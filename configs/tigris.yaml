@@ -1,0 +1,17 @@
+schema_version: 1
+site: tigris
+project_dir: /home/ryreu/atlas/HLT_Classification
+data_dir: /home/ryreu/atlas/PracticeTagging/data
+output_root: /home/ryreu/atlas/HLT_Classification/checkpoints
+log_root: /home/ryreu/atlas/HLT_Classification/logs
+conda_base: /home/ryreu/miniforge3-aarch64
+conda_env: atlas_kd_tigris
+slurm:
+  account: reu-aisocial
+  partition: tigris
+  gpu_gres: gpu:gh200:1
+environment:
+  python_major_minor: "3.10"
+  python_no_user_site: true
+  python_dont_write_bytecode: true
+  prepend_conda_lib_to_ld_library_path: true

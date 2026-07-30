@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Environments and editor state
+.venv/
+venv/
+.env
+.idea/
+.vscode/
+
+# Research data and generated artifacts
+*.root
+*.npz
+*.npy
+*.pt
+*.pth
+*.ckpt
+checkpoints/
+caches/
+logs/
+reports/
+campaigns/
+artifacts/
+scratch/
+
+# Slurm output
+slurm-*.out
+slurm-*.err
+
+# OS files
+.DS_Store
+Thumbs.db
