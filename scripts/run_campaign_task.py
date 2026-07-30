@@ -274,7 +274,14 @@ def _execute(task: str, spec: dict, root: Path) -> list[Path]:
             report_path=report,
             allowed_returncodes=(3,),
         )
-        return [output / "last.pt", report]
+        interrupted_checkpoint = (
+            root / "reports" / "train_interrupt_last.pt"
+        )
+        atomic_publish_bytes(
+            interrupted_checkpoint,
+            (output / "last.pt").read_bytes(),
+        )
+        return [interrupted_checkpoint, report]
     if task == "train":
         output = root / "models" / "baseline"
         _run(

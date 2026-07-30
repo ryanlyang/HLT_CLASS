@@ -421,3 +421,8 @@ def test_worker_shell_contracts_and_syntax() -> None:
     assert "--parsable" in campaign
     assert SBATCH_ACCOUNT in campaign
     assert SBATCH_PARTITION in campaign
+    task_runner = (
+        REPOSITORY / "scripts" / "run_campaign_task.py"
+    ).read_text(encoding="utf-8")
+    assert "train_interrupt_last.pt" in task_runner
+    assert "allowed_returncodes=(3,)" in task_runner
