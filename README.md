@@ -53,6 +53,7 @@ JetClass data on Tigris:
 - [Repository transfer plan](REPOSITORY_TRANSFER_PLAN.md)
 - [Current handoff](docs/HANDOFF.md)
 - [Research-compute runbook](docs/RESEARCH_COMPUTE_RUNBOOK.md)
+- [Tigris miniature acceptance procedure](docs/TIGRIS_ACCEPTANCE.md)
 - [JetClass and HLT data contract](docs/DATA_CONTRACT.md)
 - [Cross-campaign experiment contract](docs/EXPERIMENT_CONTRACT.md)
 - [Testing and acceptance ladder](docs/TESTING.md)
@@ -121,6 +122,10 @@ bash sbatch/submit_baseline.sh \
 Use `--smoke-submit` only for the real miniature. Full production is separately
 gated by an explicitly authorized production specification and an
 authenticated storage measurement.
+
+The repository currently has no Git remote. Transfer an exact commit to
+Tigris (or configure a remote) before creating a campaign specification; the
+source contract rejects dirty or nonidentical worktrees.
 
 The available data commands include:
 

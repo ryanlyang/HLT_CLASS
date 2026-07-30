@@ -32,7 +32,9 @@ Implemented:
   QCD-rejection, and paired-bootstrap definitions.
 - clean-source snapshots, immutable campaign specifications, storage gates,
   task attestations, exact-ID Slurm ledgers, monitoring, and resume plans;
-- thin absolute-path Tigris workers and two-lock final-test authorization.
+- thin absolute-path Tigris workers and two-lock final-test authorization;
+- a smoke-only deliberate update-one training interruption followed by
+  dependent exact-checkpoint resume through the ordinary training worker.
 
 Still not implemented or accepted:
 
@@ -44,7 +46,9 @@ Still not implemented or accepted:
   yet exist.
 
 No file in this repository imports `Fresh_check` at runtime. The repository
-still has no commit and no configured remote.
+has an independent Git history. No remote is configured; direct Tigris access
+from the implementation session reached the cluster but was rejected at the
+required interactive Duo MFA step.
 
 ## Contracts added
 

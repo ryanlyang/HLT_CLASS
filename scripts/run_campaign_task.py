@@ -41,14 +41,21 @@ from hlt_classification.provenance import validate_campaign_source  # noqa: E402
 from hlt_classification.training.engine import TrainingConfig  # noqa: E402
 
 
-def _run(command: list[str], *, report_path: Path | None = None) -> None:
+def _run(
+    command: list[str],
+    *,
+    report_path: Path | None = None,
+    allowed_returncodes: tuple[int, ...] = (0,),
+) -> None:
     result = subprocess.run(
         command,
         cwd=REPO_ROOT,
-        check=True,
+        check=False,
         stdout=subprocess.PIPE,
         stderr=None,
     )
+    if result.returncode not in allowed_returncodes:
+        raise subprocess.CalledProcessError(result.returncode, command)
     if report_path is not None:
         atomic_publish_bytes(report_path, result.stdout)
 
@@ -243,6 +250,31 @@ def _execute(task: str, spec: dict, root: Path) -> list[Path]:
             report_path=output,
         )
         return [output]
+    if task == "train_interrupt":
+        output = root / "models" / "baseline"
+        report = root / "reports" / "train_interrupt_command.json"
+        _run(
+            _python(
+                "train_part.py",
+                "--train-cache",
+                f"0={root / 'caches' / 'hlt' / 'model_train' / 'replica_0'}",
+                "--validation-cache",
+                root / "caches" / "hlt" / "model_val" / "replica_0",
+                "--config",
+                root / "inputs" / "training_config.json",
+                "--output-dir",
+                output,
+                "--source-snapshot-sha256",
+                source,
+                "--device",
+                "cuda",
+                "--stop-after-update",
+                1,
+            ),
+            report_path=report,
+            allowed_returncodes=(3,),
+        )
+        return [output / "last.pt", report]
     if task == "train":
         output = root / "models" / "baseline"
         _run(

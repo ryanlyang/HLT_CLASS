@@ -125,11 +125,13 @@ def test_campaign_dag_and_submission_contracts() -> None:
     validate_submission_ledger(ledger, campaign_spec=spec)
     jobs = {row["task"]: row for row in ledger["jobs"]}
     assert jobs["splits"]["dependencies"] == {"preflight": "7001"}
-    assert jobs["train"]["dependencies"] == {
+    assert jobs["train_interrupt"]["dependencies"] == {
         "hlt_cache": "7004",
         "weaver_parity": "7005",
     }
-    assert "--dependency=afterok:7004:7005" in jobs["train"]["command"]
+    assert "--dependency=afterok:7004:7005" in jobs["train_interrupt"]["command"]
+    assert jobs["train"]["dependencies"] == {"train_interrupt": "7006"}
+    assert "--dependency=afterok:7006" in jobs["train"]["command"]
     with pytest.raises(RuntimeError, match="invalid job id"):
         submit_plan(
             campaign_spec_path="/tmp/spec.json",
@@ -192,6 +194,7 @@ def test_failure_injection_and_all_reused_resume() -> None:
     ]
     assert resume["rerun_tasks"] == [
         "hlt_cache",
+        "train_interrupt",
         "train",
         "evaluate_model_val",
     ]
@@ -232,7 +235,7 @@ def test_failure_injection_and_all_reused_resume() -> None:
         monitor_report=pending,
         submission_ledger=ledger,
     )
-    assert recovery["cancel_exact_job_ids"] == ["7006"]
+    assert recovery["cancel_exact_job_ids"] == ["7007"]
 
 
 def test_task_attestation_revalidates_bytes(tmp_path: Path) -> None:

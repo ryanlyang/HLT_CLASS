@@ -86,7 +86,7 @@ class TaskSpec:
 
 
 def baseline_tasks(*, smoke: bool) -> tuple[TaskSpec, ...]:
-    return (
+    tasks = [
         TaskSpec(
             "preflight",
             "run_preflight.sh",
@@ -132,27 +132,47 @@ def baseline_tasks(*, smoke: bool) -> tuple[TaskSpec, ...]:
             "32G",
             "01:00:00",
         ),
-        TaskSpec(
-            "train",
-            "run_train_part.sh",
-            ("hlt_cache", "weaver_parity"),
-            None,
-            8,
-            "96G",
-            "04:00:00" if smoke else "48:00:00",
-            True,
-        ),
-        TaskSpec(
-            "evaluate_model_val",
-            "run_evaluate_part.sh",
-            ("train",),
-            None,
-            8,
-            "64G",
-            "02:00:00" if smoke else "08:00:00",
-            True,
-        ),
+    ]
+    if smoke:
+        tasks.append(
+            TaskSpec(
+                "train_interrupt",
+                "run_train_part.sh",
+                ("hlt_cache", "weaver_parity"),
+                None,
+                8,
+                "96G",
+                "02:00:00",
+                True,
+            )
+        )
+    tasks.extend(
+        [
+            TaskSpec(
+                "train",
+                "run_train_part.sh",
+                ("train_interrupt",)
+                if smoke
+                else ("hlt_cache", "weaver_parity"),
+                None,
+                8,
+                "96G",
+                "04:00:00" if smoke else "48:00:00",
+                True,
+            ),
+            TaskSpec(
+                "evaluate_model_val",
+                "run_evaluate_part.sh",
+                ("train",),
+                None,
+                8,
+                "64G",
+                "02:00:00" if smoke else "08:00:00",
+                True,
+            ),
+        ]
     )
+    return tuple(tasks)
 
 
 def _validate_training_config(config: Mapping[str, Any]) -> None:
