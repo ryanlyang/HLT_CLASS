@@ -119,6 +119,7 @@ bash sbatch/submit_baseline.sh --campaign-spec SPEC --smoke-submit
 bash sbatch/submit_baseline.sh \
   --campaign-spec PRODUCTION_SPEC \
   --storage-measurement STORAGE_JSON \
+  --resource-evidence SMOKE_RESOURCES_JSON \
   --full-production-submit
 ```
 
@@ -151,16 +152,34 @@ python -s scripts/resume_campaign.py \
   --submission-ledger "${CAMPAIGN_ROOT}/ledgers/submission.json" \
   --monitor-report "${CAMPAIGN_ROOT}/ledgers/monitor.json" \
   --output "${CAMPAIGN_ROOT}/ledgers/resume_plan.json"
+python -s scripts/capture_slurm_resources.py \
+  --campaign-spec "${CAMPAIGN_ROOT}/campaign_spec.json" \
+  --submission-ledger "${CAMPAIGN_ROOT}/ledgers/submission.json" \
+  --monitor-report "${CAMPAIGN_ROOT}/ledgers/monitor.json" \
+  --output "${CAMPAIGN_ROOT}/ledgers/slurm_resources.json"
 ```
 
 Review the plan before adding `--submit`. If it lists stale pending jobs,
 `--cancel-stale-exact` cancels only the serialized exact IDs.
+
+The resource capture fails unless every smoke task is completed and
+artifact-reusable and `sacct` supplies positive elapsed, MaxRSS, and CPU
+measurements. A full-production storage preflight and submission both require
+this exact evidence artifact.
+
+The training worker also publishes
+`reports/training_runtime_environment.json` before it trains. This immutable
+report binds Python/package versions, CUDA runtime, and visible GPU identity
+to the campaign and source snapshot.
 
 ## Recovery principles
 
 - Validate already completed artifacts before reuse.
 - Resume shard-by-shard; do not restart days of valid preprocessing.
 - Submit failed nodes and descendants into a new recovery ledger.
+- If submission itself stops midway, assemble its per-job journal with
+  `scripts/assemble_submission_journal.py`; never rerun the original
+  submitter while an incomplete journal exists.
 - Do not use broad `scontrol release` to bypass failed prerequisites.
 - `DependencyNeverSatisfied` requires a repaired dependency graph, not merely
   releasing downstream jobs.

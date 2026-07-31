@@ -6,8 +6,8 @@ __version__ = "0.1.0"
 
 FOUNDATION_STATUS = {
     "transfer_block": 4,
-    "implemented_out_of_order_blocks": (5,),
-    "scientific_pipeline_implemented": False,
+    "implemented_out_of_order_blocks": (5, 6, 7),
+    "scientific_pipeline_implemented": True,
     "next_transfer_block": 5,
     "authoritative_weaver_parity_passed": False,
 }

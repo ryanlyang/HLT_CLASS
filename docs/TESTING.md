@@ -113,7 +113,9 @@ source drift after an all-reused graph, cross-campaign parent rejection,
 exact numeric `sbatch --parsable` parsing, dependency lineage, insufficient
 storage, task-byte corruption, dry-run nonmutation, failed-descendant recovery,
 stale exact-job cancellation lineage, worker environment/static contracts,
-and both final-test locks.
+durable partial-submission recovery (including never-submitted descendants),
+both final-test locks plus atomic execution-claim consumption, and rejection
+of direct inference/evaluation API calls that omit that consumed claim.
 
 Block 8:
 

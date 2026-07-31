@@ -18,4 +18,4 @@ bash sbatch/submit_baseline.sh \
 `--smoke-simulate` performs a no-Slurm failure/recovery exercise.
 `--smoke-submit` submits only a miniature. Full production additionally
 requires an explicitly authorized production specification and authenticated
-storage measurement.
+storage measurement plus successful smoke resource evidence.

@@ -28,15 +28,22 @@ def main() -> int:
     parser.add_argument("--repository", type=Path, default=REPO_ROOT)
     parser.add_argument("--storage-path", type=Path, required=True)
     parser.add_argument("--projected-peak-bytes", type=int, required=True)
+    parser.add_argument("--resource-evidence", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     spec = load_json(args.campaign_spec)
     validate_campaign_source(spec, repository=args.repository)
+    resource_evidence = (
+        None
+        if args.resource_evidence is None
+        else load_json(args.resource_evidence)
+    )
     report = measure_campaign_storage(
         campaign_spec=spec,
         path=args.storage_path,
         projected_peak_bytes=args.projected_peak_bytes,
         measurement_host=platform.node(),
+        resource_evidence=resource_evidence,
     )
     write_immutable_json(args.output, report)
     print(json.dumps(report, indent=2, sort_keys=True))

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -7,10 +8,15 @@ import pytest
 import torch
 from torch import nn
 
-from hlt_classification.data.cache_contracts import canonical_sha256
+from hlt_classification.data.cache_contracts import (
+    canonical_sha256,
+    with_content_hash,
+)
 from hlt_classification.training.checkpoints import (
     SelectionRecord,
+    capture_model_runtime_state,
     load_checkpoint,
+    restore_model_runtime_state,
     selection_is_better,
 )
 from hlt_classification.training.engine import (
@@ -52,12 +58,19 @@ def _raw_arrays(rows: int, *, role: str) -> dict[str, np.ndarray]:
 
 
 class TinyCache:
-    def __init__(self, role: str, rows: int = 20, shard_size: int = 7) -> None:
+    def __init__(
+        self,
+        role: str,
+        rows: int = 20,
+        shard_size: int = 7,
+        source_snapshot_sha256: str = "a" * 64,
+    ) -> None:
         self.cache_kind = "hlt"
         self.logical_role = role
         self.lineage = {
             "replica_id": 0,
             "realization_policy": "R_FIXED",
+            "source_snapshot_sha256": source_snapshot_sha256,
         }
         self._arrays = _raw_arrays(rows, role=role)
         records = []
@@ -135,6 +148,26 @@ class NonfiniteClassifier(PoorClassifier):
         return output + torch.tensor(float("nan"), device=output.device)
 
 
+class StatefulTrimmerClassifier(TinyClassifier):
+    def __init__(self) -> None:
+        super().__init__()
+        self.trimmer = type(
+            "RuntimeTrimmer",
+            (),
+            {"enabled": True, "_counter": 0},
+        )()
+
+    def forward(self, points, features, lorentz_vectors, mask):
+        self.trimmer._counter += 1
+        logits = super().forward(points, features, lorentz_vectors, mask)
+        offsets = torch.arange(
+            10,
+            device=logits.device,
+            dtype=logits.dtype,
+        )
+        return logits + offsets * self.trimmer._counter * 1.0e-4
+
+
 def _config() -> TrainingConfig:
     return TrainingConfig(
         total_updates=6,
@@ -162,6 +195,8 @@ def _parents(config, train, validation):
 def _assert_nested_equal(left, right) -> None:
     if isinstance(left, torch.Tensor):
         assert torch.equal(left, right)
+    elif isinstance(left, np.ndarray):
+        assert np.array_equal(left, right)
     elif isinstance(left, dict):
         assert set(left) == set(right)
         for key in left:
@@ -211,6 +246,17 @@ def test_checkpoint_selector_ties_are_exact_and_earliest() -> None:
     assert selection_is_better(SelectionRecord(0.9, 0.1, 20, 2), incumbent)
     assert selection_is_better(SelectionRecord(1.0, 0.6, 20, 2), incumbent)
     assert not selection_is_better(SelectionRecord(1.0, 0.5, 11, 1), incumbent)
+
+
+def test_model_runtime_trimmer_state_round_trips_exactly() -> None:
+    source = StatefulTrimmerClassifier()
+    source.trimmer.enabled = False
+    source.trimmer._counter = 17
+    state = capture_model_runtime_state(source)
+    target = StatefulTrimmerClassifier()
+    restore_model_runtime_state(target, state)
+    assert target.trimmer.enabled is False
+    assert target.trimmer._counter == 17
 
 
 def test_interrupted_resume_matches_uninterrupted_exactly(tmp_path: Path) -> None:
@@ -265,10 +311,70 @@ def test_interrupted_resume_matches_uninterrupted_exactly(tmp_path: Path) -> Non
         "scaler_state",
         "sampler_state",
         "replica_cycle_state",
+        "rng_state",
         "history",
         "best_selection",
     ):
         _assert_nested_equal(left[key], right[key])
+
+
+def test_trimmer_counter_resume_matches_uninterrupted_exactly(
+    tmp_path: Path,
+) -> None:
+    train = TinyCache("model_train")
+    validation = TinyCache("model_val")
+    config = TrainingConfig(
+        total_updates=4,
+        batch_size=4,
+        seed=81,
+        validation_interval_updates=1,
+        checkpoint_interval_updates=1,
+    )
+    full_root = tmp_path / "stateful_full"
+    resumed_root = tmp_path / "stateful_resumed"
+    full = train_fixed_budget(
+        model_factory=StatefulTrimmerClassifier,
+        train_caches={0: train},
+        validation_cache=validation,
+        config=config,
+        output_dir=full_root,
+        source_snapshot_sha256="a" * 64,
+    )
+    partial = train_fixed_budget(
+        model_factory=StatefulTrimmerClassifier,
+        train_caches={0: train},
+        validation_cache=validation,
+        config=config,
+        output_dir=resumed_root,
+        source_snapshot_sha256="a" * 64,
+        stop_after_update=2,
+    )
+    assert partial["complete"] is False
+    resumed = train_fixed_budget(
+        model_factory=StatefulTrimmerClassifier,
+        train_caches={0: train},
+        validation_cache=validation,
+        config=config,
+        output_dir=resumed_root,
+        source_snapshot_sha256="a" * 64,
+    )
+    assert full["history"] == resumed["history"]
+    parents = _parents(config, train, validation)
+    left = load_checkpoint(
+        full_root / "last.pt",
+        expected_parents=parents,
+        expected_config=config.to_dict(),
+    )
+    right = load_checkpoint(
+        resumed_root / "last.pt",
+        expected_parents=parents,
+        expected_config=config.to_dict(),
+    )
+    _assert_nested_equal(
+        left["model_runtime_state"],
+        right["model_runtime_state"],
+    )
+    _assert_nested_equal(left["model_state"], right["model_state"])
 
 
 def test_intentionally_poor_model_completes_without_performance_gate(
@@ -276,8 +382,12 @@ def test_intentionally_poor_model_completes_without_performance_gate(
 ) -> None:
     report = train_fixed_budget(
         model_factory=PoorClassifier,
-        train_caches={0: TinyCache("model_train")},
-        validation_cache=TinyCache("model_val"),
+        train_caches={
+            0: TinyCache("model_train", source_snapshot_sha256="b" * 64)
+        },
+        validation_cache=TinyCache(
+            "model_val", source_snapshot_sha256="b" * 64
+        ),
         config=TrainingConfig(
             total_updates=2,
             batch_size=5,
@@ -297,8 +407,12 @@ def test_nonfinite_model_fails_without_skipping_batch(tmp_path: Path) -> None:
     with pytest.raises(FloatingPointError, match="nonfinite training logits"):
         train_fixed_budget(
             model_factory=NonfiniteClassifier,
-            train_caches={0: TinyCache("model_train")},
-            validation_cache=TinyCache("model_val"),
+            train_caches={
+                0: TinyCache("model_train", source_snapshot_sha256="c" * 64)
+            },
+            validation_cache=TinyCache(
+                "model_val", source_snapshot_sha256="c" * 64
+            ),
             config=TrainingConfig(
                 total_updates=1,
                 batch_size=5,
@@ -308,4 +422,57 @@ def test_nonfinite_model_fails_without_skipping_batch(tmp_path: Path) -> None:
             ),
             output_dir=tmp_path / "bad",
             source_snapshot_sha256="c" * 64,
+        )
+
+
+def test_training_rejects_active_source_drift(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="cache source snapshot"):
+        train_fixed_budget(
+            model_factory=TinyClassifier,
+            train_caches={0: TinyCache("model_train")},
+            validation_cache=TinyCache("model_val"),
+            config=TrainingConfig(
+                total_updates=1,
+                batch_size=5,
+                seed=9,
+                validation_interval_updates=1,
+                checkpoint_interval_updates=1,
+            ),
+            output_dir=tmp_path / "wrong_source",
+            source_snapshot_sha256="d" * 64,
+        )
+
+
+def test_checkpoint_sidecar_filename_is_authenticated(tmp_path: Path) -> None:
+    train = TinyCache("model_train")
+    validation = TinyCache("model_val")
+    config = TrainingConfig(
+        total_updates=1,
+        batch_size=5,
+        seed=19,
+        validation_interval_updates=1,
+        checkpoint_interval_updates=1,
+    )
+    root = tmp_path / "sidecar"
+    train_fixed_budget(
+        model_factory=TinyClassifier,
+        train_caches={0: train},
+        validation_cache=validation,
+        config=config,
+        output_dir=root,
+        source_snapshot_sha256="a" * 64,
+    )
+    sidecar_path = root / "last.pt.json"
+    sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
+    sidecar["checkpoint_filename"] = "different.pt"
+    sidecar = with_content_hash(sidecar)
+    sidecar_path.write_text(
+        json.dumps(sidecar, sort_keys=True),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="filename differs"):
+        load_checkpoint(
+            root / "last.pt",
+            expected_parents=_parents(config, train, validation),
+            expected_config=config.to_dict(),
         )

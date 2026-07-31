@@ -14,8 +14,8 @@ def test_package_import_reports_current_transfer_status() -> None:
     assert hlt_classification.__version__ == "0.1.0"
     assert hlt_classification.FOUNDATION_STATUS == {
         "transfer_block": 4,
-        "implemented_out_of_order_blocks": (5,),
-        "scientific_pipeline_implemented": False,
+        "implemented_out_of_order_blocks": (5, 6, 7),
+        "scientific_pipeline_implemented": True,
         "next_transfer_block": 5,
         "authoritative_weaver_parity_passed": False,
     }

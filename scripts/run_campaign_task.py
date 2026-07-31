@@ -27,6 +27,8 @@ from hlt_classification.data.cache_contracts import (  # noqa: E402
     canonical_sha256,
     load_json,
     sha256_file,
+    validate_content_hash,
+    with_content_hash,
     write_immutable_json,
 )
 from hlt_classification.data.hlt_v3 import (  # noqa: E402
@@ -39,6 +41,9 @@ from hlt_classification.data.schema import schema_payload  # noqa: E402
 from hlt_classification.data.splits import load_split_manifest  # noqa: E402
 from hlt_classification.provenance import validate_campaign_source  # noqa: E402
 from hlt_classification.training.engine import TrainingConfig  # noqa: E402
+from hlt_classification.training.checkpoints import (  # noqa: E402
+    CHECKPOINT_SIDECAR_CONTRACT,
+)
 
 
 def _run(
@@ -56,6 +61,9 @@ def _run(
     )
     if result.returncode not in allowed_returncodes:
         raise subprocess.CalledProcessError(result.returncode, command)
+    if result.stdout:
+        sys.stdout.buffer.write(result.stdout)
+        sys.stdout.buffer.flush()
     if report_path is not None:
         atomic_publish_bytes(report_path, result.stdout)
 
@@ -184,7 +192,6 @@ def _execute(task: str, spec: dict, root: Path) -> list[Path]:
                 "--source-snapshot-sha256",
                 source,
             ),
-            report_path=root / "reports" / f"offline_cache_{role}.json",
         )
         cache_roots = [
             root / "caches" / "offline" / current
@@ -220,7 +227,6 @@ def _execute(task: str, spec: dict, root: Path) -> list[Path]:
                 "--shard-size",
                 data["cache_shard_size"],
             ),
-            report_path=root / "reports" / f"hlt_cache_{role}.json",
         )
         cache_roots = [
             root / "caches" / "hlt" / current / "replica_0"
@@ -252,38 +258,126 @@ def _execute(task: str, spec: dict, root: Path) -> list[Path]:
         return [output]
     if task == "train_interrupt":
         output = root / "models" / "baseline"
-        report = root / "reports" / "train_interrupt_command.json"
-        _run(
-            _python(
-                "train_part.py",
-                "--train-cache",
-                f"0={root / 'caches' / 'hlt' / 'model_train' / 'replica_0'}",
-                "--validation-cache",
-                root / "caches" / "hlt" / "model_val" / "replica_0",
-                "--config",
-                root / "inputs" / "training_config.json",
-                "--output-dir",
-                output,
-                "--source-snapshot-sha256",
-                source,
-                "--device",
-                "cuda",
-                "--stop-after-update",
-                1,
+        interrupted_root = root / "reports" / "train_interrupt_checkpoint"
+        interrupted_checkpoint = interrupted_root / "last.pt"
+        interrupted_sidecar = interrupted_root / "last.pt.json"
+        report = root / "reports" / "train_interrupt.json"
+        if not (
+            interrupted_checkpoint.is_file()
+            and interrupted_sidecar.is_file()
+            and report.is_file()
+        ):
+            source_checkpoint = output / "last.pt"
+            source_sidecar = output / "last.pt.json"
+            if not source_checkpoint.is_file() or not source_sidecar.is_file():
+                _run(
+                    _python(
+                        "train_part.py",
+                        "--train-cache",
+                        (
+                            f"0={root / 'caches' / 'hlt' / 'model_train' / 'replica_0'}"
+                        ),
+                        "--validation-cache",
+                        root / "caches" / "hlt" / "model_val" / "replica_0",
+                        "--config",
+                        root / "inputs" / "training_config.json",
+                        "--output-dir",
+                        output,
+                        "--source-snapshot-sha256",
+                        source,
+                        "--device",
+                        "cuda",
+                        "--stop-after-update",
+                        1,
+                    ),
+                    allowed_returncodes=(3,),
+                )
+            sidecar = load_json(source_sidecar)
+            validate_content_hash(
+                sidecar,
+                expected_contract=CHECKPOINT_SIDECAR_CONTRACT,
+            )
+            if (
+                sidecar.get("checkpoint_filename") != "last.pt"
+                or int(sidecar.get("update", -1)) != 1
+                or sidecar.get("parents", {}).get(
+                    "source_snapshot_sha256"
+                )
+                != source
+                or sha256_file(source_checkpoint)
+                != sidecar.get("checkpoint_file_sha256")
+            ):
+                raise ValueError(
+                    "smoke interruption checkpoint lineage or update differs"
+                )
+            atomic_publish_bytes(
+                interrupted_checkpoint,
+                source_checkpoint.read_bytes(),
+            )
+            atomic_publish_bytes(
+                interrupted_sidecar,
+                source_sidecar.read_bytes(),
+            )
+            evidence = with_content_hash(
+                {
+                    "contract": (
+                        "hlt_classification_training_interruption_evidence_v1"
+                    ),
+                    "schema_version": 1,
+                    "campaign_spec_sha256": spec["content_hash"],
+                    "source_snapshot_sha256": source,
+                    "interrupted_after_update": 1,
+                    "checkpoint_file_sha256": sha256_file(
+                        interrupted_checkpoint
+                    ),
+                    "checkpoint_sidecar_content_hash": sidecar[
+                        "content_hash"
+                    ],
+                    "continuation_required": True,
+                }
+            )
+            write_immutable_json(report, evidence)
+        frozen_sidecar = load_json(interrupted_sidecar)
+        validate_content_hash(
+            frozen_sidecar,
+            expected_contract=CHECKPOINT_SIDECAR_CONTRACT,
+        )
+        frozen_report = load_json(report)
+        validate_content_hash(
+            frozen_report,
+            expected_contract=(
+                "hlt_classification_training_interruption_evidence_v1"
             ),
-            report_path=report,
-            allowed_returncodes=(3,),
         )
-        interrupted_checkpoint = (
-            root / "reports" / "train_interrupt_last.pt"
-        )
-        atomic_publish_bytes(
-            interrupted_checkpoint,
-            (output / "last.pt").read_bytes(),
-        )
-        return [interrupted_checkpoint, report]
+        if (
+            int(frozen_sidecar.get("update", -1)) != 1
+            or sha256_file(interrupted_checkpoint)
+            != frozen_sidecar.get("checkpoint_file_sha256")
+            or frozen_report.get("checkpoint_file_sha256")
+            != frozen_sidecar.get("checkpoint_file_sha256")
+            or frozen_report.get("checkpoint_sidecar_content_hash")
+            != frozen_sidecar.get("content_hash")
+            or frozen_report.get("campaign_spec_sha256")
+            != spec["content_hash"]
+            or frozen_report.get("source_snapshot_sha256") != source
+        ):
+            raise ValueError("frozen smoke interruption evidence differs")
+        return [interrupted_checkpoint, interrupted_sidecar, report]
     if task == "train":
         output = root / "models" / "baseline"
+        runtime_environment = (
+            root / "reports" / "training_runtime_environment.json"
+        )
+        _run(
+            _python(
+                "capture_runtime_environment.py",
+                "--campaign-spec",
+                root / "campaign_spec.json",
+                "--output",
+                runtime_environment,
+                "--require-cuda",
+            )
+        )
         _run(
             _python(
                 "train_part.py",
@@ -303,6 +397,7 @@ def _execute(task: str, spec: dict, root: Path) -> list[Path]:
             report_path=root / "reports" / "train_command.json",
         )
         return [
+            runtime_environment,
             output / "training_report.json",
             output / "last.pt",
             output / "best_model_val.pt",

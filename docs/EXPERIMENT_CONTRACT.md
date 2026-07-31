@@ -51,6 +51,8 @@ test with mixed precision disabled.
 - Nonfinite required quantities fail; they are not silently skipped.
 - Exact resume restores model, optimizer, scheduler, scaler, sampler, replica
   cycle, epoch/update count, and random states.
+- The v2 checkpoint also restores Weaver trimmer `enabled` and `_counter`
+  runtime state, which is not carried by the model state dictionary.
 - Every checkpoint binds its data, configuration, and source parents.
 
 Performance-based termination, cancellation, and row skipping are forbidden.
@@ -124,3 +126,11 @@ monitor report, resume plan, finalist lock, and final-test execution lock
 contracts. A completed Slurm state is reusable only when every attested file
 still has its recorded hash. Recovery creates a fresh submission ledger for
 the failed task and every descendant; it never releases stale dependencies.
+
+Final-test inference atomically creates
+`hlt_classification_final_test_execution_claim_v1` before its first model
+forward. An existing claim with incomplete predictions forbids automatic
+rerun; complete prediction reuse requires the exact matching claim. The
+library inference and metric APIs enforce the same claim and
+campaign/checkpoint/cache/source lineage, so bypassing the CLI does not bypass
+the final-test lock.

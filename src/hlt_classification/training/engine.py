@@ -35,12 +35,13 @@ from hlt_classification.training.checkpoints import (
     atomic_save_checkpoint,
     build_checkpoint_payload,
     load_checkpoint,
+    restore_model_runtime_state,
     restore_rng_state,
     selection_is_better,
 )
 
 TRAINING_CONFIG_CONTRACT = "hlt_classification_part_training_config_v1"
-TRAINING_REPORT_CONTRACT = "hlt_classification_part_training_report_v1"
+TRAINING_REPORT_CONTRACT = "hlt_classification_part_training_report_v2"
 TRAINING_SCHEMA_VERSION = 1
 SAMPLER_CONTRACT = "hlt_classification_shard_epoch_sampler_v1"
 
@@ -455,6 +456,11 @@ def train_fixed_budget(
         realization_policy=config.realization_policy,
     )
     if (
+        cache_set.primary.lineage.get("source_snapshot_sha256")
+        != source_hash
+    ):
+        raise ValueError("training cache source snapshot differs")
+    if (
         validation_cache.cache_kind != "hlt"
         or validation_cache.logical_role != "model_val"
         or int(validation_cache.lineage.get("replica_id", -1)) != 0
@@ -528,6 +534,7 @@ def train_fixed_budget(
             map_location=resolved_device,
         )
         model.load_state_dict(payload["model_state"], strict=True)
+        restore_model_runtime_state(model, payload["model_runtime_state"])
         optimizer.load_state_dict(payload["optimizer_state"])
         _optimizer_to_device(optimizer, resolved_device)
         scaler.load_state_dict(payload["scaler_state"])

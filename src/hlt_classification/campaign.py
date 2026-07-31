@@ -24,8 +24,14 @@ from .training.engine import TRAINING_CONFIG_CONTRACT
 CAMPAIGN_SPEC_CONTRACT = "hlt_classification_baseline_campaign_spec_v1"
 CAMPAIGN_SPEC_SCHEMA_VERSION = 1
 SUBMISSION_LEDGER_CONTRACT = "hlt_classification_submission_ledger_v1"
+SUBMISSION_JOB_RECORD_CONTRACT = (
+    "hlt_classification_submission_job_record_v1"
+)
 RESUME_PLAN_CONTRACT = "hlt_classification_resume_plan_v1"
 STORAGE_MEASUREMENT_CONTRACT = "hlt_classification_storage_measurement_v1"
+SLURM_RESOURCE_EVIDENCE_CONTRACT = (
+    "hlt_classification_slurm_resource_evidence_v1"
+)
 MONITOR_REPORT_CONTRACT = "hlt_classification_monitor_report_v1"
 TASK_ATTESTATION_CONTRACT = "hlt_classification_task_attestation_v1"
 
@@ -209,6 +215,10 @@ def create_baseline_campaign_spec(
     if source_snapshot.get("worktree_clean") is not True:
         raise ValueError("campaign source snapshot must be clean")
     _validate_training_config(training_config)
+    if mode == "smoke" and int(training_config["total_updates"]) < 2:
+        raise ValueError(
+            "smoke campaign requires at least two updates to exercise resume"
+        )
     split_sizes = (
         SMOKE_SPLIT_SIZES if mode == "smoke" else dict(DEFAULT_SPLIT_SIZES)
     )
@@ -280,6 +290,12 @@ def validate_campaign_spec(payload: Mapping[str, Any]) -> str:
     if mode not in {"smoke", "production"}:
         raise ValueError("campaign mode differs")
     _validate_training_config(payload["training_config"])
+    if mode == "smoke" and int(
+        payload["training_config"]["total_updates"]
+    ) < 2:
+        raise ValueError(
+            "smoke campaign requires at least two updates to exercise resume"
+        )
     if canonical_sha256(payload["training_config"]) != payload.get(
         "training_config_sha256"
     ):
@@ -477,6 +493,7 @@ def submit_plan(
     task_names: Sequence[str] | None = None,
     measured_resources: Mapping[str, Mapping[str, Any]] | None = None,
     executor: Callable[[Sequence[str]], str] | None = None,
+    on_submitted: Callable[[Mapping[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     validate_campaign_spec(campaign_spec)
     plan = render_submission_plan(
@@ -510,26 +527,254 @@ def submit_plan(
             command.append(resolved)
         job_id = _parse_job_id(execute(command))
         job_ids[row["task"]] = job_id
-        rows.append(
-            {
-                "task": row["task"],
-                "job_id": job_id,
-                "dependencies": {
-                    dependency: job_ids[dependency]
-                    for dependency in row["dependencies"]
-                },
-                "command": command,
-            }
-        )
-    return with_content_hash(
+        submitted_row = {
+            "task": row["task"],
+            "job_id": job_id,
+            "dependencies": {
+                dependency: job_ids[dependency]
+                for dependency in row["dependencies"]
+            },
+            "command": command,
+        }
+        rows.append(submitted_row)
+        if on_submitted is not None:
+            on_submitted(dict(submitted_row))
+    return build_submission_ledger(
+        campaign_spec=campaign_spec,
+        jobs=rows,
+    )
+
+
+def build_submission_ledger(
+    *,
+    campaign_spec: Mapping[str, Any],
+    jobs: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    validate_campaign_spec(campaign_spec)
+    if not jobs:
+        raise ValueError("submission ledger requires at least one job")
+    ledger = with_content_hash(
         {
             "contract": SUBMISSION_LEDGER_CONTRACT,
             "schema_version": 1,
             "campaign_spec_sha256": campaign_spec["content_hash"],
             "campaign_id": campaign_spec["campaign_id"],
-            "jobs": rows,
+            "jobs": [dict(row) for row in jobs],
         }
     )
+    validate_submission_ledger(ledger, campaign_spec=campaign_spec)
+    return ledger
+
+
+def build_submission_job_record(
+    *,
+    campaign_spec: Mapping[str, Any],
+    sequence: int,
+    job: Mapping[str, Any],
+    submission_kind: str,
+) -> dict[str, Any]:
+    if (
+        not isinstance(sequence, int)
+        or isinstance(sequence, bool)
+        or sequence < 0
+    ):
+        raise ValueError("submission sequence is invalid")
+    if submission_kind not in {"initial", "resume"}:
+        raise ValueError("submission journal kind differs")
+    # Reuse the ledger validator for the one-row prefix where possible by
+    # validating the row fields directly here.
+    task_by_name(campaign_spec, str(job.get("task", "")))
+    if not re.fullmatch(r"[0-9]+", str(job.get("job_id", ""))):
+        raise ValueError("submission journal job id is invalid")
+    if not isinstance(job.get("dependencies"), Mapping):
+        raise ValueError("submission journal dependencies differ")
+    if not isinstance(job.get("command"), list) or not job["command"]:
+        raise ValueError("submission journal command differs")
+    return with_content_hash(
+        {
+            "contract": SUBMISSION_JOB_RECORD_CONTRACT,
+            "schema_version": 1,
+            "campaign_spec_sha256": campaign_spec["content_hash"],
+            "campaign_id": campaign_spec["campaign_id"],
+            "submission_kind": submission_kind,
+            "sequence": sequence,
+            "job": dict(job),
+        }
+    )
+
+
+def validate_submission_job_record(
+    payload: Mapping[str, Any],
+    *,
+    campaign_spec: Mapping[str, Any],
+) -> str:
+    digest = validate_content_hash(
+        payload,
+        expected_contract=SUBMISSION_JOB_RECORD_CONTRACT,
+    )
+    expected = build_submission_job_record(
+        campaign_spec=campaign_spec,
+        sequence=payload["sequence"],
+        job=payload["job"],
+        submission_kind=payload["submission_kind"],
+    )
+    if dict(payload) != expected:
+        raise ValueError("submission job journal semantics differ")
+    return digest
+
+
+def build_slurm_resource_evidence(
+    *,
+    smoke_campaign_spec: Mapping[str, Any],
+    submission_ledger: Mapping[str, Any],
+    monitor_report: Mapping[str, Any],
+    usage_by_job_id: Mapping[str, Mapping[str, Any]],
+    campaign_artifact_bytes: int,
+    measurement_host: str,
+) -> dict[str, Any]:
+    """Authenticate measured resource use from one successful smoke graph."""
+
+    validate_campaign_spec(smoke_campaign_spec)
+    if smoke_campaign_spec["mode"] != "smoke":
+        raise ValueError("resource evidence parent must be a smoke campaign")
+    validate_submission_ledger(
+        submission_ledger,
+        campaign_spec=smoke_campaign_spec,
+    )
+    validate_monitor_report(
+        monitor_report,
+        campaign_spec=smoke_campaign_spec,
+        submission_ledger=submission_ledger,
+    )
+    if not all(row["reusable"] for row in monitor_report["tasks"]):
+        raise ValueError("resource evidence requires a fully reusable smoke graph")
+    exact_job_ids = {
+        row["job_id"] for row in submission_ledger["jobs"]
+    }
+    if set(usage_by_job_id) != exact_job_ids:
+        raise ValueError("resource usage does not cover exact campaign job ids")
+    if (
+        not isinstance(campaign_artifact_bytes, int)
+        or isinstance(campaign_artifact_bytes, bool)
+        or campaign_artifact_bytes <= 0
+    ):
+        raise ValueError("measured campaign artifact bytes must be positive")
+    if not measurement_host:
+        raise ValueError("resource measurement host is required")
+    task_for_job = {
+        row["job_id"]: row["task"] for row in submission_ledger["jobs"]
+    }
+    rows = []
+    for job_id in sorted(exact_job_ids, key=int):
+        usage = dict(usage_by_job_id[job_id])
+        elapsed = usage.get("elapsed_seconds")
+        max_rss = usage.get("max_rss_bytes")
+        cpus = usage.get("allocated_cpus")
+        if (
+            not isinstance(elapsed, int)
+            or isinstance(elapsed, bool)
+            or elapsed <= 0
+        ):
+            raise ValueError("measured elapsed seconds must be positive")
+        if (
+            not isinstance(max_rss, int)
+            or isinstance(max_rss, bool)
+            or max_rss <= 0
+        ):
+            raise ValueError("measured maximum RSS bytes must be positive")
+        if (
+            not isinstance(cpus, int)
+            or isinstance(cpus, bool)
+            or cpus <= 0
+        ):
+            raise ValueError("measured allocated CPUs must be positive")
+        rows.append(
+            {
+                "task": task_for_job[job_id],
+                "job_id": job_id,
+                "state": "COMPLETED",
+                "elapsed_seconds": elapsed,
+                "max_rss_bytes": max_rss,
+                "allocated_cpus": cpus,
+            }
+        )
+    return with_content_hash(
+        {
+            "contract": SLURM_RESOURCE_EVIDENCE_CONTRACT,
+            "schema_version": 1,
+            "smoke_campaign_spec_sha256": smoke_campaign_spec[
+                "content_hash"
+            ],
+            "submission_ledger_sha256": submission_ledger["content_hash"],
+            "monitor_report_sha256": monitor_report["content_hash"],
+            "source_snapshot_sha256": smoke_campaign_spec[
+                "source_snapshot_sha256"
+            ],
+            "measurement_host": measurement_host,
+            "campaign_artifact_bytes": campaign_artifact_bytes,
+            "tasks": rows,
+        }
+    )
+
+
+def validate_slurm_resource_evidence(payload: Mapping[str, Any]) -> str:
+    digest = validate_content_hash(
+        payload,
+        expected_contract=SLURM_RESOURCE_EVIDENCE_CONTRACT,
+    )
+    for key in (
+        "smoke_campaign_spec_sha256",
+        "submission_ledger_sha256",
+        "monitor_report_sha256",
+        "source_snapshot_sha256",
+    ):
+        require_sha256(payload.get(key), name=key)
+    if not payload.get("measurement_host"):
+        raise ValueError("resource measurement host is absent")
+    artifact_bytes = payload.get("campaign_artifact_bytes")
+    if (
+        not isinstance(artifact_bytes, int)
+        or isinstance(artifact_bytes, bool)
+        or artifact_bytes <= 0
+    ):
+        raise ValueError("resource artifact-byte measurement is invalid")
+    rows = payload.get("tasks")
+    if not isinstance(rows, list) or not rows:
+        raise ValueError("resource evidence has no task measurements")
+    expected_core = {
+        "preflight",
+        "splits",
+        "offline_cache",
+        "hlt_cache",
+        "weaver_parity",
+        "train",
+        "evaluate_model_val",
+    }
+    task_names: set[str] = set()
+    job_ids: set[str] = set()
+    for row in rows:
+        task = str(row.get("task", ""))
+        job_id = str(row.get("job_id", ""))
+        if not task or task in task_names:
+            raise ValueError("resource evidence task is absent or duplicated")
+        if not re.fullmatch(r"[0-9]+", job_id) or job_id in job_ids:
+            raise ValueError("resource evidence job id is invalid or duplicated")
+        if row.get("state") != "COMPLETED":
+            raise ValueError("resource evidence job did not complete")
+        for key in ("elapsed_seconds", "max_rss_bytes", "allocated_cpus"):
+            value = row.get(key)
+            if (
+                not isinstance(value, int)
+                or isinstance(value, bool)
+                or value <= 0
+            ):
+                raise ValueError(f"resource evidence {key} is invalid")
+        task_names.add(task)
+        job_ids.add(job_id)
+    missing = sorted(expected_core - task_names)
+    if missing:
+        raise ValueError(f"resource evidence lacks core smoke tasks: {missing}")
+    return digest
 
 
 def build_storage_measurement(
@@ -539,6 +784,7 @@ def build_storage_measurement(
     projected_peak_bytes: int,
     observed_task_resources: Mapping[str, Mapping[str, Any]],
     measurement_host: str,
+    resource_evidence: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Bind a conservative storage/resource preflight to one campaign."""
 
@@ -577,6 +823,42 @@ def build_storage_measurement(
         resources[task["name"]] = row
     if not measurement_host:
         raise ValueError("measurement host is required")
+    if campaign_spec["mode"] == "production":
+        if resource_evidence is None:
+            raise ValueError(
+                "production storage measurement requires successful smoke "
+                "resource evidence"
+            )
+        evidence_hash = validate_slurm_resource_evidence(resource_evidence)
+        if (
+            resource_evidence["source_snapshot_sha256"]
+            != campaign_spec["source_snapshot_sha256"]
+        ):
+            raise ValueError("resource evidence source snapshot differs")
+        measured_tasks = {
+            row["task"] for row in resource_evidence["tasks"]
+        }
+        missing = sorted(set(task_names) - measured_tasks)
+        if missing:
+            raise ValueError(
+                f"resource evidence lacks production tasks: {missing}"
+            )
+        resource_policy = (
+            "production_requests_bound_to_successful_tigris_smoke"
+        )
+    else:
+        if resource_evidence is not None:
+            evidence_hash = validate_slurm_resource_evidence(
+                resource_evidence
+            )
+            if (
+                resource_evidence["source_snapshot_sha256"]
+                != campaign_spec["source_snapshot_sha256"]
+            ):
+                raise ValueError("resource evidence source snapshot differs")
+        else:
+            evidence_hash = None
+        resource_policy = "smoke_declared_requests_not_production_evidence"
     return with_content_hash(
         {
             "contract": STORAGE_MEASUREMENT_CONTRACT,
@@ -591,6 +873,8 @@ def build_storage_measurement(
             "minimum_free_after_peak_bytes": (
                 available_bytes - projected_peak_bytes
             ),
+            "resource_policy": resource_policy,
+            "resource_evidence_sha256": evidence_hash,
             "resources": resources,
         }
     )
@@ -602,6 +886,7 @@ def measure_campaign_storage(
     path: str | Path,
     projected_peak_bytes: int,
     measurement_host: str,
+    resource_evidence: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     usage = shutil.disk_usage(Path(path))
     resources = {
@@ -620,6 +905,7 @@ def measure_campaign_storage(
         projected_peak_bytes=projected_peak_bytes,
         observed_task_resources=resources,
         measurement_host=measurement_host,
+        resource_evidence=resource_evidence,
     )
 
 
@@ -627,6 +913,7 @@ def validate_storage_measurement(
     payload: Mapping[str, Any],
     *,
     campaign_spec: Mapping[str, Any],
+    resource_evidence: Mapping[str, Any] | None = None,
 ) -> str:
     digest = validate_content_hash(
         payload,
@@ -638,6 +925,11 @@ def validate_storage_measurement(
         projected_peak_bytes=payload["projected_peak_bytes"],
         observed_task_resources=payload["resources"],
         measurement_host=payload["measurement_host"],
+        resource_evidence=(
+            None
+            if payload.get("resource_evidence_sha256") is None
+            else resource_evidence
+        ),
     )
     if dict(payload) != expected:
         raise ValueError("storage measurement semantics differ")
@@ -780,6 +1072,11 @@ def build_resume_plan(
         for task, row in monitored.items()
         if not row["reusable"]
     }
+    invalid.update(
+        task["name"]
+        for task in campaign_spec["tasks"]
+        if task["name"] not in monitored
+    )
     rerun: set[str] = set(invalid)
     changed = True
     while changed:
@@ -799,7 +1096,8 @@ def build_resume_plan(
     stale_pending_job_ids = [
         monitored[name]["job_id"]
         for name in ordered_rerun
-        if monitored[name]["state"]
+        if name in monitored
+        and monitored[name]["state"]
         not in TERMINAL_SUCCESS_STATES | TERMINAL_FAILURE_STATES
     ]
     return with_content_hash(
@@ -931,7 +1229,9 @@ __all__ = [
     "PROJECT_DIR",
     "SBATCH_ACCOUNT",
     "SBATCH_PARTITION",
+    "SLURM_RESOURCE_EVIDENCE_CONTRACT",
     "SUBMISSION_LEDGER_CONTRACT",
+    "SUBMISSION_JOB_RECORD_CONTRACT",
     "STORAGE_MEASUREMENT_CONTRACT",
     "TASK_ATTESTATION_CONTRACT",
     "MONITOR_REPORT_CONTRACT",
@@ -941,7 +1241,10 @@ __all__ = [
     "create_baseline_campaign_spec",
     "build_monitor_report",
     "build_resume_plan",
+    "build_slurm_resource_evidence",
     "build_storage_measurement",
+    "build_submission_job_record",
+    "build_submission_ledger",
     "build_task_attestation",
     "measure_campaign_storage",
     "render_submission_plan",
@@ -950,7 +1253,9 @@ __all__ = [
     "task_by_name",
     "validate_campaign_spec",
     "validate_monitor_report",
+    "validate_slurm_resource_evidence",
     "validate_storage_measurement",
     "validate_submission_ledger",
+    "validate_submission_job_record",
     "validate_task_attestation",
 ]

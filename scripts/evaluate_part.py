@@ -19,7 +19,11 @@ from hlt_classification.data.cache_contracts import (  # noqa: E402
     sha256_file,
     validate_content_hash,
 )
-from hlt_classification.contracts import authorize_final_test_inference  # noqa: E402
+from hlt_classification.contracts import (  # noqa: E402
+    authorize_final_test_inference,
+    consume_final_test_execution_claim,
+    validate_final_test_execution_claim,
+)
 from hlt_classification.data.dataset import ShardedCacheDataset  # noqa: E402
 from hlt_classification.evaluation.inference import (  # noqa: E402
     evaluate_prediction_artifact,
@@ -29,6 +33,9 @@ from hlt_classification.models.particle_transformer import (  # noqa: E402
     build_particle_transformer,
 )
 from hlt_classification.training.checkpoints import load_checkpoint  # noqa: E402
+from hlt_classification.training.checkpoints import (  # noqa: E402
+    restore_model_runtime_state,
+)
 from hlt_classification.training.engine import (  # noqa: E402
     TRAINING_REPORT_CONTRACT,
 )
@@ -47,17 +54,24 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--amp-dtype", choices=("none", "bfloat16"), default="bfloat16")
     parser.add_argument("--finalist-lock", type=Path)
     parser.add_argument("--execution-lock", type=Path)
+    parser.add_argument("--execution-claim", type=Path)
     parser.add_argument("--campaign-spec-sha256")
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    final_test_claim = None
     training_report = load_json(args.training_report)
     validate_content_hash(
         training_report,
         expected_contract=TRAINING_REPORT_CONTRACT,
     )
+    if (
+        training_report.get("parents", {}).get("source_snapshot_sha256")
+        != args.source_snapshot_sha256
+    ):
+        raise ValueError("training report source snapshot differs")
     dataset = ShardedCacheDataset(
         args.hlt_cache,
         expected_cache_kind="hlt",
@@ -77,19 +91,50 @@ def main(argv: Sequence[str] | None = None) -> int:
         if (
             args.finalist_lock is None
             or args.execution_lock is None
+            or args.execution_claim is None
             or args.campaign_spec_sha256 is None
         ):
             raise PermissionError(
                 "final_test inference requires both locks and campaign lineage"
             )
-        authorize_final_test_inference(
-            finalist_lock=load_json(args.finalist_lock),
-            execution_lock=load_json(args.execution_lock),
+        finalist_lock = load_json(args.finalist_lock)
+        execution_lock = load_json(args.execution_lock)
+        execution_hash = authorize_final_test_inference(
+            finalist_lock=finalist_lock,
+            execution_lock=execution_lock,
             checkpoint_sha256=checkpoint_hash,
             final_test_cache_manifest_sha256=dataset.manifest_sha256,
             source_snapshot_sha256=args.source_snapshot_sha256,
             campaign_spec_sha256=args.campaign_spec_sha256,
         )
+        expected_claim = {
+            "execution_lock_sha256": execution_hash,
+            "campaign_spec_sha256": args.campaign_spec_sha256,
+            "checkpoint_sha256": checkpoint_hash,
+            "final_test_cache_manifest_sha256": dataset.manifest_sha256,
+            "source_snapshot_sha256": args.source_snapshot_sha256,
+        }
+        prediction_manifest = args.prediction_dir / "manifest.json"
+        if prediction_manifest.is_file():
+            if not args.execution_claim.is_file():
+                raise PermissionError(
+                    "complete final-test predictions lack their consumed claim"
+                )
+            final_test_claim = load_json(args.execution_claim)
+            validate_final_test_execution_claim(
+                final_test_claim,
+                expected=expected_claim,
+            )
+        else:
+            final_test_claim = consume_final_test_execution_claim(
+                path=args.execution_claim,
+                finalist_lock=finalist_lock,
+                execution_lock=execution_lock,
+                checkpoint_sha256=checkpoint_hash,
+                final_test_cache_manifest_sha256=dataset.manifest_sha256,
+                source_snapshot_sha256=args.source_snapshot_sha256,
+                campaign_spec_sha256=args.campaign_spec_sha256,
+            )
     model = build_particle_transformer()
     payload = load_checkpoint(
         checkpoint_path,
@@ -98,6 +143,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         map_location=args.device,
     )
     model.load_state_dict(payload["model_state"], strict=True)
+    restore_model_runtime_state(model, payload["model_runtime_state"])
     predictions = run_inference(
         model=model,
         dataset=dataset,
@@ -108,12 +154,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         device=args.device,
         amp_dtype=args.amp_dtype,
         progress=lambda value: print(json.dumps(value, sort_keys=True), flush=True),
+        final_test_claim=final_test_claim,
+        final_test_campaign_spec_sha256=args.campaign_spec_sha256,
     )
     metrics = evaluate_prediction_artifact(
         prediction_dir=args.prediction_dir,
         source_dataset=dataset,
         output_path=args.metrics_output,
         source_snapshot_sha256=args.source_snapshot_sha256,
+        final_test_claim=final_test_claim,
+        final_test_campaign_spec_sha256=args.campaign_spec_sha256,
+        final_test_checkpoint_sha256=(
+            checkpoint_hash if dataset.logical_role == "final_test" else None
+        ),
     )
     print(
         json.dumps(

@@ -31,11 +31,53 @@ from hlt_classification.data.part_inputs import (
     build_particle_transformer_inputs_from_cache_batch,
 )
 from hlt_classification.evaluation.metrics import classification_metrics
+from hlt_classification.contracts import validate_final_test_execution_claim
 
 PREDICTION_SHARD_CONTRACT = "hlt_classification_prediction_shard_v1"
 PREDICTION_MANIFEST_CONTRACT = "hlt_classification_prediction_manifest_v1"
 EVALUATION_REPORT_CONTRACT = "hlt_classification_evaluation_report_v1"
 INFERENCE_SCHEMA_VERSION = 1
+
+
+def _validate_final_test_claim_for_inference(
+    *,
+    claim: Mapping[str, Any] | None,
+    campaign_spec_sha256: str | None,
+    checkpoint_sha256: str,
+    cache_manifest_sha256: str,
+    source_snapshot_sha256: str,
+) -> None:
+    """Require the atomically consumed claim on every final-test API path."""
+
+    if claim is None:
+        raise PermissionError(
+            "final_test inference/evaluation requires a consumed execution claim"
+        )
+    if campaign_spec_sha256 is None:
+        raise PermissionError(
+            "final_test inference/evaluation requires campaign lineage"
+        )
+    validate_final_test_execution_claim(
+        claim,
+        expected={
+            "campaign_spec_sha256": require_sha256(
+                campaign_spec_sha256,
+                name="campaign_spec_sha256",
+            ),
+            "checkpoint_sha256": require_sha256(
+                checkpoint_sha256,
+                name="checkpoint_sha256",
+            ),
+            "final_test_cache_manifest_sha256": require_sha256(
+                cache_manifest_sha256,
+                name="final_test_cache_manifest_sha256",
+            ),
+            "source_snapshot_sha256": require_sha256(
+                source_snapshot_sha256,
+                name="source_snapshot_sha256",
+            ),
+        },
+    )
 
 
 def _prediction_paths(root: Path, index: int) -> tuple[Path, Path]:
@@ -165,20 +207,38 @@ def run_inference(
     device: str | torch.device = "cpu",
     amp_dtype: str = "none",
     progress: Callable[[Mapping[str, Any]], None] | None = None,
+    final_test_claim: Mapping[str, Any] | None = None,
+    final_test_campaign_spec_sha256: str | None = None,
 ) -> dict[str, Any]:
     if dataset.cache_kind != "hlt":
         raise ValueError("deployable inference requires an HLT cache")
     if batch_size <= 0 or amp_dtype not in {"none", "bfloat16"}:
         raise ValueError("inference batch size or dtype differs")
+    active_source_hash = require_sha256(
+        source_snapshot_sha256,
+        name="source_snapshot_sha256",
+    )
+    if (
+        dataset.lineage.get("source_snapshot_sha256")
+        != active_source_hash
+    ):
+        raise ValueError("inference cache source snapshot differs")
+    checkpoint_hash = require_sha256(
+        checkpoint_sha256,
+        name="checkpoint_sha256",
+    )
+    if dataset.logical_role == "final_test":
+        _validate_final_test_claim_for_inference(
+            claim=final_test_claim,
+            campaign_spec_sha256=final_test_campaign_spec_sha256,
+            checkpoint_sha256=checkpoint_hash,
+            cache_manifest_sha256=dataset.manifest_sha256,
+            source_snapshot_sha256=active_source_hash,
+        )
     lineage = {
-        "checkpoint_sha256": require_sha256(
-            checkpoint_sha256, name="checkpoint_sha256"
-        ),
+        "checkpoint_sha256": checkpoint_hash,
         "hlt_cache_manifest_sha256": dataset.manifest_sha256,
-        "source_snapshot_sha256": require_sha256(
-            source_snapshot_sha256,
-            name="source_snapshot_sha256",
-        ),
+        "source_snapshot_sha256": active_source_hash,
         "logical_role": dataset.logical_role,
         "amp_dtype": amp_dtype,
     }
@@ -351,14 +411,57 @@ def evaluate_prediction_artifact(
     source_dataset: ShardedCacheDataset,
     output_path: str | Path,
     source_snapshot_sha256: str,
+    final_test_claim: Mapping[str, Any] | None = None,
+    final_test_campaign_spec_sha256: str | None = None,
+    final_test_checkpoint_sha256: str | None = None,
 ) -> dict[str, Any]:
     root = Path(prediction_dir)
+    active_source_hash = require_sha256(
+        source_snapshot_sha256,
+        name="source_snapshot_sha256",
+    )
+    if (
+        source_dataset.lineage.get("source_snapshot_sha256")
+        != active_source_hash
+    ):
+        raise ValueError("evaluation cache source snapshot differs")
+    if source_dataset.logical_role == "final_test":
+        if final_test_claim is None:
+            raise PermissionError(
+                "final_test inference/evaluation requires a consumed "
+                "execution claim"
+            )
+        if final_test_checkpoint_sha256 is None:
+            raise PermissionError(
+                "final_test evaluation requires checkpoint lineage"
+            )
+        _validate_final_test_claim_for_inference(
+            claim=final_test_claim,
+            campaign_spec_sha256=final_test_campaign_spec_sha256,
+            checkpoint_sha256=final_test_checkpoint_sha256,
+            cache_manifest_sha256=source_dataset.manifest_sha256,
+            source_snapshot_sha256=active_source_hash,
+        )
     manifest = load_json(root / "manifest.json")
+    if (
+        final_test_checkpoint_sha256 is not None
+        and manifest.get("lineage", {}).get("checkpoint_sha256")
+        != require_sha256(
+            final_test_checkpoint_sha256,
+            name="final_test_checkpoint_sha256",
+        )
+    ):
+        raise ValueError("evaluation checkpoint lineage differs")
     prediction_hash = validate_prediction_manifest(
         manifest,
         root=root,
         source_dataset=source_dataset,
     )
+    if (
+        manifest["lineage"].get("source_snapshot_sha256")
+        != active_source_hash
+    ):
+        raise ValueError("evaluation prediction source snapshot differs")
     logits: list[np.ndarray] = []
     labels: list[np.ndarray] = []
     for index, record in enumerate(manifest["shards"]):
@@ -385,10 +488,7 @@ def evaluate_prediction_artifact(
             "parents": {
                 "prediction_manifest_sha256": prediction_hash,
                 "hlt_cache_manifest_sha256": source_dataset.manifest_sha256,
-                "source_snapshot_sha256": require_sha256(
-                    source_snapshot_sha256,
-                    name="source_snapshot_sha256",
-                ),
+                "source_snapshot_sha256": active_source_hash,
             },
             "logical_role": source_dataset.logical_role,
             "metrics": metrics,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+from io import BytesIO
 import json
 import os
 from pathlib import Path
@@ -22,12 +23,13 @@ from hlt_classification.data.cache_contracts import (
     write_immutable_json,
 )
 
-TRAINING_CHECKPOINT_CONTRACT = "hlt_classification_training_checkpoint_v1"
+TRAINING_CHECKPOINT_CONTRACT = "hlt_classification_training_checkpoint_v2"
 TRAINING_CHECKPOINT_SCHEMA_VERSION = 1
-CHECKPOINT_SIDECAR_CONTRACT = "hlt_classification_checkpoint_sidecar_v1"
+CHECKPOINT_SIDECAR_CONTRACT = "hlt_classification_checkpoint_sidecar_v2"
 CHECKPOINT_SELECTOR = (
     "minimum_model_val_cross_entropy_then_maximum_accuracy_then_earliest_update"
 )
+MODEL_RUNTIME_STATE_CONTRACT = "hlt_classification_model_runtime_state_v1"
 
 
 @dataclass(frozen=True)
@@ -115,6 +117,77 @@ def restore_rng_state(payload: Mapping[str, Any]) -> None:
         torch.cuda.set_rng_state_all(cuda_states)
 
 
+def capture_model_runtime_state(model: torch.nn.Module) -> dict[str, Any]:
+    """Capture non-state-dict Weaver state that changes future forwards."""
+
+    trimmers = []
+    for module_name, module in model.named_modules():
+        trimmer = getattr(module, "trimmer", None)
+        if (
+            trimmer is None
+            or not hasattr(trimmer, "enabled")
+            or not hasattr(trimmer, "_counter")
+        ):
+            continue
+        counter = int(trimmer._counter)
+        if counter < 0:
+            raise ValueError("model trimmer counter is negative")
+        path = f"{module_name}.trimmer" if module_name else "trimmer"
+        trimmers.append(
+            {
+                "path": path,
+                "enabled": bool(trimmer.enabled),
+                "counter": counter,
+            }
+        )
+    return {
+        "contract": MODEL_RUNTIME_STATE_CONTRACT,
+        "schema_version": 1,
+        "trimmers": trimmers,
+    }
+
+
+def restore_model_runtime_state(
+    model: torch.nn.Module,
+    payload: Mapping[str, Any],
+) -> None:
+    if payload.get("contract") != MODEL_RUNTIME_STATE_CONTRACT:
+        raise ValueError("model runtime-state contract differs")
+    if payload.get("schema_version") != 1:
+        raise ValueError("model runtime-state schema differs")
+    active: dict[str, Any] = {}
+    for module_name, module in model.named_modules():
+        trimmer = getattr(module, "trimmer", None)
+        if (
+            trimmer is not None
+            and hasattr(trimmer, "enabled")
+            and hasattr(trimmer, "_counter")
+        ):
+            path = f"{module_name}.trimmer" if module_name else "trimmer"
+            active[path] = trimmer
+    rows = payload.get("trimmers")
+    if not isinstance(rows, list):
+        raise ValueError("model runtime trimmer registry differs")
+    supplied_paths = [str(row.get("path", "")) for row in rows]
+    if len(supplied_paths) != len(set(supplied_paths)):
+        raise ValueError("model runtime trimmer paths are duplicated")
+    if set(supplied_paths) != set(active):
+        raise ValueError("model runtime trimmer topology differs")
+    for row in rows:
+        if not isinstance(row.get("enabled"), bool):
+            raise ValueError("model runtime trimmer enabled flag differs")
+        counter = row.get("counter")
+        if (
+            not isinstance(counter, int)
+            or isinstance(counter, bool)
+            or counter < 0
+        ):
+            raise ValueError("model runtime trimmer counter differs")
+        trimmer = active[str(row["path"])]
+        trimmer.enabled = row["enabled"]
+        trimmer._counter = counter
+
+
 def validate_checkpoint_parents(parents: Mapping[str, Any]) -> dict[str, str]:
     required = {
         "config_sha256",
@@ -158,6 +231,7 @@ def build_checkpoint_payload(
         "epoch": epoch,
         "update": update,
         "model_state": model.state_dict(),
+        "model_runtime_state": capture_model_runtime_state(model),
         "optimizer_state": optimizer.state_dict(),
         "scheduler_state": {
             "kind": "closed_form_update_schedule",
@@ -200,6 +274,7 @@ def validate_checkpoint_payload(
         raise ValueError("active training configuration hash differs")
     required_states = {
         "model_state",
+        "model_runtime_state",
         "optimizer_state",
         "scheduler_state",
         "scaler_state",
@@ -234,8 +309,13 @@ def atomic_save_checkpoint(
     os.close(handle)
     temporary_path = Path(temporary_name)
     try:
-        torch.save(dict(payload), temporary_path)
-        with temporary_path.open("r+b") as stream:
+        # A file-path save embeds the random temporary filename as the ZIP
+        # archive root. Saving to a buffer fixes that root to ``archive`` and
+        # makes identical checkpoint state produce identical bytes.
+        buffer = BytesIO()
+        torch.save(dict(payload), buffer)
+        with temporary_path.open("wb") as stream:
+            stream.write(buffer.getvalue())
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary_path, destination)
@@ -303,6 +383,12 @@ def load_checkpoint(
         sidecar = json.load(stream)
     if sidecar.get("contract") != CHECKPOINT_SIDECAR_CONTRACT:
         raise ValueError("checkpoint sidecar contract differs")
+    if sidecar.get("schema_version") != TRAINING_CHECKPOINT_SCHEMA_VERSION:
+        raise ValueError("checkpoint sidecar schema version differs")
+    if sidecar.get("checkpoint_filename") != checkpoint_path.name:
+        raise ValueError("checkpoint sidecar filename differs")
+    if sidecar.get("checkpoint_contract") != TRAINING_CHECKPOINT_CONTRACT:
+        raise ValueError("checkpoint sidecar payload contract differs")
     supplied_hash = require_sha256(
         sidecar.get("content_hash"), name="checkpoint_sidecar_content_hash"
     )
@@ -343,8 +429,10 @@ __all__ = [
     "atomic_save_checkpoint",
     "build_checkpoint_payload",
     "capture_rng_state",
+    "capture_model_runtime_state",
     "load_checkpoint",
     "restore_rng_state",
+    "restore_model_runtime_state",
     "selection_is_better",
     "validate_checkpoint_payload",
 ]

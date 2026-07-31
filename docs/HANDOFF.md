@@ -31,7 +31,8 @@ Implemented:
 - frozen accuracy, CE, efficiency, AUC, Brier, 15-bin top-label ECE,
   QCD-rejection, and paired-bootstrap definitions.
 - clean-source snapshots, immutable campaign specifications, storage gates,
-  task attestations, exact-ID Slurm ledgers, monitoring, and resume plans;
+  task attestations, per-job durable submission journals, exact-ID Slurm
+  ledgers, monitoring, and resume plans;
 - thin absolute-path Tigris workers and two-lock final-test authorization;
 - a smoke-only deliberate update-one training interruption followed by
   dependent exact-checkpoint resume through the ordinary training worker.
@@ -78,10 +79,10 @@ Weaver adapter/parity report:
 hlt_classification_weaver_part_v1
 
 training checkpoint:
-hlt_classification_training_checkpoint_v1
+hlt_classification_training_checkpoint_v2
 
 training report:
-hlt_classification_part_training_report_v1
+hlt_classification_part_training_report_v2
 
 prediction manifest:
 hlt_classification_prediction_manifest_v1
@@ -98,14 +99,21 @@ hlt_classification_baseline_campaign_spec_v1
 
 execution evidence:
 hlt_classification_storage_measurement_v1
+hlt_classification_slurm_resource_evidence_v1
+hlt_classification_runtime_environment_v1
 hlt_classification_task_attestation_v1
+hlt_classification_submission_job_record_v1
 hlt_classification_submission_ledger_v1
 hlt_classification_monitor_report_v1
 hlt_classification_resume_plan_v1
 
+smoke interruption evidence:
+hlt_classification_training_interruption_evidence_v1
+
 final-test locks:
 hlt_classification_finalist_lock_v1
 hlt_classification_final_test_execution_lock_v1
+hlt_classification_final_test_execution_claim_v1
 ```
 
 Changing registered-v1 event, substream, replica-cycle, degradation, or cache
@@ -169,7 +177,7 @@ focused Block 7:
 8 passed
 
 complete discovered suite:
-79 passed
+87 passed
 ```
 
 The Block-4 suite proves byte-identical clean versus interrupted/resumed
@@ -181,23 +189,22 @@ output shard, and processing-batch layouts.
 No real Tigris data, GPU, or installed Weaver path was exercised in this
 block. The local environment has PyTorch 2.5.1 but no Weaver installation.
 
-Block 6 focused evidence is 14 passing tests. It includes exact
+The current training/inference/orchestration focused evidence is 24 passing
+tests. It includes exact
 uninterrupted-versus-resumed state equivalence, a deliberately poor model that
 still completes, nonfinite failure injection, bitwise batch-invariant
 prediction shards, and all frozen metric edge cases.
 
-Block 7 focused evidence is 8 passing tests. It includes source drift after an
+The campaign portion includes source drift after an
 all-reused graph, cross-campaign lineage rejection, storage insufficiency,
 exact dependency IDs, task-byte corruption, dry-run nonmutation,
 failed-descendant recovery, stale exact-job cancellation lineage, and
-final-test lock authorization. Python AST parsing and every campaign CLI
-`--help` path pass. A local `bash -n` check could not run because this Windows
-session could not launch its Bash executable; run it on Tigris before
-acceptance.
+final-test lock authorization. Python AST parsing, all 18 script `--help`
+paths, and local `bash -n sbatch/*.sh` pass.
 
 ## Active and next task
 
-Create the initial clean commit, transfer that exact commit to Tigris, run the
+Commit the current audited source, transfer that exact commit to Tigris, run the
 Block-5 authoritative Weaver attestation, and execute the Block-8 miniature:
 
 ```bash

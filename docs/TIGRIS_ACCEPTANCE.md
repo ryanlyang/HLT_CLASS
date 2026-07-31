@@ -107,6 +107,11 @@ python -s scripts/resume_campaign.py \
   --submission-ledger "${CAMPAIGN_ROOT}/ledgers/submission.json" \
   --monitor-report "${CAMPAIGN_ROOT}/ledgers/monitor.json" \
   --output "${CAMPAIGN_ROOT}/ledgers/resume_plan.json"
+python -s scripts/capture_slurm_resources.py \
+  --campaign-spec "${CAMPAIGN_ROOT}/campaign_spec.json" \
+  --submission-ledger "${CAMPAIGN_ROOT}/ledgers/submission.json" \
+  --monitor-report "${CAMPAIGN_ROOT}/ledgers/monitor.json" \
+  --output "${CAMPAIGN_ROOT}/ledgers/slurm_resources.json"
 ```
 
 An entirely successful graph must report every task reusable and no rerun
@@ -120,8 +125,10 @@ Record in `docs/HANDOFF.md`:
 
 - exact Git commit and clean status;
 - Python, Weaver, PyTorch, CUDA, and GPU identity;
+- `training_runtime_environment.json` content hash;
 - campaign root and every exact job ID;
 - complete `sacct` resource rows;
+- `slurm_resources.json` content hash and measured campaign bytes;
 - real-Weaver parity report;
 - cache audit, training resume, prediction, and metric artifact hashes;
 - final miniature metrics;

@@ -15,6 +15,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from hlt_classification.campaign import (  # noqa: E402
+    build_submission_job_record,
     build_resume_plan,
     submit_plan,
     validate_monitor_report,
@@ -67,15 +68,56 @@ def main() -> int:
     if not plan["rerun_tasks"]:
         print(json.dumps({"submitted": False, "reason": "all_tasks_reusable"}))
         return 0
+    root = Path(spec["site"]["campaign_root"])
+    output = root / "ledgers" / f"resume_{monitor['content_hash']}.json"
+    if output.is_file():
+        resumed = load_json(output)
+        validate_submission_ledger(resumed, campaign_spec=spec)
+        print(
+            json.dumps(
+                {
+                    "submitted": False,
+                    "reused": True,
+                    "ledger_path": str(output),
+                    **resumed,
+                }
+            )
+        )
+        return 0
+    journal_root = (
+        root
+        / "ledgers"
+        / f"resume_{monitor['content_hash']}_jobs"
+    )
+    if any(journal_root.glob("*.json")):
+        raise RuntimeError(
+            "partial resume submission journal exists; assemble and recover "
+            "it instead of duplicating submitted jobs"
+        )
+    sequence = 0
+
+    def persist_job(job):
+        nonlocal sequence
+        record = build_submission_job_record(
+            campaign_spec=spec,
+            sequence=sequence,
+            job=job,
+            submission_kind="resume",
+        )
+        write_immutable_json(
+            journal_root / f"{sequence:04d}_{job['task']}.json",
+            record,
+        )
+        sequence += 1
+
     resumed = submit_plan(
         campaign_spec_path=(
             Path(spec["site"]["campaign_root"]) / "campaign_spec.json"
         ),
         campaign_spec=spec,
         task_names=plan["rerun_tasks"],
+        on_submitted=persist_job,
     )
-    root = Path(spec["site"]["campaign_root"])
-    output = root / "ledgers" / f"resume_{monitor['content_hash']}.json"
     write_immutable_json(output, resumed)
     print(json.dumps({"submitted": True, "ledger_path": str(output), **resumed}))
     return 0

@@ -8,6 +8,7 @@ import torch
 from torch import nn
 
 from hlt_classification.data.cache_contracts import canonical_sha256, load_json
+from hlt_classification.contracts import build_final_test_execution_claim
 from hlt_classification.evaluation.inference import (
     evaluate_prediction_artifact,
     run_inference,
@@ -64,6 +65,7 @@ class InferenceCache:
             "identity_order_sha256": canonical_sha256(identities.tolist()),
         }
         self.manifest_sha256 = canonical_sha256({"cache": "validation"})
+        self.lineage = {"source_snapshot_sha256": "b" * 64}
 
     def __len__(self) -> int:
         return len(self._arrays["labels"])
@@ -169,3 +171,99 @@ def test_nonfinite_inference_fails_closed(tmp_path: Path) -> None:
             source_snapshot_sha256="b" * 64,
             batch_size=4,
         )
+
+
+def test_inference_and_evaluation_reject_source_drift(tmp_path: Path) -> None:
+    dataset = InferenceCache()
+    with pytest.raises(ValueError, match="cache source snapshot"):
+        run_inference(
+            model=DeterministicModel(),
+            dataset=dataset,
+            output_dir=tmp_path / "wrong_source",
+            checkpoint_sha256="a" * 64,
+            source_snapshot_sha256="c" * 64,
+            batch_size=4,
+        )
+    run_inference(
+        model=DeterministicModel(),
+        dataset=dataset,
+        output_dir=tmp_path / "predictions",
+        checkpoint_sha256="a" * 64,
+        source_snapshot_sha256="b" * 64,
+        batch_size=4,
+    )
+    with pytest.raises(ValueError, match="cache source snapshot"):
+        evaluate_prediction_artifact(
+            prediction_dir=tmp_path / "predictions",
+            source_dataset=dataset,
+            output_path=tmp_path / "metrics.json",
+            source_snapshot_sha256="c" * 64,
+        )
+
+
+def test_direct_final_test_api_paths_require_execution_claim(
+    tmp_path: Path,
+) -> None:
+    dataset = InferenceCache()
+    dataset.logical_role = "final_test"
+    with pytest.raises(PermissionError, match="consumed execution claim"):
+        run_inference(
+            model=DeterministicModel(),
+            dataset=dataset,
+            output_dir=tmp_path / "final_predictions",
+            checkpoint_sha256="a" * 64,
+            source_snapshot_sha256="b" * 64,
+            batch_size=4,
+        )
+
+    dataset.logical_role = "model_val"
+    run_inference(
+        model=DeterministicModel(),
+        dataset=dataset,
+        output_dir=tmp_path / "predictions",
+        checkpoint_sha256="a" * 64,
+        source_snapshot_sha256="b" * 64,
+        batch_size=4,
+    )
+    dataset.logical_role = "final_test"
+    with pytest.raises(PermissionError, match="consumed execution claim"):
+        evaluate_prediction_artifact(
+            prediction_dir=tmp_path / "predictions",
+            source_dataset=dataset,
+            output_path=tmp_path / "metrics.json",
+            source_snapshot_sha256="b" * 64,
+        )
+
+
+def test_direct_final_test_api_accepts_exact_consumed_claim(
+    tmp_path: Path,
+) -> None:
+    dataset = InferenceCache()
+    dataset.logical_role = "final_test"
+    claim = build_final_test_execution_claim(
+        execution_lock_sha256="d" * 64,
+        campaign_spec_sha256="c" * 64,
+        checkpoint_sha256="a" * 64,
+        final_test_cache_manifest_sha256=dataset.manifest_sha256,
+        source_snapshot_sha256="b" * 64,
+    )
+    run_inference(
+        model=DeterministicModel(),
+        dataset=dataset,
+        output_dir=tmp_path / "predictions",
+        checkpoint_sha256="a" * 64,
+        source_snapshot_sha256="b" * 64,
+        batch_size=4,
+        final_test_claim=claim,
+        final_test_campaign_spec_sha256="c" * 64,
+    )
+    report = evaluate_prediction_artifact(
+        prediction_dir=tmp_path / "predictions",
+        source_dataset=dataset,
+        output_path=tmp_path / "metrics.json",
+        source_snapshot_sha256="b" * 64,
+        final_test_claim=claim,
+        final_test_campaign_spec_sha256="c" * 64,
+        final_test_checkpoint_sha256="a" * 64,
+    )
+    assert report["logical_role"] == "final_test"

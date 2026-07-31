@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import os
+from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from hlt_classification.data.cache_contracts import (
@@ -13,6 +16,9 @@ from hlt_classification.data.cache_contracts import (
 FINALIST_LOCK_CONTRACT = "hlt_classification_finalist_lock_v1"
 FINAL_TEST_EXECUTION_LOCK_CONTRACT = (
     "hlt_classification_final_test_execution_lock_v1"
+)
+FINAL_TEST_EXECUTION_CLAIM_CONTRACT = (
+    "hlt_classification_final_test_execution_claim_v1"
 )
 LOCK_SCHEMA_VERSION = 1
 
@@ -185,12 +191,145 @@ def authorize_final_test_inference(
     return execution_hash
 
 
+def build_final_test_execution_claim(
+    *,
+    execution_lock_sha256: str,
+    campaign_spec_sha256: str,
+    checkpoint_sha256: str,
+    final_test_cache_manifest_sha256: str,
+    source_snapshot_sha256: str,
+) -> dict[str, Any]:
+    return with_content_hash(
+        {
+            "contract": FINAL_TEST_EXECUTION_CLAIM_CONTRACT,
+            "schema_version": LOCK_SCHEMA_VERSION,
+            "execution_lock_sha256": require_sha256(
+                execution_lock_sha256,
+                name="execution_lock_sha256",
+            ),
+            "campaign_spec_sha256": require_sha256(
+                campaign_spec_sha256,
+                name="campaign_spec_sha256",
+            ),
+            "checkpoint_sha256": require_sha256(
+                checkpoint_sha256,
+                name="checkpoint_sha256",
+            ),
+            "final_test_cache_manifest_sha256": require_sha256(
+                final_test_cache_manifest_sha256,
+                name="final_test_cache_manifest_sha256",
+            ),
+            "source_snapshot_sha256": require_sha256(
+                source_snapshot_sha256,
+                name="source_snapshot_sha256",
+            ),
+            "claim_state": "atomically_consumed_before_inference",
+        }
+    )
+
+
+def validate_final_test_execution_claim(
+    payload: Mapping[str, Any],
+    *,
+    expected: Mapping[str, str] | None = None,
+) -> str:
+    digest = validate_content_hash(
+        payload,
+        expected_contract=FINAL_TEST_EXECUTION_CLAIM_CONTRACT,
+    )
+    rebuilt = build_final_test_execution_claim(
+        execution_lock_sha256=payload["execution_lock_sha256"],
+        campaign_spec_sha256=payload["campaign_spec_sha256"],
+        checkpoint_sha256=payload["checkpoint_sha256"],
+        final_test_cache_manifest_sha256=payload[
+            "final_test_cache_manifest_sha256"
+        ],
+        source_snapshot_sha256=payload["source_snapshot_sha256"],
+    )
+    if dict(payload) != rebuilt:
+        raise ValueError("final-test execution claim semantics differ")
+    if expected is not None:
+        differences = [
+            key for key, value in expected.items() if payload.get(key) != value
+        ]
+        if differences:
+            raise PermissionError(
+                f"final-test execution claim lineage differs: {differences}"
+            )
+    return digest
+
+
+def consume_final_test_execution_claim(
+    *,
+    path: str | Path,
+    finalist_lock: Mapping[str, Any],
+    execution_lock: Mapping[str, Any],
+    checkpoint_sha256: str,
+    final_test_cache_manifest_sha256: str,
+    source_snapshot_sha256: str,
+    campaign_spec_sha256: str,
+) -> dict[str, Any]:
+    """Atomically consume the one execution claim; identical reuse is forbidden."""
+
+    execution_hash = authorize_final_test_inference(
+        finalist_lock=finalist_lock,
+        execution_lock=execution_lock,
+        checkpoint_sha256=checkpoint_sha256,
+        final_test_cache_manifest_sha256=final_test_cache_manifest_sha256,
+        source_snapshot_sha256=source_snapshot_sha256,
+        campaign_spec_sha256=campaign_spec_sha256,
+    )
+    claim = build_final_test_execution_claim(
+        execution_lock_sha256=execution_hash,
+        campaign_spec_sha256=campaign_spec_sha256,
+        checkpoint_sha256=checkpoint_sha256,
+        final_test_cache_manifest_sha256=final_test_cache_manifest_sha256,
+        source_snapshot_sha256=source_snapshot_sha256,
+    )
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    serialized = (
+        json.dumps(
+            claim,
+            sort_keys=True,
+            indent=2,
+            ensure_ascii=True,
+            allow_nan=False,
+        ).encode("utf-8")
+        + b"\n"
+    )
+    try:
+        descriptor = os.open(
+            destination,
+            os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+            0o600,
+        )
+    except FileExistsError as error:
+        raise PermissionError(
+            "final-test execution claim was already consumed; automatic "
+            "rerun is forbidden"
+        ) from error
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(serialized)
+            stream.flush()
+            os.fsync(stream.fileno())
+    except BaseException:
+        destination.unlink(missing_ok=True)
+        raise
+    return claim
+
+
 __all__ = [
     "FINALIST_LOCK_CONTRACT",
     "FINAL_TEST_EXECUTION_LOCK_CONTRACT",
+    "FINAL_TEST_EXECUTION_CLAIM_CONTRACT",
     "authorize_final_test_inference",
     "build_final_test_execution_lock",
+    "build_final_test_execution_claim",
     "build_finalist_lock",
     "validate_final_test_execution_lock",
+    "validate_final_test_execution_claim",
     "validate_finalist_lock",
+    "consume_final_test_execution_claim",
 ]
