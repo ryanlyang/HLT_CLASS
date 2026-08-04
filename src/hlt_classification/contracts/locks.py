@@ -320,6 +320,65 @@ def consume_final_test_execution_claim(
     return claim
 
 
+def recover_or_consume_final_test_execution_claim(
+    *,
+    path: str | Path,
+    finalist_lock: Mapping[str, Any],
+    execution_lock: Mapping[str, Any],
+    checkpoint_sha256: str,
+    final_test_cache_manifest_sha256: str,
+    source_snapshot_sha256: str,
+    campaign_spec_sha256: str,
+) -> dict[str, Any]:
+    """Recover one exact consumed claim, or atomically consume it once.
+
+    This is the restart-safe worker entry point.  An existing claim is accepted
+    only when all authorized lineage is byte-for-byte identical.  The lower
+    level :func:`consume_final_test_execution_claim` remains strictly one-shot.
+    """
+
+    execution_hash = authorize_final_test_inference(
+        finalist_lock=finalist_lock,
+        execution_lock=execution_lock,
+        checkpoint_sha256=checkpoint_sha256,
+        final_test_cache_manifest_sha256=final_test_cache_manifest_sha256,
+        source_snapshot_sha256=source_snapshot_sha256,
+        campaign_spec_sha256=campaign_spec_sha256,
+    )
+    expected = {
+        "execution_lock_sha256": execution_hash,
+        "campaign_spec_sha256": campaign_spec_sha256,
+        "checkpoint_sha256": checkpoint_sha256,
+        "final_test_cache_manifest_sha256": final_test_cache_manifest_sha256,
+        "source_snapshot_sha256": source_snapshot_sha256,
+    }
+    destination = Path(path)
+    if not destination.is_file():
+        try:
+            return consume_final_test_execution_claim(
+                path=destination,
+                finalist_lock=finalist_lock,
+                execution_lock=execution_lock,
+                checkpoint_sha256=checkpoint_sha256,
+                final_test_cache_manifest_sha256=(
+                    final_test_cache_manifest_sha256
+                ),
+                source_snapshot_sha256=source_snapshot_sha256,
+                campaign_spec_sha256=campaign_spec_sha256,
+            )
+        except PermissionError:
+            # Another process may have won the exclusive-create race.  It is
+            # recoverable only if it published this exact authorized claim.
+            if not destination.is_file():
+                raise
+    with destination.open("r", encoding="utf-8") as stream:
+        claim = json.load(stream)
+    if not isinstance(claim, dict):
+        raise ValueError("final-test execution claim must contain an object")
+    validate_final_test_execution_claim(claim, expected=expected)
+    return claim
+
+
 __all__ = [
     "FINALIST_LOCK_CONTRACT",
     "FINAL_TEST_EXECUTION_LOCK_CONTRACT",
@@ -332,4 +391,5 @@ __all__ = [
     "validate_final_test_execution_claim",
     "validate_finalist_lock",
     "consume_final_test_execution_claim",
+    "recover_or_consume_final_test_execution_claim",
 ]

@@ -1,0 +1,242 @@
+from __future__ import annotations
+
+import pytest
+
+from hlt_classification.data.cache_contracts import canonical_sha256, with_content_hash
+from hlt_classification.prad.campaign import (
+    PRAD_VARIANTS,
+    build_prad_task_attestation,
+    build_prad_resource_evidence,
+    build_prad_storage_evidence,
+    create_prad_campaign_spec,
+    prad_tasks,
+    render_prad_submission_plan,
+    submit_prad_plan,
+    validate_prad_task_attestation,
+    validate_prad_campaign_spec,
+)
+from hlt_classification.provenance import SOURCE_SNAPSHOT_CONTRACT
+
+
+def _snapshot():
+    core = {
+        "git_commit": "1" * 40,
+        "git_tree": "2" * 40,
+        "tracked_files_sha256": "3" * 64,
+    }
+    return with_content_hash(
+        {
+            "contract": SOURCE_SNAPSHOT_CONTRACT,
+            "schema_version": 1,
+            **core,
+            "tracked_file_count": 20,
+            "worktree_clean": True,
+            "source_snapshot_sha256": canonical_sha256(core),
+        }
+    )
+
+
+def test_prad_smoke_dag_uses_exact_tigris_account_and_dependencies() -> None:
+    spec = create_prad_campaign_spec(
+        source_snapshot=_snapshot(),
+        mode="smoke",
+        campaign_root="/home/ryreu/atlas/HLT_Classification/artifacts/prad/smoke",
+    )
+    validate_prad_campaign_spec(spec)
+    assert tuple(spec["required_full_split"]["sizes"].values()) == (500_000, 150_000, 500_000)
+    assert tuple(spec["split"]["sizes"].values()) == (200, 100, 100)
+    assert set(spec["run_registry"]["core"]) == {f"E{i}" for i in range(11)}
+    assert set(spec["run_registry"]["variants"]) == set(PRAD_VARIANTS)
+    plan = render_prad_submission_plan(
+        campaign_spec_path="/tmp/prad.json", spec=spec
+    )
+    assert all("--account=reu-aisocial" in row["command"] for row in plan)
+    assert all("--partition=tigris" in row["command"] for row in plan)
+    final = next(row for row in plan if row["task"] == "final_test")
+    dependency = next(value for value in final["command"] if value.startswith("--dependency"))
+    assert "${finalist_lock_JOB_ID}" in dependency
+    assert "${paired_test_inputs_JOB_ID}" in dependency
+    baseline = next(row for row in spec["tasks"] if row["name"] == "E0_baseline")
+    assert "prad_runtime" in baseline["dependencies"]
+    assert "targets_val" in baseline["dependencies"]
+    teacher_outputs = next(
+        row for row in spec["tasks"] if row["name"] == "teacher_val_outputs"
+    )
+    assert teacher_outputs["dependencies"] == ["E1_teacher"]
+    finalist = next(row for row in spec["tasks"] if row["name"] == "finalist_lock")
+    assert "paired_test_inputs" in finalist["dependencies"]
+    oracle = next(row for row in spec["tasks"] if row["name"] == "E2_oracle")
+    assert "teacher_val_outputs" in oracle["dependencies"]
+
+
+def test_prad_task_attestation_is_bound_to_exact_array_element() -> None:
+    attestation = build_prad_task_attestation(
+        campaign_spec_sha256="a" * 64,
+        task="confirmation",
+        array_task_id="3",
+        result={"seed": 44},
+    )
+    validate_prad_task_attestation(
+        attestation,
+        campaign_spec_sha256="a" * 64,
+        task="confirmation",
+        array_task_id="3",
+    )
+    with pytest.raises(ValueError, match="lineage"):
+        validate_prad_task_attestation(
+            attestation,
+            campaign_spec_sha256="a" * 64,
+            task="confirmation",
+            array_task_id="2",
+        )
+
+
+def test_prad_production_requires_all_prior_evidence() -> None:
+    with pytest.raises(PermissionError, match="explicit authorization"):
+        create_prad_campaign_spec(
+            source_snapshot=_snapshot(),
+            mode="production",
+            campaign_root="/campaign",
+        )
+    with pytest.raises(ValueError, match="dry_run_report_sha256"):
+        create_prad_campaign_spec(
+            source_snapshot=_snapshot(),
+            mode="production",
+            campaign_root="/campaign",
+            production_authorized=True,
+        )
+
+
+def test_prad_submission_uses_numeric_ids_and_afterok_graph() -> None:
+    spec = create_prad_campaign_spec(
+        source_snapshot=_snapshot(),
+        mode="smoke",
+        campaign_root="/campaign",
+    )
+    counter = iter(range(1000, 1000 + len(spec["tasks"])))
+    ledger = submit_prad_plan(
+        campaign_spec_path="/campaign/campaign_spec.json",
+        spec=spec,
+        executor=lambda _: f"{next(counter)};tigris",
+    )
+    assert len(ledger["jobs"]) == len(spec["tasks"])
+    assert all(row["job_id"].isdigit() for row in ledger["jobs"])
+    oracle = next(row for row in ledger["jobs"] if row["task"] == "E2_oracle")
+    jobs_by_task = {row["task"]: row for row in ledger["jobs"]}
+    oracle_spec = next(row for row in spec["tasks"] if row["name"] == "E2_oracle")
+    expected = (
+        "--dependency=afterok:"
+        + ":".join(
+            jobs_by_task[name]["job_id"] for name in oracle_spec["dependencies"]
+        )
+    )
+    assert expected in oracle["command"]
+
+    resumed_counter = iter(range(3002, 3002 + len(spec["tasks"])))
+    resumed = submit_prad_plan(
+        campaign_spec_path="/campaign/campaign_spec.json",
+        spec=spec,
+        existing_jobs=ledger["jobs"][:2],
+        executor=lambda _: str(next(resumed_counter)),
+    )
+    assert resumed["jobs"][:2] == ledger["jobs"][:2]
+    assert resumed["jobs"][2]["job_id"] == "3002"
+
+
+def test_production_requests_are_bound_to_exact_smoke_resource_evidence() -> None:
+    smoke = create_prad_campaign_spec(
+        source_snapshot=_snapshot(), mode="smoke", campaign_root="/smoke"
+    )
+    counter = iter(range(2000, 2000 + len(smoke["tasks"])))
+    ledger = submit_prad_plan(
+        campaign_spec_path="/smoke/campaign_spec.json",
+        spec=smoke,
+        executor=lambda _: str(next(counter)),
+    )
+    usage = {
+        row["job_id"]: {
+            "state": "COMPLETED",
+            "elapsed_seconds": 10,
+            "max_rss_bytes": 1024,
+            "allocated_cpus": 4,
+        }
+        for row in ledger["jobs"]
+    }
+    requests = {
+        task.name: {
+            "cpus": task.cpus,
+            "memory": task.memory,
+            "walltime": task.walltime,
+            "gpu": task.gpu,
+            "array": task.array,
+        }
+        for task in prad_tasks(smoke=False)
+    }
+    requests["E0_baseline"]["memory"] = "128G"
+    dry_run = with_content_hash(
+        {
+            "contract": "hlt_classification_prad_dry_run_v1",
+            "schema_version": 1,
+            "campaign_spec_sha256": smoke["content_hash"],
+            "mutated": False,
+            "plan": render_prad_submission_plan(
+                campaign_spec_path="/smoke/campaign_spec.json", spec=smoke
+            ),
+        }
+    )
+    task_lookup = {row["name"]: row for row in smoke["tasks"]}
+
+    def attestation_count(task: str) -> int:
+        value = task_lookup[task]["array"]
+        if value is None:
+            return 1
+        bounds = value.split("%", 1)[0].split("-", 1)
+        return int(bounds[1]) - int(bounds[0]) + 1
+
+    monitor = with_content_hash(
+        {
+            "contract": "hlt_classification_prad_monitor_report_v1",
+            "schema_version": 1,
+            "campaign_spec_sha256": smoke["content_hash"],
+            "submission_ledger_sha256": ledger["content_hash"],
+            "jobs": [
+                {
+                    "task": row["task"],
+                    "job_id": row["job_id"],
+                    "state": "COMPLETED",
+                    "attestations": ["c" * 64] * attestation_count(row["task"]),
+                    "reusable": True,
+                }
+                for row in ledger["jobs"]
+            ],
+        }
+    )
+    evidence = build_prad_resource_evidence(
+        smoke_spec=smoke,
+        submission_ledger=ledger,
+        dry_run_report=dry_run,
+        monitor_report=monitor,
+        usage_by_job_id=usage,
+        production_requests=requests,
+        campaign_artifact_bytes=4096,
+        measurement_host="tigris",
+    )
+    storage = build_prad_storage_evidence(
+        resource_evidence=evidence,
+        available_bytes=500 * 1024**3,
+        projected_peak_bytes=200 * 1024**3,
+        required_free_after_peak_bytes=100 * 1024**3,
+        measurement_host="tigris",
+        measurement_path="/home/ryreu/atlas/HLT_Classification/artifacts",
+    )
+    production = create_prad_campaign_spec(
+        source_snapshot=_snapshot(),
+        mode="production",
+        campaign_root="/production",
+        production_authorized=True,
+        resource_evidence=evidence,
+        storage_evidence=storage,
+    )
+    baseline = next(row for row in production["tasks"] if row["name"] == "E0_baseline")
+    assert baseline["memory"] == "128G"
+    assert production["production_evidence"]["resource_evidence_sha256"] == evidence["content_hash"]

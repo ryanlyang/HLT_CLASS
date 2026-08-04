@@ -15,6 +15,15 @@ the source-bound compact campaign, production workers, storage gate,
 monitoring, and exact-ID recovery workflow are implemented. Real Tigris
 acceptance remains.
 
+The active PRAD campaign is implemented locally as a separate authenticated
+three-role campaign: fixed split construction, real-data audit, Hungarian
+association, C/A targets, offline teacher, HLT-only relation-biased student,
+E0--E10 and V1--V10 configurations, exact resume, locked evaluation,
+five-seed reporting, and measured-resource Slurm orchestration are present.
+This is implementation readiness, not a scientific result: installed-Weaver
+parity, a real Tigris miniature, the 500k/150k/500k artifacts, training, and
+the sealed final evaluation remain to be executed.
+
 Do not interpret the presence of plans or directory placeholders as an
 executable scientific pipeline. See [the current handoff](docs/HANDOFF.md).
 
@@ -53,6 +62,8 @@ JetClass data on Tigris:
 - [Repository transfer plan](REPOSITORY_TRANSFER_PLAN.md)
 - [Current handoff](docs/HANDOFF.md)
 - [Research-compute runbook](docs/RESEARCH_COMPUTE_RUNBOOK.md)
+- [PRAD research-compute runbook](docs/PRAD_RUNBOOK.md)
+- [PRAD requirements traceability](docs/PRAD_REQUIREMENTS_TRACEABILITY.md)
 - [Tigris miniature acceptance procedure](docs/TIGRIS_ACCEPTANCE.md)
 - [JetClass and HLT data contract](docs/DATA_CONTRACT.md)
 - [Cross-campaign experiment contract](docs/EXPERIMENT_CONTRACT.md)

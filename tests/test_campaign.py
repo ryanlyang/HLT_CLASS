@@ -34,6 +34,7 @@ from hlt_classification.contracts import (
     build_final_test_execution_lock,
     build_finalist_lock,
     consume_final_test_execution_claim,
+    recover_or_consume_final_test_execution_claim,
     validate_final_test_execution_claim,
 )
 from hlt_classification.data.cache_contracts import (
@@ -534,6 +535,15 @@ def test_final_test_lock_authorization_and_claim_are_exact(
             "source_snapshot_sha256": source,
         },
     )
+    assert recover_or_consume_final_test_execution_claim(
+        path=claim_path,
+        finalist_lock=finalist,
+        execution_lock=execution,
+        checkpoint_sha256=checkpoint,
+        final_test_cache_manifest_sha256=cache,
+        source_snapshot_sha256=source,
+        campaign_spec_sha256=campaign,
+    ) == claim
     with pytest.raises(PermissionError, match="already consumed"):
         consume_final_test_execution_claim(
             path=claim_path,

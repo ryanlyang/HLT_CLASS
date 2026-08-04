@@ -81,6 +81,16 @@ plan:
 |---|---|---|---|
 | `teacher_logit_reco/HLT_OFFLINE_STRUCTURE_DISTILLATION_IMPLEMENTATION_PLAN.md` — `0d4eaab71c13dd64a4af326d085f35259490b90eca084c60d6c6c3a24325a937` | `docs/plans/HLT_OFFLINE_STRUCTURE_DISTILLATION_IMPLEMENTATION_PLAN.md` | all scientific questions, target definitions, controls, split counts, access rules, stages, selectors, metrics, statistics, locks, and acceptance criteria | replaced old repository/runtime paths with `src/hlt_classification/hosd` and local reusable contracts; retained optional donor comparators; required local ports plus donor-parity tests for missing RPT/RETB semantics; reset donor-only implementation statuses. No executable donor code was copied by this document migration. |
 
+## PRAD implementation provenance
+
+PRAD was implemented from the user-supplied repository-root documents
+`prad_implementation_agent_prompt.md` and
+`privileged_relational_attention_proposal(1).md`. No executable donor file,
+checkpoint, cache, metric result, or historical campaign artifact was migrated
+for PRAD. The implementation extends the already mapped canonical Weaver
+wrapper and standalone data/campaign contracts; consequently there is no new
+donor commit or donor-file hash to register for this campaign.
+
 ## Approved transfer surfaces
 
 | Transfer block | Donor surface | Intended retained meaning | Migration policy |

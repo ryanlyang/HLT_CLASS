@@ -36,10 +36,33 @@ Implemented:
 - thin absolute-path Tigris workers and two-lock final-test authorization;
 - a smoke-only deliberate update-one training interruption followed by
   dependent exact-checkpoint resume through the ordinary training worker.
+- the active PRAD implementation: proportional 500k/150k/500k split contract,
+  paired-view audit/cache, replica-aligned charged/neutral Hungarian matching,
+  exclusive C/A K=2/3/4 targets, and train-only moments/positive weights;
+- a parity-oriented offline-teacher/HLT-student Weaver extension with symmetric
+  contextual relations, bounded centered head bias, zero-initialized gates,
+  HLT-only deployment signature, and explicit nondeployable oracle path;
+- optional validated float16 dense teacher relation/bias caching and a
+  mandatory installed-Weaver CUDA PRAD mechanics attestation before E0;
+- configuration-driven E0--E10 and all registered V1--V10 switches, fixed
+  staged budgets, frozen teacher, exact resume, deterministic identity-bound
+  in-batch shuffled control, and five confirmation seeds;
+- PRAD validation selection, bounded relation-fidelity diagnostics, label-free
+  inference, validation benchmarks, pre-test five-seed final selection,
+  restart-safe finalist/execution claims, paired bootstrap reporting for every
+  final five-seed graph, and complete required plot assembly;
+- a source-bound PRAD Tigris DAG using `reu-aisocial`/`tigris`, absolute worker
+  paths, exact numeric dependencies, durable partial-submit recovery, exact-ID
+  monitoring/resume/cancellation, and production requests bound to completed
+  smoke `sacct` evidence plus conservative source-bound storage headroom.
 
 Still not implemented or accepted:
 
 - authoritative installed-Weaver parity and real Tigris miniature;
+- PRAD's real `reports/data_audit.md`, exact full split/cache artifacts,
+  trained checkpoints, experiment results, sealed 500k test metrics, plots,
+  and final scientific recommendation. Those are intentionally not fabricated
+  locally and require the clean committed source plus the real miniature first;
 - all twelve HOSD implementation steps. The migrated plan is authoritative,
   but `src/hlt_classification/hosd/`, its target extractors/caches/teachers,
   taps/heads/probes, auxiliary and feedback training, combinations, metrics,
@@ -50,6 +73,10 @@ No file in this repository imports `Fresh_check` at runtime. The repository
 has an independent Git history. No remote is configured; direct Tigris access
 from the implementation session reached the cluster but was rejected at the
 required interactive Duo MFA step.
+
+The exact PRAD execution sequence, including clean-source transfer, smoke dry
+run, monitored miniature, reviewed resource requests, and separately reviewed
+production dry run, is in `docs/PRAD_RUNBOOK.md`.
 
 ## Contracts added
 
@@ -114,6 +141,25 @@ final-test locks:
 hlt_classification_finalist_lock_v1
 hlt_classification_final_test_execution_lock_v1
 hlt_classification_final_test_execution_claim_v1
+
+PRAD campaign surfaces:
+hlt_classification_prad_split_manifest_v1
+hlt_classification_prad_paired_view_v1
+hlt_classification_prad_structural_targets_v1
+hlt_classification_prad_teacher_outputs_v1
+hlt_classification_prad_relation_v1
+hlt_classification_prad_checkpoint_v1
+hlt_classification_prad_training_report_v1
+hlt_classification_prad_training_v2
+hlt_classification_prad_prediction_manifest_v1
+hlt_classification_prad_evaluation_report_v1
+hlt_classification_prad_campaign_spec_v1
+hlt_classification_prad_submission_ledger_v1
+hlt_classification_prad_task_attestation_v1
+hlt_classification_prad_resource_evidence_v1
+hlt_classification_prad_final_selection_v1
+hlt_classification_prad_runtime_validation_v1
+hlt_classification_prad_statistical_report_v2
 ```
 
 Changing registered-v1 event, substream, replica-cycle, degradation, or cache
@@ -177,7 +223,10 @@ focused Block 7:
 8 passed
 
 complete discovered suite:
-87 passed
+135 passed
+
+focused PRAD suite:
+48 passed
 ```
 
 The Block-4 suite proves byte-identical clean versus interrupted/resumed
@@ -199,18 +248,34 @@ The campaign portion includes source drift after an
 all-reused graph, cross-campaign lineage rejection, storage insufficiency,
 exact dependency IDs, task-byte corruption, dry-run nonmutation,
 failed-descendant recovery, stale exact-job cancellation lineage, and
-final-test lock authorization. Python AST parsing, all 18 script `--help`
-paths, and local `bash -n sbatch/*.sh` pass.
+final-test lock authorization. Python compilation, all 21 PRAD script `--help`
+paths, all 11 shell syntax checks, `git diff --check`, and the whitespace audit
+pass.
+
+The PRAD-focused suite covers exact split constants and proportional/disjoint
+construction, Hungarian thresholds and pair masks, C/A targets, symmetric
+relations, masked centering/bounds, exact zero-gate parity, class-gradient
+flow, replica-aligned target selection, frozen teacher behavior, HLT-only
+inference, test locks, exact checkpoint state, frozen primary metrics,
+train-only statistics, source-bound campaign guards, numeric dependencies,
+partial-submit reuse, smoke-bound production resources, dense teacher-output
+shape/storage validation, accumulated training time, semantic-only causal
+isolation, teacher semantic validation, exact final-claim recovery, exact
+array-element attestations, and synthetic installed-interface runtime
+attestation.
 
 ## Active and next task
 
 Commit the current audited source, transfer that exact commit to Tigris, run the
-Block-5 authoritative Weaver attestation, and execute the Block-8 miniature:
+Block-5 authoritative Weaver attestation, and execute the PRAD real miniature
+exactly as `docs/PRAD_RUNBOOK.md` specifies:
 
 ```bash
 export PYTHONNOUSERSITE=1
 python -s scripts/validate_weaver_parity.py --device cpu
 ```
 
-Do not mark Block 5 accepted until it reports `"passed": true`. Transfer Block
-8 real miniature acceptance and HOSD-plan migration is the next task.
+Do not mark Block 5 or PRAD production readiness accepted until parity reports
+`"passed": true`, every smoke task attestation authenticates, and measured
+resource evidence is captured. A full PRAD campaign remains unauthorized in
+this handoff.

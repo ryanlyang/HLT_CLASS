@@ -79,3 +79,38 @@ actual `sbatch` commands rather than merely validated and ignored.
 Every successful `sbatch --parsable` return is durably journaled before the
 next job is submitted, so a submit-side outage cannot lose already-created
 job IDs or cause an ambiguous duplicate submission.
+
+PRAD campaign foundations:
+
+- `build_prad_splits.py`: exact three-role 500k/150k/500k split, seed 1337;
+- `audit_prad_data.py`: bounded real paired-view and Hungarian-match audit;
+- `build_prad_paired_cache.py`: immutable paired offline/HLT view shards;
+- `build_prad_targets.py`: compact match indices and exclusive-C/A targets.
+- `validate_prad_runtime.py`: installed-Weaver PRAD preflight for zero-gate
+  parity, HLT-only inference, relation/gate gradients, and teacher freezing;
+- `fit_prad_statistics.py`: train-only input moments and semantic positive weights;
+- `train_prad_reference.py`: E0 baseline and E4 logit-KD reference graphs;
+- `train_prad_teacher.py`: from-scratch offline relation teacher;
+- `train_prad_student.py`: E2/E3/E5--E10 and configuration variants;
+- `cache_prad_teacher_outputs.py`: immutable frozen-teacher jet outputs, with
+  optional float16 dense relation/bias tensors and test access requiring the
+  execution lock;
+- `evaluate_prad.py`: HLT-only label-free inference, metrics, and validation
+  resource benchmark;
+- `report_prad.py`: locked five-seed CSV, bootstrap, plot, and report assembly;
+- `create_prad_campaign.py`, `submit_prad_campaign.py`, and
+  `run_prad_task.py`: immutable PRAD campaign construction and execution;
+- `monitor_prad_campaign.py` and `resume_prad_campaign.py`: exact-ID state,
+  attestation validation, and failed-descendant recovery;
+- `cancel_prad_campaign.py`: exact ledger-ID cancellation only;
+- `write_prad_resource_requests.py` and `capture_prad_resources.py`: reviewed
+  production requests bound to completed smoke `sacct` evidence;
+- `measure_prad_storage.py`: conservative production peak and free-space gate
+  bound to the same smoke/source evidence.
+
+The audit and cache commands must run against the real Tigris data before any
+full training submission. Partial cache builds exit 3 and never publish a
+complete manifest.
+
+See [`docs/PRAD_RUNBOOK.md`](../docs/PRAD_RUNBOOK.md) for the ordered Tigris
+commands and production authorization boundary.
