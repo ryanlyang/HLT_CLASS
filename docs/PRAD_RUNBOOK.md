@@ -58,7 +58,10 @@ Inspect every rendered command, requested resource, array, and dependency.
 The smoke DAG runs both canonical installed-Weaver parity and a CUDA PRAD
 mechanics attestation before E0. The latter must authenticate zero-gate
 baseline parity, HLT-only public inference, gradient flow, and frozen-teacher
-behavior in `reports/prad_runtime_validation.json`.
+behavior in `reports/prad_runtime_validation.json`. Its v2 contract also
+reproduces the pair-supervised Stage-A freeze schedule and proves that the
+relation-only loss does not backpropagate through the frozen final-logit
+attention path.
 The 15-node minimum-storage DAG has no durable paired-view, target, or teacher
 cache nodes. Each consuming worker rebuilds the required arrays under its
 Slurm job-local temporary directory, reuses them within that task, and removes

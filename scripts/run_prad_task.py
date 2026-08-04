@@ -628,7 +628,7 @@ def _dispatch(task: str, spec: dict[str, Any], paths: dict[str, Path]) -> dict[s
         report = load_json(output)
         validate_content_hash(
             report,
-            expected_contract="hlt_classification_prad_runtime_validation_v1",
+            expected_contract="hlt_classification_prad_runtime_validation_v2",
         )
         if report.get("passed") is not True:
             raise RuntimeError("installed-Weaver PRAD runtime validation failed")

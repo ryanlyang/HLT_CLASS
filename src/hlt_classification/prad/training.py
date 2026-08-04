@@ -460,7 +460,15 @@ def student_loss(
 
     if stage not in {"A", "B", "C"}:
         raise ValueError("unknown PRAD training stage")
-    zero = output.logits.sum() * 0.0
+    # Stage A trains only the relation path.  Anchoring its zero-valued
+    # placeholders to the final logits needlessly sends a zero gradient
+    # through every later attention block.  In installed CUDA Weaver that
+    # produces an unsupported SDPA backward case where only the additive
+    # attention-bias path requires a gradient.  The relation tensor is
+    # present for every PRAD graph and keeps the placeholders on the correct
+    # device/dtype without connecting Stage A to the frozen classifier path.
+    zero_source = output.relation if stage == "A" else output.logits
+    zero = zero_source.sum() * 0.0
     hard = (
         zero
         if stage == "A" or not experiment.hard_class_loss

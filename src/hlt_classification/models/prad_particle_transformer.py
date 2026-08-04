@@ -23,6 +23,9 @@ from hlt_classification.prad.relation import (
 PRAD_PARTICLE_TRANSFORMER_CONTRACT = (
     "hlt_classification_prad_particle_transformer_v1"
 )
+PRAD_RUNTIME_VALIDATION_CONTRACT = (
+    "hlt_classification_prad_runtime_validation_v2"
+)
 
 PRAD_SCALAR_FEATURE_INDICES = (0, 1, 2, 3, 4, 5, 11, 12, 13, 14, 15, 16)
 PRAD_PID_FEATURE_SLICE = slice(6, 11)
@@ -538,6 +541,69 @@ def validate_prad_runtime(
     with torch.no_grad():
         public_logits = student(points, features, vectors, mask)
 
+    # Reproduce the registered pair-supervised Stage-A freeze schedule.  This
+    # is deliberately separate from the all-trainable mechanics loss above:
+    # optimized CUDA attention kernels can have different backward surfaces
+    # when only a differentiable additive attention bias remains.
+    for parameter in student.parameters():
+        parameter.requires_grad_(False)
+        parameter.grad = None
+    for parameter in student.relation.parameters():
+        parameter.requires_grad_(True)
+    with torch.no_grad():
+        student.gated_bias.raw_gates.zero_()
+    student.train()
+    stage_a_output = student.forward_training(
+        points,
+        features,
+        vectors,
+        mask,
+        pair_payload=torch.zeros(
+            batch_size,
+            1,
+            particles,
+            particles,
+            device=target,
+        ),
+    )
+    stage_a_output.logits.retain_grad()
+    stage_a_valid = (
+        stage_a_output.particle_mask[:, :, None]
+        & stage_a_output.particle_mask[:, None, :]
+    )
+    stage_a_valid &= ~torch.eye(
+        stage_a_valid.shape[-1], dtype=torch.bool, device=target
+    )[None]
+    stage_a_semantic_valid = stage_a_valid[..., None].expand_as(
+        stage_a_output.semantic_logits
+    )
+    # Local imports avoid a model/training import cycle while ensuring the
+    # standalone runtime worker exercises the production loss implementation.
+    from hlt_classification.prad.experiments import CORE_EXPERIMENTS
+    from hlt_classification.prad.training import student_loss
+
+    stage_a_loss = student_loss(
+        output=stage_a_output,
+        labels=labels,
+        experiment=CORE_EXPERIMENTS["E5"],
+        stage="A",
+        semantic_targets=torch.zeros_like(stage_a_output.semantic_logits),
+        semantic_valid=stage_a_semantic_valid,
+        semantic_positive_weights=torch.ones(3, device=target),
+    ).total
+    stage_a_loss.backward()
+    stage_a_relation_gradient_norm = float(
+        sum(
+            parameter.grad.detach().float().square().sum()
+            for parameter in student.relation.parameters()
+            if parameter.grad is not None
+        ).sqrt().cpu()
+    )
+    stage_a_relation_gradients_finite = all(
+        parameter.grad is None or bool(torch.isfinite(parameter.grad).all())
+        for parameter in student.relation.parameters()
+    )
+
     valid_keys = zero_gate_output.particle_mask[:, None, None, :]
     centered_sum = (zero_gate_output.privileged_bias * valid_keys).sum(dim=-1)
     checks = {
@@ -559,10 +625,15 @@ def validate_prad_runtime(
         "nonzero_gate_receives_gradient": gate_gradient_norm > 0.0,
         "teacher_parameters_are_frozen": not teacher_has_gradient,
         "mechanics_loss_finite": bool(torch.isfinite(mechanics_loss)),
+        "stage_a_logits_excluded_from_backward": stage_a_output.logits.grad is None,
+        "stage_a_relation_gradient_finite_nonzero": (
+            stage_a_relation_gradients_finite
+            and stage_a_relation_gradient_norm > 0.0
+        ),
     }
     return {
-        "contract": "hlt_classification_prad_runtime_validation_v1",
-        "schema_version": 1,
+        "contract": PRAD_RUNTIME_VALIDATION_CONTRACT,
+        "schema_version": 2,
         "scope": "synthetic_runtime_mechanics_not_scientific_performance",
         "device": str(target),
         "seed": seed,
@@ -572,6 +643,7 @@ def validate_prad_runtime(
         "maximum_zero_gate_logit_error": maximum_zero_gate_error,
         "relation_gradient_norm": relation_gradient_norm,
         "gate_gradient_norm": gate_gradient_norm,
+        "stage_a_relation_gradient_norm": stage_a_relation_gradient_norm,
         "checks": checks,
         "passed": all(checks.values()),
     }
@@ -579,6 +651,7 @@ def validate_prad_runtime(
 
 __all__ = [
     "PRAD_PARTICLE_TRANSFORMER_CONTRACT",
+    "PRAD_RUNTIME_VALIDATION_CONTRACT",
     "PradForwardOutput",
     "PradParticleTransformer",
     "build_prad_particle_transformer",

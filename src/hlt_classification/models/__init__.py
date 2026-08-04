@@ -10,6 +10,7 @@ from .particle_transformer import (
 )
 from .prad_particle_transformer import (
     PRAD_PARTICLE_TRANSFORMER_CONTRACT,
+    PRAD_RUNTIME_VALIDATION_CONTRACT,
     PradForwardOutput,
     PradParticleTransformer,
     build_prad_particle_transformer,
@@ -19,6 +20,7 @@ from .prad_particle_transformer import (
 __all__ = [
     "PARTICLE_TRANSFORMER_CONTRACT",
     "PRAD_PARTICLE_TRANSFORMER_CONTRACT",
+    "PRAD_RUNTIME_VALIDATION_CONTRACT",
     "CanonicalParticleTransformer",
     "PradForwardOutput",
     "PradParticleTransformer",

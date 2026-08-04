@@ -197,6 +197,65 @@ def test_student_teacher_targets_are_stop_gradient_and_teacher_freezes() -> None
         assert_frozen_teacher_has_no_gradients(teacher)
 
 
+def test_stage_a_loss_does_not_backpropagate_through_final_logits() -> None:
+    batch, particles = 2, 3
+    relation = torch.randn(
+        batch, particles, particles, 3, requires_grad=True
+    )
+    logits = torch.randn(batch, 10, requires_grad=True)
+    particle_mask = torch.ones(batch, particles, dtype=torch.bool)
+    semantic_valid = ~torch.eye(particles, dtype=torch.bool)[None]
+    semantic_valid = semantic_valid[..., None].expand(batch, -1, -1, 3)
+    output = PradForwardOutput(
+        logits=logits,
+        relation=relation,
+        privileged_bias=torch.zeros(batch, 2, particles, particles),
+        semantic_logits=relation,
+        particle_mask=particle_mask,
+        standard_bias=torch.zeros(batch, 2, particles, particles),
+    )
+
+    result = student_loss(
+        output=output,
+        labels=torch.tensor([0, 1]),
+        experiment=CORE_EXPERIMENTS["E5"],
+        stage="A",
+        semantic_targets=torch.zeros_like(relation),
+        semantic_valid=semantic_valid,
+        semantic_positive_weights=torch.ones(3),
+    )
+    result.total.backward()
+
+    assert logits.grad is None
+    assert relation.grad is not None
+    assert torch.isfinite(relation.grad).all()
+
+    # Outside Stage A, retain the historical logits anchor so an unused
+    # relation module (the E2 oracle path) does not acquire a synthetic zero
+    # gradient and AdamW weight decay.
+    stage_c_logits = torch.randn(batch, 10, requires_grad=True)
+    unused_relation = torch.randn(
+        batch, particles, particles, 3, requires_grad=True
+    )
+    stage_c_output = PradForwardOutput(
+        logits=stage_c_logits,
+        relation=unused_relation,
+        privileged_bias=output.privileged_bias,
+        semantic_logits=unused_relation,
+        particle_mask=particle_mask,
+        standard_bias=output.standard_bias,
+    )
+    stage_c_result = student_loss(
+        output=stage_c_output,
+        labels=torch.tensor([0, 1]),
+        experiment=CORE_EXPERIMENTS["E2"],
+        stage="C",
+    )
+    stage_c_result.total.backward()
+    assert stage_c_logits.grad is not None
+    assert unused_relation.grad is None
+
+
 def test_pair_payload_round_trip_preserves_all_training_only_fields() -> None:
     relation = torch.randn(2, 4, 4, 16, requires_grad=True)
     bias = torch.randn(2, 3, 4, 4, requires_grad=True)

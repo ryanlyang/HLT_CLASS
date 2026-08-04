@@ -84,7 +84,7 @@ additionally tested.
 | Baseline reproduced | Pending external execution | full E0 training/evaluation |
 | Teacher trained/frozen | Pending external execution | selected E1 checkpoint and output artifacts |
 | Oracle completed | Pending external execution | E2 validation result |
-| Main architecture implemented | Locally passed | current tests; Tigris runtime attestation still required for production readiness |
+| Main architecture implemented | Locally passed | current tests; v2 Stage-A CUDA runtime attestation still required for production readiness |
 | HLT-only inference | Locally passed | also rechecked in every real evaluation worker |
 | Core causal ablations run | Pending external execution | E3--E10 full-data rows |
 | Priority variants evaluated | Pending oracle/production execution | registered variant rows selected by declared policy |

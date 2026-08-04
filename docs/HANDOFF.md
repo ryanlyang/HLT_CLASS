@@ -186,7 +186,7 @@ hlt_classification_prad_submission_ledger_v1
 hlt_classification_prad_task_attestation_v1
 hlt_classification_prad_resource_evidence_v1
 hlt_classification_prad_final_selection_v1
-hlt_classification_prad_runtime_validation_v1
+hlt_classification_prad_runtime_validation_v2
 hlt_classification_prad_statistical_report_v2
 ```
 
@@ -207,7 +207,7 @@ semantics requires a new applicable scientific or serialized contract version.
 | Canonical ParT transforms | Passed locally | `tests/test_part_inputs.py` |
 | Wrapper/parity logic | Passed with interface-faithful test double | `tests/test_particle_transformer.py` |
 | Installed-Weaver FP32 parity | Passed on Tigris | v3 report at `2b3e34c` matched logits, masks, model state, training-required gradients, and auxiliary Lorentz-gradient topology |
-| Real Tigris minimum-storage miniature | Attempt 3 completed E0 | `41967`--`41972` completed; `41973` exposed a teacher CLI/engine keyword mismatch before teacher training |
+| Real Tigris minimum-storage miniature | Attempt 4 completed through E4 | core-screen array `42015` completed E3/E4; E5--E10 exposed an installed-CUDA Stage-A attention-backward defect |
 | Baseline training/resume | Passed locally | `tests/test_training_engine.py` |
 | Inference and metrics | Passed locally | `tests/test_inference.py`, `tests/test_metrics.py` |
 | Production DAG dry run | Passed locally | `tests/test_campaign.py` |
@@ -251,10 +251,10 @@ focused Block 7:
 8 passed
 
 complete discovered suite:
-147 passed
+148 passed
 
 focused PRAD suite:
-58 passed
+59 passed
 ```
 
 The Block-4 suite proves byte-identical clean versus interrupted/resumed
@@ -323,13 +323,27 @@ keyword set against the real engine signature in a regression, and a tiny
 full-budget teacher test exercises factory construction through compact
 best/final checkpoint publication and rolling-checkpoint removal.
 
+The `58ee660b` miniature passed the repaired teacher path, oracle, and E3/E4.
+Core-screen array `42015` then failed E5--E10 during their relation-only Stage
+A with PyTorch `RuntimeError: LSE is not correctly aligned (strideH)`. Those
+are exactly the pair-supervised graphs; E3 begins directly in all-trainable
+Stage C and completed. The Stage-A loss had anchored zero-valued hard/KD
+placeholders to final logits, unnecessarily asking installed CUDA attention to
+backpropagate a zero gradient through frozen later blocks while only its
+additive bias path remained differentiable. The zero anchor now uses the
+pre-attention relation tensor. A regression requires final logits to receive
+no Stage-A gradient, and runtime-validation v2 reproduces the registered
+freeze schedule on installed CUDA before E0.
+
 ## Active and next task
 
-The local full-suite audit is complete. Commit the teacher factory-interface
-fix, cancel only the pending descendants of `smoke_min_6bcda2d` through its v2
-ledger, transfer the exact fix commit to Tigris, and execute a fresh PRAD real
-miniature exactly as `docs/PRAD_RUNBOOK.md` specifies. It must complete the
-remaining teacher/student, selection, locked-test, and aggregation surfaces.
+The local full-suite audit is complete. Commit the Stage-A graph repair and
+runtime-validation v2, cancel only the pending descendants of
+`smoke_min_58ee660b` through its v2 ledger, transfer the exact fix commit to
+Tigris, and execute a fresh PRAD real miniature exactly as
+`docs/PRAD_RUNBOOK.md` specifies. Runtime-validation v2 must pass before the
+new graph proceeds to E0; the miniature must then complete selection,
+locked-test, and aggregation surfaces.
 
 ```bash
 export PYTHONNOUSERSITE=1
