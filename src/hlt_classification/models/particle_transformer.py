@@ -11,8 +11,8 @@ import torch
 from torch import nn
 
 
-PARTICLE_TRANSFORMER_CONTRACT = "hlt_classification_weaver_part_v1"
-PARTICLE_TRANSFORMER_SCHEMA_VERSION = 1
+PARTICLE_TRANSFORMER_CONTRACT = "hlt_classification_weaver_part_v2"
+PARTICLE_TRANSFORMER_SCHEMA_VERSION = 2
 FP32_ABSOLUTE_TOLERANCE = 1.0e-6
 FP32_RELATIVE_TOLERANCE = 1.0e-5
 
@@ -164,8 +164,12 @@ def validate_weaver_fp32_parity(
         requires_grad=True,
     )
     mask = torch.ones(batch_size, 1, particles, dtype=torch.bool, device=target)
-    mask[0, :, -3:] = False
-    mask[1, :, -1:] = False
+    # Preserve padding coverage without creating a masked-masked pair of
+    # identical zero four-vectors.  Weaver's Lorentz pair features have an
+    # undefined input derivative for that artificial zero/zero pair even
+    # though deployable inputs never differentiate their four-vectors.
+    mask[0, :, -1] = False
+    mask[1, :, -2] = False
     mask_before = mask.clone()
 
     direct_features = feature_base.detach().clone().requires_grad_(True)
@@ -248,6 +252,22 @@ def validate_weaver_fp32_parity(
         and wrapped_features.grad.dtype == torch.float32
     )
     points_ignored = points.grad is None
+    required_gradients = (
+        direct_features.grad,
+        wrapped_features.grad,
+        direct_vectors.grad,
+        wrapped_vectors.grad,
+        *direct_parameter_grads.values(),
+        *wrapped_parameter_grads.values(),
+    )
+    required_tensors_finite = bool(
+        torch.isfinite(direct_logits).all()
+        and torch.isfinite(wrapped_logits).all()
+        and all(
+            gradient is not None and bool(torch.isfinite(gradient).all())
+            for gradient in required_gradients
+        )
+    )
 
     checks = {
         "logits_close": logits_close,
@@ -260,6 +280,7 @@ def validate_weaver_fp32_parity(
         "mask_exact": mask_exact,
         "points_ignored": points_ignored,
         "fp32_outputs_and_gradients": fp32_exact,
+        "required_outputs_and_gradients_finite": required_tensors_finite,
         "mixed_precision_disabled": True,
         "trim_enabled": canonical_particle_transformer_config()["trim"] is True,
     }
@@ -271,6 +292,7 @@ def validate_weaver_fp32_parity(
         "seed": seed,
         "batch_size": batch_size,
         "particles": particles,
+        "masked_particles_per_row": (~mask[:, 0]).sum(dim=1).cpu().tolist(),
         "torch_version": torch.__version__,
         "weaver_module": model_class.__module__,
         "config": canonical_particle_transformer_config(),

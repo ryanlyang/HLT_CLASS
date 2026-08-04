@@ -82,7 +82,7 @@ Block 5:
 
 - exact ParT feature transformations and masking;
 - padding, single-particle, and all-empty rows;
-- real-Weaver FP32 logits, gradients, masks, and state-dictionary parity;
+- real-Weaver FP32 logits, finite gradients, masks, and state-dictionary parity;
 - BF16 finiteness as a separate non-authoritative path test.
 
 Block 6:

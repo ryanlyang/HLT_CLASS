@@ -110,6 +110,7 @@ hlt_classification_part_inputs_v1
 
 Weaver adapter/parity report:
 hlt_classification_weaver_part_v1
+hlt_classification_weaver_part_v2
 
 training checkpoint:
 hlt_classification_training_checkpoint_v2
@@ -184,7 +185,7 @@ semantics requires a new applicable scientific or serialized contract version.
 | HLT shard/batch layout invariance | Passed locally | bitwise concatenated arrays |
 | Canonical ParT transforms | Passed locally | `tests/test_part_inputs.py` |
 | Wrapper/parity logic | Passed with interface-faithful test double | `tests/test_particle_transformer.py` |
-| Installed-Weaver FP32 parity | Pending | first smoke worker failed before invoking parity; rerun fixed source on Tigris |
+| Installed-Weaver FP32 parity | Pending | direct `22c15fc` attempt exposed a Lorentz-gradient NaN consistent with repeated padded zeros; v2 finite-fixture rerun pending |
 | Real Tigris cache miniature | Attempt 1 failed closed | jobs `41126`--`41147`; corrected-source rerun pending |
 | Baseline training/resume | Passed locally | `tests/test_training_engine.py` |
 | Inference and metrics | Passed locally | `tests/test_inference.py`, `tests/test_metrics.py` |
@@ -270,7 +271,13 @@ isolation, teacher semantic validation, exact final-claim recovery, exact
 array-element attestations, and synthetic installed-interface runtime
 attestation. The two Tigris-derived regressions prove split construction is
 invariant to canonical JSON key sorting and independent Weaver dispatch does
-not touch a split artifact.
+not touch a split artifact. A direct installed-Weaver run at corrected commit
+`22c15fc2051f103e50361beb2759731cb956dc8a` then reported zero maximum error
+for logits and feature/parameter gradients but a nonfinite Lorentz-input
+gradient difference. This is consistent with the fixture's multiple identical
+padded zero four-vectors. The v2 parity report tests that diagnosis by retaining
+one masked particle per jet and now explicitly requires every compared output
+and gradient finite; authoritative confirmation remains the Tigris rerun.
 
 ## Active and next task
 

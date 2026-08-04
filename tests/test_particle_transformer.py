@@ -103,6 +103,8 @@ def test_authoritative_parity_function_covers_all_required_surfaces(fake_weaver)
     assert report["authoritative_path"] == "installed_weaver_fp32"
     assert report["config"]["trim"] is True
     assert report["checks"]["mixed_precision_disabled"]
+    assert report["checks"]["required_outputs_and_gradients_finite"]
+    assert report["masked_particles_per_row"] == [1, 1, 0]
     assert all(report["checks"].values())
     assert report["missing_parameter_gradients"] == []
     assert all(value == 0.0 for value in report["maximum_absolute_errors"].values())
