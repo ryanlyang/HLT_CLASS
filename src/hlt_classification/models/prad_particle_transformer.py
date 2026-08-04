@@ -24,7 +24,7 @@ PRAD_PARTICLE_TRANSFORMER_CONTRACT = (
     "hlt_classification_prad_particle_transformer_v1"
 )
 PRAD_RUNTIME_VALIDATION_CONTRACT = (
-    "hlt_classification_prad_runtime_validation_v2"
+    "hlt_classification_prad_runtime_validation_v3"
 )
 
 PRAD_SCALAR_FEATURE_INDICES = (0, 1, 2, 3, 4, 5, 11, 12, 13, 14, 15, 16)
@@ -580,7 +580,13 @@ def validate_prad_runtime(
     # Local imports avoid a model/training import cycle while ensuring the
     # standalone runtime worker exercises the production loss implementation.
     from hlt_classification.prad.experiments import CORE_EXPERIMENTS
-    from hlt_classification.prad.training import student_loss
+    from hlt_classification.prad.training import (
+        PradTrainingConfig,
+        configure_student_stage,
+        prad_attention_backend,
+        prad_attention_kernel,
+        student_loss,
+    )
 
     stage_a_loss = student_loss(
         output=stage_a_output,
@@ -603,6 +609,74 @@ def validate_prad_runtime(
         parameter.grad is None or bool(torch.isfinite(parameter.grad).all())
         for parameter in student.relation.parameters()
     )
+
+    # Stage B intentionally mixes frozen early blocks with trainable later
+    # blocks and a differentiable additive relation bias.  Exercise that exact
+    # topology with the same backend policy used by the production engine.
+    stage_b_config = PradTrainingConfig(
+        experiment=CORE_EXPERIMENTS["E9"],
+        seed=seed,
+        amp_dtype="none",
+    )
+    configure_student_stage(student, stage_b_config, stage_b_config.stage_a_epochs)
+    student.zero_grad(set_to_none=True)
+    student.train()
+    with prad_attention_kernel("B", target):
+        stage_b_output = student.forward_training(
+            points,
+            features,
+            vectors,
+            mask,
+            pair_payload=torch.zeros(
+                batch_size,
+                1,
+                particles,
+                particles,
+                device=target,
+            ),
+        )
+    stage_b_valid = (
+        stage_b_output.particle_mask[:, :, None]
+        & stage_b_output.particle_mask[:, None, :]
+    )
+    stage_b_valid &= ~torch.eye(
+        stage_b_valid.shape[-1], dtype=torch.bool, device=target
+    )[None]
+    stage_b_semantic_valid = stage_b_valid[..., None].expand_as(
+        stage_b_output.semantic_logits
+    )
+    stage_b_loss = student_loss(
+        output=stage_b_output,
+        labels=labels,
+        experiment=CORE_EXPERIMENTS["E9"],
+        stage="B",
+        semantic_targets=torch.zeros_like(stage_b_output.semantic_logits),
+        semantic_valid=stage_b_semantic_valid,
+        semantic_positive_weights=torch.ones(3, device=target),
+        teacher_relation=torch.zeros_like(stage_b_output.relation),
+        teacher_bias=torch.zeros_like(stage_b_output.privileged_bias),
+        teacher_logits=torch.zeros_like(stage_b_output.logits),
+        teacher_true_class_confidence=torch.ones(batch_size, device=target),
+        pair_mask=stage_b_valid,
+        lambda_kd=0.1,
+    ).total
+    stage_b_loss.backward()
+    stage_b_trainable_gradients = [
+        parameter.grad
+        for parameter in student.parameters()
+        if parameter.requires_grad and parameter.grad is not None
+    ]
+    stage_b_gradients_finite = bool(stage_b_trainable_gradients) and all(
+        bool(torch.isfinite(gradient).all())
+        for gradient in stage_b_trainable_gradients
+    )
+    stage_b_gradient_norm = float(
+        sum(
+            gradient.detach().float().square().sum()
+            for gradient in stage_b_trainable_gradients
+        ).sqrt().cpu()
+    )
+    stage_b_backend = prad_attention_backend("B", target)
 
     valid_keys = zero_gate_output.particle_mask[:, None, None, :]
     centered_sum = (zero_gate_output.privileged_bias * valid_keys).sum(dim=-1)
@@ -630,10 +704,16 @@ def validate_prad_runtime(
             stage_a_relation_gradients_finite
             and stage_a_relation_gradient_norm > 0.0
         ),
+        "stage_b_mixed_freeze_gradients_finite_nonzero": (
+            stage_b_gradients_finite and stage_b_gradient_norm > 0.0
+        ),
+        "stage_b_attention_backend_policy_applied": stage_b_backend == (
+            "math" if target.type == "cuda" else "automatic"
+        ),
     }
     return {
         "contract": PRAD_RUNTIME_VALIDATION_CONTRACT,
-        "schema_version": 2,
+        "schema_version": 3,
         "scope": "synthetic_runtime_mechanics_not_scientific_performance",
         "device": str(target),
         "seed": seed,
@@ -644,6 +724,8 @@ def validate_prad_runtime(
         "relation_gradient_norm": relation_gradient_norm,
         "gate_gradient_norm": gate_gradient_norm,
         "stage_a_relation_gradient_norm": stage_a_relation_gradient_norm,
+        "stage_b_attention_backend": stage_b_backend,
+        "stage_b_gradient_norm": stage_b_gradient_norm,
         "checks": checks,
         "passed": all(checks.values()),
     }

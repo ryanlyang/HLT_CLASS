@@ -231,8 +231,12 @@ def test_prad_runtime_attestation_exercises_training_and_deployment_paths() -> N
     assert report["maximum_zero_gate_logit_error"] < 1.0e-6
     assert report["relation_gradient_norm"] > 0.0
     assert report["gate_gradient_norm"] > 0.0
-    assert report["contract"] == "hlt_classification_prad_runtime_validation_v2"
-    assert report["schema_version"] == 2
+    assert report["contract"] == "hlt_classification_prad_runtime_validation_v3"
+    assert report["schema_version"] == 3
     assert report["checks"]["stage_a_logits_excluded_from_backward"]
     assert report["checks"]["stage_a_relation_gradient_finite_nonzero"]
     assert report["stage_a_relation_gradient_norm"] > 0.0
+    assert report["checks"]["stage_b_mixed_freeze_gradients_finite_nonzero"]
+    assert report["checks"]["stage_b_attention_backend_policy_applied"]
+    assert report["stage_b_attention_backend"] == "automatic"
+    assert report["stage_b_gradient_norm"] > 0.0

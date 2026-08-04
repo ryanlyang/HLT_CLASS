@@ -137,12 +137,12 @@ def test_weaver_parity_worker_does_not_require_split_manifest(
     assert commands and commands[0][-2:] == ["--device", "cpu"]
 
 
-def test_prad_runtime_worker_authenticates_v2_report_schema(
+def test_prad_runtime_worker_authenticates_v3_report_schema(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     script_path = Path(__file__).parents[1] / "scripts" / "run_prad_task.py"
     module_spec = importlib.util.spec_from_file_location(
-        "run_prad_task_runtime_v2", script_path
+        "run_prad_task_runtime_v3", script_path
     )
     assert module_spec is not None and module_spec.loader is not None
     module = importlib.util.module_from_spec(module_spec)
@@ -150,8 +150,8 @@ def test_prad_runtime_worker_authenticates_v2_report_schema(
     reports = tmp_path / "reports"
     expected = with_content_hash(
         {
-            "contract": "hlt_classification_prad_runtime_validation_v2",
-            "schema_version": 2,
+            "contract": "hlt_classification_prad_runtime_validation_v3",
+            "schema_version": 3,
             "passed": True,
         }
     )

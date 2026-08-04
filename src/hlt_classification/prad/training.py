@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from dataclasses import dataclass
 import hashlib
 from typing import Any, Mapping, Sequence
@@ -23,7 +24,8 @@ from .losses import (
     temperature_kl_loss,
 )
 
-PRAD_TRAINING_CONTRACT = "hlt_classification_prad_training_v2"
+PRAD_TRAINING_CONTRACT = "hlt_classification_prad_training_v3"
+PRAD_ATTENTION_BACKEND_POLICY = "math_for_stage_b_mixed_freeze_v1"
 PRAD_RELATION_SHUFFLE_ALGORITHM = (
     "within_realized_batch_identity_derangement_v1"
 )
@@ -116,6 +118,7 @@ class PradTrainingConfig:
             "amp_dtype": self.amp_dtype,
             "realization_policy": self.realization_policy,
             "relation_shuffle_algorithm": PRAD_RELATION_SHUFFLE_ALGORITHM,
+            "attention_backend_policy": PRAD_ATTENTION_BACKEND_POLICY,
             "checkpoint_interval_updates": self.checkpoint_interval_updates,
             "history_interval_updates": self.history_interval_updates,
         }
@@ -246,6 +249,23 @@ def kd_coefficient(config: PradTrainingConfig, epoch: int) -> float:
         stage_epoch = epoch - config.stage_a_epochs
         return config.lambda_kd * (stage_epoch + 1) / config.stage_b_epochs
     return config.lambda_kd
+
+
+def prad_attention_backend(stage: str, device: str | torch.device) -> str:
+    """Select the registered attention backend for one training stage."""
+
+    if stage not in {"A", "B", "C"}:
+        raise ValueError("unknown PRAD training stage")
+    target = torch.device(device)
+    return "math" if stage == "B" and target.type == "cuda" else "automatic"
+
+
+def prad_attention_kernel(stage: str, device: str | torch.device):
+    """Use reliable SDPA for Stage B's intentionally mixed freeze graph."""
+
+    if prad_attention_backend(stage, device) == "math":
+        return torch.nn.attention.sdpa_kernel(torch.nn.attention.SDPBackend.MATH)
+    return nullcontext()
 
 
 def _set_trainable(module: nn.Module, enabled: bool) -> None:
@@ -578,6 +598,7 @@ def teacher_loss(
 
 
 __all__ = [
+    "PRAD_ATTENTION_BACKEND_POLICY",
     "PRAD_CONFIRMATION_SEEDS",
     "PRAD_RELATION_SHUFFLE_ALGORITHM",
     "PradTrainingConfig",
@@ -590,6 +611,8 @@ __all__ = [
     "kd_coefficient",
     "map_offline_pairs_to_hlt",
     "pack_training_pair_payload",
+    "prad_attention_backend",
+    "prad_attention_kernel",
     "semantic_targets_from_assignments",
     "stage_for_epoch",
     "student_loss",

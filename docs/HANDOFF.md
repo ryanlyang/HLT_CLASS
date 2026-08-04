@@ -177,7 +177,7 @@ hlt_classification_prad_checkpoint_v1
 hlt_classification_prad_model_checkpoint_v1
 hlt_classification_prad_ephemeral_dataset_v1
 hlt_classification_prad_training_report_v1
-hlt_classification_prad_training_v2
+hlt_classification_prad_training_v3
 hlt_classification_prad_prediction_manifest_v2
 hlt_classification_prad_teacher_prediction_manifest_v1
 hlt_classification_prad_evaluation_report_v1
@@ -186,7 +186,7 @@ hlt_classification_prad_submission_ledger_v1
 hlt_classification_prad_task_attestation_v1
 hlt_classification_prad_resource_evidence_v1
 hlt_classification_prad_final_selection_v1
-hlt_classification_prad_runtime_validation_v2
+hlt_classification_prad_runtime_validation_v3
 hlt_classification_prad_statistical_report_v2
 ```
 
@@ -207,7 +207,7 @@ semantics requires a new applicable scientific or serialized contract version.
 | Canonical ParT transforms | Passed locally | `tests/test_part_inputs.py` |
 | Wrapper/parity logic | Passed with interface-faithful test double | `tests/test_particle_transformer.py` |
 | Installed-Weaver FP32 parity | Passed on Tigris | v3 report at `2b3e34c` matched logits, masks, model state, training-required gradients, and auxiliary Lorentz-gradient topology |
-| Real Tigris minimum-storage miniature | Attempt 5 passed CUDA Stage-A mechanics | job `42084` ran runtime-validation v2 successfully, then exposed a wrapper schema-default mismatch during report authentication |
+| Real Tigris minimum-storage miniature | Attempt 6 completed through E4 | core-screen array `42278` reached Stage B in E5--E10 and exposed an optimized-SDPA mixed-freeze backward incompatibility |
 | Baseline training/resume | Passed locally | `tests/test_training_engine.py` |
 | Inference and metrics | Passed locally | `tests/test_inference.py`, `tests/test_metrics.py` |
 | Production DAG dry run | Passed locally | `tests/test_campaign.py` |
@@ -345,14 +345,30 @@ expected schema version while preserving version 1 as its default, the PRAD
 runtime worker explicitly requests version 2, and a regression exercises the
 real dispatch path with a content-authenticated v2 report.
 
+The `f90cf5fe` miniature then completed its runtime worker, E0 baseline, E1
+teacher, E2 oracle, and E3/E4. Core-screen E5--E10 all failed after the same
+roughly four-minute interval with
+`RuntimeError: LSE is not correctly aligned (strideH)`. Their shared timing
+and exclusive pair-supervised stage schedule identify the transition from the
+repaired relation-only Stage A to partially unfrozen Stage B as the failure
+surface.
+Stage B intentionally freezes early ParT blocks while training later blocks
+and the differentiable relation bias; this differs from both Stage A and E3's
+fully trainable Stage C. Training contract v3 records
+`math_for_stage_b_mixed_freeze_v1`: CUDA Stage B selects PyTorch's reliable
+math SDPA backend, while Stage A, Stage C, CPU, and inference retain automatic
+selection. Runtime-validation v3 now performs a full mixed-freeze Stage-B
+forward/backward with the production loss and requires finite nonzero
+gradients before E0.
+
 ## Active and next task
 
-The local full-suite audit is complete. Commit the runtime-report schema fix,
-cancel only the pending descendants of `smoke_min_d2237422` through its v2
-ledger, transfer the exact fix commit to Tigris, and execute a fresh PRAD real
-miniature exactly as `docs/PRAD_RUNBOOK.md` specifies. The Stage-A CUDA
-mechanics are now authentically passed; the miniature must still complete the
-training, selection, locked-test, and aggregation surfaces.
+Commit the Stage-B backend policy and runtime-validation v3, cancel only the
+pending descendants of `smoke_min_f90cf5fe` through its v2 ledger, transfer
+the exact fix commit to Tigris, and execute a fresh PRAD real miniature exactly
+as `docs/PRAD_RUNBOOK.md` specifies. Runtime-validation v3 must authenticate
+the mixed-freeze CUDA backward before E0; the miniature must still complete
+training, selection, locked-test, and aggregation.
 
 ```bash
 export PYTHONNOUSERSITE=1

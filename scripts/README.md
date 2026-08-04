@@ -92,7 +92,7 @@ PRAD campaign foundations:
 - `build_prad_targets.py`: compact match indices and exclusive-C/A targets.
 - `validate_prad_runtime.py`: installed-Weaver PRAD preflight for zero-gate
   parity, HLT-only inference, relation/gate gradients, teacher freezing, and
-  the relation-only Stage-A CUDA backward surface;
+  the relation-only Stage-A and mixed-freeze Stage-B CUDA backward surfaces;
 - `fit_prad_statistics.py`: train-only input moments and semantic positive weights;
 - `train_prad_reference.py`: E0 baseline and E4 logit-KD reference graphs;
 - `train_prad_teacher.py`: from-scratch offline relation teacher;

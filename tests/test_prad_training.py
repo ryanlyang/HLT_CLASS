@@ -14,6 +14,7 @@ from hlt_classification.prad.experiments import (
     experiment_variant,
 )
 from hlt_classification.prad.training import (
+    PRAD_ATTENTION_BACKEND_POLICY,
     PRAD_CONFIRMATION_SEEDS,
     PRAD_RELATION_SHUFFLE_ALGORITHM,
     PradTrainingConfig,
@@ -23,6 +24,7 @@ from hlt_classification.prad.training import (
     kd_coefficient,
     map_offline_pairs_to_hlt,
     pack_training_pair_payload,
+    prad_attention_backend,
     semantic_targets_from_assignments,
     stage_for_epoch,
     student_loss,
@@ -50,6 +52,17 @@ def test_registered_stages_are_fixed_budget_and_kd_ramps() -> None:
     assert kd_coefficient(config, 5) == pytest.approx(0.1)
     assert kd_coefficient(config, 9) == pytest.approx(0.5)
     assert PRAD_CONFIRMATION_SEEDS == (11, 22, 33, 44, 55)
+    assert config.to_dict()["contract"] == "hlt_classification_prad_training_v3"
+    assert (
+        config.to_dict()["attention_backend_policy"]
+        == PRAD_ATTENTION_BACKEND_POLICY
+    )
+    assert prad_attention_backend("A", torch.device("cuda")) == "automatic"
+    assert prad_attention_backend("B", torch.device("cuda")) == "math"
+    assert prad_attention_backend("C", torch.device("cuda")) == "automatic"
+    assert prad_attention_backend("B", torch.device("cpu")) == "automatic"
+    with pytest.raises(ValueError, match="unknown PRAD training stage"):
+        prad_attention_backend("invalid", torch.device("cpu"))
     control = PradTrainingConfig(CORE_EXPERIMENTS["E3"], seed=11)
     assert stage_for_epoch(control, 0) == "C"
 

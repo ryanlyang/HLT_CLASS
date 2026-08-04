@@ -147,6 +147,15 @@ that diagnostic surface instead of requiring it to be finite. All outputs and
 gradients required by training remain strictly finite. The deployable student
 forward accepts only canonical HLT Particle Transformer inputs.
 
+The registered Stage-B freeze schedule creates a mixed CUDA backward graph:
+early ParT blocks remain frozen while later blocks and the learned additive
+relation bias are trainable. Installed PyTorch's optimized SDPA backend rejects
+that topology. Training contract v3 therefore selects the math SDPA backend
+for CUDA Stage B only; relation-only Stage A and fully trainable Stage C retain
+automatic backend selection. Runtime-validation v3 exercises all three
+topologies before E0, and the selected policy is serialized in every training
+configuration.
+
 ## 6. Training-only targets
 
 - frozen teacher relation bottleneck `r_T`;
