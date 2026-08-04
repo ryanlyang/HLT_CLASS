@@ -22,7 +22,9 @@ Implemented:
 - exact label, identity, role, validity-state, padding, and parent validation;
 - canonical 17-feature Particle Transformer input construction;
 - frozen from-scratch standard-four Weaver baseline adapter and standalone
-  FP32 logits/gradient/mask/state-dictionary attestation.
+  FP32 logits/training-gradient/mask/state-dictionary attestation, including
+  exact topology comparison for Weaver's nonfinite auxiliary Lorentz-input
+  derivative.
 - deterministic shard-local epoch sampling and fixed-update AdamW training;
 - exact model, optimizer, schedule, scaler, sampler, replica-cycle, RNG, and
   history checkpoint resume;
@@ -64,7 +66,12 @@ Still not implemented or accepted:
   failed closed before data/model execution: sorted JSON role keys exposed an
   order-sensitive split-builder check, and the independent Weaver worker read
   the absent split manifest before dispatch. Both defects now have local
-  regressions and fixes; transfer and a new source-bound smoke campaign remain;
+  regressions and fixes. A direct installed-Weaver diagnostic then established
+  that every auxiliary Lorentz-input derivative is NaN for all-valid, singly
+  padded, and multiply padded fixtures alike, while logits, feature gradients,
+  and parameter gradients remain finite. The v3 parity contract compares that
+  diagnostic topology exactly and keeps all training-required quantities
+  strictly finite; its Tigris rerun and a new source-bound smoke remain;
 - PRAD's real `reports/data_audit.md`, exact full split/cache artifacts,
   trained checkpoints, experiment results, sealed 500k test metrics, plots,
   and final scientific recommendation. Those are intentionally not fabricated
@@ -111,6 +118,7 @@ hlt_classification_part_inputs_v1
 Weaver adapter/parity report:
 hlt_classification_weaver_part_v1
 hlt_classification_weaver_part_v2
+hlt_classification_weaver_part_v3
 
 training checkpoint:
 hlt_classification_training_checkpoint_v2

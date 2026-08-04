@@ -11,8 +11,8 @@ import torch
 from torch import nn
 
 
-PARTICLE_TRANSFORMER_CONTRACT = "hlt_classification_weaver_part_v2"
-PARTICLE_TRANSFORMER_SCHEMA_VERSION = 2
+PARTICLE_TRANSFORMER_CONTRACT = "hlt_classification_weaver_part_v3"
+PARTICLE_TRANSFORMER_SCHEMA_VERSION = 3
 FP32_ABSOLUTE_TOLERANCE = 1.0e-6
 FP32_RELATIVE_TOLERANCE = 1.0e-5
 
@@ -106,6 +106,50 @@ def _allclose(left: torch.Tensor, right: torch.Tensor) -> bool:
     )
 
 
+def _nonfinite_topology_and_finite_values_close(
+    left: torch.Tensor,
+    right: torch.Tensor,
+) -> bool:
+    """Compare finite values and the exact NaN/+Inf/-Inf topology."""
+
+    if left.shape != right.shape:
+        return False
+    left_finite = torch.isfinite(left)
+    right_finite = torch.isfinite(right)
+    topology_exact = bool(
+        torch.equal(left_finite, right_finite)
+        and torch.equal(torch.isnan(left), torch.isnan(right))
+        and torch.equal(torch.isposinf(left), torch.isposinf(right))
+        and torch.equal(torch.isneginf(left), torch.isneginf(right))
+    )
+    if not topology_exact:
+        return False
+    if not bool(left_finite.any()):
+        return True
+    return _allclose(left[left_finite], right[right_finite])
+
+
+def _maximum_finite_difference(
+    left: torch.Tensor,
+    right: torch.Tensor,
+) -> float | None:
+    """Return a JSON-safe maximum over entries finite in both tensors."""
+
+    jointly_finite = torch.isfinite(left) & torch.isfinite(right)
+    if not bool(jointly_finite.any()):
+        return None
+    return _maximum_difference(left[jointly_finite], right[jointly_finite])
+
+
+def _nonfinite_counts(value: torch.Tensor) -> dict[str, int]:
+    return {
+        "finite": int(torch.isfinite(value).sum().item()),
+        "nan": int(torch.isnan(value).sum().item()),
+        "positive_infinity": int(torch.isposinf(value).sum().item()),
+        "negative_infinity": int(torch.isneginf(value).sum().item()),
+    }
+
+
 def validate_weaver_fp32_parity(
     *,
     device: str = "cpu",
@@ -164,12 +208,8 @@ def validate_weaver_fp32_parity(
         requires_grad=True,
     )
     mask = torch.ones(batch_size, 1, particles, dtype=torch.bool, device=target)
-    # Preserve padding coverage without creating a masked-masked pair of
-    # identical zero four-vectors.  Weaver's Lorentz pair features have an
-    # undefined input derivative for that artificial zero/zero pair even
-    # though deployable inputs never differentiate their four-vectors.
-    mask[0, :, -1] = False
-    mask[1, :, -2] = False
+    mask[0, :, -3:] = False
+    mask[1, :, -1:] = False
     mask_before = mask.clone()
 
     direct_features = feature_base.detach().clone().requires_grad_(True)
@@ -240,7 +280,9 @@ def validate_weaver_fp32_parity(
     vector_gradients_close = (
         direct_vectors.grad is not None
         and wrapped_vectors.grad is not None
-        and _allclose(direct_vectors.grad, wrapped_vectors.grad)
+        and _nonfinite_topology_and_finite_values_close(
+            direct_vectors.grad, wrapped_vectors.grad
+        )
     )
     mask_exact = torch.equal(mask, mask_before)
     fp32_exact = (
@@ -252,20 +294,18 @@ def validate_weaver_fp32_parity(
         and wrapped_features.grad.dtype == torch.float32
     )
     points_ignored = points.grad is None
-    required_gradients = (
+    required_training_gradients = (
         direct_features.grad,
         wrapped_features.grad,
-        direct_vectors.grad,
-        wrapped_vectors.grad,
         *direct_parameter_grads.values(),
         *wrapped_parameter_grads.values(),
     )
-    required_tensors_finite = bool(
+    required_training_tensors_finite = bool(
         torch.isfinite(direct_logits).all()
         and torch.isfinite(wrapped_logits).all()
         and all(
             gradient is not None and bool(torch.isfinite(gradient).all())
-            for gradient in required_gradients
+            for gradient in required_training_gradients
         )
     )
 
@@ -279,8 +319,10 @@ def validate_weaver_fp32_parity(
         "state_dictionary_values_exact": state_values_exact,
         "mask_exact": mask_exact,
         "points_ignored": points_ignored,
-        "fp32_outputs_and_gradients": fp32_exact,
-        "required_outputs_and_gradients_finite": required_tensors_finite,
+        "fp32_training_outputs_and_gradients": fp32_exact,
+        "required_training_outputs_and_gradients_finite": (
+            required_training_tensors_finite
+        ),
         "mixed_precision_disabled": True,
         "trim_enabled": canonical_particle_transformer_config()["trim"] is True,
     }
@@ -298,12 +340,20 @@ def validate_weaver_fp32_parity(
         "config": canonical_particle_transformer_config(),
         "absolute_tolerance": FP32_ABSOLUTE_TOLERANCE,
         "relative_tolerance": FP32_RELATIVE_TOLERANCE,
+        "lorentz_vector_gradient_training_required": False,
+        "lorentz_vector_gradient_comparison": (
+            "exact_nan_posinf_neginf_topology_and_allclose_finite_entries"
+        ),
+        "lorentz_vector_gradient_nonfinite_counts": {
+            "direct": _nonfinite_counts(direct_vectors.grad),
+            "wrapped": _nonfinite_counts(wrapped_vectors.grad),
+        },
         "maximum_absolute_errors": {
             "logits": _maximum_difference(direct_logits, wrapped_logits),
             "feature_gradients": _maximum_difference(
                 direct_features.grad, wrapped_features.grad
             ),
-            "lorentz_vector_gradients": _maximum_difference(
+            "lorentz_vector_gradients_finite_entries": _maximum_finite_difference(
                 direct_vectors.grad, wrapped_vectors.grad
             ),
             "parameter_gradients": parameter_gradient_maximum,
@@ -342,9 +392,7 @@ def validate_weaver_bf16_finiteness(
     features = torch.randn(
         batch_size, 17, particles, device=target, requires_grad=True
     )
-    vectors = torch.randn(
-        batch_size, 4, particles, device=target, requires_grad=True
-    )
+    vectors = torch.randn(batch_size, 4, particles, device=target)
     points = torch.randn(batch_size, 2, particles, device=target)
     mask = torch.ones(batch_size, 1, particles, dtype=torch.bool, device=target)
     if particles > 1:
@@ -368,9 +416,8 @@ def validate_weaver_bf16_finiteness(
             features.grad is not None
             and bool(torch.isfinite(features.grad).all())
         ),
-        "lorentz_vector_gradients_finite": (
-            vectors.grad is not None
-            and bool(torch.isfinite(vectors.grad).all())
+        "lorentz_vectors_not_differentiated": (
+            not vectors.requires_grad and vectors.grad is None
         ),
         "parameter_gradients_present": all(
             gradient is not None for gradient in parameter_gradients

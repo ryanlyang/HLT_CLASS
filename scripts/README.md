@@ -28,7 +28,11 @@ status 3 and has no final manifest. The HLT CLI emits progress as JSON lines.
 Implemented out of order for Transfer Block 5:
 
 - `validate_weaver_parity.py`: standalone installed-Weaver FP32 comparison of
-  logits, input gradients, parameter gradients, masks, and state dictionaries.
+  logits, feature-input gradients, parameter gradients, masks, and state
+  dictionaries. The auxiliary Lorentz-input derivative is compared by exact
+  finite/NaN/+Inf/-Inf topology because installed Weaver produces nonfinite
+  values there even for all-valid inputs; production training does not
+  differentiate that input.
 
 It requires Weaver and PyTorch. On Tigris, activate `atlas_kd_tigris`, disable
 the user site, and run:

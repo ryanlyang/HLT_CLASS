@@ -137,10 +137,15 @@ gate                        tanh(raw), separate by layer and head, raw=0
 ordinary ParT pair bias     retained
 ```
 
-With gates zero, FP32 evaluation logits, masks, input gradients, shared
-parameter gradients, and shared state tensors must match the canonical
-baseline under their registered tolerances. The deployable student forward
-accepts only canonical HLT Particle Transformer inputs.
+With gates zero, FP32 evaluation logits, masks, feature-input gradients,
+shared parameter gradients, and shared state tensors must match the canonical
+baseline under their registered tolerances. Installed Weaver's standard-four
+pair construction has nonfinite auxiliary Lorentz-input derivatives even for
+all-valid inputs; training does not differentiate those inputs, so parity
+requires exact finite/NaN/+Inf/-Inf topology and matching finite entries for
+that diagnostic surface instead of requiring it to be finite. All outputs and
+gradients required by training remain strictly finite. The deployable student
+forward accepts only canonical HLT Particle Transformer inputs.
 
 ## 6. Training-only targets
 

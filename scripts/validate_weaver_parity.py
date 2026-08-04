@@ -47,7 +47,7 @@ def main() -> int:
         batch_size=args.batch_size,
         particles=args.particles,
     )
-    print(json.dumps(report, indent=2, sort_keys=True))
+    print(json.dumps(report, indent=2, sort_keys=True, allow_nan=False))
     return 0 if report["passed"] else 1
 
 

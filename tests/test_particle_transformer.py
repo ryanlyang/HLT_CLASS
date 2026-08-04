@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 from types import ModuleType
 
@@ -103,11 +104,50 @@ def test_authoritative_parity_function_covers_all_required_surfaces(fake_weaver)
     assert report["authoritative_path"] == "installed_weaver_fp32"
     assert report["config"]["trim"] is True
     assert report["checks"]["mixed_precision_disabled"]
-    assert report["checks"]["required_outputs_and_gradients_finite"]
-    assert report["masked_particles_per_row"] == [1, 1, 0]
+    assert report["checks"]["required_training_outputs_and_gradients_finite"]
+    assert report["masked_particles_per_row"] == [3, 1, 0]
+    assert not report["lorentz_vector_gradient_training_required"]
+    assert report["lorentz_vector_gradient_nonfinite_counts"] == {
+        "direct": {
+            "finite": 84,
+            "nan": 0,
+            "positive_infinity": 0,
+            "negative_infinity": 0,
+        },
+        "wrapped": {
+            "finite": 84,
+            "nan": 0,
+            "positive_infinity": 0,
+            "negative_infinity": 0,
+        },
+    }
     assert all(report["checks"].values())
     assert report["missing_parameter_gradients"] == []
     assert all(value == 0.0 for value in report["maximum_absolute_errors"].values())
+    json.dumps(report, allow_nan=False)
+
+
+def test_nonfinite_gradient_comparison_requires_exact_topology() -> None:
+    left = torch.tensor([float("nan"), float("inf"), -float("inf"), 1.0])
+    equal = torch.tensor([float("nan"), float("inf"), -float("inf"), 1.0])
+    wrong_topology = torch.tensor(
+        [float("inf"), float("nan"), -float("inf"), 1.0]
+    )
+    wrong_finite_value = torch.tensor(
+        [float("nan"), float("inf"), -float("inf"), 2.0]
+    )
+
+    assert part._nonfinite_topology_and_finite_values_close(left, equal)
+    assert not part._nonfinite_topology_and_finite_values_close(
+        left, wrong_topology
+    )
+    assert not part._nonfinite_topology_and_finite_values_close(
+        left, wrong_finite_value
+    )
+    assert part._maximum_finite_difference(left, equal) == 0.0
+    assert part._maximum_finite_difference(
+        left[:3], equal[:3]
+    ) is None
 
 
 def test_bf16_is_separate_non_authoritative_finiteness_path(fake_weaver) -> None:
