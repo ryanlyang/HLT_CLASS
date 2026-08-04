@@ -207,7 +207,7 @@ semantics requires a new applicable scientific or serialized contract version.
 | Canonical ParT transforms | Passed locally | `tests/test_part_inputs.py` |
 | Wrapper/parity logic | Passed with interface-faithful test double | `tests/test_particle_transformer.py` |
 | Installed-Weaver FP32 parity | Passed on Tigris | v3 report at `2b3e34c` matched logits, masks, model state, training-required gradients, and auxiliary Lorentz-gradient topology |
-| Real Tigris minimum-storage miniature | Pending | older disk-backed attempts do not validate the v2 DAG or ephemeral cleanup |
+| Real Tigris minimum-storage miniature | Attempt 2 reached E0 evaluation | `41820`--`41824` completed; `41825` exposed tensor-buffer trimmer restore compatibility after E0 training completed |
 | Baseline training/resume | Passed locally | `tests/test_training_engine.py` |
 | Inference and metrics | Passed locally | `tests/test_inference.py`, `tests/test_metrics.py` |
 | Production DAG dry run | Passed locally | `tests/test_campaign.py` |
@@ -251,7 +251,7 @@ focused Block 7:
 8 passed
 
 complete discovered suite:
-144 passed
+145 passed
 
 focused PRAD suite:
 53 passed
@@ -305,13 +305,21 @@ padded zero four-vectors. The v3 contract instead authenticates exact nonfinite
 topology for that unused derivative while requiring every training surface
 finite; its Tigris run at `2b3e34c` passed with exit code zero.
 
+The first minimum-storage miniature at `288aafc` authenticated split, audit,
+installed-Weaver parity, CUDA PRAD runtime, and task-local train statistics in
+jobs `41820`--`41824`. E0 job `41825` completed training and published compact
+model checkpoints, then failed closed when evaluation restored Weaver's
+registered tensor `_counter` buffer by assigning a Python integer. The restore
+helper now mutates tensor counters in place while preserving legacy integer
+counters, with a regression that proves registered-buffer identity and value.
+
 ## Active and next task
 
-The local full-suite audit is complete. Commit the minimum-storage source and
-transfer that exact commit to Tigris only after the older `2b3e34c` smoke has
-finished or been cancelled by its exact campaign job IDs. Then execute a new
-PRAD real miniature exactly as `docs/PRAD_RUNBOOK.md` specifies. It must prove
-the 15-node DAG, job-local cleanup, compact checkpoint loading, and measured
+The local full-suite audit is complete. Commit the tensor-buffer compatibility
+fix, cancel only the pending descendants of `smoke_min_288aafc` through its v2
+ledger, transfer the exact fix commit to Tigris, and execute a fresh PRAD real
+miniature exactly as `docs/PRAD_RUNBOOK.md` specifies. It must prove the
+15-node DAG, job-local cleanup, compact checkpoint loading, and measured
 durable size.
 
 ```bash

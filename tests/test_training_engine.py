@@ -168,6 +168,21 @@ class StatefulTrimmerClassifier(TinyClassifier):
         return logits + offsets * self.trimmer._counter * 1.0e-4
 
 
+class _TensorCounterTrimmer(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.enabled = True
+        self.register_buffer(
+            "_counter", torch.tensor(0, dtype=torch.long), persistent=False
+        )
+
+
+class TensorCounterTrimmerClassifier(TinyClassifier):
+    def __init__(self) -> None:
+        super().__init__()
+        self.trimmer = _TensorCounterTrimmer()
+
+
 def _config() -> TrainingConfig:
     return TrainingConfig(
         total_updates=6,
@@ -257,6 +272,21 @@ def test_model_runtime_trimmer_state_round_trips_exactly() -> None:
     restore_model_runtime_state(target, state)
     assert target.trimmer.enabled is False
     assert target.trimmer._counter == 17
+
+
+def test_model_runtime_restore_preserves_registered_tensor_counter() -> None:
+    source = TensorCounterTrimmerClassifier()
+    source.trimmer.enabled = False
+    source.trimmer._counter.fill_(23)
+    state = capture_model_runtime_state(source)
+    target = TensorCounterTrimmerClassifier()
+    original_counter = target.trimmer._counter
+
+    restore_model_runtime_state(target, state)
+
+    assert target.trimmer.enabled is False
+    assert target.trimmer._counter is original_counter
+    assert target.trimmer._counter.item() == 23
 
 
 def test_interrupted_resume_matches_uninterrupted_exactly(tmp_path: Path) -> None:

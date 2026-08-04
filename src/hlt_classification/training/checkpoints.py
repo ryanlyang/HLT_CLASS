@@ -185,7 +185,17 @@ def restore_model_runtime_state(
             raise ValueError("model runtime trimmer counter differs")
         trimmer = active[str(row["path"])]
         trimmer.enabled = row["enabled"]
-        trimmer._counter = counter
+        current_counter = trimmer._counter
+        if torch.is_tensor(current_counter):
+            if current_counter.numel() != 1:
+                raise ValueError("model runtime tensor counter shape differs")
+            # Newer PyTorch/Weaver versions register the counter as a buffer.
+            # Mutate it in place so Module.__setattr__ is never asked to
+            # replace a registered Tensor buffer with a Python integer.
+            with torch.no_grad():
+                current_counter.fill_(counter)
+        else:
+            trimmer._counter = counter
 
 
 def validate_checkpoint_parents(parents: Mapping[str, Any]) -> dict[str, str]:
