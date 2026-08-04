@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import importlib.util
+from pathlib import Path
+
 import pytest
 
 from hlt_classification.data.cache_contracts import canonical_sha256, with_content_hash
@@ -89,6 +92,30 @@ def test_prad_task_attestation_is_bound_to_exact_array_element() -> None:
             task="confirmation",
             array_task_id="2",
         )
+
+
+def test_weaver_parity_worker_does_not_require_split_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    script_path = Path(__file__).parents[1] / "scripts" / "run_prad_task.py"
+    module_spec = importlib.util.spec_from_file_location(
+        "run_prad_task_regression", script_path
+    )
+    assert module_spec is not None and module_spec.loader is not None
+    module = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(module)
+    commands = []
+    monkeypatch.setattr(module, "_run", lambda command: commands.append(command))
+    result = module._dispatch(
+        "weaver_parity",
+        {
+            "source_snapshot": {"source_snapshot_sha256": "a" * 64},
+            "site": {"project_dir": "/project"},
+        },
+        {"split": tmp_path / "missing.json"},
+    )
+    assert result == {"validated": True}
+    assert commands and commands[0][-2:] == ["--device", "cpu"]
 
 
 def test_prad_production_requires_all_prior_evidence() -> None:

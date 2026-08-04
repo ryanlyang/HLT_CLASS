@@ -186,8 +186,11 @@ def build_prad_split_manifest(
 ) -> PradSplitManifest:
     """Build the exact PRAD population and atomically publish role files."""
 
-    if tuple(split_sizes) != PRAD_SPLIT_ROLES:
-        raise ValueError("PRAD split sizes must use canonical role order")
+    # JSON objects are intentionally serialized with sorted keys, so mapping
+    # insertion order is not scientific semantics.  Authenticate exact role
+    # coverage, then normalize into the canonical order below.
+    if set(split_sizes) != set(PRAD_SPLIT_ROLES):
+        raise ValueError("PRAD split sizes must cover the canonical roles")
     sizes = {role: int(split_sizes[role]) for role in PRAD_SPLIT_ROLES}
     if seed != PRAD_SPLIT_SEED:
         raise ValueError(f"PRAD split seed must be {PRAD_SPLIT_SEED}")

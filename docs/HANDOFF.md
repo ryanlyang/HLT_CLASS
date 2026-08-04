@@ -58,7 +58,13 @@ Implemented:
 
 Still not implemented or accepted:
 
-- authoritative installed-Weaver parity and real Tigris miniature;
+- authoritative installed-Weaver parity and a completed real Tigris miniature.
+  The first authentic PRAD smoke submission, source commit
+  `8bb20be8cb351f0a0fd71f50dabcc03467790161` and jobs `41126`--`41147`,
+  failed closed before data/model execution: sorted JSON role keys exposed an
+  order-sensitive split-builder check, and the independent Weaver worker read
+  the absent split manifest before dispatch. Both defects now have local
+  regressions and fixes; transfer and a new source-bound smoke campaign remain;
 - PRAD's real `reports/data_audit.md`, exact full split/cache artifacts,
   trained checkpoints, experiment results, sealed 500k test metrics, plots,
   and final scientific recommendation. Those are intentionally not fabricated
@@ -178,8 +184,8 @@ semantics requires a new applicable scientific or serialized contract version.
 | HLT shard/batch layout invariance | Passed locally | bitwise concatenated arrays |
 | Canonical ParT transforms | Passed locally | `tests/test_part_inputs.py` |
 | Wrapper/parity logic | Passed with interface-faithful test double | `tests/test_particle_transformer.py` |
-| Installed-Weaver FP32 parity | Pending | run on Tigris |
-| Real Tigris cache miniature | Not run | Transfer Block 8 |
+| Installed-Weaver FP32 parity | Pending | first smoke worker failed before invoking parity; rerun fixed source on Tigris |
+| Real Tigris cache miniature | Attempt 1 failed closed | jobs `41126`--`41147`; corrected-source rerun pending |
 | Baseline training/resume | Passed locally | `tests/test_training_engine.py` |
 | Inference and metrics | Passed locally | `tests/test_inference.py`, `tests/test_metrics.py` |
 | Production DAG dry run | Passed locally | `tests/test_campaign.py` |
@@ -223,10 +229,10 @@ focused Block 7:
 8 passed
 
 complete discovered suite:
-135 passed
+137 passed
 
 focused PRAD suite:
-48 passed
+50 passed
 ```
 
 The Block-4 suite proves byte-identical clean versus interrupted/resumed
@@ -262,7 +268,9 @@ partial-submit reuse, smoke-bound production resources, dense teacher-output
 shape/storage validation, accumulated training time, semantic-only causal
 isolation, teacher semantic validation, exact final-claim recovery, exact
 array-element attestations, and synthetic installed-interface runtime
-attestation.
+attestation. The two Tigris-derived regressions prove split construction is
+invariant to canonical JSON key sorting and independent Weaver dispatch does
+not touch a split artifact.
 
 ## Active and next task
 

@@ -80,6 +80,25 @@ def test_prad_split_is_deterministic_exact_and_disjoint(tmp_path) -> None:
         )
 
 
+def test_prad_split_mapping_order_is_not_scientific_semantics(tmp_path) -> None:
+    # Immutable JSON publication sorts object keys as test/train/val.
+    json_ordered_sizes = {"test": 10, "train": 20, "val": 10}
+    manifest = build_prad_split_manifest(
+        _records(),
+        data_root=str(tmp_path),
+        output_dir=tmp_path / "json_order",
+        split_sizes=json_ordered_sizes,
+    )
+    assert [len(manifest.identities(role)) for role in PRAD_SPLIT_ROLES] == [20, 10, 10]
+    with pytest.raises(ValueError, match="canonical roles"):
+        build_prad_split_manifest(
+            _records(),
+            data_root=str(tmp_path),
+            output_dir=tmp_path / "wrong_roles",
+            split_sizes={"train": 20, "val": 10, "other": 10},
+        )
+
+
 def test_prad_split_tracks_inventory_class_proportions(tmp_path) -> None:
     records = tuple(
         FileRecord(

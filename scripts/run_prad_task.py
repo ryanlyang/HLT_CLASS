@@ -404,19 +404,6 @@ def _dispatch(task: str, spec: dict[str, Any], paths: dict[str, Path]) -> dict[s
             split_sizes=spec["split"]["sizes"],
         )
         return manifest.audit()
-    manifest = load_prad_split_manifest(paths["split"])
-    if task == "data_audit":
-        from hlt_classification.data.identity import FileRecord
-
-        report = run_prad_data_audit(
-            files=tuple(FileRecord.from_dict(item) for item in manifest.payload["files"]),
-            identities=manifest.identities("train")[: min(1000, len(manifest.identities("train")))],
-            data_root=manifest.payload["data_root"],
-            split_manifest_sha256=manifest.content_hash,
-            output_markdown=paths["reports"] / "data_audit.md",
-            output_json=paths["reports"] / "data_audit.json",
-        )
-        return {"report_sha256": report["content_hash"]}
     if task == "weaver_parity":
         _run(_python(spec, "validate_weaver_parity.py", "--device", "cpu"))
         return {"validated": True}
@@ -439,6 +426,19 @@ def _dispatch(task: str, spec: dict[str, Any], paths: dict[str, Path]) -> dict[s
         )
         if report.get("passed") is not True:
             raise RuntimeError("installed-Weaver PRAD runtime validation failed")
+        return {"report_sha256": report["content_hash"]}
+    manifest = load_prad_split_manifest(paths["split"])
+    if task == "data_audit":
+        from hlt_classification.data.identity import FileRecord
+
+        report = run_prad_data_audit(
+            files=tuple(FileRecord.from_dict(item) for item in manifest.payload["files"]),
+            identities=manifest.identities("train")[: min(1000, len(manifest.identities("train")))],
+            data_root=manifest.payload["data_root"],
+            split_manifest_sha256=manifest.content_hash,
+            output_markdown=paths["reports"] / "data_audit.md",
+            output_json=paths["reports"] / "data_audit.json",
+        )
         return {"report_sha256": report["content_hash"]}
     if task.startswith("paired_"):
         role = {"paired_train": "train", "paired_val": "val", "paired_test_inputs": "test"}[task]
