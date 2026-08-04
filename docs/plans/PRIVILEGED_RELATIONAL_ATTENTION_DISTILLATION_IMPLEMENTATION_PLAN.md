@@ -157,12 +157,27 @@ forward accepts only canonical HLT Particle Transformer inputs.
   assignments;
 - deterministic Hungarian HLT-to-offline match and derived pair mask.
 
-Dense pair arrays are not persisted by default. Builders use bounded identity
-shards; compact assignments, cluster IDs, teacher jet outputs, and hashes are
-stored, while relation tensors are recomputed or streamed in bounded chunks.
-The teacher-output CLI exposes an explicit `--dense-pairs` mode that persists
-validated float16 relation and centered-bias outputs when a reviewed storage
-projection includes them; the default campaign deliberately streams them.
+The production campaign uses the versioned
+`prad_minimum_durable_storage_v1` profile. Paired offline/HLT views, compact
+assignments, cluster IDs, and teacher jet outputs are rebuilt under
+`$SLURM_TMPDIR` (falling back to `/dev/shm`) for the task that consumes them
+and are deleted when that task exits. The worker rejects a temporary root
+inside the project or campaign tree. Standalone CLIs also support direct
+process-memory reconstruction. None of these large arrays consume durable
+campaign quota.
+
+Only the split, train-only statistics, reports, compact best/final model
+checkpoints, locks, and compact predictions survive successful tasks. A full
+optimizer/RNG checkpoint is a single rolling `last.pt` per active run so a
+preempted job remains exactly resumable; it is deleted after its immutable
+training report and both required model-only checkpoints are published.
+Prediction shards store only ten float32 logits. Their stable identities are
+reconstructed from authenticated split row ranges rather than duplicated in
+every file.
+
+The teacher-output CLI retains an explicit `--dense-pairs` diagnostic mode,
+but the campaign never enables it. Dense relation and centered-bias tensors
+are recomputed in bounded batches.
 
 ## 7. Experiment registry
 
@@ -207,3 +222,9 @@ acceptance additionally requires real JetClass capacity, a genuine Tigris
 miniature through the production workers, measured storage/resources, exact
 committed source, all registered full-data rows, five-seed confirmation, and
 the sealed 500k final evaluation.
+
+The minimum-storage estimator covers the deliberately uncapped one-percent
+confirmation rule and therefore assumes every eligible graph advances. Its
+current conservative durable peak is about 29 GiB, down from the disk-backed
+cache design's roughly 119 GiB. The ordinary case should be smaller, but only
+the new real miniature may replace this bound with measured evidence.

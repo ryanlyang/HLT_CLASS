@@ -24,14 +24,20 @@ from hlt_classification.prad.teacher_engine import (  # noqa: E402
     PradTeacherTrainingConfig,
     train_prad_teacher,
 )
+from hlt_classification.prad.splits import load_prad_split_manifest  # noqa: E402
+from hlt_classification.prad.streaming import (  # noqa: E402
+    build_in_memory_paired_views,
+    build_in_memory_structural_targets,
+)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--train-paired-cache", type=Path, required=True)
-    parser.add_argument("--train-target-cache", type=Path, required=True)
-    parser.add_argument("--validation-paired-cache", type=Path, required=True)
-    parser.add_argument("--validation-target-cache", type=Path, required=True)
+    parser.add_argument("--train-paired-cache", type=Path)
+    parser.add_argument("--train-target-cache", type=Path)
+    parser.add_argument("--validation-paired-cache", type=Path)
+    parser.add_argument("--validation-target-cache", type=Path)
+    parser.add_argument("--streaming-split-manifest", type=Path)
     parser.add_argument("--semantic-weights", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--source-snapshot-sha256", required=True)
@@ -44,14 +50,55 @@ def main() -> int:
     parser.add_argument("--stop-after-update", type=int)
     args = parser.parse_args()
     weights = load_json(args.semantic_weights)
+    durable_paths = (
+        args.train_paired_cache,
+        args.train_target_cache,
+        args.validation_paired_cache,
+        args.validation_target_cache,
+    )
+    if args.streaming_split_manifest is not None:
+        if any(path is not None for path in durable_paths):
+            raise ValueError("streaming PRAD teacher forbids durable caches")
+        split = load_prad_split_manifest(args.streaming_split_manifest)
+        train_views = build_in_memory_paired_views(
+            split,
+            logical_role="train",
+            replica_ids=(0,),
+            source_snapshot_sha256=args.source_snapshot_sha256,
+        )
+        validation_views = build_in_memory_paired_views(
+            split,
+            logical_role="val",
+            replica_ids=(0,),
+            source_snapshot_sha256=args.source_snapshot_sha256,
+        )
+        train_dataset = train_views[0]
+        train_target_dataset = build_in_memory_structural_targets(
+            split,
+            paired_views=train_views,
+            source_snapshot_sha256=args.source_snapshot_sha256,
+        )[0]
+        validation_dataset = validation_views[0]
+        validation_target_dataset = build_in_memory_structural_targets(
+            split,
+            paired_views=validation_views,
+            source_snapshot_sha256=args.source_snapshot_sha256,
+        )[0]
+    else:
+        if any(path is None for path in durable_paths):
+            raise ValueError("durable PRAD teacher requires all cache paths")
+        train_dataset = PradCacheDataset(args.train_paired_cache)
+        train_target_dataset = PradCacheDataset(args.train_target_cache)
+        validation_dataset = PradCacheDataset(args.validation_paired_cache)
+        validation_target_dataset = PradCacheDataset(args.validation_target_cache)
     report = train_prad_teacher(
         model_factory=lambda: build_prad_particle_transformer(
             relation_dim=args.relation_dim
         ),
-        train_paired_cache=PradCacheDataset(args.train_paired_cache),
-        train_targets=PradCacheDataset(args.train_target_cache),
-        validation_paired_cache=PradCacheDataset(args.validation_paired_cache),
-        validation_targets=PradCacheDataset(args.validation_target_cache),
+        train_paired_cache=train_dataset,
+        train_targets=train_target_dataset,
+        validation_paired_cache=validation_dataset,
+        validation_targets=validation_target_dataset,
         config=PradTeacherTrainingConfig(
             seed=args.seed,
             relation_dim=args.relation_dim,

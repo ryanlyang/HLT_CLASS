@@ -41,7 +41,9 @@ On Tigris, after checking out the exact pushed commit:
 ```bash
 cd /home/ryreu/atlas/HLT_Classification
 export PYTHONNOUSERSITE=1
-SMOKE_ROOT=/home/ryreu/atlas/HLT_Classification/artifacts/prad/smoke_v1
+SHORT_SHA="$(git rev-parse --short=8 HEAD)"
+SMOKE_ROOT="/home/ryreu/atlas/HLT_Classification/artifacts/prad/smoke_min_${SHORT_SHA}"
+test ! -e "${SMOKE_ROOT}" || { echo "ERROR: smoke root already exists" >&2; exit 1; }
 python -s scripts/create_prad_campaign.py \
   --mode smoke \
   --campaign-root "${SMOKE_ROOT}" \
@@ -57,9 +59,11 @@ The smoke DAG runs both canonical installed-Weaver parity and a CUDA PRAD
 mechanics attestation before E0. The latter must authenticate zero-gate
 baseline parity, HLT-only public inference, gradient flow, and frozen-teacher
 behavior in `reports/prad_runtime_validation.json`.
-The teacher-validation output cache is produced only after E1, and the
-finalist-lock node waits for both five-seed confirmation and the authenticated
-paired-test cache whose manifest it binds.
+The 15-node minimum-storage DAG has no durable paired-view, target, or teacher
+cache nodes. Each consuming worker rebuilds the required arrays under its
+Slurm job-local temporary directory, reuses them within that task, and removes
+them on exit. The finalist and execution locks bind deterministic ephemeral
+input manifests, so recomputation does not weaken lineage or test sealing.
 Then submit only the miniature:
 
 ```bash
@@ -135,15 +139,19 @@ The resource evidence queries only ledger job IDs, requires every state to be
 `COMPLETED`, records elapsed time/MaxRSS/CPUs, and binds the reviewed request
 table and campaign artifact size to the exact clean source.
 The storage measurement requires the reviewed projection to be at least the
-repository's conservative full-campaign estimate (currently about 119 GiB)
-and, by default, leaves another 100 GiB free after the projected peak.
+repository's conservative full-campaign estimate (currently about 29 GiB)
+and, by default, leaves another 100 GiB free after the projected peak. That is
+a fail-safe worst case in which every validation graph lies inside the
+one-percent confirmation window. Actual checkpoint bytes and the number of
+confirmed graphs must be taken from the new minimum-storage miniature rather
+than from the older disk-backed smoke.
 
 ## 5. Authorized production submission
 
 Only after explicit authorization:
 
 ```bash
-PROD_ROOT=/home/ryreu/atlas/HLT_Classification/artifacts/prad/production_v1
+PROD_ROOT=/home/ryreu/atlas/HLT_Classification/artifacts/prad/production_min_v2
 python -s scripts/create_prad_campaign.py \
   --mode production \
   --campaign-root "${PROD_ROOT}" \
@@ -177,9 +185,11 @@ source, cache, and checkpoint; immutable shards reject any drift.
 
 ## Expected evidence
 
-The campaign root contains split checksums, the real data audit, cache
-manifests, exact-resume checkpoints, validation predictions/metrics and
-benchmarks, selection and final-test locks, label-free test predictions,
-five-seed comparisons, statistical evidence, plots, and (production only)
-`reports/final_report.md`. Weak scientific performance does not fail or skip a
-registered row.
+The campaign root contains split checksums, the real data audit, train-only
+statistics, compact best/final model checkpoints, validation
+predictions/metrics and benchmarks, selection and final-test locks, compact
+label-free test predictions, five-seed comparisons, statistical evidence,
+plots, and (production only) `reports/final_report.md`. Rolling optimizer/RNG
+checkpoints exist only while a run is incomplete. Large paired views,
+structural targets, and teacher outputs are job-local and absent after worker
+cleanup. Weak scientific performance does not fail or skip a registered row.

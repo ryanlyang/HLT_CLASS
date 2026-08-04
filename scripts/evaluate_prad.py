@@ -29,12 +29,19 @@ from hlt_classification.prad.inference import (  # noqa: E402
 )
 from hlt_classification.prad.loaders import load_selected_prad_model  # noqa: E402
 from hlt_classification.prad.reference_engine import PRAD_REFERENCE_REPORT_CONTRACT  # noqa: E402
+from hlt_classification.prad.splits import load_prad_split_manifest  # noqa: E402
+from hlt_classification.prad.streaming import (  # noqa: E402
+    build_in_memory_paired_views,
+    build_in_memory_structural_targets,
+)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--training-report", type=Path, required=True)
-    parser.add_argument("--cache", type=Path, required=True)
+    parser.add_argument("--cache", type=Path)
+    parser.add_argument("--streaming-split-manifest", type=Path)
+    parser.add_argument("--streaming-targets", action="store_true")
     parser.add_argument("--prediction-dir", type=Path, required=True)
     parser.add_argument("--metrics-output", type=Path, required=True)
     parser.add_argument("--benchmark-output", type=Path)
@@ -77,7 +84,34 @@ def main() -> int:
         expected_report_contract=contract,
         map_location=args.device,
     )
-    dataset = PradCacheDataset(args.cache)
+    if args.streaming_split_manifest is not None:
+        if args.cache is not None or args.target_cache is not None:
+            raise ValueError("streaming PRAD evaluation forbids durable input caches")
+        role = "test" if args.final_evaluation else "val"
+        split = load_prad_split_manifest(args.streaming_split_manifest)
+        paired_views = build_in_memory_paired_views(
+            split,
+            logical_role=role,
+            replica_ids=(0,),
+            source_snapshot_sha256=args.source_snapshot_sha256,
+        )
+        dataset = paired_views[0]
+        target_dataset = (
+            build_in_memory_structural_targets(
+                split,
+                paired_views=paired_views,
+                source_snapshot_sha256=args.source_snapshot_sha256,
+            )[0]
+            if args.streaming_targets
+            else None
+        )
+    else:
+        if args.cache is None or args.streaming_targets:
+            raise ValueError("durable PRAD evaluation cache arguments differ")
+        dataset = PradCacheDataset(args.cache)
+        target_dataset = (
+            None if args.target_cache is None else PradCacheDataset(args.target_cache)
+        )
     claim = None
     if dataset.manifest.get("logical_role") == "test":
         if not args.final_evaluation:
@@ -128,9 +162,7 @@ def main() -> int:
         final_evaluation=args.final_evaluation,
         final_test_claim=claim,
         campaign_spec_sha256=args.campaign_spec_sha256,
-        target_dataset=(
-            None if args.target_cache is None else PradCacheDataset(args.target_cache)
-        ),
+        target_dataset=target_dataset,
         teacher_output_dataset=(
             None
             if args.teacher_output_cache is None

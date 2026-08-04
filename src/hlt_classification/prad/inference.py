@@ -16,7 +16,6 @@ from hlt_classification.data.cache_contracts import (
     array_sha256,
     atomic_publish_bytes,
     deterministic_npz_bytes,
-    identity_key_array,
     identity_order_sha256,
     load_json,
     load_npz_arrays,
@@ -32,7 +31,7 @@ from .engine import _tensor_inputs
 from .evaluation import prad_classification_metrics
 from .evaluation import stratified_prad_metrics
 
-PRAD_PREDICTION_MANIFEST_CONTRACT = "hlt_classification_prad_prediction_manifest_v1"
+PRAD_PREDICTION_MANIFEST_CONTRACT = "hlt_classification_prad_prediction_manifest_v2"
 PRAD_EVALUATION_REPORT_CONTRACT = "hlt_classification_prad_evaluation_report_v1"
 
 
@@ -209,10 +208,12 @@ def run_prad_inference(
     target = torch.device(device)
     model.to(target).eval()
     records = []
-    global_keys: list[str] = []
+    total_rows = 0
     with torch.no_grad():
         for shard_index, record in enumerate(dataset.records):
-            source = load_npz_arrays(dataset.root / str(record["filename"]))
+            source = dataset.read_range(
+                int(record["row_start"]), int(record["row_stop"])
+            )
             keys = [str(value) for value in source["identity_keys"].tolist()]
             logits = []
             for start in range(0, len(keys), batch_size):
@@ -234,7 +235,6 @@ def run_prad_inference(
                     raise FloatingPointError("PRAD inference logits are invalid")
                 logits.append(output.float().cpu().numpy())
             arrays = {
-                "identity_keys": identity_key_array(keys),
                 "logits": np.ascontiguousarray(np.concatenate(logits), dtype=np.float32),
             }
             path = root / "shards" / f"shard_{shard_index:06d}.npz"
@@ -250,14 +250,17 @@ def run_prad_inference(
                     "logits_sha256": array_sha256("logits", arrays["logits"]),
                 }
             )
-            global_keys.extend(keys)
+            total_rows += len(keys)
     manifest = with_content_hash(
         {
             "contract": PRAD_PREDICTION_MANIFEST_CONTRACT,
             "schema_version": 1,
             "lineage": lineage,
-            "rows": len(global_keys),
-            "identity_order_sha256": identity_order_sha256(global_keys),
+            "rows": total_rows,
+            "identity_order_sha256": dataset.manifest["identity_order_sha256"],
+            "identity_encoding": (
+                "implicit_split_row_range_bound_to_source_manifest"
+            ),
             "labels_in_prediction_artifact": False,
             "offline_fields_in_model_call": False,
             "shards": records,
@@ -328,14 +331,22 @@ def evaluate_prad_predictions(
         if sha256_file(prediction_path) != prediction_record["file_sha256"]:
             raise ValueError("PRAD prediction shard hash differs")
         prediction = load_npz_arrays(prediction_path)
-        source = load_npz_arrays(source_dataset.root / str(source_record["filename"]))
-        prediction_keys = [str(value) for value in prediction["identity_keys"].tolist()]
+        source = source_dataset.read_range(
+            int(source_record["row_start"]), int(source_record["row_stop"])
+        )
         source_keys = [str(value) for value in source["identity_keys"].tolist()]
-        if prediction_keys != source_keys:
-            raise ValueError("PRAD prediction labels cannot be joined by identity")
+        if (
+            set(prediction) != {"logits"}
+            or prediction["logits"].shape != (len(source_keys), 10)
+            or int(prediction_record["row_start"]) != int(source_record["row_start"])
+            or int(prediction_record["row_stop"]) != int(source_record["row_stop"])
+            or prediction_record["identity_order_sha256"]
+            != identity_order_sha256(source_keys)
+        ):
+            raise ValueError("PRAD compact prediction/source row binding differs")
         logits.append(prediction["logits"])
         labels.append(source["labels"])
-        keys.extend(prediction_keys)
+        keys.extend(source_keys)
         tokens = source["hlt_tokens"]
         mask = source["hlt_mask"]
         px = (tokens[:, :, 0] * np.cos(tokens[:, :, 2])) * mask

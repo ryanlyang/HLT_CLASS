@@ -24,13 +24,15 @@ from hlt_classification.prad.cache import PradCacheDataset  # noqa: E402
 from hlt_classification.prad.engine import _tensor_inputs  # noqa: E402
 from hlt_classification.prad.loaders import load_selected_prad_model  # noqa: E402
 from hlt_classification.prad.splits import load_prad_split_manifest  # noqa: E402
+from hlt_classification.prad.streaming import build_in_memory_paired_views  # noqa: E402
 from hlt_classification.prad.teacher_engine import PRAD_TEACHER_REPORT_CONTRACT  # noqa: E402
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--split-manifest", type=Path, required=True)
-    parser.add_argument("--paired-cache", type=Path, required=True)
+    parser.add_argument("--paired-cache", type=Path)
+    parser.add_argument("--streaming-inputs", action="store_true")
     parser.add_argument("--teacher-report", type=Path, required=True)
     parser.add_argument("--role", choices=("train", "val", "test"), required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
@@ -51,6 +53,20 @@ def main() -> int:
     )
     target = torch.device(args.device)
     teacher.to(target).eval()
+    split = load_prad_split_manifest(args.split_manifest)
+    if args.streaming_inputs:
+        if args.paired_cache is not None:
+            raise ValueError("streaming teacher outputs forbid a durable paired cache")
+        paired_dataset = build_in_memory_paired_views(
+            split,
+            logical_role=args.role,
+            replica_ids=(0,),
+            source_snapshot_sha256=args.source_snapshot_sha256,
+        )[0]
+    else:
+        if args.paired_cache is None:
+            raise ValueError("durable teacher outputs require --paired-cache")
+        paired_dataset = PradCacheDataset(args.paired_cache)
 
     def infer(arrays):
         inputs, labels = _tensor_inputs(arrays, view="offline", device=target)
@@ -78,17 +94,17 @@ def main() -> int:
         lock_hash = validate_final_test_execution_lock(lock)
         if args.role != "test":
             raise PermissionError("a final-evaluation lock is valid only for test")
-        paired = PradCacheDataset(args.paired_cache)
         if (
-            lock["final_test_cache_manifest_sha256"] != paired.manifest_sha256
+            lock["final_test_cache_manifest_sha256"]
+            != paired_dataset.manifest_sha256
             or lock["source_snapshot_sha256"] != args.source_snapshot_sha256
         ):
             raise PermissionError("final-evaluation lock lineage differs")
     elif args.role == "test":
         raise PermissionError("test teacher outputs require the execution lock")
     result = build_prad_teacher_output_cache(
-        load_prad_split_manifest(args.split_manifest),
-        PradCacheDataset(args.paired_cache),
+        split,
+        paired_dataset,
         logical_role=args.role,
         output_dir=args.output_dir,
         source_snapshot_sha256=args.source_snapshot_sha256,

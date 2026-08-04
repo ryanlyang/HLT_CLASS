@@ -15,8 +15,10 @@ import torch
 
 from hlt_classification.data.cache_contracts import (
     canonical_sha256,
+    load_json,
     require_sha256,
     sha256_file,
+    validate_content_hash,
     with_content_hash,
 )
 from hlt_classification.training.checkpoints import (
@@ -28,6 +30,10 @@ from hlt_classification.training.checkpoints import (
 
 PRAD_CHECKPOINT_CONTRACT = "hlt_classification_prad_checkpoint_v1"
 PRAD_CHECKPOINT_SIDECAR_CONTRACT = "hlt_classification_prad_checkpoint_sidecar_v1"
+PRAD_MODEL_CHECKPOINT_CONTRACT = "hlt_classification_prad_model_checkpoint_v1"
+PRAD_MODEL_CHECKPOINT_SIDECAR_CONTRACT = (
+    "hlt_classification_prad_model_checkpoint_sidecar_v1"
+)
 PRAD_CHECKPOINT_SCHEMA_VERSION = 1
 PRAD_CHECKPOINT_SELECTOR = (
     "maximum_validation_macro_log_rejection_then_maximum_accuracy_then_earliest_epoch"
@@ -222,6 +228,204 @@ def save_prad_checkpoint(path: str | Path, payload: Mapping[str, Any]) -> dict[s
     return {"path": str(destination), "sha256": digest, "sidecar": str(sidecar_path)}
 
 
+def build_prad_model_checkpoint_payload(
+    *,
+    model: torch.nn.Module,
+    config: Mapping[str, Any],
+    parents: Mapping[str, str],
+    checkpoint_role: str,
+    epoch: int,
+    update: int,
+    selection: PradSelectionRecord | None,
+) -> dict[str, Any]:
+    """Build an optimizer-free checkpoint for durable cross-job use."""
+
+    if checkpoint_role not in {"selected", "final"}:
+        raise ValueError("PRAD model checkpoint role differs")
+    if epoch < 0 or update < 0:
+        raise ValueError("PRAD model checkpoint counters must be nonnegative")
+    validated = _validated_parents(parents)
+    normalized_config = json.loads(json.dumps(config, sort_keys=True, allow_nan=False))
+    if canonical_sha256(normalized_config) != validated["config_sha256"]:
+        raise ValueError("PRAD model checkpoint configuration hash differs")
+    return {
+        "contract": PRAD_MODEL_CHECKPOINT_CONTRACT,
+        "schema_version": 1,
+        "parents": validated,
+        "config": normalized_config,
+        "checkpoint_role": checkpoint_role,
+        "epoch": epoch,
+        "update": update,
+        "model_state": model.state_dict(),
+        "model_runtime_state": capture_model_runtime_state(model),
+        "selection": None if selection is None else selection.to_dict(),
+        "optimizer_state_persisted": False,
+        "rng_state_persisted": False,
+    }
+
+
+def save_prad_model_checkpoint(
+    path: str | Path, payload: Mapping[str, Any]
+) -> dict[str, str]:
+    """Atomically replace one compact selected/final model checkpoint."""
+
+    if payload.get("contract") != PRAD_MODEL_CHECKPOINT_CONTRACT:
+        raise ValueError("PRAD model checkpoint contract differs")
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    buffer = BytesIO()
+    torch.save(dict(payload), buffer)
+    handle, temporary_name = tempfile.mkstemp(
+        prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent
+    )
+    try:
+        with os.fdopen(handle, "wb") as stream:
+            stream.write(buffer.getvalue())
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary_name, destination)
+    finally:
+        Path(temporary_name).unlink(missing_ok=True)
+    digest = sha256_file(destination)
+    sidecar = with_content_hash(
+        {
+            "contract": PRAD_MODEL_CHECKPOINT_SIDECAR_CONTRACT,
+            "schema_version": 1,
+            "checkpoint_filename": destination.name,
+            "checkpoint_file_sha256": digest,
+            "parents": dict(payload["parents"]),
+            "checkpoint_role": payload["checkpoint_role"],
+            "epoch": int(payload["epoch"]),
+            "update": int(payload["update"]),
+        }
+    )
+    sidecar_path = destination.with_suffix(destination.suffix + ".json")
+    serialized = json.dumps(sidecar, sort_keys=True, indent=2).encode("utf-8") + b"\n"
+    handle, temporary_name = tempfile.mkstemp(
+        prefix=f".{sidecar_path.name}.", suffix=".tmp", dir=sidecar_path.parent
+    )
+    try:
+        with os.fdopen(handle, "wb") as stream:
+            stream.write(serialized)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary_name, sidecar_path)
+    finally:
+        Path(temporary_name).unlink(missing_ok=True)
+    return {"path": str(destination), "sha256": digest, "sidecar": str(sidecar_path)}
+
+
+def load_prad_model_checkpoint(
+    path: str | Path,
+    *,
+    expected_config: Mapping[str, Any],
+    expected_parents: Mapping[str, str],
+    expected_role: str,
+    map_location: str | torch.device = "cpu",
+) -> dict[str, Any]:
+    if expected_role not in {"selected", "final"}:
+        raise ValueError("expected PRAD model checkpoint role differs")
+    checkpoint_path = Path(path)
+    sidecar_path = checkpoint_path.with_suffix(checkpoint_path.suffix + ".json")
+    if not checkpoint_path.is_file() or not sidecar_path.is_file():
+        raise FileNotFoundError("PRAD model checkpoint or sidecar is absent")
+    sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
+    supplied_hash = sidecar.pop("content_hash", None)
+    if supplied_hash != canonical_sha256(sidecar):
+        raise ValueError("PRAD model checkpoint sidecar hash differs")
+    if sidecar.get("contract") != PRAD_MODEL_CHECKPOINT_SIDECAR_CONTRACT:
+        raise ValueError("PRAD model checkpoint sidecar contract differs")
+    if sidecar.get("checkpoint_file_sha256") != sha256_file(checkpoint_path):
+        raise ValueError("PRAD model checkpoint file hash differs")
+    payload = torch.load(checkpoint_path, map_location=map_location, weights_only=False)
+    if (
+        payload.get("contract") != PRAD_MODEL_CHECKPOINT_CONTRACT
+        or payload.get("schema_version") != 1
+        or payload.get("parents") != _validated_parents(expected_parents)
+        or payload.get("config")
+        != json.loads(json.dumps(expected_config, sort_keys=True, allow_nan=False))
+        or payload.get("checkpoint_role") != expected_role
+        or payload.get("optimizer_state_persisted") is not False
+        or payload.get("rng_state_persisted") is not False
+        or any(
+            name in payload
+            for name in (
+                "optimizer_state",
+                "scheduler_state",
+                "scaler_state",
+                "sampler_state",
+                "rng_state",
+                "history",
+            )
+        )
+    ):
+        raise ValueError("PRAD model checkpoint payload differs")
+    if (
+        sidecar.get("checkpoint_filename") != checkpoint_path.name
+        or sidecar.get("parents") != payload["parents"]
+        or sidecar.get("checkpoint_role") != expected_role
+        or sidecar.get("epoch") != payload["epoch"]
+        or sidecar.get("update") != payload["update"]
+    ):
+        raise ValueError("PRAD model checkpoint sidecar payload differs")
+    if payload.get("selection") is not None:
+        PradSelectionRecord.from_dict(payload["selection"])
+    return payload
+
+
+def remove_transient_prad_checkpoint(path: str | Path) -> None:
+    """Remove only a completed run's rolling full-state checkpoint pair."""
+
+    checkpoint = Path(path)
+    if checkpoint.name != "last.pt":
+        raise ValueError("only the PRAD rolling last.pt checkpoint is transient")
+    checkpoint.unlink(missing_ok=True)
+    checkpoint.with_suffix(checkpoint.suffix + ".json").unlink(missing_ok=True)
+
+
+def load_completed_prad_training_report(
+    path: str | Path,
+    *,
+    expected_contract: str,
+    expected_config: Mapping[str, Any],
+    expected_parents: Mapping[str, str],
+    map_location: str | torch.device = "cpu",
+) -> dict[str, Any] | None:
+    """Authenticate and reuse a report published before worker interruption."""
+
+    report_path = Path(path)
+    if not report_path.is_file():
+        return None
+    report = load_json(report_path)
+    validate_content_hash(report, expected_contract=expected_contract)
+    normalized_config = json.loads(
+        json.dumps(expected_config, sort_keys=True, allow_nan=False)
+    )
+    if (
+        report.get("complete") is not True
+        or report.get("config") != normalized_config
+        or report.get("parents") != _validated_parents(expected_parents)
+    ):
+        raise ValueError("completed PRAD training report lineage differs")
+    for field, role in (("selected_checkpoint", "selected"), ("final_checkpoint", "final")):
+        record = report.get(field, {})
+        checkpoint_path = Path(str(record.get("path", "")))
+        if (
+            record.get("format") != "model_only"
+            or not checkpoint_path.is_file()
+            or sha256_file(checkpoint_path) != record.get("sha256")
+        ):
+            raise ValueError("completed PRAD model checkpoint differs")
+        load_prad_model_checkpoint(
+            checkpoint_path,
+            expected_config=normalized_config,
+            expected_parents=expected_parents,
+            expected_role=role,
+            map_location=map_location,
+        )
+    return report
+
+
 def load_prad_checkpoint(
     path: str | Path,
     *,
@@ -271,9 +475,14 @@ def restore_prad_checkpoint_state(
 __all__ = [
     "PradSelectionRecord",
     "build_prad_checkpoint_payload",
+    "build_prad_model_checkpoint_payload",
     "load_prad_checkpoint",
+    "load_completed_prad_training_report",
+    "load_prad_model_checkpoint",
     "prad_selection_is_better",
+    "remove_transient_prad_checkpoint",
     "restore_prad_checkpoint_state",
     "save_prad_checkpoint",
+    "save_prad_model_checkpoint",
     "validate_prad_checkpoint_payload",
 ]

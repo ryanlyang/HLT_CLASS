@@ -27,8 +27,9 @@ from hlt_classification.provenance import validate_source_snapshot_payload
 
 from .experiments import CORE_EXPERIMENTS, experiment_variant
 from .training import PRAD_CONFIRMATION_SEEDS
+from .streaming import PRAD_MINIMUM_STORAGE_PROFILE
 
-PRAD_CAMPAIGN_SPEC_CONTRACT = "hlt_classification_prad_campaign_spec_v1"
+PRAD_CAMPAIGN_SPEC_CONTRACT = "hlt_classification_prad_campaign_spec_v2"
 PRAD_SUBMISSION_LEDGER_CONTRACT = "hlt_classification_prad_submission_ledger_v1"
 PRAD_RESOURCE_EVIDENCE_CONTRACT = "hlt_classification_prad_resource_evidence_v1"
 PRAD_STORAGE_EVIDENCE_CONTRACT = "hlt_classification_prad_storage_evidence_v1"
@@ -93,19 +94,11 @@ def prad_tasks(*, smoke: bool) -> tuple[PradTask, ...]:
             "01:00:00",
             gpu=True,
         ),
-        PradTask("paired_train", ("split",), 4, "64G", short, array="0-3%2"),
-        PradTask("paired_val", ("split",), 4, "64G", short),
-        PradTask("paired_test_inputs", ("split",), 4, "64G", short),
-        PradTask("targets_train", ("paired_train",), 4, "64G", short, array="0-3%2"),
-        PradTask("targets_val", ("paired_val",), 4, "64G", short),
-        PradTask("targets_test_inputs", ("paired_test_inputs",), 4, "64G", short),
-        PradTask("train_statistics", ("targets_train",), 4, "32G", short),
+        PradTask("train_statistics", ("split", "data_audit"), 8, "96G", train),
         PradTask(
             "E0_baseline",
             (
-                "paired_train",
-                "paired_val",
-                "targets_val",
+                "split",
                 "prad_runtime",
                 "data_audit",
             ),
@@ -116,23 +109,15 @@ def prad_tasks(*, smoke: bool) -> tuple[PradTask, ...]:
         ),
         PradTask(
             "E1_teacher",
-            ("E0_baseline", "train_statistics", "targets_train"),
+            ("E0_baseline", "train_statistics"),
             8,
             "96G",
             train,
             gpu=True,
         ),
         PradTask(
-            "teacher_val_outputs",
-            ("E1_teacher",),
-            4,
-            "64G",
-            short,
-            gpu=True,
-        ),
-        PradTask(
             "E2_oracle",
-            ("teacher_val_outputs", "targets_val"),
+            ("E1_teacher",),
             8,
             "96G",
             train,
@@ -168,14 +153,14 @@ def prad_tasks(*, smoke: bool) -> tuple[PradTask, ...]:
         ),
         PradTask(
             "finalist_lock",
-            ("confirmation", "paired_test_inputs"),
+            ("confirmation", "split"),
             4,
             "32G",
             short,
         ),
         PradTask(
             "final_test",
-            ("finalist_lock", "paired_test_inputs", "targets_test_inputs"),
+            ("finalist_lock",),
             8,
             "96G",
             train,
@@ -331,6 +316,16 @@ def create_prad_campaign_spec(
             },
             "run_registry": _run_registry(),
             "tasks": tasks,
+            "storage_policy": {
+                "profile": PRAD_MINIMUM_STORAGE_PROFILE,
+                "paired_views": "slurm_job_local_ephemeral_recomputed",
+                "structural_targets": "slurm_job_local_ephemeral_recomputed",
+                "teacher_outputs": "slurm_job_local_ephemeral",
+                "resume_checkpoints": "one_rolling_transient_per_active_run",
+                "completed_checkpoints": "compact_model_only",
+                "prediction_identity_encoding": "implicit_authenticated_split_row",
+                "large_intermediates_durable": False,
+            },
             "production_evidence": evidence,
             "poor_performance_cancels_tasks": False,
             "test_inference_requires_locks": True,
@@ -400,6 +395,17 @@ def validate_prad_campaign_spec(spec: Mapping[str, Any]) -> str:
         seen.add(task["name"])
     if spec.get("poor_performance_cancels_tasks") is not False:
         raise ValueError("PRAD campaign may not cancel work for weak performance")
+    if spec.get("storage_policy") != {
+        "profile": PRAD_MINIMUM_STORAGE_PROFILE,
+        "paired_views": "slurm_job_local_ephemeral_recomputed",
+        "structural_targets": "slurm_job_local_ephemeral_recomputed",
+        "teacher_outputs": "slurm_job_local_ephemeral",
+        "resume_checkpoints": "one_rolling_transient_per_active_run",
+        "completed_checkpoints": "compact_model_only",
+        "prediction_identity_encoding": "implicit_authenticated_split_row",
+        "large_intermediates_durable": False,
+    }:
+        raise ValueError("PRAD minimum-storage policy differs")
     if spec.get("test_inference_requires_locks") is not True:
         raise ValueError("PRAD campaign test sealing differs")
     return digest
@@ -575,25 +581,30 @@ def validate_prad_resource_evidence(payload: Mapping[str, Any]) -> str:
 
 
 def estimate_prad_peak_storage_bytes() -> int:
-    """Conservative uncompressed full-campaign peak including all finalists."""
+    """Conservative durable peak for the minimum-storage production profile."""
 
-    particles = 128
-    train, val, test = 500_000, 150_000, 500_000
-    replicated_rows = 4 * train + val + test
-    paired_per_row = 2 * particles * 14 * 4 + 3 * particles + 256
-    targets_per_row = particles * (2 + 4 + 1 + 3 * 2) + 256
-    maximum_graphs = 10 + len(PRAD_VARIANTS)
-    test_prediction_per_row = 10 * 4 + 160
+    test = 500_000
+    # Selection excludes E1 (the offline teacher) and E2 (the oracle), leaving
+    # E0, E3--E10, and all predeclared E9 variants as possible confirmation
+    # graphs.  The one-percent rule deliberately has no arbitrary graph cap.
+    maximum_graphs = 9 + len(PRAD_VARIANTS)
+    test_prediction_per_row = 10 * 4
     predictions = maximum_graphs * len(PRAD_CONFIRMATION_SEEDS) * test * test_prediction_per_row
-    training_runs = 11 + len(PRAD_VARIANTS) + 2 + maximum_graphs * len(PRAD_CONFIRMATION_SEEDS)
-    checkpoint_and_history = training_runs * 160 * 1024**2
+    screen_runs = 11 + len(PRAD_VARIANTS) + 2  # E0--E10, variants, V7 teachers
+    confirmation_runs = maximum_graphs * len(PRAD_CONFIRMATION_SEEDS)
+    # The scientific plan requires both best-validation and final compact
+    # checkpoints for every run.  Neither optimizer nor RNG state is durable.
+    durable_models = 2 * (screen_runs + confirmation_runs)
+    compact_checkpoints = durable_models * 64 * 1024**2
+    rolling_resume = 2 * 160 * 1024**2
+    reports_manifests_and_plots = 1024**3
     raw = (
-        replicated_rows * (paired_per_row + targets_per_row)
-        + predictions
-        + checkpoint_and_history
-        + test * (11 * 4 + 160)
+        predictions
+        + compact_checkpoints
+        + rolling_resume
+        + reports_manifests_and_plots
     )
-    return int(raw * 3 // 2)
+    return int(raw * 5 // 4)
 
 
 def validate_prad_storage_evidence(

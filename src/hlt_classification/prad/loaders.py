@@ -15,7 +15,7 @@ from hlt_classification.data.cache_contracts import (
 )
 from hlt_classification.training.checkpoints import restore_model_runtime_state
 
-from .checkpoints import load_prad_checkpoint
+from .checkpoints import load_prad_model_checkpoint
 
 _Model = TypeVar("_Model", bound=nn.Module)
 
@@ -36,10 +36,11 @@ def load_selected_prad_model(
     checkpoint_hash = sha256_file(checkpoint_path)
     if checkpoint_hash != selected.get("sha256"):
         raise ValueError("selected PRAD checkpoint hash differs from its report")
-    payload = load_prad_checkpoint(
+    payload = load_prad_model_checkpoint(
         checkpoint_path,
         expected_config=report["config"],
         expected_parents=report["parents"],
+        expected_role="selected",
         map_location=map_location,
     )
     model = model_factory()

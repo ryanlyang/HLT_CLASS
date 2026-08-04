@@ -112,9 +112,16 @@ PRAD campaign foundations:
 - `measure_prad_storage.py`: conservative production peak and free-space gate
   bound to the same smoke/source evidence.
 
-The audit and cache commands must run against the real Tigris data before any
-full training submission. Partial cache builds exit 3 and never publish a
-complete manifest.
+The campaign specification uses `prad_minimum_durable_storage_v1`: workers
+rebuild paired views, structural targets, and teacher outputs under
+`$SLURM_TMPDIR` (or `/dev/shm`) and remove them after each task. Completed runs
+retain optimizer-free `selected_model.pt` and `final_model.pt`; `last.pt` is a
+rolling exact-resume file and is removed after successful completion.
+
+The audit and minimum-storage smoke must run against the real Tigris data
+before any full training submission. Standalone partial cache builds still
+exit 3 and never publish a complete manifest; they are diagnostic surfaces,
+not durable nodes in the minimum-storage campaign.
 
 See [`docs/PRAD_RUNBOOK.md`](../docs/PRAD_RUNBOOK.md) for the ordered Tigris
 commands and production authorization boundary.

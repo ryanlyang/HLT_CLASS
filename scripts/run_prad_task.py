@@ -7,9 +7,12 @@ import argparse
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 from typing import Any, Sequence
+
+import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = REPO_ROOT / "src"
@@ -22,6 +25,9 @@ from hlt_classification.contracts import (  # noqa: E402
 )
 from hlt_classification.data import discover_file_records  # noqa: E402
 from hlt_classification.data.cache_contracts import (  # noqa: E402
+    array_sha256,
+    atomic_publish_bytes,
+    deterministic_npz_bytes,
     load_json,
     sha256_file,
     validate_content_hash,
@@ -45,6 +51,10 @@ from hlt_classification.prad.splits import (  # noqa: E402
     build_prad_split_manifest,
     load_prad_split_manifest,
 )
+from hlt_classification.prad.streaming import (  # noqa: E402
+    PRAD_MINIMUM_STORAGE_PROFILE,
+    ephemeral_paired_manifest,
+)
 from hlt_classification.provenance import validate_source_snapshot  # noqa: E402
 
 
@@ -54,18 +64,61 @@ def _run(command: Sequence[str]) -> None:
 
 def _paths(spec: dict[str, Any]) -> dict[str, Path]:
     root = Path(spec["site"]["campaign_root"])
+    ephemeral_root = root / ".unused_ephemeral"
+    if _minimum_storage(spec):
+        base = Path(os.environ.get("SLURM_TMPDIR", "/dev/shm")).resolve()
+        project = Path(spec["site"]["project_dir"]).resolve()
+        durable_root = root.resolve()
+        if (
+            base == Path("/")
+            or base == project
+            or base.is_relative_to(project)
+            or project.is_relative_to(base)
+            or base == durable_root
+            or base.is_relative_to(durable_root)
+            or durable_root.is_relative_to(base)
+        ):
+            raise RuntimeError("unsafe PRAD ephemeral base")
+        job = os.environ.get("SLURM_JOB_ID", f"pid_{os.getpid()}")
+        array = os.environ.get("SLURM_ARRAY_TASK_ID", "none")
+        ephemeral_root = (
+            base
+            / f"prad_{spec['content_hash'][:12]}_{job}_{array}"
+        ).resolve()
+        if ephemeral_root.parent != base:
+            raise RuntimeError("PRAD ephemeral root escaped its base")
     return {
         "root": root,
         "split": root / "splits" / "split_manifest.json",
-        "paired": root / "cache" / "paired",
-        "targets": root / "cache" / "targets",
-        "teacher_outputs": root / "cache" / "teacher_outputs",
+        "paired": (
+            ephemeral_root / "paired"
+            if _minimum_storage(spec)
+            else root / "cache" / "paired"
+        ),
+        "targets": (
+            ephemeral_root / "targets"
+            if _minimum_storage(spec)
+            else root / "cache" / "targets"
+        ),
+        "teacher_outputs": (
+            ephemeral_root / "teacher_outputs"
+            if _minimum_storage(spec)
+            else root / "cache" / "teacher_outputs"
+        ),
         "weights": root / "artifacts" / "semantic_weights.json",
         "runs": root / "runs",
         "reports": root / "reports",
         "results": root / "results",
         "locks": root / "locks",
+        "ephemeral_root": ephemeral_root,
     }
+
+
+def _minimum_storage(spec: dict[str, Any]) -> bool:
+    return (
+        spec.get("storage_policy", {}).get("profile")
+        == PRAD_MINIMUM_STORAGE_PROFILE
+    )
 
 
 def _python(spec: dict[str, Any], script: str, *arguments: object) -> list[str]:
@@ -109,6 +162,105 @@ def _target_arguments(paths: dict[str, Path]) -> list[str]:
     return result
 
 
+def _training_data_arguments(
+    spec: dict[str, Any], paths: dict[str, Path]
+) -> list[object]:
+    del spec
+    return [
+        *_cache_arguments(paths),
+        "--validation-cache",
+        paths["paired"] / "val" / "replica_0",
+    ]
+
+
+def _student_data_arguments(
+    spec: dict[str, Any], paths: dict[str, Path]
+) -> list[object]:
+    del spec
+    return [
+        *_cache_arguments(paths),
+        *_target_arguments(paths),
+        "--validation-cache",
+        paths["paired"] / "val" / "replica_0",
+        "--validation-target-cache",
+        paths["targets"] / "val",
+    ]
+
+
+def _prepare_ephemeral_inputs(
+    task: str,
+    spec: dict[str, Any],
+    paths: dict[str, Path],
+) -> None:
+    """Build task-scoped cache-compatible arrays outside durable storage."""
+
+    if not _minimum_storage(spec):
+        return
+    requirements: dict[str, tuple[tuple[int, ...], bool, bool]] = {
+        "train_statistics": ((0, 1, 2, 3), True, False),
+        "E0_baseline": ((0, 1, 2, 3), False, True),
+        "E1_teacher": ((0,), True, True),
+        "E2_oracle": ((0, 1, 2, 3), True, True),
+        "core_screen": ((0, 1, 2, 3), True, True),
+        "variant_screen": ((0, 1, 2, 3), True, True),
+        "confirmation": ((0, 1, 2, 3), True, True),
+    }
+    if task not in requirements:
+        return
+    train_replicas, train_targets_required, val_targets_required = requirements[task]
+    source_hash = spec["source_snapshot"]["source_snapshot_sha256"]
+
+    def paired(role: str, replica: int) -> None:
+        _run(
+            _python(
+                spec,
+                "build_prad_paired_cache.py",
+                "--split-manifest",
+                paths["split"],
+                "--role",
+                role,
+                "--replica-id",
+                replica,
+                "--output-dir",
+                paths["paired"] / role / f"replica_{replica}",
+                "--source-snapshot-sha256",
+                source_hash,
+            )
+        )
+
+    def targets(role: str, replica: int) -> None:
+        output = (
+            paths["targets"] / role / f"replica_{replica}"
+            if role == "train"
+            else paths["targets"] / role
+        )
+        _run(
+            _python(
+                spec,
+                "build_prad_targets.py",
+                "--split-manifest",
+                paths["split"],
+                "--paired-cache",
+                paths["paired"] / role / f"replica_{replica}",
+                "--role",
+                role,
+                "--output-dir",
+                output,
+                "--source-snapshot-sha256",
+                source_hash,
+            )
+        )
+
+    for replica in train_replicas:
+        paired("train", replica)
+        if train_targets_required:
+            targets("train", replica)
+    if task != "train_statistics":
+        paired("val", 0)
+        if val_targets_required:
+            targets("val", 0)
+
+
 def _experiment_report(paths: dict[str, Path], experiment_id: str, *, seed: int | None = None) -> Path:
     return (
         paths["runs"] / "screen" / experiment_id / "training_report.json"
@@ -129,9 +281,7 @@ def _run_graph(
 ) -> None:
     source_hash = spec["source_snapshot"]["source_snapshot_sha256"]
     common = [
-        *_cache_arguments(paths),
-        "--validation-cache",
-        str(paths["paired"] / "val" / "replica_0"),
+        *_training_data_arguments(spec, paths),
         "--source-snapshot-sha256",
         source_hash,
         "--seed",
@@ -191,12 +341,7 @@ def _run_graph(
             "train_prad_student.py",
             "--experiment",
             experiment_id,
-            *_cache_arguments(paths),
-            *_target_arguments(paths),
-            "--validation-cache",
-            paths["paired"] / "val" / "replica_0",
-            "--validation-target-cache",
-            paths["targets"] / "val",
+            *_student_data_arguments(spec, paths),
             "--semantic-weights",
             paths["weights"],
             "--baseline-report",
@@ -230,11 +375,35 @@ def _evaluate_graph(
     include_teacher_validation: bool,
 ) -> None:
     validation = output_dir / "validation"
-    diagnostics = [
-        "--target-cache",
-        str(paths["targets"] / "val"),
+    input_arguments: list[object] = [
+        "--cache",
+        paths["paired"] / "val" / "replica_0",
     ]
+    diagnostics: list[object] = ["--target-cache", paths["targets"] / "val"]
     if include_teacher_validation:
+        if _minimum_storage(spec):
+            teacher_root = paths["teacher_outputs"] / "val"
+            if not (teacher_root / "manifest.json").is_file():
+                _run(
+                    _python(
+                        spec,
+                        "cache_prad_teacher_outputs.py",
+                        "--split-manifest",
+                        paths["split"],
+                        "--paired-cache",
+                        paths["paired"] / "val" / "replica_0",
+                        "--teacher-report",
+                        _experiment_report(paths, "E1"),
+                        "--role",
+                        "val",
+                        "--output-dir",
+                        teacher_root,
+                        "--source-snapshot-sha256",
+                        spec["source_snapshot"]["source_snapshot_sha256"],
+                        "--device",
+                        "cuda",
+                    )
+                )
         diagnostics.extend(
             [
                 "--teacher-output-cache",
@@ -247,8 +416,7 @@ def _evaluate_graph(
             "evaluate_prad.py",
             "--training-report",
             output_dir / "training_report.json",
-            "--cache",
-            paths["paired"] / "val" / "replica_0",
+            *input_arguments,
             "--prediction-dir",
             validation / "predictions",
             "--metrics-output",
@@ -316,38 +484,76 @@ def _selection(paths: dict[str, Path], spec: dict[str, Any]) -> dict[str, Any]:
 
 
 def _evaluate_teacher_test_cache(
-    paths: dict[str, Path], teacher_outputs: Path, source_hash: str
+    paths: dict[str, Path],
+    teacher_outputs: Path,
+    source_hash: str,
 ) -> dict[str, Any]:
-    paired = PradCacheDataset(paths["paired"] / "test" / "replica_0")
     teacher = PradCacheDataset(teacher_outputs)
-    if (
-        len(paired) != len(teacher)
-        or paired.manifest["identity_order_sha256"]
-        != teacher.manifest["identity_order_sha256"]
-    ):
+    split = load_prad_split_manifest(paths["split"])
+    identities = split.identities("test")
+    expected_keys = [item.key for item in identities]
+    if teacher.manifest["identity_order_sha256"] != split.payload["roles"]["test"][
+        "identity_order_sha256"
+    ]:
         raise ValueError("PRAD teacher test population differs")
     logits = []
-    labels = []
-    for start in range(0, len(paired), 4096):
-        stop = min(start + 4096, len(paired))
-        paired_arrays = paired.read_range(start, stop)
+    labels = np.asarray([item.label for item in identities], dtype=np.int64)
+    for start in range(0, len(teacher), 4096):
+        stop = min(start + 4096, len(teacher))
         teacher_arrays = teacher.read_range(start, stop)
-        if not (paired_arrays["identity_keys"] == teacher_arrays["identity_keys"]).all():
+        if [str(value) for value in teacher_arrays["identity_keys"]] != expected_keys[
+            start:stop
+        ]:
             raise ValueError("PRAD teacher test identity order differs")
         logits.append(teacher_arrays["teacher_logits"])
-        labels.append(paired_arrays["labels"])
-    import numpy as np
-
+    compact_logits = np.concatenate(logits).astype(np.float32)
+    prediction_root = paths["results"] / "test" / "E1" / "predictions"
+    prediction_path = prediction_root / "teacher_logits.npz"
+    atomic_publish_bytes(
+        prediction_path,
+        deterministic_npz_bytes({"logits": compact_logits}),
+    )
+    prediction_manifest = with_content_hash(
+        {
+            "contract": "hlt_classification_prad_teacher_prediction_manifest_v1",
+            "schema_version": 1,
+            "source_snapshot_sha256": source_hash,
+            "split_manifest_sha256": split.content_hash,
+            "teacher_checkpoint_sha256": teacher.manifest["parents"][
+                "teacher_checkpoint_sha256"
+            ],
+            "teacher_output_cache_manifest_sha256": teacher.manifest_sha256,
+            "logical_role": "test",
+            "rows": len(identities),
+            "identity_order_sha256": split.payload["roles"]["test"][
+                "identity_order_sha256"
+            ],
+            "identity_encoding": "implicit_authenticated_split_row",
+            "labels_in_prediction_artifact": False,
+            "filename": prediction_path.relative_to(prediction_root).as_posix(),
+            "file_sha256": sha256_file(prediction_path),
+            "logits_sha256": array_sha256("logits", compact_logits),
+        }
+    )
+    write_immutable_json(prediction_root / "manifest.json", prediction_manifest)
     report = with_content_hash(
         {
             "contract": "hlt_classification_prad_teacher_test_report_v1",
             "schema_version": 1,
-            "paired_cache_manifest_sha256": paired.manifest_sha256,
+            "paired_cache_manifest_sha256": ephemeral_paired_manifest(
+                split,
+                logical_role="test",
+                replica_id=0,
+                source_snapshot_sha256=source_hash,
+            )["content_hash"],
             "teacher_output_cache_manifest_sha256": teacher.manifest_sha256,
+            "teacher_prediction_manifest_sha256": prediction_manifest[
+                "content_hash"
+            ],
             "source_snapshot_sha256": source_hash,
             "metrics": prad_classification_metrics(
-                np.concatenate(logits).astype(np.float32),
-                np.concatenate(labels).astype(np.int64),
+                compact_logits,
+                labels,
             ),
         }
     )
@@ -486,17 +692,12 @@ def _dispatch(task: str, spec: dict[str, Any], paths: dict[str, Path]) -> dict[s
         )
         return {"role": role, "replica": replica}
     if task == "train_statistics":
-        _run(
-            _python(
-                spec,
-                "fit_prad_statistics.py",
-                "--train-paired-cache",
-                paths["paired"] / "train" / "replica_0",
-                *_target_arguments(paths),
-                "--output",
-                paths["weights"],
-            )
-        )
+        arguments: list[object] = [
+            "--train-paired-cache",
+            paths["paired"] / "train" / "replica_0",
+            *_target_arguments(paths),
+        ]
+        _run(_python(spec, "fit_prad_statistics.py", *arguments, "--output", paths["weights"]))
         return {"statistics": str(paths["weights"])}
     if task == "E0_baseline":
         _run_graph(
@@ -510,18 +711,21 @@ def _dispatch(task: str, spec: dict[str, Any], paths: dict[str, Path]) -> dict[s
         )
         return {"experiment": "E0"}
     if task == "E1_teacher":
+        teacher_data_arguments: list[object] = [
+            "--train-paired-cache",
+            paths["paired"] / "train" / "replica_0",
+            "--train-target-cache",
+            paths["targets"] / "train" / "replica_0",
+            "--validation-paired-cache",
+            paths["paired"] / "val" / "replica_0",
+            "--validation-target-cache",
+            paths["targets"] / "val",
+        ]
         _run(
             _python(
                 spec,
                 "train_prad_teacher.py",
-                "--train-paired-cache",
-                paths["paired"] / "train" / "replica_0",
-                "--train-target-cache",
-                paths["targets"] / "train" / "replica_0",
-                "--validation-paired-cache",
-                paths["paired"] / "val" / "replica_0",
-                "--validation-target-cache",
-                paths["targets"] / "val",
+                *teacher_data_arguments,
                 "--semantic-weights",
                 paths["weights"],
                 "--output-dir",
@@ -590,18 +794,21 @@ def _dispatch(task: str, spec: dict[str, Any], paths: dict[str, Path]) -> dict[s
         experiment_id = f"E9_{variant}"
         if variant in {"V7_8", "V7_32"}:
             relation_dim = 8 if variant == "V7_8" else 32
+            variant_teacher_data: list[object] = [
+                "--train-paired-cache",
+                paths["paired"] / "train" / "replica_0",
+                "--train-target-cache",
+                paths["targets"] / "train" / "replica_0",
+                "--validation-paired-cache",
+                paths["paired"] / "val" / "replica_0",
+                "--validation-target-cache",
+                paths["targets"] / "val",
+            ]
             _run(
                 _python(
                     spec,
                     "train_prad_teacher.py",
-                    "--train-paired-cache",
-                    paths["paired"] / "train" / "replica_0",
-                    "--train-target-cache",
-                    paths["targets"] / "train" / "replica_0",
-                    "--validation-paired-cache",
-                    paths["paired"] / "val" / "replica_0",
-                    "--validation-target-cache",
-                    paths["targets"] / "val",
+                    *variant_teacher_data,
                     "--semantic-weights",
                     paths["weights"],
                     "--output-dir",
@@ -681,11 +888,16 @@ def _dispatch(task: str, spec: dict[str, Any], paths: dict[str, Path]) -> dict[s
             source_snapshot_sha256=source_hash,
         )
         write_immutable_json(paths["locks"] / "finalists.json", lock)
-        test_cache = PradCacheDataset(paths["paired"] / "test" / "replica_0")
+        test_input_manifest = ephemeral_paired_manifest(
+            load_prad_split_manifest(paths["split"]),
+            logical_role="test",
+            replica_id=0,
+            source_snapshot_sha256=source_hash,
+        )
         execution = build_final_test_execution_lock(
             campaign_spec_sha256=spec["content_hash"],
             finalist_lock_sha256=lock["content_hash"],
-            final_test_cache_manifest_sha256=test_cache.manifest_sha256,
+            final_test_cache_manifest_sha256=test_input_manifest["content_hash"],
             source_snapshot_sha256=source_hash,
         )
         write_immutable_json(paths["locks"] / "final_test_execution.json", execution)
@@ -703,8 +915,7 @@ def _dispatch(task: str, spec: dict[str, Any], paths: dict[str, Path]) -> dict[s
                 "cache_prad_teacher_outputs.py",
                 "--split-manifest",
                 paths["split"],
-                "--paired-cache",
-                paths["paired"] / "test" / "replica_0",
+                "--streaming-inputs",
                 "--teacher-report",
                 _experiment_report(paths, "E1"),
                 "--role",
@@ -731,16 +942,15 @@ def _dispatch(task: str, spec: dict[str, Any], paths: dict[str, Path]) -> dict[s
                         "evaluate_prad.py",
                         "--training-report",
                         _experiment_report(paths, graph, seed=seed),
-                        "--cache",
-                        paths["paired"] / "test" / "replica_0",
+                        "--streaming-split-manifest",
+                        paths["split"],
+                        "--streaming-targets",
                         "--prediction-dir",
                         output / "predictions",
                         "--metrics-output",
                         output / "metrics.json",
                         "--source-snapshot-sha256",
                         source_hash,
-                        "--target-cache",
-                        paths["targets"] / "test",
                         "--teacher-output-cache",
                         teacher_outputs,
                         "--device",
@@ -783,24 +993,36 @@ def main() -> int:
     if args.task not in task_names:
         raise ValueError("requested task is absent from PRAD campaign graph")
     paths = _paths(spec)
-    result = _dispatch(args.task, spec, paths)
-    attestation = build_prad_task_attestation(
-        campaign_spec_sha256=spec["content_hash"],
-        task=args.task,
-        array_task_id=os.environ.get("SLURM_ARRAY_TASK_ID"),
-        result=result,
-    )
-    suffix = (
-        f"_{os.environ['SLURM_ARRAY_TASK_ID']}"
-        if "SLURM_ARRAY_TASK_ID" in os.environ
-        else ""
-    )
-    write_immutable_json(
-        paths["root"] / "task_attestations" / f"{args.task}{suffix}.json",
-        attestation,
-    )
-    print(json.dumps(attestation, indent=2, sort_keys=True))
-    return 0
+    try:
+        _prepare_ephemeral_inputs(args.task, spec, paths)
+        result = _dispatch(args.task, spec, paths)
+        attestation = build_prad_task_attestation(
+            campaign_spec_sha256=spec["content_hash"],
+            task=args.task,
+            array_task_id=os.environ.get("SLURM_ARRAY_TASK_ID"),
+            result=result,
+        )
+        suffix = (
+            f"_{os.environ['SLURM_ARRAY_TASK_ID']}"
+            if "SLURM_ARRAY_TASK_ID" in os.environ
+            else ""
+        )
+        write_immutable_json(
+            paths["root"] / "task_attestations" / f"{args.task}{suffix}.json",
+            attestation,
+        )
+        print(json.dumps(attestation, indent=2, sort_keys=True))
+        return 0
+    finally:
+        if _minimum_storage(spec):
+            ephemeral = paths["ephemeral_root"].resolve()
+            base = ephemeral.parent
+            if (
+                ephemeral.name.startswith(f"prad_{spec['content_hash'][:12]}_")
+                and base != Path("/")
+                and ephemeral.exists()
+            ):
+                shutil.rmtree(ephemeral)
 
 
 if __name__ == "__main__":

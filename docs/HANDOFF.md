@@ -2,9 +2,9 @@
 
 ## Repository state
 
-Transfer Blocks 1--4, 6, and 7 are complete locally. Transfer Block 5 is code-complete
-but still requires authoritative FP32 equivalence against installed Weaver on
-Tigris.
+Transfer Blocks 1--4, 6, and 7 are complete locally. Transfer Block 5 is
+code-complete and its authoritative installed-Weaver FP32 equivalence check
+passed on Tigris. A complete real PRAD miniature is still required.
 
 Implemented:
 
@@ -57,10 +57,16 @@ Implemented:
   paths, exact numeric dependencies, durable partial-submit recovery, exact-ID
   monitoring/resume/cancellation, and production requests bound to completed
   smoke `sacct` evidence plus conservative source-bound storage headroom.
+- the versioned `prad_minimum_durable_storage_v1` profile: the 15-node DAG
+  rebuilds paired views, structural targets, and teacher outputs in Slurm
+  job-local temporary storage and deletes them on worker exit; completed runs
+  retain optimizer-free best/final checkpoints, incomplete runs retain only
+  one rolling exact-resume checkpoint, and prediction shards store logits with
+  split-row-bound implicit identities.
 
 Still not implemented or accepted:
 
-- authoritative installed-Weaver parity and a completed real Tigris miniature.
+- a completed real Tigris minimum-storage miniature.
   The first authentic PRAD smoke submission, source commit
   `8bb20be8cb351f0a0fd71f50dabcc03467790161` and jobs `41126`--`41147`,
   failed closed before data/model execution: sorted JSON role keys exposed an
@@ -71,8 +77,12 @@ Still not implemented or accepted:
   padded, and multiply padded fixtures alike, while logits, feature gradients,
   and parameter gradients remain finite. The v3 parity contract compares that
   diagnostic topology exactly and keeps all training-required quantities
-  strictly finite; its Tigris rerun and a new source-bound smoke remain;
-- PRAD's real `reports/data_audit.md`, exact full split/cache artifacts,
+  strictly finite. The v3 authoritative rerun passed on Tigris at source
+  commit `2b3e34c961067f1d458561d67b51b2ffd780704a`. A disk-backed smoke from
+  that source was submitted, but complete monitor/resource evidence has not
+  been supplied and it cannot validate the new storage profile;
+- PRAD's real `reports/data_audit.md`, exact full split and ephemeral-data
+  attestations,
   trained checkpoints, experiment results, sealed 500k test metrics, plots,
   and final scientific recommendation. Those are intentionally not fabricated
   locally and require the clean committed source plus the real miniature first;
@@ -164,11 +174,14 @@ hlt_classification_prad_structural_targets_v1
 hlt_classification_prad_teacher_outputs_v1
 hlt_classification_prad_relation_v1
 hlt_classification_prad_checkpoint_v1
+hlt_classification_prad_model_checkpoint_v1
+hlt_classification_prad_ephemeral_dataset_v1
 hlt_classification_prad_training_report_v1
 hlt_classification_prad_training_v2
-hlt_classification_prad_prediction_manifest_v1
+hlt_classification_prad_prediction_manifest_v2
+hlt_classification_prad_teacher_prediction_manifest_v1
 hlt_classification_prad_evaluation_report_v1
-hlt_classification_prad_campaign_spec_v1
+hlt_classification_prad_campaign_spec_v2
 hlt_classification_prad_submission_ledger_v1
 hlt_classification_prad_task_attestation_v1
 hlt_classification_prad_resource_evidence_v1
@@ -193,8 +206,8 @@ semantics requires a new applicable scientific or serialized contract version.
 | HLT shard/batch layout invariance | Passed locally | bitwise concatenated arrays |
 | Canonical ParT transforms | Passed locally | `tests/test_part_inputs.py` |
 | Wrapper/parity logic | Passed with interface-faithful test double | `tests/test_particle_transformer.py` |
-| Installed-Weaver FP32 parity | Pending | direct `22c15fc` attempt exposed a Lorentz-gradient NaN consistent with repeated padded zeros; v2 finite-fixture rerun pending |
-| Real Tigris cache miniature | Attempt 1 failed closed | jobs `41126`--`41147`; corrected-source rerun pending |
+| Installed-Weaver FP32 parity | Passed on Tigris | v3 report at `2b3e34c` matched logits, masks, model state, training-required gradients, and auxiliary Lorentz-gradient topology |
+| Real Tigris minimum-storage miniature | Pending | older disk-backed attempts do not validate the v2 DAG or ephemeral cleanup |
 | Baseline training/resume | Passed locally | `tests/test_training_engine.py` |
 | Inference and metrics | Passed locally | `tests/test_inference.py`, `tests/test_metrics.py` |
 | Production DAG dry run | Passed locally | `tests/test_campaign.py` |
@@ -238,10 +251,10 @@ focused Block 7:
 8 passed
 
 complete discovered suite:
-137 passed
+144 passed
 
 focused PRAD suite:
-50 passed
+53 passed
 ```
 
 The Block-4 suite proves byte-identical clean versus interrupted/resumed
@@ -277,28 +290,35 @@ partial-submit reuse, smoke-bound production resources, dense teacher-output
 shape/storage validation, accumulated training time, semantic-only causal
 isolation, teacher semantic validation, exact final-claim recovery, exact
 array-element attestations, and synthetic installed-interface runtime
-attestation. The two Tigris-derived regressions prove split construction is
+attestation. Minimum-storage coverage additionally proves in-memory
+reconstruction does not publish arrays, task-local cache paths cannot fall
+inside the campaign/project tree, completed training removes full optimizer
+state while retaining loadable best/final model-only checkpoints, and compact
+predictions bind identities through authenticated split row ranges. The two
+Tigris-derived regressions prove split construction is
 invariant to canonical JSON key sorting and independent Weaver dispatch does
 not touch a split artifact. A direct installed-Weaver run at corrected commit
 `22c15fc2051f103e50361beb2759731cb956dc8a` then reported zero maximum error
 for logits and feature/parameter gradients but a nonfinite Lorentz-input
 gradient difference. This is consistent with the fixture's multiple identical
-padded zero four-vectors. The v2 parity report tests that diagnosis by retaining
-one masked particle per jet and now explicitly requires every compared output
-and gradient finite; authoritative confirmation remains the Tigris rerun.
+padded zero four-vectors. The v3 contract instead authenticates exact nonfinite
+topology for that unused derivative while requiring every training surface
+finite; its Tigris run at `2b3e34c` passed with exit code zero.
 
 ## Active and next task
 
-Commit the current audited source, transfer that exact commit to Tigris, run the
-Block-5 authoritative Weaver attestation, and execute the PRAD real miniature
-exactly as `docs/PRAD_RUNBOOK.md` specifies:
+The local full-suite audit is complete. Commit the minimum-storage source and
+transfer that exact commit to Tigris only after the older `2b3e34c` smoke has
+finished or been cancelled by its exact campaign job IDs. Then execute a new
+PRAD real miniature exactly as `docs/PRAD_RUNBOOK.md` specifies. It must prove
+the 15-node DAG, job-local cleanup, compact checkpoint loading, and measured
+durable size.
 
 ```bash
 export PYTHONNOUSERSITE=1
 python -s scripts/validate_weaver_parity.py --device cpu
 ```
 
-Do not mark Block 5 or PRAD production readiness accepted until parity reports
-`"passed": true`, every smoke task attestation authenticates, and measured
-resource evidence is captured. A full PRAD campaign remains unauthorized in
-this handoff.
+Do not mark PRAD production readiness accepted until every new smoke task
+attestation authenticates and measured resource/storage evidence is captured.
+A full PRAD campaign remains unauthorized in this handoff.

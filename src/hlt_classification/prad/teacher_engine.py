@@ -29,10 +29,15 @@ from .artifacts import prad_view_config_sha256
 from .checkpoints import (
     PradSelectionRecord,
     build_prad_checkpoint_payload,
+    build_prad_model_checkpoint_payload,
+    load_completed_prad_training_report,
     load_prad_checkpoint,
+    load_prad_model_checkpoint,
     prad_selection_is_better,
+    remove_transient_prad_checkpoint,
     restore_prad_checkpoint_state,
     save_prad_checkpoint,
+    save_prad_model_checkpoint,
 )
 from .engine import _plan, _plan_sha256, _take, _tensor_inputs
 from .evaluation import binary_auc, prad_classification_metrics
@@ -251,7 +256,18 @@ def train_prad_teacher(
     root = Path(output_dir)
     root.mkdir(parents=True, exist_ok=True)
     last_path = root / "last.pt"
-    best_path = root / "best_val_macro_log_rejection.pt"
+    best_path = root / "selected_model.pt"
+    final_path = root / "final_model.pt"
+    completed = load_completed_prad_training_report(
+        root / "training_report.json",
+        expected_contract=PRAD_TEACHER_REPORT_CONTRACT,
+        expected_config=config_payload,
+        expected_parents=parents,
+        map_location=target,
+    )
+    if completed is not None:
+        remove_transient_prad_checkpoint(last_path)
+        return completed
     epoch = batch_cursor = update = 0
     history: list[dict[str, Any]] = []
     best: PradSelectionRecord | None = None
@@ -316,6 +332,25 @@ def train_prad_teacher(
             ),
         )
         return save_prad_checkpoint(path, payload)
+
+    def model_checkpoint(
+        path: Path,
+        *,
+        role: str,
+        selection: PradSelectionRecord | None,
+    ) -> dict[str, str]:
+        return save_prad_model_checkpoint(
+            path,
+            build_prad_model_checkpoint_payload(
+                model=model,
+                config=config_payload,
+                parents=parents,
+                checkpoint_role=role,
+                epoch=epoch if selection is None else selection.epoch,
+                update=update if selection is None else selection.update,
+                selection=selection,
+            ),
+        )
 
     while epoch < config.epochs:
         plan = _plan(
@@ -392,20 +427,24 @@ def train_prad_teacher(
         history.append({"kind": "validation", "epoch": epoch, "update": update, "metrics": metrics})
         if prad_selection_is_better(candidate, best):
             best = candidate
-            checkpoint(best_path)
+            model_checkpoint(best_path, role="selected", selection=best)
         scheduler.step()
         epoch += 1
         batch_cursor = 0
         checkpoint(last_path)
     if best is None:
         raise RuntimeError("PRAD teacher produced no selected checkpoint")
+    if not best_path.is_file():
+        raise RuntimeError("PRAD teacher compact selected checkpoint is absent")
+    final_checkpoint = model_checkpoint(final_path, role="final", selection=None)
     training_time_seconds = (
         elapsed_before_resume + time.perf_counter() - invocation_started
     )
-    selected_payload = load_prad_checkpoint(
+    selected_payload = load_prad_model_checkpoint(
         best_path,
         expected_config=config_payload,
         expected_parents=parents,
+        expected_role="selected",
         map_location=target,
     )
     model.load_state_dict(selected_payload["model_state"], strict=True)
@@ -426,8 +465,16 @@ def train_prad_teacher(
             "training_time_seconds": training_time_seconds,
             "parameter_count": int(sum(parameter.numel() for parameter in model.parameters())),
             "best_selection": best.to_dict(),
-            "selected_checkpoint": {"path": str(best_path), "sha256": sha256_file(best_path)},
-            "final_checkpoint": {"path": str(last_path), "sha256": sha256_file(last_path)},
+            "selected_checkpoint": {
+                "path": str(best_path),
+                "sha256": sha256_file(best_path),
+                "format": "model_only",
+            },
+            "final_checkpoint": {
+                "path": final_checkpoint["path"],
+                "sha256": final_checkpoint["sha256"],
+                "format": "model_only",
+            },
             "history": history,
             "gate_values": model.gated_bias.gates.detach().cpu().tolist(),
             "teacher_frozen_after_selection": True,
@@ -435,6 +482,7 @@ def train_prad_teacher(
         }
     )
     write_immutable_json(root / "training_report.json", report)
+    remove_transient_prad_checkpoint(last_path)
     return report
 
 

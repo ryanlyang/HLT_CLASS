@@ -3,21 +3,30 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import numpy as np
 import pytest
 
-from hlt_classification.data.cache_contracts import canonical_sha256, with_content_hash
+from hlt_classification.data.cache_contracts import (
+    canonical_sha256,
+    load_npz_arrays,
+    with_content_hash,
+)
+from hlt_classification.data.identity import FileRecord
+from hlt_classification.prad.cache import build_prad_array_cache
 from hlt_classification.prad.campaign import (
     PRAD_VARIANTS,
     build_prad_task_attestation,
     build_prad_resource_evidence,
     build_prad_storage_evidence,
     create_prad_campaign_spec,
+    estimate_prad_peak_storage_bytes,
     prad_tasks,
     render_prad_submission_plan,
     submit_prad_plan,
     validate_prad_task_attestation,
     validate_prad_campaign_spec,
 )
+from hlt_classification.prad.splits import build_prad_split_manifest
 from hlt_classification.provenance import SOURCE_SNAPSHOT_CONTRACT
 
 
@@ -58,18 +67,27 @@ def test_prad_smoke_dag_uses_exact_tigris_account_and_dependencies() -> None:
     final = next(row for row in plan if row["task"] == "final_test")
     dependency = next(value for value in final["command"] if value.startswith("--dependency"))
     assert "${finalist_lock_JOB_ID}" in dependency
-    assert "${paired_test_inputs_JOB_ID}" in dependency
     baseline = next(row for row in spec["tasks"] if row["name"] == "E0_baseline")
     assert "prad_runtime" in baseline["dependencies"]
-    assert "targets_val" in baseline["dependencies"]
-    teacher_outputs = next(
-        row for row in spec["tasks"] if row["name"] == "teacher_val_outputs"
-    )
-    assert teacher_outputs["dependencies"] == ["E1_teacher"]
     finalist = next(row for row in spec["tasks"] if row["name"] == "finalist_lock")
-    assert "paired_test_inputs" in finalist["dependencies"]
+    assert finalist["dependencies"] == ["confirmation", "split"]
     oracle = next(row for row in spec["tasks"] if row["name"] == "E2_oracle")
-    assert "teacher_val_outputs" in oracle["dependencies"]
+    assert oracle["dependencies"] == ["E1_teacher"]
+    assert len(spec["tasks"]) == 15
+    assert not {
+        "paired_train",
+        "paired_val",
+        "paired_test_inputs",
+        "targets_train",
+        "targets_val",
+        "targets_test_inputs",
+        "teacher_val_outputs",
+    } & {row["name"] for row in spec["tasks"]}
+    assert spec["storage_policy"]["large_intermediates_durable"] is False
+    assert spec["storage_policy"]["paired_views"] == (
+        "slurm_job_local_ephemeral_recomputed"
+    )
+    assert 28 * 1024**3 < estimate_prad_peak_storage_bytes() < 30 * 1024**3
 
 
 def test_prad_task_attestation_is_bound_to_exact_array_element() -> None:
@@ -116,6 +134,106 @@ def test_weaver_parity_worker_does_not_require_split_manifest(
     )
     assert result == {"validated": True}
     assert commands and commands[0][-2:] == ["--device", "cpu"]
+
+
+def test_minimum_storage_worker_keeps_large_caches_outside_campaign(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    script_path = Path(__file__).parents[1] / "scripts" / "run_prad_task.py"
+    module_spec = importlib.util.spec_from_file_location(
+        "run_prad_task_storage", script_path
+    )
+    assert module_spec is not None and module_spec.loader is not None
+    module = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(module)
+    spec = create_prad_campaign_spec(
+        source_snapshot=_snapshot(), mode="smoke", campaign_root="/campaign"
+    )
+    ephemeral_base = tmp_path / "slurm_job"
+    monkeypatch.setenv("SLURM_TMPDIR", str(ephemeral_base))
+    monkeypatch.setenv("SLURM_JOB_ID", "123")
+    paths = module._paths(spec)
+    assert paths["ephemeral_root"].parent == ephemeral_base.resolve()
+    assert paths["paired"].is_relative_to(paths["ephemeral_root"])
+    assert paths["targets"].is_relative_to(paths["ephemeral_root"])
+    assert paths["teacher_outputs"].is_relative_to(paths["ephemeral_root"])
+    assert not paths["runs"].is_relative_to(paths["ephemeral_root"])
+
+
+def test_minimum_storage_worker_rejects_ephemeral_project_subdirectory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    script_path = Path(__file__).parents[1] / "scripts" / "run_prad_task.py"
+    module_spec = importlib.util.spec_from_file_location(
+        "run_prad_task_unsafe_storage", script_path
+    )
+    assert module_spec is not None and module_spec.loader is not None
+    module = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(module)
+    project = tmp_path / "project"
+    spec = create_prad_campaign_spec(
+        source_snapshot=_snapshot(), mode="smoke", campaign_root=str(project / "run")
+    )
+    spec["site"]["project_dir"] = str(project)
+    monkeypatch.setenv("SLURM_TMPDIR", str(project / "tmp"))
+    with pytest.raises(RuntimeError, match="unsafe PRAD ephemeral base"):
+        module._paths(spec)
+    monkeypatch.setenv("SLURM_TMPDIR", str(tmp_path))
+    with pytest.raises(RuntimeError, match="unsafe PRAD ephemeral base"):
+        module._paths(spec)
+
+
+def test_teacher_test_predictions_are_compact_and_durable(
+    tmp_path: Path,
+) -> None:
+    script_path = Path(__file__).parents[1] / "scripts" / "run_prad_task.py"
+    module_spec = importlib.util.spec_from_file_location(
+        "run_prad_task_teacher_predictions", script_path
+    )
+    assert module_spec is not None and module_spec.loader is not None
+    module = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(module)
+    split = build_prad_split_manifest(
+        tuple(FileRecord(f"class_{label}/sample.root", label, 4) for label in range(10)),
+        data_root=str(tmp_path),
+        output_dir=tmp_path / "splits",
+        split_sizes={"train": 20, "val": 10, "test": 10},
+    )
+
+    def outputs(start, stop, _identities):
+        rows = stop - start
+        logits = np.zeros((rows, 10), dtype=np.float32)
+        logits[:, start % 10] = 1.0
+        return {
+            "teacher_logits": logits,
+            "teacher_true_class_confidence": np.full(rows, 0.5, np.float32),
+        }
+
+    teacher_root = tmp_path / "ephemeral_teacher"
+    build_prad_array_cache(
+        split.identities("test"),
+        cache_kind="teacher_outputs",
+        logical_role="test",
+        output_dir=teacher_root,
+        parents={
+            "split_manifest_sha256": split.content_hash,
+            "teacher_checkpoint_sha256": "b" * 64,
+        },
+        shard_builder=outputs,
+        shard_size=4,
+    )
+    paths = {
+        "split": tmp_path / "splits" / "split_manifest.json",
+        "results": tmp_path / "durable_results",
+    }
+    report = module._evaluate_teacher_test_cache(
+        paths, teacher_root, "a" * 64
+    )
+    prediction_root = paths["results"] / "test" / "E1" / "predictions"
+    arrays = load_npz_arrays(prediction_root / "teacher_logits.npz")
+    assert set(arrays) == {"logits"}
+    assert arrays["logits"].shape == (10, 10)
+    assert report["teacher_prediction_manifest_sha256"]
 
 
 def test_prad_production_requires_all_prior_evidence() -> None:

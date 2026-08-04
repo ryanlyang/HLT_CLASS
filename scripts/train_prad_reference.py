@@ -22,6 +22,10 @@ from hlt_classification.prad.reference_engine import (  # noqa: E402
     PradReferenceTrainingConfig,
     train_prad_reference,
 )
+from hlt_classification.prad.splits import load_prad_split_manifest  # noqa: E402
+from hlt_classification.prad.streaming import (  # noqa: E402
+    build_in_memory_paired_views,
+)
 from hlt_classification.prad.teacher_engine import PRAD_TEACHER_REPORT_CONTRACT  # noqa: E402
 from hlt_classification.prad.training import freeze_teacher  # noqa: E402
 
@@ -34,8 +38,9 @@ def _replica(value: str):
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--experiment", choices=("E0", "E4"), required=True)
-    parser.add_argument("--train-cache", action="append", type=_replica, required=True)
-    parser.add_argument("--validation-cache", type=Path, required=True)
+    parser.add_argument("--train-cache", action="append", type=_replica)
+    parser.add_argument("--validation-cache", type=Path)
+    parser.add_argument("--streaming-split-manifest", type=Path)
     parser.add_argument("--baseline-report", type=Path)
     parser.add_argument("--teacher-report", type=Path)
     parser.add_argument("--output-dir", type=Path, required=True)
@@ -66,14 +71,37 @@ def main() -> int:
             expected_report_contract=PRAD_TEACHER_REPORT_CONTRACT,
         )
         freeze_teacher(teacher)
-    caches = dict(args.train_cache)
-    if len(caches) != len(args.train_cache):
-        raise ValueError("duplicate PRAD train replica")
+    if args.streaming_split_manifest is not None:
+        if args.train_cache or args.validation_cache is not None:
+            raise ValueError("streaming PRAD reference forbids durable caches")
+        split = load_prad_split_manifest(args.streaming_split_manifest)
+        train_datasets = build_in_memory_paired_views(
+            split,
+            logical_role="train",
+            replica_ids=(0, 1, 2, 3),
+            source_snapshot_sha256=args.source_snapshot_sha256,
+        )
+        validation_dataset = build_in_memory_paired_views(
+            split,
+            logical_role="val",
+            replica_ids=(0,),
+            source_snapshot_sha256=args.source_snapshot_sha256,
+        )[0]
+    else:
+        if not args.train_cache or args.validation_cache is None:
+            raise ValueError("durable PRAD reference requires train/validation caches")
+        caches = dict(args.train_cache)
+        if len(caches) != len(args.train_cache):
+            raise ValueError("duplicate PRAD train replica")
+        train_datasets = {
+            key: PradCacheDataset(path) for key, path in caches.items()
+        }
+        validation_dataset = PradCacheDataset(args.validation_cache)
     report = train_prad_reference(
         model_factory=build_particle_transformer,
         teacher=teacher,
-        train_paired_caches={key: PradCacheDataset(path) for key, path in caches.items()},
-        validation_paired_cache=PradCacheDataset(args.validation_cache),
+        train_paired_caches=train_datasets,
+        validation_paired_cache=validation_dataset,
         config=PradReferenceTrainingConfig(
             args.experiment,
             args.seed,

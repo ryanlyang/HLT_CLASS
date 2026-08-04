@@ -31,6 +31,11 @@ from hlt_classification.prad.experiments import (  # noqa: E402
 )
 from hlt_classification.prad.loaders import load_selected_prad_model  # noqa: E402
 from hlt_classification.prad.reference_engine import PRAD_REFERENCE_REPORT_CONTRACT  # noqa: E402
+from hlt_classification.prad.splits import load_prad_split_manifest  # noqa: E402
+from hlt_classification.prad.streaming import (  # noqa: E402
+    build_in_memory_paired_views,
+    build_in_memory_structural_targets,
+)
 from hlt_classification.prad.teacher_engine import PRAD_TEACHER_REPORT_CONTRACT  # noqa: E402
 from hlt_classification.prad.training import (  # noqa: E402
     PradTrainingConfig,
@@ -60,10 +65,11 @@ def _experiment(value: str):
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--experiment", required=True)
-    parser.add_argument("--train-cache", action="append", type=_replica, required=True)
-    parser.add_argument("--train-target-cache", action="append", type=_replica, required=True)
-    parser.add_argument("--validation-cache", type=Path, required=True)
-    parser.add_argument("--validation-target-cache", type=Path, required=True)
+    parser.add_argument("--train-cache", action="append", type=_replica)
+    parser.add_argument("--train-target-cache", action="append", type=_replica)
+    parser.add_argument("--validation-cache", type=Path)
+    parser.add_argument("--validation-target-cache", type=Path)
+    parser.add_argument("--streaming-split-manifest", type=Path)
     parser.add_argument("--semantic-weights", type=Path, required=True)
     parser.add_argument("--baseline-report", type=Path, required=True)
     parser.add_argument("--teacher-report", type=Path)
@@ -125,21 +131,69 @@ def main() -> int:
         copy_teacher_heads=experiment_copies_teacher_relation_heads(experiment),
     )
     weights = load_json(args.semantic_weights)
-    caches = dict(args.train_cache)
-    if len(caches) != len(args.train_cache):
-        raise ValueError("duplicate PRAD train replica")
-    target_caches = dict(args.train_target_cache)
-    if len(target_caches) != len(args.train_target_cache):
-        raise ValueError("duplicate PRAD train target replica")
+    if args.streaming_split_manifest is not None:
+        if (
+            args.train_cache
+            or args.train_target_cache
+            or args.validation_cache is not None
+            or args.validation_target_cache is not None
+        ):
+            raise ValueError("streaming PRAD student forbids durable caches")
+        split = load_prad_split_manifest(args.streaming_split_manifest)
+        train_datasets = build_in_memory_paired_views(
+            split,
+            logical_role="train",
+            replica_ids=(0, 1, 2, 3),
+            source_snapshot_sha256=args.source_snapshot_sha256,
+        )
+        train_target_datasets = build_in_memory_structural_targets(
+            split,
+            paired_views=train_datasets,
+            source_snapshot_sha256=args.source_snapshot_sha256,
+        )
+        validation_views = build_in_memory_paired_views(
+            split,
+            logical_role="val",
+            replica_ids=(0,),
+            source_snapshot_sha256=args.source_snapshot_sha256,
+        )
+        validation_dataset = validation_views[0]
+        validation_target_dataset = build_in_memory_structural_targets(
+            split,
+            paired_views=validation_views,
+            source_snapshot_sha256=args.source_snapshot_sha256,
+        )[0]
+    else:
+        if (
+            not args.train_cache
+            or not args.train_target_cache
+            or args.validation_cache is None
+            or args.validation_target_cache is None
+        ):
+            raise ValueError("durable PRAD student requires all cache paths")
+        caches = dict(args.train_cache)
+        if len(caches) != len(args.train_cache):
+            raise ValueError("duplicate PRAD train replica")
+        target_caches = dict(args.train_target_cache)
+        if len(target_caches) != len(args.train_target_cache):
+            raise ValueError("duplicate PRAD train target replica")
+        train_datasets = {
+            key: PradCacheDataset(path) for key, path in caches.items()
+        }
+        train_target_datasets = {
+            key: PradCacheDataset(path) for key, path in target_caches.items()
+        }
+        validation_dataset = PradCacheDataset(args.validation_cache)
+        validation_target_dataset = PradCacheDataset(
+            args.validation_target_cache
+        )
     report = train_prad_student(
         model=student,
         teacher=teacher,
-        train_paired_caches={key: PradCacheDataset(path) for key, path in caches.items()},
-        train_targets={
-            key: PradCacheDataset(path) for key, path in target_caches.items()
-        },
-        validation_paired_cache=PradCacheDataset(args.validation_cache),
-        validation_targets=PradCacheDataset(args.validation_target_cache),
+        train_paired_caches=train_datasets,
+        train_targets=train_target_datasets,
+        validation_paired_cache=validation_dataset,
+        validation_targets=validation_target_dataset,
         config=PradTrainingConfig(
             experiment=experiment,
             seed=args.seed,

@@ -12,7 +12,7 @@ campaign evidence. “Implemented” never means a real-data experiment has run.
 | 2: source/data audit | active implementation plan, `prad/audit.py`, `audit_prad_data.py` | schema-capability and synthetic audit tests | real `reports/data_audit.md` pending Tigris data |
 | 3: fixed split | `prad/splits.py`, `build_prad_splits.py` | exact constants, capacity failure, proportional class allocation, disjoint identities, checksums | 500k/150k/500k manifests pending real inventory |
 | 4: HLT baseline | `reference_engine.py`, E0 registry and worker | training/resume/inference mechanics tested | full E0 reproduction pending |
-| 8: structural targets | `targets.py`, `artifacts.py`, `build_prad_targets.py` | exclusive C/A K=2/3/4 and compact cache tests | full target caches pending; vertex coefficient is zero because source has no vertex field |
+| 8: structural targets | `targets.py`, `artifacts.py`, `streaming.py`, `build_prad_targets.py` | exclusive C/A K=2/3/4 plus task-local and in-memory reconstruction tests | full targets are recomputed per consuming task; vertex coefficient is zero because source has no vertex field |
 | 9: association | `matching.py`, paired/target cache builders | charged/neutral Hungarian gates, cost rejection, pair-mask tests | real coverage tables pending audit |
 | 10: teacher | `teacher_engine.py`, `cache_prad_teacher_outputs.py` | attention-connected relation graph, semantic validation, selection/freeze and compact/dense output-cache tests | E1 checkpoint and val/test metrics pending |
 | 11--12: losses and schedule | `losses.py`, `training.py`, `engine.py` | normalized masked losses, reliability weights, KD, staged freeze/LR behavior, exact resume | full fixed-budget runs pending |
@@ -45,7 +45,10 @@ training time. Evaluation adds keyed predictions, metrics, relation diagnostics,
 gate values, matching coverage, throughput, latency, and peak memory. Dense
 teacher relation and centered-bias outputs can be stored as validated float16
 shards with `--dense-pairs`; the default campaign streams/recomputes them to
-remain within its reviewed storage model.
+remain within its reviewed storage model. The minimum-storage profile also
+keeps paired views, compact targets, and teacher jet outputs in Slurm job-local
+temporary storage. Completed runs retain model-only best/final checkpoints;
+only incomplete runs retain one rolling exact-resume checkpoint.
 
 ## Safeguard coverage
 

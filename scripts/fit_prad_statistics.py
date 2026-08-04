@@ -16,6 +16,11 @@ if str(SRC_ROOT) not in sys.path:
 
 from hlt_classification.prad.cache import PradCacheDataset  # noqa: E402
 from hlt_classification.prad.statistics import save_semantic_positive_weights  # noqa: E402
+from hlt_classification.prad.splits import load_prad_split_manifest  # noqa: E402
+from hlt_classification.prad.streaming import (  # noqa: E402
+    build_in_memory_paired_views,
+    build_in_memory_structural_targets,
+)
 
 
 def _replica(value: str):
@@ -25,26 +30,55 @@ def _replica(value: str):
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--train-paired-cache", type=Path, required=True)
-    parser.add_argument("--train-target-cache", action="append", type=_replica, required=True)
+    parser.add_argument("--train-paired-cache", type=Path)
+    parser.add_argument("--train-target-cache", action="append", type=_replica)
+    parser.add_argument("--streaming-split-manifest", type=Path)
+    parser.add_argument("--source-snapshot-sha256")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
-    target_paths = dict(args.train_target_cache)
-    if len(target_paths) != len(args.train_target_cache) or set(target_paths) != {0, 1, 2, 3}:
-        raise ValueError("PRAD statistics require target replicas 0,1,2,3")
-    caches = tuple(
-        PradCacheDataset(
-            target_paths[replica],
-            expected_kind="structural_targets",
+    if args.streaming_split_manifest is not None:
+        if (
+            args.train_paired_cache is not None
+            or args.train_target_cache
+            or args.source_snapshot_sha256 is None
+        ):
+            raise ValueError("streaming PRAD statistics arguments differ")
+        split = load_prad_split_manifest(args.streaming_split_manifest)
+        paired_by_replica = build_in_memory_paired_views(
+            split,
+            logical_role="train",
+            replica_ids=(0, 1, 2, 3),
+            source_snapshot_sha256=args.source_snapshot_sha256,
+        )
+        target_by_replica = build_in_memory_structural_targets(
+            split,
+            paired_views=paired_by_replica,
+            source_snapshot_sha256=args.source_snapshot_sha256,
+        )
+        caches = tuple(target_by_replica[replica] for replica in range(4))
+        paired = paired_by_replica[0]
+    else:
+        if args.train_paired_cache is None or not args.train_target_cache:
+            raise ValueError("durable PRAD statistics require cache paths")
+        target_paths = dict(args.train_target_cache)
+        if (
+            len(target_paths) != len(args.train_target_cache)
+            or set(target_paths) != {0, 1, 2, 3}
+        ):
+            raise ValueError("PRAD statistics require target replicas 0,1,2,3")
+        caches = tuple(
+            PradCacheDataset(
+                target_paths[replica],
+                expected_kind="structural_targets",
+                expected_role="train",
+            )
+            for replica in range(4)
+        )
+        paired = PradCacheDataset(
+            args.train_paired_cache,
+            expected_kind="paired_views",
             expected_role="train",
         )
-        for replica in range(4)
-    )
-    paired = PradCacheDataset(
-        args.train_paired_cache,
-        expected_kind="paired_views",
-        expected_role="train",
-    )
     report = save_semantic_positive_weights(
         caches, args.output, paired_cache=paired
     )

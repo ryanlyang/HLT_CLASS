@@ -10,9 +10,13 @@ from hlt_classification.data.cache_contracts import canonical_sha256
 from hlt_classification.prad.checkpoints import (
     PradSelectionRecord,
     build_prad_checkpoint_payload,
+    build_prad_model_checkpoint_payload,
     load_prad_checkpoint,
+    load_prad_model_checkpoint,
+    remove_transient_prad_checkpoint,
     restore_prad_checkpoint_state,
     save_prad_checkpoint,
+    save_prad_model_checkpoint,
 )
 from hlt_classification.training.engine import DisabledScaler
 
@@ -85,3 +89,36 @@ def test_prad_checkpoint_restores_all_required_training_state(tmp_path) -> None:
     assert loaded["epoch"] == 2
     assert loaded["sampler_state"]["batch_cursor"] == 3
     assert loaded["elapsed_training_seconds"] == 12.5
+
+    compact_payload = build_prad_model_checkpoint_payload(
+        model=model,
+        config=config,
+        parents=parents,
+        checkpoint_role="selected",
+        epoch=selection.epoch,
+        update=selection.update,
+        selection=selection,
+    )
+    compact = save_prad_model_checkpoint(
+        tmp_path / "selected_model.pt", compact_payload
+    )
+    assert (tmp_path / "selected_model.pt").stat().st_size < (
+        tmp_path / "last.pt"
+    ).stat().st_size
+    loaded_model = load_prad_model_checkpoint(
+        compact["path"],
+        expected_config=config,
+        expected_parents=parents,
+        expected_role="selected",
+    )
+    assert loaded_model["optimizer_state_persisted"] is False
+    assert loaded_model["rng_state_persisted"] is False
+    assert "optimizer_state" not in loaded_model
+    assert "rng_state" not in loaded_model
+    assert all(
+        torch.equal(value, loaded_model["model_state"][name])
+        for name, value in model.state_dict().items()
+    )
+    remove_transient_prad_checkpoint(tmp_path / "last.pt")
+    assert not (tmp_path / "last.pt").exists()
+    assert not (tmp_path / "last.pt.json").exists()

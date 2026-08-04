@@ -5,6 +5,7 @@ import pytest
 import torch
 from torch import nn
 
+from hlt_classification.data.cache_contracts import load_npz_arrays
 from hlt_classification.data.identity import JetIdentity
 from hlt_classification.prad.cache import PradCacheDataset, build_prad_array_cache
 from hlt_classification.prad.inference import (
@@ -70,6 +71,13 @@ def test_prad_inference_is_label_free_and_hlt_only(tmp_path) -> None:
     )
     assert predictions["labels_in_prediction_artifact"] is False
     assert predictions["offline_fields_in_model_call"] is False
+    assert predictions["identity_encoding"] == (
+        "implicit_split_row_range_bound_to_source_manifest"
+    )
+    first = load_npz_arrays(
+        tmp_path / "predictions" / predictions["shards"][0]["filename"]
+    )
+    assert set(first) == {"logits"}
     report = evaluate_prad_predictions(
         prediction_dir=tmp_path / "predictions",
         source_dataset=cache,
