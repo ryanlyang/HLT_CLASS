@@ -188,7 +188,7 @@ def _teacher_validation(
 
 def train_prad_teacher(
     *,
-    model: PradParticleTransformer,
+    model_factory: Callable[[], PradParticleTransformer],
     train_paired_cache: PradCacheDataset,
     train_targets: PradCacheDataset,
     validation_paired_cache: PradCacheDataset,

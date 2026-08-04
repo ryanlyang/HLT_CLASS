@@ -207,7 +207,7 @@ semantics requires a new applicable scientific or serialized contract version.
 | Canonical ParT transforms | Passed locally | `tests/test_part_inputs.py` |
 | Wrapper/parity logic | Passed with interface-faithful test double | `tests/test_particle_transformer.py` |
 | Installed-Weaver FP32 parity | Passed on Tigris | v3 report at `2b3e34c` matched logits, masks, model state, training-required gradients, and auxiliary Lorentz-gradient topology |
-| Real Tigris minimum-storage miniature | Attempt 2 reached E0 evaluation | `41820`--`41824` completed; `41825` exposed tensor-buffer trimmer restore compatibility after E0 training completed |
+| Real Tigris minimum-storage miniature | Attempt 3 completed E0 | `41967`--`41972` completed; `41973` exposed a teacher CLI/engine keyword mismatch before teacher training |
 | Baseline training/resume | Passed locally | `tests/test_training_engine.py` |
 | Inference and metrics | Passed locally | `tests/test_inference.py`, `tests/test_metrics.py` |
 | Production DAG dry run | Passed locally | `tests/test_campaign.py` |
@@ -251,10 +251,10 @@ focused Block 7:
 8 passed
 
 complete discovered suite:
-145 passed
+147 passed
 
 focused PRAD suite:
-53 passed
+58 passed
 ```
 
 The Block-4 suite proves byte-identical clean versus interrupted/resumed
@@ -313,14 +313,23 @@ registered tensor `_counter` buffer by assigning a Python integer. The restore
 helper now mutates tensor counters in place while preserving legacy integer
 counters, with a regression that proves registered-buffer identity and value.
 
+The replacement miniature at `6bcda2d` then completed split, audit, parity,
+runtime, statistics, and the entire E0 train/evaluate task in jobs
+`41967`--`41972`. E1 job `41973` failed before training because its CLI passed
+the intended `model_factory` keyword to an engine signature that still named
+the parameter `model`, even though the engine body already invoked
+`model_factory()`. The signature is aligned, the CLI now binds its complete
+keyword set against the real engine signature in a regression, and a tiny
+full-budget teacher test exercises factory construction through compact
+best/final checkpoint publication and rolling-checkpoint removal.
+
 ## Active and next task
 
-The local full-suite audit is complete. Commit the tensor-buffer compatibility
-fix, cancel only the pending descendants of `smoke_min_288aafc` through its v2
+The local full-suite audit is complete. Commit the teacher factory-interface
+fix, cancel only the pending descendants of `smoke_min_6bcda2d` through its v2
 ledger, transfer the exact fix commit to Tigris, and execute a fresh PRAD real
-miniature exactly as `docs/PRAD_RUNBOOK.md` specifies. It must prove the
-15-node DAG, job-local cleanup, compact checkpoint loading, and measured
-durable size.
+miniature exactly as `docs/PRAD_RUNBOOK.md` specifies. It must complete the
+remaining teacher/student, selection, locked-test, and aggregation surfaces.
 
 ```bash
 export PYTHONNOUSERSITE=1
