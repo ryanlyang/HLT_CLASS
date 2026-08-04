@@ -70,13 +70,14 @@ def validate_content_hash(
     payload: Mapping[str, Any],
     *,
     expected_contract: str,
+    expected_schema_version: int = CACHE_SCHEMA_VERSION,
 ) -> str:
     if payload.get("contract") != expected_contract:
         raise ValueError(
             f"contract mismatch: expected {expected_contract!r}, "
             f"got {payload.get('contract')!r}"
         )
-    if payload.get("schema_version") != CACHE_SCHEMA_VERSION:
+    if payload.get("schema_version") != expected_schema_version:
         raise ValueError("cache schema version mismatch")
     supplied = require_sha256(payload.get("content_hash"), name="content_hash")
     unhashed = dict(payload)

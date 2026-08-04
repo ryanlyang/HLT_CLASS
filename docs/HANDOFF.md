@@ -207,7 +207,7 @@ semantics requires a new applicable scientific or serialized contract version.
 | Canonical ParT transforms | Passed locally | `tests/test_part_inputs.py` |
 | Wrapper/parity logic | Passed with interface-faithful test double | `tests/test_particle_transformer.py` |
 | Installed-Weaver FP32 parity | Passed on Tigris | v3 report at `2b3e34c` matched logits, masks, model state, training-required gradients, and auxiliary Lorentz-gradient topology |
-| Real Tigris minimum-storage miniature | Attempt 4 completed through E4 | core-screen array `42015` completed E3/E4; E5--E10 exposed an installed-CUDA Stage-A attention-backward defect |
+| Real Tigris minimum-storage miniature | Attempt 5 passed CUDA Stage-A mechanics | job `42084` ran runtime-validation v2 successfully, then exposed a wrapper schema-default mismatch during report authentication |
 | Baseline training/resume | Passed locally | `tests/test_training_engine.py` |
 | Inference and metrics | Passed locally | `tests/test_inference.py`, `tests/test_metrics.py` |
 | Production DAG dry run | Passed locally | `tests/test_campaign.py` |
@@ -251,10 +251,10 @@ focused Block 7:
 8 passed
 
 complete discovered suite:
-148 passed
+149 passed
 
 focused PRAD suite:
-59 passed
+60 passed
 ```
 
 The Block-4 suite proves byte-identical clean versus interrupted/resumed
@@ -335,15 +335,24 @@ pre-attention relation tensor. A regression requires final logits to receive
 no Stage-A gradient, and runtime-validation v2 reproduces the registered
 freeze schedule on installed CUDA before E0.
 
+The next `d2237422` miniature completed split, installed-Weaver parity, data
+audit, and train statistics. Its runtime-validation subprocess returned exit
+code zero in job `42084`, which establishes that the new Stage-A CUDA
+backward attestation passed. The task wrapper then rejected that valid report:
+it requested the v2 contract name while the reusable content-hash validator
+still defaulted to schema version 1. The validator now accepts an explicit
+expected schema version while preserving version 1 as its default, the PRAD
+runtime worker explicitly requests version 2, and a regression exercises the
+real dispatch path with a content-authenticated v2 report.
+
 ## Active and next task
 
-The local full-suite audit is complete. Commit the Stage-A graph repair and
-runtime-validation v2, cancel only the pending descendants of
-`smoke_min_58ee660b` through its v2 ledger, transfer the exact fix commit to
-Tigris, and execute a fresh PRAD real miniature exactly as
-`docs/PRAD_RUNBOOK.md` specifies. Runtime-validation v2 must pass before the
-new graph proceeds to E0; the miniature must then complete selection,
-locked-test, and aggregation surfaces.
+The local full-suite audit is complete. Commit the runtime-report schema fix,
+cancel only the pending descendants of `smoke_min_d2237422` through its v2
+ledger, transfer the exact fix commit to Tigris, and execute a fresh PRAD real
+miniature exactly as `docs/PRAD_RUNBOOK.md` specifies. The Stage-A CUDA
+mechanics are now authentically passed; the miniature must still complete the
+training, selection, locked-test, and aggregation surfaces.
 
 ```bash
 export PYTHONNOUSERSITE=1

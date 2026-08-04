@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 
 import numpy as np
@@ -134,6 +135,43 @@ def test_weaver_parity_worker_does_not_require_split_manifest(
     )
     assert result == {"validated": True}
     assert commands and commands[0][-2:] == ["--device", "cpu"]
+
+
+def test_prad_runtime_worker_authenticates_v2_report_schema(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    script_path = Path(__file__).parents[1] / "scripts" / "run_prad_task.py"
+    module_spec = importlib.util.spec_from_file_location(
+        "run_prad_task_runtime_v2", script_path
+    )
+    assert module_spec is not None and module_spec.loader is not None
+    module = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(module)
+    reports = tmp_path / "reports"
+    expected = with_content_hash(
+        {
+            "contract": "hlt_classification_prad_runtime_validation_v2",
+            "schema_version": 2,
+            "passed": True,
+        }
+    )
+
+    def successful_runtime(command):
+        output = Path(command[command.index("--output") + 1])
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(expected), encoding="utf-8")
+
+    monkeypatch.setattr(module, "_run", successful_runtime)
+    result = module._dispatch(
+        "prad_runtime",
+        {
+            "source_snapshot": {"source_snapshot_sha256": "a" * 64},
+            "site": {"project_dir": "/project"},
+        },
+        {"reports": reports},
+    )
+
+    assert result == {"report_sha256": expected["content_hash"]}
 
 
 def test_minimum_storage_worker_keeps_large_caches_outside_campaign(
