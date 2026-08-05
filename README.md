@@ -7,9 +7,17 @@ and training-time use of paired offline information.
 
 PMARD is the active campaign. Its repository-local Scouting schema, label and
 file-split contracts, bounded ROOT streaming, 21-channel HLT and native-offline
-inputs, constituent candidate/assignment solvers, `P4_ONLY/v1` alpha repair,
+inputs, the canonical fitted-strict selective matcher, persistent compact
+per-source sparse assignments, retained `P4_ONLY/v1`, and primary mixed-type
+`SELECTIVE_FULL_PARTICLE_ENDPOINT/v1` alpha repair,
 15-output Scouting ParT adapters, KD losses/metrics, hash-chained locks, and
 minimum-storage campaign DAG are under `src/hlt_classification/scouting/`.
+The selective endpoint replaces all 21 fields and p4 for accepted matches while
+leaving unmatched tokens byte-identical to HLT. Its authorization lock binds
+the fixed matcher artifact, exact threshold, row selection, and assignment
+manifest; training uses
+deterministic cross-file RAM shuffling and FP32 KD/representation losses under
+BF16 model autocast.
 Local synthetic verification does not authorize production: installed-Weaver
 parity and the complete real streamed Tigris miniature remain mandatory.
 

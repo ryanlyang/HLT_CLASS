@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import hashlib
 from pathlib import Path
 from typing import Mapping, Sequence
 import numpy as np
 
-from hlt_classification.data.cache_contracts import array_sha256, require_sha256, with_content_hash
+from hlt_classification.data.cache_contracts import array_sha256, require_sha256, validate_content_hash, with_content_hash
 
 EPHEMERAL_TEACHER_TARGET_CONTRACT = "hlt_classification_pmard_ephemeral_teacher_targets_v1"
 
@@ -36,6 +36,28 @@ class EphemeralTeacherTargets:
     identities: tuple[str, ...]
     logits: np.ndarray
     header: Mapping[str, object]
+    _lookup: Mapping[str, int] = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        value = np.asarray(self.logits)
+        if (value.dtype not in (np.float16, np.float32)
+                or value.shape != (len(self.identities), 15)
+                or len(set(self.identities)) != len(self.identities)
+                or not np.isfinite(value).all()):
+            raise ValueError("teacher target identities/logits are invalid")
+        if (self.header.get("storage_mode") != "ram_ephemeral"
+                or self.header.get("identity_sha256") != hashlib.sha256(
+                    "\n".join(self.identities).encode()
+                ).hexdigest()
+                or self.header.get("logits_sha256") != array_sha256("logits", value)):
+            raise ValueError("teacher target header differs from RAM content")
+        validate_content_hash(
+            self.header, expected_contract=EPHEMERAL_TEACHER_TARGET_CONTRACT,
+            expected_schema_version=1,
+        )
+        object.__setattr__(self, "_lookup", {
+            key: index for index, key in enumerate(self.identities)
+        })
 
     @classmethod
     def create(
@@ -59,8 +81,7 @@ class EphemeralTeacherTargets:
         return cls(keys, value, header)
 
     def join(self, requested_identities: Sequence[str]) -> np.ndarray:
-        lookup = {key: index for index, key in enumerate(self.identities)}
-        try: indexes = [lookup[str(key)] for key in requested_identities]
+        try: indexes = [self._lookup[str(key)] for key in requested_identities]
         except KeyError as error: raise KeyError("teacher target identity join is incomplete") from error
         result = self.logits[indexes].astype(np.float32, copy=False)
         if not np.isfinite(result).all(): raise FloatingPointError("joined teacher logits are nonfinite")

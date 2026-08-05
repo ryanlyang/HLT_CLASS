@@ -52,14 +52,18 @@ def partition_files(
 def iterate_projected_chunks(
     files: Sequence[str | Path], branches: Iterable[str], *, data_root: str | Path,
     role: str, completed_locks: Sequence[str] = (), step_size: int | str = 4096,
+    interleave_files: int = 1,
 ) -> Iterator[ScoutingChunk]:
     require_role_access(role, branch_read=True, completed_locks=completed_locks)
     requested = tuple(sorted(set(branches)))
     if not requested:
         raise ValueError("a projected ROOT read requires at least one branch")
+    if interleave_files <= 0:
+        raise ValueError("interleave_files must be positive")
     root = Path(data_root).expanduser().resolve()
     import uproot
-    for item in files:
+
+    def chunks_for_file(item: str | Path) -> Iterator[ScoutingChunk]:
         path = Path(item).expanduser().resolve()
         try:
             relative = path.relative_to(root).as_posix()
@@ -70,15 +74,41 @@ def iterate_projected_chunks(
             missing = sorted(set(requested) - set(tree.keys()))
             if missing:
                 raise KeyError(f"{relative} is missing projected branches: {missing}")
-            for arrays, report in tree.iterate(
+            cursor = 0
+            for item in tree.iterate(
                 requested, step_size=step_size, library="ak", how=dict, report=True,
             ):
+                if isinstance(item, tuple) and len(item) == 2:
+                    arrays, report = item
+                    entry_start = int(report.tree_entry_start)
+                    entry_stop = int(report.tree_entry_stop)
+                else:
+                    # Uproot RNTuple iteration currently ignores `report=True`.
+                    arrays = item
+                    rows = len(next(iter(arrays.values())))
+                    entry_start, entry_stop = cursor, cursor + rows
+                cursor = entry_stop
                 yield ScoutingChunk(
                     source_path=relative,
-                    entry_start=int(report.tree_entry_start),
-                    entry_stop=int(report.tree_entry_stop),
+                    entry_start=entry_start,
+                    entry_stop=entry_stop,
                     arrays=arrays,
                 )
+
+    # Keep only a bounded number of ROOT handles open while round-robin reading
+    # chunks.  A downstream RAM shuffle buffer can therefore contain examples
+    # from several source files instead of merely permuting one contiguous file.
+    for start in range(0, len(files), interleave_files):
+        active = [iter(chunks_for_file(item)) for item in files[start:start + interleave_files]]
+        while active:
+            remaining = []
+            for iterator in active:
+                try:
+                    yield next(iterator)
+                    remaining.append(iterator)
+                except StopIteration:
+                    pass
+            active = remaining
 
 
 __all__ = [

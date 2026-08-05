@@ -8,8 +8,8 @@ from typing import Final
 
 from hlt_classification.data.cache_contracts import canonical_sha256
 
-SCOUTING_SCHEMA_CONTRACT: Final = "hlt_classification_scouting_schema_v1"
-SCOUTING_SCHEMA_VERSION: Final = 1
+SCOUTING_SCHEMA_CONTRACT: Final = "hlt_classification_scouting_schema_v3"
+SCOUTING_SCHEMA_VERSION: Final = 3
 TREE_NAME: Final = "tree"
 DEFAULT_DATA_ROOT: Final = "/home/ryreu/cms/data/ScoutingAK8_native_compact/2024/train"
 
@@ -146,13 +146,15 @@ def matching_required_branches() -> frozenset[str]:
     hlt = {
         f"scoutpfcand_{name}" for name in (
             "px", "py", "pz", "energy", "charge", "isEl", "isMu",
-            "isChargedHad", "isGamma", "isNeutralHad",
+            "isChargedHad", "isGamma", "isNeutralHad", "dxy", "dxysig",
+            "dz", "dzsig", "normchi2", "quality", "lostInnerHits",
         )
     }
     charged = {
         f"cpfcandlt_{name}" for name in (
             "px", "py", "pz", "energy", "charge", "isEl", "isMu",
-            "isChargedHad", "isLostTrack",
+            "isChargedHad", "isLostTrack", "dxy", "dxysig", "dz", "dzsig",
+            "normchi2", "quality", "lostInnerHits",
         )
     }
     neutral = {
@@ -160,7 +162,8 @@ def matching_required_branches() -> frozenset[str]:
             "px", "py", "pz", "energy", "isGamma", "isNeutralHad",
         )
     }
-    return frozenset(hlt | charged | neutral)
+    counts = {"n_scoutpfcands", "n_cpfcands", "n_lts", "n_npfcands"}
+    return frozenset(hlt | charged | neutral | counts)
 
 
 def schema_payload() -> dict[str, object]:
@@ -175,6 +178,7 @@ def schema_payload() -> dict[str, object]:
         "toff_charged_features": list(TOFF_CHARGED_FEATURES),
         "toff_neutral_features": list(TOFF_NEUTRAL_FEATURES),
         "toff_lengths": [OFFLINE_CHARGED_MAX_LENGTH, OFFLINE_NEUTRAL_MAX_LENGTH],
+        "matching_branches": sorted(matching_required_branches()),
         "source_logical_content_sha256": EXPECTED_LOGICAL_CONTENT_SHA256,
     }
 

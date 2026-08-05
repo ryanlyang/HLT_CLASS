@@ -8,37 +8,79 @@ separate prior campaign and cannot redefine PMARD.
 
 Implemented locally in the current worktree:
 
-- versioned Scouting source/schema, label, row-identity, split, artifact, and
+- version-3 Scouting schema with explicit native constituent-count boundary
+  validation, plus versioned source, label, row-identity, split, artifact, and
   role-capability contracts;
+- version-2 60/20/20 source-file split construction: the source audit streams
+  per-file 15-class counts, an exact MILP minimizes the worst class-by-role
+  fraction deviation under whole-file disjointness, and validation fails
+  closed above a predeclared 0.02 absolute tolerance;
 - exact 15-class mapping, 21-channel CMSSW transform, 200-token HLT view, and
   90/60 native-offline no-SV view;
 - projected bounded ROOT streaming with rank/worker file partition and sealed
-  pre-lock final-test branch access;
-- compatible-category/charge/lost-track candidate graphs, separately fitted
-  and calibrated physics/contextual scorers, deterministic score quantization,
-  `M0`--`M5`, Hungarian+dustbin, unbalanced OT, exact alternative margins,
-  held-out synthetic/stress/event-mixing diagnostics, and a matching-only
-  selector with category eligibility fallback;
-- RAM-ephemeral int16 assignment table contract and five-fold source cross-fit
-  allocation;
+  pre-lock final-test branch access, plus eight-file round-robin train reads
+  and deterministic natural-population 32,768-row RAM shuffle buffers;
+- v2 sparse candidate graphs with audited node/edge/track-validity features,
+  three-round bipartite message passing, positive-unlabeled bootstrap,
+  two ultra-conservative pseudo-label rounds, held-out edge and post-assignment
+  calibration, deterministic score quantization, exact alternative margins,
+  Hungarian/OT controls, and `M0`--`M5`;
+- adversarial synthetic loss/fake/split/merge/category-confusion tests,
+  genuinely different event-mixed jets, independent HLT/offline perturbation
+  stability, confidence Brier and matching-only category gates;
+- the canonical `fitted_strict` selective matcher as a standalone production
+  module: immutable semantic hashes for the 7,500-jet edge/confidence/audit
+  bundle, exact empirical LLR scoring, strict PID/charge and broad kinematic
+  gates, rectangular Hungarian private dummies, calibrated ten-diagnostic
+  confidence at threshold `0.9828147479721088`, native-index restoration after
+  lost-track exclusion, batch inference, and persistent-cache construction;
+- deterministic class-proportional row-selection manifests and immutable
+  fitted-strict assignment caches computed once per selected jet: compact
+  per-source CSR/DEFLATE shards store only entry, uint8 HLT index, uint16
+  offline index, and uint16 confidence; consumers use a bounded lazy LRU and
+  verify split/selection/matcher/data hashes before reuse;
 - exact `P4_ONLY/v1` alpha endpoints and byte-identical `alpha=0`, plus charged
   eligibility, shuffled/corrupted matches, direction/response/wrong/random
   controls, log-angular interpolation, and confidence weighting;
+- versioned `SELECTIVE_FULL_PARTICLE_ENDPOINT/v1` mixed-type repair: unique
+  accepted assignments, exact all-21-channel plus p4 offline replacement for
+  accepted tokens at `alpha=1`, byte-identical unmatched HLT tokens, raw
+  continuous interpolation, SHA-256 identity-bound nested discrete/validity
+  switches, charged/neutral track-applicability coherence, and unchanged HLT
+  count/order/mask without durable repaired datasets;
+- a hash-chained selective-assignment authorization boundary binding the
+  canonical fitted-strict artifact and threshold, split, deterministic row
+  selection, compact train/validation assignment manifest, all five input
+  categories, and the exact unmatched-as-HLT policy before any privileged
+  teacher or student;
 - 21-input/15-output canonical Weaver adapter, native-offline diagnostic model,
-  K0--K6 loss semantics, class weights, representation loss, metrics, and fixed
-  three-generation registry;
-- exact batch-offset/RNG/optimizer resume, HLT-only inference signature,
+  K0--K6 loss semantics including a valid alpha-zero K2 collapse, class
+  weights, separate `R4_PAIR`/`R4_GRAM` representation arms, corrected
+  per-signal QCD discriminants, and a fixed three-generation registry whose
+  representation and anchored-companion paths remain executable when the
+  selector legitimately chooses alpha zero via an exact HLT identity alias;
+- cross-file full-batch packing, Weaver no-decay optimizer exclusions,
+  named RNG domains, FP32 CE/KL/recursive representation and pair/Gram math
+  plus FP32 RAM logits under BF16 ParT autocast, eight-check validation cadence,
+  durable 50-update interval-mean loss history, validation/preemption-only
+  rolling checkpoints, batch-shell-to-Python `exec` signal delivery, exact
+  batch-offset/RNG/optimizer/best-state resume, a shared deterministic
+  4,096-row smoke selection, one bounded RAM-cache miniature, and HLT-only post-cache streams
+  with unused GPU teachers/matchers released for R0 and zero-coefficient
+  controls, plus the HLT-only inference signature,
   fixed observer-only stratification and final nested paired statistics;
 - hash-chained freeze locks and a minimum-storage Tigris DAG whose smoke graph
   cannot access final test, with exact-ID monitor/resume/cancel, authenticated
   resource/storage/miniature evidence, nonmutating production dry run, and
-  explicit production authorization gates.
+  explicit production authorization gates; a pilot graph uses exact
+  300k/100k/100k row selections, constructs final-test selection/assignments
+  only after the execution lock, and reports HLT, native-offline, and
+  matched-offline endpoint oracles alongside deployable finalists.
 
-The complete local suite passes with bytecode and pytest caches disabled:
-`169 passed, 14 warnings` using the established `tagging-hlt` scientific
-environment. `git diff --check`, Python compilation, and the PMARD CLI help
-surfaces pass. Windows could not launch the local `bash.exe`, so authoritative
-shell syntax remains part of the Tigris preflight.
+Local verification now passes `208 tests, 14 warnings`, including selective
+all-field endpoint, persistent sparse join, pilot-DAG, matcher, KD, resume, and
+legacy campaign regressions. CLI help and `git diff --check` also pass; the
+remaining notices are repository line-ending notices.
 
 Still required externally before production: commit and push the exact clean
 source; authenticate the native 53-file dataset and split; run installed-Weaver
@@ -50,8 +92,10 @@ resource measurement, or final-test output is claimed in this handoff.
 
 Track-only and p4-plus-track repair remain deliberately unavailable until the
 real Stage-A units/definition audit creates a compatibility lock; attempting
-either fails closed. This is the plan's required conditional gate, not a
-silent approximation.
+either fails closed. The old complete full-particle implementation remains
+locally verified but is not the selected scientific endpoint. The selected
+fitted-strict path is intentionally partial and uses the new selective
+all-field contract; it never claims that the unmatched fraction became offline.
 
 ## Repository state
 
@@ -241,6 +285,22 @@ hlt_classification_prad_resource_evidence_v1
 hlt_classification_prad_final_selection_v1
 hlt_classification_prad_runtime_validation_v3
 hlt_classification_prad_statistical_report_v2
+
+PMARD/Scouting reviewed surfaces:
+hlt_classification_scouting_schema_v3
+hlt_classification_fitted_strict_matcher_v1
+hlt_classification_scouting_feature_audit_v2
+hlt_classification_pmard_row_selection_v1
+hlt_classification_pmard_selective_assignment_shard_v1
+hlt_classification_pmard_selective_assignment_manifest_v1
+hlt_classification_pmard_ephemeral_assignment_v2
+hlt_classification_pmard_matcher_report_v2
+hlt_classification_pmard_matcher_validation_v2
+hlt_classification_pmard_full_role_coverage_v2
+hlt_classification_pmard_training_report_v4
+hlt_classification_pmard_resume_checkpoint_v4
+hlt_classification_pmard_lock_v4
+hlt_classification_pmard_campaign_spec_v9
 ```
 
 Changing registered-v1 event, substream, replica-cycle, degradation, or cache
@@ -304,10 +364,13 @@ focused Block 7:
 8 passed
 
 complete discovered suite:
-149 passed
+205 passed, 14 warnings
 
 focused PRAD suite:
 60 passed
+
+focused PMARD/Scouting suite:
+54 passed
 ```
 
 The Block-4 suite proves byte-identical clean versus interrupted/resumed
@@ -319,11 +382,21 @@ output shard, and processing-batch layouts.
 No real Tigris data, GPU, or installed Weaver path was exercised in this
 block. The local environment has PyTorch 2.5.1 but no Weaver installation.
 
-The current training/inference/orchestration focused evidence is 24 passing
-tests. It includes exact
+The current PMARD/Scouting focused evidence is 54 passing tests. It includes exact
 uninterrupted-versus-resumed state equivalence, a deliberately poor model that
 still completes, nonfinite failure injection, bitwise batch-invariant
-prediction shards, and all frozen metric edge cases.
+prediction shards, all frozen metric edge cases, full-endpoint authorization
+rejection with full-role count-only lineage, recursive FP32 representation KD
+under BF16 inputs, durable interval-mean history, batch-shell signal delivery,
+bounded cross-file reads, sparse validation/checkpoint cadence, and an
+end-to-end zero-alpha selection through representation KD, anchored companion
+training, and the next dual-teacher generation student.
+The fitted-strict additions authenticate the canonical model bundle, reproduce
+reference scores/margins/confidences numerically, exercise both rectangular
+assignment directions, private dummies, post-assignment rejection, strict
+PID/charge gates, wrapped phi, invalid PID, native lost-track boundaries,
+one-to-one integrity, unmatched p4 preservation, artifact tampering, and the
+online PMARD-stream dispatch.
 
 The campaign portion includes source drift after an
 all-reused graph, cross-campaign lineage rejection, storage insufficiency,
@@ -432,10 +505,12 @@ Do not mark PRAD production readiness accepted until every new smoke task
 attestation authenticates and measured resource/storage evidence is captured.
 A full PRAD campaign remains unauthorized in this handoff.
 
-## Exact active next task: PMARD real miniature
+## Exact active next task: selective all-field repair contract
 
-On the exact committed and pushed source, follow `docs/PMARD_RUNBOOK.md` to
-authenticate source/splits, create the immutable smoke spec, inspect its dry
-run, and submit only the smoke DAG after explicit authorization. Do not create
-a production spec until `capture_pmard_evidence.py` has authenticated every
-completed smoke task and the separate production dry-run report exists.
+Implement a new versioned PMARD repair family in which only accepted
+`fitted_strict` tokens move toward all 21 matched offline fields and every
+abstained token remains byte-identical HLT. Replace the obsolete 100%-coverage
+authorization semantics with selective coverage/precision lineage, add the
+matched/unmatched and mixed-view ablations declared in the plan amendment, and
+only then rebuild and dry-run the smoke DAG. A real miniature is premature
+until that scientific contract is complete.

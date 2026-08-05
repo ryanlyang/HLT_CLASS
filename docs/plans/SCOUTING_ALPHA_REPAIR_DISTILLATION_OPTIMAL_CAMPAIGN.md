@@ -1,6 +1,6 @@
 # Scouting Particle-Matched Alpha-Repair Distillation: Optimal Campaign Plan
 
-Status: **active; locally implementation-complete, external acceptance pending**.
+Status: **active; fitted-strict selective campaign implemented locally**.
 Activated by the user's explicit invocation of the PMARD implementation
 mandate on 2026-08-05. This status does not claim real-data validation,
 installed-Weaver acceptance, measured resources, or a scientific result.
@@ -11,6 +11,49 @@ The reusable implementation mandate is
 [`pmard_implementation_agent_prompt.md`](../../pmard_implementation_agent_prompt.md).
 The user invoked that mandate on 2026-08-05. This document therefore has
 campaign-level scientific authority for PMARD implementation and execution.
+
+### 2026-08-05 selective-matcher amendment
+
+The working constituent matcher is now the calibrated `fitted_strict`
+algorithm at confidence threshold `0.9828147479721088`, specified by
+[`docs/contracts/FITTED_STRICT_MATCHER.md`](../contracts/FITTED_STRICT_MATCHER.md).
+It intentionally accepts only a high-confidence subset (64.86% of HLT tokens
+and 67.21% of aggregate HLT pT in its untouched canonical test sample).
+Unmatched HLT tokens remain exactly HLT. This decision supersedes statements
+below that make 100% assignment a requirement of the primary scientific view.
+
+The new primary contract is `SELECTIVE_FULL_PARTICLE_ENDPOINT/v1`. At alpha 1,
+every accepted match replaces p4 and the complete projected 21-field record;
+every unmatched token remains exactly HLT, including order, count, mask, raw
+values, and derived model inputs. Intermediate alpha uses continuous
+interpolation plus deterministic identity-bound nested discrete/validity
+switches only on accepted tokens. The old `FULL_PARTICLE_ENDPOINT/v1` remains
+available as a strict complete-assignment diagnostic and was not weakened.
+
+The production graph computes fitted-strict assignments once per selected jet,
+publishes immutable per-source sparse CSR/DEFLATE shards with uint8 HLT index,
+uint16 offline index, and uint16 calibrated confidence, and reloads them through
+a bounded source LRU. Dense assignment datasets and repaired particle datasets
+remain forbidden. The assignment authorization binds the matcher artifact,
+exact threshold, split, deterministic row selection, and assignment manifest.
+
+This amendment supersedes all later passages that require M0--M5 cross-fitting,
+100% HLT-token coverage, online rematching by training jobs, or
+`FULL_PARTICLE_ENDPOINT/v1` as the campaign primary. Mechanism ablations reuse
+the same fixed assignment cache so they vary repair semantics rather than
+silently changing correspondence.
+
+Three initial oracles are registered on identical selected rows: the HLT
+baseline, the native offline TOFF model, and T100 trained/evaluated on the
+matched-offline endpoint. The last is deliberately a selective hybrid oracle,
+not a claim to reconstruct the native offline jet.
+
+The campaign has three modes. Smoke selects 4,096 train and validation jets and
+does not open final test. Pilot selects exactly 300,000 train, 100,000
+validation, and—only after finalist/execution locks—100,000 final-test jets.
+Production uses every mapped jet. Bounded selections allocate per-class counts
+by largest remainder from the role population and choose identities by stable
+SHA-256 rank, preserving class proportions without copying ROOT data.
 
 This document specifies a new campaign on the paired CMS ScoutingAK8 2024
 dataset. It is independent of the repository's other planned or active
@@ -60,16 +103,19 @@ teacher logits + ordinary HLT-teacher logits + hard label
 
 The teacher is not a full offline Particle Transformer and is not restricted
 by a residual adapter. It is the same style and capacity of Particle
-Transformer as the HLT model, but it receives an HLT-anchored input in which
-every confidently matched HLT constituent has selected continuous quantities
-moved a fixed fraction `alpha` toward its offline counterpart.
+Transformer as the HLT model, but it receives an HLT-cardinality input in
+which every model-visible HLT constituent has a unique offline counterpart.
+Continuous quantities move a fixed fraction `alpha` toward that counterpart;
+discrete quantities use deterministic nested endpoint switches.
 
 For every view:
 
 - HLT constituent count, ordering, padding, and mask are unchanged;
-- unmatched or ambiguous HLT constituents remain exactly unchanged;
+- the primary full-particle family requires every visible HLT constituent to
+  have a unique accepted offline assignment and fails closed otherwise;
 - extra offline constituents are never added;
-- categorical HLT identity and quality fields remain HLT fields;
+- at `alpha = 1`, all 21 feature channels and the p4 in every visible slot are
+  the matched offline endpoint, with no retained HLT model value;
 - matching indices, confidences, residuals, and offline masks never enter the
   teacher or deployable student;
 - `alpha = 0` is exactly the canonical HLT input, not a numerically similar
@@ -210,36 +256,54 @@ mode or place outputs beneath the data root.
 
 ### 4.2 Split contract
 
-The primary split is the guide's deterministic, source-file-disjoint split:
+The primary split is version 2 of the deterministic, source-file-disjoint
+contract:
 
 ```text
-seed        12345
-fractions   0.8 train / 0.1 validation / 0.1 final test
-strata      mixed-resonance source directory and QCD source directory
-unit        complete ROOT source file
+seed                 12345
+target fractions     0.6 train / 0.2 validation / 0.2 final test
+indivisible unit     complete authenticated ROOT source file
+balance variables    all 15 mapped class counts in every source file
+file-count quotas    largest-remainder allocation of the 53 complete files
+optimizer            exact mixed-integer minimax allocation
+acceptance tolerance maximum 0.02 absolute deviation from any of the 45
+                     requested class-by-role fractions
 ```
 
-The reference split inventory is:
+For the locked mapped population of 4,635,175 jets, the aggregate fractional
+targets are 2,781,105 train, 927,035 validation, and 927,035 final-test jets.
+Those are targets, not fabricated realized counts. Files are indivisible, so
+exact integer 60/20/20 counts for every class and exact file disjointness are
+not simultaneously guaranteed. The allocator therefore globally minimizes
+the worst absolute deviation among the 45 class-by-role fractions, then
+minimizes their aggregate deviation. With 53 files the canonical file-count
+quota is 32 train, 11 validation, and 10 final test. If the exact optimizer
+cannot keep every realized class fraction within two percentage points of its
+target, split construction fails closed before campaign creation. The real
+manifest publishes the optimum and every realized count, fraction, and
+deviation; no training begins until that manifest validates.
 
-| Role | Files | Raw rows before baseline selection/mapping |
-|---|---:|---:|
-| train | 42 | 4,012,400 |
-| validation | 6 | 586,962 |
-| final test | 5 | 485,375 |
+The source audit makes one streaming scalar-only pass over the baseline and
+label branches to authenticate per-file 15-class counts. This is the sole
+pre-split privilege to inspect labels over the complete unsplit inventory. It
+may influence only immutable split membership, never model selection, matcher
+fitting, feature statistics, or hyperparameters. Once membership is published,
+the source and split manifest hashes become campaign parents and the ordinary
+final-test access seal applies. This exception is required for a genuinely
+class-stratified file split and is not an authorization to inspect final-test
+features or predictions.
 
 Manifest paths are normalized POSIX paths relative to the authenticated data
 root, never machine-specific absolute paths. The data lock records the split
 generator source hash and environment as well as the seed; the manifests, not
-the seed alone, define membership. Per-role baseline, mapped, unmapped, and
-15-class counts are materialized for train and validation in the authenticated
-split report. Before the final-test locks, the final-test report contains only
-file identities, digests, and raw entry counts. Its selection and class counts
-are generated only in the locked final reporting wave.
+the seed alone, define membership. Per-file and per-role baseline, mapped, and
+15-class counts are materialized in the authenticated source/split reports so
+the balance guarantee is independently auditable.
 
 The exact `train.txt`, `val.txt`, `test.txt`, `split_manifest.csv`, source-file
-hashes, and train/validation class counts are immutable campaign parents. The
-post-lock final-test count report is their immutable child. The directory name
-`train` in the source dataset is not treated as a supplied scientific split.
+hashes, optimizer diagnostics, and role class counts are immutable campaign
+parents. The directory name `train` in the source dataset is not treated as a
+supplied scientific split.
 
 `event_no` is not a globally unique event identifier. PMARD therefore claims
 file disjointness and row disjointness, not proven physical-event disjointness
@@ -273,11 +337,12 @@ Labels are deliberately excluded from identity so inconsistent relabeling
 cannot evade an overlap audit. HLT and offline arrays inherit exactly the same
 row identity; any loss of within-entry alignment fails closed.
 
-No PMARD worker opens final-test particle or label branches before the
-finalist and execution locks. Source checksum verification and split-manifest
-validation are the only permitted pre-lock final-test operations. This is
-stricter than merely forbidding predictions and removes accidental matcher or
-preprocessing feedback from final test.
+After the one-time pre-role stratification pass described above, no PMARD
+worker opens a final-test particle or label branch before the finalist and
+execution locks. Source checksum verification and split-manifest validation
+are the only permitted pre-lock operations on assigned final-test files. This
+is stricter than merely forbidding predictions and removes accidental matcher
+or preprocessing feedback from final test.
 
 ### 4.3 Labels and primary task
 
@@ -377,7 +442,15 @@ the other four must equal zero. For `cpfcandlt_*`, exactly one of `isEl`,
 `isGamma` and `isNeutralHad` must equal one. Nonfinite, nonbinary, missing,
 zero-hot, or multi-hot category values make that object unmatchable. They are
 counted by collection and split; no category priority silently coerces them.
-Charged matches additionally require finite equal nonzero stored charge.
+The legacy conservative/P4 matcher requires category compatibility and charged
+matches additionally require finite equal nonzero stored charge. It cannot
+authorize `FULL_PARTICLE_ENDPOINT/v1`, because those hard gates make PID and
+charge disagreements unrepairable by construction. The full-particle matcher
+must instead allow such disagreements, establish identity without the disputed
+field, validate them at its locked precision target, and produce a complete
+unique assignment for every visible HLT token. That matcher design is a
+separate required lock; the repair implementation fails closed until its
+complete assignments exist.
 
 Lost-track membership is not inferred from pT ordering. Before the matcher
 design lock, Stage A must authenticate the producer semantics and cross-tabulate
@@ -627,10 +700,15 @@ bootstrap:
    those train-only seeds.
 3. Estimate accidental-pair distributions from incompatible pairs, distant
    in-jet candidates, and event-mixed candidates.
-4. Fit a calibrated log-likelihood-ratio edge scorer.
-5. Solve the jet globally with unmatched states.
-6. Add only high-confidence new assignments to the fit and repeat for a fixed,
-   predeclared number of iterations.
+4. Treat every other plausible candidate edge as **unlabeled**, not as a
+   negative. Only incompatible, sufficiently distant, extreme-response, or
+   event-mixed pairs are definite negatives.
+5. Fit likelihood and contextual scorers on known positives and definite
+   negatives; unlabeled edges do not enter binary cross entropy.
+6. Calibrate edge logits on a disjoint held-out graph subset and solve the jet
+   globally with unmatched states.
+7. Add only Hungarian/OT-consensus, mutual-first assignments above calibrated
+   probability `0.999` as pseudo-positives and repeat for exactly two rounds.
 
 The bootstrap never expands until convergence based on classification. Its
 iteration count, seed thresholds, feature list, binning, smoothing, and random
@@ -662,22 +740,34 @@ the source fold of their parent. Matcher hyperparameters are selected using
 only matching diagnostics aggregated across held-out train folds; validation
 classifiers and labels play no role.
 
+The production matcher fit uses 10,000 known-correspondence synthetic jets and
+200,000 native jets per fit. Native rows use equal per-source quotas sampled at
+evenly spaced mapped-row ordinals during one bounded streaming pass; the
+worker never retains graph objects for the complete 2.78M-jet train role. The
+matching-only validation uses 2,000 adversarial synthetic jets and 10,000
+native jets per fold/full report. Smoke budgets are 200/20,000 for fitting and
+200/10,000 for validation. These budgets and the sampling algorithm are in the
+immutable campaign registry and matcher report. Once the matcher is locked,
+assignment construction still scans every applicable train or validation row.
+
 ### 6.5 Primary contextual matcher
 
-The optimal matcher is a physics-informed contextual bipartite model:
+The optimal matcher is a physics-informed sparse bipartite graph model:
 
 ```text
-HLT set     -> HLT encoder -----+
-                                  +-> self/cross context -> edge logits
-offline set -> offline encoder --+                            |
-                                                              v
-                                      unbalanced optimal transport + dustbins
+HLT nodes     -> node encoder ---+
+                                 +-> 3 rounds candidate-edge message passing
+offline nodes -> node encoder ---+                 |
+candidate edge residuals -> edge encoder ----------+-> contextual edge logits
+                                                       |
+                                                       v
+                                       Hungarian+dustbins (M4 primary)
 ```
 
-Inputs include the audited physical pair residuals and per-set context. It may
-use self-attention within each collection and cross-attention across
-collections so that a candidate is scored relative to its competitors and
-local jet neighborhood.
+Inputs include audited physical pair residuals, validity indicators,
+track-quality residuals, local density, ranks, and candidate multiplicities.
+Three sparse message-passing rounds make an edge aware of competitors that
+share either endpoint without constructing a dense pair tensor.
 
 Context is restricted to the candidate graph and bounded local neighborhoods.
 The matcher has no global class token, pooled whole-jet classifier head, sample
@@ -713,10 +803,10 @@ maximize   sum_ij M_ij s_ij - unmatched penalties
 subject to each HLT and offline object participating in at most one hard match
 ```
 
-The primary solver is unbalanced optimal transport with explicit HLT and
-offline dustbins, followed by a deterministic hard one-to-one extraction.
-Hungarian/min-cost assignment with dummy nodes is the required independent
-implementation control.
+`M4` uses deterministic Hungarian/min-cost assignment with explicit dummy
+nodes as its primary hard extraction. `M3` is the independent unbalanced-OT
+physics control. `M5` requires agreement between the contextual Hungarian
+assignment and the independently scored OT construction.
 
 Tie behavior, edge ordering, floating-point dtype, Sinkhorn tolerance and
 iterations, dustbin costs, and hard-extraction rules are versioned. Greedy
@@ -725,7 +815,8 @@ nearest-neighbor matching is diagnostic only.
 Candidate edges are lexicographically ordered by HLT index then offline index.
 Calibration and neural inference use a locked dtype and deterministic runtime.
 Before assignment, calibrated edge scores are canonicalized to a versioned
-fixed-point grid. Scores within a declared guard band of a gate, threshold, or
+fixed-point grid (`1e-5` logit units in v2, coarser than measured single- versus
+multi-graph FP32 launch drift). Scores within a declared guard band of a gate, threshold, or
 quantization boundary abstain. Two independent constructions from identical
 parents must yield byte-identical hard assignments and aggregate counters.
 
@@ -736,13 +827,18 @@ component re-solve definition.
 
 ### 6.7 Confidence and abstention
 
-An assignment is accepted only when it satisfies all locked conditions:
+Edge probabilities are not assignment probabilities. After global assignment,
+a held-out logistic calibrator predicts assignment correctness from the
+selected-edge logit, exact forbidden-edge global margin, row/column margins,
+mutual preference, solver agreement, competitor counts, and category. An
+assignment is accepted only when it satisfies all locked conditions:
 
 - high calibrated match probability;
 - mutual HLT-to-offline and offline-to-HLT preference;
 - sufficient margin over the best alternative global assignment involving
   that object;
-- stability under small physically meaningful input perturbations;
+- stability under independently sampled, physically meaningful HLT/offline
+  perturbations, never a common rigid transform that preserves pair distances;
 - compatible type-specific residual likelihood;
 - agreement between the primary solver and an independent global solver at
   the ultra-pure operating point.
@@ -775,7 +871,7 @@ therefore combines:
   loss, splitting, and merging;
 - seed-match holdout recovery;
 - event-mixing false-positive rate;
-- assignment stability under rotations and small perturbations;
+- assignment stability under independent response/direction perturbations;
 - agreement between optimal-transport and Hungarian solutions;
 - residual closure by particle type, `pT`, `eta`, multiplicity, and density;
 - match fraction and ambiguity rate in every class, without using class in
@@ -790,6 +886,12 @@ operating point is a lower confidence bound of at least 99% precision on the
 in-domain synthetic holdout and all required category-specific bounds. Exact
 statistical interval and category thresholds must be frozen in the matcher
 contract before the report is generated.
+
+The v2 selector additionally requires event-mixing false-positive rate at
+most `0.001`, independent-perturbation assignment stability at least `0.99`,
+and synthetic accepted-assignment confidence Brier score at most `0.01` in
+every held-out fold. Event-mixed partners are chosen from a kinematically
+similar pool but remain a genuinely different jet.
 
 The matching-only selector is lexicographic:
 
@@ -816,8 +918,8 @@ Poor coverage or quality is a scientific result, not a job failure.
 | `M1` | hand-scaled physical cost | Hungarian+dustbin | transparent reference |
 | `M2` | fitted likelihood ratio | Hungarian+dustbin | global physics baseline |
 | `M3` | fitted likelihood ratio | unbalanced OT+dustbin | solver comparison |
-| `M4` | contextual edge model | unbalanced OT+dustbin | proposed primary |
-| `M5` | `M3`/`M4` consensus | hard abstaining assignment | maximum-purity option |
+| `M4` | sparse contextual graph model | Hungarian+dustbin + post-assignment calibration | proposed primary |
+| `M5` | `M3`/`M4` consensus | exact-margin hard abstention | maximum-purity option |
 
 Matching arms publish only compact model parameters, configuration, aggregate
 reports, and hashed event-display identities. Full-dataset assignments are
@@ -861,6 +963,12 @@ missing-weight behavior, tolerance, failure counts, and representative closure
 plots. `pt_nopuppi` may enter a response gate only after that audit. Until the
 closure contract passes, offline p4 matching and repair are disabled.
 
+The v2 feature gate uses relative closure tolerance `1e-4` per object and
+permits at most a `1e-4` failing-object fraction for the selected formula in
+each of HLT, offline charged, and offline neutral collections, independently
+in train and validation. Missing reference chunks or zero audited objects fail
+closed.
+
 Direct Cartesian four-vector interpolation is the primary parameterization.
 It avoids angular branch cuts and remains inside the convex future-directed
 four-vector cone when both inputs are physical. All downstream kinematics are
@@ -887,12 +995,14 @@ alpha = 0.00, 0.05, 0.10, 0.25, 0.50, 1.00
 ```
 
 Every alpha for a role uses the identical locked assignment table, accepted
-edge set, endpoint p4s, HLT ordering, and unmatched population. Matching is
+edge set, endpoint particles, and HLT ordering. Matching is
 not rerun and its confidence threshold is not retuned as alpha changes. Thus
 alpha is the only scientific difference along the privilege ladder.
 
-`alpha = 1` is still not a full offline jet. It retains HLT multiplicity,
-ordering, unmatched objects, missing-object information, and HLT-only fields.
+`alpha = 1` is the **HLT-cardinality offline endpoint**, not the complete
+offline jet. It retains HLT multiplicity and slot ordering and discards extra
+offline constituents, but every model-visible slot contains only its matched
+offline p4 and projected 21-channel offline representation.
 
 Candidate order always remains the original descending-HLT-`pT` order. It is
 never resorted by repaired `pT`, because resorting would expose an additional
@@ -900,10 +1010,9 @@ offline-dependent permutation and break exact teacher/student token identity.
 
 ### 7.2 Feature-coherence rule
 
-Repair is performed before CMSSW normalization. From the repaired four-vector,
-the view builder recomputes every approved kinematic channel and the ParT
-standard-four pair inputs. Non-kinematic HLT quality, identity, and categorical
-channels remain unchanged.
+Repair is performed before CMSSW normalization. Every family declares whether
+each channel is recomputed, interpolated, switched discretely, or retained.
+ParT standard-four pair inputs always derive from the repaired p4.
 
 Any stored derived feature whose exact formula and reference axis cannot be
 authenticated must not be guessed. It remains HLT-valued until a formula audit
@@ -919,7 +1028,7 @@ At `alpha = 0`, the builder takes an exact HLT short circuit and must produce
 byte-identical canonical HLT tensors. It may not rely on recomputation being
 approximately equal.
 
-The primary `P4_ONLY/v1` channel map is already fixed as follows:
+The retained `P4_ONLY/v1` ablation channel map is fixed as follows:
 
 | # | Channel | `P4_ONLY/v1` behavior |
 |---:|---|---|
@@ -946,19 +1055,43 @@ uses the unique half-open interval frozen by the input contract. Required
 positive denominators and log epsilon behavior are audited and versioned.
 
 This fixed table prevents an implementation from opportunistically repairing
-additional channels after seeing results. A later formula audit may define a
-new repair-family version, but it cannot silently change `P4_ONLY/v1`.
+additional channels after seeing results. `FULL_PARTICLE_ENDPOINT/v1` is a
+separate versioned family and does not silently change `P4_ONLY/v1`.
+
+The primary `FULL_PARTICLE_ENDPOINT/v1` projects native charged and neutral
+offline particles into the complete HLT 21-channel schema. Charged offline
+fields populate their common track and identity channels. Neutral offline
+fields populate neutral identity and kinematics; structurally inapplicable
+charged fields use the authenticated canonical neutral value. Every field has
+a fixed endpoint source and interpolation type in code.
+
+Continuous quantities are repaired before normalization. Cartesian p4 uses a
+convex interpolation, wrapped angles use their shortest arc, and ordinary raw
+real-valued channels use endpoint interpolation. A validity/applicability
+change is a discrete transition rather than interpolation through a sentinel.
+PID and charge switch as one atomic identity bundle. Quality and lost-inner-hit
+state use their own switches when applicability is unchanged. A
+charged/neutral identity change switches all dependent track state with the
+identity, preventing an intermediate neutral token with partially populated
+charged-track fields.
+
+For discrete group `g`, token `i`, and authenticated row identity `r`, a stable
+`u(r,i,g)` is derived from the repair seed and SHA-256. The offline endpoint is
+selected iff `u < alpha`. Views are therefore deterministic across epochs,
+chunks, ranks, and workers; switches are nested as alpha rises; and every
+group is offline at `alpha = 1`.
 
 ### 7.3 Repair families
 
-The primary family is `P4_ONLY`: repaired four-vectors and audited derived
-kinematics, with all detector-quality and categorical fields retained from
-HLT.
+The primary family is `FULL_PARTICLE_ENDPOINT`: an exact all-field offline
+endpoint on the unchanged HLT token skeleton. `P4_ONLY` remains the clean
+kinematics-only ablation.
 
 Registered mechanism ablations are:
 
 | Repair family | Changed quantities | Purpose |
 |---|---|---|
+| `FULL_PARTICLE_ENDPOINT` | p4 plus all 21 projected offline fields | primary complete uncorruption ladder |
 | `P4_ONLY` | p4 and audited derived kinematics | clean universal repair |
 | `TRACK_ONLY` | compatible charged-track observables | tracking contribution |
 | `P4_PLUS_TRACK` | both above | best common-feature oracle |
@@ -971,6 +1104,25 @@ Track repair is enabled only after a branch-semantics audit proves that the
 HLT and offline stored quantities have compatible definitions. Discrete
 charge, particle type, quality flags, lost-inner-hit counts, and similar
 fields are never linearly interpolated.
+The full family is gated by that real-data semantic audit and by complete
+one-to-one assignment coverage.
+
+`FULL_PARTICLE_ENDPOINT` is authorized by a distinct hash-chained
+`full_endpoint` lock only when the matching-only selector passes, all five
+particle categories pass their locked precision criteria, the selected full
+matcher passes its own 99% precision lower bound, and a separate count-only
+scan proves exactly complete assignments over every mapped train and
+validation row. For each role, the signed report records the split-manifest
+`expected_mapped_jets` and observed `scanned_mapped_jets`; authorization
+requires exact equality. It also requires the visible and assigned category
+counts to sum to their corresponding token totals and to agree category by
+category. Thus perfect coverage over only a shortened prefix cannot authorize
+repair. The bounded matching-validation samples inform precision and
+selection but never authorize full-role completeness. The lock binds the exact
+variant, threshold, split, fixed source-to-fold seed, five fold matcher hashes,
+full matcher, validation, and full-role coverage hashes. Partial category
+eligibility can support `P4_ONLY` ablations and matcher diagnostics, but can
+never silently authorize the all-field endpoint.
 
 ### 7.4 No hidden match channel
 
@@ -1001,14 +1153,14 @@ Required teacher/oracle rows are:
 | ID | Input | Role |
 |---|---|---|
 | `T0` | canonical HLT | ordinary baseline teacher |
-| `T05` | `P4_ONLY`, alpha 0.05 | weak privilege |
-| `T10` | `P4_ONLY`, alpha 0.10 | weak privilege |
-| `T25` | `P4_ONLY`, alpha 0.25 | intermediate privilege |
-| `T50` | `P4_ONLY`, alpha 0.50 | strong privilege |
-| `T100` | `P4_ONLY`, alpha 1.00 | HLT-skeleton oracle |
+| `T05` | `FULL_PARTICLE_ENDPOINT`, alpha 0.05 | weak privilege |
+| `T10` | `FULL_PARTICLE_ENDPOINT`, alpha 0.10 | weak privilege |
+| `T25` | `FULL_PARTICLE_ENDPOINT`, alpha 0.25 | intermediate privilege |
+| `T50` | `FULL_PARTICLE_ENDPOINT`, alpha 0.50 | strong privilege |
+| `T100` | `FULL_PARTICLE_ENDPOINT`, alpha 1.00 | complete HLT-count offline endpoint |
 | `TOFF` | native offline constituents | unrestricted offline diagnostic |
 
-All alpha teachers use the same architecture, initialization policy, sampler,
+All alpha teachers use the same architecture, initialization tensor, sampler,
 optimizer, schedule, update budget, and checkpoint rule. `TOFF` uses the locked
 native charged/neutral representation below and is never described as
 capacity-matched unless parameter and compute parity are explicitly enforced.
@@ -1116,14 +1268,15 @@ Registered variants are:
 | `R1` | final class token | normalized projected cosine/MSE |
 | `R2` | pooled particle state | normalized projected cosine/MSE |
 | `R3` | late particle block | masked learned projection |
-| `R4` | late pair geometry | pairwise similarity/distance preservation |
+| `R4_PAIR` | actual Weaver pair-geometry/attention-bias tensor | masked pairwise MSE after an identity-initialized 1x1 head projection |
+| `R4_GRAM` | Gram matrix of normalized late particle states | masked pair-similarity MSE |
 | `R5` | two selected late depths | weighted sum with separate projections |
 
 Every representation arm has a matched-capacity control containing the same
 projection modules with the privileged loss coefficient zero.
 
-The v1 implementation freezes the normalized representation-loss coefficient
-at `0.10` for `R1`--`R5`. This value and the corresponding zero-coefficient
+The v2 implementation freezes the normalized representation-loss coefficient
+at `0.10` for every non-`R0` arm. This value and the corresponding zero-coefficient
 matched-capacity controls are part of the training lock; changing it defines a
 new registered training variant rather than a post-result adjustment.
 
@@ -1140,7 +1293,16 @@ Primary representation rules are:
 - retain logit KD in all promoted representation arms;
 - report target predictability separately from classification utility.
 
-Layer-by-layer freezing is a registered exploratory arm only after `R1`--`R5`.
+The alpha selector is allowed to choose `alpha = 0`. In that case,
+positive-coefficient representation KD exposes the exact same in-memory HLT
+view under both `hlt` and `privileged` keys and retains the shared frozen T0
+teacher. This is an identity alias, not a copied or reconstructed view: no
+offline branch, matcher, assignment, or repaired input is read. A zero result
+therefore remains scientifically meaningful and cannot terminate the
+registered representation stage.
+
+Layer-by-layer freezing is a registered exploratory arm only after the six
+declared non-`R0` representation surfaces.
 The preferred first implementation trains all student layers jointly. A
 progressive arm may train late alignment, then progressively introduce earlier
 targets, but it must have an equal-update, equal-capacity, no-freeze control.
@@ -1189,6 +1351,14 @@ Required generational controls are:
 All registered generations `B_1`, `B_2`, and `B_3` run even if an earlier
 generation is poor. If `B_3` still improves, extending the chain requires a
 new campaign specification and cannot use final-test feedback.
+
+If the locked alpha selector chooses zero, each companion `T_g` is initialized
+from `B_g` and fine-tuned on the identical HLT endpoint with the same CE plus
+anchor-KD recipe. `B_(g+1)` may then receive distinct HLT-domain logits from
+`B_g` and `T_g`; both use the HLT identity alias for any aligned
+representation surface. The companion and all later generations still run,
+and no matcher or offline branch is introduced merely to avoid a zero-alpha
+result.
 
 ## 12. Required mechanism and null controls
 
@@ -1263,6 +1433,10 @@ The primary train policy streams the natural selected train population without
 permanent downsampling or oversampling. Every comparison receives identical
 authenticated row cycles and batch plans. File order and within-chunk order
 are deterministic functions of the epoch, rank, worker, and sampler seed.
+Training round-robins chunks from eight source files and applies an
+identity-preserving deterministic 32,768-row RAM shuffle buffer before model
+batches are emitted. This mixes files while preserving the natural class
+distribution. Validation and final-test streams remain ordered and unshuffled.
 
 Train-only class counts `n_c` define square-root inverse-frequency weights:
 
@@ -1295,6 +1469,17 @@ the campaign inherits:
 - fixed update budgets;
 - deterministic validation checkpoint selection by CE, then accuracy, then
   earliest optimizer update;
+- eight approximately equidistant validation checks over the fixed update
+  budget, including the final update, unless an explicitly locked miniature
+  interval overrides the schedule;
+- durable FP32 interval-mean training losses every 50 updates; unfinished
+  intervals are included in exact-resume state and the completed compact
+  history is retained in the immutable training report;
+- rolling resume publication only at validation boundaries, explicit
+  interruption, or Slurm preemption, rather than after every optimizer step;
+  checkpointable Slurm tasks request `B:USR1@120`; the batch worker uses
+  `exec` so Python becomes the signaled batch process and checkpoints at the
+  next completed optimizer update;
 - exact resume of model, optimizer, scheduler, scaler, sampler, epoch/update,
   worker/rank partition, and RNG state.
 
@@ -1333,12 +1518,13 @@ Screening uses master seed `1337`. Confirmation uses master seeds
 best representation arm, selected generational arm, and every arm within the
 predeclared validation promotion window receive all five confirmation seeds.
 
-Each master seed expands through named domain separators into distinct but
-paired HLT-teacher, alpha-teacher, student, sampler, dropout, and augmentation
-sub-seeds. For a given master seed, `K1` and every PMARD candidate share the
-same HLT teacher and student-initialization sub-seed; alpha teachers use their
-own paired sub-seed. Thus confirmation propagates both teacher and student
-variation without accidentally initializing teacher and student identically.
+Each master seed expands through named domain separators into teacher,
+student, sampler, matcher, corruption, dropout, and augmentation sub-seeds.
+For a given master seed, `T0` and every alpha HLT-architecture teacher start
+from the identical `teacher_initialization` tensor; `K1` and every PMARD
+candidate use the same distinct `student_initialization` tensor. Thus the
+privilege comparison is paired without accidentally initializing teacher and
+student identically.
 No screen checkpoint is relabeled as one of the confirmation seeds.
 
 Seed derivation separately namespaces:
@@ -1386,9 +1572,9 @@ The paired metric bootstrap uses seed `8041`.
 
 ### Stage D: teacher privilege ladder
 
-- train all `P4_ONLY` alpha teachers;
+- train all `FULL_PARTICLE_ENDPOINT` alpha teachers;
 - report teacher gain, divergence, agreement, and match-coverage dependence;
-- run `P4_PLUS_TRACK` only after its semantic audit is locked;
+- retain `P4_ONLY` as the kinematics-only mechanism ablation;
 - retain every registered result regardless of quality.
 
 ### Stage E: primary logit transfer
@@ -1408,7 +1594,8 @@ The paired metric bootstrap uses seed `8041`.
 
 ### Stage G: representation transfer
 
-- run `R0`--`R5` and matched-capacity controls;
+- run `R0`, `R1`, `R2`, `R3`, `R4_PAIR`, `R4_GRAM`, and `R5`, with a
+  matched-capacity control for every non-`R0` arm;
 - evaluate target fidelity and downstream classification separately;
 - run progressive layer freezing only as the registered exploratory arm.
 
@@ -1442,7 +1629,14 @@ chooses the earliest update.
 Campaign finalist selection uses a versioned 15-class utility. The proposed
 primary criterion is the macro mean over the 14 signal classes of log QCD
 rejection at 50% signal efficiency, with exact tie/interpolation and
-zero-background behavior frozen in tests. Tie breakers are:
+zero-background behavior frozen in tests.
+
+For signal class `s`, its rejection curve ranks rows with the conditional
+signal-versus-QCD discriminant
+`P(s) / (P(s) + P(QCD))`; it does not use the class-independent `1-P(QCD)`.
+QCD mass-sculpting diagnostics use the same per-signal discriminant.
+
+Tie breakers are:
 
 1. higher macro OVR AUC;
 2. lower multiclass CE;
@@ -1543,15 +1737,17 @@ begins.
 ROOT remains the only authoritative dataset representation. Each worker:
 
 - reads only projected branches needed by its task;
-- iterates one file and bounded row chunk at a time;
+- round-robins bounded chunks across at most eight open source files for
+  training and reads one file at a time for ordered evaluation;
 - uses Awkward jagged arrays until batch construction;
 - partitions files across distributed ranks and DataLoader workers;
 - begins with two reader workers and tunes only from measured evidence;
 - never enables whole-dataset `--in-memory` loading;
 - never writes a padded full-dataset tensor cache.
 
-The starting raw read chunk is 4,096 rows and the starting model batch is 512,
-subject to miniature measurement. Increasing readers is not assumed to improve
+The starting raw read chunk is 4,096 rows, the deterministic train shuffle
+buffer is 32,768 selected rows, and the starting model batch is 512, subject
+to miniature measurement. Increasing readers is not assumed to improve
 throughput because it may multiply memory and random I/O.
 
 ### 17.2 Ephemeral match table
@@ -1559,6 +1755,15 @@ throughput because it may multiply memory and random I/O.
 The matcher scans a role once at job start and writes a compact, row-ordered
 assignment table to process shared memory or a validated RAM-backed directory
 such as `$SLURM_TMPDIR` when it is RAM-backed, otherwise `/dev/shm`.
+
+The v2 implementation uses a process-local NumPy `int16` table and a cached
+identity index, both authenticated by their headers. Production full-role jobs
+build it once and reuse it across epochs. Bounded `--max-rows-per-role` smoke
+runs deliberately retain deterministic online matching. The sole exception is
+the registered `ram_cache_miniature`, which builds a bounded assignment table
+and bounded teacher-logit tables to exercise the production cache/join path
+without scanning the full role. `CONFIDENCE_WEIGHTED` also remains online
+because an assignment-only table cannot reproduce its calibrated confidence.
 
 For a length-200 HLT sequence, a signed 16-bit offline index with `-1` as the
 unmatched sentinel requires approximately:
@@ -1596,13 +1801,13 @@ no repaired ROOT, NPZ, Parquet, or full padded tensor dataset is published.
 ### 17.4 Ephemeral teacher targets
 
 Logit KD does not require durable teacher-output caches. At student-job start,
-frozen teachers stream over the training role and place row-ordered float16 or
-float32 logits in shared RAM with a content-authenticated header.
+frozen teachers stream over the training role and place identity-keyed FP32
+logits in process RAM with a content-authenticated header.
 
-For 4.635 million rows and 15 float16 logits, one complete table is only about
-139 MB before metadata. Two teacher tables remain modest. Float32 is preferred
-if the miniature shows a meaningful KD discrepancy; the dtype decision is
-frozen and parity-tested.
+For 4.635 million rows and 15 FP32 logits, one complete table is about 278 MB
+before metadata. Two teacher tables remain modest relative to available host
+RAM. CE, temperature softmax, KL, and representation losses are evaluated in
+FP32 even while ParT forward/backward uses BF16 autocast.
 
 Late 128-dimensional float16 embeddings would require about 1.19 GB over the
 complete population and remain feasible in RAM, but representation targets
@@ -1611,12 +1816,22 @@ may instead be computed online to avoid retaining unnecessary roles.
 Teacher-target RAM is cleared at job exit. No training-role teacher logits or
 embeddings are durably stored.
 
-Teacher forward computation is FP32-authoritative. If float16 RAM storage is
-selected, the cached logits are converted back to FP32 before temperature
-softmax and KD, and a miniature must bound the loss/logit discrepancy against
-an all-FP32 path. Teacher targets are joined to shuffled training batches by
+Teacher forward computation and RAM target storage are FP32-authoritative.
+CE, KL, recursive representation structures, and pair/Gram construction and
+reductions are FP32-authoritative even when their source ParT activations were
+created under BF16 autocast.
+Teacher targets are joined to shuffled training batches by
 canonical row identity; positional coincidence with a previous stream order
 is never accepted as a join.
+
+Once identity-keyed logits exist, ordinary `R0` students and matched
+zero-coefficient representation controls train from the HLT-only stream. They
+do not reread offline branches, decode offline particles, rebuild repair
+views, or retain the now-unused teachers/matchers on GPU. Only a non-`R0` arm
+with a strictly positive representation coefficient retains the aligned
+privileged stream and privileged teacher for per-update representation
+targets. This changes execution cost only; the cached logits, HLT batches,
+losses, row identities, and scientific budgets are unchanged.
 
 ### 17.5 Durable artifacts
 
@@ -1659,6 +1874,14 @@ Before any full submission, a real miniature measures:
 - ROOT throughput and wait fraction;
 - size of every checkpoint and prediction artifact;
 - cost of matcher construction versus reuse inside one job.
+
+The count-only full-role matcher audit is intentionally not a bounded
+miniature: both the smoke and production DAGs scan the complete mapped train
+and validation roles. It therefore has an independent 48-hour GPU request
+instead of inheriting the one-hour smoke GPU default. No bounded diagnostic
+may produce the authorization artifact. The smoke resource evidence must
+record this task's elapsed time, RSS, GPU memory, and ROOT I/O; that evidence
+is reviewed before freezing the production request.
 
 Production requests use those measurements plus a declared safety factor.
 Large RAM availability is used to reduce durable duplication, not to load the
@@ -1710,6 +1933,18 @@ PMARD teacher/student checkpoint and training report
 PMARD prediction and evaluation report
 campaign specification
 finalist and final-test locks
+
+Current scientific surfaces introduced by the matcher and endpoint reviews:
+hlt_classification_scouting_schema_v3
+hlt_classification_scouting_feature_audit_v2
+hlt_classification_pmard_ephemeral_assignment_v2
+hlt_classification_pmard_matcher_report_v2
+hlt_classification_pmard_matcher_validation_v2
+hlt_classification_pmard_full_role_coverage_v2
+hlt_classification_pmard_training_report_v4
+hlt_classification_pmard_resume_checkpoint_v4
+hlt_classification_pmard_lock_v4
+hlt_classification_pmard_campaign_spec_v8
 ```
 
 Every reusable artifact records its content hash, parent hashes, exact source
@@ -1735,15 +1970,22 @@ occur in this order:
 3. **Matcher-result lock:** selected matcher, full out-of-fold assignments
    recipe, operating points, category eligibility, and repair compatibility.
    This precedes every teacher result.
-4. **Training lock:** installed-Weaver model parity, class weights, optimizer
+4. **Full-role coverage audit and full-endpoint authorization lock:** scan all
+   mapped train rows with their locked out-of-fold matchers and all mapped
+   validation rows with the full matcher. Publish only counts and hashes, then
+   require exact split-declared versus scanned jet totals, token/category
+   conservation, selected execution lineage, all five eligible categories,
+   full-matcher precision, and complete assignments. No assignment dataset is
+   published. This lock must exist before any full-endpoint teacher.
+5. **Training lock:** installed-Weaver model parity, class weights, optimizer
    grid outcome, batch size, update budgets, temperatures, loss coefficients,
    checkpoint selector, experiment registry, and model seeds. This precedes
    alpha-teacher and student comparisons.
-5. **Screen/confirmation lock:** promotion window and full-budget confirmation
+6. **Screen/confirmation lock:** promotion window and full-budget confirmation
    rows. Existing registered rows are never cancelled because of poor results.
-6. **Finalist lock:** exact HLT-only graphs, checkpoints, seeds, metrics, null
+7. **Finalist lock:** exact HLT-only graphs, checkpoints, seeds, metrics, null
    control, and diagnostic oracles permitted in the final wave.
-7. **Execution lock and claim:** exact committed source, environment, job DAG,
+8. **Execution lock and claim:** exact committed source, environment, job DAG,
    final-test manifest, and authorized one-time execution.
 
 Every lock records the complete prior lock as a hashed parent. A later change
@@ -1832,6 +2074,8 @@ must not depend on an unversioned external checkout.
 - logical `tree` selection without duplicate ROOT key-cycle enumeration;
 - file-disjoint split construction and manifest authentication;
 - projected branch reads and bounded jagged chunks;
+- bounded eight-file round-robin reads and deterministic cross-file RAM-buffer
+  shuffling without changing the natural class population;
 - rank/worker file partition without duplication;
 - deterministic row identity from normalized file and entry;
 - all four native collection length invariants;
@@ -1862,9 +2106,11 @@ must not depend on an unversioned external checkout.
 ### 21.3 Repair
 
 - exact `alpha = 0` HLT identity;
-- exact `alpha = 1` accepted-match endpoints;
+- exact all-21-channel `alpha = 1` offline endpoints;
 - physical and finite interpolated four-vectors;
-- unchanged HLT count, order, mask, categorical fields, and unmatched rows;
+- unchanged HLT count, order, and mask;
+- complete one-to-one assignment enforcement with no HLT fallback;
+- atomic, nested PID/charge, quality, hit-state, validity, and applicability switches;
 - approved derived-feature recomputation;
 - no guessed feature transformations;
 - consistent pair inputs;
@@ -1938,7 +2184,8 @@ shortlist should remain bounded:
 
 1. CE HLT ParT baseline.
 2. Ordinary 25% CE / 75% HLT self-KD.
-3. `P4_ONLY` teachers at all six alpha values.
+3. `FULL_PARTICLE_ENDPOINT` teachers at all six alpha values, with `P4_ONLY`
+   retained as the kinematics-only mechanism ablation.
 4. Primary 25% CE / 60% HLT KD / 15% privileged KD at all six alphas.
 5. Privileged-only KD and full-offline KD at the selected intermediate alpha.
 6. Ultra-pure charged-only and charged-plus-neutral matcher operating points.

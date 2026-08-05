@@ -16,10 +16,12 @@ from hlt_classification.data.cache_contracts import atomic_publish_bytes, load_j
 from hlt_classification.provenance import validate_source_snapshot
 from .campaign import validate_pmard_campaign_spec
 from .config_contracts import validate_vendored_preprocessing
-from .locks import claim_final_execution, create_lock
+from .locks import claim_final_execution, create_lock, create_selective_assignment_authorization
+from .fitted_strict import ConstituentMatcher, fitted_strict_artifact_report
+from .splits import role_records
 from .matcher_validation import select_matcher_variant
 from .selection import select_alpha, select_budget, utility_key
-from .training import REPRESENTATION_COEFFICIENT
+from .training import MATCHER_FOLD_SEED, REPRESENTATION_COEFFICIENT
 
 PMARD_TASK_ATTESTATION_CONTRACT = "hlt_classification_pmard_task_attestation_v1"
 
@@ -50,8 +52,16 @@ class Workflow:
         self.data_lock = self.root / "locks/01_data.json"
         self.matcher_design_lock = self.root / "locks/02_matcher_design.json"
         self.matcher_result_lock = self.root / "locks/03_matcher_result.json"
-        self.training_lock = self.root / "locks/04_training.json"
+        self.full_endpoint_lock = self.root / "locks/04_full_endpoint_authorized.json"
+        self.training_lock = self.root / "locks/05_training.json"
         self.full_matcher = self.root / "matcher/full/matcher_report.json"
+        self.full_role_coverage = self.root / "matcher/full_role_coverage.json"
+        self.row_selection = self.root / "data/row_selection.json"
+        self.assignment_root = self.root / "matcher/assignments"
+        self.assignment_manifest = self.root / "matcher/assignment_manifest.json"
+        self.final_row_selection = self.root / "data/final_row_selection.json"
+        self.final_assignment_root = self.root / "matcher/final_assignments"
+        self.final_assignment_manifest = self.root / "matcher/final_assignment_manifest.json"
 
     @property
     def source_snapshot_sha256(self) -> str:
@@ -70,12 +80,12 @@ class Workflow:
         return load_json(self.matcher_result_lock)["payload"]
 
     def _eligible_categories(self) -> str:
-        settings = self._matcher_settings()
-        eligible = [name for name, allowed in settings["category_eligibility"].items() if allowed]
-        # Failed matching bounds disable a category; if all fail, run the conservative
-        # charged-only arm as the predeclared scientific fallback rather than forcing coverage.
-        if not eligible: eligible = ["0", "1", "2"]
-        return ",".join(eligible)
+        return "0,1,2,3,4"
+
+    @staticmethod
+    def _repair_family(extra: Sequence[object]) -> str:
+        values = list(map(str, extra))
+        return values[values.index("--repair-family") + 1] if "--repair-family" in values else "SELECTIVE_FULL_PARTICLE_ENDPOINT"
 
     def _training_args(
         self, *, updates: int | None = None, lr: float | None = None,
@@ -89,7 +99,6 @@ class Workflow:
             "--seed", locked.get("screen_seed", 1337) if seed is None else seed,
             "--device", "cuda",
         ]
-        if self.spec["mode"] == "smoke": result.extend(("--max-rows-per-role", 4096))
         return result
 
     def _teacher_command(
@@ -104,17 +113,22 @@ class Workflow:
             "--output-dir", output, "--experiment-id", experiment,
             "--alpha", alpha, "--class-counts", self.audit,
             "--source-snapshot-sha256", self.source_snapshot_sha256,
+            "--row-selection", self.row_selection,
             *self._training_args(updates=updates, lr=lr, seed=seed), *extra,
         )
         if native_offline: command.append("--native-offline")
         if alpha:
+            family = self._repair_family(extra)
+            if "--repair-family" not in map(str, extra):
+                command.extend(("--repair-family", family))
             if "--matcher-variant" not in map(str, extra):
                 matcher = self._matcher_settings()
                 command.extend(("--matcher-variant", matcher["selected_variant"],
                                 "--matcher-threshold", matcher["threshold"]))
             if "--eligible-categories" not in map(str, extra):
-                command.extend(("--eligible-categories", self._eligible_categories()))
-            command.extend(("--matcher-report", str(self.full_matcher), *self._fold_args()))
+                command.extend(("--eligible-categories", "0,1,2,3,4" if family == "FULL_PARTICLE_ENDPOINT" else self._eligible_categories()))
+            command.extend(("--full-endpoint-lock", str(self.full_endpoint_lock),
+                            "--assignment-manifest", str(self.assignment_manifest)))
         return command
 
     def _student_command(
@@ -128,21 +142,24 @@ class Workflow:
             "--output-dir", output, "--arm", arm, "--alpha", alpha,
             "--temperature", locked["temperature"], "--class-counts", self.audit,
             "--source-snapshot-sha256", self.source_snapshot_sha256,
-            "--total-updates", locked["total_updates"], "--batch-size", locked["batch_size"],
-            "--learning-rate", locked["peak_learning_rate"],
-            "--seed", locked["screen_seed"] if seed is None else seed, "--device", "cuda",
+            "--row-selection", self.row_selection,
+            *self._training_args(seed=seed),
             *extra,
         )
         if hlt_teacher is not None: command.extend(("--hlt-teacher-report", str(hlt_teacher)))
         if privileged_teacher is not None: command.extend(("--privileged-teacher-report", str(privileged_teacher)))
         if arm not in {"K0", "K1", "K6"} and alpha:
+            family = self._repair_family(extra)
+            if "--repair-family" not in map(str, extra):
+                command.extend(("--repair-family", family))
             if "--matcher-variant" not in map(str, extra):
                 matcher = self._matcher_settings()
                 command.extend(("--matcher-variant", matcher["selected_variant"],
                                 "--matcher-threshold", matcher["threshold"]))
             if "--eligible-categories" not in map(str, extra):
-                command.extend(("--eligible-categories", self._eligible_categories()))
-            command.extend(("--matcher-report", str(self.full_matcher), *self._fold_args()))
+                command.extend(("--eligible-categories", "0,1,2,3,4" if family == "FULL_PARTICLE_ENDPOINT" else self._eligible_categories()))
+            command.extend(("--full-endpoint-lock", str(self.full_endpoint_lock),
+                            "--assignment-manifest", str(self.assignment_manifest)))
         return command
 
     def _teacher_report(self, alpha: float) -> Path:
@@ -151,6 +168,26 @@ class Workflow:
             return Path(selection["selected_report_path"])
         tag = {0.05: "T05", .1: "T10", .25: "T25", .5: "T50", 1.0: "T100"}[alpha]
         return self.root / f"training/teachers/{tag}/training_report.json"
+
+    def _evaluate_oracle(
+        self, *, name: str, training_report: Path, role: str,
+        selection: Path, assignments: Path | None = None,
+    ) -> Path:
+        output = self.root / f"evaluation/oracles/{role}/{name}"
+        command = _script(
+            self.repository, "evaluate_scouting_pmard.py",
+            "--split-manifest", self.split, "--data-root", self.data,
+            "--training-report", training_report, "--role", role,
+            "--output-dir", output, "--row-selection", selection, "--device", "cuda",
+        )
+        if role == "final_test":
+            command.extend(("--execution-lock", self.root / "locks/08_execution.json"))
+        if assignments is not None:
+            command.extend(("--assignment-manifest", assignments))
+            if role == "validation":
+                command.extend(("--assignment-lock", self.full_endpoint_lock))
+        _run(command, repository=self.repository)
+        return output / "evaluation_report.json"
 
     def run(self, task: str) -> list[Path]:
         self.root.mkdir(parents=True, exist_ok=True)
@@ -183,26 +220,39 @@ class Workflow:
             payload = create_lock(
                 "matcher_design", campaign_spec_sha256=self.spec["content_hash"],
                 parent_lock=load_json(self.data_lock), payload={
-                    "folds": 5, "variants": [f"M{i}" for i in range(6)],
-                    "primary_candidate": "M4", "conservative_candidate": "M5",
-                    "operating_points": {"ultra_pure": .99, "high_purity": .95, "high_coverage": .80},
-                    "edge_feature_contract": "physics_context_type13_v1",
-                    "solver": "uot_dustbin_plus_hungarian_control_v1",
+                    "variants": ["fitted_strict"],
+                    "artifact": "bundled_fitted_strict_v1",
+                    "solver": "hungarian_with_lost_track_recovery_v1",
+                    "calibration": "fixed_shipped_probability_models_v1",
                     "downstream_selection_forbidden": True,
                 },
             ); write_immutable_json(self.matcher_design_lock, payload); return [self.matcher_design_lock]
+        if task == "row_selection":
+            budgets = self.spec["registry"]["row_budgets"][self.spec["mode"]]
+            arguments: list[object] = []
+            for role in ("train", "validation"):
+                value = budgets[role]
+                arguments.extend(("--role-budget", f"{role}={'all' if value is None else value}"))
+            _run(_script(
+                self.repository, "build_pmard_row_selection.py",
+                "--split-manifest", self.split, "--data-root", self.data,
+                "--output", self.row_selection, *arguments,
+            ), repository=self.repository)
+            return [self.row_selection]
         if task == "matcher_crossfit":
+            matcher_budget = self.spec["registry"]["matcher_budgets"][self.spec["mode"]]
             fold = _array_id(); output = self.root / f"matcher/fold_{fold}"
             _run(_script(
                 self.repository, "train_scouting_matcher.py", "--split-manifest", self.split,
                 "--data-root", self.data, "--output-dir", output,
                 "--source-snapshot-sha256", self.source_snapshot_sha256,
                 "--holdout-fold", fold, "--device", "cuda", "--synthetic-jets",
-                200 if self.spec["mode"] == "smoke" else 10000,
-                *(("--native-max-jets", 20000) if self.spec["mode"] == "smoke" else ()),
+                matcher_budget["training_synthetic_jets"],
+                "--native-max-jets", matcher_budget["training_native_jets"],
             ), repository=self.repository)
             return [output / "matcher_report.json"]
         if task == "matcher_validation":
+            matcher_budget = self.spec["registry"]["matcher_budgets"][self.spec["mode"]]
             outputs = []
             for fold in range(5):
                 report = self.root / f"matcher/fold_{fold}/matcher_report.json"
@@ -210,37 +260,77 @@ class Workflow:
                 _run(_script(
                     self.repository, "validate_scouting_matcher.py", "--split-manifest", self.split,
                     "--matcher-report", report, "--data-root", self.data, "--output", output,
-                    "--holdout-fold", fold, "--device", "cuda",
+                    "--holdout-fold", fold, "--device", "cuda", "--synthetic-jets",
+                    matcher_budget["validation_synthetic_jets"], "--native-max-jets",
+                    matcher_budget["validation_native_jets"],
                 ), repository=self.repository); outputs.append(output)
             _run(_script(
                 self.repository, "train_scouting_matcher.py", "--split-manifest", self.split,
                 "--data-root", self.data, "--output-dir", self.full_matcher.parent,
                 "--source-snapshot-sha256", self.source_snapshot_sha256, "--device", "cuda",
-                "--synthetic-jets", 200 if self.spec["mode"] == "smoke" else 10000,
-                *(("--native-max-jets", 20000) if self.spec["mode"] == "smoke" else ()),
+                "--synthetic-jets", matcher_budget["training_synthetic_jets"],
+                "--native-max-jets", matcher_budget["training_native_jets"],
             ), repository=self.repository)
             validation = self.root / "matcher/full/validation.json"
             _run(_script(
                 self.repository, "validate_scouting_matcher.py", "--split-manifest", self.split,
                 "--matcher-report", self.full_matcher, "--data-root", self.data,
                 "--output", validation, "--role", "validation", "--device", "cuda",
+                "--synthetic-jets", matcher_budget["validation_synthetic_jets"],
+                "--native-max-jets", matcher_budget["validation_native_jets"],
             ), repository=self.repository); return [*outputs, self.full_matcher, validation]
         if task == "matcher_result_lock":
-            validations = [load_json(self.root / f"matcher/fold_{fold}/validation.json") for fold in range(5)]
-            full = load_json(self.root / "matcher/full/validation.json")
-            selection = select_matcher_variant(validations)
+            report = fitted_strict_artifact_report(ConstituentMatcher.canonical())
             payload = create_lock(
                 "matcher_result", campaign_spec_sha256=self.spec["content_hash"],
                 parent_lock=load_json(self.matcher_design_lock), payload={
-                    "selected_variant": selection["selected_variant"], "selected_operating_point": "ultra_pure",
-                    "threshold": .99, "fold_validation_sha256": [row["content_hash"] for row in validations],
-                    "full_matcher_report_sha256": load_json(self.full_matcher)["content_hash"],
-                    "validation_report_sha256": full["content_hash"],
-                    "meets_initial_precision_target": selection["selector_requirements_met"],
-                    "category_eligibility": selection["category_eligibility"],
-                    "matching_only_selection": selection["candidates"],
+                    "selected_variant": report["variant"], "threshold": report["threshold"],
+                    "matcher_artifact_sha256": report["content_hash"],
+                    "split_manifest_sha256": load_json(self.split)["content_hash"],
+                    "category_eligibility": {str(index): True for index in range(5)},
+                    "execution": "persistent_sparse_assignments_only_v1",
                 },
             ); write_immutable_json(self.matcher_result_lock, payload); return [self.matcher_result_lock]
+        if task == "assignment_cache":
+            index = _array_id(); split = load_json(self.split)
+            train_files = len(role_records(split, "train"))
+            role, source_index = (("train", index) if index < train_files
+                                  else ("validation", index - train_files))
+            _run(_script(
+                self.repository, "build_pmard_assignment_cache.py",
+                "--split-manifest", self.split, "--selection-manifest", self.row_selection,
+                "--data-root", self.data, "--assignment-root", self.assignment_root,
+                "--source", role, source_index,
+            ), repository=self.repository)
+            return [self.assignment_root / role / f"shard_{source_index:03d}.npz",
+                    self.assignment_root / role / f"shard_{source_index:03d}.json"]
+        if task == "assignment_manifest":
+            _run(_script(
+                self.repository, "build_pmard_assignment_cache.py",
+                "--split-manifest", self.split, "--selection-manifest", self.row_selection,
+                "--data-root", self.data, "--assignment-root", self.assignment_root,
+                "--finalize", "train", "validation", "--output", self.assignment_manifest,
+            ), repository=self.repository)
+            return [self.assignment_manifest]
+        if task == "full_role_coverage_audit":
+            _run(_script(
+                self.repository, "audit_scouting_matcher_coverage.py",
+                "--split-manifest", self.split,
+                "--matcher-result-lock", self.matcher_result_lock,
+                "--matcher-report", self.full_matcher,
+                "--data-root", self.data, "--output", self.full_role_coverage,
+                "--device", "cuda", *self._fold_args(),
+            ), repository=self.repository)
+            return [self.full_role_coverage]
+        if task == "full_endpoint_lock":
+            authorization = create_selective_assignment_authorization(
+                matcher_result_lock=load_json(self.matcher_result_lock),
+                assignment_manifest=load_json(self.assignment_manifest),
+                row_selection=load_json(self.row_selection),
+                campaign_spec_sha256=self.spec["content_hash"],
+            )
+            write_immutable_json(self.full_endpoint_lock, authorization)
+            return [self.full_endpoint_lock]
         if task == "weaver_parity":
             output = self.root / "runtime/weaver_parity.json"
             _run(_script(self.repository, "validate_scouting_weaver.py", "--repository", self.repository, "--device", "cuda", "--output", output), repository=self.repository)
@@ -248,7 +338,7 @@ class Workflow:
         if task == "budget_grid":
             index = _array_id(); batches = (256, 512); rates = (1e-4, 3e-4, 1e-3); passes = (10, 20)
             batch, rate, exposure = [(b, r, p) for b in batches for r in rates for p in passes][index]
-            train_rows = load_json(self.audit)["roles"]["train"]["mapped"]
+            train_rows = load_json(self.row_selection)["roles"]["train"]["rows"]
             updates = 2 if self.spec["mode"] == "smoke" else math.ceil(train_rows / batch) * exposure
             output = self.root / f"training/budget_grid/{index:02d}"
             command = _script(
@@ -256,10 +346,10 @@ class Workflow:
                 "--data-root", self.data, "--output-dir", output,
                 "--experiment-id", f"budget_b{batch}_lr{rate:g}_p{exposure}", "--alpha", 0,
                 "--class-counts", self.audit, "--source-snapshot-sha256", self.source_snapshot_sha256,
+                "--row-selection", self.row_selection,
                 "--total-updates", updates, "--batch-size", batch, "--learning-rate", rate,
                 "--seed", 1337, "--device", "cuda",
             )
-            if self.spec["mode"] == "smoke": command.extend(("--max-rows-per-role", "4096"))
             _run(command, repository=self.repository); return [output / "training_report.json"]
         if task == "budget_selection":
             paths = [self.root / f"training/budget_grid/{index:02d}/training_report.json" for index in range(12)]
@@ -277,10 +367,10 @@ class Workflow:
                 "--data-root", self.data, "--output-dir", output, "--arm", "K1", "--alpha", 0,
                 "--temperature", tau, "--hlt-teacher-report", selected["selected_report_path"],
                 "--class-counts", self.audit, "--source-snapshot-sha256", self.source_snapshot_sha256,
+                "--row-selection", self.row_selection,
                 "--total-updates", config["total_updates"], "--batch-size", config["effective_batch_size"],
                 "--learning-rate", config["peak_learning_rate"], "--seed", 1337, "--device", "cuda",
             )
-            if self.spec["mode"] == "smoke": command.extend(("--max-rows-per-role", "4096"))
             _run(command, repository=self.repository); return [output / "training_report.json"]
         if task == "training_lock":
             reports = [load_json(self.root / f"training/temperature/tau_{tau}/training_report.json") for tau in (1, 2, 4)]
@@ -292,7 +382,7 @@ class Workflow:
                 raise RuntimeError("training lock requires passing installed-Weaver parity")
             payload = create_lock(
                 "training", campaign_spec_sha256=self.spec["content_hash"],
-                parent_lock=load_json(self.matcher_result_lock), payload={
+                parent_lock=load_json(self.full_endpoint_lock), payload={
                     "batch_size": config["effective_batch_size"], "peak_learning_rate": config["peak_learning_rate"],
                     "total_updates": config["total_updates"], "temperature": chosen["config"]["loss"]["temperature"],
                     "screen_seed": 1337, "confirmation_seeds": [11, 22, 33, 44, 55],
@@ -322,6 +412,24 @@ class Workflow:
             output = self.root / f"training/teachers/{tag}"
             _run(self._teacher_command(output=output, experiment=tag, alpha=alpha), repository=self.repository)
             return [output / "training_report.json"]
+        if task == "ram_cache_miniature":
+            output = self.root / "training/ram_cache_miniature"
+            _run(self._student_command(
+                output=output, arm="K2", alpha=.25, hlt_teacher=baseline,
+                privileged_teacher=self._teacher_report(.25),
+                extra=("--cache-teacher-targets",),
+            ), repository=self.repository)
+            return [output / "training_report.json"]
+        if task == "oracle_validation":
+            return [
+                self._evaluate_oracle(name="hlt_baseline", training_report=baseline,
+                                      role="validation", selection=self.row_selection),
+                self._evaluate_oracle(name="native_offline", training_report=self.root / "training/teachers/TOFF/training_report.json",
+                                      role="validation", selection=self.row_selection),
+                self._evaluate_oracle(name="matched_offline_endpoint", training_report=self.root / "training/teachers/T100/training_report.json",
+                                      role="validation", selection=self.row_selection,
+                                      assignments=self.assignment_manifest),
+            ]
         if task == "k2_alpha_sweep":
             alpha = (0.0, .05, .1, .25, .5, 1.0)[_array_id()]
             output = self.root / f"training/k2_alpha/{alpha:g}"
@@ -360,6 +468,11 @@ class Workflow:
                 ("M5", .99, "CONFIDENCE_WEIGHTED", "0,1,2,3,4", 0.0),
             ]
             index = _array_id(); variant, threshold, family, categories, corruption = controls[index]
+            # All mechanism controls reuse the one canonical assignment cache;
+            # matcher/threshold variation would silently recompute a different dataset.
+            variant = self._matcher_settings()["selected_variant"]
+            threshold = self._matcher_settings()["threshold"]
+            categories = "0,1,2,3,4"
             control_alpha = 0.0 if index == 12 else alpha
             root = self.root / f"training/mechanisms/{index:02d}"
             teacher_dir = root / "teacher"; extra = (
@@ -367,6 +480,12 @@ class Workflow:
                 "--repair-family", family, "--eligible-categories", categories,
                 "--match-corruption-fraction", corruption,
             )
+            if control_alpha == 0:
+                _run(self._student_command(
+                    output=root / "student", arm="K2", alpha=0,
+                    hlt_teacher=baseline, privileged_teacher=baseline, extra=extra,
+                ), repository=self.repository)
+                return [root / "student/training_report.json"]
             _run(self._teacher_command(output=teacher_dir, experiment=f"mechanism_{index:02d}_teacher", alpha=control_alpha, extra=extra), repository=self.repository)
             _run(self._student_command(output=root / "student", arm="K2", alpha=control_alpha, hlt_teacher=baseline,
                                        privileged_teacher=teacher_dir / "training_report.json", extra=extra), repository=self.repository)
@@ -374,8 +493,9 @@ class Workflow:
         if task == "representation":
             index = _array_id()
             if index == 0: return [Path(alpha_selection["selected_report_path"])]
-            arm_index = index if index <= 5 else index - 5; arm = f"R{arm_index}"
-            control = index > 5; output = self.root / f"training/representation/{index:02d}_{arm}{'_control' if control else ''}"
+            arms = ("R1", "R2", "R3", "R4_PAIR", "R4_GRAM", "R5")
+            arm = arms[(index - 1) % len(arms)]
+            control = index > len(arms); output = self.root / f"training/representation/{index:02d}_{arm}{'_control' if control else ''}"
             extra: list[object] = ["--representation-arm", arm, "--representation-coefficient", 0 if control else REPRESENTATION_COEFFICIENT]
             if control: extra.append("--representation-control")
             _run(self._student_command(output=output, arm="K2", alpha=alpha, hlt_teacher=baseline,
@@ -406,7 +526,7 @@ class Workflow:
             candidates.append(("B1_primary", Path(alpha_selection["selected_report_path"]), "logit"))
             for index in range(22):
                 candidates.append((f"mechanism_{index:02d}", self.root / f"training/mechanisms/{index:02d}/student/training_report.json", "mechanism"))
-            for index in range(1, 11):
+            for index in range(1, 13):
                 candidates.append((f"representation_{index:02d}", next((self.root / "training/representation").glob(f"{index:02d}_*/training_report.json")), "representation"))
             candidates.append(("B2", self.root / "training/generations/1/student/training_report.json", "generation"))
             candidates.append(("B3", self.root / "training/generations/2/student/training_report.json", "generation"))
@@ -438,7 +558,7 @@ class Workflow:
             })); return [output]
         if task == "screen_confirmation_lock":
             selection = load_json(self.root / "training/screen_selection.json")
-            output = self.root / "locks/05_screen_confirmation.json"
+            output = self.root / "locks/06_screen_confirmation.json"
             payload = create_lock(
                 "screen_confirmation", campaign_spec_sha256=self.spec["content_hash"],
                 parent_lock=load_json(self.training_lock),
@@ -461,8 +581,8 @@ class Workflow:
         if task == "finalist_lock":
             return [self._create_finalist_lock()]
         if task == "execution_lock":
-            finalist = load_json(self.root / "locks/06_finalist.json")
-            output = self.root / "locks/07_execution.json"
+            finalist = load_json(self.root / "locks/07_finalist.json")
+            output = self.root / "locks/08_execution.json"
             payload = create_lock(
                 "execution", campaign_spec_sha256=self.spec["content_hash"],
                 parent_lock=finalist, payload={
@@ -472,6 +592,37 @@ class Workflow:
                     "job_dag_sha256": self.spec["content_hash"],
                 },
             ); write_immutable_json(output, payload); return [output]
+        if task == "final_row_selection":
+            budget = self.spec["registry"]["row_budgets"][self.spec["mode"]]["final_test"]
+            _run(_script(
+                self.repository, "build_pmard_row_selection.py",
+                "--split-manifest", self.split, "--data-root", self.data,
+                "--output", self.final_row_selection,
+                "--role-budget", f"final_test={'all' if budget is None else budget}",
+                "--completed-lock", "finalist", "--completed-lock", "execution",
+                "--access-lock", f"finalist={self.root / 'locks/07_finalist.json'}",
+                "--access-lock", f"execution={self.root / 'locks/08_execution.json'}",
+            ), repository=self.repository)
+            return [self.final_row_selection]
+        if task == "final_assignment_cache":
+            index = _array_id()
+            _run(_script(
+                self.repository, "build_pmard_assignment_cache.py",
+                "--split-manifest", self.split, "--selection-manifest", self.final_row_selection,
+                "--data-root", self.data, "--assignment-root", self.final_assignment_root,
+                "--source", "final_test", index,
+                "--completed-lock", "finalist", "--completed-lock", "execution",
+            ), repository=self.repository)
+            return [self.final_assignment_root / "final_test" / f"shard_{index:03d}.npz",
+                    self.final_assignment_root / "final_test" / f"shard_{index:03d}.json"]
+        if task == "final_assignment_manifest":
+            _run(_script(
+                self.repository, "build_pmard_assignment_cache.py",
+                "--split-manifest", self.split, "--selection-manifest", self.final_row_selection,
+                "--data-root", self.data, "--assignment-root", self.final_assignment_root,
+                "--finalize", "final_test", "--output", self.final_assignment_manifest,
+            ), repository=self.repository)
+            return [self.final_assignment_manifest]
         if task == "final_test":
             return self._run_final_test()
         if task == "aggregate_report":
@@ -481,11 +632,14 @@ class Workflow:
 
     def _view_extra(self, scientific: Mapping[str, Any]) -> list[object]:
         matcher = self._matcher_settings()
+        family = scientific.get("repair_family", "SELECTIVE_FULL_PARTICLE_ENDPOINT")
         return [
             "--matcher-variant", scientific.get("matcher_variant", matcher["selected_variant"]),
             "--matcher-threshold", scientific.get("matcher_threshold", matcher["threshold"]),
-            "--repair-family", scientific.get("repair_family", "P4_ONLY"),
-            "--eligible-categories", scientific.get("eligible_categories", self._eligible_categories()),
+            "--repair-family", family,
+            "--eligible-categories", scientific.get(
+                "eligible_categories", "0,1,2,3,4",
+            ),
             "--match-corruption-fraction", scientific.get("match_corruption_fraction", 0.0),
         ]
 
@@ -602,17 +756,17 @@ class Workflow:
             "selected": selected, "evaluation_graphs": evaluation_graphs,
             "required_null_control": "K1", "all_confirmation_summaries": summaries,
         }))
-        output = self.root / "locks/06_finalist.json"
+        output = self.root / "locks/07_finalist.json"
         payload = create_lock(
             "finalist", campaign_spec_sha256=self.spec["content_hash"],
-            parent_lock=load_json(self.root / "locks/05_screen_confirmation.json"),
+            parent_lock=load_json(self.root / "locks/06_screen_confirmation.json"),
             payload={"selection_sha256": load_json(selection_path)["content_hash"],
                      "selected": selected, "evaluation_graphs": evaluation_graphs,
                      "required_null_control": "K1"},
         ); write_immutable_json(output, payload); return output
 
     def _run_final_test(self) -> list[Path]:
-        execution = load_json(self.root / "locks/07_execution.json")
+        execution = load_json(self.root / "locks/08_execution.json")
         claim_path = self.root / "locks/final_test_claim.json"
         claim_final_execution(
             claim_path, execution_lock=execution,
@@ -627,12 +781,32 @@ class Workflow:
                     self.repository, "evaluate_scouting_pmard.py", "--split-manifest", self.split,
                     "--data-root", self.data, "--training-report", report_path,
                     "--role", "final_test", "--output-dir", output,
-                    "--execution-lock", self.root / "locks/07_execution.json", "--device", "cuda",
+                    "--row-selection", self.final_row_selection,
+                    "--execution-lock", self.root / "locks/08_execution.json", "--device", "cuda",
                 ), repository=self.repository); outputs.append(output / "evaluation_report.json")
+        baseline = Path(self._locked_training()["baseline_report_path"])
+        outputs.extend((
+            self._evaluate_oracle(name="hlt_baseline", training_report=baseline,
+                                  role="final_test", selection=self.final_row_selection),
+            self._evaluate_oracle(name="native_offline", training_report=self.root / "training/teachers/TOFF/training_report.json",
+                                  role="final_test", selection=self.final_row_selection),
+            self._evaluate_oracle(name="matched_offline_endpoint", training_report=self.root / "training/teachers/T100/training_report.json",
+                                  role="final_test", selection=self.final_row_selection,
+                                  assignments=self.final_assignment_manifest),
+        ))
         return outputs
 
     def _aggregate_final_report(self) -> Path:
         selection = load_json(self.root / "training/finalist_selection.json")
+        oracle_evaluations = {}
+        for role in ("validation", "final_test"):
+            oracle_evaluations[role] = {}
+            for name in ("hlt_baseline", "native_offline", "matched_offline_endpoint"):
+                oracle = load_json(self.root / f"evaluation/oracles/{role}/{name}/evaluation_report.json")
+                oracle_evaluations[role][name] = {
+                    "evaluation_sha256": oracle["content_hash"], "rows": oracle["rows"],
+                    "model_input": oracle["model_input"], "metrics": oracle["metrics"],
+                }
         rows = []
         for finalist in selection["evaluation_graphs"]:
             for seed_report in finalist["seed_reports"]:
@@ -679,6 +853,7 @@ class Workflow:
             "finalist_selection_sha256": selection["content_hash"], "rows": rows,
             "paired_nested_bootstrap": intervals,
             "dependence_sensitivity": dependence,
+            "oracle_evaluations": oracle_evaluations,
             "plots": [{"file": plot_path.name, "sha256": sha256_file(plot_path)}],
             "positive_evidence_rule": "macro_log_rejection_lower_above_zero_and_ce_upper_below_zero",
         })

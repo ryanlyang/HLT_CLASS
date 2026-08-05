@@ -130,10 +130,24 @@ commands and production authorization boundary.
 PMARD/Scouting commands are configuration-driven wrappers over
 `hlt_classification.scouting`: `validate_scouting_data.py`,
 `build_scouting_splits.py`, `audit_scouting_features.py`, matcher and Weaver
-validation, the Scouting teacher/student/evaluation commands, and the PMARD
+validation, `validate_fitted_strict_matcher.py` for the immutable selective
+matcher bundle, `build_pmard_row_selection.py` for deterministic proportional
+campaign membership, `build_pmard_assignment_cache.py` for resumable compact
+per-source matching and manifest finalization, the Scouting teacher/student/evaluation
+commands, and the PMARD
 create/submit/monitor/resume/cancel workers. `dry_run_pmard_campaign.py`
 renders the complete production graph without submission;
 `capture_pmard_evidence.py` binds a completed smoke ledger to exact resource,
 RAM, I/O, GPU, and durable-storage measurements. See
 [`docs/PMARD_RUNBOOK.md`](../docs/PMARD_RUNBOOK.md). The smoke DAG never reads
-the scientific final-test role.
+the scientific final-test role. The source audit streams scalar selection and
+label branches to authenticate per-file class counts; the split builder uses
+an exact 60/20/20 multiclass minimax allocation of whole files and fails if
+any realized class fraction misses its target by more than 0.02. All ordinary
+smoke training commands consume the same authenticated 4,096-row-per-role
+selection; the one registered
+`ram_cache_miniature` additionally uses `--cache-teacher-targets` to validate
+bounded teacher-logit caching and HLT-only identity joins. Pilot mode registers
+exact 300k/100k/100k membership and sealed final-role assignments. A selected
+`alpha=0` remains executable through representation and generation stages via
+an in-memory HLT-to-privileged identity alias; it never triggers offline reads.

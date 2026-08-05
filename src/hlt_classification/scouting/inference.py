@@ -30,18 +30,22 @@ def assert_hlt_only_signature(model) -> None:
 def run_inference(
     model, batches: Iterable[Mapping[str, object]], *, output_dir: str | Path,
     parents: Mapping[str, str], role: str, device: str = "cuda",
+    input_key: str = "hlt", deployable_hlt_only: bool = True,
 ) -> dict[str, object]:
     import torch
-    assert_hlt_only_signature(model); target = torch.device(device); model.to(target).eval()
+    if deployable_hlt_only:
+        assert_hlt_only_signature(model)
+    target = torch.device(device); model.to(target).eval()
     logits = []; labels = []; identities = []; observer_chunks: dict[str, list[np.ndarray]] = {}
     with torch.inference_mode():
         for batch in batches:
-            view = batch["hlt"]
-            output = model(
-                torch.as_tensor(view.features, device=target),
-                torch.as_tensor(view.vectors, device=target),
-                torch.as_tensor(view.mask, device=target),
-            )
+            view = batch[input_key]
+            def tensors(item):
+                return (torch.as_tensor(item.features, device=target),
+                        torch.as_tensor(item.vectors, device=target),
+                        torch.as_tensor(item.mask, device=target))
+            output = (model(*tensors(view.charged), *tensors(view.neutral))
+                      if input_key == "toff" else model(*tensors(view)))
             if output.shape[1] != 15 or not torch.isfinite(output).all():
                 raise FloatingPointError("PMARD inference logits are invalid")
             logits.append(output.float().cpu().numpy())
@@ -67,7 +71,7 @@ def run_inference(
         "prediction_file_sha256": sha256_file(prediction_path),
         "metrics": classification_metrics(all_logits, all_labels),
         "diagnostics": diagnostic_metrics(all_logits, all_labels, observers) if observers else None,
-        "deployable_hlt_only": True,
+        "model_input": input_key, "deployable_hlt_only": deployable_hlt_only,
     })
     write_immutable_json(root / "evaluation_report.json", report); return report
 

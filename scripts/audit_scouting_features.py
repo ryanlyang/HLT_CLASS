@@ -12,13 +12,15 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from hlt_classification.data.cache_contracts import load_json, with_content_hash, write_immutable_json  # noqa: E402
-from hlt_classification.scouting.audit import collection_length_diagnostics  # noqa: E402
+from hlt_classification.scouting.audit import (  # noqa: E402
+    FEATURE_AUDIT_CONTRACT, FEATURE_AUDIT_VERSION, authorize_p4_closure,
+    collection_length_diagnostics,
+)
 from hlt_classification.scouting.labels import baseline_mask, class_membership, multiclass_labels  # noqa: E402
 from hlt_classification.scouting.matching import decode_exclusive_categories, physical_p4_mask  # noqa: E402
 from hlt_classification.scouting.schema import BASELINE_BRANCHES, LABEL_BRANCHES, matching_required_branches  # noqa: E402
 from hlt_classification.scouting.splits import role_records  # noqa: E402
 from hlt_classification.scouting.streaming import iterate_projected_chunks  # noqa: E402
-
 
 def _rows(value):
     import awkward as ak
@@ -93,13 +95,10 @@ def main() -> int:
             raise ValueError(f"{role} feature audit found invalid scientific inputs")
         closure_report = {}
         for name, values in closure.items():
-            objects = values["objects"]
-            candidates = {"unweighted": values["unweighted_failures"]}
-            if "weighted_failures" in values: candidates["puppiw_times_unweighted"] = values["weighted_failures"]
-            selected_formula = min(candidates, key=lambda item: (candidates[item], item)) if objects else None
-            closure_report[name] = {**dict(values), "selected_formula": selected_formula,
-                "selected_failure_fraction": None if not objects else candidates[selected_formula] / objects,
-                "relative_tolerance": 1e-4}
+            try:
+                closure_report[name] = authorize_p4_closure(values)
+            except ValueError as error:
+                raise ValueError(f"{role} {name} p4 closure cannot authorize matching/repair") from error
         role_reports[role] = {
             "raw_rows": raw, "baseline_selected": selected, "mapped": mapped,
             "unmapped": selected - mapped, "class_counts": classes.tolist(),
@@ -108,7 +107,7 @@ def main() -> int:
             "truncated_hlt_objects": truncated, "p4_closure": closure_report,
         }
     report = with_content_hash({
-        "contract": "hlt_classification_scouting_feature_audit_v1", "schema_version": 1,
+        "contract": FEATURE_AUDIT_CONTRACT, "schema_version": FEATURE_AUDIT_VERSION,
         "split_manifest_sha256": split["content_hash"], "roles": role_reports,
         "final_test_branches_read": False,
     })

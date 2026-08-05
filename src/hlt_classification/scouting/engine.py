@@ -7,7 +7,9 @@ from io import BytesIO
 import os
 from pathlib import Path
 import random
+import signal
 import tempfile
+import threading
 from typing import Callable, Iterable, Mapping
 
 import numpy as np
@@ -18,10 +20,15 @@ from hlt_classification.data.cache_contracts import (
 )
 from hlt_classification.training.checkpoints import capture_model_runtime_state, capture_rng_state, restore_model_runtime_state, restore_rng_state
 from .evaluation import classification_metrics
-from .training import LossConfiguration, freeze_teacher, pmard_loss, representation_kd_loss
+from .training import (
+    LossConfiguration, derive_seed, freeze_teacher, pmard_loss, representation_kd_loss,
+)
+from .targets import EphemeralTeacherTargets
 
-PMARD_TRAINING_REPORT_CONTRACT = "hlt_classification_pmard_training_report_v1"
-PMARD_RESUME_CONTRACT = "hlt_classification_pmard_resume_checkpoint_v1"
+PMARD_TRAINING_REPORT_CONTRACT = "hlt_classification_pmard_training_report_v4"
+PMARD_TRAINING_REPORT_VERSION = 4
+PMARD_RESUME_CONTRACT = "hlt_classification_pmard_resume_checkpoint_v4"
+PMARD_RESUME_VERSION = 4
 
 
 class PmardTrainingInterrupted(RuntimeError):
@@ -38,7 +45,9 @@ class PmardTrainingConfig:
     weight_decay: float = .01
     warmup_fraction: float = .05
     minimum_lr_fraction: float = .05
-    validation_interval: int = 1000
+    validation_interval: int | None = None
+    validation_checks: int = 8
+    logging_interval: int = 50
     master_seed: int = 1337
     amp_dtype: str = "bfloat16"
     model_input: str = "hlt"
@@ -49,13 +58,17 @@ class PmardTrainingConfig:
     def __post_init__(self) -> None:
         if self.total_updates <= 0 or self.effective_batch_size <= 0 or self.peak_learning_rate <= 0:
             raise ValueError("training budget values must be positive")
+        if self.validation_interval is not None and self.validation_interval <= 0:
+            raise ValueError("validation interval must be positive when explicitly set")
+        if self.validation_checks <= 0 or self.logging_interval <= 0:
+            raise ValueError("validation_checks and logging_interval must be positive")
         if not 0 <= self.warmup_fraction < 1 or not 0 < self.minimum_lr_fraction <= 1:
             raise ValueError("training schedule fractions differ")
         if self.amp_dtype not in {"none", "bfloat16"}:
             raise ValueError("unsupported PMARD AMP dtype")
         if self.model_input not in {"hlt", "privileged", "toff"}:
             raise ValueError("unknown PMARD model input role")
-        if self.representation_arm not in {"R0", "R1", "R2", "R3", "R4", "R5"}:
+        if self.representation_arm not in {"R0", "R1", "R2", "R3", "R4_PAIR", "R4_GRAM", "R5"}:
             raise ValueError("unknown representation arm")
         if self.representation_coefficient < 0:
             raise ValueError("representation coefficient must be nonnegative")
@@ -119,6 +132,69 @@ def _model_logits(model, batch: Mapping[str, object], device, input_key: str):
     return model(*_view_tensors(batch[input_key], device))
 
 
+def _optimizer_for(model, config: PmardTrainingConfig):
+    import torch
+    exclusions = set(model.no_weight_decay()) if hasattr(model, "no_weight_decay") else set()
+    decay = []; no_decay = []
+    for name, parameter in model.named_parameters():
+        if parameter.requires_grad:
+            (no_decay if name in exclusions else decay).append(parameter)
+    groups = []
+    if decay:
+        groups.append({"params": decay, "weight_decay": config.weight_decay})
+    if no_decay:
+        groups.append({"params": no_decay, "weight_decay": 0.0})
+    return torch.optim.AdamW(groups, lr=config.peak_learning_rate)
+
+
+def _cpu_state_dict(model) -> dict[str, object]:
+    return {name: value.detach().cpu().clone() for name, value in model.state_dict().items()}
+
+
+def _selection_key(metrics: Mapping[str, object], update: int) -> tuple[float, float, int]:
+    return (float(metrics["cross_entropy"]), -float(metrics["accuracy"]), int(update))
+
+
+def _validation_due(config: PmardTrainingConfig, update: int) -> bool:
+    if update == config.total_updates:
+        return True
+    if config.validation_interval is not None:
+        return update % config.validation_interval == 0
+    # Exactly `validation_checks` approximately equidistant boundaries, including
+    # the final update, even when the update budget is not divisible by the count.
+    boundaries = {
+        int(np.ceil(config.total_updates * index / config.validation_checks))
+        for index in range(1, config.validation_checks + 1)
+    }
+    return update in boundaries
+
+
+class _PreemptionMonitor:
+    """Turn Slurm termination signals into a checkpoint at the next safe update."""
+
+    def __init__(self) -> None:
+        self.requested = False
+        self.previous: dict[int, object] = {}
+
+    def install(self) -> None:
+        if threading.current_thread() is not threading.main_thread():
+            return
+        for name in ("SIGUSR1", "SIGTERM"):
+            number = getattr(signal, name, None)
+            if number is None:
+                continue
+            self.previous[number] = signal.getsignal(number)
+            signal.signal(number, self._request)
+
+    def _request(self, _signum, _frame) -> None:
+        self.requested = True
+
+    def restore(self) -> None:
+        for number, handler in self.previous.items():
+            signal.signal(number, handler)
+        self.previous.clear()
+
+
 def _representation_forward(model, batch, device, input_key: str, arm: str):
     output = model.forward_representations(*_view_tensors(batch[input_key], device))
     if isinstance(output, tuple):
@@ -126,12 +202,27 @@ def _representation_forward(model, batch, device, input_key: str, arm: str):
     if arm == "R1": representation = output.class_token
     elif arm == "R2": representation = output.pooled_particles
     elif arm == "R3": representation = output.late_particles
-    elif arm == "R4":
-        normalized = __import__("torch").nn.functional.normalize(output.late_particles, dim=-1)
-        representation = normalized @ normalized.transpose(1, 2)
+    elif arm == "R4_PAIR": representation = output.pair_geometry
+    elif arm == "R4_GRAM":
+        torch = __import__("torch")
+        with torch.autocast(device_type=output.late_particles.device.type, enabled=False):
+            normalized = torch.nn.functional.normalize(
+                output.late_particles.float(), dim=-1,
+            )
+            representation = normalized @ normalized.transpose(1, 2)
     elif arm == "R5": representation = output.late_depths
-    else: raise ValueError("representation forward requires R1--R5")
+    else: raise ValueError("unknown representation forward arm")
     return output.logits, representation, output.particle_mask
+
+
+def _float_representation(value):
+    """Recursively preserve representation structure while upcasting tensors."""
+    import torch
+    if isinstance(value, tuple):
+        return tuple(_float_representation(item) for item in value)
+    if not isinstance(value, torch.Tensor):
+        raise TypeError("representation KD received a non-tensor structure")
+    return value.float()
 
 
 def evaluate_model(
@@ -151,12 +242,38 @@ def evaluate_model(
     return classification_metrics(np.concatenate(logits), np.concatenate(labels))
 
 
+def precompute_teacher_targets(
+    model, batches: Iterable[Mapping[str, object]], *, input_key: str, device: str,
+    teacher_report_sha256: str, split_manifest_sha256: str,
+) -> EphemeralTeacherTargets:
+    """Run one authoritative FP32 teacher pass and retain only RAM logits."""
+    import torch
+    target = torch.device(device)
+    freeze_teacher(model).to(target)
+    identities: list[str] = []; logits: list[np.ndarray] = []
+    with torch.inference_mode():
+        for batch in batches:
+            output = _model_logits(model, batch, target, input_key).float()
+            if output.ndim != 2 or output.shape[1] != 15 or not torch.isfinite(output).all():
+                raise FloatingPointError("teacher-target forward produced invalid logits")
+            identities.extend(map(str, batch["identity_keys"]))
+            logits.append(output.cpu().numpy())
+    if not logits:
+        raise ValueError("teacher-target stream is empty")
+    return EphemeralTeacherTargets.create(
+        identities, np.concatenate(logits).astype(np.float32, copy=False),
+        teacher_report_sha256=teacher_report_sha256,
+        split_manifest_sha256=split_manifest_sha256,
+    )
+
+
 def train_pmard(
     *, model, train_batches: Callable[[int], Iterable[Mapping[str, object]]],
     validation_batches: Callable[[], Iterable[Mapping[str, object]]],
     class_weights, config: PmardTrainingConfig, output_dir: str | Path,
     parents: Mapping[str, str], device: str = "cuda", hlt_teacher=None,
-    privileged_teacher=None, resume: bool = True,
+    privileged_teacher=None, hlt_teacher_targets: EphemeralTeacherTargets | None = None,
+    privileged_teacher_targets: EphemeralTeacherTargets | None = None, resume: bool = True,
     scientific_config: Mapping[str, object] | None = None,
     stop_after_update: int | None = None,
 ) -> dict[str, object]:
@@ -167,7 +284,19 @@ def train_pmard(
     validated_parents = {
         str(name): require_sha256(value, name=str(name)) for name, value in sorted(parents.items())
     }
-    torch.manual_seed(config.master_seed); random.seed(config.master_seed); np.random.seed(config.master_seed)
+    for name, table in (
+        ("hlt", hlt_teacher_targets), ("privileged", privileged_teacher_targets),
+    ):
+        if table is None:
+            continue
+        if table.header.get("split_manifest_sha256") != validated_parents.get("split_manifest_sha256"):
+            raise ValueError(f"{name} RAM teacher targets have different split lineage")
+        if table.header.get("teacher_report_sha256") not in set(validated_parents.values()):
+            raise ValueError(f"{name} RAM teacher targets have unauthenticated teacher lineage")
+    training_seed = derive_seed(config.master_seed, "training_dropout_and_augmentation")
+    torch.manual_seed(training_seed); random.seed(training_seed); np.random.seed(training_seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(training_seed)
     model.to(target)
     if hlt_teacher is not None: freeze_teacher(hlt_teacher).to(target)
     if privileged_teacher is not None: freeze_teacher(privileged_teacher).to(target)
@@ -179,11 +308,15 @@ def train_pmard(
             if trimmer is None or not hasattr(trimmer, "enabled"):
                 raise TypeError("representation KD requires controllable Weaver trimming")
             trimmer.enabled = False
-    optimizer = torch.optim.AdamW(model.parameters(), lr=config.peak_learning_rate, weight_decay=config.weight_decay)
+    optimizer = _optimizer_for(model, config)
     root = Path(output_dir); rolling = root / "rolling_resume.pt"
     scientific_payload = dict(scientific_config or {})
     config_hash = canonical_sha256({"training": asdict(config), "scientific": scientific_payload})
     update = 0; epoch = 0; batch_offset = 0; history = []
+    loss_window_sums: dict[str, object] = {}
+    loss_window_start = 1; loss_window_updates = 0
+    validation_history: list[dict[str, object]] = []
+    best_model = None; best_runtime = None; best_metrics = None; best_update = None
     if rolling.exists() and resume:
         state = torch.load(rolling, map_location=target, weights_only=False)
         if state.get("contract") != PMARD_RESUME_CONTRACT or state.get("config_sha256") != config_hash or state.get("parents") != validated_parents:
@@ -192,7 +325,18 @@ def train_pmard(
         optimizer.load_state_dict(state["optimizer"]); restore_rng_state(state["rng"])
         update, epoch = int(state["update"]), int(state["epoch"])
         batch_offset, history = int(state["batch_offset"]), list(state["history"])
+        loss_window_sums = {
+            str(name): value.to(target) for name, value in state["loss_window_sums"].items()
+        }
+        loss_window_start = int(state["loss_window_start"])
+        loss_window_updates = int(state["loss_window_updates"])
+        validation_history = list(state["validation_history"])
+        best_model, best_runtime = state["best_model"], state["best_runtime"]
+        best_metrics, best_update = state["best_metrics"], state["best_update"]
     weights = torch.as_tensor(class_weights, dtype=torch.float32, device=target)
+    preemption = _PreemptionMonitor()
+    if target.type == "cuda":
+        preemption.install()
     while update < config.total_updates:
         consumed = False
         model.train()
@@ -213,15 +357,33 @@ def train_pmard(
                         model, batch, target, config.model_input, config.representation_arm,
                     )
                 with torch.no_grad():
-                    hlt_logits = (
-                        _model_logits(hlt_teacher, batch, target, "hlt")
-                        if config.loss.hlt_kd else None
-                    )
+                    hlt_logits = None
+                    if config.loss.hlt_kd:
+                        if hlt_teacher_targets is not None:
+                            hlt_logits = torch.as_tensor(
+                                hlt_teacher_targets.join(batch["identity_keys"]),
+                                device=target, dtype=torch.float32,
+                            )
+                        elif hlt_teacher is not None:
+                            hlt_logits = _model_logits(hlt_teacher, batch, target, "hlt")
+                        else:
+                            raise ValueError("HLT KD requires a frozen teacher or RAM targets")
                     privileged_logits = None
                     if config.loss.privileged_kd:
-                        if "privileged_logits" in batch:
+                        if privileged_teacher_targets is not None:
                             privileged_logits = torch.as_tensor(
-                                batch["privileged_logits"], device=target, dtype=student.dtype,
+                                privileged_teacher_targets.join(batch["identity_keys"]),
+                                device=target, dtype=torch.float32,
+                            )
+                        elif "privileged_logits" in batch:
+                            privileged_logits = torch.as_tensor(
+                                batch["privileged_logits"], device=target, dtype=torch.float32,
+                            )
+                        elif privileged_teacher is hlt_teacher and hlt_logits is not None:
+                            privileged_logits = hlt_logits
+                        elif privileged_teacher is hlt_teacher and "hlt" in batch:
+                            privileged_logits = _model_logits(
+                                privileged_teacher, batch, target, "hlt"
                             )
                         elif privileged_teacher is not None and "privileged" in batch:
                             privileged_logits = _model_logits(
@@ -235,10 +397,14 @@ def train_pmard(
                             raise ValueError(
                                 "privileged KD requires identity-joined RAM logits or a privileged view"
                             )
-                parts = pmard_loss(
-                    student, labels, class_weights=weights, configuration=config.loss,
-                    hlt_teacher_logits=hlt_logits, privileged_teacher_logits=privileged_logits,
-                )
+                with torch.autocast(device_type=target.type, enabled=False):
+                    parts = pmard_loss(
+                        student.float(), labels, class_weights=weights, configuration=config.loss,
+                        hlt_teacher_logits=None if hlt_logits is None else hlt_logits.float(),
+                        privileged_teacher_logits=(
+                            None if privileged_logits is None else privileged_logits.float()
+                        ),
+                    )
                 if config.representation_arm != "R0" and config.representation_coefficient > 0:
                     if privileged_teacher is None or "privileged" not in batch:
                         raise ValueError("representation KD requires the alpha teacher and aligned view")
@@ -249,22 +415,70 @@ def train_pmard(
                     if not torch.equal(representation_mask, teacher_mask):
                         raise ValueError("teacher/student representation masks differ")
                     rep_mask = None if config.representation_arm in {"R1", "R2"} else representation_mask
-                    parts["representation"] = representation_kd_loss(
-                        student_representation, teacher_representation, mask=rep_mask,
-                    )
+                    with torch.autocast(device_type=target.type, enabled=False):
+                        parts["representation"] = representation_kd_loss(
+                            _float_representation(student_representation),
+                            _float_representation(teacher_representation), mask=rep_mask,
+                        )
                     parts["total"] = parts["total"] + config.representation_coefficient * parts["representation"]
             parts["total"].backward(); optimizer.step(); update += 1
-            history.append({"update": update, **{name: float(value.detach().cpu()) for name, value in parts.items()}})
-            state = {
-                "contract": PMARD_RESUME_CONTRACT, "schema_version": 1,
-                "config_sha256": config_hash, "parents": validated_parents,
-                "model": model.state_dict(), "model_runtime": capture_model_runtime_state(model),
-                "optimizer": optimizer.state_dict(), "rng": capture_rng_state(),
-                "update": update, "epoch": epoch, "batch_offset": batch_index + 1,
-                "history": history,
-            }
-            _rolling_publish(rolling, state)
-            if stop_after_update is not None and update >= stop_after_update and update < config.total_updates:
+            for name, value in parts.items():
+                detached = value.detach().float()
+                loss_window_sums[name] = (
+                    detached if name not in loss_window_sums
+                    else loss_window_sums[name] + detached
+                )
+            loss_window_updates += 1
+            validation_due = _validation_due(config, update)
+            stop_due = (
+                stop_after_update is not None
+                and update >= stop_after_update
+                and update < config.total_updates
+            )
+            if update % config.logging_interval == 0 or update == config.total_updates:
+                history.append({
+                    "start_update": loss_window_start, "end_update": update,
+                    "updates": loss_window_updates,
+                    "mean_losses": {
+                        name: float((value / loss_window_updates).cpu())
+                        for name, value in sorted(loss_window_sums.items())
+                    },
+                })
+                loss_window_sums = {}; loss_window_start = update + 1
+                loss_window_updates = 0
+            if validation_due:
+                pre_validation_runtime = capture_model_runtime_state(model)
+                metrics = evaluate_model(
+                    model, validation_batches(), device=device, input_key=config.model_input,
+                )
+                restore_model_runtime_state(model, pre_validation_runtime)
+                validation_history.append({"update": update, **metrics})
+                if best_metrics is None or _selection_key(metrics, update) < _selection_key(best_metrics, best_update):
+                    best_model = _cpu_state_dict(model)
+                    best_runtime = pre_validation_runtime
+                    best_metrics = metrics
+                    best_update = update
+                model.train()
+            if validation_due or stop_due or preemption.requested:
+                state = {
+                    "contract": PMARD_RESUME_CONTRACT, "schema_version": PMARD_RESUME_VERSION,
+                    "config_sha256": config_hash, "parents": validated_parents,
+                    "model": model.state_dict(), "model_runtime": capture_model_runtime_state(model),
+                    "optimizer": optimizer.state_dict(), "rng": capture_rng_state(),
+                    "update": update, "epoch": epoch, "batch_offset": batch_index + 1,
+                    "history": history, "validation_history": validation_history,
+                    "loss_window_sums": loss_window_sums,
+                    "loss_window_start": loss_window_start,
+                    "loss_window_updates": loss_window_updates,
+                    "best_model": best_model, "best_runtime": best_runtime,
+                    "best_metrics": best_metrics, "best_update": best_update,
+                }
+                _rolling_publish(rolling, state)
+            if preemption.requested:
+                preemption.restore()
+                raise PmardTrainingInterrupted(f"preempted after durable update {update}")
+            if stop_due:
+                preemption.restore()
                 raise PmardTrainingInterrupted(f"stopped after durable update {update}")
             if update >= config.total_updates: break
         if not consumed:
@@ -273,26 +487,52 @@ def train_pmard(
                 continue
             raise ValueError("training stream is empty")
         epoch += 1; batch_offset = 0
-    metrics = evaluate_model(
-        model, validation_batches(), device=device, input_key=config.model_input,
-    )
+    if best_model is None or best_metrics is None or best_update is None:
+        metrics = evaluate_model(model, validation_batches(), device=device, input_key=config.model_input)
+        best_model = _cpu_state_dict(model); best_runtime = capture_model_runtime_state(model)
+        best_metrics = metrics; best_update = update
+        validation_history.append({"update": update, **metrics})
+    model.load_state_dict(best_model)
+    if best_runtime is not None:
+        restore_model_runtime_state(model, best_runtime)
     checkpoint_path = root / "selected_model.pt"
     atomic_publish_bytes(checkpoint_path, _torch_bytes({
         "model": model.state_dict(), "config": asdict(config),
-        "scientific_config": scientific_payload,
+        "scientific_config": scientific_payload, "model_runtime": best_runtime,
+        "selected_update": best_update,
     }))
     report = with_content_hash({
-        "contract": PMARD_TRAINING_REPORT_CONTRACT, "schema_version": 1,
+        "contract": PMARD_TRAINING_REPORT_CONTRACT,
+        "schema_version": PMARD_TRAINING_REPORT_VERSION,
         "experiment_id": config.experiment_id, "config": asdict(config),
         "scientific_config": scientific_payload,
         "parents": validated_parents, "complete": True, "updates": update,
-        "performance_early_termination": False, "validation": metrics,
+        "performance_early_termination": False, "validation": best_metrics,
+        "validation_history": validation_history,
+        "training_history": history,
+        "training_history_rule": "fp32_interval_mean_every_logging_interval_v1",
+        "checkpoint_selector": "minimum_ce_then_maximum_accuracy_then_earliest_update_v1",
+        "selected_update": best_update,
+        "selected_cross_entropy_hex": float(best_metrics["cross_entropy"]).hex(),
+        "selected_accuracy_hex": float(best_metrics["accuracy"]).hex(),
+        "rng_domains": {
+            "training_dropout_and_augmentation": training_seed,
+            "model_initialization_is_caller_bound": True,
+        },
+        "ephemeral_teacher_targets": {
+            "hlt": None if hlt_teacher_targets is None else dict(hlt_teacher_targets.header),
+            "privileged": None if privileged_teacher_targets is None else dict(privileged_teacher_targets.header),
+        },
         "selected_checkpoint": checkpoint_path.name,
         "selected_checkpoint_sha256": sha256_file(checkpoint_path),
     })
     write_immutable_json(root / "training_report.json", report)
     rolling.unlink(missing_ok=True)
+    preemption.restore()
     return report
 
 
-__all__ = ["PmardTrainingConfig", "PmardTrainingInterrupted", "evaluate_model", "learning_rate", "train_pmard"]
+__all__ = [
+    "PmardTrainingConfig", "PmardTrainingInterrupted", "evaluate_model", "learning_rate",
+    "precompute_teacher_targets", "train_pmard",
+]

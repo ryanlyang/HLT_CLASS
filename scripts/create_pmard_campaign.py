@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create an immutable clean-source PMARD smoke or authorized production spec."""
+"""Create an immutable clean-source PMARD smoke, pilot, or production spec."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def main() -> int:
     parser.add_argument("--source-manifest", type=Path, required=True)
     parser.add_argument("--split-manifest", type=Path, required=True)
     parser.add_argument("--campaign-root", required=True)
-    parser.add_argument("--mode", choices=("smoke", "production"), required=True)
+    parser.add_argument("--mode", choices=("smoke", "pilot", "production"), required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--authorize-production", action="store_true")
     for name in ("miniature-report", "dry-run-report", "resource-evidence", "storage-evidence"):
@@ -29,14 +29,14 @@ def main() -> int:
     evidence_paths = (args.miniature_report, args.dry_run_report, args.resource_evidence, args.storage_evidence)
     if args.mode == "production" and any(path is None for path in evidence_paths):
         parser.error("production requires all four validated evidence artifact paths")
-    if args.mode == "smoke" and any(path is not None for path in evidence_paths):
-        parser.error("smoke creation may not claim production evidence")
+    if args.mode != "production" and any(path is not None for path in evidence_paths):
+        parser.error("only production creation may claim production evidence")
     spec = create_pmard_campaign_spec(
         source_snapshot=capture_source_snapshot(args.repository, require_clean=True),
         source_manifest_sha256=source["content_hash"], split_manifest_sha256=split["content_hash"],
         campaign_root=args.campaign_root, mode=args.mode,
         production_authorized=args.authorize_production,
-        evidence_artifacts=(None if args.mode == "smoke" else {
+        evidence_artifacts=(None if args.mode != "production" else {
             "miniature_report": load_json(args.miniature_report),
             "dry_run_report": load_json(args.dry_run_report),
             "resource_evidence": load_json(args.resource_evidence),

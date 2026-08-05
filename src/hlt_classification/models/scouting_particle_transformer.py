@@ -115,32 +115,40 @@ class ScoutingRepresentationOutput:
 
 
 class RepresentationScoutingParticleTransformer(nn.Module):
-    """Canonical graph plus matched-capacity learned projections for R1--R5."""
+    """Canonical graph plus matched-capacity projections for declared KD surfaces."""
 
     def __init__(self, arm: str) -> None:
         super().__init__()
-        if arm not in {"R1", "R2", "R3", "R4", "R5"}:
-            raise ValueError("representation wrapper requires R1--R5")
+        if arm not in {"R1", "R2", "R3", "R4_PAIR", "R4_GRAM", "R5"}:
+            raise ValueError("unknown representation wrapper arm")
         self.arm = arm; self.baseline = ScoutingParticleTransformer()
-        count = 2 if arm == "R5" else 1
+        count = 2 if arm == "R5" else 0 if arm == "R4_PAIR" else 1
         self.projections = nn.ModuleList(nn.Linear(128, 128, bias=False) for _ in range(count))
-        for projection in self.projections:
-            nn.init.eye_(projection.weight)
+        for projection in self.projections: nn.init.eye_(projection.weight)
+        self.pair_projection = nn.Conv2d(8, 8, 1, bias=False) if arm == "R4_PAIR" else None
+        if self.pair_projection is not None:
+            nn.init.eye_(self.pair_projection.weight[:, :, 0, 0])
 
     def forward(self, features: torch.Tensor, vectors: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         return self.baseline(features, vectors, mask)
+
+    def no_weight_decay(self) -> set[str]:
+        return {f"baseline.{name}" for name in self.baseline.no_weight_decay()}
 
     def forward_representations(self, features: torch.Tensor, vectors: torch.Tensor, mask: torch.Tensor):
         output = self.baseline.forward_representations(features, vectors, mask)
         if self.arm == "R1": target = self.projections[0](output.class_token)
         elif self.arm == "R2": target = self.projections[0](output.pooled_particles)
         elif self.arm == "R3": target = self.projections[0](output.late_particles)
-        elif self.arm == "R4":
+        elif self.arm == "R4_PAIR":
+            if output.pair_geometry.ndim != 4 or output.pair_geometry.shape[1] != 8:
+                raise ValueError("installed Weaver pair geometry is not [batch,8,N,N]")
+            target = self.pair_projection(output.pair_geometry)
+        elif self.arm == "R4_GRAM":
             projected = self.projections[0](output.late_particles)
-            target = torch.matmul(
-                torch.nn.functional.normalize(projected, dim=-1),
-                torch.nn.functional.normalize(projected, dim=-1).transpose(1, 2),
-            )
+            with torch.autocast(device_type=projected.device.type, enabled=False):
+                normalized = torch.nn.functional.normalize(projected.float(), dim=-1)
+                target = torch.matmul(normalized, normalized.transpose(1, 2))
         else:
             target = tuple(
                 projection(value) for projection, value in zip(self.projections, output.late_depths, strict=True)

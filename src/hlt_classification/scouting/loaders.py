@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Callable
 
 from hlt_classification.data.cache_contracts import load_json, sha256_file, validate_content_hash
-from .engine import PMARD_TRAINING_REPORT_CONTRACT
+from .engine import PMARD_TRAINING_REPORT_CONTRACT, PMARD_TRAINING_REPORT_VERSION
 
 
 def scouting_model_factory_for_report(report: dict[str, object]):
@@ -25,12 +25,18 @@ def scouting_model_factory_for_report(report: dict[str, object]):
 def load_pmard_model(report_path: str | Path, *, model_factory: Callable[[], object], device: str = "cpu"):
     import torch
     path = Path(report_path); report = load_json(path)
-    validate_content_hash(report, expected_contract=PMARD_TRAINING_REPORT_CONTRACT)
+    validate_content_hash(
+        report, expected_contract=PMARD_TRAINING_REPORT_CONTRACT,
+        expected_schema_version=PMARD_TRAINING_REPORT_VERSION,
+    )
     checkpoint = path.parent / report["selected_checkpoint"]
     if sha256_file(checkpoint) != report["selected_checkpoint_sha256"]:
         raise ValueError("PMARD selected checkpoint hash differs")
     payload = torch.load(checkpoint, map_location=device, weights_only=False)
     model = model_factory(); model.load_state_dict(payload["model"], strict=True)
+    if payload.get("model_runtime") is not None:
+        from hlt_classification.training.checkpoints import restore_model_runtime_state
+        restore_model_runtime_state(model, payload["model_runtime"])
     return model, report
 
 

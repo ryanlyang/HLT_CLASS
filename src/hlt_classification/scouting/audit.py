@@ -11,18 +11,43 @@ import numpy as np
 from hlt_classification.data.cache_contracts import canonical_sha256, sha256_file, with_content_hash
 from .identity import normalize_source_path, reject_case_aliases
 from .schema import (
-    EXPECTED_BRANCH_COUNT, EXPECTED_FILE_COUNT, EXPECTED_RAW_ENTRIES,
+    CLASS_NAMES, EXPECTED_BASELINE_ENTRIES, EXPECTED_BRANCH_COUNT, EXPECTED_CLASS_COUNTS,
+    EXPECTED_FILE_COUNT, EXPECTED_MAPPED_ENTRIES, EXPECTED_RAW_ENTRIES,
     EXPECTED_LOGICAL_CONTENT_SHA256, TREE_NAME,
 )
 
-SOURCE_MANIFEST_CONTRACT = "hlt_classification_scouting_source_manifest_v1"
-FEATURE_AUDIT_CONTRACT = "hlt_classification_scouting_feature_audit_v1"
+SOURCE_MANIFEST_CONTRACT = "hlt_classification_scouting_source_manifest_v2"
+SOURCE_MANIFEST_VERSION = 2
+FEATURE_AUDIT_CONTRACT = "hlt_classification_scouting_feature_audit_v2"
+FEATURE_AUDIT_VERSION = 2
+MAX_P4_CLOSURE_FAILURE_FRACTION = 1.0e-4
+
+
+def authorize_p4_closure(values: Mapping[str, int]) -> dict[str, object]:
+    """Select the best audited p4 formula and enforce the v2 closure gate."""
+    objects = int(values.get("objects", 0))
+    candidates = {"unweighted": int(values.get("unweighted_failures", 0))}
+    if "weighted_failures" in values:
+        candidates["puppiw_times_unweighted"] = int(values["weighted_failures"])
+    selected = min(candidates, key=lambda item: (candidates[item], item)) if objects else None
+    report = {
+        **dict(values), "selected_formula": selected,
+        "selected_failure_fraction": None if not objects else candidates[selected] / objects,
+        "relative_tolerance": 1.0e-4,
+        "maximum_allowed_failure_fraction": MAX_P4_CLOSURE_FAILURE_FRACTION,
+    }
+    if (not objects or int(values.get("missing_reference_chunks", 0))
+            or report["selected_failure_fraction"] > MAX_P4_CLOSURE_FAILURE_FRACTION):
+        raise ValueError("p4 closure cannot authorize matching/repair")
+    return report
 
 
 def audit_source_inventory(
     data_root: str | Path, files: Iterable[str | Path], *, strict_reference: bool = True,
 ) -> dict[str, object]:
     import uproot
+    from .labels import baseline_mask, multiclass_labels
+    from .schema import BASELINE_BRANCHES, LABEL_BRANCHES
     root = Path(data_root).expanduser().resolve()
     rows = []
     for item in sorted(Path(value).expanduser().resolve() for value in files):
@@ -32,6 +57,16 @@ def audit_source_inventory(
             raise ValueError("source inventory escapes data root") from error
         with uproot.open(item) as handle:
             tree = handle[TREE_NAME]
+            selected_entries = mapped_entries = 0
+            class_counts = np.zeros(15, np.int64)
+            for arrays in tree.iterate(
+                expressions=sorted(set(BASELINE_BRANCHES) | set(LABEL_BRANCHES)),
+                step_size=65_536, library="np", how=dict,
+            ):
+                selected = baseline_mask(arrays); labels = multiclass_labels(arrays)
+                mapped = selected & (labels >= 0)
+                selected_entries += int(selected.sum()); mapped_entries += int(mapped.sum())
+                class_counts += np.bincount(labels[mapped], minlength=15)
             rows.append({
                 "path": relative, "stratum": item.parent.name,
                 "raw_entries": int(tree.num_entries), "branch_count": len(tree.keys()),
@@ -39,14 +74,21 @@ def audit_source_inventory(
                     sorted((str(name), str(tree[name].typename)) for name in tree.keys())
                 ),
                 "sha256": sha256_file(item),
+                "baseline_selected_entries": selected_entries,
+                "mapped_entries": mapped_entries,
+                "class_counts": class_counts.tolist(),
             })
     reject_case_aliases(tuple(row["path"] for row in rows))
     if len({row["path"] for row in rows}) != len(rows):
         raise ValueError("source inventory contains duplicate logical paths")
+    aggregate_counts = np.asarray([row["class_counts"] for row in rows], np.int64).sum(axis=0)
     report = {
-        "contract": SOURCE_MANIFEST_CONTRACT, "schema_version": 1,
+        "contract": SOURCE_MANIFEST_CONTRACT, "schema_version": SOURCE_MANIFEST_VERSION,
         "tree": TREE_NAME, "file_count": len(rows),
         "raw_entries": sum(row["raw_entries"] for row in rows),
+        "baseline_selected_entries": sum(row["baseline_selected_entries"] for row in rows),
+        "mapped_entries": int(aggregate_counts.sum()),
+        "class_counts": aggregate_counts.tolist(),
         "aggregate_logical_content_sha256": EXPECTED_LOGICAL_CONTENT_SHA256,
         "files": rows,
     }
@@ -69,6 +111,11 @@ def audit_source_inventory(
             raise ValueError("source branch inventory differs from 297-branch contract")
         if len({row["branch_schema_sha256"] for row in rows}) != 1:
             raise ValueError("source files disagree on logical branch schema")
+        if (report["baseline_selected_entries"] != EXPECTED_BASELINE_ENTRIES
+                or report["mapped_entries"] != EXPECTED_MAPPED_ENTRIES):
+            raise ValueError("source selected/mapped populations differ from locked facts")
+        if report["class_counts"] != [EXPECTED_CLASS_COUNTS[name] for name in CLASS_NAMES]:
+            raise ValueError("source per-class populations differ from locked facts")
     return with_content_hash(report)
 
 
@@ -131,4 +178,9 @@ def p4_closure_diagnostics(
     return result
 
 
-__all__ = ["audit_source_inventory", "collection_length_diagnostics", "p4_closure_diagnostics"]
+__all__ = [
+    "FEATURE_AUDIT_CONTRACT", "FEATURE_AUDIT_VERSION",
+    "MAX_P4_CLOSURE_FAILURE_FRACTION", "SOURCE_MANIFEST_CONTRACT",
+    "SOURCE_MANIFEST_VERSION", "audit_source_inventory", "authorize_p4_closure",
+    "collection_length_diagnostics", "p4_closure_diagnostics",
+]

@@ -52,7 +52,11 @@ def classification_metrics(logits: np.ndarray, labels: np.ndarray) -> dict[str, 
             "precision": float(true_positive / max(1, confusion[:, index].sum())),
         }
         if index > 0 and qcd.any() and np.any(target == index):
-            signal_scores = probabilities[:, index]
+            denominator = probabilities[:, index] + probabilities[:, 0]
+            signal_scores = np.divide(
+                probabilities[:, index], denominator,
+                out=np.zeros_like(denominator), where=denominator > 0,
+            )
             rejections = {}
             for efficiency in (.3, .5, .8):
                 ordered = np.sort(signal_scores[target == index])[::-1]
@@ -129,8 +133,11 @@ def diagnostic_metrics(
         for signal in range(1, 15):
             signal_rows = labels == signal
             if not signal_rows.any(): continue
-            threshold = np.quantile(probabilities[signal_rows, signal], .5, method="inverted_cdf")
-            selected = qcd & (probabilities[:, signal] >= threshold)
+            discriminant = probabilities[:, signal] / np.maximum(
+                probabilities[:, signal] + probabilities[:, 0], 1e-300,
+            )
+            threshold = np.quantile(discriminant[signal_rows], .5, method="inverted_cdf")
+            selected = qcd & (discriminant >= threshold)
             shifted = np.histogram(values["scoutfj_sdmass"][selected], bins=mass_edges)[0].astype(np.float64)
             shifted /= max(1.0, shifted.sum()); midpoint = .5 * (reference + shifted)
             def kl(left, right):

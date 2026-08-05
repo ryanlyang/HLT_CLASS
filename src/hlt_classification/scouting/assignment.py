@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import hashlib
 from pathlib import Path
 import random
@@ -11,12 +11,13 @@ from typing import Iterable, Mapping, Sequence
 
 import numpy as np
 
-from hlt_classification.data.cache_contracts import array_sha256, require_sha256, with_content_hash
+from hlt_classification.data.cache_contracts import array_sha256, require_sha256, validate_content_hash, with_content_hash
 from .identity import ScoutingJetIdentity
 from .splits import SourceFileRecord
 from .matching import CandidateGraph
 
-EPHEMERAL_ASSIGNMENT_CONTRACT = "hlt_classification_pmard_ephemeral_assignment_v1"
+EPHEMERAL_ASSIGNMENT_CONTRACT = "hlt_classification_pmard_ephemeral_assignment_v2"
+EPHEMERAL_ASSIGNMENT_VERSION = 2
 
 
 def build_source_folds(
@@ -37,12 +38,31 @@ def build_source_folds(
     return result
 
 
+def build_even_source_ordinals(
+    records: Sequence[SourceFileRecord], *, total_rows: int,
+) -> dict[str, np.ndarray]:
+    """Allocate equal file quotas and deterministic evenly spaced row ordinals."""
+    ordered = sorted(records)
+    if not ordered or total_rows <= 0:
+        raise ValueError("source-balanced sampling requires records and a positive budget")
+    base, remainder = divmod(total_rows, len(ordered))
+    result = {}
+    for index, record in enumerate(ordered):
+        quota = min(record.mapped_entries, base + int(index < remainder))
+        result[record.path] = np.asarray(
+            [int((slot + .5) * record.mapped_entries / quota) for slot in range(quota)],
+            np.int64,
+        ) if quota else np.empty(0, np.int64)
+    return result
+
+
 @dataclass
 class EphemeralAssignmentTable:
     identities: tuple[str, ...]
     assignments: np.ndarray
     header: Mapping[str, object]
     owned_path: Path | None = None
+    _lookup: Mapping[str, int] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         value = np.asarray(self.assignments)
@@ -56,17 +76,40 @@ class EphemeralAssignmentTable:
             raise ValueError("assignment table is not marked RAM-ephemeral")
         if self.header.get("array_sha256") != array_sha256("assignments", value):
             raise ValueError("assignment table hash differs")
+        if self.header.get("identity_sha256") != hashlib.sha256(
+            "\n".join(self.identities).encode()
+        ).hexdigest():
+            raise ValueError("assignment identity hash differs")
+        if (self.header.get("matcher_variant") not in {f"M{index}" for index in range(6)}
+                or not set(self.header.get("eligible_categories", ())) <= set(range(5))
+                or not self.header.get("eligible_categories")):
+            raise ValueError("assignment matcher semantics differ")
+        validate_content_hash(
+            self.header, expected_contract=EPHEMERAL_ASSIGNMENT_CONTRACT,
+            expected_schema_version=EPHEMERAL_ASSIGNMENT_VERSION,
+        )
+        self._lookup = {key: index for index, key in enumerate(self.identities)}
 
     @classmethod
     def create(
         cls, identities: Sequence[ScoutingJetIdentity | str], assignments: np.ndarray,
         *, parents: Mapping[str, str], matcher_id: str, threshold: float,
+        matcher_variant: str, eligible_categories: Sequence[int],
     ) -> "EphemeralAssignmentTable":
         keys = tuple(item.key if isinstance(item, ScoutingJetIdentity) else str(item) for item in identities)
         value = np.ascontiguousarray(assignments, dtype=np.int16)
+        categories = sorted(set(map(int, eligible_categories)))
+        if matcher_variant not in {f"M{index}" for index in range(6)} or not categories or not set(categories) <= set(range(5)):
+            raise ValueError("assignment matcher variant/categories are invalid")
+        if not 0 <= threshold <= 1:
+            raise ValueError("assignment threshold lies outside [0,1]")
         header = with_content_hash({
-            "contract": EPHEMERAL_ASSIGNMENT_CONTRACT, "schema_version": 1,
-            "storage_mode": "ram_ephemeral", "matcher_id": matcher_id,
+            "contract": EPHEMERAL_ASSIGNMENT_CONTRACT,
+            "schema_version": EPHEMERAL_ASSIGNMENT_VERSION,
+            "storage_mode": "ram_ephemeral",
+            "matcher_id": require_sha256(matcher_id, name="matcher_id"),
+            "matcher_variant": str(matcher_variant),
+            "eligible_categories": categories,
             "threshold": float(threshold), "rows": len(keys), "width": 200,
             "identity_sha256": hashlib.sha256("\n".join(keys).encode()).hexdigest(),
             "array_sha256": array_sha256("assignments", value),
@@ -81,6 +124,17 @@ class EphemeralAssignmentTable:
         if target.name.startswith("pmard_assignment_") and target.is_dir():
             shutil.rmtree(target)
         self.owned_path = None
+
+    def join(self, requested_identities: Sequence[str]) -> np.ndarray:
+        """Return identity-aligned assignments and fail closed on any miss."""
+        try:
+            indexes = [self._lookup[str(key)] for key in requested_identities]
+        except KeyError as error:
+            raise KeyError("assignment-table identity join is incomplete") from error
+        result = self.assignments[indexes]
+        if result.dtype != np.int16 or result.shape != (len(indexes), 200):
+            raise RuntimeError("joined assignment table has invalid shape or dtype")
+        return result
 
 
 def corrupt_assignment(
@@ -110,6 +164,6 @@ def corrupt_assignment(
 
 
 __all__ = [
-    "EPHEMERAL_ASSIGNMENT_CONTRACT", "EphemeralAssignmentTable",
-    "build_source_folds", "corrupt_assignment",
+    "EPHEMERAL_ASSIGNMENT_CONTRACT", "EPHEMERAL_ASSIGNMENT_VERSION", "EphemeralAssignmentTable",
+    "build_even_source_ordinals", "build_source_folds", "corrupt_assignment",
 ]

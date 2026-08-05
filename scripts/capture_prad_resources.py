@@ -52,13 +52,13 @@ def _query_job(job_id: str) -> dict[str, int | str]:
         fields = line.split("|")
         if len(fields) < 5:
             continue
-        raw_id, state, raw_elapsed, raw_rss, raw_cpus = fields[:5]
-        if not (
-            raw_id == job_id
-            or raw_id.startswith(f"{job_id}.")
-            or raw_id.startswith(f"{job_id}_")
-        ):
-            continue
+        _raw_id, state, raw_elapsed, raw_rss, raw_cpus = fields[:5]
+        # ``sacct -j ARRAY_MASTER`` is already scoped to the requested job.
+        # Some Slurm installations expose array children in JobIDRaw as their
+        # distinct allocation IDs rather than ``MASTER_INDEX``.  Filtering on
+        # the master prefix would silently discard those children and miss the
+        # true maximum elapsed time/RSS.  Consume every returned hierarchy row
+        # and take maxima below.
         states.append(state.strip().split("+", 1)[0])
         if raw_elapsed.strip().isdigit():
             elapsed.append(int(raw_elapsed))

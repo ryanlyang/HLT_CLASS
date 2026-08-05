@@ -115,6 +115,30 @@ from the guide's reference-file byte hash only by terminal newline encoding.
 Scientific validation compares the parsed, ordered preprocessing semantics and
 retains both hashes rather than falsely claiming byte identity.
 
+### Fitted-strict matcher port
+
+The matching study directory has no Git metadata, so this port is bound to
+exact source hashes rather than inventing a donor commit:
+
+| Donor path and SHA-256 | New paths | Retained semantics | Intentional changes and evidence |
+|---|---|---|---|
+| `HLTvsOfflineComparisons/matching/run_selective_matcher_campaign.py` — `68e2bbf1098506c37dbd5af7a1265db89bfbece19b7f7a6a00ab99605e2544d0` | `src/hlt_classification/scouting/fitted_strict.py` | fitted-strict edge features/signs, empirical LLR lookup, broad and strict gates, rectangular Hungarian private dummies, assignment diagnostics, confidence calibration, exact operating point | refactored inference only into a stable typed API; no implicit fitting; native offline indices are restored after lost-track exclusion; fail-closed artifact validation; numerical golden parity in `tests/test_fitted_strict_matcher.py`. |
+| `HLTvsOfflineComparisons/matching/FITTED_STRICT_MATCHER_IMPLEMENTATION_GUIDE.md` — `d3b2adc32df67b0ee971a9383fadbae00540b4022be64a921b7d2d90c361733e` | `docs/contracts/FITTED_STRICT_MATCHER.md` | algorithm, population, selective-mask, and PMARD preservation contract | condensed into a repository-local versioned contract and explicitly blocks the incompatible legacy complete endpoint. |
+| canonical `fitted_edge_model.json` — donor byte SHA-256 `2cfd51b209435164263247252a35cf83708fa71fc2580301c35bb5d905d41142`; `confidence_models.json` — `dc1ce2f3f889bef3e3c6cdc46da70bc14e79dff518d6d4b1d759fac51f093735`; `independent_validation.json` — `af1d2b009e7c9186b454acd461e4cf40335261ae4b491f1c82dd1957e941687e` | `src/hlt_classification/scouting/resources/fitted_strict_v1/` | exact parsed model/audit values from the intact 7,500-jet bundle | JSON semantic hashes are authenticated so Windows/Linux checkout line endings cannot change identity; original donor byte hashes remain in the vendored provenance file. No checkpoint, dataset, or race-corrupted result directory was copied. |
+
+The independent donor validator
+`validate_selective_matcher_results.py` was inspected at SHA-256
+`f83b7e42bdd9d6b28292727fa31c341e22a7f1a4668b0eb0df52cad84a628ae3`.
+No runtime import reaches the external FCV tree, and no new third-party source
+or license obligation was introduced.
+
+The subsequent selective campaign plumbing—`selective_assignment.py`, the two
+builder CLIs, selective 21-field repair, assignment authorization, pilot DAG,
+and oracle evaluation—is original repository-local work with no donor file or
+commit. It composes the authenticated matcher above with existing Scouting
+contracts; tests cover sparse joins, exact unmatched preservation, endpoint
+replacement, and campaign registration.
+
 ## Approved transfer surfaces
 
 | Transfer block | Donor surface | Intended retained meaning | Migration policy |

@@ -12,7 +12,7 @@ PMARD_ARTIFACT_CONTRACT: Final = "hlt_classification_pmard_artifact_v1"
 PMARD_CONTRACT_VERSION: Final = 1
 DATA_ROLES: Final = ("train", "validation", "final_test")
 LOCK_ORDER: Final = (
-    "data", "matcher_design", "matcher_result", "training",
+    "data", "matcher_design", "matcher_result", "full_endpoint", "training",
     "screen_confirmation", "finalist", "execution",
 )
 

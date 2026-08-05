@@ -1,0 +1,38 @@
+{
+  "all_checks_pass": true,
+  "checks": {
+    "six_unique_expected_variants": true,
+    "all_metrics_finite": true,
+    "all_validation_thresholds_pass": true,
+    "confidence_model_variant_set_matches": true,
+    "threshold_variant_set_matches": true,
+    "thresholds_reproduced": true,
+    "manifest_hash_reproduced": true,
+    "split_total_matches_sample": true,
+    "declared_winner_present": true,
+    "declared_winner_test_flag_reproduced": true,
+    "strict_passes_all_untouched_test_gates": true,
+    "strict_covers_majority_of_test_pt": true,
+    "strict_beats_geometry_test_pt_coverage": true,
+    "strict_assignment_counts_valid": true
+  },
+  "untouched_test_gate_passing_candidates": [
+    "fitted_strict"
+  ],
+  "recommended_safety_first_candidate": "fitted_strict",
+  "derived_test_mixed_fpr_wilson_upper_95": {
+    "geometry": 0.0012000019381203013,
+    "geometry_response": 0.0011156812040638072,
+    "fitted_soft": 0.0010874936344947744,
+    "fitted_strict": 0.000974290544541761,
+    "fitted_context": 0.0010733837485937556,
+    "context_consensus": 0.0010451305775871543
+  },
+  "sampled_jets": 7500,
+  "split_sizes": {
+    "train": 3750,
+    "validation": 1875,
+    "test": 1875
+  },
+  "recommendation_rule": "Apply the stricter post-campaign gates (including stress pT precision and the mixed-event Wilson upper bound), then maximize already-recorded validation pT coverage. This safety fallback is provisional until confirmed on a new independent sample."
+}

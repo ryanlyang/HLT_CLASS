@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from pathlib import Path
 import pytest
 
 from hlt_classification.data.cache_contracts import canonical_sha256, with_content_hash
@@ -12,7 +13,12 @@ from hlt_classification.scouting.campaign import (
 from hlt_classification.scouting.evidence import (
     build_miniature_report, build_resource_evidence, build_storage_evidence,
 )
-from hlt_classification.scouting.locks import create_lock, validate_lock
+from hlt_classification.scouting.locks import (
+    create_full_endpoint_authorization, create_lock,
+    validate_full_endpoint_authorization, validate_lock,
+)
+from hlt_classification.scouting.training import MATCHER_FOLD_SEED
+from hlt_classification.scouting.workflow import Workflow
 
 
 def _digest(value: str) -> str:
@@ -40,14 +46,118 @@ def test_pmard_dry_run_is_complete_topological_and_nonnumeric_ids_rejected():
     ledger = submit_pmard_campaign(spec, spec_path="/tmp/spec.json", dry_run=True)
     assert set(ledger["jobs"]) == {task["name"] for task in spec["tasks"]}
     assert all(command[0:2] == ["sbatch", "--parsable"] for command in ledger["commands"])
+    commands = {
+        task["name"]: command for task, command in zip(spec["tasks"], ledger["commands"], strict=True)
+    }
+    assert "--signal=B:USR1@120" in commands["representation"]
+    assert "--signal=B:USR1@120" not in commands["source_audit"]
     assert ledger["mutated"] is False
     assert "final_test" not in ledger["jobs"] and "miniature_summary" in ledger["jobs"]
+    representation = next(task for task in spec["tasks"] if task["name"] == "representation")
+    assert representation["array"] == "0-12%2"
+    assert spec["registry"]["representation_arms"][-3:] == ["R4_PAIR", "R4_GRAM", "R5"]
+    assert spec["registry"]["matcher"]["variant"] == "fitted_strict"
+    assert spec["registry"]["primary_repair_family"] == "SELECTIVE_FULL_PARTICLE_ENDPOINT/v1"
+    assert spec["contract"] == "hlt_classification_pmard_campaign_spec_v9"
+    assignment = next(task for task in spec["tasks"] if task["name"] == "assignment_cache")
+    full_lock = next(task for task in spec["tasks"] if task["name"] == "full_endpoint_lock")
+    training_lock = next(task for task in spec["tasks"] if task["name"] == "training_lock")
+    assert assignment["dependencies"] == ["matcher_result_lock"]
+    assert assignment["array"] == "0-42%4"
+    assert spec["registry"]["row_budgets"]["smoke"]["train"] == 4096
+    assert spec["registry"]["assignment_cache"]["unmatched_policy"] == "retain_exact_hlt_token_v1"
+    assert spec["registry"]["ram_cache_miniature"] == {
+        "smoke_only": True, "max_rows_per_role": 4096,
+        "arm": "K2", "alpha": .25, "cache_teacher_targets": True,
+        "expected_training_stream": "hlt_only_cached_logits",
+    }
+    assert full_lock["dependencies"] == ["assignment_manifest"]
+    assert "full_endpoint_lock" in training_lock["dependencies"]
+    cache_miniature = next(
+        task for task in spec["tasks"] if task["name"] == "ram_cache_miniature"
+    )
+    alpha_sweep = next(task for task in spec["tasks"] if task["name"] == "k2_alpha_sweep")
+    assert cache_miniature["dependencies"] == ["oracle_validation"]
+    assert cache_miniature["checkpointable"] is True
+    assert alpha_sweep["dependencies"] == ["ram_cache_miniature"]
     with pytest.raises(PermissionError):
         create_pmard_campaign_spec(
             source_snapshot=_source(), source_manifest_sha256=_digest("source"),
             split_manifest_sha256=_digest("split"), campaign_root="/tmp/pmard",
             mode="production",
         )
+
+
+def test_pmard_batch_worker_execs_python_for_batch_shell_signal_delivery():
+    worker = Path(__file__).resolve().parents[1] / "sbatch" / "run_pmard_task.sh"
+    commands = [
+        line.strip() for line in worker.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    assert commands[-1].startswith("exec python -s ")
+
+
+def test_every_smoke_student_command_uses_shared_row_selection():
+    workflow = object.__new__(Workflow)
+    workflow.spec = {
+        "mode": "smoke",
+        "source_snapshot": {"source_snapshot_sha256": "a" * 64},
+    }
+    workflow.repository = Path("/repository")
+    workflow.root = Path("/campaign")
+    workflow.data = Path("/data")
+    workflow.split = Path("/campaign/split.json")
+    workflow.audit = Path("/campaign/audit.json")
+    workflow.row_selection = Path("/campaign/row_selection.json")
+    workflow.assignment_manifest = Path("/campaign/assignments.json")
+    workflow.full_endpoint_lock = Path("/campaign/full_endpoint.json")
+    workflow.full_matcher = Path("/campaign/matcher.json")
+    workflow._matcher_settings = lambda: {
+        "selected_variant": "fitted_strict", "threshold": 0.9828147479721088,
+    }
+    workflow._locked_training = lambda: {
+        "temperature": 2, "total_updates": 2, "batch_size": 64,
+        "peak_learning_rate": 1e-3, "screen_seed": 1337,
+    }
+    for arm in (f"K{index}" for index in range(7)):
+        command = workflow._student_command(
+            output=Path(f"/output/{arm}"), arm=arm, alpha=0,
+            hlt_teacher=None, privileged_teacher=None,
+        )
+        assert command.count("--row-selection") == 1
+        assert command[command.index("--row-selection") + 1] == str(workflow.row_selection)
+        assert "--max-rows-per-role" not in command
+    cache_command = workflow._student_command(
+        output=Path("/output/cache"), arm="K2", alpha=0,
+        hlt_teacher=None, privileged_teacher=None,
+        extra=("--cache-teacher-targets",),
+    )
+    assert "--cache-teacher-targets" in cache_command
+    assert cache_command[cache_command.index("--row-selection") + 1] == str(workflow.row_selection)
+    alpha_command = workflow._student_command(
+        output=Path("/output/alpha"), arm="K2", alpha=.25,
+        hlt_teacher=Path("/teacher/hlt.json"),
+        privileged_teacher=Path("/teacher/privileged.json"),
+    )
+    assert alpha_command[alpha_command.index("--matcher-variant") + 1] == "fitted_strict"
+    assert alpha_command[alpha_command.index("--repair-family") + 1] == "SELECTIVE_FULL_PARTICLE_ENDPOINT"
+    assert alpha_command[alpha_command.index("--assignment-manifest") + 1] == str(workflow.assignment_manifest)
+    assert "--matcher-report" not in alpha_command
+
+
+def test_pilot_registers_exact_300k_100k_100k_and_sealed_final_assignments():
+    spec = create_pmard_campaign_spec(
+        source_snapshot=_source(), source_manifest_sha256=_digest("source"),
+        split_manifest_sha256=_digest("split"), campaign_root="/tmp/pilot", mode="pilot",
+    )
+    assert validate_pmard_campaign_spec(spec) == spec["content_hash"]
+    assert spec["registry"]["row_budgets"]["pilot"] == {
+        "train": 300_000, "validation": 100_000, "final_test": 100_000,
+    }
+    tasks = {task["name"]: task for task in spec["tasks"]}
+    assert tasks["final_row_selection"]["dependencies"] == ["execution_lock"]
+    assert tasks["final_assignment_cache"]["dependencies"] == ["final_row_selection"]
+    assert tasks["final_test"]["dependencies"] == ["final_assignment_manifest"]
 
 
 def test_production_requires_validated_complete_evidence_bundle():
@@ -106,3 +216,140 @@ def test_lock_chain_requires_exact_predecessor():
     assert validate_lock(child, expected_level="matcher_design") == child["content_hash"]
     with pytest.raises(ValueError):
         create_lock("training", payload={}, campaign_spec_sha256=spec_hash, parent_lock=parent)
+    with pytest.raises(ValueError, match="different campaign spec"):
+        create_lock(
+            "matcher_design", payload={}, campaign_spec_sha256=_digest("other-spec"),
+            parent_lock=parent,
+        )
+
+
+def test_full_endpoint_lock_requires_all_categories_and_exact_complete_coverage():
+    spec_hash = _digest("spec")
+    split_hash = _digest("split")
+    fold_hashes = [_digest(f"fold-{fold}") for fold in range(5)]
+    full_matcher_hash = "f" * 64
+    data = create_lock("data", payload={}, campaign_spec_sha256=spec_hash)
+    design = create_lock("matcher_design", payload={}, campaign_spec_sha256=spec_hash, parent_lock=data)
+    validation = with_content_hash({
+        "contract": "hlt_classification_pmard_matcher_validation_v2", "schema_version": 2,
+        "threshold": .99,
+        "parents": {
+            "split_manifest_sha256": split_hash,
+            "matcher_report_sha256": full_matcher_hash,
+        },
+        "variants": {"M5": {
+            "native_coverage": .95, "passes_initial_99pct_lcb": True,
+        }},
+    })
+    matcher = create_lock(
+        "matcher_result", campaign_spec_sha256=spec_hash, parent_lock=design,
+        payload={
+            "selected_variant": "M5", "meets_initial_precision_target": True,
+            "threshold": .99, "matcher_fold_seed": MATCHER_FOLD_SEED,
+            "split_manifest_sha256": split_hash,
+            "fold_matcher_report_sha256": fold_hashes,
+            "category_eligibility": {str(index): True for index in range(5)},
+            "matching_only_selection": [{"variant": "M5", "native_coverage": .94}],
+            "validation_report_sha256": validation["content_hash"],
+            "full_matcher_report_sha256": full_matcher_hash,
+        },
+    )
+    coverage_parents = {
+        "split_manifest_sha256": split_hash,
+        "matcher_result_lock_sha256": matcher["content_hash"],
+        "full_matcher_report_sha256": full_matcher_hash,
+        **{
+            f"matcher_fold_{fold}_report_sha256": fold_hashes[fold]
+            for fold in range(5)
+        },
+    }
+    role_counts = {
+        "expected_mapped_jets": 10, "scanned_mapped_jets": 10,
+        "visible_hlt_tokens": 20, "assigned_hlt_tokens": 20,
+        "unassigned_hlt_tokens": 0, "invalid_assignment_tokens": 0,
+        "duplicate_assignment_tokens": 0, "unknown_category_tokens": 0,
+        "visible_by_category": [4] * 5, "assigned_by_category": [4] * 5,
+        "coverage": 1.0, "complete": True,
+    }
+    coverage = with_content_hash({
+        "contract": "hlt_classification_pmard_full_role_coverage_v2",
+        "schema_version": 2,
+        "scope": "all_mapped_train_and_validation_rows_v1",
+        "selected_variant": "M5", "threshold": .99,
+        "matcher_fold_seed": MATCHER_FOLD_SEED,
+        "parents": dict(sorted(coverage_parents.items())),
+        "roles": {"train": dict(role_counts), "validation": dict(role_counts)},
+        "complete": True, "assignment_artifact_published": False,
+        "downstream_classifier_or_label_used_for_matching": False,
+    })
+    authorization = create_full_endpoint_authorization(
+        matcher_result_lock=matcher, full_validation=validation,
+        full_role_coverage=coverage,
+        campaign_spec_sha256=spec_hash,
+    )
+    assert validate_full_endpoint_authorization(
+        authorization, matcher_report_sha256=full_matcher_hash,
+        matcher_variant="M5", matcher_threshold=.99,
+        split_manifest_sha256=split_hash,
+        fold_matcher_report_sha256=fold_hashes,
+    ) == authorization["content_hash"]
+    shortened_coverage = dict(coverage)
+    shortened_coverage["roles"] = {
+        "train": dict(role_counts), "validation": dict(role_counts),
+    }
+    shortened_coverage["roles"]["train"].update({
+        "scanned_mapped_jets": 9,
+        "visible_hlt_tokens": 18,
+        "assigned_hlt_tokens": 18,
+        "visible_by_category": [4, 4, 4, 3, 3],
+        "assigned_by_category": [4, 4, 4, 3, 3],
+    })
+    # Even a forged `complete` flag and perfect observed-token coverage cannot
+    # authorize a scan that processed only 9 of 10 manifest-declared jets.
+    shortened_coverage = with_content_hash({
+        key: value for key, value in shortened_coverage.items() if key != "content_hash"
+    })
+    with pytest.raises(PermissionError, match="jet scan is incomplete"):
+        create_full_endpoint_authorization(
+            matcher_result_lock=matcher, full_validation=validation,
+            full_role_coverage=shortened_coverage,
+            campaign_spec_sha256=spec_hash,
+        )
+    incomplete_coverage = dict(coverage)
+    incomplete_coverage["roles"] = {
+        "train": dict(role_counts), "validation": dict(role_counts),
+    }
+    incomplete_coverage["roles"]["train"]["assigned_hlt_tokens"] = 19
+    incomplete_coverage["roles"]["train"]["unassigned_hlt_tokens"] = 1
+    incomplete_coverage["roles"]["train"]["coverage"] = .95
+    incomplete_coverage["roles"]["train"]["complete"] = False
+    incomplete_coverage["complete"] = False
+    incomplete_coverage = with_content_hash({
+        key: value for key, value in incomplete_coverage.items() if key != "content_hash"
+    })
+    with pytest.raises(PermissionError):
+        create_full_endpoint_authorization(
+            matcher_result_lock=matcher, full_validation=validation,
+            full_role_coverage=incomplete_coverage,
+            campaign_spec_sha256=spec_hash,
+        )
+    partial = dict(matcher)
+    partial["payload"] = dict(matcher["payload"])
+    partial["payload"]["category_eligibility"] = dict(
+        matcher["payload"]["category_eligibility"]
+    )
+    partial["payload"]["category_eligibility"]["4"] = False
+    partial = with_content_hash({key: value for key, value in partial.items() if key != "content_hash"})
+    with pytest.raises(PermissionError):
+        create_full_endpoint_authorization(
+            matcher_result_lock=partial, full_validation=validation,
+            full_role_coverage=coverage,
+            campaign_spec_sha256=spec_hash,
+        )
+    with pytest.raises(PermissionError):
+        validate_full_endpoint_authorization(
+            authorization, matcher_report_sha256=full_matcher_hash,
+            matcher_variant="M0", matcher_threshold=.99,
+            split_manifest_sha256=split_hash,
+            fold_matcher_report_sha256=fold_hashes,
+        )

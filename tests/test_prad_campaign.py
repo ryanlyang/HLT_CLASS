@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -172,6 +173,41 @@ def test_prad_runtime_worker_authenticates_v3_report_schema(
     )
 
     assert result == {"report_sha256": expected["content_hash"]}
+
+
+def test_resource_capture_includes_distinct_slurm_array_child_raw_ids(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    script_path = Path(__file__).parents[1] / "scripts" / "capture_prad_resources.py"
+    module_spec = importlib.util.spec_from_file_location(
+        "capture_prad_array_resources", script_path
+    )
+    assert module_spec is not None and module_spec.loader is not None
+    module = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(module)
+    stdout = "\n".join(
+        (
+            "42825|COMPLETED|1053||8",
+            "42825.batch|COMPLETED|1053|2668800K|8",
+            # RIT Slurm returns a distinct JobIDRaw for array element 1.
+            "42992|COMPLETED|1074||8",
+            "42992.batch|COMPLETED|1074|12769856K|8",
+        )
+    )
+    monkeypatch.setattr(
+        module.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(stdout=stdout),
+    )
+
+    usage = module._query_job("42825")
+
+    assert usage == {
+        "state": "COMPLETED",
+        "elapsed_seconds": 1074,
+        "max_rss_bytes": 12769856 * 1024,
+        "allocated_cpus": 8,
+    }
 
 
 def test_minimum_storage_worker_keeps_large_caches_outside_campaign(
