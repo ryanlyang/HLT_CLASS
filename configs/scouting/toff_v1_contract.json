@@ -1,0 +1,34 @@
+{
+  "contract": "hlt_classification_scouting_toff_input_v1",
+  "schema_version": 1,
+  "documented_reference_sha256": "32da128ad0e82c6933a36cf409ae766523a116ae66df8d43153c671bc89f7c1d",
+  "weaver_reference_commit": "6a084ec341f5af2e06f6d884e6a4ee4dab8bb4e4",
+  "secondary_vertices": false,
+  "jet_scalars": false,
+  "charged": {
+    "prefix": "cpfcandlt_",
+    "length": 90,
+    "features": ["pt_log_nopuppi", "e_log_nopuppi", "etarel", "phirel", "abseta", "charge", "isEl", "isMu", "isChargedHad", "lostInnerHits", "normchi2", "quality", "dz", "dzsig", "dxy", "dxysig", "btagEtaRel", "btagPtRatio", "btagPParRatio"],
+    "vectors": ["px", "py", "pz", "energy"]
+  },
+  "neutral": {
+    "prefix": "npfcand_",
+    "length": 60,
+    "features": ["pt_log_nopuppi", "e_log_nopuppi", "etarel", "phirel", "abseta", "isGamma", "isNeutralHad"],
+    "vectors": ["px", "py", "pz", "energy"]
+  },
+  "normalization": {
+    "pt_log_nopuppi": [1, 0.5, -5, 5],
+    "e_log_nopuppi": [1.3, 0.5, -5, 5],
+    "abseta": [0.6, 1.6, -5, 5],
+    "normchi2": [5, 0.2, -5, 5],
+    "quality": [0, 0.2, -5, 5],
+    "dz": [0, 180, -5, 5],
+    "dzsig": [0, 0.9, -5, 5],
+    "dxy": [0, 300, -5, 5],
+    "dxysig": [0, 1, -5, 5],
+    "btagEtaRel": [1.5, 0.5, -5, 5],
+    "btagPtRatio": [0, 1, -5, 5],
+    "btagPParRatio": [0, 1, -5, 5]
+  }
+}

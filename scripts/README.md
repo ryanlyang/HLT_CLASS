@@ -126,3 +126,14 @@ not durable nodes in the minimum-storage campaign.
 
 See [`docs/PRAD_RUNBOOK.md`](../docs/PRAD_RUNBOOK.md) for the ordered Tigris
 commands and production authorization boundary.
+
+PMARD/Scouting commands are configuration-driven wrappers over
+`hlt_classification.scouting`: `validate_scouting_data.py`,
+`build_scouting_splits.py`, `audit_scouting_features.py`, matcher and Weaver
+validation, the Scouting teacher/student/evaluation commands, and the PMARD
+create/submit/monitor/resume/cancel workers. `dry_run_pmard_campaign.py`
+renders the complete production graph without submission;
+`capture_pmard_evidence.py` binds a completed smoke ledger to exact resource,
+RAM, I/O, GPU, and durable-storage measurements. See
+[`docs/PMARD_RUNBOOK.md`](../docs/PMARD_RUNBOOK.md). The smoke DAG never reads
+the scientific final-test role.

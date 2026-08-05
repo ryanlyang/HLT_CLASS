@@ -5,9 +5,14 @@ meaning, controls, access rules, selection, metrics, artifacts, and execution
 stages before implementation.
 
 The active requested campaign is the
-[PRAD implementation plan](PRIVILEGED_RELATIONAL_ATTENTION_DISTILLATION_IMPLEMENTATION_PLAN.md),
-which binds the user-supplied PRAD execution prompt and scientific proposal to
-the repository's reusable contracts and data capabilities.
+[Scouting Particle-Matched Alpha-Repair Distillation plan](SCOUTING_ALPHA_REPAIR_DISTILLATION_OPTIMAL_CAMPAIGN.md).
+The user explicitly invoked its implementation mandate on 2026-08-05. PMARD's
+versioned contracts govern Scouting data, matching, repair, teachers, students,
+selection, storage, and final-test access.
+
+The [PRAD implementation plan](PRIVILEGED_RELATIONAL_ATTENTION_DISTILLATION_IMPLEMENTATION_PLAN.md)
+remains an implemented, separate JetClass campaign. It is not the active
+scientific campaign in this conversation and does not define PMARD semantics.
 
 The reviewed [HOSD implementation plan](HLT_OFFLINE_STRUCTURE_DISTILLATION_IMPLEMENTATION_PLAN.md)
 remains a separate planned campaign. Its donor implementation-status

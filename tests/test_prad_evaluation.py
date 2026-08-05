@@ -2,13 +2,18 @@ from __future__ import annotations
 
 import numpy as np
 
+from hlt_classification.data.identity import FileRecord
 from hlt_classification.prad.evaluation import (
     binary_auc,
     prad_classification_metrics,
     stratified_prad_metrics,
 )
-from hlt_classification.prad.reporting import build_paired_bootstrap_evidence
+from hlt_classification.prad.reporting import (
+    _test_labels,
+    build_paired_bootstrap_evidence,
+)
 from hlt_classification.prad.plotting import save_loss_curves
+from hlt_classification.prad.splits import build_prad_split_manifest
 
 
 def test_prad_primary_metric_is_finite_deterministic_and_per_class() -> None:
@@ -102,3 +107,28 @@ def test_required_loss_curve_plot_is_materialized(tmp_path) -> None:
         output,
     )
     assert output.is_file() and output.stat().st_size > 0
+
+
+def test_reporting_loads_authenticated_test_labels_without_durable_cache(
+    tmp_path,
+) -> None:
+    root = tmp_path / "campaign"
+    manifest = build_prad_split_manifest(
+        tuple(
+            FileRecord(
+                file=f"class_{label}/sample.root",
+                label=label,
+                num_entries=10,
+            )
+            for label in range(10)
+        ),
+        data_root=str(tmp_path),
+        output_dir=root / "splits",
+        split_sizes={"train": 20, "val": 10, "test": 10},
+    )
+    expected = np.asarray(
+        [identity.label for identity in manifest.identities("test")],
+        dtype=np.int64,
+    )
+    assert np.array_equal(_test_labels(root), expected)
+    assert not (root / "cache").exists()

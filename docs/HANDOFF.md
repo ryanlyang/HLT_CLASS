@@ -1,5 +1,58 @@
 # Current Handoff
 
+## Active PMARD implementation (2026-08-05)
+
+The user explicitly activated the PMARD mandate. The active scientific plan is
+`docs/plans/SCOUTING_ALPHA_REPAIR_DISTILLATION_OPTIMAL_CAMPAIGN.md`; PRAD is a
+separate prior campaign and cannot redefine PMARD.
+
+Implemented locally in the current worktree:
+
+- versioned Scouting source/schema, label, row-identity, split, artifact, and
+  role-capability contracts;
+- exact 15-class mapping, 21-channel CMSSW transform, 200-token HLT view, and
+  90/60 native-offline no-SV view;
+- projected bounded ROOT streaming with rank/worker file partition and sealed
+  pre-lock final-test branch access;
+- compatible-category/charge/lost-track candidate graphs, separately fitted
+  and calibrated physics/contextual scorers, deterministic score quantization,
+  `M0`--`M5`, Hungarian+dustbin, unbalanced OT, exact alternative margins,
+  held-out synthetic/stress/event-mixing diagnostics, and a matching-only
+  selector with category eligibility fallback;
+- RAM-ephemeral int16 assignment table contract and five-fold source cross-fit
+  allocation;
+- exact `P4_ONLY/v1` alpha endpoints and byte-identical `alpha=0`, plus charged
+  eligibility, shuffled/corrupted matches, direction/response/wrong/random
+  controls, log-angular interpolation, and confidence weighting;
+- 21-input/15-output canonical Weaver adapter, native-offline diagnostic model,
+  K0--K6 loss semantics, class weights, representation loss, metrics, and fixed
+  three-generation registry;
+- exact batch-offset/RNG/optimizer resume, HLT-only inference signature,
+  fixed observer-only stratification and final nested paired statistics;
+- hash-chained freeze locks and a minimum-storage Tigris DAG whose smoke graph
+  cannot access final test, with exact-ID monitor/resume/cancel, authenticated
+  resource/storage/miniature evidence, nonmutating production dry run, and
+  explicit production authorization gates.
+
+The complete local suite passes with bytecode and pytest caches disabled:
+`169 passed, 14 warnings` using the established `tagging-hlt` scientific
+environment. `git diff --check`, Python compilation, and the PMARD CLI help
+surfaces pass. Windows could not launch the local `bash.exe`, so authoritative
+shell syntax remains part of the Tigris preflight.
+
+Still required externally before production: commit and push the exact clean
+source; authenticate the native 53-file dataset and split; run installed-Weaver
+FP32 parity; complete the genuine streamed Tigris smoke graph; capture measured
+RAM/GPU/I/O/wall/storage evidence; and inspect the full production dry run.
+The smoke DAG ends at `miniature_summary` and structurally contains no
+`final_test` task. No PMARD scientific result, real matcher lock, checkpoint,
+resource measurement, or final-test output is claimed in this handoff.
+
+Track-only and p4-plus-track repair remain deliberately unavailable until the
+real Stage-A units/definition audit creates a compatibility lock; attempting
+either fails closed. This is the plan's required conditional gate, not a
+silent approximation.
+
 ## Repository state
 
 Transfer Blocks 1--4, 6, and 7 are complete locally. Transfer Block 5 is
@@ -361,7 +414,7 @@ selection. Runtime-validation v3 now performs a full mixed-freeze Stage-B
 forward/backward with the production loss and requires finite nonzero
 gradients before E0.
 
-## Active and next task
+## Historical PRAD next task (superseded as the active conversation task)
 
 Commit the Stage-B backend policy and runtime-validation v3, cancel only the
 pending descendants of `smoke_min_f90cf5fe` through its v2 ledger, transfer
@@ -378,3 +431,11 @@ python -s scripts/validate_weaver_parity.py --device cpu
 Do not mark PRAD production readiness accepted until every new smoke task
 attestation authenticates and measured resource/storage evidence is captured.
 A full PRAD campaign remains unauthorized in this handoff.
+
+## Exact active next task: PMARD real miniature
+
+On the exact committed and pushed source, follow `docs/PMARD_RUNBOOK.md` to
+authenticate source/splits, create the immutable smoke spec, inspect its dry
+run, and submit only the smoke DAG after explicit authorization. Do not create
+a production spec until `capture_pmard_evidence.py` has authenticated every
+completed smoke task and the separate production dry-run report exists.

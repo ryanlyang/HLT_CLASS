@@ -91,6 +91,30 @@ for PRAD. The implementation extends the already mapped canonical Weaver
 wrapper and standalone data/campaign contracts; consequently there is no new
 donor commit or donor-file hash to register for this campaign.
 
+## PMARD implementation provenance
+
+PMARD was implemented independently from the active repository plan and the
+read-only operational guide
+`C:\Users\22rya\ComputerScience\FCV\SCOUTING_AK8_USAGE_GUIDE.md` (SHA-256
+`c80b3f3459848c4f634f8f3a861fc83da0bfa530f71e314826123d8dc6774ac9`).
+The adjacent `scouting_ak8_tools` directory has no Git metadata, so no
+executable file from it was copied or imported at runtime; without an exact
+donor commit it is an operational reference only.
+
+The repository vendors the data-only CMSSW V00 preprocessing transcription
+under `configs/scouting/`. Its authoritative upstream source is
+`cms-data/RecoBTag-Combined` commit
+`37a104b51c8458bcda97a95ba52d304a5041e922`; the documented transcription hash
+is `2e346c5da8491046205f29cba21b0f6e434e273eb89dae068aa5dd40e2ca91f7`.
+The independently authored `TOFF/v1` JSON records the semantics and the
+documented reference-YAML hash
+`32da128ad0e82c6933a36cf409ae766523a116ae66df8d43153c671bc89f7c1d` plus
+Weaver reference commit `6a084ec341f5af2e06f6d884e6a4ee4dab8bb4e4`. No Weaver source is copied.
+The local JSON byte hash is also recorded by the config validator; it differs
+from the guide's reference-file byte hash only by terminal newline encoding.
+Scientific validation compares the parsed, ordered preprocessing semantics and
+retains both hashes rather than falsely claiming byte identity.
+
 ## Approved transfer surfaces
 
 | Transfer block | Donor surface | Intended retained meaning | Migration policy |

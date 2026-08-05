@@ -61,10 +61,17 @@ def _prediction_logits(root: Path, graph: str, seed: int) -> np.ndarray:
 
 
 def _test_labels(root: Path) -> np.ndarray:
-    from .cache import PradCacheDataset
+    from .splits import load_prad_split_manifest
 
-    dataset = PradCacheDataset(root / "cache" / "paired" / "test" / "replica_0")
-    return np.concatenate([arrays["labels"] for arrays in dataset.iter_shards()]).astype(np.int64)
+    # The minimum-storage campaign intentionally deletes job-local paired test
+    # tensors after locked inference.  Stable labels and their exact order are
+    # already authenticated by the immutable split, so reporting must not
+    # depend on a durable copy of those tensors.
+    split = load_prad_split_manifest(root / "splits" / "split_manifest.json")
+    return np.asarray(
+        [identity.label for identity in split.identities("test")],
+        dtype=np.int64,
+    )
 
 
 def _benchmark(root: Path, graph: str, seed: int) -> dict[str, Any]:

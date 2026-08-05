@@ -5,6 +5,14 @@ and training-time use of paired offline information.
 
 ## Current status
 
+PMARD is the active campaign. Its repository-local Scouting schema, label and
+file-split contracts, bounded ROOT streaming, 21-channel HLT and native-offline
+inputs, constituent candidate/assignment solvers, `P4_ONLY/v1` alpha repair,
+15-output Scouting ParT adapters, KD losses/metrics, hash-chained locks, and
+minimum-storage campaign DAG are under `src/hlt_classification/scouting/`.
+Local synthetic verification does not authorize production: installed-Weaver
+parity and the complete real streamed Tigris miniature remain mandatory.
+
 Transfer Blocks 1--4, 6, and 7 are complete locally. Transfer Block 5 is code-complete:
 the repository contains the canonical 17-feature input transform, frozen
 from-scratch Weaver Particle Transformer adapter, and authoritative FP32
@@ -15,7 +23,7 @@ the source-bound compact campaign, production workers, storage gate,
 monitoring, and exact-ID recovery workflow are implemented. Real Tigris
 acceptance remains.
 
-The active PRAD campaign is implemented locally as a separate authenticated
+The earlier PRAD campaign remains implemented locally as a separate authenticated
 three-role campaign: fixed split construction, real-data audit, Hungarian
 association, C/A targets, offline teacher, HLT-only relation-biased student,
 E0--E10 and V1--V10 configurations, exact resume, locked evaluation,
@@ -64,6 +72,8 @@ JetClass data on Tigris:
 - [Research-compute runbook](docs/RESEARCH_COMPUTE_RUNBOOK.md)
 - [PRAD research-compute runbook](docs/PRAD_RUNBOOK.md)
 - [PRAD requirements traceability](docs/PRAD_REQUIREMENTS_TRACEABILITY.md)
+- [PMARD active implementation plan](docs/plans/SCOUTING_ALPHA_REPAIR_DISTILLATION_OPTIMAL_CAMPAIGN.md)
+- [PMARD research-compute runbook](docs/PMARD_RUNBOOK.md)
 - [Tigris miniature acceptance procedure](docs/TIGRIS_ACCEPTANCE.md)
 - [JetClass and HLT data contract](docs/DATA_CONTRACT.md)
 - [Cross-campaign experiment contract](docs/EXPERIMENT_CONTRACT.md)
