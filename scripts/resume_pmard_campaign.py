@@ -14,7 +14,25 @@ from hlt_classification.provenance import validate_source_snapshot  # noqa: E402
 from hlt_classification.scouting.campaign import sbatch_command, validate_pmard_campaign_spec  # noqa: E402
 
 
-def _run(command): return subprocess.run(command, check=True, capture_output=True, text=True).stdout
+def _run(command):
+    completed = subprocess.run(command, check=False, capture_output=True, text=True)
+    if completed.returncode:
+        detail = completed.stderr.strip() or completed.stdout.strip() or "no scheduler diagnostic"
+        raise RuntimeError(
+            f"resumed sbatch submission failed with exit code {completed.returncode}: {detail}"
+        )
+    return completed.stdout
+
+
+def _active_dependency_ids(task, jobs, resubmitted):
+    """Return only dependencies submitted by this resume invocation.
+
+    Reusable predecessors are authenticated by their imported artifacts. Their
+    historical Slurm IDs may already have aged out of the controller and must
+    not be attached to a new submission.
+    """
+    active = set(resubmitted)
+    return [jobs[name] for name in task["dependencies"] if name in active]
 
 
 def main() -> int:
@@ -30,10 +48,11 @@ def main() -> int:
     if monitor.get("campaign_spec_sha256") != spec["content_hash"]: raise ValueError("monitor campaign differs")
     prior = {row["task"]: row for row in monitor["jobs"]}; jobs = {}; resubmitted = []; commands = []
     for task in spec["tasks"]:
-        name = task["name"]; dependencies = [jobs[value] for value in task["dependencies"]]
+        name = task["name"]
         dependency_changed = any(value in resubmitted for value in task["dependencies"])
         if prior[name]["reusable"] and not dependency_changed:
             jobs[name] = prior[name]["job_id"]; continue
+        dependencies = _active_dependency_ids(task, jobs, resubmitted)
         command = sbatch_command(spec, task, dependencies, spec_path=str(args.campaign_spec.resolve()))
         commands.append(command); resubmitted.append(name)
         if args.execute:

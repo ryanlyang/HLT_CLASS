@@ -80,7 +80,7 @@ Implemented locally in the current worktree:
   only after the execution lock, and reports HLT, native-offline, and
   matched-offline endpoint oracles alongside deployable finalists.
 
-Local verification now passes `208 tests, 14 warnings`, including selective
+Local verification now passes `211 tests` with 14 Matplotlib warnings, including selective
 all-field endpoint, persistent sparse join, pilot-DAG, matcher, KD, resume, and
 legacy campaign regressions. CLI help and `git diff --check` also pass; the
 remaining notices are repository line-ending notices.
@@ -117,6 +117,15 @@ hard-links and re-attests only the completed prefix through `training_lock`,
 rebuilds every campaign-bound lock under a fresh campaign spec, binds the
 import report into the new lock chain, and submits from `teachers` onward.
 Failed teacher/descendant artifacts are categorically excluded.
+The first prefix-resume submission exposed a Slurm-controller lifetime edge:
+the resume helper attached the newly submitted `teachers` job to historical
+completed job `43732`, although the imported `training_lock` artifact already
+authenticated that predecessor. Completed IDs may age out of the controller
+and are not valid scheduling dependencies. Resume commands now include only
+dependencies newly submitted by the same resume invocation; imported reusable
+predecessors remain artifact dependencies, and scheduler failures retain the
+actual `sbatch` diagnostic. Focused resume/recovery/campaign tests pass 10/10,
+and the complete suite passes 211/211 (plus one local pytest-cache warning).
 
 Still required externally before production: commit and push the exact clean
 source; authenticate the native 53-file dataset and split; run installed-Weaver

@@ -19,6 +19,7 @@ RECOVERY_OPERATION_PATHS = {
     "scripts/import_pmard_pilot_prefix.py",
     "scripts/monitor_pmard_campaign.py",
     "scripts/cancel_pmard_campaign.py",
+    "scripts/resume_pmard_campaign.py",
 }
 PREFIX_TASKS = (
     "source_audit", "splits", "feature_audit", "data_lock",
