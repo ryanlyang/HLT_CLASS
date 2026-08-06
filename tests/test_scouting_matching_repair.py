@@ -184,6 +184,26 @@ def test_selective_endpoint_replaces_complete_matched_record_and_keeps_unmatched
     assert np.array_equal(endpoint.mask, canonical.mask)
 
 
+def test_selective_endpoint_ignores_invalid_identity_on_unmatched_hlt_token():
+    arrays, offline_p4, assignment, _, _ = _full_endpoint_fixture()
+    assignment[0, 0] = -1
+    arrays["scoutpfcand_isGamma"][0][0] = 1
+    canonical = build_hlt_inputs(arrays)
+
+    endpoint = build_selective_matched_offline_endpoint_inputs(
+        arrays, arrays, offline_p4, assignment,
+    )
+
+    assert endpoint.features[0, :, 0].tobytes() == canonical.features[0, :, 0].tobytes()
+    assert endpoint.vectors[0, :, 0].tobytes() == canonical.vectors[0, :, 0].tobytes()
+    complete = assignment.copy(); complete[0, 0] = 1
+    with pytest.raises(ValueError, match="invalid matched HLT particle identity"):
+        build_alpha_repaired_inputs(
+            arrays, offline_p4, complete, alpha=1.0,
+            repair_family="FULL_PARTICLE_ENDPOINT", offline_arrays=arrays,
+        )
+
+
 def test_full_endpoint_discrete_switches_are_nested_deterministic_and_coherent():
     arrays, offline_p4, assignment, _, _ = _full_endpoint_fixture()
     canonical = build_hlt_inputs(arrays)

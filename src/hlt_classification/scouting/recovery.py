@@ -11,10 +11,11 @@ from hlt_classification.data.cache_contracts import validate_content_hash
 from .campaign import validate_pmard_campaign_spec
 
 
-PMARD_PREFIX_IMPORT_CONTRACT = "hlt_classification_pmard_prefix_import_v2"
-PMARD_PREFIX_IMPORT_VERSION = 2
+PMARD_PREFIX_IMPORT_CONTRACT = "hlt_classification_pmard_prefix_import_v3"
+PMARD_PREFIX_IMPORT_VERSION = 3
 WORKFLOW_PATH = "src/hlt_classification/scouting/workflow.py"
 ASSIGNMENT_PATH = "src/hlt_classification/scouting/selective_assignment.py"
+REPAIR_PATH = "src/hlt_classification/scouting/repair.py"
 RECOVERY_OPERATION_PATHS = {
     "src/hlt_classification/scouting/recovery.py",
     "scripts/import_pmard_pilot_prefix.py",
@@ -159,6 +160,91 @@ def _assignment_root_for_manifest(path: Path) -> Path:
         raise ValueError("selective assignment contains changes beyond manifest root resolution")
 
 
+def validate_selective_identity_scope(old_source: str, new_source: str) -> None:
+    """Prove selective repair validates identity only for matched HLT tokens."""
+
+    old_tree = ast.parse(old_source); new_tree = ast.parse(new_source)
+    expected_old_function = ast.parse('''
+def _hlt_charged_mask(raw: Mapping[str, Sequence[np.ndarray]], *, row: int, visible: int) -> np.ndarray:
+    flags = np.stack([
+        np.asarray(raw[HLT_FEATURE_SPECS[channel].branch][row][:visible], np.float64)
+        for channel in range(2, 7)
+    ], axis=1)
+    if not (((flags == 0) | (flags == 1)).all() and np.all(flags.sum(axis=1) == 1)):
+        raise ValueError(f"invalid HLT particle identity in row {row}")
+    return np.argmax(flags, axis=1) < 3
+''').body[0]
+    expected_new_function = ast.parse('''
+def _hlt_charged_mask(
+    raw: Mapping[str, Sequence[np.ndarray]], *, row: int, visible: int,
+    tokens: np.ndarray,
+) -> np.ndarray:
+    flags = np.stack([
+        np.asarray(raw[HLT_FEATURE_SPECS[channel].branch][row][:visible], np.float64)
+        for channel in range(2, 7)
+    ], axis=1)[tokens]
+    if not (((flags == 0) | (flags == 1)).all() and np.all(flags.sum(axis=1) == 1)):
+        raise ValueError(f"invalid matched HLT particle identity in row {row}")
+    return np.argmax(flags, axis=1) < 3
+''').body[0]
+
+    def named_function(tree: ast.Module, name: str) -> ast.FunctionDef:
+        matches = [
+            node for node in tree.body
+            if isinstance(node, ast.FunctionDef) and node.name == name
+        ]
+        if len(matches) != 1:
+            raise ValueError(f"repair function {name} differs")
+        return matches[0]
+
+    old_function = named_function(old_tree, "_hlt_charged_mask")
+    new_function = named_function(new_tree, "_hlt_charged_mask")
+    if ast.dump(old_function, include_attributes=False) != ast.dump(
+        expected_old_function, include_attributes=False,
+    ):
+        raise ValueError("old HLT identity validation differs from the expected implementation")
+    if ast.dump(new_function, include_attributes=False) != ast.dump(
+        expected_new_function, include_attributes=False,
+    ):
+        raise ValueError("matched-token HLT identity validation differs from the authorized correction")
+
+    def charged_assignment(tree: ast.Module) -> ast.Assign:
+        function = named_function(tree, "_apply_full_endpoint_repair")
+        matches = [
+            node for node in ast.walk(function) if isinstance(node, ast.Assign)
+            and any(isinstance(target, ast.Name) and target.id == "hlt_charged" for target in node.targets)
+        ]
+        if len(matches) != 1:
+            raise ValueError("HLT charged-mask call differs")
+        return matches[0]
+
+    old_assignment = charged_assignment(old_tree); new_assignment = charged_assignment(new_tree)
+    expected_old_call = ast.parse(
+        "value = _hlt_charged_mask(raw, row=row, visible=visible)[matched_tokens]",
+    ).body[0].value
+    expected_new_call = ast.parse(
+        "value = _hlt_charged_mask(raw, row=row, visible=visible, tokens=matched_tokens)",
+    ).body[0].value
+    if ast.dump(old_assignment.value, include_attributes=False) != ast.dump(
+        expected_old_call, include_attributes=False,
+    ):
+        raise ValueError("old HLT charged-mask call differs")
+    if ast.dump(new_assignment.value, include_attributes=False) != ast.dump(
+        expected_new_call, include_attributes=False,
+    ):
+        raise ValueError("new HLT charged-mask call differs")
+
+    sentinel = ast.parse("def _AUTHORIZED_HLT_IDENTITY_SCOPE(): pass").body[0]
+    old_tree.body[old_tree.body.index(old_function)] = sentinel
+    new_tree.body[new_tree.body.index(new_function)] = ast.parse(
+        "def _AUTHORIZED_HLT_IDENTITY_SCOPE(): pass",
+    ).body[0]
+    old_assignment.value = ast.Constant(value="HLT_CHARGED_MASK")
+    new_assignment.value = ast.Constant(value="HLT_CHARGED_MASK")
+    if ast.dump(old_tree, include_attributes=False) != ast.dump(new_tree, include_attributes=False):
+        raise ValueError("repair contains changes beyond matched-token identity validation")
+
+
 def validate_prefix_import_compatibility(
     source_spec: Mapping[str, Any], target_spec: Mapping[str, Any], *, repository: Path,
 ) -> dict[str, object]:
@@ -186,7 +272,7 @@ def validate_prefix_import_compatibility(
         path for path in changed
         if path.startswith(("src/", "scripts/", "sbatch/")) and not path.endswith(".md")
     }
-    if scientific_changes != ({WORKFLOW_PATH, ASSIGNMENT_PATH} | RECOVERY_OPERATION_PATHS):
+    if scientific_changes != ({WORKFLOW_PATH, ASSIGNMENT_PATH, REPAIR_PATH} | RECOVERY_OPERATION_PATHS):
         raise ValueError("prefix recovery contains an unauthorized scientific-source change")
     old_workflow = _git(repository, "show", f"{source_commit}:{WORKFLOW_PATH}")
     new_workflow = _git(repository, "show", f"{target_commit}:{WORKFLOW_PATH}")
@@ -194,6 +280,9 @@ def validate_prefix_import_compatibility(
     old_assignment = _git(repository, "show", f"{source_commit}:{ASSIGNMENT_PATH}")
     new_assignment = _git(repository, "show", f"{target_commit}:{ASSIGNMENT_PATH}")
     validate_assignment_root_resolution(old_assignment, new_assignment)
+    old_repair = _git(repository, "show", f"{source_commit}:{REPAIR_PATH}")
+    new_repair = _git(repository, "show", f"{target_commit}:{REPAIR_PATH}")
+    validate_selective_identity_scope(old_repair, new_repair)
     return {
         "source_campaign_spec_sha256": source_hash,
         "target_campaign_spec_sha256": target_hash,
@@ -202,7 +291,7 @@ def validate_prefix_import_compatibility(
         "changed_paths": list(changed),
         "scientific_change": (
             "complete_teacher_student_argv_string_normalization_and_"
-            "canonical_assignment_manifest_root_resolution_v2"
+            "canonical_assignment_manifest_root_and_selective_identity_scope_v3"
         ),
     }
 
@@ -225,5 +314,6 @@ __all__ = [
     "IMPORTED_TASKS", "PMARD_PREFIX_IMPORT_CONTRACT", "PMARD_PREFIX_IMPORT_VERSION",
     "PREFIX_TASKS", "REBUILT_TASKS", "validate_argv_string_normalization",
     "validate_assignment_root_resolution",
+    "validate_selective_identity_scope",
     "validate_prefix_import", "validate_prefix_import_compatibility",
 ]

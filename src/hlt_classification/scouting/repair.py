@@ -197,13 +197,16 @@ def _validate_full_endpoint_features(
     return charged
 
 
-def _hlt_charged_mask(raw: Mapping[str, Sequence[np.ndarray]], *, row: int, visible: int) -> np.ndarray:
+def _hlt_charged_mask(
+    raw: Mapping[str, Sequence[np.ndarray]], *, row: int, visible: int,
+    tokens: np.ndarray,
+) -> np.ndarray:
     flags = np.stack([
         np.asarray(raw[HLT_FEATURE_SPECS[channel].branch][row][:visible], np.float64)
         for channel in range(2, 7)
-    ], axis=1)
+    ], axis=1)[tokens]
     if not (((flags == 0) | (flags == 1)).all() and np.all(flags.sum(axis=1) == 1)):
-        raise ValueError(f"invalid HLT particle identity in row {row}")
+        raise ValueError(f"invalid matched HLT particle identity in row {row}")
     return np.argmax(flags, axis=1) < 3
 
 
@@ -260,7 +263,9 @@ def _apply_full_endpoint_repair(
         endpoint_charged = _validate_full_endpoint_features(
             endpoint_features, endpoint_validity, row=row,
         )
-        hlt_charged = _hlt_charged_mask(raw, row=row, visible=visible)[matched_tokens]
+        hlt_charged = _hlt_charged_mask(
+            raw, row=row, visible=visible, tokens=matched_tokens,
+        )
         applicability_changes = hlt_charged != endpoint_charged
 
         hlt_features = np.stack([
