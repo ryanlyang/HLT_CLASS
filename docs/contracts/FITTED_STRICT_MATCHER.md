@@ -24,7 +24,9 @@ offset caused by excluded appended lost tracks.
 The frozen algorithm is:
 
 1. use all visible HLT candidates, regular charged offline candidates, and
-   neutral offline candidates; exclude appended offline lost tracks;
+   neutral offline candidates; define the charged/lost-track boundary from
+   `n_cpfcands` and `n_lts` and exclude the appended lost tracks. The auxiliary
+   `cpfcandlt_isLostTrack` feature is not a storage-boundary authority;
 2. compute every HLT/offline `deltaR`, `log(HLT pT/offline pT)`,
    `log(HLT energy/offline energy)`, PID transition, and charge transition;
 3. score those values through the vendored empirical LLR tables and
@@ -39,9 +41,8 @@ The frozen algorithm is:
 The result is deliberately partial. Unmatched HLT tokens remain HLT and may
 not be replaced by zeros, padding, or an arbitrary offline candidate. The
 legacy `FULL_PARTICLE_ENDPOINT/v1` contract still requires 100% assignment and
-therefore cannot consume this matcher. A separately versioned selective
-all-field repair contract is required before the revised PMARD campaign can
-launch.
+therefore cannot consume this matcher. The campaign instead uses the versioned
+`SELECTIVE_FULL_PARTICLE_ENDPOINT/v1` repair contract.
 
 Run the local artifact validator with:
 

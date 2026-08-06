@@ -15,7 +15,7 @@ from hlt_classification.scouting.matching import ParticleSet
 from hlt_classification.scouting import pmard_stream
 from hlt_classification.scouting.particles import decode_particle_sets
 from hlt_classification.scouting.repair import build_alpha_repaired_inputs
-from hlt_classification.scouting.schema import HLT_FEATURE_SPECS
+from hlt_classification.scouting.schema import HLT_FEATURE_SPECS, matching_required_branches
 
 
 def _p4(pt, eta, phi, energy):
@@ -132,7 +132,7 @@ def test_unknown_pid_phi_wrap_and_lost_track_population_are_exact():
     assert result.assignment.dr[0] == pytest.approx(2e-4)
 
 
-def test_native_decoder_enforces_regular_charged_lost_track_boundary():
+def test_native_decoder_uses_count_boundary_not_auxiliary_lost_track_feature():
     arrays = {
         "n_scoutpfcands": np.asarray([1]), "n_cpfcands": np.asarray([1]),
         "n_lts": np.asarray([1]), "n_npfcands": np.asarray([1]),
@@ -163,8 +163,16 @@ def test_native_decoder_enforces_regular_charged_lost_track_boundary():
     _, offline, _ = decode_particle_sets(arrays, 0)
     assert offline.lost_track.tolist() == [False, True, False]
 
-    arrays["cpfcandlt_isLostTrack"] = [np.asarray([0, 0])]
-    with pytest.raises(ValueError, match="boundary"):
+    arrays["cpfcandlt_isLostTrack"] = [np.asarray([1, 0])]
+    _, disagreeing, _ = decode_particle_sets(arrays, 0)
+    assert disagreeing.lost_track.tolist() == [False, True, False]
+    del arrays["cpfcandlt_isLostTrack"]
+    _, absent, _ = decode_particle_sets(arrays, 0)
+    assert absent.lost_track.tolist() == [False, True, False]
+    assert "cpfcandlt_isLostTrack" not in matching_required_branches()
+
+    arrays["n_cpfcands"] = np.asarray([2])
+    with pytest.raises(ValueError, match=r"n_cpfcands \+ n_lts"):
         decode_particle_sets(arrays, 0)
 
 

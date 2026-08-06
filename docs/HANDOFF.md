@@ -8,8 +8,11 @@ separate prior campaign and cannot redefine PMARD.
 
 Implemented locally in the current worktree:
 
-- version-3 Scouting schema with explicit native constituent-count boundary
-  validation, plus versioned source, label, row-identity, split, artifact, and
+- version-4 Scouting schema with the fitted-strict donor's native
+  constituent-count boundary (`n_cpfcands` plus `n_lts`) as the authoritative
+  charged/lost-track layout; the auxiliary `cpfcandlt_isLostTrack` model
+  feature is deliberately not a matching-projection or boundary requirement;
+  plus versioned source, label, row-identity, split, artifact, and
   role-capability contracts;
 - version-2 60/20/20 source-file split construction: the source audit streams
   per-file 15-class counts, an exact MILP minimizes the worst class-by-role
@@ -81,6 +84,20 @@ Local verification now passes `208 tests, 14 warnings`, including selective
 all-field endpoint, persistent sparse join, pilot-DAG, matcher, KD, resume, and
 legacy campaign regressions. CLI help and `git diff --check` also pass; the
 remaining notices are repository line-ending notices.
+
+The first genuine pilot DAG, campaign `pmard_pilot_62dd448731cdd932` at pushed
+commit `00f03a6b1818ad16f9538e8e9e155082293677cd`, reached the persistent
+assignment-cache array (`43465_0`--`43465_42`) after its source, split,
+feature-audit, row-selection, Weaver, and matcher-artifact prerequisites
+completed. Every assignment shard failed before publication because the port
+required `cpfcandlt_isLostTrack` to equal a positional collection boundary.
+That check was stricter than the fitted-strict donor, which slices regular
+charged candidates from the authenticated scalar counts. Schema v4 corrects
+the projection and decoder contract: `n_cpfcands + n_lts` defines the charged
+family and the appended lost-track suffix, while the auxiliary model feature
+cannot redefine that boundary. No matcher-quality or PMARD result can be
+inferred from this infrastructure failure, and the immutable v3 pilot must not
+be resumed under v4 source.
 
 Still required externally before production: commit and push the exact clean
 source; authenticate the native 53-file dataset and split; run installed-Weaver
@@ -287,7 +304,7 @@ hlt_classification_prad_runtime_validation_v3
 hlt_classification_prad_statistical_report_v2
 
 PMARD/Scouting reviewed surfaces:
-hlt_classification_scouting_schema_v3
+hlt_classification_scouting_schema_v4
 hlt_classification_fitted_strict_matcher_v1
 hlt_classification_scouting_feature_audit_v2
 hlt_classification_pmard_row_selection_v1
@@ -505,12 +522,11 @@ Do not mark PRAD production readiness accepted until every new smoke task
 attestation authenticates and measured resource/storage evidence is captured.
 A full PRAD campaign remains unauthorized in this handoff.
 
-## Exact active next task: selective all-field repair contract
+## Exact active next task: corrected PMARD pilot
 
-Implement a new versioned PMARD repair family in which only accepted
-`fitted_strict` tokens move toward all 21 matched offline fields and every
-abstained token remains byte-identical HLT. Replace the obsolete 100%-coverage
-authorization semantics with selective coverage/precision lineage, add the
-matched/unmatched and mixed-view ablations declared in the plan amendment, and
-only then rebuild and dry-run the smoke DAG. A real miniature is premature
-until that scientific contract is complete.
+Commit and push the schema-v4 count-boundary correction, update the clean
+Tigris checkout to that exact commit, build a fresh immutable pilot root and
+full dry run, then submit a replacement pilot DAG. Do not reuse or mutate
+`pmard_pilot_62dd448731cdd932`: its source snapshot, campaign spec, schema hash,
+and descendants authenticate the superseded decoder. Cancel only its exact
+campaign-bound dependency-doomed descendants through its submission ledger.

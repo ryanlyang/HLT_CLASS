@@ -452,15 +452,15 @@ unique assignment for every visible HLT token. That matcher design is a
 separate required lock; the repair implementation fails closed until its
 complete assignments exist.
 
-Lost-track membership is not inferred from pT ordering. Before the matcher
-design lock, Stage A must authenticate the producer semantics and cross-tabulate
-`cpfcandlt_isLostTrack`, `n_cpfcands`, `n_lts`, native position, and the family
-length invariant over the complete selected training role. The resulting exact
-lost-track predicate and disagreement policy are stored in the native-offline
-input contract. Until that predicate is locked, all candidate rows for which
-lost-track status is ambiguous are unmatchable. The primary matcher excludes
-every locked lost-track entry; an allow-lost-track arm requires a new matcher
-and repair variant.
+Lost-track membership is not inferred from pT ordering or from the auxiliary
+`cpfcandlt_isLostTrack` model feature. The fitted-strict donor contract defines
+the native layout directly: the first `n_cpfcands` charged entries are regular
+charged PF candidates and the following `n_lts` entries are appended lost
+tracks, with the family length required to equal their sum. The primary
+matcher excludes that appended suffix. The auxiliary feature may be audited,
+but disagreement cannot redefine the collection boundary or invalidate an
+otherwise well-formed row. An allow-lost-track arm requires a new matcher and
+repair variant.
 
 ### 4.5 Sequence and truncation contract
 
@@ -1935,7 +1935,7 @@ campaign specification
 finalist and final-test locks
 
 Current scientific surfaces introduced by the matcher and endpoint reviews:
-hlt_classification_scouting_schema_v3
+hlt_classification_scouting_schema_v4
 hlt_classification_scouting_feature_audit_v2
 hlt_classification_pmard_ephemeral_assignment_v2
 hlt_classification_pmard_matcher_report_v2
@@ -1944,7 +1944,7 @@ hlt_classification_pmard_full_role_coverage_v2
 hlt_classification_pmard_training_report_v4
 hlt_classification_pmard_resume_checkpoint_v4
 hlt_classification_pmard_lock_v4
-hlt_classification_pmard_campaign_spec_v8
+hlt_classification_pmard_campaign_spec_v9
 ```
 
 Every reusable artifact records its content hash, parent hashes, exact source

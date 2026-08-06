@@ -80,10 +80,11 @@ def decode_particle_sets(
     charged_measurements, charged_validity = _measurements(arrays, "cpfcandlt", row)
     neutral_measurements = np.zeros((len(neutral_p4), len(TRACK_FIELDS)), np.float64)
     neutral_validity = np.zeros_like(neutral_measurements, np.bool_)
-    stored_lost_track = _row(arrays, "cpfcandlt_isLostTrack", row).astype(np.bool_)
+    # The fitted-strict donor defines this layout from the scalar counts:
+    # regular charged candidates first, followed by n_lts lost tracks.
+    # cpfcandlt_isLostTrack is an auxiliary modeling feature in the compact
+    # files, not an authoritative storage-boundary marker.
     boundary_lost_track = np.arange(len(charged_p4)) >= regular_charged_count
-    if not np.array_equal(stored_lost_track, boundary_lost_track):
-        raise ValueError("cpfcandlt lost-track flags disagree with the declared collection boundary")
     offline = ParticleSet(
         np.concatenate((charged_p4, neutral_p4)),
         decode_exclusive_categories(np.concatenate((charged_flags, neutral_flags))),

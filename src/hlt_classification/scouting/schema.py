@@ -8,8 +8,8 @@ from typing import Final
 
 from hlt_classification.data.cache_contracts import canonical_sha256
 
-SCOUTING_SCHEMA_CONTRACT: Final = "hlt_classification_scouting_schema_v3"
-SCOUTING_SCHEMA_VERSION: Final = 3
+SCOUTING_SCHEMA_CONTRACT: Final = "hlt_classification_scouting_schema_v4"
+SCOUTING_SCHEMA_VERSION: Final = 4
 TREE_NAME: Final = "tree"
 DEFAULT_DATA_ROOT: Final = "/home/ryreu/cms/data/ScoutingAK8_native_compact/2024/train"
 
@@ -153,7 +153,7 @@ def matching_required_branches() -> frozenset[str]:
     charged = {
         f"cpfcandlt_{name}" for name in (
             "px", "py", "pz", "energy", "charge", "isEl", "isMu",
-            "isChargedHad", "isLostTrack", "dxy", "dxysig", "dz", "dzsig",
+            "isChargedHad", "dxy", "dxysig", "dz", "dzsig",
             "normchi2", "quality", "lostInnerHits",
         )
     }
