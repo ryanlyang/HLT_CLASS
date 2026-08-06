@@ -111,7 +111,12 @@ normalize their complete final command vectors to strings, with regressions
 covering the exact threshold in teacher and student commands. This is an
 execution-only correction and does not change matcher, repair, loss, model, or
 selection semantics. The replacement pilot remains immutable and cannot be
-continued under the corrected source snapshot.
+continued in place under the corrected source snapshot. A version-1 prefix
+import now provides the narrow recovery path: it proves Git/AST compatibility,
+hard-links and re-attests only the completed prefix through `training_lock`,
+rebuilds every campaign-bound lock under a fresh campaign spec, binds the
+import report into the new lock chain, and submits from `teachers` onward.
+Failed teacher/descendant artifacts are categorically excluded.
 
 Still required externally before production: commit and push the exact clean
 source; authenticate the native 53-file dataset and split; run installed-Weaver
@@ -538,9 +543,9 @@ A full PRAD campaign remains unauthorized in this handoff.
 
 ## Exact active next task: corrected PMARD pilot
 
-Commit and push the complete-command string-normalization correction, update
-the clean Tigris checkout to that exact commit, build a fresh immutable pilot
-root and full dry run, then submit a replacement pilot DAG. Do not reuse or
-mutate either failed pilot: their source snapshots and campaign specs
-authenticate superseded execution code. Cancel only each affected campaign's
-exact dependency-doomed descendants through its own submission ledger.
+Commit and push the prefix-import recovery utility, update the clean Tigris
+checkout to that exact commit, create a fresh pilot spec, import the compatible
+completed prefix from `pmard_pilot_3f379cb66398fcc8`, inspect the recovery
+dry run, and submit from `teachers` onward. Do not reuse failed teacher or
+descendant outputs. Cancel only the old campaign's exact dependency-doomed
+jobs through its own submission ledger.

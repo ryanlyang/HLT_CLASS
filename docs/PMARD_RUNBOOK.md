@@ -132,3 +132,41 @@ walltime, ROOT I/O, and peak RAM in the pilot before authorizing production.
 Poor performance is reported and does not cancel registered rows. Invalid
 inputs, lineage drift, nonfinite required quantities, corrupt artifacts, or
 forbidden final-role access fail closed.
+
+## Execution-only pilot prefix recovery
+
+`import_pmard_pilot_prefix.py` is the only authorized shortcut after the
+specific complete-argv string-normalization correction. It requires a new
+clean-source pilot specification, proves through Git ancestry and normalized
+AST comparison that the only pre-existing scientific-source change is final
+teacher/student argv string conversion, and requires identical manifests,
+site, registry, and DAG. It hard-links and re-attests only the completed prefix
+through `training_lock`, rebuilds every campaign-bound lock, and binds a v1
+prefix-import report into the new data-lock ancestry. Failed teachers and all
+descendants are never imported. Hard links add no duplicate checkpoint bytes.
+
+After creating a fresh target pilot spec, run:
+
+```bash
+python -s scripts/import_pmard_pilot_prefix.py \
+  --source-campaign-spec "${FAILED_ROOT}/campaign_spec.json" \
+  --source-submission-ledger "${FAILED_ROOT}/submission_ledger.json" \
+  --target-campaign-spec "${RECOVERY_ROOT}/campaign_spec.json" \
+  --output-monitor "${RECOVERY_ROOT}/recovery/prefix_monitor.json"
+
+python -s scripts/resume_pmard_campaign.py \
+  --campaign-spec "${RECOVERY_ROOT}/campaign_spec.json" \
+  --monitor-report "${RECOVERY_ROOT}/recovery/prefix_monitor.json" \
+  --output "${RECOVERY_ROOT}/recovery/resume_dry_run.json"
+
+python -s scripts/resume_pmard_campaign.py \
+  --campaign-spec "${RECOVERY_ROOT}/campaign_spec.json" \
+  --monitor-report "${RECOVERY_ROOT}/recovery/prefix_monitor.json" \
+  --output "${RECOVERY_ROOT}/submission_ledger.json" \
+  --execute
+```
+
+The resulting recovery ledger is accepted by the exact-ID PMARD monitor and
+canceller. Any other source change, missing or corrupt attestation, copied
+rather than hard-linked artifact, changed scientific registry, attempted
+teacher reuse, or pre-existing target output fails closed.

@@ -18,7 +18,10 @@ def main() -> int:
     parser.add_argument("--submission-ledger", type=Path, required=True)
     parser.add_argument("--execute", action="store_true")
     args = parser.parse_args(); ledger = load_json(args.submission_ledger)
-    validate_content_hash(ledger, expected_contract=PMARD_LEDGER_CONTRACT)
+    contract = ledger.get("contract")
+    if contract not in {PMARD_LEDGER_CONTRACT, "hlt_classification_pmard_resume_ledger_v1"}:
+        raise ValueError("unsupported PMARD submission/recovery ledger")
+    validate_content_hash(ledger, expected_contract=contract)
     if ledger.get("dry_run") is not False:
         raise ValueError("dry-run PMARD IDs cannot be cancelled")
     ids = list(ledger["jobs"].values())

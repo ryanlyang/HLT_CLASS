@@ -28,7 +28,13 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--states-json", type=Path)
     args = parser.parse_args(); spec = load_json(args.campaign_spec); validate_pmard_campaign_spec(spec)
-    ledger = load_json(args.submission_ledger); ledger_hash = validate_content_hash(ledger, expected_contract=PMARD_LEDGER_CONTRACT)
+    ledger = load_json(args.submission_ledger)
+    ledger_contract = ledger.get("contract")
+    if ledger_contract not in {PMARD_LEDGER_CONTRACT, "hlt_classification_pmard_resume_ledger_v1"}:
+        raise ValueError("unsupported PMARD submission/recovery ledger")
+    ledger_hash = validate_content_hash(ledger, expected_contract=ledger_contract)
+    if ledger.get("campaign_spec_sha256") != spec["content_hash"]:
+        raise ValueError("PMARD ledger campaign differs")
     job_ids = list(ledger["jobs"].values())
     if args.states_json:
         states = load_json(args.states_json)
