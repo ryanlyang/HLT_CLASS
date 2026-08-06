@@ -59,3 +59,16 @@ def test_persistent_sparse_assignment_join_preserves_unmatched_and_confidence(tm
     assert np.count_nonzero(assignment >= 0) == 3
     assert np.isclose(confidence[1, 0], 1.0)
     assert store.contains("sample.root", np.asarray([3, 8, 9])).tolist() == [True, False, True]
+
+
+def test_persistent_store_resolves_canonical_initial_and_final_assignment_roots(tmp_path):
+    from hlt_classification.scouting.selective_assignment import _assignment_root_for_manifest
+
+    matcher = tmp_path / "matcher"
+    assert _assignment_root_for_manifest(
+        matcher / "assignment_manifest.json",
+    ) == matcher / "assignments"
+    assert _assignment_root_for_manifest(
+        matcher / "final_assignment_manifest.json",
+    ) == matcher / "final_assignments"
+    assert _assignment_root_for_manifest(tmp_path / "custom.json") == tmp_path

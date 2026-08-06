@@ -152,8 +152,9 @@ exact 300k/100k/100k membership and sealed final-role assignments. A selected
 `alpha=0` remains executable through representation and generation stages via
 an in-memory HLT-to-privileged identity alias; it never triggers offline reads.
 `import_pmard_pilot_prefix.py` is a narrowly scoped, hard-link-only recovery
-worker for the authenticated argv-string-normalization correction. It proves
-source compatibility, re-attests the completed prefix through the training
-lock under a fresh campaign identity, rebuilds campaign-bound locks, and emits
-a monitor that `resume_pmard_campaign.py` can use to submit from teachers
-onward. It cannot import failed teachers or later outputs.
+worker for the authenticated argv-string-normalization and canonical
+assignment-root corrections. It proves source compatibility, re-attests the
+completed prefix through the training lock under a fresh campaign identity,
+rebuilds campaign-bound locks, and emits a monitor that
+`resume_pmard_campaign.py` can use to submit from teachers onward. It cannot
+import failed teachers or later outputs.

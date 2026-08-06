@@ -11,9 +11,10 @@ from hlt_classification.data.cache_contracts import validate_content_hash
 from .campaign import validate_pmard_campaign_spec
 
 
-PMARD_PREFIX_IMPORT_CONTRACT = "hlt_classification_pmard_prefix_import_v1"
-PMARD_PREFIX_IMPORT_VERSION = 1
+PMARD_PREFIX_IMPORT_CONTRACT = "hlt_classification_pmard_prefix_import_v2"
+PMARD_PREFIX_IMPORT_VERSION = 2
 WORKFLOW_PATH = "src/hlt_classification/scouting/workflow.py"
+ASSIGNMENT_PATH = "src/hlt_classification/scouting/selective_assignment.py"
 RECOVERY_OPERATION_PATHS = {
     "src/hlt_classification/scouting/recovery.py",
     "scripts/import_pmard_pilot_prefix.py",
@@ -96,6 +97,68 @@ def validate_argv_string_normalization(old_source: str, new_source: str) -> None
         raise ValueError("workflow contains changes beyond argv string normalization")
 
 
+def validate_assignment_root_resolution(old_source: str, new_source: str) -> None:
+    """Prove the assignment-store change only corrects canonical shard roots."""
+
+    old_tree = ast.parse(old_source); new_tree = ast.parse(new_source)
+    helpers = [
+        node for node in new_tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_assignment_root_for_manifest"
+    ]
+    expected_helper = ast.parse('''
+def _assignment_root_for_manifest(path: Path) -> Path:
+    """Resolve the canonical shard root for a workflow manifest location."""
+    if path.name == "assignment_manifest.json":
+        return path.parent / "assignments"
+    if path.name == "final_assignment_manifest.json":
+        return path.parent / "final_assignments"
+    return path.parent
+''').body[0]
+    if len(helpers) != 1 or ast.dump(helpers[0], include_attributes=False) != ast.dump(
+        expected_helper, include_attributes=False,
+    ):
+        raise ValueError("assignment manifest root resolver differs from the authorized correction")
+    new_tree.body.remove(helpers[0])
+
+    def root_assignment(tree: ast.Module) -> ast.Assign:
+        store = next(
+            (node for node in tree.body if isinstance(node, ast.ClassDef)
+             and node.name == "PersistentAssignmentStore"), None,
+        )
+        if store is None:
+            raise ValueError("PersistentAssignmentStore is absent")
+        initializer = next(
+            (node for node in store.body if isinstance(node, ast.FunctionDef)
+             and node.name == "__init__"), None,
+        )
+        if initializer is None:
+            raise ValueError("PersistentAssignmentStore initializer is absent")
+        assignments = [
+            node for node in initializer.body if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Attribute)
+                and isinstance(target.value, ast.Name)
+                and target.value.id == "self" and target.attr == "root"
+                for target in node.targets
+            )
+        ]
+        if len(assignments) != 1:
+            raise ValueError("PersistentAssignmentStore root assignment differs")
+        return assignments[0]
+
+    old_root = root_assignment(old_tree); new_root = root_assignment(new_tree)
+    expected_old = ast.parse("value = self.path.parent").body[0].value
+    expected_new = ast.parse("value = _assignment_root_for_manifest(self.path)").body[0].value
+    if ast.dump(old_root.value, include_attributes=False) != ast.dump(expected_old, include_attributes=False):
+        raise ValueError("old assignment root is not the expected manifest parent")
+    if ast.dump(new_root.value, include_attributes=False) != ast.dump(expected_new, include_attributes=False):
+        raise ValueError("new assignment root does not use the canonical resolver")
+    old_root.value = ast.Constant(value="ASSIGNMENT_ROOT")
+    new_root.value = ast.Constant(value="ASSIGNMENT_ROOT")
+    if ast.dump(old_tree, include_attributes=False) != ast.dump(new_tree, include_attributes=False):
+        raise ValueError("selective assignment contains changes beyond manifest root resolution")
+
+
 def validate_prefix_import_compatibility(
     source_spec: Mapping[str, Any], target_spec: Mapping[str, Any], *, repository: Path,
 ) -> dict[str, object]:
@@ -123,18 +186,24 @@ def validate_prefix_import_compatibility(
         path for path in changed
         if path.startswith(("src/", "scripts/", "sbatch/")) and not path.endswith(".md")
     }
-    if scientific_changes != ({WORKFLOW_PATH} | RECOVERY_OPERATION_PATHS):
+    if scientific_changes != ({WORKFLOW_PATH, ASSIGNMENT_PATH} | RECOVERY_OPERATION_PATHS):
         raise ValueError("prefix recovery contains an unauthorized scientific-source change")
     old_workflow = _git(repository, "show", f"{source_commit}:{WORKFLOW_PATH}")
     new_workflow = _git(repository, "show", f"{target_commit}:{WORKFLOW_PATH}")
     validate_argv_string_normalization(old_workflow, new_workflow)
+    old_assignment = _git(repository, "show", f"{source_commit}:{ASSIGNMENT_PATH}")
+    new_assignment = _git(repository, "show", f"{target_commit}:{ASSIGNMENT_PATH}")
+    validate_assignment_root_resolution(old_assignment, new_assignment)
     return {
         "source_campaign_spec_sha256": source_hash,
         "target_campaign_spec_sha256": target_hash,
         "source_git_commit": source_commit,
         "target_git_commit": target_commit,
         "changed_paths": list(changed),
-        "scientific_change": "complete_teacher_student_argv_string_normalization_v1",
+        "scientific_change": (
+            "complete_teacher_student_argv_string_normalization_and_"
+            "canonical_assignment_manifest_root_resolution_v2"
+        ),
     }
 
 
@@ -155,5 +224,6 @@ def validate_prefix_import(
 __all__ = [
     "IMPORTED_TASKS", "PMARD_PREFIX_IMPORT_CONTRACT", "PMARD_PREFIX_IMPORT_VERSION",
     "PREFIX_TASKS", "REBUILT_TASKS", "validate_argv_string_normalization",
+    "validate_assignment_root_resolution",
     "validate_prefix_import", "validate_prefix_import_compatibility",
 ]

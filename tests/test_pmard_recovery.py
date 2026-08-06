@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from hlt_classification.scouting.recovery import validate_argv_string_normalization
+from hlt_classification.scouting.recovery import (
+    validate_argv_string_normalization, validate_assignment_root_resolution,
+)
 
 
 OLD = """
@@ -43,4 +45,43 @@ def test_prefix_recovery_accepts_only_complete_argv_string_normalization():
                 "return command",
                 1,
             ),
+        )
+
+
+OLD_ASSIGNMENT = '''
+from pathlib import Path
+
+class PersistentAssignmentStore:
+    def __init__(self, manifest_path):
+        self.path = Path(manifest_path); self.root = self.path.parent
+'''
+
+NEW_ASSIGNMENT = '''
+from pathlib import Path
+
+def _assignment_root_for_manifest(path: Path) -> Path:
+    """Resolve the canonical shard root for a workflow manifest location."""
+    if path.name == "assignment_manifest.json":
+        return path.parent / "assignments"
+    if path.name == "final_assignment_manifest.json":
+        return path.parent / "final_assignments"
+    return path.parent
+
+class PersistentAssignmentStore:
+    def __init__(self, manifest_path):
+        self.path = Path(manifest_path); self.root = _assignment_root_for_manifest(self.path)
+'''
+
+
+def test_prefix_recovery_accepts_only_canonical_assignment_root_resolution():
+    validate_assignment_root_resolution(OLD_ASSIGNMENT, NEW_ASSIGNMENT)
+    with pytest.raises(ValueError, match="resolver differs"):
+        validate_assignment_root_resolution(
+            OLD_ASSIGNMENT,
+            NEW_ASSIGNMENT.replace('return path.parent / "assignments"', 'return path.parent / "wrong"'),
+        )
+    with pytest.raises(ValueError, match="beyond manifest root resolution"):
+        validate_assignment_root_resolution(
+            OLD_ASSIGNMENT,
+            NEW_ASSIGNMENT.replace("class PersistentAssignmentStore:", "EXTRA = 1\n\nclass PersistentAssignmentStore:"),
         )

@@ -136,14 +136,14 @@ forbidden final-role access fail closed.
 ## Execution-only pilot prefix recovery
 
 `import_pmard_pilot_prefix.py` is the only authorized shortcut after the
-specific complete-argv string-normalization correction. It requires a new
-clean-source pilot specification, proves through Git ancestry and normalized
-AST comparison that the only pre-existing scientific-source change is final
-teacher/student argv string conversion, and requires identical manifests,
-site, registry, and DAG. It hard-links and re-attests only the completed prefix
-through `training_lock`, rebuilds every campaign-bound lock, and binds a v1
-prefix-import report into the new data-lock ancestry. Failed teachers and all
-descendants are never imported. Hard links add no duplicate checkpoint bytes.
+specific complete-argv string-normalization and canonical assignment-root
+corrections. It requires a new clean-source pilot specification, proves through
+Git ancestry and normalized AST comparison that these are the only scientific
+source changes, and requires identical manifests, site, registry, and DAG. It
+hard-links and re-attests only the completed prefix through `training_lock`,
+rebuilds every campaign-bound lock, and binds a v2 prefix-import report into
+the new data-lock ancestry. Failed teachers and all descendants are never
+imported. Hard links add no duplicate checkpoint bytes.
 
 After creating a fresh target pilot spec, run:
 

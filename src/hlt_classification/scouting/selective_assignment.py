@@ -461,6 +461,16 @@ def validate_assignment_manifest(
     return digest
 
 
+def _assignment_root_for_manifest(path: Path) -> Path:
+    """Resolve the canonical shard root for a workflow manifest location."""
+
+    if path.name == "assignment_manifest.json":
+        return path.parent / "assignments"
+    if path.name == "final_assignment_manifest.json":
+        return path.parent / "final_assignments"
+    return path.parent
+
+
 class PersistentAssignmentStore:
     """Lazy source-shard joins with a bounded decompressed-array LRU."""
 
@@ -468,7 +478,7 @@ class PersistentAssignmentStore:
         self, manifest_path: str | Path, selection_manifest: Mapping[str, object], *,
         role: str, split_manifest_sha256: str, maximum_cached_sources: int = 8,
     ) -> None:
-        self.path = Path(manifest_path); self.root = self.path.parent
+        self.path = Path(manifest_path); self.root = _assignment_root_for_manifest(self.path)
         manifest = load_json(self.path); selection_hash = selection_manifest["content_hash"]
         self.manifest_sha256 = validate_assignment_manifest(
             manifest, split_manifest_sha256=split_manifest_sha256,
