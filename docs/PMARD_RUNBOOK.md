@@ -136,15 +136,20 @@ forbidden final-role access fail closed.
 ## Execution-only pilot prefix recovery
 
 `import_pmard_pilot_prefix.py` is the only authorized shortcut after the
-specific complete-argv string-normalization, canonical assignment-root, and
-selective matched-token identity-scope corrections. It requires a new
+specific complete-argv string-normalization, canonical assignment-root,
+selective matched-token identity-scope, and endpoint-eligible cache
+corrections. It requires a new
 clean-source pilot specification, proves through Git ancestry and normalized
 AST comparison that these are the only scientific
 source changes, and requires identical manifests, site, registry, and DAG. It
-hard-links and re-attests only the completed prefix through `training_lock`,
-rebuilds every campaign-bound lock, and binds a v3 prefix-import report into
-the new data-lock ancestry. Failed teachers and all descendants are never
-imported. Hard links add no duplicate checkpoint bytes.
+hard-links and re-attests source/data artifacts plus the independent Weaver,
+HLT budget-grid, and temperature-grid outputs. Prefix-import v4 deliberately
+does not reuse the old assignment cache: resume rebuilds the compact cache,
+manifest, full-endpoint lock, and training lock before teachers. The imported
+budget grid is permitted to cross only the resubmitted full-endpoint scheduling
+gate because its alpha-zero HLT training command cannot consume assignments.
+Failed teachers and all descendants are never imported. Hard links add no
+duplicate checkpoint bytes.
 
 After creating a fresh target pilot spec, run:
 

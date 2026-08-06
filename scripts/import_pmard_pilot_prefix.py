@@ -172,6 +172,8 @@ def main() -> int:
         "hardlink_only": True,
         "imported_files": imported_rows,
         "scientific_training_reused": True,
+        "assignment_cache_reused": False,
+        "assignment_cache_rebuild_required": True,
         "failed_teacher_or_descendant_output_reused": False,
     })
     write_immutable_json(import_path, import_report)
@@ -226,8 +228,8 @@ def main() -> int:
         "prefix_import": str(import_path),
         "prefix_import_sha256": import_report["content_hash"],
         "monitor": str(args.output_monitor),
-        "reused_through": "training_lock",
-        "next_task": "teachers",
+        "reused_training_artifacts": ["budget_grid", "temperature_grid"],
+        "next_task": "assignment_cache",
     }, indent=2, sort_keys=True))
     return 0
 

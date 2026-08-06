@@ -80,7 +80,7 @@ Implemented locally in the current worktree:
   only after the execution lock, and reports HLT, native-offline, and
   matched-offline endpoint oracles alongside deployable finalists.
 
-Local verification now passes `215 tests` with 14 Matplotlib warnings, including selective
+Local verification now passes `218 tests` with 14 Matplotlib warnings, including selective
 all-field endpoint, persistent sparse join, pilot-DAG, matcher, KD, resume, and
 legacy campaign regressions. CLI help and `git diff --check` also pass; the
 remaining notices are repository line-ending notices.
@@ -111,12 +111,12 @@ normalize their complete final command vectors to strings, with regressions
 covering the exact threshold in teacher and student commands. This is an
 execution-only correction and does not change matcher, repair, loss, model, or
 selection semantics. The replacement pilot remains immutable and cannot be
-continued in place under the corrected source snapshot. A version-3 prefix
+continued in place under the corrected source snapshot. A version-4 prefix
 import now provides the narrow recovery path: it proves Git/AST compatibility,
-hard-links and re-attests only the completed prefix through `training_lock`,
-rebuilds every campaign-bound lock under a fresh campaign spec, binds the
-import report into the new lock chain, and submits from `teachers` onward.
-Failed teacher/descendant artifacts are categorically excluded.
+reuses independent source/Weaver/HLT-budget/temperature artifacts, rebuilds
+the assignment cache plus its dependent authorization and training locks, and
+then submits from `teachers` onward. Failed teacher/descendant artifacts are
+categorically excluded.
 The first prefix-resume submission exposed a Slurm-controller lifetime edge:
 the resume helper attached the newly submitted `teachers` job to historical
 completed job `43732`, although the imported `training_lock` artifact already
@@ -125,7 +125,7 @@ and are not valid scheduling dependencies. Resume commands now include only
 dependencies newly submitted by the same resume invocation; imported reusable
 predecessors remain artifact dependencies, and scheduler failures retain the
 actual `sbatch` diagnostic. Focused resume/recovery/campaign tests pass 10/10,
-and the complete suite passes 215/215 (plus one local pytest-cache warning).
+and the complete suite passes 218/218 (plus one local pytest-cache warning).
 The next recovered teacher launch exposed a second execution-only defect:
 assignment manifests intentionally store shard paths relative to
 `matcher/assignments` (or `matcher/final_assignments`), while the persistent
@@ -133,19 +133,27 @@ consumer resolved them relative to the manifest's `matcher` parent. The
 recovery had correctly imported every shard, but the consumer looked one
 directory too high and failed closed before the first training update. The
 store now resolves both canonical initial and final assignment roots while
-retaining colocated custom-manifest behavior. Prefix-import contract v3 proves
+retaining colocated custom-manifest behavior. Prefix-import contract v4 proves
 the narrowly authorized execution corrections by AST comparison against pilot
 commit `775bed70`; no trained model or matcher output is reinterpreted.
 The subsequent teacher launch reached selective full-field repair and exposed
-an over-broad HLT identity check. Fitted-strict assignments already guarantee
-that every accepted pair has an exact valid PID match to its validated offline
-endpoint, but selective repair validated all visible HLT tokens, including
-unmatched ambiguous-PID tokens that the contract requires it to preserve.
+an over-broad HLT identity check. Selective repair validated all visible HLT
+tokens, including unmatched ambiguous-PID tokens that the contract requires it
+to preserve.
 Repair now validates chargedness only on `matched_tokens`; complete repair
 still validates every token because its matched set is complete. A regression
 proves that an invalid unmatched identity remains byte-identical while the
-same identity fails when matched, and the v3 recovery AST proof authorizes
+same identity fails when matched, and the v4 recovery AST proof authorizes
 exactly this scope correction in addition to the two earlier execution fixes.
+The following real-data launch then established that fitted-strict's exact PID
+gate could accept unknown-to-unknown (`-1`) pairs. Those pairs are outside the
+authorized five-category endpoint and can carry invalid offline identities.
+Assignment-cache construction now requires exact categories 0--4, exact charge
+in -1/0/+1, and charged/neutral charge coherence on both endpoints. Because
+the original cache violates that scientific eligibility rule, recovery v4
+does not reuse it. It resubmits only the inexpensive 43-way compact cache,
+manifest, full-endpoint lock, and training lock while retaining the expensive
+HLT-only budget and temperature checkpoints across their scheduling-only gate.
 
 Still required externally before production: commit and push the exact clean
 source; authenticate the native 53-file dataset and split; run installed-Weaver

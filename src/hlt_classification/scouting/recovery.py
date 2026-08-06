@@ -11,8 +11,8 @@ from hlt_classification.data.cache_contracts import validate_content_hash
 from .campaign import validate_pmard_campaign_spec
 
 
-PMARD_PREFIX_IMPORT_CONTRACT = "hlt_classification_pmard_prefix_import_v3"
-PMARD_PREFIX_IMPORT_VERSION = 3
+PMARD_PREFIX_IMPORT_CONTRACT = "hlt_classification_pmard_prefix_import_v4"
+PMARD_PREFIX_IMPORT_VERSION = 4
 WORKFLOW_PATH = "src/hlt_classification/scouting/workflow.py"
 ASSIGNMENT_PATH = "src/hlt_classification/scouting/selective_assignment.py"
 REPAIR_PATH = "src/hlt_classification/scouting/repair.py"
@@ -26,19 +26,18 @@ RECOVERY_OPERATION_PATHS = {
 PREFIX_TASKS = (
     "source_audit", "splits", "feature_audit", "data_lock",
     "matcher_design_lock", "row_selection", "matcher_result_lock",
-    "assignment_cache", "assignment_manifest", "full_endpoint_lock",
     "weaver_parity", "budget_grid", "budget_selection",
-    "temperature_grid", "training_lock",
+    "temperature_grid",
 )
 IMPORTED_TASKS = (
     "source_audit", "splits", "feature_audit", "row_selection",
-    "assignment_cache", "assignment_manifest", "weaver_parity",
-    "budget_grid", "temperature_grid",
+    "weaver_parity", "budget_grid", "temperature_grid",
 )
 REBUILT_TASKS = (
     "data_lock", "matcher_design_lock", "matcher_result_lock",
-    "full_endpoint_lock", "budget_selection", "training_lock",
+    "budget_selection",
 )
+RECOVERY_SCHEDULING_GATES = {"budget_grid": ("full_endpoint_lock",)}
 
 
 def _git(repository: Path, *arguments: str) -> str:
@@ -99,7 +98,7 @@ def validate_argv_string_normalization(old_source: str, new_source: str) -> None
 
 
 def validate_assignment_root_resolution(old_source: str, new_source: str) -> None:
-    """Prove the assignment-store change only corrects canonical shard roots."""
+    """Prove canonical shard-root and endpoint-eligibility corrections."""
 
     old_tree = ast.parse(old_source); new_tree = ast.parse(new_source)
     helpers = [
@@ -120,6 +119,78 @@ def _assignment_root_for_manifest(path: Path) -> Path:
     ):
         raise ValueError("assignment manifest root resolver differs from the authorized correction")
     new_tree.body.remove(helpers[0])
+
+    eligibility_helpers = [
+        node for node in new_tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_endpoint_identity_eligible"
+    ]
+    expected_eligibility_helper = ast.parse('''
+def _endpoint_identity_eligible(categories: np.ndarray, charge: np.ndarray) -> np.ndarray:
+    """Return exact five-category, charge-coherent endpoint identities."""
+    category = np.asarray(categories)
+    raw_charge = np.asarray(charge, np.float64)
+    exact_charge = (
+        np.isfinite(raw_charge)
+        & np.isin(raw_charge, (-1.0, 0.0, 1.0))
+    )
+    known = np.isin(category, (0, 1, 2, 3, 4))
+    charged = category < 3
+    coherent = np.where(charged, raw_charge != 0, raw_charge == 0)
+    return known & exact_charge & coherent
+''').body[0]
+    if len(eligibility_helpers) != 1 or ast.dump(
+        eligibility_helpers[0], include_attributes=False,
+    ) != ast.dump(expected_eligibility_helper, include_attributes=False):
+        raise ValueError("assignment endpoint eligibility differs from the authorized correction")
+    new_tree.body.remove(eligibility_helpers[0])
+
+    def build_function(tree: ast.Module) -> ast.FunctionDef:
+        matches = [
+            node for node in tree.body
+            if isinstance(node, ast.FunctionDef) and node.name == "build_assignment_shard"
+        ]
+        if len(matches) != 1:
+            raise ValueError("assignment shard builder differs")
+        return matches[0]
+
+    old_segment = ast.parse('''
+selected_hlt = np.flatnonzero(result.match_mask)
+selected_offline = result.match_index[selected_hlt]
+''').body
+    new_segment = ast.parse('''
+selected_hlt = np.flatnonzero(result.match_mask)
+selected_offline = result.match_index[selected_hlt]
+eligible = (
+    _endpoint_identity_eligible(hlt.categories, hlt.charge)[selected_hlt]
+    & _endpoint_identity_eligible(offline.categories, offline.charge)[selected_offline]
+)
+selected_hlt = selected_hlt[eligible]
+selected_offline = selected_offline[eligible]
+''').body
+
+    def replace_segment(function: ast.FunctionDef, expected: list[ast.stmt], replacement: list[ast.stmt]) -> None:
+        expected_dump = [ast.dump(node, include_attributes=False) for node in expected]
+        matches = []
+        for container in ast.walk(function):
+            body = getattr(container, "body", None)
+            if not isinstance(body, list):
+                continue
+            for index in range(len(body) - len(expected) + 1):
+                candidate = body[index:index + len(expected)]
+                if [ast.dump(node, include_attributes=False) for node in candidate] == expected_dump:
+                    matches.append((body, index))
+        if len(matches) != 1:
+            raise ValueError("assignment endpoint eligibility application differs")
+        body, index = matches[0]
+        body[index:index + len(expected)] = replacement
+
+    old_builder = build_function(old_tree); new_builder = build_function(new_tree)
+    replace_segment(old_builder, old_segment, ast.parse(
+        "selected_hlt = 'AUTHORIZED_ASSIGNMENT_SELECTION'",
+    ).body)
+    replace_segment(new_builder, new_segment, ast.parse(
+        "selected_hlt = 'AUTHORIZED_ASSIGNMENT_SELECTION'",
+    ).body)
 
     def root_assignment(tree: ast.Module) -> ast.Assign:
         store = next(
@@ -157,7 +228,7 @@ def _assignment_root_for_manifest(path: Path) -> Path:
     old_root.value = ast.Constant(value="ASSIGNMENT_ROOT")
     new_root.value = ast.Constant(value="ASSIGNMENT_ROOT")
     if ast.dump(old_tree, include_attributes=False) != ast.dump(new_tree, include_attributes=False):
-        raise ValueError("selective assignment contains changes beyond manifest root resolution")
+        raise ValueError("selective assignment contains changes beyond authorized corrections")
 
 
 def validate_selective_identity_scope(old_source: str, new_source: str) -> None:
@@ -291,7 +362,8 @@ def validate_prefix_import_compatibility(
         "changed_paths": list(changed),
         "scientific_change": (
             "complete_teacher_student_argv_string_normalization_and_"
-            "canonical_assignment_manifest_root_and_selective_identity_scope_v3"
+            "canonical_assignment_root_selective_identity_scope_and_"
+            "endpoint_eligible_assignment_cache_v4"
         ),
     }
 
@@ -312,7 +384,8 @@ def validate_prefix_import(
 
 __all__ = [
     "IMPORTED_TASKS", "PMARD_PREFIX_IMPORT_CONTRACT", "PMARD_PREFIX_IMPORT_VERSION",
-    "PREFIX_TASKS", "REBUILT_TASKS", "validate_argv_string_normalization",
+    "PREFIX_TASKS", "REBUILT_TASKS", "RECOVERY_SCHEDULING_GATES",
+    "validate_argv_string_normalization",
     "validate_assignment_root_resolution",
     "validate_selective_identity_scope",
     "validate_prefix_import", "validate_prefix_import_compatibility",

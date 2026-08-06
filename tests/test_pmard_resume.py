@@ -30,6 +30,19 @@ def test_resume_omits_historical_reusable_dependencies_and_keeps_new_ones():
     ) == ["90001"]
 
 
+def test_recovery_reuses_hlt_budget_across_rebuilt_assignment_gate_only():
+    module = _resume_module()
+    resubmitted = ["assignment_cache", "assignment_manifest", "full_endpoint_lock"]
+    budget = {
+        "name": "budget_grid",
+        "dependencies": ["weaver_parity", "full_endpoint_lock"],
+    }
+    assert not module._dependency_change_requires_resubmit(
+        budget, resubmitted, {"budget_grid": ("full_endpoint_lock",)},
+    )
+    assert module._dependency_change_requires_resubmit(budget, resubmitted, {})
+
+
 def test_resume_scheduler_failure_includes_stderr(monkeypatch):
     module = _resume_module()
 

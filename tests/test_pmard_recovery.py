@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from hlt_classification.scouting.recovery import (
+    IMPORTED_TASKS, PREFIX_TASKS, REBUILT_TASKS,
     validate_argv_string_normalization, validate_assignment_root_resolution,
     validate_selective_identity_scope,
 )
@@ -31,6 +32,16 @@ class Workflow:
 """
 
 
+def test_prefix_v4_rebuilds_assignments_but_reuses_expensive_hlt_training():
+    assert "assignment_cache" not in PREFIX_TASKS
+    assert "assignment_manifest" not in PREFIX_TASKS
+    assert "full_endpoint_lock" not in PREFIX_TASKS
+    assert "training_lock" not in PREFIX_TASKS
+    assert "budget_grid" in IMPORTED_TASKS
+    assert "temperature_grid" in IMPORTED_TASKS
+    assert "budget_selection" in REBUILT_TASKS
+
+
 def test_prefix_recovery_accepts_only_complete_argv_string_normalization():
     validate_argv_string_normalization(OLD, NEW)
     with pytest.raises(ValueError, match="beyond argv string normalization"):
@@ -55,6 +66,10 @@ from pathlib import Path
 class PersistentAssignmentStore:
     def __init__(self, manifest_path):
         self.path = Path(manifest_path); self.root = self.path.parent
+
+def build_assignment_shard():
+    selected_hlt = np.flatnonzero(result.match_mask)
+    selected_offline = result.match_index[selected_hlt]
 '''
 
 NEW_ASSIGNMENT = '''
@@ -68,9 +83,32 @@ def _assignment_root_for_manifest(path: Path) -> Path:
         return path.parent / "final_assignments"
     return path.parent
 
+def _endpoint_identity_eligible(categories: np.ndarray, charge: np.ndarray) -> np.ndarray:
+    """Return exact five-category, charge-coherent endpoint identities."""
+    category = np.asarray(categories)
+    raw_charge = np.asarray(charge, np.float64)
+    exact_charge = (
+        np.isfinite(raw_charge)
+        & np.isin(raw_charge, (-1.0, 0.0, 1.0))
+    )
+    known = np.isin(category, (0, 1, 2, 3, 4))
+    charged = category < 3
+    coherent = np.where(charged, raw_charge != 0, raw_charge == 0)
+    return known & exact_charge & coherent
+
 class PersistentAssignmentStore:
     def __init__(self, manifest_path):
         self.path = Path(manifest_path); self.root = _assignment_root_for_manifest(self.path)
+
+def build_assignment_shard():
+    selected_hlt = np.flatnonzero(result.match_mask)
+    selected_offline = result.match_index[selected_hlt]
+    eligible = (
+        _endpoint_identity_eligible(hlt.categories, hlt.charge)[selected_hlt]
+        & _endpoint_identity_eligible(offline.categories, offline.charge)[selected_offline]
+    )
+    selected_hlt = selected_hlt[eligible]
+    selected_offline = selected_offline[eligible]
 '''
 
 
@@ -81,7 +119,7 @@ def test_prefix_recovery_accepts_only_canonical_assignment_root_resolution():
             OLD_ASSIGNMENT,
             NEW_ASSIGNMENT.replace('return path.parent / "assignments"', 'return path.parent / "wrong"'),
         )
-    with pytest.raises(ValueError, match="beyond manifest root resolution"):
+    with pytest.raises(ValueError, match="beyond authorized corrections"):
         validate_assignment_root_resolution(
             OLD_ASSIGNMENT,
             NEW_ASSIGNMENT.replace("class PersistentAssignmentStore:", "EXTRA = 1\n\nclass PersistentAssignmentStore:"),

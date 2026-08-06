@@ -12,6 +12,9 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 from hlt_classification.data.cache_contracts import load_json, validate_content_hash, with_content_hash, write_immutable_json  # noqa: E402
 from hlt_classification.provenance import validate_source_snapshot  # noqa: E402
 from hlt_classification.scouting.campaign import sbatch_command, validate_pmard_campaign_spec  # noqa: E402
+from hlt_classification.scouting.recovery import (  # noqa: E402
+    RECOVERY_SCHEDULING_GATES, validate_prefix_import,
+)
 
 
 def _run(command):
@@ -35,6 +38,12 @@ def _active_dependency_ids(task, jobs, resubmitted):
     return [jobs[name] for name in task["dependencies"] if name in active]
 
 
+def _dependency_change_requires_resubmit(task, resubmitted, scheduling_gates):
+    changed = set(task["dependencies"]) & set(resubmitted)
+    allowed = set(scheduling_gates.get(task["name"], ()))
+    return bool(changed - allowed)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--campaign-spec", type=Path, required=True)
@@ -46,10 +55,21 @@ def main() -> int:
     monitor = load_json(args.monitor_report)
     validate_content_hash(monitor, expected_contract="hlt_classification_pmard_monitor_v1")
     if monitor.get("campaign_spec_sha256") != spec["content_hash"]: raise ValueError("monitor campaign differs")
+    scheduling_gates = {}
+    if monitor.get("prefix_import_sha256") is not None:
+        prefix = load_json(Path(spec["campaign_root"]) / "recovery/prefix_import.json")
+        prefix_hash = validate_prefix_import(
+            prefix, target_campaign_spec_sha256=spec["content_hash"],
+        )
+        if prefix_hash != monitor["prefix_import_sha256"]:
+            raise ValueError("monitor prefix-import lineage differs")
+        scheduling_gates = RECOVERY_SCHEDULING_GATES
     prior = {row["task"]: row for row in monitor["jobs"]}; jobs = {}; resubmitted = []; commands = []
     for task in spec["tasks"]:
         name = task["name"]
-        dependency_changed = any(value in resubmitted for value in task["dependencies"])
+        dependency_changed = _dependency_change_requires_resubmit(
+            task, resubmitted, scheduling_gates,
+        )
         if prior[name]["reusable"] and not dependency_changed:
             jobs[name] = prior[name]["job_id"]; continue
         dependencies = _active_dependency_ids(task, jobs, resubmitted)

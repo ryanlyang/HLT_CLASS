@@ -38,6 +38,21 @@ ASSIGNMENT_MANIFEST_VERSION = 1
 CONFIDENCE_QUANTIZATION = 65535
 
 
+def _endpoint_identity_eligible(categories: np.ndarray, charge: np.ndarray) -> np.ndarray:
+    """Return exact five-category, charge-coherent endpoint identities."""
+
+    category = np.asarray(categories)
+    raw_charge = np.asarray(charge, np.float64)
+    exact_charge = (
+        np.isfinite(raw_charge)
+        & np.isin(raw_charge, (-1.0, 0.0, 1.0))
+    )
+    known = np.isin(category, (0, 1, 2, 3, 4))
+    charged = category < 3
+    coherent = np.where(charged, raw_charge != 0, raw_charge == 0)
+    return known & exact_charge & coherent
+
+
 def _largest_remainder(counts: Sequence[int], total: int) -> list[int]:
     values = np.asarray(counts, np.int64)
     if total <= 0 or total > int(values.sum()) or np.any(values < 0):
@@ -325,6 +340,12 @@ def build_assignment_shard(
             result = matcher.match_jet(hlt, offline)
             selected_hlt = np.flatnonzero(result.match_mask)
             selected_offline = result.match_index[selected_hlt]
+            eligible = (
+                _endpoint_identity_eligible(hlt.categories, hlt.charge)[selected_hlt]
+                & _endpoint_identity_eligible(offline.categories, offline.charge)[selected_offline]
+            )
+            selected_hlt = selected_hlt[eligible]
+            selected_offline = selected_offline[eligible]
             if np.any(selected_hlt >= 200) or np.any(selected_offline > np.iinfo(np.int16).max):
                 raise OverflowError("selective assignment exceeds compact index dtypes")
             entries.append(int(source_entry)); hlt_rows.append(selected_hlt.astype(np.uint8))

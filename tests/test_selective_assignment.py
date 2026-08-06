@@ -8,6 +8,7 @@ from hlt_classification.scouting.selective_assignment import (
     ASSIGNMENT_MANIFEST_CONTRACT, ASSIGNMENT_MANIFEST_VERSION,
     ROW_SELECTION_CONTRACT, ROW_SELECTION_VERSION, PersistentAssignmentStore,
     RowSelection, _compressed_npz_bytes,
+    _endpoint_identity_eligible,
 )
 
 
@@ -72,3 +73,11 @@ def test_persistent_store_resolves_canonical_initial_and_final_assignment_roots(
         matcher / "final_assignment_manifest.json",
     ) == matcher / "final_assignments"
     assert _assignment_root_for_manifest(tmp_path / "custom.json") == tmp_path
+
+
+def test_assignment_cache_accepts_only_known_charge_coherent_endpoint_identities():
+    categories = np.asarray((-1, 0, 1, 2, 3, 4, 2, 3))
+    charge = np.asarray((0, -1, 1, 0, 0, 0, 2, 1), np.float64)
+    assert _endpoint_identity_eligible(categories, charge).tolist() == [
+        False, True, True, False, True, True, False, False,
+    ]
