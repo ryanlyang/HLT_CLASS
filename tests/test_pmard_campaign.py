@@ -139,10 +139,19 @@ def test_every_smoke_student_command_uses_shared_row_selection():
         hlt_teacher=Path("/teacher/hlt.json"),
         privileged_teacher=Path("/teacher/privileged.json"),
     )
+    assert all(isinstance(value, str) for value in alpha_command)
     assert alpha_command[alpha_command.index("--matcher-variant") + 1] == "fitted_strict"
+    assert alpha_command[alpha_command.index("--matcher-threshold") + 1] == "0.9828147479721088"
     assert alpha_command[alpha_command.index("--repair-family") + 1] == "SELECTIVE_FULL_PARTICLE_ENDPOINT"
     assert alpha_command[alpha_command.index("--assignment-manifest") + 1] == str(workflow.assignment_manifest)
     assert "--matcher-report" not in alpha_command
+    alpha_teacher_command = workflow._teacher_command(
+        output=Path("/output/T25"), experiment="T25", alpha=.25,
+    )
+    assert all(isinstance(value, str) for value in alpha_teacher_command)
+    assert alpha_teacher_command[
+        alpha_teacher_command.index("--matcher-threshold") + 1
+    ] == "0.9828147479721088"
 
 
 def test_pilot_registers_exact_300k_100k_100k_and_sealed_final_assignments():

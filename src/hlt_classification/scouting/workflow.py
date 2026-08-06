@@ -129,7 +129,10 @@ class Workflow:
                 command.extend(("--eligible-categories", "0,1,2,3,4" if family == "FULL_PARTICLE_ENDPOINT" else self._eligible_categories()))
             command.extend(("--full-endpoint-lock", str(self.full_endpoint_lock),
                             "--assignment-manifest", str(self.assignment_manifest)))
-        return command
+        # Arguments appended after `_script` (for example the locked matcher
+        # threshold) may originate in authenticated JSON as numeric scalars.
+        # subprocess requires every argv element to be path-like or text.
+        return [str(value) for value in command]
 
     def _student_command(
         self, *, output: Path, arm: str, alpha: float, hlt_teacher: Path | None,
@@ -160,7 +163,7 @@ class Workflow:
                 command.extend(("--eligible-categories", "0,1,2,3,4" if family == "FULL_PARTICLE_ENDPOINT" else self._eligible_categories()))
             command.extend(("--full-endpoint-lock", str(self.full_endpoint_lock),
                             "--assignment-manifest", str(self.assignment_manifest)))
-        return command
+        return [str(value) for value in command]
 
     def _teacher_report(self, alpha: float) -> Path:
         if alpha == 0:

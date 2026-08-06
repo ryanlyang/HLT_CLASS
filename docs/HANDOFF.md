@@ -99,6 +99,20 @@ cannot redefine that boundary. No matcher-quality or PMARD result can be
 inferred from this infrastructure failure, and the immutable v3 pilot must not
 be resumed under v4 source.
 
+The schema-v4 replacement pilot, campaign `pmard_pilot_3f379cb66398fcc8` at
+commit `775bed70`, completed its persistent assignment cache, baseline budget
+grid, budget selection, and temperature grid. Privileged-teacher array
+elements `43733_1`--`43733_5` then failed before launching the trainer because
+the workflow appended the authenticated matcher threshold to `argv` as a
+Python float after `_script` had stringified the initial arguments;
+`subprocess` accepts only text, bytes, or path-like arguments. The same latent
+fault existed in the nonzero-alpha student builder. Both builders now
+normalize their complete final command vectors to strings, with regressions
+covering the exact threshold in teacher and student commands. This is an
+execution-only correction and does not change matcher, repair, loss, model, or
+selection semantics. The replacement pilot remains immutable and cannot be
+continued under the corrected source snapshot.
+
 Still required externally before production: commit and push the exact clean
 source; authenticate the native 53-file dataset and split; run installed-Weaver
 FP32 parity; complete the genuine streamed Tigris smoke graph; capture measured
@@ -524,9 +538,9 @@ A full PRAD campaign remains unauthorized in this handoff.
 
 ## Exact active next task: corrected PMARD pilot
 
-Commit and push the schema-v4 count-boundary correction, update the clean
-Tigris checkout to that exact commit, build a fresh immutable pilot root and
-full dry run, then submit a replacement pilot DAG. Do not reuse or mutate
-`pmard_pilot_62dd448731cdd932`: its source snapshot, campaign spec, schema hash,
-and descendants authenticate the superseded decoder. Cancel only its exact
-campaign-bound dependency-doomed descendants through its submission ledger.
+Commit and push the complete-command string-normalization correction, update
+the clean Tigris checkout to that exact commit, build a fresh immutable pilot
+root and full dry run, then submit a replacement pilot DAG. Do not reuse or
+mutate either failed pilot: their source snapshots and campaign specs
+authenticate superseded execution code. Cancel only each affected campaign's
+exact dependency-doomed descendants through its own submission ledger.
