@@ -33,12 +33,60 @@ class LossConfiguration:
     hlt_kd: float
     privileged_kd: float
     temperature: float
+    privileged_temperature: float | None = None
+
+    def __post_init__(self) -> None:
+        values = (self.ce, self.hlt_kd, self.privileged_kd)
+        if any(not np.isfinite(value) or value < 0 for value in values):
+            raise ValueError("PMARD loss coefficients must be finite and nonnegative")
+        if not np.isclose(sum(values), 1.0, rtol=0, atol=1e-12):
+            raise ValueError("PMARD loss coefficients must sum to one")
+        temperatures = (
+            self.temperature,
+            self.temperature if self.privileged_temperature is None
+            else self.privileged_temperature,
+        )
+        if any(value not in TEMPERATURE_GRID for value in temperatures):
+            raise ValueError("unknown PMARD KD temperature")
+
+    @property
+    def hlt_temperature(self) -> float:
+        """The legacy/common temperature is the frozen HLT-teacher temperature."""
+
+        return self.temperature
+
+    @property
+    def effective_privileged_temperature(self) -> float:
+        return (
+            self.temperature
+            if self.privileged_temperature is None
+            else self.privileged_temperature
+        )
 
     @classmethod
-    def for_arm(cls, arm: str, *, temperature: float) -> "LossConfiguration":
+    def for_arm(
+        cls, arm: str, *, temperature: float,
+        privileged_temperature: float | None = None,
+    ) -> "LossConfiguration":
         if arm not in KD_MIXTURES or temperature not in TEMPERATURE_GRID:
             raise ValueError("unknown KD arm or unlocked temperature")
-        return cls(arm, *KD_MIXTURES[arm], temperature)
+        return cls(
+            arm, *KD_MIXTURES[arm], temperature,
+            privileged_temperature=privileged_temperature,
+        )
+
+    @classmethod
+    def for_mixture(
+        cls, *, arm: str, ce: float, hlt_kd: float, privileged_kd: float,
+        hlt_temperature: float, privileged_temperature: float,
+    ) -> "LossConfiguration":
+        if not arm or arm in KD_MIXTURES:
+            raise ValueError("custom PMARD mixture requires a distinct nonempty arm")
+        return cls(
+            arm=arm, ce=ce, hlt_kd=hlt_kd,
+            privileged_kd=privileged_kd, temperature=hlt_temperature,
+            privileged_temperature=privileged_temperature,
+        )
 
 
 def derive_seed(master_seed: int, domain: str) -> int:
@@ -110,9 +158,7 @@ def pmard_loss(
     labels = labels.long()
     weights = class_weights.to(device=student_fp32.device, dtype=torch.float32)[labels]
     ce_rows = functional.cross_entropy(student_fp32, labels, reduction="none")
-    tau = configuration.temperature
-
-    def kd_rows(teacher):
+    def kd_rows(teacher, *, tau):
         if teacher is None:
             raise ValueError("required frozen teacher logits are absent")
         if teacher.shape != student_logits.shape or teacher.requires_grad:
@@ -125,8 +171,17 @@ def pmard_loss(
         ).sum(-1) * tau * tau
 
     zero = student_fp32.sum(dim=-1) * 0
-    hlt_rows = kd_rows(hlt_teacher_logits) if configuration.hlt_kd else zero
-    privileged_rows = kd_rows(privileged_teacher_logits) if configuration.privileged_kd else zero
+    hlt_rows = (
+        kd_rows(hlt_teacher_logits, tau=configuration.hlt_temperature)
+        if configuration.hlt_kd else zero
+    )
+    privileged_rows = (
+        kd_rows(
+            privileged_teacher_logits,
+            tau=configuration.effective_privileged_temperature,
+        )
+        if configuration.privileged_kd else zero
+    )
     components = {
         "ce": (weights * ce_rows).mean(),
         "hlt_kd": (weights * hlt_rows).mean(),

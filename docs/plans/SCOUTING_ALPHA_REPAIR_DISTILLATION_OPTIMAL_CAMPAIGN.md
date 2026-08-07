@@ -48,6 +48,26 @@ baseline, the native offline TOFF model, and T100 trained/evaluated on the
 matched-offline endpoint. The last is deliberately a selective hybrid oracle,
 not a claim to reconstruct the native offline jet.
 
+### 2026-08-06 process-local repaired-view cache amendment
+
+Campaign-spec v10 adopts the versioned
+[`PMARD ephemeral view-cache contract`](../contracts/PMARD_EPHEMERAL_VIEW_CACHE.md).
+Nonzero-alpha teachers construct selected train and validation repaired
+`ParticleInputs` once in FP32 and retain them in job-local process RAM.
+Positive-coefficient representation-KD students similarly retain aligned HLT
+and repaired train views. Identity-indexed replay exactly reconstructs the
+existing epoch file/chunk/buffer permutations and batch tails, so model math,
+row cycles, validation order, and exact-resume training state are unchanged.
+
+This amendment supersedes Sections 17.1, 17.3, and 17.6 only where they forbid
+whole selected-role model views in process RAM. It does not permit durable
+repaired ROOT/NPZ/Parquet datasets, duplicated raw arrays, cache reuse across
+jobs, or offline data in deployable inference. The 320-GiB cache cap and 75%
+Slurm-allocation headroom fail before allocation; v10 keeps 192 GiB for smoke
+and pilot and requests 384 GiB for full-production jobs that may retain these
+views. Smoke exercises the same path on its bounded roles. Immutable
+campaign-spec v9 remains streamed and is not reinterpreted.
+
 The campaign has three modes. Smoke selects 4,096 train and validation jets and
 does not open final test. Pilot selects exactly 300,000 train, 100,000
 validation, and—only after finalist/execution locks—100,000 final-test jets.
@@ -1941,10 +1961,18 @@ hlt_classification_pmard_ephemeral_assignment_v2
 hlt_classification_pmard_matcher_report_v2
 hlt_classification_pmard_matcher_validation_v2
 hlt_classification_pmard_full_role_coverage_v2
-hlt_classification_pmard_training_report_v4
-hlt_classification_pmard_resume_checkpoint_v4
+hlt_classification_pmard_training_report_v4 (legacy readable parent)
+hlt_classification_pmard_resume_checkpoint_v4 (legacy readable parent)
+hlt_classification_pmard_training_report_v5
+hlt_classification_pmard_resume_checkpoint_v5
 hlt_classification_pmard_lock_v4
 hlt_classification_pmard_campaign_spec_v9
+hlt_classification_pmard_ephemeral_view_cache_v1
+hlt_classification_pmard_campaign_spec_v10
+hlt_classification_pmard_t100_kd_sweep_spec_v2
+hlt_classification_pmard_t100_kd_targets_v1
+hlt_classification_pmard_t100_kd_sweep_report_v2
+hlt_classification_pmard_t100_kd_sweep_ledger_v2
 ```
 
 Every reusable artifact records its content hash, parent hashes, exact source

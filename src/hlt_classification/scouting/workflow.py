@@ -82,6 +82,14 @@ class Workflow:
     def _eligible_categories(self) -> str:
         return "0,1,2,3,4"
 
+    def _view_cache_args(self) -> list[object]:
+        config = self.spec.get("registry", {}).get("privileged_view_cache")
+        if not isinstance(config, Mapping) or self.spec.get("mode") not in config.get("enabled_modes", ()):
+            return []
+        return [
+            "--cache-privileged-views", "--view-cache-max-gib", config["max_gib"],
+        ]
+
     @staticmethod
     def _repair_family(extra: Sequence[object]) -> str:
         values = list(map(str, extra))
@@ -129,6 +137,7 @@ class Workflow:
                 command.extend(("--eligible-categories", "0,1,2,3,4" if family == "FULL_PARTICLE_ENDPOINT" else self._eligible_categories()))
             command.extend(("--full-endpoint-lock", str(self.full_endpoint_lock),
                             "--assignment-manifest", str(self.assignment_manifest)))
+            command.extend(self._view_cache_args())
         # Arguments appended after `_script` (for example the locked matcher
         # threshold) may originate in authenticated JSON as numeric scalars.
         # subprocess requires every argv element to be path-like or text.
@@ -163,6 +172,7 @@ class Workflow:
                 command.extend(("--eligible-categories", "0,1,2,3,4" if family == "FULL_PARTICLE_ENDPOINT" else self._eligible_categories()))
             command.extend(("--full-endpoint-lock", str(self.full_endpoint_lock),
                             "--assignment-manifest", str(self.assignment_manifest)))
+        command.extend(self._view_cache_args())
         return [str(value) for value in command]
 
     def _teacher_report(self, alpha: float) -> Path:

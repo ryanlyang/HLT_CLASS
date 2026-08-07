@@ -27,6 +27,9 @@ from hlt_classification.scouting.assignment import build_source_folds  # noqa: E
 from hlt_classification.scouting.splits import role_records  # noqa: E402
 from hlt_classification.scouting.selective_assignment import PersistentAssignmentStore, RowSelection  # noqa: E402
 from hlt_classification.scouting.fitted_strict import FITTED_STRICT_THRESHOLD  # noqa: E402
+from hlt_classification.scouting.view_cache import (  # noqa: E402
+    EphemeralPmardViewCache, expected_cache_source_rows,
+)
 
 
 def _fold_report(value: str):
@@ -62,6 +65,11 @@ def main() -> int:
     parser.add_argument("--initialize-from", type=Path)
     parser.add_argument("--anchor-teacher-report", type=Path)
     parser.add_argument("--temperature", type=float, choices=(1, 2, 4), default=1.0)
+    parser.add_argument(
+        "--cache-privileged-views", action="store_true",
+        help="Build each repaired train/validation view once in process-local RAM.",
+    )
+    parser.add_argument("--view-cache-max-gib", type=float, default=320.0)
     args = parser.parse_args(); split = load_json(args.split_manifest); counts = load_json(args.class_counts)
     selection_manifest = load_json(args.row_selection) if args.row_selection else None
     selections = ({role: RowSelection(selection_manifest, role=role, split_manifest_sha256=split["content_hash"])
@@ -181,6 +189,61 @@ def main() -> int:
             max_rows=args.max_rows_per_role,
             row_selection=selections.get(role),
         )
+    view_caches = {}
+    if args.cache_privileged_views:
+        if not args.alpha or args.native_offline:
+            raise ValueError("privileged-view caching requires a nonzero-alpha repaired teacher")
+        if args.max_rows_per_role is not None:
+            raise ValueError("privileged-view caching requires an exact row-selection population")
+        online_stream = stream
+        remaining_gib = float(args.view_cache_max_gib)
+        assignment_hash = (
+            load_json(args.assignment_manifest)["content_hash"]
+            if args.assignment_manifest else "0" * 64
+        )
+        for cache_role in ("train", "validation"):
+            records = role_records(split, cache_role)
+            selection = selections.get(cache_role)
+            expected_rows = (
+                selection.rows if selection is not None
+                else sum(record.mapped_entries for record in records)
+            )
+            print(
+                f"[pmard-view-cache] building {cache_role} repaired views "
+                f"for {expected_rows:,} jets", flush=True,
+            )
+            cache = EphemeralPmardViewCache.build(
+                online_stream(cache_role, 0), expected_rows=expected_rows,
+                records=records, role=cache_role,
+                expected_source_rows=expected_cache_source_rows(
+                    records, row_selection=selection,
+                ),
+                view_keys=("privileged",), max_gib=remaining_gib,
+                lineage={
+                    "split_manifest_sha256": split["content_hash"],
+                    "row_selection_sha256": (
+                        selection_manifest["content_hash"]
+                        if selection_manifest else "0" * 64
+                    ),
+                    "assignment_manifest_sha256": assignment_hash,
+                    "alpha": args.alpha, "repair_family": args.repair_family,
+                    "matcher_variant": args.matcher_variant,
+                    "matcher_threshold": args.matcher_threshold,
+                    "repair_seed": derive_seed(args.seed, "full_endpoint_repair"),
+                },
+            )
+            view_caches[cache_role] = cache
+            remaining_gib -= cache.header["array_bytes"] / 1024**3
+            print(
+                f"[pmard-view-cache] ready {cache_role}: "
+                f"{cache.header['array_bytes'] / 1024**3:.2f} GiB", flush=True,
+            )
+        sampler_seed = derive_seed(args.seed, "sampler")
+        def stream(role, epoch=0):
+            cache = view_caches[role]
+            return cache.iterate_batches(
+                epoch=epoch, sampler_seed=sampler_seed, batch_size=args.batch_size,
+            )
     import torch
     teacher_initialization_seed = derive_seed(args.seed, "teacher_initialization")
     torch.manual_seed(teacher_initialization_seed)
@@ -265,6 +328,9 @@ def main() -> int:
             "anchor_input_domain": anchor_input_domain,
             "ram_assignment_tables": {
                 role: table.header["content_hash"] for role, table in assignment_tables.items()
+            },
+            "ram_view_caches": {
+                role: cache.header for role, cache in view_caches.items()
             },
             "seed_domains": {
                 "teacher_initialization": teacher_initialization_seed,

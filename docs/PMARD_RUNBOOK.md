@@ -3,7 +3,8 @@
 PMARD production is deliberately gated. Synthetic tests alone never authorize
 a campaign or final-test branch read.
 
-This runbook follows campaign spec v9 and the fitted-strict selective endpoint.
+New campaigns follow campaign spec v10 and the fitted-strict selective endpoint.
+Immutable v9 campaigns remain executable with their original streamed behavior.
 Any older description of M0--M5 cross-fit training, 100% token coverage,
 ephemeral full-role assignment tables, or `FULL_PARTICLE_ENDPOINT/v1` as the
 primary path is superseded by the workflow below.
@@ -97,6 +98,15 @@ views. Repaired tensors and teacher targets remain job-owned RAM. Completed
 jobs retain compact model/report artifacts; interrupted jobs retain one rolling
 resume checkpoint.
 
+Campaign v10 retains selected repaired model views strictly in process RAM.
+Each nonzero-alpha teacher builds train and validation repaired views once;
+positive representation-KD jobs build aligned HLT/repaired train views once.
+Replay preserves the exact authenticated epoch sampler, publishes no file, and
+is rebuilt after requeue. Smoke and pilot keep 192 GiB; production
+teacher/representation/generation/confirmation jobs request 384 GiB. Arrays
+remain capped at 320 GiB and 75% of the Slurm allocation. See
+`docs/contracts/PMARD_EPHEMERAL_VIEW_CACHE.md`.
+
 Teacher/student jobs lazily reload the authenticated per-source assignment
 shards and precompute FP32 teacher logits once per frozen teacher. Train chunks are
 round-robined across eight files and mixed in a deterministic 32,768-row RAM
@@ -132,6 +142,101 @@ walltime, ROOT I/O, and peak RAM in the pilot before authorizing production.
 Poor performance is reported and does not cancel registered rows. Invalid
 inputs, lineage drift, nonfinite required quantities, corrupt artifacts, or
 forbidden final-role access fail closed.
+
+## Supplemental T100 KD weight, temperature, and exposure sweep
+
+This validation-only pilot supplement is defined by
+`docs/contracts/PMARD_T100_KD_SWEEP.md`. It reuses the completed T0, T100, K1,
+alpha-one K2, split, row-selection, and assignment artifacts from the existing
+pilot. It does not rerun matching, baseline training, temperature selection,
+or privileged-teacher training, and it never opens the final-test role.
+
+Do not update the checkout serving a live immutable pilot. After the sweep
+implementation is committed and pushed, create a separate clean, detached
+worktree at that exact commit:
+
+```bash
+cd /home/ryreu/atlas/HLT_Classification
+git fetch origin
+
+export SWEEP_COMMIT="$(git rev-parse origin/main)"
+export SWEEP_PROJECT_DIR="/home/ryreu/atlas/HLT_Classification_t100_sweep_${SWEEP_COMMIT:0:8}"
+test ! -e "${SWEEP_PROJECT_DIR}"
+git worktree add --detach "${SWEEP_PROJECT_DIR}" "${SWEEP_COMMIT}"
+
+cd "${SWEEP_PROJECT_DIR}"
+export PYTHONNOUSERSITE=1
+export PYTHONDONTWRITEBYTECODE=1
+source /home/ryreu/miniforge3-aarch64/etc/profile.d/conda.sh
+conda activate atlas_kd_tigris
+export LD_LIBRARY_PATH="${CONDA_PREFIX}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+git status --short
+```
+
+`git status --short` must be empty. Bind the supplement to the exact completed
+pilot prefix and use a new immutable output root:
+
+```bash
+export PARENT_ROOT=/home/ryreu/atlas/HLT_Classification/checkpoints/pmard_pilot_c3e40850_prefix_recovery_r5
+export SWEEP_ROOT=/home/ryreu/atlas/HLT_Classification/checkpoints/pmard_t100_kd_sweep_${SWEEP_COMMIT:0:8}
+test ! -e "${SWEEP_ROOT}"
+
+python -s scripts/create_pmard_t100_kd_sweep.py \
+  --parent-campaign-root "${PARENT_ROOT}" \
+  --output-root "${SWEEP_ROOT}" \
+  --output "${SWEEP_ROOT}/sweep_spec.json"
+
+python -s scripts/submit_pmard_t100_kd_sweep.py \
+  --sweep-spec "${SWEEP_ROOT}/sweep_spec.json" \
+  --output "${SWEEP_ROOT}/submission_dry_run.json"
+```
+
+Inspect `submission_dry_run.json`. It must contain exactly three jobs: one
+`teacher_targets` GPU job, an uncapped `--array=0-35` GPU grid dependent on
+that cache, and one CPU aggregate job dependent on the entire array. Each
+command must export `PROJECT_DIR=${SWEEP_PROJECT_DIR}`. Live submission is:
+
+```bash
+python -s scripts/submit_pmard_t100_kd_sweep.py \
+  --sweep-spec "${SWEEP_ROOT}/sweep_spec.json" \
+  --output "${SWEEP_ROOT}/submission_ledger.json" \
+  --execute
+```
+
+The first job creates only compact float32 T0/T100 logits and identity keys.
+All 36 students subsequently read HLT particles only. The grid crosses T100
+weights `0.15/0.25/0.35/0.50`, T100 temperatures `1/2/4`, and training
+exposures `10/20/40` complete passes (11,720/23,440/46,880 updates at batch
+size 256). The execution ledger is
+immutable and must not be pre-created by the dry run.
+
+After the aggregate job completes, print the ordered validation table and
+both reference deltas with:
+
+```bash
+python -s - "${SWEEP_ROOT}/aggregate_report.json" <<'PY'
+import json, sys
+r = json.load(open(sys.argv[1]))
+print("selected:", r["selected_experiment_id"])
+print("model                     pass  CE       AUC      logR50   dCE/K1   dAUC/K1  dlogR/K1  dCE/K2   dAUC/K2  dlogR/K2")
+for row in r["candidates"]:
+    v, k1, k2 = row["validation"], row["delta_vs_k1"], row["delta_vs_prior_k2_alpha1"]
+    print(
+        "{:<25} {:>4} {:.6f} {:.6f} {:.6f} {:+.6f} {:+.6f} {:+.6f} {:+.6f} {:+.6f} {:+.6f}".format(
+            row["experiment_id"], row["training_passes"],
+            v["cross_entropy"], v["macro_ovr_auc"],
+            v["macro_mean_log_qcd_rejection_at_50pct_signal"],
+            k1["cross_entropy"], k1["macro_ovr_auc"],
+            k1["macro_mean_log_qcd_rejection_at_50pct_signal"],
+            k2["cross_entropy"], k2["macro_ovr_auc"],
+            k2["macro_mean_log_qcd_rejection_at_50pct_signal"],
+        )
+    )
+PY
+```
+
+These are single-seed validation-screen results. Promotion still requires the
+registered confirmation procedure; this supplement creates no test claim.
 
 ## Execution-only pilot prefix recovery
 

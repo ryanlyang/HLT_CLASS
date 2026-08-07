@@ -29,6 +29,10 @@ from hlt_classification.scouting.assignment import build_source_folds  # noqa: E
 from hlt_classification.scouting.splits import role_records  # noqa: E402
 from hlt_classification.scouting.selective_assignment import PersistentAssignmentStore, RowSelection  # noqa: E402
 from hlt_classification.scouting.fitted_strict import FITTED_STRICT_THRESHOLD  # noqa: E402
+from hlt_classification.scouting.view_cache import (  # noqa: E402
+    EphemeralPmardViewCache, expected_cache_source_rows,
+    should_cache_student_views,
+)
 
 
 def _fold_report(value: str):
@@ -71,6 +75,11 @@ def main() -> int:
     parser.add_argument("--representation-coefficient", type=float, default=0.0)
     parser.add_argument("--representation-control", action="store_true")
     parser.add_argument("--generation", type=int, default=0)
+    parser.add_argument(
+        "--cache-privileged-views", action="store_true",
+        help="Retain aligned HLT/repaired training views in process-local RAM.",
+    )
+    parser.add_argument("--view-cache-max-gib", type=float, default=320.0)
     args = parser.parse_args(); split = load_json(args.split_manifest)
     selection_manifest = load_json(args.row_selection) if args.row_selection else None
     selections = ({role: RowSelection(selection_manifest, role=role, split_manifest_sha256=split["content_hash"])
@@ -276,6 +285,60 @@ def main() -> int:
             max_rows=args.max_rows_per_role,
             row_selection=selections.get(role),
         )
+    view_cache = None
+    if should_cache_student_views(
+        requested=args.cache_privileged_views,
+        needs_privileged_training_views=needs_privileged_training_views,
+        alpha=args.alpha, arm=args.arm,
+    ):
+        if args.max_rows_per_role is not None:
+            raise ValueError("RAM repaired-view caching requires an exact row-selection population")
+        records = role_records(split, "train")
+        selection = selections.get("train")
+        expected_rows = (
+            selection.rows if selection is not None
+            else sum(record.mapped_entries for record in records)
+        )
+        online_stream = stream
+        print(
+            f"[pmard-view-cache] building aligned HLT/repaired training views "
+            f"for {expected_rows:,} jets", flush=True,
+        )
+        view_cache = EphemeralPmardViewCache.build(
+            online_stream("train", 0), expected_rows=expected_rows,
+            records=records, role="train",
+            expected_source_rows=expected_cache_source_rows(
+                records, row_selection=selection,
+            ),
+            view_keys=("hlt", "privileged"), max_gib=args.view_cache_max_gib,
+            lineage={
+                "split_manifest_sha256": split["content_hash"],
+                "row_selection_sha256": (
+                    selection_manifest["content_hash"]
+                    if selection_manifest else "0" * 64
+                ),
+                "assignment_manifest_sha256": (
+                    load_json(args.assignment_manifest)["content_hash"]
+                    if args.assignment_manifest else "0" * 64
+                ),
+                "alpha": args.alpha, "repair_family": args.repair_family,
+                "matcher_variant": args.matcher_variant,
+                "matcher_threshold": args.matcher_threshold,
+                "repair_seed": derive_seed(args.seed, "full_endpoint_repair"),
+            },
+        )
+        print(
+            f"[pmard-view-cache] ready train: "
+            f"{view_cache.header['array_bytes'] / 1024**3:.2f} GiB", flush=True,
+        )
+        sampler_seed = derive_seed(args.seed, "sampler")
+        def stream(role, epoch=0):
+            if role == "train":
+                return view_cache.iterate_batches(
+                    epoch=epoch, sampler_seed=sampler_seed,
+                    batch_size=args.batch_size,
+                )
+            return online_stream(role, epoch)
     student_factory = (
         build_scouting_particle_transformer if args.representation_arm == "R0"
         else lambda: build_representation_scouting_particle_transformer(args.representation_arm)
@@ -285,12 +348,15 @@ def main() -> int:
     if cache_teacher_targets:
         if config.hlt_kd:
             hlt_targets = precompute_teacher_targets(
-                hlt_teacher, iterate_model_batches(
-                    split, data_root=args.data_root, role="train", input_mode="hlt",
-                    epoch=0, batch_size=args.batch_size,
-                    sampler_seed=derive_seed(args.seed, "sampler"),
-                    max_rows=args.max_rows_per_role,
-                    row_selection=selections.get("train"),
+                hlt_teacher, (
+                    stream("train", 0) if view_cache is not None
+                    else iterate_model_batches(
+                        split, data_root=args.data_root, role="train", input_mode="hlt",
+                        epoch=0, batch_size=args.batch_size,
+                        sampler_seed=derive_seed(args.seed, "sampler"),
+                        max_rows=args.max_rows_per_role,
+                        row_selection=selections.get("train"),
+                    )
                 ), input_key="hlt", device=args.device,
                 teacher_report_sha256=hlt_hash,
                 split_manifest_sha256=split["content_hash"],
@@ -386,6 +452,7 @@ def main() -> int:
             },
             "teacher_target_cache_enabled": cache_teacher_targets,
             "cached_teacher_target_roles": cached_teacher_target_roles,
+            "ram_view_cache": None if view_cache is None else view_cache.header,
             "representation_arm": args.representation_arm,
             "representation_coefficient": args.representation_coefficient,
             "representation_control": args.representation_control,

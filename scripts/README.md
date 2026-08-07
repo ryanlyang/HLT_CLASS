@@ -158,3 +158,12 @@ cache corrections. It proves source compatibility, reuses the independent HLT
 budget and temperature training, and emits a monitor that rebuilds assignments
 and dependent locks before submitting teachers. It cannot import failed
 teachers or later outputs.
+
+The supplemental T100 transfer study uses
+`create_pmard_t100_kd_sweep.py`, `build_pmard_t100_kd_targets.py`,
+`train_pmard_t100_kd_sweep.py`, `aggregate_pmard_t100_kd_sweep.py`, and
+`submit_pmard_t100_kd_sweep.py`. It binds a completed pilot prefix, computes
+T0/T100 logits once, runs an uncapped 36-row HLT-only
+weight/temperature/exposure array, and aggregates validation without
+final-test access. The exact
+separate-worktree launch procedure is in `docs/PMARD_RUNBOOK.md`.

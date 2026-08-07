@@ -13,8 +13,9 @@ from .fitted_strict import FITTED_STRICT_THRESHOLD
 from .schema import SCOUTING_SCHEMA_SHA256
 from .training import CONFIRMATION_SEEDS, KD_MIXTURES, REPRESENTATION_ARMS, TEMPERATURE_GRID
 
-PMARD_CAMPAIGN_SPEC_CONTRACT = "hlt_classification_pmard_campaign_spec_v9"
-PMARD_CAMPAIGN_SPEC_VERSION = 9
+PMARD_CAMPAIGN_SPEC_CONTRACT = "hlt_classification_pmard_campaign_spec_v10"
+PMARD_CAMPAIGN_SPEC_VERSION = 10
+PMARD_LEGACY_CAMPAIGN_SPEC_VERSION = 9
 PMARD_LEDGER_CONTRACT = "hlt_classification_pmard_submission_ledger_v1"
 PMARD_DRY_RUN_CONTRACT = "hlt_classification_pmard_production_dry_run_v1"
 PMARD_SMOKE_MAX_ROWS_PER_ROLE = 4096
@@ -42,8 +43,8 @@ class PmardTask:
         return {**self.__dict__, "dependencies": list(self.dependencies), "worker": "run_pmard_task.py"}
 
 
-def experiment_registry() -> dict[str, object]:
-    return {
+def experiment_registry(*, campaign_version: int = PMARD_CAMPAIGN_SPEC_VERSION) -> dict[str, object]:
+    registry = {
         "alphas": list(ALPHA_GRID), "matcher_arms": ["fitted_strict"],
         "primary_repair_family": "SELECTIVE_FULL_PARTICLE_ENDPOINT/v1",
         "matcher": {
@@ -78,11 +79,26 @@ def experiment_registry() -> dict[str, object]:
         "generations": [0, 1, 2, 3], "screen_seed": 1337,
         "confirmation_seeds": list(CONFIRMATION_SEEDS),
     }
+    if campaign_version >= 10:
+        registry["privileged_view_cache"] = {
+            "storage": "process_local_ram_float32_particle_views_v1",
+            "enabled_modes": ["smoke", "pilot", "production"],
+            "max_gib": 320.0,
+            "sampler_replay": "exact_chunk_file_buffer_schedule_v1",
+            "durable_artifact_published": False,
+        }
+    return registry
 
 
-def pmard_tasks(*, smoke: bool, pilot: bool = False) -> tuple[PmardTask, ...]:
+def pmard_tasks(
+    *, smoke: bool, pilot: bool = False,
+    campaign_version: int = PMARD_CAMPAIGN_SPEC_VERSION,
+) -> tuple[PmardTask, ...]:
     cpu = "00:30:00" if smoke else "08:00:00"
     gpu = "01:00:00" if smoke else "48:00:00"
+    privileged_memory = (
+        "192G" if smoke or pilot or campaign_version < 10 else "384G"
+    )
     tasks = [
         PmardTask("source_audit", (), walltime=cpu),
         PmardTask("splits", ("source_audit",), walltime=cpu),
@@ -99,7 +115,7 @@ def pmard_tasks(*, smoke: bool, pilot: bool = False) -> tuple[PmardTask, ...]:
         PmardTask("budget_selection", ("budget_grid",), walltime=cpu),
         PmardTask("temperature_grid", ("budget_selection",), cpus=8, memory="192G", walltime=gpu, gpu=True, array="0-2%2", checkpointable=True),
         PmardTask("training_lock", ("temperature_grid", "full_endpoint_lock"), walltime=cpu),
-        PmardTask("teachers", ("training_lock",), cpus=8, memory="192G", walltime=gpu, gpu=True, array="0-6%2", checkpointable=True),
+        PmardTask("teachers", ("training_lock",), cpus=8, memory=privileged_memory, walltime=gpu, gpu=True, array="0-6%2", checkpointable=True),
         PmardTask("oracle_validation", ("teachers",), cpus=8, memory="192G", walltime=gpu, gpu=True),
     ]
     if smoke:
@@ -113,12 +129,12 @@ def pmard_tasks(*, smoke: bool, pilot: bool = False) -> tuple[PmardTask, ...]:
         PmardTask("alpha_selection", ("k2_alpha_sweep",), walltime=cpu),
         PmardTask("kd_controls", ("alpha_selection",), cpus=8, memory="192G", walltime=gpu, gpu=True, array="0-6%2", checkpointable=True),
         PmardTask("mechanism_controls", ("kd_controls",), cpus=8, memory="192G", walltime=gpu, gpu=True, array="0-21%2", checkpointable=True),
-        PmardTask("representation", ("mechanism_controls",), cpus=8, memory="192G", walltime=gpu, gpu=True, array="0-12%2", checkpointable=True),
-        PmardTask("generation_1", ("representation",), cpus=8, memory="192G", walltime=gpu, gpu=True, checkpointable=True),
-        PmardTask("generation_2", ("generation_1",), cpus=8, memory="192G", walltime=gpu, gpu=True, checkpointable=True),
+        PmardTask("representation", ("mechanism_controls",), cpus=8, memory=privileged_memory, walltime=gpu, gpu=True, array="0-12%2", checkpointable=True),
+        PmardTask("generation_1", ("representation",), cpus=8, memory=privileged_memory, walltime=gpu, gpu=True, checkpointable=True),
+        PmardTask("generation_2", ("generation_1",), cpus=8, memory=privileged_memory, walltime=gpu, gpu=True, checkpointable=True),
         PmardTask("screen_selection", ("generation_2",), walltime=cpu),
         PmardTask("screen_confirmation_lock", ("screen_selection",), walltime=cpu),
-        PmardTask("confirmation", ("screen_confirmation_lock",), cpus=8, memory="192G", walltime=gpu, gpu=True, array="0-4%2", checkpointable=True),
+        PmardTask("confirmation", ("screen_confirmation_lock",), cpus=8, memory=privileged_memory, walltime=gpu, gpu=True, array="0-4%2", checkpointable=True),
     ])
     if smoke:
         tasks.append(PmardTask("miniature_summary", ("confirmation",), walltime=cpu))
@@ -229,9 +245,13 @@ def create_pmard_campaign_spec(
 
 
 def validate_pmard_campaign_spec(spec: Mapping[str, Any]) -> str:
+    version = spec.get("schema_version")
+    if version not in {PMARD_LEGACY_CAMPAIGN_SPEC_VERSION, PMARD_CAMPAIGN_SPEC_VERSION}:
+        raise ValueError("PMARD campaign spec version is unsupported")
+    expected_contract = f"hlt_classification_pmard_campaign_spec_v{version}"
     digest = validate_content_hash(
-        spec, expected_contract=PMARD_CAMPAIGN_SPEC_CONTRACT,
-        expected_schema_version=PMARD_CAMPAIGN_SPEC_VERSION,
+        spec, expected_contract=expected_contract,
+        expected_schema_version=int(version),
     )
     validate_source_snapshot_payload(spec.get("source_snapshot", {}))
     if spec["source_snapshot"].get("worktree_clean") is not True:
@@ -243,17 +263,23 @@ def validate_pmard_campaign_spec(spec: Mapping[str, Any]) -> str:
         raise ValueError("PMARD campaign mode/site differs")
     if spec.get("scouting_schema_sha256") != SCOUTING_SCHEMA_SHA256:
         raise ValueError("campaign Scouting schema differs")
+    expected_registry = experiment_registry(campaign_version=int(version))
     expected_identity = canonical_sha256({
         "source_snapshot_sha256": spec["source_snapshot"]["source_snapshot_sha256"],
         "source_manifest_sha256": source_hash, "split_manifest_sha256": split_hash,
-        "mode": mode, "registry": experiment_registry(), "evidence": spec.get("evidence"),
+        "mode": mode, "registry": expected_registry, "evidence": spec.get("evidence"),
     })
     if spec.get("campaign_id") != f"pmard_{mode}_{expected_identity[:16]}":
         raise ValueError("PMARD campaign scientific identity differs")
-    if spec.get("registry") != experiment_registry():
+    if spec.get("registry") != expected_registry:
         raise ValueError("PMARD experiment registry differs")
     _validate_dag(spec.get("tasks", ()))
-    expected_tasks = [item.to_dict() for item in pmard_tasks(smoke=mode == "smoke", pilot=mode == "pilot")]
+    expected_tasks = [
+        item.to_dict() for item in pmard_tasks(
+            smoke=mode == "smoke", pilot=mode == "pilot",
+            campaign_version=int(version),
+        )
+    ]
     if spec.get("tasks") != expected_tasks:
         raise ValueError("PMARD task registry/resources differ")
     if spec.get("mode") == "production":

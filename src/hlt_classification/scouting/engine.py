@@ -16,7 +16,7 @@ import numpy as np
 
 from hlt_classification.data.cache_contracts import (
     atomic_publish_bytes, canonical_sha256, sha256_file, with_content_hash,
-    write_immutable_json, require_sha256,
+    write_immutable_json, require_sha256, validate_content_hash,
 )
 from hlt_classification.training.checkpoints import capture_model_runtime_state, capture_rng_state, restore_model_runtime_state, restore_rng_state
 from .evaluation import classification_metrics
@@ -25,10 +25,28 @@ from .training import (
 )
 from .targets import EphemeralTeacherTargets
 
-PMARD_TRAINING_REPORT_CONTRACT = "hlt_classification_pmard_training_report_v4"
-PMARD_TRAINING_REPORT_VERSION = 4
-PMARD_RESUME_CONTRACT = "hlt_classification_pmard_resume_checkpoint_v4"
-PMARD_RESUME_VERSION = 4
+PMARD_TRAINING_REPORT_CONTRACT = "hlt_classification_pmard_training_report_v5"
+PMARD_TRAINING_REPORT_VERSION = 5
+PMARD_LEGACY_TRAINING_REPORT_CONTRACT = "hlt_classification_pmard_training_report_v4"
+PMARD_LEGACY_TRAINING_REPORT_VERSION = 4
+PMARD_RESUME_CONTRACT = "hlt_classification_pmard_resume_checkpoint_v5"
+PMARD_RESUME_VERSION = 5
+
+
+def validate_pmard_training_report(report: Mapping[str, object]) -> str:
+    """Accept immutable v4 parents while publishing new dual-temperature v5 rows."""
+
+    identity = (report.get("contract"), report.get("schema_version"))
+    supported = {
+        (PMARD_LEGACY_TRAINING_REPORT_CONTRACT, PMARD_LEGACY_TRAINING_REPORT_VERSION),
+        (PMARD_TRAINING_REPORT_CONTRACT, PMARD_TRAINING_REPORT_VERSION),
+    }
+    if identity not in supported:
+        raise ValueError("PMARD training report version is unsupported")
+    return validate_content_hash(
+        report, expected_contract=str(identity[0]),
+        expected_schema_version=int(identity[1]),
+    )
 
 
 class PmardTrainingInterrupted(RuntimeError):
@@ -534,5 +552,5 @@ def train_pmard(
 
 __all__ = [
     "PmardTrainingConfig", "PmardTrainingInterrupted", "evaluate_model", "learning_rate",
-    "precompute_teacher_targets", "train_pmard",
+    "precompute_teacher_targets", "train_pmard", "validate_pmard_training_report",
 ]

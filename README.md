@@ -17,7 +17,10 @@ leaving unmatched tokens byte-identical to HLT. Its authorization lock binds
 the fixed matcher artifact, exact threshold, row selection, and assignment
 manifest; training uses
 deterministic cross-file RAM shuffling and FP32 KD/representation losses under
-BF16 model autocast.
+BF16 model autocast. Campaign-spec v10 additionally computes each selected
+nonzero-alpha repaired view once into an authenticated process-local FP32 RAM
+cache and exactly replays the existing epoch sampler; immutable v9 executions
+retain their original streamed behavior.
 Local synthetic verification does not authorize production: installed-Weaver
 parity and the complete real streamed Tigris miniature remain mandatory.
 
@@ -81,6 +84,8 @@ JetClass data on Tigris:
 - [PRAD research-compute runbook](docs/PRAD_RUNBOOK.md)
 - [PRAD requirements traceability](docs/PRAD_REQUIREMENTS_TRACEABILITY.md)
 - [PMARD active implementation plan](docs/plans/SCOUTING_ALPHA_REPAIR_DISTILLATION_OPTIMAL_CAMPAIGN.md)
+- [PMARD pilot preliminary results and implementation map](docs/PMARD_PILOT_PRELIMINARY_RESULTS.md)
+- [PMARD T100 KD sweep contract](docs/contracts/PMARD_T100_KD_SWEEP.md)
 - [PMARD research-compute runbook](docs/PMARD_RUNBOOK.md)
 - [Tigris miniature acceptance procedure](docs/TIGRIS_ACCEPTANCE.md)
 - [JetClass and HLT data contract](docs/DATA_CONTRACT.md)

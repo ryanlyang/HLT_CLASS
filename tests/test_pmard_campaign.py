@@ -8,7 +8,8 @@ from hlt_classification.data.cache_contracts import canonical_sha256, with_conte
 from hlt_classification.provenance import SOURCE_SNAPSHOT_CONTRACT
 from hlt_classification.scouting.campaign import (
     create_pmard_campaign_spec, create_pmard_production_dry_run,
-    submit_pmard_campaign, validate_pmard_campaign_spec,
+    experiment_registry, pmard_tasks, submit_pmard_campaign,
+    validate_pmard_campaign_spec,
 )
 from hlt_classification.scouting.evidence import (
     build_miniature_report, build_resource_evidence, build_storage_evidence,
@@ -58,7 +59,7 @@ def test_pmard_dry_run_is_complete_topological_and_nonnumeric_ids_rejected():
     assert spec["registry"]["representation_arms"][-3:] == ["R4_PAIR", "R4_GRAM", "R5"]
     assert spec["registry"]["matcher"]["variant"] == "fitted_strict"
     assert spec["registry"]["primary_repair_family"] == "SELECTIVE_FULL_PARTICLE_ENDPOINT/v1"
-    assert spec["contract"] == "hlt_classification_pmard_campaign_spec_v9"
+    assert spec["contract"] == "hlt_classification_pmard_campaign_spec_v10"
     assignment = next(task for task in spec["tasks"] if task["name"] == "assignment_cache")
     full_lock = next(task for task in spec["tasks"] if task["name"] == "full_endpoint_lock")
     training_lock = next(task for task in spec["tasks"] if task["name"] == "training_lock")
@@ -152,6 +153,24 @@ def test_every_smoke_student_command_uses_shared_row_selection():
     assert alpha_teacher_command[
         alpha_teacher_command.index("--matcher-threshold") + 1
     ] == "0.9828147479721088"
+    assert "--cache-privileged-views" not in alpha_teacher_command
+    workflow.spec = {
+        **workflow.spec, "mode": "pilot",
+        "registry": {"privileged_view_cache": {
+            "enabled_modes": ["pilot", "production"], "max_gib": 320.0,
+        }},
+    }
+    cached_teacher = workflow._teacher_command(
+        output=Path("/output/T25_cached"), experiment="T25", alpha=.25,
+    )
+    cached_student = workflow._student_command(
+        output=Path("/output/R3_cached"), arm="K2", alpha=.25,
+        hlt_teacher=Path("/teacher/hlt.json"),
+        privileged_teacher=Path("/teacher/privileged.json"),
+    )
+    for command in (cached_teacher, cached_student):
+        assert command.count("--cache-privileged-views") == 1
+        assert command[command.index("--view-cache-max-gib") + 1] == "320.0"
 
 
 def test_pilot_registers_exact_300k_100k_100k_and_sealed_final_assignments():
@@ -164,9 +183,47 @@ def test_pilot_registers_exact_300k_100k_100k_and_sealed_final_assignments():
         "train": 300_000, "validation": 100_000, "final_test": 100_000,
     }
     tasks = {task["name"]: task for task in spec["tasks"]}
+    assert spec["registry"]["privileged_view_cache"] == {
+        "storage": "process_local_ram_float32_particle_views_v1",
+        "enabled_modes": ["smoke", "pilot", "production"], "max_gib": 320.0,
+        "sampler_replay": "exact_chunk_file_buffer_schedule_v1",
+        "durable_artifact_published": False,
+    }
+    assert tasks["teachers"]["memory"] == "192G"
+    assert tasks["representation"]["memory"] == "192G"
+    assert tasks["confirmation"]["memory"] == "192G"
     assert tasks["final_row_selection"]["dependencies"] == ["execution_lock"]
     assert tasks["final_assignment_cache"]["dependencies"] == ["final_row_selection"]
     assert tasks["final_test"]["dependencies"] == ["final_assignment_manifest"]
+
+
+def test_campaign_v9_remains_valid_for_the_active_immutable_pilot():
+    current = create_pmard_campaign_spec(
+        source_snapshot=_source(), source_manifest_sha256=_digest("source"),
+        split_manifest_sha256=_digest("split"), campaign_root="/tmp/legacy", mode="pilot",
+    )
+    registry = experiment_registry(campaign_version=9)
+    evidence = current["evidence"]
+    identity = canonical_sha256({
+        "source_snapshot_sha256": current["source_snapshot"]["source_snapshot_sha256"],
+        "source_manifest_sha256": current["source_manifest_sha256"],
+        "split_manifest_sha256": current["split_manifest_sha256"],
+        "mode": "pilot", "registry": registry, "evidence": evidence,
+    })
+    legacy = {
+        key: value for key, value in current.items()
+        if key != "content_hash"
+    }
+    legacy.update({
+        "contract": "hlt_classification_pmard_campaign_spec_v9",
+        "schema_version": 9, "campaign_id": f"pmard_pilot_{identity[:16]}",
+        "registry": registry,
+        "tasks": [task.to_dict() for task in pmard_tasks(
+            smoke=False, pilot=True, campaign_version=9,
+        )],
+    })
+    legacy = with_content_hash(legacy)
+    assert validate_pmard_campaign_spec(legacy) == legacy["content_hash"]
 
 
 def test_production_requires_validated_complete_evidence_bundle():
@@ -216,6 +273,9 @@ def test_production_requires_validated_complete_evidence_bundle():
     )
     assert validate_pmard_campaign_spec(production) == production["content_hash"]
     assert "final_test" in {task["name"] for task in production["tasks"]}
+    production_tasks = {task["name"]: task for task in production["tasks"]}
+    assert production_tasks["teachers"]["memory"] == "384G"
+    assert production_tasks["representation"]["memory"] == "384G"
 
 
 def test_lock_chain_requires_exact_predecessor():

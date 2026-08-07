@@ -1,5 +1,36 @@
 # Current Handoff
 
+## Preliminary PMARD pilot evidence (2026-08-07)
+
+The recovered 300k/100k/100k PMARD pilot has now completed its teacher ladder,
+authenticated validation oracles, K2 alpha sweep, alpha selection, and K0--K6
+logit-KD controls. Alpha `1.0` was selected. On validation, K2 improved over
+the ordinary K1 self-KD control from CE `0.675880` to `0.675060`, macro AUC
+`0.937334` to `0.937468`, and mean log QCD rejection `7.022452` to `7.034357`;
+overall accuracy was effectively unchanged. The selective T100 endpoint
+closed only about 16--21% of the native-offline oracle gap, and direct TOFF KD
+in K6 improved CE/AUC slightly beyond K2 without improving rejection. These
+are single-screening-seed validation observations, not confirmed or final-test
+claims. Mechanism controls remain in progress; representation, generation,
+confirmation, and sealed final-test stages remain pending.
+
+The complete numerical tables, exact endpoint semantics, current limitations,
+artifact locations, and code-symbol map are recorded in
+[`docs/PMARD_PILOT_PRELIMINARY_RESULTS.md`](PMARD_PILOT_PRELIMINARY_RESULTS.md).
+This section supersedes older statements below that no real PMARD scientific
+output exists; it does not supersede their implementation or recovery history.
+
+An authenticated supplemental T100 transfer sweep is now implemented. It
+holds CE at 25%, scans T100 KD weights `0.15/0.25/0.35/0.50`, T100
+temperatures `1/2/4`, and training exposures `10/20/40` complete passes,
+assigns the remaining 75% teacher mass to T0 at temperature 1, and trains all
+36 rows on HLT inputs only. A single prerequisite
+pass caches T0/T100 train logits, so repaired alpha-one inputs are not rebuilt
+for every student. The sweep is bound to the completed pilot prefix, compares
+against both K1 and the original alpha-one K2 row, and cannot read final test.
+Its specification and commands are documented in
+`docs/contracts/PMARD_T100_KD_SWEEP.md` and `docs/PMARD_RUNBOOK.md`.
+
 ## Active PMARD implementation (2026-08-05)
 
 The user explicitly activated the PMARD mandate. The active scientific plan is
@@ -72,6 +103,14 @@ Implemented locally in the current worktree:
   with unused GPU teachers/matchers released for R0 and zero-coefficient
   controls, plus the HLT-only inference signature,
   fixed observer-only stratification and final nested paired statistics;
+- campaign-spec v10 process-local repaired-view caching: nonzero-alpha
+  teachers retain only FP32 privileged train/validation model views, positive
+  representation KD retains aligned HLT/privileged train views, and
+  identity-indexed replay reproduces the exact file/chunk/32,768-row-buffer
+  epoch sampler and batch tails; the 320-GiB/75%-of-Slurm preallocation gate,
+  192-GiB smoke/pilot and 384-GiB production requests, zero durable output,
+  v9 validation support, and exact-source enforcement keep the active
+  recovered pilot scientifically unchanged;
 - hash-chained freeze locks and a minimum-storage Tigris DAG whose smoke graph
   cannot access final test, with exact-ID monitor/resume/cancel, authenticated
   resource/storage/miniature evidence, nonmutating production dry run, and
@@ -80,7 +119,11 @@ Implemented locally in the current worktree:
   only after the execution lock, and reports HLT, native-offline, and
   matched-offline endpoint oracles alongside deployable finalists.
 
-Local verification now passes `218 tests` with 14 Matplotlib warnings, including selective
+Local verification passes `228 tests` with 14 Matplotlib warnings. The new
+RAM-view-cache coverage includes three-epoch online-versus-cached
+identity/batch/tensor equivalence, memory fail-before-allocation, alpha-zero
+and native-offline bypass, campaign v9 compatibility, and campaign v10
+resource wiring. Existing coverage includes selective
 all-field endpoint, persistent sparse join, pilot-DAG, matcher, KD, resume, and
 legacy campaign regressions. CLI help and `git diff --check` also pass; the
 remaining notices are repository line-ending notices.
@@ -370,10 +413,16 @@ hlt_classification_pmard_ephemeral_assignment_v2
 hlt_classification_pmard_matcher_report_v2
 hlt_classification_pmard_matcher_validation_v2
 hlt_classification_pmard_full_role_coverage_v2
-hlt_classification_pmard_training_report_v4
-hlt_classification_pmard_resume_checkpoint_v4
+hlt_classification_pmard_training_report_v4 (legacy readable parent)
+hlt_classification_pmard_resume_checkpoint_v4 (legacy readable parent)
+hlt_classification_pmard_training_report_v5
+hlt_classification_pmard_resume_checkpoint_v5
 hlt_classification_pmard_lock_v4
 hlt_classification_pmard_campaign_spec_v9
+hlt_classification_pmard_t100_kd_sweep_spec_v2
+hlt_classification_pmard_t100_kd_targets_v1
+hlt_classification_pmard_t100_kd_sweep_report_v2
+hlt_classification_pmard_t100_kd_sweep_ledger_v2
 ```
 
 Changing registered-v1 event, substream, replica-cycle, degradation, or cache

@@ -21,9 +21,7 @@ from hlt_classification.scouting.campaign import (  # noqa: E402
     PMARD_LEDGER_CONTRACT, validate_pmard_campaign_spec,
 )
 from hlt_classification.scouting.config_contracts import validate_vendored_preprocessing  # noqa: E402
-from hlt_classification.scouting.engine import (  # noqa: E402
-    PMARD_TRAINING_REPORT_CONTRACT, PMARD_TRAINING_REPORT_VERSION,
-)
+from hlt_classification.scouting.engine import validate_pmard_training_report  # noqa: E402
 from hlt_classification.scouting.recovery import (  # noqa: E402
     IMPORTED_TASKS, PMARD_PREFIX_IMPORT_CONTRACT, PMARD_PREFIX_IMPORT_VERSION,
     PREFIX_TASKS, REBUILT_TASKS, validate_prefix_import_compatibility,
@@ -89,10 +87,7 @@ def _import_attested_outputs(
         imported.append({"source": str(source), "target": str(target), "sha256": row["sha256"]})
         if target.name == "training_report.json":
             report = load_json(target)
-            validate_content_hash(
-                report, expected_contract=PMARD_TRAINING_REPORT_CONTRACT,
-                expected_schema_version=PMARD_TRAINING_REPORT_VERSION,
-            )
+            validate_pmard_training_report(report)
             checkpoint_source = source.parent / report["selected_checkpoint"]
             if sha256_file(checkpoint_source) != report["selected_checkpoint_sha256"]:
                 raise ValueError("source selected checkpoint hash differs")
