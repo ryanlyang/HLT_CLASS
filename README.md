@@ -86,6 +86,7 @@ JetClass data on Tigris:
 - [PMARD active implementation plan](docs/plans/SCOUTING_ALPHA_REPAIR_DISTILLATION_OPTIMAL_CAMPAIGN.md)
 - [PMARD pilot preliminary results and implementation map](docs/PMARD_PILOT_PRELIMINARY_RESULTS.md)
 - [PMARD T100 KD sweep contract](docs/contracts/PMARD_T100_KD_SWEEP.md)
+- [PMARD paired KD schedule follow-up contract](docs/contracts/PMARD_KD_SCHEDULE_FOLLOWUP.md)
 - [PMARD research-compute runbook](docs/PMARD_RUNBOOK.md)
 - [Tigris miniature acceptance procedure](docs/TIGRIS_ACCEPTANCE.md)
 - [JetClass and HLT data contract](docs/DATA_CONTRACT.md)

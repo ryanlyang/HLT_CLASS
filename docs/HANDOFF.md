@@ -50,6 +50,23 @@ and forward native offline arrays under the unversioned runtime selector. The
 supplemental target worker also evaluates the constrained T100 repaired path
 before the ordinary T0 path so future endpoint incompatibilities fail early.
 
+A validation-only paired schedule follow-up is now implemented for the
+observed 20-pass CE-control instability. It consumes the completed 36-row
+T100 sweep aggregate, freezes both its lowest-CE and best-utility recipe at
+each of 10/20/40 passes, carries the 40-pass winners into a predeclared
+60-pass extrapolation, and reruns those recipes beside fresh K0 CE-only and
+K1 T0-self-KD controls. Every row validates once per complete train pass.
+Ten-pass rows use the parent `3e-4` peak LR; 20/40/60-pass groups run both that
+fixed LR and the predeclared `L*sqrt(10/passes)` schedule. The maximum grid is
+28 uncapped jobs (smaller only when the two parent selection rules choose the
+same recipe). It reuses the parent T0/T100 float32 target cache and opens only
+the 300k train and 100k validation HLT views; it does not rematch, construct
+repaired views, or access test. Contracts and launch procedure are in
+`docs/contracts/PMARD_KD_SCHEDULE_FOLLOWUP.md` and `docs/PMARD_RUNBOOK.md`.
+Local source compilation passed; the dependency-bearing pytest suite was not
+available under the current Windows Python environment and still requires
+execution in `atlas_kd_tigris` before push/Tigris submission.
+
 ## Active PMARD implementation (2026-08-05)
 
 The user explicitly activated the PMARD mandate. The active scientific plan is
@@ -442,6 +459,9 @@ hlt_classification_pmard_t100_kd_sweep_spec_v2
 hlt_classification_pmard_t100_kd_targets_v1
 hlt_classification_pmard_t100_kd_sweep_report_v2
 hlt_classification_pmard_t100_kd_sweep_ledger_v2
+hlt_classification_pmard_kd_followup_spec_v1
+hlt_classification_pmard_kd_followup_report_v1
+hlt_classification_pmard_kd_followup_ledger_v1
 ```
 
 Changing registered-v1 event, substream, replica-cycle, degradation, or cache

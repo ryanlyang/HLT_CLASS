@@ -1973,6 +1973,9 @@ hlt_classification_pmard_t100_kd_sweep_spec_v2
 hlt_classification_pmard_t100_kd_targets_v1
 hlt_classification_pmard_t100_kd_sweep_report_v2
 hlt_classification_pmard_t100_kd_sweep_ledger_v2
+hlt_classification_pmard_kd_followup_spec_v1
+hlt_classification_pmard_kd_followup_report_v1
+hlt_classification_pmard_kd_followup_ledger_v1
 ```
 
 Every reusable artifact records its content hash, parent hashes, exact source

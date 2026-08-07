@@ -238,6 +238,92 @@ PY
 These are single-seed validation-screen results. Promotion still requires the
 registered confirmation procedure; this supplement creates no test claim.
 
+### Paired CE/self-KD/T100 schedule controls
+
+After the T100 sweep aggregate exists, use the follow-up contract in
+`docs/contracts/PMARD_KD_SCHEDULE_FOLLOWUP.md` to make the 10/20/40/60-pass
+comparison interpretable. This study validates every epoch and reruns K0,
+K1, and both the lowest-CE and best-utility T100 recipes under matched
+schedules. The 60-pass rows inherit the frozen winners from the parent
+sweep's longest, 40-pass exposure. At 20, 40, and 60 passes it runs both the original `3e-4` peak LR and
+the predeclared square-root-scaled LR. It reuses the parent logit cache and
+does not rerun matching or T100 view construction.
+
+Commit and push the implementation, then make another clean detached
+worktree; do not update either worktree serving a live immutable study:
+
+```bash
+cd /home/ryreu/atlas/HLT_Classification
+git fetch origin
+
+export FOLLOWUP_COMMIT="$(git rev-parse origin/main)"
+export FOLLOWUP_PROJECT_DIR="/home/ryreu/atlas/HLT_Classification_kd_followup_${FOLLOWUP_COMMIT:0:8}"
+test ! -e "${FOLLOWUP_PROJECT_DIR}"
+git worktree add --detach "${FOLLOWUP_PROJECT_DIR}" "${FOLLOWUP_COMMIT}"
+
+cd "${FOLLOWUP_PROJECT_DIR}"
+export PYTHONNOUSERSITE=1
+export PYTHONDONTWRITEBYTECODE=1
+source /home/ryreu/miniforge3-aarch64/etc/profile.d/conda.sh
+conda activate atlas_kd_tigris
+export LD_LIBRARY_PATH="${CONDA_PREFIX}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+git status --short
+```
+
+`git status --short` must be empty. Point `PARENT_SWEEP_ROOT` at the successful
+36-row sweep root containing `aggregate_report.json`:
+
+```bash
+export PARENT_SWEEP_ROOT=/home/ryreu/atlas/HLT_Classification/checkpoints/pmard_t100_kd_sweep_SUCCESSFUL_ROOT
+export FOLLOWUP_ROOT=/home/ryreu/atlas/HLT_Classification/checkpoints/pmard_kd_followup_${FOLLOWUP_COMMIT:0:8}
+test -f "${PARENT_SWEEP_ROOT}/aggregate_report.json"
+test ! -e "${FOLLOWUP_ROOT}"
+
+python -s scripts/create_pmard_kd_followup.py \
+  --parent-sweep-root "${PARENT_SWEEP_ROOT}" \
+  --output-root "${FOLLOWUP_ROOT}" \
+  --output "${FOLLOWUP_ROOT}/followup_spec.json"
+
+python -s scripts/submit_pmard_kd_followup.py \
+  --followup-spec "${FOLLOWUP_ROOT}/followup_spec.json" \
+  --output "${FOLLOWUP_ROOT}/submission_dry_run.json"
+```
+
+Inspect the immutable registry in `followup_spec.json`. If the CE and utility
+winners differ, the dry run contains an uncapped `--array=0-27`;
+deduplication can make it smaller. There are exactly two jobs:
+the GPU grid and a dependent CPU aggregate. Submit with:
+
+```bash
+python -s scripts/submit_pmard_kd_followup.py \
+  --followup-spec "${FOLLOWUP_ROOT}/followup_spec.json" \
+  --output "${FOLLOWUP_ROOT}/submission_ledger.json" \
+  --execute
+```
+
+After aggregation, print the direct matched comparisons:
+
+```bash
+python -s - "${FOLLOWUP_ROOT}/aggregate_report.json" <<'PY'
+import json, sys
+r = json.load(open(sys.argv[1]))
+print("model                                     pass schedule     LR          CE       AUC      logR50   dCE/K0   dCE/K1")
+for row in r["candidates"]:
+    v, k0, k1 = row["validation"], row["delta_vs_ce_only"], row["delta_vs_hlt_self_kd"]
+    print(
+        "{:<41} {:>4} {:<11} {:.7g} {:.6f} {:.6f} {:.6f} {:+.6f} {:+.6f}".format(
+            row["experiment_id"], row["training_passes"], row["schedule"],
+            row["peak_learning_rate"], v["cross_entropy"], v["macro_ovr_auc"],
+            v["macro_mean_log_qcd_rejection_at_50pct_signal"],
+            k0["cross_entropy"], k1["cross_entropy"],
+        )
+    )
+PY
+```
+
+This is still a single-seed validation diagnostic and has no final-test
+authority.
+
 ## Execution-only pilot prefix recovery
 
 `import_pmard_pilot_prefix.py` is the only authorized shortcut after the

@@ -362,17 +362,7 @@ def load_t100_sweep_targets(
 ) -> tuple[EphemeralTeacherTargets, EphemeralTeacherTargets, dict[str, object]]:
     validate_t100_sweep_spec(spec)
     data_path, manifest_path = target_cache_paths(spec)
-    manifest = load_json(manifest_path)
-    validate_content_hash(
-        manifest, expected_contract=T100_SWEEP_TARGET_CONTRACT,
-        expected_schema_version=T100_SWEEP_TARGET_VERSION,
-    )
-    if manifest.get("sweep_spec_sha256") != spec["content_hash"]:
-        raise ValueError("T100 sweep target cache belongs to another sweep")
-    if manifest.get("rows") != PMARD_PILOT_ROWS["train"]:
-        raise ValueError("T100 sweep target row count differs")
-    if sha256_file(data_path) != manifest.get("target_file_sha256"):
-        raise ValueError("T100 sweep target file hash differs")
+    manifest = validate_t100_sweep_target_artifact(spec)
     arrays = load_npz_arrays(data_path)
     if set(arrays) != {"identity_keys", "hlt_logits", "privileged_logits"}:
         raise ValueError("T100 sweep target arrays differ")
@@ -398,6 +388,83 @@ def load_t100_sweep_targets(
         split_manifest_sha256=split_hash,
     )
     return hlt, privileged, manifest
+
+
+def validate_t100_sweep_target_artifact(
+    spec: Mapping[str, object],
+) -> dict[str, object]:
+    """Validate the durable target manifest/file without loading its arrays."""
+
+    validate_t100_sweep_spec(spec)
+    data_path, manifest_path = target_cache_paths(spec)
+    manifest = load_json(manifest_path)
+    validate_content_hash(
+        manifest, expected_contract=T100_SWEEP_TARGET_CONTRACT,
+        expected_schema_version=T100_SWEEP_TARGET_VERSION,
+    )
+    if manifest.get("sweep_spec_sha256") != spec["content_hash"]:
+        raise ValueError("T100 sweep target cache belongs to another sweep")
+    if manifest.get("rows") != PMARD_PILOT_ROWS["train"]:
+        raise ValueError("T100 sweep target row count differs")
+    if manifest.get("target_file") != data_path.name or manifest.get("dtype") != "float32":
+        raise ValueError("T100 sweep target serialization differs")
+    if sha256_file(data_path) != manifest.get("target_file_sha256"):
+        raise ValueError("T100 sweep target file hash differs")
+    expected = {
+        "split_manifest_sha256": spec["artifacts"]["split_manifest"]["content_hash"],
+        "row_selection_sha256": spec["artifacts"]["row_selection"]["content_hash"],
+        "assignment_manifest_sha256": spec["artifacts"]["assignment_manifest"]["content_hash"],
+        "full_endpoint_lock_sha256": spec["artifacts"]["full_endpoint_lock"]["content_hash"],
+        "hlt_teacher_report_sha256": spec["artifacts"]["t0_training_report"]["content_hash"],
+        "privileged_teacher_report_sha256": spec["artifacts"]["t100_training_report"]["content_hash"],
+        "model_inputs": {"hlt": "hlt", "privileged": "selective_alpha1_endpoint"},
+        "final_test_access": False,
+    }
+    if any(manifest.get(name) != value for name, value in expected.items()):
+        raise ValueError("T100 sweep target lineage differs")
+    return manifest
+
+
+def validate_t100_sweep_report(
+    spec: Mapping[str, object], report: Mapping[str, object],
+) -> str:
+    digest = validate_content_hash(
+        report, expected_contract=T100_SWEEP_REPORT_CONTRACT,
+        expected_schema_version=T100_SWEEP_REPORT_VERSION,
+    )
+    target_manifest = validate_t100_sweep_target_artifact(spec)
+    if (
+        report.get("sweep_spec_sha256") != spec["content_hash"]
+        or report.get("teacher_target_manifest_sha256")
+        != target_manifest["content_hash"]
+        or report.get("candidate_count") != len(t100_sweep_grid())
+        or report.get("final_test_access") is not False
+    ):
+        raise ValueError("T100 sweep aggregate lineage differs")
+    candidates = report.get("candidates")
+    if not isinstance(candidates, list) or len(candidates) != len(t100_sweep_grid()):
+        raise ValueError("T100 sweep aggregate candidate inventory differs")
+    expected_ids = {row["experiment_id"] for row in t100_sweep_grid()}
+    if {row.get("experiment_id") for row in candidates} != expected_ids:
+        raise ValueError("T100 sweep aggregate experiment inventory differs")
+    registered = {row["experiment_id"]: row for row in t100_sweep_grid()}
+    recipe_fields = (
+        "index", "training_passes", "ce_weight", "hlt_kd_weight",
+        "privileged_kd_weight", "hlt_temperature", "privileged_temperature",
+    )
+    for candidate in candidates:
+        expected = registered[str(candidate["experiment_id"])]
+        if any(candidate.get(name) != expected[name] for name in recipe_fields):
+            raise ValueError("T100 sweep aggregate recipe differs from its registry")
+        require_sha256(
+            candidate.get("training_report_sha256"),
+            name="candidate.training_report_sha256",
+        )
+        if not isinstance(candidate.get("validation"), Mapping):
+            raise ValueError("T100 sweep aggregate candidate lacks validation metrics")
+    if report.get("selected_experiment_id") not in expected_ids:
+        raise ValueError("T100 sweep selected experiment is not registered")
+    return digest
 
 
 def aggregate_t100_sweep(spec: Mapping[str, object]) -> dict[str, object]:
@@ -579,5 +646,6 @@ __all__ = [
     "create_t100_sweep_spec", "load_t100_sweep_targets",
     "publish_t100_sweep_targets", "submit_t100_sweep",
     "t100_sweep_grid", "target_cache_paths", "updates_for_training_passes",
-    "validate_t100_sweep_inputs", "validate_t100_sweep_spec",
+    "validate_t100_sweep_inputs", "validate_t100_sweep_report",
+    "validate_t100_sweep_spec", "validate_t100_sweep_target_artifact",
 ]

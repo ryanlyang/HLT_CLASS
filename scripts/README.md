@@ -167,3 +167,12 @@ T0/T100 logits once, runs an uncapped 36-row HLT-only
 weight/temperature/exposure array, and aggregates validation without
 final-test access. The exact
 separate-worktree launch procedure is in `docs/PMARD_RUNBOOK.md`.
+
+The paired optimizer/cadence follow-up uses
+`create_pmard_kd_followup.py`, `train_pmard_kd_followup.py`,
+`aggregate_pmard_kd_followup.py`, and `submit_pmard_kd_followup.py`. It is
+created only from a complete authenticated T100-sweep aggregate, reuses that
+sweep's compact T0/T100 logit cache, and reruns matched CE-only, T0 self-KD,
+and selected T100 KD rows with validation after every train pass. It runs both
+the square-root exposure-scaled and original fixed learning rates at 20/40/60
+passes; no matcher, repaired view, or test-role job is registered.
