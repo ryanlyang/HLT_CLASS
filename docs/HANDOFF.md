@@ -31,6 +31,16 @@ against both K1 and the original alpha-one K2 row, and cannot read final test.
 Its specification and commands are documented in
 `docs/contracts/PMARD_T100_KD_SWEEP.md` and `docs/PMARD_RUNBOOK.md`.
 
+The first live supplemental target-cache job, `48034`, failed after six
+minutes before publishing a cache because the selective authorization stores
+the versioned family `SELECTIVE_FULL_PARTICLE_ENDPOINT/v1`, while the tensor
+builder historically accepted only the runtime selector without `/v1`.
+`runtime_repair_family()` now performs an explicit allow-listed translation
+for both full-endpoint contracts, and a regression proves the versioned
+selective family produces byte-identical repaired tensors. The failed
+source-bound sweep specification must not be resumed under corrected source;
+recovery requires a new clean commit, worktree, sweep root, and specification.
+
 ## Active PMARD implementation (2026-08-05)
 
 The user explicitly activated the PMARD mandate. The active scientific plan is

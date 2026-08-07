@@ -9,7 +9,8 @@ from hlt_classification.scouting.matching import (
     hungarian_with_dustbins, optimal_transport_with_dustbins, wrapped_delta_phi,
 )
 from hlt_classification.scouting.repair import (
-    FULL_ENDPOINT_FIELDS, build_alpha_repaired_inputs,
+    FULL_ENDPOINT_FIELDS, SELECTIVE_FULL_REPAIR_FAMILY,
+    build_alpha_repaired_inputs,
     build_full_offline_endpoint_inputs,
     build_selective_matched_offline_endpoint_inputs,
 )
@@ -172,6 +173,12 @@ def test_selective_endpoint_replaces_complete_matched_record_and_keeps_unmatched
     endpoint = build_selective_matched_offline_endpoint_inputs(
         arrays, arrays, offline_p4, assignment,
     )
+    versioned_endpoint = build_alpha_repaired_inputs(
+        arrays, offline_p4, assignment, alpha=1.0,
+        repair_family=SELECTIVE_FULL_REPAIR_FAMILY, offline_arrays=arrays,
+    )
+    assert versioned_endpoint.features.tobytes() == endpoint.features.tobytes()
+    assert versioned_endpoint.vectors.tobytes() == endpoint.vectors.tobytes()
     assert endpoint.features[0, :, 0].tobytes() == canonical.features[0, :, 0].tobytes()
     assert endpoint.vectors[0, :, 0].tobytes() == canonical.vectors[0, :, 0].tobytes()
     for field in FULL_ENDPOINT_FIELDS:

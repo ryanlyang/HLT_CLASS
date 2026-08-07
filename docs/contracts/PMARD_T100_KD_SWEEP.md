@@ -39,6 +39,11 @@ particle inputs and repaired datasets are never published. All 36 students
 then use ordinary HLT-only streaming and identity-join both cached targets in
 RAM. The array is intentionally uncapped.
 
+The authorization artifact retains the versioned repair-family identity
+`SELECTIVE_FULL_PARTICLE_ENDPOINT/v1`. At execution, the shared repair module
+translates that allow-listed contract name to the unversioned tensor-builder
+selector; arbitrary family strings still fail closed.
+
 ## Lineage and access
 
 `hlt_classification_pmard_t100_kd_sweep_spec_v2` binds the clean source,

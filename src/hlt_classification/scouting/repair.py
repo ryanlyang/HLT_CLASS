@@ -21,6 +21,21 @@ REPAIR_FAMILIES = (
     "RESPONSE_ONLY", "WRONG_DIRECTION", "RANDOM_DIRECTION",
     "LOG_ANGULAR", "CONFIDENCE_WEIGHTED", "MATCH_SHUFFLED",
 )
+
+
+def runtime_repair_family(repair_family: str) -> str:
+    """Translate an authorized versioned family into the tensor-builder selector."""
+
+    aliases = {
+        FULL_REPAIR_FAMILY: "FULL_PARTICLE_ENDPOINT",
+        SELECTIVE_FULL_REPAIR_FAMILY: "SELECTIVE_FULL_PARTICLE_ENDPOINT",
+    }
+    runtime = aliases.get(repair_family, repair_family)
+    if runtime not in REPAIR_FAMILIES:
+        raise ValueError("unknown repair family")
+    return runtime
+
+
 RECOMPUTED_CHANNELS = frozenset((7, 8, 9, 10, 19))
 RETAINED_CHANNELS = frozenset(set(range(21)) - RECOMPUTED_CHANNELS)
 
@@ -373,8 +388,7 @@ def build_alpha_repaired_inputs(
 ) -> ParticleInputs:
     if alpha not in ALPHA_GRID:
         raise ValueError(f"alpha must be one of {ALPHA_GRID}")
-    if repair_family not in REPAIR_FAMILIES:
-        raise ValueError("unknown repair family")
+    repair_family = runtime_repair_family(repair_family)
     if repair_family in {"TRACK_ONLY", "P4_PLUS_TRACK"}:
         raise PermissionError(
             "track repair is disabled until a locked branch-semantics compatibility audit exists"
@@ -514,4 +528,5 @@ __all__ = [
     "build_selective_matched_offline_endpoint_inputs",
     "combined_offline_p4",
     "full_endpoint_required_branches",
+    "runtime_repair_family",
 ]
