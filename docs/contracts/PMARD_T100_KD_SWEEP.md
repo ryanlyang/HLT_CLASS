@@ -42,7 +42,10 @@ RAM. The array is intentionally uncapped.
 The authorization artifact retains the versioned repair-family identity
 `SELECTIVE_FULL_PARTICLE_ENDPOINT/v1`. At execution, the shared repair module
 translates that allow-listed contract name to the unversioned tensor-builder
-selector; arbitrary family strings still fail closed.
+selector at PMARD-stream entry, before native offline branch projection;
+arbitrary family strings still fail closed. Target construction runs the T100
+repaired pass before the ordinary T0 pass so the constrained path is validated
+first.
 
 ## Lineage and access
 

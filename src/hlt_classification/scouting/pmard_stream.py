@@ -17,7 +17,10 @@ from .labels import baseline_mask, multiclass_labels
 from .matcher_training import LoadedContextualMatcher, contextual_scores_many, likelihood_scores
 from .matching import build_candidate_graph, match_variant
 from .particles import decode_particle_sets
-from .repair import build_alpha_repaired_inputs, full_endpoint_required_branches
+from .repair import (
+    build_alpha_repaired_inputs, full_endpoint_required_branches,
+    runtime_repair_family,
+)
 from .selective_assignment import PersistentAssignmentStore, RowSelection
 from .schema import BASELINE_BRANCHES, LABEL_BRANCHES, hlt_required_branches, matching_required_branches
 from .splits import role_records
@@ -72,6 +75,7 @@ def iterate_pmard_batches(
     shuffle_buffer_rows: int = TRAIN_SHUFFLE_BUFFER_ROWS,
     interleave_source_files: int = TRAIN_INTERLEAVE_FILES,
 ) -> Iterator[dict[str, object]]:
+    repair_family = runtime_repair_family(repair_family)
     if batch_size <= 0:
         raise ValueError("PMARD model batch size must be positive")
     if shuffle_buffer_rows < batch_size:

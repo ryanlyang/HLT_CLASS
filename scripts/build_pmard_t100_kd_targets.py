@@ -47,28 +47,8 @@ def main() -> int:
     sampler_seed = derive_seed(int(locked["screen_seed"]), "sampler")
     data_root = Path(spec["site"]["data_root"])
 
-    t0_raw = payloads["t0_training_report"]
-    t0, t0_report = load_pmard_model(
-        paths["t0_training_report"],
-        model_factory=scouting_model_factory_for_report(t0_raw), device=args.device,
-    )
-    hlt_targets = precompute_teacher_targets(
-        t0,
-        iterate_model_batches(
-            split, data_root=data_root, role="train", input_mode="hlt",
-            epoch=0, batch_size=batch_size, sampler_seed=sampler_seed,
-            row_selection=selection,
-        ),
-        input_key="hlt", device=args.device,
-        teacher_report_sha256=t0_report["content_hash"],
-        split_manifest_sha256=inputs["split_manifest_sha256"],
-    )
-    del t0
-    gc.collect()
-    import torch
-    if args.device.startswith("cuda") and torch.cuda.is_available():
-        torch.cuda.empty_cache()
-
+    # Exercise the more constrained repaired-view path first, so any endpoint
+    # projection/assignment incompatibility fails before the ordinary T0 pass.
     t100_raw = payloads["t100_training_report"]
     t100, t100_report = load_pmard_model(
         paths["t100_training_report"],
@@ -94,6 +74,28 @@ def main() -> int:
         ),
         input_key="privileged", device=args.device,
         teacher_report_sha256=t100_report["content_hash"],
+        split_manifest_sha256=inputs["split_manifest_sha256"],
+    )
+    del t100
+    gc.collect()
+    import torch
+    if args.device.startswith("cuda") and torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+    t0_raw = payloads["t0_training_report"]
+    t0, t0_report = load_pmard_model(
+        paths["t0_training_report"],
+        model_factory=scouting_model_factory_for_report(t0_raw), device=args.device,
+    )
+    hlt_targets = precompute_teacher_targets(
+        t0,
+        iterate_model_batches(
+            split, data_root=data_root, role="train", input_mode="hlt",
+            epoch=0, batch_size=batch_size, sampler_seed=sampler_seed,
+            row_selection=selection,
+        ),
+        input_key="hlt", device=args.device,
+        teacher_report_sha256=t0_report["content_hash"],
         split_manifest_sha256=inputs["split_manifest_sha256"],
     )
     manifest = publish_t100_sweep_targets(

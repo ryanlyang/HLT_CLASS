@@ -40,6 +40,15 @@ for both full-endpoint contracts, and a regression proves the versioned
 selective family produces byte-identical repaired tensors. The failed
 source-bound sweep specification must not be resumed under corrected source;
 recovery requires a new clean commit, worktree, sweep root, and specification.
+The next clean attempt, target job `48142`, then showed that normalization at
+the tensor builder was too late: the PMARD streamer had already omitted native
+offline branches because its projection dispatch still compared the versioned
+name literally. The streamer now normalizes at entry, before category gates,
+branch projection, confidence dispatch, or tensor construction. Its
+fitted-strict regression requires the versioned selective family to project
+and forward native offline arrays under the unversioned runtime selector. The
+supplemental target worker also evaluates the constrained T100 repaired path
+before the ordinary T0 path so future endpoint incompatibilities fail early.
 
 ## Active PMARD implementation (2026-08-05)
 

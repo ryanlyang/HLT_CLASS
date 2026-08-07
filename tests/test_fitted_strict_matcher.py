@@ -14,7 +14,9 @@ from hlt_classification.scouting.inputs import ParticleInputs
 from hlt_classification.scouting.matching import ParticleSet
 from hlt_classification.scouting import pmard_stream
 from hlt_classification.scouting.particles import decode_particle_sets
-from hlt_classification.scouting.repair import build_alpha_repaired_inputs
+from hlt_classification.scouting.repair import (
+    SELECTIVE_FULL_REPAIR_FAMILY, build_alpha_repaired_inputs,
+)
 from hlt_classification.scouting.schema import HLT_FEATURE_SPECS, matching_required_branches
 
 
@@ -229,16 +231,22 @@ def test_pmard_stream_dispatches_fitted_strict_without_legacy_graph(monkeypatch)
     monkeypatch.setattr(pmard_stream, "build_hlt_inputs", lambda _arrays: view)
     captured = {}
 
-    def repaired(_arrays, _offline, assignment, **_kwargs):
+    def repaired(_arrays, _offline, assignment, **kwargs):
         captured["assignment"] = assignment.copy()
+        captured["repair_family"] = kwargs["repair_family"]
+        captured["offline_arrays"] = kwargs["offline_arrays"]
         return view
 
     monkeypatch.setattr(pmard_stream, "build_alpha_repaired_inputs", repaired)
     batches = list(pmard_stream.iterate_pmard_batches(
         {"roles": {}}, data_root=".", role="train", matcher_model=matcher,
         alpha=1.0, matcher_variant="fitted_strict", threshold=FITTED_STRICT_THRESHOLD,
+        repair_family=SELECTIVE_FULL_REPAIR_FAMILY,
         max_rows=1, batch_size=1, shuffle_buffer_rows=1,
     ))
     assert len(batches) == 1
     assert captured["assignment"][0, :3].tolist() == [0, 3, 1]
+    assert captured["repair_family"] == "SELECTIVE_FULL_PARTICLE_ENDPOINT"
+    assert captured["offline_arrays"] is not None
+    assert np.array_equal(captured["offline_arrays"]["placeholder"], np.asarray([1]))
     assert np.array_equal(batches[0]["privileged"].vectors, view.vectors)
