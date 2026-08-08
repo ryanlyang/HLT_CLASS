@@ -732,7 +732,8 @@ sole privileged D teachers use two. A changed value requires a separately
 identified `registered_ablation` and cannot silently alter the primary.
 
 New contract families are `HIGHCOV_MATCHER_RESOURCES/v1`,
-`HIGHCOV_DENSE_ASSIGNMENT_{SHARD,MANIFEST,LOCK}/v1`,
+`HIGHCOV_DENSE_ASSIGNMENT_{SHARD,MANIFEST}/v2`,
+`HIGHCOV_DENSE_ASSIGNMENT_LOCK/v1`,
 `HIGHCOV_ASSIGNMENT_RECOMPUTATION_AUDIT/v1`, `HCWDL_ARTIFACT/v1`,
 `HCWDL_{NODE_SPEC,GRAPH,TRAINING_REPORT,CHECKPOINT_SELECTION}/v1`,
 `HCWDL_RECIPE/v3`,
@@ -791,8 +792,27 @@ the six split-identity fields while the source manifest and all of its richer
 metadata remain independently content-hash authenticated. Both HCWDL and the
 canonical split-building CLI use that projection, with a rich-row regression.
 Focused HCWDL/split tests pass 70/70 and the repository-wide suite passes 300
-with 14 warnings. This local fix still requires an exact clean commit and a
-fresh Tigris smoke identity; no failed-campaign descendant should be reused.
+with 14 warnings. That fix was committed as `659ebb6294038497d5da874f92beba05927021e8`
+and exercised by the next fresh smoke identity.
+
+The next smoke at commit `659ebb6294038497d5da874f92beba05927021e8`
+passed both source/split boundaries and produced every train/validation
+assignment shard, then stopped while aggregating job 56236. Real HLT data can
+contain category flag rows that are not exactly one-hot; the established
+decoder represents these tokens as category `-1`, and the broad matcher gate
+correctly forces them to the HLT-preserving dustbin. Assignment v1 counted
+these tokens in the dense HLT skeleton but had only five category counters,
+making its own conservation equation impossible. Assignment shard/manifest
+contracts advance to v2 and now record `unclassified_hlt_tokens` explicitly:
+five-category visible totals plus unclassified equal all visible tokens,
+five-category assigned totals equal all assigned tokens, and an unclassified
+token is forbidden from carrying an offline assignment. Dustbin fraction
+continues to cover the complete HLT skeleton, including these tokens, so the
+strict `<10%` authorization criterion is unchanged.
+Focused matcher/HCWDL tests pass 64/64 and the repository-wide suite passes
+301 with the same 14 warnings. The v2 fix requires an exact clean commit and a
+fresh Tigris smoke identity; v1 assignment shards must not be relabeled or
+reused.
 
 ## Exact active next task: separately authorized HCWDL Tigris validation
 

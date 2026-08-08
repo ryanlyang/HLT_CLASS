@@ -25,10 +25,10 @@ from hlt_classification.data.cache_contracts import (
 from .highcov_matcher import MatchResult
 
 
-SHARD_CONTRACT = "HIGHCOV_DENSE_ASSIGNMENT_SHARD/v1"
-MANIFEST_CONTRACT = "HIGHCOV_DENSE_ASSIGNMENT_MANIFEST/v1"
+SHARD_CONTRACT = "HIGHCOV_DENSE_ASSIGNMENT_SHARD/v2"
+MANIFEST_CONTRACT = "HIGHCOV_DENSE_ASSIGNMENT_MANIFEST/v2"
 LOCK_CONTRACT = "HIGHCOV_DENSE_ASSIGNMENT_LOCK/v1"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 ARRAY_NAMES = ("entries", "offsets", "native_offline_index", "confidence_u16")
 ROLES = ("train", "validation", "final_test")
 
@@ -83,20 +83,48 @@ def _validate_arrays(arrays: Mapping[str, np.ndarray], *, expected_rows: int | N
         raise ValueError("assignment shard row count differs")
 
 
-def _category_counts(categories: Sequence[np.ndarray], results: Sequence[MatchResult]) -> tuple[list[int], list[int]]:
+def _category_counts(
+    categories: Sequence[np.ndarray], results: Sequence[MatchResult],
+) -> tuple[list[int], list[int], int]:
     visible = np.zeros(5, np.int64)
     assigned = np.zeros(5, np.int64)
+    unclassified = 0
     for category, result in zip(categories, results, strict=True):
         value = np.asarray(category, np.int64)
         if value.shape != result.native_offline_index.shape:
             raise ValueError("HLT categories differ from matcher result")
         if np.any((value < -1) | (value > 4)):
             raise ValueError("HLT category lies outside -1..4")
+        accepted = np.asarray(result.accepted, bool)
+        if accepted.shape != value.shape or not np.array_equal(
+            accepted, np.asarray(result.native_offline_index) >= 0,
+        ):
+            raise ValueError("matcher accepted mask differs from native assignment")
+        if np.any((value < 0) & accepted):
+            raise ValueError("unclassified HLT token cannot have an offline assignment")
+        unclassified += int(np.count_nonzero(value < 0))
         for index in range(5):
             selected = value == index
             visible[index] += np.count_nonzero(selected)
-            assigned[index] += np.count_nonzero(selected & result.accepted)
-    return visible.tolist(), assigned.tolist()
+            assigned[index] += np.count_nonzero(selected & accepted)
+    return visible.tolist(), assigned.tolist(), unclassified
+
+
+def _validate_category_totals(metadata: Mapping[str, Any]) -> None:
+    visible = np.asarray(metadata.get("visible_by_category"), np.int64)
+    assigned = np.asarray(metadata.get("assigned_by_category"), np.int64)
+    unclassified = metadata.get("unclassified_hlt_tokens")
+    if (
+        visible.shape != (5,) or assigned.shape != (5,)
+        or isinstance(unclassified, bool) or not isinstance(unclassified, int)
+        or unclassified < 0 or np.any(visible < 0) or np.any(assigned < 0)
+        or np.any(assigned > visible)
+    ):
+        raise ValueError("assignment category totals differ")
+    if int(visible.sum()) + unclassified != int(metadata["visible_hlt_tokens"]):
+        raise ValueError("assignment visible category/token conservation differs")
+    if int(assigned.sum()) != int(metadata["assigned_hlt_tokens"]):
+        raise ValueError("assignment assigned category/token conservation differs")
 
 
 def publish_assignment_shard(
@@ -135,7 +163,7 @@ def publish_assignment_shard(
         "confidence_u16": confidence,
     }
     _validate_arrays(arrays)
-    visible, assigned = _category_counts(hlt_categories, results)
+    visible, assigned, unclassified = _category_counts(hlt_categories, results)
     output_path = Path(output)
     data_path = output_path.with_suffix(".npz")
     metadata_path = output_path.with_suffix(".json")
@@ -152,6 +180,7 @@ def publish_assignment_shard(
         "assigned_hlt_tokens": int(np.count_nonzero(mapping >= 0)),
         "visible_by_category": visible,
         "assigned_by_category": assigned,
+        "unclassified_hlt_tokens": unclassified,
         "data_file": data_path.name,
         "data_sha256": sha256_file(data_path),
         "array_sha256": {name: array_sha256(name, value) for name, value in arrays.items()},
@@ -183,6 +212,7 @@ def load_assignment_shard(
         raise ValueError("assignment visible token total differs")
     if int(metadata["assigned_hlt_tokens"]) != int(np.count_nonzero(arrays["native_offline_index"] >= 0)):
         raise ValueError("assignment assigned token total differs")
+    _validate_category_totals(metadata)
     return metadata, arrays
 
 
@@ -200,6 +230,7 @@ def publish_assignment_manifest(
     totals = {"rows": 0, "visible": 0, "assigned": 0}
     visible_category = np.zeros(5, np.int64)
     assigned_category = np.zeros(5, np.int64)
+    unclassified = 0
     seen_sources: set[str] = set()
     base = Path(path).parent
     for raw in shard_metadata_paths:
@@ -213,6 +244,7 @@ def publish_assignment_manifest(
         totals["assigned"] += int(metadata["assigned_hlt_tokens"])
         visible_category += np.asarray(metadata["visible_by_category"], np.int64)
         assigned_category += np.asarray(metadata["assigned_by_category"], np.int64)
+        unclassified += int(metadata["unclassified_hlt_tokens"])
         records.append({
             "source_path": metadata["source_path"],
             "metadata_path": str(metadata_path.relative_to(base)),
@@ -222,7 +254,11 @@ def publish_assignment_manifest(
         })
     if totals["rows"] != expected_mapped_jets:
         raise ValueError("assignment scan did not cover every expected mapped jet")
-    if int(visible_category.sum()) != totals["visible"] or int(assigned_category.sum()) > totals["assigned"]:
+    if (
+        int(visible_category.sum()) + unclassified != totals["visible"]
+        or int(assigned_category.sum()) != totals["assigned"]
+        or np.any(assigned_category > visible_category)
+    ):
         raise ValueError("assignment category/token conservation differs")
     dustbins = totals["visible"] - totals["assigned"]
     fraction = dustbins / totals["visible"] if totals["visible"] else 1.0
@@ -237,6 +273,7 @@ def publish_assignment_manifest(
         "dustbin_fraction": fraction,
         "visible_by_category": visible_category.tolist(),
         "assigned_by_category": assigned_category.tolist(),
+        "unclassified_hlt_tokens": unclassified,
         "shards": sorted(records, key=lambda value: str(value["source_path"])),
         "parents": dict(sorted(parents.items())),
     })
@@ -261,14 +298,9 @@ def validate_assignment_manifest(
         raise ValueError("assignment manifest mapped-jet coverage differs")
     visible = int(value["visible_hlt_tokens"])
     assigned = int(value["assigned_hlt_tokens"])
-    visible_by_category = np.asarray(value["visible_by_category"], np.int64)
-    assigned_by_category = np.asarray(value["assigned_by_category"], np.int64)
     if visible <= 0 or assigned < 0 or assigned > visible:
         raise ValueError("assignment token totals differ")
-    if visible_by_category.shape != (5,) or assigned_by_category.shape != (5,):
-        raise ValueError("assignment category totals shape differs")
-    if int(visible_by_category.sum()) != visible or np.any(assigned_by_category > visible_by_category):
-        raise ValueError("assignment category conservation differs")
+    _validate_category_totals(value)
     fraction = (visible - assigned) / visible
     if abs(float(value["dustbin_fraction"]) - fraction) > 1e-15:
         raise ValueError("assignment dustbin fraction differs")

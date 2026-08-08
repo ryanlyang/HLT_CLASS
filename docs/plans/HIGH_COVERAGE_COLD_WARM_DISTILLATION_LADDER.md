@@ -1468,8 +1468,8 @@ training nodes publish exact resume state at validation boundaries and USR1.
 Implementation introduces separately versioned contracts for:
 
 - `HIGHCOV_MATCHER_RESOURCES/v1` and validation report;
-- `HIGHCOV_DENSE_ASSIGNMENT_SHARD/v1`;
-- `HIGHCOV_DENSE_ASSIGNMENT_MANIFEST/v1` and authorization lock;
+- `HIGHCOV_DENSE_ASSIGNMENT_SHARD/v2`;
+- `HIGHCOV_DENSE_ASSIGNMENT_MANIFEST/v2` and authorization lock;
 - `HIGHCOV_REPAIR/v1`;
 - `HCWDL_RECIPE/v3` and recipe lock;
 - `HCWDL_NODE_SPEC/v1` and graph registry;

@@ -194,11 +194,12 @@ def test_dense_assignment_roundtrip_authorization_and_recomputation(tmp_path: Pa
 def test_dense_assignment_rejects_short_scan_and_ten_percent_dustbins(tmp_path: Path) -> None:
     parents = {"split": "a" * 64}
     result = _result(list(range(9)) + [-1], [0.5] * 9 + [0.0])
-    publish_assignment_shard(
+    shard = publish_assignment_shard(
         tmp_path / "source", source_path="file.root", role="validation", source_fold=None,
-        entries=[0], hlt_categories=[np.asarray([0, 1, 2, 3, 4, 0, 1, 2, 3, 4])],
+        entries=[0], hlt_categories=[np.asarray([0, 1, 2, 3, 4, 0, 1, 2, 3, -1])],
         results=[result], parents=parents,
     )
+    assert shard["unclassified_hlt_tokens"] == 1
     with pytest.raises(ValueError, match="every expected"):
         publish_assignment_manifest(
             tmp_path / "short.json", role="validation",
@@ -206,12 +207,23 @@ def test_dense_assignment_rejects_short_scan_and_ten_percent_dustbins(tmp_path: 
             expected_mapped_jets=2, parents=parents,
         )
     manifest = tmp_path / "manifest.json"
-    publish_assignment_manifest(
+    published = publish_assignment_manifest(
         manifest, role="validation", shard_metadata_paths=[tmp_path / "source.json"],
         expected_mapped_jets=1, parents=parents,
     )
+    assert published["unclassified_hlt_tokens"] == 1
+    assert sum(published["visible_by_category"]) + 1 == published["visible_hlt_tokens"]
     with pytest.raises(ValueError, match="dustbin_fraction < 0.10"):
         validate_assignment_manifest(
             manifest, expected_role="validation", expected_mapped_jets=1,
             expected_parents=parents, require_sub10pct_dustbins=True,
+        )
+
+
+def test_dense_assignment_rejects_an_assigned_unclassified_hlt_token(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="unclassified HLT token"):
+        publish_assignment_shard(
+            tmp_path / "invalid", source_path="file.root", role="validation",
+            source_fold=None, entries=[0], hlt_categories=[np.asarray([-1])],
+            results=[_result([0], [0.9])], parents={"split": "a" * 64},
         )

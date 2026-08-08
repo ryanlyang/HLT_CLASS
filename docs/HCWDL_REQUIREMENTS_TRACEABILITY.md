@@ -26,8 +26,8 @@ by any status in this ledger.
 | Eighteen post-assignment diagnostics and calibrated confidence | `highcov_assignment.py`, `highcov_calibration.py`, `highcov_matcher.py` | matcher v1 | donor diagnostics/confidence parity | Local passed |
 | File-based train-fold scorer selection and leakage rejection | `highcov_matcher.py`, `highcov_cache.py` | assignment shard v1 | fold-lineage tests | Local passed |
 | Native offline indices and lost-track exclusion | `highcov_matcher.py`, existing `particles.py` integration | assignment shard v1 | offset and forbidden-lost-track tests | Local passed |
-| Dense int16/uint16 shards, logical/byte hashes, atomic publication | `highcov_cache.py` | `HIGHCOV_DENSE_ASSIGNMENT_SHARD/v1` | round trip/corruption tests | Local passed |
-| Manifest completeness, conservation, sampled recomputation, and `<10%` dustbins on complete train and validation roles | `highcov_cache.py` | `HIGHCOV_DENSE_ASSIGNMENT_MANIFEST/v1` and lock | 9-of-10, threshold, recomputation tests | Local passed |
+| Dense int16/uint16 shards, logical/byte hashes, atomic publication | `highcov_cache.py` | `HIGHCOV_DENSE_ASSIGNMENT_SHARD/v2` | round trip/corruption/unclassified-token tests | Local passed |
+| Manifest completeness, five-category plus explicit unclassified-token conservation, sampled recomputation, and `<10%` dustbins on complete train and validation roles | `highcov_cache.py` | `HIGHCOV_DENSE_ASSIGNMENT_MANIFEST/v2` and lock | 9-of-10, threshold, recomputation, and real-schema unclassified-token tests | Local passed |
 | One-time cache consumption with no training rematch | `highcov_cache.py`, `hcwdl_views.py` | assignment authorization lock | matcher-call-count integration test | Local passed |
 
 ## Block 3: high-coverage repair families
