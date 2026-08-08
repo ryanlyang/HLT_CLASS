@@ -18,8 +18,8 @@ from .matcher_training import LoadedContextualMatcher, contextual_scores_many, l
 from .matching import build_candidate_graph, match_variant
 from .particles import decode_particle_sets
 from .repair import (
-    build_alpha_repaired_inputs, full_endpoint_required_branches,
-    runtime_repair_family,
+    build_alpha_repaired_inputs, build_selective_matched_offline_endpoint_inputs,
+    full_endpoint_required_branches, runtime_repair_family,
 )
 from .selective_assignment import PersistentAssignmentStore, RowSelection
 from .schema import BASELINE_BRANCHES, LABEL_BRANCHES, hlt_required_branches, matching_required_branches
@@ -72,6 +72,7 @@ def iterate_pmard_batches(
     assignment_store: PersistentAssignmentStore | None = None,
     row_selection: RowSelection | None = None,
     assignment_collector: _AssignmentCollector | None = None,
+    endpoint_audit_collector: list[dict[str, object]] | None = None,
     shuffle_buffer_rows: int = TRAIN_SHUFFLE_BUFFER_ROWS,
     interleave_source_files: int = TRAIN_INTERLEAVE_FILES,
 ) -> Iterator[dict[str, object]]:
@@ -85,14 +86,18 @@ def iterate_pmard_batches(
         raise ValueError("eligible matcher categories differ from the five-category contract")
     if assignment_table is not None and assignment_store is not None:
         raise ValueError("PMARD stream accepts only one assignment source")
-    if repair_family in {"FULL_PARTICLE_ENDPOINT", "SELECTIVE_FULL_PARTICLE_ENDPOINT"} and categories != frozenset(range(5)):
+    full_endpoint_families = {
+        "FULL_PARTICLE_ENDPOINT", "SELECTIVE_FULL_PARTICLE_ENDPOINT",
+        "HIGHCOV_SHELL_EXACT", "HIGHCOV_SHELL_SOFT", "HIGHCOV_HC_EXACT",
+    }
+    if repair_family in full_endpoint_families and categories != frozenset(range(5)):
         raise PermissionError("full endpoint repair requires all five particle categories")
     records = list(role_records(split_manifest, role))
     rng = np.random.default_rng(np.random.SeedSequence([sampler_seed, epoch]))
     if role == "train": rng.shuffle(records)
     assigned = partition_files(records, rank=rank, world_size=world_size, worker_id=worker_id, num_workers=num_workers)
     branches = set(BASELINE_BRANCHES) | set(LABEL_BRANCHES) | set(hlt_required_branches()) | set(matching_required_branches())
-    if repair_family in {"FULL_PARTICLE_ENDPOINT", "SELECTIVE_FULL_PARTICLE_ENDPOINT"}:
+    if repair_family in full_endpoint_families:
         branches |= set(full_endpoint_required_branches())
     files = [Path(data_root) / record.path for record in assigned]
     selected_rows = 0
@@ -194,7 +199,10 @@ def iterate_pmard_batches(
                 row_assignment = assignment[row, :len(hlt.p4)].copy()
                 if np.any(row_assignment >= len(offline.p4)):
                     raise ValueError("RAM assignment references a missing offline constituent")
-                if repair_family == "CONFIDENCE_WEIGHTED" and assignment_store is None:
+                if repair_family in {
+                    "CONFIDENCE_WEIGHTED", "HIGHCOV_SHELL_EXACT",
+                    "HIGHCOV_SHELL_SOFT", "HIGHCOV_HC_EXACT",
+                } and assignment_store is None:
                     raise ValueError("confidence-weighted repair requires calibrated online scores")
             if match_corruption_fraction:
                 if graph is None:
@@ -220,11 +228,46 @@ def iterate_pmard_batches(
         hlt_view = build_hlt_inputs(arrays)
         privileged_view = build_alpha_repaired_inputs(
             arrays, offline_p4, assignment, alpha=alpha, repair_family=repair_family,
-            confidence_weights=confidence if repair_family == "CONFIDENCE_WEIGHTED" else None,
-            offline_arrays=arrays if repair_family in {"FULL_PARTICLE_ENDPOINT", "SELECTIVE_FULL_PARTICLE_ENDPOINT"} else None,
-            identity_keys=keys if repair_family in {"FULL_PARTICLE_ENDPOINT", "SELECTIVE_FULL_PARTICLE_ENDPOINT"} else None,
+            confidence_weights=confidence if repair_family in {
+                "CONFIDENCE_WEIGHTED", "HIGHCOV_SHELL_EXACT",
+                "HIGHCOV_SHELL_SOFT", "HIGHCOV_HC_EXACT",
+            } else None,
+            offline_arrays=arrays if repair_family in full_endpoint_families else None,
+            identity_keys=keys if repair_family in full_endpoint_families else None,
             discrete_seed=repair_seed,
         )
+        if endpoint_audit_collector is not None:
+            if repair_family != "HIGHCOV_SHELL_EXACT" or alpha != 1.0:
+                raise ValueError("endpoint audit is defined only for Shell Exact D100")
+            expected_endpoint = build_selective_matched_offline_endpoint_inputs(
+                arrays, arrays, offline_p4, assignment,
+            )
+            visible_mask = np.arange(assignment.shape[1])[None, :] < hlt_view.raw_lengths[:, None]
+            matched = visible_mask & (assignment >= 0)
+            dustbin = visible_mask & ~matched
+            matched3 = matched[:, None, :]; dustbin3 = dustbin[:, None, :]
+            endpoint_audit_collector.append({
+                "rows": len(indexes),
+                "matched_tokens": int(np.count_nonzero(matched)),
+                "dustbin_tokens": int(np.count_nonzero(dustbin)),
+                "d100_assigned_exact_offline": bool(
+                    np.array_equal(privileged_view.features[matched3.repeat(21, axis=1)],
+                                   expected_endpoint.features[matched3.repeat(21, axis=1)])
+                    and np.array_equal(privileged_view.vectors[matched3.repeat(4, axis=1)],
+                                       expected_endpoint.vectors[matched3.repeat(4, axis=1)])
+                ),
+                "dustbins_exact_hlt": bool(
+                    np.array_equal(privileged_view.features[dustbin3.repeat(21, axis=1)],
+                                   hlt_view.features[dustbin3.repeat(21, axis=1)])
+                    and np.array_equal(privileged_view.vectors[dustbin3.repeat(4, axis=1)],
+                                       hlt_view.vectors[dustbin3.repeat(4, axis=1)])
+                ),
+                "hlt_skeleton_unchanged": bool(
+                    np.array_equal(privileged_view.mask, hlt_view.mask)
+                    and np.array_equal(privileged_view.raw_lengths, hlt_view.raw_lengths)
+                ),
+                "all_21_fields_checked": privileged_view.features.shape[1] == 21,
+            })
         chunk_batch = {
             "labels": labels[indexes], "identity_keys": keys,
             "hlt": hlt_view, "privileged": privileged_view,

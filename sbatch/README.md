@@ -37,3 +37,18 @@ miniature, and measured resource evidence.
 The complete smoke, monitoring, exact-ID recovery/cancellation, measured
 resource, and authorized-production sequence is documented in
 [`docs/PRAD_RUNBOOK.md`](../docs/PRAD_RUNBOOK.md).
+
+HCWDL uses `run_hcwdl_task.sh`. It activates the exact project environment,
+sets `PYTHONNOUSERSITE=1`, prepends `${CONDA_PREFIX}/lib`, and ends with
+`exec python -s`, allowing Slurm `B:USR1` to reach the checkpointing process.
+All future commands are generated locally from an immutable HCWDL spec. The
+`shell_endpoint_qualification_lock` job includes `--hold`; release is a later,
+separately authorized operation after the lineage-bound endpoint diagnostic
+acknowledgement is written. Pilot/production resources remain planning values
+until a genuine Tigris miniature publishes measured evidence. The measured
+prelaunch candidate and the executable spec must share the same independently
+hashed `HCWDL_COMMAND_PLAN/v1`; explicit submission authorization binds that
+hash and the exact resource requests, avoiding any circular dependency on the
+enclosing campaign-spec hash. A first bounded smoke can therefore use
+explicitly authorized conservative bootstrap requests without being mislabeled
+as measured; pilot and production cannot.

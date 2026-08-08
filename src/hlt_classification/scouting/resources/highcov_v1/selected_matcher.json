@@ -1,0 +1,56 @@
+{
+  "algorithm": {
+    "assignment": "lexicographic maximum gated-edge cardinality, then maximum empirical edge likelihood via deterministic Hungarian assignment",
+    "candidate_gate": {
+      "max_abs_log_energy_response": 4.0,
+      "max_abs_log_pt_response": 4.0,
+      "max_delta_r": 0.3,
+      "requires_finite_five_category_identity": true,
+      "requires_rounded_charge_in_minus1_0_plus1": true
+    },
+    "confidence": "18 post-assignment diagnostics, standardized logistic regression, then isotonic calibration",
+    "confidence_consensus": "independent geometry-plus-weak-response lexicographic assignment in the same gate",
+    "edge_score": "train-only empirical likelihood tables for deltaR, log-pT response, log-energy response, PID transition, charge transition, and pT-rank delta; nonnegative fitted meta-weights",
+    "hard_anchor_lock": false,
+    "private_dustbins": true,
+    "tie_quantum": 1e-06
+  },
+  "artifacts": {
+    "confidence_calibration_content_hash": "7db644933ceb6541abd2e8869dccf8874d84753b46199cf2ab334082c1c3f53f",
+    "empirical_models_content_hash": "b09d4ff84049f9646d3521e00cf6838d69ef62e0876535a52ad7981dba29b6bb",
+    "final_audit_content_hash": "a5cdc091d95e63b93effa01fb7494da09e6670372dec43ee85928ebe74e61605",
+    "stratified_audit_content_hash": "35b1e48e48ef5d5f34c96acfc074e1f71dc200850e53c558da85127bca6d0ba3"
+  },
+  "contract": "highcov_selected_matcher_v1",
+  "content_hash": "ea7dde63b66f9dc07d9f7532a320d560e83a20885c2580478627d68fee1a68d3",
+  "operating_points": {
+    "completion_shell": {
+      "claim": "plausible confidence-warped completion, not demonstrated physical correspondence",
+      "minimum_confidence": 0.0
+    },
+    "high_confidence_core": {
+      "claim": "high-purity proxy-qualified correspondence core",
+      "minimum_confidence": 0.958730161190033
+    },
+    "p99_core": {
+      "claim": "P99 proxy-qualified correspondence core",
+      "minimum_confidence": 0.9998835921287537
+    }
+  },
+  "repair": {
+    "continuous_effective_alpha": "alpha * confidence ** gamma",
+    "default_gamma": 1.0,
+    "discrete_policy": "deterministic nested hash switch by correlated field group",
+    "field_count": 21,
+    "unmatched_or_zero_confidence": "bitwise HLT endpoint"
+  },
+  "schema_version": 1,
+  "scientific_roles": {
+    "forced_all_pairs": "forced-assignment oracle only",
+    "optimal_transport": "transport diagnostic only",
+    "selected_completion_shell": "confidence-warped plausible completion",
+    "selected_thresholded_core": "correspondence candidate qualified only by proxies and synthetic known answers"
+  },
+  "selection_status": "frozen before endpoint classification proxy",
+  "truth_limit": "No real constituent truth association is available; confidence is calibrated to development-fitted synthetic corruptions and cannot establish physical truth on authentic pairs."
+}

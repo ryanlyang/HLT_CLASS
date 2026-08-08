@@ -20,17 +20,20 @@ from hlt_classification.data.cache_contracts import (
 )
 from hlt_classification.training.checkpoints import capture_model_runtime_state, capture_rng_state, restore_model_runtime_state, restore_rng_state
 from .evaluation import classification_metrics
+from .dataset import _take_batch
 from .training import (
     LossConfiguration, derive_seed, freeze_teacher, pmard_loss, representation_kd_loss,
 )
 from .targets import EphemeralTeacherTargets
 
-PMARD_TRAINING_REPORT_CONTRACT = "hlt_classification_pmard_training_report_v5"
-PMARD_TRAINING_REPORT_VERSION = 5
+PMARD_TRAINING_REPORT_CONTRACT = "hlt_classification_pmard_training_report_v6"
+PMARD_TRAINING_REPORT_VERSION = 6
 PMARD_LEGACY_TRAINING_REPORT_CONTRACT = "hlt_classification_pmard_training_report_v4"
 PMARD_LEGACY_TRAINING_REPORT_VERSION = 4
-PMARD_RESUME_CONTRACT = "hlt_classification_pmard_resume_checkpoint_v5"
-PMARD_RESUME_VERSION = 5
+PMARD_INTERMEDIATE_TRAINING_REPORT_CONTRACT = "hlt_classification_pmard_training_report_v5"
+PMARD_INTERMEDIATE_TRAINING_REPORT_VERSION = 5
+PMARD_RESUME_CONTRACT = "hlt_classification_pmard_resume_checkpoint_v6"
+PMARD_RESUME_VERSION = 6
 
 
 def validate_pmard_training_report(report: Mapping[str, object]) -> str:
@@ -39,6 +42,7 @@ def validate_pmard_training_report(report: Mapping[str, object]) -> str:
     identity = (report.get("contract"), report.get("schema_version"))
     supported = {
         (PMARD_LEGACY_TRAINING_REPORT_CONTRACT, PMARD_LEGACY_TRAINING_REPORT_VERSION),
+        (PMARD_INTERMEDIATE_TRAINING_REPORT_CONTRACT, PMARD_INTERMEDIATE_TRAINING_REPORT_VERSION),
         (PMARD_TRAINING_REPORT_CONTRACT, PMARD_TRAINING_REPORT_VERSION),
     }
     if identity not in supported:
@@ -60,6 +64,9 @@ class PmardTrainingConfig:
     total_updates: int
     effective_batch_size: int
     peak_learning_rate: float
+    microbatch_size: int | None = None
+    gradient_accumulation: int = 1
+    adam_epsilon: float = 1e-8
     weight_decay: float = .01
     warmup_fraction: float = .05
     minimum_lr_fraction: float = .05
@@ -72,10 +79,18 @@ class PmardTrainingConfig:
     representation_arm: str = "R0"
     representation_coefficient: float = 0.0
     representation_control: bool = False
+    selection_policy: str = "pmard_ce_accuracy"
 
     def __post_init__(self) -> None:
         if self.total_updates <= 0 or self.effective_batch_size <= 0 or self.peak_learning_rate <= 0:
             raise ValueError("training budget values must be positive")
+        microbatch = self.effective_batch_size if self.microbatch_size is None else self.microbatch_size
+        if microbatch <= 0 or self.gradient_accumulation <= 0:
+            raise ValueError("microbatch and gradient accumulation must be positive")
+        if microbatch * self.gradient_accumulation != self.effective_batch_size:
+            raise ValueError("effective batch must equal microbatch times accumulation")
+        if not np.isfinite(self.adam_epsilon) or self.adam_epsilon <= 0:
+            raise ValueError("Adam epsilon must be finite and positive")
         if self.validation_interval is not None and self.validation_interval <= 0:
             raise ValueError("validation interval must be positive when explicitly set")
         if self.validation_checks <= 0 or self.logging_interval <= 0:
@@ -94,6 +109,8 @@ class PmardTrainingConfig:
             raise ValueError("R0 cannot enable representation loss/control")
         if self.representation_arm != "R0" and self.representation_coefficient == 0 and not self.representation_control:
             raise ValueError("zero-coefficient projection arm must be declared as its matched control")
+        if self.selection_policy not in {"pmard_ce_accuracy", "hcwdl_macro_auc"}:
+            raise ValueError("unknown checkpoint selection policy")
 
 
 def learning_rate(config: PmardTrainingConfig, update: int) -> float:
@@ -162,15 +179,28 @@ def _optimizer_for(model, config: PmardTrainingConfig):
         groups.append({"params": decay, "weight_decay": config.weight_decay})
     if no_decay:
         groups.append({"params": no_decay, "weight_decay": 0.0})
-    return torch.optim.AdamW(groups, lr=config.peak_learning_rate)
+    return torch.optim.AdamW(
+        groups, lr=config.peak_learning_rate, eps=config.adam_epsilon,
+    )
 
 
 def _cpu_state_dict(model) -> dict[str, object]:
     return {name: value.detach().cpu().clone() for name, value in model.state_dict().items()}
 
 
-def _selection_key(metrics: Mapping[str, object], update: int) -> tuple[float, float, int]:
-    return (float(metrics["cross_entropy"]), -float(metrics["accuracy"]), int(update))
+def _selection_key(
+    metrics: Mapping[str, object], update: int, *, policy: str = "pmard_ce_accuracy",
+) -> tuple[object, ...]:
+    if policy == "pmard_ce_accuracy":
+        return (float(metrics["cross_entropy"]), -float(metrics["accuracy"]), int(update))
+    if policy == "hcwdl_macro_auc":
+        return (
+            -float(metrics["macro_ovr_auc"]),
+            float(metrics["cross_entropy"]),
+            -float(metrics["macro_mean_log_qcd_rejection_at_50pct_signal"]),
+            int(update),
+        )
+    raise ValueError("unknown checkpoint selection policy")
 
 
 def _validation_due(config: PmardTrainingConfig, update: int) -> bool:
@@ -358,88 +388,126 @@ def train_pmard(
     while update < config.total_updates:
         consumed = False
         model.train()
-        for batch_index, batch in enumerate(train_batches(epoch)):
+        for batch_index, effective_batch in enumerate(train_batches(epoch)):
             if batch_index < batch_offset:
                 continue
             consumed = True
-            labels = torch.as_tensor(batch["labels"], dtype=torch.long, device=target)
             for group in optimizer.param_groups: group["lr"] = learning_rate(config, update)
             optimizer.zero_grad(set_to_none=True)
-            amp = torch.autocast(device_type=target.type, dtype=torch.bfloat16, enabled=config.amp_dtype == "bfloat16")
-            with amp:
-                if config.representation_arm == "R0" or config.representation_coefficient == 0:
-                    student = _model_logits(model, batch, target, config.model_input)
-                    student_representation = representation_mask = None
-                else:
-                    student, student_representation, representation_mask = _representation_forward(
-                        model, batch, target, config.model_input, config.representation_arm,
-                    )
-                with torch.no_grad():
-                    hlt_logits = None
-                    if config.loss.hlt_kd:
-                        if hlt_teacher_targets is not None:
-                            hlt_logits = torch.as_tensor(
-                                hlt_teacher_targets.join(batch["identity_keys"]),
-                                device=target, dtype=torch.float32,
-                            )
-                        elif hlt_teacher is not None:
-                            hlt_logits = _model_logits(hlt_teacher, batch, target, "hlt")
-                        else:
-                            raise ValueError("HLT KD requires a frozen teacher or RAM targets")
-                    privileged_logits = None
-                    if config.loss.privileged_kd:
-                        if privileged_teacher_targets is not None:
-                            privileged_logits = torch.as_tensor(
-                                privileged_teacher_targets.join(batch["identity_keys"]),
-                                device=target, dtype=torch.float32,
-                            )
-                        elif "privileged_logits" in batch:
-                            privileged_logits = torch.as_tensor(
-                                batch["privileged_logits"], device=target, dtype=torch.float32,
-                            )
-                        elif privileged_teacher is hlt_teacher and hlt_logits is not None:
-                            privileged_logits = hlt_logits
-                        elif privileged_teacher is hlt_teacher and "hlt" in batch:
-                            privileged_logits = _model_logits(
-                                privileged_teacher, batch, target, "hlt"
-                            )
-                        elif privileged_teacher is not None and "privileged" in batch:
-                            privileged_logits = _model_logits(
-                                privileged_teacher, batch, target, "privileged"
-                            )
-                        elif privileged_teacher is not None and "toff" in batch:
-                            privileged_logits = _model_logits(
-                                privileged_teacher, batch, target, "toff"
-                            )
-                        else:
-                            raise ValueError(
-                                "privileged KD requires identity-joined RAM logits or a privileged view"
-                            )
-                with torch.autocast(device_type=target.type, enabled=False):
-                    parts = pmard_loss(
-                        student.float(), labels, class_weights=weights, configuration=config.loss,
-                        hlt_teacher_logits=None if hlt_logits is None else hlt_logits.float(),
-                        privileged_teacher_logits=(
-                            None if privileged_logits is None else privileged_logits.float()
-                        ),
-                    )
-                if config.representation_arm != "R0" and config.representation_coefficient > 0:
-                    if privileged_teacher is None or "privileged" not in batch:
-                        raise ValueError("representation KD requires the alpha teacher and aligned view")
+            effective_rows = len(effective_batch["labels"])
+            microbatch_size = (
+                effective_rows
+                if config.microbatch_size is None else config.microbatch_size
+            )
+            accumulated_parts: dict[str, object] = {}
+            accumulated_rows = 0
+            microbatches = 0
+            for micro_start in range(0, effective_rows, microbatch_size):
+                micro_stop = min(effective_rows, micro_start + microbatch_size)
+                indexes = np.arange(micro_start, micro_stop, dtype=np.int64)
+                batch = (
+                    effective_batch if micro_start == 0 and micro_stop == effective_rows
+                    else _take_batch(effective_batch, indexes)
+                )
+                micro_rows = micro_stop - micro_start
+                microbatches += 1; accumulated_rows += micro_rows
+                labels = torch.as_tensor(batch["labels"], dtype=torch.long, device=target)
+                amp = torch.autocast(
+                    device_type=target.type, dtype=torch.bfloat16,
+                    enabled=config.amp_dtype == "bfloat16",
+                )
+                with amp:
+                    if config.representation_arm == "R0" or config.representation_coefficient == 0:
+                        student = _model_logits(model, batch, target, config.model_input)
+                        student_representation = representation_mask = None
+                    else:
+                        student, student_representation, representation_mask = _representation_forward(
+                            model, batch, target, config.model_input, config.representation_arm,
+                        )
                     with torch.no_grad():
-                        _, teacher_representation, teacher_mask = _representation_forward(
-                            privileged_teacher, batch, target, "privileged", config.representation_arm,
-                        )
-                    if not torch.equal(representation_mask, teacher_mask):
-                        raise ValueError("teacher/student representation masks differ")
-                    rep_mask = None if config.representation_arm in {"R1", "R2"} else representation_mask
+                        hlt_logits = None
+                        if config.loss.hlt_kd:
+                            if hlt_teacher_targets is not None:
+                                hlt_logits = torch.as_tensor(
+                                    hlt_teacher_targets.join(batch["identity_keys"]),
+                                    device=target, dtype=torch.float32,
+                                )
+                            elif hlt_teacher is not None:
+                                hlt_logits = _model_logits(hlt_teacher, batch, target, "hlt")
+                            else:
+                                raise ValueError("HLT KD requires a frozen teacher or RAM targets")
+                        privileged_logits = None
+                        if config.loss.privileged_kd:
+                            if privileged_teacher_targets is not None:
+                                privileged_logits = torch.as_tensor(
+                                    privileged_teacher_targets.join(batch["identity_keys"]),
+                                    device=target, dtype=torch.float32,
+                                )
+                            elif "privileged_logits" in batch:
+                                privileged_logits = torch.as_tensor(
+                                    batch["privileged_logits"], device=target, dtype=torch.float32,
+                                )
+                            elif privileged_teacher is hlt_teacher and hlt_logits is not None:
+                                privileged_logits = hlt_logits
+                            elif privileged_teacher is hlt_teacher and "hlt" in batch:
+                                privileged_logits = _model_logits(
+                                    privileged_teacher, batch, target, "hlt"
+                                )
+                            elif privileged_teacher is not None and "privileged" in batch:
+                                privileged_logits = _model_logits(
+                                    privileged_teacher, batch, target, "privileged"
+                                )
+                            elif privileged_teacher is not None and "toff" in batch:
+                                privileged_logits = _model_logits(
+                                    privileged_teacher, batch, target, "toff"
+                                )
+                            else:
+                                raise ValueError(
+                                    "privileged KD requires identity-joined RAM logits or a privileged view"
+                                )
                     with torch.autocast(device_type=target.type, enabled=False):
-                        parts["representation"] = representation_kd_loss(
-                            _float_representation(student_representation),
-                            _float_representation(teacher_representation), mask=rep_mask,
+                        parts = pmard_loss(
+                            student.float(), labels, class_weights=weights, configuration=config.loss,
+                            hlt_teacher_logits=None if hlt_logits is None else hlt_logits.float(),
+                            privileged_teacher_logits=(
+                                None if privileged_logits is None else privileged_logits.float()
+                            ),
                         )
-                    parts["total"] = parts["total"] + config.representation_coefficient * parts["representation"]
-            parts["total"].backward(); optimizer.step(); update += 1
+                    if config.representation_arm != "R0" and config.representation_coefficient > 0:
+                        if privileged_teacher is None or "privileged" not in batch:
+                            raise ValueError("representation KD requires the alpha teacher and aligned view")
+                        with torch.no_grad():
+                            _, teacher_representation, teacher_mask = _representation_forward(
+                                privileged_teacher, batch, target, "privileged", config.representation_arm,
+                            )
+                        if not torch.equal(representation_mask, teacher_mask):
+                            raise ValueError("teacher/student representation masks differ")
+                        rep_mask = None if config.representation_arm in {"R1", "R2"} else representation_mask
+                        with torch.autocast(device_type=target.type, enabled=False):
+                            parts["representation"] = representation_kd_loss(
+                                _float_representation(student_representation),
+                                _float_representation(teacher_representation), mask=rep_mask,
+                            )
+                        parts["total"] = parts["total"] + config.representation_coefficient * parts["representation"]
+                (parts["total"] * micro_rows).backward()
+                for name, value in parts.items():
+                    weighted = value.detach().float() * micro_rows
+                    accumulated_parts[name] = (
+                        weighted if name not in accumulated_parts
+                        else accumulated_parts[name] + weighted
+                    )
+            expected_microbatches = int(np.ceil(effective_rows / microbatch_size))
+            if microbatches != expected_microbatches or microbatches > config.gradient_accumulation:
+                raise RuntimeError("training effective batch violates gradient accumulation contract")
+            if accumulated_rows != effective_rows or accumulated_rows <= 0:
+                raise RuntimeError("training microbatches do not conserve effective-batch rows")
+            for parameter in model.parameters():
+                if parameter.grad is not None:
+                    parameter.grad.div_(accumulated_rows)
+            optimizer.step(); update += 1
+            parts = {
+                name: value / accumulated_rows for name, value in accumulated_parts.items()
+            }
             for name, value in parts.items():
                 detached = value.detach().float()
                 loss_window_sums[name] = (
@@ -471,7 +539,9 @@ def train_pmard(
                 )
                 restore_model_runtime_state(model, pre_validation_runtime)
                 validation_history.append({"update": update, **metrics})
-                if best_metrics is None or _selection_key(metrics, update) < _selection_key(best_metrics, best_update):
+                if best_metrics is None or _selection_key(
+                    metrics, update, policy=config.selection_policy,
+                ) < _selection_key(best_metrics, best_update, policy=config.selection_policy):
                     best_model = _cpu_state_dict(model)
                     best_runtime = pre_validation_runtime
                     best_metrics = metrics
@@ -510,6 +580,17 @@ def train_pmard(
         best_model = _cpu_state_dict(model); best_runtime = capture_model_runtime_state(model)
         best_metrics = metrics; best_update = update
         validation_history.append({"update": update, **metrics})
+    final_checkpoint_path = None
+    final_checkpoint_sha256 = None
+    if config.selection_policy == "hcwdl_macro_auc":
+        final_checkpoint_path = root / "final_model.pt"
+        atomic_publish_bytes(final_checkpoint_path, _torch_bytes({
+            "model": _cpu_state_dict(model), "config": asdict(config),
+            "scientific_config": scientific_payload,
+            "model_runtime": capture_model_runtime_state(model),
+            "final_update": update,
+        }))
+        final_checkpoint_sha256 = sha256_file(final_checkpoint_path)
     model.load_state_dict(best_model)
     if best_runtime is not None:
         restore_model_runtime_state(model, best_runtime)
@@ -529,10 +610,22 @@ def train_pmard(
         "validation_history": validation_history,
         "training_history": history,
         "training_history_rule": "fp32_interval_mean_every_logging_interval_v1",
-        "checkpoint_selector": "minimum_ce_then_maximum_accuracy_then_earliest_update_v1",
+        "checkpoint_selector": (
+            "minimum_ce_then_maximum_accuracy_then_earliest_update_v1"
+            if config.selection_policy == "pmard_ce_accuracy"
+            else "maximum_macro_auc_then_minimum_ce_then_maximum_logr50_then_earliest_update_v1"
+        ),
         "selected_update": best_update,
         "selected_cross_entropy_hex": float(best_metrics["cross_entropy"]).hex(),
         "selected_accuracy_hex": float(best_metrics["accuracy"]).hex(),
+        "selected_macro_ovr_auc_hex": (
+            None if "macro_ovr_auc" not in best_metrics
+            else float(best_metrics["macro_ovr_auc"]).hex()
+        ),
+        "selected_macro_mean_log_qcd_rejection_at_50pct_signal_hex": (
+            None if "macro_mean_log_qcd_rejection_at_50pct_signal" not in best_metrics
+            else float(best_metrics["macro_mean_log_qcd_rejection_at_50pct_signal"]).hex()
+        ),
         "rng_domains": {
             "training_dropout_and_augmentation": training_seed,
             "model_initialization_is_caller_bound": True,
@@ -543,6 +636,8 @@ def train_pmard(
         },
         "selected_checkpoint": checkpoint_path.name,
         "selected_checkpoint_sha256": sha256_file(checkpoint_path),
+        "final_checkpoint": None if final_checkpoint_path is None else final_checkpoint_path.name,
+        "final_checkpoint_sha256": final_checkpoint_sha256,
     })
     write_immutable_json(root / "training_report.json", report)
     rolling.unlink(missing_ok=True)

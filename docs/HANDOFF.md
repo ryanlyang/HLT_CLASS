@@ -674,3 +674,104 @@ completed prefix from `pmard_pilot_3f379cb66398fcc8`, inspect the recovery
 dry run, and submit from `teachers` onward. Do not reuse failed teacher or
 descendant outputs. Cancel only the old campaign's exact dependency-doomed
 jobs through its own submission ledger.
+
+## HCWDL local implementation closure (2026-08-08)
+
+The active conversation task is now the local implementation of
+`docs/plans/HIGH_COVERAGE_COLD_WARM_DISTILLATION_LADDER.md`. The previous PRAD
+and corrected-PMARD operational next tasks above are historical context and are
+not authorization to contact Tigris in this task.
+
+All six locally implementable HCWDL blocks now exist:
+
+1. The exact high-coverage donor runtime and three fitted resources are
+   packaged under `src/hlt_classification/scouting`; every copied donor file is
+   recorded in `docs/LEGACY_SOURCE_MAP.md` at exact clean donor commit
+   `64be1a82f11f42949fdffa639a869ccea2528bfa`.
+2. Cross-fitted empirical matching, native-index restoration, lost-track
+   exclusion, lexicographic one-to-one assignment, 18 confidence diagnostics,
+   compact int16/uint16 shards, complete-role manifests, deterministic sampled
+   recomputation, and strict sub-10% dustbin authorization are implemented.
+3. Shell Exact, Shell Soft, and HC Exact repair all 21 fields. Shell Exact has
+   confidence-warped intermediate alphas, byte-exact D0, exact assigned D100,
+   exact HLT dustbins, deterministic identity-bound discrete switches, and a
+   fixed HLT skeleton.
+4. The immutable 23-node cold/warm graph, HLT/D25/D50/D75/D100/TOFF domains,
+   fresh/warm initialization, one/two-teacher FP32 KD, recipe-bound AdamW
+   epsilon and microbatch accumulation, 60 passes, every-pass validation,
+   AUC/CE/logR/earliest selection, final and selected checkpoints, and exact
+   resume are executable.
+5. Smoke/pilot/production DAGs, source-byte reauthentication, split validation,
+   locks, fixed endpoint qualification, exact human acknowledgement, 55-row
+   confirmation registry, reporting, one-claim final evaluation, exact-ID
+   recovery/cancellation, resource/storage evidence, and Slurm command
+   generation are implemented. The endpoint lock is submitted held so the
+   six diagnostics can be inspected and the lineage-bound acknowledgement can
+   be written before exact-ID release. A measured non-executable candidate
+   spec now hashes the exact future Slurm commands independently of the
+   enclosing spec; submission authorization v3 binds that command plan and
+   exact resource-request hash, and the executable spec must reproduce both.
+   The first explicitly authorized smoke miniature uses conservative bootstrap
+   requests without claiming they were measured; pilot/production still
+   require a genuine measured resource profile.
+6. Donor parity, tamper/failure guards, assignment/repair/graph/training tests,
+   all CLI help surfaces, a complete bounded local smoke, and a full planning
+   pilot dry run are implemented locally.
+
+The primary two-teacher ladder decision was locked on 2026-08-08 from the
+completed `pmard_kd_followup_b8a493547de8bd7e` results: 60-pass maximum,
+validation every pass, macro-AUC-first checkpoint selection, dual-teacher peak
+LR `3e-4`, and CE/predecessor/privileged weights `0.25/0.40/0.35` with
+privileged temperature `2`. `HCWDL_RECIPE/v2` enforces those values for the
+`primary_ladder` profile. Lower CE or another mixture remains possible only as
+a separately identified `registered_ablation`; it cannot silently change the
+primary campaign. Single-teacher settings, predecessor temperature,
+non-dual learning rates, schedule details, and batching remain evidence-bound.
+
+New contract families are `HIGHCOV_MATCHER_RESOURCES/v1`,
+`HIGHCOV_DENSE_ASSIGNMENT_{SHARD,MANIFEST,LOCK}/v1`,
+`HIGHCOV_ASSIGNMENT_RECOMPUTATION_AUDIT/v1`, `HCWDL_ARTIFACT/v1`,
+`HCWDL_{NODE_SPEC,GRAPH,TRAINING_REPORT,CHECKPOINT_SELECTION}/v1`,
+`HCWDL_RECIPE/v2`,
+`HCWDL_EPHEMERAL_{VIEW,TARGET}_BANK/v1`, `HCWDL_LOCK/v1`,
+`HCWDL_EXECUTION_CLAIM/v1`, `HCWDL_ENDPOINT_{QUALIFICATION,DIAGNOSTIC_ACK}/v1`,
+`HCWDL_{SCREEN,CONFIRMATION,FINAL}_AGGREGATE/v1`,
+`HCWDL_FINAL_{EVALUATION,EVALUATION_MANIFEST}/v1`,
+`HCWDL_CAMPAIGN_SPEC/v2`, `HCWDL_COMMAND_PLAN/v1`,
+`HCWDL_SUBMISSION_LEDGER/v2`, `HCWDL_MONITOR_REPORT/v1`,
+`HCWDL_{RESOURCE_PROFILE,STORAGE_ESTIMATE}/v1`,
+`HCWDL_SUBMISSION_AUTHORIZATION/v3`,
+`HCWDL_CACHE_MINIATURE/v1`, and `HCWDL_LOCAL_SMOKE_REPORT/v1`.
+PMARD training/resume contracts advance to v6 for explicit microbatch,
+accumulation, and Adam-epsilon semantics; validators retain v4/v5 report
+compatibility.
+
+Local verification evidence at the final post-handoff audit:
+
+- repository-wide suite: 293 passed with the same 14 Matplotlib/Pyparsing
+  deprecation warnings;
+- all 51 HCWDL/high-coverage Python surfaces compile, all 25 thin CLIs have
+  tested help surfaces, and Slurm shell invariants pass;
+- standalone bounded smoke:
+  `%TEMP%/hcwdl_local_smoke_final_500de1f8e45f44ba8fb84b0eebca898a/smoke_report.json`,
+  content hash
+  `8f3157b434d6b371f3513de83ffa175d13cbb9e5a9d6e9a196849013b13dae0e`;
+  all 23 nodes and five alphas completed, endpoint exactness passed, and the
+  final-test role was not accessed;
+- the pilot dry-run regression renders exact 300,000/100,000/100,000 roles,
+  every dependency and resource class, uncapped source arrays, the held human
+  gate, and no submission.
+
+The placeholder/donor-import/development-path static scans were clean and
+`git diff --check` passed with line-ending notices only. No SSH, Slurm, remote
+push, ROOT write, or Tigris action occurred.
+
+## Exact active next task: separately authorized HCWDL Tigris validation
+
+Resolve and sign the immutable optimization recipe from independent evidence;
+push an exact clean commit only under a separate authorization; run installed
+Weaver parity and a genuine production-worker Tigris miniature; capture
+measured RAM, walltime, I/O, GPU, and storage evidence; build a measured
+resource profile and a fresh complete dry run; then request explicit pilot
+submission authorization. Do not claim runtime acceptance or release the held
+endpoint gate until those steps and the six real endpoint diagnostics exist.

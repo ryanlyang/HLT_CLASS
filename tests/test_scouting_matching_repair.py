@@ -9,7 +9,8 @@ from hlt_classification.scouting.matching import (
     hungarian_with_dustbins, optimal_transport_with_dustbins, wrapped_delta_phi,
 )
 from hlt_classification.scouting.repair import (
-    FULL_ENDPOINT_FIELDS, SELECTIVE_FULL_REPAIR_FAMILY,
+    FULL_ENDPOINT_FIELDS, HIGHCOV_HC_EXACT_FAMILY, HIGHCOV_SHELL_EXACT_FAMILY,
+    HIGHCOV_SHELL_SOFT_FAMILY, SELECTIVE_FULL_REPAIR_FAMILY,
     build_alpha_repaired_inputs,
     build_full_offline_endpoint_inputs,
     build_selective_matched_offline_endpoint_inputs,
@@ -291,6 +292,71 @@ def test_full_endpoint_switches_are_identity_bound_not_chunk_bound():
         )
         assert single.features[0].tobytes() == joint.features[row].tobytes()
         assert single.vectors[0].tobytes() == joint.vectors[row].tobytes()
+
+
+def test_highcov_shell_exact_all_field_endpoints_and_confidence_warp():
+    arrays, offline_p4, assignment, _, _ = _full_endpoint_fixture()
+    canonical = build_hlt_inputs(arrays)
+    selective = build_selective_matched_offline_endpoint_inputs(
+        arrays, arrays, offline_p4, assignment,
+    )
+    confidence = np.zeros((1, 200), np.float32)
+    confidence[0, :2] = [0.0, 1.0]
+
+    zero = build_alpha_repaired_inputs(
+        arrays, offline_p4, np.full_like(assignment, -1), alpha=0.0,
+        repair_family=HIGHCOV_SHELL_EXACT_FAMILY,
+    )
+    assert zero.features.tobytes() == canonical.features.tobytes()
+    assert zero.vectors.tobytes() == canonical.vectors.tobytes()
+
+    endpoint = build_alpha_repaired_inputs(
+        arrays, offline_p4, assignment, alpha=1.0,
+        repair_family=HIGHCOV_SHELL_EXACT_FAMILY,
+        confidence_weights=confidence, offline_arrays=arrays,
+    )
+    assert endpoint.features.tobytes() == selective.features.tobytes()
+    assert endpoint.vectors.tobytes() == selective.vectors.tobytes()
+
+    quarter = build_alpha_repaired_inputs(
+        arrays, offline_p4, assignment, alpha=.25,
+        repair_family=HIGHCOV_SHELL_EXACT_FAMILY,
+        confidence_weights=confidence, offline_arrays=arrays,
+        identity_keys=("file.root::tree::shell",), discrete_seed=8,
+    )
+    strengths = np.asarray([.25 ** 2.0, .25 ** .7])
+    for token, strength in enumerate(strengths):
+        expected = (
+            (1 - strength) * canonical.vectors[0, :, token]
+            + strength * offline_p4[0][assignment[0, token]]
+        )
+        np.testing.assert_allclose(quarter.vectors[0, :, token], expected, rtol=1e-6)
+
+
+def test_highcov_soft_and_core_families_keep_declared_hlt_tokens():
+    arrays, offline_p4, assignment, _, _ = _full_endpoint_fixture()
+    canonical = build_hlt_inputs(arrays)
+    confidence = np.zeros((1, 200), np.float32)
+    confidence[0, :2] = [.5, .99]
+    soft = build_alpha_repaired_inputs(
+        arrays, offline_p4, assignment, alpha=1.0,
+        repair_family=HIGHCOV_SHELL_SOFT_FAMILY,
+        confidence_weights=confidence, offline_arrays=arrays,
+        identity_keys=("file.root::tree::soft",), discrete_seed=3,
+    )
+    np.testing.assert_allclose(
+        soft.vectors[0, :, 0],
+        .5 * canonical.vectors[0, :, 0] + .5 * offline_p4[0][assignment[0, 0]],
+        rtol=1e-6,
+    )
+    core = build_alpha_repaired_inputs(
+        arrays, offline_p4, assignment, alpha=1.0,
+        repair_family=HIGHCOV_HC_EXACT_FAMILY,
+        confidence_weights=confidence, offline_arrays=arrays,
+    )
+    assert core.features[0, :, 0].tobytes() == canonical.features[0, :, 0].tobytes()
+    assert core.vectors[0, :, 0].tobytes() == canonical.vectors[0, :, 0].tobytes()
+    assert np.array_equal(core.vectors[0, :, 1], offline_p4[0][assignment[0, 1]])
 
 
 def test_synthetic_correspondence_and_wilson_bounds_are_deterministic():

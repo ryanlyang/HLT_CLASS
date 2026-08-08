@@ -176,3 +176,29 @@ sweep's compact T0/T100 logit cache, and reruns matched CE-only, T0 self-KD,
 and selected T100 KD rows with validation after every train pass. It runs both
 the square-root exposure-scaled and original fixed learning rates at 20/40/60
 passes; no matcher, repaired view, or test-role job is registered.
+
+HCWDL commands package the high-coverage completion-shell matcher and run the
+fixed Shell Exact cold/warm ladder. The matcher/assignment surface is
+`validate_highcov_resources.py`, `build_highcov_assignment_shard.py`,
+`finalize_highcov_assignments.py`, and `audit_highcov_assignments.py`.
+Recipe, resource, submission, and human diagnostic gates are built by
+`build_hcwdl_recipe.py`, `build_hcwdl_resource_profile.py`,
+`build_hcwdl_submission_authorization.py`, and
+`build_hcwdl_endpoint_ack.py`. Campaign creation/submission/dry-run,
+monitor/resume/cancel, node/qualifier/control training, cache miniature,
+selection, final evaluation, and aggregation each have a thin `*hcwdl*` CLI.
+`run_hcwdl_local_smoke.py` executes the complete 23-node graph on bounded
+synthetic tensors without final-test access. The endpoint lock Slurm job is
+submitted held; after the six fixed qualifier reports exist, the exact
+acknowledgement artifact must be published and that exact job ID manually
+released. No executable pilot/production spec can be made from the bundled
+test-only recipe or unmeasured planning resources. After a real miniature,
+create a locked non-live candidate spec with the measured resource profile,
+inspect its dry run, and pass that candidate to
+`build_hcwdl_submission_authorization.py`; authorization v3 binds the exact
+resource requests and `HCWDL_COMMAND_PLAN/v1` hash. The first bounded smoke
+may use its explicitly authorized conservative bootstrap requests without
+claiming measurement; pilot/production candidates require measured profiles.
+Recreate the live spec with the same root,
+recipe, profile, and authorization. Any command-path, resource, task, or
+lineage difference fails closed.

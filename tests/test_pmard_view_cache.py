@@ -157,6 +157,57 @@ def test_ram_view_cache_fails_before_large_allocation_when_budget_is_too_small()
         )
 
 
+def test_ram_view_cache_replays_native_offline_views_exactly():
+    from hlt_classification.scouting.inputs import NativeOfflineInputs, ParticleInputs
+
+    rows = 3
+
+    def particles(features: int, length: int, offset: float) -> ParticleInputs:
+        values = np.arange(rows * features * length, dtype=np.float32)
+        return ParticleInputs(
+            values.reshape(rows, features, length) + offset,
+            np.arange(rows * 4 * length, dtype=np.float32).reshape(rows, 4, length) + offset,
+            np.ones((rows, 1, length), np.bool_),
+            np.full(rows, length, np.int32),
+        )
+
+    native = NativeOfflineInputs(
+        charged=particles(18, 20, 10.0), neutral=particles(6, 10, 20.0),
+    )
+    record = SourceFileRecord(
+        "sample/a.root", "sample", rows, _digest("native"), rows,
+        tuple([rows] + [0] * 14),
+    )
+    batch = {
+        "labels": np.arange(rows, dtype=np.int64),
+        "identity_keys": np.asarray([
+            f"sample/a.root::tree::{row}" for row in range(rows)
+        ]),
+        "toff": native,
+    }
+    cache = EphemeralPmardViewCache.build(
+        (batch,), expected_rows=rows, records=(record,), role="validation",
+        expected_source_rows={record.path: rows}, view_keys=("toff",),
+        lineage={"split_manifest_sha256": "b" * 64}, max_gib=.01,
+        step_size=2, environ={},
+    )
+    replayed = list(cache.iterate_batches(
+        epoch=0, sampler_seed=17, batch_size=2, shuffle_buffer_rows=2,
+        interleave_source_files=1,
+    ))
+    assert sum(len(item["labels"]) for item in replayed) == rows
+    for member in ("charged", "neutral"):
+        expected = getattr(native, member)
+        observed = [getattr(item["toff"], member) for item in replayed]
+        for field in ("features", "vectors", "mask", "raw_lengths"):
+            assert np.array_equal(
+                np.concatenate([getattr(view, field) for view in observed]),
+                getattr(expected, field),
+            )
+    assert cache.header["view_keys"] == ["toff"]
+    assert cache.header["durable_artifact_published"] is False
+
+
 def test_view_cache_budget_reserves_slurm_headroom():
     assert view_cache_budget_bytes(320, environ={"SLURM_MEM_PER_NODE": "384G"}) == 288 * 1024**3
     assert view_cache_budget_bytes(100, environ={"SLURM_MEM_PER_NODE": "384000"}) == 100 * 1024**3

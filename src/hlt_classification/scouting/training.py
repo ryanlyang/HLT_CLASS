@@ -46,7 +46,10 @@ class LossConfiguration:
             self.temperature if self.privileged_temperature is None
             else self.privileged_temperature,
         )
-        if any(value not in TEMPERATURE_GRID for value in temperatures):
+        if self.arm.startswith("HCWDL_"):
+            if any(not np.isfinite(value) or value <= 0 for value in temperatures):
+                raise ValueError("HCWDL KD temperatures must be finite and positive")
+        elif any(value not in TEMPERATURE_GRID for value in temperatures):
             raise ValueError("unknown PMARD KD temperature")
 
     @property

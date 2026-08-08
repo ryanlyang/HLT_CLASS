@@ -13,7 +13,7 @@ from hlt_classification.data.cache_contracts import with_content_hash
 from .dataset import (
     TRAIN_INTERLEAVE_FILES, TRAIN_SHUFFLE_BUFFER_ROWS, _take_batch,
 )
-from .inputs import ParticleInputs
+from .inputs import NativeOfflineInputs, ParticleInputs
 from .splits import SourceFileRecord
 from .streaming import partition_files
 
@@ -57,13 +57,79 @@ def view_cache_budget_bytes(
     )
 
 
-def _view_row_bytes(view: ParticleInputs) -> int:
+def _particle_row_bytes(view: ParticleInputs) -> int:
     rows = len(view.raw_lengths)
     if rows <= 0:
         raise ValueError("view-cache seed batch is empty")
     return sum(array.nbytes for array in (
         view.features, view.vectors, view.mask, view.raw_lengths,
     )) // rows
+
+
+def _view_row_bytes(view: ParticleInputs | NativeOfflineInputs) -> int:
+    if isinstance(view, ParticleInputs):
+        return _particle_row_bytes(view)
+    if isinstance(view, NativeOfflineInputs):
+        return _particle_row_bytes(view.charged) + _particle_row_bytes(view.neutral)
+    raise TypeError("view cache received an unsupported view type")
+
+
+def _validate_view(view: object) -> None:
+    particles = (
+        (view,) if isinstance(view, ParticleInputs)
+        else (view.charged, view.neutral) if isinstance(view, NativeOfflineInputs)
+        else ()
+    )
+    if not particles:
+        raise ValueError("view cache requires canonical particle inputs")
+    for particle in particles:
+        if (
+            particle.features.dtype != np.float32
+            or particle.vectors.dtype != np.float32
+            or particle.mask.dtype != np.bool_
+            or particle.raw_lengths.dtype != np.int32
+        ):
+            raise ValueError("view cache requires canonical FP32/bool/int32 particle inputs")
+
+
+def _allocate_particle(view: ParticleInputs, rows: int) -> ParticleInputs:
+    return ParticleInputs(
+        np.empty((rows, *view.features.shape[1:]), view.features.dtype),
+        np.empty((rows, *view.vectors.shape[1:]), view.vectors.dtype),
+        np.empty((rows, *view.mask.shape[1:]), view.mask.dtype),
+        np.empty(rows, view.raw_lengths.dtype),
+    )
+
+
+def _allocate_view(view: ParticleInputs | NativeOfflineInputs, rows: int):
+    if isinstance(view, ParticleInputs):
+        return _allocate_particle(view, rows)
+    return NativeOfflineInputs(
+        _allocate_particle(view.charged, rows), _allocate_particle(view.neutral, rows),
+    )
+
+
+def _append_particle(target: ParticleInputs, source: ParticleInputs, start: int, stop: int) -> None:
+    for name in ("features", "vectors", "mask", "raw_lengths"):
+        source_array = getattr(source, name); target_array = getattr(target, name)
+        if source_array.shape[1:] != target_array.shape[1:] or source_array.dtype != target_array.dtype:
+            raise ValueError("view-cache particle shape or dtype changed within a role")
+        target_array[start:stop] = source_array
+
+
+def _append_view(target, source, start: int, stop: int) -> None:
+    if isinstance(target, ParticleInputs) and isinstance(source, ParticleInputs):
+        _append_particle(target, source, start, stop); return
+    if isinstance(target, NativeOfflineInputs) and isinstance(source, NativeOfflineInputs):
+        _append_particle(target.charged, source.charged, start, stop)
+        _append_particle(target.neutral, source.neutral, start, stop); return
+    raise ValueError("view-cache particle type changed within a role")
+
+
+def _view_array_bytes(view: ParticleInputs | NativeOfflineInputs) -> int:
+    if isinstance(view, ParticleInputs):
+        return sum(getattr(view, name).nbytes for name in ("features", "vectors", "mask", "raw_lengths"))
+    return _view_array_bytes(view.charged) + _view_array_bytes(view.neutral)
 
 
 def _identity_digest(values: Sequence[str], *, ordered: bool) -> str:
@@ -129,24 +195,15 @@ class EphemeralPmardViewCache:
         if expected_rows <= 0:
             raise ValueError("view cache requires a positive expected row count")
         keys = tuple(dict.fromkeys(map(str, view_keys)))
-        if not keys or any(key not in {"hlt", "privileged"} for key in keys):
-            raise ValueError("view cache accepts only HLT and privileged particle views")
+        if not keys or any(key not in {"hlt", "privileged", "toff"} for key in keys):
+            raise ValueError("view cache accepts only canonical particle views")
         iterator = iter(batches)
         try:
             first = next(iterator)
         except StopIteration as error:
             raise ValueError("view-cache source stream is empty") from error
         for key in keys:
-            if not isinstance(first.get(key), ParticleInputs):
-                raise ValueError(f"view-cache source lacks ParticleInputs {key!r}")
-            view = first[key]
-            if (
-                view.features.dtype != np.float32
-                or view.vectors.dtype != np.float32
-                or view.mask.dtype != np.bool_
-                or view.raw_lengths.dtype != np.int32
-            ):
-                raise ValueError("view cache requires canonical FP32/bool/int32 particle inputs")
+            _validate_view(first.get(key))
         first_rows = len(first["labels"])
         if first_rows <= 0:
             raise ValueError("view-cache source emitted an empty batch")
@@ -162,14 +219,7 @@ class EphemeralPmardViewCache:
             )
         labels = np.empty(expected_rows, dtype=label_dtype)
         identities: list[str | None] = [None] * expected_rows
-        views = {
-            key: ParticleInputs(
-                np.empty((expected_rows, *first[key].features.shape[1:]), first[key].features.dtype),
-                np.empty((expected_rows, *first[key].vectors.shape[1:]), first[key].vectors.dtype),
-                np.empty((expected_rows, *first[key].mask.shape[1:]), first[key].mask.dtype),
-                np.empty(expected_rows, first[key].raw_lengths.dtype),
-            ) for key in keys
-        }
+        views = {key: _allocate_view(first[key], expected_rows) for key in keys}
         cursor = 0
 
         def append(batch: Mapping[str, object]) -> None:
@@ -181,13 +231,7 @@ class EphemeralPmardViewCache:
             identities[cursor:stop] = map(str, batch["identity_keys"])
             for key in keys:
                 source = batch.get(key); target = views[key]
-                if not isinstance(source, ParticleInputs):
-                    raise ValueError(f"view-cache block lacks ParticleInputs {key!r}")
-                for name in ("features", "vectors", "mask", "raw_lengths"):
-                    source_array = getattr(source, name); target_array = getattr(target, name)
-                    if source_array.shape[1:] != target_array.shape[1:] or source_array.dtype != target_array.dtype:
-                        raise ValueError("view-cache particle shape or dtype changed within a role")
-                    target_array[cursor:stop] = source_array
+                _append_view(target, source, cursor, stop)
             cursor = stop
 
         append(first)
@@ -198,10 +242,7 @@ class EphemeralPmardViewCache:
                 f"view-cache row count differs: expected {expected_rows}, observed {cursor}"
             )
         identity_values = tuple(str(value) for value in identities)
-        array_bytes = labels.nbytes + sum(
-            sum(getattr(view, name).nbytes for name in ("features", "vectors", "mask", "raw_lengths"))
-            for view in views.values()
-        )
+        array_bytes = labels.nbytes + sum(_view_array_bytes(view) for view in views.values())
         header = with_content_hash({
             "contract": EPHEMERAL_VIEW_CACHE_CONTRACT,
             "schema_version": EPHEMERAL_VIEW_CACHE_VERSION,

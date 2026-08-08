@@ -11,12 +11,17 @@ from .inputs import ParticleInputs, build_hlt_inputs
 from .matching import p4_kinematics, physical_p4_mask, wrapped_delta_phi
 from .schema import HLT_FEATURE_SPECS, HLT_VECTOR_BRANCHES
 
-ALPHA_GRID = (0.0, 0.05, 0.10, 0.25, 0.50, 1.0)
+ALPHA_GRID = (0.0, 0.05, 0.10, 0.25, 0.50, 0.75, 1.0)
 REPAIR_FAMILY = "P4_ONLY/v1"
 FULL_REPAIR_FAMILY = "FULL_PARTICLE_ENDPOINT/v1"
 SELECTIVE_FULL_REPAIR_FAMILY = "SELECTIVE_FULL_PARTICLE_ENDPOINT/v1"
+HIGHCOV_SHELL_EXACT_FAMILY = "HIGHCOV_SHELL_EXACT/v1"
+HIGHCOV_SHELL_SOFT_FAMILY = "HIGHCOV_SHELL_SOFT/v1"
+HIGHCOV_HC_EXACT_FAMILY = "HIGHCOV_HC_EXACT/v1"
+HIGHCOV_HC_THRESHOLD = 0.958730161190033
 REPAIR_FAMILIES = (
     "P4_ONLY", "FULL_PARTICLE_ENDPOINT", "SELECTIVE_FULL_PARTICLE_ENDPOINT",
+    "HIGHCOV_SHELL_EXACT", "HIGHCOV_SHELL_SOFT", "HIGHCOV_HC_EXACT",
     "TRACK_ONLY", "P4_PLUS_TRACK", "DIRECTION_ONLY",
     "RESPONSE_ONLY", "WRONG_DIRECTION", "RANDOM_DIRECTION",
     "LOG_ANGULAR", "CONFIDENCE_WEIGHTED", "MATCH_SHUFFLED",
@@ -29,6 +34,9 @@ def runtime_repair_family(repair_family: str) -> str:
     aliases = {
         FULL_REPAIR_FAMILY: "FULL_PARTICLE_ENDPOINT",
         SELECTIVE_FULL_REPAIR_FAMILY: "SELECTIVE_FULL_PARTICLE_ENDPOINT",
+        HIGHCOV_SHELL_EXACT_FAMILY: "HIGHCOV_SHELL_EXACT",
+        HIGHCOV_SHELL_SOFT_FAMILY: "HIGHCOV_SHELL_SOFT",
+        HIGHCOV_HC_EXACT_FAMILY: "HIGHCOV_HC_EXACT",
     }
     runtime = aliases.get(repair_family, repair_family)
     if runtime not in REPAIR_FAMILIES:
@@ -137,9 +145,10 @@ def full_endpoint_required_branches() -> frozenset[str]:
 
 def _unit_switch(
     identity_key: str, token_index: int, group: str, *, seed: int,
+    repair_contract: str = FULL_REPAIR_FAMILY,
 ) -> float:
     payload = (
-        f"{FULL_REPAIR_FAMILY}\0{int(seed)}\0{identity_key}\0"
+        f"{repair_contract}\0{int(seed)}\0{identity_key}\0"
         f"{int(token_index)}\0{group}"
     ).encode("utf-8")
     integer = int.from_bytes(hashlib.sha256(payload).digest()[:8], "big")
@@ -231,9 +240,20 @@ def _apply_full_endpoint_repair(
     alpha: float, offline_arrays: Mapping[str, object],
     identity_keys: Sequence[str] | None, discrete_seed: int,
     require_complete: bool = True,
+    strength_by_token: np.ndarray | None = None,
+    repair_contract: str = FULL_REPAIR_FAMILY,
 ) -> None:
     rows = canonical.features.shape[0]
-    if 0 < alpha < 1:
+    strengths = None if strength_by_token is None else np.asarray(strength_by_token, np.float64)
+    if strengths is not None:
+        if strengths.shape != assignments.shape or not np.isfinite(strengths).all():
+            raise ValueError("full endpoint strength shape or finiteness differs")
+        if np.any((strengths < 0) | (strengths > 1)):
+            raise ValueError("full endpoint strengths must lie in [0,1]")
+    has_intermediate = 0 < alpha < 1 if strengths is None else bool(
+        np.any((strengths > 0) & (strengths < 1))
+    )
+    if has_intermediate:
         if identity_keys is None or len(identity_keys) != rows:
             raise ValueError("intermediate full endpoint repair requires one identity key per row")
         if len(set(map(str, identity_keys))) != rows:
@@ -250,6 +270,10 @@ def _apply_full_endpoint_repair(
                 f"row {row} is missing {len(missing)} assignments"
             )
         matched_assignment = row_assignment[matched_tokens]
+        row_strength = (
+            np.full(len(matched_tokens), alpha, np.float64)
+            if strengths is None else strengths[row, matched_tokens]
+        )
         if len(set(matched_assignment.tolist())) != len(matched_assignment):
             raise ValueError(f"full endpoint assignment is not one-to-one in row {row}")
 
@@ -293,12 +317,15 @@ def _apply_full_endpoint_repair(
         key = "" if identity_keys is None else str(identity_keys[row])
         choices: dict[str, np.ndarray] = {}
         for group in ("identity", "quality", "lost_inner_hits"):
-            if alpha == 1:
+            if np.all(row_strength == 1):
                 choices[group] = np.ones(len(matched_tokens), np.bool_)
             else:
                 choices[group] = np.asarray([
-                    _unit_switch(key, token, group, seed=discrete_seed) < alpha
-                    for token in matched_tokens
+                    _unit_switch(
+                        key, token, group, seed=discrete_seed,
+                        repair_contract=repair_contract,
+                    ) < strength
+                    for token, strength in zip(matched_tokens, row_strength, strict=True)
                 ], np.bool_)
         validity_changes = {
             group: np.any(
@@ -308,17 +335,24 @@ def _apply_full_endpoint_repair(
         }
         validity_choices = {
             group: (
-                np.ones(len(matched_tokens), np.bool_) if alpha == 1 else np.asarray([
-                    _unit_switch(key, token, f"validity_{group}", seed=discrete_seed) < alpha
-                    for token in matched_tokens
+                np.ones(len(matched_tokens), np.bool_) if np.all(row_strength == 1) else np.asarray([
+                    _unit_switch(
+                        key, token, f"validity_{group}", seed=discrete_seed,
+                        repair_contract=repair_contract,
+                    ) < strength
+                    for token, strength in zip(matched_tokens, row_strength, strict=True)
                 ], np.bool_)
             )
             for group in FULL_VALIDITY_GROUPS
         }
 
         repaired_p4 = hlt_p4.copy()
-        repaired_p4[matched_tokens] = (
-            (1.0 - alpha) * hlt_p4[matched_tokens] + alpha * endpoint_p4
+        interpolated_p4 = (
+            (1.0 - row_strength[:, None]) * hlt_p4[matched_tokens]
+            + row_strength[:, None] * endpoint_p4
+        )
+        repaired_p4[matched_tokens] = np.where(
+            (row_strength == 1)[:, None], endpoint_p4, interpolated_p4,
         )
         if not physical_p4_mask(repaired_p4).all():
             raise ValueError(f"interpolated full endpoint p4 became nonphysical in row {row}")
@@ -334,7 +368,8 @@ def _apply_full_endpoint_repair(
             group_validity_changes = validity_changes[validity_group]
             validity_choice = validity_choices[validity_group]
             if field.interpolation == "linear":
-                repaired_value = (1.0 - alpha) * hlt_value + alpha * endpoint_value
+                repaired_value = (1.0 - row_strength) * hlt_value + row_strength * endpoint_value
+                repaired_value = np.where(row_strength == 1, endpoint_value, repaired_value)
                 repaired_value = np.where(
                     group_validity_changes,
                     np.where(validity_choice, endpoint_value, hlt_value),
@@ -349,10 +384,10 @@ def _apply_full_endpoint_repair(
                     )
             elif field.interpolation == "angle":
                 displacement = wrapped_delta_phi(endpoint_value, hlt_value)
-                repaired_value = (
-                    endpoint_value.copy() if alpha == 1
-                    else wrapped_delta_phi(hlt_value + alpha * displacement, 0.0)
+                repaired_value = wrapped_delta_phi(
+                    hlt_value + row_strength * displacement, 0.0,
                 )
+                repaired_value = np.where(row_strength == 1, endpoint_value, repaired_value)
                 repaired_value = np.where(
                     group_validity_changes,
                     np.where(validity_choice, endpoint_value, hlt_value),
@@ -403,18 +438,61 @@ def build_alpha_repaired_inputs(
     if len(offline_p4_by_row) != rows:
         raise ValueError("offline endpoint row count differs")
     confidence = None if confidence_weights is None else np.asarray(confidence_weights, np.float64)
-    if repair_family == "CONFIDENCE_WEIGHTED":
+    confidence_families = {
+        "CONFIDENCE_WEIGHTED", "HIGHCOV_SHELL_EXACT",
+        "HIGHCOV_SHELL_SOFT", "HIGHCOV_HC_EXACT",
+    }
+    if repair_family in confidence_families:
         if confidence is None or confidence.shape != mapping.shape or not np.isfinite(confidence).all() or np.any((confidence < 0) | (confidence > 1)):
             raise ValueError("confidence-weighted repair requires finite aligned probabilities")
     raw = {name: [row.copy() for row in _rows(value)] for name, value in hlt_arrays.items()}
-    if repair_family in {"FULL_PARTICLE_ENDPOINT", "SELECTIVE_FULL_PARTICLE_ENDPOINT"}:
+    highcov_families = {
+        "HIGHCOV_SHELL_EXACT", "HIGHCOV_SHELL_SOFT", "HIGHCOV_HC_EXACT",
+    }
+    if repair_family in {"FULL_PARTICLE_ENDPOINT", "SELECTIVE_FULL_PARTICLE_ENDPOINT"} | highcov_families:
         if offline_arrays is None:
             raise ValueError("full endpoint repair requires native offline arrays")
+        effective_mapping = mapping
+        strength_by_token = None
+        repair_contract = (
+            FULL_REPAIR_FAMILY if repair_family == "FULL_PARTICLE_ENDPOINT"
+            else SELECTIVE_FULL_REPAIR_FAMILY
+        )
+        if repair_family in highcov_families:
+            assert confidence is not None
+            if repair_family == "HIGHCOV_SHELL_EXACT":
+                if alpha == 0:
+                    strength_by_token = np.zeros_like(confidence)
+                elif alpha == 1:
+                    strength_by_token = np.where(mapping >= 0, 1.0, 0.0)
+                else:
+                    strength_by_token = np.where(
+                        mapping >= 0, alpha ** (2.0 - 1.3 * confidence), 0.0,
+                    )
+                repair_contract = HIGHCOV_SHELL_EXACT_FAMILY
+            elif repair_family == "HIGHCOV_SHELL_SOFT":
+                strength_by_token = np.where(mapping >= 0, alpha * confidence, 0.0)
+                repair_contract = HIGHCOV_SHELL_SOFT_FAMILY
+            else:
+                effective_mapping = mapping.copy()
+                effective_mapping[confidence < HIGHCOV_HC_THRESHOLD] = -1
+                if alpha == 0:
+                    strength_by_token = np.zeros_like(confidence)
+                elif alpha == 1:
+                    strength_by_token = np.where(effective_mapping >= 0, 1.0, 0.0)
+                else:
+                    strength_by_token = np.where(
+                        effective_mapping >= 0,
+                        alpha ** (2.0 - 1.3 * confidence), 0.0,
+                    )
+                repair_contract = HIGHCOV_HC_EXACT_FAMILY
         _apply_full_endpoint_repair(
-            raw, canonical, offline_p4_by_row, mapping, alpha=alpha,
+            raw, canonical, offline_p4_by_row, effective_mapping, alpha=alpha,
             offline_arrays=offline_arrays, identity_keys=identity_keys,
             discrete_seed=discrete_seed,
             require_complete=repair_family == "FULL_PARTICLE_ENDPOINT",
+            strength_by_token=strength_by_token,
+            repair_contract=repair_contract,
         )
         result = build_hlt_inputs(raw)
         if not np.array_equal(result.mask, canonical.mask) or not np.array_equal(
@@ -522,6 +600,8 @@ def build_selective_matched_offline_endpoint_inputs(
 __all__ = [
     "ALPHA_GRID", "FULL_ENDPOINT_FIELDS", "FULL_IDENTITY_CHANNELS",
     "FULL_REPAIR_FAMILY", "SELECTIVE_FULL_REPAIR_FAMILY", "FULL_TRACK_CHANNELS", "FULL_VALIDITY_GROUPS",
+    "HIGHCOV_HC_EXACT_FAMILY", "HIGHCOV_HC_THRESHOLD", "HIGHCOV_SHELL_EXACT_FAMILY",
+    "HIGHCOV_SHELL_SOFT_FAMILY",
     "RECOMPUTED_CHANNELS",
     "REPAIR_FAMILIES", "REPAIR_FAMILY", "RETAINED_CHANNELS",
     "build_alpha_repaired_inputs", "build_full_offline_endpoint_inputs",

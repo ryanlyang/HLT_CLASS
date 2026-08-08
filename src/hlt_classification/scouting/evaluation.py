@@ -66,6 +66,7 @@ def classification_metrics(logits: np.ndarray, labels: np.ndarray) -> dict[str, 
                 rejection = int(qcd.sum()) / max(1, background_pass)
                 rejections[f"{int(efficiency * 100)}pct"] = {
                     "threshold": float(threshold), "qcd_pass": background_pass,
+                    "qcd_fpr": float(background_pass / int(qcd.sum())),
                     "zero_background": background_pass == 0,
                     "rejection": float(rejection),
                     "achieved_signal_efficiency": float(np.mean(signal_scores[target == index] >= threshold)),
@@ -81,12 +82,20 @@ def classification_metrics(logits: np.ndarray, labels: np.ndarray) -> dict[str, 
         if selected.any():
             ece += selected.mean() * abs(correct[selected].mean() - confidence[selected].mean())
     one_hot = np.eye(15, dtype=np.float64)[target]
+    recalls = np.divide(
+        np.diag(confusion), confusion.sum(axis=1),
+        out=np.zeros(15, np.float64), where=confusion.sum(axis=1) > 0,
+    )
+    brier = float(np.mean(np.sum((probabilities - one_hot) ** 2, axis=1)))
     return {
         "rows": len(target), "cross_entropy": cross_entropy(logits, target),
         "accuracy": float(np.mean(predictions == target)),
+        "balanced_accuracy": float(np.mean(recalls)),
+        "always_qcd_accuracy": float(np.mean(target == 0)),
         "macro_ovr_auc": float(np.mean(aucs)) if aucs else None,
         "macro_mean_log_qcd_rejection_at_50pct_signal": float(np.mean(log_rejections)) if log_rejections else None,
-        "multiclass_brier": float(np.mean(np.sum((probabilities - one_hot) ** 2, axis=1))),
+        "multiclass_brier": brier,
+        "multiclass_brier_score": brier,
         "top_label_ece_15_bin": float(ece),
         "confusion_matrix": confusion.tolist(), "per_class": per_class,
     }
