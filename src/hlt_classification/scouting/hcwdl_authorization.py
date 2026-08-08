@@ -12,14 +12,19 @@ from hlt_classification.data.cache_contracts import require_sha256, validate_con
 
 LEGACY_SUBMISSION_AUTHORIZATION_CONTRACT: Final = "HCWDL_SUBMISSION_AUTHORIZATION/v3"
 PREVIOUS_SUBMISSION_AUTHORIZATION_CONTRACT: Final = "HCWDL_SUBMISSION_AUTHORIZATION/v4"
-SUBMISSION_AUTHORIZATION_CONTRACT: Final = "HCWDL_SUBMISSION_AUTHORIZATION/v5"
+PRIOR_SUBMISSION_AUTHORIZATION_CONTRACT: Final = "HCWDL_SUBMISSION_AUTHORIZATION/v5"
+SUBMISSION_AUTHORIZATION_CONTRACT: Final = "HCWDL_SUBMISSION_AUTHORIZATION/v6"
 AUTHORIZATION_PHRASE: Final = "AUTHORIZE EXACT HCWDL SPEC FOR TIGRIS"
 LEGACY_MODES: Final = frozenset({"smoke", "pilot", "production"})
 PREVIOUS_MODES: Final = frozenset({
     "smoke", "pilot", "midscale500k", "production",
 })
-MODES: Final = frozenset({
+PRIOR_MODES: Final = frozenset({
     "smoke", "pilot", "midscale500k", "midscale1m", "production",
+})
+MODES: Final = frozenset({
+    "smoke", "pilot", "midscale500k", "midscale1m", "midscale2m",
+    "production",
 })
 
 
@@ -74,7 +79,7 @@ def build_submission_authorization(
     elif production_authorization_sha256 is not None:
         raise ValueError("nonproduction HCWDL authorization names a production decision")
     return with_content_hash({
-        "contract": SUBMISSION_AUTHORIZATION_CONTRACT, "schema_version": 5,
+        "contract": SUBMISSION_AUTHORIZATION_CONTRACT, "schema_version": 6,
         "mode": mode, "source_commit": source_commit,
         "source_manifest_sha256": require_sha256(source_manifest_sha256, name="source SHA-256"),
         "split_manifest_sha256": require_sha256(split_manifest_sha256, name="split SHA-256"),
@@ -103,8 +108,11 @@ def validate_submission_authorization(
     elif contract == PREVIOUS_SUBMISSION_AUTHORIZATION_CONTRACT:
         schema_version = 4
         allowed_modes = PREVIOUS_MODES
-    elif contract == SUBMISSION_AUTHORIZATION_CONTRACT:
+    elif contract == PRIOR_SUBMISSION_AUTHORIZATION_CONTRACT:
         schema_version = 5
+        allowed_modes = PRIOR_MODES
+    elif contract == SUBMISSION_AUTHORIZATION_CONTRACT:
+        schema_version = 6
         allowed_modes = MODES
     else:
         raise ValueError("HCWDL submission authorization contract differs")
@@ -130,7 +138,8 @@ def validate_submission_authorization(
 
 __all__ = [
     "AUTHORIZATION_PHRASE", "LEGACY_SUBMISSION_AUTHORIZATION_CONTRACT",
-    "PREVIOUS_SUBMISSION_AUTHORIZATION_CONTRACT", "SUBMISSION_AUTHORIZATION_CONTRACT",
+    "PREVIOUS_SUBMISSION_AUTHORIZATION_CONTRACT",
+    "PRIOR_SUBMISSION_AUTHORIZATION_CONTRACT", "SUBMISSION_AUTHORIZATION_CONTRACT",
     "build_submission_authorization", "validate_submission_authorization",
     "require_canonical_campaign_spec_path", "validate_source_checkout",
 ]

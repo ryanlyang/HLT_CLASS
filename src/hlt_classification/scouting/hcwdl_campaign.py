@@ -17,13 +17,18 @@ from .hcwdl_authorization import validate_submission_authorization
 
 LEGACY_CAMPAIGN_CONTRACT: Final = "HCWDL_CAMPAIGN_SPEC/v3"
 PREVIOUS_CAMPAIGN_CONTRACT: Final = "HCWDL_CAMPAIGN_SPEC/v4"
-CAMPAIGN_CONTRACT: Final = "HCWDL_CAMPAIGN_SPEC/v5"
+PRIOR_CAMPAIGN_CONTRACT: Final = "HCWDL_CAMPAIGN_SPEC/v5"
+CAMPAIGN_CONTRACT: Final = "HCWDL_CAMPAIGN_SPEC/v6"
 COMMAND_PLAN_CONTRACT: Final = "HCWDL_COMMAND_PLAN/v2"
 LEDGER_CONTRACT: Final = "HCWDL_SUBMISSION_LEDGER/v2"
 LEGACY_MODES: Final = ("smoke", "pilot", "production")
 PREVIOUS_MODES: Final = ("smoke", "pilot", "midscale500k", "production")
-MODES: Final = (
+PRIOR_MODES: Final = (
     "smoke", "pilot", "midscale500k", "midscale1m", "production",
+)
+MODES: Final = (
+    "smoke", "pilot", "midscale500k", "midscale1m", "midscale2m",
+    "production",
 )
 ROLE_COUNTS: Final = {
     "smoke": {"train": 4096, "validation": 4096, "final_test": 0},
@@ -33,6 +38,9 @@ ROLE_COUNTS: Final = {
     },
     "midscale1m": {
         "train": 1_000_000, "validation": 400_000, "final_test": 400_000,
+    },
+    "midscale2m": {
+        "train": 2_000_000, "validation": 500_000, "final_test": 500_000,
     },
     "production": {"train": None, "validation": None, "final_test": None},
 }
@@ -282,7 +290,7 @@ def create_campaign_spec(
     resource_request_sha256 = canonical_sha256(normalized_resources)
     payload = {
         "contract": CAMPAIGN_CONTRACT,
-        "schema_version": 5,
+        "schema_version": 6,
         "mode": mode,
         "planning_only": bool(planning_only),
         "live_submission_authorized": bool(live_submission_authorized),
@@ -346,8 +354,11 @@ def validate_campaign_spec(value: Mapping[str, Any], *, executable: bool = False
     elif contract == PREVIOUS_CAMPAIGN_CONTRACT:
         schema_version = 4
         allowed_modes = PREVIOUS_MODES
-    elif contract == CAMPAIGN_CONTRACT:
+    elif contract == PRIOR_CAMPAIGN_CONTRACT:
         schema_version = 5
+        allowed_modes = PRIOR_MODES
+    elif contract == CAMPAIGN_CONTRACT:
+        schema_version = 6
         allowed_modes = MODES
     else:
         raise ValueError("HCWDL campaign contract differs")
@@ -501,6 +512,7 @@ __all__ = [
     "CAMPAIGN_CONTRACT", "COMMAND_PLAN_CONTRACT", "CampaignTask", "LEDGER_CONTRACT",
     "LEGACY_CAMPAIGN_CONTRACT", "LEGACY_MODES", "MODES",
     "PREVIOUS_CAMPAIGN_CONTRACT", "PREVIOUS_MODES",
+    "PRIOR_CAMPAIGN_CONTRACT", "PRIOR_MODES",
     "PILOT_PLANNING_RESOURCES", "ROLE_COUNTS", "ResourceRequest", "SMOKE_RESOURCES",
     "build_command_plan", "build_task_registry", "create_campaign_spec", "slurm_commands",
     "split_submission_commands",

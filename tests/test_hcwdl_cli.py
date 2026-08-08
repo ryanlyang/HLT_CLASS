@@ -201,6 +201,37 @@ def test_midscale1m_cli_dry_run_locks_fixed_population(tmp_path: Path):
     assert "--array=0-13" in ledger["commands"]["assign_test"]
 
 
+def test_midscale2m_cli_dry_run_locks_fixed_population(tmp_path: Path):
+    spec = create_campaign_spec(
+        mode="midscale2m",
+        campaign_root="/home/ryreu/atlas/HLT_Classification/checkpoints/hcwdl_midscale2m_dry",
+        source_manifest_sha256="a" * 64, split_manifest_sha256="b" * 64,
+        source_commit="c" * 40,
+        role_source_counts={"train": 42, "validation": 14, "final_test": 14},
+        recipe_sha256=None, recipe_path=None, planning_only=True,
+        source_manifest_path="/future/source_manifest.json",
+        split_manifest_path="/future/split_manifest.json",
+        data_root="/home/ryreu/cms/data/ScoutingAK8_native_compact/2024/train",
+    )
+    spec_path = tmp_path / "midscale2m_spec.json"
+    ledger_path = tmp_path / "midscale2m_dry_run.json"
+    write_immutable_json(spec_path, spec)
+    result = subprocess.run(
+        [sys.executable, str(REPOSITORY / "scripts/dry_run_hcwdl_campaign.py"),
+         "--campaign-spec", str(spec_path), "--output", str(ledger_path)],
+        cwd=REPOSITORY, capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert spec["role_counts"] == {
+        "train": 2_000_000, "validation": 500_000, "final_test": 500_000,
+    }
+    ledger = load_json(ledger_path)
+    assert ledger["dry_run"] is True
+    assert "--array=0-41" in ledger["commands"]["assign_train"]
+    assert "--array=0-13" in ledger["commands"]["assign_validation"]
+    assert "--array=0-13" in ledger["commands"]["assign_test"]
+
+
 def test_production_worker_rejects_a_planning_spec_before_dispatch(tmp_path: Path):
     spec = create_campaign_spec(
         mode="smoke", campaign_root=tmp_path / "campaign",

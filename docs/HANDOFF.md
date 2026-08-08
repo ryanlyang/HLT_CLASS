@@ -2,31 +2,36 @@
 
 ## HCWDL named midscale campaign modes (2026-08-08)
 
-HCWDL now registers two distinct immutable midscale populations:
+HCWDL now registers three distinct immutable midscale populations:
 `midscale500k` uses 500,000 train, 250,000 validation, and 250,000 final-test
 jets; `midscale1m` uses 1,000,000 train, 400,000 validation, and 400,000
-final-test jets. Each reuses the
+final-test jets; and `midscale2m` uses 2,000,000 train, 500,000 validation, and
+500,000 final-test jets. Each reuses the
 same count-agnostic matching, persistent assignments, two-phase endpoint gate,
 23-node ladder, confirmation, and sealed-test machinery, but receives its own
 campaign identity and requires a recipe whose class weights are bound to its
 exact deterministic train selection. Future midscale sizes must
 receive different mode names rather than editing these counts.
 
-Campaign specs and submission authorizations advance to v5; v3 and v4
-smoke/pilot/midscale500k/production artifacts remain readable. Validation requires the stored
+Campaign specs and submission authorizations advance to v6; v3 through v5
+artifacts remain readable. Validation requires the stored
 role counts to exactly equal the registered mode, closing a previously
 implicit integrity check. The creation CLI exposes the new mode and focused
 tests cover its exact counts, uncapped dry-run DAG, authorization, tamper
 rejection, and v3 compatibility. This change does not alter or cancel the
-currently running v3 300k pilot or any v4 midscale500k execution.
+currently running or prepared v3-v5 campaign.
 
-Verification after the two named-mode implementations: the focused
-high-coverage/HCWDL suite passes 71/71 and the complete repository suite passes
-315/315 with the same 14 Matplotlib/Pyparsing warnings. `midscale1m` has not
+The named modes require independent deterministic preselections, recipes,
+resource/storage evidence, authorization, worktrees, assignments, locks, and
+two-phase submissions. None may reuse another mode's recipe lineage.
+
+Verification after registering all three named midscale modes: the focused
+high-coverage/HCWDL suite passes 72/72 and the complete repository suite passes
+316/316 with the same 14 Matplotlib/Pyparsing warnings. `midscale2m` has not
 yet been executed on Tigris. Its exact next step is a clean commit and push,
-followed by a dedicated worktree, deterministic 1m/400k/400k preselection, a
-recipe bound to that 1m train-selection hash, measured-profile candidate dry
-run, explicit v5 authorization, and its independent two-phase submission.
+then a dedicated worktree, deterministic 2m/500k/500k preselection, a recipe
+bound to that 2m train-selection hash, scaled storage/profile evidence, exact
+v6 candidate dry run and authorization, and an independent two-phase launch.
 
 ## PMARD all-model exploratory test comparison (2026-08-08)
 
@@ -832,7 +837,7 @@ All six locally implementable HCWDL blocks now exist:
    epsilon and microbatch accumulation, 60 passes, every-pass validation,
    AUC/CE/logR/earliest selection, final and selected checkpoints, and exact
    resume are executable.
-5. Smoke/pilot/midscale500k/midscale1m/production DAGs, source-byte reauthentication, split validation,
+5. Smoke/pilot/midscale500k/midscale1m/midscale2m/production DAGs, source-byte reauthentication, split validation,
    locks, fixed endpoint qualification, exact human acknowledgement, 55-row
    confirmation registry, reporting, one-claim final evaluation, exact-ID
    recovery/cancellation, resource/storage evidence, and Slurm command
@@ -873,10 +878,10 @@ New contract families are `HIGHCOV_MATCHER_RESOURCES/v1`,
 `HCWDL_EXECUTION_CLAIM/v1`, `HCWDL_ENDPOINT_{QUALIFICATION,DIAGNOSTIC_ACK}/v1`,
 `HCWDL_{SCREEN,CONFIRMATION,FINAL}_AGGREGATE/v1`,
 `HCWDL_FINAL_{EVALUATION,EVALUATION_MANIFEST}/v1`,
-`HCWDL_CAMPAIGN_SPEC/v5` (v3/v4 readable), `HCWDL_COMMAND_PLAN/v2`,
+`HCWDL_CAMPAIGN_SPEC/v6` (v3-v5 readable), `HCWDL_COMMAND_PLAN/v2`,
 `HCWDL_SUBMISSION_LEDGER/v2`, `HCWDL_MONITOR_REPORT/v1`,
 `HCWDL_{RESOURCE_PROFILE,STORAGE_ESTIMATE}/v1`,
-`HCWDL_SUBMISSION_AUTHORIZATION/v5` (v3/v4 readable),
+`HCWDL_SUBMISSION_AUTHORIZATION/v6` (v3-v5 readable),
 `HCWDL_CACHE_MINIATURE/v1`, and `HCWDL_LOCAL_SMOKE_REPORT/v1`.
 PMARD training/resume contracts advance to v6 for explicit microbatch,
 accumulation, and Adam-epsilon semantics; validators retain v4/v5 report

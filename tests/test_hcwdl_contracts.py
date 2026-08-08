@@ -8,13 +8,15 @@ import pytest
 
 from hlt_classification.data.cache_contracts import with_content_hash, write_immutable_json
 from hlt_classification.scouting.hcwdl_campaign import (
-    LEGACY_CAMPAIGN_CONTRACT, PREVIOUS_CAMPAIGN_CONTRACT, ROLE_COUNTS,
-    build_command_plan, create_campaign_spec, slurm_commands,
-    split_submission_commands, validate_campaign_spec,
+    LEGACY_CAMPAIGN_CONTRACT, PREVIOUS_CAMPAIGN_CONTRACT,
+    PRIOR_CAMPAIGN_CONTRACT, ROLE_COUNTS, build_command_plan,
+    create_campaign_spec, slurm_commands, split_submission_commands,
+    validate_campaign_spec,
 )
 from hlt_classification.scouting.hcwdl_authorization import (
     AUTHORIZATION_PHRASE, LEGACY_SUBMISSION_AUTHORIZATION_CONTRACT,
-    PREVIOUS_SUBMISSION_AUTHORIZATION_CONTRACT, build_submission_authorization,
+    PREVIOUS_SUBMISSION_AUTHORIZATION_CONTRACT,
+    PRIOR_SUBMISSION_AUTHORIZATION_CONTRACT, build_submission_authorization,
     require_canonical_campaign_spec_path, validate_submission_authorization,
 )
 from hlt_classification.scouting.hcwdl_contracts import (
@@ -71,6 +73,7 @@ def test_campaign_modes_are_complete_uncapped_and_test_sealed():
     pilot = _spec("pilot")
     midscale500k = _spec("midscale500k")
     midscale1m = _spec("midscale1m")
+    midscale2m = _spec("midscale2m")
     assert smoke["role_counts"] == ROLE_COUNTS["smoke"]
     assert pilot["role_counts"] == {"train": 300_000, "validation": 100_000, "final_test": 100_000}
     assert midscale500k["role_counts"] == {
@@ -78,6 +81,9 @@ def test_campaign_modes_are_complete_uncapped_and_test_sealed():
     }
     assert midscale1m["role_counts"] == {
         "train": 1_000_000, "validation": 400_000, "final_test": 400_000,
+    }
+    assert midscale2m["role_counts"] == {
+        "train": 2_000_000, "validation": 500_000, "final_test": 500_000,
     }
     smoke_tasks = {row["task_id"]: row for row in smoke["tasks"]}
     pilot_tasks = {row["task_id"]: row for row in pilot["tasks"]}
@@ -91,14 +97,16 @@ def test_campaign_modes_are_complete_uncapped_and_test_sealed():
     validate_campaign_spec(smoke)
     validate_campaign_spec(midscale500k)
     validate_campaign_spec(midscale1m)
+    validate_campaign_spec(midscale2m)
     with pytest.raises(PermissionError):
         validate_campaign_spec(pilot, executable=True)
 
 
-def test_campaign_mode_counts_are_exact_and_v3_v4_artifacts_remain_readable():
+def test_campaign_mode_counts_are_exact_and_v3_through_v5_remain_readable():
     midscale500k = _spec("midscale500k")
     midscale1m = _spec("midscale1m")
-    forged = dict(midscale1m)
+    midscale2m = _spec("midscale2m")
+    forged = dict(midscale2m)
     forged["role_counts"] = dict(ROLE_COUNTS["pilot"])
     forged = with_content_hash(forged)
     with pytest.raises(ValueError, match="registered mode"):
@@ -116,6 +124,12 @@ def test_campaign_mode_counts_are_exact_and_v3_v4_artifacts_remain_readable():
     previous = with_content_hash(previous)
     assert validate_campaign_spec(previous) == previous["content_hash"]
 
+    prior = dict(midscale1m)
+    prior["contract"] = PRIOR_CAMPAIGN_CONTRACT
+    prior["schema_version"] = 5
+    prior = with_content_hash(prior)
+    assert validate_campaign_spec(prior) == prior["content_hash"]
+
     invalid_legacy = dict(midscale500k)
     invalid_legacy["contract"] = LEGACY_CAMPAIGN_CONTRACT
     invalid_legacy["schema_version"] = 3
@@ -130,22 +144,53 @@ def test_campaign_mode_counts_are_exact_and_v3_v4_artifacts_remain_readable():
     with pytest.raises(ValueError, match="mode or graph"):
         validate_campaign_spec(invalid_previous)
 
+    invalid_prior = dict(midscale2m)
+    invalid_prior["contract"] = PRIOR_CAMPAIGN_CONTRACT
+    invalid_prior["schema_version"] = 5
+    invalid_prior = with_content_hash(invalid_prior)
+    with pytest.raises(ValueError, match="mode or graph"):
+        validate_campaign_spec(invalid_prior)
 
-def test_midscale1m_authorization_is_v5_and_v3_v4_remain_readable():
+
+def test_midscale2m_authorization_is_v6_and_v3_through_v5_remain_readable():
     authorization = build_submission_authorization(
-        mode="midscale1m", source_commit="c" * 40,
+        mode="midscale2m", source_commit="c" * 40,
         source_manifest_sha256=H, split_manifest_sha256=G,
         recipe_sha256=H, resource_request_sha256=G,
         command_plan_sha256=H, authorization_phrase=AUTHORIZATION_PHRASE,
     )
-    assert authorization["contract"] == "HCWDL_SUBMISSION_AUTHORIZATION/v5"
-    assert authorization["schema_version"] == 5
+    assert authorization["contract"] == "HCWDL_SUBMISSION_AUTHORIZATION/v6"
+    assert authorization["schema_version"] == 6
     assert validate_submission_authorization(
-        authorization, mode="midscale1m", source_commit="c" * 40,
+        authorization, mode="midscale2m", source_commit="c" * 40,
         source_manifest_sha256=H, split_manifest_sha256=G,
         recipe_sha256=H, resource_request_sha256=G,
         command_plan_sha256=H, production_authorization_sha256=None,
     ) == authorization["content_hash"]
+
+    prior = dict(authorization)
+    prior["contract"] = PRIOR_SUBMISSION_AUTHORIZATION_CONTRACT
+    prior["schema_version"] = 5
+    prior["mode"] = "midscale1m"
+    prior = with_content_hash(prior)
+    assert validate_submission_authorization(
+        prior, mode="midscale1m", source_commit="c" * 40,
+        source_manifest_sha256=H, split_manifest_sha256=G,
+        recipe_sha256=H, resource_request_sha256=G,
+        command_plan_sha256=H, production_authorization_sha256=None,
+    ) == prior["content_hash"]
+
+    invalid_prior = dict(authorization)
+    invalid_prior["contract"] = PRIOR_SUBMISSION_AUTHORIZATION_CONTRACT
+    invalid_prior["schema_version"] = 5
+    invalid_prior = with_content_hash(invalid_prior)
+    with pytest.raises(ValueError, match="authorization mode"):
+        validate_submission_authorization(
+            invalid_prior, mode="midscale2m", source_commit="c" * 40,
+            source_manifest_sha256=H, split_manifest_sha256=G,
+            recipe_sha256=H, resource_request_sha256=G,
+            command_plan_sha256=H, production_authorization_sha256=None,
+        )
 
     previous = dict(authorization)
     previous["contract"] = PREVIOUS_SUBMISSION_AUTHORIZATION_CONTRACT
@@ -165,7 +210,7 @@ def test_midscale1m_authorization_is_v5_and_v3_v4_remain_readable():
     invalid_previous = with_content_hash(invalid_previous)
     with pytest.raises(ValueError, match="authorization mode"):
         validate_submission_authorization(
-            invalid_previous, mode="midscale1m", source_commit="c" * 40,
+            invalid_previous, mode="midscale2m", source_commit="c" * 40,
             source_manifest_sha256=H, split_manifest_sha256=G,
             recipe_sha256=H, resource_request_sha256=G,
             command_plan_sha256=H, production_authorization_sha256=None,

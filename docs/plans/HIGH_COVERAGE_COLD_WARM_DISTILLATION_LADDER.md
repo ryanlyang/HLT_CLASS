@@ -47,10 +47,11 @@ split. It never copies or rewrites the ROOT dataset.
 | Pilot | 300,000 | 100,000 | 100,000 after locks |
 | Midscale500k | 500,000 | 250,000 | 250,000 after locks |
 | Midscale1m | 1,000,000 | 400,000 | 400,000 after locks |
+| Midscale2m | 2,000,000 | 500,000 | 500,000 after locks |
 | Production | every mapped train-role row | every mapped validation-role row | every mapped test-role row after locks |
 
-Pilot, `midscale500k`, and `midscale1m` selections are deterministic,
-class-proportional nested subsets of the immutable roles. Both midscale modes
+Pilot, `midscale500k`, `midscale1m`, and `midscale2m` selections are deterministic,
+class-proportional nested subsets of the immutable roles. All three midscale modes
 are distinct registered identities rather than an editable generic midscale
 budget, leaving future midscale sizes free to receive separate identities.
 Production counts come from the realized split manifest;
@@ -1101,7 +1102,7 @@ boundaries are fixed:
 | `src/hlt_classification/scouting/ladder.py` | node, domain, initialization, loss, and graph registry |
 | `src/hlt_classification/scouting/ladder_contracts.py` | versioned specs, reports, locks, and validation |
 | `src/hlt_classification/scouting/ladder_workflow.py` | task command construction and artifact consumption |
-| `src/hlt_classification/scouting/ladder_campaign.py` | smoke, pilot, midscale500k, midscale1m, and production DAG/resource registry |
+| `src/hlt_classification/scouting/ladder_campaign.py` | smoke, pilot, midscale500k, midscale1m, midscale2m, and production DAG/resource registry |
 
 CLIs remain thin argument/delegation layers. Slurm scripts only establish the
 authenticated environment and `exec` the Python task runner.
@@ -1488,8 +1489,8 @@ Implementation introduces separately versioned contracts for:
 - `HCWDL_RECIPE/v3` and recipe lock;
 - `HCWDL_NODE_SPEC/v1` and graph registry;
 - `HCWDL_TRAINING_REPORT/v1`, checkpoint selection, and resume;
-- `HCWDL_CAMPAIGN_SPEC/v5` (v3/v4 readable), `HCWDL_COMMAND_PLAN/v2`, submission ledger,
-  submission authorization v5 (v3/v4 readable), and monitor report;
+- `HCWDL_CAMPAIGN_SPEC/v6` (v3-v5 readable), `HCWDL_COMMAND_PLAN/v2`, submission ledger,
+  submission authorization v6 (v3-v5 readable), and monitor report;
 - endpoint qualification, confirmation registry, finalist, execution, and
   aggregate-report contracts.
 
