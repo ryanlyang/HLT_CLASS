@@ -13,7 +13,10 @@ from hlt_classification.scouting.inputs import ParticleInputs, build_hlt_inputs
 from hlt_classification.scouting.dataset import _concat_batches, _slice_batch
 from hlt_classification.scouting.labels import baseline_mask, multiclass_labels
 from hlt_classification.scouting.schema import CLASS_NAMES, HLT_FEATURE_SPECS
-from hlt_classification.scouting.splits import SourceFileRecord, build_split_manifest, validate_split_manifest
+from hlt_classification.scouting.splits import (
+    SourceFileRecord, build_split_manifest, source_file_record_from_manifest_row,
+    validate_split_manifest,
+)
 from hlt_classification.scouting.streaming import iterate_projected_chunks, partition_files
 from hlt_classification.scouting.targets import EphemeralTeacherTargets, validate_ram_root
 
@@ -45,6 +48,20 @@ def test_identity_is_label_free_portable_and_case_safe():
         normalize_source_path("../escape.root")
     with pytest.raises(ValueError):
         reject_case_aliases(("A/x.root", "a/x.root"))
+
+
+def test_source_audit_rows_project_explicitly_into_split_records():
+    row = {
+        "path": "signal/part.root", "stratum": "signal", "raw_entries": 20,
+        "sha256": _digest("rich-source-row"), "mapped_entries": 15,
+        "class_counts": [1] * 15,
+        "baseline_selected_entries": 18,
+        "branch_count": 297,
+        "branch_schema_sha256": _digest("branch-schema"),
+    }
+    assert source_file_record_from_manifest_row(row) == SourceFileRecord(
+        "signal/part.root", "signal", 20, row["sha256"], 15, (1,) * 15,
+    )
 
 
 def test_split_is_stratified_disjoint_authenticated_and_reference_sized(tmp_path):

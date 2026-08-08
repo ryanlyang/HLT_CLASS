@@ -16,7 +16,8 @@ from hlt_classification.scouting.audit import (  # noqa: E402
     SOURCE_MANIFEST_CONTRACT, SOURCE_MANIFEST_VERSION,
 )
 from hlt_classification.scouting.splits import (  # noqa: E402
-    SourceFileRecord, build_split_manifest, role_records, validate_split_manifest,
+    build_split_manifest, role_records, source_file_record_from_manifest_row,
+    validate_split_manifest,
 )
 
 
@@ -31,10 +32,7 @@ def main() -> int:
         source, expected_contract=SOURCE_MANIFEST_CONTRACT,
         expected_schema_version=SOURCE_MANIFEST_VERSION,
     )
-    records = [SourceFileRecord(
-        row["path"], row["stratum"], row["raw_entries"], row["sha256"],
-        row["mapped_entries"], tuple(row["class_counts"]),
-    ) for row in source["files"]]
+    records = [source_file_record_from_manifest_row(row) for row in source["files"]]
     manifest = build_split_manifest(records, source_manifest_sha256=source_hash, seed=args.seed)
     validate_split_manifest(
         manifest, source_manifest_sha256=source_hash, expected_inventory=records,

@@ -778,9 +778,21 @@ the validator required the pre-serialization insertion order. Split role maps
 are now validated by their exact key set and consumed in the canonical
 `SPLIT_ROLES` order. A regression publishes, reloads, and validates a real
 split manifest through the immutable JSON path. Focused HCWDL/split tests pass
-69/69 and the repository-wide suite remains 299 passed with 14 warnings. This
-local fix still requires an exact clean commit and a fresh Tigris smoke
-identity; no failed-campaign descendant should be reused.
+69/69 and the repository-wide suite remains 299 passed with 14 warnings.
+
+The fresh smoke at corrected commit `68406fd9c9077ead912555fe85ff7fb0e6208d00`
+then exposed a second adapter-only split failure (`source_audit` job 56179
+completed; `splits` job 56180 failed). The authenticated source-manifest file
+rows contain audit metadata such as `baseline_selected_entries`, branch count,
+and branch-schema hash in addition to the six fields that define
+`SourceFileRecord`; HCWDL had incorrectly expanded the richer row directly
+into that narrower dataclass. A reusable explicit projection now preserves
+the six split-identity fields while the source manifest and all of its richer
+metadata remain independently content-hash authenticated. Both HCWDL and the
+canonical split-building CLI use that projection, with a rich-row regression.
+Focused HCWDL/split tests pass 70/70 and the repository-wide suite passes 300
+with 14 warnings. This local fix still requires an exact clean commit and a
+fresh Tigris smoke identity; no failed-campaign descendant should be reused.
 
 ## Exact active next task: separately authorized HCWDL Tigris validation
 

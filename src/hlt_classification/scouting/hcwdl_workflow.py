@@ -31,7 +31,7 @@ from .hcwdl_recipe import validate_recipe, validate_recipe_class_weight_lineage
 from .hcwdl_reporting import build_confirmation_registry, build_final_report, build_screen_aggregate
 from .highcov_resources import resource_validation_report
 from .audit import SOURCE_MANIFEST_CONTRACT, SOURCE_MANIFEST_VERSION
-from .splits import SourceFileRecord, validate_split_manifest
+from .splits import source_file_record_from_manifest_row, validate_split_manifest
 
 
 def _array_index() -> int:
@@ -126,7 +126,9 @@ class HcwdlWorkflow:
             source = load_json(self.source_manifest)
             split_hash = validate_split_manifest(
                 split, source_manifest_sha256=self.spec["source_manifest_sha256"],
-                expected_inventory=(SourceFileRecord(**row) for row in source["files"]),
+                expected_inventory=(
+                    source_file_record_from_manifest_row(row) for row in source["files"]
+                ),
             )
             if split_hash != self.spec["split_manifest_sha256"]:
                 raise ValueError("HCWDL split manifest differs from campaign spec")

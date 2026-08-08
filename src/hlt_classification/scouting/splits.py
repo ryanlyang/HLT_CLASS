@@ -44,6 +44,18 @@ class SourceFileRecord:
             raise ValueError("source file mapped count differs from its class counts")
 
 
+def source_file_record_from_manifest_row(row: Mapping[str, object]) -> SourceFileRecord:
+    """Project one authenticated, richer source-audit row into split semantics."""
+    return SourceFileRecord(
+        path=row["path"],  # type: ignore[arg-type]
+        stratum=row["stratum"],  # type: ignore[arg-type]
+        raw_entries=row["raw_entries"],  # type: ignore[arg-type]
+        sha256=row["sha256"],  # type: ignore[arg-type]
+        mapped_entries=row["mapped_entries"],  # type: ignore[arg-type]
+        class_counts=tuple(row["class_counts"]),  # type: ignore[arg-type]
+    )
+
+
 def largest_remainder_allocation(
     count: int, fractions: Sequence[float] = SPLIT_FRACTIONS
 ) -> tuple[int, int, int]:
@@ -310,5 +322,5 @@ __all__ = [
     "MAX_CLASS_FRACTION_DEVIATION", "SCOUTING_SPLIT_CONTRACT", "SPLIT_ALGORITHM",
     "SPLIT_FRACTIONS", "SPLIT_ROLES", "SPLIT_SEED",
     "SourceFileRecord", "build_split_manifest", "largest_remainder_allocation",
-    "role_records", "validate_split_manifest",
+    "role_records", "source_file_record_from_manifest_row", "validate_split_manifest",
 ]
