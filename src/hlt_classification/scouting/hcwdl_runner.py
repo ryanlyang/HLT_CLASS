@@ -183,6 +183,12 @@ def run_node(
     )
 
 
+def qualification_shared_seed(replicate_seed: int) -> int:
+    """Return the paired endpoint-qualification trajectory seed."""
+
+    return derive_seed(replicate_seed, "hcwdl/qualification/shared_trajectory_v1")
+
+
 def run_qualifier(
     *, qualifier_id: str, recipe_path: str | Path,
     split_manifest_path: str | Path, selection_manifest_path: str | Path,
@@ -213,7 +219,10 @@ def run_qualifier(
     if set(stores) != {"train", "validation"}:
         raise ValueError("HCWDL qualifier requires train/validation assignments")
     batch = int(recipe["batching"]["effective_batch_size"])
-    seed = derive_seed(replicate_seed, f"hcwdl/qualification/{qualifier_id}")
+    # Endpoint qualification is a paired view comparison.  The qualifier ID
+    # must not perturb initialization, row order, dropout, or training RNG.
+    # Only the constructed input view differs across the six registered rows.
+    seed = qualification_shared_seed(replicate_seed)
     domain, family = domains[qualifier_id]
 
     def raw_stream(role: str, epoch: int = 0):
@@ -311,6 +320,7 @@ def run_qualifier(
             "campaign": "HCWDL", "qualification_id": qualifier_id,
             "fixed_primary_repair": "HIGHCOV_SHELL_EXACT/v1",
             "selection_performed": False, "training_passes": 2 if smoke else 60,
+            "qualification_rng_policy": "shared_trajectory_across_views_v1",
         },
     )
 
@@ -452,4 +462,7 @@ def run_confirmation_control(
     )
 
 
-__all__ = ["run_confirmation_control", "run_node", "run_qualifier"]
+__all__ = [
+    "qualification_shared_seed", "run_confirmation_control", "run_node",
+    "run_qualifier",
+]

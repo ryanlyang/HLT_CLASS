@@ -1,5 +1,32 @@
 # Current Handoff
 
+## HCWDL unweighted primary and automatic continuation (2026-08-09)
+
+The primary HCWDL recipe is now `HCWDL_RECIPE/v4`: qualifiers, privileged
+teachers, cold/warm ladder nodes, controls, and confirmation runs use
+unweighted natural-population per-jet loss through an authenticated vector of
+fifteen exact ones. The deterministic train selection and all class counts
+remain bound. Earlier square-root-weighted campaigns are ablations and cannot
+be resumed as primary parents.
+
+All six endpoint qualifiers share one stochastic trajectory seed, pairing
+initialization, sampler order, repair randomness, dropout, and training RNG
+across views. Campaign/submission contracts advance to v7 and the command plan
+to v3. In `preauthorized_automatic` mode the full `afterok` DAG is queued once;
+the endpoint gate creates a lineage-bound nonselecting waiver only after all
+six finite reports and endpoint invariants validate. Poor finite science
+continues, while job failures, nonfinite metrics, corrupt artifacts, and
+lineage mismatches stop descendants. Manual acknowledgement remains supported.
+
+The weighted 300k/500k/1M/2M campaign identities are stale for this primary
+recipe and require fresh recipes, specs, worktrees, and exact job IDs.
+
+Local verification after this change: focused HCWDL/high-coverage tests pass
+78/78 and the complete repository suite passes 322/322 with the same 14
+Matplotlib/Pyparsing warnings. A fresh unweighted Tigris smoke and the four
+new campaign identities remain to be launched from an exact clean pushed
+commit; no remote jobs were mutated from this local implementation.
+
 ## HCWDL named midscale campaign modes (2026-08-08)
 
 HCWDL now registers three distinct immutable midscale populations:

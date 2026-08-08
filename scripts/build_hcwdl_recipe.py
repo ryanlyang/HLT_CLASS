@@ -16,7 +16,6 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 from hlt_classification.data.cache_contracts import load_json, write_immutable_json  # noqa: E402
 from hlt_classification.scouting.hcwdl_recipe import CLASS_WEIGHT_POLICY, build_recipe  # noqa: E402
 from hlt_classification.scouting.selective_assignment import validate_row_selection  # noqa: E402
-from hlt_classification.scouting.training import sqrt_inverse_class_weights  # noqa: E402
 
 
 def main() -> int:
@@ -43,13 +42,12 @@ def main() -> int:
         if not isinstance(train, dict):
             raise ValueError("HCWDL row selection lacks train counts")
         counts = [int(value) for value in train["class_counts"]]
-        weights = sqrt_inverse_class_weights(counts)
         payload["class_weighting"] = {
             "policy": CLASS_WEIGHT_POLICY,
             "train_class_counts": counts,
             "train_row_selection_sha256": selection_hash,
         }
-        payload["class_weights"] = np.asarray(weights, np.float32).tolist()
+        payload["class_weights"] = np.ones(15, np.float32).tolist()
         evidence = dict(payload.get("evidence", {}))
         previous = evidence.get("train_row_selection")
         if previous is not None and previous != selection_hash:

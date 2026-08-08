@@ -9,14 +9,17 @@ import pytest
 from hlt_classification.data.cache_contracts import with_content_hash, write_immutable_json
 from hlt_classification.scouting.hcwdl_campaign import (
     LEGACY_CAMPAIGN_CONTRACT, PREVIOUS_CAMPAIGN_CONTRACT,
-    PRIOR_CAMPAIGN_CONTRACT, ROLE_COUNTS, build_command_plan,
+    PRIOR_CAMPAIGN_CONTRACT, RECENT_CAMPAIGN_CONTRACT, ROLE_COUNTS,
+    build_command_plan,
     create_campaign_spec, slurm_commands, split_submission_commands,
     validate_campaign_spec,
 )
 from hlt_classification.scouting.hcwdl_authorization import (
-    AUTHORIZATION_PHRASE, LEGACY_SUBMISSION_AUTHORIZATION_CONTRACT,
+    AUTHORIZATION_PHRASE, AUTOMATIC_ENDPOINT_CONTINUATION,
+    LEGACY_SUBMISSION_AUTHORIZATION_CONTRACT,
     PREVIOUS_SUBMISSION_AUTHORIZATION_CONTRACT,
-    PRIOR_SUBMISSION_AUTHORIZATION_CONTRACT, build_submission_authorization,
+    PRIOR_SUBMISSION_AUTHORIZATION_CONTRACT,
+    RECENT_SUBMISSION_AUTHORIZATION_CONTRACT, build_submission_authorization,
     require_canonical_campaign_spec_path, validate_submission_authorization,
 )
 from hlt_classification.scouting.hcwdl_contracts import (
@@ -31,8 +34,11 @@ from hlt_classification.scouting.hcwdl_locks import (
 from hlt_classification.scouting.hcwdl_recipe import example_recipe, validate_recipe
 from hlt_classification.scouting.hcwdl_qualification import (
     DIAGNOSTIC_ACK_PHRASE, QUALIFIERS, build_diagnostic_acknowledgement,
-    validate_diagnostic_acknowledgement,
+    build_diagnostic_waiver, build_qualification_report,
+    validate_diagnostic_acknowledgement, validate_diagnostic_waiver,
+    validate_qualification_report,
 )
+from hlt_classification.scouting.hcwdl_runner import qualification_shared_seed
 from hlt_classification.scouting.hcwdl_recovery import (
     assemble_submission_ledger, build_monitor_report, build_submission_event,
     build_submission_ledger, build_task_attestation, exact_cancel_ids, resume_tasks,
@@ -56,7 +62,10 @@ H = "a" * 64
 G = "b" * 64
 
 
-def _spec(mode: str, *, planning: bool = True):
+def _spec(
+    mode: str, *, planning: bool = True,
+    endpoint_continuation: str = "manual_posthoc",
+):
     return create_campaign_spec(
         mode=mode, campaign_root="/campaign", source_manifest_sha256=H,
         split_manifest_sha256=G, source_commit="c" * 40,
@@ -65,7 +74,17 @@ def _spec(mode: str, *, planning: bool = True):
         recipe_path=None if planning else "/campaign/recipe.json",
         planning_only=planning, source_manifest_path="/source.json",
         split_manifest_path="/split.json", data_root="/data",
+        endpoint_continuation=endpoint_continuation,
     )
+
+
+def _downgrade_spec(spec: dict, contract: str, schema_version: int) -> dict:
+    value = dict(spec)
+    value.pop("endpoint_continuation", None)
+    value["contract"] = contract
+    value["schema_version"] = schema_version
+    value["command_plan_sha256"] = build_command_plan(value)["content_hash"]
+    return with_content_hash(value)
 
 
 def test_campaign_modes_are_complete_uncapped_and_test_sealed():
@@ -102,7 +121,7 @@ def test_campaign_modes_are_complete_uncapped_and_test_sealed():
         validate_campaign_spec(pilot, executable=True)
 
 
-def test_campaign_mode_counts_are_exact_and_v3_through_v5_remain_readable():
+def test_campaign_mode_counts_are_exact_and_v3_through_v6_remain_readable():
     midscale500k = _spec("midscale500k")
     midscale1m = _spec("midscale1m")
     midscale2m = _spec("midscale2m")
@@ -112,23 +131,17 @@ def test_campaign_mode_counts_are_exact_and_v3_through_v5_remain_readable():
     with pytest.raises(ValueError, match="registered mode"):
         validate_campaign_spec(forged)
 
-    legacy = dict(_spec("pilot"))
-    legacy["contract"] = LEGACY_CAMPAIGN_CONTRACT
-    legacy["schema_version"] = 3
-    legacy = with_content_hash(legacy)
+    legacy = _downgrade_spec(_spec("pilot"), LEGACY_CAMPAIGN_CONTRACT, 3)
     assert validate_campaign_spec(legacy) == legacy["content_hash"]
 
-    previous = dict(midscale500k)
-    previous["contract"] = PREVIOUS_CAMPAIGN_CONTRACT
-    previous["schema_version"] = 4
-    previous = with_content_hash(previous)
+    previous = _downgrade_spec(midscale500k, PREVIOUS_CAMPAIGN_CONTRACT, 4)
     assert validate_campaign_spec(previous) == previous["content_hash"]
 
-    prior = dict(midscale1m)
-    prior["contract"] = PRIOR_CAMPAIGN_CONTRACT
-    prior["schema_version"] = 5
-    prior = with_content_hash(prior)
+    prior = _downgrade_spec(midscale1m, PRIOR_CAMPAIGN_CONTRACT, 5)
     assert validate_campaign_spec(prior) == prior["content_hash"]
+
+    recent = _downgrade_spec(midscale2m, RECENT_CAMPAIGN_CONTRACT, 6)
+    assert validate_campaign_spec(recent) == recent["content_hash"]
 
     invalid_legacy = dict(midscale500k)
     invalid_legacy["contract"] = LEGACY_CAMPAIGN_CONTRACT
@@ -152,15 +165,15 @@ def test_campaign_mode_counts_are_exact_and_v3_through_v5_remain_readable():
         validate_campaign_spec(invalid_prior)
 
 
-def test_midscale2m_authorization_is_v6_and_v3_through_v5_remain_readable():
+def test_midscale2m_authorization_is_v7_and_v3_through_v6_remain_readable():
     authorization = build_submission_authorization(
         mode="midscale2m", source_commit="c" * 40,
         source_manifest_sha256=H, split_manifest_sha256=G,
         recipe_sha256=H, resource_request_sha256=G,
         command_plan_sha256=H, authorization_phrase=AUTHORIZATION_PHRASE,
     )
-    assert authorization["contract"] == "HCWDL_SUBMISSION_AUTHORIZATION/v6"
-    assert authorization["schema_version"] == 6
+    assert authorization["contract"] == "HCWDL_SUBMISSION_AUTHORIZATION/v7"
+    assert authorization["schema_version"] == 7
     assert validate_submission_authorization(
         authorization, mode="midscale2m", source_commit="c" * 40,
         source_manifest_sha256=H, split_manifest_sha256=G,
@@ -169,6 +182,8 @@ def test_midscale2m_authorization_is_v6_and_v3_through_v5_remain_readable():
     ) == authorization["content_hash"]
 
     prior = dict(authorization)
+    prior.pop("endpoint_continuation")
+    prior.pop("endpoint_diagnostic_review_waived_before_execution")
     prior["contract"] = PRIOR_SUBMISSION_AUTHORIZATION_CONTRACT
     prior["schema_version"] = 5
     prior["mode"] = "midscale1m"
@@ -179,6 +194,19 @@ def test_midscale2m_authorization_is_v6_and_v3_through_v5_remain_readable():
         recipe_sha256=H, resource_request_sha256=G,
         command_plan_sha256=H, production_authorization_sha256=None,
     ) == prior["content_hash"]
+
+    recent = dict(authorization)
+    recent.pop("endpoint_continuation")
+    recent.pop("endpoint_diagnostic_review_waived_before_execution")
+    recent["contract"] = RECENT_SUBMISSION_AUTHORIZATION_CONTRACT
+    recent["schema_version"] = 6
+    recent = with_content_hash(recent)
+    assert validate_submission_authorization(
+        recent, mode="midscale2m", source_commit="c" * 40,
+        source_manifest_sha256=H, split_manifest_sha256=G,
+        recipe_sha256=H, resource_request_sha256=G,
+        command_plan_sha256=H, production_authorization_sha256=None,
+    ) == recent["content_hash"]
 
     invalid_prior = dict(authorization)
     invalid_prior["contract"] = PRIOR_SUBMISSION_AUTHORIZATION_CONTRACT
@@ -229,6 +257,31 @@ def test_midscale2m_authorization_is_v6_and_v3_through_v5_remain_readable():
     ) == legacy["content_hash"]
 
 
+def test_submission_authorization_binds_automatic_endpoint_waiver() -> None:
+    authorization = build_submission_authorization(
+        mode="pilot", source_commit="c" * 40,
+        source_manifest_sha256=H, split_manifest_sha256=G,
+        recipe_sha256=H, resource_request_sha256=G,
+        command_plan_sha256=H, authorization_phrase=AUTHORIZATION_PHRASE,
+        endpoint_continuation=AUTOMATIC_ENDPOINT_CONTINUATION,
+    )
+    assert authorization["endpoint_diagnostic_review_waived_before_execution"] is True
+    assert validate_submission_authorization(
+        authorization, mode="pilot", source_commit="c" * 40,
+        source_manifest_sha256=H, split_manifest_sha256=G,
+        recipe_sha256=H, resource_request_sha256=G,
+        command_plan_sha256=H, production_authorization_sha256=None,
+        endpoint_continuation=AUTOMATIC_ENDPOINT_CONTINUATION,
+    ) == authorization["content_hash"]
+    with pytest.raises(PermissionError, match="lineage differs"):
+        validate_submission_authorization(
+            authorization, mode="pilot", source_commit="c" * 40,
+            source_manifest_sha256=H, split_manifest_sha256=G,
+            recipe_sha256=H, resource_request_sha256=G,
+            command_plan_sha256=H, production_authorization_sha256=None,
+        )
+
+
 def test_executable_campaign_spec_path_is_not_redirectable(tmp_path: Path):
     root = tmp_path / "campaign"
     canonical = root / "campaign_spec.json"
@@ -265,6 +318,28 @@ def test_slurm_commands_are_topological_absolute_and_checkpoint_signaled():
     qualification, ladder = split_submission_commands(_spec("pilot"))
     assert qualification[-1]["task_id"] == "endpoint_qualification"
     assert ladder[0]["task_id"] == "shell_endpoint_qualification_lock"
+
+
+def test_preauthorized_endpoint_continuation_submits_the_complete_afterok_dag():
+    spec = _spec(
+        "pilot", endpoint_continuation=AUTOMATIC_ENDPOINT_CONTINUATION,
+    )
+    commands, second_phase = split_submission_commands(spec)
+    assert second_phase == []
+    assert [row["task_id"] for row in commands] == [
+        row["task_id"] for row in spec["tasks"]
+    ]
+    gate = next(
+        row for row in commands
+        if row["task_id"] == "shell_endpoint_qualification_lock"
+    )
+    assert "--dependency=afterok:${JOB_endpoint_qualification}" in gate["command"]
+    assert "--hold" not in gate["command"]
+
+
+def test_qualifiers_share_one_stochastic_trajectory_seed():
+    assert qualification_shared_seed(1337) == qualification_shared_seed(1337)
+    assert qualification_shared_seed(1337) != qualification_shared_seed(1338)
 
 
 def test_recipe_contains_explicit_control_policy_and_remains_unauthorized():
@@ -333,6 +408,71 @@ def test_endpoint_acknowledgement_is_explicit_and_binds_every_diagnostic():
             recipe_sha256=H, cache_miniature_sha256=G,
             qualifier_report_sha256={**qualifier_hashes, "T0": G},
         )
+
+
+def test_preauthorized_endpoint_waiver_binds_authorization_and_all_reports():
+    qualifier_hashes = {name: H for name in QUALIFIERS}
+    waiver = build_diagnostic_waiver(
+        campaign_spec_sha256=H, assignment_manifest_sha256=G,
+        recipe_sha256=H, cache_miniature_sha256=G,
+        qualifier_report_sha256=qualifier_hashes,
+        submission_authorization_sha256=G,
+    )
+    assert waiver["reports_reviewed_posthoc"] is False
+    assert waiver["selection_performed"] is False
+    assert validate_diagnostic_waiver(
+        waiver, campaign_spec_sha256=H, assignment_manifest_sha256=G,
+        recipe_sha256=H, cache_miniature_sha256=G,
+        qualifier_report_sha256=qualifier_hashes,
+        submission_authorization_sha256=G,
+    ) == waiver["content_hash"]
+    with pytest.raises(ValueError, match="submission_authorization_sha256"):
+        validate_diagnostic_waiver(
+            waiver, campaign_spec_sha256=H, assignment_manifest_sha256=G,
+            recipe_sha256=H, cache_miniature_sha256=G,
+            qualifier_report_sha256=qualifier_hashes,
+            submission_authorization_sha256=H,
+        )
+
+
+def test_automatic_qualification_accepts_finite_bad_science_without_selection():
+    reports = {}
+    for index, name in enumerate(QUALIFIERS):
+        metrics = {
+            "cross_entropy": 1.0 + index,
+            "accuracy": 0.1,
+            "balanced_accuracy": 0.1,
+            "macro_ovr_auc": 0.9 - 0.1 * index,
+            "macro_mean_log_qcd_rejection_at_50pct_signal": 1.0,
+            "top_label_ece_15_bin": 0.1,
+            "multiclass_brier_score": 0.5,
+            "per_class": {"Xbb": {}, "Xcc": {}},
+        }
+        reports[name] = with_content_hash({
+            "contract": "fixture", "schema_version": 1,
+            "validation": metrics,
+        })
+    strata = [
+        {"observable": name}
+        for name in (
+            "matched_token_fraction", "matched_pt_fraction",
+            "mean_confidence", "dustbin_fraction",
+        )
+    ]
+    report = build_qualification_report(
+        reports, campaign_spec_sha256=H, assignment_manifest_sha256=G,
+        recipe_sha256=H,
+        endpoint_invariants={
+            "d0_exact_hlt": True, "d100_assigned_exact_offline": True,
+            "dustbins_exact_hlt": True, "hlt_skeleton_unchanged": True,
+            "all_21_fields_checked": True,
+        },
+        shell_strata=strata, diagnostic_ack_sha256=G,
+        continuation_mode=AUTOMATIC_ENDPOINT_CONTINUATION,
+    )
+    assert report["selection_performed"] is False
+    assert report["metrics"]["TSHELL"]["macro_ovr_auc"] < report["metrics"]["T0"]["macro_ovr_auc"]
+    assert validate_qualification_report(report) == report["content_hash"]
 
 
 def test_screen_order_and_confirmation_registry_are_frozen():

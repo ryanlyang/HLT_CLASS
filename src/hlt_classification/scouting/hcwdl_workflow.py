@@ -13,6 +13,7 @@ from hlt_classification.data.cache_contracts import (
     write_immutable_json,
 )
 
+from .hcwdl_authorization import AUTOMATIC_ENDPOINT_CONTINUATION
 from .hcwdl_campaign import validate_campaign_spec
 from .hcwdl_contracts import (
     artifact_envelope, authenticate_source_files, validate_artifact,
@@ -24,9 +25,12 @@ from .hcwdl_locks import (
     validate_lock,
 )
 from .hcwdl_qualification import (
-    QUALIFIERS, build_qualification_report, compute_shell_strata,
-    validate_diagnostic_acknowledgement,
+    QUALIFIERS, build_diagnostic_waiver, build_qualification_report,
+    compute_shell_strata, validate_diagnostic_acknowledgement,
+    validate_diagnostic_waiver, validate_endpoint_diagnostics,
+    validate_qualification_report,
 )
+from .engine import validate_pmard_training_report
 from .hcwdl_recipe import validate_recipe, validate_recipe_class_weight_lineage
 from .hcwdl_reporting import build_confirmation_registry, build_final_report, build_screen_aggregate
 from .highcov_resources import resource_validation_report
@@ -259,7 +263,6 @@ class HcwdlWorkflow:
         if task_id == "shell_endpoint_qualification_lock":
             reports = {name: load_json(self.root / f"qualification/{name}/training_report.json") for name in QUALIFIERS}
             acknowledgement_path = self.root / "authorizations/endpoint_diagnostic_ack.json"
-            acknowledgement = load_json(acknowledgement_path)
             assignment_hash = load_json(self.manifests["validation"])["content_hash"]
             miniature = load_json(self.root / "runtime/cache_miniature.json")
             validate_content_hash(
@@ -269,25 +272,58 @@ class HcwdlWorkflow:
             qualifier_hashes = {
                 name: report["content_hash"] for name, report in reports.items()
             }
-            acknowledgement_hash = validate_diagnostic_acknowledgement(
-                acknowledgement, campaign_spec_sha256=self.spec["content_hash"],
-                assignment_manifest_sha256=assignment_hash,
-                recipe_sha256=self.spec["recipe_sha256"],
-                cache_miniature_sha256=miniature["content_hash"],
-                qualifier_report_sha256=qualifier_hashes,
-            )
+            for report in reports.values():
+                validate_pmard_training_report(report)
             endpoint_invariants = miniature.get("endpoint_invariants")
             if not isinstance(endpoint_invariants, dict):
                 raise ValueError("HCWDL cache miniature lacks endpoint invariant evidence")
+            validate_endpoint_diagnostics(reports, endpoint_invariants)
+            shell_strata = compute_shell_strata(
+                self.manifests["validation"], data_root=self.data_root,
+            )
+            continuation_mode = self.spec.get("endpoint_continuation", "manual_posthoc")
+            if continuation_mode == AUTOMATIC_ENDPOINT_CONTINUATION:
+                acknowledgement = build_diagnostic_waiver(
+                    campaign_spec_sha256=self.spec["content_hash"],
+                    assignment_manifest_sha256=assignment_hash,
+                    recipe_sha256=self.spec["recipe_sha256"],
+                    cache_miniature_sha256=miniature["content_hash"],
+                    qualifier_report_sha256=qualifier_hashes,
+                    submission_authorization_sha256=self.spec[
+                        "submission_authorization_sha256"
+                    ],
+                )
+                write_immutable_json(acknowledgement_path, acknowledgement)
+                acknowledgement_hash = validate_diagnostic_waiver(
+                    acknowledgement, campaign_spec_sha256=self.spec["content_hash"],
+                    assignment_manifest_sha256=assignment_hash,
+                    recipe_sha256=self.spec["recipe_sha256"],
+                    cache_miniature_sha256=miniature["content_hash"],
+                    qualifier_report_sha256=qualifier_hashes,
+                    submission_authorization_sha256=self.spec[
+                        "submission_authorization_sha256"
+                    ],
+                )
+            else:
+                acknowledgement_hash = validate_diagnostic_acknowledgement(
+                    load_json(acknowledgement_path),
+                    campaign_spec_sha256=self.spec["content_hash"],
+                    assignment_manifest_sha256=assignment_hash,
+                    recipe_sha256=self.spec["recipe_sha256"],
+                    cache_miniature_sha256=miniature["content_hash"],
+                    qualifier_report_sha256=qualifier_hashes,
+                )
             output = self.root / "qualification/qualification_report.json"
             report = build_qualification_report(
                 reports, campaign_spec_sha256=self.spec["content_hash"],
                 assignment_manifest_sha256=assignment_hash,
                 recipe_sha256=self.spec["recipe_sha256"],
                 endpoint_invariants=endpoint_invariants,
-                shell_strata=compute_shell_strata(self.manifests["validation"], data_root=self.data_root),
+                shell_strata=shell_strata,
                 diagnostic_ack_sha256=acknowledgement_hash,
+                continuation_mode=continuation_mode,
             )
+            validate_qualification_report(report)
             write_immutable_json(output, report)
             lock = create_shell_endpoint_qualification_lock(
                 campaign_spec_sha256=self.spec["content_hash"],

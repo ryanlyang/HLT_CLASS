@@ -16,7 +16,8 @@ from hlt_classification.scouting.hcwdl_campaign import (  # noqa: E402
     split_submission_commands, validate_campaign_spec,
 )
 from hlt_classification.scouting.hcwdl_authorization import (  # noqa: E402
-    require_canonical_campaign_spec_path, validate_source_checkout,
+    AUTOMATIC_ENDPOINT_CONTINUATION, require_canonical_campaign_spec_path,
+    validate_source_checkout,
 )
 from hlt_classification.scouting.hcwdl_recovery import (  # noqa: E402
     assemble_submission_ledger, build_submission_event, build_submission_ledger,
@@ -46,7 +47,12 @@ def main() -> int:
     )
     if REPO_ROOT.resolve() != Path(spec["project_dir"]).resolve():
         raise PermissionError("HCWDL submitter is not running from the bound project worktree")
-    if args.authorization_phrase != "SUBMIT HCWDL EXACT SPEC":
+    expected_phrase = (
+        "SUBMIT HCWDL EXACT SPEC WITH PREAUTHORIZED ENDPOINT CONTINUATION"
+        if spec.get("endpoint_continuation") == AUTOMATIC_ENDPOINT_CONTINUATION
+        else "SUBMIT HCWDL EXACT SPEC"
+    )
+    if args.authorization_phrase != expected_phrase:
         raise PermissionError("live HCWDL submission requires the exact authorization phrase")
     validate_source_checkout(REPO_ROOT, expected_commit=str(spec["source_commit"]))
     jobs: dict[str, str] = {}

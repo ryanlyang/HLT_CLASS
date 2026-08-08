@@ -47,7 +47,7 @@ def test_every_hcwdl_cli_has_working_help(script: str):
     assert "usage:" in result.stdout.lower()
 
 
-def test_recipe_cli_derives_authenticated_class_weights(tmp_path: Path):
+def test_recipe_cli_publishes_authenticated_unweighted_ce(tmp_path: Path):
     raw = example_recipe()
     payload = {
         key: value for key, value in raw.items()
@@ -67,10 +67,11 @@ def test_recipe_cli_derives_authenticated_class_weights(tmp_path: Path):
         "seed": 1337,
         "roles": {
             "train": {
-                "all_rows": False, "rows": 15, "class_counts": [1] * 15,
+                "all_rows": False, "rows": 120,
+                "class_counts": list(range(1, 16)),
                 "population_class_counts": [2] * 15,
-                "sources": [{"path": "fixture.root", "rows": 15,
-                             "entries": list(range(15))}],
+                "sources": [{"path": "fixture.root", "rows": 120,
+                             "entries": list(range(120))}],
             },
         },
         "selection_rule": "per_class_smallest_identity_sha256_rank_v1",
@@ -89,6 +90,7 @@ def test_recipe_cli_derives_authenticated_class_weights(tmp_path: Path):
     recipe = load_json(output)
     validate_recipe(recipe, expected_profile="primary_ladder")
     assert recipe["class_weighting"]["train_row_selection_sha256"] == selection["content_hash"]
+    assert recipe["class_weighting"]["policy"] == "unweighted_per_jet_population_mean_v1"
     assert recipe["class_weights"] == [1.0] * 15
 
 

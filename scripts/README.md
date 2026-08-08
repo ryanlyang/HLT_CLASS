@@ -198,11 +198,12 @@ Recipe, resource, submission, and human diagnostic gates are built by
 monitor/resume/cancel, node/qualifier/control training, cache miniature,
 selection, final evaluation, and aggregation each have a thin `*hcwdl*` CLI.
 `run_hcwdl_local_smoke.py` executes the complete 23-node graph on bounded
-synthetic tensors without final-test access. Live submission is two-phase:
-`submit_hcwdl_campaign.py` stops after the six fixed qualifier jobs; after
-their exact reports are inspected and the acknowledgement is published,
-`continue_hcwdl_campaign.py` validates the entire prefix and submits the lock
-plus downstream ladder. Slurm holds are not used. Executable specs default to
+synthetic tensors without final-test access. Live submission is either manual
+two-phase or explicitly `preauthorized_automatic`. Automatic mode queues the
+complete `afterok` DAG; its endpoint gate derives a lineage-bound review
+waiver only after all six reports and endpoint invariants validate. Manual
+mode retains `continue_hcwdl_campaign.py`. Slurm holds are not used.
+Executable specs default to
 and enforce the exact checkout invoking campaign creation, so concurrent
 campaigns use dedicated Git worktrees. `midscale500k`, `midscale1m`, and
 `midscale2m` are separately named 500,000/250,000/250,000,
@@ -212,14 +213,14 @@ executable pilot/named-midscale/production spec can be made from the bundled
 test-only recipe or unmeasured planning resources. After a real miniature,
 create a locked non-live candidate spec with the measured resource profile,
 inspect its dry run, and pass that candidate to
-`build_hcwdl_submission_authorization.py`; authorization v6 binds the exact
-resource requests and `HCWDL_COMMAND_PLAN/v2` hash. The first bounded smoke
+`build_hcwdl_submission_authorization.py`; authorization v7 binds the exact
+resource requests, `HCWDL_COMMAND_PLAN/v3` hash, and continuation mode. The first bounded smoke
 may use its explicitly authorized conservative bootstrap requests without
 claiming measurement; pilot/named-midscale/production candidates require measured profiles.
 Recreate the live spec with the same root,
 recipe, profile, and authorization. Any command-path, resource, task, or
 lineage difference fails closed.
-An authorized `HCWDL_RECIPE/v3` is built with `--train-row-selection`; the
-builder derives the exact square-root inverse-frequency weights from that
-artifact and binds both its hash and its 15 train counts. The campaign's
+An authorized `HCWDL_RECIPE/v4` is built with `--train-row-selection`; the
+builder publishes fifteen exact ones for unweighted per-jet loss and binds
+both the selection hash and its 15 train counts. The campaign's
 deterministic row-selection task must reproduce those exact immutable bytes.

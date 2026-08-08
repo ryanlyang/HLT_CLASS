@@ -13,7 +13,8 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from hlt_classification.data.cache_contracts import load_json, write_immutable_json  # noqa: E402
 from hlt_classification.scouting.hcwdl_authorization import (  # noqa: E402
-    require_canonical_campaign_spec_path, validate_source_checkout,
+    AUTOMATIC_ENDPOINT_CONTINUATION, require_canonical_campaign_spec_path,
+    validate_source_checkout,
 )
 from hlt_classification.scouting.hcwdl_campaign import (  # noqa: E402
     split_submission_commands, validate_campaign_spec,
@@ -88,6 +89,10 @@ def main() -> int:
 
     spec = load_json(args.campaign_spec)
     validate_campaign_spec(spec, executable=True)
+    if spec.get("endpoint_continuation") == AUTOMATIC_ENDPOINT_CONTINUATION:
+        raise PermissionError(
+            "preauthorized automatic campaigns submit the complete DAG initially"
+        )
     require_canonical_campaign_spec_path(
         args.campaign_spec, campaign_root=spec["campaign_root"],
     )

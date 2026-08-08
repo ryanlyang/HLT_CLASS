@@ -11,6 +11,7 @@ from hlt_classification.scouting.hcwdl_ladder import (
     GRAPH_SHA256, NODE_REGISTRY, validate_ladder_graph,
 )
 from hlt_classification.scouting.hcwdl_recipe import (
+    LEGACY_CLASS_WEIGHT_POLICY, LEGACY_RECIPE_CONTRACT,
     PRIMARY_DUAL_TEACHER_DECISION, PRIMARY_RECIPE_DECISION, build_recipe,
     example_recipe, validate_recipe, validate_recipe_class_weight_lineage,
 )
@@ -320,3 +321,24 @@ def test_recipe_class_weights_are_exactly_bound_to_train_selection() -> None:
     })
     with pytest.raises(ValueError, match="different row-selection lineage"):
         validate_recipe_class_weight_lineage(recipe, changed_selection)
+
+
+def test_recipe_v4_is_unweighted_and_v3_weighted_artifacts_remain_readable() -> None:
+    current = example_recipe()
+    assert current["contract"] == "HCWDL_RECIPE/v4"
+    assert current["class_weights"] == [1.0] * 15
+
+    legacy = dict(current)
+    legacy["contract"] = LEGACY_RECIPE_CONTRACT
+    legacy["schema_version"] = 3
+    counts = np.arange(1, 16, dtype=np.float64)
+    inverse = 1.0 / np.sqrt(counts)
+    weights = (counts.sum() / np.sum(counts * inverse) * inverse).astype(np.float32)
+    legacy["class_weighting"] = {
+        **legacy["class_weighting"],
+        "policy": LEGACY_CLASS_WEIGHT_POLICY,
+        "train_class_counts": [int(value) for value in counts],
+    }
+    legacy["class_weights"] = weights.tolist()
+    legacy = with_content_hash(legacy)
+    assert validate_recipe(legacy, require_authorized=False) == legacy["content_hash"]
