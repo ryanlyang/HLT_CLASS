@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a hashed HCWDL smoke, pilot, or production campaign specification."""
+"""Create a hashed HCWDL smoke, pilot, midscale500k, or production specification."""
 
 from __future__ import annotations
 
@@ -12,12 +12,12 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from hlt_classification.data.cache_contracts import load_json, write_immutable_json  # noqa: E402
 from hlt_classification.scouting.hcwdl_authorization import validate_source_checkout  # noqa: E402
-from hlt_classification.scouting.hcwdl_campaign import create_campaign_spec  # noqa: E402
+from hlt_classification.scouting.hcwdl_campaign import MODES, create_campaign_spec  # noqa: E402
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--mode", choices=("smoke", "pilot", "production"), required=True)
+    parser.add_argument("--mode", choices=MODES, required=True)
     parser.add_argument("--campaign-root", type=Path, required=True)
     parser.add_argument("--source-manifest", type=Path, required=True)
     parser.add_argument("--split-manifest", type=Path, required=True)

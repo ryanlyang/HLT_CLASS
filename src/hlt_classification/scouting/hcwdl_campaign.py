@@ -15,13 +15,18 @@ from .hcwdl_resources import validate_resource_profile
 from .hcwdl_authorization import validate_submission_authorization
 
 
-CAMPAIGN_CONTRACT: Final = "HCWDL_CAMPAIGN_SPEC/v3"
+LEGACY_CAMPAIGN_CONTRACT: Final = "HCWDL_CAMPAIGN_SPEC/v3"
+CAMPAIGN_CONTRACT: Final = "HCWDL_CAMPAIGN_SPEC/v4"
 COMMAND_PLAN_CONTRACT: Final = "HCWDL_COMMAND_PLAN/v2"
 LEDGER_CONTRACT: Final = "HCWDL_SUBMISSION_LEDGER/v2"
-MODES: Final = ("smoke", "pilot", "production")
+LEGACY_MODES: Final = ("smoke", "pilot", "production")
+MODES: Final = ("smoke", "pilot", "midscale500k", "production")
 ROLE_COUNTS: Final = {
     "smoke": {"train": 4096, "validation": 4096, "final_test": 0},
     "pilot": {"train": 300_000, "validation": 100_000, "final_test": 100_000},
+    "midscale500k": {
+        "train": 500_000, "validation": 250_000, "final_test": 250_000,
+    },
     "production": {"train": None, "validation": None, "final_test": None},
 }
 
@@ -270,7 +275,7 @@ def create_campaign_spec(
     resource_request_sha256 = canonical_sha256(normalized_resources)
     payload = {
         "contract": CAMPAIGN_CONTRACT,
-        "schema_version": 3,
+        "schema_version": 4,
         "mode": mode,
         "planning_only": bool(planning_only),
         "live_submission_authorized": bool(live_submission_authorized),
@@ -327,9 +332,27 @@ def create_campaign_spec(
 
 
 def validate_campaign_spec(value: Mapping[str, Any], *, executable: bool = False) -> str:
-    digest = validate_content_hash(value, expected_contract=CAMPAIGN_CONTRACT, expected_schema_version=3)
-    if value.get("mode") not in MODES or value.get("graph_sha256") != GRAPH_SHA256:
+    contract = value.get("contract")
+    if contract == LEGACY_CAMPAIGN_CONTRACT:
+        schema_version = 3
+        allowed_modes = LEGACY_MODES
+    elif contract == CAMPAIGN_CONTRACT:
+        schema_version = 4
+        allowed_modes = MODES
+    else:
+        raise ValueError("HCWDL campaign contract differs")
+    digest = validate_content_hash(
+        value, expected_contract=str(contract), expected_schema_version=schema_version,
+    )
+    mode = value.get("mode")
+    if (
+        not isinstance(mode, str)
+        or mode not in allowed_modes
+        or value.get("graph_sha256") != GRAPH_SHA256
+    ):
         raise ValueError("HCWDL campaign mode or graph differs")
+    if value.get("role_counts") != ROLE_COUNTS[mode]:
+        raise ValueError("HCWDL campaign role counts differ from its registered mode")
     if set(value.get("role_source_counts", {})) != {"train", "validation", "final_test"}:
         raise ValueError("HCWDL campaign role source counts differ")
     if not isinstance(value.get("include_label_only_warm_continuation"), bool):
@@ -465,7 +488,8 @@ def split_submission_commands(
 
 
 __all__ = [
-    "CAMPAIGN_CONTRACT", "COMMAND_PLAN_CONTRACT", "CampaignTask", "LEDGER_CONTRACT", "MODES",
+    "CAMPAIGN_CONTRACT", "COMMAND_PLAN_CONTRACT", "CampaignTask", "LEDGER_CONTRACT",
+    "LEGACY_CAMPAIGN_CONTRACT", "LEGACY_MODES", "MODES",
     "PILOT_PLANNING_RESOURCES", "ROLE_COUNTS", "ResourceRequest", "SMOKE_RESOURCES",
     "build_command_plan", "build_task_registry", "create_campaign_spec", "slurm_commands",
     "split_submission_commands",

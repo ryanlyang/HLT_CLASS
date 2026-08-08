@@ -45,10 +45,13 @@ split. It never copies or rewrites the ROOT dataset.
 |---|---:|---:|---:|
 | Smoke | 4,096 | 4,096 | inaccessible |
 | Pilot | 300,000 | 100,000 | 100,000 after locks |
+| Midscale500k | 500,000 | 250,000 | 250,000 after locks |
 | Production | every mapped train-role row | every mapped validation-role row | every mapped test-role row after locks |
 
-Pilot selections are deterministic, class-proportional nested subsets of the
-immutable roles. Production counts come from the realized split manifest;
+Pilot and `midscale500k` selections are deterministic, class-proportional
+nested subsets of the immutable roles. `midscale500k` is a distinct registered
+mode rather than an editable generic midscale budget, leaving future midscale
+sizes free to receive separate identities. Production counts come from the realized split manifest;
 nominal 60/20/20 targets are not substituted for whole-file realized counts.
 
 ## 3. Deployment and access invariants
@@ -453,9 +456,9 @@ native-offline TOFF input adapter. Teachers are frozen in evaluation mode.
 
 ## 9. Training budget and observation
 
-Every pilot or production primary ladder model trains for exactly 60 complete
+Every pilot, midscale500k, or production primary ladder model trains for exactly 60 complete
 natural train-role passes. Smoke mirrors the graph with its bounded two-update
-execution budget. Pilot/production updates are:
+execution budget. Non-smoke updates are:
 
 ```text
 ceil(train_rows / effective_batch_size) * 60
@@ -493,7 +496,7 @@ lock must exist before endpoint or ladder training. It binds:
 
 The primary dual-teacher rungs are now fixed at 25% CE, 40% predecessor HLT
 KD, and 35% privileged KD; privileged temperature is two and the dual-teacher
-peak learning rate is `3e-4`. Pilot/production still use 60 passes, validate
+peak learning rate is `3e-4`. Pilot/midscale500k/production still use 60 passes, validate
 every pass, and select by macro AUC first. The 40-pass fixed-LR evidence row
 achieved CE `0.667893`, accuracy `0.790030`, and AUC `0.938643`; its 60-pass
 counterpart remained competitive and improved rejection. The 60-pass maximum
@@ -588,7 +591,7 @@ All selection uses validation. The finalist selector ranks highest macro AUC,
 then lower CE, then higher mean log rejection, then stable graph ID. It freezes
 a limited test wave before final-test assignments exist.
 
-The pilot/production final-test wave contains only:
+The pilot/midscale500k/production final-test wave contains only:
 
 - M0;
 - selected M6 cold and warm graphs;
@@ -675,7 +678,8 @@ and versions rather than silently broadening old contracts.
 ## 20. Implementation boundary
 
 This plan authorizes local implementation and verification. It does not
-authorize a live pilot or production submission. A live pilot requires a clean
+authorize a live pilot, midscale500k, or production submission. A live
+pilot or midscale500k run requires a clean
 pushed commit, completed recipe lock, endpoint-qualification evidence, dry run,
 measured resources, and explicit user launch instruction. Production requires
 the additional evidence and authorization in Section 17.
@@ -686,7 +690,7 @@ Sections 1--20 freeze the scientific design and its compact campaign overview.
 Sections 21 onward are the normative implementation elaboration. They remove
 degrees of freedom that an implementer could otherwise fill in inconsistently.
 They do not replace the fixed decisions above: Shell Exact v1 remains primary,
-both complete ladders run, every pilot/production primary node trains for 60
+both complete ladders run, every pilot/midscale500k/production primary node trains for 60
 passes, validation is every pass, and checkpoint choice begins with highest
 validation macro AUC.
 
@@ -828,7 +832,7 @@ uses the complete selected natural validation role, with no resampling. M
 models and D0 validate on HLT; D25/D50/D75/D100 validate on their own domains;
 TOFF validates on native offline.
 
-There is no performance early stopping. All 60 pilot/production passes run for
+There is no performance early stopping. All 60 pilot/midscale500k/production passes run for
 finite valid results. A lower AUC or higher CE is scientific evidence, not an
 execution error. Smoke is an explicitly non-scientific two-update path test.
 
@@ -1095,7 +1099,7 @@ boundaries are fixed:
 | `src/hlt_classification/scouting/ladder.py` | node, domain, initialization, loss, and graph registry |
 | `src/hlt_classification/scouting/ladder_contracts.py` | versioned specs, reports, locks, and validation |
 | `src/hlt_classification/scouting/ladder_workflow.py` | task command construction and artifact consumption |
-| `src/hlt_classification/scouting/ladder_campaign.py` | smoke, pilot, and production DAG/resource registry |
+| `src/hlt_classification/scouting/ladder_campaign.py` | smoke, pilot, midscale500k, and production DAG/resource registry |
 
 CLIs remain thin argument/delegation layers. Slurm scripts only establish the
 authenticated environment and `exec` the Python task runner.
@@ -1482,8 +1486,8 @@ Implementation introduces separately versioned contracts for:
 - `HCWDL_RECIPE/v3` and recipe lock;
 - `HCWDL_NODE_SPEC/v1` and graph registry;
 - `HCWDL_TRAINING_REPORT/v1`, checkpoint selection, and resume;
-- `HCWDL_CAMPAIGN_SPEC/v3`, `HCWDL_COMMAND_PLAN/v2`, submission ledger,
-  submission authorization v3, and monitor report;
+- `HCWDL_CAMPAIGN_SPEC/v4` (v3 readable), `HCWDL_COMMAND_PLAN/v2`, submission ledger,
+  submission authorization v4 (v3 readable), and monitor report;
 - endpoint qualification, confirmation registry, finalist, execution, and
   aggregate-report contracts.
 
@@ -1690,7 +1694,7 @@ Files existing without those behaviors do not satisfy this plan.
 
 | Value | Resolution evidence | Must be frozen before |
 |---|---|---|
-| pilot/production RAM and time | genuine Tigris miniature | live submission |
+| pilot/midscale500k/production RAM and time | genuine Tigris miniature | live submission |
 | production tracks/seeds | pilot results and resource report | production spec |
 
 The following are fixed, not unresolved: single-teacher CE/KD `0.25/0.75`;
@@ -1699,7 +1703,7 @@ privileged and HLT temperatures `2/1`; every peak LR `3e-4`; effective and
 microbatch 256 with accumulation one; the five-percent warmup/cosine/five-percent
 minimum schedule; AdamW betas/epsilon/decay and disabled clipping; Shell Exact v1; domains
 0/0.25/0.50/0.75/1; complete cold and warm pilot ladders; 60 passes per
-pilot/production primary node; validation every pass; macro-AUC-first checkpoint
+pilot/midscale500k/production primary node; validation every pass; macro-AUC-first checkpoint
 selection; one-time matching; 300k/100k/100k pilot roles; and HLT-only
 deployable inference.
 

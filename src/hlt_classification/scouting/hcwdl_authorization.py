@@ -10,8 +10,11 @@ from typing import Any, Final
 from hlt_classification.data.cache_contracts import require_sha256, validate_content_hash, with_content_hash
 
 
-SUBMISSION_AUTHORIZATION_CONTRACT: Final = "HCWDL_SUBMISSION_AUTHORIZATION/v3"
+LEGACY_SUBMISSION_AUTHORIZATION_CONTRACT: Final = "HCWDL_SUBMISSION_AUTHORIZATION/v3"
+SUBMISSION_AUTHORIZATION_CONTRACT: Final = "HCWDL_SUBMISSION_AUTHORIZATION/v4"
 AUTHORIZATION_PHRASE: Final = "AUTHORIZE EXACT HCWDL SPEC FOR TIGRIS"
+LEGACY_MODES: Final = frozenset({"smoke", "pilot", "production"})
+MODES: Final = frozenset({"smoke", "pilot", "midscale500k", "production"})
 
 
 def require_canonical_campaign_spec_path(
@@ -54,7 +57,7 @@ def build_submission_authorization(
     authorization_phrase: str,
     production_authorization_sha256: str | None = None,
 ) -> dict[str, Any]:
-    if mode not in {"smoke", "pilot", "production"}:
+    if mode not in MODES:
         raise ValueError("HCWDL authorization mode differs")
     if authorization_phrase != AUTHORIZATION_PHRASE:
         raise PermissionError("HCWDL submission authorization phrase differs")
@@ -65,7 +68,7 @@ def build_submission_authorization(
     elif production_authorization_sha256 is not None:
         raise ValueError("nonproduction HCWDL authorization names a production decision")
     return with_content_hash({
-        "contract": SUBMISSION_AUTHORIZATION_CONTRACT, "schema_version": 3,
+        "contract": SUBMISSION_AUTHORIZATION_CONTRACT, "schema_version": 4,
         "mode": mode, "source_commit": source_commit,
         "source_manifest_sha256": require_sha256(source_manifest_sha256, name="source SHA-256"),
         "split_manifest_sha256": require_sha256(split_manifest_sha256, name="split SHA-256"),
@@ -87,9 +90,20 @@ def validate_submission_authorization(
     recipe_sha256: str, resource_request_sha256: str, command_plan_sha256: str,
     production_authorization_sha256: str | None,
 ) -> str:
+    contract = value.get("contract")
+    if contract == LEGACY_SUBMISSION_AUTHORIZATION_CONTRACT:
+        schema_version = 3
+        allowed_modes = LEGACY_MODES
+    elif contract == SUBMISSION_AUTHORIZATION_CONTRACT:
+        schema_version = 4
+        allowed_modes = MODES
+    else:
+        raise ValueError("HCWDL submission authorization contract differs")
     digest = validate_content_hash(
-        value, expected_contract=SUBMISSION_AUTHORIZATION_CONTRACT, expected_schema_version=3,
+        value, expected_contract=str(contract), expected_schema_version=schema_version,
     )
+    if not isinstance(value.get("mode"), str) or value.get("mode") not in allowed_modes:
+        raise ValueError("HCWDL submission authorization mode differs")
     expected = {
         "mode": mode, "source_commit": source_commit,
         "source_manifest_sha256": source_manifest_sha256,
@@ -106,7 +120,8 @@ def validate_submission_authorization(
 
 
 __all__ = [
-    "AUTHORIZATION_PHRASE", "SUBMISSION_AUTHORIZATION_CONTRACT",
+    "AUTHORIZATION_PHRASE", "LEGACY_SUBMISSION_AUTHORIZATION_CONTRACT",
+    "SUBMISSION_AUTHORIZATION_CONTRACT",
     "build_submission_authorization", "validate_submission_authorization",
     "require_canonical_campaign_spec_path", "validate_source_checkout",
 ]

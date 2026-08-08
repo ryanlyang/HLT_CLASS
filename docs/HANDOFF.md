@@ -1,5 +1,31 @@
 # Current Handoff
 
+## HCWDL `midscale500k` campaign mode (2026-08-08)
+
+HCWDL now registers `midscale500k` as a distinct immutable population:
+500,000 train, 250,000 validation, and 250,000 final-test jets. It reuses the
+same count-agnostic matching, persistent assignments, two-phase endpoint gate,
+23-node ladder, confirmation, and sealed-test machinery, but receives its own
+campaign identity and requires a recipe whose class weights are bound to its
+exact deterministic 500,000-row train selection. Future midscale sizes must
+receive different mode names rather than editing these counts.
+
+Campaign specs and submission authorizations advance to v4; v3 smoke/pilot/
+production artifacts remain readable. Validation now also requires the stored
+role counts to exactly equal the registered mode, closing a previously
+implicit integrity check. The creation CLI exposes the new mode and focused
+tests cover its exact counts, uncapped dry-run DAG, authorization, tamper
+rejection, and v3 compatibility. This change does not alter or cancel the
+currently running v3 300k pilot.
+
+Verification after implementation: the focused high-coverage/HCWDL suite
+passes 70/70 and the complete repository suite passes 314/314 with the same
+14 Matplotlib/Pyparsing warnings. The mode has not yet been executed on
+Tigris. Its exact next step is a clean commit and push, followed by a dedicated
+worktree, deterministic 500k/250k/250k preselection, a recipe bound to that
+500k train-selection hash, measured-profile candidate dry run, explicit v4
+authorization, and its independent two-phase submission.
+
 ## PMARD all-model exploratory test comparison (2026-08-08)
 
 The user explicitly authorized evaluation of all completed T100-sweep and
@@ -804,7 +830,7 @@ All six locally implementable HCWDL blocks now exist:
    epsilon and microbatch accumulation, 60 passes, every-pass validation,
    AUC/CE/logR/earliest selection, final and selected checkpoints, and exact
    resume are executable.
-5. Smoke/pilot/production DAGs, source-byte reauthentication, split validation,
+5. Smoke/pilot/midscale500k/production DAGs, source-byte reauthentication, split validation,
    locks, fixed endpoint qualification, exact human acknowledgement, 55-row
    confirmation registry, reporting, one-claim final evaluation, exact-ID
    recovery/cancellation, resource/storage evidence, and Slurm command
@@ -845,10 +871,10 @@ New contract families are `HIGHCOV_MATCHER_RESOURCES/v1`,
 `HCWDL_EXECUTION_CLAIM/v1`, `HCWDL_ENDPOINT_{QUALIFICATION,DIAGNOSTIC_ACK}/v1`,
 `HCWDL_{SCREEN,CONFIRMATION,FINAL}_AGGREGATE/v1`,
 `HCWDL_FINAL_{EVALUATION,EVALUATION_MANIFEST}/v1`,
-`HCWDL_CAMPAIGN_SPEC/v3`, `HCWDL_COMMAND_PLAN/v2`,
+`HCWDL_CAMPAIGN_SPEC/v4` (v3 readable), `HCWDL_COMMAND_PLAN/v2`,
 `HCWDL_SUBMISSION_LEDGER/v2`, `HCWDL_MONITOR_REPORT/v1`,
 `HCWDL_{RESOURCE_PROFILE,STORAGE_ESTIMATE}/v1`,
-`HCWDL_SUBMISSION_AUTHORIZATION/v3`,
+`HCWDL_SUBMISSION_AUTHORIZATION/v4` (v3 readable),
 `HCWDL_CACHE_MINIATURE/v1`, and `HCWDL_LOCAL_SMOKE_REPORT/v1`.
 PMARD training/resume contracts advance to v6 for explicit microbatch,
 accumulation, and Adam-epsilon semantics; validators retain v4/v5 report

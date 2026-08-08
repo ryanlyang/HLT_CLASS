@@ -8,12 +8,14 @@ import pytest
 
 from hlt_classification.data.cache_contracts import with_content_hash, write_immutable_json
 from hlt_classification.scouting.hcwdl_campaign import (
-    ROLE_COUNTS, build_command_plan, create_campaign_spec, slurm_commands,
-    split_submission_commands, validate_campaign_spec,
+    LEGACY_CAMPAIGN_CONTRACT, ROLE_COUNTS, build_command_plan,
+    create_campaign_spec, slurm_commands, split_submission_commands,
+    validate_campaign_spec,
 )
 from hlt_classification.scouting.hcwdl_authorization import (
-    AUTHORIZATION_PHRASE, build_submission_authorization,
-    require_canonical_campaign_spec_path,
+    AUTHORIZATION_PHRASE, LEGACY_SUBMISSION_AUTHORIZATION_CONTRACT,
+    build_submission_authorization, require_canonical_campaign_spec_path,
+    validate_submission_authorization,
 )
 from hlt_classification.scouting.hcwdl_contracts import (
     authenticate_source_files, require_role_access,
@@ -67,8 +69,12 @@ def _spec(mode: str, *, planning: bool = True):
 def test_campaign_modes_are_complete_uncapped_and_test_sealed():
     smoke = _spec("smoke")
     pilot = _spec("pilot")
+    midscale = _spec("midscale500k")
     assert smoke["role_counts"] == ROLE_COUNTS["smoke"]
     assert pilot["role_counts"] == {"train": 300_000, "validation": 100_000, "final_test": 100_000}
+    assert midscale["role_counts"] == {
+        "train": 500_000, "validation": 250_000, "final_test": 250_000,
+    }
     smoke_tasks = {row["task_id"]: row for row in smoke["tasks"]}
     pilot_tasks = {row["task_id"]: row for row in pilot["tasks"]}
     assert len([row for row in smoke["tasks"] if row["graph_node"]]) == 23
@@ -79,8 +85,60 @@ def test_campaign_modes_are_complete_uncapped_and_test_sealed():
     assert pilot_tasks["assign_train"]["array"] == "0-3"
     assert pilot_tasks["assign_validation"]["array"] == "0-1"
     validate_campaign_spec(smoke)
+    validate_campaign_spec(midscale)
     with pytest.raises(PermissionError):
         validate_campaign_spec(pilot, executable=True)
+
+
+def test_campaign_mode_counts_are_exact_and_v3_artifacts_remain_readable():
+    midscale = _spec("midscale500k")
+    forged = dict(midscale)
+    forged["role_counts"] = dict(ROLE_COUNTS["pilot"])
+    forged = with_content_hash(forged)
+    with pytest.raises(ValueError, match="registered mode"):
+        validate_campaign_spec(forged)
+
+    legacy = dict(_spec("pilot"))
+    legacy["contract"] = LEGACY_CAMPAIGN_CONTRACT
+    legacy["schema_version"] = 3
+    legacy = with_content_hash(legacy)
+    assert validate_campaign_spec(legacy) == legacy["content_hash"]
+
+    invalid_legacy = dict(midscale)
+    invalid_legacy["contract"] = LEGACY_CAMPAIGN_CONTRACT
+    invalid_legacy["schema_version"] = 3
+    invalid_legacy = with_content_hash(invalid_legacy)
+    with pytest.raises(ValueError, match="mode or graph"):
+        validate_campaign_spec(invalid_legacy)
+
+
+def test_midscale500k_authorization_is_v4_and_v3_authorization_remains_readable():
+    authorization = build_submission_authorization(
+        mode="midscale500k", source_commit="c" * 40,
+        source_manifest_sha256=H, split_manifest_sha256=G,
+        recipe_sha256=H, resource_request_sha256=G,
+        command_plan_sha256=H, authorization_phrase=AUTHORIZATION_PHRASE,
+    )
+    assert authorization["contract"] == "HCWDL_SUBMISSION_AUTHORIZATION/v4"
+    assert authorization["schema_version"] == 4
+    assert validate_submission_authorization(
+        authorization, mode="midscale500k", source_commit="c" * 40,
+        source_manifest_sha256=H, split_manifest_sha256=G,
+        recipe_sha256=H, resource_request_sha256=G,
+        command_plan_sha256=H, production_authorization_sha256=None,
+    ) == authorization["content_hash"]
+
+    legacy = dict(authorization)
+    legacy["contract"] = LEGACY_SUBMISSION_AUTHORIZATION_CONTRACT
+    legacy["schema_version"] = 3
+    legacy["mode"] = "pilot"
+    legacy = with_content_hash(legacy)
+    assert validate_submission_authorization(
+        legacy, mode="pilot", source_commit="c" * 40,
+        source_manifest_sha256=H, split_manifest_sha256=G,
+        recipe_sha256=H, resource_request_sha256=G,
+        command_plan_sha256=H, production_authorization_sha256=None,
+    ) == legacy["content_hash"]
 
 
 def test_executable_campaign_spec_path_is_not_redirectable(tmp_path: Path):
