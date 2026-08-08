@@ -10,7 +10,7 @@ from hlt_classification.data.cache_contracts import canonical_sha256, with_conte
 from hlt_classification.provenance import SOURCE_SNAPSHOT_CONTRACT
 from hlt_classification.scouting.campaign import PMARD_SITE
 from hlt_classification.scouting.exploratory_test import (
-    EXPECTED_MODEL_COUNT, TEST_SEMANTICS, authorize_exploratory_test,
+    TEST_SEMANTICS, authorize_exploratory_test,
     metrics_only_inference, submit_exploratory_test,
     validate_exploratory_locks, validate_exploratory_test_spec,
 )
@@ -31,7 +31,7 @@ def _source_snapshot():
     })
 
 
-def _spec(tmp_path: Path):
+def _spec(tmp_path: Path, *, followup_models: int = 27):
     artifacts = {
         name: {"path": str((tmp_path / f"{name}.json").resolve()), "content_hash": "2" * 64}
         for name in (
@@ -40,7 +40,8 @@ def _spec(tmp_path: Path):
         )
     }
     registry = []
-    for index in range(EXPECTED_MODEL_COUNT):
+    model_count = 36 + followup_models
+    for index in range(model_count):
         source = "t100_sweep" if index < 36 else "kd_followup"
         experiment = f"model_{index:02d}"
         registry.append({
@@ -59,17 +60,19 @@ def _spec(tmp_path: Path):
     identity = canonical_sha256({
         "source_snapshot_sha256": source["source_snapshot_sha256"],
         "artifacts": artifacts, "registry": registry, "site": site,
-        "rows": 100_000, "semantics": TEST_SEMANTICS,
+        "candidate_count": model_count, "rows": 100_000,
+        "semantics": TEST_SEMANTICS,
     })
     return with_content_hash({
-        "contract": "hlt_classification_pmard_exploratory_test_spec_v1",
-        "schema_version": 1,
+        "contract": "hlt_classification_pmard_exploratory_test_spec_v2",
+        "schema_version": 2,
         "study_id": f"pmard_exploratory_test_{identity[:16]}",
         "source_snapshot": source,
         "parent_sweep_root": str((tmp_path / "parent").resolve()),
         "followup_root": str((tmp_path / "followup").resolve()),
         "output_root": str((tmp_path / "output").resolve()),
         "site": site, "artifacts": artifacts, "registry": registry,
+        "candidate_count": model_count,
         "tasks": ["authorize", "row_selection", "evaluation", "aggregate"],
         "role": "final_test", "rows": 100_000, "selection_seed": 1337,
         "test_role_semantics": TEST_SEMANTICS,
@@ -81,13 +84,17 @@ def _spec(tmp_path: Path):
     })
 
 
-def test_exploratory_spec_requires_exact_frozen_64_model_inventory(tmp_path: Path):
+def test_exploratory_spec_requires_exact_frozen_distinct_inventory(tmp_path: Path):
     spec = _spec(tmp_path)
     validate_exploratory_test_spec(spec)
     broken = dict(spec); broken["registry"] = broken["registry"][:-1]
     broken = with_content_hash({key: value for key, value in broken.items() if key != "content_hash"})
-    with pytest.raises(ValueError, match="exactly 64"):
+    with pytest.raises(ValueError, match="distinct-model count"):
         validate_exploratory_test_spec(broken)
+
+    # The implementation must also accept the maximum 36+28 inventory when
+    # no follow-up recipe was deduplicated.
+    validate_exploratory_test_spec(_spec(tmp_path / "maximum", followup_models=28))
 
 
 def test_exploratory_authorization_records_consumed_holdout(tmp_path: Path, monkeypatch):
@@ -95,8 +102,8 @@ def test_exploratory_authorization_records_consumed_holdout(tmp_path: Path, monk
     spec = _spec(tmp_path)
     monkeypatch.setattr(exploratory, "validate_exploratory_test_inputs", lambda value: {})
     finalist, execution = authorize_exploratory_test(spec)
-    assert finalist["candidate_count"] == 64
-    assert len(finalist["authorized_evaluation_ids"]) == 64
+    assert finalist["candidate_count"] == 63
+    assert len(finalist["authorized_evaluation_ids"]) == 63
     assert execution["holdout_consumed_for_model_comparison"] is True
     assert execution["confirmatory_claim_forbidden"] is True
     assert execution["metrics_only"] is True
@@ -130,7 +137,7 @@ def test_metrics_only_inference_is_hlt_only_and_keeps_no_prediction_artifact(tmp
     assert list(tmp_path.iterdir()) == []
 
 
-def test_exploratory_slurm_is_uncapped_64_model_array(tmp_path: Path, monkeypatch):
+def test_exploratory_slurm_is_uncapped_exact_model_array(tmp_path: Path, monkeypatch):
     import hlt_classification.scouting.exploratory_test as exploratory
     spec = _spec(tmp_path)
     monkeypatch.setattr(exploratory, "validate_exploratory_test_inputs", lambda value: {})
@@ -142,7 +149,7 @@ def test_exploratory_slurm_is_uncapped_64_model_array(tmp_path: Path, monkeypatc
         "evaluation": "94003", "aggregate": "94004",
     }
     evaluation = ledger["commands"][2]
-    assert "--array=0-63" in evaluation
+    assert "--array=0-62" in evaluation
     assert all("%" not in value for value in evaluation if value.startswith("--array="))
     assert "--dependency=afterok:94002" in evaluation
     assert "--dependency=afterok:94003" in ledger["commands"][3]

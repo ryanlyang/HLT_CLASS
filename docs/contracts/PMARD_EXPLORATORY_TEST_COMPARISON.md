@@ -1,6 +1,6 @@
-# PMARD 64-Model Exploratory Test Comparison
+# PMARD All-Model Exploratory Test Comparison
 
-Contract family: `v1`
+Contract family: `v2`
 
 This study implements the user's explicit decision to evaluate every model
 from the completed T100 KD sweep and paired schedule follow-up on the pilot's
@@ -11,11 +11,17 @@ unbiased final-test claim.
 
 ## Frozen inventory
 
-The specification is created before test-role access and contains exactly 64
-models:
+The specification is created before test-role access and contains every
+distinct completed model:
 
 - all 36 registered T100 weight/temperature/exposure sweep models;
-- all 28 registered paired schedule-follow-up models.
+- every distinct registered paired schedule-follow-up model.
+
+The follow-up contract deduplicates a recipe when it wins both its CE and
+utility selection roles. Therefore its inventory can contain 21--28 distinct
+models. The completed study contains 27, making the actual comparison
+36 + 27 = **63 distinct checkpoints**. A duplicated logical role is not
+evaluated as a fake additional model.
 
 Each row binds its source study, registry index, experiment ID, immutable
 training-report hash, selected checkpoint path and hash, scientific axes, and
@@ -37,12 +43,12 @@ weaken, the standard PMARD single-finalist locks. Only after both locks exist
 may a deterministic class-proportional 100,000-row selection be made from the
 `final_test` role.
 
-All 64 models consume the same ordered HLT-only rows. Each GPU worker verifies
+All frozen models consume the same ordered HLT-only rows. Each GPU worker verifies
 the registered report and checkpoint, audits the deployable forward signature,
 and computes the standard 15-class PMARD metrics. Logits and labels live only
 in RAM long enough to calculate metrics. No prediction NPZ or per-jet output
 is published. Every report records the ordered identity hash; aggregation
-requires that hash and the exact row count to agree across all 64 models.
+requires that hash and the exact row count to agree across the complete inventory.
 
 The comparison publishes validation and exploratory-test metrics together,
 plus test-minus-validation deltas. Any ranking made after viewing these test
@@ -51,15 +57,16 @@ new independent dataset or a predeclared external evaluation set.
 
 ## Durable contracts
 
-- `hlt_classification_pmard_exploratory_test_spec_v1`;
-- `hlt_classification_pmard_exploratory_finalist_lock_v1`;
-- `hlt_classification_pmard_exploratory_execution_lock_v1`;
+- `hlt_classification_pmard_exploratory_test_spec_v2`;
+- `hlt_classification_pmard_exploratory_finalist_lock_v2`;
+- `hlt_classification_pmard_exploratory_execution_lock_v2`;
 - existing `hlt_classification_pmard_row_selection_v1` with both exploratory
   access-lock hashes;
-- `hlt_classification_pmard_exploratory_test_evaluation_v1`;
-- `hlt_classification_pmard_exploratory_test_report_v1`;
-- `hlt_classification_pmard_exploratory_test_ledger_v1`.
+- `hlt_classification_pmard_exploratory_test_evaluation_v2`;
+- `hlt_classification_pmard_exploratory_test_report_v2`;
+- `hlt_classification_pmard_exploratory_test_ledger_v2`.
 
-The Slurm graph is authorization, row selection, an uncapped `0-63` GPU
+The completed-study Slurm graph is authorization, row selection, an uncapped
+`0-62` GPU
 array, then aggregation. A failure in one evaluation prevents an incomplete
-aggregate from being mistaken for the 64-model comparison.
+aggregate from being mistaken for the complete comparison.

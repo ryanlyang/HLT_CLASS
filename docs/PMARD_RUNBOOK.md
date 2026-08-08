@@ -324,11 +324,13 @@ PY
 This is still a single-seed validation diagnostic and has no final-test
 authority.
 
-## Exploratory test comparison of all 64 completed models
+## Exploratory test comparison of all distinct completed models
 
 This is an explicit change in evidence semantics, not a normal PMARD finalist
-run. It evaluates every 36-row T100-sweep model and every 28-row paired
-follow-up model on the same 100,000 test jets. Once executed, that test role is
+run. It evaluates every 36-row T100-sweep model and every distinct paired
+follow-up model on the same 100,000 test jets. The completed follow-up has 27
+models because one recipe winning two roles was trained only once, so the
+realized inventory is 63—not an artificial duplicated 64th checkpoint. Once executed, that test role is
 an exploratory comparison set and cannot support a confirmatory claim. See
 `docs/contracts/PMARD_EXPLORATORY_TEST_COMPARISON.md`.
 
@@ -379,8 +381,8 @@ python -s scripts/submit_pmard_exploratory_test.py \
   --output "${EXPLORATORY_ROOT}/submission_dry_run.json"
 ```
 
-Confirm the spec has exactly 64 unique rows and that the dry-run evaluation
-command contains uncapped `--array=0-63`. Submit the four-stage DAG only from
+Confirm the spec has exactly 63 unique checkpoint rows and that the dry-run
+evaluation command contains uncapped `--array=0-62`. Submit the four-stage DAG only from
 that exact worktree:
 
 ```bash

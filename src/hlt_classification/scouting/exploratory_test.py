@@ -1,4 +1,4 @@
-"""Exploratory final-test comparison for the frozen 64-model PMARD inventory.
+"""Exploratory final-test comparison for the frozen PMARD model inventory.
 
 This module deliberately does not reuse the confirmatory PMARD finalist
 selector.  It records the user's decision to consume the pilot final-test role
@@ -36,37 +36,37 @@ from .selective_assignment import (
 )
 
 EXPLORATORY_TEST_SPEC_CONTRACT = (
-    "hlt_classification_pmard_exploratory_test_spec_v1"
+    "hlt_classification_pmard_exploratory_test_spec_v2"
 )
-EXPLORATORY_TEST_SPEC_VERSION = 1
+EXPLORATORY_TEST_SPEC_VERSION = 2
 EXPLORATORY_FINALIST_LOCK_CONTRACT = (
-    "hlt_classification_pmard_exploratory_finalist_lock_v1"
+    "hlt_classification_pmard_exploratory_finalist_lock_v2"
 )
 EXPLORATORY_EXECUTION_LOCK_CONTRACT = (
-    "hlt_classification_pmard_exploratory_execution_lock_v1"
+    "hlt_classification_pmard_exploratory_execution_lock_v2"
 )
-EXPLORATORY_LOCK_VERSION = 1
+EXPLORATORY_LOCK_VERSION = 2
 EXPLORATORY_EVALUATION_CONTRACT = (
-    "hlt_classification_pmard_exploratory_test_evaluation_v1"
+    "hlt_classification_pmard_exploratory_test_evaluation_v2"
 )
-EXPLORATORY_EVALUATION_VERSION = 1
+EXPLORATORY_EVALUATION_VERSION = 2
 EXPLORATORY_REPORT_CONTRACT = (
-    "hlt_classification_pmard_exploratory_test_report_v1"
+    "hlt_classification_pmard_exploratory_test_report_v2"
 )
-EXPLORATORY_REPORT_VERSION = 1
+EXPLORATORY_REPORT_VERSION = 2
 EXPLORATORY_LEDGER_CONTRACT = (
-    "hlt_classification_pmard_exploratory_test_ledger_v1"
+    "hlt_classification_pmard_exploratory_test_ledger_v2"
 )
-EXPLORATORY_LEDGER_VERSION = 1
+EXPLORATORY_LEDGER_VERSION = 2
 
 EXPLORATORY_TEST_TASKS = (
     "authorize", "row_selection", "evaluation", "aggregate",
 )
 EXPLORATORY_TEST_ROWS = PMARD_PILOT_ROWS["final_test"]
 EXPECTED_SWEEP_MODELS = 36
-EXPECTED_FOLLOWUP_MODELS = 28
-EXPECTED_MODEL_COUNT = EXPECTED_SWEEP_MODELS + EXPECTED_FOLLOWUP_MODELS
-TEST_SEMANTICS = "exploratory_all_registered_models_v1"
+MIN_FOLLOWUP_MODELS = 21
+MAX_FOLLOWUP_MODELS = 28
+TEST_SEMANTICS = "exploratory_all_registered_models_v2"
 
 PRIMARY_METRICS = (
     "cross_entropy", "accuracy", "balanced_accuracy", "always_qcd_accuracy",
@@ -223,13 +223,16 @@ def _build_registry(
     sweep_spec: Mapping[str, object], sweep_report: Mapping[str, object],
     followup_spec: Mapping[str, object], followup_report: Mapping[str, object],
 ) -> list[dict[str, object]]:
+    followup_count = len(followup_spec.get("registry", ()))
+    if not MIN_FOLLOWUP_MODELS <= followup_count <= MAX_FOLLOWUP_MODELS:
+        raise ValueError("follow-up distinct-model count is outside its registered bounds")
     sources = (
         (
             "t100_sweep", sweep_report.get("candidates"), EXPECTED_SWEEP_MODELS,
             Path(str(sweep_spec["output_root"])),
         ),
         (
-            "kd_followup", followup_report.get("candidates"), EXPECTED_FOLLOWUP_MODELS,
+            "kd_followup", followup_report.get("candidates"), followup_count,
             Path(str(followup_spec["output_root"])),
         ),
     )
@@ -251,8 +254,8 @@ def _build_registry(
                     / "training_report.json"
                 ),
             ))
-    if len(registry) != EXPECTED_MODEL_COUNT:
-        raise RuntimeError("exploratory registry does not contain 64 models")
+    if len(registry) != EXPECTED_SWEEP_MODELS + followup_count:
+        raise RuntimeError("exploratory registry does not contain every distinct model")
     if len({row["evaluation_id"] for row in registry}) != len(registry):
         raise ValueError("exploratory evaluation identities collide")
     return registry
@@ -261,22 +264,31 @@ def _build_registry(
 def _validate_followup_report(
     followup_spec: Mapping[str, object], report: Mapping[str, object],
 ) -> str:
+    expected_count = len(followup_spec.get("registry", ()))
+    if not MIN_FOLLOWUP_MODELS <= expected_count <= MAX_FOLLOWUP_MODELS:
+        raise ValueError("follow-up specification model count is invalid")
     digest = validate_content_hash(
         report, expected_contract=KD_FOLLOWUP_REPORT_CONTRACT,
         expected_schema_version=KD_FOLLOWUP_REPORT_VERSION,
     )
-    if (
-        report.get("followup_spec_sha256") != followup_spec["content_hash"]
-        or report.get("parent_sweep_report_sha256")
-        != followup_spec["artifacts"]["parent_sweep_report"]["content_hash"]
-        or report.get("teacher_target_manifest_sha256")
-        != followup_spec["artifacts"]["teacher_target_manifest"]["content_hash"]
-        or report.get("candidate_count") != EXPECTED_FOLLOWUP_MODELS
-        or report.get("final_test_access") is not False
-    ):
-        raise ValueError("follow-up aggregate lineage differs")
+    expected_lineage = {
+        "followup_spec_sha256": followup_spec["content_hash"],
+        "parent_sweep_report_sha256": (
+            followup_spec["artifacts"]["parent_sweep_report"]["content_hash"]
+        ),
+        "teacher_target_manifest_sha256": (
+            followup_spec["artifacts"]["teacher_target_manifest"]["content_hash"]
+        ),
+        "candidate_count": expected_count, "final_test_access": False,
+    }
+    differences = [
+        name for name, value in expected_lineage.items()
+        if report.get(name) != value
+    ]
+    if differences:
+        raise ValueError(f"follow-up aggregate lineage differs: {differences}")
     candidates = report.get("candidates")
-    if not isinstance(candidates, list) or len(candidates) != EXPECTED_FOLLOWUP_MODELS:
+    if not isinstance(candidates, list) or len(candidates) != expected_count:
         raise ValueError("follow-up aggregate candidate inventory differs")
     registered = {
         str(row["experiment_id"]): row for row in followup_spec["registry"]
@@ -325,6 +337,7 @@ def create_exploratory_test_spec(
     registry = _build_registry(
         sweep_spec, sweep_report, follow_spec, follow_report,
     )
+    candidate_count = len(registry)
     split_reference = dict(sweep_spec["artifacts"]["split_manifest"])
     artifacts = {
         "parent_sweep_spec": _versioned_reference(sweep_spec_path),
@@ -339,7 +352,8 @@ def create_exploratory_test_spec(
     identity = canonical_sha256({
         "source_snapshot_sha256": source_snapshot["source_snapshot_sha256"],
         "artifacts": artifacts, "registry": registry, "site": site,
-        "rows": EXPLORATORY_TEST_ROWS, "semantics": TEST_SEMANTICS,
+        "candidate_count": candidate_count, "rows": EXPLORATORY_TEST_ROWS,
+        "semantics": TEST_SEMANTICS,
     })
     return with_content_hash({
         "contract": EXPLORATORY_TEST_SPEC_CONTRACT,
@@ -350,6 +364,7 @@ def create_exploratory_test_spec(
         "followup_root": str(follow_root),
         "output_root": str(destination),
         "site": site, "artifacts": artifacts, "registry": registry,
+        "candidate_count": candidate_count,
         "tasks": list(EXPLORATORY_TEST_TASKS),
         "role": "final_test", "rows": EXPLORATORY_TEST_ROWS,
         "selection_seed": 1337,
@@ -391,15 +406,25 @@ def validate_exploratory_test_spec(spec: Mapping[str, object]) -> str:
             raise ValueError(f"exploratory reference {name!r} is invalid")
         require_sha256(reference.get("content_hash"), name=f"artifacts[{name}]")
     registry = spec.get("registry")
-    if not isinstance(registry, list) or len(registry) != EXPECTED_MODEL_COUNT:
-        raise ValueError("exploratory registry must contain exactly 64 models")
-    if [row.get("index") for row in registry] != list(range(EXPECTED_MODEL_COUNT)):
+    candidate_count = spec.get("candidate_count")
+    if (
+        not isinstance(candidate_count, int)
+        or isinstance(candidate_count, bool)
+        or not EXPECTED_SWEEP_MODELS + MIN_FOLLOWUP_MODELS
+        <= candidate_count
+        <= EXPECTED_SWEEP_MODELS + MAX_FOLLOWUP_MODELS
+        or not isinstance(registry, list)
+        or len(registry) != candidate_count
+    ):
+        raise ValueError("exploratory exact distinct-model count differs")
+    if [row.get("index") for row in registry] != list(range(candidate_count)):
         raise ValueError("exploratory registry indices differ")
-    if len({row.get("evaluation_id") for row in registry}) != EXPECTED_MODEL_COUNT:
+    if len({row.get("evaluation_id") for row in registry}) != candidate_count:
         raise ValueError("exploratory registry identities collide")
+    followup_count = candidate_count - EXPECTED_SWEEP_MODELS
     expected_source_indices = {
         "t100_sweep": list(range(EXPECTED_SWEEP_MODELS)),
-        "kd_followup": list(range(EXPECTED_FOLLOWUP_MODELS)),
+        "kd_followup": list(range(followup_count)),
     }
     observed_source_indices = {name: [] for name in expected_source_indices}
     for row in registry:
@@ -436,7 +461,8 @@ def validate_exploratory_test_spec(spec: Mapping[str, object]) -> str:
     expected_identity = canonical_sha256({
         "source_snapshot_sha256": spec["source_snapshot"]["source_snapshot_sha256"],
         "artifacts": references, "registry": registry, "site": dict(site),
-        "rows": EXPLORATORY_TEST_ROWS, "semantics": TEST_SEMANTICS,
+        "candidate_count": candidate_count, "rows": EXPLORATORY_TEST_ROWS,
+        "semantics": TEST_SEMANTICS,
     })
     if spec.get("study_id") != f"pmard_exploratory_test_{expected_identity[:16]}":
         raise ValueError("exploratory study identity differs")
@@ -480,14 +506,15 @@ def exploratory_lock_paths(spec: Mapping[str, object]) -> tuple[Path, Path]:
 def authorize_exploratory_test(spec: Mapping[str, object]) -> tuple[dict[str, object], dict[str, object]]:
     validate_exploratory_test_inputs(spec)
     inventory_hash = canonical_sha256(spec["registry"])
+    candidate_count = len(spec["registry"])
     finalist = with_content_hash({
         "contract": EXPLORATORY_FINALIST_LOCK_CONTRACT,
         "schema_version": EXPLORATORY_LOCK_VERSION,
         "exploratory_test_spec_sha256": spec["content_hash"],
         "model_inventory_sha256": inventory_hash,
-        "candidate_count": EXPECTED_MODEL_COUNT,
+        "candidate_count": candidate_count,
         "authorized_evaluation_ids": [row["evaluation_id"] for row in spec["registry"]],
-        "authorization_basis": "explicit_user_request_evaluate_all_64_models",
+        "authorization_basis": "explicit_user_request_evaluate_all_distinct_models",
         "test_role_semantics": TEST_SEMANTICS,
         "confirmatory_claim_forbidden": True,
     })
@@ -530,11 +557,11 @@ def validate_exploratory_locks(
     if (
         finalist.get("exploratory_test_spec_sha256") != spec["content_hash"]
         or finalist.get("model_inventory_sha256") != inventory_hash
-        or finalist.get("candidate_count") != EXPECTED_MODEL_COUNT
+        or finalist.get("candidate_count") != len(spec["registry"])
         or finalist.get("authorized_evaluation_ids")
         != [row["evaluation_id"] for row in spec["registry"]]
         or finalist.get("authorization_basis")
-        != "explicit_user_request_evaluate_all_64_models"
+        != "explicit_user_request_evaluate_all_distinct_models"
         or finalist.get("test_role_semantics") != TEST_SEMANTICS
         or finalist.get("confirmatory_claim_forbidden") is not True
     ):
@@ -653,8 +680,8 @@ def evaluate_exploratory_model(
     from .loaders import load_pmard_model, scouting_model_factory_for_report
 
     validate_exploratory_test_spec(spec)
-    if index < 0 or index >= EXPECTED_MODEL_COUNT:
-        raise IndexError("exploratory model index is outside the 64-model inventory")
+    if index < 0 or index >= len(spec["registry"]):
+        raise IndexError("exploratory model index is outside the frozen inventory")
     finalist, execution = validate_exploratory_locks(spec)
     selection_payload = validate_exploratory_row_selection(spec)
     _, split_manifest = _load_reference(spec, "split_manifest")
@@ -718,7 +745,7 @@ def validate_exploratory_evaluation(
         expected_schema_version=EXPLORATORY_EVALUATION_VERSION,
     )
     index = report.get("registry_index")
-    if not isinstance(index, int) or index < 0 or index >= EXPECTED_MODEL_COUNT:
+    if not isinstance(index, int) or index < 0 or index >= len(spec["registry"]):
         raise ValueError("exploratory evaluation registry index differs")
     row = spec["registry"][index]
     finalist, execution = validate_exploratory_locks(spec)
@@ -827,7 +854,7 @@ def submit_exploratory_test(
             predecessor = EXPLORATORY_TEST_TASKS[ordinal - 2]
             command.append(f"--dependency=afterok:{jobs[predecessor]}")
         if task == "evaluation":
-            command.append(f"--array=0-{EXPECTED_MODEL_COUNT - 1}")
+            command.append(f"--array=0-{len(spec['registry']) - 1}")
         command.extend((
             "--export=ALL,"
             f"PROJECT_DIR={spec['site']['project_dir']},"
@@ -853,7 +880,7 @@ def submit_exploratory_test(
 
 
 __all__ = [
-    "EXPECTED_MODEL_COUNT", "EXPLORATORY_TEST_TASKS", "TEST_SEMANTICS",
+    "EXPLORATORY_TEST_TASKS", "TEST_SEMANTICS",
     "aggregate_exploratory_test", "authorize_exploratory_test",
     "build_exploratory_row_selection", "create_exploratory_test_spec",
     "evaluate_exploratory_model", "metrics_only_inference",

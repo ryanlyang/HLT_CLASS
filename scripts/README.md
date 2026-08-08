@@ -177,12 +177,12 @@ and selected T100 KD rows with validation after every train pass. It runs both
 the square-root exposure-scaled and original fixed learning rates at 20/40/60
 passes; no matcher, repaired view, or test-role job is registered.
 
-The explicitly authorized 64-model exploratory test comparison uses
+The explicitly authorized all-model exploratory test comparison uses
 `create_pmard_exploratory_test.py`, `run_pmard_exploratory_test_task.py`, and
-`submit_pmard_exploratory_test.py`. It freezes all 36 T100-sweep and 28
-schedule-follow-up checkpoints before access, converts the pilot's 100,000
-`final_test` jets into an exploratory comparison set, evaluates an uncapped
-`0-63` HLT-only array, and publishes metrics JSON only. It never writes
+`submit_pmard_exploratory_test.py`. It freezes all 36 T100-sweep and all 27
+distinct completed schedule-follow-up checkpoints before access, converts the
+pilot's 100,000 `final_test` jets into an exploratory comparison set,
+evaluates an uncapped `0-62` HLT-only array, and publishes metrics JSON only. It never writes
 per-jet predictions, and its reports permanently forbid confirmatory claims
 from this consumed holdout.
 

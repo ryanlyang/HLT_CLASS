@@ -2276,13 +2276,16 @@ evidence only; the real acceptance items above remain mandatory.
 
 The user explicitly replaced the pilot's single-finalist test objective with
 an all-model exploratory comparison for the already registered T100 KD sweep
-and paired schedule follow-up. Exactly 36 plus 28 models are frozen before
+and paired schedule follow-up. Exactly 36 plus every distinct completed
+follow-up model are frozen before
 test access and evaluated on one identical deterministic 100,000-jet HLT-only
 selection. This amendment does not change their training or validation
 selection and does not authorize offline inputs at inference.
 
-Executing this comparison consumes the pilot `final_test` role as an
-exploratory comparison set. The resulting 64-model table is descriptive and
+The completed follow-up deduplicated one recipe that won both selection roles,
+so the realized inventory is 36 plus 27 = 63 distinct checkpoints. Executing
+this comparison consumes the pilot `final_test` role as an
+exploratory comparison set. The resulting all-model table is descriptive and
 cannot support the untouched-holdout or single-finalist claims described
 earlier in this plan. A later confirmatory claim requires independent data.
 The dedicated contract is

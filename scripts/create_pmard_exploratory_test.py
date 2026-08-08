@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create the immutable exploratory comparison of all 64 PMARD models."""
+"""Create the immutable exploratory comparison of all distinct PMARD models."""
 
 from __future__ import annotations
 

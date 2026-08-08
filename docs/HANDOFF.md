@@ -1,13 +1,13 @@
 # Current Handoff
 
-## PMARD 64-model exploratory test comparison (2026-08-08)
+## PMARD all-model exploratory test comparison (2026-08-08)
 
-The user explicitly authorized evaluation of all 64 completed T100-sweep and
+The user explicitly authorized evaluation of all completed T100-sweep and
 paired-schedule models and reclassified the pilot's 100,000-jet `final_test`
 role as an exploratory comparison set. The new isolated contract freezes the
-36 plus 28 report/checkpoint identities before access, publishes dedicated
+36 plus 27 distinct report/checkpoint identities before access, publishes dedicated
 authorization and execution locks, builds one deterministic test selection,
-runs an uncapped HLT-only `0-63` GPU array, and aggregates only metrics. Every
+runs an uncapped HLT-only `0-62` GPU array, and aggregates only metrics. Every
 evaluation must attest the same ordered identity hash; per-jet predictions are
 never written. The aggregate permanently records that post-test rankings are
 descriptive and confirmatory claims from this holdout are forbidden.
@@ -29,9 +29,17 @@ lineage compatibility bug before any test access: the supplemental sweep's
 immutable parent campaign was being recomputed against today's expanded PMARD
 campaign registry. The exploratory validator now authenticates every archived
 embedded artifact by its own versioned contract and recorded content hash,
-while still validating the sweep/follow-up relationship, all 64 training
-reports, and all 64 checkpoint hashes. It does not reinterpret the old
+while still validating the sweep/follow-up relationship, every training
+report, and every checkpoint hash. It does not reinterpret the old
 campaign with current constants.
+
+The second pre-access creation attempt established that the completed follow-up
+contains 27 rather than 28 models: its registered construction correctly
+deduplicated one recipe that won both CE and utility roles. The fixed-64
+assumption was therefore invalid. Contract v2 freezes the exact registered
+inventory (36 + 27 = 63) and derives the
+array bound from the immutable specification. No test-role access occurred in
+either failed creation attempt.
 
 ## HCWDL matching-free representation-KD plan (2026-08-08)
 
@@ -50,8 +58,8 @@ sketches, train-only gradient calibration, a `rho_repr=0.10` auxiliary budget,
 pass-based ramps, 60 passes with validation every pass, macro-AUC-first
 selection, paired stochastic streams, one-time compact target construction,
 generation-aware just-in-time target cleanup/recovery, zero-coefficient,
-jet-only, no-relation, and shuffled-pair controls, and a split-scoped combined
-final-test reservation honored by both evaluator families. It includes the
+jet-only, no-relation, and shuffled-pair controls, and a population-scoped
+combined final-test reservation honored by both evaluator families. It includes the
 proposed source/module map, CLI and Slurm boundaries, artifact layout,
 contracts, failure semantics, complete test matrix, implementation blocks, and
 definition of done.
@@ -69,8 +77,11 @@ This is documentation only. No representation-ascent contract, model tap,
 target bank, training node, worker, smoke, or submission was implemented or
 authorized in this step. Before editing, the focused existing HCWDL/PMARD
 training suite passed 40/40 under the local `tagging-hlt` environment with
-`PYTHONPATH=src`. The separately authorized primary-HCWDL Tigris-validation
-work remains independent; this new plan does not submit, cancel, or alter it.
+`PYTHONPATH=src`. After the final plan audit, the four focused HCWDL suites
+passed 58/58 in the same environment; Markdown targets and `git diff --check`
+also passed aside from line-ending notices. The separately authorized
+primary-HCWDL Tigris-validation work remains independent; this new plan does
+not submit, cancel, or alter it.
 
 ## Preliminary PMARD pilot evidence (2026-08-07)
 

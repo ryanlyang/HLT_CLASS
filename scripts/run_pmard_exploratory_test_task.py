@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run one stage of the immutable 64-model exploratory comparison."""
+"""Run one stage of the immutable all-model exploratory comparison."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 from hlt_classification.data.cache_contracts import load_json  # noqa: E402
 from hlt_classification.provenance import validate_source_snapshot  # noqa: E402
 from hlt_classification.scouting.exploratory_test import (  # noqa: E402
-    EXPECTED_MODEL_COUNT, EXPLORATORY_TEST_TASKS,
+    EXPLORATORY_TEST_TASKS,
     aggregate_exploratory_test, authorize_exploratory_test,
     build_exploratory_row_selection, evaluate_exploratory_model,
     validate_exploratory_test_spec,
@@ -35,7 +35,7 @@ def main() -> int:
         build_exploratory_row_selection(spec)
     elif args.task == "evaluation":
         raw = os.environ.get("SLURM_ARRAY_TASK_ID")
-        if raw is None or not raw.isdigit() or int(raw) >= EXPECTED_MODEL_COUNT:
+        if raw is None or not raw.isdigit() or int(raw) >= len(spec["registry"]):
             raise ValueError("evaluation requires a valid SLURM_ARRAY_TASK_ID")
         evaluate_exploratory_model(spec, index=int(raw), device="cuda")
     else:

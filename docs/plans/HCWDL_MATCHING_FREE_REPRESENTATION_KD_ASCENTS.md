@@ -517,8 +517,7 @@ beside every derived resource/map so another language can reproduce the bytes.
 Resource generation is exact. For each block hash this payload:
 
 ```json
-{"bandwidth_index":0,"contract":"HCWDL_REP_RFF/v1","master_seed":20260808,
- "resource_name":"token_rbf_sigma_0p10"}
+{"bandwidth_index":0,"contract":"HCWDL_REP_RFF/v1","master_seed":20260808,"resource_name":"token_rbf_sigma_0p10"}
 ```
 
 The four token resource names in index order are

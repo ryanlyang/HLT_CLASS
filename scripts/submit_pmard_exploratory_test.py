@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dry-run or submit the 64-model PMARD exploratory comparison."""
+"""Dry-run or submit the all-model PMARD exploratory comparison."""
 
 from __future__ import annotations
 
