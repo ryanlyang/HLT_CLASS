@@ -250,3 +250,40 @@ def test_pmard_stream_dispatches_fitted_strict_without_legacy_graph(monkeypatch)
     assert captured["offline_arrays"] is not None
     assert np.array_equal(captured["offline_arrays"]["placeholder"], np.asarray([1]))
     assert np.array_equal(batches[0]["privileged"].vectors, view.vectors)
+
+
+def test_pmard_stream_prefix_bound_does_not_impose_second_class_quota(monkeypatch):
+    matcher = ConstituentMatcher.canonical()
+    hlt, offline = _canonical_fixture()
+    chunk = SimpleNamespace(
+        source_path="sample.root", entry_start=7,
+        arrays={"placeholder": np.asarray([1, 2, 3])},
+    )
+    monkeypatch.setattr(pmard_stream, "role_records", lambda *_: [SimpleNamespace(path="sample.root")])
+    monkeypatch.setattr(pmard_stream, "iterate_projected_chunks", lambda *_args, **_kwargs: iter([chunk]))
+    monkeypatch.setattr(pmard_stream, "multiclass_labels", lambda _arrays: np.asarray([0, 0, 0]))
+    monkeypatch.setattr(pmard_stream, "baseline_mask", lambda _arrays: np.asarray([True, True, True]))
+    monkeypatch.setattr(pmard_stream, "decode_particle_sets", lambda _arrays, _row: (hlt, offline, 0))
+
+    def inputs(arrays):
+        rows = len(arrays["placeholder"])
+        return ParticleInputs(
+            np.zeros((rows, 21, 200), np.float32),
+            np.zeros((rows, 4, 200), np.float32),
+            np.ones((rows, 1, 200), np.bool_), np.full(rows, 3, np.int32),
+        )
+
+    monkeypatch.setattr(pmard_stream, "build_hlt_inputs", inputs)
+    monkeypatch.setattr(
+        pmard_stream, "build_alpha_repaired_inputs",
+        lambda arrays, *_args, **_kwargs: inputs(arrays),
+    )
+    batches = list(pmard_stream.iterate_pmard_batches(
+        {"roles": {}}, data_root=".", role="validation", matcher_model=matcher,
+        alpha=1.0, matcher_variant="fitted_strict", threshold=FITTED_STRICT_THRESHOLD,
+        repair_family=SELECTIVE_FULL_REPAIR_FAMILY,
+        max_rows=2, max_rows_policy="stream_prefix", batch_size=2,
+        shuffle_buffer_rows=2,
+    ))
+    assert sum(len(batch["labels"]) for batch in batches) == 2
+    assert np.concatenate([batch["labels"] for batch in batches]).tolist() == [0, 0]

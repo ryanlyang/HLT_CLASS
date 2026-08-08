@@ -65,6 +65,7 @@ def iterate_pmard_batches(
     match_corruption_fraction: float = 0.0, corruption_seed: int = 1337,
     repair_seed: int = 1337,
     max_rows: int | None = None,
+    max_rows_policy: str = "class_balanced",
     completed_locks: Sequence[str] = (), step_size: int = 4096, batch_size: int = 512,
     rank: int = 0, world_size: int = 1, worker_id: int = 0, num_workers: int = 1,
     epoch: int = 0, sampler_seed: int = 1337, device: str = "cpu",
@@ -79,6 +80,10 @@ def iterate_pmard_batches(
     repair_family = runtime_repair_family(repair_family)
     if batch_size <= 0:
         raise ValueError("PMARD model batch size must be positive")
+    if max_rows is not None and max_rows <= 0:
+        raise ValueError("PMARD max_rows must be positive")
+    if max_rows_policy not in {"class_balanced", "stream_prefix"}:
+        raise ValueError("PMARD max_rows policy differs")
     if shuffle_buffer_rows < batch_size:
         raise ValueError("shuffle_buffer_rows must be at least batch_size")
     categories = frozenset(int(value) for value in eligible_categories)
@@ -103,7 +108,7 @@ def iterate_pmard_batches(
     selected_rows = 0
     class_targets = None
     class_selected = np.zeros(15, np.int64)
-    if max_rows is not None:
+    if max_rows is not None and max_rows_policy == "class_balanced":
         class_targets = np.full(15, max_rows // 15, np.int64)
         class_targets[:max_rows % 15] += 1
     pending: dict[str, object] | None = None
@@ -126,6 +131,10 @@ def iterate_pmard_batches(
             if not len(indexes):
                 continue
         if role == "train": indexes = indexes[rng.permutation(len(indexes))]
+        if max_rows is not None and max_rows_policy == "stream_prefix":
+            indexes = indexes[:max(0, max_rows - selected_rows)]
+            if not len(indexes):
+                break
         if class_targets is not None:
             provisional = class_selected.copy(); retained = []
             for index in indexes:

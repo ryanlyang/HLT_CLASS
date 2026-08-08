@@ -814,6 +814,23 @@ Focused matcher/HCWDL tests pass 64/64 and the repository-wide suite passes
 fresh Tigris smoke identity; v1 assignment shards must not be relabeled or
 reused.
 
+The v2 smoke then completed assignment manifest publication and the strict
+assignment lock (`56351` and `56352`) before cache miniature job 56353 exposed
+a separate bounded-stream bug. The miniature supplied the authenticated
+4,096-row validation selection and also asked the PMARD stream for a
+class-balanced `max_rows=4096`; that second uniform per-class quota is not the
+same as the selection's authenticated natural class proportions, so it
+discarded selected rows and could not cover the promised bound. PMARD streams
+now expose an explicit `stream_prefix` bound policy. The cache miniature uses
+that policy for D0 and D100, taking exactly the requested deterministic prefix
+after row-selection filtering without rebalancing or changing training
+semantics. The original `class_balanced` policy remains the default for all
+existing callers. A skewed-class regression proves the prefix reaches its
+exact bound where the former second quota could not.
+Focused cache/stream/HCWDL tests pass 47/47 and the repository-wide suite
+passes 302 with the same 14 warnings. The fix still requires a clean pushed
+commit and a fresh smoke identity.
+
 ## Exact active next task: separately authorized HCWDL Tigris validation
 
 Resolve and sign the immutable optimization recipe from independent evidence;

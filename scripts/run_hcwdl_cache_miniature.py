@@ -39,7 +39,8 @@ def main() -> int:
         split, data_root=args.data_root, role=args.role, matcher_model=None,
         alpha=0.0, repair_family="HIGHCOV_SHELL_EXACT/v1",
         matcher_variant="highcov_empirical_lexicographic_dr0p30_v1", threshold=0.0,
-        max_rows=bound, batch_size=min(256, bound), assignment_store=store,
+        max_rows=bound, max_rows_policy="stream_prefix",
+        batch_size=min(256, bound), assignment_store=store,
         row_selection=selection, sampler_seed=1337, repair_seed=1337,
     ):
         d0_rows += len(batch["labels"])
@@ -56,7 +57,8 @@ def main() -> int:
         split, data_root=args.data_root, role=args.role, matcher_model=None,
         alpha=1.0, repair_family="HIGHCOV_SHELL_EXACT/v1",
         matcher_variant="highcov_empirical_lexicographic_dr0p30_v1", threshold=0.0,
-        max_rows=bound, batch_size=min(256, bound), assignment_store=store,
+        max_rows=bound, max_rows_policy="stream_prefix",
+        batch_size=min(256, bound), assignment_store=store,
         row_selection=selection, sampler_seed=1337, repair_seed=1337,
         endpoint_audit_collector=endpoint_audits,
     ):
