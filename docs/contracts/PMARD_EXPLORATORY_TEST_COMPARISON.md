@@ -23,6 +23,12 @@ validation metrics. The follow-up must be a hash-valid child of the supplied
 T100 sweep. Missing, extra, duplicated, non-HLT, representation-architecture,
 or changed checkpoint rows fail closed.
 
+The two completed studies are historical immutable artifacts. Their embedded
+references are validated using their recorded versioned contracts and content
+hashes. The exploratory reader does not recompute an old parent campaign's
+scientific identity using the current campaign registry, because later
+registry additions cannot retroactively alter a completed source-bound run.
+
 ## Access and evaluation
 
 Two dedicated locks record the explicit all-model authorization and the

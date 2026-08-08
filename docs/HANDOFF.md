@@ -24,6 +24,15 @@ single-finalist code path was not weakened. Initial focused verification is
 Matplotlib/pytest-cache warnings. Tigris execution remains to be performed
 from exact pushed clean source.
 
+The first Tigris creation attempt at commit `f9926ab` exposed a historical
+lineage compatibility bug before any test access: the supplemental sweep's
+immutable parent campaign was being recomputed against today's expanded PMARD
+campaign registry. The exploratory validator now authenticates every archived
+embedded artifact by its own versioned contract and recorded content hash,
+while still validating the sweep/follow-up relationship, all 64 training
+reports, and all 64 checkpoint hashes. It does not reinterpret the old
+campaign with current constants.
+
 ## HCWDL matching-free representation-KD plan (2026-08-08)
 
 The new implementation-grade registered-ablation plan is

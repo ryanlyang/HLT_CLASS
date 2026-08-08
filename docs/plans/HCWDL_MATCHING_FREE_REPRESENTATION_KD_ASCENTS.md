@@ -503,14 +503,35 @@ kernel seed. The arrays and their logical hashes are part of the recipe. They
 are FP32 and frozen. Dynamic batch-median bandwidths are forbidden because
 they make the target depend on batch composition and resume layout.
 
-Resource generation is exact: derive each independent block seed as the
-big-endian integer encoded by the first eight bytes of
-`SHA256("HCWDL_REP_RFF/v1" || 20260808 || resource_name || bandwidth_index)`,
-initialize `numpy.random.Generator(numpy.random.PCG64(seed64))`, draw standard
-normal frequencies followed by uniform phases in FP64, divide frequencies by
-the declared sigma, then cast the C-contiguous arrays to FP32. The producing
-NumPy version is recorded. Runtime acceptance is governed by the stored array
-logical hashes, not merely by a seed or dependency version.
+Every scientific SHA derivation in this plan uses one canonical byte rule:
+serialize a type-explicit object with Python `json.dumps(payload,
+sort_keys=True, separators=(",", ":"), ensure_ascii=True,
+allow_nan=False)`, encode that exact string as UTF-8, and hash those bytes.
+Hash inputs never use delimiter concatenation, native integer bytes, path
+strings, or implicit object stringification. Jet identities enter seed payloads
+only through the canonical identity digest already authenticated by the row
+manifest. A 64-bit RNG seed is `int.from_bytes(digest[0:8], "big",
+signed=False)`. The canonical serialized payload and its SHA-256 are retained
+beside every derived resource/map so another language can reproduce the bytes.
+
+Resource generation is exact. For each block hash this payload:
+
+```json
+{"bandwidth_index":0,"contract":"HCWDL_REP_RFF/v1","master_seed":20260808,
+ "resource_name":"token_rbf_sigma_0p10"}
+```
+
+The four token resource names in index order are
+`token_rbf_sigma_0p10`, `token_rbf_sigma_0p25`,
+`token_rbf_sigma_0p50`, and `token_rbf_sigma_1p00`; relation resources use
+`relation_rbf_sigma_0p05`, `relation_rbf_sigma_0p10`,
+`relation_rbf_sigma_0p20`, and `relation_rbf_sigma_0p40`. Initialize
+`numpy.random.Generator(numpy.random.PCG64(seed64))`, draw the complete
+standard-normal frequency array followed by the complete uniform-phase array
+in FP64, divide frequencies by the declared sigma, then cast C-contiguous
+arrays to FP32. The producing NumPy version is recorded. Runtime acceptance is
+governed by the stored array logical hashes, not merely by a seed or dependency
+version.
 
 For normalized token `z`:
 
@@ -649,8 +670,11 @@ deltaR     = sqrt((eta_i - eta_j)^2 + delta_phi^2)
 ```
 
 `eta` and `phi` are deterministically derived from the same post-trimmer
-four-vectors used by the model, in FP32 with the repository's canonical
-four-vector helper. Nonfinite visible geometry fails the target/student batch.
+four-vectors used by the model with the repository's canonical
+`matching.py::p4_kinematics` NumPy-FP64 implementation. Wrapped `delta_phi`,
+`deltaR`, and the comparisons to the two stratum edges are also evaluated in
+FP64. Only the resulting fixed stratum IDs enter the FP32 representation-loss
+path. Nonfinite visible geometry fails the target/student batch.
 
 ```text
 local:   0.00 <= deltaR < 0.05
@@ -700,8 +724,8 @@ is never fabricated and a row is never skipped from CE/logit KD.
 
 Eligibility, pair count, ESS, and loss contribution are reported by class,
 family, and stratum. No per-class result is silently generalized to classes
-with poor support; class/family support weakness above the overall execution
-floor remains a scientific limitation rather than a reason to skip a node.
+with poor support; class/family support weakness remains a scientific
+limitation rather than a reason to skip a node.
 
 At M6, relational sketches are computed separately within the charged and
 neutral families defined in Section 9.4 and combined by the same equal-family
@@ -712,11 +736,15 @@ logits, and CE.
 
 ### 10.4 Interpretation
 
-The relational component asks whether HLT contextual token states organize
-nearby and wide-angle particle pairs similarly to the privileged model. It
-does not make a merged HLT object become two tokens. A positive `RREL - RSET`
-increment supports the narrower conclusion that latent relational structure
-was useful supervision under the fixed HLT skeleton.
+The relational component asks whether HLT contextual token states have similar
+**marginal cosine distributions within fixed physical-separation strata** to
+the privileged model. It neither reconstructs pair-graph topology nor makes a
+merged HLT object become two tokens. A positive full-ascent `RREL - RSET`
+difference supports only that the complete relation-inclusive allocation and
+its accumulated predecessors worked better; it is not an isolated causal
+estimate of the current relation term. The predeclared M5 no-relation control
+provides the narrower, single-rung allocation diagnostic described in Section
+23.2.
 
 ## 11. Projection regularization
 
@@ -732,11 +760,15 @@ Projection parameters are excluded from AdamW weight decay because the
 explicit orthogonality term owns their scale/conditioning. They otherwise use
 the node's ordinary optimizer and learning-rate schedule.
 
-The orthogonality term prevents a projection from collapsing dimensions or
+The orthogonality term discourages a projection from collapsing dimensions or
 arbitrarily rescaling the loss. It does not force the deployable backbone to
 copy a teacher coordinate system exactly. Singular values, condition number,
-and `L_orth` are recorded at every validation boundary; a nonfinite projection
-or condition number above `1e4` fails execution.
+and `L_orth` are recorded at every validation boundary. A nonfinite projection
+is a numerical failure. A **finite** condition number above `1e4` is a
+predeclared poor-conditioning diagnostic, not an execution failure, checkpoint
+selector, mid-run reset, or reason to suppress descendants; the registered
+row continues and reports the excursion. This preserves the campaign rule
+that a finite scientifically poor auxiliary cannot cancel an experiment.
 
 ## 12. Exact two representation strategies
 
@@ -808,11 +840,12 @@ base-loss gradient.
 
 ### 13.2 Calibration population and activation barriers
 
-Select exactly 4,096 train identities by the smallest SHA-256 values of:
+Select exactly 4,096 train identities by the smallest SHA-256 values of the
+Section 9.3 canonical-JSON UTF-8 payload:
 
-```text
-HCWDL_REP_GRAD_CAL/v1 || campaign hash || parent logit-counterpart node ID
-                      || canonical jet identity
+```json
+{"campaign_sha256":"<hex>","contract":"HCWDL_REP_GRAD_CAL/v1",
+ "identity_sha256":"<hex>","parent_logit_counterpart_node_id":"<id>"}
 ```
 
 The subset remains in natural class proportions up to deterministic hash
@@ -843,6 +876,17 @@ and uses `torch.autograd.grad` on the named captured surfaces, never parameter
 sampler position, optimizer state, logging windows, and target cursors are
 snapshotted and restored. The next scientific batch is therefore identical to
 the no-calibration trajectory except for the newly frozen scalar scales.
+
+Within one calibration batch, execute the stochastic student graph **once**.
+That one call produces the logits and every captured student surface used by
+the barrier. Derive the base per-row loss and all component losses from those
+same tensors, then call `torch.autograd.grad` for `G_base,k` and `G_rep,k` with
+the required `retain_graph` setting. Re-running dropout, trimming, attention,
+or the model separately for base and representation gradients is forbidden.
+Component-specific support changes only the FP32 reduction of already-created
+per-row losses; it never creates a second stochastic forward. Teacher targets
+are cached/detached. Tests count forward calls and prove identical RNG and
+surface tensors across every component norm at the barrier.
 
 The pass-two and pass-four barriers are safe checkpoint boundaries. If a job
 is preempted before a barrier artifact is atomically published, resume restores
@@ -1038,16 +1082,30 @@ coefficients are exactly `0.30/0.45/0.25`.
 
 Smoke uses its two-update execution budget and evaluates the same schedule in
 update coordinates. It is expected to remain in the zero-representation
-interval, so smoke additionally invokes an explicit one-batch
-`--exercise-full-representation-loss` path that computes and backpropagates
-the full-strength components without publishing a scientific checkpoint or
-changing the two-update optimizer trajectory. The probe runs on a temporary
-deep copy of the initialized student/heads under a forked RNG state, first
-executes the phase-calibration algorithm on all available bounded smoke rows,
-forces both ramps to one, performs no optimizer/scheduler step, asserts finite
-nonzero gradients at every active student surface, then discards the copy and
-restores all RNG/cache counters. Its calibration is labeled smoke-only and can
-never satisfy a pilot/production phase artifact.
+interval, so smoke additionally invokes
+`--exercise-full-representation-loss`. This is a two-part, explicitly
+non-scientific acceptance path:
+
+1. one bounded real-data batch traverses the complete loader, surface capture,
+   target join, family/stratum masking, and base-plus-representation loss; and
+2. deterministic post-tap fixtures make **every** registered ordinary-D and
+   TOFF jet/set/relation component eligible, including charged and neutral M6
+   families and all three relation strata.
+
+The second part intentionally bypasses the production `12 of 16` support gate.
+On a temporary deep copy under a forked RNG state it runs the exact Section
+13.3 gradient-norm and scale formula on at least one eligible fixture batch,
+requires a finite positive scale and finite nonzero student-surface/backbone
+gradient for every recipe component, forces both ramps to one, and performs no
+optimizer/scheduler step. It does not turn unavailable bounded-population
+support into scientific evidence. The probe publishes
+`HCWDL_REPRESENTATION_SMOKE_PROBE/v1` with `scientific_authorization=false`,
+fixture/resource hashes, component eligibility, scales, and gradient norms;
+that artifact is rejected anywhere a pilot/production calibration is required.
+The copy is discarded and all RNG/cache counters are restored, so the
+two-update trajectory is byte-identical with or without the probe. This keeps a
+small smoke from passing vacuously merely because production support logic
+marked every component inactive.
 
 ## 15. Training duration, validation, and checkpoint selection
 
@@ -1402,7 +1460,8 @@ Introduce:
 - `HCWDL_REPRESENTATION_TARGET_GENERATION/v1`;
 - `HCWDL_REPRESENTATION_TARGET_SHARD/v1`;
 - `HCWDL_REPRESENTATION_TARGET_MANIFEST/v1`;
-- `HCWDL_REPRESENTATION_TARGET_CLEANUP/v1`.
+- `HCWDL_REPRESENTATION_TARGET_CLEANUP_AUTHORIZATION/v1`;
+- `HCWDL_REPRESENTATION_TARGET_CLEANUP_COMPLETION/v1`.
 
 The logical-bank artifact freezes teacher/target meaning independently of a
 physical materialization. Each screen, confirmation, or recovery
@@ -1426,7 +1485,9 @@ targets/<logical_bank>/generations/<generation_id>/
   generation.json
   manifest.json
   shards/...
-cleanup/<logical_bank>/<generation_id>.json
+cleanup/<logical_bank>/<generation_id>/
+  authorization.json
+  completion.json
 ```
 
 `logical_bank.json` freezes scientific target meaning but contains no mutable
@@ -1443,22 +1504,36 @@ Banks are constructed just before their first eligible rung, not all retained
 for the whole campaign. A generation cleanup task uses `afterok` on every
 consumer and runs only after every declared consumer has an authenticated
 complete report binding that generation. An execution failure is not a
-terminal scientific consumer and cannot authorize cleanup. Cleanup removes the
-generation's binary shards, retains its logical-bank/generation/manifest plus
-cleanup record, and records removed paths, byte hashes, total bytes, consumer
-attestations, and whether deterministic reconstruction is possible.
+terminal scientific consumer and cannot authorize cleanup.
 
-Recovery before cleanup reuses only fully validated shards. A missing shard
-without a valid cleanup record is corruption, not an authorized cache miss.
-Recovery after cleanup publishes a new generation bound to an immutable
-`HCWDL_REPRESENTATION_RECOVERY_PLAN/v1`, includes only consumers that do not
-already have an authenticated complete output for the recovery plan (or newly
-registered confirmation consumers),
-reconstructs from the same teacher/signature, and verifies the prior
-`logical_target_sha256`. Cleanup never removes model checkpoints, reports,
-recipe resources, calibration reports, or scientific metrics. The new recovery
-module must schedule `rebuild generation -> unfinished consumers -> new
-cleanup`; it cannot reuse the parent HCWDL transitive retry logic unchanged.
+Cleanup is an exact two-phase state transition. **Before deleting the first
+byte**, atomically publish immutable
+`HCWDL_REPRESENTATION_TARGET_CLEANUP_AUTHORIZATION/v1`. It binds the generation
+manifest, pre-build forward-spec and post-build execution-attestation hashes,
+every authenticated consumer report, the complete sorted list of removable
+paths with byte/logical hashes and byte totals, the paths that must remain, and
+whether exact reconstruction is authorized. Only paths in that authorization
+may be deleted. After every removal and retained-file audit succeeds, atomically
+publish `HCWDL_REPRESENTATION_TARGET_CLEANUP_COMPLETION/v1`, binding the
+authorization plus observed removed/missing/retained sets and byte totals.
+Authorization is durable cleanup intent; completion is evidence that the
+transition finished. Neither is mutable.
+
+Recovery before authorization reuses only fully validated shards. A missing
+shard with no valid authorization is corruption. Once a valid authorization
+exists, any listed shard that is missing denotes an interrupted or completed
+authorized cleanup, never corruption: recovery first idempotently finishes the
+exact authorized deletions and publishes/validates completion. If unfinished
+or newly registered consumers require targets, it then publishes a **new**
+generation bound to an immutable `HCWDL_REPRESENTATION_RECOVERY_PLAN/v1`,
+reconstructs under the same forward spec, validates against the prior execution
+attestation and `logical_target_sha256`, runs only that generation's consumers,
+and performs a new two-phase cleanup. It never recreates shards inside a
+partially deleted old generation. Cleanup never removes model checkpoints,
+reports, recipe resources, calibration reports, or scientific metrics. The new
+recovery module must schedule `finish old cleanup -> rebuild generation ->
+unfinished consumers -> authorize new cleanup -> complete new cleanup`; it
+cannot reuse the parent HCWDL transitive retry logic unchanged.
 
 Screen and confirmation are separate physical generations of the same logical
 teacher target when cleanup occurs between them. A confirmation rebuild binds
@@ -1471,8 +1546,9 @@ for all confirmation consumers.
 There is no mutable latest-generation index. The immutable campaign spec,
 confirmation registry, or recovery plan names the exact generation path each
 consumer must load. A separately authorized emergency purge of an abandoned
-failed generation is a destructive operational action with its own audit; it
-never publishes a scientific-complete cleanup record.
+failed generation is a destructive operational action with its own
+authorization/completion audit; it never impersonates a last-consumer
+scientific cleanup.
 
 The campaign storage estimator must account for the worst set of banks that
 can coexist under the actual DAG. It may serialize bank construction or delay
@@ -1498,11 +1574,14 @@ HCWDL_REPRESENTATION_TARGET_CONSUMER_REGISTRY/v1
 HCWDL_REPRESENTATION_TARGET_GENERATION/v1
 HCWDL_REPRESENTATION_TARGET_SHARD/v1
 HCWDL_REPRESENTATION_TARGET_MANIFEST/v1
-HCWDL_REPRESENTATION_TARGET_CLEANUP/v1
+HCWDL_REPRESENTATION_TARGET_CLEANUP_AUTHORIZATION/v1
+HCWDL_REPRESENTATION_TARGET_CLEANUP_COMPLETION/v1
 HCWDL_REPRESENTATION_RECOVERY_PLAN/v1
 HCWDL_REPRESENTATION_GRADIENT_CALIBRATION/v1
 HCWDL_REPRESENTATION_GRADIENT_CALIBRATION_MANIFEST/v1
 HCWDL_REPRESENTATION_NUMERICAL_ACCEPTANCE/v1
+HCWDL_REPRESENTATION_SMOKE_PROBE/v1
+HCWDL_REPRESENTATION_PAIRED_BOOTSTRAP/v1
 HCWDL_REPRESENTATION_CONTROL_REGISTRY/v1
 HCWDL_REPRESENTATION_SHUFFLE_MAP/v1
 HCWDL_REPRESENTATION_RESUME_STATE/v1
@@ -1514,14 +1593,27 @@ HCWDL_REPRESENTATION_CONFIRMATION_REGISTRY/v1
 HCWDL_REPRESENTATION_CONFIRMATION_AGGREGATE/v1
 HCWDL_REPRESENTATION_FINAL_DISPOSITION/v1
 HCWDL_REPRESENTATION_PARENT_FINAL_STATE/v1
+HCWDL_SHARED_FINAL_POPULATION/v1
+HCWDL_SHARED_FINAL_POPULATION_DISJOINTNESS/v1
+HCWDL_SHARED_FINAL_EXPOSURE_LEDGER/v1
+HCWDL_SHARED_FINAL_POPULATION_REGISTRATION/v1
 HCWDL_SHARED_FINAL_RESERVATION/v1
 HCWDL_SHARED_FINAL_LEGACY_CANCELLATION/v1
 HCWDL_REPRESENTATION_FINALIST_LOCK/v1
-HCWDL_REPRESENTATION_EXECUTION_LOCK/v1
+HCWDL_SHARED_FINAL_TASK_REGISTRY/v1
 HCWDL_SHARED_FINAL_EXECUTION_CLAIM/v1
+HCWDL_SHARED_FINAL_ROLE_CAPABILITY/v1
+HCWDL_SHARED_FINAL_RECOVERY_PLAN/v1
+HCWDL_SHARED_FINAL_ROW_SELECTION/v1
+HCWDL_SHARED_FINAL_LABEL_ESCROW/v1
+HCWDL_SHARED_FINAL_ASSIGNMENT_AUDIT/v1
+HCWDL_SHARED_FINAL_DATA_ATTESTATION/v1
+HCWDL_REPRESENTATION_EXECUTION_LOCK/v1
+HCWDL_REPRESENTATION_FINAL_PREDICTION_SPEC/v1
 HCWDL_REPRESENTATION_FINAL_EVALUATION/v1
 HCWDL_REPRESENTATION_PREDICTION_SHARD/v1
 HCWDL_REPRESENTATION_PREDICTION_MANIFEST/v1
+HCWDL_REPRESENTATION_METRIC_JOIN/v1
 HCWDL_REPRESENTATION_FINAL_AGGREGATE/v1
 HCWDL_REPRESENTATION_CAMPAIGN_SPEC/v1
 HCWDL_REPRESENTATION_COMMAND_PLAN/v1
@@ -1711,9 +1803,11 @@ They use the correct labels, correct predecessor logits, correct privileged
 logits, exact cold initialization/stochastic streams of their unshuffled M5
 counterpart, and the same representation loss. Only representation target
 identities are replaced by a deterministic no-fixed-point permutation within
-the same true class. Within each class, sort train identities by
-`SHA256("HCWDL_REP_SHUFFLE/v1" || 20260809 || identity)` and give position `i`
-the jet/set/relation representation targets from position `(i + 1) mod n`.
+the same true class. Within each class, sort train identities by the digest of
+the Section 9.3 canonical-JSON UTF-8 payload
+`{"contract":"HCWDL_REP_SHUFFLE/v1","identity_sha256":"<hex>",
+"master_seed":20260809}` and give zero-based sorted position `i` the
+jet/set/relation representation targets from position `(i + 1) mod n`.
 Every class must contain at least two selected train rows; otherwise the
 control fails structurally. The privileged logits stay joined to the correct
 identity, and validation targets remain unused.
@@ -1786,13 +1880,36 @@ Required noncampaign controls include:
 - zero encoder gradient from a physics-only pair loss, proving that prohibited
   formulation cannot masquerade as representation KD.
 
-The exact fixture generator, distribution parameterization, selected-resource
-hashes, unrounded error vectors, and pass/fail values are published as
+Fixture generation is executable, not prose-dependent. Every stream uses
+`numpy.random.Generator(PCG64(seed))`, and NumPy's exclusive-high integer
+semantics. For each token fixture, in order: draw student and teacher counts
+independently; draw one 128-dimensional standard-normal center and unit
+normalize it; draw independent student/teacher log-scales uniformly between
+the written log endpoints; draw the complete student then teacher
+standard-normal noise arrays; form `center + scale * noise` and unit-normalize
+each row; draw the complete student then teacher `Uniform(0,1)` weight arrays
+and normalize each separately. For each relation fixture, use the same field
+order with one scalar uniform center, independent log-scales, student then
+teacher scalar noise arrays, clipping, and student then teacher weights. Counts
+are drawn with `integers(2, 33)` for token-value fixtures,
+`integers(2, 497)` for relation-value fixtures, and `integers(2, 17)` for both
+gradient families. Exact and RFF gradient comparisons treat the completed
+student cloud as the FP64 leaf requiring gradient; the teacher cloud, weights,
+and frozen resources are detached and byte-identical across the two losses.
+
+For seed `995`, draw the full 128-by-128 Gaussian matrix first, apply FP64 QR,
+and multiply each Q column by the sign of the corresponding R diagonal
+(`zero -> +1`); then draw the 64 token fixtures in the token field order above.
+The same Q is applied jointly to both clouds for every fixture. No draw is
+discarded or retried.
+
+The exact fixture generator, distribution parameterization, serialized seed
+payloads, selected-resource hashes, unrounded error/gradient vectors, and
+pass/fail values are published as
 `HCWDL_REPRESENTATION_NUMERICAL_ACCEPTANCE/v1`. The resource seed is never
 searched for one that passes. Failure requires a new predeclared recipe; it
-cannot be repaired after viewing model metrics.
-All fixture streams use `numpy.random.Generator(PCG64(seed))`, FP64 draws in
-the written field order, and FP64 exact-kernel evaluation.
+cannot be repaired after viewing model metrics. All draws and exact-kernel
+evaluation are FP64.
 
 ### 23.5 What is not a control
 
@@ -1891,62 +2008,106 @@ This estimates conditional terminal-rung training variance, not full-ladder
 seed variance, and reports that limitation. A future full-system replicate
 requires four additional complete ascent graphs and a new authorization.
 
-Paired bootstrap and confidence intervals use the repository's fixed seed
-`8041`, paired-jet sampling unit, independent within-class resampling with
-observed class counts preserved, and linear 2.5%/97.5% quantiles. All
-registered signs are reported.
+Paired bootstrap uses a new explicit
+`HCWDL_REPRESENTATION_PAIRED_BOOTSTRAP/v1` surface; neither an existing
+10-class stratified helper nor an unstratified scalar helper is compatible.
+The input join must contain the same identity-ordered prediction row for every
+model and at least one observed row in each of the 15 frozen classes. Create
+exactly 2,000 replicates from
+`numpy.random.Generator(PCG64(8041))`. For each replicate and each class in
+canonical class-code order, draw `n_c` integer offsets with replacement from
+that class's `n_c` observed rows using `integers(0, n_c, size=n_c)`. Concatenate
+those class blocks; the resulting identity index vector is used unchanged for
+every paired model and delta in that replicate. No cross-class resampling,
+row-level independent model draw, retry, or metric-specific bootstrap is
+allowed.
+
+Store replicate values and paired deltas for CE, overall and balanced
+accuracy, macro OVR AUC, macro mean log-QCD-rejection at 50% signal efficiency,
+top-label ECE-15, multiclass Brier score, and every class's OVR AUC plus
+50%-efficiency QCD FPR/rejection. Report the original-population point estimate,
+bootstrap median, and 2.5%/97.5% intervals using NumPy's `method="linear"` on
+unrounded FP64 replicate values. Nonfinite/undefined metric policy is the
+frozen metric contract's policy and is recorded per replicate; it cannot cause
+redraw. The artifact stores the exact joined-identity hash, prediction/label
+parent hashes, RNG metadata, replicate-index logical hash, full replicate
+arrays or losslessly equivalent immutable binary sidecar, and every registered
+comparison sign.
 
 ## 25. Final-test boundary
 
-### 25.1 Immutable final disposition and shared atomic reservation
+### 25.1 Population-scoped disposition and pre-training reservation
 
 The original logit-only campaign and HCWDL-RKD use different campaign roots,
-so a root-local `execution_claim.json` cannot prevent a race. Before the
-representation campaign spec is created, audit the parent submission ledger,
-all final-task Slurm IDs, final output paths, and the split-scoped common claim
-namespace. Freeze exactly one campaign-spec disposition:
+so a root-local `execution_claim.json` cannot prevent a race. First create
+`HCWDL_SHARED_FINAL_POPULATION/v1` without opening any ROOT branch. It hashes
+the complete ordered set of canonical `(source_file_sha256, source_entry)`
+identities in the parent split's **entire mapped final-test role**, not the
+later selected subset. The common secrecy namespace is:
+
+```text
+<checkpoint_namespace>/final_claims/<final_population_sha256>/
+```
+
+Selection rules, selected rows, and label contracts are bound *inside* this
+namespace and cannot create a new namespace over the same population. A
+proposed new holdout additionally publishes
+`HCWDL_SHARED_FINAL_POPULATION_DISJOINTNESS/v1` against every population in the
+common exposure ledger; any identity overlap fails closed. A changed split
+name or label policy is never proof of a new holdout.
+
+Population registration and overlap checking are one serialized transaction,
+not a check-then-write pair. A neutral shared registrar takes an exclusive
+OS-level lock on the one fixed exposure-ledger lock file, reloads and validates
+the complete immutable `HCWDL_SHARED_FINAL_EXPOSURE_LEDGER/v1`, checks the
+proposed identity set against every entry, atomically publishes the new
+population/disjointness/registration entry and next ledger generation, fsyncs
+file and parent directory, and only then releases the lock. The same critical
+section also rejects a second reservation for an already registered
+population. No campaign-root code may register directly. The real-filesystem
+miniature must prove the selected lock/rename/fsync primitive on Tigris; if the
+filesystem cannot provide it, final execution is blocked rather than falling
+back to an unlocked scan. Tests race both identical populations and different
+population hashes with at least one overlapping identity; exactly one
+registration/reservation may succeed. Here `source snapshot` always means the
+authenticated **data** source snapshot; producer source commit is a separate
+bound field.
+
+Before the representation campaign spec is created, audit the parent
+submission ledger, all legacy final-task Slurm IDs, final outputs, root-local
+claims, the population namespace, and exposure ledger. Freeze exactly one
+campaign-spec disposition:
 
 ```text
 combined_confirmatory
 validation_only_parent_claim_consumed
 ```
 
-`combined_confirmatory` is legal only when no parent final prediction/output
-or execution claim exists. Any pending/running legacy parent final job must be
-cancelled by exact ledger-bound job ID and an immutable cancellation/state
-attestation must prove it can no longer race. Before training starts, publish
-an atomic shared reservation under:
+`combined_confirmatory` is legal only when no prediction, model-derived final
+output, or execution claim exists for any overlapping population. Every
+pending/running legacy parent final job is cancelled by exact ledger-bound job
+ID; `HCWDL_SHARED_FINAL_LEGACY_CANCELLATION/v1` records the IDs, scheduler
+states after cancellation, output audit, and proof that no worker can race.
+Before training starts, atomically publish
+`HCWDL_SHARED_FINAL_RESERVATION/v1` in the population namespace. It binds source,
+split, full population, exact class-stratified parent selection rule, label
+contract, Shell-Exact assignment specification, combined campaign spec, and a
+pre-training finalist-registry commitment: complete parent-union policy, four
+representation endpoint IDs, screening seed, and selector rules, but not
+unknown checkpoint hashes.
 
-```text
-<checkpoint_namespace>/final_claims/
-  <SHA256(canonical_json({source_snapshot, split,
-                          final_row_selection, label_contract}))>/
-```
-
-The reservation binds the combined campaign spec and a pre-training
-finalist-registry **commitment**: the exact parent-union policy, four
-representation endpoint IDs, screening seed, and selector rules, but not the
-as-yet-unknown selected checkpoint hashes. The later finalist lock binds the
-realized registry/checkpoint hashes back to this commitment. Both the parent
-evaluator and the representation evaluator must be
-upgraded to a shared-claim contract and use exclusive creation in this
-namespace. The parent v1 root-local evaluator is forbidden after reservation:
-it neither sees nor honors the shared lock. At execution, the authorized
-combined evaluator exclusively creates the one split-scoped execution claim;
-every other evaluator fails before opening final-test branches.
-
-`validation_only_parent_claim_consumed` is mandatory if a parent claim,
-model-derived final output, un-cancellable legacy final worker, or ambiguous
-external state already exists. Its immutable task registry contains no final
-lock, final evaluation, or final aggregate task. This disposition is decided
-at spec creation, not by an `if` statement late in the DAG.
+`validation_only_parent_claim_consumed` is mandatory if a prior claim/output,
+un-cancellable worker, overlap, or ambiguous external state exists. Its
+immutable task registry contains no population claim, selection, assignment,
+prediction, metric join, or final aggregate task. Disposition is decided at
+spec creation, never by a late DAG `if`.
 
 ### 25.2 Exact combined finalist registry
 
-The combined registry is the union of the complete parent finalist registry
-and the new representation endpoints. It cannot drop parent-selected
-intermediate nodes or null controls merely to shorten this plan. Concretely it
-contains:
+After validation/confirmation, the combined registry is the union of the
+complete parent finalist registry and the new representation endpoints. It
+cannot drop parent-selected intermediates or null controls merely to shorten
+this plan. It contains:
 
 - every deployable checkpoint and nondeployable oracle/control named by the
   parent confirmation/finalist policy, including M0, logit M6 cold/warm,
@@ -1955,34 +2116,132 @@ contains:
 - the screening-seed (`1337`) selected checkpoints for RSET M6 cold/warm and
   RREL M6 cold/warm.
 
-The 20 seed-`11/22/33/44/55` representation confirmation runs estimate
-conditional variance and are not finalist candidates. No best-seed selection
-is performed. The four M5 mechanism controls are validation-only and are not
-finalists. A different endpoint/seed policy requires a new combined registry
-before any final access.
+The 20 seed-`11/22/33/44/55` representation confirmations estimate conditional
+terminal variance and are not finalists. No best-seed selection is performed.
+The four M5 controls are validation-only. A different endpoint/seed policy
+requires a new reservation on a genuinely untouched disjoint population.
 
-The combined finalist lock binds both campaign hashes, the full union registry,
-rows, assignments, recipes, loss/architecture attestations, source,
-checkpoints, extraction reports, shared reservation, and proof that the parent
-standalone final wave is disabled. All six deployable M6 endpoints are
-predeclared estimands inside the larger parent-union final wave; the evaluator
-does not pick only the most attractive representation strategy after test.
+`HCWDL_REPRESENTATION_FINALIST_LOCK/v1` binds both campaign hashes, full union
+registry, recipes, loss/architecture attestations, source/split/full-population
+hashes, selection-rule and assignment-spec commitments, every checkpoint and
+extraction report, shared reservation, and legacy-cancellation proof. It does
+**not** pretend that selected final rows or final assignments exist yet. Those
+are authenticated after the shared claim in Section 25.3. All six deployable
+M6 endpoints are predeclared estimands inside the larger parent-union wave.
 
-Every deployable finalist loads only its extracted HLT backbone and the common
-HLT view. Separately declared D100/TOFF nondeployable diagnostics may open
-their exact parent-authorized final domains inside the same one claim; they
-never teach a student. No final task builds, loads, or joins a representation
-target bank. Prediction shards/manifest are label-free until the locked metric
-join and are bound by the contracts in Section 21.
+### 25.3 Shared claim, exact task registry, and recovery
 
-### 25.3 If the parent claim has already executed
+Freeze `HCWDL_SHARED_FINAL_TASK_REGISTRY/v1` and its submission ledger before
+any final branch opens. It enumerates every logical/array row, purpose,
+authorized branch family, source partition, finalist/checkpoint, output path,
+resource signature, and dependency in this exact graph:
+
+```text
+shared_claim_gate
+  -> final_row_selection_and_label_escrow
+  -> final_assignment_shards[]
+  -> final_assignment_manifest_and_audit
+  -> final_data_attestation
+  -> combined_execution_lock
+  -> label_free_prediction_shards[finalist, source]
+  -> prediction_manifest[finalist]
+  -> locked_metric_join
+  -> final_aggregate
+```
+
+The selection task preserves the parent's frozen class-stratified rule (100k
+rows in pilot); assignment uses the frozen Shell-Exact matcher and publishes
+the complete selected-role shard/manifest/audit artifacts required by D100.
+`HCWDL_SHARED_FINAL_DATA_ATTESTATION/v1` binds realized selection and assignment
+hashes to the population, claim, precommitted rules, exact row/class/source
+counts, and final task registry. The subsequent
+`HCWDL_REPRESENTATION_EXECUTION_LOCK/v1` binds that attestation, the finalist
+lock, shared claim, and exact prediction/metric registry before any prediction
+begins; it does not retroactively authorize selection or assignment.
+
+The coordinator atomically creates
+`HCWDL_SHARED_FINAL_EXECUTION_CLAIM/v1` after the finalist lock/task registry
+exist and before selection. The immutable claim contains population,
+reservation, finalist-lock, task-registry, submission-ledger, source commit,
+and deterministic `claim_owner_id = SHA256(canonical_json({campaign_spec,
+task_registry, finalist_lock}))`. Exclusive creation has exact idempotence: if
+the file already exists with the same owner and every parent hash, the same
+coordinator/recovery validates and reuses it; any difference fails before a
+branch read. Fan-out workers never create claims. They present
+`HCWDL_SHARED_FINAL_ROLE_CAPABILITY/v1` binding the claim, registry, exact task
+row, purpose, and allowed branches to the common final-role reader. Prediction
+and metric rows additionally bind the combined execution-lock hash.
+
+Preemption or task failure does not create another exposure. An immutable
+`HCWDL_SHARED_FINAL_RECOVERY_PLAN/v1` binds the existing claim and registry,
+audits every atomic output, and resubmits only rows whose final output is absent
+(an orphan temporary path is first audited and removed under the ordinary
+atomic-publication contract) under the same owner. A published artifact that
+fails byte/content/parent validation is corruption and fails closed: recovery
+never overwrites it or silently creates a new unregistered attempt. Completed
+shards/manifests are reused only after hash validation. Recovery cannot add
+finalists, source rows, branch families, output paths, attempts, or metric
+computations. A two-process claim race, coordinator crash immediately
+before/after publication, partial prediction wave, same-owner recovery, and a
+corrupt-published-output rejection are mandatory tests.
+
+All final data entry points use one versioned capability gate in a shared
+module; updating only `hcwdl_final.py` is insufficient. The old root-local
+parent evaluator and old `require_role_access(..., {finalist, execution})`
+capability are rejected after reservation. Both parent and representation
+workers must validate the population-scoped claim and exact task row before
+opening any final branch.
+
+### 25.4 Label access, prediction artifacts, and metric join
+
+The parent final-row selection is label-dependent. HCWDL-RKD does not hide
+that access: `final_row_selection_and_label_escrow` is the one registered ROOT
+label read, after the shared claim. It projects only canonical identity,
+baseline-selection fields, and label branches; selects the frozen natural
+class-stratified population; publishes a public identity/count manifest and a
+separately capability-protected `HCWDL_SHARED_FINAL_LABEL_ESCROW/v1` mapping
+selected identity digests to uint8 labels. It loads no particle branches and
+computes no model output.
+
+Assignment tasks read only the required HLT/offline particle and identity
+branches. Prediction tasks use a new reusable label-free final streamer that
+projects identity plus the exact model-input branches only. It exposes three
+explicit, audited paths: `iterate_final_hlt_inputs`,
+`iterate_final_shell_exact_inputs`, and `iterate_final_native_offline_inputs`.
+The HLT/native-offline paths do not call current
+`dataset.py::iterate_model_batches`, because that function unconditionally
+adds `LABEL_BRANCHES` and constructs labels. The Shell-Exact path does not call
+current `pmard_stream.py::iterate_pmard_batches`, because that training stream
+also carries labels; it uses a label-free repair streamer over the already
+claimed identities and authenticated final assignment manifest. Each new path
+has a frozen projected-branch allow-list, resolves only identity digests in the
+claimed row-selection manifest, and emits `(identity_digest, model_inputs)`
+without a label field. A branch-access audit records the ordered ROOT files,
+trees, projected branch names, entries, and capability hash for every shard.
+Instrumented tests make any label-branch request in these paths raise before
+I/O. The existing `iterate_model_batches`, `iterate_pmard_batches`, and
+`evaluate_model` label-joining paths are forbidden for final prediction.
+Deployable finalists load only extracted HLT backbones and the common HLT
+view. D100/TOFF diagnostics use only their predeclared input domains under the
+same claim. No final task builds or loads a representation target bank.
+
+Each `HCWDL_REPRESENTATION_PREDICTION_SHARD/v1` contains only sorted identity
+digests and finite FP32 `[rows,15]` logits--no labels or probabilities. Its
+manifest proves exact disjoint selected-row coverage. The single
+`locked_metric_join` validates all manifests, opens the label escrow (not ROOT
+particle/label branches), joins every identity exactly once, computes the
+frozen softmax/metric set, and publishes one evaluation per registered
+finalist. The prediction execution/metric signatures and resources are frozen
+in Section 27.
+
+### 25.5 If the parent claim has already executed
 
 When disposition is `validation_only_parent_claim_consumed`, the
 representation ascents are validation-only follow-up experiments on this
 split. They cannot share or reopen the old confirmatory claim. A confirmatory
-representation result requires a genuinely untouched holdout, new split/access
-plan, and new shared claim namespace. Code reports this status rather than
-issuing a second execution lock over the same test population.
+representation result requires a genuinely untouched, identity-disjoint
+holdout with a new population/disjointness artifact and reservation. Code
+reports this status rather than issuing a second claim over exposed rows.
 
 ## 26. Failure semantics
 
@@ -2028,11 +2287,31 @@ steps. They request exactly one GH200 and set the Section 16.3 deterministic
 environment before Python imports Torch. Cleanup/merge/lock/report tasks are
 CPU jobs.
 
+Final inference has a separate measured `gpu_final_prediction` class and
+`HCWDL_REPRESENTATION_FINAL_PREDICTION_SPEC/v1`. It freezes one GH200, strict
+checkpoint/architecture/input-domain hashes, model evaluation mode, FP32
+parameters/inputs/forward, autocast disabled, TF32 disabled, deterministic
+algorithms/backend flags, canonical 256-row batches that never cross a source
+partition, final-short-batch behavior, feature/identity streamer hash, and
+FP32 C-order logit output. Softmax is not computed or stored by GPU workers.
+The CPU metric join freezes the source hashes and versions of
+`evaluation.py::softmax`/`classification_metrics`, converts FP32 logits to
+FP64, uses SciPy `logsumexp`, and binds label-escrow/order hashes.
+
 Every allocation is shape-estimated before large arrays are created and must
 stay below 75% of the Slurm memory request after accounting for all concurrent
 arrays. Pilot may request more than 192 GiB when the real miniature justifies
 it; production is expected to use the parent 384-GiB scale or a separately
 measured value. Scientific batching remains effective/microbatch 256/256.
+
+The storage estimator covers target generations, two retained resume states,
+selected/final checkpoints, final selection/label escrow, final assignment
+shards, and every prediction shard simultaneously required by the task DAG.
+Prediction payload bytes are exactly
+`N_selected * N_finalists * (32 + 15 * 4)` before container metadata and
+compression: 32 identity-digest bytes plus 15 FP32 logits per row. Probabilities
+are not duplicated. The estimate also reserves one interrupted-shard
+generation and 25% filesystem headroom.
 
 Arrays are uncapped by default. A measured filesystem or site limit may add a
 recorded operational cap without changing targets or row selection. Training
@@ -2045,7 +2324,10 @@ Walltimes come from a genuine Tigris miniature that measures separately:
 - RSET cold and warm two-update/full-loss probes;
 - RREL cold and warm two-update/full-loss probes;
 - target loading and cleanup;
-- validation, checkpoint publication, and USR1 resume.
+- validation, checkpoint publication, and USR1 resume;
+- label-dependent final selection on a validation-role proxy, Shell-Exact
+  assignment, label-free prediction for every input-domain family, manifest
+  merge, label-escrow metric join, and partial-wave recovery.
 
 No full pilot submission is authorized until those measurements, a storage
 estimate, complete dry run, clean pushed source, and explicit user approval
@@ -2132,7 +2414,11 @@ Add the following focused modules under
 | `hcwdl_representation_targets.py` | target shard construction, manifests, exact joins, RAM materialization, cleanup |
 | `hcwdl_representation_training.py` | model/head initialization, one-time predecessor logits, 60-pass engine adapter, resume, extraction |
 | `hcwdl_representation_reporting.py` | per-node reports, paired deltas, screen/confirmation/final aggregate |
-| `hcwdl_representation_locks.py` | parent import, screen, finalist, execution, cleanup, and final lock validation |
+| `hcwdl_paired_bootstrap.py` | exact 15-class paired resampling, metric/delta vectors, interval artifact |
+| `hcwdl_shared_final.py` | neutral population registrar/exposure ledger, reservation, claim, task capabilities, idempotent recovery; mandatory for parent and representation evaluators |
+| `hcwdl_final_stream.py` | label-only selection/escrow, three label-free inference loaders, projected-branch audits, locked label join |
+| `hcwdl_representation_final.py` | complete parent-union finalist registry, final assignment/data attestation, prediction manifests, combined aggregate |
+| `hcwdl_representation_locks.py` | parent import, screen, finalist, representation execution and cleanup validation; delegates shared final access to `hcwdl_shared_final.py` |
 | `hcwdl_representation_workflow.py` | task dispatcher and prerequisite/output validation |
 | `hcwdl_representation_campaign.py` | immutable campaign spec, command plan, Slurm resources and dependency graph |
 | `hcwdl_representation_recovery.py` | monitor classification, exact task resumption, target-bank reconstruction rules |
@@ -2148,10 +2434,14 @@ The implementation should reuse:
 - `hcwdl_ladder.py` for the authenticated parent nodes/domains;
 - `hcwdl_recipe.py` for exact parent weights, temperatures, LR, batching, and
   schedule;
-- `dataset.py::iterate_model_batches` for actual HLT/native-offline decoding;
-- `pmard_stream.py::iterate_pmard_batches` for actual repaired-D stream
-  construction, with the new training-only token-ID/family auxiliary channel
-  propagated through the same trim/permutation;
+- `dataset.py::iterate_model_batches` for train/validation HLT/native-offline
+  decoding only; final prediction must use the separate label-free functions in
+  `hcwdl_final_stream.py` and may reuse lower-level feature decoders only after
+  their projected-branch allow-list is explicit;
+- `pmard_stream.py::iterate_pmard_batches` for train/validation repaired-D
+  stream construction, with the new training-only token-ID/family auxiliary
+  channel propagated through the same trim/permutation; the D100 final oracle
+  must use the separate label-free Shell-Exact streamer;
 - `view_cache.py::EphemeralPmardViewCache` for the production process-local RAM
   replay pattern, extended or replaced under a new contract because its current
   payload does not preserve the required auxiliary token metadata;
@@ -2170,9 +2460,10 @@ The implementation should reuse:
 - `loaders.py` strict checkpoint/model-factory validation patterns;
 - `hcwdl_runner.py` as a map of the current concrete HCWDL assembly, not as a
   representation-training entry point;
-- `hcwdl_final.py` only after versioning it to resolve and atomically honor the
-  split-scoped shared reservation/claim in Section 25; its current root-local
-  `execution_claim.json` behavior is explicitly incompatible;
+- `hcwdl_final.py` only after versioning it to delegate **all** final-role access
+  to `hcwdl_shared_final.py` and its label-free stream/join surfaces; its current
+  root-local `execution_claim.json` and label-joining evaluator are explicitly
+  incompatible;
 - `hcwdl_authorization.py` and `hcwdl_resources.py` authorization/resource
   patterns.
 
@@ -2304,7 +2595,8 @@ For each logical bank:
 3. load the selected teacher checkpoint strictly and set evaluation mode;
 4. open only projected branches needed for that teacher view;
 5. stream each selected train identity exactly once in canonical source/entry
-   order using the signature's per-source 256-row batch partition;
+   order using the pre-build forward spec's per-source 256-row batch
+   partition;
 6. perform one deterministic FP32 teacher surface forward per canonical batch
    with every backend/precision flag in the signature enforced;
 7. calculate token and relation sketches immediately, then discard token
@@ -2314,8 +2606,9 @@ For each logical bank:
    and shard-parent conservation succeeds;
 10. release teacher, view buffers, and construction scratch.
 
-Before a recovery publication, step 6 first replays the signature's sentinel
-batches and must reproduce their prior logical hashes. The finished generation
+Before a recovery publication, step 6 first replays the prior execution
+attestation's sentinel batches under the unchanged forward spec and must
+reproduce their prior logical hashes. The finished generation
 must then reproduce the complete prior `logical_target_sha256`; sentinel
 agreement alone is necessary but not sufficient.
 
@@ -2368,18 +2661,22 @@ payloads do not.
 Recovery is a generation-aware state machine with these exhaustive states:
 
 ```text
-COMPLETE_SHARDS       -> validate and resume registered consumers
-AUTHORIZED_CLEANUP    -> build a new generation for unfinished consumers only
-INCOMPLETE_NO_CLEANUP -> corruption; fail closed
-ABANDONED_AUTHORIZED  -> retain audit state; no scientific-complete cleanup
+COMPLETE_SHARDS_NO_AUTH        -> validate and resume registered consumers
+CLEANUP_AUTHORIZED_IN_PROGRESS -> idempotently finish exact deletion, attest
+CLEANUP_COMPLETED              -> rebuild new generation if consumers remain
+INCOMPLETE_NO_AUTHORIZATION    -> corruption; fail closed
+ABANDONED_AUTHORIZED           -> finish only its separately authorized purge
 ```
 
-The recovery plan names incomplete or newly authorized consumer rows explicitly
-and creates a new consumer registry. It cannot transitively retry already
-completed descendants,
-cannot write into the old generation directory, and cannot infer state from
-Slurm job names. The recovery generation is cleaned only after every consumer
-in its smaller registry publishes an authenticated complete report.
+State precedence is content-based: a valid completion wins; otherwise a valid
+authorization plus manifest defines in-progress cleanup; otherwise every shard
+must validate or the generation is corrupt. The recovery plan names incomplete
+or newly authorized consumer rows explicitly and creates a new consumer
+registry. It cannot transitively retry already completed descendants, cannot
+write into the old generation directory, and cannot infer state from Slurm job
+names. The recovery generation is cleaned only after every consumer in its
+smaller registry publishes an authenticated complete report and its own cleanup
+authorization exists.
 
 The campaign-spec builder computes pilot and production peak durable bytes
 from exact selected rows and schemas. It refuses a configured target-storage
@@ -2398,10 +2695,21 @@ scripts/build_hcwdl_representation_targets.py
 scripts/train_hcwdl_representation_node.py
 scripts/select_hcwdl_representation_checkpoint.py
 scripts/extract_hcwdl_representation_model.py
-scripts/build_hcwdl_representation_cleanup.py
+scripts/authorize_hcwdl_representation_cleanup.py
+scripts/complete_hcwdl_representation_cleanup.py
 scripts/aggregate_hcwdl_representation_screen.py
 scripts/build_hcwdl_representation_confirmation_registry.py
-scripts/evaluate_hcwdl_representation_final.py
+scripts/register_hcwdl_shared_final_population.py
+scripts/claim_hcwdl_shared_final_execution.py
+scripts/build_hcwdl_shared_final_selection.py
+scripts/build_hcwdl_shared_final_assignment_shard.py
+scripts/finalize_hcwdl_shared_final_assignments.py
+scripts/build_hcwdl_shared_final_data_attestation.py
+scripts/build_hcwdl_representation_execution_lock.py
+scripts/predict_hcwdl_shared_final_shard.py
+scripts/finalize_hcwdl_shared_final_predictions.py
+scripts/join_hcwdl_shared_final_metrics.py
+scripts/recover_hcwdl_shared_final.py
 scripts/create_hcwdl_representation_campaign.py
 scripts/dry_run_hcwdl_representation_campaign.py
 scripts/submit_hcwdl_representation_campaign.py
@@ -2419,26 +2727,30 @@ temperatures, rows, seeds, or teachers.
 
 ### 30.2 Slurm worker
 
-Add one thin worker:
+Add two thin workers:
 
 ```text
 sbatch/run_hcwdl_representation_task.sh
+sbatch/run_hcwdl_representation_deterministic_task.sh
 ```
 
-It validates `PROJECT_DIR`, activates the declared Conda environment, sets
-`PYTHONNOUSERSITE=1`, prepends `${CONDA_PREFIX}/lib` to `LD_LIBRARY_PATH`, and
-sets `CUBLAS_WORKSPACE_CONFIG=:4096:8` before Python/CUDA initialization. The
-Python task dispatcher enforces the remaining target-builder flags only for
-target-generation tasks. The shell
-ends with:
+Both validate `PROJECT_DIR`, activate the declared Conda environment, set
+`PYTHONNOUSERSITE=1`, and prepend `${CONDA_PREFIX}/lib` to `LD_LIBRARY_PATH`.
+The ordinary worker handles training/report/lock tasks and deliberately leaves
+the parent training CUDA environment unchanged. The deterministic worker is
+registered only for target-generation and final-prediction task kinds, sets
+`CUBLAS_WORKSPACE_CONFIG=:4096:8` before Python/CUDA initialization, and refuses
+any other task. The Python dispatcher validates the corresponding immutable
+task kind and remaining precision/backend flags. Both end with:
 
 ```bash
 exec python -s "${PROJECT_DIR}/scripts/run_hcwdl_representation_task.py" ...
 ```
 
-It contains no relative repository imports and no scientific defaults. A
-shell regression verifies the final `exec`, environment isolation, absolute
-helper paths, and quoted arguments.
+Neither contains relative repository imports or scientific defaults. Shell
+regressions verify the final `exec`, environment isolation, absolute helper
+paths, quoted arguments, deterministic-task allow list, and absence of the
+CUBLAS override in paired training jobs.
 
 ### 30.3 Dry run and submission rules
 
@@ -2521,43 +2833,79 @@ campaign root:
     <node_id>/<seed>/...
   cleanup/
     <logical_bank>/
-      <generation_id>.json
+      <generation_id>/
+        authorization.json
+        completion.json
   locks/
     01_parent_import.json
     02_miniature_accepted.json
     03_screen_complete.json
     04_confirmation_frozen.json
     05_finalists.json
-    06_execution.json
+    06_final_data_attestation.json
+    07_execution.json
   reports/
     screen_aggregate.json
     confirmation_aggregate.json
     final_aggregate.json
   final/
+    task_registry.json
+    prediction_spec.json
+    recovery/
+      <recovery_id>.json
+    selection/
+      row_selection.json
+      label_escrow.npz
+      label_escrow.json
+      branch_access.json
+    assignment/
+      shards/
+        <source_partition>.npz
+        <source_partition>.json
+      manifest.json
+      audit.json
     predictions/
       <finalist_id>/
         <source_partition>.npz
         <source_partition>.json
+        <source_partition>.branch_access.json
         manifest.json
     evaluations/
       <finalist_id>.json
+    metric_join.json
   monitoring/
     monitor_report.json
 ```
 
-The split-scoped shared reservation and execution claim are deliberately
+The population-scoped shared reservation and execution claim are deliberately
 outside either campaign root:
 
 ```text
-<checkpoint_namespace>/final_claims/<split_selection_identity>/
+<checkpoint_namespace>/final_claims/<final_population_sha256>/
+  population.json
+  population_disjointness.json
+  population_registration.json
   reservation.json
   legacy_cancellation.json        # required when legacy jobs existed
-  execution_claim.json            # created exactly once
+  execution_claim.json            # exclusive, exact-owner idempotent
+
+<checkpoint_namespace>/final_claims/exposure_ledger/
+  registrar.lock                  # operational exclusive-lock inode
+  registrations/<final_population_sha256>.json
+  generations/<sequence>_<content_hash>.json
+  HEAD.json                       # atomic validated pointer, not identity
 ```
 
+The common exposure ledger is also outside campaign roots and indexes every
+population reservation/claim by identity-set hash. Under the registrar lock,
+`HEAD.json` is atomically replaced only after the next immutable generation and
+registration have been fsynced; readers validate the full hash/sequence chain.
+It contains no model prediction or label payload.
+
 Both the versioned parent final worker and the representation worker resolve
-this same path from authenticated split/selection parents. A campaign-local
-lookalike does not satisfy the shared-claim contract.
+this same path from the complete authenticated final-role population, then
+validate the exact task/capability row. A campaign-local lookalike does not
+satisfy the shared-claim contract.
 
 The exact filenames may be constants in the implementation, but they cannot
 depend on timestamps. Campaign identity is a canonical content hash, while
@@ -2613,6 +2961,9 @@ For `RSET` and `RREL`, require:
 - exact token-weight normalization and softened-pT formula;
 - deterministic top-32 selection and tie breaking;
 - relation strata boundary behavior at exactly `0.05` and `0.20`;
+- canonical-JSON UTF-8 seed payload/hash fixtures for token/relation RFF,
+  calibration-row ranking, and shuffle ranking, including first-eight-byte
+  big-endian seed conversion;
 - pair-count/ESS eligibility at exactly 3/4 pairs and immediately below/at
   `ESS=3.0`;
 - independent student/teacher pair populations;
@@ -2629,8 +2980,9 @@ For `RSET` and `RREL`, require:
   BF16 model execution;
 - class-weighted per-jet and geometric-pair reductions;
 - one-row Gram behavior;
-- projection identity initialization, no weight decay, orthogonality, and
-  condition-number failure.
+- projection identity initialization, no weight decay, orthogonality,
+  nonfinite-projection failure, and finite `condition_number > 1e4`
+  report-only continuation.
 
 ### 32.4 Calibration and schedule tests
 
@@ -2641,6 +2993,9 @@ Require exact tests for:
 - jet/set calibration occurs exactly after pass two and before pass three;
 - relation calibration occurs exactly after pass four and before pass five;
 - RNG/trimmer/optimizer state unchanged by calibration;
+- exactly one stochastic student forward per calibration batch supplies base
+  and every component gradient norm, with component support changing only the
+  reduction over those same tensors;
 - preemption immediately before and after either calibration barrier resumes
   without skipping or duplicating calibration;
 - FP64 median calculation and hexadecimal persistence;
@@ -2651,7 +3006,10 @@ Require exact tests for:
 - relation ramp values immediately before, at, and after passes 4 and 8;
 - `rho_repr=0` equality of logits, base loss, shared gradients, optimizer
   update, RNG state, and checkpoint bytes where serialization permits;
-- smoke's explicit full-loss backward probe despite the two-update zero ramp;
+- smoke's explicit real-data path probe plus all-component eligible post-tap
+  fixtures despite the two-update zero ramp; every component must have a finite
+  positive smoke-only scale and nonzero gradient even when production support
+  would mark it inactive;
 - exact 60 validation records and no performance early stopping.
 
 ### 32.5 Target-bank tests
@@ -2678,8 +3036,13 @@ Require:
   cannot clean up after only the four primary nodes;
 - last-consumer cleanup cannot run early and records exact removed bytes;
 - failed/cancelled/timed-out consumers cannot authorize cleanup;
-- missing shard without cleanup is corruption, while authorized-cleanup
-  recovery creates a new generation for unfinished consumers only;
+- cleanup authorization is atomically durable before the first removal;
+  injected process death after every individual deletion and immediately
+  before completion publication resumes the same authorized deletion set and
+  never classifies it as corruption;
+- missing shard without cleanup authorization is corruption, while completed
+  authorized-cleanup recovery creates a new generation for unfinished
+  consumers only;
 - screen and confirmation generations do not collide, and reconstruction after
   preemption produces identical logical targets.
 
@@ -2708,13 +3071,23 @@ Require:
 - ordered pairwise delta tables and undefined gap denominators;
 - five-seed terminal confirmation registry is frozen before execution;
 - mandatory parent report/finalist imports cannot be silently omitted;
+- the new 15-class paired bootstrap produces the frozen 2,000 replicate index
+  hash, uses identical indices across paired models, preserves every class
+  count, and is not routed through incompatible 10-class/unstratified helpers;
 - screening-seed representation endpoints, not confirmation seeds, enter the
   combined finalist registry;
 - prediction shards are label-free, disjoint, complete, and bound before the
   locked label join;
+- HLT, Shell-Exact D100, and native-offline final streamers request only their
+  frozen identity/input branch allow-lists; an instrumented label-branch read
+  fails before I/O, while the selection task is the only ROOT-label reader;
 - a root-local legacy claim cannot satisfy the shared claim, two racing
   evaluators yield exactly one winner, and a validation-only disposition has no
   final tasks;
+- two distinct population hashes with overlapping identities raced through the
+  global registrar yield exactly one exposure-ledger registration/reservation;
+- absent final outputs may resume under the same owner/path, whereas a
+  published corrupt output fails closed and is never overwritten;
 - final aggregate cannot read final test without combined new locks.
 
 ### 32.7 End-to-end acceptance ladder
@@ -2797,7 +3170,7 @@ an array-index accident or environment override.
 ### Block G — reporting and final boundary
 
 Implement paired aggregates, representation diagnostics, immutable final
-disposition, shared split-scoped reservation/legacy cancellation/execution
+disposition, shared population-scoped reservation/legacy cancellation/execution
 claim honored by both evaluator families, complete parent-union finalist
 registry, label-free prediction shards, HLT-only final evaluation, and final
 aggregate.
@@ -2902,7 +3275,7 @@ Implementation is complete only when all of the following are true:
 12. both component controls, both shuffled controls, and zero-coefficient
     parity execute under their versioned registries;
 13. reporting produces every ordered comparison and diagnostic in Section 24;
-14. split-scoped shared final locks prevent racing, premature, or retrospective
+14. population-scoped shared final locks prevent racing, premature, or retrospective
     test access by either evaluator family;
 15. local focused and full tests pass;
 16. a genuine Tigris production-worker miniature, cache miniature, and USR1

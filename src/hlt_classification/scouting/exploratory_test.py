@@ -26,11 +26,10 @@ from .evaluation import classification_metrics
 from .inference import assert_hlt_only_signature
 from .kd_followup import (
     KD_FOLLOWUP_REPORT_CONTRACT, KD_FOLLOWUP_REPORT_VERSION,
-    validate_kd_followup_inputs, validate_kd_followup_spec,
+    validate_kd_followup_spec,
 )
 from .kd_sweep import (
-    validate_t100_sweep_inputs, validate_t100_sweep_report,
-    validate_t100_sweep_spec,
+    validate_t100_sweep_report, validate_t100_sweep_spec,
 )
 from .selective_assignment import (
     RowSelection, build_row_selection, validate_row_selection,
@@ -106,6 +105,53 @@ def _load_reference(
     if digest != reference.get("content_hash"):
         raise ValueError(f"exploratory artifact {name!r} content hash differs")
     return path, payload
+
+
+def _validate_embedded_references(owner: Mapping[str, object]) -> None:
+    """Validate archived references by their frozen contracts and hashes.
+
+    Completed supplemental studies intentionally remain readable after the
+    live campaign registry evolves.  Recomputing an archived campaign's
+    scientific identity with current campaign constants would be incorrect;
+    its immutable bytes and the child study's recorded hash are authoritative.
+    """
+
+    references = owner.get("artifacts")
+    if not isinstance(references, Mapping) or not references:
+        raise ValueError("archived study artifact inventory is absent")
+    for name, reference in references.items():
+        if not isinstance(reference, Mapping):
+            raise ValueError(f"archived reference {name!r} is invalid")
+        path = Path(str(reference.get("path")))
+        payload = load_json(path)
+        contract = payload.get("contract")
+        version = payload.get("schema_version")
+        if not isinstance(contract, str) or not isinstance(version, int):
+            raise ValueError(f"archived reference {name!r} is unversioned")
+        digest = validate_content_hash(
+            payload, expected_contract=contract, expected_schema_version=version,
+        )
+        if digest != reference.get("content_hash"):
+            raise ValueError(f"archived reference {name!r} content hash differs")
+
+
+def _validate_archived_studies(
+    sweep_spec: Mapping[str, object], sweep_report: Mapping[str, object],
+    followup_spec: Mapping[str, object], followup_report: Mapping[str, object],
+) -> None:
+    validate_t100_sweep_spec(sweep_spec)
+    _validate_embedded_references(sweep_spec)
+    validate_t100_sweep_report(sweep_spec, sweep_report)
+    validate_kd_followup_spec(followup_spec)
+    _validate_embedded_references(followup_spec)
+    if (
+        followup_spec["artifacts"]["parent_sweep_spec"]["content_hash"]
+        != sweep_spec["content_hash"]
+        or followup_spec["artifacts"]["parent_sweep_report"]["content_hash"]
+        != sweep_report["content_hash"]
+    ):
+        raise ValueError("follow-up is not a child of the supplied T100 sweep")
+    _validate_followup_report(followup_spec, followup_report)
 
 
 def _compact_validation(metrics: Mapping[str, object]) -> dict[str, object]:
@@ -272,19 +318,9 @@ def create_exploratory_test_spec(
     follow_spec = load_json(follow_spec_path)
     sweep_report = load_json(sweep_report_path)
     follow_report = load_json(follow_report_path)
-    validate_t100_sweep_spec(sweep_spec)
-    validate_t100_sweep_inputs(sweep_spec)
-    validate_t100_sweep_report(sweep_spec, sweep_report)
-    validate_kd_followup_spec(follow_spec)
-    validate_kd_followup_inputs(follow_spec)
-    if (
-        follow_spec["artifacts"]["parent_sweep_spec"]["content_hash"]
-        != sweep_spec["content_hash"]
-        or follow_spec["artifacts"]["parent_sweep_report"]["content_hash"]
-        != sweep_report["content_hash"]
-    ):
-        raise ValueError("follow-up is not a child of the supplied T100 sweep")
-    _validate_followup_report(follow_spec, follow_report)
+    _validate_archived_studies(
+        sweep_spec, sweep_report, follow_spec, follow_report,
+    )
 
     registry = _build_registry(
         sweep_spec, sweep_report, follow_spec, follow_report,
@@ -421,20 +457,9 @@ def validate_exploratory_test_inputs(spec: Mapping[str, object]) -> dict[str, ob
     _, follow_spec = _load_reference(spec, "followup_spec")
     _, follow_report = _load_reference(spec, "followup_report")
     split_path, split_manifest = _load_reference(spec, "split_manifest")
-    validate_t100_sweep_spec(sweep_spec)
-    validate_t100_sweep_inputs(sweep_spec)
-    validate_t100_sweep_report(sweep_spec, sweep_report)
-    validate_kd_followup_spec(follow_spec)
-    validate_kd_followup_inputs(follow_spec)
-    _validate_followup_report(follow_spec, follow_report)
-    if (
-        follow_spec["artifacts"]["parent_sweep_spec"]["content_hash"]
-        != sweep_spec["content_hash"]
-        or follow_spec["artifacts"]["parent_sweep_report"]["content_hash"]
-        != sweep_report["content_hash"]
-        or follow_report.get("followup_spec_sha256") != follow_spec["content_hash"]
-    ):
-        raise ValueError("exploratory parent lineage differs")
+    _validate_archived_studies(
+        sweep_spec, sweep_report, follow_spec, follow_report,
+    )
     expected_registry = _build_registry(
         sweep_spec, sweep_report, follow_spec, follow_report,
     )
