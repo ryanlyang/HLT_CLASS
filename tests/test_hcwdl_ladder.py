@@ -6,12 +6,13 @@ import numpy as np
 import pytest
 import torch
 
-from hlt_classification.data.cache_contracts import load_json, sha256_file
+from hlt_classification.data.cache_contracts import load_json, sha256_file, with_content_hash
 from hlt_classification.scouting.hcwdl_ladder import (
     GRAPH_SHA256, NODE_REGISTRY, validate_ladder_graph,
 )
 from hlt_classification.scouting.hcwdl_recipe import (
-    PRIMARY_DUAL_TEACHER_DECISION, build_recipe, example_recipe, validate_recipe,
+    PRIMARY_DUAL_TEACHER_DECISION, PRIMARY_RECIPE_DECISION, build_recipe,
+    example_recipe, validate_recipe, validate_recipe_class_weight_lineage,
 )
 from hlt_classification.scouting.hcwdl_training import (
     initialize_node_model, node_training_config, select_checkpoint, train_hcwdl_node,
@@ -20,6 +21,9 @@ from hlt_classification.scouting.engine import (
     PmardTrainingConfig, PmardTrainingInterrupted, train_pmard,
 )
 from hlt_classification.scouting.inputs import ParticleInputs
+from hlt_classification.scouting.selective_assignment import (
+    ROW_SELECTION_CONTRACT, ROW_SELECTION_VERSION,
+)
 from hlt_classification.scouting.training import LossConfiguration
 
 
@@ -72,16 +76,20 @@ def test_node_configs_are_sixty_passes_every_pass_validation_and_exact_losses() 
         "M2w", recipe, train_rows=17, replicate_seed=9,
         require_authorized_recipe=False,
     )
-    assert root.validation_interval == 3 and root.total_updates == 180
+    assert root.validation_interval == 1 and root.total_updates == 60
     assert root.loss.ce == 1 and root.loss.hlt_kd == root.loss.privileged_kd == 0
     assert single.loss.privileged_kd == .75 and single.loss.hlt_kd == 0
     assert bottom.loss.hlt_kd == .75 and bottom.loss.privileged_kd == 0
+    assert single.loss.privileged_temperature == 2
+    assert bottom.loss.temperature == 1
     assert (dual.loss.ce, dual.loss.hlt_kd, dual.loss.privileged_kd) == (.25, .4, .35)
     assert dual.peak_learning_rate == 3e-4
+    assert dual.loss.temperature == 1
     assert dual.loss.privileged_temperature == 2
     assert dual.model_input == "hlt" and dual.selection_policy == "hcwdl_macro_auc"
-    assert (dual.microbatch_size, dual.gradient_accumulation) == (4, 2)
+    assert (dual.microbatch_size, dual.gradient_accumulation) == (256, 1)
     assert dual.adam_epsilon == 1e-8
+    assert root.peak_learning_rate == single.peak_learning_rate == 3e-4
 
 
 def test_microbatch_accumulation_matches_one_full_effective_batch(tmp_path: Path) -> None:
@@ -251,6 +259,8 @@ def test_primary_recipe_decision_is_locked_but_ablation_profile_remains_availabl
         "predecessor_kd": PRIMARY_DUAL_TEACHER_DECISION["predecessor_kd"],
         "privileged_kd": PRIMARY_DUAL_TEACHER_DECISION["privileged_kd"],
     }
+    for name, expected in PRIMARY_RECIPE_DECISION.items():
+        assert primary[name] == expected
     changed = dict(payload)
     changed["dual_teacher_coefficients"] = {
         "ce": 0.15, "predecessor_kd": 0.50, "privileged_kd": 0.35,
@@ -260,3 +270,53 @@ def test_primary_recipe_decision_is_locked_but_ablation_profile_remains_availabl
     changed["recipe_profile"] = "registered_ablation"
     changed["purpose"] = "registered_lower_ce_ablation"
     validate_recipe(build_recipe(changed, authorized=True))
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    (
+        ("single_teacher_coefficients", {"ce": .5, "teacher_kd": .5}),
+        ("single_privileged_temperature", 1.0),
+        ("predecessor_temperature", 2.0),
+        ("batching", {"microbatch_size": 128, "gradient_accumulation": 2,
+                      "effective_batch_size": 256}),
+    ),
+)
+def test_primary_recipe_rejects_drift_outside_dual_decision(field, replacement) -> None:
+    raw = example_recipe()
+    payload = {
+        key: value for key, value in raw.items()
+        if key not in {"contract", "schema_version", "authorized_for_execution", "content_hash"}
+    }
+    payload["recipe_profile"] = "primary_ladder"
+    payload["purpose"] = "hcwdl_primary_ladder"
+    payload[field] = replacement
+    with pytest.raises(ValueError, match="primary HCWDL complete recipe decision differs"):
+        build_recipe(payload, authorized=True)
+
+
+def test_recipe_class_weights_are_exactly_bound_to_train_selection() -> None:
+    recipe = example_recipe()
+    selection = with_content_hash({
+        "contract": ROW_SELECTION_CONTRACT,
+        "schema_version": ROW_SELECTION_VERSION,
+        "roles": {"train": {"class_counts": [1] * 15}},
+    })
+    recipe_payload = {
+        key: value for key, value in recipe.items()
+        if key not in {"contract", "schema_version", "authorized_for_execution", "content_hash"}
+    }
+    recipe_payload["class_weighting"] = {
+        **recipe_payload["class_weighting"],
+        "train_row_selection_sha256": selection["content_hash"],
+    }
+    recipe = build_recipe(recipe_payload, authorized=False)
+    validate_recipe_class_weight_lineage(recipe, selection)
+    selection["roles"]["train"]["class_counts"][0] = 2
+    with pytest.raises(ValueError, match="content hash"):
+        validate_recipe_class_weight_lineage(recipe, selection)
+    changed_selection = with_content_hash({
+        key: value for key, value in selection.items() if key != "content_hash"
+    })
+    with pytest.raises(ValueError, match="different row-selection lineage"):
+        validate_recipe_class_weight_lineage(recipe, changed_selection)

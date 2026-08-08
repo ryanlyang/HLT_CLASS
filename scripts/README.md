@@ -202,3 +202,7 @@ claiming measurement; pilot/production candidates require measured profiles.
 Recreate the live spec with the same root,
 recipe, profile, and authorization. Any command-path, resource, task, or
 lineage difference fails closed.
+An authorized `HCWDL_RECIPE/v3` is built with `--train-row-selection`; the
+builder derives the exact square-root inverse-frequency weights from that
+artifact and binds both its hash and its 15 train counts. The campaign's
+deterministic row-selection task must reproduce those exact immutable bytes.

@@ -479,13 +479,13 @@ No per-update model checkpoint is published.
 ## 10. Optimization recipe lock
 
 The registered PMARD KD follow-up `pmard_kd_followup_b8a493547de8bd7e`
-resolved the primary dual-teacher decision. A versioned `HCWDL_RECIPE/v2`
+resolved the primary dual-teacher decision. A versioned `HCWDL_RECIPE/v3`
 lock must exist before endpoint or ladder training. It binds:
 
 - effective batch size and accumulation;
 - cold and warm peak learning rates;
 - warmup passes/fraction, minimum LR, cosine policy, weight decay;
-- single-teacher CE/KD coefficients and temperature;
+- single-teacher CE/KD coefficients and domain-routed HLT/privileged temperatures;
 - dual-teacher CE/predecessor/privileged coefficients and independent
   temperatures;
 - class weights, AMP dtype, seed domains, and 60-pass budget;
@@ -499,11 +499,22 @@ achieved CE `0.667893`, accuracy `0.790030`, and AUC `0.938643`; its 60-pass
 counterpart remained competitive and improved rejection. The 60-pass maximum
 therefore remains fixed while selection may choose an earlier checkpoint.
 
+The complete primary recipe is now fixed: sole privileged teachers use 25% CE
+plus 75% KD at temperature two; the sole HLT D0 teacher for M1 uses the same
+coefficients at temperature one; HLT predecessors in dual-teacher nodes use
+temperature one. Every primary peak learning rate is `3e-4`; effective and
+microbatch size are both 256 with no accumulation; AdamW uses betas
+`(0.9, 0.999)`, epsilon `1e-8`, weight decay `0.01`, and no gradient clipping;
+the schedule is five-percent warmup followed by cosine decay to five percent
+of peak. Coefficients remain constant. BF16 model execution, FP32 loss math,
+the square-root inverse-frequency class-weight rule, and the label-only warm
+confirmation control are mandatory.
+
 This is an enforced `primary_ladder` recipe profile, not an implicit default.
-A lower-CE or stronger-privilege experiment must declare a separate
-`registered_ablation` recipe and campaign identity. Single-teacher settings,
-predecessor temperature, schedule fractions, batching, and non-dual learning
-rates remain evidence-bound inputs. Missing or placeholder values fail closed.
+A lower-CE, stronger-privilege, different-temperature, reduced-warm-LR, or
+accumulated-microbatch experiment must declare a separate
+`registered_ablation` recipe and campaign identity. Missing or placeholder
+values fail closed.
 
 ## 11. Teacher-target and view reuse
 
@@ -857,16 +868,15 @@ publication is prohibited.
 
 ## 24. Recipe as a hard execution boundary
 
-### 24.1 Values deliberately unknown today
+### 24.1 Values resolved for the primary pilot
 
-The primary dual-teacher coefficients, privileged temperature, dual-teacher
-peak learning rate, duration, validation cadence, and checkpoint selector are
-resolved below. Single-teacher coefficients/temperature, predecessor
-temperature, non-dual learning rates, schedule shape, batching, and warm-start
-optimization remain scientifically unresolved. Launch code rejects every
-placeholder.
+The complete primary optimization recipe is resolved below. Operational RAM,
+walltime, and storage requests remain subject to the genuine Tigris miniature,
+but they cannot change scientific batching, optimization, temperatures, loss
+weights, duration, validation cadence, or checkpoint selection. Launch code
+rejects every placeholder.
 
-### 24.2 Required `HCWDL_RECIPE/v2` contents
+### 24.2 Required `HCWDL_RECIPE/v3` contents
 
 The immutable recipe binds:
 
@@ -874,7 +884,7 @@ The immutable recipe binds:
 - separate cold-root, cold-child, and warm-child peak learning rates;
 - optimizer, betas, epsilon, weight decay, and gradient clipping;
 - warmup length, minimum LR, schedule function, and pass landmarks;
-- single-teacher CE/KD coefficients and temperature;
+- single-teacher CE/KD coefficients and domain-routed HLT/privileged temperatures;
 - dual-teacher CE/predecessor/privileged coefficients and two temperatures;
 - constant or fully specified scheduled coefficient behavior;
 - class weights and their authenticated train-count parents;
@@ -888,23 +898,31 @@ tolerance. Temperatures and learning rates are finite and positive. A locked
 recipe contains no `null`, `TBD`, fallback, environment override, or implicit
 default.
 
-### 24.3 Locked primary dual-teacher decision
+### 24.3 Locked complete primary recipe
 
 ```text
 single teacher:  CE 0.25, KD 0.75
 dual teacher:    CE 0.25, predecessor KD 0.40, privileged KD 0.35
+single privileged temperature: 2
+single HLT temperature:         1
 predecessor temperature: 1
 privileged temperature:  2
 dual-teacher peak LR:     3e-4
+all other peak LRs:       3e-4
+effective/microbatch:     256/256 with accumulation 1
+AdamW:                    betas 0.9/0.999, eps 1e-8, decay 0.01, no clipping
+schedule:                 5% warmup, cosine to 5% of peak
+class weights:            sqrt inverse authenticated train frequency
 maximum passes:           60
 validation:               every pass
 checkpoint selector:      macro AUC, CE, log rejection, earliest
 ```
 
-The dual-teacher row is the primary ladder decision. The single-teacher and
-predecessor-temperature lines remain hypotheses until their distinct evidence
-is locked. Less CE, another temperature, or another dual-teacher mixture is a
-registered ablation rather than an in-place modification of the primary.
+For a single-teacher node, runtime selects temperature by teacher domain:
+privileged D teachers use two, while D0 teaching HLT-only M1 uses the HLT
+predecessor temperature one. Less CE, another temperature, a reduced warm LR,
+or another teacher mixture is a registered ablation rather than an in-place
+modification of the primary.
 
 ### 24.4 Recipe resolution
 
@@ -1453,7 +1471,7 @@ Implementation introduces separately versioned contracts for:
 - `HIGHCOV_DENSE_ASSIGNMENT_SHARD/v1`;
 - `HIGHCOV_DENSE_ASSIGNMENT_MANIFEST/v1` and authorization lock;
 - `HIGHCOV_REPAIR/v1`;
-- `HCWDL_RECIPE/v2` and recipe lock;
+- `HCWDL_RECIPE/v3` and recipe lock;
 - `HCWDL_NODE_SPEC/v1` and graph registry;
 - `HCWDL_TRAINING_REPORT/v1`, checkpoint selection, and resume;
 - `HCWDL_CAMPAIGN_SPEC/v2`, `HCWDL_COMMAND_PLAN/v1`, submission ledger,
@@ -1657,18 +1675,14 @@ Files existing without those behaviors do not satisfy this plan.
 
 | Value | Resolution evidence | Must be frozen before |
 |---|---|---|
-| non-dual cold peak LR | longer-schedule CE/KD sweeps | recipe lock |
-| warm peak LR | warm-continuation miniature or sweep | recipe lock |
-| warmup/minimum LR | schedule sweep and stability report | recipe lock |
-| single-teacher weights | T100 weight/temperature/pass sweep | recipe lock |
-| single/predecessor temperatures | registered temperature evidence | recipe lock |
-| effective batch/accumulation | throughput and convergence evidence | recipe lock |
 | pilot/production RAM and time | genuine Tigris miniature | live submission |
 | production tracks/seeds | pilot results and resource report | production spec |
 
-The following are fixed, not unresolved: primary dual-teacher CE/predecessor/
-privileged weights `0.25/0.40/0.35`; privileged temperature `2`;
-dual-teacher peak LR `3e-4`; Shell Exact v1; domains
+The following are fixed, not unresolved: single-teacher CE/KD `0.25/0.75`;
+primary dual-teacher CE/predecessor/privileged weights `0.25/0.40/0.35`;
+privileged and HLT temperatures `2/1`; every peak LR `3e-4`; effective and
+microbatch 256 with accumulation one; the five-percent warmup/cosine/five-percent
+minimum schedule; AdamW betas/epsilon/decay and disabled clipping; Shell Exact v1; domains
 0/0.25/0.50/0.75/1; complete cold and warm pilot ladders; 60 passes per
 pilot/production primary node; validation every pass; macro-AUC-first checkpoint
 selection; one-time matching; 300k/100k/100k pilot roles; and HLT-only

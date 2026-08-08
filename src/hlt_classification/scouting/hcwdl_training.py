@@ -66,7 +66,11 @@ def _loss_for_node(node: NodeSpec, recipe: Mapping[str, Any]) -> LossConfigurati
         teacher = node.teachers[0]
         hlt = float(coefficient["teacher_kd"]) if teacher.domain == "hlt" else 0.0
         privileged = float(coefficient["teacher_kd"]) if teacher.domain != "hlt" else 0.0
-        temperature = float(recipe["single_teacher_temperature"])
+        temperature = float(
+            recipe["predecessor_temperature"]
+            if teacher.domain == "hlt"
+            else recipe["single_privileged_temperature"]
+        )
         return LossConfiguration.for_mixture(
             arm=f"HCWDL_{node.node_id}_SINGLE", ce=float(coefficient["ce"]),
             hlt_kd=hlt, privileged_kd=privileged,

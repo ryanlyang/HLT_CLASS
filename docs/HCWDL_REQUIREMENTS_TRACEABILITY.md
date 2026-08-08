@@ -50,7 +50,7 @@ by any status in this ledger.
 | One-time RAM views and FP32 logit targets with deterministic identity joins | `hcwdl_views.py` | ephemeral cache/target v1 | construction-count, order, missing/duplicate tests | Local passed |
 | Sixty pilot/production passes, validation every pass, natural rows, final partial batch | `hcwdl_training.py` | recipe/report v1 | pass-boundary integration tests | Local passed |
 | Macro-AUC/CE/log-rejection/earliest checkpoint order and exact resume lineage | `hcwdl_training.py` | selection/report/resume v1 | tie and interrupted-equivalence tests | Local passed |
-| Versioned primary/ablation recipe boundary and evidence builder | `hcwdl_recipe.py` | `HCWDL_RECIPE/v2` | primary-decision, profile, placeholder, tamper, and evidence tests | Local passed |
+| Versioned primary/ablation recipe boundary and evidence builder | `hcwdl_recipe.py` | `HCWDL_RECIPE/v3` | complete primary decision, role-aware temperature, class-weight lineage, profile, placeholder, tamper, and evidence tests | Local passed |
 
 ## Block 5: orchestration, locks, reporting, and recovery
 
@@ -85,7 +85,7 @@ remote, or modify ROOT data. The final locally attainable status is:
 
 ## Local closure evidence
 
-- Complete repository suite: 293 passed with 14 pre-existing
+- Complete repository suite: 299 passed with 14 pre-existing
   Matplotlib/Pyparsing deprecation warnings.
 - All 51 HCWDL/high-coverage Python surfaces compile; every one of the 25 thin
   CLI surfaces has a passing help test; the Slurm worker invariants pass.

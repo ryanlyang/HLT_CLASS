@@ -18,7 +18,7 @@ from .dataset import iterate_model_batches
 from .engine import precompute_teacher_targets
 from .engine import PmardTrainingConfig, train_pmard
 from .hcwdl_ladder import DOMAINS, NODE_REGISTRY
-from .hcwdl_recipe import validate_recipe
+from .hcwdl_recipe import validate_recipe, validate_recipe_class_weight_lineage
 from .hcwdl_training import train_hcwdl_node
 from .highcov_cache import DenseAssignmentStore
 from .loaders import load_pmard_model, scouting_model_factory_for_report
@@ -52,6 +52,7 @@ def run_node(
     node = NODE_REGISTRY[node_id]
     recipe = load_json(recipe_path); validate_recipe(recipe, require_authorized=True)
     split = load_json(split_manifest_path); selection_raw = load_json(selection_manifest_path)
+    validate_recipe_class_weight_lineage(recipe, selection_raw)
     selections = {
         role: RowSelection(selection_raw, role=role, split_manifest_sha256=split["content_hash"])
         for role in ("train", "validation")
@@ -203,6 +204,7 @@ def run_qualifier(
         raise ValueError("unknown HCWDL endpoint qualifier")
     recipe = load_json(recipe_path); recipe_hash = validate_recipe(recipe, require_authorized=True)
     split = load_json(split_manifest_path); selection_raw = load_json(selection_manifest_path)
+    validate_recipe_class_weight_lineage(recipe, selection_raw)
     selections = {
         role: RowSelection(selection_raw, role=role, split_manifest_sha256=split["content_hash"])
         for role in ("train", "validation")
@@ -329,6 +331,7 @@ def run_confirmation_control(
         raise ValueError("unknown HCWDL confirmation control")
     recipe = load_json(recipe_path); recipe_hash = validate_recipe(recipe, require_authorized=True)
     split = load_json(split_manifest_path); selection_raw = load_json(selection_manifest_path)
+    validate_recipe_class_weight_lineage(recipe, selection_raw)
     selections = {
         role: RowSelection(selection_raw, role=role, split_manifest_sha256=split["content_hash"])
         for role in ("train", "validation")

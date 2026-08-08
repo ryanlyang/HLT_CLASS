@@ -722,17 +722,20 @@ The primary two-teacher ladder decision was locked on 2026-08-08 from the
 completed `pmard_kd_followup_b8a493547de8bd7e` results: 60-pass maximum,
 validation every pass, macro-AUC-first checkpoint selection, dual-teacher peak
 LR `3e-4`, and CE/predecessor/privileged weights `0.25/0.40/0.35` with
-privileged temperature `2`. `HCWDL_RECIPE/v2` enforces those values for the
-`primary_ladder` profile. Lower CE or another mixture remains possible only as
-a separately identified `registered_ablation`; it cannot silently change the
-primary campaign. Single-teacher settings, predecessor temperature,
-non-dual learning rates, schedule details, and batching remain evidence-bound.
+privileged temperature `2`. `HCWDL_RECIPE/v3` now locks the complete primary
+profile: single-teacher CE/KD `0.25/0.75`; privileged/HLT temperatures `2/1`;
+all peak LRs `3e-4`; effective/microbatch 256 with accumulation one; fixed
+AdamW and five-percent warmup/cosine/minimum schedule semantics; authenticated
+sqrt-inverse train-count class weights; constant coefficients; and the warm
+label-only control. D0 teaching M1 is routed to the HLT temperature one while
+sole privileged D teachers use two. A changed value requires a separately
+identified `registered_ablation` and cannot silently alter the primary.
 
 New contract families are `HIGHCOV_MATCHER_RESOURCES/v1`,
 `HIGHCOV_DENSE_ASSIGNMENT_{SHARD,MANIFEST,LOCK}/v1`,
 `HIGHCOV_ASSIGNMENT_RECOMPUTATION_AUDIT/v1`, `HCWDL_ARTIFACT/v1`,
 `HCWDL_{NODE_SPEC,GRAPH,TRAINING_REPORT,CHECKPOINT_SELECTION}/v1`,
-`HCWDL_RECIPE/v2`,
+`HCWDL_RECIPE/v3`,
 `HCWDL_EPHEMERAL_{VIEW,TARGET}_BANK/v1`, `HCWDL_LOCK/v1`,
 `HCWDL_EXECUTION_CLAIM/v1`, `HCWDL_ENDPOINT_{QUALIFICATION,DIAGNOSTIC_ACK}/v1`,
 `HCWDL_{SCREEN,CONFIRMATION,FINAL}_AGGREGATE/v1`,
@@ -748,7 +751,7 @@ compatibility.
 
 Local verification evidence at the final post-handoff audit:
 
-- repository-wide suite: 293 passed with the same 14 Matplotlib/Pyparsing
+- repository-wide suite: 299 passed with the same 14 Matplotlib/Pyparsing
   deprecation warnings;
 - all 51 HCWDL/high-coverage Python surfaces compile, all 25 thin CLIs have
   tested help surfaces, and Slurm shell invariants pass;

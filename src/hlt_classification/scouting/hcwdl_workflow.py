@@ -27,7 +27,7 @@ from .hcwdl_qualification import (
     QUALIFIERS, build_qualification_report, compute_shell_strata,
     validate_diagnostic_acknowledgement,
 )
-from .hcwdl_recipe import validate_recipe
+from .hcwdl_recipe import validate_recipe, validate_recipe_class_weight_lineage
 from .hcwdl_reporting import build_confirmation_registry, build_final_report, build_screen_aggregate
 from .highcov_resources import resource_validation_report
 from .audit import SOURCE_MANIFEST_CONTRACT, SOURCE_MANIFEST_VERSION
@@ -226,6 +226,7 @@ class HcwdlWorkflow:
             recipe = load_json(self.recipe); recipe_hash = validate_recipe(
                 recipe, require_authorized=True, expected_profile="primary_ladder",
             )
+            validate_recipe_class_weight_lineage(recipe, load_json(self.selection))
             if recipe_hash != self.spec["recipe_sha256"]:
                 raise ValueError("HCWDL campaign recipe lineage differs")
             lock = create_recipe_lock(

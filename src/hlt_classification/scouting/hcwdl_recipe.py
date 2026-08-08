@@ -11,8 +11,8 @@ import numpy as np
 from hlt_classification.data.cache_contracts import require_sha256, validate_content_hash, with_content_hash
 
 
-RECIPE_CONTRACT: Final = "HCWDL_RECIPE/v2"
-RECIPE_SCHEMA_VERSION: Final = 2
+RECIPE_CONTRACT: Final = "HCWDL_RECIPE/v3"
+RECIPE_SCHEMA_VERSION: Final = 3
 PRIMARY_RECIPE_PROFILE: Final = "primary_ladder"
 PRIMARY_DUAL_TEACHER_DECISION: Final = {
     "peak_learning_rate": 3e-4,
@@ -21,6 +21,47 @@ PRIMARY_DUAL_TEACHER_DECISION: Final = {
     "privileged_kd": 0.35,
     "privileged_temperature": 2.0,
 }
+PRIMARY_RECIPE_DECISION: Final = {
+    "batching": {
+        "microbatch_size": 256,
+        "gradient_accumulation": 1,
+        "effective_batch_size": 256,
+    },
+    "optimizer": {
+        "name": "AdamW",
+        "peak_learning_rates": {
+            "cold_root": 3e-4,
+            "cold_child": 3e-4,
+            "warm_child": 3e-4,
+        },
+        "betas": [0.9, 0.999],
+        "epsilon": 1e-8,
+        "weight_decay": 0.01,
+        "gradient_clipping": {"enabled": False},
+    },
+    "schedule": {
+        "name": "warmup_cosine",
+        "warmup_fraction": 0.05,
+        "minimum_lr_fraction": 0.05,
+    },
+    "coefficient_schedule": "constant",
+    "single_teacher_coefficients": {"ce": 0.25, "teacher_kd": 0.75},
+    "dual_teacher_coefficients": {
+        "ce": 0.25,
+        "predecessor_kd": 0.40,
+        "privileged_kd": 0.35,
+    },
+    "controls": {
+        "predecessor_only_coefficients": {"ce": 0.25, "predecessor_kd": 0.75},
+        "include_label_only_warm_continuation": True,
+    },
+    "single_privileged_temperature": 2.0,
+    "predecessor_temperature": 1.0,
+    "privileged_temperature": 2.0,
+    "dual_teacher_peak_learning_rate": 3e-4,
+    "amp_dtype": "bfloat16",
+}
+CLASS_WEIGHT_POLICY: Final = "sqrt_inverse_frequency_unit_population_mean_v1"
 FORBIDDEN_PLACEHOLDERS: Final = frozenset(("", "tbd", "todo", "placeholder", "unknown", "auto", "default"))
 
 
@@ -84,13 +125,36 @@ def validate_recipe(
     if batching["microbatch_size"] * batching["gradient_accumulation"] != batching["effective_batch_size"]:
         raise ValueError("HCWDL effective batch does not equal microbatch times accumulation")
     optimizer = value.get("optimizer")
-    if not isinstance(optimizer, Mapping) or optimizer.get("name") != "AdamW":
+    if (
+        not isinstance(optimizer, Mapping)
+        or set(optimizer) != {
+            "name", "peak_learning_rates", "betas", "epsilon", "weight_decay",
+            "gradient_clipping",
+        }
+        or optimizer.get("name") != "AdamW"
+    ):
         raise ValueError("HCWDL optimizer differs")
     learning_rates = optimizer.get("peak_learning_rates")
     if not isinstance(learning_rates, Mapping) or set(learning_rates) != {"cold_root", "cold_child", "warm_child"}:
         raise ValueError("HCWDL learning-rate roles differ")
     for name, item in learning_rates.items():
         _positive(item, f"peak learning rate {name}")
+    betas = optimizer.get("betas")
+    if (
+        not isinstance(betas, Sequence) or isinstance(betas, (str, bytes))
+        or len(betas) != 2
+        or any(not math.isfinite(float(item)) or not 0 <= float(item) < 1 for item in betas)
+    ):
+        raise ValueError("HCWDL AdamW betas differ")
+    if [float(item) for item in betas] != [0.9, 0.999]:
+        raise ValueError("HCWDL runtime supports only the bound AdamW betas")
+    clipping = optimizer.get("gradient_clipping")
+    if not isinstance(clipping, Mapping) or not isinstance(clipping.get("enabled"), bool):
+        raise ValueError("HCWDL gradient-clipping policy differs")
+    if clipping["enabled"]:
+        raise ValueError("HCWDL runtime does not enable gradient clipping")
+    elif set(clipping) != {"enabled"}:
+        raise ValueError("disabled HCWDL gradient clipping has unexpected fields")
     dual_peak_learning_rate = _positive(
         value.get("dual_teacher_peak_learning_rate"),
         "dual-teacher peak learning rate",
@@ -106,6 +170,8 @@ def validate_recipe(
     minimum = float(schedule.get("minimum_lr_fraction"))
     if not 0 <= warmup < 1 or not 0 < minimum <= 1:
         raise ValueError("HCWDL schedule fractions differ")
+    if value.get("coefficient_schedule") != "constant":
+        raise ValueError("HCWDL coefficient schedule differs")
     single = _weights(value.get("single_teacher_coefficients"), ("ce", "teacher_kd"), "single-teacher")
     dual = _weights(value.get("dual_teacher_coefficients"), ("ce", "predecessor_kd", "privileged_kd"), "dual-teacher")
     controls = value.get("controls")
@@ -117,12 +183,35 @@ def validate_recipe(
     )
     if not isinstance(controls.get("include_label_only_warm_continuation"), bool):
         raise ValueError("HCWDL warm-continuation control decision differs")
-    _positive(value.get("single_teacher_temperature"), "single-teacher temperature")
+    _positive(value.get("single_privileged_temperature"), "single privileged temperature")
     _positive(value.get("predecessor_temperature"), "predecessor temperature")
     _positive(value.get("privileged_temperature"), "privileged temperature")
-    class_weights = np.asarray(value.get("class_weights"), np.float64)
+    class_weighting = value.get("class_weighting")
+    if not isinstance(class_weighting, Mapping) or set(class_weighting) != {
+        "policy", "train_class_counts", "train_row_selection_sha256",
+    }:
+        raise ValueError("HCWDL class-weight lineage differs")
+    if class_weighting.get("policy") != CLASS_WEIGHT_POLICY:
+        raise ValueError("HCWDL class-weight policy differs")
+    counts_raw = class_weighting.get("train_class_counts")
+    if (
+        not isinstance(counts_raw, Sequence) or isinstance(counts_raw, (str, bytes))
+        or len(counts_raw) != 15
+        or any(isinstance(item, bool) or not isinstance(item, int) or item <= 0 for item in counts_raw)
+    ):
+        raise ValueError("HCWDL train class counts differ")
+    require_sha256(
+        class_weighting.get("train_row_selection_sha256"),
+        name="HCWDL train row-selection SHA-256",
+    )
+    counts = np.asarray(counts_raw, np.float64)
+    inverse = 1.0 / np.sqrt(counts)
+    expected_weights = (counts.sum() / np.sum(counts * inverse) * inverse).astype(np.float32)
+    class_weights = np.asarray(value.get("class_weights"), np.float32)
     if class_weights.shape != (15,) or not np.isfinite(class_weights).all() or np.any(class_weights <= 0):
         raise ValueError("HCWDL class weights must contain 15 finite positive values")
+    if not np.array_equal(class_weights, expected_weights):
+        raise ValueError("HCWDL class weights differ from authenticated train counts")
     evidence = value.get("evidence")
     if not isinstance(evidence, Mapping) or not evidence:
         raise ValueError("HCWDL recipe requires evidence parents")
@@ -141,7 +230,40 @@ def validate_recipe(
         }
         if actual != expected:
             raise ValueError("primary HCWDL dual-teacher decision differs")
+        primary_actual = {
+            name: value[name] for name in (
+                "batching", "optimizer", "schedule", "coefficient_schedule",
+                "single_teacher_coefficients", "dual_teacher_coefficients", "controls",
+                "single_privileged_temperature", "predecessor_temperature",
+                "privileged_temperature", "dual_teacher_peak_learning_rate", "amp_dtype",
+            )
+        }
+        if primary_actual != PRIMARY_RECIPE_DECISION:
+            raise ValueError("primary HCWDL complete recipe decision differs")
     return digest
+
+
+def validate_recipe_class_weight_lineage(
+    recipe: Mapping[str, Any], row_selection: Mapping[str, Any],
+) -> None:
+    """Bind recipe weights to the exact authenticated train selection."""
+
+    validate_recipe(recipe, require_authorized=bool(recipe.get("authorized_for_execution")))
+    from .selective_assignment import ROW_SELECTION_CONTRACT, ROW_SELECTION_VERSION
+
+    selection_hash = validate_content_hash(
+        row_selection, expected_contract=ROW_SELECTION_CONTRACT,
+        expected_schema_version=ROW_SELECTION_VERSION,
+    )
+    train = row_selection.get("roles", {}).get("train")
+    if not isinstance(train, Mapping):
+        raise ValueError("HCWDL row selection lacks the train role")
+    weighting = recipe["class_weighting"]
+    if (
+        weighting["train_row_selection_sha256"] != selection_hash
+        or weighting["train_class_counts"] != train.get("class_counts")
+    ):
+        raise ValueError("HCWDL recipe class weights have different row-selection lineage")
 
 
 def build_recipe(payload: Mapping[str, Any], *, authorized: bool) -> dict[str, Any]:
@@ -164,23 +286,30 @@ def example_recipe() -> dict[str, Any]:
         "repair_family": "HIGHCOV_SHELL_EXACT/v1",
         "training_passes": 60,
         "validation_every_passes": 1,
-        "batching": {"microbatch_size": 4, "gradient_accumulation": 2, "effective_batch_size": 8},
+        "batching": dict(PRIMARY_RECIPE_DECISION["batching"]),
         "optimizer": {
             "name": "AdamW", "peak_learning_rates": {
-                "cold_root": 1e-4, "cold_child": 1e-4, "warm_child": 5e-5,
-            }, "epsilon": 1e-8, "weight_decay": 0.01,
+                "cold_root": 3e-4, "cold_child": 3e-4, "warm_child": 3e-4,
+            }, "betas": [0.9, 0.999], "epsilon": 1e-8, "weight_decay": 0.01,
+            "gradient_clipping": {"enabled": False},
         },
         "dual_teacher_peak_learning_rate": 3e-4,
         "schedule": {"name": "warmup_cosine", "warmup_fraction": 0.05, "minimum_lr_fraction": 0.05},
+        "coefficient_schedule": "constant",
         "single_teacher_coefficients": {"ce": 0.25, "teacher_kd": 0.75},
         "dual_teacher_coefficients": {"ce": 0.25, "predecessor_kd": 0.40, "privileged_kd": 0.35},
         "controls": {
             "predecessor_only_coefficients": {"ce": 0.25, "predecessor_kd": 0.75},
-            "include_label_only_warm_continuation": False,
+            "include_label_only_warm_continuation": True,
         },
-        "single_teacher_temperature": 2.0,
+        "single_privileged_temperature": 2.0,
         "predecessor_temperature": 1.0,
         "privileged_temperature": 2.0,
+        "class_weighting": {
+            "policy": CLASS_WEIGHT_POLICY,
+            "train_class_counts": [1] * 15,
+            "train_row_selection_sha256": "1" * 64,
+        },
         "class_weights": [1.0] * 15,
         "amp_dtype": "bfloat16",
         "evidence": {"local_fixture": "0" * 64},
@@ -188,7 +317,8 @@ def example_recipe() -> dict[str, Any]:
 
 
 __all__ = [
-    "PRIMARY_DUAL_TEACHER_DECISION", "PRIMARY_RECIPE_PROFILE",
+    "CLASS_WEIGHT_POLICY", "PRIMARY_DUAL_TEACHER_DECISION", "PRIMARY_RECIPE_DECISION",
+    "PRIMARY_RECIPE_PROFILE",
     "RECIPE_CONTRACT", "RECIPE_SCHEMA_VERSION", "build_recipe",
-    "example_recipe", "validate_recipe",
+    "example_recipe", "validate_recipe", "validate_recipe_class_weight_lineage",
 ]

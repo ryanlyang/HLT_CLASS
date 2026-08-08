@@ -8,8 +8,12 @@ import sys
 
 import pytest
 
-from hlt_classification.data.cache_contracts import load_json, write_immutable_json
+from hlt_classification.data.cache_contracts import load_json, with_content_hash, write_immutable_json
 from hlt_classification.scouting.hcwdl_campaign import create_campaign_spec
+from hlt_classification.scouting.hcwdl_recipe import example_recipe, validate_recipe
+from hlt_classification.scouting.selective_assignment import (
+    ROW_SELECTION_CONTRACT, ROW_SELECTION_VERSION,
+)
 
 
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -40,6 +44,51 @@ def test_every_hcwdl_cli_has_working_help(script: str):
     )
     assert result.returncode == 0, result.stderr
     assert "usage:" in result.stdout.lower()
+
+
+def test_recipe_cli_derives_authenticated_class_weights(tmp_path: Path):
+    raw = example_recipe()
+    payload = {
+        key: value for key, value in raw.items()
+        if key not in {
+            "contract", "schema_version", "authorized_for_execution", "content_hash",
+            "class_weighting", "class_weights",
+        }
+    }
+    payload["recipe_profile"] = "primary_ladder"
+    payload["purpose"] = "hcwdl_primary_ladder"
+    payload_path = tmp_path / "payload.json"
+    payload_path.write_text(json.dumps(payload), encoding="utf-8")
+    selection = with_content_hash({
+        "contract": ROW_SELECTION_CONTRACT,
+        "schema_version": ROW_SELECTION_VERSION,
+        "split_manifest_sha256": "a" * 64,
+        "seed": 1337,
+        "roles": {
+            "train": {
+                "all_rows": False, "rows": 15, "class_counts": [1] * 15,
+                "population_class_counts": [2] * 15,
+                "sources": [{"path": "fixture.root", "rows": 15,
+                             "entries": list(range(15))}],
+            },
+        },
+        "selection_rule": "per_class_smallest_identity_sha256_rank_v1",
+        "access_lock_sha256": {},
+    })
+    selection_path = tmp_path / "selection.json"
+    output = tmp_path / "recipe.json"
+    write_immutable_json(selection_path, selection)
+    result = subprocess.run(
+        [sys.executable, str(REPOSITORY / "scripts/build_hcwdl_recipe.py"),
+         "--payload", str(payload_path), "--train-row-selection", str(selection_path),
+         "--output", str(output), "--authorize"],
+        cwd=REPOSITORY, capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    recipe = load_json(output)
+    validate_recipe(recipe, expected_profile="primary_ladder")
+    assert recipe["class_weighting"]["train_row_selection_sha256"] == selection["content_hash"]
+    assert recipe["class_weights"] == [1.0] * 15
 
 
 def test_complete_pilot_dry_run_is_nonmutating_and_exact(tmp_path: Path):
