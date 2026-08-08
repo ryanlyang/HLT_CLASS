@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a hashed HCWDL smoke, pilot, midscale500k, or production specification."""
+"""Create a hashed HCWDL smoke, pilot, named-midscale, or production spec."""
 
 from __future__ import annotations
 

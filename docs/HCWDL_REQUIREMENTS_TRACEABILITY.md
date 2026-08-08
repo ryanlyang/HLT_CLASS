@@ -56,8 +56,8 @@ by any status in this ledger.
 
 | Requirement | Implementation | Contract | Verification | Status |
 |---|---|---|---|---|
-| Smoke/pilot/midscale500k/production specs, exact registered role counts, and complete dependency DAG | `hcwdl_campaign.py`, `hcwdl_workflow.py` | `HCWDL_CAMPAIGN_SPEC/v4` (v3 readable) | graph/dependency/mode-count tests | Local passed |
-| Bootstrap smoke or measured prelaunch candidate and exact non-circular command-plan authorization | `hcwdl_campaign.py`, `hcwdl_authorization.py` | `HCWDL_COMMAND_PLAN/v2`, submission authorization v4 (v3 readable) | first-miniature and changed-root/command-plan rejection tests | Local passed |
+| Smoke/pilot/midscale500k/midscale1m/production specs, exact registered role counts, and complete dependency DAG | `hcwdl_campaign.py`, `hcwdl_workflow.py` | `HCWDL_CAMPAIGN_SPEC/v5` (v3/v4 readable) | graph/dependency/mode-count tests | Local passed |
+| Bootstrap smoke or measured prelaunch candidate and exact non-circular command-plan authorization | `hcwdl_campaign.py`, `hcwdl_authorization.py` | `HCWDL_COMMAND_PLAN/v2`, submission authorization v5 (v3/v4 readable) | first-miniature and changed-root/command-plan rejection tests | Local passed |
 | Endpoint qualification infrastructure without validation-selected repair | `hcwdl_qualification.py` | qualification report/lock v1 | bad-performance continuation test | Local passed |
 | Confirmation registry, finalist lock, execution lock, and sealed final-test claim | `hcwdl_locks.py` | lock family v1 | pre-lock denial and atomic claim tests | Local passed |
 | Metrics, gap recovery, screen/confirmation/final aggregation | `hcwdl_reporting.py` | aggregate report v1 | metric and selection tests | Local passed |

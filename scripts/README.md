@@ -187,8 +187,8 @@ per-jet predictions, and its reports permanently forbid confirmatory claims
 from this consumed holdout.
 
 HCWDL commands package the high-coverage completion-shell matcher and run the
-fixed Shell Exact cold/warm ladder in smoke, pilot, `midscale500k`, or
-production mode. The matcher/assignment surface is
+fixed Shell Exact cold/warm ladder in smoke, pilot, `midscale500k`,
+`midscale1m`, or production mode. The matcher/assignment surface is
 `validate_highcov_resources.py`, `build_highcov_assignment_shard.py`,
 `finalize_highcov_assignments.py`, and `audit_highcov_assignments.py`.
 Recipe, resource, submission, and human diagnostic gates are built by
@@ -204,16 +204,17 @@ their exact reports are inspected and the acknowledgement is published,
 `continue_hcwdl_campaign.py` validates the entire prefix and submits the lock
 plus downstream ladder. Slurm holds are not used. Executable specs default to
 and enforce the exact checkout invoking campaign creation, so concurrent
-campaigns use dedicated Git worktrees. `midscale500k` is a separately named
-500,000/250,000/250,000 mode so later midscale populations cannot silently
-reuse its identity. No executable pilot/midscale500k/production spec can be made from the bundled
+campaigns use dedicated Git worktrees. `midscale500k` and `midscale1m` are
+separately named 500,000/250,000/250,000 and 1,000,000/400,000/400,000 modes,
+so later midscale populations cannot silently reuse either identity. No
+executable pilot/named-midscale/production spec can be made from the bundled
 test-only recipe or unmeasured planning resources. After a real miniature,
 create a locked non-live candidate spec with the measured resource profile,
 inspect its dry run, and pass that candidate to
-`build_hcwdl_submission_authorization.py`; authorization v4 binds the exact
+`build_hcwdl_submission_authorization.py`; authorization v5 binds the exact
 resource requests and `HCWDL_COMMAND_PLAN/v2` hash. The first bounded smoke
 may use its explicitly authorized conservative bootstrap requests without
-claiming measurement; pilot/midscale500k/production candidates require measured profiles.
+claiming measurement; pilot/named-midscale/production candidates require measured profiles.
 Recreate the live spec with the same root,
 recipe, profile, and authorization. Any command-path, resource, task, or
 lineage difference fails closed.
