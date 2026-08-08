@@ -87,6 +87,7 @@ JetClass data on Tigris:
 - [PMARD pilot preliminary results and implementation map](docs/PMARD_PILOT_PRELIMINARY_RESULTS.md)
 - [PMARD T100 KD sweep contract](docs/contracts/PMARD_T100_KD_SWEEP.md)
 - [PMARD paired KD schedule follow-up contract](docs/contracts/PMARD_KD_SCHEDULE_FOLLOWUP.md)
+- [PMARD 64-model exploratory test comparison contract](docs/contracts/PMARD_EXPLORATORY_TEST_COMPARISON.md)
 - [PMARD research-compute runbook](docs/PMARD_RUNBOOK.md)
 - [HCWDL primary cold/warm ladder plan](docs/plans/HIGH_COVERAGE_COLD_WARM_DISTILLATION_LADDER.md)
 - [HCWDL matching-free representation-KD ascent plan](docs/plans/HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md)

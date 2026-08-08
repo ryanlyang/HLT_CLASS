@@ -2271,3 +2271,22 @@ Until then, the repository implementation is not production-ready evidence and
 does not establish that PMARD's scientific hypothesis is true. The local code,
 contracts, synthetic tests, and execution preparation are implementation
 evidence only; the real acceptance items above remain mandatory.
+
+## 25. Explicit exploratory-test amendment (2026-08-08)
+
+The user explicitly replaced the pilot's single-finalist test objective with
+an all-model exploratory comparison for the already registered T100 KD sweep
+and paired schedule follow-up. Exactly 36 plus 28 models are frozen before
+test access and evaluated on one identical deterministic 100,000-jet HLT-only
+selection. This amendment does not change their training or validation
+selection and does not authorize offline inputs at inference.
+
+Executing this comparison consumes the pilot `final_test` role as an
+exploratory comparison set. The resulting 64-model table is descriptive and
+cannot support the untouched-holdout or single-finalist claims described
+earlier in this plan. A later confirmatory claim requires independent data.
+The dedicated contract is
+[`PMARD_EXPLORATORY_TEST_COMPARISON.md`](../contracts/PMARD_EXPLORATORY_TEST_COMPARISON.md).
+The standard PMARD finalist/execution implementation remains intact for other
+campaigns; this amendment uses separate, versioned access locks and does not
+silently relax it.

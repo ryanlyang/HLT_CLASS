@@ -1,5 +1,29 @@
 # Current Handoff
 
+## PMARD 64-model exploratory test comparison (2026-08-08)
+
+The user explicitly authorized evaluation of all 64 completed T100-sweep and
+paired-schedule models and reclassified the pilot's 100,000-jet `final_test`
+role as an exploratory comparison set. The new isolated contract freezes the
+36 plus 28 report/checkpoint identities before access, publishes dedicated
+authorization and execution locks, builds one deterministic test selection,
+runs an uncapped HLT-only `0-63` GPU array, and aggregates only metrics. Every
+evaluation must attest the same ordered identity hash; per-jet predictions are
+never written. The aggregate permanently records that post-test rankings are
+descriptive and confirmatory claims from this holdout are forbidden.
+
+Implementation lives in
+`src/hlt_classification/scouting/exploratory_test.py`, the three
+`scripts/*pmard_exploratory_test*.py` entry points, and
+`sbatch/run_pmard_exploratory_test.sh`. Scientific and operational semantics
+are documented in
+[`docs/contracts/PMARD_EXPLORATORY_TEST_COMPARISON.md`](contracts/PMARD_EXPLORATORY_TEST_COMPARISON.md)
+and [`docs/PMARD_RUNBOOK.md`](PMARD_RUNBOOK.md). The existing confirmatory
+single-finalist code path was not weakened. Initial focused verification is
+27/27 passing; the complete local suite is 309/309 passing with 15 existing
+Matplotlib/pytest-cache warnings. Tigris execution remains to be performed
+from exact pushed clean source.
+
 ## HCWDL matching-free representation-KD plan (2026-08-08)
 
 The new implementation-grade registered-ablation plan is

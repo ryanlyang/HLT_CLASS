@@ -540,15 +540,22 @@ For TOFF, create separate charged and neutral teacher kernel means. Partition
 student HLT tokens with a pre-transform training-only family code derived from
 canonical raw charge/PID:
 
-1. charge must be exactly one of `{-1, 0, +1}`; nonzero proposes
-   `charged`, zero proposes `neutral`;
-2. exactly one recognized charged-hadron/electron/muon PID proposes `charged`;
-   exactly one neutral-hadron/photon PID proposes `neutral`; absent or
-   non-one-hot PID is `unknown`;
-3. a known PID proposal that disagrees with charge is `unclassified` rather
-   than resolved by precedence;
-4. an unknown PID uses the valid charge proposal and is counted as
-   `charge_only`; invalid charge is `unclassified`.
+1. read the five raw flags in the repository's canonical HLT order
+   `(isEl, isMu, isChargedHad, isGamma, isNeutralHad)`. Every flag must be
+   finite. A finite binary one-hot row maps exactly to
+   `(electron, muon, charged_hadron, photon, neutral_hadron)`; a binary all-zero
+   row is `unknown`; a nonbinary or multi-hot row is `malformed`;
+2. raw charge must be exactly one of `{-1, 0, +1}` under the parent input
+   contract. Nonfinite or out-of-domain charge is an invalid input and fails
+   closed rather than becoming a family label. Nonzero proposes `charged` and
+   zero proposes `neutral`;
+3. a known electron/muon/charged-hadron PID proposes `charged`; a known
+   photon/neutral-hadron PID proposes `neutral`. If that proposal disagrees
+   with charge, the token is `unclassified_contradiction` rather than resolved
+   by precedence;
+4. an all-zero unknown PID uses the valid charge proposal and is counted as
+   `charge_only`. A malformed PID is `unclassified_malformed` and never falls
+   back to charge.
 
 Unclassified tokens are excluded from M6 token and relation KD, retained in
 CE/logit KD, and counted by class/reason. The family code and canonical token
@@ -683,10 +690,13 @@ strata that are nonempty in both views.
 If a stratum is empty or fails the pair/ESS gate in either view, it contributes
 no optimization term and its occupancy/ESS difference is recorded. If no
 stratum is jointly eligible for a jet, that jet's relational loss is exactly
-zero and the jet is excluded from the `L_rel` denominator. At least one
-jointly eligible stratum must exist in 90% of the train-only calibration jets
-for an `RREL` node to be executable. Failure of this structural prerequisite
-is an execution/design failure, not a poor classification result.
+zero and the jet is excluded from the `L_rel` denominator. The report defines
+`relation_population_adequate = true` only when at least one jointly eligible
+stratum exists in at least 90% of the train-only calibration jets. Falling
+below that threshold is poor target support, not invalid input: the node still
+runs and all descendants remain registered. Section 13.3 determines whether
+the component can be calibrated or must remain explicitly inactive; support
+is never fabricated and a row is never skipped from CE/logit KD.
 
 Eligibility, pair count, ESS, and loss contribution are reported by class,
 family, and stratum. No per-class result is silently generalized to classes
@@ -884,14 +894,27 @@ s_k = median_batch(G_base,k) / median_batch(G_rep,k)
 Lhat_k = s_k * L_k
 ```
 
-Medians are computed from unrounded FP64 host values. A zero, nonfinite, or
-nonpositive median, a scale outside `[1e-4, 1e4]`, fewer than 12 finite
-calibration batches, or failure of the relational eligibility rule fails the
-node before the affected component activates. Values are never silently
-clipped. The immutable calibration report stores every batch norm, median,
-scale, hexadecimal float, target hash, exact boundary deployable-state logical
-hash, exact boundary training-state logical hash (including active heads),
-completed update/pass, and representation recipe hash.
+Medians are computed from unrounded FP64 host values. Nonfinite tensors or
+gradients remain numerical failures. Valid but weak target support is handled
+without cancelling a scientific row: if fewer than 12 batches contain eligible
+support, either median is zero/nonpositive, or the finite implied scale lies
+outside `[1e-4, 1e4]`, the phase publishes
+`component_status = inactive_valid_support`, freezes `s_k = 0`, and records the
+exact reason and all observed norms. The component then contributes a literal
+zero with zero gradient for the remainder of the node; its nominal coefficient
+is not reallocated to another component. Values are never clipped or replaced
+with invented targets. Other components, the complete base objective,
+validation, checkpoint selection, and all descendants continue.
+
+An active phase publishes `component_status = active` and its scale. Both
+statuses are immutable resume state. The calibration report stores every batch
+norm, eligible-row/class/family/stratum count, median, scale, hexadecimal
+float, target and shuffle-map hash when applicable, exact boundary
+deployable-state logical hash, exact boundary training-state logical hash
+(including active heads), completed update/pass, and representation recipe
+hash. A disconnected implementation on a fixture that should be eligible is
+caught by numerical acceptance; runtime sparsity itself is not reclassified as
+corruption.
 
 The same jet/set components receive independently calculated scales in RSET
 and RREL nodes because warm predecessors and later scientific trajectories can
@@ -1084,7 +1107,8 @@ screen, confirmation, and recovery generations. A generation manifest binds:
 - source, split, train row selection, graph, assignment, repair, architecture,
   parent recipe, and representation recipe hashes;
 - exact named layer surfaces and installed-Weaver signature;
-- exact target-forward execution signature from Section 16.3;
+- exact pre-build target-forward specification and post-build execution
+  attestation from Section 16.3;
 - RFF resource arrays and hashes;
 - identity order/set hashes;
 - dtype, shape, logical hash, and finite audit for every target array;
@@ -1104,12 +1128,13 @@ Every join requires all requested identities exactly once. Missing, duplicate,
 reordered, nonfinite, wrong-layer, wrong-teacher, wrong-strategy, or
 wrong-selection targets fail closed.
 
-### 16.3 Canonical target-forward execution signature
+### 16.3 Canonical target-forward specification and execution attestation
 
 Exact FP32 target bytes are part of the logical scientific artifact. They may
-therefore be regenerated only under an immutable
-`HCWDL_REPRESENTATION_TARGET_FORWARD_SIGNATURE/v1`, not merely from the same
-checkpoint. The signature binds:
+therefore be generated only under an immutable **pre-build**
+`HCWDL_REPRESENTATION_TARGET_FORWARD_SPEC/v1`, not merely from the same
+checkpoint. The spec contains no output-derived value and is fully validated
+before a privileged branch is opened. It binds:
 
 - strict checkpoint byte/logical hashes, model configuration, architecture and
   tap attestations, representation recipe, and kernel-resource hashes;
@@ -1117,9 +1142,8 @@ checkpoint. The signature binds:
   including Python, PyTorch, CUDA, cuDNN, NumPy, Awkward, Uproot, and Weaver
   versions or source hashes;
 - canonical target-builder request `gpu:gh200:1`, NVIDIA GH200/Hopper
-  architecture and compute capability, plus exact driver/runtime versions
-  measured by the genuine miniature and frozen in the campaign spec (the
-  physical GPU UUID is audit-only and may differ across jobs);
+  architecture and compute capability, plus exact driver/runtime/package
+  versions measured by the genuine miniature and frozen in the campaign spec;
 - evaluation mode, FP32 parameters/inputs/activations, autocast disabled, TF32
   disabled for matmul and cuDNN, and no reduced-precision FP32 reduction;
 - `torch.use_deterministic_algorithms(True)`, deterministic cuDNN, benchmark
@@ -1130,24 +1154,35 @@ checkpoint. The signature binds:
   and one final short batch per partition with no padding or row duplication;
 - exact input decoding, feature dtype/layout, trimmer/evaluation behavior,
   family-code construction, surface capture, sketch arithmetic, and output
-  array C-order;
-- a dry deterministic replay of at least the first, middle, and last canonical
-  batch whose logits/surface/sketch logical hashes must agree before a rebuild
-  is authorized.
+  array C-order.
+
+After all shards have passed their finite/count/logical audit, but before the
+generation manifest is published, create an immutable **post-build**
+`HCWDL_REPRESENTATION_TARGET_EXECUTION_ATTESTATION/v1`. It binds the spec hash,
+actual producer commit/environment/device model and audit-only GPU UUID, every
+enforced backend flag, canonical batch count/partition hash, first/middle/last
+sentinel-batch logits/surface/sketch logical hashes, every completed output
+array logical hash, and the resulting `logical_target_sha256`. The generation
+manifest binds both the pre-build spec and this post-build attestation. It
+cannot validate if either was used in the other's place.
 
 The target-forward batch partition is scientific because kernel selection can
 change FP32 activations. It is distinct from compression and file-I/O chunk
 sizes, which may vary only after target arrays already exist. A recovery host
-that cannot reproduce the complete signature is **not** allowed to rebuild:
+that cannot reproduce the complete pre-build spec is **not** allowed to rebuild:
 the scheduler must retain or copy already-authenticated shards, wait for a
 matching worker, or mark recovery blocked. There is no tolerance-based
 substitution for an exact target hash.
 
-For every completed generation, the signature artifact records the unrounded
-logical hashes of all output arrays. Re-execution under the same signature must
-reproduce those hashes exactly before a new generation may be published. This
-is an execution-reproducibility requirement, not a claim that arbitrary
-hardware/software stacks produce bit-identical neural activations.
+For a rebuild, the prior execution attestation supplies the sentinel and full
+logical hashes. Before full production the builder dry-replays at least the
+first, middle, and last canonical batches and requires exact sentinel
+agreement; the completed rebuilt generation must reproduce the prior full
+`logical_target_sha256`. Initial construction has no circular sentinel
+requirement: it validates only the pre-build spec, then publishes the first
+post-build attestation. This is an execution-reproducibility requirement, not
+a claim that arbitrary hardware/software stacks produce bit-identical neural
+activations.
 
 ### 16.4 Consumer RAM materialization
 
@@ -1386,7 +1421,8 @@ Physical generations never overwrite one another:
 targets/<logical_bank>/logical_bank.json
 targets/<logical_bank>/generations/<generation_id>/
   consumer_registry.json
-  target_forward_signature.json
+  target_forward_spec.json
+  target_execution_attestation.json
   generation.json
   manifest.json
   shards/...
@@ -1455,7 +1491,8 @@ HCWDL_REPRESENTATION_ASCENT_GRAPH/v1
 HCWDL_REPRESENTATION_RECIPE/v1
 HCWDL_REPRESENTATION_KERNEL_RESOURCES/v1
 HCWDL_REPRESENTATION_TAP/v1
-HCWDL_REPRESENTATION_TARGET_FORWARD_SIGNATURE/v1
+HCWDL_REPRESENTATION_TARGET_FORWARD_SPEC/v1
+HCWDL_REPRESENTATION_TARGET_EXECUTION_ATTESTATION/v1
 HCWDL_REPRESENTATION_TARGET_LOGICAL_BANK/v1
 HCWDL_REPRESENTATION_TARGET_CONSUMER_REGISTRY/v1
 HCWDL_REPRESENTATION_TARGET_GENERATION/v1
@@ -1506,14 +1543,21 @@ consumers and are never accepted as if they already implemented this plan.
 The three binary-bearing control/state families are explicit rather than
 implicit Python conventions:
 
-- `HCWDL_REPRESENTATION_RESUME_STATE/v1` is a JSON envelope plus a bound
-  `rolling_resume.pt`. It enumerates every required state namespace, tensor
-  key/shape/dtype, logical-state hash, serialized byte hash, completed
-  pass/update, next canonical batch, sampler/trimmer/RNG state, optimizer and
-  scheduler state, partial interval aggregates, active projections,
-  calibration artifacts, exact target generation/logical hashes, and producer
-  runtime signature. Resume rejects missing or unexpected state; a report path
-  alone is never a resume contract.
+- `HCWDL_REPRESENTATION_RESUME_STATE/v1` is a crash-atomic immutable generation,
+  never a replace-in-place PT/JSON pair. Generation `q` contains
+  `state_q.pt`, `state_q.json`, and `commit_q.json`; the PT and sidecar are
+  atomically renamed first, and the commit record binding both hashes is
+  atomically published last. Resume scans committed sequence numbers and loads
+  the highest fully valid generation. Orphan PT/JSON files without a commit are
+  ignored and audited. Only after a new commit validates may generations older
+  than the immediately previous committed state be deleted, so at least two
+  recoverable states survive cleanup. The sidecar enumerates every required
+  state namespace, tensor key/shape/dtype, logical-state hash, serialized byte
+  hash, completed pass/update, next canonical batch, sampler/trimmer/RNG state,
+  optimizer and scheduler state, partial interval aggregates, active
+  projections, calibration artifacts, exact target generation/logical hashes,
+  and producer runtime signature. Resume rejects missing or unexpected state;
+  a report path or uncommitted file pair is never a resume contract.
 - `HCWDL_REPRESENTATION_CONTROL_REGISTRY/v1` contains the exact four M5 control
   node definitions, their parent-counterpart mappings, target consumers, loss
   allocations, and validation-only disposition. The 24-node primary graph does
@@ -1674,6 +1718,16 @@ Every class must contain at least two selected train rows; otherwise the
 control fails structurally. The privileged logits stay joined to the correct
 identity, and validation targets remain unused.
 
+Each shuffled control performs its **own** Section 13 calibration after the
+shuffle map has been applied, at the same pass-two/pass-four barriers and on
+the same canonical calibration identities as its paired primary node. Its
+calibration artifacts bind the shuffle-map hash and shuffled target joins;
+they never reuse the unshuffled primary scales. Recalibration is the
+deterministic normalization consequence of the sole exogenous shuffle
+intervention and keeps the nominal local auxiliary coefficient comparable. No
+validation value enters it. If shuffled support is weak, the exact
+inactive-component rule in Section 13.3 applies.
+
 This preserves coarse class information while destroying exact jet pairing.
 If shuffled targets perform as well as paired targets, any gain is generic
 class-conditioned regularization rather than evidence for paired privileged
@@ -1704,10 +1758,22 @@ Required noncampaign controls include:
   95th-percentile absolute error `<=0.03`, and Pearson correlation `>=0.95`;
 - exact-versus-RFF **student-gradient** fidelity on 64 additional small token
   fixtures from seed `993` and 64 relation fixtures from seed `994`, each with
-  set sizes in `[2,16]`. After excluding an exact-gradient norm below `1e-8`,
-  require flattened gradient-cosine median `>=0.80`, 10th percentile
-  `>=0.30`, and median RFF/exact gradient-norm ratio in `[0.50,2.00]` for each
-  kernel family;
+  set sizes in `[2,16]`. For exact-gradient norm at least `1e-8`, require
+  flattened gradient-cosine median `>=0.80`, 10th percentile `>=0.30`, median
+  RFF/exact gradient-norm ratio in `[0.50,2.00]`, 5th-percentile ratio
+  `>=0.20`, and 95th-percentile ratio `<=5.00` for each kernel family. Every
+  excluded near-zero fixture must have absolute RFF gradient norm `<=1e-6`, so
+  a spurious large gradient cannot disappear behind the ratio exclusion;
+- finite-RFF joint-rotation sensitivity on 64 token fixtures from seed `995`.
+  Generate a deterministic Haar orthogonal 128-by-128 matrix by FP64 Gaussian
+  QR with positive diagonal convention, rotate both student and teacher token
+  clouds, and compare with the unrotated fixed-resource result. Require mean
+  absolute loss change `<=0.06`, 95th percentile `<=0.15`; after rotating the
+  transformed student gradient back, require gradient-cosine median `>=0.75`,
+  10th percentile `>=0.20`, median norm ratio in `[0.50,2.00]`, and 95th
+  percentile ratio `<=5.00`. Exact RBF MMD must be invariant to numerical
+  tolerance. This explicitly bounds, but does not deny, the finite-map basis
+  artifact;
 - token permutation invariance;
 - exact Gram/relation invariance under a shared orthogonal rotation and a
   report-only synthetic demonstration that anisotropic/nonlinear transforms
@@ -1932,7 +1998,8 @@ The following fail closed:
 - invalid RFF resources, named taps, shapes, masks, or TOFF family semantics;
 - target construction from validation or final test;
 - nonfinite required tensors, losses, gradients, or metrics;
-- representation calibration outside its predeclared validity bounds;
+- nonfinite calibration inputs/gradients, a stale phase artifact, or a
+  component-status/scale pair inconsistent with Section 13.3;
 - warm loading of training-only heads or cross-strategy backbones;
 - deployable export containing a representation target input or offline
   parameter path;
@@ -2231,7 +2298,8 @@ For each logical bank:
 
 1. validate the parent import, overlay recipe, kernel resources, teacher
    selection, assignment/repair lineage, train row selection, and canonical
-   target-forward execution signature;
+   target-forward specification and any prior execution attestation required
+   for a rebuild;
 2. calculate exact output shapes and peak bytes before loading the teacher;
 3. load the selected teacher checkpoint strictly and set evaluation mode;
 4. open only projected branches needed for that teacher view;
@@ -2416,7 +2484,8 @@ campaign root:
       generations/
         <generation_id>/
           consumer_registry.json
-          target_forward_signature.json
+          target_forward_spec.json
+          target_execution_attestation.json
           generation.json
           manifest.json
           shards/
@@ -2429,8 +2498,10 @@ campaign root:
       manifest.json
   training/
     <strategy>/<node_id>/
-      rolling_resume.pt
-      rolling_resume.json
+      resume/
+        state_<sequence>.pt
+        state_<sequence>.json
+        commit_<sequence>.json
       selected_training_state.pt
       final_training_state.pt
       deployable_selected.pt
@@ -2573,8 +2644,9 @@ Require exact tests for:
 - preemption immediately before and after either calibration barrier resumes
   without skipping or duplicating calibration;
 - FP64 median calculation and hexadecimal persistence;
-- invalid scale, insufficient finite batch, or low relation eligibility
-  failure;
+- finite out-of-range scale, insufficient valid support, zero gradient, or low
+  relation eligibility produces the exact inactive-component state without
+  suppressing the node, while a nonfinite calibration fails closed;
 - jet/set ramp values immediately before, at, and after passes 2 and 6;
 - relation ramp values immediately before, at, and after passes 4 and 8;
 - `rho_repr=0` equality of logits, base loss, shared gradients, optimizer
@@ -2694,7 +2766,8 @@ physics cannot masquerade as representation KD.
 
 ### Block D — implement target banks
 
-Implement the canonical target-forward signature, one-forward source-sharded
+Implement the canonical target-forward spec/attestation pair, one-forward
+source-sharded
 construction, logical-bank/per-generation manifests, RAM joins,
 predecessor-logit RAM caches, resume validation, cleanup, and generation-aware
 recovery.
@@ -2855,11 +2928,17 @@ fixed per-jet RFF MMD supports different particle counts and orderings.
 The equal-budget `RREL` alternative adds one corrected notion of structure: the
 distribution of **learned latent cosine relations**, stratified by fixed raw
 angular regions. The raw geometry chooses which relations to summarize but is
-not itself optimized, so the term genuinely trains the encoder. TOFF charged
-and neutral spaces remain separate throughout.
+not itself optimized, so the term genuinely trains the encoder. It aligns
+per-jet marginal relation distributions, not graph topology; different pair
+graphs can share the same summaries. TOFF charged and neutral spaces remain
+separate throughout.
 
-Running both strategies as complete cold and warm ascents answers not only
-whether representation KD helps at one rung, but whether it compounds, whether
-warm continuation stores it better, and whether the relational addition is
-worth its complexity. The logit-only ascents, zero-coefficient parity, and
-within-class shuffled-pair controls make those conclusions interpretable.
+Running both strategies as complete cold and warm ascents provides the
+predeclared screening comparisons for whether representation KD helps at one
+rung, compounds, is stored better by warm continuation, and justifies the
+relational package. Those full-ladder and M5 mechanism comparisons remain
+descriptive single-seed screens. Only terminal M6 variance is conditionally
+replicated; the confirmation seeds are not finalist candidates. The logit-only
+ascents, zero-coefficient parity, component controls, and within-class
+shuffled-pair controls make the screening evidence interpretable without
+overstating full-system uncertainty.

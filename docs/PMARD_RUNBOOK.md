@@ -324,6 +324,91 @@ PY
 This is still a single-seed validation diagnostic and has no final-test
 authority.
 
+## Exploratory test comparison of all 64 completed models
+
+This is an explicit change in evidence semantics, not a normal PMARD finalist
+run. It evaluates every 36-row T100-sweep model and every 28-row paired
+follow-up model on the same 100,000 test jets. Once executed, that test role is
+an exploratory comparison set and cannot support a confirmatory claim. See
+`docs/contracts/PMARD_EXPLORATORY_TEST_COMPARISON.md`.
+
+Use a clean pushed commit and a detached worktree. The known successful study
+roots are shown below:
+
+```bash
+cd /home/ryreu/atlas/HLT_Classification
+git fetch origin
+
+export EXPLORATORY_COMMIT="$(git rev-parse origin/main)"
+export EXPLORATORY_PROJECT_DIR="/home/ryreu/atlas/HLT_Classification_exploratory_${EXPLORATORY_COMMIT:0:8}"
+test ! -e "${EXPLORATORY_PROJECT_DIR}"
+git worktree add --detach "${EXPLORATORY_PROJECT_DIR}" "${EXPLORATORY_COMMIT}"
+
+cd "${EXPLORATORY_PROJECT_DIR}"
+source /home/ryreu/miniforge3-aarch64/etc/profile.d/conda.sh
+conda activate atlas_kd_tigris
+export PYTHONNOUSERSITE=1
+export PYTHONDONTWRITEBYTECODE=1
+export PYTHONPATH="${PWD}/src${PYTHONPATH:+:${PYTHONPATH}}"
+export LD_LIBRARY_PATH="${CONDA_PREFIX}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+git status --short
+
+python -m pytest -q tests/test_pmard_exploratory_test.py
+```
+
+`git status --short` must be empty and the focused test must pass. Then create
+the immutable specification and inspect the dry-run ledger:
+
+```bash
+export PARENT_SWEEP_ROOT=/home/ryreu/atlas/HLT_Classification/checkpoints/pmard_t100_kd_sweep_0b15599a_r2
+export FOLLOWUP_ROOT=/home/ryreu/atlas/HLT_Classification/checkpoints/pmard_kd_followup_ae07aa35
+export EXPLORATORY_ROOT="/home/ryreu/atlas/HLT_Classification/checkpoints/pmard_exploratory_test_${EXPLORATORY_COMMIT:0:8}"
+
+test -f "${PARENT_SWEEP_ROOT}/aggregate_report.json"
+test -f "${FOLLOWUP_ROOT}/aggregate_report.json"
+test ! -e "${EXPLORATORY_ROOT}"
+
+python -s scripts/create_pmard_exploratory_test.py \
+  --parent-sweep-root "${PARENT_SWEEP_ROOT}" \
+  --followup-root "${FOLLOWUP_ROOT}" \
+  --output-root "${EXPLORATORY_ROOT}" \
+  --output "${EXPLORATORY_ROOT}/exploratory_test_spec.json"
+
+python -s scripts/submit_pmard_exploratory_test.py \
+  --exploratory-test-spec "${EXPLORATORY_ROOT}/exploratory_test_spec.json" \
+  --output "${EXPLORATORY_ROOT}/submission_dry_run.json"
+```
+
+Confirm the spec has exactly 64 unique rows and that the dry-run evaluation
+command contains uncapped `--array=0-63`. Submit the four-stage DAG only from
+that exact worktree:
+
+```bash
+python -s scripts/submit_pmard_exploratory_test.py \
+  --exploratory-test-spec "${EXPLORATORY_ROOT}/exploratory_test_spec.json" \
+  --output "${EXPLORATORY_ROOT}/submission_ledger.json" \
+  --execute
+```
+
+After aggregation, print a validation/test comparison ordered by exploratory
+test CE. This ordering is descriptive only:
+
+```bash
+python -s - "${EXPLORATORY_ROOT}/aggregate_report.json" <<'PY'
+import json, sys
+r = json.load(open(sys.argv[1]))
+rows = sorted(r["candidates"], key=lambda x: (x["exploratory_test"]["cross_entropy"], x["evaluation_id"]))
+print("rank source       experiment                              val_CE   test_CE  test_AUC test_logR50")
+for rank, row in enumerate(rows, 1):
+    v, t = row["validation"], row["exploratory_test"]
+    print("{:>4} {:<12} {:<38} {:.6f} {:.6f} {:.6f} {:.6f}".format(
+        rank, row["source_study"], row["experiment_id"],
+        v["cross_entropy"], t["cross_entropy"], t["macro_ovr_auc"],
+        t["macro_mean_log_qcd_rejection_at_50pct_signal"],
+    ))
+PY
+```
+
 ## Execution-only pilot prefix recovery
 
 `import_pmard_pilot_prefix.py` is the only authorized shortcut after the
