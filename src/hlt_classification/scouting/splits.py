@@ -229,8 +229,11 @@ def validate_split_manifest(
     if manifest.get("maximum_allowed_class_fraction_deviation") != MAX_CLASS_FRACTION_DEVIATION:
         raise ValueError("split class-balance tolerance differs")
     roles = manifest.get("roles")
-    if not isinstance(roles, Mapping) or tuple(roles) != SPLIT_ROLES:
-        raise ValueError("split roles or order differ")
+    # JSON objects are unordered by contract, and immutable publication writes
+    # them with sorted keys.  Validate the exact role set here; all scientific
+    # processing below still follows the canonical SPLIT_ROLES order.
+    if not isinstance(roles, Mapping) or set(roles) != set(SPLIT_ROLES):
+        raise ValueError("split roles differ")
     seen: set[str] = set()
     for role in SPLIT_ROLES:
         value = roles[role]

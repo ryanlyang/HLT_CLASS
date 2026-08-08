@@ -766,8 +766,21 @@ Local verification evidence at the final post-handoff audit:
   gate, and no submission.
 
 The placeholder/donor-import/development-path static scans were clean and
-`git diff --check` passed with line-ending notices only. No SSH, Slurm, remote
-push, ROOT write, or Tigris action occurred.
+`git diff --check` passed with line-ending notices only. During that local
+implementation audit, no SSH, Slurm, remote push, ROOT write, or Tigris action
+occurred.
+
+The first separately authorized Tigris smoke attempt reached source audit but
+stopped at split validation (`source_audit` job 56135 completed; `splits` job
+56136 failed before matching or training). The cause was an order-sensitive
+role-key check: immutable JSON publication canonically sorts object keys while
+the validator required the pre-serialization insertion order. Split role maps
+are now validated by their exact key set and consumed in the canonical
+`SPLIT_ROLES` order. A regression publishes, reloads, and validates a real
+split manifest through the immutable JSON path. Focused HCWDL/split tests pass
+69/69 and the repository-wide suite remains 299 passed with 14 warnings. This
+local fix still requires an exact clean commit and a fresh Tigris smoke
+identity; no failed-campaign descendant should be reused.
 
 ## Exact active next task: separately authorized HCWDL Tigris validation
 

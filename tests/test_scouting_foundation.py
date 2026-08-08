@@ -4,6 +4,7 @@ import hashlib
 import numpy as np
 import pytest
 
+from hlt_classification.data.cache_contracts import load_json, write_immutable_json
 from hlt_classification.scouting.audit import audit_source_inventory, authorize_p4_closure
 from hlt_classification.scouting.assignment import EphemeralAssignmentTable, build_even_source_ordinals
 from hlt_classification.scouting.contracts import artifact_envelope, require_role_access, validate_artifact
@@ -46,7 +47,7 @@ def test_identity_is_label_free_portable_and_case_safe():
         reject_case_aliases(("A/x.root", "a/x.root"))
 
 
-def test_split_is_stratified_disjoint_authenticated_and_reference_sized():
+def test_split_is_stratified_disjoint_authenticated_and_reference_sized(tmp_path):
     records = []
     for stratum, count in (("signal", 25), ("qcd", 28)):
         records.extend(
@@ -64,6 +65,18 @@ def test_split_is_stratified_disjoint_authenticated_and_reference_sized():
     assert first["fractions"] == [0.6, 0.2, 0.2]
     assert first["maximum_observed_class_fraction_deviation"] <= .02
     assert validate_split_manifest(first, source_manifest_sha256=source, expected_inventory=records) == first["content_hash"]
+
+    # Immutable JSON publication sorts mapping keys.  A valid split must remain
+    # valid after that mandatory serialization round trip.
+    path = tmp_path / "split_manifest.json"
+    write_immutable_json(path, first)
+    round_tripped = load_json(path)
+    assert tuple(round_tripped["roles"]) == ("final_test", "train", "validation")
+    assert validate_split_manifest(
+        round_tripped,
+        source_manifest_sha256=source,
+        expected_inventory=records,
+    ) == first["content_hash"]
 
 
 def test_source_audit_streams_per_file_class_counts_for_stratification(tmp_path):
