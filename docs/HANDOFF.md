@@ -767,6 +767,19 @@ jobs through its own submission ledger.
 
 ## HCWDL local implementation closure (2026-08-08)
 
+The first real smoke reached and completed all six endpoint qualifiers, but
+Tigris represented the submitted `--hold` gate as `JobHeldAdmin`; the ordinary
+submitting user could not release it. The same execution also demonstrated
+that a campaign bound to the shared main checkout fails if another experiment
+pulls that checkout mid-DAG. Campaign/command-plan contracts advance to v3/v2.
+Creation and submission now bind the exact invoking worktree, the initial
+submission stops after endpoint qualification, and
+`continue_hcwdl_campaign.py` validates the complete attested prefix plus the
+human acknowledgement before submitting the gate and downstream ladder with
+no Slurm hold. This correction passes the 58 focused orchestration tests and
+the complete 311-test suite locally; it still requires a fresh exact-commit
+Tigris smoke.
+
 The active conversation task is now the local implementation of
 `docs/plans/HIGH_COVERAGE_COLD_WARM_DISTILLATION_LADDER.md`. The previous PRAD
 and corrected-PMARD operational next tasks above are historical context and are
@@ -795,9 +808,10 @@ All six locally implementable HCWDL blocks now exist:
    locks, fixed endpoint qualification, exact human acknowledgement, 55-row
    confirmation registry, reporting, one-claim final evaluation, exact-ID
    recovery/cancellation, resource/storage evidence, and Slurm command
-   generation are implemented. The endpoint lock is submitted held so the
-   six diagnostics can be inspected and the lineage-bound acknowledgement can
-   be written before exact-ID release. A measured non-executable candidate
+   generation are implemented. Submission stops after the six diagnostics;
+   after inspection and lineage-bound acknowledgement, a separately invoked
+   continuation validates the complete prefix and submits the remaining DAG.
+   A measured non-executable candidate
    spec now hashes the exact future Slurm commands independently of the
    enclosing spec; submission authorization v3 binds that command plan and
    exact resource-request hash, and the executable spec must reproduce both.
@@ -831,7 +845,7 @@ New contract families are `HIGHCOV_MATCHER_RESOURCES/v1`,
 `HCWDL_EXECUTION_CLAIM/v1`, `HCWDL_ENDPOINT_{QUALIFICATION,DIAGNOSTIC_ACK}/v1`,
 `HCWDL_{SCREEN,CONFIRMATION,FINAL}_AGGREGATE/v1`,
 `HCWDL_FINAL_{EVALUATION,EVALUATION_MANIFEST}/v1`,
-`HCWDL_CAMPAIGN_SPEC/v2`, `HCWDL_COMMAND_PLAN/v1`,
+`HCWDL_CAMPAIGN_SPEC/v3`, `HCWDL_COMMAND_PLAN/v2`,
 `HCWDL_SUBMISSION_LEDGER/v2`, `HCWDL_MONITOR_REPORT/v1`,
 `HCWDL_{RESOURCE_PROFILE,STORAGE_ESTIMATE}/v1`,
 `HCWDL_SUBMISSION_AUTHORIZATION/v3`,

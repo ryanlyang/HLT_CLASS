@@ -1404,6 +1404,14 @@ Dependencies express artifact availability, never a performance threshold.
 Endpoint disappointment, teacher disappointment, or a negative rung gain
 cannot suppress registered descendants.
 
+Submission is explicitly two-phase. Phase one ends after all six endpoint
+qualification tasks and does not submit the qualification lock or any ladder
+job. After the exact qualifier reports are inspected, the human publishes the
+lineage-bound acknowledgement. Phase two validates every phase-one task
+attestation and that acknowledgement, then submits the qualification lock and
+the complete downstream DAG. Slurm `--hold` is forbidden: on Tigris it can
+become an administrator-only hold that the submitting user cannot release.
+
 ### 33.3 Job granularity and arrays
 
 Assignment workers are arrays by source file or deterministic source shard.
@@ -1542,6 +1550,7 @@ scripts/train_hcwdl_node.py
 scripts/select_hcwdl_checkpoint.py
 scripts/aggregate_hcwdl_campaign.py
 scripts/submit_hcwdl_campaign.py
+scripts/continue_hcwdl_campaign.py
 scripts/monitor_hcwdl_campaign.py
 scripts/resume_hcwdl_campaign.py
 scripts/cancel_hcwdl_campaign.py
@@ -1557,6 +1566,12 @@ Commands support non-mutating validation/dry-run modes where appropriate.
 Subprocess arguments are converted to strings before launch. Every consumer
 validates exact repair, alpha, matcher, resource, recipe, teacher, graph, and
 source parents.
+
+Every executable campaign is bound to the exact worktree from which its
+creation CLI runs. The default project directory is that checkout, not a
+shared mutable repository path. Candidate creation, initial submission,
+continuation, and every worker reject a different or dirty checkout. Separate
+concurrent campaigns therefore use separate lightweight Git worktrees.
 
 ### 36.2 Scientific versus execution failure
 

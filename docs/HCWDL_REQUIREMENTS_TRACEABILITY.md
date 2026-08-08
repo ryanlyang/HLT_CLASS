@@ -56,13 +56,13 @@ by any status in this ledger.
 
 | Requirement | Implementation | Contract | Verification | Status |
 |---|---|---|---|---|
-| Smoke/pilot/production specs and complete dependency DAG | `hcwdl_campaign.py`, `hcwdl_workflow.py` | `HCWDL_CAMPAIGN_SPEC/v2` | graph/dependency tests | Local passed |
-| Bootstrap smoke or measured prelaunch candidate and exact non-circular command-plan authorization | `hcwdl_campaign.py`, `hcwdl_authorization.py` | `HCWDL_COMMAND_PLAN/v1`, submission authorization v3 | first-miniature and changed-root/command-plan rejection tests | Local passed |
+| Smoke/pilot/production specs and complete dependency DAG | `hcwdl_campaign.py`, `hcwdl_workflow.py` | `HCWDL_CAMPAIGN_SPEC/v3` | graph/dependency tests | Local passed |
+| Bootstrap smoke or measured prelaunch candidate and exact non-circular command-plan authorization | `hcwdl_campaign.py`, `hcwdl_authorization.py` | `HCWDL_COMMAND_PLAN/v2`, submission authorization v3 | first-miniature and changed-root/command-plan rejection tests | Local passed |
 | Endpoint qualification infrastructure without validation-selected repair | `hcwdl_qualification.py` | qualification report/lock v1 | bad-performance continuation test | Local passed |
 | Confirmation registry, finalist lock, execution lock, and sealed final-test claim | `hcwdl_locks.py` | lock family v1 | pre-lock denial and atomic claim tests | Local passed |
 | Metrics, gap recovery, screen/confirmation/final aggregation | `hcwdl_reporting.py` | aggregate report v1 | metric and selection tests | Local passed |
 | Exact-ID submission ledger, per-submit journals, monitoring, resume, superseded/replacement history, and cancellation | `hcwdl_campaign.py`, `hcwdl_recovery.py` | submission ledger v2, monitor/event/attestation v1 | mocked scheduler, partial-ledger, corruption, and exact-ID tests | Local passed |
-| Thin CLIs and absolute-path `exec python` Slurm worker | `scripts/*hcwdl*.py`, `sbatch/run_hcwdl_task.sh` | campaign spec v2 | help/static/dry-run tests | Local passed |
+| Thin CLIs, two-phase endpoint continuation, dedicated-worktree binding, and absolute-path `exec python` Slurm worker | `scripts/*hcwdl*.py`, `sbatch/run_hcwdl_task.sh` | campaign spec v3 | help/static/dry-run tests | Local passed |
 | No live action without locked recipe, source, assignments, qualification, and explicit execution mode | workflow validators | all parent locks | fail-closed prelaunch tests | Local passed |
 
 ## Block 6: local acceptance and readiness
@@ -98,6 +98,6 @@ remote, or modify ROOT data. The final locally attainable status is:
   endpoint exactness passed, and final-test access was false.
 - `tests/test_hcwdl_cli.py::test_complete_pilot_dry_run_is_nonmutating_and_exact`
   constructs and renders the complete 300,000/100,000/100,000 planning DAG,
-  including uncapped source arrays and the held endpoint-acknowledgement gate.
+  including uncapped source arrays and the two-phase endpoint-acknowledgement boundary.
 - The only remaining acceptance is separately authorized execution with real
   Weaver/CUDA/data workers on Tigris, followed by measured resource locking.

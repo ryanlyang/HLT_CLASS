@@ -197,15 +197,18 @@ Recipe, resource, submission, and human diagnostic gates are built by
 monitor/resume/cancel, node/qualifier/control training, cache miniature,
 selection, final evaluation, and aggregation each have a thin `*hcwdl*` CLI.
 `run_hcwdl_local_smoke.py` executes the complete 23-node graph on bounded
-synthetic tensors without final-test access. The endpoint lock Slurm job is
-submitted held; after the six fixed qualifier reports exist, the exact
-acknowledgement artifact must be published and that exact job ID manually
-released. No executable pilot/production spec can be made from the bundled
+synthetic tensors without final-test access. Live submission is two-phase:
+`submit_hcwdl_campaign.py` stops after the six fixed qualifier jobs; after
+their exact reports are inspected and the acknowledgement is published,
+`continue_hcwdl_campaign.py` validates the entire prefix and submits the lock
+plus downstream ladder. Slurm holds are not used. Executable specs default to
+and enforce the exact checkout invoking campaign creation, so concurrent
+campaigns use dedicated Git worktrees. No executable pilot/production spec can be made from the bundled
 test-only recipe or unmeasured planning resources. After a real miniature,
 create a locked non-live candidate spec with the measured resource profile,
 inspect its dry run, and pass that candidate to
 `build_hcwdl_submission_authorization.py`; authorization v3 binds the exact
-resource requests and `HCWDL_COMMAND_PLAN/v1` hash. The first bounded smoke
+resource requests and `HCWDL_COMMAND_PLAN/v2` hash. The first bounded smoke
 may use its explicitly authorized conservative bootstrap requests without
 claiming measurement; pilot/production candidates require measured profiles.
 Recreate the live spec with the same root,

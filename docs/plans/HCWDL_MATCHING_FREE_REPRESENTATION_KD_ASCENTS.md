@@ -880,11 +880,16 @@ Section 9.3 canonical-JSON UTF-8 payload:
 ```
 
 The subset remains in natural class proportions up to deterministic hash
-variation; it is not class-balanced or validation-selected. It is divided into
-16 canonical batches of 256. If the train role contains fewer than 4,096 rows,
-smoke uses every available row and records the smaller non-scientific count.
-RSET and RREL counterparts therefore use the same calibration identities;
-strategy text cannot perturb the subset.
+variation; it is not class-balanced or validation-selected. Sort the selected
+rows by ascending 32-byte selection digest, then by ascending 32-byte canonical
+identity digest as the collision tie-break. A repeated canonical identity fails
+closed. The ordered list and its SHA-256 are part of the calibration contract;
+no filesystem, source-file, loader, or dictionary order may replace it. Divide
+that exact order into 16 consecutive batches of 256. If the train role contains
+fewer than 4,096 rows, smoke uses every available row in the same order and
+records the smaller non-scientific count. RSET and RREL counterparts therefore
+use the same calibration identities and batch order; strategy text cannot
+perturb either.
 
 Calibration occurs immediately before each component family first becomes
 active, not at the fresh initialization:
@@ -918,6 +923,21 @@ Component-specific support changes only the FP32 reduction of already-created
 per-row losses; it never creates a second stochastic forward. Teacher targets
 are cached/detached. Tests count forward calls and prove identical RNG and
 surface tensors across every component norm at the barrier.
+
+The ordering at every validation boundary is exact:
+
+```text
+finish scientific pass -> validation -> required calibration barrier
+-> representation diagnostic -> boundary/resume commit
+```
+
+At ordinary boundaries the calibration step is a no-op. At pass 2, jet/set
+scales are published before that boundary's diagnostic; relation is `null`
+with `not_yet_calibrated`. At pass 4, RREL relation calibration is published
+before the diagnostic; RSET relation remains `null` with
+`not_part_of_strategy`. Before pass 2, jet/set and relation scale-dependent
+diagnostics are `null` with `not_yet_calibrated`. A diagnostic may never use a
+scale that is still being calculated or run before a required barrier.
 
 The pass-two and pass-four barriers are safe checkpoint boundaries. If a job
 is preempted before a barrier artifact is atomically published, resume restores
@@ -1294,7 +1314,7 @@ For ordinary D teachers, the shared physical superset requires:
 
 ```text
 15 logits + 128 pooled + 1,024 token sketch + 3 * 256 relation values
-= 1,935 FP32 values per jet, plus fixed-width identity/eligibility metadata
+= 1,935 FP32 values = 7,740 core bytes per jet
 ```
 
 The TOFF superset requires:
@@ -1302,14 +1322,18 @@ The TOFF superset requires:
 ```text
 15 logits + 128 pooled + 2 * 1,024 token sketches
           + 2 * 3 * 256 relation values
-= 3,727 FP32 values per jet, plus fixed-width identity/eligibility metadata
+= 3,727 FP32 values = 14,908 core bytes per jet
 ```
 
-Before compression/metadata, 300,000 pilot rows therefore require about
-`2.322 GB` (`2.163 GiB`) for one ordinary bank and `4.4724 GB`
-(`4.165 GiB`) for TOFF. At an illustrative 3,000,000 production rows, the
-corresponding values are `23.22 GB` (`21.625 GiB`) and `44.724 GB`
-(`41.652 GiB`). The mandatory cold-then-warm lifecycle permits only one
+Section 29.1 freezes `75` ordinary or `113` TOFF metadata bytes per row, so the
+exact uncompressed logical row widths are `7,815` and `15,021` bytes. Thus
+300,000 pilot rows require `2,344,500,000` bytes (`2.3445 GB`, `2.183486 GiB`)
+for one ordinary bank or `4,506,300,000` bytes (`4.5063 GB`, `4.196819 GiB`)
+for TOFF. At exactly 3,000,000 production rows, the corresponding values are
+`23,445,000,000` bytes (`23.445 GB`, `21.834858 GiB`) and
+`45,063,000,000` bytes (`45.063 GB`, `41.968189 GiB`). Compression and NPZ/JSON
+container overhead are excluded from these logical-byte identities and must be
+measured separately. The mandatory cold-then-warm lifecycle permits only one
 committed bank at a time; no compression saving is assumed for authorization.
 The storage estimator adds the exact fixed metadata, staging/recovery reserve,
 and filesystem headroom rather than using these core-array values alone. Exact
@@ -1501,10 +1525,14 @@ Introduce:
 - `HCWDL_REPRESENTATION_TARGET_CLEANUP_COMPLETION/v1`.
 
 The logical-bank artifact freezes teacher/target meaning independently of a
-physical materialization. Each screen, confirmation, or recovery
-materialization has its own immutable consumer registry and `generation_id`
-derived from the logical-bank hash, purpose, consumer-registry hash, and
-recovery/confirmation parent hash. Targets are source-sharded,
+physical materialization. A training execution is predeclared from the logical
+bank and target purpose, never from a not-yet-created physical generation. Each
+screen, confirmation, or recovery materialization has its own immutable
+consumer registry and `generation_id` derived from the logical-bank hash,
+purpose, consumer-registry hash, and recovery/confirmation parent hash. The
+registry can therefore enumerate predeclared execution IDs before the physical
+generation exists, and the generation can hash that completed registry without
+an identity cycle. Targets are source-sharded,
 canonical-identity ordered, contiguous FP32 arrays with explicit
 shape/dtype/logical hashes and an immutable generation manifest.
 Publication is atomic. Compression may be used only if decompression
@@ -1634,6 +1662,7 @@ HCWDL_REPRESENTATION_CONFIRMATION_REGISTRY/v1
 HCWDL_REPRESENTATION_CONFIRMATION_AGGREGATE/v1
 HCWDL_REPRESENTATION_FINAL_DISPOSITION/v1
 HCWDL_REPRESENTATION_PARENT_FINAL_STATE/v1
+HCWDL_SHARED_IMMUTABLE_BINARY_ENVELOPE/v1
 HCWDL_SHARED_FINAL_POPULATION/v1
 HCWDL_SHARED_FINAL_POPULATION_DISJOINTNESS/v1
 HCWDL_SHARED_FINAL_EXPOSURE_LEDGER/v1
@@ -1674,6 +1703,34 @@ hashes. Binary objects record byte and logical hashes. Old PMARD representation
 arms, `HCWDL_GRAPH/v1`, and `HCWDL_RECIPE/v3` remain valid under their existing
 consumers and are never accepted as if they already implemented this plan.
 
+Every non-resume binary-plus-JSON artifact uses the common
+`HCWDL_SHARED_IMMUTABLE_BINARY_ENVELOPE/v1` publication protocol. Validate all
+immutable parents first; derive deterministic `envelope_id` as the SHA-256 of
+Section 9.3 canonical JSON over `{contract, producer_task_id, schema,
+immutable_parent_hashes, registered_output_row}` and `envelope_owner_id` over
+that payload plus the campaign/recovery owner. Neither identity depends on
+not-yet-computed output bytes; the committed sidecar supplies those hashes. Write
+payloads, sidecar, branch-access record when applicable, and `commit.json` into
+`staging/<envelope_id>/<envelope_owner_id>/`; fsync every file and the complete
+tree; then atomically rename that nonempty directory to
+`committed/<envelope_id>/` and fsync the committed parent. The committed
+directory appearance is the sole publication point. `commit.json` binds every
+member's relative path, byte hash, logical hash, dtype/shape where applicable,
+and parent hash. A final-path payload outside a committed envelope is never an
+artifact.
+
+Restart with the same owner/payload validates and continues only missing
+staged members or validates an already committed envelope; a different owner
+cannot adopt staging. A conflicting committed envelope or invalid committed
+member is corruption and is never overwritten. Orphan staging may be removed
+only under the exact-owner recovery plan. This protocol is mandatory for the
+kernel-resource pair, shuffle-map pair, final label escrow, final assignment
+shards, final prediction shards, and paired-bootstrap binary sidecars. Target
+generations use the stronger whole-generation directory commit in Section 29;
+resume states use the sequence protocol below. Tests inject death before and
+after every member write/fsync, before and after `commit.json`, and before and
+after the directory rename.
+
 The three binary-bearing control/state families are explicit rather than
 implicit Python conventions:
 
@@ -1702,7 +1759,8 @@ implicit Python conventions:
   cyclic-derangement algorithm, and proves no fixed point or cross-class edge.
   Both shuffled strategies consume the same authenticated mapping.
 
-Likewise, prediction shards use an immutable binary/JSON envelope: canonical
+Likewise, prediction shards use the shared committed binary/JSON envelope:
+canonical
 identity digest plus finite FP32 `[rows,15]` logits only--no probabilities or
 labels--with exact finalist and checkpoint hashes, row/order/set hashes, and
 producer runtime signature. The
@@ -1745,8 +1803,13 @@ clean -> build D25c -> ... -> clean D100 -> build TOFF`. TOFF confirmation is a 
 that depends on screen-generation cleanup. No D25-or-later screen bank may
 build merely because its downward teacher already exists. Student branches
 remain sequential internally because predecessor logits and warm weights come
-from their own prior rung. The four same-rung branches may run concurrently;
-bank lifecycles may not cross the frozen storage barrier. This serialization is
+from their own prior rung. For an ordinary cold or warm bank, its two same-bank
+RSET/RREL consumers may run concurrently. Cold and warm consumers cannot run
+concurrently because warm-bank readiness requires cold-bank cleanup. The shared
+D100 bank may fan out to its eight registered M5 primary/control consumers, and
+the shared TOFF bank to its four registered M6 consumers; those are the only
+larger same-generation waves. Bank lifecycles may not cross the frozen storage
+barrier. This serialization is
 intentional because the evidence-backed 1,024/256-dimensional sketches favor a
 stronger finite kernel while respecting the user's limited durable storage.
 
@@ -1911,7 +1974,9 @@ Required noncampaign controls include:
   `F.normalize` Jacobian. For gradient norm at least `1e-8`, require flattened
   cosine `>=0.99999`, norm ratio in `[0.999,1.001]`, and maximum absolute entry
   error `<=1e-5`; a near-zero analytic fixture requires autograd norm `<=1e-6`;
-- ideal infinite-four-RBF **value** quality on those exact fixtures. Token
+- ideal infinite-four-RBF **value** quality on the 512 seed-`991` token and
+  512 seed-`992` relation value fixtures defined in the first two bullets--not
+  on the smaller seed-`993`/`994` gradient fixtures. Token
   MAE/p95/correlation must be `<=0.015/<=0.040/>=0.990` (audited
   `0.009032/0.026687/0.997016`); relation must be
   `<=0.030/<=0.100/>=0.985` (audited `0.019179/0.076771/0.992085`). Ideal-RBF
@@ -2018,13 +2083,16 @@ means for:
 - BF16-forward/FP32-loss finite checks.
 
 The diagnostic microbatch is exact. It is the first canonical 256-identity
-batch of the Section 13 calibration population, in that population's fixed
-order, materialized once from train-only inputs and the node's exact target
-generation. At every post-validation safe boundary, run the live student/heads
-in `eval()` mode with the node's BF16-forward/FP32-loss policy and one shared
-student forward for base and all components. Use the Section 13 matched-support
-reductions and `Theta_cal`; an ineligible component reports `null` plus counts,
-never an invented zero. Teacher values are cached/detached.
+batch of the Section 13 digest-ordered calibration population, materialized
+once from train-only inputs and the node's exact target generation. At every
+post-validation safe boundary, first complete any calibration barrier required
+at that pass under Section 13.2, then run the live student/heads in `eval()`
+mode with the node's BF16-forward/FP32-loss policy and one shared student
+forward for base and all components. Use the Section 13 matched-support
+reductions and `Theta_cal`; an ineligible or not-yet-calibrated component
+reports `null` plus the exact status/counts, never an invented zero or a scale
+from the future. Teacher values are cached/detached. The diagnostic precedes
+the boundary/resume commit.
 
 Before the diagnostic, snapshot model mode and buffers, CPU/CUDA RNG, trimmer,
 sampler, optimizer/scheduler, data/target cursors, and logging state. Run inside
@@ -2091,13 +2159,24 @@ deployable backbone and varies the new-run stochastic streams.
 
 Every training run, including the seed-1337 screen, has an immutable
 `execution_id = SHA256(Section 9.3 canonical JSON of {campaign, strategy,
-node_id, purpose, seed, initialization_parent, teacher, target_generation,
-recipe})`. Calibration phases/manifests, resume generations, checkpoints,
-reports, and selection artifacts are all namespaced by this execution ID.
-`node_id` alone is never an output path. Thus the five confirmation executions
-of one M6 node cannot collide with each other or with its screening execution.
-The confirmation registry enumerates the 20 exact execution IDs before any run
-starts.
+node_id, purpose, seed, initialization_parent, teacher, logical_target_bank,
+target_purpose, recipe})`. `logical_target_bank` is the authenticated logical
+bank hash; `target_purpose` is exactly `screen` or `confirmation`. A physical
+`target_generation` is deliberately excluded because it is operationally
+reconstructible and its consumer registry already contains these execution
+IDs. Calibration phases/manifests, resume generations, checkpoints, reports,
+and selection artifacts are all namespaced by execution ID and separately bind
+the realized physical generation ID, its consumer-registry hash, and its stable
+`logical_target_sha256`. Once an execution publishes its first calibration or
+resume artifact, that execution cannot switch physical generations; a rebuild
+may serve that same predeclared execution ID only when it has no committed
+training state. A partially trained execution necessarily prevents its target
+generation's last-consumer cleanup and therefore resumes against the original
+generation. `node_id` alone is never an output path. Thus the five confirmation
+executions of one M6 node cannot
+collide with each other or with its screening execution. The confirmation
+registry enumerates the 20 exact execution IDs before its consumer registry and
+physical generation are constructed.
 
 This estimates conditional terminal-rung training variance, not full-ladder
 seed variance, and reports that limitation. A future full-system replicate
@@ -2332,7 +2411,9 @@ baseline-selection fields, and label branches; selects the frozen natural
 class-stratified population; publishes a public identity/count manifest and a
 separately capability-protected `HCWDL_SHARED_FINAL_LABEL_ESCROW/v1` mapping
 selected identity digests to uint8 labels. It loads no particle branches and
-computes no model output.
+computes no model output. The escrow payload/sidecar/commit are published by the
+Section 21 shared directory-envelope protocol; an NPZ without its committed
+envelope is invisible, not a recoverable published artifact.
 
 Assignment tasks read only the required HLT/offline particle and identity
 branches. Prediction tasks use a new reusable label-free final streamer that
@@ -2684,17 +2765,49 @@ jet_penultimate               float32 [J, 128]
 token_kernel_mean             float32 [J, 1024]      ordinary D
 token_kernel_mean_charged     float32 [J, 1024]      TOFF
 token_kernel_mean_neutral     float32 [J, 1024]      TOFF
-token_family_eligibility      uint8  [J, families]
+token_family_eligibility      uint8  [J, F_bank]
 relation_kernel_mean          float32 [J, 3, 256]    ordinary D
 relation_kernel_mean_charged  float32 [J, 3, 256]    TOFF
 relation_kernel_mean_neutral  float32 [J, 3, 256]    TOFF
-relation_eligibility          uint8  [J, families, 3]
-token_count                   uint16 [J, families]
-token_scalar_pt_sum           float32 [J, families]
-relation_pair_count           uint16 [J, families, 3]
-relation_effective_sample     float32 [J, families, 3]
-family_reason_counts          fixed-width uint16 [J, reason]
+relation_eligibility          uint8  [J, F_bank, 3]
+token_count                   uint16 [J, F_bank]
+token_scalar_pt_sum           float32 [J, F_bank]
+relation_pair_count           uint16 [J, F_bank, 3]
+relation_effective_sample     float32 [J, F_bank, 3]
+family_reason_counts          uint16 [J, R_bank]
 ```
+
+The axes are not symbolic runtime choices. For every ordinary D bank,
+`F_bank=1` with ordered family axis `("all",)` and `R_bank=1` with reason axis
+`("ordinary_all",)`. For TOFF, `F_bank=2` with ordered axis
+`("charged","neutral")` and `R_bank=6` with this exact reason-code order:
+
+```text
+known_pid_charge_agree_charged
+known_pid_charge_agree_neutral
+charge_only_charged
+charge_only_neutral
+unclassified_contradiction
+unclassified_malformed
+```
+
+`token_count`, `token_scalar_pt_sum`, pair count, and relation ESS describe the
+post-trimmer **teacher target** clouds. TOFF `family_reason_counts` describe the
+companion HLT bookkeeping tokens after the target-forward spec's exact trim and
+Section 9.4 classifier; ordinary `ordinary_all` counts that bank's visible
+target tokens. Live stochastic student counts remain training diagnostics, not
+cached target metadata. Invalid/nonfinite charge or PID inputs fail before
+counting. The first four TOFF reasons sum to classified charged/neutral HLT
+tokens; the last two sum to HLT tokens excluded from M6 token/relation KD. The
+manifest records these ordered vocabularies verbatim and validates the declared
+teacher and companion-HLT conservation equations separately.
+
+Fixed metadata bytes per row are exactly
+`4 + 8 + 32 + 1 + F_bank + 3*F_bank + 2*F_bank + 4*F_bank +
+6*F_bank + 12*F_bank + 2*R_bank = 45 + 28*F_bank + 2*R_bank`.
+They are therefore `75` bytes for an ordinary bank and `113` bytes for TOFF,
+before container overhead or compression. Together with the core floats this
+gives the exact `7,815`/`15,021` logical bytes per row used by Section 16.5.
 
 `label` cannot participate in a representation target or model forward. It is
 stored solely to audit class counts and implement the predeclared within-class
@@ -2718,15 +2831,18 @@ hashes but is valid only when the stable logical target hash is unchanged.
 
 For each logical bank:
 
-1. atomically publish `HCWDL_REPRESENTATION_TARGET_BUILD_INTENT/v1`, binding
-   the logical bank, generation/consumer registry, forward spec, exact sorted
-   source partitions/output names, expected rows/shapes, and deterministic
-   `build_owner_id`; create only its owner-scoped staging directory;
-2. validate the parent import, overlay recipe, kernel resources, teacher
+1. validate the parent import, overlay recipe, kernel resources, teacher
    selection, assignment/repair lineage, train row selection, and canonical
    target-forward specification and any prior execution attestation required
-   for a rebuild;
-3. calculate exact output shapes and peak bytes before loading the teacher;
+   for a rebuild; no staging directory or build-intent contract may exist yet;
+2. calculate exact output shapes, logical metadata bytes, peak bytes, target
+   paths, and consumer set before loading the teacher; reject an impossible
+   storage/resource plan during this preflight;
+3. create only the owner-scoped staging directory and atomically publish/fsync
+   `HCWDL_REPRESENTATION_TARGET_BUILD_INTENT/v1` inside it, binding the logical
+   bank, generation/consumer registry, forward spec, exact sorted source
+   partitions/output names, expected rows/shapes/bytes, and deterministic
+   `build_owner_id`;
 4. load the selected teacher checkpoint strictly and set evaluation mode;
 5. open only projected branches needed for that teacher view;
 6. stream each selected train identity exactly once in canonical source/entry
@@ -2949,6 +3065,17 @@ They never infer replacement jobs from names or omit them because they were not
 in the original submission. Broad `scancel --name` operations are not part of
 the interface.
 
+Monitoring is append-only. Invocation sequence `q` publishes immutable
+`monitoring/reports/<q>_<content_hash>.json` under
+`HCWDL_REPRESENTATION_MONITOR_REPORT/v1`, binding the complete authenticated
+submission-ledger chain and the preceding monitor-report hash (or `null` at
+`q=0`). Repeated monitoring never overwrites `monitor_report.json`. An optional
+operational `monitoring/HEAD` is an atomically replaced, fsynced pointer
+containing only sequence, relative path, and content hash; it is not a
+scientific artifact, and readers validate the referenced immutable report. A
+missing, stale, or corrupt HEAD can be reconstructed from the valid report
+chain without changing any report.
+
 ## 31. Exact artifact layout
 
 The representation campaign uses a new root; it never writes into the parent
@@ -2961,18 +3088,37 @@ campaign root:
   submission_ledger.json
   recovery_submission_ledgers/
     <sequence>_<content_hash>.json
+  graph/
+    ascent_graph.json
   import/
     parent_import.json
     parent_loss_attestation.json
     architecture_attestation.json
     parent_final_state.json
     final_disposition.json
+  architecture/
+    tap.json
+    installed_weaver_parity.json
   recipes/
     representation_recipe.json
-    kernel_resources.npz
-    kernel_resources.json
+    kernel_resources/
+      staging/<envelope_id>/<envelope_owner_id>/...
+      committed/<envelope_id>/
+        payload.npz
+        sidecar.json
+        commit.json
   resources/
     measured_profile.json
+    storage_estimate.json
+  acceptance/
+    numerical.json
+    smoke_probe.json
+    local_smoke_report.json
+    cache_miniature.json
+    tigris_acceptance.json
+  recovery/
+    targets/<recovery_id>.json
+    training/<recovery_id>.json
   targets/
     <logical_bank>/
       logical_bank.json
@@ -3002,20 +3148,35 @@ campaign root:
           state_<sequence>.pt
           state_<sequence>.json
           commit_<sequence>.json
-        selected_training_state.pt
-        final_training_state.pt
-        deployable_selected.pt
+        checkpoints/
+          selected/
+            staging/<envelope_id>/<envelope_owner_id>/...
+            committed/<envelope_id>/
+              training_state.pt
+              deployable_state.pt
+              sidecar.json
+              commit.json
+          final/
+            staging/<envelope_id>/<envelope_owner_id>/...
+            committed/<envelope_id>/
+              training_state.pt
+              sidecar.json
+              commit.json
         deployable_extraction.json
         training_report.json
         checkpoint_selection.json
+    controls/<control_node_id>/<execution_id>/
+      ...                             # identical execution-scoped schema above
   controls/
     registry.json
     zero_coefficient/
       acceptance.json
     shuffled_representation/
-      shuffle_map.npz
-      shuffle_map.json
-    <control_node_id>/...
+      staging/<envelope_id>/<envelope_owner_id>/...
+      committed/<envelope_id>/
+        payload.npz
+        sidecar.json
+        commit.json
   confirmation/
     registry.json
     runs/<execution_id>.json
@@ -3026,6 +3187,7 @@ campaign root:
         authorization.json
         completion.json
   locks/
+    00_submission_authorization.json
     01_parent_import.json
     02_miniature_accepted.json
     03_screen_complete.json
@@ -3035,36 +3197,64 @@ campaign root:
     07_execution.json
   reports/
     screen_aggregate.json
-    confirmation_aggregate.json
     final_aggregate.json
+    paired_bootstrap/<comparison_id>/
+      staging/<envelope_id>/<envelope_owner_id>/...
+      committed/<envelope_id>/
+        replicates.npz
+        sidecar.json
+        commit.json
   final/
     task_registry.json
     prediction_spec.json
+    capabilities/<task_id>.json
     recovery/
       <recovery_id>.json
     selection/
       row_selection.json
-      label_escrow.npz
-      label_escrow.json
       branch_access.json
+      label_escrow/
+        staging/<envelope_id>/<envelope_owner_id>/...
+        committed/<envelope_id>/
+          labels.npz
+          sidecar.json
+          commit.json
     assignment/
       shards/
-        <source_partition>.npz
-        <source_partition>.json
+        <source_partition>/
+          staging/<envelope_id>/<envelope_owner_id>/...
+          committed/<envelope_id>/
+            assignments.npz
+            sidecar.json
+            commit.json
       manifest.json
       audit.json
     predictions/
       <finalist_id>/
-        <source_partition>.npz
-        <source_partition>.json
-        <source_partition>.branch_access.json
+        shards/<source_partition>/
+          staging/<envelope_id>/<envelope_owner_id>/...
+          committed/<envelope_id>/
+            logits.npz
+            sidecar.json
+            branch_access.json
+            commit.json
         manifest.json
     evaluations/
       <finalist_id>.json
     metric_join.json
   monitoring/
-    monitor_report.json
+    reports/<sequence>_<content_hash>.json
+    HEAD                              # optional operational atomic pointer
 ```
+
+The canonical confirmation aggregate exists only at
+`confirmation/aggregate.json`; there is no second copied artifact under
+`reports/`. Every `staging/committed` pair in this layout follows the common
+Section 21 envelope protocol. An ellipsis denotes the already-enumerated
+execution-scoped training schema, not an unregistered artifact family. Every
+contract in Section 21 therefore has one canonical root-relative publication
+path; no producer may invent a timestamped alias or a second authoritative
+copy.
 
 The population-scoped shared reservation and execution claim are deliberately
 outside either campaign root:
@@ -3118,6 +3308,9 @@ Add focused tests for:
   unweighted-KD parent-loss attestation, plus acceptance only after corrected
   loss/report/checkpoint lineage agrees;
 - exact four-row control registry distinct from the 24-node primary graph;
+- execution IDs derive from logical-bank/purpose identity, confirmation
+  registries enumerate those IDs before generation construction, and physical
+  generations separately bind the registry without a hash cycle;
 - overlay recipe exactness and rejection of CLI/environment overrides;
 - unchanged validation selector order: macro AUC, CE, logR50, earliest update;
 - role access: train targets only, validation selection only, sealed final
@@ -3183,8 +3376,9 @@ For `RSET` and `RREL`, require:
 
 Require exact tests for:
 
-- smallest-hash 4,096-row selection and no validation identities;
-- 16 canonical calibration batches at pilot/production size;
+- smallest-hash 4,096-row selection, ascending selection-digest/canonical-
+  identity tie-break order, ordered-list hash, and no validation identities;
+- 16 consecutive canonical calibration batches at pilot/production size;
 - jet/set calibration occurs exactly after pass two and before pass three;
 - relation calibration occurs exactly after pass four and before pass five;
 - RNG/trimmer/optimizer state unchanged by calibration;
@@ -3193,6 +3387,9 @@ Require exact tests for:
   reduction over those same tensors;
 - preemption immediately before and after either calibration barrier resumes
   without skipping or duplicating calibration;
+- exact `validation -> required calibration -> diagnostic -> boundary commit`
+  sequencing at passes 2 and 4, with explicit `not_yet_calibrated`/strategy-null
+  fields and no future scale visible to a diagnostic;
 - screen/confirmation execution IDs scope every calibration/resume/report path;
   20 concurrent M6 confirmations cannot collide;
 - FP64 median calculation and hexadecimal persistence;
@@ -3218,12 +3415,17 @@ Require:
 - exact selected-row, identity-set, class-count, and source-shard conservation;
 - exact `K_token=1024`/`K_relation=256` ordinary/TOFF shapes and
   `1,935`/`3,727` FP32-value core byte formulas at authenticated row counts;
+- exact ordinary `F=1,R=1` and TOFF `F=2,R=6` metadata shapes, ordered family
+  and reason vocabularies, conservation checks, `75`/`113` metadata bytes, and
+  `7,815`/`15,021` total logical bytes per row;
 - duplicate, missing, unexpected, reordered, cross-role, nonfinite, wrong-tap,
   wrong-teacher, wrong-track, and wrong-kernel rejection;
 - atomic publication and orphan temporary-file rejection;
-- initial-build process death after every staged shard, after attestation, after
-  manifest, and immediately before/after directory rename has exact same-owner
-  continuation and can never expose a partial committed generation;
+- invalid preflight leaves no staging directory or build intent; initial-build
+  process death immediately after durable build intent but before shard 1,
+  after every staged shard, after attestation, after manifest, and immediately
+  before/after directory rename has exact same-owner continuation and can never
+  expose a partial committed generation;
 - shard byte-hash and array logical-hash validation;
 - same teacher execution supplies logits and representation summaries;
 - RSET ignores but authenticates the shared relation superset;
@@ -3244,9 +3446,10 @@ Require:
 - last-consumer cleanup cannot run early and records exact removed bytes;
 - failed/cancelled/timed-out consumers cannot authorize cleanup;
 - cleanup authorization is atomically durable before the first removal;
-  injected process death after every individual deletion and immediately
-  before completion publication resumes the same authorized deletion set and
-  never classifies it as corruption;
+  injected process death immediately after authorization but before deletion
+  1, after every individual deletion, and immediately before/after completion
+  publication resumes the same authorized deletion set and never classifies it
+  as corruption;
 - missing shard without cleanup authorization is corruption, while completed
   authorized-cleanup recovery creates a new generation for unfinished
   consumers only;
@@ -3269,6 +3472,10 @@ Require:
 - the versioned resume envelope rejects a missing/extra state namespace,
   changed target generation, changed calibration, altered RNG/sampler cursor,
   or mismatched binary logical/byte hash;
+- resume crash injection after PT publication, after JSON-sidecar publication,
+  immediately before/after commit publication, and during old-generation
+  pruning always selects the highest fully valid commit and retains the prior
+  valid generation;
 - selected checkpoint retains training heads while extraction removes them;
 - within-class shuffle is a deterministic derangement, changes only
   representation identity joins, is shared by RSET/RREL, validates under its
@@ -3288,6 +3495,10 @@ Require:
   combined finalist registry;
 - prediction shards are label-free, disjoint, complete, and bound before the
   locked label join, contain exactly FP32 logits, and reject probability arrays;
+- every kernel, shuffle, escrow, assignment, prediction, checkpoint, and
+  paired-bootstrap envelope survives death between each payload/sidecar/commit
+  write and before/after its directory rename; no partial final-path envelope
+  is visible and a corrupt committed envelope is never overwritten;
 - HLT, Shell-Exact D100, and native-offline final streamers request only their
   frozen identity/input branch allow-lists; an instrumented label-branch read
   fails before I/O, while the selection task is the only ROOT-label reader;
@@ -3303,6 +3514,11 @@ Require:
   ledger validator reconstructs the exact submitted argv;
 - original plus chained recovery submission ledgers own every replacement job
   ID for monitoring and exact-ID cancellation;
+- repeated monitors publish a validated immutable sequence/hash chain; an
+  operational HEAD may be lost or stale without overwriting a report;
+- every Section 21 contract resolves to exactly one canonical Section 31 path,
+  including recovery plans, acceptance artifacts, storage estimate, paired
+  bootstrap, and submission authorization;
 - absent final outputs may resume under the same owner/path, whereas a
   published corrupt output fails closed and is never overwritten;
 - final aggregate cannot read final test without combined new locks.

@@ -124,6 +124,20 @@ def test_complete_pilot_dry_run_is_nonmutating_and_exact(tmp_path: Path):
     assert spec["split_manifest_sha256"] == "b" * 64
     assert "sbatch" in result.stdout
 
+    phase_path = tmp_path / "qualification_phase.json"
+    result = subprocess.run(
+        [sys.executable, str(REPOSITORY / "scripts/submit_hcwdl_campaign.py"),
+         "--campaign-spec", str(spec_path), "--output", str(phase_path)],
+        cwd=REPOSITORY, capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    phase = load_json(phase_path)
+    assert "endpoint_qualification" in phase["jobs"]
+    assert "shell_endpoint_qualification_lock" not in phase["jobs"]
+    assert not ({f"train_{node}" for node in (
+        "M0", "D100", "TOFF",
+    )} & set(phase["jobs"]))
+
 
 def test_production_worker_rejects_a_planning_spec_before_dispatch(tmp_path: Path):
     spec = create_campaign_spec(
