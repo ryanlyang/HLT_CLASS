@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from hlt_classification.data.cache_contracts import with_content_hash
+from hlt_classification.data.cache_contracts import with_content_hash, write_immutable_json
 from hlt_classification.scouting.hcwdl_campaign import (
     ROLE_COUNTS, build_command_plan, create_campaign_spec, slurm_commands,
     validate_campaign_spec,
@@ -20,6 +20,7 @@ from hlt_classification.scouting.hcwdl_contracts import (
 )
 from hlt_classification.data.cache_contracts import sha256_file
 from hlt_classification.scouting.hcwdl_ladder import NODE_REGISTRY
+from hlt_classification.scouting.hcwdl_ladder import GRAPH_SHA256
 from hlt_classification.scouting.hcwdl_locks import (
     claim_final_execution, create_execution_lock, create_lock, validate_lock,
 )
@@ -37,8 +38,12 @@ from hlt_classification.scouting.hcwdl_resources import (
     build_resource_profile, estimate_storage, validate_resource_profile,
 )
 from hlt_classification.scouting.hcwdl_reporting import (
-    build_confirmation_registry, result_key, select_declared_candidate,
+    build_confirmation_registry, build_screen_aggregate, result_key,
+    select_declared_candidate,
 )
+from hlt_classification.scouting.hcwdl_training import TRAINING_REPORT_CONTRACT
+from hlt_classification.scouting.engine import PMARD_TRAINING_REPORT_CONTRACT
+from hlt_classification.scouting.hcwdl_workflow import HcwdlWorkflow
 from hlt_classification.scouting.hcwdl_views import EphemeralHcwdlTargetBank, EphemeralHcwdlViewBank
 from hlt_classification.scouting.inputs import ParticleInputs
 
@@ -214,6 +219,81 @@ def test_screen_order_and_confirmation_registry_are_frozen():
     )
     confirmation = next(row for row in spec["tasks"] if row["task_id"] == "confirmation")
     assert confirmation["array"] == "0-59"
+
+
+def _screen_training_pair(node_id: str):
+    checkpoint = (node_id.encode().hex() + "0" * 64)[:64]
+    final_checkpoint = (node_id.encode().hex() + "1" * 64)[:64]
+    engine = with_content_hash({
+        "contract": PMARD_TRAINING_REPORT_CONTRACT,
+        "schema_version": 6,
+        "scientific_config": {
+            "campaign": "HCWDL", "graph_sha256": GRAPH_SHA256,
+            "recipe_sha256": H, "node": {"node_id": node_id},
+        },
+        "validation": {
+            "macro_ovr_auc": .9, "cross_entropy": .5,
+            "macro_mean_log_qcd_rejection_at_50pct_signal": 3.0,
+        },
+        "selected_checkpoint_sha256": checkpoint,
+        "final_checkpoint_sha256": final_checkpoint,
+    })
+    node = with_content_hash({
+        "contract": TRAINING_REPORT_CONTRACT, "schema_version": 1,
+        "node_id": node_id, "graph_sha256": GRAPH_SHA256,
+        "recipe_sha256": H, "parents": {"recipe": H},
+        "pmard_engine_report_sha256": engine["content_hash"],
+        "selected_checkpoint_sha256": checkpoint,
+        "final_checkpoint_sha256": final_checkpoint,
+        "selection": {}, "complete": True,
+    })
+    return engine, node
+
+
+def test_screen_aggregate_pairs_hcwdl_identity_with_authenticated_engine_metrics():
+    pairs = [_screen_training_pair(node_id) for node_id in NODE_REGISTRY]
+    aggregate = build_screen_aggregate(
+        [pair[0] for pair in pairs], node_reports=[pair[1] for pair in pairs],
+        campaign_spec_sha256=G, recipe_sha256=H, assignment_lock_sha256=G,
+    )
+    assert len(aggregate["rows"]) == len(NODE_REGISTRY)
+    assert {row["node_id"] for row in aggregate["rows"]} == set(NODE_REGISTRY)
+    assert aggregate["rows"][0]["report_sha256"] in {
+        pair[1]["content_hash"] for pair in pairs
+    }
+
+    forged = dict(pairs[0][1])
+    forged["pmard_engine_report_sha256"] = G
+    forged = with_content_hash({key: value for key, value in forged.items() if key != "content_hash"})
+    with pytest.raises(ValueError, match="authenticated PMARD engine report"):
+        build_screen_aggregate(
+            [pair[0] for pair in pairs],
+            node_reports=[forged, *[pair[1] for pair in pairs[1:]]],
+            campaign_spec_sha256=G, recipe_sha256=H, assignment_lock_sha256=G,
+        )
+
+
+def test_screen_workflow_reads_engine_and_hcwdl_node_reports(tmp_path: Path):
+    workflow = object.__new__(HcwdlWorkflow)
+    workflow.root = tmp_path
+    workflow.spec = {
+        "tasks": [{"task_id": "screen_aggregate"}],
+        "content_hash": G, "recipe_sha256": H,
+    }
+    workflow.locks = {"assignment": tmp_path / "locks/assignment.json"}
+    write_immutable_json(workflow.locks["assignment"], with_content_hash({
+        "contract": "fixture", "schema_version": 1,
+    }))
+    for node_id in NODE_REGISTRY:
+        engine, node = _screen_training_pair(node_id)
+        output = tmp_path / "training" / node_id
+        write_immutable_json(output / "training_report.json", engine)
+        write_immutable_json(output / "hcwdl_training_report.json", node)
+
+    outputs = workflow.run("screen_aggregate")
+    aggregate = json.loads(outputs[0].read_text())
+    assert aggregate["all_registered_nodes_completed"] is True
+    assert len(aggregate["rows"]) == len(NODE_REGISTRY)
 
 
 def _view(rows: int = 3) -> ParticleInputs:

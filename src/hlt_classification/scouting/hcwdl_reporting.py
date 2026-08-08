@@ -8,8 +8,10 @@ from typing import Any, Final
 
 from hlt_classification.data.cache_contracts import require_sha256, validate_content_hash, with_content_hash
 
+from .engine import validate_pmard_training_report
 from .hcwdl_ladder import GRAPH_SHA256, NODE_REGISTRY
 from .hcwdl_qualification import recovered_fraction
+from .hcwdl_training import TRAINING_REPORT_CONTRACT
 
 
 SCREEN_REPORT_CONTRACT: Final = "HCWDL_SCREEN_AGGREGATE/v1"
@@ -49,22 +51,81 @@ def select_declared_candidate(
 
 
 def build_screen_aggregate(
-    reports: Sequence[Mapping[str, Any]], *, campaign_spec_sha256: str,
+    reports: Sequence[Mapping[str, Any]], *,
+    node_reports: Sequence[Mapping[str, Any]], campaign_spec_sha256: str,
     recipe_sha256: str, assignment_lock_sha256: str,
 ) -> dict[str, Any]:
-    by_node = {str(report["node_id"]): report for report in reports}
-    if set(by_node) != set(NODE_REGISTRY) or len(reports) != len(NODE_REGISTRY):
+    engine_by_hash: dict[str, Mapping[str, Any]] = {}
+    for report in reports:
+        digest = validate_pmard_training_report(report)
+        if digest in engine_by_hash:
+            raise ValueError("HCWDL screen aggregate repeats a PMARD engine report")
+        engine_by_hash[digest] = report
+
+    by_node: dict[str, tuple[Mapping[str, Any], Mapping[str, Any]]] = {}
+    for node_report in node_reports:
+        validate_content_hash(
+            node_report, expected_contract=TRAINING_REPORT_CONTRACT,
+            expected_schema_version=1,
+        )
+        node_id = str(node_report.get("node_id"))
+        if node_id in by_node:
+            raise ValueError("HCWDL screen aggregate repeats a graph node")
+        if node_id not in NODE_REGISTRY:
+            raise ValueError("HCWDL screen aggregate contains an unknown graph node")
+        if (
+            node_report.get("graph_sha256") != GRAPH_SHA256
+            or node_report.get("recipe_sha256") != recipe_sha256
+            or node_report.get("complete") is not True
+        ):
+            raise ValueError("HCWDL node report lineage or completion differs")
+        engine_hash = require_sha256(
+            node_report.get("pmard_engine_report_sha256"),
+            name=f"{node_id} PMARD engine report SHA-256",
+        )
+        engine_report = engine_by_hash.get(engine_hash)
+        if engine_report is None:
+            raise ValueError("HCWDL node report lacks its authenticated PMARD engine report")
+        if (
+            node_report.get("selected_checkpoint_sha256")
+            != engine_report.get("selected_checkpoint_sha256")
+            or node_report.get("final_checkpoint_sha256")
+            != engine_report.get("final_checkpoint_sha256")
+        ):
+            raise ValueError("HCWDL node and PMARD checkpoint lineage differs")
+        scientific = engine_report.get("scientific_config")
+        if not isinstance(scientific, Mapping):
+            raise ValueError("HCWDL PMARD engine report lacks scientific configuration")
+        engine_node = scientific.get("node")
+        if (
+            scientific.get("campaign") != "HCWDL"
+            or scientific.get("graph_sha256") != GRAPH_SHA256
+            or scientific.get("recipe_sha256") != recipe_sha256
+            or not isinstance(engine_node, Mapping)
+            or engine_node.get("node_id") != node_id
+        ):
+            raise ValueError("HCWDL PMARD engine report node lineage differs")
+        by_node[node_id] = (node_report, engine_report)
+
+    if (
+        set(by_node) != set(NODE_REGISTRY)
+        or len(node_reports) != len(NODE_REGISTRY)
+        or len(reports) != len(NODE_REGISTRY)
+    ):
         raise ValueError("HCWDL screen aggregate requires every primary graph node")
     rows = []
     for node_id in sorted(by_node):
-        report = by_node[node_id]
-        metrics = dict(report["validation"])
+        node_report, engine_report = by_node[node_id]
+        metrics = dict(engine_report["validation"])
         result_key({"node_id": node_id, "validation": metrics})
         rows.append({
             "node_id": node_id, "validation": metrics,
-            "report_sha256": require_sha256(report["content_hash"], name=f"{node_id} report SHA-256"),
+            "report_sha256": require_sha256(
+                node_report["content_hash"], name=f"{node_id} report SHA-256",
+            ),
             "checkpoint_sha256": require_sha256(
-                report["selected_checkpoint_sha256"], name=f"{node_id} checkpoint SHA-256",
+                node_report["selected_checkpoint_sha256"],
+                name=f"{node_id} checkpoint SHA-256",
             ),
         })
     intermediate_c = select_declared_candidate(rows, allowed_nodes=[f"M{i}c" for i in range(2, 6)])

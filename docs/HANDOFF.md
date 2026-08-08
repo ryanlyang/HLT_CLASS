@@ -1,5 +1,44 @@
 # Current Handoff
 
+## HCWDL matching-free representation-KD plan (2026-08-08)
+
+The new implementation-grade registered-ablation plan is
+[`docs/plans/HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md`](plans/HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md).
+It adds four planned full M1--M6 ascents without changing the implemented
+logit-only `HCWDL_GRAPH/v1` or `HCWDL_RECIPE/v3`: paired jet plus unordered
+token-set KD (`RSET`) under cold and warm initialization, and the same package
+plus differentiable latent-relation KD (`RREL`) under cold and warm
+initialization. The existing logit cold/warm ascents remain the primary
+controls.
+
+The plan freezes 24 new node identities, exact privileged teachers, separate
+native-offline charged/neutral representation spaces, fixed RFF set/relation
+sketches, train-only gradient calibration, a `rho_repr=0.10` auxiliary budget,
+pass-based ramps, 60 passes with validation every pass, macro-AUC-first
+selection, paired stochastic streams, one-time compact target construction,
+generation-aware just-in-time target cleanup/recovery, zero-coefficient,
+jet-only, no-relation, and shuffled-pair controls, and a split-scoped combined
+final-test reservation honored by both evaluator families. It includes the
+proposed source/module map, CLI and Slurm boundaries, artifact layout,
+contracts, failure semantics, complete test matrix, implementation blocks, and
+definition of done.
+
+The planning audit found a pre-existing parent-loss mismatch that is now an
+explicit implementation blocker: the active HCWDL plan requires class-weighted
+CE and unweighted KD row means, while the current shared `pmard_loss` runtime
+class-weights CE and both KD terms. HCWDL-RKD requires a versioned
+parent-loss attestation, runtime correction, and consistent parent artifacts;
+affected reports cannot be relabeled as paired. The plan also requires a new
+architecture attestation because current parent artifacts do not publish the
+needed model/tap architecture hash.
+
+This is documentation only. No representation-ascent contract, model tap,
+target bank, training node, worker, smoke, or submission was implemented or
+authorized in this step. Before editing, the focused existing HCWDL/PMARD
+training suite passed 40/40 under the local `tagging-hlt` environment with
+`PYTHONPATH=src`. The separately authorized primary-HCWDL Tigris-validation
+work remains independent; this new plan does not submit, cancel, or alter it.
+
 ## Preliminary PMARD pilot evidence (2026-08-07)
 
 The recovered 300k/100k/100k PMARD pilot has now completed its teacher ladder,

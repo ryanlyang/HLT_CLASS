@@ -28,6 +28,17 @@ the final-test lock boundary. Its endpoint qualification is diagnostic rather
 than a validation-driven repair selector. It does not reinterpret the original
 PMARD pilot.
 
+The additive
+[HCWDL matching-free privileged representation-KD ascent plan](HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md)
+registers two nested representation strategies, each as a complete cold and
+warm M1--M6 ascent. It preserves the implemented logit-only HCWDL graph and
+recipe as controls, uses compact one-time privileged target sketches, compares
+paired jet and unordered token-set structure without particle correspondence,
+and adds a corrected latent-relation ablation whose optimized coordinates
+remain differentiable with respect to the student encoder. It is an
+implementation-grade plan only; no representation-ascent implementation or
+live authorization currently follows from its presence.
+
 The [PRAD implementation plan](PRIVILEGED_RELATIONAL_ATTENTION_DISTILLATION_IMPLEMENTATION_PLAN.md)
 remains an implemented, separate JetClass campaign. It is not the active
 scientific campaign in this conversation and does not define PMARD semantics.

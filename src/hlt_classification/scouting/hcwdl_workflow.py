@@ -77,6 +77,9 @@ class HcwdlWorkflow:
     def _training_report(self, node_id: str) -> Path:
         return self.root / f"training/{node_id}/training_report.json"
 
+    def _hcwdl_training_report(self, node_id: str) -> Path:
+        return self.root / f"training/{node_id}/hcwdl_training_report.json"
+
     def _node_command(self, node_id: str, *, output: Path, seed: int) -> list[object]:
         if self.recipe is None:
             raise PermissionError("HCWDL training cannot run without a locked recipe")
@@ -302,9 +305,13 @@ class HcwdlWorkflow:
             return [output / "training_report.json", output / "hcwdl_training_report.json"]
         if task_id == "screen_aggregate":
             reports = [load_json(self._training_report(node)) for node in NODE_REGISTRY]
+            node_reports = [
+                load_json(self._hcwdl_training_report(node)) for node in NODE_REGISTRY
+            ]
             output = self.root / "reports/screen_aggregate.json"
             aggregate = build_screen_aggregate(
-                reports, campaign_spec_sha256=self.spec["content_hash"],
+                reports, node_reports=node_reports,
+                campaign_spec_sha256=self.spec["content_hash"],
                 recipe_sha256=self.spec["recipe_sha256"],
                 assignment_lock_sha256=load_json(self.locks["assignment"])["content_hash"],
             )
