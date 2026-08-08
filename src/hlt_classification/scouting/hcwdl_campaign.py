@@ -15,8 +15,8 @@ from .hcwdl_resources import validate_resource_profile
 from .hcwdl_authorization import validate_submission_authorization
 
 
-CAMPAIGN_CONTRACT: Final = "HCWDL_CAMPAIGN_SPEC/v2"
-COMMAND_PLAN_CONTRACT: Final = "HCWDL_COMMAND_PLAN/v1"
+CAMPAIGN_CONTRACT: Final = "HCWDL_CAMPAIGN_SPEC/v3"
+COMMAND_PLAN_CONTRACT: Final = "HCWDL_COMMAND_PLAN/v2"
 LEDGER_CONTRACT: Final = "HCWDL_SUBMISSION_LEDGER/v2"
 MODES: Final = ("smoke", "pilot", "production")
 ROLE_COUNTS: Final = {
@@ -270,7 +270,7 @@ def create_campaign_spec(
     resource_request_sha256 = canonical_sha256(normalized_resources)
     payload = {
         "contract": CAMPAIGN_CONTRACT,
-        "schema_version": 2,
+        "schema_version": 3,
         "mode": mode,
         "planning_only": bool(planning_only),
         "live_submission_authorized": bool(live_submission_authorized),
@@ -327,7 +327,7 @@ def create_campaign_spec(
 
 
 def validate_campaign_spec(value: Mapping[str, Any], *, executable: bool = False) -> str:
-    digest = validate_content_hash(value, expected_contract=CAMPAIGN_CONTRACT, expected_schema_version=2)
+    digest = validate_content_hash(value, expected_contract=CAMPAIGN_CONTRACT, expected_schema_version=3)
     if value.get("mode") not in MODES or value.get("graph_sha256") != GRAPH_SHA256:
         raise ValueError("HCWDL campaign mode or graph differs")
     if set(value.get("role_source_counts", {})) != {"train", "validation", "final_test"}:
@@ -412,8 +412,6 @@ def _slurm_commands_unchecked(spec: Mapping[str, Any]) -> list[dict[str, Any]]:
             command.append("--signal=B:USR1@120")
         if task.array is not None:
             command.append(f"--array={task.array}")
-        if task.manual_release:
-            command.append("--hold")
         if task.dependencies:
             command.append("--dependency=afterok:" + ":".join(
                 f"${{JOB_{parent}}}" for parent in task.dependencies
@@ -448,9 +446,28 @@ def slurm_commands(spec: Mapping[str, Any]) -> list[dict[str, Any]]:
     return _slurm_commands_unchecked(spec)
 
 
+def split_submission_commands(
+    spec: Mapping[str, Any],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Split the exact DAG at the human endpoint-review boundary."""
+
+    commands = slurm_commands(spec)
+    gate = "shell_endpoint_qualification_lock"
+    positions = [index for index, row in enumerate(commands) if row["task_id"] == gate]
+    if len(positions) != 1:
+        raise RuntimeError("HCWDL command plan has an invalid endpoint gate")
+    boundary = positions[0]
+    qualification = commands[:boundary]
+    ladder = commands[boundary:]
+    if not qualification or not ladder or ladder[0]["task_id"] != gate:
+        raise RuntimeError("HCWDL two-phase command plan differs")
+    return qualification, ladder
+
+
 __all__ = [
     "CAMPAIGN_CONTRACT", "COMMAND_PLAN_CONTRACT", "CampaignTask", "LEDGER_CONTRACT", "MODES",
     "PILOT_PLANNING_RESOURCES", "ROLE_COUNTS", "ResourceRequest", "SMOKE_RESOURCES",
     "build_command_plan", "build_task_registry", "create_campaign_spec", "slurm_commands",
+    "split_submission_commands",
     "validate_campaign_spec", "validate_task_registry",
 ]

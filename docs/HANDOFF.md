@@ -19,8 +19,8 @@ Implementation lives in
 are documented in
 [`docs/contracts/PMARD_EXPLORATORY_TEST_COMPARISON.md`](contracts/PMARD_EXPLORATORY_TEST_COMPARISON.md)
 and [`docs/PMARD_RUNBOOK.md`](PMARD_RUNBOOK.md). The existing confirmatory
-single-finalist code path was not weakened. Initial focused verification is
-27/27 passing; the complete local suite is 309/309 passing with 15 existing
+single-finalist code path was not weakened. Current focused verification is
+16/16 passing; the complete local suite is 310/310 passing with 15 existing
 Matplotlib/pytest-cache warnings. Tigris execution remains to be performed
 from exact pushed clean source.
 
@@ -40,6 +40,13 @@ assumption was therefore invalid. Contract v2 freezes the exact registered
 inventory (36 + 27 = 63) and derives the
 array bound from the immutable specification. No test-role access occurred in
 either failed creation attempt.
+
+The third pre-access creation attempt found that some historical training
+reports predate `balanced_accuracy` and `always_qcd_accuracy`. These derived
+fields are now optional only in copied validation summaries; the five common
+selection/performance metrics remain mandatory, and every exploratory test
+evaluation computes the full current metric set. This attempt also stopped
+before publishing a specification or reading the test role.
 
 ## HCWDL matching-free representation-KD plan (2026-08-08)
 

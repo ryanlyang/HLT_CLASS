@@ -1474,7 +1474,7 @@ Implementation introduces separately versioned contracts for:
 - `HCWDL_RECIPE/v3` and recipe lock;
 - `HCWDL_NODE_SPEC/v1` and graph registry;
 - `HCWDL_TRAINING_REPORT/v1`, checkpoint selection, and resume;
-- `HCWDL_CAMPAIGN_SPEC/v2`, `HCWDL_COMMAND_PLAN/v1`, submission ledger,
+- `HCWDL_CAMPAIGN_SPEC/v3`, `HCWDL_COMMAND_PLAN/v2`, submission ledger,
   submission authorization v3, and monitor report;
 - endpoint qualification, confirmation registry, finalist, execution, and
   aggregate-report contracts.

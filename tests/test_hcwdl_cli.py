@@ -22,7 +22,8 @@ SCRIPTS = (
     "finalize_highcov_assignments.py", "audit_highcov_assignments.py",
     "build_hcwdl_recipe.py", "build_hcwdl_row_selection.py",
     "create_hcwdl_campaign.py",
-    "submit_hcwdl_campaign.py", "monitor_hcwdl_campaign.py",
+    "submit_hcwdl_campaign.py", "continue_hcwdl_campaign.py",
+    "monitor_hcwdl_campaign.py",
     "resume_hcwdl_campaign.py", "cancel_hcwdl_campaign.py",
     "train_hcwdl_node.py", "train_hcwdl_qualifier.py", "train_hcwdl_control.py",
     "select_hcwdl_checkpoint.py", "run_hcwdl_cache_miniature.py",
@@ -117,7 +118,7 @@ def test_complete_pilot_dry_run_is_nonmutating_and_exact(tmp_path: Path):
     assert "--array=0-13" in ledger["commands"]["assign_validation"]
     assert "--array=0-13" in ledger["commands"]["assign_test"]
     assert all("%" not in argument for command in ledger["commands"].values() for argument in command)
-    assert "--hold" in ledger["commands"]["shell_endpoint_qualification_lock"]
+    assert "--hold" not in ledger["commands"]["shell_endpoint_qualification_lock"]
     assert spec["role_counts"] == {"train": 300_000, "validation": 100_000, "final_test": 100_000}
     assert spec["source_manifest_sha256"] == "a" * 64
     assert spec["split_manifest_sha256"] == "b" * 64

@@ -97,6 +97,21 @@ def test_exploratory_spec_requires_exact_frozen_distinct_inventory(tmp_path: Pat
     validate_exploratory_test_spec(_spec(tmp_path / "maximum", followup_models=28))
 
 
+def test_historical_validation_allows_newer_optional_metrics_to_be_absent():
+    import hlt_classification.scouting.exploratory_test as exploratory
+    historical = {
+        "cross_entropy": .7, "accuracy": .78, "macro_ovr_auc": .93,
+        "macro_mean_log_qcd_rejection_at_50pct_signal": 7.0,
+        "top_label_ece_15_bin": .01,
+    }
+    assert exploratory._compact_validation(historical) == historical
+    with pytest.raises(ValueError, match="cross_entropy"):
+        exploratory._compact_validation({
+            key: value for key, value in historical.items()
+            if key != "cross_entropy"
+        })
+
+
 def test_exploratory_authorization_records_consumed_holdout(tmp_path: Path, monkeypatch):
     import hlt_classification.scouting.exploratory_test as exploratory
     spec = _spec(tmp_path)

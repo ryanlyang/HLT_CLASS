@@ -148,6 +148,13 @@ signature, parity report, and strict checkpoint-key/shape audits for every
 imported teacher/student architecture. It records parent lineage but is not
 misrepresented as an old parent artifact.
 
+The attestation **schema and tap specification** are frozen before model edits;
+the attestation artifact itself is published only after the named taps exist and
+installed-Weaver parity has passed. Parent-import publication therefore follows
+surface implementation/parity. “Parent import before any representation target
+or student” is a runtime campaign gate, not an instruction to attest code that
+has not yet been implemented.
+
 ### 3.2 Required prefix-import artifact
 
 Before any representation target or student is built, publish and validate a
@@ -481,10 +488,18 @@ soft tracks and neutral particles visible; the softened-pT half prevents a
 large number of tiny constituents from dominating. Nonpositive or nonfinite
 visible pT fails target construction rather than being silently clipped.
 
-### 9.3 Fixed multi-scale random Fourier kernel
+### 9.3 Fixed multi-scale spectral-moment kernel
 
-Use a deterministic random Fourier approximation to a mixture of four RBF
-kernels on unit-normalized 128-dimensional features:
+Use a deterministic finite random-Fourier feature map on unit-normalized
+128-dimensional features. The frozen feature map defines the **exact training
+kernel**
+
+```text
+k_FS(x, y) = phi(x).T phi(y)
+```
+
+for this campaign. Its spectral distribution is inspired by the equal mixture
+of four RBF kernels below:
 
 ```text
 k_sigma(x, y) = exp(-||x - y||_2^2 / (2 * sigma^2))
@@ -493,8 +508,8 @@ k_mix(x, y)   = (1 / 4) * sum_sigma k_sigma(x, y)
 
 ```text
 sigma in {0.10, 0.25, 0.50, 1.00}
-32 Fourier features per sigma
-K_token = 128 total features
+256 Fourier features per sigma
+K_token = 1,024 total features
 ```
 
 For each bandwidth, `omega ~ Normal(0, sigma^-2 I)` and
@@ -545,10 +560,28 @@ The per-jet set loss is:
 L_set = mean_j ||mu(A_tok Z_s,j) - mu(Z_t,j)||_2^2
 ```
 
-This is a fixed-feature approximation to weighted multi-kernel MMD. It is
-order-invariant, supports unequal counts, has gradients through student token
-states and `A_tok`, and permits the teacher target to be cached as one compact
-128-vector per jet instead of every teacher token.
+This is the exact weighted MMD for the frozen finite kernel `k_FS`. It is not
+claimed to reproduce the local gradient of the infinite RBF mixture: the
+audited finite map does not do so compactly, and Section 23.4 makes that
+limitation explicit. As a finite nonlinear spectral-moment objective it is
+order-invariant, supports unequal counts, has exact gradients through student
+token states and `A_tok`, and permits the teacher target to be cached as one
+fixed 1,024-vector per jet instead of every teacher token. Gradient calibration
+normalizes its achieved training signal; it does not relabel it as an
+infinite-kernel gradient.
+
+This interpretation is deliberate, not a relaxed failed gate. A deterministic
+pre-implementation sweep found that ideal 128-D RBF-gradient fidelity at the
+original threshold required at least 65,536 Fourier features **per bandwidth**
+(`262,144` cached values per jet), which is storage-prohibitive for the
+three-million-row role. The measured practical point of 256 features per
+bandwidth gives ideal-kernel value MAE/p95/correlation
+`0.009032/0.026687/0.997016` while remaining compatible with serialized JIT
+banks. The plan therefore freezes the 1,024-dimensional finite spectral kernel as its
+own estimand and forbids either calling it the
+infinite kernel or inflating it into a multi-terabyte target bank. A future
+infinite-kernel/coreset/sliced-kernel ascent would be a new registered strategy,
+not an in-place change to RSET.
 
 MMD is computed per paired jet and then averaged. Pooling tokens from different
 jets into one batch-level cloud is forbidden; doing so could align the global
@@ -686,22 +719,21 @@ validation-tuned boundaries are forbidden.
 
 ### 10.3 Relational kernel sketch
 
-Within each active stratum, use a deterministic one-dimensional random
-Fourier approximation to the equal mixture of four RBF kernels, using the
-Section 9.3 `exp(-distance^2 / (2 sigma^2))` convention on
-`c_ij in [-1,1]`:
+Within each active stratum, use an exact deterministic one-dimensional finite
+spectral kernel, constructed by the Section 9.3 resource rule from the stated
+four RBF spectral scales, on `c_ij in [-1,1]`:
 
 ```text
 sigma in {0.05, 0.10, 0.20, 0.40}
-16 Fourier features per sigma
-K_relation_per_stratum = 64
+64 Fourier features per sigma
+K_relation_per_stratum = 256
 ```
 
 For each bandwidth, draw the frozen one-dimensional frequency and phase arrays
 from the relation-specific resource substream and use:
 
 ```text
-phi_rel(c) = concatenated_sigma sqrt(2 / 64)
+phi_rel(c) = concatenated_sigma sqrt(2 / 256)
              * cos(omega_sigma c + b_sigma)
 ```
 
@@ -1261,24 +1293,28 @@ durable shards are deleted only by the last-consumer cleanup stage in Section
 For ordinary D teachers, the shared physical superset requires:
 
 ```text
-15 logits + 128 pooled + 128 token sketch + 3 * 64 relation values
-= 463 FP32 values per jet, plus fixed-width identity/eligibility metadata
+15 logits + 128 pooled + 1,024 token sketch + 3 * 256 relation values
+= 1,935 FP32 values per jet, plus fixed-width identity/eligibility metadata
 ```
 
 The TOFF superset requires:
 
 ```text
-15 logits + 128 pooled + 2 * 128 token sketches + 2 * 3 * 64 relation values
-= 783 FP32 values per jet, plus fixed-width identity/eligibility metadata
+15 logits + 128 pooled + 2 * 1,024 token sketches
+          + 2 * 3 * 256 relation values
+= 3,727 FP32 values per jet, plus fixed-width identity/eligibility metadata
 ```
 
 Before compression/metadata, 300,000 pilot rows therefore require about
-`555.6 MB` (`530 MiB`) for one ordinary bank and `939.6 MB` (`896 MiB`) for
-TOFF. At an illustrative 3,000,000 production rows, the corresponding values
-are `5.556 GB` and `9.396 GB`. The just-in-time ordinary cold/warm pair peaks at
-twice the ordinary-bank value, rather than all ten banks. Exact shape-based
-bytes from the authenticated row count are computed before allocation and
-must remain below both the configured target cap and 75% of
+`2.322 GB` (`2.163 GiB`) for one ordinary bank and `4.4724 GB`
+(`4.165 GiB`) for TOFF. At an illustrative 3,000,000 production rows, the
+corresponding values are `23.22 GB` (`21.625 GiB`) and `44.724 GB`
+(`41.652 GiB`). The mandatory cold-then-warm lifecycle permits only one
+committed bank at a time; no compression saving is assumed for authorization.
+The storage estimator adds the exact fixed metadata, staging/recovery reserve,
+and filesystem headroom rather than using these core-array values alone. Exact
+shape-based bytes from the authenticated row count are computed before
+allocation and must remain below both the configured target cap and 75% of
 `SLURM_MEM_PER_NODE` after all simultaneously live view, model, optimizer, and
 construction buffers are included.
 
@@ -1398,7 +1434,8 @@ The overlay binds at minimum:
 - target-bank storage/lifecycle policy;
 - base graph, recipe, source, split, row-selection, assignment, architecture,
   teacher-import, and producer-source hashes;
-- evidence that the zero-coefficient path and RFF approximation tests passed.
+- evidence that the zero-coefficient path, exact finite-kernel implementation,
+  analytic-gradient, and declared diagnostic-reference tests passed.
 
 The kernel arrays are published once as
 `HCWDL_REPRESENTATION_KERNEL_RESOURCES/v1`. Runtime regenerates them from the
@@ -1456,6 +1493,7 @@ Introduce:
 
 - `HCWDL_REPRESENTATION_TARGET_LOGICAL_BANK/v1`;
 - `HCWDL_REPRESENTATION_TARGET_CONSUMER_REGISTRY/v1`;
+- `HCWDL_REPRESENTATION_TARGET_BUILD_INTENT/v1`;
 - `HCWDL_REPRESENTATION_TARGET_GENERATION/v1`;
 - `HCWDL_REPRESENTATION_TARGET_SHARD/v1`;
 - `HCWDL_REPRESENTATION_TARGET_MANIFEST/v1`;
@@ -1477,7 +1515,9 @@ Physical generations never overwrite one another:
 
 ```text
 targets/<logical_bank>/logical_bank.json
+targets/<logical_bank>/staging/<generation_id>/<build_owner_id>/...
 targets/<logical_bank>/generations/<generation_id>/
+  build_intent.json
   consumer_registry.json
   target_forward_spec.json
   target_execution_attestation.json
@@ -1570,6 +1610,7 @@ HCWDL_REPRESENTATION_TARGET_FORWARD_SPEC/v1
 HCWDL_REPRESENTATION_TARGET_EXECUTION_ATTESTATION/v1
 HCWDL_REPRESENTATION_TARGET_LOGICAL_BANK/v1
 HCWDL_REPRESENTATION_TARGET_CONSUMER_REGISTRY/v1
+HCWDL_REPRESENTATION_TARGET_BUILD_INTENT/v1
 HCWDL_REPRESENTATION_TARGET_GENERATION/v1
 HCWDL_REPRESENTATION_TARGET_SHARD/v1
 HCWDL_REPRESENTATION_TARGET_MANIFEST/v1
@@ -1578,6 +1619,7 @@ HCWDL_REPRESENTATION_TARGET_CLEANUP_COMPLETION/v1
 HCWDL_REPRESENTATION_RECOVERY_PLAN/v1
 HCWDL_REPRESENTATION_GRADIENT_CALIBRATION/v1
 HCWDL_REPRESENTATION_GRADIENT_CALIBRATION_MANIFEST/v1
+HCWDL_REPRESENTATION_DIAGNOSTIC_BATCH/v1
 HCWDL_REPRESENTATION_NUMERICAL_ACCEPTANCE/v1
 HCWDL_REPRESENTATION_SMOKE_PROBE/v1
 HCWDL_REPRESENTATION_PAIRED_BOOTSTRAP/v1
@@ -1617,6 +1659,7 @@ HCWDL_REPRESENTATION_FINAL_AGGREGATE/v1
 HCWDL_REPRESENTATION_CAMPAIGN_SPEC/v1
 HCWDL_REPRESENTATION_COMMAND_PLAN/v1
 HCWDL_REPRESENTATION_SUBMISSION_LEDGER/v1
+HCWDL_REPRESENTATION_RECOVERY_SUBMISSION_LEDGER/v1
 HCWDL_REPRESENTATION_MONITOR_REPORT/v1
 HCWDL_REPRESENTATION_RESOURCE_PROFILE/v1
 HCWDL_REPRESENTATION_STORAGE_ESTIMATE/v1
@@ -1660,8 +1703,9 @@ implicit Python conventions:
   Both shuffled strategies consume the same authenticated mapping.
 
 Likewise, prediction shards use an immutable binary/JSON envelope: canonical
-identity digest plus FP32 logits/probabilities, no labels, exact finalist and
-checkpoint hashes, row/order/set hashes, and producer runtime signature. The
+identity digest plus finite FP32 `[rows,15]` logits only--no probabilities or
+labels--with exact finalist and checkpoint hashes, row/order/set hashes, and
+producer runtime signature. The
 prediction manifest proves complete disjoint final-role coverage before the
 single locked label/metric join.
 
@@ -1670,11 +1714,13 @@ single locked label/metric join.
 ### 22.1 High-level graph
 
 ```text
-validate parent HCWDL prefix
+implement named taps + installed-Weaver parity
+  -> representation architecture attestation
+  -> validate parent HCWDL prefix/loss semantics
   -> representation parent-import lock
   -> kernel resources + representation overlay recipe
   -> representation local/real-worker miniature
-  -> D0c/D0w target banks
+  -> rung-serialized D0c/D0w target banks
        -> RSET_M1c -> RSET_M2c -> ... -> RSET_M6c
        -> RREL_M1c -> RREL_M2c -> ... -> RREL_M6c
        -> RSET_M1w -> RSET_M2w -> ... -> RSET_M6w
@@ -1687,12 +1733,22 @@ validate parent HCWDL prefix
   -> final aggregate
 ```
 
-The abbreviated graph hides just-in-time target tasks. Before each rung, the
-corresponding D/TOFF target-bank task depends on its selected teacher artifact;
-both representation strategies depend on that bank. Target cleanup depends on
-all consumers. Student branches remain sequential internally because each
-branch's predecessor logits and warm weights come from its own preceding rung.
-The four branches may run concurrently when their dependencies exist.
+The abbreviated graph hides mandatory just-in-time storage barriers. Within a
+rung, track-specific banks run in deterministic `cold -> cleanup -> warm ->
+cleanup` order after their selected teachers exist; they are not simultaneously
+durable. Every bank consumer depends on its exact committed generation;
+cleanup depends on all registered consumers. The **next rung's bank-build
+readiness task depends on completion attestations for every bank in the prior
+rung**, as well as its selected teacher. Thus the exact chain is
+`build D0c -> cold M1 consumers -> clean -> build D0w -> warm M1 consumers ->
+clean -> build D25c -> ... -> clean D100 -> build TOFF`. TOFF confirmation is a later physical generation
+that depends on screen-generation cleanup. No D25-or-later screen bank may
+build merely because its downward teacher already exists. Student branches
+remain sequential internally because predecessor logits and warm weights come
+from their own prior rung. The four same-rung branches may run concurrently;
+bank lifecycles may not cross the frozen storage barrier. This serialization is
+intentional because the evidence-backed 1,024/256-dimensional sketches favor a
+stronger finite kernel while respecting the user's limited durable storage.
 
 ### 22.2 Exact 24-node registry
 
@@ -1833,40 +1889,48 @@ surface. Running the control only at M5 keeps it diagnostic rather than adding
 another pair of six-rung cascades. It does not establish that every earlier or
 warm rung has the same mechanism.
 
-### 23.4 RFF and invariance controls
+### 23.4 Finite-kernel and invariance controls
 
 Required noncampaign controls include:
 
-- exact multi-kernel MMD versus the selected fixed RFF resources on 512
-  deterministic token fixtures from numerical seed `991`: independently draw
+- exact frozen finite-kernel MMD in its slow pairwise form versus squared
+  feature-mean distance in its cached form on 512 deterministic token fixtures
+  from numerical seed `991`: independently draw
   set sizes in `[2,32]`, unit-normalized 128-vectors from a random unit center
   plus standard-normal noise at a log-uniform scale in `[0.02,0.8]`, and
-  `Uniform(0,1)` weights normalized to sum one. Require mean absolute MMD error
-  `<=0.04`, 95th-percentile absolute
-  error `<=0.10`, and Pearson correlation `>=0.95`;
+  `Uniform(0,1)` weights normalized to sum one. Require FP64 maximum absolute
+  disagreement `<=1e-10` and FP32 runtime disagreement `<=1e-5`;
 - the analogous 512 relation fixtures from numerical seed `992`, with set
   sizes in `[2,496]`, center `Uniform(-0.8,0.8)`, standard-normal noise at a
   log-uniform scale in `[0.01,0.5]`, values clipped to `[-1,1]`, and normalized
-  `Uniform(0,1)` weights. Require mean absolute error `<=0.01`,
-  95th-percentile absolute error `<=0.03`, and Pearson correlation `>=0.95`;
-- exact-versus-RFF **student-gradient** fidelity on 64 additional small token
-  fixtures from seed `993` and 64 relation fixtures from seed `994`, each with
-  set sizes in `[2,16]`. For exact-gradient norm at least `1e-8`, require
-  flattened gradient-cosine median `>=0.80`, 10th percentile `>=0.30`, median
-  RFF/exact gradient-norm ratio in `[0.50,2.00]`, 5th-percentile ratio
-  `>=0.20`, and 95th-percentile ratio `<=5.00` for each kernel family. Every
-  excluded near-zero fixture must have absolute RFF gradient norm `<=1e-6`, so
-  a spurious large gradient cannot disappear behind the ratio exclusion;
-- finite-RFF joint-rotation sensitivity on 64 token fixtures from seed `995`.
+  `Uniform(0,1)` weights. Require the same finite-kernel pairwise/cached
+  equivalence tolerances;
+- analytic finite-kernel **student gradients** versus PyTorch autograd on 64
+  additional small token fixtures from seed `993` and 64 relation fixtures
+  from seed `994`, each with set sizes in `[2,16]`, including the runtime
+  `F.normalize` Jacobian. For gradient norm at least `1e-8`, require flattened
+  cosine `>=0.99999`, norm ratio in `[0.999,1.001]`, and maximum absolute entry
+  error `<=1e-5`; a near-zero analytic fixture requires autograd norm `<=1e-6`;
+- ideal infinite-four-RBF **value** quality on those exact fixtures. Token
+  MAE/p95/correlation must be `<=0.015/<=0.040/>=0.990` (audited
+  `0.009032/0.026687/0.997016`); relation must be
+  `<=0.030/<=0.100/>=0.985` (audited `0.019179/0.076771/0.992085`). Ideal-RBF
+  gradient comparison is always report-only, so the finite loss cannot be
+  described as infinite-RBF gradient fidelity. Relation's
+  stronger ideal-gradient agreement is also diagnostic, not a different
+  acceptance meaning;
+- finite-kernel joint-rotation sensitivity on 64 token fixtures from seed `995`.
   Generate a deterministic Haar orthogonal 128-by-128 matrix by FP64 Gaussian
   QR with positive diagonal convention, rotate both student and teacher token
-  clouds, and compare with the unrotated fixed-resource result. Require mean
-  absolute loss change `<=0.06`, 95th percentile `<=0.15`; after rotating the
-  transformed student gradient back, require gradient-cosine median `>=0.75`,
-  10th percentile `>=0.20`, median norm ratio in `[0.50,2.00]`, and 95th
-  percentile ratio `<=5.00`. Exact RBF MMD must be invariant to numerical
-  tolerance. This explicitly bounds, but does not deny, the finite-map basis
-  artifact;
+  clouds, and compare with the unrotated fixed-resource result. Exact RBF MMD
+  must be invariant to numerical tolerance; the finite kernel is expected to
+  change because its resource coordinates are fixed. Require finite-kernel loss
+  change mean `<=0.020` and p95 `<=0.065` (audited
+  `0.013436/0.047950`). Publish the transformed-gradient cosine/norm
+  report-only--the audited median cosine is `0.0318`--and make no gradient
+  rotation-invariance claim. This bounds value sensitivity while exposing
+  rather than denying the finite-map basis artifact; the learned `A_tok`, fixed
+  teacher checkpoint, and predeclared resource seed define the actual estimand;
 - token permutation invariance;
 - exact Gram/relation invariance under a shared orthogonal rotation and a
   report-only synthetic demonstration that anisotropic/nonlinear transforms
@@ -1892,9 +1956,10 @@ order with one scalar uniform center, independent log-scales, student then
 teacher scalar noise arrays, clipping, and student then teacher weights. Counts
 are drawn with `integers(2, 33)` for token-value fixtures,
 `integers(2, 497)` for relation-value fixtures, and `integers(2, 17)` for both
-gradient families. Exact and RFF gradient comparisons treat the completed
-student cloud as the FP64 leaf requiring gradient; the teacher cloud, weights,
-and frozen resources are detached and byte-identical across the two losses.
+gradient families. Analytic/autograd and ideal-reference comparisons treat the
+completed student cloud as the FP64 leaf requiring gradient; the teacher cloud,
+weights, and frozen resources are detached and byte-identical across compared
+computations.
 
 For seed `995`, draw the full 128-by-128 Gaussian matrix first, apply FP64 QR,
 and multiply each Q column by the sign of the corresponding R diagonal
@@ -1907,8 +1972,8 @@ payloads, selected-resource hashes, unrounded error/gradient vectors, and
 pass/fail values are published as
 `HCWDL_REPRESENTATION_NUMERICAL_ACCEPTANCE/v1`. The resource seed is never
 searched for one that passes. Failure requires a new predeclared recipe; it
-cannot be repaired after viewing model metrics. All draws and exact-kernel
-evaluation are FP64.
+cannot be repaired after viewing model metrics. All draws, finite-kernel
+references, and ideal-RBF diagnostics are FP64.
 
 ### 23.5 What is not a control
 
@@ -1951,6 +2016,27 @@ means for:
   pair;
 - teacher-target join count, cache bytes, construction/read time, and hashes;
 - BF16-forward/FP32-loss finite checks.
+
+The diagnostic microbatch is exact. It is the first canonical 256-identity
+batch of the Section 13 calibration population, in that population's fixed
+order, materialized once from train-only inputs and the node's exact target
+generation. At every post-validation safe boundary, run the live student/heads
+in `eval()` mode with the node's BF16-forward/FP32-loss policy and one shared
+student forward for base and all components. Use the Section 13 matched-support
+reductions and `Theta_cal`; an ineligible component reports `null` plus counts,
+never an invented zero. Teacher values are cached/detached.
+
+Before the diagnostic, snapshot model mode and buffers, CPU/CUDA RNG, trimmer,
+sampler, optimizer/scheduler, data/target cursors, and logging state. Run inside
+`torch.random.fork_rng` seeded from the Section 9.3 canonical payload
+`{contract: HCWDL_REP_DIAGNOSTIC/v1, execution_id, completed_update}`; use
+`autograd.grad` with no `.grad` accumulation and no optimizer step. Restore the
+snapshot and require byte/logical equality of every state and the identity of
+the next scientific training batch. The diagnostic input has its own immutable
+manifest and cursor, so it never advances a training/cache iterator. A
+with-diagnostic versus without-diagnostic exact-resume fixture must produce
+identical subsequent checkpoints. These report-only values cannot fail a
+finite row or select a checkpoint.
 
 These values never select a checkpoint or fail a finite scientifically weak
 model. Only violated structural/numerical contracts fail execution.
@@ -2003,9 +2089,31 @@ teacher/initialization parent and the privileged teacher fixed. Cold M6 uses a
 fresh seed-specific backbone; warm M6 reloads its branch's selected M5
 deployable backbone and varies the new-run stochastic streams.
 
+Every training run, including the seed-1337 screen, has an immutable
+`execution_id = SHA256(Section 9.3 canonical JSON of {campaign, strategy,
+node_id, purpose, seed, initialization_parent, teacher, target_generation,
+recipe})`. Calibration phases/manifests, resume generations, checkpoints,
+reports, and selection artifacts are all namespaced by this execution ID.
+`node_id` alone is never an output path. Thus the five confirmation executions
+of one M6 node cannot collide with each other or with its screening execution.
+The confirmation registry enumerates the 20 exact execution IDs before any run
+starts.
+
 This estimates conditional terminal-rung training variance, not full-ladder
 seed variance, and reports that limitation. A future full-system replicate
 requires four additional complete ascent graphs and a new authorization.
+
+`HCWDL_REPRESENTATION_CONFIRMATION_AGGREGATE/v1` has one exact conditional
+estimand per branch and classification metric: the arithmetic mean across the
+five seed-specific point estimates, sample standard deviation with `ddof=1`,
+standard error `s/sqrt(5)`, and two-sided 95% Student-t interval
+`mean +/- t_(0.975,4) * s/sqrt(5)`. It also reports all five raw values and the
+five paired seed-wise differences for each RREL-minus-RSET and warm-minus-cold
+contrast, summarized by the same formula. Seeds pair only when their integer
+seed is equal. There is no pass/fail improvement criterion, multiple-testing
+claim, best-seed choice, or finalist selection from this aggregate; it is
+conditional terminal-M6 training variance around fixed screening-seed M5
+parents, not full-ladder uncertainty.
 
 Paired bootstrap uses a new explicit
 `HCWDL_REPRESENTATION_PAIRED_BOOTSTRAP/v1` surface; neither an existing
@@ -2026,9 +2134,13 @@ accuracy, macro OVR AUC, macro mean log-QCD-rejection at 50% signal efficiency,
 top-label ECE-15, multiclass Brier score, and every class's OVR AUC plus
 50%-efficiency QCD FPR/rejection. Report the original-population point estimate,
 bootstrap median, and 2.5%/97.5% intervals using NumPy's `method="linear"` on
-unrounded FP64 replicate values. Nonfinite/undefined metric policy is the
-frozen metric contract's policy and is recorded per replicate; it cannot cause
-redraw. The artifact stores the exact joined-identity hash, prediction/label
+unrounded FP64 replicate values. The rejection policy is bound explicitly to
+the current `evaluation.py` convention: store raw `qcd_pass`; empirical FPR is
+`qcd_pass / N_qcd`; rejection is `N_qcd / max(1, qcd_pass)`; and log rejection
+is `log(max(rejection, 1.0))`. Because within-class resampling preserves a
+positive count for every class, every OVR AUC and `N_qcd` denominator is
+defined. Any other nonfinite metric is a contract failure for that prediction
+join, not a dropped bootstrap replicate or redraw. The artifact stores the exact joined-identity hash, prediction/label
 parent hashes, RNG metadata, replicate-index logical hash, full replicate
 arrays or losslessly equivalent immutable binary sidecar, and every registered
 comparison sign.
@@ -2056,21 +2168,41 @@ common exposure ledger; any identity overlap fails closed. A changed split
 name or label policy is never proof of a new holdout.
 
 Population registration and overlap checking are one serialized transaction,
-not a check-then-write pair. A neutral shared registrar takes an exclusive
-OS-level lock on the one fixed exposure-ledger lock file, reloads and validates
-the complete immutable `HCWDL_SHARED_FINAL_EXPOSURE_LEDGER/v1`, checks the
-proposed identity set against every entry, atomically publishes the new
-population/disjointness/registration entry and next ledger generation, fsyncs
-file and parent directory, and only then releases the lock. The same critical
-section also rejects a second reservation for an already registered
-population. No campaign-root code may register directly. The real-filesystem
-miniature must prove the selected lock/rename/fsync primitive on Tigris; if the
-filesystem cannot provide it, final execution is blocked rather than falling
-back to an unlocked scan. Tests race both identical populations and different
-population hashes with at least one overlapping identity; exactly one
-registration/reservation may succeed. Here `source snapshot` always means the
-authenticated **data** source snapshot; producer source commit is a separate
-bound field.
+not a check-then-write pair. The proposal has deterministic
+`registration_owner_id = SHA256(canonical JSON of the population, proposed
+campaign identity, disposition request, and selection/label/assignment rule
+commitments)`. A neutral shared registrar takes an exclusive OS-level lock on
+the one fixed exposure-ledger lock file and executes this crash-recoverable
+order:
+
+1. validate `HEAD` and the full immutable
+   `HCWDL_SHARED_FINAL_EXPOSURE_LEDGER/v1` chain, then check the proposed
+   identity set against every entry;
+2. write population, disjointness, and registration payloads into an
+   owner-scoped proposal directory, fsync its files/tree, and atomically rename
+   the whole directory into the population namespace;
+3. publish/fsync the next immutable ledger generation binding that directory;
+4. atomically replace/fsync `HEAD` to point to that generation.
+
+The registrar does not treat an intermediate same-owner state as a second
+registration. On restart under the lock, it recognizes the exact owner/payload
+at every boundary and idempotently completes only the missing rename, ledger
+generation, or `HEAD` swap. A different owner/payload, conflicting immutable
+file, or ledger entry without its exact bundle fails closed. After the campaign
+spec/disposition audit, the same owner publishes the reservation as a separate
+atomic file under this lock; absent reservation is resumable, exact existing
+reservation is idempotent, and any difference fails. This ownership claim
+prevents a second campaign from reserving the already registered population
+while never stranding it after a coordinator crash.
+
+No campaign-root code may register directly. The real-filesystem miniature
+must prove the selected lock/directory-rename/file-rename/fsync primitives on
+Tigris; if the filesystem cannot provide them, final execution is blocked
+rather than falling back to an unlocked scan. Tests inject death before/after
+every step and race both identical populations and different population hashes
+with at least one overlapping identity; exactly one owner may complete
+registration/reservation. Here `source snapshot` always means the authenticated
+**data** source snapshot; producer source commit is a separate bound field.
 
 Before the representation campaign spec is created, audit the parent
 submission ledger, all legacy final-task Slurm IDs, final outputs, root-local
@@ -2408,7 +2540,7 @@ Add the following focused modules under
 | `hcwdl_representation_contracts.py` | contract names, canonical payload validation, artifact parent checks, role access |
 | `hcwdl_representation_graph.py` | 24-node registry, teacher mapping, strategy/track/init invariants, DAG validation |
 | `hcwdl_representation_recipe.py` | immutable overlay recipe, kernel resources, ramps, coefficients, inherited-parent validation |
-| `hcwdl_representation_kernels.py` | fixed RFF generation, exact/RFF kernel checks, weighted token and relation sketches |
+| `hcwdl_representation_kernels.py` | fixed spectral-resource generation, exact finite-kernel/analytic-gradient checks, ideal-RBF diagnostics, weighted token/relation sketches |
 | `hcwdl_representation_losses.py` | jet, set, relation, orthogonality, family-aware reductions, gradient calibration |
 | `hcwdl_representation_targets.py` | target shard construction, manifests, exact joins, RAM materialization, cleanup |
 | `hcwdl_representation_training.py` | model/head initialization, one-time predecessor logits, 60-pass engine adapter, resume, extraction |
@@ -2549,13 +2681,13 @@ identity_digest                uint8  [J, 32]
 label                         uint8  [J]       audit/join only
 logits                        float32 [J, 15]
 jet_penultimate               float32 [J, 128]
-token_kernel_mean             float32 [J, 128]       ordinary D
-token_kernel_mean_charged     float32 [J, 128]       TOFF
-token_kernel_mean_neutral     float32 [J, 128]       TOFF
+token_kernel_mean             float32 [J, 1024]      ordinary D
+token_kernel_mean_charged     float32 [J, 1024]      TOFF
+token_kernel_mean_neutral     float32 [J, 1024]      TOFF
 token_family_eligibility      uint8  [J, families]
-relation_kernel_mean          float32 [J, 3, 64]     ordinary D
-relation_kernel_mean_charged  float32 [J, 3, 64]     TOFF
-relation_kernel_mean_neutral  float32 [J, 3, 64]     TOFF
+relation_kernel_mean          float32 [J, 3, 256]    ordinary D
+relation_kernel_mean_charged  float32 [J, 3, 256]    TOFF
+relation_kernel_mean_neutral  float32 [J, 3, 256]    TOFF
 relation_eligibility          uint8  [J, families, 3]
 token_count                   uint16 [J, families]
 token_scalar_pt_sum           float32 [J, families]
@@ -2586,24 +2718,35 @@ hashes but is valid only when the stable logical target hash is unchanged.
 
 For each logical bank:
 
-1. validate the parent import, overlay recipe, kernel resources, teacher
+1. atomically publish `HCWDL_REPRESENTATION_TARGET_BUILD_INTENT/v1`, binding
+   the logical bank, generation/consumer registry, forward spec, exact sorted
+   source partitions/output names, expected rows/shapes, and deterministic
+   `build_owner_id`; create only its owner-scoped staging directory;
+2. validate the parent import, overlay recipe, kernel resources, teacher
    selection, assignment/repair lineage, train row selection, and canonical
    target-forward specification and any prior execution attestation required
    for a rebuild;
-2. calculate exact output shapes and peak bytes before loading the teacher;
-3. load the selected teacher checkpoint strictly and set evaluation mode;
-4. open only projected branches needed for that teacher view;
-5. stream each selected train identity exactly once in canonical source/entry
+3. calculate exact output shapes and peak bytes before loading the teacher;
+4. load the selected teacher checkpoint strictly and set evaluation mode;
+5. open only projected branches needed for that teacher view;
+6. stream each selected train identity exactly once in canonical source/entry
    order using the pre-build forward spec's per-source 256-row batch
    partition;
-6. perform one deterministic FP32 teacher surface forward per canonical batch
-   with every backend/precision flag in the signature enforced;
-7. calculate token and relation sketches immediately, then discard token
+7. perform one deterministic FP32 teacher surface forward per canonical batch
+   with every backend/precision flag in the forward spec enforced;
+8. calculate token and relation sketches immediately, then discard token
    activations and particle inputs;
-8. publish each shard atomically only after its finite/count/hash audit;
-9. publish the manifest only after exact total-row, class-count, identity-set,
-   and shard-parent conservation succeeds;
-10. release teacher, view buffers, and construction scratch.
+9. publish each audited shard atomically **inside staging**. A staged shard is
+   resumable work product, not a reusable target-generation artifact;
+10. after exact total-row, class-count, identity-set, and shard-parent
+    conservation succeeds, publish the post-build execution attestation,
+    generation record, and manifest inside staging; fsync every file and the
+    directory tree;
+11. atomically rename the complete owner staging directory to
+    `generations/<generation_id>`, fsync its parent, and treat that directory
+    appearance as the sole generation commit point. If the destination exists,
+    validate it byte-for-byte instead of overwriting it;
+12. release teacher, view buffers, and construction scratch.
 
 Before a recovery publication, step 6 first replays the prior execution
 attestation's sentinel batches under the unchanged forward spec and must
@@ -2611,10 +2754,16 @@ reproduce their prior logical hashes. The finished generation
 must then reproduce the complete prior `logical_target_sha256`; sentinel
 agreement alone is necessary but not sufficient.
 
-Interrupted temporary files are not artifacts. A complete manifest cannot
-reference a partial shard. Reuse validates both the immutable manifest and
-every current shard byte; a manifest is never trusted because its directory
-exists.
+An interrupted staging tree has exact-owner idempotence. Recovery validates the
+build intent, owner, forward signature, and every completed staged shard,
+continues only missing partitions, and quarantines/recomputes a corrupt staged
+file because it was never committed as an artifact. A different owner or
+payload cannot adopt it. A crash before the directory rename exposes no
+generation; a crash after it exposes a complete generation. Atomic nonempty
+directory rename/fsync behavior is a required real-Tigris miniature gate. A
+complete manifest cannot reference a partial shard. Reuse validates both the
+immutable manifest and every current shard byte; a manifest is never trusted
+because its directory exists.
 
 ### 29.3 Target coverage invariants
 
@@ -2648,6 +2797,15 @@ D100      -> eight M5 primary/control consumers -> cleanup
 TOFF      -> four M6 consumers  -> cleanup
 ```
 
+Within each of the first four lines, warm-bank readiness depends on cold-bank
+cleanup **completion**; the next line's cold bank depends on warm-bank cleanup
+completion. Shared D100/TOFF each have one completion. These are actual DAG
+edges, not documentation shorthand or optional optimization. The screen `TOFF`
+cleanup precedes construction of the separate 20-consumer confirmation
+generation. Dry-run graph tests compute the maximum live generation set and
+prove it is at most one committed bank plus explicitly reserved staging/recovery
+headroom.
+
 For track-specific banks each individual bank has two consumers. Cleanup waits
 for an authenticated complete training report from every registered consumer
 and for those reports/resume checkpoints to bind the exact generation and
@@ -2660,6 +2818,7 @@ payloads do not.
 Recovery is a generation-aware state machine with these exhaustive states:
 
 ```text
+STAGING_BUILD_IN_PROGRESS       -> same-owner validate/continue, then commit
 COMPLETE_SHARDS_NO_AUTH        -> validate and resume registered consumers
 CLEANUP_AUTHORIZED_IN_PROGRESS -> idempotently finish exact deletion, attest
 CLEANUP_COMPLETED              -> rebuild new generation if consumers remain
@@ -2667,8 +2826,11 @@ INCOMPLETE_NO_AUTHORIZATION    -> corruption; fail closed
 ABANDONED_AUTHORIZED           -> finish only its separately authorized purge
 ```
 
-State precedence is content-based: a valid completion wins; otherwise a valid
-authorization plus manifest defines in-progress cleanup; otherwise every shard
+State precedence is content-based: a valid committed generation ignores any
+orphan staging tree; otherwise a valid same-owner build intent defines staged
+construction and no committed-generation corruption exists. For a committed
+generation, a valid cleanup completion wins; otherwise a valid authorization
+plus manifest defines in-progress cleanup; otherwise every committed shard
 must validate or the generation is corrupt. The recovery plan names incomplete
 or newly authorized consumer rows explicitly and creates a new consumer
 registry. It cannot transitively retry already completed descendants, cannot
@@ -2679,7 +2841,9 @@ authorization exists.
 
 The campaign-spec builder computes pilot and production peak durable bytes
 from exact selected rows and schemas. It refuses a configured target-storage
-cap smaller than the next bank pair. It never keeps all ten banks at once.
+cap smaller than the next single bank plus its declared staging/recovery and
+filesystem headroom. It never keeps two committed banks, much less all ten, at
+once.
 
 ## 30. Command-line and worker surface
 
@@ -2753,19 +2917,37 @@ CUBLAS override in paired training jobs.
 
 ### 30.3 Dry run and submission rules
 
-The dry run publishes the exact `sbatch` argv, resources, arrays, dependencies,
-source commit, worktree-clean proof, campaign root, and spec hash without
-mutation. Submission consumes that command plan byte-for-byte and emits a
-ledger of exact job IDs. No script reconstructs dependencies from job names.
+The dry run publishes a versioned symbolic command plan without mutation. Each
+row contains exact invariant `sbatch` argv, resources, arrays, source commit,
+worktree-clean proof, campaign root/spec hash, a stable `task_key`, and
+dependencies as ordered upstream **task keys**, represented in argv by typed
+tokens such as `${afterok:target_D0c}`. Scheduler job IDs cannot appear in a
+pre-submission dry run and are never guessed from job names.
+
+Submission topologically consumes that template. After each successful
+`sbatch`, it records the returned exact job/array ID, substitutes only the
+declared dependency tokens of downstream rows, and publishes the fully
+materialized argv and key-to-ID map in
+`HCWDL_REPRESENTATION_SUBMISSION_LEDGER/v1`. Removing, adding, reordering, or
+changing any nondependency token fails. A deterministic validator rematerializes
+each argv from the immutable template plus earlier ledger IDs and requires
+byte-for-byte equality. Thus the reviewed plan is exact while acknowledging
+that Slurm assigns dependencies only during submission.
 
 Array indices map through immutable registry rows. Operational concurrency is
 uncapped unless a measured resource profile explicitly sets a limit. Changing
 only a concurrency limit does not change scientific identity, but it is
 recorded in the command plan and ledger.
 
-Cancellation accepts only a validated representation submission ledger and
-cancels its exact bound job IDs. Broad `scancel --name` operations are not part
-of the interface.
+Every recovery submission publishes
+`HCWDL_REPRESENTATION_RECOVERY_SUBMISSION_LEDGER/v1`, binding the recovery plan,
+campaign spec, original ledger, complete ordered chain of prior recovery
+ledgers, symbolic recovery templates, materialized argv, and newly returned
+exact job IDs. Monitoring and cancellation first validate the original ledger
+plus this hash chain and operate on the authenticated union of exact live IDs.
+They never infer replacement jobs from names or omit them because they were not
+in the original submission. Broad `scancel --name` operations are not part of
+the interface.
 
 ## 31. Exact artifact layout
 
@@ -2777,6 +2959,8 @@ campaign root:
   campaign_spec.json
   command_plan.json
   submission_ledger.json
+  recovery_submission_ledgers/
+    <sequence>_<content_hash>.json
   import/
     parent_import.json
     parent_loss_attestation.json
@@ -2792,8 +2976,11 @@ campaign root:
   targets/
     <logical_bank>/
       logical_bank.json
+      staging/
+        <generation_id>/<build_owner_id>/...
       generations/
         <generation_id>/
+          build_intent.json
           consumer_registry.json
           target_forward_spec.json
           target_execution_attestation.json
@@ -2803,22 +2990,24 @@ campaign root:
             <source_partition>.npz
             <source_partition>.json
   calibration/
-    <node_id>/
+    <execution_id>/
+      diagnostic_batch.json
       jet_set.json
       relation.json               # RREL only
       manifest.json
   training/
     <strategy>/<node_id>/
-      resume/
-        state_<sequence>.pt
-        state_<sequence>.json
-        commit_<sequence>.json
-      selected_training_state.pt
-      final_training_state.pt
-      deployable_selected.pt
-      deployable_extraction.json
-      training_report.json
-      checkpoint_selection.json
+      <execution_id>/
+        resume/
+          state_<sequence>.pt
+          state_<sequence>.json
+          commit_<sequence>.json
+        selected_training_state.pt
+        final_training_state.pt
+        deployable_selected.pt
+        deployable_extraction.json
+        training_report.json
+        checkpoint_selection.json
   controls/
     registry.json
     zero_coefficient/
@@ -2829,7 +3018,8 @@ campaign root:
     <control_node_id>/...
   confirmation/
     registry.json
-    <node_id>/<seed>/...
+    runs/<execution_id>.json
+    aggregate.json
   cleanup/
     <logical_bank>/
       <generation_id>/
@@ -2890,7 +3080,7 @@ outside either campaign root:
 
 <checkpoint_namespace>/final_claims/exposure_ledger/
   registrar.lock                  # operational exclusive-lock inode
-  registrations/<final_population_sha256>.json
+  proposals/<registration_owner_id>/...
   generations/<sequence>_<content_hash>.json
   HEAD.json                       # atomic validated pointer, not identity
 ```
@@ -2921,6 +3111,8 @@ Add focused tests for:
 - M1--M6 teacher mappings and cold/warm predecessor rules;
 - no cross-track, cross-strategy, or training-head warm parent;
 - graph acyclicity and complete finite-result descendants;
+- schema freeze -> tap implementation/parity -> architecture attestation ->
+  parent import ordering, with pre-parity attestation/import rejected;
 - parent-import rejection for every stale/missing hash class;
 - rejection of the current class-weighted-KD runtime under the required
   unweighted-KD parent-loss attestation, plus acceptance only after corrected
@@ -2967,11 +3159,15 @@ For `RSET` and `RREL`, require:
   `ESS=3.0`;
 - independent student/teacher pair populations;
 - no cross-family TOFF relation;
-- RFF determinism from frozen resource arrays;
-- exact small-set multi-kernel MMD agreement within the frozen approximation
-  tolerance across multiple fixtures/seeds;
-- exact-versus-RFF student-gradient cosine/norm acceptance under the frozen
-  seed-993/994 fixtures;
+- RFF resource determinism and exact finite-kernel identity from frozen arrays;
+- slow pairwise finite-kernel MMD equals the cached feature-mean loss under the
+  frozen FP64/FP32 tolerances across all fixtures;
+- analytic finite-kernel gradients equal autograd, including normalization,
+  under the frozen seed-993/994 tolerances;
+- ideal infinite-RBF value-quality and joint-rotation loss gates meet the
+  frozen evidence-backed thresholds, while ideal-gradient and
+  rotation-gradient values remain report-only and are never mislabeled as
+  fidelity/invariance acceptance;
 - finite, nonzero gradients to student jet and token states;
 - detached/no-gradient teacher targets;
 - zero encoder gradient for a deliberately raw-physics-only relation loss;
@@ -2997,6 +3193,8 @@ Require exact tests for:
   reduction over those same tensors;
 - preemption immediately before and after either calibration barrier resumes
   without skipping or duplicating calibration;
+- screen/confirmation execution IDs scope every calibration/resume/report path;
+  20 concurrent M6 confirmations cannot collide;
 - FP64 median calculation and hexadecimal persistence;
 - finite out-of-range scale, insufficient valid support, zero gradient, or low
   relation eligibility produces the exact inactive-component state without
@@ -3009,16 +3207,23 @@ Require exact tests for:
   fixtures despite the two-update zero ramp; every component must have a finite
   positive smoke-only scale and nonzero gradient even when production support
   would mark it inactive;
-- exact 60 validation records and no performance early stopping.
+- exact 60 validation records and no performance early stopping;
+- fixed diagnostic identities/order/mode, one-forward matched-support
+  reductions, and byte-identical subsequent training with diagnostics on/off.
 
 ### 32.5 Target-bank tests
 
 Require:
 
 - exact selected-row, identity-set, class-count, and source-shard conservation;
+- exact `K_token=1024`/`K_relation=256` ordinary/TOFF shapes and
+  `1,935`/`3,727` FP32-value core byte formulas at authenticated row counts;
 - duplicate, missing, unexpected, reordered, cross-role, nonfinite, wrong-tap,
   wrong-teacher, wrong-track, and wrong-kernel rejection;
 - atomic publication and orphan temporary-file rejection;
+- initial-build process death after every staged shard, after attestation, after
+  manifest, and immediately before/after directory rename has exact same-owner
+  continuation and can never expose a partial committed generation;
 - shard byte-hash and array logical-hash validation;
 - same teacher execution supplies logits and representation summaries;
 - RSET ignores but authenticates the shared relation superset;
@@ -3033,6 +3238,9 @@ Require:
   resolution;
 - the D100 screen generation has exactly eight primary/control consumers and
   cannot clean up after only the four primary nodes;
+- rung `r+1` build-readiness depends on every rung `r` cleanup completion, and
+  within-rung warm readiness depends on cold cleanup; dry-run peak-liveness
+  analysis cannot schedule two committed banks or all preexisting-teacher banks;
 - last-consumer cleanup cannot run early and records exact removed bytes;
 - failed/cancelled/timed-out consumers cannot authorize cleanup;
 - cleanup authorization is atomically durable before the first removal;
@@ -3069,14 +3277,17 @@ Require:
   descendant;
 - ordered pairwise delta tables and undefined gap denominators;
 - five-seed terminal confirmation registry is frozen before execution;
+- confirmation aggregation uses exactly five raw values, `ddof=1`, the frozen
+  Student-t interval, and equal-seed paired contrasts, and never selects a seed;
 - mandatory parent report/finalist imports cannot be silently omitted;
 - the new 15-class paired bootstrap produces the frozen 2,000 replicate index
   hash, uses identical indices across paired models, preserves every class
-  count, and is not routed through incompatible 10-class/unstratified helpers;
+  count, exercises raw zero-QCD-pass capping exactly, and is not routed through
+  incompatible 10-class/unstratified helpers;
 - screening-seed representation endpoints, not confirmation seeds, enter the
   combined finalist registry;
 - prediction shards are label-free, disjoint, complete, and bound before the
-  locked label join;
+  locked label join, contain exactly FP32 logits, and reject probability arrays;
 - HLT, Shell-Exact D100, and native-offline final streamers request only their
   frozen identity/input branch allow-lists; an instrumented label-branch read
   fails before I/O, while the selection task is the only ROOT-label reader;
@@ -3085,6 +3296,13 @@ Require:
   final tasks;
 - two distinct population hashes with overlapping identities raced through the
   global registrar yield exactly one exposure-ledger registration/reservation;
+- registrar death before/after bundle rename, ledger-generation publication,
+  `HEAD` swap, and reservation publication is same-owner idempotent and cannot
+  strand or double-register a population;
+- symbolic dependency templates materialize only scheduler-ID tokens, and the
+  ledger validator reconstructs the exact submitted argv;
+- original plus chained recovery submission ledgers own every replacement job
+  ID for monitoring and exact-ID cancellation;
 - absent final outputs may resume under the same owner/path, whereas a
   published corrupt output fails closed and is never overwritten;
 - final aggregate cannot read final test without combined new locks.
@@ -3111,29 +3329,34 @@ pilot.
 
 ### Block A — freeze contracts and graph
 
-Implement parent loss remediation/attestation, parent import, architecture
-attestation, representation recipe/resources, node/control graphs, binary
-resume/control envelopes, and validation-only access rules. Add contract/graph
-tests.
+Freeze the parent-loss correction, architecture/tap **schemas**, representation
+recipe/resource schemas, node/control graphs, binary resume/control envelopes,
+and validation-only access rules. Implement and test the parent-loss runtime
+correction, but do not publish architecture or parent-import artifacts before
+Block B parity. Add contract/graph tests.
 
-**Gate:** the authoritative base-loss runtime and imported parent artifacts
-agree, all 24 primary nodes plus four controls serialize to their frozen graph
-and registry hashes, and old HCWDL tests remain unchanged except for an
-explicitly versioned loss/final-claim correction.
+**Gate:** the authoritative base-loss runtime and frozen graph schemas agree,
+all 24 primary nodes plus four controls serialize to their frozen graph and
+registry hashes, and old HCWDL tests remain unchanged except for an explicitly
+versioned loss/final-claim correction.
 
 ### Block B — expose authenticated model surfaces
 
-Implement ordinary and TOFF surface forwards plus deployable extraction.
+Implement ordinary and TOFF surface forwards plus deployable extraction. Run
+installed-Weaver parity, then publish the architecture attestation, validate all
+parent checkpoints against it, and only then publish the parent-import artifact.
 
-**Gate:** installed-Weaver FP32 logit/gradient parity, exact shapes/masks, and
-strict HLT-only extraction pass.
+**Gate:** installed-Weaver FP32 logit/gradient parity, exact shapes/masks,
+strict HLT-only extraction, architecture attestation, and parent import all
+validate in that order.
 
 ### Block C — implement kernels and losses
 
 Implement fixed resources, weighted sketches, family logic, latent relations,
 jet/Gram loss, projections, calibration, and schedules.
 
-**Gate:** all mathematical invariance/gradient/RFF/control tests pass; raw
+**Gate:** all mathematical invariance, finite-kernel analytic-gradient, and
+control tests pass; ideal-RBF comparisons remain diagnostics; raw
 physics cannot masquerade as representation KD.
 
 ### Block D — implement target banks
@@ -3204,7 +3427,8 @@ change:
 - HLT/D and TOFF named tap semantics;
 - RSET and RREL component definitions and weights;
 - `rho_repr=0.10`;
-- token and relation RBF bandwidths/RFF widths;
+- token and relation finite spectral-kernel bandwidths/RFF widths and the
+  explicit non-equivalence to infinite-RBF gradients;
 - top-32 relation population and fixed deltaR strata;
 - M6 charged/neutral separation;
 - projection structure, identity initialization, regularizer, and reset rule;
@@ -3295,7 +3519,8 @@ matching-free weighted distribution of privileged token representations. A
 small identity-initialized linear projection handles coordinate rotation, a
 strictly orthogonal-basis-invariant jet Gram term guards against
 projection-only fitting, and a
-fixed per-jet RFF MMD supports different particle counts and orderings.
+fixed per-jet finite-spectral-kernel MMD supports different particle counts and
+orderings without claiming infinite-RBF gradient equivalence.
 
 The equal-budget `RREL` alternative adds one corrected notion of structure: the
 distribution of **learned latent cosine relations**, stratified by fixed raw

@@ -35,6 +35,12 @@ hashes. The exploratory reader does not recompute an old parent campaign's
 scientific identity using the current campaign registry, because later
 registry additions cannot retroactively alter a completed source-bound run.
 
+Historical validation summaries require the common CE, accuracy, macro-AUC,
+mean log-rejection, and ECE fields. Newer derived fields such as balanced
+accuracy and always-QCD accuracy are retained when present but are not
+retroactively required from older reports. The exploratory test evaluator
+computes the complete current metric set for every model.
+
 ## Access and evaluation
 
 Two dedicated locks record the explicit all-model authorization and the

@@ -9,7 +9,7 @@ import pytest
 from hlt_classification.data.cache_contracts import with_content_hash, write_immutable_json
 from hlt_classification.scouting.hcwdl_campaign import (
     ROLE_COUNTS, build_command_plan, create_campaign_spec, slurm_commands,
-    validate_campaign_spec,
+    split_submission_commands, validate_campaign_spec,
 )
 from hlt_classification.scouting.hcwdl_authorization import (
     AUTHORIZATION_PHRASE, build_submission_authorization,
@@ -115,7 +115,10 @@ def test_slurm_commands_are_topological_absolute_and_checkpoint_signaled():
     endpoint_gate = next(
         row for row in commands if row["task_id"] == "shell_endpoint_qualification_lock"
     )
-    assert "--hold" in endpoint_gate["command"]
+    assert "--hold" not in endpoint_gate["command"]
+    qualification, ladder = split_submission_commands(_spec("pilot"))
+    assert qualification[-1]["task_id"] == "endpoint_qualification"
+    assert ladder[0]["task_id"] == "shell_endpoint_qualification_lock"
 
 
 def test_recipe_contains_explicit_control_policy_and_remains_unauthorized():

@@ -73,6 +73,11 @@ PRIMARY_METRICS = (
     "macro_ovr_auc", "macro_mean_log_qcd_rejection_at_50pct_signal",
     "multiclass_brier", "top_label_ece_15_bin",
 )
+REQUIRED_VALIDATION_METRICS = (
+    "cross_entropy", "accuracy", "macro_ovr_auc",
+    "macro_mean_log_qcd_rejection_at_50pct_signal",
+    "top_label_ece_15_bin",
+)
 
 
 def _versioned_reference(path: Path) -> dict[str, str]:
@@ -155,10 +160,10 @@ def _validate_archived_studies(
 
 
 def _compact_validation(metrics: Mapping[str, object]) -> dict[str, object]:
-    missing = [name for name in PRIMARY_METRICS if name not in metrics]
+    missing = [name for name in REQUIRED_VALIDATION_METRICS if name not in metrics]
     if missing:
         raise ValueError(f"training validation metrics are incomplete: {missing}")
-    return {name: metrics[name] for name in PRIMARY_METRICS}
+    return {name: metrics[name] for name in PRIMARY_METRICS if name in metrics}
 
 
 def _scientific_axes(candidate: Mapping[str, object]) -> dict[str, object]:
@@ -798,7 +803,11 @@ def aggregate_exploratory_test(spec: Mapping[str, object]) -> dict[str, object]:
             "test_minus_validation": {
                 name: float(test_metrics[name]) - float(validation[name])
                 for name in PRIMARY_METRICS
-                if test_metrics[name] is not None and validation[name] is not None
+                if (
+                    name in test_metrics and name in validation
+                    and test_metrics[name] is not None
+                    and validation[name] is not None
+                )
             },
         })
     report = with_content_hash({

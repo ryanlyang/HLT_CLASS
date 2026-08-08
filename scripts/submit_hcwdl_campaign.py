@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dry-run or explicitly submit an authorized HCWDL DAG."""
+"""Submit the pre-acknowledgement phase of an authorized HCWDL DAG."""
 
 from __future__ import annotations
 
@@ -12,7 +12,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from hlt_classification.data.cache_contracts import load_json, write_immutable_json  # noqa: E402
-from hlt_classification.scouting.hcwdl_campaign import slurm_commands, validate_campaign_spec  # noqa: E402
+from hlt_classification.scouting.hcwdl_campaign import (  # noqa: E402
+    split_submission_commands, validate_campaign_spec,
+)
 from hlt_classification.scouting.hcwdl_authorization import (  # noqa: E402
     require_canonical_campaign_spec_path, validate_source_checkout,
 )
@@ -29,7 +31,7 @@ def main() -> int:
     parser.add_argument("--authorization-phrase")
     args = parser.parse_args()
     spec = load_json(args.campaign_spec)
-    commands = slurm_commands(spec)
+    commands, _ = split_submission_commands(spec)
     by_task = {row["task_id"]: list(row["command"]) for row in commands}
     if not args.execute:
         ledger = build_submission_ledger(
@@ -42,6 +44,8 @@ def main() -> int:
     require_canonical_campaign_spec_path(
         args.campaign_spec, campaign_root=spec["campaign_root"],
     )
+    if REPO_ROOT.resolve() != Path(spec["project_dir"]).resolve():
+        raise PermissionError("HCWDL submitter is not running from the bound project worktree")
     if args.authorization_phrase != "SUBMIT HCWDL EXACT SPEC":
         raise PermissionError("live HCWDL submission requires the exact authorization phrase")
     validate_source_checkout(REPO_ROOT, expected_commit=str(spec["source_commit"]))
