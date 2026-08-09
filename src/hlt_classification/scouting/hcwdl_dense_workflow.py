@@ -11,9 +11,8 @@ from hlt_classification.data.cache_contracts import (
 
 from .engine import validate_pmard_training_report
 from .hcwdl_dense import (
-    DENSE_GRAPH_SHA256, DENSE_NODE_REGISTRY, DENSE_REPAIR_RNG_POLICY,
-    DENSE_TRAINING_REPORT_CONTRACT,
-    build_dense_aggregate, validate_dense_spec,
+    DENSE_REPAIR_RNG_POLICY, build_dense_aggregate,
+    dense_profile_for_spec, validate_dense_spec,
 )
 from .hcwdl_dense_runner import run_dense_node
 
@@ -22,6 +21,7 @@ class DenseColdWorkflow:
     def __init__(self, spec: dict[str, Any]) -> None:
         validate_dense_spec(spec, executable=False)
         self.spec = spec
+        self.profile = dense_profile_for_spec(spec)
         self.root = Path(spec["campaign_root"])
 
     def _engine_report(self, node_id: str) -> Path:
@@ -30,15 +30,14 @@ class DenseColdWorkflow:
     def _node_report(self, node_id: str) -> Path:
         return self.root / f"training/{node_id}/hcwdl_training_report.json"
 
-    @staticmethod
-    def _validate_engine_node(engine: dict[str, Any], node_id: str) -> str:
+    def _validate_engine_node(self, engine: dict[str, Any], node_id: str) -> str:
         engine_hash = validate_pmard_training_report(engine)
         scientific = engine.get("scientific_config")
         node = None if not isinstance(scientific, dict) else scientific.get("node")
         if (
             not isinstance(scientific, dict)
-            or scientific.get("campaign") != "HCWDL_DENSE_COLD_300K"
-            or scientific.get("graph_sha256") != DENSE_GRAPH_SHA256
+            or scientific.get("campaign") != self.profile.campaign
+            or scientific.get("graph_sha256") != self.profile.graph_sha256
             or scientific.get("repair_rng_policy") != DENSE_REPAIR_RNG_POLICY
             or not isinstance(node, dict)
             or node.get("node_id") != node_id
@@ -47,7 +46,7 @@ class DenseColdWorkflow:
         return engine_hash
 
     def _teacher_report(self, node_id: str) -> tuple[Path, str]:
-        teacher_id = DENSE_NODE_REGISTRY[node_id].teachers[0].node_id
+        teacher_id = self.profile.registry[node_id].teachers[0].node_id
         if teacher_id in self.spec["imported_controls"]:
             record = self.spec["imported_controls"][teacher_id]
             return Path(record["report_path"]), str(record["report_sha256"])
@@ -56,12 +55,12 @@ class DenseColdWorkflow:
         engine_hash = self._validate_engine_node(engine, teacher_id)
         node = load_json(self._node_report(teacher_id))
         validate_content_hash(
-            node, expected_contract=DENSE_TRAINING_REPORT_CONTRACT,
+            node, expected_contract=self.profile.training_report_contract,
             expected_schema_version=1,
         )
         if (
             node.get("node_id") != teacher_id
-            or node.get("graph_sha256") != DENSE_GRAPH_SHA256
+            or node.get("graph_sha256") != self.profile.graph_sha256
             or node.get("pmard_engine_report_sha256") != engine_hash
             or node.get("complete") is not True
         ):
@@ -99,6 +98,13 @@ class DenseColdWorkflow:
                 ],
                 expected_teacher_report_sha256=teacher_hash,
                 device="cuda",
+                registry=self.profile.registry,
+                domains=self.profile.domains,
+                graph_sha256=self.profile.graph_sha256,
+                training_report_contract=self.profile.training_report_contract,
+                node_contract=self.profile.node_contract,
+                campaign_label=self.profile.campaign,
+                rung_step=self.profile.rung_step,
             )
             return [self._engine_report(node_id), self._node_report(node_id)]
         if task_id == "aggregate":
@@ -109,17 +115,17 @@ class DenseColdWorkflow:
             for node_id, record in self.spec["imported_controls"].items():
                 if reports[node_id].get("content_hash") != record["report_sha256"]:
                     raise ValueError(f"dense cold imported {node_id} report hash differs")
-            for node_id in DENSE_NODE_REGISTRY:
+            for node_id in self.profile.registry:
                 engine = load_json(self._engine_report(node_id))
                 engine_hash = self._validate_engine_node(engine, node_id)
                 node = load_json(self._node_report(node_id))
                 validate_content_hash(
-                    node, expected_contract=DENSE_TRAINING_REPORT_CONTRACT,
+                    node, expected_contract=self.profile.training_report_contract,
                     expected_schema_version=1,
                 )
                 if (
                     node.get("node_id") != node_id
-                    or node.get("graph_sha256") != DENSE_GRAPH_SHA256
+                    or node.get("graph_sha256") != self.profile.graph_sha256
                     or node.get("pmard_engine_report_sha256") != engine_hash
                     or node.get("selected_checkpoint_sha256")
                     != engine.get("selected_checkpoint_sha256")
@@ -127,7 +133,7 @@ class DenseColdWorkflow:
                     raise ValueError(f"dense cold node report lineage differs for {node_id}")
                 reports[node_id] = engine
             aggregate = build_dense_aggregate(spec=self.spec, reports=reports)
-            output = self.root / "reports/dense_cold_aggregate.json"
+            output = self.root / f"reports/{self.profile.aggregate_filename}"
             write_immutable_json(output, aggregate)
             return [output]
         raise RuntimeError("unreachable dense cold task")

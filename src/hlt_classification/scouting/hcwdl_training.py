@@ -94,6 +94,7 @@ def node_training_config(
     replicate_seed: int,
     require_authorized_recipe: bool = True,
     registry: Mapping[str, NodeSpec] = NODE_REGISTRY,
+    domains: Mapping[str, Mapping[str, object]] = DOMAINS,
     seed_node_id: str | None = None,
 ) -> PmardTrainingConfig:
     validate_recipe(recipe, require_authorized=require_authorized_recipe)
@@ -113,7 +114,9 @@ def node_training_config(
     else:
         lr_role = "cold_child"
         peak_learning_rate = float(recipe["optimizer"]["peak_learning_rates"][lr_role])
-    model_input = str(DOMAINS[node.student_domain]["input"])
+    if node.student_domain not in domains:
+        raise ValueError("HCWDL student domain is absent from the declared domain registry")
+    model_input = str(domains[node.student_domain]["input"])
     return PmardTrainingConfig(
         experiment_id=node.node_id,
         loss=_loss_for_node(node, recipe),
@@ -196,11 +199,13 @@ def train_hcwdl_node(
     stop_after_update: int | None = None,
     smoke: bool = False,
     registry: Mapping[str, NodeSpec] = NODE_REGISTRY,
+    domains: Mapping[str, Mapping[str, object]] = DOMAINS,
     graph_sha256: str = GRAPH_SHA256,
     report_contract: str = TRAINING_REPORT_CONTRACT,
     campaign_label: str = "HCWDL",
     scientific_config_extra: Mapping[str, Any] | None = None,
     seed_node_id: str | None = None,
+    node_contract: str | None = None,
 ) -> dict[str, Any]:
     recipe_sha256 = validate_recipe(recipe, require_authorized=True)
     if node_id not in registry:
@@ -215,17 +220,20 @@ def train_hcwdl_node(
     )
     config = node_training_config(
         node_id, recipe, train_rows=train_rows, replicate_seed=replicate_seed,
-        registry=registry, seed_node_id=seed_node_id,
+        registry=registry, domains=domains, seed_node_id=seed_node_id,
     )
     if smoke:
         config = replace(
             config, total_updates=2, validation_interval=2,
             validation_checks=1, logging_interval=1,
         )
+    node_payload = node.payload()
+    if node_contract is not None:
+        node_payload["contract"] = node_contract
     scientific = {
         "campaign": campaign_label,
         "graph_sha256": graph_sha256,
-        "node": node.payload(),
+        "node": node_payload,
         "recipe_sha256": recipe_sha256,
         "training_passes": 60 if not smoke else None,
         "validation_every_passes": 1 if not smoke else None,

@@ -1,5 +1,34 @@
 # Current Handoff
 
+## HCWDL five-point dense cold 300k supplement (2026-08-09)
+
+The dense cold implementation now also registers an isolated five-point
+screen: imported TOFF teaches D100offkd, then fresh D95/D90/.../D5/D0 and one
+fresh M1. This is 22 new sequential GPU training nodes plus one CPU aggregate.
+It retains the locked unweighted 0.25 CE plus 0.75 sole-teacher KD recipe,
+temperature 2 for privileged rungs and temperature 1 for M1, 60 passes,
+per-pass validation, macro-AUC-first checkpoint selection, and the shared
+nested Shell Exact repair coordinate. It reuses the completed unweighted 300k
+pilot read-only and has no final-test task.
+
+The new scientific identities are the `HCWDL_DENSE5_* /v1` graph, node,
+specification, command-plan, training-report, and aggregate contracts. Its
+Slurm jobs use `hcddp5_*`, so it can run beside the primary campaign and the
+ten-point supplement without artifact or scheduler-name collision. The same
+thin CLIs dispatch by immutable spec contract; creation requires
+`--rung-step 5` and separate exact authorization phrases.
+
+This extension audit also fixed a latent generic-training bug before the
+ten-point ladder reached D90: custom dense domain registries are now passed
+through training configuration rather than looking up only the original
+25-point HCWDL domains. D90 and D95 input selection are regression tested.
+The exact contract and launch procedure are in
+`docs/contracts/HCWDL_DENSE5_COLD_PILOT.md` and
+`docs/HCWDL_DENSE5_COLD_RUNBOOK.md`. Focused HCWDL/dense/high-coverage/repair
+validation passes 118/118; the complete repository suite passes 330/330 with
+the same 14 Matplotlib/Pyparsing warnings. CLI help, Python compilation, and
+`git diff --check` pass. No Tigris jobs were submitted by this implementation.
+
 ## HCWDL dense cold 300k supplement (2026-08-09)
 
 The new isolated `HCWDL_DENSE_COLD_GRAPH/v1` implements the requested

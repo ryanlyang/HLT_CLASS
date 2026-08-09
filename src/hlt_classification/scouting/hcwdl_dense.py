@@ -33,6 +33,14 @@ DENSE_REPORT_CONTRACT: Final = "HCWDL_DENSE_COLD_AGGREGATE/v1"
 DENSE_TRAINING_REPORT_CONTRACT: Final = "HCWDL_DENSE_COLD_TRAINING_REPORT/v1"
 DENSE_AUTHORIZATION_PHRASE: Final = "AUTHORIZE HCWDL DENSE COLD 300K EXACT SPEC"
 DENSE_SUBMISSION_PHRASE: Final = "SUBMIT HCWDL DENSE COLD 300K EXACT SPEC"
+DENSE5_NODE_CONTRACT: Final = "HCWDL_DENSE5_COLD_NODE_SPEC/v1"
+DENSE5_GRAPH_CONTRACT: Final = "HCWDL_DENSE5_COLD_GRAPH/v1"
+DENSE5_SPEC_CONTRACT: Final = "HCWDL_DENSE5_COLD_PILOT_SPEC/v1"
+DENSE5_PLAN_CONTRACT: Final = "HCWDL_DENSE5_COLD_COMMAND_PLAN/v1"
+DENSE5_REPORT_CONTRACT: Final = "HCWDL_DENSE5_COLD_AGGREGATE/v1"
+DENSE5_TRAINING_REPORT_CONTRACT: Final = "HCWDL_DENSE5_COLD_TRAINING_REPORT/v1"
+DENSE5_AUTHORIZATION_PHRASE: Final = "AUTHORIZE HCWDL DENSE5 COLD 300K EXACT SPEC"
+DENSE5_SUBMISSION_PHRASE: Final = "SUBMIT HCWDL DENSE5 COLD 300K EXACT SPEC"
 DENSE_REPAIR_RNG_POLICY: Final = "shared_nested_discrete_coordinate_across_all_alpha_domains_v1"
 DENSE_ROLE_COUNTS: Final = {"train": 300_000, "validation": 100_000, "final_test": 100_000}
 DENSE_REPLICATE_SEED: Final = 1337
@@ -45,6 +53,16 @@ DENSE_DOMAINS: Final = MappingProxyType({
             "input": "privileged", "alpha": alpha / 100.0, "deployable": False,
         }
         for alpha in range(10, 101, 10)
+    },
+    "toff": {"input": "toff", "alpha": None, "deployable": False},
+})
+DENSE5_DOMAINS: Final = MappingProxyType({
+    "hlt": {"input": "hlt", "alpha": 0.0, "deployable": True},
+    **{
+        f"d{alpha}": {
+            "input": "privileged", "alpha": alpha / 100.0, "deployable": False,
+        }
+        for alpha in range(5, 101, 5)
     },
     "toff": {"input": "toff", "alpha": None, "deployable": False},
 })
@@ -62,15 +80,17 @@ class DenseNodeSpec:
     loss_kind: str
     deployable: bool
 
-    def payload(self) -> dict[str, object]:
+    def payload(self, *, contract: str = DENSE_NODE_CONTRACT) -> dict[str, object]:
         return {
-            "contract": DENSE_NODE_CONTRACT,
+            "contract": contract,
             "schema_version": 1,
             **asdict(self),
         }
 
 
-def _dense_registry() -> dict[str, DenseNodeSpec]:
+def _dense_registry(step: int = 10) -> dict[str, DenseNodeSpec]:
+    if step not in {5, 10}:
+        raise ValueError("dense cold rung step must be 5 or 10")
     nodes: dict[str, DenseNodeSpec] = {}
 
     def add(node_id: str, domain: str, teacher_id: str, teacher_domain: str) -> None:
@@ -88,7 +108,7 @@ def _dense_registry() -> dict[str, DenseNodeSpec]:
 
     add("D100offkd", "d100", "TOFF", "toff")
     previous, previous_domain = "D100offkd", "d100"
-    for alpha in range(90, 0, -10):
+    for alpha in range(100 - step, 0, -step):
         node, domain = f"D{alpha}c", f"d{alpha}"
         add(node, domain, previous, previous_domain)
         previous, previous_domain = node, domain
@@ -98,16 +118,24 @@ def _dense_registry() -> dict[str, DenseNodeSpec]:
 
 
 DENSE_NODE_REGISTRY: Final[Mapping[str, DenseNodeSpec]] = MappingProxyType(_dense_registry())
+DENSE5_NODE_REGISTRY: Final[Mapping[str, DenseNodeSpec]] = MappingProxyType(
+    _dense_registry(5)
+)
 
 
 def validate_dense_graph(
     registry: Mapping[str, DenseNodeSpec] = DENSE_NODE_REGISTRY,
+    *, rung_step: int = 10,
+    domains: Mapping[str, Mapping[str, object]] = DENSE_DOMAINS,
+    graph_contract: str = DENSE_GRAPH_CONTRACT,
+    node_contract: str = DENSE_NODE_CONTRACT,
 ) -> str:
     expected = (
-        "D100offkd", *(f"D{alpha}c" for alpha in range(90, 0, -10)),
+        "D100offkd",
+        *(f"D{alpha}c" for alpha in range(100 - rung_step, 0, -rung_step)),
         "D0c", "M1c",
     )
-    if tuple(registry) != expected or len(registry) != 12:
+    if tuple(registry) != expected or len(registry) != 100 // rung_step + 2:
         raise ValueError("dense cold graph node order differs")
     previous = "TOFF"
     previous_domain = "toff"
@@ -119,7 +147,7 @@ def validate_dense_graph(
         teacher = node.teachers[0]
         if teacher.node_id != previous or teacher.domain != previous_domain:
             raise ValueError(f"dense cold teacher edge differs for {node_id}")
-        if node.student_domain not in DENSE_DOMAINS:
+        if node.student_domain not in domains:
             raise ValueError("dense cold student domain differs")
         previous, previous_domain = node_id, node.student_domain
     if registry["D100offkd"].student_domain != "d100":
@@ -127,14 +155,78 @@ def validate_dense_graph(
     if not registry["D0c"].deployable or not registry["M1c"].deployable:
         raise ValueError("dense cold HLT endpoints must be deployable")
     return canonical_sha256({
-        "contract": DENSE_GRAPH_CONTRACT,
+        "contract": graph_contract,
         "schema_version": 1,
         "repair_rng_policy": DENSE_REPAIR_RNG_POLICY,
-        "nodes": [registry[name].payload() for name in registry],
+        "nodes": [registry[name].payload(contract=node_contract) for name in registry],
     })
 
 
 DENSE_GRAPH_SHA256: Final = validate_dense_graph()
+DENSE5_GRAPH_SHA256: Final = validate_dense_graph(
+    DENSE5_NODE_REGISTRY, rung_step=5, domains=DENSE5_DOMAINS,
+    graph_contract=DENSE5_GRAPH_CONTRACT, node_contract=DENSE5_NODE_CONTRACT,
+)
+
+
+@dataclass(frozen=True)
+class DenseCampaignProfile:
+    rung_step: int
+    campaign: str
+    node_contract: str
+    graph_contract: str
+    spec_contract: str
+    plan_contract: str
+    report_contract: str
+    training_report_contract: str
+    authorization_phrase: str
+    submission_phrase: str
+    job_prefix: str
+    aggregate_filename: str
+    domains: Mapping[str, Mapping[str, object]]
+    registry: Mapping[str, DenseNodeSpec]
+    graph_sha256: str
+
+
+DENSE_PROFILE: Final = DenseCampaignProfile(
+    rung_step=10, campaign="HCWDL_DENSE_COLD_300K",
+    node_contract=DENSE_NODE_CONTRACT, graph_contract=DENSE_GRAPH_CONTRACT,
+    spec_contract=DENSE_SPEC_CONTRACT, plan_contract=DENSE_PLAN_CONTRACT,
+    report_contract=DENSE_REPORT_CONTRACT,
+    training_report_contract=DENSE_TRAINING_REPORT_CONTRACT,
+    authorization_phrase=DENSE_AUTHORIZATION_PHRASE,
+    submission_phrase=DENSE_SUBMISSION_PHRASE, job_prefix="hcddp_",
+    aggregate_filename="dense_cold_aggregate.json", domains=DENSE_DOMAINS,
+    registry=DENSE_NODE_REGISTRY, graph_sha256=DENSE_GRAPH_SHA256,
+)
+DENSE5_PROFILE: Final = DenseCampaignProfile(
+    rung_step=5, campaign="HCWDL_DENSE5_COLD_300K",
+    node_contract=DENSE5_NODE_CONTRACT, graph_contract=DENSE5_GRAPH_CONTRACT,
+    spec_contract=DENSE5_SPEC_CONTRACT, plan_contract=DENSE5_PLAN_CONTRACT,
+    report_contract=DENSE5_REPORT_CONTRACT,
+    training_report_contract=DENSE5_TRAINING_REPORT_CONTRACT,
+    authorization_phrase=DENSE5_AUTHORIZATION_PHRASE,
+    submission_phrase=DENSE5_SUBMISSION_PHRASE, job_prefix="hcddp5_",
+    aggregate_filename="dense5_cold_aggregate.json", domains=DENSE5_DOMAINS,
+    registry=DENSE5_NODE_REGISTRY, graph_sha256=DENSE5_GRAPH_SHA256,
+)
+
+
+def dense_profile_for_step(rung_step: int) -> DenseCampaignProfile:
+    if rung_step == 10:
+        return DENSE_PROFILE
+    if rung_step == 5:
+        return DENSE5_PROFILE
+    raise ValueError("dense cold rung step must be 5 or 10")
+
+
+def dense_profile_for_spec(value: Mapping[str, Any]) -> DenseCampaignProfile:
+    contract = value.get("contract")
+    if contract == DENSE_SPEC_CONTRACT:
+        return DENSE_PROFILE
+    if contract == DENSE5_SPEC_CONTRACT:
+        return DENSE5_PROFILE
+    raise ValueError("unknown dense cold specification contract")
 
 
 def _root_report(parent_root: Path, node_id: str) -> Path:
@@ -266,12 +358,14 @@ def create_dense_spec(
     *, parent_campaign_spec: str | Path, campaign_root: str | Path,
     project_dir: str | Path, source_commit: str,
     authorization_phrase: str | None = None,
+    rung_step: int = 10,
 ) -> dict[str, Any]:
+    profile = dense_profile_for_step(rung_step)
     evidence = validate_dense_parent(parent_campaign_spec)
     if len(source_commit) != 40 or any(c not in "0123456789abcdef" for c in source_commit):
         raise ValueError("dense cold source commit must be a full lowercase Git SHA")
     authorized = authorization_phrase is not None
-    if authorized and authorization_phrase != DENSE_AUTHORIZATION_PHRASE:
+    if authorized and authorization_phrase != profile.authorization_phrase:
         raise PermissionError("dense cold live authorization phrase differs")
     parent = evidence["parent"]
     resources = {
@@ -280,7 +374,7 @@ def create_dense_spec(
     }
     tasks = []
     previous: str | None = None
-    for node_id in DENSE_NODE_REGISTRY:
+    for node_id in profile.registry:
         task_id = f"train_{node_id}"
         tasks.append({
             "task_id": task_id,
@@ -298,9 +392,9 @@ def create_dense_spec(
         "resource_class": "cpu_small",
     })
     payload = {
-        "contract": DENSE_SPEC_CONTRACT,
+        "contract": profile.spec_contract,
         "schema_version": 1,
-        "campaign": "HCWDL_DENSE_COLD_300K",
+        "campaign": profile.campaign,
         "campaign_root": str(Path(campaign_root)),
         "project_dir": str(Path(project_dir)),
         "source_commit": source_commit,
@@ -327,29 +421,36 @@ def create_dense_spec(
         "replicate_seed": DENSE_REPLICATE_SEED,
         "repair_family": "HIGHCOV_SHELL_EXACT/v1",
         "repair_rng_policy": DENSE_REPAIR_RNG_POLICY,
-        "graph_sha256": DENSE_GRAPH_SHA256,
+        "graph_sha256": profile.graph_sha256,
         "resources": resources,
         "resource_request_sha256": canonical_sha256(resources),
         "tasks": tasks,
     }
+    if profile.rung_step == 5:
+        payload["rung_step"] = 5
     provisional = with_content_hash({**payload, "command_plan_sha256": None})
     payload["command_plan_sha256"] = build_dense_command_plan(provisional)["content_hash"]
     return with_content_hash(payload)
 
 
 def validate_dense_spec(value: Mapping[str, Any], *, executable: bool = False) -> str:
+    profile = dense_profile_for_spec(value)
     digest = validate_content_hash(
-        value, expected_contract=DENSE_SPEC_CONTRACT, expected_schema_version=1,
+        value, expected_contract=profile.spec_contract, expected_schema_version=1,
     )
     if (
-        value.get("campaign") != "HCWDL_DENSE_COLD_300K"
-        or value.get("graph_sha256") != DENSE_GRAPH_SHA256
+        value.get("campaign") != profile.campaign
+        or value.get("graph_sha256") != profile.graph_sha256
         or value.get("role_counts") != DENSE_ROLE_COUNTS
         or value.get("repair_family") != "HIGHCOV_SHELL_EXACT/v1"
         or value.get("repair_rng_policy") != DENSE_REPAIR_RNG_POLICY
         or value.get("replicate_seed") != DENSE_REPLICATE_SEED
     ):
         raise ValueError("dense cold specification scientific identity differs")
+    if profile.rung_step == 5 and value.get("rung_step") != 5:
+        raise ValueError("dense5 cold specification rung step differs")
+    if profile.rung_step == 10 and "rung_step" in value:
+        raise ValueError("dense cold v1 specification cannot declare a rung step")
     if value.get("resource_request_sha256") != canonical_sha256(value.get("resources")):
         raise ValueError("dense cold resource-request lineage differs")
     for name in (
@@ -386,7 +487,7 @@ def validate_dense_spec(value: Mapping[str, Any], *, executable: bool = False) -
         raise ValueError("dense cold source commit lineage differs")
     if set(value.get("resources", {})) != {"gpu_single", "cpu_small"}:
         raise ValueError("dense cold resource classes differ")
-    expected_nodes = list(DENSE_NODE_REGISTRY)
+    expected_nodes = list(profile.registry)
     tasks = value.get("tasks")
     if not isinstance(tasks, list) or len(tasks) != len(expected_nodes) + 1:
         raise ValueError("dense cold task registry differs")
@@ -413,6 +514,7 @@ def validate_dense_spec(value: Mapping[str, Any], *, executable: bool = False) -
 
 
 def build_dense_command_plan(spec: Mapping[str, Any]) -> dict[str, Any]:
+    profile = dense_profile_for_spec(spec)
     commands = []
     for task in spec["tasks"]:
         resource = spec["resources"][task["resource_class"]]
@@ -420,7 +522,7 @@ def build_dense_command_plan(spec: Mapping[str, Any]) -> dict[str, Any]:
             "sbatch", "--parsable", "--account=reu-aisocial", "--partition=tigris",
             f"--cpus-per-task={int(resource['cpus'])}", f"--mem={resource['memory']}",
             f"--time={resource['walltime']}",
-            f"--job-name=hcddp_{task['task_id']}",
+            f"--job-name={profile.job_prefix}{task['task_id']}",
         ]
         if resource.get("gpu") is not None:
             command.extend((f"--gres={resource['gpu']}", "--signal=B:USR1@120"))
@@ -440,7 +542,7 @@ def build_dense_command_plan(spec: Mapping[str, Any]) -> dict[str, Any]:
             "command": command,
         })
     return with_content_hash({
-        "contract": DENSE_PLAN_CONTRACT,
+        "contract": profile.plan_contract,
         "schema_version": 1,
         "campaign_identity_sha256": canonical_sha256({
             "campaign_root": spec["campaign_root"],
@@ -473,11 +575,12 @@ def build_dense_aggregate(
     *, spec: Mapping[str, Any], reports: Mapping[str, Mapping[str, Any]],
 ) -> dict[str, Any]:
     validate_dense_spec(spec)
-    expected = {"M0", "D100", "TOFF", *DENSE_NODE_REGISTRY}
+    profile = dense_profile_for_spec(spec)
+    expected = {"M0", "D100", "TOFF", *profile.registry}
     if set(reports) != expected:
         raise ValueError("dense cold aggregate report set differs")
     rows = []
-    for node_id in ("M0", "D100", "TOFF", *DENSE_NODE_REGISTRY):
+    for node_id in ("M0", "D100", "TOFF", *profile.registry):
         report = reports[node_id]
         validate_pmard_training_report(report)
         if node_id in {"M0", "D100", "TOFF"}:
@@ -511,13 +614,13 @@ def build_dense_aggregate(
             "of_m0_to_d100offkd_auc_gap": fraction(node, top_auc),
             "of_m0_to_toff_auc_gap": fraction(node, offline_auc),
         }
-        for node in DENSE_NODE_REGISTRY
+        for node in profile.registry
     }
     return with_content_hash({
-        "contract": DENSE_REPORT_CONTRACT,
+        "contract": profile.report_contract,
         "schema_version": 1,
         "campaign_spec_sha256": spec["content_hash"],
-        "graph_sha256": DENSE_GRAPH_SHA256,
+        "graph_sha256": profile.graph_sha256,
         "rows": rows,
         "auc_recovery": recovery,
         "final_node": "M1c",
@@ -531,6 +634,9 @@ __all__ = [
     "DENSE_NODE_REGISTRY", "DENSE_REPAIR_RNG_POLICY", "DENSE_REPORT_CONTRACT",
     "DENSE_SPEC_CONTRACT", "DENSE_SUBMISSION_PHRASE",
     "DENSE_TRAINING_REPORT_CONTRACT", "build_dense_aggregate",
-    "build_dense_command_plan", "create_dense_spec", "validate_dense_graph",
-    "validate_dense_parent", "validate_dense_spec",
+    "DENSE5_AUTHORIZATION_PHRASE", "DENSE5_DOMAINS", "DENSE5_GRAPH_SHA256",
+    "DENSE5_NODE_REGISTRY", "DENSE5_SUBMISSION_PHRASE", "DenseCampaignProfile",
+    "build_dense_command_plan", "create_dense_spec", "dense_profile_for_spec",
+    "dense_profile_for_step", "validate_dense_graph", "validate_dense_parent",
+    "validate_dense_spec",
 ]

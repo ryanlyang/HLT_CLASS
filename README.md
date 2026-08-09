@@ -92,6 +92,8 @@ JetClass data on Tigris:
 - [HCWDL primary cold/warm ladder plan](docs/plans/HIGH_COVERAGE_COLD_WARM_DISTILLATION_LADDER.md)
 - [HCWDL dense cold 300k runbook](docs/HCWDL_DENSE_COLD_RUNBOOK.md)
 - [HCWDL dense cold 300k contract](docs/contracts/HCWDL_DENSE_COLD_PILOT.md)
+- [HCWDL five-point dense cold 300k runbook](docs/HCWDL_DENSE5_COLD_RUNBOOK.md)
+- [HCWDL five-point dense cold 300k contract](docs/contracts/HCWDL_DENSE5_COLD_PILOT.md)
 - [HCWDL matching-free representation-KD ascent plan](docs/plans/HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md)
 - [Tigris miniature acceptance procedure](docs/TIGRIS_ACCEPTANCE.md)
 - [JetClass and HLT data contract](docs/DATA_CONTRACT.md)

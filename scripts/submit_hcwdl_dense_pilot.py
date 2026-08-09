@@ -14,7 +14,7 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 from hlt_classification.data.cache_contracts import load_json, write_immutable_json  # noqa: E402
 from hlt_classification.scouting.hcwdl_authorization import validate_source_checkout  # noqa: E402
 from hlt_classification.scouting.hcwdl_dense import (  # noqa: E402
-    DENSE_SUBMISSION_PHRASE, build_dense_command_plan, validate_dense_spec,
+    build_dense_command_plan, dense_profile_for_spec, validate_dense_spec,
 )
 from hlt_classification.scouting.hcwdl_recovery import (  # noqa: E402
     assemble_submission_ledger, build_submission_event, build_submission_ledger,
@@ -30,6 +30,7 @@ def main() -> int:
     args = parser.parse_args()
     spec = load_json(args.campaign_spec)
     validate_dense_spec(spec, executable=args.execute)
+    profile = dense_profile_for_spec(spec)
     if args.campaign_spec.resolve() != (
         Path(spec["campaign_root"]) / "campaign_spec.json"
     ).resolve():
@@ -43,7 +44,7 @@ def main() -> int:
         )
         write_immutable_json(args.output, ledger)
         return 0
-    if args.authorization_phrase != DENSE_SUBMISSION_PHRASE:
+    if args.authorization_phrase != profile.submission_phrase:
         raise PermissionError("dense cold submission phrase differs")
     if REPO_ROOT.resolve() != Path(spec["project_dir"]).resolve():
         raise PermissionError("dense cold submitter is not running from bound worktree")

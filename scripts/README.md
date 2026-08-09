@@ -233,3 +233,8 @@ D100, and TOFF without copying or rematching them. It then runs the sequential
 fresh-start `TOFF -> D100offkd -> D90 -> ... -> D0 -> M1` graph with one
 shared nested repair coordinate system and publishes validation recovery only.
 It has no final-test task. See `docs/HCWDL_DENSE_COLD_RUNBOOK.md`.
+The same entry points accept `--rung-step 5` at creation time to register the
+separate 22-model `TOFF -> D100offkd -> D95 -> ... -> D5 -> D0 -> M1`
+screen. That graph uses distinct `HCWDL_DENSE5_*` contracts, authorization
+phrases, `hcddp5_*` job names, output root, and aggregate. See
+`docs/HCWDL_DENSE5_COLD_RUNBOOK.md`.

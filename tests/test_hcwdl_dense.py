@@ -8,19 +8,21 @@ import pytest
 from hlt_classification.data.cache_contracts import with_content_hash
 from hlt_classification.scouting.engine import PMARD_TRAINING_REPORT_CONTRACT
 from hlt_classification.scouting.hcwdl_dense import (
+    DENSE5_DOMAINS, DENSE5_GRAPH_SHA256, DENSE5_NODE_REGISTRY,
     DENSE_DOMAINS, DENSE_GRAPH_SHA256, DENSE_NODE_REGISTRY,
     DENSE_REPAIR_RNG_POLICY, build_dense_aggregate,
-    build_dense_command_plan, validate_dense_graph, validate_dense_spec,
+    build_dense_command_plan, dense_profile_for_step, validate_dense_graph,
+    validate_dense_spec,
 )
 from hlt_classification.scouting.hcwdl_dense_runner import dense_shared_repair_seed
 from hlt_classification.scouting.hcwdl_recipe import example_recipe
 from hlt_classification.scouting.hcwdl_training import node_training_config
 
 
-def _tasks():
+def _tasks(registry=DENSE_NODE_REGISTRY):
     rows = []
     previous = None
-    for node_id in DENSE_NODE_REGISTRY:
+    for node_id in registry:
         task_id = f"train_{node_id}"
         rows.append({
             "task_id": task_id, "kind": "train_node", "node_id": node_id,
@@ -35,7 +37,8 @@ def _tasks():
     return rows
 
 
-def _spec():
+def _spec(rung_step=10):
+    profile = dense_profile_for_step(rung_step)
     resources = {
         "gpu_single": {
             "cpus": 8, "memory": "320G", "walltime": "72:00:00",
@@ -47,8 +50,8 @@ def _spec():
     }
     from hlt_classification.data.cache_contracts import canonical_sha256
     payload = {
-        "contract": "HCWDL_DENSE_COLD_PILOT_SPEC/v1", "schema_version": 1,
-        "campaign": "HCWDL_DENSE_COLD_300K", "campaign_root": "/dense",
+        "contract": profile.spec_contract, "schema_version": 1,
+        "campaign": profile.campaign, "campaign_root": "/dense",
         "project_dir": "/project", "source_commit": "c" * 40,
         "live_submission_authorized": True,
         "parent_campaign_spec_path": "/parent/campaign_spec.json",
@@ -74,10 +77,13 @@ def _spec():
         "role_counts": {"train": 300_000, "validation": 100_000, "final_test": 100_000},
         "replicate_seed": 1337, "repair_family": "HIGHCOV_SHELL_EXACT/v1",
         "repair_rng_policy": DENSE_REPAIR_RNG_POLICY,
-        "graph_sha256": DENSE_GRAPH_SHA256, "resources": resources,
-        "resource_request_sha256": canonical_sha256(resources), "tasks": _tasks(),
+        "graph_sha256": profile.graph_sha256, "resources": resources,
+        "resource_request_sha256": canonical_sha256(resources),
+        "tasks": _tasks(profile.registry),
         "command_plan_sha256": None,
     }
+    if rung_step == 5:
+        payload["rung_step"] = 5
     provisional = with_content_hash(payload)
     payload["command_plan_sha256"] = build_dense_command_plan(provisional)["content_hash"]
     return with_content_hash(payload)
@@ -122,6 +128,25 @@ def test_dense_graph_is_exact_cold_ten_point_descent() -> None:
     assert DENSE_DOMAINS["d10"]["alpha"] == .1
 
 
+def test_dense5_graph_is_exact_cold_five_point_descent() -> None:
+    assert validate_dense_graph(
+        DENSE5_NODE_REGISTRY, rung_step=5, domains=DENSE5_DOMAINS,
+        graph_contract="HCWDL_DENSE5_COLD_GRAPH/v1",
+        node_contract="HCWDL_DENSE5_COLD_NODE_SPEC/v1",
+    ) == DENSE5_GRAPH_SHA256
+    expected = [
+        "D100offkd", *(f"D{alpha}c" for alpha in range(95, 0, -5)),
+        "D0c", "M1c",
+    ]
+    assert list(DENSE5_NODE_REGISTRY) == expected
+    assert len(DENSE5_NODE_REGISTRY) == 22
+    assert DENSE5_NODE_REGISTRY["D95c"].teachers[0].node_id == "D100offkd"
+    assert DENSE5_NODE_REGISTRY["D5c"].teachers[0].node_id == "D10c"
+    assert DENSE5_NODE_REGISTRY["D0c"].teachers[0].node_id == "D5c"
+    assert DENSE5_DOMAINS["d95"]["alpha"] == .95
+    assert DENSE5_DOMAINS["d5"]["alpha"] == .05
+
+
 def test_dense_recipe_is_single_teacher_and_temperature_changes_only_at_m1() -> None:
     recipe = example_recipe()
     top = node_training_config(
@@ -152,6 +177,12 @@ def test_dense_recipe_is_single_teacher_and_temperature_changes_only_at_m1() -> 
         require_authorized_recipe=False,
     )
     assert paired_top.master_seed == parent_top.master_seed
+    d95 = node_training_config(
+        "D95c", recipe, train_rows=300_000, replicate_seed=1337,
+        require_authorized_recipe=False, registry=DENSE5_NODE_REGISTRY,
+        domains=DENSE5_DOMAINS,
+    )
+    assert d95.model_input == "privileged"
 
 
 def test_dense_repair_seed_is_shared_and_spec_is_sequential() -> None:
@@ -175,6 +206,25 @@ def test_dense_repair_seed_is_shared_and_spec_is_sequential() -> None:
     with pytest.raises(ValueError, match="task differs"):
         validate_dense_spec(forged)
 
+    dense5 = _spec(5)
+    assert validate_dense_spec(dense5, executable=True) == dense5["content_hash"]
+    dense5_plan = build_dense_command_plan(dense5)
+    assert len(dense5_plan["commands"]) == 23
+    assert dense5_plan["commands"][1]["task_id"] == "train_D95c"
+    assert dense5_plan["commands"][-1]["dependencies"] == ["train_M1c"]
+    assert all(
+        "--array" not in argument
+        for row in dense5_plan["commands"] for argument in row["command"]
+    )
+    assert all(
+        not argument.startswith("--job-name=hcddp_")
+        for row in dense5_plan["commands"] for argument in row["command"]
+    )
+    assert any(
+        argument.startswith("--job-name=hcddp5_")
+        for argument in dense5_plan["commands"][0]["command"]
+    )
+
 
 def test_dense_aggregate_reports_recovery_without_test_access() -> None:
     reports = {
@@ -195,3 +245,26 @@ def test_dense_aggregate_reports_recovery_without_test_access() -> None:
     assert aggregate["final_test_accessed"] is False
     assert aggregate["auc_recovery"]["D100offkd"]["of_m0_to_d100offkd_auc_gap"] == 1
     assert len(aggregate["rows"]) == 15
+
+    dense5_reports = {
+        "M0": _report("M0", .93), "D100": _report("D100", .94),
+        "TOFF": _report("TOFF", .95),
+    }
+    for index, node in enumerate(DENSE5_NODE_REGISTRY):
+        dense5_reports[node] = _report(node, .945 - index * .00025)
+    dense5_spec = _spec(5)
+    for node in ("M0", "D100", "TOFF"):
+        dense5_spec["imported_controls"][node]["report_sha256"] = dense5_reports[
+            node
+        ]["content_hash"]
+        dense5_spec["imported_controls"][node]["checkpoint_sha256"] = dense5_reports[
+            node
+        ]["selected_checkpoint_sha256"]
+    dense5_spec = _rehash_spec(dense5_spec)
+    dense5_aggregate = build_dense_aggregate(
+        spec=dense5_spec, reports=dense5_reports,
+    )
+    assert dense5_aggregate["contract"] == "HCWDL_DENSE5_COLD_AGGREGATE/v1"
+    assert dense5_aggregate["final_node"] == "M1c"
+    assert dense5_aggregate["final_test_accessed"] is False
+    assert len(dense5_aggregate["rows"]) == 25

@@ -13,7 +13,7 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 from hlt_classification.data.cache_contracts import write_immutable_json  # noqa: E402
 from hlt_classification.scouting.hcwdl_authorization import validate_source_checkout  # noqa: E402
 from hlt_classification.scouting.hcwdl_dense import (  # noqa: E402
-    DENSE_AUTHORIZATION_PHRASE, create_dense_spec,
+    create_dense_spec, dense_profile_for_step,
 )
 
 
@@ -25,6 +25,7 @@ def main() -> int:
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--authorize-live-submission", action="store_true")
     parser.add_argument("--authorization-phrase")
+    parser.add_argument("--rung-step", type=int, choices=(5, 10), default=10)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.output.resolve() != (args.campaign_root / "campaign_spec.json").resolve():
@@ -41,11 +42,13 @@ def main() -> int:
         project_dir=args.project_dir,
         source_commit=args.source_commit,
         authorization_phrase=phrase,
+        rung_step=args.rung_step,
     )
     write_immutable_json(args.output, spec)
     print(f"Dense graph: {spec['graph_sha256']}")
     print(f"Authorized: {spec['live_submission_authorized']}")
-    print(f"Creation phrase: {DENSE_AUTHORIZATION_PHRASE}")
+    print(f"Rung step: {args.rung_step}")
+    print(f"Creation phrase: {dense_profile_for_step(args.rung_step).authorization_phrase}")
     return 0
 
 

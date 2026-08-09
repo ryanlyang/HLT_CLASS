@@ -19,8 +19,9 @@ from hlt_classification.models.scouting_particle_transformer import (
 from .dataset import iterate_model_batches
 from .engine import precompute_teacher_targets
 from .hcwdl_dense import (
-    DENSE_DOMAINS, DENSE_GRAPH_SHA256, DENSE_NODE_REGISTRY,
-    DENSE_REPAIR_RNG_POLICY, DENSE_TRAINING_REPORT_CONTRACT,
+    DENSE_DOMAINS, DENSE_GRAPH_SHA256, DENSE_NODE_CONTRACT,
+    DENSE_NODE_REGISTRY, DENSE_REPAIR_RNG_POLICY,
+    DENSE_TRAINING_REPORT_CONTRACT, DenseNodeSpec,
 )
 from .hcwdl_recipe import validate_recipe, validate_recipe_class_weight_lineage
 from .hcwdl_training import train_hcwdl_node
@@ -54,10 +55,17 @@ def run_dense_node(
     expected_teacher_report_sha256: str,
     device: str = "cuda",
     view_cache_max_gib: float = 320.0,
+    registry: Mapping[str, DenseNodeSpec] = DENSE_NODE_REGISTRY,
+    domains: Mapping[str, Mapping[str, object]] = DENSE_DOMAINS,
+    graph_sha256: str = DENSE_GRAPH_SHA256,
+    training_report_contract: str = DENSE_TRAINING_REPORT_CONTRACT,
+    node_contract: str = DENSE_NODE_CONTRACT,
+    campaign_label: str = "HCWDL_DENSE_COLD_300K",
+    rung_step: int = 10,
 ) -> dict[str, Any]:
-    if node_id not in DENSE_NODE_REGISTRY:
+    if node_id not in registry:
         raise ValueError("unknown dense cold HCWDL node")
-    node = DENSE_NODE_REGISTRY[node_id]
+    node = registry[node_id]
     recipe = load_json(recipe_path)
     recipe_hash = validate_recipe(recipe, require_authorized=True)
     if recipe_hash != require_sha256(expected_recipe_sha256, name="dense recipe SHA-256"):
@@ -123,7 +131,7 @@ def run_dense_node(
                 epoch=epoch, batch_size=batch_size, sampler_seed=sampler_seed,
                 row_selection=selections[role],
             )
-        alpha = DENSE_DOMAINS[domain]["alpha"]
+        alpha = domains[domain]["alpha"]
         if alpha is None:
             raise ValueError("dense cold privileged domain lacks alpha")
         return iterate_pmard_batches(
@@ -136,7 +144,7 @@ def run_dense_node(
         )
 
     student_domain = node.student_domain
-    student_input_key = str(DENSE_DOMAINS[student_domain]["input"])
+    student_input_key = str(domains[student_domain]["input"])
     view_caches: dict[str, EphemeralPmardViewCache] = {}
     remaining = float(view_cache_max_gib)
     for role in ("train", "validation"):
@@ -157,7 +165,7 @@ def run_dense_node(
                     "HIGHCOV_SHELL_EXACT/v1" if student_domain != "hlt"
                     else "not_applicable"
                 ),
-                "alpha": DENSE_DOMAINS[student_domain]["alpha"],
+                "alpha": domains[student_domain]["alpha"],
                 "repair_rng_policy": DENSE_REPAIR_RNG_POLICY,
             },
         )
@@ -180,7 +188,7 @@ def run_dense_node(
         expected_teacher_report_sha256, name="dense teacher report SHA-256",
     ):
         raise ValueError("dense cold teacher report differs from declared lineage")
-    teacher_input_key = str(DENSE_DOMAINS[teacher_spec.domain]["input"])
+    teacher_input_key = str(domains[teacher_spec.domain]["input"])
     teacher_targets = precompute_teacher_targets(
         teacher_model, online_stream(teacher_spec.domain, "train", 0),
         input_key=teacher_input_key, device=device,
@@ -193,6 +201,14 @@ def run_dense_node(
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
+    scientific_extra = {
+        "repair_rng_policy": DENSE_REPAIR_RNG_POLICY,
+        "seed_identity": "D100" if node_id == "D100offkd" else node_id,
+        "coarse_ascent_disabled": True,
+        "final_test_accessed": False,
+    }
+    if rung_step == 5:
+        scientific_extra["rung_step"] = 5
     return train_hcwdl_node(
         node_id=node_id, recipe=recipe, train_rows=selections["train"].rows,
         replicate_seed=replicate_seed,
@@ -216,17 +232,13 @@ def run_dense_node(
         privileged_teacher_targets=(
             teacher_targets if teacher_spec.domain != "hlt" else None
         ),
-        registry=DENSE_NODE_REGISTRY,
-        graph_sha256=DENSE_GRAPH_SHA256,
-        report_contract=DENSE_TRAINING_REPORT_CONTRACT,
-        campaign_label="HCWDL_DENSE_COLD_300K",
+        registry=registry, domains=domains,
+        graph_sha256=graph_sha256,
+        report_contract=training_report_contract,
+        campaign_label=campaign_label,
+        node_contract=node_contract,
         seed_node_id="D100" if node_id == "D100offkd" else node_id,
-        scientific_config_extra={
-            "repair_rng_policy": DENSE_REPAIR_RNG_POLICY,
-            "seed_identity": "D100" if node_id == "D100offkd" else node_id,
-            "coarse_ascent_disabled": True,
-            "final_test_accessed": False,
-        },
+        scientific_config_extra=scientific_extra,
     )
 
 
