@@ -30,6 +30,7 @@ from .hcwdl_representation_contracts import (
     PRODUCTION_WORKER_SMOKE_PROOF_CONTRACT,
     SHARED_FINAL_BRANCH_ACCESS_CONTRACT,
     SMOKE_PROBE_CONTRACT,
+    SURFACE_PARITY_CONTRACT,
     TIGRIS_ACTION_PROOF_CONTRACT,
     TIGRIS_ACCEPTANCE_CONTRACT,
     TIGRIS_EVIDENCE_BUNDLE_CONTRACT,
@@ -38,6 +39,7 @@ from .hcwdl_representation_contracts import (
     USR1_EXACT_RESUME_PROOF_CONTRACT,
     VALIDATION_PROXY_PROOF_CONTRACT,
     WORKER_RUNTIME_MEASUREMENT_CONTRACT,
+    contract_schema_version,
 )
 from .hcwdl_representation_graph import CONTROL_REGISTRY, NODE_REGISTRY
 from .hcwdl_representation_resources import (
@@ -54,7 +56,7 @@ from .hcwdl_representation_worker_runtime import validate_worker_runtime_measure
 
 
 ACTION_RESULT_CONTRACTS: Final = {
-    "installed_weaver_parity": "HCWDL_REPRESENTATION_SURFACE_PARITY/v1",
+    "installed_weaver_parity": SURFACE_PARITY_CONTRACT,
     "ordinary_cache_miniature": CACHE_MINIATURE_BANK_CONTRACT,
     "toff_cache_miniature": CACHE_MINIATURE_BANK_CONTRACT,
     # Retained as a nonauthorizing diagnostic/proof-builder input.  It is not
@@ -492,7 +494,11 @@ def _validate_action_result(
     contract = ACTION_RESULT_CONTRACTS.get(evidence_kind)
     if contract is None:
         raise ValueError("unknown Tigris action evidence kind")
-    digest = validate_content_hash(result, expected_contract=contract, expected_schema_version=1)
+    digest = validate_content_hash(
+        result,
+        expected_contract=contract,
+        expected_schema_version=contract_schema_version(contract),
+    )
     if evidence_kind == "installed_weaver_parity":
         from hlt_classification.models.hcwdl_surfaces import validate_surface_parity_report
 

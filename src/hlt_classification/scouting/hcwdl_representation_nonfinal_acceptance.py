@@ -35,7 +35,6 @@ from hlt_classification.provenance import (
     validate_source_snapshot_payload,
 )
 
-from .hcwdl_campaign import validate_campaign_spec as validate_parent_campaign_spec
 from .hcwdl_parent_loss import validate_parent_loss_attestation
 from .hcwdl_recipe import validate_recipe as validate_parent_recipe
 from .hcwdl_representation_bootstrap import validate_acceptance_bootstrap
@@ -66,6 +65,11 @@ from .hcwdl_representation_runtime_binding import resolve_runtime_row
 from .selective_assignment import build_row_selection, validate_row_selection
 from .hcwdl_representation_resume import validate_resume_generation
 from .hcwdl_representation_training import validate_representation_training_report
+from .hcwdl_training import validate_hcwdl_parent_prefix_campaign
+
+# Named indirection is retained for test injection and downstream callers;
+# its production target is the exact v8-only validator above.
+validate_parent_campaign_spec = validate_hcwdl_parent_prefix_campaign
 
 
 NONFINAL_ACCEPTANCE_AUTHORIZATION_PHRASE: Final = (
@@ -320,7 +324,9 @@ def _validate_parent_inputs(
     for name in PARENT_INPUT_NAMES:
         loaded[name], normalized[name] = _load_reference(references[name], name=name)
 
-    validate_parent_campaign_spec(loaded["parent_campaign_spec"], executable=True)
+    validate_parent_campaign_spec(
+        loaded["parent_campaign_spec"], executable=True,
+    )
     parent_recipe_hash = validate_parent_recipe(
         loaded["parent_recipe"], require_authorized=True,
         expected_profile="primary_ladder",
@@ -341,6 +347,34 @@ def _validate_parent_inputs(
     }
     if any(imported_parents.get(name) != digest for name, digest in expected_imported.items()):
         raise ValueError("non-final acceptance parent-import lineage differs")
+    parent_import_payload = loaded["parent_import"].get("payload", {})
+    campaign = loaded["parent_campaign_spec"]
+    if any((
+        parent_import_payload.get("parent_campaign_contract")
+        != campaign.get("contract"),
+        parent_import_payload.get("parent_campaign_mode") != campaign.get("mode"),
+        parent_import_payload.get("parent_execution_scope")
+        != campaign.get("execution_scope"),
+        parent_import_payload.get("endpoint_continuation")
+        != campaign.get("endpoint_continuation"),
+        parent_import_payload.get("training_passes")
+        != campaign.get("training_passes"),
+        parent_import_payload.get("validation_every_passes")
+        != campaign.get("validation_every_passes"),
+        parent_import_payload.get("parent_train_rows")
+        != campaign.get("role_counts", {}).get("train"),
+        parent_import_payload.get("terminal_task_id")
+        != campaign.get("terminal_task_id"),
+        parent_import_payload.get("execution_lock_authorized")
+        != campaign.get("execution_lock_authorized"),
+        parent_import_payload.get("final_test_access_authorized")
+        != campaign.get("final_test_access_authorized"),
+        parent_import_payload.get("registered_final_test_tasks")
+        != campaign.get("registered_final_test_tasks"),
+    )):
+        raise PermissionError(
+            "non-final acceptance parent import differs from the exact v8 prefix"
+        )
     expected_representation = {
         "parent_recipe": parent_recipe_hash,
         "parent_loss_attestation": parent_loss_hash,

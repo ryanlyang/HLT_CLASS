@@ -1,9 +1,9 @@
 # HCWDL Matching-Free Privileged Representation-KD Ascents
 
-Status: **the local scientific/data-plane, v7/v4 migration, and bounded
+Status: **the local scientific/data-plane, v8-prefix/v4 migration, and bounded
 non-final acceptance-authority implementation are verified; implementation
 authority does not issue an execution authority or authorize a scheduler
-mutation. A fresh corrected parent v7/v4 execution, an exact clean pushed
+mutation. A fresh corrected parent v8/v4 prefix execution, an exact clean pushed
 source, separately phrase-authorized non-final execution, installed-Weaver and
 genuine Tigris acceptance, measured production resources, and explicit pilot
 authorization remain pending; this document authorizes no submission or
@@ -148,7 +148,7 @@ campaign.
 
 The current parent artifact family does not publish the architecture hash this
 plan needs. HCWDL-RKD therefore creates a new
-`HCWDL_REPRESENTATION_ARCHITECTURE_ATTESTATION/v1` from the canonical model
+`HCWDL_REPRESENTATION_ARCHITECTURE_ATTESTATION/v2` from the canonical model
 configuration, installed-Weaver runtime signature, model source hash, tap
 signature, parity report, and strict checkpoint-key/shape audits for every
 imported teacher/student architecture. It records parent lineage but is not
@@ -164,10 +164,12 @@ has not yet been implemented.
 ### 3.2 Required prefix-import artifact
 
 Before any representation target or student is built, publish and validate a
-`HCWDL_REPRESENTATION_PARENT_IMPORT/v2` artifact containing:
+`HCWDL_REPRESENTATION_PARENT_IMPORT/v3` artifact containing:
 
 - an executable parent campaign with contract exactly
-  `HCWDL_CAMPAIGN_SPEC/v7`, plus its campaign-spec hash and source commit;
+  `HCWDL_CAMPAIGN_SPEC/v8` with exact
+  `parent_prefix_through_finalist_lock` scope, plus its campaign-spec hash and
+  source commit;
 - source, split, and exact row-selection hashes;
 - train and validation assignment-manifest hashes;
 - assignment, recipe, and endpoint-qualification lock hashes;
@@ -198,7 +200,7 @@ still mandatory so old nonuniform, class-weighted-KD reports cannot be
 silently relabeled or called paired.
 
 Before parent import, publish
-`HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v2` proving that the parent
+`HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v3` proving that the parent
 runtime, parent reports, and authoritative plan agree on:
 
 ```text
@@ -436,8 +438,19 @@ forbidden.
 
 The representation-exposing forward must reproduce the public forward logits
 and gradients within the installed-Weaver FP32 parity tolerance with trimming
-disabled for the parity fixture. A real miniature additionally exercises the
-single-forward path with normal training-time trimming and exact resume.
+disabled for the parity fixture. `HCWDL_REPRESENTATION_SURFACE_PARITY/v2`
+constructs every standard-four input as `(px, py, pz, E)` with deterministic
+unit invariant mass, rather than drawing an independent unphysical energy.
+Logits, feature-input gradients, and parameter gradients are training-required
+and must all be finite. Lorentz-vector inputs are data and are not
+differentiated during training; installed Weaver may nevertheless expose
+nonfinite auxiliary derivatives at singular self-pair coordinates. Their
+diagnostic parity therefore requires exact finite/NaN/+Inf/-Inf topology and
+an absolute difference at most `1e-6` over jointly finite entries. The report
+stores only JSON-safe counts and a finite maximum (or `null` when no jointly
+finite entry exists). A topology difference fails parity and cannot authorize
+the architecture. A real miniature additionally exercises the single-forward
+path with normal training-time trimming and exact resume.
 
 ## 8. Common paired-jet representation anchor
 
@@ -1667,14 +1680,14 @@ Implementation introduces distinct contracts rather than broadening the
 logit-only HCWDL meanings:
 
 ```text
-HCWDL_REPRESENTATION_PARENT_IMPORT/v2
-HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v2
-HCWDL_REPRESENTATION_ARCHITECTURE_ATTESTATION/v1
+HCWDL_REPRESENTATION_PARENT_IMPORT/v3
+HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v3
+HCWDL_REPRESENTATION_ARCHITECTURE_ATTESTATION/v2
 HCWDL_REPRESENTATION_ASCENT_GRAPH/v1
 HCWDL_REPRESENTATION_RECIPE/v2
 HCWDL_REPRESENTATION_KERNEL_RESOURCES/v1
 HCWDL_REPRESENTATION_TAP/v1
-HCWDL_REPRESENTATION_SURFACE_PARITY/v1
+HCWDL_REPRESENTATION_SURFACE_PARITY/v2
 HCWDL_REPRESENTATION_TARGET_FORWARD_SPEC/v1
 HCWDL_REPRESENTATION_TARGET_EXECUTION_ATTESTATION/v1
 HCWDL_REPRESENTATION_TARGET_LOGICAL_BANK/v1
@@ -1783,8 +1796,10 @@ must check both components rather than inferring the schema version from the
 `/vN` contract suffix:
 
 ```text
-HCWDL_REPRESENTATION_PARENT_IMPORT/v2             schema_version = 1
-HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v2   schema_version = 2
+HCWDL_REPRESENTATION_PARENT_IMPORT/v3             schema_version = 2
+HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v3   schema_version = 3
+HCWDL_REPRESENTATION_ARCHITECTURE_ATTESTATION/v2  schema_version = 2
+HCWDL_REPRESENTATION_SURFACE_PARITY/v2            schema_version = 2
 HCWDL_REPRESENTATION_RECIPE/v2                    schema_version = 1
 HCWDL_REPRESENTATION_USR1_EXACT_RESUME_PROOF/v2  schema_version = 1
 HCWDL_REPRESENTATION_VALIDATION_PROXY_PROOF/v2   schema_version = 1
@@ -2858,7 +2873,7 @@ The implementation should reuse:
 objective. The dedicated `HCWDL_PARENT_BASE_LOSS/v1` surface leaves both KL
 rows unweighted and applies the authenticated recipe vector only to CE; under
 the required v4 fifteen-one vector every row reduction is an unweighted
-natural-population mean. The v2 parent-loss attestation must bind that exact
+natural-population mean. The v3 parent-loss attestation must bind that exact
 recipe and the corrected report/checkpoint lineage. Reusing a legacy
 nonuniform v3 report and merely relabeling it is forbidden.
 
@@ -3673,7 +3688,12 @@ Add focused tests for:
 With an installed Weaver, test both ordinary and native-offline models for:
 
 - public-forward versus surface-forward logits in FP32;
-- public-forward versus surface-forward input and parameter gradients;
+- strict finiteness and parity of public-forward versus surface-forward
+  logits, feature-input gradients, and parameter gradients;
+- JSON-safe exact NaN/+Inf/-Inf topology plus finite-entry absolute parity for
+  the non-training-required Lorentz-vector derivatives, separately for the
+  ordinary, TOFF charged, and TOFF neutral paths;
+- deterministic finite timelike unit-mass four-vector parity fixtures;
 - exact named shapes/dtypes/masks at block two and penultimate layers;
 - correct trim/permutation propagation into masks, vectors, canonical token
   IDs, and pre-transform family codes, with no auxiliary feature reaching the

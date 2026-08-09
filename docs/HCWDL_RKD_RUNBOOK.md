@@ -9,8 +9,8 @@ Current boundary: the repository may be implemented, tested, and rendered as
 a non-submitting command plan locally. The bounded non-final
 two-update/USR1/validation-proxy authority is implemented, but the present
 authorization covers implementation only: it does not issue an execution
-authority artifact or authorize scheduler mutation. A fresh corrected parent
-v7/v4 execution, a clean pushed source identity, a separately phrase-issued
+authority artifact or authorize scheduler mutation. A fresh corrected parent-prefix
+v8/v4 execution, a clean pushed source identity, a separately phrase-issued
 non-final execution authority, live Tigris and installed-Weaver acceptance,
 measured resources, and explicit pilot authorization remain separate gates.
 Local fixtures never satisfy those gates and never authorize final-test
@@ -38,12 +38,18 @@ heads are training-only and are absent from extracted deployable checkpoints.
 The required parent is the primary `HCWDL_RECIPE/v4` artifact with an exact
 fifteen-one loss vector, so CE and FP32 forward-KL are all unweighted
 natural-population row means. Parent artifacts created under nonuniform v3
-weights or class-weighted KD are incompatible; the v2 parent-loss attestation
+weights or class-weighted KD are incompatible; the v3 parent-loss attestation
 must reject them rather than relabel them.
-The parent campaign must be the executable `HCWDL_CAMPAIGN_SPEC/v7` artifact.
+The parent campaign must be executable `HCWDL_CAMPAIGN_SPEC/v8` with exact
+`parent_prefix_through_finalist_lock` scope, a finite-count pilot or named
+midscale mode, 60 passes, validation every pass, terminal `finalist_lock`, no
+registered final tasks, and automatic endpoint continuation. A manual v8
+prefix is not eligible for this RKD parent import.
 The current artifact tuples are deliberately nonparallel:
-parent import v2 uses `schema_version=1`, parent-loss attestation v2 uses
-`schema_version=2`, and representation recipe v2 uses `schema_version=1`.
+parent import v3 uses `schema_version=2`; parent-loss attestation v3 uses
+`schema_version=3`; architecture attestation v2 and surface parity v2 use
+`schema_version=2`;
+and representation recipe v2 uses `schema_version=1`.
 Always validate both the contract string and schema version.
 Its executable policy hash is derived from the versioned code constant and
 authenticated runtime-source bytes; workers never read this plan or another
@@ -52,9 +58,9 @@ concept document to decide loss semantics.
 The existing unweighted campaign candidate at commit `b3154d67` is not an
 eligible parent for this import.  That commit predates the explicit
 loss-semantics fields required in wrapper reports, PMARD engine reports, and
-checkpoints, and it does not contain `hcwdl_parent_loss.py`.  The v2 attestation
+checkpoints, and it does not contain `hcwdl_parent_loss.py`.  The v3 attestation
 must reject those outputs rather than infer or relabel them.  Create a fresh
-HCWDL v7/v4 campaign identity from the new exact clean commit and complete its
+HCWDL v8/v4 parent-prefix identity from the new exact clean commit and complete its
 required parent artifacts before running the parent-evidence command below.
 
 ## Local environment
@@ -136,7 +142,7 @@ report. Missing keys, extra keys, or using the wrapper report itself for
 `hcwdl_training.py` in that checkout. Their logical names, repository-relative
 locations, and bytes are all hashed; an arbitrary nonempty source list is not
 accepted. All three paths must resolve under one clean Git top level whose HEAD
-is exactly the `source_commit` in the reopened executable parent v7 campaign.
+is exactly the `source_commit` in the reopened executable parent v8 prefix.
 The attestation records that campaign hash, commit, complete clean-source
 snapshot, exact three-row source registry, and registry digest; every imported
 report/checkpoint evidence row is bound to that same digest. Then run the
@@ -145,7 +151,7 @@ installed-Weaver boundary:
 ```powershell
 & $python scripts/prepare_hcwdl_representation_parent_evidence.py `
   --representation-root <representation-root> `
-  --parent-campaign-spec <parent-v7-campaign-spec.json> `
+  --parent-campaign-spec <parent-v8-prefix-campaign-spec.json> `
   --parent-recipe <parent-v4-recipe.json> `
   --parent-reports <parent-reports.json> `
   --model-sources <model-sources.json> `
@@ -153,10 +159,18 @@ installed-Weaver boundary:
   --device cpu
 ```
 
-This publishes the canonical tap, installed-Weaver surface parity,
-architecture attestation, and v2 parent-loss attestation. Synthetic Weaver or
-an unauthorized parity result fails before the architecture file is
-published.
+This publishes the canonical tap, installed-Weaver v2 surface parity,
+v2 architecture attestation, and v3 parent-loss attestation. Surface parity uses
+deterministic timelike unit-mass standard-four inputs, requires finite logits,
+feature gradients, and parameter gradients, and authenticates Weaver's
+non-training-required Lorentz-vector derivatives by exact nonfinite topology
+plus finite-entry absolute parity. Its artifact is strict JSON and cannot
+contain NaN or Infinity. Synthetic Weaver, a topology mismatch, a nonfinite
+training-required tensor, or any other unauthorized parity result fails before
+the architecture file is published. Because the tap is published first, a
+failed attempt can leave only `architecture/tap.json`; preserve that failed
+partial root and retry corrected source in a new representation root rather
+than overwriting it.
 
 Next create three JSON
 objects whose values are absolute immutable file paths: `authority-files.json`
@@ -175,10 +189,14 @@ registry to its report using the exact key
   --output <representation-root>/import/parent_import.json
 ```
 
-The builder reopens the actual executable parent v7 campaign, authorized
+The builder reopens the actual executable parent v8 prefix, authorized
 primary v4 recipe, assignment/audit and complete lock chain, architecture and
 loss attestations, all six qualifier reports, and every canonical confirmation
-report. It derives teacher/control
+report. Every qualifier, all 23 screen engines, and every confirmation engine
+must match its fully reconstructed v4 configuration, contain no smoke-only
+field, complete all 60 passes and exact validation boundaries, retain the
+independently selected metrics, and authenticate both selected and completed
+final checkpoint bytes. It derives teacher/control
 rows from the authenticated architecture audits; no caller-supplied Boolean
 or checkpoint registry can authorize the import. The similarly named
 `build_hcwdl_representation_parent_import.py` remains the registered campaign

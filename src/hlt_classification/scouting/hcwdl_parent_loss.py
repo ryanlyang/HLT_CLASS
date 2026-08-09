@@ -41,7 +41,7 @@ from .hcwdl_recipe import (
 
 HCWDL_PARENT_BASE_LOSS_CONTRACT: Final = "HCWDL_PARENT_BASE_LOSS/v1"
 HCWDL_PARENT_LOSS_ATTESTATION_CONTRACT: Final = (
-    "HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v2"
+    "HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v3"
 )
 PARENT_RECIPE_AUTHORITY_KEYS: Final = frozenset({
     "parent_recipe_contract",
@@ -75,6 +75,9 @@ HCWDL_PARENT_LOSS_POLICY: Final = {
         "recipe_hash_in_wrapper_engine_and_checkpoint",
         "training_report_bytes",
         "selected_checkpoint_bytes",
+        "final_checkpoint_bytes",
+        "exact_60_pass_execution_config",
+        "exact_60_validation_records",
         "producer_runtime_source_bytes",
     ),
     "legacy_weighted_kd_is_acceptable": False,
@@ -311,6 +314,7 @@ def _validate_parent_rows(
     *,
     expected_recipe_authority: Mapping[str, str],
     expected_runtime_source_sha256: str,
+    expected_total_updates: int,
 ) -> list[dict[str, Any]]:
     if not rows:
         raise ValueError("parent-loss attestation requires parent artifacts")
@@ -320,6 +324,8 @@ def _validate_parent_rows(
         row = dict(raw)
         required = {
             "node_id", "training_report_sha256", "checkpoint_sha256",
+            "final_checkpoint_sha256", "execution_config_sha256",
+            "completed_updates", "validation_record_count",
             "loss_semantics_contract", "producer_source_sha256",
         } | PARENT_RECIPE_AUTHORITY_KEYS
         if set(row) != required:
@@ -336,14 +342,80 @@ def _validate_parent_rows(
         ):
             raise ValueError("parent artifact used a different parent recipe authority")
         for name in (
-            "training_report_sha256", "checkpoint_sha256", "producer_source_sha256",
+            "training_report_sha256", "checkpoint_sha256",
+            "final_checkpoint_sha256", "execution_config_sha256",
+            "producer_source_sha256",
         ):
             row[name] = require_sha256(row[name], name=f"{node} {name}")
         if row["producer_source_sha256"] != expected_runtime_source_sha256:
             raise ValueError("parent artifact producer source differs from runtime registry")
+        if (
+            row["completed_updates"] != expected_total_updates
+            or row["validation_record_count"] != 60
+        ):
+            raise ValueError("parent artifact is not an exact completed 60-pass execution")
         row["node_id"] = node
         result.append(row)
+    from .hcwdl_ladder import NODE_REGISTRY
+
+    if seen != set(NODE_REGISTRY):
+        raise ValueError("parent-loss attestation must cover the exact 23-node screen")
     return sorted(result, key=lambda item: item["node_id"])
+
+
+def _validated_parent_campaign_authority(
+    value: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Normalize the exact v8 prefix fields carried by the attestation."""
+
+    from .hcwdl_authorization import (
+        AUTOMATIC_ENDPOINT_CONTINUATION,
+        PARENT_PREFIX_SCOPE,
+    )
+    from .hcwdl_campaign import (
+        MODES, PARENT_PREFIX_CAMPAIGN_CONTRACT, ROLE_COUNTS,
+    )
+
+    expected_keys = {
+        "parent_campaign_contract", "parent_campaign_mode",
+        "parent_execution_scope", "parent_endpoint_continuation",
+        "parent_training_passes", "parent_validation_every_passes",
+        "parent_train_rows", "parent_terminal_task_id",
+        "parent_execution_lock_authorized",
+        "parent_final_test_access_authorized",
+        "parent_registered_final_test_tasks",
+    }
+    if not isinstance(value, Mapping) or set(value) != expected_keys:
+        raise ValueError("parent-loss campaign authority fields differ")
+    mode = value.get("parent_campaign_mode")
+    train_rows = value.get("parent_train_rows")
+    expected_train_rows = (
+        None if mode not in MODES else ROLE_COUNTS[str(mode)]["train"]
+    )
+    expected = {
+        "parent_campaign_contract": PARENT_PREFIX_CAMPAIGN_CONTRACT,
+        "parent_execution_scope": PARENT_PREFIX_SCOPE,
+        "parent_endpoint_continuation": AUTOMATIC_ENDPOINT_CONTINUATION,
+        "parent_training_passes": 60,
+        "parent_validation_every_passes": 1,
+        "parent_terminal_task_id": "finalist_lock",
+        "parent_execution_lock_authorized": False,
+        "parent_final_test_access_authorized": False,
+        "parent_registered_final_test_tasks": 0,
+    }
+    if (
+        mode not in MODES
+        or mode == "smoke"
+        or expected_train_rows is None
+        or isinstance(train_rows, bool)
+        or not isinstance(train_rows, int)
+        or train_rows != expected_train_rows
+        or any(value.get(name) != item for name, item in expected.items())
+    ):
+        raise PermissionError(
+            "parent-loss attestation requires the exact non-smoke v8 parent prefix"
+        )
+    return dict(value)
 
 
 def _validated_runtime_source_registry(
@@ -382,6 +454,7 @@ def _validated_runtime_source_registry(
 
 def _validated_source_authority(
     *, parent_campaign_spec_sha256: str,
+    parent_campaign_authority: Mapping[str, Any],
     parent_source_snapshot: Mapping[str, Any],
     runtime_source_registry: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
@@ -401,6 +474,9 @@ def _validated_source_authority(
     registry = _validated_runtime_source_registry(runtime_source_registry)
     return {
         "parent_campaign_spec_sha256": campaign_sha256,
+        "parent_campaign_authority": _validated_parent_campaign_authority(
+            parent_campaign_authority
+        ),
         "parent_source_commit": source_commit,
         "parent_source_snapshot": dict(parent_source_snapshot),
         "runtime_source_registry": registry,
@@ -413,12 +489,12 @@ def _source_authority_from_files(
     parent_campaign_spec_path: str | Path,
     runtime_source_paths: Mapping[str, str | Path],
 ) -> dict[str, Any]:
-    from .hcwdl_campaign import CAMPAIGN_CONTRACT, validate_campaign_spec
+    from .hcwdl_training import validate_hcwdl_parent_prefix_campaign
 
     campaign = load_json(Path(parent_campaign_spec_path))
-    if campaign.get("contract") != CAMPAIGN_CONTRACT:
-        raise ValueError("parent-loss attestation requires HCWDL_CAMPAIGN_SPEC/v7")
-    campaign_sha256 = validate_campaign_spec(campaign, executable=True)
+    campaign_sha256 = validate_hcwdl_parent_prefix_campaign(
+        campaign, executable=True,
+    )
     if set(runtime_source_paths) != set(PARENT_LOSS_RUNTIME_SOURCE_FILES):
         raise ValueError("parent-loss runtime-source registry is incomplete or expanded")
 
@@ -459,6 +535,27 @@ def _source_authority_from_files(
         )
     return _validated_source_authority(
         parent_campaign_spec_sha256=campaign_sha256,
+        parent_campaign_authority={
+            "parent_campaign_contract": campaign["contract"],
+            "parent_campaign_mode": campaign["mode"],
+            "parent_execution_scope": campaign["execution_scope"],
+            "parent_endpoint_continuation": campaign["endpoint_continuation"],
+            "parent_training_passes": campaign["training_passes"],
+            "parent_validation_every_passes": campaign[
+                "validation_every_passes"
+            ],
+            "parent_train_rows": campaign["role_counts"]["train"],
+            "parent_terminal_task_id": campaign["terminal_task_id"],
+            "parent_execution_lock_authorized": campaign[
+                "execution_lock_authorized"
+            ],
+            "parent_final_test_access_authorized": campaign[
+                "final_test_access_authorized"
+            ],
+            "parent_registered_final_test_tasks": campaign[
+                "registered_final_test_tasks"
+            ],
+        },
         parent_source_snapshot=snapshot,
         runtime_source_registry=registry,
     )
@@ -467,6 +564,7 @@ def _source_authority_from_files(
 def parent_artifact_evidence_from_report(
     *, node_id: str, training_report_path: str | Path,
     producer_source_sha256: str, parent_recipe: Mapping[str, Any],
+    train_rows: int,
 ) -> dict[str, Any]:
     """Open and verify one corrected parent report and selected checkpoint.
 
@@ -476,79 +574,26 @@ def parent_artifact_evidence_from_report(
     verifies the serialized checkpoint semantic binding.
     """
 
-    import torch
-
-    from .engine import validate_pmard_training_report
-    from .hcwdl_training import validate_hcwdl_training_report
+    from .hcwdl_training import validate_hcwdl_full_parent_wrapper_report
 
     recipe_authority = _validated_parent_recipe_authority(parent_recipe)
     expected_recipe_sha256 = recipe_authority["parent_recipe_sha256"]
     path = Path(training_report_path)
     wrapper = load_json(path)
-    wrapper_hash = validate_hcwdl_training_report(wrapper)
-    if wrapper.get("node_id") != node_id or wrapper.get("complete") is not True:
-        raise ValueError(f"corrected parent report identity/completion differs: {node_id}")
-    engine_path = path.parent / "training_report.json"
-    engine = load_json(engine_path)
-    engine_hash = validate_pmard_training_report(engine)
-    if engine_hash != wrapper.get("pmard_engine_report_sha256"):
-        raise ValueError(f"parent engine-report lineage differs: {node_id}")
-    if any(
-        engine.get(name) != expected
-        for name, expected in {
-            "loss_semantics_contract": HCWDL_PARENT_BASE_LOSS_CONTRACT,
-            "loss_semantics": HCWDL_PARENT_LOSS_SEMANTICS,
-            "loss_semantics_sha256": canonical_sha256(HCWDL_PARENT_LOSS_SEMANTICS),
-            "execution_config_sha256": wrapper.get("pmard_execution_config_sha256"),
-        }.items()
-    ):
-        raise ValueError(f"parent engine loss semantics differ: {node_id}")
-    wrapper_parents = wrapper.get("parents")
-    engine_parents = engine.get("parents")
-    engine_scientific = engine.get("scientific_config")
-    if (
-        wrapper.get("recipe_sha256") != expected_recipe_sha256
-        or not isinstance(wrapper_parents, Mapping)
-        or wrapper_parents.get("recipe") != expected_recipe_sha256
-        or not isinstance(engine_parents, Mapping)
-        or engine_parents.get("recipe") != expected_recipe_sha256
-        or not isinstance(engine_scientific, Mapping)
-        or engine_scientific.get("recipe_sha256") != expected_recipe_sha256
-    ):
-        raise ValueError(
-            f"parent wrapper/engine lacks exact HCWDL_RECIPE/v4 lineage: {node_id}"
-        )
-    checkpoint_path = engine_path.parent / str(engine.get("selected_checkpoint", ""))
-    if not checkpoint_path.is_file():
-        raise FileNotFoundError(f"parent selected checkpoint is absent: {checkpoint_path}")
-    checkpoint_bytes = sha256_file(checkpoint_path)
-    if checkpoint_bytes != engine.get("selected_checkpoint_sha256") or (
-        checkpoint_bytes != wrapper.get("selected_checkpoint_sha256")
-    ):
-        raise ValueError(f"parent selected-checkpoint byte lineage differs: {node_id}")
-    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
-    if not isinstance(checkpoint, Mapping) or any(
-        checkpoint.get(name) != expected
-        for name, expected in {
-            "loss_semantics_contract": HCWDL_PARENT_BASE_LOSS_CONTRACT,
-            "loss_semantics": HCWDL_PARENT_LOSS_SEMANTICS,
-            "loss_semantics_sha256": canonical_sha256(HCWDL_PARENT_LOSS_SEMANTICS),
-            "execution_config_sha256": wrapper.get("pmard_execution_config_sha256"),
-        }.items()
-    ):
-        raise ValueError(f"parent checkpoint loss semantics differ: {node_id}")
-    checkpoint_scientific = checkpoint.get("scientific_config")
-    if (
-        not isinstance(checkpoint_scientific, Mapping)
-        or checkpoint_scientific.get("recipe_sha256") != expected_recipe_sha256
-    ):
-        raise ValueError(
-            f"parent checkpoint lacks exact HCWDL_RECIPE/v4 lineage: {node_id}"
-        )
+    evidence = validate_hcwdl_full_parent_wrapper_report(
+        wrapper, training_report_path=path, train_rows=train_rows,
+        recipe=parent_recipe, expected_node_id=node_id,
+    )
+    if wrapper.get("recipe_sha256") != expected_recipe_sha256:
+        raise ValueError(f"parent wrapper recipe authority differs: {node_id}")
     return {
         "node_id": node_id,
-        "training_report_sha256": wrapper_hash,
-        "checkpoint_sha256": checkpoint_bytes,
+        "training_report_sha256": evidence["wrapper_sha256"],
+        "checkpoint_sha256": evidence["selected_checkpoint_sha256"],
+        "final_checkpoint_sha256": evidence["final_checkpoint_sha256"],
+        "execution_config_sha256": evidence["execution_config_sha256"],
+        "completed_updates": evidence["completed_updates"],
+        "validation_record_count": evidence["validation_record_count"],
         "loss_semantics_contract": HCWDL_PARENT_BASE_LOSS_CONTRACT,
         "producer_source_sha256": require_sha256(
             producer_source_sha256, name=f"{node_id} producer source",
@@ -581,11 +626,15 @@ def build_parent_loss_attestation_from_reports(
         runtime_source_paths=runtime_source_paths,
     )
     runtime_source_sha256 = source_authority["runtime_source_sha256"]
+    train_rows = int(
+        source_authority["parent_campaign_authority"]["parent_train_rows"]
+    )
     evidence = [
         parent_artifact_evidence_from_report(
             node_id=node_id, training_report_path=path,
             producer_source_sha256=runtime_source_sha256,
             parent_recipe=parent_recipe,
+            train_rows=train_rows,
         )
         for node_id, path in sorted(parent_reports.items())
     ]
@@ -594,6 +643,9 @@ def build_parent_loss_attestation_from_reports(
         parent_artifacts=evidence,
         parent_campaign_spec_sha256=source_authority[
             "parent_campaign_spec_sha256"
+        ],
+        parent_campaign_authority=source_authority[
+            "parent_campaign_authority"
         ],
         parent_source_snapshot=source_authority["parent_source_snapshot"],
         runtime_source_registry=source_authority["runtime_source_registry"],
@@ -605,6 +657,7 @@ def build_parent_loss_attestation(
     parent_recipe: Mapping[str, Any],
     parent_artifacts: Sequence[Mapping[str, Any]],
     parent_campaign_spec_sha256: str,
+    parent_campaign_authority: Mapping[str, Any],
     parent_source_snapshot: Mapping[str, Any],
     runtime_source_registry: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
@@ -619,12 +672,13 @@ def build_parent_loss_attestation(
     recipe_authority = _validated_parent_recipe_authority(parent_recipe)
     source_authority = _validated_source_authority(
         parent_campaign_spec_sha256=parent_campaign_spec_sha256,
+        parent_campaign_authority=parent_campaign_authority,
         parent_source_snapshot=parent_source_snapshot,
         runtime_source_registry=runtime_source_registry,
     )
     payload = with_content_hash({
         "contract": HCWDL_PARENT_LOSS_ATTESTATION_CONTRACT,
-        "schema_version": 2,
+        "schema_version": 3,
         "parent_loss_policy": dict(HCWDL_PARENT_LOSS_POLICY),
         "parent_loss_policy_sha256": HCWDL_PARENT_LOSS_POLICY_SHA256,
         **source_authority,
@@ -639,6 +693,14 @@ def build_parent_loss_attestation(
             expected_runtime_source_sha256=source_authority[
                 "runtime_source_sha256"
             ],
+            expected_total_updates=(
+                60 * int(np.ceil(
+                    source_authority["parent_campaign_authority"][
+                        "parent_train_rows"
+                    ]
+                    / int(parent_recipe["batching"]["effective_batch_size"])
+                ))
+            ),
         ),
     })
     validate_parent_loss_attestation(payload, parent_recipe=parent_recipe)
@@ -652,7 +714,7 @@ def validate_parent_loss_attestation(
     digest = validate_content_hash(
         value,
         expected_contract=HCWDL_PARENT_LOSS_ATTESTATION_CONTRACT,
-        expected_schema_version=2,
+        expected_schema_version=3,
     )
     if (
         value.get("parent_loss_policy") != HCWDL_PARENT_LOSS_POLICY
@@ -666,6 +728,7 @@ def validate_parent_loss_attestation(
         raise ValueError("parent-loss source authority differs")
     source_authority = _validated_source_authority(
         parent_campaign_spec_sha256=value.get("parent_campaign_spec_sha256"),
+        parent_campaign_authority=value.get("parent_campaign_authority"),
         parent_source_snapshot=raw_snapshot,
         runtime_source_registry=raw_registry,
     )
@@ -692,6 +755,14 @@ def validate_parent_loss_attestation(
         expected_runtime_source_sha256=source_authority[
             "runtime_source_sha256"
         ],
+        expected_total_updates=(
+            60 * int(np.ceil(
+                source_authority["parent_campaign_authority"][
+                    "parent_train_rows"
+                ]
+                / int(parent_recipe["batching"]["effective_batch_size"])
+            ))
+        ),
     ):
         raise ValueError("parent-loss artifact registry differs")
     return digest

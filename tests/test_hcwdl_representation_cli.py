@@ -197,6 +197,51 @@ def test_parent_evidence_cli_rejects_missing_or_extra_model_sources_before_publi
         assert not (output_root / "architecture/tap.json").exists()
 
 
+def test_parent_evidence_cli_rejects_v7_before_any_publication(tmp_path: Path) -> None:
+    placeholder = tmp_path / "placeholder.json"
+    placeholder.write_text("{}\n", encoding="utf-8")
+    campaign = tmp_path / "campaign.json"
+    campaign.write_text(
+        json.dumps({"contract": "HCWDL_CAMPAIGN_SPEC/v7", "schema_version": 7}),
+        encoding="utf-8",
+    )
+    registries = {
+        "parent-reports": {"M0": str(placeholder.resolve())},
+        "model-sources": {
+            "D0w": str(placeholder.resolve()),
+            "hcwdl_surfaces": str(placeholder.resolve()),
+            "scouting_particle_transformer": str(placeholder.resolve()),
+        },
+        "runtime-sources": {
+            "engine": str(placeholder.resolve()),
+            "parent_loss": str(placeholder.resolve()),
+            "training": str(placeholder.resolve()),
+        },
+    }
+    paths = {}
+    for name, value in registries.items():
+        path = tmp_path / f"{name}.json"
+        path.write_text(json.dumps(value), encoding="utf-8")
+        paths[name] = path
+    output_root = (tmp_path / "representation").resolve()
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(REPOSITORY / "scripts/prepare_hcwdl_representation_parent_evidence.py"),
+            "--representation-root", str(output_root),
+            "--parent-campaign-spec", str(campaign.resolve()),
+            "--parent-recipe", str(placeholder.resolve()),
+            "--parent-reports", str(paths["parent-reports"].resolve()),
+            "--model-sources", str(paths["model-sources"].resolve()),
+            "--runtime-sources", str(paths["runtime-sources"].resolve()),
+        ],
+        cwd=REPOSITORY, capture_output=True, text=True,
+    )
+    assert result.returncode != 0
+    assert "HCWDL_CAMPAIGN_SPEC/v8" in result.stderr
+    assert not output_root.exists()
+
+
 def test_fixed_size_inventory_and_storage_clis_build_validated_artifacts(
     tmp_path: Path,
 ) -> None:

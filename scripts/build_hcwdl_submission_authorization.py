@@ -12,7 +12,9 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from hlt_classification.data.cache_contracts import load_json, write_immutable_json  # noqa: E402
 from hlt_classification.scouting.hcwdl_authorization import build_submission_authorization  # noqa: E402
-from hlt_classification.scouting.hcwdl_campaign import validate_campaign_spec  # noqa: E402
+from hlt_classification.scouting.hcwdl_campaign import (  # noqa: E402
+    campaign_execution_scope, validate_campaign_spec,
+)
 
 
 def main() -> int:
@@ -44,6 +46,7 @@ def main() -> int:
         authorization_phrase=args.authorization_phrase,
         production_authorization_sha256=spec.get("production_authorization_sha256"),
         endpoint_continuation=spec.get("endpoint_continuation", "manual_posthoc"),
+        execution_scope=campaign_execution_scope(spec),
     )
     write_immutable_json(args.output, result)
     return 0

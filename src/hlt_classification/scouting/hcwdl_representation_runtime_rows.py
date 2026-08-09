@@ -31,6 +31,8 @@ from .hcwdl_representation_campaign import (
     PARENT_QUALIFIER_REPORT_ROUTES,
 )
 from .hcwdl_representation_contracts import (
+    ARCHITECTURE_ATTESTATION_CONTRACT, PARENT_IMPORT_CONTRACT,
+    PARENT_LOSS_ATTESTATION_CONTRACT,
     RUNTIME_DRY_RUN_AUDIT_CONTRACT, RUNTIME_PREREQUISITES_CONTRACT,
     SURFACE_PARITY_CONTRACT, contract_schema_version,
 )
@@ -623,12 +625,12 @@ def _output_contract(task: CampaignTask, ordinal: int) -> str | None:
         "tap_schema": ("HCWDL_REPRESENTATION_TAP/v1",),
         "surface_parity": (SURFACE_PARITY_CONTRACT,),
         "architecture_attestation": (
-            "HCWDL_REPRESENTATION_ARCHITECTURE_ATTESTATION/v1",
+            ARCHITECTURE_ATTESTATION_CONTRACT,
         ),
         "parent_loss_attestation": (
-            "HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v2",
+            PARENT_LOSS_ATTESTATION_CONTRACT,
         ),
-        "parent_import": ("HCWDL_REPRESENTATION_PARENT_IMPORT/v2",),
+        "parent_import": (PARENT_IMPORT_CONTRACT,),
         "control_registry": ("HCWDL_REPRESENTATION_CONTROL_REGISTRY/v1",),
         "kernel_resources": (None,),
         "representation_recipe": (

@@ -579,7 +579,14 @@ def _surface_fixture(*, seed: int, device: str):
 
     def cloud(channels: int, tokens: int):
         features = torch.randn((2, channels, tokens), generator=generator).to(device)
-        vectors = torch.randn((2, 4, tokens), generator=generator).to(device)
+        vectors = torch.randn((2, 4, tokens), generator=generator)
+        # Weaver's standard-four input is (px, py, pz, E).  Independent
+        # Gaussian energy components create mostly spacelike vectors and can
+        # make the installed pair-feature path nonfinite.  A fixed unit mass
+        # keeps this deterministic fixture physical without constraining its
+        # directions or momentum scales.
+        vectors[:, 3] = vectors[:, :3].square().sum(1).add(1.0).sqrt()
+        vectors = vectors.to(device)
         mask = torch.ones((2, 1, tokens), dtype=torch.bool, device=device)
         visible = torch.arange(tokens, dtype=torch.int64, device=device).repeat(2, 1)
         family = (visible % 2).to(torch.int8)
@@ -1673,16 +1680,25 @@ def _local_parent_import_gate() -> Mapping[str, Any]:
     }
     artifact = with_content_hash({
         "contract": PARENT_IMPORT_CONTRACT,
-        "schema_version": 1,
+        "schema_version": 2,
         "parents": {
             name: _local_digest(f"parent-import:{name}")
             for name in PARENT_AUTHORITY_PARENT_KEYS
         },
         "payload": {
             "parent_source_commit": "0" * 40,
-            "parent_campaign_contract": "HCWDL_CAMPAIGN_SPEC/v7",
+            "parent_campaign_contract": "HCWDL_CAMPAIGN_SPEC/v8",
+            "parent_campaign_mode": "pilot",
+            "parent_execution_scope": "parent_prefix_through_finalist_lock",
             "parent_recipe_contract": "HCWDL_RECIPE/v4",
             "endpoint_continuation": "preauthorized_automatic",
+            "training_passes": 60,
+            "validation_every_passes": 1,
+            "parent_train_rows": 300000,
+            "terminal_task_id": "finalist_lock",
+            "execution_lock_authorized": False,
+            "final_test_access_authorized": False,
+            "registered_final_test_tasks": 0,
             "teachers": [teachers[node] for node in sorted(teachers)],
             "logit_controls": [controls[node] for node in sorted(controls)],
             "authority_derived_from_registered_files": True,
@@ -1694,10 +1710,10 @@ def _local_parent_import_gate() -> Mapping[str, Any]:
         "work_kind": "parent_import_contract_gate",
         "parent_import_sha256": digest,
         "parent_import_contract": PARENT_IMPORT_CONTRACT,
-        "parent_import_schema_version": 1,
+        "parent_import_schema_version": 2,
         "teacher_count": len(IMPORTED_TEACHERS),
         "logit_control_count": len(IMPORTED_LOGIT_CONTROLS),
-        "nonauthorizing_synthetic_v2_fixture": True,
+        "nonauthorizing_synthetic_v3_fixture": True,
         "authority_files_reopened": False,
     }
 

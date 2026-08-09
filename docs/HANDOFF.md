@@ -1,5 +1,94 @@
 # Current Handoff
 
+## HCWDL non-final corrected-parent prefix (2026-08-09)
+
+The base HCWDL execution layer now has a dedicated non-final 60-pass parent
+scope. `HCWDL_CAMPAIGN_SPEC/v8` with execution scope exactly
+`parent_prefix_through_finalist_lock` retains the selected non-smoke
+train/validation populations, v4 recipe, all 23 ladder nodes, canonical
+confirmation registry, 60 complete natural-role passes, and every-pass
+validation. Its task registry ends at `finalist_lock`; it contains no
+execution lock, final-test selection/assignment/evaluation, or aggregate task.
+Stored final-role counts are sealed metadata, while execution-lock and
+final-role authority are explicitly false.
+
+The matching command plan and submission authorization are
+`HCWDL_COMMAND_PLAN/v4` and `HCWDL_SUBMISSION_AUTHORIZATION/v8`. Candidate
+authorization, initial submission, manual continuation, and exact recovery
+use prefix-specific phrases. Dry-run, monitoring, ledgers, and recovery reuse
+the existing exact-ID machinery but reconstruct only the v8 prefix graph.
+Existing v3--v7 campaign and authorization artifacts retain their original
+meaning; they are not upgraded or relabeled.
+
+Final local verification in the `tagging-hlt` environment is **790 passed,
+6 platform skips, 0 failures** across all 796 collected tests. The skips are
+five directly executable POSIX-shell checks and one real-`SIGUSR1` check that
+are unavailable on Windows; the 14 warnings are the existing
+Matplotlib/PyParsing deprecations. The integrated parent-authority, loss,
+locks, central-contract, runtime, non-final-acceptance, parity, and prefix
+shard is **124 passed, 1 expected Windows skip**. The dedicated prefix suite
+is **9 passed** and covers v8 graph closure, scope tampering, smoke and
+open-ended-production rejection, v8 authorization/executable validation,
+worker-route denial, dry-run/submit planning, monitor/recovery closure, and
+create/authorize CLIs. No scheduler command was executed, no campaign was
+authorized or submitted, and no final role was accessed. Operator boundaries
+and exact future commands are documented in
+[`HCWDL_PARENT_PREFIX_RUNBOOK.md`](HCWDL_PARENT_PREFIX_RUNBOOK.md).
+
+The downstream HCWDL-RKD boundary now accepts only this exact v8 prefix scope.
+Parent import v3/schema 2 and parent-loss attestation v3/schema 3 reopen all
+six qualifier, 23 screen, and every registered confirmation engine report;
+they require the exact reconstructed configuration, corrected loss semantics,
+60 validation records at exact pass boundaries, completed update budget,
+independently selected metrics, and authenticated selected/final checkpoint
+bytes. A forged imported artifact cannot bypass the independent v8 campaign
+check in non-final acceptance. No parent run or representation execution is
+authorized by this implementation.
+
+The completed d56 parent smoke (`hcwdl_parent_smoke_d56c622_r1`, 42 tasks) is
+valid smoke evidence only. It is categorically ineligible for parent import or
+non-final action inputs. The failed representation root
+`hcwdl_rkd_nonfinal_acceptance_d56c622_r1` contains review registries and the
+early tap only; it stopped during installed-Weaver parity construction and
+must not be resumed, treated as acceptance evidence, or reused. A new clean
+root backed by an exact completed non-smoke v8 60-pass prefix is required.
+
+## HCWDL-RKD installed-Weaver surface-parity v2 repair (2026-08-09)
+
+The first parent-evidence attempt against installed Weaver on Tigris reached
+the real CPU forward/backward boundary and failed before publishing
+`architecture/surface_parity.json`: the v1 fixture drew the energy component
+of each standard-four vector independently, so most fixture vectors were
+unphysical, and the v1 report also attempted to serialize Weaver's known
+nonfinite auxiliary Lorentz-input derivatives as a numeric maximum. Canonical
+JSON correctly rejected that NaN/Infinity. The environment, corrected parent,
+and registries were not the cause. The failed representation root contains
+only its three review registries and immutable `architecture/tap.json`; no
+Slurm work or final-role access occurred.
+
+The contract is now `HCWDL_REPRESENTATION_SURFACE_PARITY/v2` with schema
+version 2. Its fixture constructs deterministic timelike unit-mass vectors.
+Logits, feature-input gradients, and parameter gradients remain strictly
+finite and parity-gated. Lorentz-vector derivatives are explicitly
+non-training-required and are compared by exact finite/NaN/+Inf/-Inf topology
+plus an absolute tolerance over jointly finite entries, with only JSON-safe
+counts and finite-or-null maxima stored. Ordinary, TOFF charged, and TOFF
+neutral paths are audited separately, closing the v1 native aggregate that
+could hide a NaN behind an earlier finite feature-gradient maximum.
+Because that parity artifact is embedded in the architecture attestation, the
+outer identity is also versioned honestly as
+`HCWDL_REPRESENTATION_ARCHITECTURE_ATTESTATION/v2`, schema version 2; the v1
+identity is not silently reinterpreted to require a v2 nested artifact.
+
+Focused local verification passed: 151 tests passed and 6 platform-specific
+POSIX/SIGUSR1 tests skipped across the model, contract, acceptance-evidence,
+runtime-row, CLI, campaign, provenance, and task-runtime suites. The
+installed-Weaver v2 rerun remains pending and must use the exact pushed commit
+in a fresh representation root. The
+corrected parent smoke remains immutable at its existing source; this repair
+neither authorizes nor submits the bounded actions, a pilot, or any final-role
+work.
+
 ## HCWDL-RKD bounded non-final acceptance authority (2026-08-09)
 
 The separately authorized implementation is complete locally. It adds a
@@ -42,25 +131,26 @@ the final whitespace/diff audit is recorded with this handoff.
 
 This implementation does not remove the parent blocker. The existing
 `b3154d67` parent predates explicit loss semantics and cannot be relabeled as
-the required v7/v4 parent-loss v2 authority. The next research-compute step is
-therefore still a fresh corrected HCWDL v7/v4 parent run from the exact pushed
+the required v8/v4 parent-loss v3 authority. The next research-compute step is
+therefore still a fresh corrected HCWDL v8/v4 parent-prefix run from the exact pushed
 source. Only after that parent exists may an operator separately issue the
 non-final execution phrase and run the bounded actions. A pilot and any
 final-test access remain unauthorized.
 
-## HCWDL-RKD v7/v4 compatibility closure (2026-08-09)
+## HCWDL-RKD v8-prefix/v4 compatibility closure (2026-08-09)
 
 The matching-free representation-KD branch is now reconciled with the current
-parent authority: executable `HCWDL_CAMPAIGN_SPEC/v7`, primary
+parent authority: executable `HCWDL_CAMPAIGN_SPEC/v8` with exact
+`parent_prefix_through_finalist_lock` scope, primary
 `HCWDL_RECIPE/v4`, and an exact fifteen-one loss vector.  The representation
 overlay is `HCWDL_REPRESENTATION_RECIPE/v2` with schema version 1; the strict
-parent import is `HCWDL_REPRESENTATION_PARENT_IMPORT/v2` with schema version 1;
+parent import is `HCWDL_REPRESENTATION_PARENT_IMPORT/v3` with schema version 2;
 and the corrected parent-loss attestation is
-`HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v2` with schema version 2.
+`HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v3` with schema version 3.
 Weighted v3 parents and old v1 representation imports cannot be relabeled as
 these artifacts.
 
-The pre-campaign builders now reopen the real parent v7 campaign, v4 recipe,
+The pre-campaign builders now reopen the real parent v8 prefix, v4 recipe,
 full assignment/qualification/confirmation/finalist authority chain, reports,
 checkpoint bytes, installed-Weaver parity, model sources, and one clean parent
 source checkout at the exact parent campaign commit.  The runtime binding
@@ -82,8 +172,8 @@ are the existing Matplotlib/PyParsing deprecations.
 This is not yet campaign completion.  The existing unweighted parent candidate
 at commit `b3154d67` predates the explicit loss-semantics fields and does not
 contain `hcwdl_parent_loss.py`; its reports and checkpoints therefore cannot
-satisfy the v2 attestation.  The plan forbids relabeling those outputs, so a
-fresh, separately identified HCWDL v7/v4 parent run from the new exact clean
+satisfy the v3 attestation.  The plan forbids relabeling those outputs, so a
+fresh, separately identified HCWDL v8/v4 parent-prefix run from the new exact clean
 commit is required before HCWDL-RKD parent evidence can be built. The bounded
 bootstrap itself still cannot authorize two-update/USR1 or validation-proxy
 actions; the separate non-final implementation described above now closes
@@ -201,15 +291,15 @@ selection/performance metrics remain mandatory, and every exploratory test
 evaluation computes the full current metric set. This attempt also stopped
 before publishing a specification or reading the test role.
 
-## Superseded pre-v7/v4 HCWDL-RKD local evidence (2026-08-09)
+## Superseded pre-v8-prefix/v4 HCWDL-RKD local evidence (2026-08-09)
 
 The hashes and counts in this section describe the earlier `b820327` snapshot,
 whose retained runtime binding used parent-import, parent-loss, and overlay
 recipe v1 lineage. The parent campaign has since advanced to executable
-`HCWDL_CAMPAIGN_SPEC/v7` plus primary `HCWDL_RECIPE/v4`; therefore none of the
+`HCWDL_CAMPAIGN_SPEC/v8` parent prefix plus primary `HCWDL_RECIPE/v4`; therefore none of the
 following smoke/binding hashes is current authorization or closure evidence.
 They are retained only as historical local-test provenance and must not be
-reused for a v2 campaign.
+reused for a v3 import.
 
 The implementation-grade plan remains
 [`docs/plans/HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md`](plans/HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md).
@@ -1144,11 +1234,11 @@ and submission authorization remain pending.
 
 ## Exact active next task: corrected parent, then bounded Tigris acceptance
 
-The v7/v4 compatibility migration and bounded non-final authority
+The v8-prefix/v4 compatibility migration and bounded non-final authority
 implementation are locally complete. Publish the exact clean branch commit and
-refresh the isolated Tigris worktree. First create a new HCWDL v7/v4 parent
+refresh the isolated Tigris worktree. First create a new HCWDL v8/v4 parent prefix
 campaign identity at that commit and run its corrected reports/checkpoints;
-the `b3154d67` outputs cannot be reused as v2 parent-loss evidence. Only after
+the `b3154d67` outputs cannot be reused as v3 parent-loss evidence. Only after
 that parent validates may an operator separately issue the exact non-final
 execution phrase and run the bounded two-update, USR1 exact-resume, and
 validation-proxy actions. The installed-Weaver boundary and genuine worker

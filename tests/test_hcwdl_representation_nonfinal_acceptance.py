@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -93,15 +94,37 @@ def authority_bundle(tmp_path: Path, monkeypatch):
     bootstrap_path = tmp_path / "bootstrap.json"
     _publish(bootstrap_path, bootstrap)
 
-    parent_campaign = _artifact("HCWDL_CAMPAIGN_SPEC/v7", purpose="fixture")
+    parent_campaign = _artifact(
+        "HCWDL_CAMPAIGN_SPEC/v8", purpose="fixture", mode="pilot",
+        execution_scope="parent_prefix_through_finalist_lock",
+        endpoint_continuation="preauthorized_automatic",
+        training_passes=60, validation_every_passes=1,
+        role_counts={"train": 300000, "validation": 100000, "final_test": 100000},
+        terminal_task_id="finalist_lock", execution_lock_authorized=False,
+        final_test_access_authorized=False, registered_final_test_tasks=0,
+    )
     parent_recipe = _artifact("HCWDL_RECIPE/v4", purpose="fixture")
-    parent_loss = _artifact("HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v2")
+    parent_loss = with_content_hash({
+        "contract": "HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v3",
+        "schema_version": 3,
+    })
     parent_import = _artifact(
-        "HCWDL_REPRESENTATION_PARENT_IMPORT/v2",
+        "HCWDL_REPRESENTATION_PARENT_IMPORT/v3",
         parents={
             "parent_campaign_spec": parent_campaign["content_hash"],
             "parent_recipe": parent_recipe["content_hash"],
             "parent_loss_attestation": parent_loss["content_hash"],
+        },
+        payload={
+            "parent_campaign_contract": parent_campaign["contract"],
+            "parent_campaign_mode": parent_campaign["mode"],
+            "parent_execution_scope": parent_campaign["execution_scope"],
+            "endpoint_continuation": parent_campaign["endpoint_continuation"],
+            "training_passes": 60, "validation_every_passes": 1,
+            "parent_train_rows": 300000, "terminal_task_id": "finalist_lock",
+            "execution_lock_authorized": False,
+            "final_test_access_authorized": False,
+            "registered_final_test_tasks": 0,
         },
     )
     representation_recipe = _artifact(
@@ -315,6 +338,28 @@ def test_authority_rejects_registry_tamper(authority_bundle) -> None:
     changed = with_content_hash(changed)
     with pytest.raises(PermissionError, match="action registry"):
         nf.validate_nonfinal_acceptance_authority(changed)
+
+
+def test_nonfinal_parent_boundary_rejects_forged_smoke_import(
+    authority_bundle,
+) -> None:
+    root = authority_bundle.tmp_path
+    import_path = root / "parent_import.json"
+    forged = load_json(import_path)
+    forged.pop("content_hash")
+    forged["payload"]["parent_campaign_mode"] = "smoke"
+    forged["payload"]["parent_train_rows"] = 4096
+    forged = with_content_hash(forged)
+    import_path.write_text(json.dumps(forged), encoding="utf-8")
+    references = {
+        name: {
+            "path": str((root / f"{name}.json").resolve()),
+            "sha256": nf.sha256_file(root / f"{name}.json"),
+        }
+        for name in nf.PARENT_INPUT_NAMES
+    }
+    with pytest.raises(PermissionError, match="exact v8 prefix"):
+        nf._validate_parent_inputs(references)
 
 
 def test_authority_reopens_every_runtime_derived_action_input(authority_bundle) -> None:

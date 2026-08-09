@@ -12,7 +12,7 @@ run.
 | Plan sections | Requirement | Implementation surface | Focused evidence |
 |---|---|---|---|
 | 1--6, 12, 14--15, 18--19, 22 | four ascents, 24 nodes, exact teacher graph, cold/warm initialization, schedules and immutable overlay | `src/hlt_classification/scouting/hcwdl_representation_graph.py`, `hcwdl_representation_recipe.py` | `tests/test_hcwdl_representation_graph.py`, `test_hcwdl_representation_recipe.py` |
-| 3.1--3.3 | actual v7/v4 parent import and exact-all-ones CE/KD attestation | `hcwdl_parent_loss.py`, `hcwdl_representation_locks.py`, corrected opt-in path in `engine.py` | `tests/test_hcwdl_parent_loss.py`, `test_hcwdl_representation_locks.py` |
+| 3.1--3.3 | actual v8-prefix/v4 parent import and exact-all-ones CE/KD attestation | `hcwdl_parent_loss.py`, `hcwdl_representation_locks.py`, corrected opt-in path in `engine.py` | `tests/test_hcwdl_parent_loss.py`, `test_hcwdl_representation_locks.py`, `test_hcwdl_parent_authority.py` |
 | 7, 17, 28.2 | single-forward ordinary and TOFF surfaces and architecture attestation | `src/hlt_classification/models/scouting_particle_transformer.py`, `models/hcwdl_surfaces.py` | `tests/test_hcwdl_representation_model.py`, `test_hcwdl_representation_locks.py` |
 | 8--11, 13--14, 17--18 | jet/set/relation/orthogonality math, fixed kernels, family policy, calibration and ramps | `hcwdl_representation_kernels.py`, `hcwdl_representation_losses.py`, `hcwdl_representation_calibration.py` | `tests/test_hcwdl_representation_math.py`, `test_hcwdl_representation_calibration.py` |
 | 16, 20, 21, 29 | logical target banks, signature-bound generations, RAM joins, cleanup and reconstruction | `hcwdl_representation_targets.py`, `hcwdl_representation_target_runtime.py`, `hcwdl_representation_target_recovery.py` | `tests/test_hcwdl_representation_targets.py` |
@@ -77,14 +77,15 @@ label, not a promise that every label names a dynamically imported callable;
 consumers invoke their typed validators directly.
 
 The migrated authority tuples are exact and intentionally nonparallel:
-`HCWDL_REPRESENTATION_PARENT_IMPORT/v2` uses schema 1,
-`HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v2` uses schema 2, and
+`HCWDL_REPRESENTATION_PARENT_IMPORT/v3` uses schema 2,
+`HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v3` uses schema 3, and
 `HCWDL_REPRESENTATION_RECIPE/v2` uses schema 1. The strengthened
 `USR1_EXACT_RESUME_PROOF/v2`, `VALIDATION_PROXY_PROOF/v2`,
 `TIGRIS_EVIDENCE_BUNDLE/v2`, and `TIGRIS_ACCEPTANCE/v2` also use common-
 envelope schema 1. The latter two freeze the new bounded non-final check
 registry rather than expanding their v1 semantics. The parent authority itself
-is exactly executable `HCWDL_CAMPAIGN_SPEC/v7` plus primary
+is exactly executable `HCWDL_CAMPAIGN_SPEC/v8` with
+`parent_prefix_through_finalist_lock` scope plus primary
 `HCWDL_RECIPE/v4`.
 
 - [x] parent and architecture: `PARENT_IMPORT`, `PARENT_LOSS_ATTESTATION`,

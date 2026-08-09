@@ -13,8 +13,10 @@ from hlt_classification.data.cache_contracts import (
     write_immutable_json,
 )
 
-from .hcwdl_authorization import AUTOMATIC_ENDPOINT_CONTINUATION
-from .hcwdl_campaign import validate_campaign_spec
+from .hcwdl_authorization import (
+    AUTOMATIC_ENDPOINT_CONTINUATION, PARENT_PREFIX_SCOPE,
+)
+from .hcwdl_campaign import campaign_execution_scope, validate_campaign_spec
 from .hcwdl_contracts import (
     artifact_envelope, authenticate_source_files, validate_artifact,
 )
@@ -399,6 +401,13 @@ class HcwdlWorkflow:
         raise RuntimeError(f"registered HCWDL task has no dispatcher branch: {task_id}")
 
     def _run_final_stage(self, task_id: str) -> list[Path]:
+        if (
+            campaign_execution_scope(self.spec) == PARENT_PREFIX_SCOPE
+            and task_id != "finalist_lock"
+        ):
+            raise PermissionError(
+                "HCWDL parent-prefix scope ends at finalist_lock"
+            )
         if task_id == "finalist_lock":
             confirmation = load_json(self.locks["confirmation_registry"])
             reports = []

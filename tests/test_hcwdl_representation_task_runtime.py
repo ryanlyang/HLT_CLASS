@@ -102,10 +102,10 @@ def test_workflow_propagates_the_live_executable_gate(
 def test_local_parent_import_gate_exercises_current_v2_shape() -> None:
     work = runtime_adapters._local_parent_import_gate()
     assert work["parent_import_contract"] == (
-        "HCWDL_REPRESENTATION_PARENT_IMPORT/v2"
+        "HCWDL_REPRESENTATION_PARENT_IMPORT/v3"
     )
-    assert work["parent_import_schema_version"] == 1
-    assert work["nonauthorizing_synthetic_v2_fixture"] is True
+    assert work["parent_import_schema_version"] == 2
+    assert work["nonauthorizing_synthetic_v3_fixture"] is True
     assert work["authority_files_reopened"] is False
 
 

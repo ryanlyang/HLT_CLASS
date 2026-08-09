@@ -407,14 +407,22 @@ def _parent_import_authority(spec, parent_lock):
         "parent_graph": GRAPH_SHA256,
     })
     return with_content_hash({
-        "contract": "HCWDL_REPRESENTATION_PARENT_IMPORT/v2",
-        "schema_version": 1,
+        "contract": "HCWDL_REPRESENTATION_PARENT_IMPORT/v3",
+        "schema_version": 2,
         "parents": parents,
         "payload": {
             "parent_source_commit": "1" * 40,
-            "parent_campaign_contract": "HCWDL_CAMPAIGN_SPEC/v7",
+            "parent_campaign_contract": "HCWDL_CAMPAIGN_SPEC/v8",
+            "parent_campaign_mode": "pilot",
+            "parent_execution_scope": "parent_prefix_through_finalist_lock",
             "parent_recipe_contract": "HCWDL_RECIPE/v4",
             "endpoint_continuation": "preauthorized_automatic",
+            "training_passes": 60, "validation_every_passes": 1,
+            "parent_train_rows": 300000,
+            "terminal_task_id": "finalist_lock",
+            "execution_lock_authorized": False,
+            "final_test_access_authorized": False,
+            "registered_final_test_tasks": 0,
             "teachers": [
                 imported_row(node, teacher=True) for node in IMPORTED_TEACHERS
             ],
@@ -704,7 +712,9 @@ def test_all_rows_bind_with_documented_in_place_prebuilt_layout() -> None:
         assert descriptor["owner_task_kind"] == task_key
         assert descriptor["registered_input"] == logical
         assert descriptor["registered_output"] == output
-        assert descriptor["expected_schema_version"] == 1
+        assert descriptor["expected_schema_version"] == (
+            2 if task_key == "parent_import" else 1
+        )
         assert descriptor["expected_content_hash"] == content_hash
 
     kernel_reference = resolve_runtime_row(
@@ -840,9 +850,9 @@ def test_upstream_schema_versions_distinguish_semantic_v2_from_envelope_v2() -> 
     tasks = {task.task_key: task for task in rows_module._tasks(_spec())}
     expected = {
         "parent_loss_attestation": (
-            "HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v2", 2,
+            "HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v3", 3,
         ),
-        "parent_import": ("HCWDL_REPRESENTATION_PARENT_IMPORT/v2", 1),
+        "parent_import": ("HCWDL_REPRESENTATION_PARENT_IMPORT/v3", 2),
         "representation_recipe": ("HCWDL_REPRESENTATION_RECIPE/v2", 1),
     }
     for task_key, (contract, schema_version) in expected.items():

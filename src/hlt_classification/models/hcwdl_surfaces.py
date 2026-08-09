@@ -33,14 +33,19 @@ from .scouting_particle_transformer import (
 
 TAP_CONTRACT: Final = "HCWDL_REPRESENTATION_TAP/v1"
 ARCHITECTURE_ATTESTATION_CONTRACT: Final = (
-    "HCWDL_REPRESENTATION_ARCHITECTURE_ATTESTATION/v1"
+    "HCWDL_REPRESENTATION_ARCHITECTURE_ATTESTATION/v2"
 )
-SURFACE_PARITY_CONTRACT: Final = "HCWDL_REPRESENTATION_SURFACE_PARITY/v1"
+ARCHITECTURE_ATTESTATION_SCHEMA_VERSION: Final = 2
+SURFACE_PARITY_CONTRACT: Final = "HCWDL_REPRESENTATION_SURFACE_PARITY/v2"
+SURFACE_PARITY_SCHEMA_VERSION: Final = 2
 RUNTIME_SIGNATURE_CONTRACT: Final = (
     "HCWDL_REPRESENTATION_WEAVER_RUNTIME_SIGNATURE/v1"
 )
 FP32_ATOL: Final = 1.0e-6
 FP32_RTOL: Final = 1.0e-5
+LORENTZ_GRADIENT_COMPARISON: Final = (
+    "exact_nan_posinf_neginf_topology_and_absolute_tolerance_finite_entries"
+)
 HCWDL_PARENT_ARCHITECTURE_NODES: Final = frozenset({
     "D100", "TOFF", "M0",
     *(f"D{level}{track}" for level in (0, 25, 50, 75) for track in ("c", "w")),
@@ -499,22 +504,113 @@ def audit_parent_checkpoint_file(
     )
 
 
+def _finite_maximum_difference(
+    left: torch.Tensor,
+    right: torch.Tensor,
+    *,
+    name: str,
+) -> float:
+    if left.shape != right.shape:
+        raise ValueError(f"{name} parity tensor shape differs")
+    if not bool(torch.isfinite(left).all()) or not bool(torch.isfinite(right).all()):
+        raise ValueError(f"{name} parity tensor is nonfinite")
+    if left.numel() == 0:
+        return 0.0
+    return float((left.detach() - right.detach()).abs().max().cpu())
+
+
+def _nonfinite_counts(value: torch.Tensor) -> dict[str, int]:
+    return {
+        "finite": int(torch.isfinite(value).sum().item()),
+        "nan": int(torch.isnan(value).sum().item()),
+        "positive_infinity": int(torch.isposinf(value).sum().item()),
+        "negative_infinity": int(torch.isneginf(value).sum().item()),
+    }
+
+
+def _lorentz_gradient_branch(
+    public: torch.Tensor,
+    surface: torch.Tensor,
+) -> dict[str, object]:
+    if public.shape != surface.shape:
+        raise ValueError("Lorentz-gradient parity tensor shape differs")
+    public_finite = torch.isfinite(public)
+    surface_finite = torch.isfinite(surface)
+    topology_exact = bool(
+        torch.equal(public_finite, surface_finite)
+        and torch.equal(torch.isnan(public), torch.isnan(surface))
+        and torch.equal(torch.isposinf(public), torch.isposinf(surface))
+        and torch.equal(torch.isneginf(public), torch.isneginf(surface))
+    )
+    jointly_finite = public_finite & surface_finite
+    if bool(jointly_finite.any()):
+        finite_maximum: float | None = _finite_maximum_difference(
+            public[jointly_finite], surface[jointly_finite],
+            name="Lorentz-gradient finite-entry",
+        )
+        finite_entries_close = bool(finite_maximum <= FP32_ATOL)
+    else:
+        finite_maximum = None
+        finite_entries_close = True
+    passed = bool(topology_exact and finite_entries_close)
+    return {
+        "nonfinite_counts": {
+            "public": _nonfinite_counts(public),
+            "surface": _nonfinite_counts(surface),
+        },
+        "finite_entry_maximum_absolute_difference": finite_maximum,
+        "finite_entries_close": finite_entries_close,
+        "nonfinite_topology_exact": topology_exact,
+        "passed": passed,
+    }
+
+
+def _lorentz_gradient_comparison(
+    branches: Mapping[str, tuple[torch.Tensor, torch.Tensor]],
+) -> dict[str, object]:
+    results = {
+        name: _lorentz_gradient_branch(public, surface)
+        for name, (public, surface) in sorted(branches.items())
+    }
+    return {
+        "training_required": False,
+        "comparison": LORENTZ_GRADIENT_COMPARISON,
+        "branches": results,
+        "passed": bool(all(row["passed"] for row in results.values())),
+    }
+
+
+def _required_gradient(value: torch.Tensor | None, *, name: str) -> torch.Tensor:
+    if value is None:
+        raise ValueError(f"{name} gradient is absent")
+    return value
+
+
 def _gradient_comparison(expected: Mapping[str, torch.Tensor | None], model) -> tuple[bool, float]:
     maximum = 0.0
+    gradients_close = True
     actual = dict(model.named_parameters())
     if set(expected) != set(actual):
-        return False, float("inf")
+        raise ValueError("parameter-gradient parity names differ")
     for name, reference in expected.items():
         candidate = actual[name].grad
         if (reference is None) != (candidate is None):
-            return False, float("inf")
+            raise ValueError(f"parameter-gradient presence differs for {name}")
         if reference is not None:
-            if not torch.isfinite(reference).all() or not torch.isfinite(candidate).all():
-                return False, float("inf")
-            maximum = max(maximum, float((reference - candidate).abs().max().cpu()))
-            if not torch.allclose(reference, candidate, atol=FP32_ATOL, rtol=FP32_RTOL):
-                return False, maximum
-    return True, maximum
+            assert candidate is not None
+            maximum = max(
+                maximum,
+                _finite_maximum_difference(
+                    reference, candidate, name=f"parameter gradient {name}",
+                ),
+            )
+            gradients_close = bool(
+                gradients_close
+                and torch.allclose(
+                    reference, candidate, atol=FP32_ATOL, rtol=FP32_RTOL,
+                )
+            )
+    return gradients_close, maximum
 
 
 def _snapshot_model(model):
@@ -571,8 +667,12 @@ def _ordinary_parity(model: ScoutingParticleTransformer, inputs) -> dict[str, ob
         name: None if parameter.grad is None else parameter.grad.detach().clone()
         for name, parameter in model.named_parameters()
     }
-    public_feature_gradient = public_features.grad.detach().clone()
-    public_vector_gradient = public_vectors.grad.detach().clone()
+    public_feature_gradient = _required_gradient(
+        public_features.grad, name="public feature",
+    ).detach().clone()
+    public_vector_gradient = _required_gradient(
+        public_vectors.grad, name="public Lorentz-vector",
+    ).detach().clone()
 
     surface_features = features.detach().clone().float().requires_grad_(True)
     surface_vectors = vectors.detach().clone().float().requires_grad_(True)
@@ -584,18 +684,27 @@ def _ordinary_parity(model: ScoutingParticleTransformer, inputs) -> dict[str, ob
     parameters_close, parameter_maximum = _gradient_comparison(
         public_parameter_gradients, model,
     )
+    surface_feature_gradient = _required_gradient(
+        surface_features.grad, name="surface feature",
+    )
+    surface_vector_gradient = _required_gradient(
+        surface_vectors.grad, name="surface Lorentz-vector",
+    )
+    lorentz_gradients = _lorentz_gradient_comparison({
+        "ordinary": (public_vector_gradient, surface_vector_gradient),
+    })
     result = {
-        "logit_maximum_absolute_difference": float(
-            (public.float() - surface.logits.float()).abs().max().cpu()
+        "logit_maximum_absolute_difference": _finite_maximum_difference(
+            public.float(), surface.logits.float(), name="ordinary logit",
         ),
-        "feature_gradient_maximum_absolute_difference": float(
-            (public_feature_gradient - surface_features.grad).abs().max().cpu()
+        "feature_gradient_maximum_absolute_difference": _finite_maximum_difference(
+            public_feature_gradient, surface_feature_gradient,
+            name="ordinary feature-gradient",
         ),
-        "vector_gradient_maximum_absolute_difference": float(
-            (public_vector_gradient - surface_vectors.grad).abs().max().cpu()
-        ),
+        "lorentz_vector_gradients": lorentz_gradients,
         "parameter_gradient_maximum_absolute_difference": parameter_maximum,
         "parameter_gradients_close": parameters_close,
+        "training_required_tensors_finite": True,
         "surface_shapes": {
             "particle_block_2": list(surface.particle_block_2.shape),
             "jet_penultimate": list(surface.jet_penultimate.shape),
@@ -610,7 +719,7 @@ def _ordinary_parity(model: ScoutingParticleTransformer, inputs) -> dict[str, ob
     result["passed"] = bool(
         result["logit_maximum_absolute_difference"] <= FP32_ATOL
         and result["feature_gradient_maximum_absolute_difference"] <= FP32_ATOL
-        and result["vector_gradient_maximum_absolute_difference"] <= FP32_ATOL
+        and lorentz_gradients["passed"] is True
         and parameters_close and result["metadata_exact"]
     )
     return result
@@ -639,7 +748,11 @@ def _native_parity(model: NativeOfflineParticleTransformer, inputs) -> dict[str,
         name: None if parameter.grad is None else parameter.grad.detach().clone()
         for name, parameter in model.named_parameters()
     }
-    public_input_gradients = [value.grad.detach().clone() for value in public_float_inputs]
+    public_input_gradients = [
+        _required_gradient(value.grad, name=f"public native input {index}")
+        .detach().clone()
+        for index, value in enumerate(public_float_inputs)
+    ]
     surface_float_inputs = [
         value.detach().clone().float().requires_grad_(True)
         for value in (
@@ -656,17 +769,30 @@ def _native_parity(model: NativeOfflineParticleTransformer, inputs) -> dict[str,
     parameters_close, parameter_maximum = _gradient_comparison(
         public_parameter_gradients, model,
     )
-    input_maximum = max(
-        float((left - right.grad).abs().max().cpu())
-        for left, right in zip(public_input_gradients, surface_float_inputs, strict=True)
+    surface_input_gradients = [
+        _required_gradient(value.grad, name=f"surface native input {index}")
+        for index, value in enumerate(surface_float_inputs)
+    ]
+    feature_maximum = max(
+        _finite_maximum_difference(
+            public_input_gradients[index], surface_input_gradients[index],
+            name=f"native {branch} feature-gradient",
+        )
+        for index, branch in ((0, "charged"), (2, "neutral"))
     )
+    lorentz_gradients = _lorentz_gradient_comparison({
+        "charged": (public_input_gradients[1], surface_input_gradients[1]),
+        "neutral": (public_input_gradients[3], surface_input_gradients[3]),
+    })
     result = {
-        "logit_maximum_absolute_difference": float(
-            (public.float() - surface.logits.float()).abs().max().cpu()
+        "logit_maximum_absolute_difference": _finite_maximum_difference(
+            public.float(), surface.logits.float(), name="native logit",
         ),
-        "input_gradient_maximum_absolute_difference": input_maximum,
+        "feature_gradient_maximum_absolute_difference": feature_maximum,
+        "lorentz_vector_gradients": lorentz_gradients,
         "parameter_gradient_maximum_absolute_difference": parameter_maximum,
         "parameter_gradients_close": parameters_close,
+        "training_required_tensors_finite": True,
         "surface_shapes": {
             "charged_particle_block_2": list(surface.charged_particle_block_2.shape),
             "neutral_particle_block_2": list(surface.neutral_particle_block_2.shape),
@@ -685,7 +811,8 @@ def _native_parity(model: NativeOfflineParticleTransformer, inputs) -> dict[str,
     }
     result["passed"] = bool(
         result["logit_maximum_absolute_difference"] <= FP32_ATOL
-        and input_maximum <= FP32_ATOL and parameters_close
+        and feature_maximum <= FP32_ATOL
+        and lorentz_gradients["passed"] is True and parameters_close
         and result["branches_remain_separate"] and result["metadata_exact"]
     )
     return result
@@ -735,7 +862,7 @@ def build_surface_parity_report(
     authorization_capable = bool(passed and runtime_kind == "installed_weaver" and actual_installed)
     return with_content_hash({
         "contract": SURFACE_PARITY_CONTRACT,
-        "schema_version": 1,
+        "schema_version": SURFACE_PARITY_SCHEMA_VERSION,
         "tap_schema_sha256": tap_schema_sha256(),
         "runtime_kind": runtime_kind,
         "installed_weaver_runtime_detected": actual_installed,
@@ -756,7 +883,7 @@ def validate_surface_parity_report(value: Mapping[str, Any]) -> str:
     digest = validate_content_hash(
         value,
         expected_contract=SURFACE_PARITY_CONTRACT,
-        expected_schema_version=1,
+        expected_schema_version=SURFACE_PARITY_SCHEMA_VERSION,
     )
     required_fields = {
         "contract", "schema_version", "tap_schema_sha256", "runtime_kind",
@@ -792,35 +919,124 @@ def validate_surface_parity_report(value: Mapping[str, Any]) -> str:
     ordinary_fields = {
         "logit_maximum_absolute_difference",
         "feature_gradient_maximum_absolute_difference",
-        "vector_gradient_maximum_absolute_difference",
+        "lorentz_vector_gradients",
         "parameter_gradient_maximum_absolute_difference",
-        "parameter_gradients_close", "surface_shapes", "metadata_exact", "passed",
+        "parameter_gradients_close", "training_required_tensors_finite",
+        "surface_shapes", "metadata_exact", "passed",
     }
     native_fields = {
-        "logit_maximum_absolute_difference", "input_gradient_maximum_absolute_difference",
+        "logit_maximum_absolute_difference", "feature_gradient_maximum_absolute_difference",
+        "lorentz_vector_gradients",
         "parameter_gradient_maximum_absolute_difference", "parameter_gradients_close",
-        "surface_shapes", "branches_remain_separate", "metadata_exact", "passed",
+        "training_required_tensors_finite", "surface_shapes",
+        "branches_remain_separate", "metadata_exact", "passed",
     }
     if set(ordinary) != ordinary_fields or set(native) != native_fields:
         raise ValueError("surface parity component fields differ")
 
     def finite_difference(component: Mapping[str, Any], name: str) -> float:
-        result = float(component[name])
+        raw = component[name]
+        if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+            raise ValueError("surface parity difference is not numeric")
+        result = float(raw)
         if not torch.isfinite(torch.tensor(result)) or result < 0:
             raise ValueError("surface parity difference is nonfinite or negative")
         return result
 
+    def lorentz_passed(component: Mapping[str, Any], expected_branches: set[str]) -> bool:
+        value = component.get("lorentz_vector_gradients")
+        if not isinstance(value, Mapping) or set(value) != {
+            "training_required", "comparison", "branches", "passed",
+        }:
+            raise ValueError("surface parity Lorentz-gradient evidence differs")
+        if value.get("training_required") is not False:
+            raise ValueError("surface parity Lorentz gradients cannot be training-required")
+        if value.get("comparison") != LORENTZ_GRADIENT_COMPARISON:
+            raise ValueError("surface parity Lorentz-gradient comparison differs")
+        branches = value.get("branches")
+        if not isinstance(branches, Mapping) or set(branches) != expected_branches:
+            raise ValueError("surface parity Lorentz-gradient branches differ")
+        branch_passes: list[bool] = []
+        count_fields = {"finite", "nan", "positive_infinity", "negative_infinity"}
+        for name in sorted(branches):
+            branch = branches[name]
+            if not isinstance(branch, Mapping) or set(branch) != {
+                "nonfinite_counts", "finite_entry_maximum_absolute_difference",
+                "finite_entries_close", "nonfinite_topology_exact", "passed",
+            }:
+                raise ValueError("surface parity Lorentz-gradient branch differs")
+            counts = branch.get("nonfinite_counts")
+            if not isinstance(counts, Mapping) or set(counts) != {"public", "surface"}:
+                raise ValueError("surface parity Lorentz-gradient counts differ")
+            normalized_counts: dict[str, dict[str, int]] = {}
+            for side in ("public", "surface"):
+                row = counts[side]
+                if not isinstance(row, Mapping) or set(row) != count_fields:
+                    raise ValueError("surface parity Lorentz-gradient count fields differ")
+                normalized_counts[side] = {}
+                for field in count_fields:
+                    count = row[field]
+                    if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+                        raise ValueError("surface parity Lorentz-gradient count differs")
+                    normalized_counts[side][field] = count
+            public_total = sum(normalized_counts["public"].values())
+            surface_total = sum(normalized_counts["surface"].values())
+            if public_total <= 0 or surface_total != public_total:
+                raise ValueError("surface parity Lorentz-gradient count total differs")
+            topology_exact = branch.get("nonfinite_topology_exact")
+            if not isinstance(topology_exact, bool):
+                raise ValueError("surface parity Lorentz-gradient result differs")
+            if topology_exact and counts["public"] != counts["surface"]:
+                raise ValueError("surface parity Lorentz-gradient topology/counts differ")
+
+            finite_count = normalized_counts["public"]["finite"]
+            maximum = branch.get("finite_entry_maximum_absolute_difference")
+            if finite_count == 0 or (maximum is None and not topology_exact):
+                if maximum is not None:
+                    raise ValueError("surface parity Lorentz-gradient finite maximum differs")
+                expected_finite_close = True
+            elif (
+                maximum is None
+                or isinstance(maximum, bool)
+                or not isinstance(maximum, (int, float))
+                or not torch.isfinite(torch.tensor(float(maximum)))
+                or float(maximum) < 0
+            ):
+                raise ValueError("surface parity Lorentz-gradient finite maximum differs")
+            else:
+                expected_finite_close = bool(float(maximum) <= FP32_ATOL)
+            for field in ("finite_entries_close", "passed"):
+                if not isinstance(branch.get(field), bool):
+                    raise ValueError("surface parity Lorentz-gradient result differs")
+            if branch["finite_entries_close"] is not expected_finite_close:
+                raise ValueError("surface parity Lorentz-gradient finite result differs")
+            expected_pass = bool(
+                branch["finite_entries_close"] and branch["nonfinite_topology_exact"]
+            )
+            if branch["passed"] is not expected_pass:
+                raise ValueError("surface parity Lorentz-gradient branch result differs")
+            branch_passes.append(expected_pass)
+        expected = bool(all(branch_passes))
+        if value.get("passed") is not expected:
+            raise ValueError("surface parity Lorentz-gradient aggregate differs")
+        return expected
+
+    ordinary_lorentz = lorentz_passed(ordinary, {"ordinary"})
+    native_lorentz = lorentz_passed(native, {"charged", "neutral"})
     ordinary_passed = bool(
         finite_difference(ordinary, "logit_maximum_absolute_difference") <= FP32_ATOL
         and finite_difference(ordinary, "feature_gradient_maximum_absolute_difference") <= FP32_ATOL
-        and finite_difference(ordinary, "vector_gradient_maximum_absolute_difference") <= FP32_ATOL
+        and ordinary_lorentz
         and ordinary.get("parameter_gradients_close") is True
+        and ordinary.get("training_required_tensors_finite") is True
         and ordinary.get("metadata_exact") is True
     )
     native_passed = bool(
         finite_difference(native, "logit_maximum_absolute_difference") <= FP32_ATOL
-        and finite_difference(native, "input_gradient_maximum_absolute_difference") <= FP32_ATOL
+        and finite_difference(native, "feature_gradient_maximum_absolute_difference") <= FP32_ATOL
+        and native_lorentz
         and native.get("parameter_gradients_close") is True
+        and native.get("training_required_tensors_finite") is True
         and native.get("branches_remain_separate") is True
         and native.get("metadata_exact") is True
     )
@@ -983,7 +1199,7 @@ def build_architecture_attestation(
     )
     return with_content_hash({
         "contract": ARCHITECTURE_ATTESTATION_CONTRACT,
-        "schema_version": 1,
+        "schema_version": ARCHITECTURE_ATTESTATION_SCHEMA_VERSION,
         "scientific_authorization": authorized,
         "authorization_blocker": blocker,
         "exact_file_evidence": exact_files,
@@ -1180,7 +1396,7 @@ def validate_architecture_attestation(
     digest = validate_content_hash(
         value,
         expected_contract=ARCHITECTURE_ATTESTATION_CONTRACT,
-        expected_schema_version=1,
+        expected_schema_version=ARCHITECTURE_ATTESTATION_SCHEMA_VERSION,
     )
     required_fields = {
         "contract", "schema_version", "scientific_authorization",

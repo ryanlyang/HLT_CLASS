@@ -8,6 +8,7 @@ import pytest
 
 from hlt_classification.scouting.hcwdl_representation_contracts import (
     ACCEPTANCE_REAL_BATCH_FULL_LOSS_CONTRACT,
+    ARCHITECTURE_ATTESTATION_CONTRACT,
     CALIBRATION_SELECTION_CONTRACT,
     CONTRACTS,
     LOGICAL_ARRAY_HASH_DOMAIN,
@@ -22,6 +23,7 @@ from hlt_classification.scouting.hcwdl_representation_contracts import (
     PRODUCTION_WORKER_SMOKE_PROOF_CONTRACT,
     REPRESENTATION_RECIPE_CONTRACT,
     RUNTIME_BINDING_CONTRACT,
+    SURFACE_PARITY_CONTRACT,
     SHARED_LEGACY_FINAL_EXPOSURE_CONTRACT,
     SUBMISSION_EVENT_CONTRACT,
     TIGRIS_ACCEPTANCE_CONTRACT,
@@ -43,14 +45,14 @@ from hlt_classification.scouting.hcwdl_representation_contracts import (
 # the test prevents a similarly named parent/PMARD contract from being accepted
 # accidentally and makes an in-place semantic expansion fail loudly.
 EXPECTED_CONTRACTS = {
-    "HCWDL_REPRESENTATION_PARENT_IMPORT/v2",
-    "HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v2",
-    "HCWDL_REPRESENTATION_ARCHITECTURE_ATTESTATION/v1",
+    "HCWDL_REPRESENTATION_PARENT_IMPORT/v3",
+    "HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v3",
+    "HCWDL_REPRESENTATION_ARCHITECTURE_ATTESTATION/v2",
     "HCWDL_REPRESENTATION_ASCENT_GRAPH/v1",
     "HCWDL_REPRESENTATION_RECIPE/v2",
     "HCWDL_REPRESENTATION_KERNEL_RESOURCES/v1",
     "HCWDL_REPRESENTATION_TAP/v1",
-    "HCWDL_REPRESENTATION_SURFACE_PARITY/v1",
+    "HCWDL_REPRESENTATION_SURFACE_PARITY/v2",
     "HCWDL_REPRESENTATION_TARGET_FORWARD_SPEC/v1",
     "HCWDL_REPRESENTATION_TARGET_EXECUTION_ATTESTATION/v1",
     "HCWDL_REPRESENTATION_TARGET_LOGICAL_BANK/v1",
@@ -201,14 +203,38 @@ def test_nonfinal_acceptance_contract_identities_are_exact() -> None:
     assert contract_schema_version(TIGRIS_ACCEPTANCE_CONTRACT) == 1
 
 
-def test_contract_schema_registry_blocks_generic_parent_loss_v2_envelopes() -> None:
-    assert contract_schema_version(PARENT_LOSS_ATTESTATION_CONTRACT) == 2
-    assert contract_schema_version(PARENT_IMPORT_CONTRACT) == 1
+def test_contract_schema_registry_blocks_generic_custom_v2_envelopes() -> None:
+    assert contract_schema_version(ARCHITECTURE_ATTESTATION_CONTRACT) == 2
+    assert contract_schema_version(PARENT_LOSS_ATTESTATION_CONTRACT) == 3
+    assert contract_schema_version(SURFACE_PARITY_CONTRACT) == 2
+    assert contract_schema_version(PARENT_IMPORT_CONTRACT) == 2
     assert contract_schema_version(REPRESENTATION_RECIPE_CONTRACT) == 1
     with pytest.raises(ValueError, match="typed artifact builder"):
         build_versioned_artifact(
             PARENT_LOSS_ATTESTATION_CONTRACT,
             parents={"parent_recipe": "a" * 64}, payload={"forged": True},
+        )
+    with pytest.raises(ValueError, match="typed artifact builder"):
+        build_versioned_artifact(
+            PARENT_IMPORT_CONTRACT,
+            parents={"parent_campaign_spec": "a" * 64},
+            payload={"forged": True},
+        )
+    with pytest.raises(ValueError, match="typed artifact builder"):
+        build_versioned_artifact(
+            ARCHITECTURE_ATTESTATION_CONTRACT,
+            parents={"surface_parity": "a" * 64},
+            payload={"forged": True},
+        )
+    with pytest.raises(ValueError, match="typed artifact builder"):
+        build_versioned_artifact(
+            SURFACE_PARITY_CONTRACT,
+            parents={"tap_schema": "a" * 64}, payload={"forged": True},
+        )
+    with pytest.raises(ValueError, match="typed artifact builder"):
+        build_versioned_artifact(
+            ARCHITECTURE_ATTESTATION_CONTRACT,
+            parents={"surface_parity": "a" * 64}, payload={"forged": True},
         )
 
 

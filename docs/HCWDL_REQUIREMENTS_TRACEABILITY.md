@@ -63,6 +63,7 @@ by any status in this ledger.
 | Metrics, gap recovery, screen/confirmation/final aggregation | `hcwdl_reporting.py` | aggregate report v1 | metric and selection tests | Local passed |
 | Exact-ID submission ledger, per-submit journals, monitoring, resume, superseded/replacement history, and cancellation | `hcwdl_campaign.py`, `hcwdl_recovery.py` | submission ledger v2, monitor/event/attestation v1 | mocked scheduler, partial-ledger, corruption, and exact-ID tests | Local passed |
 | Thin CLIs, explicit manual/automatic endpoint continuation, dedicated-worktree binding, and absolute-path `exec python` Slurm worker | `scripts/*hcwdl*.py`, `sbatch/run_hcwdl_task.sh` | campaign spec v7 | help/static/dry-run tests | Local passed |
+| Corrected-parent non-final scope through `finalist_lock`, with no execution-lock/final task authority and distinct authorization/submission/recovery phrases | `hcwdl_campaign.py`, `hcwdl_authorization.py`, `hcwdl_workflow.py`, `scripts/*hcwdl_campaign.py` | `HCWDL_CAMPAIGN_SPEC/v8`, `HCWDL_COMMAND_PLAN/v4`, submission authorization v8 | prefix closure, legacy-scope injection, phrase, dry-run, monitor, and recovery tests | Local passed |
 | No live action without locked recipe, source, assignments, qualification, and explicit execution mode | workflow validators | all parent locks | fail-closed prelaunch tests | Local passed |
 
 ## Block 6: local acceptance and readiness

@@ -395,7 +395,9 @@ def test_canonical_prepublished_parent_import_and_recipe_layout_binds() -> None:
             "registered_input": logical,
             "registered_output": output,
             "expected_contract": contract,
-            "expected_schema_version": 1,
+            "expected_schema_version": (
+                2 if task_key == "parent_import" else 1
+            ),
             "expected_content_hash": content_hash,
         }
 
@@ -445,7 +447,7 @@ def test_static_output_overlap_remains_closed_except_exact_designated_route() ->
     ("field", "changed"),
     (
         ("expected_contract", "WRONG_CONTRACT/v1"),
-        ("expected_schema_version", 2),
+        ("expected_schema_version", 1),
         ("expected_content_hash", "f" * 64),
     ),
 )
@@ -474,7 +476,7 @@ def test_prepublished_worker_authenticates_bytes_and_publication_is_noop(
     tmp_path: Path,
 ) -> None:
     parent = with_content_hash({
-        "contract": PARENT_IMPORT_CONTRACT, "schema_version": 1,
+        "contract": PARENT_IMPORT_CONTRACT, "schema_version": 2,
         "payload": {"kind": "parent"},
     })
     recipe = with_content_hash({
@@ -536,8 +538,8 @@ def test_prepublished_worker_authenticates_bytes_and_publication_is_noop(
     ("contract", "schema_version", "payload"),
     (
         ("WRONG_PARENT_IMPORT/v1", 1, {"kind": "parent"}),
-        (PARENT_IMPORT_CONTRACT, 2, {"kind": "parent"}),
-        (PARENT_IMPORT_CONTRACT, 1, {"kind": "changed"}),
+        (PARENT_IMPORT_CONTRACT, 1, {"kind": "parent"}),
+        (PARENT_IMPORT_CONTRACT, 2, {"kind": "changed"}),
     ),
 )
 def test_prepublished_worker_rejects_wrong_contract_schema_or_content(
@@ -545,7 +547,7 @@ def test_prepublished_worker_rejects_wrong_contract_schema_or_content(
     payload: dict[str, str],
 ) -> None:
     expected = with_content_hash({
-        "contract": PARENT_IMPORT_CONTRACT, "schema_version": 1,
+        "contract": PARENT_IMPORT_CONTRACT, "schema_version": 2,
         "payload": {"kind": "parent"},
     })
     actual = with_content_hash({

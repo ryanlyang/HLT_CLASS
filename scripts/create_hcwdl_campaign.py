@@ -12,7 +12,8 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from hlt_classification.data.cache_contracts import load_json, write_immutable_json  # noqa: E402
 from hlt_classification.scouting.hcwdl_authorization import (  # noqa: E402
-    ENDPOINT_CONTINUATION_MODES, validate_source_checkout,
+    ENDPOINT_CONTINUATION_MODES, EXECUTION_SCOPES, FULL_CAMPAIGN_SCOPE,
+    validate_source_checkout,
 )
 from hlt_classification.scouting.hcwdl_campaign import MODES, create_campaign_spec  # noqa: E402
 
@@ -36,6 +37,10 @@ def main() -> int:
     parser.add_argument(
         "--endpoint-continuation", choices=ENDPOINT_CONTINUATION_MODES,
         default="manual_posthoc",
+    )
+    parser.add_argument(
+        "--execution-scope", choices=EXECUTION_SCOPES,
+        default=FULL_CAMPAIGN_SCOPE,
     )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -72,6 +77,7 @@ def main() -> int:
             else bool(recipe["controls"]["include_label_only_warm_continuation"])
         ),
         endpoint_continuation=args.endpoint_continuation,
+        execution_scope=args.execution_scope,
     )
     write_immutable_json(args.output, spec)
     return 0

@@ -13,11 +13,11 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from hlt_classification.data.cache_contracts import load_json, write_immutable_json  # noqa: E402
 from hlt_classification.scouting.hcwdl_authorization import (  # noqa: E402
-    AUTOMATIC_ENDPOINT_CONTINUATION, require_canonical_campaign_spec_path,
-    validate_source_checkout,
+    AUTOMATIC_ENDPOINT_CONTINUATION, continuation_phrase,
+    require_canonical_campaign_spec_path, validate_source_checkout,
 )
 from hlt_classification.scouting.hcwdl_campaign import (  # noqa: E402
-    split_submission_commands, validate_campaign_spec,
+    campaign_execution_scope, split_submission_commands, validate_campaign_spec,
 )
 from hlt_classification.scouting.hcwdl_qualification import (  # noqa: E402
     QUALIFIERS, validate_diagnostic_acknowledgement,
@@ -103,7 +103,10 @@ def main() -> int:
     _validate_endpoint_acknowledgement(spec)
     if args.execute:
         validate_source_checkout(REPO_ROOT, expected_commit=str(spec["source_commit"]))
-        if args.authorization_phrase != "CONTINUE HCWDL AFTER ENDPOINT ACK":
+        expected_phrase = continuation_phrase(
+            execution_scope=campaign_execution_scope(spec),
+        )
+        if args.authorization_phrase != expected_phrase:
             raise PermissionError("HCWDL continuation requires the exact authorization phrase")
 
     _, commands = split_submission_commands(spec)

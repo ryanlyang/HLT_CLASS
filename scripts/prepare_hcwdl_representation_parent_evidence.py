@@ -21,6 +21,9 @@ from hlt_classification.scouting.hcwdl_parent_loss import (
 from hlt_classification.scouting.hcwdl_representation_runtime_adapters import (
     build_installed_weaver_surface_parity_artifact,
 )
+from hlt_classification.scouting.hcwdl_training import (
+    validate_hcwdl_parent_prefix_campaign,
+)
 
 
 def _path_mapping(path: Path, *, name: str) -> dict[str, Path]:
@@ -71,6 +74,13 @@ def main() -> int:
             f"missing={sorted(set(PARENT_LOSS_RUNTIME_SOURCE_FILES) - set(runtime_sources))}, "
             f"extra={sorted(set(runtime_sources) - set(PARENT_LOSS_RUNTIME_SOURCE_FILES))}"
         )
+
+    # Eligibility is checked before publishing even the reusable tap/parity
+    # rows.  A v7, smoke, manual-continuation, or otherwise out-of-scope parent
+    # therefore leaves a fresh representation root completely untouched.
+    validate_hcwdl_parent_prefix_campaign(
+        artifact(args.parent_campaign_spec), executable=True,
+    )
 
     tap_path = root / "architecture" / "tap.json"
     parity_path = root / "architecture" / "surface_parity.json"

@@ -31,6 +31,7 @@ from hlt_classification.scouting.hcwdl_parent_loss import (
     parent_loss_runtime_fingerprint,
     validate_parent_loss_attestation,
 )
+from hlt_classification.scouting.hcwdl_ladder import NODE_REGISTRY
 from hlt_classification.scouting.hcwdl_recipe import (
     CLASS_WEIGHT_POLICY,
     LEGACY_CLASS_WEIGHT_POLICY,
@@ -121,6 +122,19 @@ def _source_authority() -> dict[str, object]:
     })
     return {
         "parent_campaign_spec_sha256": "7" * 64,
+        "parent_campaign_authority": {
+            "parent_campaign_contract": "HCWDL_CAMPAIGN_SPEC/v8",
+            "parent_campaign_mode": "pilot",
+            "parent_execution_scope": "parent_prefix_through_finalist_lock",
+            "parent_endpoint_continuation": "preauthorized_automatic",
+            "parent_training_passes": 60,
+            "parent_validation_every_passes": 1,
+            "parent_train_rows": 300000,
+            "parent_terminal_task_id": "finalist_lock",
+            "parent_execution_lock_authorized": False,
+            "parent_final_test_access_authorized": False,
+            "parent_registered_final_test_tasks": 0,
+        },
         "parent_source_snapshot": snapshot,
         "runtime_source_registry": registry,
     }
@@ -128,6 +142,28 @@ def _source_authority() -> dict[str, object]:
 
 def _runtime_source_sha256(source_authority: dict[str, object]) -> str:
     return canonical_sha256(source_authority["runtime_source_registry"])
+
+
+def _parent_rows(
+    recipe: dict[str, object], source_authority: dict[str, object],
+) -> list[dict[str, object]]:
+    batch = int(recipe["batching"]["effective_batch_size"])
+    updates = 60 * int(np.ceil(300000 / batch))
+    return [
+        {
+            "node_id": node_id,
+            "training_report_sha256": "1" * 64,
+            "checkpoint_sha256": "2" * 64,
+            "final_checkpoint_sha256": "3" * 64,
+            "execution_config_sha256": "4" * 64,
+            "completed_updates": updates,
+            "validation_record_count": 60,
+            "loss_semantics_contract": HCWDL_PARENT_BASE_LOSS_CONTRACT,
+            "producer_source_sha256": _runtime_source_sha256(source_authority),
+            **_recipe_authority(recipe),
+        }
+        for node_id in sorted(NODE_REGISTRY)
+    ]
 
 
 def test_hcwdl_base_loss_weights_ce_but_not_either_kd_and_stays_fp32():
@@ -220,37 +256,33 @@ def test_legacy_pmard_value_and_gradient_remain_exactly_the_historical_formula()
 def test_parent_loss_attestation_rejects_old_semantics_and_tampering():
     recipe = _authorized_recipe()
     source_authority = _source_authority()
-    row = {
-        "node_id": "M3c",
-        "training_report_sha256": "1" * 64,
-        "checkpoint_sha256": "2" * 64,
-        "loss_semantics_contract": HCWDL_PARENT_BASE_LOSS_CONTRACT,
-        "producer_source_sha256": _runtime_source_sha256(source_authority),
-        **_recipe_authority(recipe),
-    }
+    rows = _parent_rows(recipe, source_authority)
+    row = rows[0]
     report = build_parent_loss_attestation(
         parent_recipe=recipe,
-        parent_artifacts=[row], **source_authority,
+        parent_artifacts=rows, **source_authority,
     )
     assert validate_parent_loss_attestation(
         report, parent_recipe=recipe,
     ) == report["content_hash"]
     assert parent_loss_runtime_fingerprint() == report["runtime_fingerprint"]
 
-    old = dict(row)
+    old_rows = copy.deepcopy(rows)
+    old = old_rows[0]
     old["loss_semantics_contract"] = "HCWDL_PARENT_BASE_LOSS/legacy_weighted_kd"
     with pytest.raises(ValueError, match="incompatible loss semantics"):
         build_parent_loss_attestation(
             parent_recipe=recipe,
-            parent_artifacts=[old], **source_authority,
+            parent_artifacts=old_rows, **source_authority,
         )
 
-    mixed_source = dict(row)
+    mixed_rows = copy.deepcopy(rows)
+    mixed_source = mixed_rows[0]
     mixed_source["producer_source_sha256"] = "f" * 64
     with pytest.raises(ValueError, match="producer source differs"):
         build_parent_loss_attestation(
             parent_recipe=recipe,
-            parent_artifacts=[mixed_source], **source_authority,
+            parent_artifacts=mixed_rows, **source_authority,
         )
 
     tampered = copy.deepcopy(report)
@@ -299,18 +331,11 @@ def test_parent_loss_attestation_rejects_v3_non_one_and_mixed_recipe_authority()
             **source_authority,
         )
 
-    row = {
-        "node_id": "M3c",
-        "training_report_sha256": "1" * 64,
-        "checkpoint_sha256": "2" * 64,
-        "loss_semantics_contract": HCWDL_PARENT_BASE_LOSS_CONTRACT,
-        "producer_source_sha256": _runtime_source_sha256(source_authority),
-        **_recipe_authority(current),
-    }
+    rows = _parent_rows(current, source_authority)
     with pytest.raises(ValueError, match="different parent recipe authority"):
         build_parent_loss_attestation(
             parent_recipe=_alternate_authorized_recipe(),
-            parent_artifacts=[row],
+            parent_artifacts=rows,
             **source_authority,
         )
 
@@ -436,7 +461,7 @@ def test_train_pmard_requires_explicit_corrected_semantics_and_preserves_legacy_
         )
 
 
-def test_parent_attestation_opens_actual_report_engine_and_checkpoint_bytes(
+def test_parent_attestation_rejects_v7_before_reusing_report_bytes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ):
     from hlt_classification.scouting import hcwdl_campaign
@@ -505,67 +530,7 @@ def test_parent_attestation_opens_actual_report_engine_and_checkpoint_bytes(
     })
     campaign_path = tmp_path / "parent_campaign_spec.json"
     write_immutable_json(campaign_path, campaign)
-    attestation = build_parent_loss_attestation_from_reports(
-        parent_recipe_path=recipe_path,
-        parent_campaign_spec_path=campaign_path,
-        parent_reports={"M0": report_path}, runtime_source_paths=runtime_sources,
-    )
-    assert validate_parent_loss_attestation(
-        attestation, parent_recipe=recipe,
-    ) == attestation["content_hash"]
-    assert attestation["parent_artifacts"][0]["training_report_sha256"] == wrapper[
-        "content_hash"
-    ]
-    assert attestation["parent_loss_policy_sha256"] == HCWDL_PARENT_LOSS_POLICY_SHA256
-    assert attestation["parent_recipe_sha256"] == recipe["content_hash"]
-    assert attestation["parent_artifacts"][0]["parent_recipe_sha256"] == recipe[
-        "content_hash"
-    ]
-    assert attestation["parent_campaign_spec_sha256"] == campaign["content_hash"]
-    assert attestation["parent_source_commit"] == source_commit
-    assert attestation["parent_source_snapshot"]["worktree_clean"] is True
-
-    alternate_path = tmp_path / "alternate_recipe.json"
-    write_immutable_json(alternate_path, _alternate_authorized_recipe())
-    with pytest.raises(ValueError, match="wrapper/engine lacks exact"):
-        build_parent_loss_attestation_from_reports(
-            parent_recipe_path=alternate_path,
-            parent_campaign_spec_path=campaign_path,
-            parent_reports={"M0": report_path}, runtime_source_paths=runtime_sources,
-        )
-
-    wrong_campaign = with_content_hash({
-        "contract": "HCWDL_CAMPAIGN_SPEC/v7", "schema_version": 7,
-        "source_commit": "0" * 40,
-    })
-    wrong_campaign_path = tmp_path / "wrong_parent_campaign_spec.json"
-    write_immutable_json(wrong_campaign_path, wrong_campaign)
-    with pytest.raises(PermissionError, match="parent campaign commit"):
-        build_parent_loss_attestation_from_reports(
-            parent_recipe_path=recipe_path,
-            parent_campaign_spec_path=wrong_campaign_path,
-            parent_reports={"M0": report_path}, runtime_source_paths=runtime_sources,
-        )
-
-    fake_root = tmp_path / "not-a-checkout" / "src" / "hlt_classification" / "scouting"
-    fake_root.mkdir(parents=True)
-    fake_sources = {}
-    for logical_name, source in runtime_sources.items():
-        fake = fake_root / source.name
-        fake.write_bytes(source.read_bytes())
-        fake_sources[logical_name] = fake
-    with pytest.raises(RuntimeError, match="rev-parse --show-toplevel"):
-        build_parent_loss_attestation_from_reports(
-            parent_recipe_path=recipe_path,
-            parent_campaign_spec_path=campaign_path,
-            parent_reports={"M0": report_path}, runtime_source_paths=fake_sources,
-        )
-    tampered = torch.load(
-        root / engine["selected_checkpoint"], map_location="cpu", weights_only=False,
-    )
-    tampered["loss_semantics_contract"] = "legacy"
-    torch.save(tampered, root / engine["selected_checkpoint"])
-    with pytest.raises(ValueError, match="byte lineage"):
+    with pytest.raises(ValueError, match="HCWDL_CAMPAIGN_SPEC/v8"):
         build_parent_loss_attestation_from_reports(
             parent_recipe_path=recipe_path,
             parent_campaign_spec_path=campaign_path,

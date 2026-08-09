@@ -13,6 +13,7 @@ from typing import Final
 
 from .hcwdl_representation_contracts import (
     ACCEPTANCE_REAL_BATCH_FULL_LOSS_CONTRACT,
+    ARCHITECTURE_ATTESTATION_CONTRACT,
     CALIBRATION_SELECTION_CONTRACT,
     CONTRACTS,
     NONFINAL_ACCEPTANCE_ACTION_ASSEMBLY_CONTRACT,
@@ -24,6 +25,7 @@ from .hcwdl_representation_contracts import (
     PARENT_IMPORT_CONTRACT,
     PARENT_LOSS_ATTESTATION_CONTRACT,
     REPRESENTATION_RECIPE_CONTRACT,
+    SURFACE_PARITY_CONTRACT,
     TIGRIS_ACCEPTANCE_CONTRACT,
     TIGRIS_EVIDENCE_BUNDLE_CONTRACT,
     TWO_UPDATE_ACCEPTANCE_PROOF_CONTRACT,
@@ -54,12 +56,12 @@ def _c(name: str) -> str:
 ROUTES: Final = {
     PARENT_IMPORT_CONTRACT: ArtifactRoute("import/parent_import.json", "parent_import", "validate_parent_import"),
     PARENT_LOSS_ATTESTATION_CONTRACT: ArtifactRoute("import/parent_loss_attestation.json", "parent_loss_attestation", "validate_parent_loss_attestation"),
-    _c("ARCHITECTURE_ATTESTATION"): ArtifactRoute("import/architecture_attestation.json", "architecture_attestation", "validate_architecture_attestation"),
+    ARCHITECTURE_ATTESTATION_CONTRACT: ArtifactRoute("import/architecture_attestation.json", "architecture_attestation", "validate_architecture_attestation"),
     _c("ASCENT_GRAPH"): ArtifactRoute("graph/ascent_graph.json", "graph_freeze", "validate_ascent_graph_artifact"),
     REPRESENTATION_RECIPE_CONTRACT: ArtifactRoute("recipes/representation_recipe.json", "representation_recipe", "validate_representation_recipe"),
     _c("KERNEL_RESOURCES"): ArtifactRoute("recipes/kernel_resources/committed/${envelope_id}", "kernel_resources", "validate_kernel_resources"),
     _c("TAP"): ArtifactRoute("architecture/tap.json", "tap_schema", "validate_tap_artifact"),
-    _c("SURFACE_PARITY"): ArtifactRoute("architecture/surface_parity.json", "surface_parity", "validate_surface_parity"),
+    SURFACE_PARITY_CONTRACT: ArtifactRoute("architecture/surface_parity.json", "surface_parity", "validate_surface_parity"),
     _c("TARGET_FORWARD_SPEC"): ArtifactRoute("targets/${bank}/generations/${generation_id}/target_forward_spec.json", "target_build", "validate_target_forward_spec"),
     _c("TARGET_EXECUTION_ATTESTATION"): ArtifactRoute("targets/${bank}/generations/${generation_id}/target_execution_attestation.json", "target_build", "validate_target_generation"),
     _c("TARGET_LOGICAL_BANK"): ArtifactRoute("targets/${bank}/logical_bank.json", "target_build", "validate_logical_target_bank"),

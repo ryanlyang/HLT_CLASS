@@ -269,7 +269,7 @@ grouped as follows:
 - parent/tap/recipe/target/training work:
   `prepare_hcwdl_representation_parent_evidence.py` (installed-Weaver tap,
   parity, architecture, and corrected parent-loss evidence bound to the
-  executable parent v7 campaign and its exact clean source checkout before a
+  exact executable v8 parent-prefix campaign and its clean source checkout before a
   representation campaign),
   `prepare_hcwdl_representation_parent_import.py` (the pre-campaign,
   file-authority builder),

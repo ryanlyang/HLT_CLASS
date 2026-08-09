@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Final
 
@@ -17,21 +18,20 @@ from hlt_classification.models.hcwdl_surfaces import (
 )
 
 from .hcwdl_parent_loss import validate_parent_loss_attestation
-from .hcwdl_representation_contracts import (
-    build_versioned_artifact,
-    validate_versioned_artifact,
-)
 
 
 LEGACY_PARENT_IMPORT_CONTRACT: Final = "HCWDL_REPRESENTATION_PARENT_IMPORT/v1"
-PARENT_IMPORT_CONTRACT: Final = "HCWDL_REPRESENTATION_PARENT_IMPORT/v2"
+PARENT_IMPORT_CONTRACT: Final = "HCWDL_REPRESENTATION_PARENT_IMPORT/v3"
 """Authoritative file-backed parent import.
 
 Version 1 accepted caller-supplied lineage hashes and Boolean statements that
 the original contracts had been validated.  It remains useful only for local
 fixtures.  Version 2 records the hashes of every file that establishes the
 parent campaign, assignment, recipe, endpoint-continuation, and finalist
-authority and can therefore be reconstructed from registered files.
+authority and can therefore be reconstructed from registered files.  Version
+3 narrows executable import to the exact non-smoke v8 60-pass parent prefix
+and authenticates the full execution config, 60 validation records, selected
+checkpoint, and completed final checkpoint of every engine report.
 """
 
 PARENT_AUTHORITY_FILE_KEYS: Final = frozenset({
@@ -426,14 +426,37 @@ def _validate_parent_loss_campaign_source(
     parent_loss_attestation: Mapping[str, Any],
     *, campaign: Mapping[str, Any], campaign_sha256: str,
 ) -> None:
-    """Bind after-the-fact source evidence to the reopened v7 parent authority."""
+    """Bind after-the-fact source evidence to the reopened v8 parent prefix."""
 
     snapshot = parent_loss_attestation.get("parent_source_snapshot")
     source_commit = campaign.get("source_commit")
+    expected_authority = {
+        "parent_campaign_contract": campaign.get("contract"),
+        "parent_campaign_mode": campaign.get("mode"),
+        "parent_execution_scope": campaign.get("execution_scope"),
+        "parent_endpoint_continuation": campaign.get("endpoint_continuation"),
+        "parent_training_passes": campaign.get("training_passes"),
+        "parent_validation_every_passes": campaign.get(
+            "validation_every_passes"
+        ),
+        "parent_train_rows": campaign.get("role_counts", {}).get("train"),
+        "parent_terminal_task_id": campaign.get("terminal_task_id"),
+        "parent_execution_lock_authorized": campaign.get(
+            "execution_lock_authorized"
+        ),
+        "parent_final_test_access_authorized": campaign.get(
+            "final_test_access_authorized"
+        ),
+        "parent_registered_final_test_tasks": campaign.get(
+            "registered_final_test_tasks"
+        ),
+    }
     if (
         parent_loss_attestation.get("parent_campaign_spec_sha256")
         != campaign_sha256
         or parent_loss_attestation.get("parent_source_commit") != source_commit
+        or parent_loss_attestation.get("parent_campaign_authority")
+        != expected_authority
         or not isinstance(snapshot, Mapping)
         or snapshot.get("git_commit") != source_commit
     ):
@@ -518,9 +541,6 @@ def _validated_parent_authority(
     confirmation_report_paths = dict(confirmation_report_paths or {})
 
     from .audit import SOURCE_MANIFEST_CONTRACT, SOURCE_MANIFEST_VERSION
-    from .engine import validate_pmard_training_report
-    from .hcwdl_authorization import AUTOMATIC_ENDPOINT_CONTINUATION
-    from .hcwdl_campaign import CAMPAIGN_CONTRACT, validate_campaign_spec
     from .hcwdl_ladder import GRAPH_SHA256, validate_ladder_graph
     from .hcwdl_locks import (
         create_assignment_lock, create_confirmation_registry_lock,
@@ -540,20 +560,22 @@ def _validated_parent_authority(
         CONFIRMATION_REPORT_CONTRACT, SCREEN_REPORT_CONTRACT,
         build_screen_aggregate,
     )
-    from .hcwdl_training import select_checkpoint, validate_hcwdl_training_report
+    from .hcwdl_training import (
+        confirmation_control_training_config, node_training_config,
+        qualifier_training_config, select_checkpoint,
+        validate_hcwdl_full_parent_engine_report,
+        validate_hcwdl_full_parent_wrapper_report,
+        validate_hcwdl_parent_prefix_campaign,
+    )
     from .highcov_cache import validate_assignment_manifest
     from .highcov_resources import RESOURCE_CONTRACT, resource_validation_report
     from .selective_assignment import validate_row_selection
     from .splits import source_file_record_from_manifest_row, validate_split_manifest
 
     campaign = artifacts["campaign_spec"]
-    if campaign.get("contract") != CAMPAIGN_CONTRACT:
-        raise ValueError("HCWDL-RKD parent must use HCWDL_CAMPAIGN_SPEC/v7")
-    campaign_sha256 = validate_campaign_spec(campaign, executable=True)
-    if campaign.get("endpoint_continuation") != AUTOMATIC_ENDPOINT_CONTINUATION:
-        raise PermissionError(
-            "HCWDL-RKD parent requires the v7 preauthorized automatic continuation"
-        )
+    campaign_sha256 = validate_hcwdl_parent_prefix_campaign(
+        campaign, executable=True,
+    )
     if (teachers is None) != (logit_controls is None):
         raise ValueError("parent import row registries must be supplied together")
     if teachers is None:
@@ -679,12 +701,37 @@ def _validated_parent_authority(
 
     qualifier_reports: dict[str, Mapping[str, Any]] = {}
     qualifier_hashes: dict[str, str] = {}
+    train_rows = int(roles["train"]["rows"])
     for name in QUALIFIERS:
-        report = _registered_json_file(
+        report_path, report = _registered_json_file(
             qualifier_paths[name], name=f"qualifier {name}",
-        )[1]
+        )
         qualifier_reports[name] = report
-        qualifier_hashes[name] = validate_pmard_training_report(report)
+        qualifier_hashes[name] = validate_hcwdl_full_parent_engine_report(
+            report, train_rows=train_rows, recipe=recipe,
+            expected_experiment_id=name,
+            expected_exact_config=asdict(qualifier_training_config(
+                name, recipe, train_rows=train_rows, replicate_seed=1337,
+            )),
+            report_path=report_path,
+        )
+        qualifier_scientific = report.get("scientific_config")
+        if (
+            report.get("parents") != {
+                "split_manifest_sha256": split_sha256,
+                "source_snapshot_sha256": source_sha256,
+                "assignment_lock_sha256": assignment_lock["content_hash"],
+                "recipe_sha256": recipe_sha256,
+            }
+            or not isinstance(qualifier_scientific, Mapping)
+            or qualifier_scientific.get("qualification_id") != name
+            or qualifier_scientific.get("fixed_primary_repair")
+            != "HIGHCOV_SHELL_EXACT/v1"
+            or qualifier_scientific.get("selection_performed") is not False
+            or qualifier_scientific.get("qualification_rng_policy")
+            != "shared_trajectory_across_views_v1"
+        ):
+            raise ValueError(f"parent qualifier lineage differs: {name}")
     cache_miniature = artifacts["cache_miniature"]
     cache_sha256 = validate_content_hash(
         cache_miniature, expected_contract="HCWDL_CACHE_MINIATURE/v1",
@@ -745,18 +792,21 @@ def _validated_parent_authority(
         wrapper_path, wrapper = _registered_json_file(
             row["report_path"], name=f"screen wrapper {node_id}",
         )
-        wrapper_sha256 = validate_hcwdl_training_report(wrapper)
+        full_evidence = validate_hcwdl_full_parent_wrapper_report(
+            wrapper, training_report_path=wrapper_path,
+            train_rows=train_rows, recipe=recipe,
+            expected_node_id=node_id, expected_replicate_seed=1337,
+        )
+        wrapper_sha256 = full_evidence["wrapper_sha256"]
         if (
             wrapper_sha256 != row["report_sha256"]
             or wrapper.get("node_id") != node_id
             or wrapper.get("complete") is not True
         ):
             raise ValueError(f"parent screen wrapper differs for {node_id}")
-        engine_path, engine = _registered_json_file(
-            wrapper_path.parent / "training_report.json",
-            name=f"screen engine {node_id}",
-        )
-        engine_sha256 = validate_pmard_training_report(engine)
+        engine_path = Path(full_evidence["engine_path"])
+        engine = full_evidence["engine"]
+        engine_sha256 = full_evidence["engine_sha256"]
         if (
             wrapper.get("pmard_engine_report_sha256") != engine_sha256
             or engine.get("experiment_id") != node_id
@@ -829,8 +879,23 @@ def _validated_parent_authority(
         path, report = _registered_json_file(
             confirmation_report_paths[key], name=f"confirmation {key}",
         )
-        report_sha256 = validate_pmard_training_report(report)
         node_id = str(row["node_id"])
+        expected_config = (
+            node_training_config(
+                node_id, recipe, train_rows=train_rows,
+                replicate_seed=int(row["seed"]),
+            )
+            if row["kind"] == "primary"
+            else confirmation_control_training_config(
+                node_id, recipe, train_rows=train_rows,
+                replicate_seed=int(row["seed"]),
+            )
+        )
+        report_sha256 = validate_hcwdl_full_parent_engine_report(
+            report, train_rows=train_rows, recipe=recipe,
+            expected_experiment_id=node_id,
+            expected_exact_config=asdict(expected_config), report_path=path,
+        )
         validation_arguments = {
             "report": report, "replicate_seed": int(row["seed"]),
             "split_sha256": split_sha256, "source_sha256": source_sha256,
@@ -1058,14 +1123,28 @@ def build_parent_import_from_files(
     )
     campaign = authority["campaign"]
     recipe = authority["recipe"]
-    artifact = build_versioned_artifact(
-        PARENT_IMPORT_CONTRACT,
-        parents=authority["parents"],
-        payload={
+    artifact = with_content_hash({
+        "contract": PARENT_IMPORT_CONTRACT,
+        "schema_version": 2,
+        "parents": dict(sorted(authority["parents"].items())),
+        "payload": {
             "parent_source_commit": campaign["source_commit"],
             "parent_campaign_contract": campaign["contract"],
+            "parent_campaign_mode": campaign["mode"],
+            "parent_execution_scope": campaign["execution_scope"],
             "parent_recipe_contract": recipe["contract"],
             "endpoint_continuation": campaign["endpoint_continuation"],
+            "training_passes": campaign["training_passes"],
+            "validation_every_passes": campaign["validation_every_passes"],
+            "parent_train_rows": campaign["role_counts"]["train"],
+            "terminal_task_id": campaign["terminal_task_id"],
+            "execution_lock_authorized": campaign["execution_lock_authorized"],
+            "final_test_access_authorized": campaign[
+                "final_test_access_authorized"
+            ],
+            "registered_final_test_tasks": campaign[
+                "registered_final_test_tasks"
+            ],
             "teachers": [
                 _import_row(teachers[node_id], node_id=node_id, teacher=True)
                 for node_id in IMPORTED_TEACHERS
@@ -1077,21 +1156,15 @@ def build_parent_import_from_files(
             "authority_derived_from_registered_files": True,
             "complete": True,
         },
-    )
+    })
     validate_parent_import(artifact)
     return artifact
 
 
 def validate_parent_import(value: Mapping[str, Any]) -> str:
-    digest = validate_versioned_artifact(
-        value,
-        expected_contract=PARENT_IMPORT_CONTRACT,
-        required_payload_keys=(
-            "parent_source_commit", "parent_campaign_contract",
-            "parent_recipe_contract", "endpoint_continuation", "teachers",
-            "logit_controls", "authority_derived_from_registered_files",
-            "complete",
-        ),
+    digest = validate_content_hash(
+        value, expected_contract=PARENT_IMPORT_CONTRACT,
+        expected_schema_version=2,
     )
     if set(value) != {
         "contract", "schema_version", "parents", "payload", "content_hash",
@@ -1102,7 +1175,11 @@ def validate_parent_import(value: Mapping[str, Any]) -> str:
     payload = value["payload"]
     if set(payload) != {
         "parent_source_commit", "parent_campaign_contract",
-        "parent_recipe_contract", "endpoint_continuation", "teachers",
+        "parent_campaign_mode", "parent_execution_scope",
+        "parent_recipe_contract", "endpoint_continuation",
+        "training_passes", "validation_every_passes", "parent_train_rows",
+        "terminal_task_id", "execution_lock_authorized",
+        "final_test_access_authorized", "registered_final_test_tasks", "teachers",
         "logit_controls", "authority_derived_from_registered_files", "complete",
     }:
         raise ValueError("parent import payload fields differ")
@@ -1112,12 +1189,29 @@ def validate_parent_import(value: Mapping[str, Any]) -> str:
         or any(character not in "0123456789abcdef" for character in source_commit)
     ):
         raise ValueError("parent source commit differs")
+    from .hcwdl_authorization import (
+        AUTOMATIC_ENDPOINT_CONTINUATION, PARENT_PREFIX_SCOPE,
+    )
+    from .hcwdl_campaign import MODES, PARENT_PREFIX_CAMPAIGN_CONTRACT, ROLE_COUNTS
+
+    mode = payload["parent_campaign_mode"]
     if (
-        payload["parent_campaign_contract"] != "HCWDL_CAMPAIGN_SPEC/v7"
+        payload["parent_campaign_contract"] != PARENT_PREFIX_CAMPAIGN_CONTRACT
+        or mode not in MODES
+        or mode == "smoke"
+        or ROLE_COUNTS[mode]["train"] is None
+        or payload["parent_train_rows"] != ROLE_COUNTS[mode]["train"]
+        or payload["parent_execution_scope"] != PARENT_PREFIX_SCOPE
         or payload["parent_recipe_contract"] != "HCWDL_RECIPE/v4"
-        or payload["endpoint_continuation"] != "preauthorized_automatic"
+        or payload["endpoint_continuation"] != AUTOMATIC_ENDPOINT_CONTINUATION
+        or payload["training_passes"] != 60
+        or payload["validation_every_passes"] != 1
+        or payload["terminal_task_id"] != "finalist_lock"
+        or payload["execution_lock_authorized"] is not False
+        or payload["final_test_access_authorized"] is not False
+        or payload["registered_final_test_tasks"] != 0
     ):
-        raise ValueError("parent import current contract/continuation identity differs")
+        raise ValueError("parent import exact v8 prefix identity differs")
     raw_teachers = payload["teachers"]
     raw_controls = payload["logit_controls"]
     if not isinstance(raw_teachers, list) or not isinstance(raw_controls, list):
@@ -1176,8 +1270,21 @@ def validate_parent_import_against_authority_files(
     if any((
         payload["parent_source_commit"] != campaign["source_commit"],
         payload["parent_campaign_contract"] != campaign["contract"],
+        payload["parent_campaign_mode"] != campaign["mode"],
+        payload["parent_execution_scope"] != campaign["execution_scope"],
         payload["parent_recipe_contract"] != recipe["contract"],
         payload["endpoint_continuation"] != campaign["endpoint_continuation"],
+        payload["training_passes"] != campaign["training_passes"],
+        payload["validation_every_passes"]
+        != campaign["validation_every_passes"],
+        payload["parent_train_rows"] != campaign["role_counts"]["train"],
+        payload["terminal_task_id"] != campaign["terminal_task_id"],
+        payload["execution_lock_authorized"]
+        != campaign["execution_lock_authorized"],
+        payload["final_test_access_authorized"]
+        != campaign["final_test_access_authorized"],
+        payload["registered_final_test_tasks"]
+        != campaign["registered_final_test_tasks"],
     )):
         raise ValueError("parent import payload differs from current authority files")
     return digest

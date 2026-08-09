@@ -84,8 +84,16 @@ def _authority_projection():
     parents["architecture_attestation"] = architecture["content_hash"]
     parents["parent_loss_attestation"] = loss["content_hash"]
     campaign = {
-        "contract": "HCWDL_CAMPAIGN_SPEC/v7", "source_commit": "4" * 40,
+        "contract": "HCWDL_CAMPAIGN_SPEC/v8", "source_commit": "4" * 40,
+        "mode": "pilot",
+        "execution_scope": "parent_prefix_through_finalist_lock",
         "endpoint_continuation": "preauthorized_automatic",
+        "training_passes": 60, "validation_every_passes": 1,
+        "role_counts": {"train": 300000, "validation": 100000, "final_test": 100000},
+        "terminal_task_id": "finalist_lock",
+        "execution_lock_authorized": False,
+        "final_test_access_authorized": False,
+        "registered_final_test_tasks": 0,
     }
     recipe = {"contract": "HCWDL_RECIPE/v4"}
     return {
@@ -109,7 +117,7 @@ def _dummy_qualifiers():
     }
 
 
-def test_file_backed_parent_import_binds_v7_v4_and_every_authority_parent(
+def test_file_backed_parent_import_binds_v8_prefix_v4_and_every_authority_parent(
     monkeypatch,
 ) -> None:
     authority, teachers, controls = _authority_projection()
@@ -123,9 +131,13 @@ def test_file_backed_parent_import_binds_v7_v4_and_every_authority_parent(
         teachers=teachers, logit_controls=controls,
     )
     assert calls
-    assert artifact["contract"] == "HCWDL_REPRESENTATION_PARENT_IMPORT/v2"
+    assert artifact["contract"] == "HCWDL_REPRESENTATION_PARENT_IMPORT/v3"
+    assert artifact["schema_version"] == 2
     assert artifact["parents"] == authority["parents"]
-    assert artifact["payload"]["parent_campaign_contract"] == "HCWDL_CAMPAIGN_SPEC/v7"
+    assert artifact["payload"]["parent_campaign_contract"] == "HCWDL_CAMPAIGN_SPEC/v8"
+    assert artifact["payload"]["parent_execution_scope"] == (
+        "parent_prefix_through_finalist_lock"
+    )
     assert artifact["payload"]["parent_recipe_contract"] == "HCWDL_RECIPE/v4"
     assert artifact["payload"]["authority_derived_from_registered_files"] is True
     assert locks.validate_parent_import(artifact) == artifact["content_hash"]
@@ -174,14 +186,35 @@ def test_parent_import_reopens_authority_and_rejects_cross_campaign_splice(
         )
 
 
-def test_parent_loss_source_authority_is_cross_bound_to_reopened_v7_campaign() -> None:
+def test_parent_loss_source_authority_is_cross_bound_to_reopened_v8_campaign() -> None:
     campaign_sha256 = "1" * 64
     source_commit = "2" * 40
-    campaign = {"source_commit": source_commit}
+    campaign = {
+        "contract": "HCWDL_CAMPAIGN_SPEC/v8", "source_commit": source_commit,
+        "mode": "pilot", "execution_scope": "parent_prefix_through_finalist_lock",
+        "endpoint_continuation": "preauthorized_automatic",
+        "training_passes": 60, "validation_every_passes": 1,
+        "role_counts": {"train": 300000}, "terminal_task_id": "finalist_lock",
+        "execution_lock_authorized": False,
+        "final_test_access_authorized": False,
+        "registered_final_test_tasks": 0,
+    }
+    campaign_authority = {
+        "parent_campaign_contract": campaign["contract"],
+        "parent_campaign_mode": campaign["mode"],
+        "parent_execution_scope": campaign["execution_scope"],
+        "parent_endpoint_continuation": campaign["endpoint_continuation"],
+        "parent_training_passes": 60, "parent_validation_every_passes": 1,
+        "parent_train_rows": 300000, "parent_terminal_task_id": "finalist_lock",
+        "parent_execution_lock_authorized": False,
+        "parent_final_test_access_authorized": False,
+        "parent_registered_final_test_tasks": 0,
+    }
     attestation = {
         "parent_campaign_spec_sha256": campaign_sha256,
         "parent_source_commit": source_commit,
         "parent_source_snapshot": {"git_commit": source_commit},
+        "parent_campaign_authority": campaign_authority,
     }
     locks._validate_parent_loss_campaign_source(
         attestation, campaign=campaign, campaign_sha256=campaign_sha256,
@@ -409,13 +442,14 @@ def test_control_report_lineage_rejects_unrelated_screen_teacher() -> None:
     (
         ("extra_parent", "parent lineage registry"),
         ("bad_commit", "source commit"),
-        ("legacy_campaign", "current contract"),
-        ("legacy_recipe", "current contract"),
-        ("manual_continuation", "current contract"),
+        ("legacy_campaign", "exact v8 prefix"),
+        ("smoke_mode", "exact v8 prefix"),
+        ("legacy_recipe", "exact v8 prefix"),
+        ("manual_continuation", "exact v8 prefix"),
         ("false_file_authority", "file-authority completion proof"),
     ),
 )
-def test_v2_validator_recomputes_closed_identity(monkeypatch, mutation, message) -> None:
+def test_v3_validator_recomputes_closed_identity(monkeypatch, mutation, message) -> None:
     authority, teachers, controls = _authority_projection()
     monkeypatch.setattr(locks, "_validated_parent_authority", lambda **_: authority)
     artifact = locks.build_parent_import_from_files(
@@ -430,6 +464,9 @@ def test_v2_validator_recomputes_closed_identity(monkeypatch, mutation, message)
         forged["payload"]["parent_source_commit"] = "not-a-commit"
     elif mutation == "legacy_campaign":
         forged["payload"]["parent_campaign_contract"] = "HCWDL_CAMPAIGN_SPEC/v6"
+    elif mutation == "smoke_mode":
+        forged["payload"]["parent_campaign_mode"] = "smoke"
+        forged["payload"]["parent_train_rows"] = 4096
     elif mutation == "legacy_recipe":
         forged["payload"]["parent_recipe_contract"] = "HCWDL_RECIPE/v3"
     elif mutation == "manual_continuation":
@@ -441,20 +478,24 @@ def test_v2_validator_recomputes_closed_identity(monkeypatch, mutation, message)
         locks.validate_parent_import(forged)
 
 
-def test_strict_authority_rejects_v6_before_any_generic_validator(monkeypatch) -> None:
+@pytest.mark.parametrize("legacy", ("v6", "v7"))
+def test_strict_authority_rejects_pre_v8_before_any_generic_validator(
+    monkeypatch, legacy,
+) -> None:
     artifacts = {
         name: {"contract": "TEST/v1", "schema_version": 1, "content_hash": H}
         for name in locks.PARENT_AUTHORITY_FILE_KEYS
     }
     artifacts["campaign_spec"] = {
-        "contract": "HCWDL_CAMPAIGN_SPEC/v6", "schema_version": 6,
+        "contract": f"HCWDL_CAMPAIGN_SPEC/{legacy}",
+        "schema_version": int(legacy[1:]),
         "content_hash": H,
     }
     monkeypatch.setattr(
         locks, "_registered_json_file",
         lambda path, *, name: (Path(path), artifacts[name]),
     )
-    with pytest.raises(ValueError, match="HCWDL_CAMPAIGN_SPEC/v7"):
+    with pytest.raises(ValueError, match="HCWDL_CAMPAIGN_SPEC/v8"):
         locks._validated_parent_authority(
             authority_files=_dummy_paths(), qualifier_report_paths=_dummy_qualifiers(),
         )

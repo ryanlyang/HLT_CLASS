@@ -13,10 +13,11 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from hlt_classification.data.cache_contracts import load_json, write_immutable_json  # noqa: E402
 from hlt_classification.scouting.hcwdl_campaign import (  # noqa: E402
-    split_submission_commands, validate_campaign_spec,
+    campaign_execution_scope, split_submission_commands, validate_campaign_spec,
 )
 from hlt_classification.scouting.hcwdl_authorization import (  # noqa: E402
-    AUTOMATIC_ENDPOINT_CONTINUATION, require_canonical_campaign_spec_path,
+    live_submission_phrase, MANUAL_ENDPOINT_CONTINUATION,
+    require_canonical_campaign_spec_path,
     validate_source_checkout,
 )
 from hlt_classification.scouting.hcwdl_recovery import (  # noqa: E402
@@ -47,10 +48,11 @@ def main() -> int:
     )
     if REPO_ROOT.resolve() != Path(spec["project_dir"]).resolve():
         raise PermissionError("HCWDL submitter is not running from the bound project worktree")
-    expected_phrase = (
-        "SUBMIT HCWDL EXACT SPEC WITH PREAUTHORIZED ENDPOINT CONTINUATION"
-        if spec.get("endpoint_continuation") == AUTOMATIC_ENDPOINT_CONTINUATION
-        else "SUBMIT HCWDL EXACT SPEC"
+    expected_phrase = live_submission_phrase(
+        execution_scope=campaign_execution_scope(spec),
+        endpoint_continuation=str(spec.get(
+            "endpoint_continuation", MANUAL_ENDPOINT_CONTINUATION,
+        )),
     )
     if args.authorization_phrase != expected_phrase:
         raise PermissionError("live HCWDL submission requires the exact authorization phrase")

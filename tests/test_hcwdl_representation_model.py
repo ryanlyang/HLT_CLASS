@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,7 @@ from hlt_classification.models.hcwdl_surfaces import (
     build_surface_parity_report,
     tap_schema,
     validate_architecture_attestation,
+    validate_surface_parity_report,
 )
 from hlt_classification.data.cache_contracts import (
     canonical_sha256,
@@ -130,6 +132,71 @@ def _ordinary_inputs(batch=3, particles=7, channels=21):
     family = (torch.arange(particles) % 2).to(torch.int8).repeat(batch, 1)
     family = family.masked_fill(~mask[:, 0], -1)
     return features, vectors, mask, ids, family
+
+
+def test_production_surface_fixture_uses_finite_timelike_unit_mass_vectors():
+    from hlt_classification.scouting.hcwdl_representation_runtime_adapters import (
+        _surface_fixture,
+    )
+
+    ordinary, native = _surface_fixture(seed=1337, device="cpu")
+    for vectors in (ordinary[1], native[1], native[4]):
+        assert torch.isfinite(vectors).all()
+        assert torch.all(vectors[:, 3] > 0)
+        invariant_mass_squared = (
+            vectors[:, 3].square() - vectors[:, :3].square().sum(1)
+        )
+        assert torch.allclose(
+            invariant_mass_squared,
+            torch.ones_like(invariant_mass_squared),
+            atol=1.0e-5,
+            rtol=1.0e-5,
+        )
+
+
+def test_lorentz_gradient_parity_is_json_safe_and_requires_exact_topology():
+    public = torch.tensor([float("nan"), float("inf"), -float("inf"), 1.0])
+    surface = public.clone()
+    comparison = surfaces._lorentz_gradient_comparison({
+        "ordinary": (public, surface),
+    })
+    assert comparison["passed"] is True
+    branch = comparison["branches"]["ordinary"]
+    assert branch["finite_entry_maximum_absolute_difference"] == 0.0
+    assert branch["nonfinite_counts"]["public"] == {
+        "finite": 1,
+        "nan": 1,
+        "positive_infinity": 1,
+        "negative_infinity": 1,
+    }
+    json.dumps(comparison, allow_nan=False)
+
+    wrong_topology = torch.tensor(
+        [float("inf"), float("nan"), -float("inf"), 1.0]
+    )
+    native = surfaces._lorentz_gradient_comparison({
+        "charged": (public, wrong_topology),
+        "neutral": (public, surface),
+    })
+    assert native["passed"] is False
+    assert native["branches"]["charged"]["nonfinite_topology_exact"] is False
+    assert native["branches"]["neutral"]["passed"] is True
+    json.dumps(native, allow_nan=False)
+
+
+def test_training_required_surface_parity_tensor_must_be_finite():
+    with pytest.raises(ValueError, match="nonfinite"):
+        surfaces._finite_maximum_difference(
+            torch.tensor([float("nan")]),
+            torch.tensor([float("nan")]),
+            name="required feature-gradient",
+        )
+    model = nn.Linear(1, 1, bias=False)
+    model.weight.grad = torch.full_like(model.weight, float("nan"))
+    with pytest.raises(ValueError, match="parameter gradient weight.*nonfinite"):
+        surfaces._gradient_comparison(
+            {"weight": torch.zeros_like(model.weight)}, model,
+        )
 
 
 def _parameter_gradients(model):
@@ -272,8 +339,50 @@ def test_synthetic_surface_parity_is_recorded_but_cannot_authorize(fake_hcwdl_we
         ordinary_inputs=ordinary_inputs, native_offline_inputs=native_inputs,
         runtime_kind="synthetic_test_double",
     )
+    assert parity["contract"] == "HCWDL_REPRESENTATION_SURFACE_PARITY/v2"
+    assert parity["schema_version"] == 2
     assert parity["passed"] and not parity["authorization_capable"]
+    assert parity["ordinary"]["training_required_tensors_finite"] is True
+    assert parity["native_offline"]["training_required_tensors_finite"] is True
+    assert parity["ordinary"]["lorentz_vector_gradients"]["passed"] is True
+    assert set(parity["native_offline"]["lorentz_vector_gradients"]["branches"]) == {
+        "charged", "neutral",
+    }
+    json.dumps(parity, allow_nan=False)
+    assert validate_surface_parity_report(parity) == parity["content_hash"]
     assert ordinary.mod.trimmer.enabled == ordinary_enabled
+
+    nonfinite_claim = dict(parity)
+    nonfinite_claim["ordinary"] = dict(parity["ordinary"])
+    nonfinite_claim["ordinary"]["training_required_tensors_finite"] = False
+    with pytest.raises(ValueError, match="component result differs"):
+        validate_surface_parity_report(with_content_hash(nonfinite_claim))
+
+    forged_finite_result = json.loads(json.dumps(parity))
+    forged_branch = forged_finite_result["ordinary"][
+        "lorentz_vector_gradients"
+    ]["branches"]["ordinary"]
+    forged_branch["finite_entry_maximum_absolute_difference"] = 1.0
+    forged_branch["finite_entries_close"] = True
+    forged_branch["passed"] = True
+    with pytest.raises(ValueError, match="finite result differs"):
+        validate_surface_parity_report(with_content_hash(forged_finite_result))
+
+    forged_boolean_maximum = json.loads(json.dumps(parity))
+    forged_boolean_maximum["ordinary"][
+        "lorentz_vector_gradients"
+    ]["branches"]["ordinary"][
+        "finite_entry_maximum_absolute_difference"
+    ] = True
+    with pytest.raises(ValueError, match="finite maximum differs"):
+        validate_surface_parity_report(with_content_hash(forged_boolean_maximum))
+
+    forged_boolean_difference = json.loads(json.dumps(parity))
+    forged_boolean_difference["ordinary"][
+        "logit_maximum_absolute_difference"
+    ] = True
+    with pytest.raises(ValueError, match="not numeric"):
+        validate_surface_parity_report(with_content_hash(forged_boolean_difference))
     with pytest.raises(ValueError, match="synthetic Weaver"):
         build_surface_parity_report(
             ordinary_model=ordinary, native_offline_model=native,
@@ -296,12 +405,25 @@ def test_synthetic_surface_parity_is_recorded_but_cannot_authorize(fake_hcwdl_we
         checkpoint_audits=(ordinary_audit, native_audit),
         model_source_files=model_sources,
     )
+    assert attestation["contract"] == (
+        "HCWDL_REPRESENTATION_ARCHITECTURE_ATTESTATION/v2"
+    )
+    assert attestation["schema_version"] == 2
     assert not attestation["scientific_authorization"]
     assert validate_architecture_attestation(
         attestation, require_authorized=False,
     ) == attestation["content_hash"]
     with pytest.raises(ValueError, match="installed-Weaver"):
         validate_architecture_attestation(attestation, require_authorized=True)
+    relabeled_legacy = dict(attestation)
+    relabeled_legacy.update({
+        "contract": "HCWDL_REPRESENTATION_ARCHITECTURE_ATTESTATION/v1",
+        "schema_version": 1,
+    })
+    with pytest.raises(ValueError, match="contract"):
+        validate_architecture_attestation(
+            with_content_hash(relabeled_legacy), require_authorized=False,
+        )
     for invalid_sources in (
         model_sources[:-1],
         [*model_sources, {
