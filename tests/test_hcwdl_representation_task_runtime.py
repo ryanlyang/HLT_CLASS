@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import signal
 import sys
 
 import pytest
@@ -22,7 +23,7 @@ from hlt_classification.scouting.hcwdl_representation_runtime_adapters import (
 )
 from hlt_classification.scouting.hcwdl_representation_smoke import FINAL_ROLE_KINDS
 from hlt_classification.scouting.hcwdl_representation_task_runtime import (
-    TASK_KINDS, execute_registered_task,
+    RepresentationPreemptionMonitor, TASK_KINDS, execute_registered_task,
 )
 from hlt_classification.scouting import hcwdl_representation_task_runtime as task_runtime
 from hlt_classification.scouting import hcwdl_representation_runtime_adapters as runtime_adapters
@@ -66,6 +67,22 @@ def _runtime_row(task: CampaignTask, tmp_path: Path, parameters):
         "parameters": parameters,
         "runtime_signature_sha256": canonical_sha256(parameters),
     }
+
+
+def test_preemption_monitor_preserves_exact_signal_identity() -> None:
+    monitor = RepresentationPreemptionMonitor()
+    usr1 = getattr(signal, "SIGUSR1", None)
+    term = getattr(signal, "SIGTERM", None)
+    if usr1 is None:
+        pytest.skip("SIGUSR1 is unavailable on this platform")
+    monitor._request(usr1, None)
+    assert monitor.is_requested()
+    assert monitor.observed_signals() == ("SIGUSR1",)
+    assert monitor.observed_exact_usr1()
+    if term is not None:
+        monitor._request(term, None)
+        assert monitor.observed_signals() == ("SIGUSR1", "SIGTERM")
+        assert not monitor.observed_exact_usr1()
 
 
 def test_workflow_propagates_the_live_executable_gate(

@@ -111,9 +111,9 @@ REQUIRED_TIGRIS_CHECKS: Final = (
     "installed_weaver_parity",
     "ordinary_cache_miniature",
     "toff_cache_miniature",
+    "two_update_full_loss",
     "usr1_exact_resume",
-    "full_loss_probe",
-    "final_role_validation_proxy",
+    "validation_only_proxy",
     "production_worker_smoke",
 )
 # Action-specific result contracts are implemented locally.  They still
@@ -318,8 +318,81 @@ def validate_tigris_acceptance(
     requests = resource_profile["requests"]
     seen_jobs: set[int] = set()
     seen_result_executions: set[str] = set()
+    nonfinal_authority_sha256: str | None = None
     for evidence_kind in REQUIRED_TIGRIS_CHECKS:
         row = checks[evidence_kind]
+        if evidence_kind in {
+            "two_update_full_loss", "usr1_exact_resume", "validation_only_proxy",
+        }:
+            if not isinstance(row, Mapping) or set(row) != {"composite_proof"}:
+                raise PermissionError("non-final composite Tigris check row differs")
+            from .hcwdl_representation_contracts import (
+                NONFINAL_ACCEPTANCE_ACTION_RESULT_CONTRACT,
+                TWO_UPDATE_ACCEPTANCE_PROOF_CONTRACT,
+                USR1_EXACT_RESUME_PROOF_CONTRACT,
+            )
+            expected_contract = {
+                "two_update_full_loss": TWO_UPDATE_ACCEPTANCE_PROOF_CONTRACT,
+                "usr1_exact_resume": USR1_EXACT_RESUME_PROOF_CONTRACT,
+                "validation_only_proxy": NONFINAL_ACCEPTANCE_ACTION_RESULT_CONTRACT,
+            }[evidence_kind]
+            proof, proof_hash = load_authenticated_json_reference(
+                row["composite_proof"], expected_contract=expected_contract,
+                name=f"{evidence_kind} composite proof",
+            )
+            if evidence_kind == "two_update_full_loss":
+                from .hcwdl_representation_nonfinal_acceptance import (
+                    validate_two_update_acceptance_proof,
+                )
+
+                validate_two_update_acceptance_proof(proof, require_genuine=True)
+                job_ids = {
+                    int(item["job_id"])
+                    for item in proof["scheduler_evidence"].values()
+                }
+            elif evidence_kind == "usr1_exact_resume":
+                from .hcwdl_representation_nonfinal_acceptance import (
+                    validate_usr1_exact_resume_proof_v2,
+                )
+
+                validate_usr1_exact_resume_proof_v2(proof, require_genuine=True)
+                job_ids = {
+                    int(item["job_id"])
+                    for item in proof["scheduler_evidence"].values()
+                }
+            else:
+                from .hcwdl_representation_nonfinal_acceptance import (
+                    validate_nonfinal_acceptance_action_result,
+                )
+
+                validate_nonfinal_acceptance_action_result(
+                    proof, expected_action_id="validation_proxy",
+                    require_genuine=True,
+                )
+                job_ids = {int(proof["scheduler_job_id"])}
+            if (
+                proof.get("source_commit") != source_commit
+                or proof.get("representation_recipe_sha256")
+                != representation_recipe_sha256
+            ):
+                raise PermissionError("non-final composite proof lineage differs")
+            proof_authority = require_sha256(
+                proof.get("authority_sha256"),
+                name=f"{evidence_kind} non-final authority",
+            )
+            if nonfinal_authority_sha256 is None:
+                nonfinal_authority_sha256 = proof_authority
+            elif proof_authority != nonfinal_authority_sha256:
+                raise PermissionError(
+                    "Tigris composite proofs bind different non-final authorities"
+                )
+            if seen_jobs & job_ids or proof_hash in seen_result_executions:
+                raise PermissionError(
+                    "Tigris evidence reuses a non-final job or composite result"
+                )
+            seen_jobs.update(job_ids)
+            seen_result_executions.add(proof_hash)
+            continue
         if not isinstance(row, Mapping) or set(row) != {
             "scheduler_evidence", "miniature_evidence", "action_proof",
         }:
@@ -396,6 +469,8 @@ def validate_tigris_acceptance(
                 "Tigris evidence reuses one action result for multiple checks"
             )
         seen_result_executions.add(result_execution)
+    if nonfinal_authority_sha256 is None:
+        raise PermissionError("Tigris acceptance lacks its non-final authority")
     return digest
 
 

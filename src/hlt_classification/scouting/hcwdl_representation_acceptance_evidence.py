@@ -26,6 +26,7 @@ from .hcwdl_representation_campaign_artifacts import (
 from .hcwdl_representation_contracts import (
     CACHE_MINIATURE_BANK_CONTRACT,
     MINIATURE_EVIDENCE_CONTRACT,
+    NONFINAL_ACCEPTANCE_ACTION_RESULT_CONTRACT,
     PRODUCTION_WORKER_SMOKE_PROOF_CONTRACT,
     SHARED_FINAL_BRANCH_ACCESS_CONTRACT,
     SMOKE_PROBE_CONTRACT,
@@ -33,6 +34,7 @@ from .hcwdl_representation_contracts import (
     TIGRIS_ACCEPTANCE_CONTRACT,
     TIGRIS_EVIDENCE_BUNDLE_CONTRACT,
     TRAINING_REPORT_CONTRACT,
+    TWO_UPDATE_ACCEPTANCE_PROOF_CONTRACT,
     USR1_EXACT_RESUME_PROOF_CONTRACT,
     VALIDATION_PROXY_PROOF_CONTRACT,
     WORKER_RUNTIME_MEASUREMENT_CONTRACT,
@@ -55,18 +57,17 @@ ACTION_RESULT_CONTRACTS: Final = {
     "installed_weaver_parity": "HCWDL_REPRESENTATION_SURFACE_PARITY/v1",
     "ordinary_cache_miniature": CACHE_MINIATURE_BANK_CONTRACT,
     "toff_cache_miniature": CACHE_MINIATURE_BANK_CONTRACT,
-    "usr1_exact_resume": USR1_EXACT_RESUME_PROOF_CONTRACT,
+    # Retained as a nonauthorizing diagnostic/proof-builder input.  It is not
+    # one of REQUIRED_TIGRIS_CHECKS; the required replacement is the composite
+    # two_update_full_loss proof below.
     "full_loss_probe": SMOKE_PROBE_CONTRACT,
-    "final_role_validation_proxy": VALIDATION_PROXY_PROOF_CONTRACT,
     "production_worker_smoke": PRODUCTION_WORKER_SMOKE_PROOF_CONTRACT,
 }
 ACTION_RESOURCE_CLASSES: Final = {
     "installed_weaver_parity": "cpu_small",
     "ordinary_cache_miniature": "gpu_target",
     "toff_cache_miniature": "gpu_target",
-    "usr1_exact_resume": "gpu_representation",
     "full_loss_probe": "gpu_representation",
-    "final_role_validation_proxy": "gpu_final_prediction",
     "production_worker_smoke": "cpu_small",
 }
 ACTION_WORKER_ROLES: Final = {
@@ -74,7 +75,6 @@ ACTION_WORKER_ROLES: Final = {
         "deterministic"
         if name in {
             "ordinary_cache_miniature", "toff_cache_miniature",
-            "final_role_validation_proxy",
         }
         else "ordinary"
     )
@@ -509,12 +509,26 @@ def _validate_action_result(
         expected = "ordinary" if evidence_kind.startswith("ordinary") else "toff"
         if result.get("bank_kind") != expected:
             raise ValueError("cache miniature action proof names the wrong bank")
-    elif evidence_kind == "usr1_exact_resume":
-        validate_usr1_exact_resume_proof(result)
     elif evidence_kind == "full_loss_probe":
         validate_full_loss_probe(result)
-    elif evidence_kind == "final_role_validation_proxy":
-        validate_validation_proxy_proof(result)
+    elif evidence_kind == "two_update_full_loss":
+        from .hcwdl_representation_nonfinal_acceptance import (
+            validate_two_update_acceptance_proof,
+        )
+
+        validate_two_update_acceptance_proof(result)
+    elif evidence_kind == "usr1_exact_resume":
+        from .hcwdl_representation_nonfinal_acceptance import (
+            validate_usr1_exact_resume_proof_v2,
+        )
+
+        validate_usr1_exact_resume_proof_v2(result)
+    elif evidence_kind == "validation_only_proxy":
+        from .hcwdl_representation_validation_proxy import (
+            validate_validation_proxy_proof_v2,
+        )
+
+        validate_validation_proxy_proof_v2(result)
     elif evidence_kind == "production_worker_smoke":
         validate_production_worker_smoke_proof(result)
     recipe = result.get("representation_recipe_sha256")
@@ -675,9 +689,78 @@ def build_tigris_evidence_bundle(
     checks: dict[str, dict[str, Any]] = {}
     seen_jobs: set[int] = set()
     seen_result_executions: set[str] = set()
+    nonfinal_authority_sha256: str | None = None
     requests = profile["requests"]
     workers = profile["measurement_environment"]["production_workers"]
     for evidence_kind in REQUIRED_TIGRIS_CHECKS:
+        if evidence_kind in {
+            "two_update_full_loss", "usr1_exact_resume", "validation_only_proxy",
+        }:
+            expected_contract = {
+                "two_update_full_loss": TWO_UPDATE_ACCEPTANCE_PROOF_CONTRACT,
+                "usr1_exact_resume": USR1_EXACT_RESUME_PROOF_CONTRACT,
+                "validation_only_proxy": NONFINAL_ACCEPTANCE_ACTION_RESULT_CONTRACT,
+            }[evidence_kind]
+            proof, proof_hash = load_authenticated_json_reference(
+                action_proofs[evidence_kind], expected_contract=expected_contract,
+                name=f"{evidence_kind} composite proof",
+            )
+            if evidence_kind == "two_update_full_loss":
+                from .hcwdl_representation_nonfinal_acceptance import (
+                    validate_two_update_acceptance_proof,
+                )
+
+                validate_two_update_acceptance_proof(proof, require_genuine=True)
+                job_ids = {
+                    int(row["job_id"])
+                    for row in proof["scheduler_evidence"].values()
+                }
+            elif evidence_kind == "usr1_exact_resume":
+                from .hcwdl_representation_nonfinal_acceptance import (
+                    validate_usr1_exact_resume_proof_v2,
+                )
+
+                validate_usr1_exact_resume_proof_v2(proof, require_genuine=True)
+                job_ids = {
+                    int(row["job_id"])
+                    for row in proof["scheduler_evidence"].values()
+                }
+            else:
+                from .hcwdl_representation_nonfinal_acceptance import (
+                    validate_nonfinal_acceptance_action_result,
+                )
+
+                validate_nonfinal_acceptance_action_result(
+                    proof, expected_action_id="validation_proxy",
+                    require_genuine=True,
+                )
+                job_ids = {int(proof["scheduler_job_id"])}
+            if (
+                proof.get("source_commit") != source_commit
+                or proof.get("representation_recipe_sha256")
+                != representation_recipe_sha256
+            ):
+                raise ValueError("non-final composite proof campaign lineage differs")
+            proof_authority = require_sha256(
+                proof.get("authority_sha256"),
+                name=f"{evidence_kind} non-final authority",
+            )
+            if nonfinal_authority_sha256 is None:
+                nonfinal_authority_sha256 = proof_authority
+            elif proof_authority != nonfinal_authority_sha256:
+                raise PermissionError(
+                    "Tigris composite proofs bind different non-final authorities"
+                )
+            if seen_jobs & job_ids or proof_hash in seen_result_executions:
+                raise PermissionError(
+                    "Tigris composite-proof registry reuses a job or result"
+                )
+            seen_jobs.update(job_ids)
+            seen_result_executions.add(proof_hash)
+            checks[evidence_kind] = {
+                "composite_proof": dict(action_proofs[evidence_kind]),
+            }
+            continue
         proof, _ = load_authenticated_json_reference(
             action_proofs[evidence_kind],
             expected_contract=TIGRIS_ACTION_PROOF_CONTRACT,
@@ -711,6 +794,8 @@ def build_tigris_evidence_bundle(
             "miniature_evidence": proof["miniature_evidence"],
             "action_proof": dict(action_proofs[evidence_kind]),
         }
+    if nonfinal_authority_sha256 is None:
+        raise PermissionError("Tigris evidence lacks its non-final authority")
     return with_content_hash({
         "contract": TIGRIS_EVIDENCE_BUNDLE_CONTRACT,
         "schema_version": 1,
@@ -764,6 +849,20 @@ def build_tigris_acceptance(
     if bundle_hash != bundle["content_hash"]:
         raise ValueError("Tigris evidence bundle content identity differs")
     return artifact
+
+
+# The active proof identities are the authority-bound implementations.  The
+# former local functions above are retained only as readable migration
+# history; assigning the public surface here makes it impossible for a caller
+# to mint the retired hash-only v1 proofs under the active v2 contracts.
+from .hcwdl_representation_nonfinal_acceptance import (
+    build_usr1_exact_resume_proof_v2 as build_usr1_exact_resume_proof,
+    validate_usr1_exact_resume_proof_v2 as validate_usr1_exact_resume_proof,
+)
+from .hcwdl_representation_validation_proxy import (
+    build_validation_proxy_proof_v2 as build_validation_proxy_proof,
+    validate_validation_proxy_proof_v2 as validate_validation_proxy_proof,
+)
 
 
 __all__ = [

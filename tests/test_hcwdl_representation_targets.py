@@ -62,6 +62,7 @@ from hlt_classification.scouting.hcwdl_representation_targets import (
     begin_target_generation,
     build_logical_target_bank,
     build_miniature_target_consumer_row,
+    build_nonfinal_acceptance_target_consumer_registry,
     build_target_consumer_registry,
     build_target_consumer_row,
     build_target_forward_spec,
@@ -237,6 +238,63 @@ def test_training_consumers_cannot_masquerade_as_miniature_and_bound_is_closed()
             logical, campaign_sha256=CAMPAIGN, recipe_sha256=RECIPE,
             bounded_row_limit=4097,
         )
+
+
+@pytest.mark.parametrize(
+    ("bank_id", "expected_trajectories", "expected_action_ids"),
+    (
+        (
+            "D0c",
+            {
+                "rset_m1c_two_update", "rrel_m1c_two_update",
+                "rrel_m1c_usr1_exact_resume",
+            },
+            {
+                "rset_m1c_two_update", "rrel_m1c_two_update",
+                "usr1_reference", "usr1_interrupt", "usr1_resume",
+            },
+        ),
+        (
+            "D0w",
+            {"rset_m1w_two_update", "rrel_m1w_two_update"},
+            {"rset_m1w_two_update", "rrel_m1w_two_update"},
+        ),
+    ),
+)
+def test_nonfinal_acceptance_target_consumers_are_exact_and_bounded(
+    bank_id: str, expected_trajectories: set[str], expected_action_ids: set[str],
+) -> None:
+    logical = _logical(bank_id)
+    registry = build_nonfinal_acceptance_target_consumer_registry(
+        logical,
+        acceptance_bootstrap_sha256=_sha("bootstrap"),
+        runtime_binding_sha256=_sha("runtime"),
+        source_runtime_row_sha256=_sha(f"runtime:{bank_id}"),
+        action_registry_sha256=_sha("actions"),
+        recipe_sha256=RECIPE,
+    )
+    validate_target_consumer_registry(registry, logical_bank=logical)
+    consumers = registry["payload"]["consumers"]
+    payloads = [row["execution_identity_payload"] for row in consumers]
+    assert {row["trajectory_id"] for row in payloads} == expected_trajectories
+    assert {
+        action_id for row in payloads for action_id in row["action_ids"]
+    } == expected_action_ids
+    assert {row["bounded_row_limit"] for row in payloads} == {512}
+    assert all(row["training_consumer_authorized"] is True for row in payloads)
+    for forbidden in (
+        "scientific_campaign_training_authorized", "pilot_submission_authorized",
+        "final_role_access_authorized", "shared_final_authorized",
+    ):
+        assert all(row[forbidden] is False for row in payloads)
+
+    forged = deepcopy(registry)
+    forged["payload"]["consumers"] = forged["payload"]["consumers"][:-1]
+    forged = with_content_hash({
+        name: value for name, value in forged.items() if name != "content_hash"
+    })
+    with pytest.raises(ValueError, match="consumer set differs"):
+        validate_target_consumer_registry(forged, logical_bank=logical)
 
 
 def test_target_builder_rechecks_miniature_bound_before_filesystem_mutation(tmp_path) -> None:

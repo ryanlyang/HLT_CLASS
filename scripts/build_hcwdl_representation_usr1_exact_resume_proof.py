@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prove an HCWDL-RKD two-update USR1 resume equals uninterrupted execution."""
+"""Reopen the three bounded HCWDL-RKD USR1 action-result envelopes."""
 
 from __future__ import annotations
 
@@ -15,20 +15,20 @@ from hlt_classification.scouting.hcwdl_representation_resources import artifact_
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--uninterrupted-report", type=Path, required=True)
-    parser.add_argument("--resumed-report", type=Path, required=True)
-    parser.add_argument("--resumed-state-directory", type=Path, required=True)
-    parser.add_argument("--resumed-sequence", type=int, required=True)
-    parser.add_argument("--source-commit", required=True)
-    parser.add_argument("--representation-recipe-sha256", required=True)
+    parser.add_argument("--authority", type=Path, required=True)
+    parser.add_argument("--reference-action-result", type=Path, required=True)
+    parser.add_argument("--interrupt-action-result", type=Path, required=True)
+    parser.add_argument("--resume-action-result", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     proof = build_usr1_exact_resume_proof(
-        uninterrupted_report=artifact_reference(args.uninterrupted_report),
-        resumed_report=artifact_reference(args.resumed_report),
-        resumed_state_directory=args.resumed_state_directory,
-        resumed_sequence=args.resumed_sequence, source_commit=args.source_commit,
-        representation_recipe_sha256=args.representation_recipe_sha256,
+        authority=artifact_reference(args.authority),
+        action_results={
+            "usr1_reference": artifact_reference(args.reference_action_result),
+            "usr1_interrupt": artifact_reference(args.interrupt_action_result),
+            "usr1_resume": artifact_reference(args.resume_action_result),
+        },
+        require_genuine=True,
     )
     publish(args.output, proof)
     return 0

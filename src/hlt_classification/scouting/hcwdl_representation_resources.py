@@ -9,12 +9,16 @@ import io
 import math
 import os
 from pathlib import Path, PurePosixPath
+import re
 import shlex
 import socket
+import subprocess
 import sys
+import shutil
 from typing import Any, Final
 
 from hlt_classification.data.cache_contracts import (
+    atomic_publish_bytes,
     canonical_sha256,
     load_json,
     require_sha256,
@@ -25,6 +29,7 @@ from hlt_classification.data.cache_contracts import (
 from .hcwdl_representation_contracts import (
     FIXED_SIZE_INVENTORY_CONTRACT,
     MINIATURE_EVIDENCE_CONTRACT,
+    NONFINAL_ACCEPTANCE_SCHEDULER_EVIDENCE_CONTRACT,
     RESOURCE_PROFILE_CONTRACT,
     SCHEDULER_EVIDENCE_CONTRACT,
     STORAGE_ESTIMATE_CONTRACT,
@@ -57,11 +62,22 @@ SACCT_FIELDS: Final = (
 )
 SACCT_FORMAT: Final = ",".join(SACCT_FIELDS)
 SACCT_COMMENT_PREFIX: Final = "hcwdl-rkd-evidence-v1:"
+NONFINAL_SACCT_COMMENT_PREFIX: Final = "hcwdl-rkd-nonfinal-v1:"
 FIXED_SIZE_KINDS: Final = (
     "retained_resume",
     "selected_checkpoint",
     "final_assignment",
     "fixed_artifact",
+)
+NONFINAL_COLLECTOR_WORKER: Final = (
+    "run_hcwdl_representation_nonfinal_evidence_collector.sh"
+)
+NONFINAL_COLLECTOR_CLI: Final = (
+    "build_hcwdl_representation_nonfinal_acceptance_scheduler_evidence.py"
+)
+NONFINAL_COLLECTOR_JOB_NAME: Final = "hcwdl-rkd-nonfinal-evidence-collector"
+_TIGRIS_CAPTURE_HOST: Final = re.compile(
+    r"^(?:tigris|gh-[a-z]+-[0-9]+)(?:\.[A-Za-z0-9.-]+)?$"
 )
 
 
@@ -204,9 +220,58 @@ def scheduler_evidence_comment(
     ))
 
 
-def _sacct_capture_command(job_id: int) -> list[str]:
+def _nonfinal_scheduler_binding_payload(
+    *, authority_sha256: str, action_id: str, resource_class: str,
+    source_commit: str, representation_recipe_sha256: str,
+    worker_role: str, worker_sha256: str, request: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Freeze one bounded non-final action into its pre-submission comment."""
+
+    if not action_id or action_id.startswith("train_") or "final/" in action_id:
+        raise PermissionError("non-final acceptance action identity is forbidden")
+    return {
+        "hash_domain": "hcwdl-representation-nonfinal-scheduler-binding/v1",
+        "schema_version": 1,
+        "authority_sha256": require_sha256(
+            authority_sha256, name="non-final acceptance authority",
+        ),
+        "action_id": str(action_id),
+        **{
+            name: value for name, value in _scheduler_binding_payload(
+                task_key=f"acceptance-nonfinal-{action_id}",
+                resource_class=resource_class,
+                source_commit=source_commit,
+                representation_recipe_sha256=representation_recipe_sha256,
+                worker_role=worker_role,
+                worker_sha256=worker_sha256,
+                request=request,
+            ).items()
+            if name not in {"hash_domain", "schema_version"}
+        },
+    }
+
+
+def nonfinal_acceptance_scheduler_comment(
+    *, authority_sha256: str, action_id: str, resource_class: str,
+    source_commit: str, representation_recipe_sha256: str,
+    worker_role: str, worker_sha256: str, request: Mapping[str, Any],
+) -> str:
+    """Return the exact reviewed comment for one non-final acceptance action."""
+
+    return NONFINAL_SACCT_COMMENT_PREFIX + canonical_sha256(
+        _nonfinal_scheduler_binding_payload(
+            authority_sha256=authority_sha256, action_id=action_id,
+            resource_class=resource_class, source_commit=source_commit,
+            representation_recipe_sha256=representation_recipe_sha256,
+            worker_role=worker_role, worker_sha256=worker_sha256,
+            request=request,
+        )
+    )
+
+
+def _sacct_capture_command(job_id: int, *, executable: str = "sacct") -> list[str]:
     return [
-        "sacct",
+        executable,
         "--jobs", str(job_id),
         "--starttime", "1970-01-01",
         "--duplicates",
@@ -219,6 +284,7 @@ def _sacct_capture_command(job_id: int) -> list[str]:
 def _validate_capture_runtime(value: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(value, Mapping) or set(value) != {
         "site", "cluster", "collector_job_id", "capture_host",
+        "account", "partition", "collector_job_name", "sacct_executable",
         "python_no_user_site", "conda_environment", "conda_prefix",
         "python_executable", "ld_library_path_prefix", "platform",
     }:
@@ -231,7 +297,11 @@ def _validate_capture_runtime(value: Mapping[str, Any]) -> dict[str, Any]:
     if (
         value["site"] != TIGRIS_SITE
         or value["cluster"] != TIGRIS_PARTITION
-        or not str(value["capture_host"])
+        or _TIGRIS_CAPTURE_HOST.fullmatch(str(value["capture_host"])) is None
+        or value["account"] != TIGRIS_ACCOUNT
+        or value["partition"] != TIGRIS_PARTITION
+        or value["collector_job_name"] != NONFINAL_COLLECTOR_JOB_NAME
+        or value["sacct_executable"] != "/usr/bin/sacct"
         or value["python_no_user_site"] is not True
         or value["conda_environment"] != "atlas_kd_tigris"
         or not conda_prefix.is_absolute()
@@ -252,12 +322,26 @@ def _live_tigris_capture_runtime() -> dict[str, Any]:
     if not raw_job.isdigit():
         raise PermissionError("authorizing sacct capture lacks its collector Slurm job")
     conda_prefix = Path(os.environ.get("CONDA_PREFIX", ""))
+    raw_sacct = Path(shutil.which("sacct") or "")
+    sacct = raw_sacct.resolve()
+    if (
+        str(sacct) != "/usr/bin/sacct"
+        or not sacct.is_file()
+        or raw_sacct.is_symlink()
+        or sacct.stat().st_uid != 0
+        or not os.access(sacct, os.X_OK)
+    ):
+        raise PermissionError("authorizing sacct capture lacks the trusted Slurm client")
     library_prefix = str(conda_prefix / "lib")
     runtime = {
         "site": TIGRIS_SITE,
         "cluster": os.environ.get("SLURM_CLUSTER_NAME"),
         "collector_job_id": int(raw_job),
         "capture_host": socket.getfqdn(),
+        "account": os.environ.get("SLURM_JOB_ACCOUNT"),
+        "partition": os.environ.get("SLURM_JOB_PARTITION"),
+        "collector_job_name": os.environ.get("SLURM_JOB_NAME"),
+        "sacct_executable": str(sacct),
         "python_no_user_site": os.environ.get("PYTHONNOUSERSITE") == "1",
         "conda_environment": os.environ.get("CONDA_DEFAULT_ENV"),
         "conda_prefix": str(conda_prefix),
@@ -275,6 +359,7 @@ def _live_tigris_capture_runtime() -> dict[str, Any]:
 def _parse_sacct_reference(
     reference: Mapping[str, Any], *, expected_worker_path: str,
     expected_comment: str, expected_task_key: str,
+    exact_script_argv: bool = False,
 ) -> dict[str, Any]:
     """Parse an exact raw ``sacct --parsable2`` capture, never a caller summary."""
 
@@ -321,7 +406,37 @@ def _parse_sacct_reference(
     except ValueError as error:
         raise ValueError("raw sacct submit line cannot be parsed") from error
     normalized_worker = str(Path(expected_worker_path))
-    if normalized_worker not in submit_tokens:
+    if exact_script_argv:
+        # The bounded workers consume authority/action through their frozen
+        # environment and accept no script arguments.  Requiring the reviewed
+        # worker to be the sole positional and final token prevents a command
+        # such as ``sbatch evil.sh /path/to/reviewed-worker.sh`` from acquiring
+        # the reviewed worker's lineage after the fact.  Long options are
+        # deliberately frozen to ``--name=value`` form (plus ``--parsable``),
+        # so there is no ambiguous option-value/positional parse.
+        if (
+            not submit_tokens
+            or PurePosixPath(submit_tokens[0]).name != "sbatch"
+            or len(submit_tokens) < 2
+            or submit_tokens[-1] != normalized_worker
+            or submit_tokens.count(normalized_worker) != 1
+            or any(
+                token != "--parsable"
+                and re.fullmatch(r"--[a-z0-9][a-z0-9-]*=.+", token) is None
+                for token in submit_tokens[1:-1]
+            )
+            or any(token.startswith("--wrap") for token in submit_tokens[1:-1])
+        ):
+            raise PermissionError("raw sacct submit line does not execute the exact worker argv")
+        required_options = {
+            f"--job-name={expected_job_name}",
+            f"--account={TIGRIS_ACCOUNT}",
+            f"--partition={TIGRIS_PARTITION}",
+            f"--comment={expected_comment}",
+        }
+        if not required_options.issubset(set(submit_tokens[1:-1])):
+            raise PermissionError("raw sacct submit line lacks exact bound Slurm options")
+    elif normalized_worker not in submit_tokens:
         raise PermissionError("raw sacct submit line lacks the exact production worker")
     completed = [row for row in rows if row["State"].split("+", 1)[0] == "COMPLETED"]
     if len(completed) != len(rows) or any(row["ExitCode"] != "0:0" for row in rows):
@@ -354,6 +469,7 @@ def _parse_sacct_reference(
         "peak_rss_bytes": max(rss_values),
         "binding_comment": parent["Comment"],
         "submit_line": parent["SubmitLine"],
+        "submit_argv": submit_tokens,
     }
 
 
@@ -964,6 +1080,437 @@ def build_scheduler_evidence_from_sacct(
     return artifact
 
 
+def _nonfinal_scheduler_artifact(
+    *, authority_sha256: str, action_id: str, resource_class: str,
+    source_commit: str, representation_recipe_sha256: str,
+    worker_role: str, worker: Mapping[str, Any], request: Mapping[str, Any],
+    parsed: Mapping[str, Any] | None, raw_accounting_record: Mapping[str, Any] | None,
+    capture_runtime: Mapping[str, Any] | None, local_job_id: int | None = None,
+    local_peak_rss_bytes: int | None = None, local_elapsed_seconds: int | float | None = None,
+    collector_produced_raw_bytes: bool = False,
+    collector_entrypoint: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    worker_reference = dict(worker)
+    worker_path, worker_sha256 = _validate_file_reference(
+        worker_reference, name=f"{worker_role} non-final acceptance worker",
+    )
+    authority = require_sha256(
+        authority_sha256, name="non-final acceptance authority",
+    )
+    recipe = require_sha256(
+        representation_recipe_sha256, name="non-final representation recipe",
+    )
+    task_key = f"acceptance-nonfinal-{action_id}"
+    if parsed is None:
+        if local_job_id is None or local_peak_rss_bytes is None or local_elapsed_seconds is None:
+            raise ValueError("local non-final scheduler fixture is incomplete")
+        observed = {
+            "job_id": _positive_integer(local_job_id, name="Slurm job ID"),
+            "job_name": f"hcwdl_rkd_{task_key}",
+            "account": TIGRIS_ACCOUNT,
+            "partition": TIGRIS_PARTITION,
+            "state": "COMPLETED",
+            "exit_code": "0:0",
+            "requested_cpus": int(request["cpus"]),
+            "requested_memory_bytes": _memory_bytes(request["memory"]),
+            "requested_gpu": request["gpu"],
+            "peak_rss_bytes": _positive_integer(
+                local_peak_rss_bytes, name="peak RSS bytes",
+            ),
+            "elapsed_seconds": local_elapsed_seconds,
+            "binding_comment": None,
+            "submit_line": None,
+        }
+        origin = "local_fixture/v1"
+        authorization_capable = False
+        capture_command = None
+        raw_accounting_sha256 = None
+        collector_identity_sha256 = None
+        submit_argv = None
+        normalized_collector_entrypoint = None
+    else:
+        observed = dict(parsed)
+        origin = "tigris_sacct_raw/v1"
+        authorization_capable = True
+        capture_command = _sacct_capture_command(int(parsed["job_id"]))
+        if raw_accounting_record is None or capture_runtime is None:
+            raise ValueError("genuine non-final scheduler capture is incomplete")
+        raw_accounting_sha256 = require_sha256(
+            raw_accounting_record.get("sha256"), name="raw sacct accounting bytes",
+        )
+        collector_identity_sha256 = canonical_sha256({
+            "hash_domain": "hcwdl-representation-nonfinal-sacct-collector/v1",
+            "schema_version": 1,
+            "target_job_id": int(parsed["job_id"]),
+            "capture_command": capture_command,
+            "raw_accounting_record": dict(raw_accounting_record),
+            "capture_runtime": dict(capture_runtime),
+            "collector_entrypoint": dict(collector_entrypoint or {}),
+        })
+        submit_argv = list(parsed["submit_argv"])
+        normalized_collector_entrypoint = dict(collector_entrypoint or {})
+    artifact = with_content_hash({
+        "contract": NONFINAL_ACCEPTANCE_SCHEDULER_EVIDENCE_CONTRACT,
+        "schema_version": 1,
+        "authority_sha256": authority,
+        "action_id": str(action_id),
+        "job_id": observed["job_id"],
+        "task_key": task_key,
+        "resource_class": resource_class,
+        "site": TIGRIS_SITE,
+        "account": observed["account"],
+        "partition": observed["partition"],
+        "source_commit": _full_source_commit(source_commit),
+        "representation_recipe_sha256": recipe,
+        "python_no_user_site": True,
+        "worker_role": worker_role,
+        "worker": worker_reference,
+        "requested_cpus": observed["requested_cpus"],
+        "requested_memory_bytes": observed["requested_memory_bytes"],
+        "requested_walltime_seconds": _walltime_seconds(request["walltime"]),
+        "requested_gpu": observed["requested_gpu"],
+        "state": observed["state"],
+        "exit_code": observed["exit_code"],
+        "peak_rss_bytes": observed["peak_rss_bytes"],
+        "elapsed_seconds": observed["elapsed_seconds"],
+        "evidence_origin": origin,
+        "raw_accounting_record": (
+            None if raw_accounting_record is None else dict(raw_accounting_record)
+        ),
+        "raw_accounting_sha256": raw_accounting_sha256,
+        "capture_command": capture_command,
+        "job_name": observed["job_name"],
+        "binding_comment": observed["binding_comment"],
+        "submit_line": observed["submit_line"],
+        "submit_argv": submit_argv,
+        "capture_runtime": None if capture_runtime is None else dict(capture_runtime),
+        "collector_identity_sha256": collector_identity_sha256,
+        "collector_produced_raw_bytes": collector_produced_raw_bytes,
+        "collector_entrypoint": normalized_collector_entrypoint,
+        "authorization_capable": authorization_capable,
+        "final_role_accessed": False,
+        "pilot_submission_authorized": False,
+    })
+    validate_nonfinal_acceptance_scheduler_evidence(
+        artifact, expected_authority_sha256=authority,
+        expected_action_id=action_id, request=request,
+        expected_source_commit=source_commit,
+        expected_recipe_sha256=recipe,
+        expected_worker=worker_reference,
+        expected_resource_class=resource_class,
+        expected_worker_role=worker_role,
+    )
+    return artifact
+
+
+def build_nonfinal_acceptance_scheduler_evidence(
+    *, authority_sha256: str, action_id: str, job_id: int,
+    resource_class: str, source_commit: str,
+    representation_recipe_sha256: str, worker_role: str,
+    worker: Mapping[str, Any], request: Mapping[str, Any],
+    peak_rss_bytes: int = 1, elapsed_seconds: int | float = 1,
+) -> dict[str, Any]:
+    """Build an explicitly nonauthorizing local action-scheduler fixture."""
+
+    return _nonfinal_scheduler_artifact(
+        authority_sha256=authority_sha256, action_id=action_id,
+        resource_class=resource_class, source_commit=source_commit,
+        representation_recipe_sha256=representation_recipe_sha256,
+        worker_role=worker_role, worker=worker, request=request, parsed=None,
+        raw_accounting_record=None, capture_runtime=None, local_job_id=job_id,
+        local_peak_rss_bytes=peak_rss_bytes,
+        local_elapsed_seconds=elapsed_seconds,
+    )
+
+
+def build_nonfinal_acceptance_scheduler_evidence_from_sacct(
+    *, authority_sha256: str, action_id: str,
+    raw_accounting_record: Mapping[str, Any], resource_class: str,
+    source_commit: str, representation_recipe_sha256: str,
+    worker_role: str, worker: Mapping[str, Any], request: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Reject caller-supplied bytes at the authorizing non-final boundary.
+
+    Genuine bounded-action evidence must use
+    :func:`capture_nonfinal_acceptance_scheduler_evidence`, which executes the
+    frozen ``sacct`` command itself inside a distinct live collector job.
+    """
+
+    raise PermissionError(
+        "caller-supplied sacct bytes cannot authorize a non-final action; "
+        "use the live collector"
+    )
+
+
+def _validate_nonfinal_submit_request(
+    submit_argv: Sequence[str], *, request: Mapping[str, Any],
+) -> None:
+    options = tuple(submit_argv[1:-1])
+    required = {
+        f"--cpus-per-task={int(request['cpus'])}",
+        f"--mem={request['memory']}",
+        f"--time={request['walltime']}",
+    }
+    if request["gpu"] is not None:
+        required.add(f"--gres={request['gpu']}")
+    prefixes = ("--cpus-per-task=", "--mem=", "--time=", "--gres=")
+    scoped = [token for token in options if token.startswith(prefixes)]
+    if not required.issubset(set(options)) or len(scoped) != len(required):
+        raise PermissionError("raw sacct submit argv resource request differs")
+
+
+def capture_nonfinal_acceptance_scheduler_evidence(
+    *, authority_sha256: str, action_id: str, job_id: int,
+    raw_accounting_output: str | Path, resource_class: str,
+    source_commit: str, representation_recipe_sha256: str,
+    worker_role: str, worker: Mapping[str, Any], request: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Capture raw accounting bytes in a distinct live Tigris collector job."""
+
+    if resource_class not in PLANNING_RESOURCES or worker_role not in WORKER_ROLES:
+        raise ValueError("non-final scheduler resource or worker role differs")
+    worker_reference = dict(worker)
+    worker_path, worker_sha256 = _validate_file_reference(
+        worker_reference, name=f"{worker_role} non-final acceptance worker",
+    )
+    expected_comment = nonfinal_acceptance_scheduler_comment(
+        authority_sha256=authority_sha256, action_id=action_id,
+        resource_class=resource_class, source_commit=source_commit,
+        representation_recipe_sha256=representation_recipe_sha256,
+        worker_role=worker_role, worker_sha256=worker_sha256, request=request,
+    )
+    target_job_id = _positive_integer(job_id, name="non-final target Slurm job ID")
+    capture_runtime = _live_tigris_capture_runtime()
+    if int(capture_runtime["collector_job_id"]) == target_job_id:
+        raise PermissionError("sacct collector job must differ from the target job")
+    if os.environ.get("HCWDL_NONFINAL_EVIDENCE_COLLECTOR") != "1":
+        raise PermissionError("non-final sacct capture lacks the collector worker marker")
+    project_root = worker_path.resolve().parent.parent
+    if worker_path.resolve().parent.name != "sbatch":
+        raise PermissionError("non-final action worker lacks canonical project context")
+    collector_worker = project_root / "sbatch" / NONFINAL_COLLECTOR_WORKER
+    collector_cli = project_root / "scripts" / NONFINAL_COLLECTOR_CLI
+    collector_entrypoint = {
+        "worker": artifact_reference(collector_worker),
+        "cli": artifact_reference(collector_cli),
+        "environment_marker": "HCWDL_NONFINAL_EVIDENCE_COLLECTOR=1",
+    }
+    from .hcwdl_representation_campaign import validate_source_checkout
+
+    validate_source_checkout(project_root, expected_commit=source_commit)
+    capture_command = _sacct_capture_command(
+        target_job_id, executable=str(capture_runtime["sacct_executable"]),
+    )
+    completed = subprocess.run(
+        capture_command, check=True, capture_output=True,
+    )
+    raw_bytes = bytes(completed.stdout)
+    if not raw_bytes:
+        raise PermissionError("live sacct collector returned no accounting bytes")
+    raw_path = Path(raw_accounting_output).resolve()
+    if raw_path.exists():
+        raise FileExistsError("live sacct output path already exists")
+    if atomic_publish_bytes(raw_path, raw_bytes) != "published":
+        raise FileExistsError("live sacct output was not freshly collector-produced")
+    raw_accounting_record = artifact_reference(raw_path)
+    parsed = _parse_sacct_reference(
+        raw_accounting_record, expected_worker_path=str(worker_path),
+        expected_comment=expected_comment,
+        expected_task_key=f"acceptance-nonfinal-{action_id}",
+        exact_script_argv=True,
+    )
+    if int(parsed["job_id"]) != target_job_id:
+        raise PermissionError("live sacct capture returned a different target job")
+    _validate_nonfinal_submit_request(parsed["submit_argv"], request=request)
+    return _nonfinal_scheduler_artifact(
+        authority_sha256=authority_sha256, action_id=action_id,
+        resource_class=resource_class, source_commit=source_commit,
+        representation_recipe_sha256=representation_recipe_sha256,
+        worker_role=worker_role, worker=worker_reference, request=request,
+        parsed=parsed, raw_accounting_record=raw_accounting_record,
+        capture_runtime=capture_runtime, collector_produced_raw_bytes=True,
+        collector_entrypoint=collector_entrypoint,
+    )
+
+
+def validate_nonfinal_acceptance_scheduler_evidence(
+    value: Mapping[str, Any], *, expected_authority_sha256: str,
+    expected_action_id: str, request: Mapping[str, Any],
+    expected_source_commit: str, expected_recipe_sha256: str,
+    expected_worker: Mapping[str, Any], expected_resource_class: str,
+    expected_worker_role: str, require_genuine: bool = False,
+) -> str:
+    """Validate exact action, authority, worker and raw Slurm lineage."""
+
+    digest = validate_content_hash(
+        value, expected_contract=NONFINAL_ACCEPTANCE_SCHEDULER_EVIDENCE_CONTRACT,
+        expected_schema_version=1,
+    )
+    expected_fields = {
+        "contract", "schema_version", "authority_sha256", "action_id",
+        "job_id", "task_key", "resource_class", "site", "account",
+        "partition", "source_commit", "representation_recipe_sha256",
+        "python_no_user_site", "worker_role", "worker", "requested_cpus",
+        "requested_memory_bytes", "requested_walltime_seconds", "requested_gpu",
+        "state", "exit_code", "peak_rss_bytes", "elapsed_seconds",
+        "evidence_origin", "raw_accounting_record", "capture_command",
+        "raw_accounting_sha256", "job_name", "binding_comment", "submit_line",
+        "submit_argv", "capture_runtime", "collector_identity_sha256",
+        "collector_produced_raw_bytes", "collector_entrypoint",
+        "authorization_capable", "final_role_accessed",
+        "pilot_submission_authorized", "content_hash",
+    }
+    if set(value) != expected_fields:
+        raise PermissionError("non-final scheduler evidence fields differ")
+    authority = require_sha256(
+        expected_authority_sha256, name="non-final acceptance authority",
+    )
+    action_id = str(expected_action_id)
+    if (
+        value["authority_sha256"] != authority
+        or value["action_id"] != action_id
+        or value["task_key"] != f"acceptance-nonfinal-{action_id}"
+        or value["source_commit"] != _full_source_commit(expected_source_commit)
+        or value["representation_recipe_sha256"]
+        != require_sha256(expected_recipe_sha256, name="expected recipe")
+        or value["worker"] != dict(expected_worker)
+        or value["resource_class"] != expected_resource_class
+        or value["worker_role"] != expected_worker_role
+        or value["final_role_accessed"] is not False
+        or value["pilot_submission_authorized"] is not False
+    ):
+        raise PermissionError("non-final scheduler authority or lineage differs")
+    _, worker_sha256 = _validate_file_reference(
+        value["worker"], name="non-final acceptance worker",
+    )
+    if (
+        value["site"] != TIGRIS_SITE
+        or value["account"] != TIGRIS_ACCOUNT
+        or value["partition"] != TIGRIS_PARTITION
+        or value["python_no_user_site"] is not True
+        or value["state"] != "COMPLETED"
+        or value["exit_code"] != "0:0"
+        or value["requested_cpus"] != int(request["cpus"])
+        or value["requested_memory_bytes"] != _memory_bytes(request["memory"])
+        or value["requested_walltime_seconds"] != _walltime_seconds(request["walltime"])
+        or value["requested_gpu"] != request["gpu"]
+    ):
+        raise PermissionError("non-final scheduler environment or request differs")
+    rss = _positive_integer(value["peak_rss_bytes"], name="peak RSS bytes")
+    elapsed = float(value["elapsed_seconds"])
+    if not 0 < elapsed <= value["requested_walltime_seconds"] or rss > (
+        3 * value["requested_memory_bytes"]
+    ) // 4:
+        raise PermissionError("non-final scheduler resource measurement differs")
+    origin = value["evidence_origin"]
+    if origin == "local_fixture/v1":
+        if any(value[name] is not None for name in (
+            "raw_accounting_record", "capture_command", "binding_comment",
+            "raw_accounting_sha256", "submit_line", "submit_argv",
+            "capture_runtime", "collector_identity_sha256",
+            "collector_entrypoint",
+        )) or value["collector_produced_raw_bytes"] is not False or value[
+            "authorization_capable"
+        ] is not False:
+            raise PermissionError("local non-final scheduler fixture claims authority")
+        if require_genuine:
+            raise PermissionError("non-final scheduler evidence is a local fixture")
+        return digest
+    if origin != "tigris_sacct_raw/v1" or value["authorization_capable"] is not True:
+        raise PermissionError("non-final scheduler evidence origin differs")
+    capture_runtime = _validate_capture_runtime(value["capture_runtime"])
+    if (
+        value["collector_produced_raw_bytes"] is not True
+        or int(capture_runtime["collector_job_id"]) == int(value["job_id"])
+    ):
+        raise PermissionError("non-final scheduler evidence lacks a distinct live collector")
+    entrypoint = value["collector_entrypoint"]
+    if not isinstance(entrypoint, Mapping) or set(entrypoint) != {
+        "worker", "cli", "environment_marker",
+    }:
+        raise PermissionError("non-final scheduler collector entrypoint differs")
+    raw_path, raw_sha256 = _validate_file_reference(
+        value["raw_accounting_record"], name="raw sacct accounting record",
+    )
+    if (
+        value["raw_accounting_sha256"] != raw_sha256
+        or value["raw_accounting_record"].get("path") != str(raw_path)
+    ):
+        raise PermissionError("non-final scheduler raw accounting bytes differ")
+    expected_comment = nonfinal_acceptance_scheduler_comment(
+        authority_sha256=authority, action_id=action_id,
+        resource_class=str(value["resource_class"]),
+        source_commit=expected_source_commit,
+        representation_recipe_sha256=expected_recipe_sha256,
+        worker_role=str(value["worker_role"]), worker_sha256=worker_sha256,
+        request=request,
+    )
+    worker_path, _ = _validate_file_reference(
+        value["worker"], name="non-final acceptance worker",
+    )
+    parsed = _parse_sacct_reference(
+        value["raw_accounting_record"], expected_worker_path=str(worker_path),
+        expected_comment=expected_comment,
+        expected_task_key=f"acceptance-nonfinal-{action_id}",
+        exact_script_argv=True,
+    )
+    _validate_nonfinal_submit_request(parsed["submit_argv"], request=request)
+    expected_raw = {
+        "job_id": parsed["job_id"], "job_name": parsed["job_name"],
+        "account": parsed["account"], "partition": parsed["partition"],
+        "state": parsed["state"], "exit_code": parsed["exit_code"],
+        "requested_cpus": parsed["requested_cpus"],
+        "requested_memory_bytes": parsed["requested_memory_bytes"],
+        "requested_gpu": parsed["requested_gpu"],
+        "peak_rss_bytes": parsed["peak_rss_bytes"],
+        "elapsed_seconds": parsed["elapsed_seconds"],
+        "binding_comment": parsed["binding_comment"],
+        "submit_line": parsed["submit_line"],
+        "submit_argv": parsed["submit_argv"],
+    }
+    if any(value[name] != expected for name, expected in expected_raw.items()):
+        raise PermissionError("non-final scheduler evidence differs from raw sacct")
+    if value["capture_command"] != _sacct_capture_command(parsed["job_id"]):
+        raise PermissionError("non-final scheduler capture command differs")
+    expected_collector_identity = canonical_sha256({
+        "hash_domain": "hcwdl-representation-nonfinal-sacct-collector/v1",
+        "schema_version": 1,
+        "target_job_id": int(parsed["job_id"]),
+        "capture_command": value["capture_command"],
+        "raw_accounting_record": dict(value["raw_accounting_record"]),
+        "capture_runtime": dict(value["capture_runtime"]),
+        "collector_entrypoint": dict(entrypoint),
+    })
+    if value["collector_identity_sha256"] != expected_collector_identity:
+        raise PermissionError("non-final scheduler collector identity differs")
+    if parsed["cluster"] != TIGRIS_PARTITION or parsed["timelimit_minutes"] != math.ceil(
+        value["requested_walltime_seconds"] / 60
+    ):
+        raise PermissionError("non-final scheduler cluster or timelimit differs")
+    worker_root = Path(worker_path).resolve().parent.parent
+    if Path(worker_path).resolve().parent.name != "sbatch":
+        raise PermissionError("non-final scheduler worker is outside canonical project context")
+    from .hcwdl_representation_campaign import validate_source_checkout
+
+    collector_worker, _ = _validate_file_reference(
+        entrypoint["worker"], name="non-final evidence collector worker",
+    )
+    collector_cli, _ = _validate_file_reference(
+        entrypoint["cli"], name="non-final evidence collector CLI",
+    )
+    if (
+        collector_worker.resolve()
+        != worker_root / "sbatch" / NONFINAL_COLLECTOR_WORKER
+        or collector_cli.resolve() != worker_root / "scripts" / NONFINAL_COLLECTOR_CLI
+        or entrypoint["environment_marker"]
+        != "HCWDL_NONFINAL_EVIDENCE_COLLECTOR=1"
+    ):
+        raise PermissionError("non-final scheduler collector source identity differs")
+
+    validate_source_checkout(worker_root, expected_commit=expected_source_commit)
+    return digest
+
+
 def build_miniature_evidence(
     *, evidence_kind: str, scheduler_evidence: Mapping[str, Any],
     representation_recipe_sha256: str | None, rows: int,
@@ -1044,8 +1591,8 @@ def build_miniature_evidence(
         "semantic_result_authenticated": result_reference is not None,
         "authorization_capable": authorization_capable,
         "final_role_access": (
-            "validation_proxy_only"
-            if evidence_kind == "final_role_validation_proxy"
+            "validation_only_proxy"
+            if evidence_kind == "validation_only_proxy"
             else "none"
         ),
     })
@@ -1157,8 +1704,8 @@ def validate_miniature_evidence(
         ):
             raise PermissionError("miniature result execution lineage differs")
     expected_access = (
-        "validation_proxy_only"
-        if expected_kind == "final_role_validation_proxy"
+        "validation_only_proxy"
+        if expected_kind == "validation_only_proxy"
         else "none"
     )
     if value["final_role_access"] != expected_access:
@@ -1363,17 +1910,24 @@ def build_measured_profile(
 __all__ = [
     "FIXED_SIZE_INVENTORY_CONTRACT", "FIXED_SIZE_KINDS",
     "MINIATURE_EVIDENCE_CONTRACT", "PLANNING_RESOURCES",
+    "NONFINAL_ACCEPTANCE_SCHEDULER_EVIDENCE_CONTRACT",
+    "NONFINAL_COLLECTOR_CLI", "NONFINAL_COLLECTOR_WORKER",
     "RESOURCE_PROFILE_CONTRACT", "ResourceRequest", "SCHEDULER_EVIDENCE_CONTRACT",
     "SACCT_FIELDS", "SACCT_FORMAT", "SCHEDULER_EVIDENCE_ORIGINS",
     "SMOKE_RESOURCES", "STORAGE_ESTIMATE_CONTRACT", "TIGRIS_ACCOUNT",
     "TIGRIS_PARTITION", "TIGRIS_SITE", "WORKER_ROLES", "artifact_reference",
     "build_fixed_size_inventory", "build_measured_profile",
     "build_miniature_evidence", "build_scheduler_evidence",
+    "build_nonfinal_acceptance_scheduler_evidence",
+    "build_nonfinal_acceptance_scheduler_evidence_from_sacct",
+    "capture_nonfinal_acceptance_scheduler_evidence",
     "build_scheduler_evidence_from_sacct",
     "build_storage_estimate",
     "load_authenticated_json_reference", "resource_table",
     "scheduler_evidence_comment",
+    "nonfinal_acceptance_scheduler_comment",
     "validate_fixed_size_inventory", "validate_measured_profile",
     "validate_miniature_evidence", "validate_scheduler_evidence",
+    "validate_nonfinal_acceptance_scheduler_evidence",
     "validate_storage_estimate",
 ]

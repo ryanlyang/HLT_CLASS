@@ -82,6 +82,25 @@ TOKEN_KERNEL_DIM: Final = 1024
 RELATION_KERNEL_DIM: Final = 256
 RELATION_STRATA: Final = ("local", "medium", "wide")
 TARGET_FORWARD_BATCH_SIZE: Final = 256
+NONFINAL_ACCEPTANCE_TARGET_PURPOSE: Final = "nonfinal_acceptance"
+NONFINAL_ACCEPTANCE_TARGET_CONSUMER_CONTRACT: Final = (
+    "HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_TARGET_CONSUMER/v1"
+)
+NONFINAL_ACCEPTANCE_TARGET_ROWS: Final = 512
+NONFINAL_ACCEPTANCE_TARGET_TRAJECTORIES: Final = {
+    "D0c": {
+        "rset_m1c_two_update": (("rset_m1c_two_update",), "RSET_M1c"),
+        "rrel_m1c_two_update": (("rrel_m1c_two_update",), "RREL_M1c"),
+        "rrel_m1c_usr1_exact_resume": (
+            ("usr1_reference", "usr1_interrupt", "usr1_resume"),
+            "RREL_M1c",
+        ),
+    },
+    "D0w": {
+        "rset_m1w_two_update": (("rset_m1w_two_update",), "RSET_M1w"),
+        "rrel_m1w_two_update": (("rrel_m1w_two_update",), "RREL_M1w"),
+    },
+}
 KERNEL_RESOURCE_NAMES: Final = (
     "token_rbf_sigma_0p10", "token_rbf_sigma_0p25", "token_rbf_sigma_0p50",
     "token_rbf_sigma_1p00", "relation_rbf_sigma_0p05", "relation_rbf_sigma_0p10",
@@ -612,6 +631,106 @@ def build_miniature_target_consumer_row(
     }
 
 
+def build_nonfinal_acceptance_target_consumer_row(
+    logical_bank: Mapping[str, Any], *, trajectory_id: str,
+    acceptance_bootstrap_sha256: str, runtime_binding_sha256: str,
+    source_runtime_row_sha256: str, action_registry_sha256: str,
+    recipe_sha256: str,
+) -> dict[str, Any]:
+    """Build one bounded training consumer without impersonating a campaign row."""
+
+    logical_hash = validate_logical_target_bank(logical_bank)
+    bank_id = str(logical_bank["payload"]["logical_bank_id"])
+    trajectories = NONFINAL_ACCEPTANCE_TARGET_TRAJECTORIES.get(bank_id)
+    if trajectories is None or trajectory_id not in trajectories:
+        raise ValueError("non-final acceptance target trajectory differs")
+    action_ids, node_id = trajectories[trajectory_id]
+    spec = _consumer_node_spec(node_id)
+    if spec.target_bank_identity != bank_id:
+        raise ValueError("non-final acceptance target consumer uses the wrong bank")
+    short_strategy = "RSET" if str(spec.strategy).endswith("SET/v1") else "RREL"
+    payload = {
+        "contract": NONFINAL_ACCEPTANCE_TARGET_CONSUMER_CONTRACT,
+        "acceptance_bootstrap_sha256": require_sha256(
+            acceptance_bootstrap_sha256, name="acceptance bootstrap",
+        ),
+        "runtime_binding_sha256": require_sha256(
+            runtime_binding_sha256, name="acceptance runtime binding",
+        ),
+        "source_runtime_row_sha256": require_sha256(
+            source_runtime_row_sha256, name="acceptance source runtime row",
+        ),
+        "action_registry_sha256": require_sha256(
+            action_registry_sha256, name="acceptance action registry",
+        ),
+        "representation_recipe_sha256": require_sha256(
+            recipe_sha256, name="acceptance representation recipe",
+        ),
+        "logical_target_bank": logical_hash,
+        "logical_bank_id": bank_id,
+        "purpose": NONFINAL_ACCEPTANCE_TARGET_PURPOSE,
+        "trajectory_id": trajectory_id,
+        "action_ids": list(action_ids),
+        "node_id": node_id,
+        "strategy": short_strategy,
+        "track": str(spec.track),
+        "seed": 1337,
+        "role": "train",
+        "bounded_row_limit": NONFINAL_ACCEPTANCE_TARGET_ROWS,
+        "training_consumer_authorized": True,
+        "authorization_scope": "bounded_nonfinal_acceptance_only",
+        "scientific_campaign_training_authorized": False,
+        "pilot_submission_authorized": False,
+        "final_role_access_authorized": False,
+        "shared_final_authorized": False,
+    }
+    return {
+        "execution_id": canonical_sha256(payload),
+        "execution_identity_payload": payload,
+        "node_id": node_id,
+        "strategy": short_strategy,
+        "track": str(spec.track),
+        "seed": 1337,
+    }
+
+
+def build_nonfinal_acceptance_target_consumer_registry(
+    logical_bank: Mapping[str, Any], *, acceptance_bootstrap_sha256: str,
+    runtime_binding_sha256: str, source_runtime_row_sha256: str,
+    action_registry_sha256: str, recipe_sha256: str,
+) -> dict[str, Any]:
+    """Build the exact D0c/D0w bounded consumer set and generation parent."""
+
+    bank_id = str(logical_bank["payload"]["logical_bank_id"])
+    trajectories = NONFINAL_ACCEPTANCE_TARGET_TRAJECTORIES.get(bank_id)
+    if trajectories is None:
+        raise ValueError("non-final acceptance target bank differs")
+    consumers = [
+        build_nonfinal_acceptance_target_consumer_row(
+            logical_bank, trajectory_id=trajectory_id,
+            acceptance_bootstrap_sha256=acceptance_bootstrap_sha256,
+            runtime_binding_sha256=runtime_binding_sha256,
+            source_runtime_row_sha256=source_runtime_row_sha256,
+            action_registry_sha256=action_registry_sha256,
+            recipe_sha256=recipe_sha256,
+        )
+        for trajectory_id in trajectories
+    ]
+    generation_parent = canonical_sha256({
+        "contract": "HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_TARGET_PARENT/v1",
+        "acceptance_bootstrap_sha256": acceptance_bootstrap_sha256,
+        "runtime_binding_sha256": runtime_binding_sha256,
+        "source_runtime_row_sha256": source_runtime_row_sha256,
+        "action_registry_sha256": action_registry_sha256,
+        "representation_recipe_sha256": recipe_sha256,
+        "logical_bank_id": bank_id,
+    })
+    return build_target_consumer_registry(
+        logical_bank, purpose=NONFINAL_ACCEPTANCE_TARGET_PURPOSE,
+        consumers=consumers, generation_parent_sha256=generation_parent,
+    )
+
+
 def _validate_consumer_rows(
     rows: Sequence[Mapping[str, Any]], *, logical_bank: Mapping[str, Any], purpose: str,
 ) -> list[dict[str, Any]]:
@@ -659,6 +778,27 @@ def _validate_consumer_rows(
                 raise ValueError("HCWDL-RKD miniature consumer semantics differ")
             require_sha256(payload.get("campaign"), name="miniature campaign")
             require_sha256(payload.get("recipe"), name="miniature recipe")
+            normalized.append(item)
+            continue
+        if purpose == NONFINAL_ACCEPTANCE_TARGET_PURPOSE:
+            payload = item.get("execution_identity_payload")
+            if not isinstance(payload, Mapping):
+                raise ValueError("non-final acceptance consumer payload differs")
+            expected = build_nonfinal_acceptance_target_consumer_row(
+                logical_bank,
+                trajectory_id=str(payload.get("trajectory_id", "")),
+                acceptance_bootstrap_sha256=str(
+                    payload.get("acceptance_bootstrap_sha256", "")
+                ),
+                runtime_binding_sha256=str(payload.get("runtime_binding_sha256", "")),
+                source_runtime_row_sha256=str(
+                    payload.get("source_runtime_row_sha256", "")
+                ),
+                action_registry_sha256=str(payload.get("action_registry_sha256", "")),
+                recipe_sha256=str(payload.get("representation_recipe_sha256", "")),
+            )
+            if item != expected:
+                raise ValueError("non-final acceptance target consumer semantics differ")
             normalized.append(item)
             continue
         if item["strategy"] not in {"RSET", "RREL"} or item["track"] not in {"cold", "warm"}:
@@ -725,6 +865,14 @@ def _validate_consumer_rows(
     elif purpose == "miniature":
         if len(normalized) != 1:
             raise ValueError("HCWDL-RKD miniature target registry must have one verifier")
+    elif purpose == NONFINAL_ACCEPTANCE_TARGET_PURPOSE:
+        trajectories = NONFINAL_ACCEPTANCE_TARGET_TRAJECTORIES.get(bank_id)
+        if trajectories is None or {
+            row["execution_identity_payload"]["trajectory_id"] for row in normalized
+        } != set(trajectories):
+            raise ValueError("non-final acceptance target consumer set differs")
+        if len(normalized) != len(trajectories):
+            raise ValueError("non-final acceptance target registry repeats a trajectory")
     else:
         raise ValueError("unknown HCWDL-RKD target purpose")
     return sorted(normalized, key=lambda row: row["execution_id"])
@@ -955,7 +1103,10 @@ def derive_target_generation_id(
     logical_bank_sha256: str, consumer_registry_sha256: str,
     *, purpose: str, generation_parent_sha256: str,
 ) -> str:
-    if purpose not in {"screen", "confirmation", "recovery", "miniature"}:
+    if purpose not in {
+        "screen", "confirmation", "recovery", "miniature",
+        NONFINAL_ACCEPTANCE_TARGET_PURPOSE,
+    }:
         raise ValueError("unknown HCWDL-RKD target generation purpose")
     return canonical_sha256({
         "logical_bank_sha256": require_sha256(
@@ -1204,17 +1355,24 @@ def _validate_build_intent_semantics(context: TargetGenerationContext) -> None:
         or sum(class_counts) != rows
     ):
         raise ValueError("HCWDL-RKD target build-intent population differs")
-    if payload["purpose"] == "miniature":
+    if payload["purpose"] in {"miniature", NONFINAL_ACCEPTANCE_TARGET_PURPOSE}:
         consumers = context.consumer_registry["payload"].get("consumers", ())
-        if len(consumers) != 1:
+        if payload["purpose"] == "miniature" and len(consumers) != 1:
             raise ValueError("HCWDL-RKD miniature target registry differs")
-        identity_payload = consumers[0].get("execution_identity_payload", {})
-        limit = identity_payload.get("bounded_row_limit")
+        limits = {
+            row.get("execution_identity_payload", {}).get("bounded_row_limit")
+            for row in consumers if isinstance(row, Mapping)
+        }
+        limit = next(iter(limits)) if len(limits) == 1 else None
         if (
             isinstance(limit, bool) or not isinstance(limit, int)
             or not 1 <= limit <= 4096 or rows > limit
         ):
-            raise ValueError("HCWDL-RKD miniature target rows exceed the bounded row limit")
+            raise ValueError(
+                "HCWDL-RKD miniature target rows exceed the bounded row limit"
+                if payload["purpose"] == "miniature"
+                else "HCWDL-RKD non-final target rows exceed their row limit"
+            )
     require_sha256(
         payload["expected_identity_order_sha256"],
         name="target build expected identity-order SHA-256",
@@ -1323,17 +1481,22 @@ def begin_target_generation(
     rows = sum(record["rows"] for record in partition_specs.values())
     if sum(class_counts) != rows:
         raise ValueError("HCWDL-RKD expected class counts do not conserve rows")
-    if payload["purpose"] == "miniature":
+    if payload["purpose"] in {"miniature", NONFINAL_ACCEPTANCE_TARGET_PURPOSE}:
         consumers = payload.get("consumers", ())
-        limit = (
-            consumers[0].get("execution_identity_payload", {}).get("bounded_row_limit")
-            if len(consumers) == 1 else None
-        )
+        limits = {
+            row.get("execution_identity_payload", {}).get("bounded_row_limit")
+            for row in consumers if isinstance(row, Mapping)
+        }
+        limit = next(iter(limits)) if len(limits) == 1 else None
         if (
             isinstance(limit, bool) or not isinstance(limit, int)
             or not 1 <= limit <= 4096 or rows > limit
         ):
-            raise ValueError("HCWDL-RKD miniature target rows exceed the bounded row limit")
+            raise ValueError(
+                "HCWDL-RKD miniature target rows exceed the bounded row limit"
+                if payload["purpose"] == "miniature"
+                else "HCWDL-RKD non-final target rows exceed their row limit"
+            )
     require_sha256(expected_identity_order_sha256, name="target expected identity-order SHA-256")
     require_sha256(expected_identity_set_sha256, name="target expected identity-set SHA-256")
     require_sha256(
@@ -2508,10 +2671,16 @@ class RepresentationTargetBank:
 __all__ = [
     "BANK_KINDS", "KERNEL_RESOURCE_NAMES", "LOGICAL_BANK_IDS", "ORDINARY_BANK", "ORDINARY_FAMILIES",
     "ORDINARY_REASONS", "RELATION_KERNEL_DIM", "RELATION_STRATA",
+    "NONFINAL_ACCEPTANCE_TARGET_CONSUMER_CONTRACT",
+    "NONFINAL_ACCEPTANCE_TARGET_PURPOSE", "NONFINAL_ACCEPTANCE_TARGET_ROWS",
+    "NONFINAL_ACCEPTANCE_TARGET_TRAJECTORIES",
     "RepresentationTargetBank", "TARGET_FORWARD_BATCH_SIZE", "TOKEN_KERNEL_DIM",
     "TOFF_BANK", "TOFF_FAMILIES", "TOFF_REASONS", "TargetGenerationContext",
     "bank_kind_for_id", "begin_target_generation", "build_logical_target_bank",
-    "build_miniature_target_consumer_row", "build_target_consumer_registry", "build_target_consumer_row",
+    "build_miniature_target_consumer_row",
+    "build_nonfinal_acceptance_target_consumer_registry",
+    "build_nonfinal_acceptance_target_consumer_row",
+    "build_target_consumer_registry", "build_target_consumer_row",
     "build_target_forward_spec",
     "derive_target_generation_id", "expected_screen_consumer_nodes",
     "deterministic_compressed_npz_bytes",

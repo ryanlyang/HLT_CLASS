@@ -22,6 +22,7 @@ run.
 | 25 | global population registration, disposition/reservation/claim, label-free prediction and locked join | `hcwdl_shared_final.py`, `hcwdl_final_stream.py`, `hcwdl_representation_final.py` | `tests/test_hcwdl_shared_final.py`, `test_hcwdl_final_stream.py`, `test_hcwdl_representation_final.py` |
 | 26 | fail-closed lineage/numerics and finite-poor-result continuation | strict validators plus workflow/runtime dispatch | negative tests throughout the focused suites |
 | 27, 30 | resources, measured fixed-size inventory/storage estimate, fixed CLIs, two campaign workers, bounded nonfinal bootstrap workers, runtime binding and preemption | `hcwdl_representation_resources.py`, `hcwdl_representation_task_runtime.py`, `hcwdl_representation_bootstrap.py`, `scripts/build_hcwdl_representation_fixed_size_inventory.py`, `scripts/build_hcwdl_representation_storage_estimate.py`, `scripts/*hcwdl_representation*`, `scripts/*hcwdl_shared_final*`, `sbatch/run_hcwdl_representation_*` | `tests/test_hcwdl_representation_cli.py`, `test_hcwdl_representation_bootstrap.py`, `test_hcwdl_representation_preemption.py` |
+| 21, 30--32 | closed bounded non-final authority, exact four M1 two-update probes, actual-USR1 receipt/fresh-process resume, and validation-only D0c/D100/TOFF proxy without shared-final access | `hcwdl_representation_nonfinal_acceptance.py`, `hcwdl_representation_validation_proxy.py`, `scripts/build_hcwdl_representation_nonfinal_acceptance_authority.py`, `scripts/run_hcwdl_representation_nonfinal_acceptance_action.py`, `scripts/build_hcwdl_representation_two_update_acceptance_proof.py`, `sbatch/run_hcwdl_representation_nonfinal_acceptance*.sh` | `tests/test_hcwdl_representation_nonfinal_acceptance.py`, `test_hcwdl_representation_validation_proxy.py`, `test_hcwdl_representation_cli.py` |
 | 28.5--28.6 | dedicated trainer, sequence resume, AUC-first selection and HLT-only extraction | `hcwdl_representation_training.py`, `hcwdl_representation_resume.py` | `tests/test_hcwdl_representation_training.py`, `test_hcwdl_representation_resume.py` |
 | 30.3 | symbolic dry run, ledger materialization, append-only monitoring, recovery chain and exact cancellation | `hcwdl_representation_campaign.py`, `hcwdl_representation_recovery.py` | `tests/test_hcwdl_representation_campaign.py`, `test_hcwdl_representation_recovery.py` |
 | 32--33 | Blocks A--G and locally testable Block-H paths | campaign adapters, production adapters, synthetic final fixtures and local smoke | focused campaign/task-runtime/smoke tests; final integrated audit recorded in `docs/HANDOFF.md` |
@@ -35,12 +36,14 @@ scripts/build_hcwdl_representation_storage_estimate.py
 scripts/build_hcwdl_representation_scheduler_evidence.py
 scripts/build_hcwdl_representation_miniature_evidence.py
 scripts/build_hcwdl_representation_resource_profile.py
+scripts/build_hcwdl_representation_nonfinal_acceptance_action_result.py
 scripts/build_hcwdl_representation_usr1_exact_resume_proof.py
 scripts/build_hcwdl_representation_validation_proxy_proof.py
 scripts/build_hcwdl_representation_production_worker_smoke_proof.py
 scripts/build_hcwdl_representation_tigris_action_proof.py
 scripts/build_hcwdl_representation_tigris_evidence_bundle.py
 scripts/build_hcwdl_representation_tigris_acceptance.py
+scripts/build_hcwdl_representation_two_update_acceptance_proof.py
 ```
 
 These commands publish authenticated evidence from already observed files and
@@ -76,8 +79,13 @@ consumers invoke their typed validators directly.
 The migrated authority tuples are exact and intentionally nonparallel:
 `HCWDL_REPRESENTATION_PARENT_IMPORT/v2` uses schema 1,
 `HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v2` uses schema 2, and
-`HCWDL_REPRESENTATION_RECIPE/v2` uses schema 1. The parent authority itself is
-exactly executable `HCWDL_CAMPAIGN_SPEC/v7` plus primary `HCWDL_RECIPE/v4`.
+`HCWDL_REPRESENTATION_RECIPE/v2` uses schema 1. The strengthened
+`USR1_EXACT_RESUME_PROOF/v2`, `VALIDATION_PROXY_PROOF/v2`,
+`TIGRIS_EVIDENCE_BUNDLE/v2`, and `TIGRIS_ACCEPTANCE/v2` also use common-
+envelope schema 1. The latter two freeze the new bounded non-final check
+registry rather than expanding their v1 semantics. The parent authority itself
+is exactly executable `HCWDL_CAMPAIGN_SPEC/v7` plus primary
+`HCWDL_RECIPE/v4`.
 
 - [x] parent and architecture: `PARENT_IMPORT`, `PARENT_LOSS_ATTESTATION`,
   `ARCHITECTURE_ATTESTATION`, `TAP`, `SURFACE_PARITY`
@@ -119,11 +127,18 @@ exactly executable `HCWDL_CAMPAIGN_SPEC/v7` plus primary `HCWDL_RECIPE/v4`.
   `SUBMISSION_LEDGER`, `RECOVERY_SUBMISSION_LEDGER`, `MONITOR_REPORT`,
   `RESOURCE_PROFILE`, `STORAGE_ESTIMATE`, `FIXED_SIZE_INVENTORY`,
   `SCHEDULER_EVIDENCE`, `MINIATURE_EVIDENCE`, `TIGRIS_EVIDENCE_BUNDLE`,
-  `TIGRIS_ACTION_PROOF`, `USR1_EXACT_RESUME_PROOF`,
-  `VALIDATION_PROXY_PROOF`, `PRODUCTION_WORKER_SMOKE_PROOF`,
+  `TIGRIS_ACTION_PROOF`, `TWO_UPDATE_ACCEPTANCE_PROOF`,
+  `USR1_DELIVERY_RECEIPT`, `USR1_EXACT_RESUME_PROOF/v2`,
+  `VALIDATION_PROXY_BRANCH_ACCESS`, `VALIDATION_PROXY_PROOF/v2`,
+  `NONFINAL_ACCEPTANCE_SCHEDULER_EVIDENCE`,
+  `PRODUCTION_WORKER_SMOKE_PROOF`,
   `LOCAL_SMOKE_REPORT`, `CACHE_MINIATURE`, `CACHE_MINIATURE_BANK`,
   `TIGRIS_ACCEPTANCE`, `SUBMISSION_AUTHORIZATION`,
-  `ACCEPTANCE_BOOTSTRAP`
+  `ACCEPTANCE_BOOTSTRAP`, `NONFINAL_ACCEPTANCE_ACTION_INPUTS`,
+  `NONFINAL_ACCEPTANCE_ACTION_ASSEMBLY`,
+  `NONFINAL_ACCEPTANCE_EXECUTION_RECEIPT`,
+  `ACCEPTANCE_REAL_BATCH_FULL_LOSS`, `NONFINAL_ACCEPTANCE_ACTION_RESULT`,
+  `NONFINAL_ACCEPTANCE_AUTHORITY`
 
 The selected/final training-envelope, zero-coefficient, confirmation-run, and
 validation-only aggregate identities make plan-required publication boundaries
@@ -145,20 +160,25 @@ explicit; they do not broaden an old HCWDL artifact.
   final-`exec`, role-isolation, and deterministic-worker regressions
 - [x] bounded bootstrap spec/worker prefix binds source/worker bytes, exact
   runtime rows, conservative resources, no arrays and no final-role authority
-- [ ] execute dedicated nonfinal two-update RSET/RREL and USR1 exact-resume
-  actions; the action-proof contracts do not substitute for unrun evidence and
-  the current full-loss bootstrap probe explicitly performs no optimizer step
+- [x] bounded non-final authority implementation freezes 512/256 rows, two
+  updates, the exact `RSET_M1c`/`RSET_M1w`/`RREL_M1c`/`RREL_M1w` probes,
+  authenticated actual-USR1 delivery/fresh-process resume, and a validation-
+  only D0c/D100/TOFF proxy that rejects all shared-final/final roles
+- [ ] issue the separate phrase-bound non-final execution authority and run
+  its dedicated actions on Tigris; implementation authorization, proof
+  contracts, and local fixtures do not substitute for unrun evidence, and the
+  current full-loss bootstrap probe explicitly performs no optimizer step
 - [x] parent-final-state, fail-closed disposition, and terminal exact-ID cancellation producer fixtures
 - [x] shared-final registrar race/recovery, capability and label-isolation tests
 - [x] complete bounded semantic smoke and full non-submitting command plan:
   86 tasks / 152 expanded rows, 24 primary nodes / four controls, no final-role
   access, no scheduler mutation, and no production authorization
-- [x] complete repository suite and `git diff --check`: 656 passed, two
-  Windows-only POSIX-shell checks skipped, and only 14 pre-existing
+- [x] complete repository suite and `git diff --check`: 767 passed, six
+  platform-only checks skipped (five POSIX-shell and one SIGUSR1), and only 14 pre-existing
   Matplotlib/PyParsing warnings
 - [x] prohibited-pattern and accidental privileged-input audit: no runtime
   `Fresh_check`, `TODO`, `FIXME`, `NotImplementedError`, executable `pass`, or
-  deployable privileged-input surface; all 389 Python files parse and the
+  deployable privileged-input surface; all 405 Python files parse and the
   untracked-file whitespace scan is clean
 - [x] documentation, runbook, traceability, CLI inventory and donor-source-map update
 - [ ] authoritative installed-Weaver CPU parity — unavailable in the local environment unless Weaver is installed

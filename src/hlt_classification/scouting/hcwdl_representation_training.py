@@ -62,6 +62,7 @@ from .hcwdl_representation_calibration import (
     validate_calibration_selection_artifact,
 )
 from .hcwdl_representation_contracts import (
+    ACCEPTANCE_REAL_BATCH_FULL_LOSS_CONTRACT,
     CHECKPOINT_SELECTION_CONTRACT,
     DEPLOYABLE_EXTRACTION_CONTRACT,
     DIAGNOSTIC_BATCH_CONTRACT,
@@ -2778,6 +2779,7 @@ def exercise_full_representation_loss(
     relation_resources: SpectralKernelResources,
     device: str,
     shuffled_representation_joiner=None,
+    require_canonical_early_backbone: bool = False,
 ) -> dict[str, Any]:
     """Non-scientific deep-copy probe with both ramps forced to one.
 
@@ -2824,6 +2826,77 @@ def exercise_full_representation_loss(
             effective_pass=8.0, token_resources=token_resources,
             relation_resources=relation_resources, force_components=True,
         )
+        if loss.raw_components is None:
+            raise RuntimeError("full-loss probe did not materialize active components")
+        try:
+            early_parameters = early_backbone_parameters(probe)
+        except ValueError:
+            if require_canonical_early_backbone:
+                raise
+            # Lightweight unit-test deployables intentionally omit the full
+            # ParT prefix topology.  They may exercise the generic loss API,
+            # but authority-bound production below requires the canonical
+            # early-backbone selector and never enters this fallback.
+            early_parameters = tuple(
+                (name, parameter)
+                for name, parameter in probe.named_parameters()
+                if name.startswith("deployable_model.")
+                and parameter.requires_grad
+            )
+            if not early_parameters:
+                raise ValueError("full-loss probe backbone support is empty")
+        component_gradient_norms: dict[str, float] = {}
+        for component in execution.active_components:
+            component_loss = loss.raw_components.losses.get(component)
+            if component_loss is None:
+                raise RuntimeError(
+                    f"full-loss probe lacks active component {component!r}"
+                )
+            if not component_loss.requires_grad:
+                if require_canonical_early_backbone:
+                    raise RuntimeError(
+                        f"full-loss probe component {component!r} has no live "
+                        "canonical gradient support"
+                    )
+                component_gradient_norms[component] = 0.0
+                continue
+            gradients = torch.autograd.grad(
+                component_loss,
+                tuple(parameter for _, parameter in early_parameters),
+                retain_graph=True,
+                create_graph=False,
+                allow_unused=not require_canonical_early_backbone,
+            )
+            connected_gradients = tuple(
+                gradient for gradient in gradients if gradient is not None
+            )
+            if (
+                len(gradients) != len(early_parameters)
+                or not connected_gradients
+                or (
+                    require_canonical_early_backbone
+                    and len(connected_gradients) != len(early_parameters)
+                )
+                or any(
+                    not torch.isfinite(gradient).all()
+                    for gradient in connected_gradients
+                )
+            ):
+                raise FloatingPointError(
+                    f"full-loss probe component {component!r} has invalid "
+                    "early-backbone gradients"
+                )
+            squared = sum(
+                gradient.detach().double().square().sum()
+                for gradient in connected_gradients
+            )
+            norm = float(torch.sqrt(squared).cpu())
+            if not math.isfinite(norm) or norm <= 0:
+                raise RuntimeError(
+                    f"full-loss probe component {component!r} is disconnected "
+                    "from the early backbone"
+                )
+            component_gradient_norms[component] = norm
         probe.zero_grad(set_to_none=True)
         loss.total.backward()
         head_norms = {}
@@ -2834,20 +2907,285 @@ def exercise_full_representation_loss(
             head_norms[name] = float(gradient.float().norm().cpu())
         if any(value <= 0 for value in head_norms.values()):
             raise RuntimeError("full-loss probe has a disconnected active projection")
+        early_squared = torch.zeros((), dtype=torch.float64, device=device)
+        for name, parameter in early_parameters:
+            gradient = parameter.grad
+            if gradient is None or not torch.isfinite(gradient).all():
+                raise FloatingPointError(
+                    f"full-loss probe early-backbone parameter {name!r} has "
+                    "an invalid total-loss gradient"
+                )
+            early_squared = early_squared + gradient.detach().double().square().sum()
+        early_norm = float(torch.sqrt(early_squared).cpu())
+        total_loss = float(loss.total.detach().cpu())
+        representation_loss = float(loss.representation_total.detach().cpu())
+        if (
+            not math.isfinite(early_norm) or early_norm <= 0
+            or not math.isfinite(total_loss) or total_loss <= 0
+            or not math.isfinite(representation_loss) or representation_loss <= 0
+        ):
+            raise FloatingPointError("full-loss probe scalar evidence is invalid")
         return {
             "execution_id": execution_id,
             "scientific_authorization": False,
             "effective_pass_forced": 8.0,
             "active_components": list(execution.active_components),
-            "total_loss": float(loss.total.detach().cpu()),
-            "representation_loss": float(loss.representation_total.detach().cpu()),
+            "total_loss": total_loss,
+            "representation_loss": representation_loss,
             "head_gradient_norms": head_norms,
+            "active_component_early_backbone_gradient_norms": (
+                component_gradient_norms
+            ),
+            "early_backbone_gradient_norm": early_norm,
+            "finite": True,
             "optimizer_step_performed": False,
         }
     finally:
         del probe
         restore_model_runtime_state(model, runtime)
         restore_rng_state(rng)
+
+
+def _build_acceptance_real_batch_full_loss_record(
+    *, binding: Mapping[str, Any], probe: Mapping[str, Any],
+    execution: NodeExecution, registered_execution_id: str,
+    diagnostic_batch_sha256: str, target_generation_sha256: str,
+    target_logical_sha256: str, target_manifest_sha256: str,
+) -> dict[str, Any]:
+    """Bind a nonmutating full-loss exercise to one authority-private batch."""
+
+    required_binding = {
+        "authority_sha256", "action_id", "action_spec_sha256", "source_commit",
+        "representation_recipe_sha256", "train_rows", "validation_rows",
+        "replicate_seed", "maximum_optimizer_updates",
+        "target_generation_sha256", "target_logical_sha256",
+        "target_manifest_sha256",
+    }
+    if not isinstance(binding, Mapping) or set(binding) != required_binding:
+        raise ValueError("acceptance full-loss binding fields differ")
+    for name in (
+        "authority_sha256", "action_spec_sha256",
+        "representation_recipe_sha256", "target_generation_sha256",
+        "target_logical_sha256", "target_manifest_sha256",
+    ):
+        require_sha256(binding[name], name=f"acceptance full-loss {name}")
+    source_commit = str(binding["source_commit"])
+    if len(source_commit) != 40 or any(
+        character not in "0123456789abcdef" for character in source_commit
+    ):
+        raise ValueError("acceptance full-loss source commit differs")
+    action_id = str(binding["action_id"])
+    if action_id not in {
+        "rset_m1c_two_update", "rset_m1w_two_update",
+        "rrel_m1c_two_update", "rrel_m1w_two_update",
+    }:
+        raise ValueError("acceptance full-loss action identity differs")
+    exact_counts = {
+        "train_rows": 512,
+        "validation_rows": 256,
+        "replicate_seed": 1337,
+        "maximum_optimizer_updates": 2,
+    }
+    if any(binding.get(name) != expected for name, expected in exact_counts.items()):
+        raise PermissionError("acceptance full-loss bounded counts differ")
+    expected_targets = {
+        "target_generation_sha256": target_generation_sha256,
+        "target_logical_sha256": target_logical_sha256,
+        "target_manifest_sha256": target_manifest_sha256,
+    }
+    if any(binding.get(name) != expected for name, expected in expected_targets.items()):
+        raise PermissionError("acceptance full-loss target binding differs")
+    if probe.get("execution_id") != execution.execution_id:
+        raise ValueError("acceptance full-loss execution identity differs")
+    active = list(execution.active_components)
+    if probe.get("active_components") != active:
+        raise ValueError("acceptance full-loss active components differ")
+    component_norms = probe.get(
+        "active_component_early_backbone_gradient_norms"
+    )
+    head_norms = probe.get("head_gradient_norms")
+    if (
+        not isinstance(component_norms, Mapping)
+        or set(component_norms) != set(active)
+        or not isinstance(head_norms, Mapping)
+        or not head_norms
+    ):
+        raise ValueError("acceptance full-loss gradient registry differs")
+    scalar_values = [
+        probe.get("total_loss"), probe.get("representation_loss"),
+        probe.get("early_backbone_gradient_norm"),
+        *component_norms.values(), *head_norms.values(),
+    ]
+    if any(
+        isinstance(value, bool) or not isinstance(value, (int, float))
+        or not math.isfinite(float(value)) or float(value) <= 0
+        for value in scalar_values
+    ):
+        raise FloatingPointError("acceptance full-loss scalar evidence is invalid")
+    if (
+        probe.get("finite") is not True
+        or probe.get("optimizer_step_performed") is not False
+        or probe.get("scientific_authorization") is not False
+        or float(probe.get("effective_pass_forced", -1.0)) != 8.0
+    ):
+        raise PermissionError("acceptance full-loss nonmutating semantics differ")
+    return with_content_hash({
+        "contract": ACCEPTANCE_REAL_BATCH_FULL_LOSS_CONTRACT,
+        "schema_version": 1,
+        "authority_sha256": binding["authority_sha256"],
+        "action_id": action_id,
+        "action_spec_sha256": binding["action_spec_sha256"],
+        "source_commit": source_commit,
+        "representation_recipe_sha256": binding[
+            "representation_recipe_sha256"
+        ],
+        "execution_id": execution.execution_id,
+        "registered_execution_id": require_sha256(
+            registered_execution_id,
+            name="acceptance full-loss registered execution",
+        ),
+        "diagnostic_batch_sha256": require_sha256(
+            diagnostic_batch_sha256,
+            name="acceptance full-loss diagnostic batch",
+        ),
+        "target_generation_sha256": require_sha256(
+            target_generation_sha256,
+            name="acceptance full-loss target generation",
+        ),
+        "target_logical_sha256": require_sha256(
+            target_logical_sha256,
+            name="acceptance full-loss target logical identity",
+        ),
+        "target_manifest_sha256": require_sha256(
+            target_manifest_sha256,
+            name="acceptance full-loss target manifest",
+        ),
+        "diagnostic_rows": 256,
+        **exact_counts,
+        "active_components": active,
+        "total_loss": float(probe["total_loss"]),
+        "representation_loss": float(probe["representation_loss"]),
+        "head_gradient_norms": {
+            str(name): float(value) for name, value in sorted(head_norms.items())
+        },
+        "active_component_early_backbone_gradient_norms": {
+            name: float(component_norms[name]) for name in active
+        },
+        "early_backbone_gradient_norm": float(
+            probe["early_backbone_gradient_norm"]
+        ),
+        "effective_pass_forced": 8.0,
+        "real_bounded_training_batch": True,
+        "model_and_rng_restored": True,
+        "finite": True,
+        "optimizer_step_performed": False,
+        "scientific_authorization": False,
+        "final_role_accessed": False,
+    })
+
+
+def validate_acceptance_real_batch_full_loss_record(
+    value: Mapping[str, Any], *, expected_authority_sha256: str | None = None,
+    expected_action_id: str | None = None,
+    expected_execution_id: str | None = None,
+    expected_recipe_sha256: str | None = None,
+    expected_diagnostic_batch_sha256: str | None = None,
+) -> str:
+    """Validate one separate authority-private real-batch loss artifact."""
+
+    digest = validate_content_hash(
+        value, expected_contract=ACCEPTANCE_REAL_BATCH_FULL_LOSS_CONTRACT,
+        expected_schema_version=1,
+    )
+    required = {
+        "contract", "schema_version", "authority_sha256", "action_id",
+        "action_spec_sha256", "source_commit", "representation_recipe_sha256",
+        "execution_id", "registered_execution_id", "diagnostic_batch_sha256",
+        "target_generation_sha256", "target_logical_sha256",
+        "target_manifest_sha256",
+        "diagnostic_rows", "train_rows", "validation_rows", "replicate_seed",
+        "maximum_optimizer_updates", "active_components", "total_loss",
+        "representation_loss", "head_gradient_norms",
+        "active_component_early_backbone_gradient_norms",
+        "early_backbone_gradient_norm", "effective_pass_forced",
+        "real_bounded_training_batch", "model_and_rng_restored", "finite",
+        "optimizer_step_performed", "scientific_authorization",
+        "final_role_accessed", "content_hash",
+    }
+    if set(value) != required:
+        raise ValueError("acceptance real-batch full-loss record fields differ")
+    execution_id = str(value["execution_id"])
+    execution = resolve_node_execution(execution_id)
+    if value["active_components"] != list(execution.active_components):
+        raise ValueError("acceptance real-batch active components differ")
+    component_norms = value["active_component_early_backbone_gradient_norms"]
+    head_norms = value["head_gradient_norms"]
+    if (
+        not isinstance(component_norms, Mapping)
+        or set(component_norms) != set(execution.active_components)
+        or not isinstance(head_norms, Mapping) or not head_norms
+    ):
+        raise ValueError("acceptance real-batch gradient registry differs")
+    scalar_values = [
+        value["total_loss"], value["representation_loss"],
+        value["early_backbone_gradient_norm"],
+        *component_norms.values(), *head_norms.values(),
+    ]
+    if any(
+        isinstance(item, bool) or not isinstance(item, (int, float))
+        or not math.isfinite(float(item)) or float(item) <= 0
+        for item in scalar_values
+    ):
+        raise FloatingPointError("acceptance real-batch full-loss values are invalid")
+    expected = {
+        "diagnostic_rows": 256, "train_rows": 512,
+        "validation_rows": 256, "replicate_seed": 1337,
+        "maximum_optimizer_updates": 2, "effective_pass_forced": 8.0,
+        "real_bounded_training_batch": True, "model_and_rng_restored": True,
+        "finite": True, "optimizer_step_performed": False,
+        "scientific_authorization": False, "final_role_accessed": False,
+    }
+    if any(value.get(name) != expected_value for name, expected_value in expected.items()):
+        raise PermissionError("acceptance real-batch full-loss semantics differ")
+    for name in (
+        "authority_sha256", "action_spec_sha256",
+        "representation_recipe_sha256", "registered_execution_id",
+        "diagnostic_batch_sha256", "target_generation_sha256",
+        "target_logical_sha256", "target_manifest_sha256",
+    ):
+        require_sha256(value[name], name=f"acceptance real-batch {name}")
+    source_commit = str(value["source_commit"])
+    if len(source_commit) != 40 or any(
+        character not in "0123456789abcdef" for character in source_commit
+    ):
+        raise ValueError("acceptance real-batch source commit differs")
+    comparisons = (
+        ("authority_sha256", expected_authority_sha256),
+        ("action_id", expected_action_id),
+        ("execution_id", expected_execution_id),
+        ("representation_recipe_sha256", expected_recipe_sha256),
+        ("diagnostic_batch_sha256", expected_diagnostic_batch_sha256),
+    )
+    for name, expected_value in comparisons:
+        if expected_value is not None and value[name] != expected_value:
+            raise PermissionError(f"acceptance real-batch {name} differs")
+    return digest
+
+
+def _commit_then_wait_for_preemption(
+    *, preemption_requested: Callable[[], bool],
+    commit_resume: Callable[[], None], preemption_wait: Callable[[], None],
+) -> None:
+    """Accept only a signal delivered after the exact committed boundary."""
+
+    if preemption_requested():
+        raise RuntimeError(
+            "preemption arrived before the committed update-one boundary"
+        )
+    commit_resume()
+    preemption_wait()
+    if not preemption_requested():
+        raise RuntimeError("preemption wait returned without a delivered signal")
 
 
 def train_hcwdl_representation_node(
@@ -2893,9 +3231,12 @@ def train_hcwdl_representation_node(
     diagnostic_parameter_selector: Callable[
         [Any], Sequence[tuple[str, Any]]
     ] = early_backbone_parameters,
+    acceptance_full_loss_binding: Mapping[str, Any] | None = None,
     sampler_external_snapshot: Callable[[], Mapping[str, Any]] | None = None,
     sampler_external_restore: Callable[[Mapping[str, Any]], None] | None = None,
     preemption_requested: Callable[[], bool] | None = None,
+    preemption_wait_after_update: int | None = None,
+    preemption_wait: Callable[[], None] | None = None,
     stop_after_update: int | None = None,
     extractor: Callable[..., Mapping[str, Any]] = _default_extractor,
     registered_output_row: Mapping[str, Any] | None = None,
@@ -2976,6 +3317,18 @@ def train_hcwdl_representation_node(
         raise ValueError("diagnostic external snapshot/restore must be supplied together")
     if mode != "synthetic_test" and diagnostic_parameter_selector is not early_backbone_parameters:
         raise ValueError("scientific diagnostic parameter support cannot be overridden")
+    if acceptance_full_loss_binding is not None and mode != "smoke":
+        raise PermissionError("acceptance full-loss evidence requires smoke mode")
+    if (preemption_wait_after_update is None) != (preemption_wait is None):
+        raise ValueError("preemption wait boundary/callback must be supplied together")
+    if preemption_wait_after_update is not None and (
+        mode != "smoke"
+        or preemption_wait_after_update != 1
+        or preemption_requested is None
+    ):
+        raise PermissionError(
+            "the exact signal wait barrier is restricted to smoke update one"
+        )
     if calibration_selection is None:
         if mode in {"scientific", "smoke"}:
             raise ValueError(
@@ -3107,6 +3460,39 @@ def train_hcwdl_representation_node(
             representation_recipe_sha256=representation_recipe_sha256,
             output=output,
             calibration_directory=calibration_output,
+        )
+    acceptance_full_loss = None
+    if acceptance_full_loss_binding is not None:
+        if diagnostic_materialized is None or diagnostic_artifact is None:
+            raise ValueError("acceptance full-loss evidence lacks its diagnostic batch")
+        probe = exercise_full_representation_loss(
+            model,
+            execution_id=execution_id,
+            batch=diagnostic_materialized,
+            target_bank=target_bank,
+            predecessor_bank=predecessor_bank,
+            class_weights=np.asarray(
+                parent_recipe["class_weights"], dtype=np.float32,
+            ),
+            token_resources=token_resources,
+            relation_resources=relation_resources,
+            device=device,
+            shuffled_representation_joiner=shuffled_representation_joiner,
+            require_canonical_early_backbone=True,
+        )
+        acceptance_full_loss = _build_acceptance_real_batch_full_loss_record(
+            binding=acceptance_full_loss_binding,
+            probe=probe,
+            execution=execution,
+            registered_execution_id=lineage["execution"],
+            diagnostic_batch_sha256=diagnostic_artifact["content_hash"],
+            target_generation_sha256=lineage["target_generation"],
+            target_logical_sha256=lineage["target_logical"],
+            target_manifest_sha256=target_bank.manifest["content_hash"],
+        )
+        write_immutable_json(
+            output / "acceptance_real_batch_full_loss.json",
+            acceptance_full_loss,
         )
     resume_root = output / "resume"
     selected_root = output / "checkpoints" / "selected" / "staging" / "candidates"
@@ -3511,6 +3897,21 @@ def train_hcwdl_representation_node(
             interval.add(interval_values, len(labels))
             if completed_update % config.logging_interval_updates == 0:
                 interval.flush(update=completed_update)
+            if completed_update == preemption_wait_after_update:
+                # The USR1 acceptance worker commits the exact cursor first,
+                # then blocks until the operating system delivers a signal.
+                # A returned callback without a recorded signal fails closed;
+                # reference and resume actions never enter this barrier.
+                assert preemption_requested is not None
+                assert preemption_wait is not None
+                _commit_then_wait_for_preemption(
+                    preemption_requested=preemption_requested,
+                    commit_resume=commit_resume,
+                    preemption_wait=preemption_wait,
+                )
+                raise RepresentationTrainingInterrupted(
+                    f"HCWDL-RKD state committed after update {completed_update}"
+                )
             should_preempt = preemption_requested is not None and preemption_requested()
             should_stop = stop_after_update is not None and completed_update == stop_after_update
             if should_preempt or should_stop:
@@ -3901,6 +4302,11 @@ def validate_representation_training_report(
     ):
         if cache_diagnostics.get(name) != report[report_name]:
             raise ValueError("HCWDL-RKD target-cache hash diagnostics differ")
+    if "row_selection_sha256" in cache_diagnostics:
+        require_sha256(
+            cache_diagnostics["row_selection_sha256"],
+            name="training-report target-cache row selection",
+        )
     extraction = report["deployable_extraction"]
     if not isinstance(extraction, Mapping) or extraction.get("strict_hlt_only") is not True:
         raise ValueError("HCWDL-RKD deployable extraction is not strict HLT-only")
@@ -3984,6 +4390,7 @@ def validate_representation_training_report(
 
 
 __all__ = [
+    "ACCEPTANCE_REAL_BATCH_FULL_LOSS_CONTRACT",
     "BATCH_PROTOCOL",
     "EXECUTION_MODES",
     "HLTBatch",
@@ -4006,6 +4413,7 @@ __all__ = [
     "resolve_node_execution",
     "run_representation_diagnostic",
     "train_hcwdl_representation_node",
+    "validate_acceptance_real_batch_full_loss_record",
     "validate_paired_rng_streams",
     "validate_representation_training_report",
 ]

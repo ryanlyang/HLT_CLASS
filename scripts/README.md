@@ -246,6 +246,13 @@ grouped as follows:
 - bounded first-evidence bootstrap (nonfinal and nonauthorizing):
   `build_hcwdl_representation_acceptance_bootstrap.py` and
   `run_hcwdl_representation_acceptance_bootstrap.py`;
+- separately phrase-authorized bounded non-final acceptance (still
+  nonauthorizing for a pilot/final role):
+  `build_hcwdl_representation_nonfinal_acceptance_authority.py`,
+  `run_hcwdl_representation_nonfinal_acceptance_action.py`,
+  `build_hcwdl_representation_nonfinal_acceptance_scheduler_evidence.py`,
+  `build_hcwdl_representation_nonfinal_acceptance_action_result.py`, and
+  `build_hcwdl_representation_two_update_acceptance_proof.py`;
 - nonexecuting resource/evidence capture and action-proof assembly:
   `build_hcwdl_representation_scheduler_evidence.py`,
   `build_hcwdl_representation_miniature_evidence.py`,
@@ -256,6 +263,9 @@ grouped as follows:
   `build_hcwdl_representation_tigris_action_proof.py`,
   `build_hcwdl_representation_tigris_evidence_bundle.py`, and
   `build_hcwdl_representation_tigris_acceptance.py`;
+- `build_hcwdl_representation_validation_proxy_proof.py` is validation-only:
+  it reopens the worker-published canonical result and prints its content hash;
+  it has no output argument and cannot create a second proof route;
 - parent/tap/recipe/target/training work:
   `prepare_hcwdl_representation_parent_evidence.py` (installed-Weaver tap,
   parity, architecture, and corrected parent-loss evidence bound to the
@@ -323,8 +333,42 @@ The isolated acceptance-bootstrap workers are
 Their exact bytes are bound in the bootstrap artifact. They can run only the
 authorized scalar prefix through zero-coefficient acceptance, never ladder
 training, reservation, array, or final-role work. The full-loss probe performs
-no optimizer step, so these workers do not yet provide two-update/USR1
-evidence and cannot complete or authorize Tigris acceptance.
+no optimizer step, so these workers do not provide two-update/USR1 evidence
+and cannot complete or authorize Tigris acceptance.
+
+The dedicated bounded non-final action surface is separate from both the
+bootstrap prefix and campaign dispatcher. Its authority builder requires the
+exact phrase `AUTHORIZE BOUNDED NONFINAL HCWDL-RKD ACCEPTANCE ACTIONS`; the
+authorization to implement these files does not invoke the builder or satisfy
+that execution phrase. The builder deeply validates the exact production
+inputs from `acceptance/nonfinal/action_inputs.json` before binding its content
+hash into the authority; it never treats path existence or caller-entered
+digests as input proof. The action runner accepts only `target_d0c`,
+`target_d0w`, `rset_m1c_two_update`, `rset_m1w_two_update`,
+`rrel_m1c_two_update`, `rrel_m1w_two_update`, `usr1_reference`,
+`usr1_interrupt`, `usr1_resume`, or `validation_proxy`. It accepts no array,
+campaign task, pilot operation, or
+final role. Training uses exactly 512 training and 256 validation rows and two
+optimizer updates. USR1 evidence requires an authenticated real-signal
+delivery receipt and a fresh resume process. The D0c/D100/TOFF proxy reads only
+literal validation data and never imports or mints shared-final artifacts.
+The runner reopens the authority, enforces its scalar worker role, executes
+only that registered bounded action through the production bridge, and writes
+an immutable execution receipt at the action's canonical non-final evidence
+route, bound to the registered semantic outputs.
+After the action job is terminal, the dedicated evidence-collector worker
+runs `build_hcwdl_representation_nonfinal_acceptance_scheduler_evidence.py`
+to capture fresh raw `sacct` bytes and the exact submitted script and argv.
+The collector must itself be a scalar Tigris job named exactly
+`hcwdl-rkd-nonfinal-evidence-collector` on account `reu-aisocial`, partition
+`tigris`, using the root-owned `/usr/bin/sacct` client.
+Then
+`build_hcwdl_representation_nonfinal_acceptance_action_result.py`
+reopens both the worker receipt and genuine collector-produced scheduler
+evidence, traverses dependency action results, and publishes a deeply
+validated `HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_ACTION_RESULT/v1` binding
+the exact authority, inputs, action, dependency results, Slurm job, worker,
+and semantic outputs. Every envelope remains nonauthorizing.
 
 The complete non-submitting procedure and acceptance boundary are in
 [`docs/HCWDL_RKD_RUNBOOK.md`](../docs/HCWDL_RKD_RUNBOOK.md). Local dry runs,

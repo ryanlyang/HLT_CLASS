@@ -1,5 +1,53 @@
 # Current Handoff
 
+## HCWDL-RKD bounded non-final acceptance authority (2026-08-09)
+
+The separately authorized implementation is complete locally. It adds a
+closed ten-action authority outside the campaign DAG: bounded D0c/D0w target
+preparation; exact two-update `RSET_M1c`, `RSET_M1w`, `RREL_M1c`, and
+`RREL_M1w` probes; a real-`SIGUSR1` reference/interrupt/fresh-resume sequence;
+and a validation-only D0c/D100/TOFF proxy. Every action is scalar. Training is
+frozen to 512 train rows, 256 validation rows, seed 1337, effective batch 256,
+and exactly two optimizer updates. Final rows are zero and campaign, pilot,
+reservation, shared-final, final-role, and scheduler-submission powers are all
+explicitly false.
+
+Production execution reuses the reviewed target and training adapters through
+an authority-private bridge, with live runtime validation before scientific
+I/O. The validation proxy performs one label-bearing validation selection;
+assignment and all three prediction streams are label-free, and durable
+artifacts omit labels. Its metrics and paired-bootstrap sidecars are
+validation-only and nonauthorizing. Workers emit immutable execution receipts
+binding the exact action assembly, dependencies, source, recipe, worker bytes,
+Slurm job, and semantic outputs. A separate Tigris collector must capture raw
+terminal `sacct` records before a post-job action result or composite proof can
+be genuine; caller-authored completion fields cannot satisfy the gate.
+
+The new authority/proof family includes action inputs, action assemblies,
+execution receipts, real-batch full-loss evidence, action results, two-update
+evidence, USR1 delivery and exact-resume evidence, validation-proxy branch
+access/result, and non-final scheduler evidence. Tigris evidence and
+acceptance advance to v2. The exact phrase `AUTHORIZE BOUNDED NONFINAL
+HCWDL-RKD ACCEPTANCE ACTIONS` is deliberately separate from the implementation
+authorization and has not been issued or used. No job, pilot, campaign
+submission, shared-final capability, or final role was created or accessed.
+
+Local verification in the `tagging-hlt` environment is **767 passed, 6
+platform skips, 0 failures**, with the same 14 Matplotlib/PyParsing warnings.
+The skips are five directly executable POSIX-shell checks and one real
+`SIGUSR1` check unavailable on Windows. The final focused USR1, execution-
+receipt, scheduler, dependency, and composite-proof lineage gate is **66
+passed**. All 405 Python files under `src`, `scripts`, and `tests` parse, and
+the final whitespace/diff audit is recorded with this handoff.
+
+This implementation does not remove the parent blocker. The existing
+`b3154d67` parent predates explicit loss semantics and cannot be relabeled as
+the required v7/v4 parent-loss v2 authority. The next research-compute step is
+therefore still a fresh corrected HCWDL v7/v4 parent run from the exact pushed
+source. Only after that parent exists may an operator separately issue the
+non-final execution phrase and run the bounded actions. A pilot and any
+final-test access remain unauthorized.
+
 ## HCWDL-RKD v7/v4 compatibility closure (2026-08-09)
 
 The matching-free representation-KD branch is now reconciled with the current
@@ -36,12 +84,11 @@ at commit `b3154d67` predates the explicit loss-semantics fields and does not
 contain `hcwdl_parent_loss.py`; its reports and checkpoints therefore cannot
 satisfy the v2 attestation.  The plan forbids relabeling those outputs, so a
 fresh, separately identified HCWDL v7/v4 parent run from the new exact clean
-commit is required before HCWDL-RKD parent evidence can be built.  In addition,
-the current bounded acceptance bootstrap intentionally cannot authorize the
-required two-update/USR1 and validation-proxy actions.  A separately reviewed
-non-final acceptance authority must be implemented before the complete genuine
-Tigris acceptance bundle can exist.  Neither limitation authorizes a pilot or
-final-role access.
+commit is required before HCWDL-RKD parent evidence can be built. The bounded
+bootstrap itself still cannot authorize two-update/USR1 or validation-proxy
+actions; the separate non-final implementation described above now closes
+that code path, but its phrase-bound execution and genuine Tigris evidence are
+still pending. Neither limitation authorizes a pilot or final-role access.
 
 No remote job, scheduler state, parent output, or final-role artifact was
 mutated during this compatibility work.
@@ -1097,13 +1144,13 @@ and submission authorization remain pending.
 
 ## Exact active next task: corrected parent, then bounded Tigris acceptance
 
-The v7/v4 compatibility migration is locally complete.  Publish its exact
-clean branch commit and refresh the isolated Tigris worktree.  First create a
-new HCWDL v7/v4 parent campaign identity at that commit and run its corrected
-reports/checkpoints; the `b3154d67` outputs cannot be reused as v2 parent-loss
-evidence.  Separately review and explicitly authorize implementation of a
-non-final acceptance authority for the required two-update, USR1 exact-resume,
-and validation-proxy actions.  Only after those prerequisites exist should the
-installed-Weaver boundary and genuine production-worker/cache acceptance runs
-be assembled, measured, and audited.  Do not reuse the superseded hashes above,
+The v7/v4 compatibility migration and bounded non-final authority
+implementation are locally complete. Publish the exact clean branch commit and
+refresh the isolated Tigris worktree. First create a new HCWDL v7/v4 parent
+campaign identity at that commit and run its corrected reports/checkpoints;
+the `b3154d67` outputs cannot be reused as v2 parent-loss evidence. Only after
+that parent validates may an operator separately issue the exact non-final
+execution phrase and run the bounded two-update, USR1 exact-resume, and
+validation-proxy actions. The installed-Weaver boundary and genuine worker
+evidence must then be measured and audited. Do not reuse superseded hashes,
 submit an RKD pilot, or open the final role before every gate passes.

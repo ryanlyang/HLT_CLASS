@@ -1,12 +1,13 @@
 # HCWDL Matching-Free Privileged Representation-KD Ascents
 
-Status: **the local scientific/data-plane implementation and v7/v4 migration
-are verified; a fresh corrected parent v7/v4 execution and a separately
-reviewed non-final authority for the two-update/USR1/validation-proxy
-acceptance actions are still required before installed-Weaver and genuine
-Tigris acceptance can close; measured production resources, exact pushed
-source, and explicit pilot authorization also remain pending; this document
-authorizes no submission or final-role access**.
+Status: **the local scientific/data-plane, v7/v4 migration, and bounded
+non-final acceptance-authority implementation are verified; implementation
+authority does not issue an execution authority or authorize a scheduler
+mutation. A fresh corrected parent v7/v4 execution, an exact clean pushed
+source, separately phrase-authorized non-final execution, installed-Weaver and
+genuine Tigris acceptance, measured production resources, and explicit pilot
+authorization remain pending; this document authorizes no submission or
+final-role access**.
 
 Short name: **HCWDL-RKD**.
 
@@ -1752,29 +1753,50 @@ HCWDL_REPRESENTATION_STORAGE_ESTIMATE/v1
 HCWDL_REPRESENTATION_FIXED_SIZE_INVENTORY/v1
 HCWDL_REPRESENTATION_SCHEDULER_EVIDENCE/v1
 HCWDL_REPRESENTATION_MINIATURE_EVIDENCE/v1
-HCWDL_REPRESENTATION_TIGRIS_EVIDENCE_BUNDLE/v1
+HCWDL_REPRESENTATION_TIGRIS_EVIDENCE_BUNDLE/v2
 HCWDL_REPRESENTATION_TIGRIS_ACTION_PROOF/v1
-HCWDL_REPRESENTATION_USR1_EXACT_RESUME_PROOF/v1
-HCWDL_REPRESENTATION_VALIDATION_PROXY_PROOF/v1
+HCWDL_REPRESENTATION_TWO_UPDATE_ACCEPTANCE_PROOF/v1
+HCWDL_REPRESENTATION_USR1_DELIVERY_RECEIPT/v1
+HCWDL_REPRESENTATION_USR1_EXACT_RESUME_PROOF/v2
+HCWDL_REPRESENTATION_VALIDATION_PROXY_BRANCH_ACCESS/v1
+HCWDL_REPRESENTATION_VALIDATION_PROXY_PROOF/v2
+HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_SCHEDULER_EVIDENCE/v1
 HCWDL_REPRESENTATION_PRODUCTION_WORKER_SMOKE_PROOF/v1
 HCWDL_REPRESENTATION_LOCAL_SMOKE_REPORT/v1
 HCWDL_REPRESENTATION_CACHE_MINIATURE/v1
 HCWDL_REPRESENTATION_CACHE_MINIATURE_BANK/v1
-HCWDL_REPRESENTATION_TIGRIS_ACCEPTANCE/v1
+HCWDL_REPRESENTATION_TIGRIS_ACCEPTANCE/v2
 HCWDL_REPRESENTATION_SUBMISSION_AUTHORIZATION/v1
 HCWDL_REPRESENTATION_ACCEPTANCE_BOOTSTRAP/v1
+HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_ACTION_INPUTS/v1
+HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_ACTION_ASSEMBLY/v1
+HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_EXECUTION_RECEIPT/v1
+HCWDL_REPRESENTATION_ACCEPTANCE_REAL_BATCH_FULL_LOSS/v1
+HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_ACTION_RESULT/v1
+HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_AUTHORITY/v1
 ```
 
 Contract semantic versions and common-envelope schema versions are separate
-identities. The three migrated parent/overlay artifacts intentionally freeze
-the nonparallel tuples below; consumers must check both components rather than
-inferring the schema version from the `/vN` contract suffix:
+identities. The three migrated parent/overlay artifacts and two strengthened
+acceptance proofs intentionally freeze the nonparallel tuples below; consumers
+must check both components rather than inferring the schema version from the
+`/vN` contract suffix:
 
 ```text
 HCWDL_REPRESENTATION_PARENT_IMPORT/v2             schema_version = 1
 HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v2   schema_version = 2
 HCWDL_REPRESENTATION_RECIPE/v2                    schema_version = 1
+HCWDL_REPRESENTATION_USR1_EXACT_RESUME_PROOF/v2  schema_version = 1
+HCWDL_REPRESENTATION_VALIDATION_PROXY_PROOF/v2   schema_version = 1
+HCWDL_REPRESENTATION_TIGRIS_EVIDENCE_BUNDLE/v2   schema_version = 1
+HCWDL_REPRESENTATION_TIGRIS_ACCEPTANCE/v2        schema_version = 1
 ```
+
+The two acceptance-proof bumps replace insufficient v1 proof semantics. The
+bundle and acceptance bumps freeze the new two-update, actual-USR1-v2, and
+validation-only-v2 check registry rather than broadening their old hash-only,
+full-loss, and final-role-proxy meanings. None changes the common-envelope
+schema version.
 
 `HCWDL_REPRESENTATION_ACCEPTANCE_BOOTSTRAP/v1` is a deliberately bounded
 operational authority for collecting the first nonfinal acceptance evidence.
@@ -1785,6 +1807,58 @@ smoke resources, bounded role counts, and a dependency-closed prefix of
 nonfinal acceptance tasks. It cannot name a final-role route, reserve or claim
 a shared-final population, train a ladder node, register a scheduler mutation,
 or satisfy the executable-pilot gate by itself.
+
+`HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_AUTHORITY/v1` is a second,
+independent operational authority. It is not an extension of the bootstrap
+prefix or campaign DAG. Before that authority can be built,
+`HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_ACTION_INPUTS/v1` authenticates the
+exact production parent/recipe/runtime/target/model/checkpoint inputs needed by
+the closed actions; path discovery or caller-supplied hashes are insufficient.
+Its closed action registry permits only the four M1
+two-update cases `RSET_M1c`, `RSET_M1w`, `RREL_M1c`, and `RREL_M1w`; one
+actual-`SIGUSR1` interrupt plus fresh-process exact-resume check; and one
+validation-only proxy over D0c, D100, and TOFF. Every action is bounded to 512
+training rows and 256 validation rows, every training case performs exactly
+two optimizer updates, and no action may run an array or publish a ladder-row
+result. The authority is built only from the separately supplied exact
+execution phrase `AUTHORIZE BOUNDED NONFINAL HCWDL-RKD ACCEPTANCE ACTIONS`.
+Authorization to implement this system does not satisfy that phrase, create
+the authority artifact, or mutate the scheduler.
+
+The non-final authority records
+`pilot_submission_authorized=false`, `final_role_access_authorized=false`, and
+`shared_final_authorized=false`. The validation proxy uses literal
+`validation` data and dedicated branch-access records; it cannot import,
+create, or satisfy any shared-final reservation, claim, capability, assignment,
+escrow, execution-lock, prediction, metric-join, bootstrap, or aggregate
+contract. Its D0c/D100/TOFF prediction stages are label-free, and labels are
+available only to the dedicated selection/join stages. The USR1 v2 proof must
+reopen an authenticated `HCWDL_REPRESENTATION_USR1_DELIVERY_RECEIPT/v1` for a
+real POSIX `SIGUSR1`; a signal-name string supplied after the fact is not
+evidence. The v1 USR1 and validation-proxy proof identities are intentionally
+not current contracts because they did not close these boundaries.
+
+All outputs are nonauthorizing. The aggregate two-update proof, USR1 receipt
+and exact-resume proof, validation-proxy branch accesses/result, and per-action
+non-final scheduler evidence bind the authority hash, action ID, source,
+worker, recipe, scheduler identity, and immutable result bytes. They can
+contribute to later genuine Tigris evidence only after independent validation;
+none can create a pilot submission authorization or unlock final-test access.
+Every bounded action worker publishes its deeply validated semantic-output
+inventory plus one immutable execution receipt that
+binds the authority, action-input assembly, exact dependency action results,
+source/recipe/worker bytes, live `SLURM_JOB_ID`, and every semantic output
+hash. After the job is terminal, a distinct Slurm evidence-collector worker
+named exactly `hcwdl-rkd-nonfinal-evidence-collector` runs on the fixed Tigris
+account/partition and captures the frozen raw records through the root-owned
+`/usr/bin/sacct` client; caller-supplied accounting bytes and `PATH`-shadowed
+clients remain nonauthorizing. A separate post-job builder reopens the collector
+evidence and execution receipt and publishes one
+`HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_ACTION_RESULT/v1` that binds its
+authority, exact action-input artifact, action ID, Slurm job identity, worker
+bytes/role, and semantic outputs. Higher-level proofs traverse its exact
+target/interrupt dependency results and consume that result rather
+than a caller-entered output hash or success Boolean.
 
 The worker-runtime measurement contract and its embedded live-runtime and
 row-signature hash domains close the review-time/runtime boundary. An allocated
@@ -2636,9 +2710,10 @@ Walltimes come from a genuine Tigris miniature that measures separately:
 - RREL cold and warm two-update/full-loss probes;
 - target loading and cleanup;
 - validation, checkpoint publication, and USR1 resume;
-- label-dependent final selection on a validation-role proxy, Shell-Exact
-  assignment, label-free prediction for every input-domain family, manifest
-  merge, label-escrow metric join, and partial-wave recovery.
+- label-dependent selection on the dedicated validation-only proxy, its
+  assignment stage, label-free D0c/D100/TOFF prediction, deterministic
+  validation-label join, and partial-wave recovery, without importing or
+  minting any shared-final artifact.
 
 No full pilot submission is authorized until those measurements, a storage
 estimate, complete dry run, clean pushed source, and explicit user approval
@@ -3116,6 +3191,10 @@ scripts/audit_hcwdl_representation_executable_candidate.py
 scripts/build_hcwdl_representation_submission_authorization.py
 scripts/build_hcwdl_representation_acceptance_bootstrap.py
 scripts/run_hcwdl_representation_acceptance_bootstrap.py
+scripts/build_hcwdl_representation_nonfinal_acceptance_authority.py
+scripts/run_hcwdl_representation_nonfinal_acceptance_action.py
+scripts/build_hcwdl_representation_nonfinal_acceptance_action_result.py
+scripts/build_hcwdl_representation_two_update_acceptance_proof.py
 scripts/submit_hcwdl_representation_campaign.py
 scripts/run_hcwdl_representation_task.py
 scripts/monitor_hcwdl_representation_campaign.py
@@ -3152,20 +3231,66 @@ their bytes and the clean source commit. They cannot run arrays, ladder
 training, reservations, shared-final/final-role work, or campaign submission,
 and the bootstrap builder never mutates the scheduler. The present prefix ends
 at zero-coefficient acceptance; its full-loss smoke performs no optimizer
-step, so separate two-update/USR1 authority is still required before the
-complete Tigris acceptance bundle can exist. The bootstrap planning spec lives
+step, so a separately phrase-issued two-update/USR1 authority and its completed
+actions are still required before the complete Tigris acceptance bundle can
+exist. The bootstrap planning spec lives
 at the canonical `campaign_spec.json` of a dedicated smoke root; that root is
 never overwritten or promoted into an executable pilot root.
 
+The separately phrase-authorized non-final actions have two further isolated
+workers:
+
+```text
+sbatch/run_hcwdl_representation_nonfinal_acceptance.sh
+sbatch/run_hcwdl_representation_nonfinal_acceptance_deterministic.sh
+```
+
+They accept only an authenticated
+`HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_AUTHORITY/v1` and one literal action
+ID from this closed registry:
+
+```text
+target_d0c
+target_d0w
+rset_m1c_two_update
+rset_m1w_two_update
+rrel_m1c_two_update
+rrel_m1w_two_update
+usr1_reference
+usr1_interrupt
+usr1_resume
+validation_proxy
+```
+
+The two target actions build only authority-private bounded D0 inputs needed
+by the exact four M1 probes. The four training actions each consume 512
+training and 256 validation rows and perform exactly two optimizer updates.
+The three USR1 actions jointly prove an uninterrupted reference, actual POSIX
+`SIGUSR1` delivery after the first update, committed interruption state, and a
+fresh-process resume to the identical second-update trajectory. The
+validation-proxy action is validation-only and covers D0c, D100, and TOFF with
+the exact branch-access stages `selection`, `assignment`, `hlt`,
+`shell_exact`, and `native_offline`; all model-input prediction stages are
+label-free. The proof binds the respective D0c, D100, and TOFF model IDs and
+checkpoint hashes to `hlt`, `shell_exact`, and `native_offline`. Neither
+worker accepts a campaign task
+key, array index, final role, shared-final artifact, or submission operation;
+all outputs are nonauthorizing.
+
 The action-specific proof contracts make these evidence boundaries explicit,
-but do not authorize or execute the missing actions. Until separately
-authorized actions produce and validate every required proof,
-`HCWDL_REPRESENTATION_TIGRIS_ACCEPTANCE/v1` remains nonauthorizing and fails
-closed. Scheduler completion plus a caller-authored success boolean is not
+but do not authorize or execute the actions. Until a separately phrase-issued
+authority is executed on an exact clean pushed source and every required proof
+validates,
+`HCWDL_REPRESENTATION_TIGRIS_ACCEPTANCE/v2` remains nonauthorizing and fails
+closed. The runner dispatches only its authority-bound scalar action through
+the authority-private production bridge and publishes an immutable execution
+receipt; it exposes no campaign task, array, pilot, or final-role surface.
+The two non-final worker shells still must not be submitted without the
+separate execution authorization and required operational preflight.
+Scheduler completion plus a caller-authored success boolean is not
 evidence of exact USR1 resume, production-worker semantics, or final-role
-isolation. Each of the seven frozen Tigris check rows binds all three of its
-scheduler evidence, miniature evidence, and action proof; no two-record row is
-accepted.
+isolation. Each frozen Tigris check row binds its scheduler evidence,
+miniature evidence, and action proof; no two-record row is accepted.
 
 Authorizing scheduler evidence is derived from immutable raw `sacct`
 allocation and step records captured by a separate Tigris Slurm collector,
@@ -3300,10 +3425,37 @@ campaign root:
     proofs/
       <evidence_kind>.json
       usr1_exact_resume_result.json
-      final_role_validation_proxy_result.json
       production_worker_smoke_result.json
     bootstrap/
       spec.json
+    nonfinal/
+      action_inputs.json
+      authority.json
+      bounded_row_selection.json
+      bounded_storage_estimate.json
+      target_consumer_registry_d0c.json
+      target_consumer_registry_d0w.json
+      assemblies/
+        <action_id>.json
+      workspaces/
+        <action_id>/...
+        usr1_interrupted_trajectory/...
+      results/
+        <action_id>.json
+      evidence/
+        <action_id>/
+          execution_receipt.json
+          raw_sacct.psv
+          scheduler.json
+      proofs/
+        two_update.json
+      usr1/
+        interrupt/
+          receipt.json
+      validation_proxy/
+        access/
+          <stage>.json
+        result.json
   recovery/
     targets/<recovery_id>.json
     training/<recovery_id>.json

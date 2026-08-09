@@ -51,11 +51,49 @@ def test_every_contract_has_one_canonical_route() -> None:
         "acceptance/proofs/${evidence_kind}.json"
     )
     assert ROUTES[
-        "HCWDL_REPRESENTATION_USR1_EXACT_RESUME_PROOF/v1"
+        "HCWDL_REPRESENTATION_TIGRIS_EVIDENCE_BUNDLE/v2"
+    ].path_template == "acceptance/tigris_evidence_bundle.json"
+    assert ROUTES[
+        "HCWDL_REPRESENTATION_TIGRIS_ACCEPTANCE/v2"
+    ].path_template == "acceptance/tigris_acceptance.json"
+    assert ROUTES[
+        "HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_ACTION_INPUTS/v1"
+    ].path_template == "acceptance/nonfinal/action_inputs.json"
+    assert ROUTES[
+        "HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_ACTION_ASSEMBLY/v1"
+    ].path_template == "acceptance/nonfinal/assemblies/${action_id}.json"
+    assert ROUTES[
+        "HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_ACTION_RESULT/v1"
+    ].path_template == "acceptance/nonfinal/results/${action_id}.json"
+    assert ROUTES[
+        "HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_AUTHORITY/v1"
+    ].path_template == "acceptance/nonfinal/authority.json"
+    assert ROUTES[
+        "HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_EXECUTION_RECEIPT/v1"
+    ].path_template == "acceptance/nonfinal/evidence/${action_id}/execution_receipt.json"
+    assert ROUTES[
+        "HCWDL_REPRESENTATION_ACCEPTANCE_REAL_BATCH_FULL_LOSS/v1"
+    ].path_template == (
+        "acceptance/nonfinal/workspaces/${action_id}/acceptance_real_batch_full_loss.json"
+    )
+    assert ROUTES[
+        "HCWDL_REPRESENTATION_TWO_UPDATE_ACCEPTANCE_PROOF/v1"
+    ].path_template == "acceptance/nonfinal/proofs/two_update.json"
+    assert ROUTES[
+        "HCWDL_REPRESENTATION_USR1_DELIVERY_RECEIPT/v1"
+    ].path_template == "acceptance/nonfinal/usr1/interrupt/receipt.json"
+    assert ROUTES[
+        "HCWDL_REPRESENTATION_USR1_EXACT_RESUME_PROOF/v2"
     ].path_template == "acceptance/proofs/usr1_exact_resume_result.json"
     assert ROUTES[
-        "HCWDL_REPRESENTATION_VALIDATION_PROXY_PROOF/v1"
-    ].path_template == "acceptance/proofs/final_role_validation_proxy_result.json"
+        "HCWDL_REPRESENTATION_VALIDATION_PROXY_BRANCH_ACCESS/v1"
+    ].path_template == "acceptance/nonfinal/validation_proxy/access/${stage}.json"
+    assert ROUTES[
+        "HCWDL_REPRESENTATION_VALIDATION_PROXY_PROOF/v2"
+    ].path_template == "acceptance/nonfinal/validation_proxy/result.json"
+    assert ROUTES[
+        "HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_SCHEDULER_EVIDENCE/v1"
+    ].path_template == "acceptance/nonfinal/evidence/${action_id}/scheduler.json"
     assert ROUTES[
         "HCWDL_REPRESENTATION_PRODUCTION_WORKER_SMOKE_PROOF/v1"
     ].path_template == "acceptance/proofs/production_worker_smoke_result.json"

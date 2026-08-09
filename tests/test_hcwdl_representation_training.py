@@ -39,10 +39,6 @@ from hlt_classification.scouting.hcwdl_representation_contracts import (
     TARGET_MANIFEST_CONTRACT,
     build_versioned_artifact,
 )
-from hlt_classification.scouting.hcwdl_representation_acceptance_evidence import (
-    build_usr1_exact_resume_proof,
-)
-from hlt_classification.scouting.hcwdl_representation_resources import artifact_reference
 from hlt_classification.scouting.hcwdl_representation_kernels import (
     generate_spectral_resources,
 )
@@ -706,22 +702,10 @@ def test_nontrivial_resume_matches_uninterrupted_selected_metrics_and_checkpoint
     )
     commits = sorted((resumed_root / "resume").glob("commit_*.json"))
     assert 1 <= len(commits) <= 2
-    # The exact-resume trajectory above is a local synthetic fixture.  It must
-    # not be promotable into the genuine Tigris USR1 acceptance proof, whose
-    # producer requires two production-worker ``smoke`` executions.
-    with pytest.raises(ValueError, match="two-update smoke"):
-        build_usr1_exact_resume_proof(
-            uninterrupted_report=artifact_reference(
-                tmp_path / "uninterrupted" / "training_report.json"
-            ),
-            resumed_report=artifact_reference(resumed_root / "training_report.json"),
-            resumed_state_directory=resumed_root / "resume",
-            resumed_sequence=resumed["resume_audit"]["highest_loaded_sequence"],
-            source_commit="1" * 40,
-            representation_recipe_sha256=fixture.representation_recipe[
-                "content_hash"
-            ],
-        )
+    # The exact-resume trajectory above remains explicitly synthetic.  The
+    # active v2 proof has a separate authority, a real-SIGUSR1 receipt, and
+    # three authority-bound scheduler records; none is produced by this test.
+    assert uninterrupted["mode"] == resumed["mode"] == "synthetic_test"
 
 
 def test_finite_but_deliberately_poor_validation_is_terminal_not_an_error(

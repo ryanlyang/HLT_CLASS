@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -39,6 +40,9 @@ SCRIPTS = (
     "build_hcwdl_representation_fixed_size_inventory.py",
     "build_hcwdl_representation_parent_import.py",
     "build_hcwdl_representation_miniature_evidence.py",
+    "build_hcwdl_representation_nonfinal_acceptance_action_result.py",
+    "build_hcwdl_representation_nonfinal_acceptance_authority.py",
+    "build_hcwdl_representation_nonfinal_acceptance_scheduler_evidence.py",
     "build_hcwdl_representation_production_worker_smoke_proof.py",
     "build_hcwdl_representation_recipe.py",
     "build_hcwdl_representation_resource_profile.py",
@@ -52,6 +56,7 @@ SCRIPTS = (
     "build_hcwdl_representation_tigris_action_proof.py",
     "build_hcwdl_representation_tigris_evidence_bundle.py",
     "build_hcwdl_representation_targets.py",
+    "build_hcwdl_representation_two_update_acceptance_proof.py",
     "build_hcwdl_representation_usr1_exact_resume_proof.py",
     "build_hcwdl_representation_validation_proxy_proof.py",
     "build_hcwdl_shared_final_assignment_shard.py",
@@ -78,6 +83,7 @@ SCRIPTS = (
     "resume_hcwdl_representation_campaign.py",
     "run_hcwdl_representation_local_smoke.py",
     "run_hcwdl_representation_acceptance_bootstrap.py",
+    "run_hcwdl_representation_nonfinal_acceptance_action.py",
     "run_hcwdl_representation_task.py",
     "select_hcwdl_representation_checkpoint.py",
     "submit_hcwdl_representation_campaign.py",
@@ -402,6 +408,305 @@ def test_representation_workers_have_exact_environment_and_dispatch_contracts() 
     assert set(DETERMINISTIC_KINDS) == {"target_build", "prediction_shard"}
 
 
+def test_nonfinal_acceptance_workers_are_scalar_and_role_isolated() -> None:
+    ordinary = (
+        REPOSITORY / "sbatch/run_hcwdl_representation_nonfinal_acceptance.sh"
+    ).read_text(encoding="utf-8")
+    deterministic = (
+        REPOSITORY
+        / "sbatch/run_hcwdl_representation_nonfinal_acceptance_deterministic.sh"
+    ).read_text(encoding="utf-8")
+    for text in (ordinary, deterministic):
+        assert text.startswith("#!/usr/bin/env bash\nset -euo pipefail\n")
+        assert 'source "${PROJECT_DIR}/sbatch/common.sh"' in text
+        assert "hlt_activate" in text
+        assert "export PYTHONNOUSERSITE=1" in text
+        assert "export PYTHONDONTWRITEBYTECODE=1" in text
+        assert 'export LD_LIBRARY_PATH="${CONDA_PREFIX}/lib' in text
+        assert "HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_AUTHORITY" in text
+        assert "HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_ACTION" in text
+        assert "run_hcwdl_representation_nonfinal_acceptance_action.py" in text
+        assert "SLURM_ARRAY_TASK_ID" not in text
+        assert "--array-index" not in text
+        assert "--campaign-spec" not in text
+        assert "--task" not in text
+        assert "--scheduler-evidence" not in text
+        assert "--output" not in text
+        assert "sbatch " not in text
+        assert "BASH_SOURCE" not in text
+    assert "CUBLAS_WORKSPACE_CONFIG" not in ordinary
+    assert "--deterministic-worker" not in ordinary
+    assert ordinary.rstrip().endswith(
+        '--action "${HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_ACTION}"'
+    )
+    assert "export CUBLAS_WORKSPACE_CONFIG=:4096:8" in deterministic
+    assert deterministic.rstrip().endswith("--deterministic-worker")
+
+
+def test_usr1_proof_cli_passes_only_authority_bound_action_results(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    script = (
+        REPOSITORY / "scripts/build_hcwdl_representation_usr1_exact_resume_proof.py"
+    )
+    monkeypatch.syspath_prepend(str(script.parent))
+    module_spec = importlib.util.spec_from_file_location(
+        "_test_hcwdl_usr1_exact_resume_cli", script,
+    )
+    assert module_spec is not None and module_spec.loader is not None
+    module = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(module)
+    captured: dict[str, object] = {}
+
+    def fake_reference(path: Path) -> dict[str, str]:
+        return {"path": str(path), "sha256": path.name}
+
+    def fake_build(**kwargs: object) -> dict[str, object]:
+        captured.update(kwargs)
+        return {"proof": True}
+
+    monkeypatch.setattr(module, "artifact_reference", fake_reference)
+    monkeypatch.setattr(module, "build_usr1_exact_resume_proof", fake_build)
+    monkeypatch.setattr(
+        module, "publish",
+        lambda path, value: captured.update(output=path, published=value),
+    )
+    monkeypatch.setattr(sys, "argv", [
+        str(script),
+        "--authority", str(tmp_path / "authority.json"),
+        "--reference-action-result", str(tmp_path / "reference.json"),
+        "--interrupt-action-result", str(tmp_path / "interrupt.json"),
+        "--resume-action-result", str(tmp_path / "resume.json"),
+        "--output", str(tmp_path / "proof.json"),
+    ])
+    assert module.main() == 0
+    assert captured["require_genuine"] is True
+    assert captured["authority"] == {
+        "path": str(tmp_path / "authority.json"),
+        "sha256": "authority.json",
+    }
+    assert captured["action_results"] == {
+        "usr1_reference": {
+            "path": str(tmp_path / "reference.json"), "sha256": "reference.json",
+        },
+        "usr1_interrupt": {
+            "path": str(tmp_path / "interrupt.json"), "sha256": "interrupt.json",
+        },
+        "usr1_resume": {
+            "path": str(tmp_path / "resume.json"), "sha256": "resume.json",
+        },
+    }
+    assert captured["published"] == {"proof": True}
+
+
+def test_nonfinal_authority_cli_uses_canonical_input_projection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    script = (
+        REPOSITORY
+        / "scripts/build_hcwdl_representation_nonfinal_acceptance_authority.py"
+    )
+    monkeypatch.syspath_prepend(str(script.parent))
+    module_spec = importlib.util.spec_from_file_location(
+        "_test_hcwdl_nonfinal_authority_cli", script,
+    )
+    assert module_spec is not None and module_spec.loader is not None
+    module = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(module)
+    events: list[tuple[str, object]] = []
+
+    def fake_inputs(**kwargs: object) -> dict[str, object]:
+        events.append(("build_inputs", kwargs))
+        return {"inputs": True}
+
+    def fake_authority(**kwargs: object) -> dict[str, object]:
+        events.append(("build_authority", kwargs))
+        return {"authority": True}
+
+    monkeypatch.setattr(module, "build_nonfinal_acceptance_action_inputs", fake_inputs)
+    monkeypatch.setattr(module, "build_nonfinal_acceptance_authority", fake_authority)
+    monkeypatch.setattr(
+        module, "publish",
+        lambda path, value: events.append(("publish", (path, value))),
+    )
+    derived = tmp_path / "derived"
+    paths = {
+        name: tmp_path / f"{name}.json"
+        for name in (
+            "bootstrap", "parent_campaign", "parent_recipe", "parent_import",
+            "parent_loss", "representation_recipe",
+        )
+    }
+    paths["action_inputs"] = derived / "action_inputs.json"
+    paths["authority"] = derived / "authority.json"
+    ordinary = tmp_path / "ordinary.sh"
+    deterministic = tmp_path / "deterministic.sh"
+    argv = [
+        str(script), "--project-dir", str(REPOSITORY),
+        "--acceptance-bootstrap", str(paths["bootstrap"]),
+        "--parent-campaign-spec", str(paths["parent_campaign"]),
+        "--parent-recipe", str(paths["parent_recipe"]),
+        "--parent-import", str(paths["parent_import"]),
+        "--parent-loss-attestation", str(paths["parent_loss"]),
+        "--representation-recipe", str(paths["representation_recipe"]),
+        "--ordinary-worker", str(ordinary),
+        "--deterministic-worker", str(deterministic),
+        "--derived-root", str(derived),
+        "--action-inputs-output", str(paths["action_inputs"]),
+        "--authorization-phrase", "exact phrase fixture",
+        "--output", str(paths["authority"]),
+    ]
+    monkeypatch.setattr(sys, "argv", argv)
+    assert module.main() == 0
+    assert [event[0] for event in events] == [
+        "build_inputs", "publish", "build_authority", "publish",
+    ]
+    assert events[0][1] == {
+        "acceptance_bootstrap_path": paths["bootstrap"],
+        "representation_recipe_path": paths["representation_recipe"],
+        "derived_root": derived,
+    }
+    authority_kwargs = events[2][1]
+    assert isinstance(authority_kwargs, dict)
+    assert authority_kwargs["action_inputs_path"] == paths["action_inputs"]
+    assert authority_kwargs["authorization_phrase"] == "exact phrase fixture"
+
+    for option, wrong_path in (
+        ("--action-inputs-output", tmp_path / "off-route-inputs.json"),
+        ("--output", tmp_path / "off-route-authority.json"),
+    ):
+        changed = list(argv)
+        changed[changed.index(option) + 1] = str(wrong_path)
+        monkeypatch.setattr(sys, "argv", changed)
+        with pytest.raises(PermissionError, match="canonical route"):
+            module.main()
+
+
+def test_nonfinal_action_result_cli_requires_genuine_post_job_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    script = (
+        REPOSITORY
+        / "scripts/build_hcwdl_representation_nonfinal_acceptance_action_result.py"
+    )
+    monkeypatch.syspath_prepend(str(script.parent))
+    module_spec = importlib.util.spec_from_file_location(
+        "_test_hcwdl_nonfinal_action_result_cli", script,
+    )
+    assert module_spec is not None and module_spec.loader is not None
+    module = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(module)
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        module, "artifact_reference",
+        lambda path: {"path": str(path), "sha256": path.name},
+    )
+    monkeypatch.setattr(module, "artifact", lambda path: {"authority": True})
+    result_path = tmp_path / "canonical" / "result.json"
+    monkeypatch.setattr(
+        module, "nonfinal_acceptance_action_result_path",
+        lambda authority, *, action_id: result_path,
+    )
+    monkeypatch.setattr(
+        module, "build_nonfinal_acceptance_action_result",
+        lambda **kwargs: captured.update(kwargs) or {"result": True},
+    )
+    monkeypatch.setattr(
+        module, "publish",
+        lambda path, value: captured.update(output=path, published=value),
+    )
+    monkeypatch.setattr(sys, "argv", [
+        str(script), "--authority", str(tmp_path / "authority.json"),
+        "--action", "rset_m1c_two_update",
+        "--scheduler-evidence", str(tmp_path / "scheduler.json"),
+        "--execution-receipt", str(tmp_path / "receipt.json"),
+    ])
+    assert module.main() == 0
+    assert captured["action_id"] == "rset_m1c_two_update"
+    assert captured["require_genuine"] is True
+    assert captured["scheduler_evidence"] == {
+        "path": str(tmp_path / "scheduler.json"), "sha256": "scheduler.json",
+    }
+    assert captured["execution_receipt"] == {
+        "path": str(tmp_path / "receipt.json"), "sha256": "receipt.json",
+    }
+    assert captured["published"] == {"result": True}
+    assert captured["output"] == result_path
+
+
+def test_nonfinal_action_cli_dispatches_validation_proxy_and_publishes_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    script = (
+        REPOSITORY / "scripts/run_hcwdl_representation_nonfinal_acceptance_action.py"
+    )
+    source = script.read_text(encoding="utf-8")
+    assert "execute_nonfinal_action" not in source
+    assert "execute_nonfinal_production_action" in source
+    monkeypatch.syspath_prepend(str(script.parent))
+    module_spec = importlib.util.spec_from_file_location(
+        "_test_hcwdl_nonfinal_action_cli", script,
+    )
+    assert module_spec is not None and module_spec.loader is not None
+    module = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(module)
+    authority_path = tmp_path / "authority.json"
+    authority = {"content_hash": "a" * 64}
+    workspace = tmp_path / "workspace"
+    semantic = {"path": str(workspace / "result.json"), "sha256": "b" * 64}
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(module, "artifact", lambda path: authority)
+    monkeypatch.setattr(
+        module, "artifact_reference",
+        lambda path: {"path": str(path), "sha256": "c" * 64},
+    )
+
+    class Result:
+        semantic_outputs = {"primary": semantic}
+        dependency_action_results = {}
+        scheduler_job_id = "12345"
+
+    monkeypatch.setattr(
+        module, "execute_nonfinal_production_action",
+        lambda **kwargs: captured.update(execute=kwargs) or Result(),
+    )
+    monkeypatch.setattr(
+        module, "build_nonfinal_acceptance_execution_receipt",
+        lambda **kwargs: captured.update(receipt=kwargs) or {"receipt": True},
+    )
+    receipt_path = workspace / "execution_receipt.json"
+    monkeypatch.setattr(
+        module, "nonfinal_acceptance_execution_receipt_path",
+        lambda *args, **kwargs: receipt_path,
+    )
+    monkeypatch.setattr(
+        module, "publish",
+        lambda path, value: captured.update(published=(path, value)),
+    )
+    monkeypatch.setattr(sys, "argv", [
+        str(script), "--authority", str(authority_path),
+        "--action", "validation_proxy", "--deterministic-worker",
+    ])
+    assert module.main() == 0
+    assert captured["execute"] == {
+        "authority": authority,
+        "authority_path": authority_path,
+        "action_id": "validation_proxy",
+        "project_dir": module.REPO_ROOT,
+        "deterministic_worker": True,
+    }
+    assert captured["receipt"] == {
+        "authority": {"path": str(authority_path), "sha256": "c" * 64},
+        "action_id": "validation_proxy",
+        "semantic_outputs": {"primary": semantic},
+        "dependency_action_results": {},
+        "scheduler_job_id": "12345",
+        "project_dir": module.REPO_ROOT,
+        "local_fixture": False,
+    }
+    assert captured["published"] == (receipt_path, {"receipt": True})
+
+
 @pytest.mark.skipif(
     os.name == "nt" or shutil.which("bash") is None,
     reason="a directly executable POSIX bash is unavailable",
@@ -411,6 +716,9 @@ def test_representation_workers_have_exact_environment_and_dispatch_contracts() 
     (
         "run_hcwdl_representation_task.sh",
         "run_hcwdl_representation_deterministic_task.sh",
+        "run_hcwdl_representation_nonfinal_acceptance.sh",
+        "run_hcwdl_representation_nonfinal_acceptance_deterministic.sh",
+        "run_hcwdl_representation_nonfinal_evidence_collector.sh",
     ),
 )
 def test_representation_worker_bash_syntax(worker: str) -> None:

@@ -517,14 +517,30 @@ def _prepare_target_partitions(
             or bounded_row_limit < len(normalized_sources)
         ):
             raise ValueError("cache-miniature row bound cannot cover every source partition")
-        # Every source partition remains represented, as required by the
-        # authenticated forward spec.  The deterministic remainder allocation
-        # keeps the total at or below the registry's global row limit.
-        base, remainder = divmod(bounded_row_limit, len(normalized_sources))
-        partition_limits = {
-            partition: base + (offset < remainder)
-            for offset, partition in enumerate(sorted(normalized_sources))
-        }
+        if not row_selection.all_rows and row_selection.rows <= bounded_row_limit:
+            # A bounded non-final acceptance selection is already an exact,
+            # authenticated population.  Preserve its per-source allocation;
+            # re-slicing it evenly can silently underfill the required 512
+            # rows whenever the global class-stratified ranks are uneven.
+            partition_limits = {
+                partition: row_selection.source_rows(record.path)
+                for partition, (_source_id, record) in normalized_sources.items()
+            }
+            if (
+                any(limit <= 0 for limit in partition_limits.values())
+                or sum(partition_limits.values()) != row_selection.rows
+            ):
+                raise ValueError(
+                    "bounded target selection does not exactly cover every source"
+                )
+        else:
+            # A generic miniature may start from an unbounded selection.  Keep
+            # every source represented and deterministically allocate its cap.
+            base, remainder = divmod(bounded_row_limit, len(normalized_sources))
+            partition_limits = {
+                partition: base + (offset < remainder)
+                for offset, partition in enumerate(sorted(normalized_sources))
+            }
     factories: dict[str, Callable[[], Iterator[Any]]] = {}
     partition_specs: dict[str, dict[str, int]] = {}
     alpha_by_view = {"d25": 0.25, "d50": 0.50, "d75": 0.75, "d100": 1.0}
@@ -870,20 +886,28 @@ def target_build_adapter(spec, task, index, runtime_row):
     source_partitions = _exact_mapping(
         value["source_partitions"], name="target source partitions",
     )
-    from .hcwdl_representation_targets import validate_target_consumer_registry
+    from .hcwdl_representation_targets import (
+        NONFINAL_ACCEPTANCE_TARGET_PURPOSE,
+        validate_target_consumer_registry,
+    )
 
     validate_target_consumer_registry(registry, logical_bank=logical)
     purpose = str(registry["payload"]["purpose"])
     if task.target_purpose != purpose:
         raise ValueError("target build task purpose differs from consumer registry")
     bounded_row_limit = None
-    if purpose == "miniature":
+    if purpose in {"miniature", NONFINAL_ACCEPTANCE_TARGET_PURPOSE}:
         consumers = registry["payload"]["consumers"]
-        # The registry validator proves the miniature has exactly one
-        # non-scientific, non-training consumer with this immutable limit.
-        bounded_row_limit = int(
-            consumers[0]["execution_identity_payload"]["bounded_row_limit"]
-        )
+        # The registry validator proves every bounded consumer shares one
+        # immutable limit.  Acceptance may have several real training
+        # trajectories, but it may never expand the source selection.
+        limits = {
+            row["execution_identity_payload"]["bounded_row_limit"]
+            for row in consumers
+        }
+        if len(limits) != 1:
+            raise PermissionError("bounded target consumers disagree on row limit")
+        bounded_row_limit = int(next(iter(limits)))
     partition_factories, partitions = _prepare_target_partitions(
         split=split, selection=selection, data_root=value["data_root"],
         teacher_view=str(value["teacher_view"]),
@@ -1508,11 +1532,22 @@ def training_adapter(spec, task, index, runtime_row):
             "parent_import", "model_sources", "shuffle_map", "view_cache_max_gib",
             "registered_output_row", "publication_owner", "confirmation_registry",
         ),
+        optional=(
+            "acceptance_full_loss_binding", "acceptance_row_selection_sha256",
+        ),
     )
     parent_recipe = _versioned_reference(value["parent_recipe"], name="parent recipe")
     recipe = _versioned_reference(value["representation_recipe"], name="representation recipe")
     split = _versioned_reference(value["split_manifest"], name="split manifest")
     selection = _versioned_reference(value["row_selection"], name="row selection")
+    acceptance_selection_sha256 = value.get("acceptance_row_selection_sha256")
+    if acceptance_selection_sha256 is not None and (
+        require_sha256(
+            acceptance_selection_sha256,
+            name="acceptance row selection SHA-256",
+        ) != selection["content_hash"]
+    ):
+        raise PermissionError("acceptance row selection lineage differs")
     runtime_signature = _versioned_reference(
         value["producer_runtime_signature"], name="producer runtime signature",
     )
@@ -1706,6 +1741,11 @@ def training_adapter(spec, task, index, runtime_row):
             "logical_sha256": resume_lineage["target_logical"],
             "manifest_sha256": target_bank.manifest["content_hash"],
             "source": "authenticated_disk_target_then_process_local_ram",
+            **(
+                {"row_selection_sha256": selection["content_hash"]}
+                if acceptance_selection_sha256 is not None
+                else {}
+            ),
         },
         token_resources=bundle.token, relation_resources=bundle.relation,
         output_dir=output, resume_lineage=resume_lineage,
@@ -1726,7 +1766,12 @@ def training_adapter(spec, task, index, runtime_row):
         calibration_expected_batches=calibration_batches_count,
         calibration_minimum_valid_batches=min(12, calibration_batches_count),
         diagnostic_batches=diagnostic_batches,
+        acceptance_full_loss_binding=value.get("acceptance_full_loss_binding"),
         preemption_requested=runtime_row.get("_preemption_requested"),
+        preemption_wait_after_update=runtime_row.get(
+            "_preemption_wait_after_update"
+        ),
+        preemption_wait=runtime_row.get("_preemption_wait"),
         registered_output_row=value["registered_output_row"],
         publication_owner=value["publication_owner"],
     )

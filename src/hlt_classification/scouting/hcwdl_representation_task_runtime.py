@@ -36,6 +36,7 @@ class RepresentationPreemptionMonitor:
 
     def __init__(self) -> None:
         self.requested = False
+        self.signal_names: list[str] = []
         self.previous: dict[int, object] = {}
 
     def install(self) -> None:
@@ -48,8 +49,13 @@ class RepresentationPreemptionMonitor:
             self.previous[number] = signal.getsignal(number)
             signal.signal(number, self._request)
 
-    def _request(self, _signum, _frame) -> None:
+    def _request(self, signum, _frame) -> None:
         self.requested = True
+        try:
+            name = signal.Signals(int(signum)).name
+        except (TypeError, ValueError):
+            name = f"SIGNAL_{signum}"
+        self.signal_names.append(name)
 
     def restore(self) -> None:
         for number, handler in self.previous.items():
@@ -58,6 +64,16 @@ class RepresentationPreemptionMonitor:
 
     def is_requested(self) -> bool:
         return bool(self.requested)
+
+    def observed_signals(self) -> tuple[str, ...]:
+        """Return exact signal identities for acceptance/recovery auditing."""
+
+        return tuple(self.signal_names)
+
+    def observed_exact_usr1(self) -> bool:
+        """True only for one real USR1 request and no TERM/other signal."""
+
+        return self.observed_signals() == ("SIGUSR1",)
 
 # This is the complete built-in task-kind surface.  It is deliberately data,
 # not import strings; `_production_handlers` below imports each owned adapter
