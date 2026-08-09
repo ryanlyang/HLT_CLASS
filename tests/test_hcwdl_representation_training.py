@@ -20,7 +20,11 @@ from hlt_classification.data.cache_contracts import (
 )
 from hlt_classification.models.hcwdl_representation import HCWDLRepresentationHeads
 import hlt_classification.scouting.hcwdl_representation_training as training_module
-from hlt_classification.scouting.hcwdl_recipe import example_recipe
+from hlt_classification.scouting.hcwdl_recipe import (
+    LEGACY_CLASS_WEIGHT_POLICY,
+    LEGACY_RECIPE_CONTRACT,
+    example_recipe,
+)
 from hlt_classification.scouting.hcwdl_representation_calibration import (
     GRADIENT_CALIBRATION_CONTRACT,
     GradientCalibrationComponent,
@@ -405,6 +409,44 @@ def test_scientific_configuration_is_exactly_sixty_passes_without_update_cap():
     assert configuration.training_passes == 60
     assert configuration.maximum_optimizer_updates is None
     assert configuration.active_total_updates == 60 * configuration.updates_per_pass
+
+
+def test_representation_training_rejects_readable_weighted_v3_parent():
+    legacy = dict(example_recipe())
+    legacy["contract"] = LEGACY_RECIPE_CONTRACT
+    legacy["schema_version"] = 3
+    counts = np.arange(1, 16, dtype=np.float64)
+    inverse = 1.0 / np.sqrt(counts)
+    weights = (counts.sum() / np.sum(counts * inverse) * inverse).astype(np.float32)
+    legacy["class_weighting"] = {
+        **legacy["class_weighting"],
+        "policy": LEGACY_CLASS_WEIGHT_POLICY,
+        "train_class_counts": [int(value) for value in counts],
+    }
+    legacy["class_weights"] = weights.tolist()
+    legacy = with_content_hash({
+        key: value for key, value in legacy.items() if key != "content_hash"
+    })
+
+    with pytest.raises(ValueError, match="unweighted HCWDL_RECIPE/v4"):
+        representation_training_configuration(
+            "RSET_M2c", legacy, train_rows=300_000,
+            replicate_seed=1337, mode="synthetic_test",
+        )
+
+
+def test_scientific_representation_training_requires_primary_parent_profile():
+    ablation = dict(example_recipe())
+    ablation.pop("content_hash")
+    ablation["authorized_for_execution"] = True
+    ablation["recipe_profile"] = "registered_ablation"
+    ablation = with_content_hash(ablation)
+
+    with pytest.raises(PermissionError, match="profile is not authorized"):
+        representation_training_configuration(
+            "RSET_M2c", ablation, train_rows=300_000,
+            replicate_seed=1337, mode="scientific",
+        )
 
 
 def test_relation_uses_raw_contextual_states_and_ordinary_family_axis(

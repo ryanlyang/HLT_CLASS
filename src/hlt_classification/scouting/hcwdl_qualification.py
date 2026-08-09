@@ -12,8 +12,10 @@ import numpy as np
 from hlt_classification.data.cache_contracts import require_sha256, validate_content_hash, with_content_hash
 
 
-QUALIFICATION_CONTRACT: Final = "HCWDL_ENDPOINT_QUALIFICATION/v1"
+LEGACY_QUALIFICATION_CONTRACT: Final = "HCWDL_ENDPOINT_QUALIFICATION/v1"
+QUALIFICATION_CONTRACT: Final = "HCWDL_ENDPOINT_QUALIFICATION/v2"
 DIAGNOSTIC_ACK_CONTRACT: Final = "HCWDL_ENDPOINT_DIAGNOSTIC_ACK/v1"
+DIAGNOSTIC_WAIVER_CONTRACT: Final = "HCWDL_ENDPOINT_DIAGNOSTIC_WAIVER/v1"
 DIAGNOSTIC_ACK_PHRASE: Final = (
     "I acknowledge the HCWDL endpoint diagnostic and authorize the fixed Shell Exact ladder."
 )
@@ -44,6 +46,24 @@ def recovered_fraction(
     if not all(math.isfinite(item) for item in (value, lower, upper)):
         raise FloatingPointError("gap-recovery input is nonfinite")
     return None if denominator <= tolerance else numerator / denominator
+
+
+def validate_endpoint_diagnostics(
+    reports: Mapping[str, Mapping[str, Any]],
+    endpoint_invariants: Mapping[str, bool],
+) -> None:
+    """Validate the scientific diagnostics before any continuation decision."""
+
+    if set(reports) != set(QUALIFIERS):
+        raise ValueError("HCWDL qualification must contain the fixed six endpoints")
+    if set(endpoint_invariants) != {
+        "d0_exact_hlt", "d100_assigned_exact_offline", "dustbins_exact_hlt",
+        "hlt_skeleton_unchanged", "all_21_fields_checked",
+    } or not all(endpoint_invariants.values()):
+        raise PermissionError("HCWDL Shell Exact endpoint invariants are incomplete")
+    for report in reports.values():
+        require_sha256(report.get("content_hash"), name="qualification report SHA-256")
+        _finite_metrics(report["validation"])
 
 
 def build_diagnostic_acknowledgement(
@@ -110,19 +130,85 @@ def validate_diagnostic_acknowledgement(
     return digest
 
 
+def build_diagnostic_waiver(
+    *, campaign_spec_sha256: str, assignment_manifest_sha256: str,
+    recipe_sha256: str, cache_miniature_sha256: str,
+    qualifier_report_sha256: Mapping[str, str],
+    submission_authorization_sha256: str,
+) -> dict[str, Any]:
+    """Bind a preauthorized, nonselecting continuation to completed diagnostics."""
+
+    if set(qualifier_report_sha256) != set(QUALIFIERS):
+        raise ValueError("HCWDL endpoint waiver must bind all six qualifiers")
+    return with_content_hash({
+        "contract": DIAGNOSTIC_WAIVER_CONTRACT, "schema_version": 1,
+        "campaign_spec_sha256": require_sha256(
+            campaign_spec_sha256, name="campaign spec SHA-256",
+        ),
+        "assignment_manifest_sha256": require_sha256(
+            assignment_manifest_sha256, name="assignment manifest SHA-256",
+        ),
+        "recipe_sha256": require_sha256(recipe_sha256, name="recipe SHA-256"),
+        "cache_miniature_sha256": require_sha256(
+            cache_miniature_sha256, name="cache miniature SHA-256",
+        ),
+        "qualifier_reports": {
+            name: require_sha256(value, name=f"qualifier report {name} SHA-256")
+            for name, value in sorted(qualifier_report_sha256.items())
+        },
+        "submission_authorization_sha256": require_sha256(
+            submission_authorization_sha256,
+            name="submission authorization SHA-256",
+        ),
+        "continuation_mode": "preauthorized_automatic",
+        "endpoint_diagnostic_review_waived_before_execution": True,
+        "reports_reviewed_posthoc": False,
+        "fixed_primary_repair": "HIGHCOV_SHELL_EXACT/v1",
+        "selection_performed": False,
+    })
+
+
+def validate_diagnostic_waiver(
+    value: Mapping[str, Any], *, campaign_spec_sha256: str,
+    assignment_manifest_sha256: str, recipe_sha256: str,
+    cache_miniature_sha256: str, qualifier_report_sha256: Mapping[str, str],
+    submission_authorization_sha256: str,
+) -> str:
+    digest = validate_content_hash(
+        value, expected_contract=DIAGNOSTIC_WAIVER_CONTRACT,
+        expected_schema_version=1,
+    )
+    expected = {
+        "campaign_spec_sha256": campaign_spec_sha256,
+        "assignment_manifest_sha256": assignment_manifest_sha256,
+        "recipe_sha256": recipe_sha256,
+        "cache_miniature_sha256": cache_miniature_sha256,
+        "submission_authorization_sha256": submission_authorization_sha256,
+    }
+    for name, expected_hash in expected.items():
+        require_sha256(expected_hash, name=name)
+        if value.get(name) != expected_hash:
+            raise ValueError(f"HCWDL endpoint waiver {name} lineage differs")
+    if value.get("qualifier_reports") != dict(sorted(qualifier_report_sha256.items())):
+        raise ValueError("HCWDL endpoint waiver qualifier lineage differs")
+    if (
+        value.get("continuation_mode") != "preauthorized_automatic"
+        or value.get("endpoint_diagnostic_review_waived_before_execution") is not True
+        or value.get("reports_reviewed_posthoc") is not False
+        or value.get("fixed_primary_repair") != "HIGHCOV_SHELL_EXACT/v1"
+        or value.get("selection_performed") is not False
+    ):
+        raise PermissionError("HCWDL endpoint diagnostic waiver is invalid")
+    return digest
+
+
 def build_qualification_report(
     reports: Mapping[str, Mapping[str, Any]], *, campaign_spec_sha256: str,
     assignment_manifest_sha256: str, recipe_sha256: str,
     endpoint_invariants: Mapping[str, bool], shell_strata: Sequence[Mapping[str, Any]],
-    diagnostic_ack_sha256: str,
+    diagnostic_ack_sha256: str, continuation_mode: str = "manual_posthoc",
 ) -> dict[str, Any]:
-    if set(reports) != set(QUALIFIERS):
-        raise ValueError("HCWDL qualification must contain the fixed six endpoints")
-    if set(endpoint_invariants) != {
-        "d0_exact_hlt", "d100_assigned_exact_offline", "dustbins_exact_hlt",
-        "hlt_skeleton_unchanged", "all_21_fields_checked",
-    } or not all(endpoint_invariants.values()):
-        raise PermissionError("HCWDL Shell Exact endpoint invariants are incomplete")
+    validate_endpoint_diagnostics(reports, endpoint_invariants)
     acknowledgement_hash = require_sha256(
         diagnostic_ack_sha256, name="endpoint diagnostic acknowledgement SHA-256",
     )
@@ -152,7 +238,7 @@ def build_qualification_report(
         ),
     }
     return with_content_hash({
-        "contract": QUALIFICATION_CONTRACT, "schema_version": 1,
+        "contract": QUALIFICATION_CONTRACT, "schema_version": 2,
         "campaign_spec_sha256": require_sha256(
             campaign_spec_sha256, name="campaign spec SHA-256",
         ),
@@ -165,6 +251,7 @@ def build_qualification_report(
         "finite_bad_performance_is_a_valid_result": True,
         "endpoint_invariants": dict(endpoint_invariants),
         "user_diagnostic_acknowledged_or_waived": True,
+        "endpoint_continuation": continuation_mode,
         "diagnostic_ack_sha256": acknowledgement_hash,
         "reports": parents, "metrics": metrics, "t0_to_toff_gap_recovery": recovery,
         "shell_strata": [dict(row) for row in shell_strata],
@@ -236,8 +323,15 @@ def compute_shell_strata(
 
 
 def validate_qualification_report(value: Mapping[str, Any]) -> str:
+    contract = value.get("contract")
+    if contract == LEGACY_QUALIFICATION_CONTRACT:
+        schema_version = 1
+    elif contract == QUALIFICATION_CONTRACT:
+        schema_version = 2
+    else:
+        raise ValueError("HCWDL qualification contract differs")
     digest = validate_content_hash(
-        value, expected_contract=QUALIFICATION_CONTRACT, expected_schema_version=1,
+        value, expected_contract=str(contract), expected_schema_version=schema_version,
     )
     if value.get("fixed_primary_repair") != "HIGHCOV_SHELL_EXACT/v1":
         raise ValueError("HCWDL qualification repair differs")
@@ -245,12 +339,19 @@ def validate_qualification_report(value: Mapping[str, Any]) -> str:
         raise ValueError("HCWDL endpoint qualification cannot select a repair")
     if set(value.get("reports", {})) != set(QUALIFIERS):
         raise ValueError("HCWDL qualification report set differs")
+    if schema_version >= 2 and value.get("endpoint_continuation") not in {
+        "manual_posthoc", "preauthorized_automatic",
+    }:
+        raise ValueError("HCWDL qualification continuation mode differs")
     return digest
 
 
 __all__ = [
-    "DIAGNOSTIC_ACK_CONTRACT", "DIAGNOSTIC_ACK_PHRASE", "QUALIFICATION_CONTRACT",
+    "DIAGNOSTIC_ACK_CONTRACT", "DIAGNOSTIC_ACK_PHRASE", "DIAGNOSTIC_WAIVER_CONTRACT",
+    "LEGACY_QUALIFICATION_CONTRACT",
     "QUALIFIERS", "REQUIRED_METRICS", "build_diagnostic_acknowledgement",
-    "build_qualification_report", "compute_shell_strata", "recovered_fraction",
-    "validate_diagnostic_acknowledgement", "validate_qualification_report",
+    "build_diagnostic_waiver", "build_qualification_report", "compute_shell_strata",
+    "recovered_fraction", "validate_diagnostic_acknowledgement",
+    "validate_diagnostic_waiver", "validate_endpoint_diagnostics",
+    "validate_qualification_report",
 ]

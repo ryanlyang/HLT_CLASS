@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from pathlib import Path
+import subprocess
 
 import pytest
 
 from hlt_classification.data.cache_contracts import with_content_hash
+from hlt_classification.provenance import capture_source_snapshot
 from hlt_classification.scouting.hcwdl_representation_graph import (
     ASCENT_GRAPH_SHA256,
     CONTROL_REGISTRY_SHA256,
@@ -15,9 +18,11 @@ from hlt_classification.scouting.hcwdl_representation_graph import (
 from hlt_classification.scouting.hcwdl_representation_recipe import (
     FROZEN_SCIENTIFIC_VALUES_SHA256,
     KERNEL_RESOURCE_NAMES,
+    PARENT_RECIPE_CONTRACT,
     REQUIRED_EVIDENCE_KEYS,
     REQUIRED_PARENT_KEYS,
     build_representation_recipe,
+    derive_recipe_producer_source_sha256,
     example_representation_recipe,
     frozen_scientific_values,
     validate_representation_recipe,
@@ -50,6 +55,35 @@ def test_overlay_binds_graph_controls_resources_evidence_and_parent_lineage():
     assert payload["scientific_values_sha256"] == FROZEN_SCIENTIFIC_VALUES_SHA256
     assert payload["kernel_array_logical_hashes"] == dict(sorted(kernels.items()))
     assert payload["acceptance_evidence"] == dict(sorted(evidence.items()))
+
+
+def test_recipe_producer_source_is_derived_from_clean_checkout(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "producer"
+    repository.mkdir()
+    subprocess.run(["git", "init"], cwd=repository, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "hcwdl-rkd@example.invalid"],
+        cwd=repository, check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "HCWDL RKD Test"],
+        cwd=repository, check=True,
+    )
+    source = repository / "producer.py"
+    source.write_text("VALUE = 1\n", encoding="utf-8")
+    subprocess.run(["git", "add", "producer.py"], cwd=repository, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "producer fixture"],
+        cwd=repository, check=True, capture_output=True,
+    )
+    expected = capture_source_snapshot(repository)["source_snapshot_sha256"]
+    assert derive_recipe_producer_source_sha256(repository) == expected
+
+    source.write_text("VALUE = 2\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="dirty"):
+        derive_recipe_producer_source_sha256(repository)
 
 
 def test_every_frozen_representation_value_is_explicit():
@@ -85,6 +119,11 @@ def test_every_frozen_representation_value_is_explicit():
     }
     assert values["training"]["passes"] == 60
     assert values["training"]["validation_every_passes"] == 1
+    assert values["training"]["representation_row_weight_source"] == (
+        "parent_recipe_exact_15_ones"
+    )
+    assert values["training"]["class_weighted_representation_row_reduction"] is False
+    assert values["training"]["representation_row_reduction"] == "mean(per_jet_loss)"
     assert values["training"]["selection_order"][0] == "highest_macro_ovr_auc"
     assert values["target_forward"]["canonical_rows_per_source_batch"] == 256
     assert values["target_lifecycle"]["logical_banks"] == [
@@ -101,7 +140,7 @@ def test_frozen_values_are_defensive_and_overlay_contains_no_base_recipe_overrid
     payload = example_representation_recipe()["payload"]
     forbidden = set(payload["scientific_values"]["forbidden_parent_overrides"])
     assert not forbidden & set(payload)
-    assert payload["parent_recipe_contract"] == "HCWDL_RECIPE/v3"
+    assert payload["parent_recipe_contract"] == PARENT_RECIPE_CONTRACT
 
 
 @pytest.mark.parametrize(
@@ -147,4 +186,3 @@ def test_recipe_rejects_missing_extra_or_cross_lineage_parents_and_hashes():
     changed["parent_recipe"] = "5" * 64
     with pytest.raises(ValueError, match="parent lineage differs"):
         validate_representation_recipe(recipe, expected_parents=changed)
-

@@ -240,6 +240,20 @@ def generate_spectral_resource_bundle() -> SpectralResourceBundle:
     )
 
 
+def spectral_resource_logical_hashes(
+    resources: SpectralResourceBundle,
+) -> dict[str, str]:
+    """Return the recipe-bound logical identity of every omega/phase block."""
+
+    if not isinstance(resources, SpectralResourceBundle):
+        raise TypeError("spectral resource logical hashes require the full bundle")
+    return {
+        block.resource_name: canonical_sha256(block.logical_hashes)
+        for family in (resources.token, resources.relation)
+        for block in family.blocks
+    }
+
+
 def _resource_arrays(resources: SpectralKernelResources) -> dict[str, np.ndarray]:
     result: dict[str, np.ndarray] = {}
     for index, block in enumerate(resources.blocks):
@@ -640,5 +654,6 @@ __all__ = [
     "cached_finite_mmd", "finite_spectral_features", "generate_spectral_resources",
     "generate_spectral_resource_bundle",
     "ideal_rbf_mmd", "normalized_weights", "slow_pairwise_finite_mmd",
-    "load_spectral_resources", "publish_spectral_resources", "weighted_feature_mean",
+    "load_spectral_resources", "publish_spectral_resources",
+    "spectral_resource_logical_hashes", "weighted_feature_mean",
 ]

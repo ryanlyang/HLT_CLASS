@@ -29,11 +29,11 @@ SCHEMA_VERSION: Final = 1
 # versioned-artifact registry below.
 LOGICAL_ARRAY_HASH_DOMAIN: Final = "HCWDL_REPRESENTATION_LOGICAL_ARRAY/v1"
 
-PARENT_IMPORT_CONTRACT: Final = "HCWDL_REPRESENTATION_PARENT_IMPORT/v1"
-PARENT_LOSS_ATTESTATION_CONTRACT: Final = "HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v1"
+PARENT_IMPORT_CONTRACT: Final = "HCWDL_REPRESENTATION_PARENT_IMPORT/v2"
+PARENT_LOSS_ATTESTATION_CONTRACT: Final = "HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v2"
 ARCHITECTURE_ATTESTATION_CONTRACT: Final = "HCWDL_REPRESENTATION_ARCHITECTURE_ATTESTATION/v1"
 ASCENT_GRAPH_CONTRACT: Final = "HCWDL_REPRESENTATION_ASCENT_GRAPH/v1"
-REPRESENTATION_RECIPE_CONTRACT: Final = "HCWDL_REPRESENTATION_RECIPE/v1"
+REPRESENTATION_RECIPE_CONTRACT: Final = "HCWDL_REPRESENTATION_RECIPE/v2"
 KERNEL_RESOURCES_CONTRACT: Final = "HCWDL_REPRESENTATION_KERNEL_RESOURCES/v1"
 TAP_CONTRACT: Final = "HCWDL_REPRESENTATION_TAP/v1"
 SURFACE_PARITY_CONTRACT: Final = "HCWDL_REPRESENTATION_SURFACE_PARITY/v1"
@@ -190,6 +190,21 @@ CONTRACTS: Final = frozenset(
     value for name, value in tuple(globals().items())
     if name.endswith("_CONTRACT") and isinstance(value, str)
 )
+CONTRACT_SCHEMA_VERSIONS: Final = {
+    contract: (2 if contract == PARENT_LOSS_ATTESTATION_CONTRACT else 1)
+    for contract in CONTRACTS
+}
+CUSTOM_ENVELOPE_CONTRACTS: Final = frozenset({
+    PARENT_LOSS_ATTESTATION_CONTRACT,
+})
+
+
+def contract_schema_version(contract: str) -> int:
+    """Return the exact JSON schema version for one registered contract."""
+
+    if contract not in CONTRACT_SCHEMA_VERSIONS:
+        raise ValueError(f"unknown HCWDL-RKD contract {contract!r}")
+    return CONTRACT_SCHEMA_VERSIONS[contract]
 
 
 def logical_array_sha256_from_byte_hash(
@@ -280,11 +295,15 @@ def build_versioned_artifact(
 
     if contract not in CONTRACTS:
         raise ValueError(f"unknown HCWDL-RKD contract {contract!r}")
+    if contract in CUSTOM_ENVELOPE_CONTRACTS:
+        raise ValueError(
+            f"HCWDL-RKD contract {contract!r} requires its typed artifact builder"
+        )
     if not isinstance(payload, Mapping):
         raise TypeError("HCWDL-RKD artifact payload must be a mapping")
     return with_content_hash({
         "contract": contract,
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": contract_schema_version(contract),
         "parents": validate_parent_hashes(parents, allow_empty=allow_empty_parents),
         "payload": dict(payload),
     })
@@ -302,10 +321,14 @@ def validate_versioned_artifact(
 
     if expected_contract not in CONTRACTS:
         raise ValueError(f"unknown HCWDL-RKD contract {expected_contract!r}")
+    if expected_contract in CUSTOM_ENVELOPE_CONTRACTS:
+        raise ValueError(
+            f"HCWDL-RKD contract {expected_contract!r} requires its typed validator"
+        )
     digest = validate_content_hash(
         value,
         expected_contract=expected_contract,
-        expected_schema_version=SCHEMA_VERSION,
+        expected_schema_version=contract_schema_version(expected_contract),
     )
     parents = validate_parent_hashes(
         value.get("parents", {}), allow_empty=allow_empty_parents,
@@ -366,7 +389,8 @@ def derive_envelope_owner_id(
 __all__ = sorted(
     [name for name in globals() if name.endswith("_CONTRACT")]
     + [
-        "CONTRACTS", "SCHEMA_VERSION", "build_versioned_artifact",
+        "CONTRACTS", "CONTRACT_SCHEMA_VERSIONS", "CUSTOM_ENVELOPE_CONTRACTS",
+        "SCHEMA_VERSION", "build_versioned_artifact", "contract_schema_version",
         "derive_envelope_id", "derive_envelope_owner_id",
         "logical_array_sha256", "logical_array_sha256_from_byte_hash",
         "validate_parent_hashes", "validate_versioned_artifact",

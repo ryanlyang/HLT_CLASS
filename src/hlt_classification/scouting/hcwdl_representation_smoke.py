@@ -743,9 +743,7 @@ def measure_zero_coefficient_parity(
         privileged_teacher = torch.cos(
             torch.arange(45, device=target, dtype=torch.float32),
         ).reshape(3, 15)
-        class_weights = torch.linspace(
-            0.5, 1.5, 15, device=target, dtype=torch.float32,
-        )
+        class_weights = torch.ones(15, device=target, dtype=torch.float32)
         configuration = LossConfiguration.for_mixture(
             arm="HCWDL_ZERO_COEFFICIENT_PARITY",
             ce=0.25, hlt_kd=0.40, privileged_kd=0.35,

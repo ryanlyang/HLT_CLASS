@@ -43,6 +43,7 @@ def main() -> int:
         command_plan_sha256=spec["command_plan_sha256"],
         authorization_phrase=args.authorization_phrase,
         production_authorization_sha256=spec.get("production_authorization_sha256"),
+        endpoint_continuation=spec.get("endpoint_continuation", "manual_posthoc"),
     )
     write_immutable_json(args.output, result)
     return 0

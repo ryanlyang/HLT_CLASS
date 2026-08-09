@@ -45,10 +45,16 @@ split. It never copies or rewrites the ROOT dataset.
 |---|---:|---:|---:|
 | Smoke | 4,096 | 4,096 | inaccessible |
 | Pilot | 300,000 | 100,000 | 100,000 after locks |
+| Midscale500k | 500,000 | 250,000 | 250,000 after locks |
+| Midscale1m | 1,000,000 | 400,000 | 400,000 after locks |
+| Midscale2m | 2,000,000 | 500,000 | 500,000 after locks |
 | Production | every mapped train-role row | every mapped validation-role row | every mapped test-role row after locks |
 
-Pilot selections are deterministic, class-proportional nested subsets of the
-immutable roles. Production counts come from the realized split manifest;
+Pilot, `midscale500k`, `midscale1m`, and `midscale2m` selections are deterministic,
+class-proportional nested subsets of the immutable roles. All three midscale modes
+are distinct registered identities rather than an editable generic midscale
+budget, leaving future midscale sizes free to receive separate identities.
+Production counts come from the realized split manifest;
 nominal 60/20/20 targets are not substituted for whole-file realized counts.
 
 ## 3. Deployment and access invariants
@@ -453,9 +459,9 @@ native-offline TOFF input adapter. Teachers are frozen in evaluation mode.
 
 ## 9. Training budget and observation
 
-Every pilot or production primary ladder model trains for exactly 60 complete
+Every pilot, named-midscale, or production primary ladder model trains for exactly 60 complete
 natural train-role passes. Smoke mirrors the graph with its bounded two-update
-execution budget. Pilot/production updates are:
+execution budget. Non-smoke updates are:
 
 ```text
 ceil(train_rows / effective_batch_size) * 60
@@ -479,7 +485,7 @@ No per-update model checkpoint is published.
 ## 10. Optimization recipe lock
 
 The registered PMARD KD follow-up `pmard_kd_followup_b8a493547de8bd7e`
-resolved the primary dual-teacher decision. A versioned `HCWDL_RECIPE/v3`
+resolved the primary dual-teacher decision. A versioned `HCWDL_RECIPE/v4`
 lock must exist before endpoint or ladder training. It binds:
 
 - effective batch size and accumulation;
@@ -488,12 +494,13 @@ lock must exist before endpoint or ladder training. It binds:
 - single-teacher CE/KD coefficients and domain-routed HLT/privileged temperatures;
 - dual-teacher CE/predecessor/privileged coefficients and independent
   temperatures;
-- class weights, AMP dtype, seed domains, and 60-pass budget;
+- the explicit unweighted per-jet loss policy, AMP dtype, seed domains, and
+  60-pass budget;
 - parent T100/schedule sweep reports and the deterministic selection rule.
 
 The primary dual-teacher rungs are now fixed at 25% CE, 40% predecessor HLT
 KD, and 35% privileged KD; privileged temperature is two and the dual-teacher
-peak learning rate is `3e-4`. Pilot/production still use 60 passes, validate
+peak learning rate is `3e-4`. Pilot/named-midscale/production still use 60 passes, validate
 every pass, and select by macro AUC first. The 40-pass fixed-LR evidence row
 achieved CE `0.667893`, accuracy `0.790030`, and AUC `0.938643`; its 60-pass
 counterpart remained competitive and improved rejection. The 60-pass maximum
@@ -507,8 +514,9 @@ microbatch size are both 256 with no accumulation; AdamW uses betas
 `(0.9, 0.999)`, epsilon `1e-8`, weight decay `0.01`, and no gradient clipping;
 the schedule is five-percent warmup followed by cosine decay to five percent
 of peak. Coefficients remain constant. BF16 model execution, FP32 loss math,
-the square-root inverse-frequency class-weight rule, and the label-only warm
-confirmation control are mandatory.
+unweighted natural-population per-jet loss reductions, and the label-only warm
+confirmation control are mandatory. Earlier square-root-class-weighted HCWDL
+runs remain valid ablations but are not primary-campaign parents.
 
 This is an enforced `primary_ladder` recipe profile, not an implicit default.
 A lower-CE, stronger-privilege, different-temperature, reduced-warm-LR, or
@@ -541,8 +549,8 @@ The primary ladder uses logits only. Representation KD, feature matching, and
 layer freezing are excluded from the primary graph and may be registered as
 post-ladder ablations.
 
-Single-teacher nodes use class-weighted CE plus forward KL from their sole
-teacher. Dual-teacher nodes use class-weighted CE plus independent forward-KL
+Single-teacher nodes use unweighted per-jet CE plus forward KL from their sole
+teacher. Dual-teacher nodes use unweighted per-jet CE plus independent forward-KL
 terms from the HLT predecessor and privileged teacher. Each KL includes its
 own `temperature**2` correction. CE, logits, softmax/log-softmax, KL, and
 reductions execute in FP32 under BF16 ParT execution.
@@ -588,7 +596,7 @@ All selection uses validation. The finalist selector ranks highest macro AUC,
 then lower CE, then higher mean log rejection, then stable graph ID. It freezes
 a limited test wave before final-test assignments exist.
 
-The pilot/production final-test wave contains only:
+The pilot/named-midscale/production final-test wave contains only:
 
 - M0;
 - selected M6 cold and warm graphs;
@@ -675,7 +683,8 @@ and versions rather than silently broadening old contracts.
 ## 20. Implementation boundary
 
 This plan authorizes local implementation and verification. It does not
-authorize a live pilot or production submission. A live pilot requires a clean
+authorize a live pilot, named-midscale, or production submission. A live
+pilot or named-midscale run requires a clean
 pushed commit, completed recipe lock, endpoint-qualification evidence, dry run,
 measured resources, and explicit user launch instruction. Production requires
 the additional evidence and authorization in Section 17.
@@ -686,7 +695,7 @@ Sections 1--20 freeze the scientific design and its compact campaign overview.
 Sections 21 onward are the normative implementation elaboration. They remove
 degrees of freedom that an implementer could otherwise fill in inconsistently.
 They do not replace the fixed decisions above: Shell Exact v1 remains primary,
-both complete ladders run, every pilot/production primary node trains for 60
+both complete ladders run, every pilot/named-midscale/production primary node trains for 60
 passes, validation is every pass, and checkpoint choice begins with highest
 validation macro AUC.
 
@@ -828,7 +837,7 @@ uses the complete selected natural validation role, with no resampling. M
 models and D0 validate on HLT; D25/D50/D75/D100 validate on their own domains;
 TOFF validates on native offline.
 
-There is no performance early stopping. All 60 pilot/production passes run for
+There is no performance early stopping. All 60 pilot/named-midscale/production passes run for
 finite valid results. A lower AUC or higher CE is scientific evidence, not an
 execution error. Smoke is an explicitly non-scientific two-update path test.
 
@@ -876,7 +885,7 @@ but they cannot change scientific batching, optimization, temperatures, loss
 weights, duration, validation cadence, or checkpoint selection. Launch code
 rejects every placeholder.
 
-### 24.2 Required `HCWDL_RECIPE/v3` contents
+### 24.2 Required `HCWDL_RECIPE/v4` contents
 
 The immutable recipe binds:
 
@@ -887,7 +896,8 @@ The immutable recipe binds:
 - single-teacher CE/KD coefficients and domain-routed HLT/privileged temperatures;
 - dual-teacher CE/predecessor/privileged coefficients and two temperatures;
 - constant or fully specified scheduled coefficient behavior;
-- class weights and their authenticated train-count parents;
+- the all-ones loss vector, unweighted policy identifier, and authenticated
+  train-count/row-selection parents;
 - BF16/FP32 policy, dropout, augmentation, and seed domains;
 - 60-pass budget, every-pass validation, and AUC-first selector;
 - evidence report hashes, candidate table, and deterministic choice rule;
@@ -912,7 +922,7 @@ all other peak LRs:       3e-4
 effective/microbatch:     256/256 with accumulation 1
 AdamW:                    betas 0.9/0.999, eps 1e-8, decay 0.01, no clipping
 schedule:                 5% warmup, cosine to 5% of peak
-class weights:            sqrt inverse authenticated train frequency
+loss row weighting:       unweighted natural population (15 exact ones)
 maximum passes:           60
 validation:               every pass
 checkpoint selector:      macro AUC, CE, log rejection, earliest
@@ -944,7 +954,7 @@ For student logits `z_s`, teacher logits `z_t`, label `y`, and temperature
 `tau`:
 
 ```text
-CE = weighted_cross_entropy(z_s, y)
+CE = mean_per_jet_cross_entropy(z_s, y)
 KD = tau^2 * KL(softmax(z_t / tau) || softmax(z_s / tau))
 ```
 
@@ -983,10 +993,10 @@ probabilities before KL.
 ### 25.4 Labels and balance
 
 The same authenticated jet label supplies CE in every domain. The training
-population stays natural. If the recipe uses class-weighted CE, weights are
-computed once from authenticated train-role counts, stored in the recipe, and
-shared by comparable nodes. KD is not class-reweighted unless a separately
-versioned ablation says so.
+population stays natural, and both CE and KD are population means with no
+class reweighting. The recipe still binds the exact train-role counts and row
+selection, but its runtime vector is exactly fifteen ones. Any class-weighted
+loss is a separately versioned ablation.
 
 ### 25.5 Explicit exclusions
 
@@ -1095,7 +1105,7 @@ boundaries are fixed:
 | `src/hlt_classification/scouting/ladder.py` | node, domain, initialization, loss, and graph registry |
 | `src/hlt_classification/scouting/ladder_contracts.py` | versioned specs, reports, locks, and validation |
 | `src/hlt_classification/scouting/ladder_workflow.py` | task command construction and artifact consumption |
-| `src/hlt_classification/scouting/ladder_campaign.py` | smoke, pilot, and production DAG/resource registry |
+| `src/hlt_classification/scouting/ladder_campaign.py` | smoke, pilot, midscale500k, midscale1m, midscale2m, and production DAG/resource registry |
 
 CLIs remain thin argument/delegation layers. Slurm scripts only establish the
 authenticated environment and `exec` the Python task runner.
@@ -1176,6 +1186,11 @@ seed train these label-only teachers:
 | TSOFT | full-shell Shell Soft alpha one |
 | TSHELL | full-shell Shell Exact D100 |
 | TOFF | native offline |
+
+All six runs are a paired stochastic comparison: the same replicate seed is
+mapped to one shared qualifier trajectory covering parameter initialization,
+epoch sampler order, repair RNG, dropout, and all training RNG. The input view
+is the intended experimental difference.
 
 The report includes all required metrics, T0-to-TOFF gap recovery, and TSHELL
 strata by matched-token fraction, matched-pT fraction, mean confidence, and
@@ -1404,13 +1419,15 @@ Dependencies express artifact availability, never a performance threshold.
 Endpoint disappointment, teacher disappointment, or a negative rung gain
 cannot suppress registered descendants.
 
-Submission is explicitly two-phase. Phase one ends after all six endpoint
-qualification tasks and does not submit the qualification lock or any ladder
-job. After the exact qualifier reports are inspected, the human publishes the
-lineage-bound acknowledgement. Phase two validates every phase-one task
-attestation and that acknowledgement, then submits the qualification lock and
-the complete downstream DAG. Slurm `--hold` is forbidden: on Tigris it can
-become an administrator-only hold that the submitting user cannot release.
+Submission supports two explicitly bound modes. `manual_posthoc` retains the
+two-phase review flow. `preauthorized_automatic` binds the review waiver into
+the submission authorization and submits the complete DAG up front. After all
+six qualifier jobs succeed, the gate validates their exact hashes, finite
+required metrics, cache endpoint invariants, recipe, assignments, and original
+authorization, then publishes a nonselecting waiver and continues. Finite poor
+performance never blocks descendants; invalid artifacts, nonfinite metrics, or
+failed jobs do. All downstream dependencies use Slurm `afterok`. Slurm
+`--hold` is forbidden.
 
 ### 33.3 Job granularity and arrays
 
@@ -1479,11 +1496,11 @@ Implementation introduces separately versioned contracts for:
 - `HIGHCOV_DENSE_ASSIGNMENT_SHARD/v2`;
 - `HIGHCOV_DENSE_ASSIGNMENT_MANIFEST/v2` and authorization lock;
 - `HIGHCOV_REPAIR/v1`;
-- `HCWDL_RECIPE/v3` and recipe lock;
+- `HCWDL_RECIPE/v4` and recipe lock;
 - `HCWDL_NODE_SPEC/v1` and graph registry;
 - `HCWDL_TRAINING_REPORT/v1`, checkpoint selection, and resume;
-- `HCWDL_CAMPAIGN_SPEC/v3`, `HCWDL_COMMAND_PLAN/v2`, submission ledger,
-  submission authorization v3, and monitor report;
+- `HCWDL_CAMPAIGN_SPEC/v7` (v3-v6 readable), `HCWDL_COMMAND_PLAN/v3`, submission ledger,
+  submission authorization v7 (v3-v6 readable), and monitor report;
 - endpoint qualification, confirmation registry, finalist, execution, and
   aggregate-report contracts.
 
@@ -1690,7 +1707,7 @@ Files existing without those behaviors do not satisfy this plan.
 
 | Value | Resolution evidence | Must be frozen before |
 |---|---|---|
-| pilot/production RAM and time | genuine Tigris miniature | live submission |
+| pilot/named-midscale/production RAM and time | genuine Tigris miniature | live submission |
 | production tracks/seeds | pilot results and resource report | production spec |
 
 The following are fixed, not unresolved: single-teacher CE/KD `0.25/0.75`;
@@ -1699,7 +1716,7 @@ privileged and HLT temperatures `2/1`; every peak LR `3e-4`; effective and
 microbatch 256 with accumulation one; the five-percent warmup/cosine/five-percent
 minimum schedule; AdamW betas/epsilon/decay and disabled clipping; Shell Exact v1; domains
 0/0.25/0.50/0.75/1; complete cold and warm pilot ladders; 60 passes per
-pilot/production primary node; validation every pass; macro-AUC-first checkpoint
+pilot/named-midscale/production primary node; validation every pass; macro-AUC-first checkpoint
 selection; one-time matching; 300k/100k/100k pilot roles; and HLT-only
 deployable inference.
 

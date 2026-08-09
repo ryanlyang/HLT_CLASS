@@ -12,16 +12,41 @@ from hlt_classification.data.cache_contracts import (
 
 from .hcwdl_ladder import GRAPH_SHA256, NODE_REGISTRY
 from .hcwdl_resources import validate_resource_profile
-from .hcwdl_authorization import validate_submission_authorization
+from .hcwdl_authorization import (
+    AUTOMATIC_ENDPOINT_CONTINUATION, ENDPOINT_CONTINUATION_MODES,
+    MANUAL_ENDPOINT_CONTINUATION, validate_submission_authorization,
+)
 
 
-CAMPAIGN_CONTRACT: Final = "HCWDL_CAMPAIGN_SPEC/v3"
-COMMAND_PLAN_CONTRACT: Final = "HCWDL_COMMAND_PLAN/v2"
+LEGACY_CAMPAIGN_CONTRACT: Final = "HCWDL_CAMPAIGN_SPEC/v3"
+PREVIOUS_CAMPAIGN_CONTRACT: Final = "HCWDL_CAMPAIGN_SPEC/v4"
+PRIOR_CAMPAIGN_CONTRACT: Final = "HCWDL_CAMPAIGN_SPEC/v5"
+RECENT_CAMPAIGN_CONTRACT: Final = "HCWDL_CAMPAIGN_SPEC/v6"
+CAMPAIGN_CONTRACT: Final = "HCWDL_CAMPAIGN_SPEC/v7"
+RECENT_COMMAND_PLAN_CONTRACT: Final = "HCWDL_COMMAND_PLAN/v2"
+COMMAND_PLAN_CONTRACT: Final = "HCWDL_COMMAND_PLAN/v3"
 LEDGER_CONTRACT: Final = "HCWDL_SUBMISSION_LEDGER/v2"
-MODES: Final = ("smoke", "pilot", "production")
+LEGACY_MODES: Final = ("smoke", "pilot", "production")
+PREVIOUS_MODES: Final = ("smoke", "pilot", "midscale500k", "production")
+PRIOR_MODES: Final = (
+    "smoke", "pilot", "midscale500k", "midscale1m", "production",
+)
+MODES: Final = (
+    "smoke", "pilot", "midscale500k", "midscale1m", "midscale2m",
+    "production",
+)
 ROLE_COUNTS: Final = {
     "smoke": {"train": 4096, "validation": 4096, "final_test": 0},
     "pilot": {"train": 300_000, "validation": 100_000, "final_test": 100_000},
+    "midscale500k": {
+        "train": 500_000, "validation": 250_000, "final_test": 250_000,
+    },
+    "midscale1m": {
+        "train": 1_000_000, "validation": 400_000, "final_test": 400_000,
+    },
+    "midscale2m": {
+        "train": 2_000_000, "validation": 500_000, "final_test": 500_000,
+    },
     "production": {"train": None, "validation": None, "final_test": None},
 }
 
@@ -76,9 +101,12 @@ def build_task_registry(
     *, train_source_count: int = 1, validation_source_count: int = 1,
     final_test_source_count: int = 1, include_final_test: bool = True,
     include_label_only_warm_continuation: bool = False,
+    endpoint_continuation: str = MANUAL_ENDPOINT_CONTINUATION,
 ) -> tuple[CampaignTask, ...]:
     if min(train_source_count, validation_source_count, final_test_source_count) <= 0:
         raise ValueError("assignment source counts must be positive")
+    if endpoint_continuation not in ENDPOINT_CONTINUATION_MODES:
+        raise ValueError("unknown HCWDL endpoint-continuation mode")
     tasks = [
         CampaignTask("source_audit", "source_audit", (), "cpu_small"),
         CampaignTask("splits", "split", ("source_audit",), "cpu_small"),
@@ -106,7 +134,8 @@ def build_task_registry(
         ),
         CampaignTask(
             "shell_endpoint_qualification_lock", "lock",
-            ("endpoint_qualification",), "cpu_small", manual_release=True,
+            ("endpoint_qualification",), "cpu_small",
+            manual_release=endpoint_continuation == MANUAL_ENDPOINT_CONTINUATION,
         ),
     ]
     # NODE_REGISTRY insertion order is the canonical topological order.
@@ -162,8 +191,8 @@ def validate_task_registry(tasks: Sequence[CampaignTask]) -> None:
             raise ValueError(f"HCWDL task {task.task_id} has an unknown dependency")
         if task.array is not None and "%" in task.array:
             raise ValueError("HCWDL arrays are uncapped by default")
-        if task.manual_release != (task.task_id == "shell_endpoint_qualification_lock"):
-            raise ValueError("HCWDL manual-release gate differs")
+        if task.manual_release and task.task_id != "shell_endpoint_qualification_lock":
+            raise ValueError("HCWDL manual-release marker differs")
     visiting: set[str] = set()
     visited: set[str] = set()
 
@@ -215,9 +244,12 @@ def create_campaign_spec(
     production_authorization_sha256: str | None = None,
     submission_authorization: Mapping[str, Any] | None = None,
     include_label_only_warm_continuation: bool = False,
+    endpoint_continuation: str = MANUAL_ENDPOINT_CONTINUATION,
 ) -> dict[str, Any]:
     if mode not in MODES:
         raise ValueError("unknown HCWDL campaign mode")
+    if endpoint_continuation not in ENDPOINT_CONTINUATION_MODES:
+        raise ValueError("unknown HCWDL endpoint-continuation mode")
     if not planning_only and recipe_sha256 is None:
         raise PermissionError("an executable HCWDL spec requires a locked recipe")
     source_hash = require_sha256(source_manifest_sha256, name="source manifest SHA-256")
@@ -258,6 +290,7 @@ def create_campaign_spec(
         final_test_source_count=int(role_source_counts["final_test"]),
         include_final_test=mode != "smoke",
         include_label_only_warm_continuation=include_label_only_warm_continuation,
+        endpoint_continuation=endpoint_continuation,
     )
     resources: Mapping[str, Any] = (
         resource_profile["requests"] if resource_profile is not None
@@ -270,7 +303,7 @@ def create_campaign_spec(
     resource_request_sha256 = canonical_sha256(normalized_resources)
     payload = {
         "contract": CAMPAIGN_CONTRACT,
-        "schema_version": 3,
+        "schema_version": 7,
         "mode": mode,
         "planning_only": bool(planning_only),
         "live_submission_authorized": bool(live_submission_authorized),
@@ -289,6 +322,7 @@ def create_campaign_spec(
         "include_label_only_warm_continuation": bool(
             include_label_only_warm_continuation
         ),
+        "endpoint_continuation": endpoint_continuation,
         "graph_sha256": GRAPH_SHA256,
         "role_counts": ROLE_COUNTS[mode],
         "resource_profile_status": (
@@ -321,19 +355,54 @@ def create_campaign_spec(
             resource_request_sha256=resource_request_sha256,
             command_plan_sha256=command_plan_hash,
             production_authorization_sha256=production_authorization_sha256,
+            endpoint_continuation=endpoint_continuation,
         )
         payload["submission_authorization_sha256"] = submission_authorization_sha256
     return with_content_hash(payload)
 
 
 def validate_campaign_spec(value: Mapping[str, Any], *, executable: bool = False) -> str:
-    digest = validate_content_hash(value, expected_contract=CAMPAIGN_CONTRACT, expected_schema_version=3)
-    if value.get("mode") not in MODES or value.get("graph_sha256") != GRAPH_SHA256:
+    contract = value.get("contract")
+    if contract == LEGACY_CAMPAIGN_CONTRACT:
+        schema_version = 3
+        allowed_modes = LEGACY_MODES
+    elif contract == PREVIOUS_CAMPAIGN_CONTRACT:
+        schema_version = 4
+        allowed_modes = PREVIOUS_MODES
+    elif contract == PRIOR_CAMPAIGN_CONTRACT:
+        schema_version = 5
+        allowed_modes = PRIOR_MODES
+    elif contract == RECENT_CAMPAIGN_CONTRACT:
+        schema_version = 6
+        allowed_modes = MODES
+    elif contract == CAMPAIGN_CONTRACT:
+        schema_version = 7
+        allowed_modes = MODES
+    else:
+        raise ValueError("HCWDL campaign contract differs")
+    digest = validate_content_hash(
+        value, expected_contract=str(contract), expected_schema_version=schema_version,
+    )
+    mode = value.get("mode")
+    if (
+        not isinstance(mode, str)
+        or mode not in allowed_modes
+        or value.get("graph_sha256") != GRAPH_SHA256
+    ):
         raise ValueError("HCWDL campaign mode or graph differs")
+    if value.get("role_counts") != ROLE_COUNTS[mode]:
+        raise ValueError("HCWDL campaign role counts differ from its registered mode")
     if set(value.get("role_source_counts", {})) != {"train", "validation", "final_test"}:
         raise ValueError("HCWDL campaign role source counts differ")
     if not isinstance(value.get("include_label_only_warm_continuation"), bool):
         raise ValueError("HCWDL conditional warm-control decision differs")
+    endpoint_continuation = value.get(
+        "endpoint_continuation", MANUAL_ENDPOINT_CONTINUATION,
+    )
+    if endpoint_continuation not in ENDPOINT_CONTINUATION_MODES:
+        raise ValueError("HCWDL endpoint-continuation mode differs")
+    if schema_version < 7 and endpoint_continuation != MANUAL_ENDPOINT_CONTINUATION:
+        raise ValueError("legacy HCWDL campaign cannot preauthorize continuation")
     tasks = tuple(CampaignTask(
         **{**task, "dependencies": tuple(task["dependencies"])}
     ) for task in value["tasks"])
@@ -347,6 +416,7 @@ def validate_campaign_spec(value: Mapping[str, Any], *, executable: bool = False
         include_label_only_warm_continuation=value[
             "include_label_only_warm_continuation"
         ],
+        endpoint_continuation=str(endpoint_continuation),
     )
     if tasks != expected_tasks:
         raise ValueError("HCWDL campaign task registry differs from its fixed inputs")
@@ -388,6 +458,7 @@ def validate_campaign_spec(value: Mapping[str, Any], *, executable: bool = False
             resource_request_sha256=resource_request_sha256,
             command_plan_sha256=plan_hash,
             production_authorization_sha256=value.get("production_authorization_sha256"),
+            endpoint_continuation=str(endpoint_continuation),
         )
         if value.get("submission_authorization_sha256") != authorization_hash:
             raise ValueError("HCWDL submission authorization hash differs")
@@ -428,9 +499,10 @@ def _slurm_commands_unchecked(spec: Mapping[str, Any]) -> list[dict[str, Any]]:
 def build_command_plan(spec: Mapping[str, Any]) -> dict[str, Any]:
     """Hash the exact future commands without depending on the enclosing spec hash."""
     commands = _slurm_commands_unchecked(spec)
-    return with_content_hash({
-        "contract": COMMAND_PLAN_CONTRACT,
-        "schema_version": 1,
+    current = spec.get("contract") == CAMPAIGN_CONTRACT
+    payload = {
+        "contract": COMMAND_PLAN_CONTRACT if current else RECENT_COMMAND_PLAN_CONTRACT,
+        "schema_version": 2 if current else 1,
         "mode": spec["mode"],
         "source_commit": spec["source_commit"],
         "source_manifest_sha256": spec["source_manifest_sha256"],
@@ -438,7 +510,10 @@ def build_command_plan(spec: Mapping[str, Any]) -> dict[str, Any]:
         "recipe_sha256": spec["recipe_sha256"],
         "resource_request_sha256": spec.get("resource_request_sha256"),
         "commands": commands,
-    })
+    }
+    if current:
+        payload["endpoint_continuation"] = spec["endpoint_continuation"]
+    return with_content_hash(payload)
 
 
 def slurm_commands(spec: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -452,6 +527,10 @@ def split_submission_commands(
     """Split the exact DAG at the human endpoint-review boundary."""
 
     commands = slurm_commands(spec)
+    if spec.get("endpoint_continuation", MANUAL_ENDPOINT_CONTINUATION) == (
+        AUTOMATIC_ENDPOINT_CONTINUATION
+    ):
+        return commands, []
     gate = "shell_endpoint_qualification_lock"
     positions = [index for index, row in enumerate(commands) if row["task_id"] == gate]
     if len(positions) != 1:
@@ -465,7 +544,11 @@ def split_submission_commands(
 
 
 __all__ = [
-    "CAMPAIGN_CONTRACT", "COMMAND_PLAN_CONTRACT", "CampaignTask", "LEDGER_CONTRACT", "MODES",
+    "CAMPAIGN_CONTRACT", "COMMAND_PLAN_CONTRACT", "CampaignTask", "LEDGER_CONTRACT",
+    "LEGACY_CAMPAIGN_CONTRACT", "LEGACY_MODES", "MODES",
+    "PREVIOUS_CAMPAIGN_CONTRACT", "PREVIOUS_MODES",
+    "PRIOR_CAMPAIGN_CONTRACT", "PRIOR_MODES", "RECENT_CAMPAIGN_CONTRACT",
+    "RECENT_COMMAND_PLAN_CONTRACT",
     "PILOT_PLANNING_RESOURCES", "ROLE_COUNTS", "ResourceRequest", "SMOKE_RESOURCES",
     "build_command_plan", "build_task_registry", "create_campaign_spec", "slurm_commands",
     "split_submission_commands",

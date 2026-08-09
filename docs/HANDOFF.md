@@ -1,5 +1,111 @@
 # Current Handoff
 
+## HCWDL-RKD v7/v4 compatibility closure (2026-08-09)
+
+The matching-free representation-KD branch is now reconciled with the current
+parent authority: executable `HCWDL_CAMPAIGN_SPEC/v7`, primary
+`HCWDL_RECIPE/v4`, and an exact fifteen-one loss vector.  The representation
+overlay is `HCWDL_REPRESENTATION_RECIPE/v2` with schema version 1; the strict
+parent import is `HCWDL_REPRESENTATION_PARENT_IMPORT/v2` with schema version 1;
+and the corrected parent-loss attestation is
+`HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v2` with schema version 2.
+Weighted v3 parents and old v1 representation imports cannot be relabeled as
+these artifacts.
+
+The pre-campaign builders now reopen the real parent v7 campaign, v4 recipe,
+full assignment/qualification/confirmation/finalist authority chain, reports,
+checkpoint bytes, installed-Weaver parity, model sources, and one clean parent
+source checkout at the exact parent campaign commit.  The runtime binding
+supports the two canonical prepublished files in place, including the single
+closed read-only recipe consumer needed before the recipe gate; no duplicate
+input copy or generic output-path exception is permitted.  The complete
+86-task/152-row binding builds at the documented canonical paths.
+
+Current local verification used the `tagging-hlt` environment with bytecode
+and threaded BLAS disabled.  The complete test collection was run as two
+disjoint selections: HCWDL tests passed **454**, with two Windows-inapplicable
+POSIX-shell checks skipped, and the remaining **252** tests passed.  Therefore
+all **708 collected tests** are accounted for: **706 passed, 2 skipped, 0
+failed**.  All 392 Python files under `src`, `scripts`, and `tests` AST-parse;
+`git diff --check`, the untracked-file whitespace scan, and the representation
+`Fresh_check`/TODO/FIXME/`NotImplementedError` scan are clean.  The 14 warnings
+are the existing Matplotlib/PyParsing deprecations.
+
+This is not yet campaign completion.  The existing unweighted parent candidate
+at commit `b3154d67` predates the explicit loss-semantics fields and does not
+contain `hcwdl_parent_loss.py`; its reports and checkpoints therefore cannot
+satisfy the v2 attestation.  The plan forbids relabeling those outputs, so a
+fresh, separately identified HCWDL v7/v4 parent run from the new exact clean
+commit is required before HCWDL-RKD parent evidence can be built.  In addition,
+the current bounded acceptance bootstrap intentionally cannot authorize the
+required two-update/USR1 and validation-proxy actions.  A separately reviewed
+non-final acceptance authority must be implemented before the complete genuine
+Tigris acceptance bundle can exist.  Neither limitation authorizes a pilot or
+final-role access.
+
+No remote job, scheduler state, parent output, or final-role artifact was
+mutated during this compatibility work.
+
+## HCWDL unweighted primary and automatic continuation (2026-08-09)
+
+The primary HCWDL recipe is now `HCWDL_RECIPE/v4`: qualifiers, privileged
+teachers, cold/warm ladder nodes, controls, and confirmation runs use
+unweighted natural-population per-jet loss through an authenticated vector of
+fifteen exact ones. The deterministic train selection and all class counts
+remain bound. Earlier square-root-weighted campaigns are ablations and cannot
+be resumed as primary parents.
+
+All six endpoint qualifiers share one stochastic trajectory seed, pairing
+initialization, sampler order, repair randomness, dropout, and training RNG
+across views. Campaign/submission contracts advance to v7 and the command plan
+to v3. In `preauthorized_automatic` mode the full `afterok` DAG is queued once;
+the endpoint gate creates a lineage-bound nonselecting waiver only after all
+six finite reports and endpoint invariants validate. Poor finite science
+continues, while job failures, nonfinite metrics, corrupt artifacts, and
+lineage mismatches stop descendants. Manual acknowledgement remains supported.
+
+The weighted 300k/500k/1M/2M campaign identities are stale for this primary
+recipe and require fresh recipes, specs, worktrees, and exact job IDs.
+
+Local verification after this change: focused HCWDL/high-coverage tests pass
+78/78 and the complete repository suite passes 322/322 with the same 14
+Matplotlib/Pyparsing warnings. A fresh unweighted Tigris smoke and the four
+new campaign identities remain to be launched from an exact clean pushed
+commit; no remote jobs were mutated from this local implementation.
+
+## HCWDL named midscale campaign modes (2026-08-08)
+
+HCWDL now registers three distinct immutable midscale populations:
+`midscale500k` uses 500,000 train, 250,000 validation, and 250,000 final-test
+jets; `midscale1m` uses 1,000,000 train, 400,000 validation, and 400,000
+final-test jets; and `midscale2m` uses 2,000,000 train, 500,000 validation, and
+500,000 final-test jets. Each reuses the
+same count-agnostic matching, persistent assignments, two-phase endpoint gate,
+23-node ladder, confirmation, and sealed-test machinery, but receives its own
+campaign identity and requires a recipe whose class weights are bound to its
+exact deterministic train selection. Future midscale sizes must
+receive different mode names rather than editing these counts.
+
+Campaign specs and submission authorizations advance to v6; v3 through v5
+artifacts remain readable. Validation requires the stored
+role counts to exactly equal the registered mode, closing a previously
+implicit integrity check. The creation CLI exposes the new mode and focused
+tests cover its exact counts, uncapped dry-run DAG, authorization, tamper
+rejection, and v3 compatibility. This change does not alter or cancel the
+currently running or prepared v3-v5 campaign.
+
+The named modes require independent deterministic preselections, recipes,
+resource/storage evidence, authorization, worktrees, assignments, locks, and
+two-phase submissions. None may reuse another mode's recipe lineage.
+
+Verification after registering all three named midscale modes: the focused
+high-coverage/HCWDL suite passes 72/72 and the complete repository suite passes
+316/316 with the same 14 Matplotlib/Pyparsing warnings. `midscale2m` has not
+yet been executed on Tigris. Its exact next step is a clean commit and push,
+then a dedicated worktree, deterministic 2m/500k/500k preselection, a recipe
+bound to that 2m train-selection hash, scaled storage/profile evidence, exact
+v6 candidate dry run and authorization, and an independent two-phase launch.
+
 ## PMARD all-model exploratory test comparison (2026-08-08)
 
 The user explicitly authorized evaluation of all completed T100-sweep and
@@ -48,11 +154,19 @@ selection/performance metrics remain mandatory, and every exploratory test
 evaluation computes the full current metric set. This attempt also stopped
 before publishing a specification or reading the test role.
 
-## HCWDL matching-free representation-KD local closure (2026-08-09)
+## Superseded pre-v7/v4 HCWDL-RKD local evidence (2026-08-09)
+
+The hashes and counts in this section describe the earlier `b820327` snapshot,
+whose retained runtime binding used parent-import, parent-loss, and overlay
+recipe v1 lineage. The parent campaign has since advanced to executable
+`HCWDL_CAMPAIGN_SPEC/v7` plus primary `HCWDL_RECIPE/v4`; therefore none of the
+following smoke/binding hashes is current authorization or closure evidence.
+They are retained only as historical local-test provenance and must not be
+reused for a v2 campaign.
 
 The implementation-grade plan remains
 [`docs/plans/HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md`](plans/HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md).
-The isolated local worktree now contains the complete versioned RKD
+That isolated local worktree contained the then-current versioned RKD
 implementation for the four
 registered M1--M6 ascents: paired jet plus unordered token-set KD (`RSET`) and
 the same package plus differentiable latent-relation KD (`RREL`), each under
@@ -77,8 +191,8 @@ cancellation.
 The exact requirement-to-code map and pending acceptance boundaries are in
 [`docs/plans/HCWDL_RKD_IMPLEMENTATION_TRACEABILITY.md`](plans/HCWDL_RKD_IMPLEMENTATION_TRACEABILITY.md),
 and safe local/Tigris operating steps are in
-[`docs/HCWDL_RKD_RUNBOOK.md`](HCWDL_RKD_RUNBOOK.md). The final local evidence
-is:
+[`docs/HCWDL_RKD_RUNBOOK.md`](HCWDL_RKD_RUNBOOK.md). The superseded evidence
+was:
 
 - the repository suite passes **656 tests**, with two Windows-only POSIX-shell
   checks skipped and 14 pre-existing Matplotlib/PyParsing deprecation warnings;
@@ -832,7 +946,7 @@ All six locally implementable HCWDL blocks now exist:
    epsilon and microbatch accumulation, 60 passes, every-pass validation,
    AUC/CE/logR/earliest selection, final and selected checkpoints, and exact
    resume are executable.
-5. Smoke/pilot/production DAGs, source-byte reauthentication, split validation,
+5. Smoke/pilot/midscale500k/midscale1m/midscale2m/production DAGs, source-byte reauthentication, split validation,
    locks, fixed endpoint qualification, exact human acknowledgement, 55-row
    confirmation registry, reporting, one-claim final evaluation, exact-ID
    recovery/cancellation, resource/storage evidence, and Slurm command
@@ -873,10 +987,10 @@ New contract families are `HIGHCOV_MATCHER_RESOURCES/v1`,
 `HCWDL_EXECUTION_CLAIM/v1`, `HCWDL_ENDPOINT_{QUALIFICATION,DIAGNOSTIC_ACK}/v1`,
 `HCWDL_{SCREEN,CONFIRMATION,FINAL}_AGGREGATE/v1`,
 `HCWDL_FINAL_{EVALUATION,EVALUATION_MANIFEST}/v1`,
-`HCWDL_CAMPAIGN_SPEC/v3`, `HCWDL_COMMAND_PLAN/v2`,
+`HCWDL_CAMPAIGN_SPEC/v6` (v3-v5 readable), `HCWDL_COMMAND_PLAN/v2`,
 `HCWDL_SUBMISSION_LEDGER/v2`, `HCWDL_MONITOR_REPORT/v1`,
 `HCWDL_{RESOURCE_PROFILE,STORAGE_ESTIMATE}/v1`,
-`HCWDL_SUBMISSION_AUTHORIZATION/v3`,
+`HCWDL_SUBMISSION_AUTHORIZATION/v6` (v3-v5 readable),
 `HCWDL_CACHE_MINIATURE/v1`, and `HCWDL_LOCAL_SMOKE_REPORT/v1`.
 PMARD training/resume contracts advance to v6 for explicit microbatch,
 accumulation, and Adam-epsilon semantics; validators retain v4/v5 report
@@ -981,12 +1095,15 @@ were skipped on Windows. This is local structural evidence only: installed-
 Weaver and genuine Tigris acceptance, measured resources, clean pushed source,
 and submission authorization remain pending.
 
-## Exact active next task: separately authorized HCWDL Tigris validation
+## Exact active next task: corrected parent, then bounded Tigris acceptance
 
-Resolve and sign the immutable optimization recipe from independent evidence;
-push an exact clean commit only under a separate authorization; run installed
-Weaver parity and a genuine production-worker Tigris miniature; capture
-measured RAM, walltime, I/O, GPU, and storage evidence; build a measured
-resource profile and a fresh complete dry run; then request explicit pilot
-submission authorization. Do not claim runtime acceptance or release the held
-endpoint gate until those steps and the six real endpoint diagnostics exist.
+The v7/v4 compatibility migration is locally complete.  Publish its exact
+clean branch commit and refresh the isolated Tigris worktree.  First create a
+new HCWDL v7/v4 parent campaign identity at that commit and run its corrected
+reports/checkpoints; the `b3154d67` outputs cannot be reused as v2 parent-loss
+evidence.  Separately review and explicitly authorize implementation of a
+non-final acceptance authority for the required two-update, USR1 exact-resume,
+and validation-proxy actions.  Only after those prerequisites exist should the
+installed-Weaver boundary and genuine production-worker/cache acceptance runs
+be assembled, measured, and audited.  Do not reuse the superseded hashes above,
+submit an RKD pilot, or open the final role before every gate passes.

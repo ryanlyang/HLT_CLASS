@@ -12,7 +12,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, Final
 
 from hlt_classification.data.cache_contracts import (
-    require_sha256, validate_content_hash, with_content_hash,
+    canonical_sha256, require_sha256, validate_content_hash, with_content_hash,
 )
 
 from .hcwdl_representation_contracts import (
@@ -114,15 +114,10 @@ def validate_cache_miniature_bank_evidence(
     return digest
 
 
-def build_zero_coefficient_acceptance(
-    *,
-    architecture_attestation_sha256: str,
-    parent_loss_attestation_sha256: str,
-    representation_recipe_sha256: str,
-    runtime_signature_sha256: str,
+def validate_zero_coefficient_measurements(
     measurements: Mapping[str, Any],
-) -> dict[str, Any]:
-    """Bind a real wrapper/base parity measurement to the frozen tolerances."""
+) -> str:
+    """Validate recipe-bound zero-coefficient measurements and hash them."""
 
     required = {
         "logits_max_abs", "base_loss_max_abs", "shared_gradient_max_abs",
@@ -143,6 +138,20 @@ def build_zero_coefficient_acceptance(
     boolean_fields = required - set(ZERO_TOLERANCES)
     if any(measurements[name] is not True for name in boolean_fields):
         raise ValueError("zero-coefficient parity evidence is incomplete")
+    return canonical_sha256(dict(measurements))
+
+
+def build_zero_coefficient_acceptance(
+    *,
+    architecture_attestation_sha256: str,
+    parent_loss_attestation_sha256: str,
+    representation_recipe_sha256: str,
+    runtime_signature_sha256: str,
+    measurements: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Bind a real wrapper/base parity measurement to the frozen tolerances."""
+
+    validate_zero_coefficient_measurements(measurements)
     return with_content_hash({
         "contract": ZERO_COEFFICIENT_ACCEPTANCE_CONTRACT,
         "schema_version": 1,
@@ -283,4 +292,5 @@ __all__ = [
     "validate_cache_miniature_acceptance",
     "validate_cache_miniature_bank_evidence",
     "validate_zero_coefficient_acceptance",
+    "validate_zero_coefficient_measurements",
 ]

@@ -68,7 +68,8 @@ class CalibrationComponentRows:
     support: Mapping[str, int] | None = None
     # Some registered components have an exact reduction that cannot be
     # reconstructed from independent rows.  In particular the jet anchor owns
-    # a class-pair-weighted off-diagonal Gram term.  Supplying ``loss`` keeps
+    # a recipe-vector off-diagonal Gram term (uniform under v4 exact ones).
+    # Supplying ``loss`` keeps
     # that exact reduction while ``per_jet``/``eligible`` still define the
     # matched support used for the base-loss gradient.
     loss: object | None = None

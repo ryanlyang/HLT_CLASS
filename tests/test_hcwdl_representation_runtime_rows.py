@@ -1,20 +1,32 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import asdict
+import importlib.util
+from pathlib import Path
 
 import pytest
 
 from hlt_classification.data.cache_contracts import (
     canonical_sha256, validate_content_hash, with_content_hash,
+    write_immutable_json,
+)
+from hlt_classification.scouting.engine import (
+    PMARD_TRAINING_REPORT_CONTRACT, PMARD_TRAINING_REPORT_VERSION,
+)
+from hlt_classification.scouting.hcwdl_parent_loss import (
+    HCWDL_PARENT_BASE_LOSS_CONTRACT, HCWDL_PARENT_LOSS_SEMANTICS,
 )
 from hlt_classification.scouting.hcwdl_representation_campaign import (
+    PARENT_IMPORT_AUTHORITY_ROUTES, PARENT_QUALIFIER_REPORT_ROUTES,
     build_command_plan, build_task_registry,
 )
 from hlt_classification.scouting.hcwdl_representation_graph import (
     CONTROL_REGISTRY, NODE_REGISTRY,
 )
 from hlt_classification.scouting.hcwdl_representation_locks import (
-    IMPORTED_LOGIT_CONTROLS, IMPORTED_TEACHERS,
+    IMPORTED_LOGIT_CONTROLS, IMPORTED_TEACHERS, PARENT_AUTHORITY_FILE_KEYS,
+    PARENT_AUTHORITY_PARENT_KEYS,
 )
 from hlt_classification.scouting.hcwdl_ladder import GRAPH_SHA256
 from hlt_classification.scouting.hcwdl_representation_final_policy import (
@@ -23,9 +35,13 @@ from hlt_classification.scouting.hcwdl_representation_final_policy import (
 from hlt_classification.scouting.hcwdl_representation_reporting import (
     CONFIRMATION_SEEDS, derive_representation_execution_id,
 )
+from hlt_classification.scouting.hcwdl_representation_recipe import (
+    build_representation_recipe, example_representation_recipe,
+)
 from hlt_classification.scouting.hcwdl_representation_resources import resource_table
 from hlt_classification.scouting.hcwdl_representation_runtime_binding import (
-    build_runtime_binding, validate_runtime_binding,
+    PREPUBLISHED_OUTPUT_BINDING, build_runtime_binding, resolve_runtime_row,
+    validate_runtime_binding,
 )
 from hlt_classification.scouting import hcwdl_representation_runtime_rows as rows_module
 from hlt_classification.scouting.hcwdl_representation_runtime_rows import (
@@ -76,6 +92,19 @@ def _final_disposition(disposition="combined_confirmatory"):
     })
 
 
+def _representation_recipe(producer_source: str = "b" * 64):
+    fixture = example_representation_recipe()
+    return build_representation_recipe(
+        parents={
+            **fixture["parents"], "producer_source": producer_source,
+        },
+        kernel_array_logical_hashes=fixture["payload"][
+            "kernel_array_logical_hashes"
+        ],
+        evidence=fixture["payload"]["acceptance_evidence"],
+    )
+
+
 def _spec(*, disposition: str = "combined_confirmatory"):
     tasks = build_task_registry(
         disposition=disposition, final_source_partitions=2,
@@ -88,7 +117,8 @@ def _spec(*, disposition: str = "combined_confirmatory"):
         "source_commit": "1" * 40, "source_manifest_sha256": "2" * 64,
         "split_manifest_sha256": _split_manifest()["content_hash"],
         "parent_import_sha256": "4" * 64,
-        "representation_recipe_sha256": "5" * 64, "graph_sha256": "6" * 64,
+        "representation_recipe_sha256": _representation_recipe()["content_hash"],
+        "graph_sha256": "6" * 64,
         "disposition_sha256": _final_disposition(disposition)["content_hash"],
         "disposition": disposition,
         "role_counts": {
@@ -188,6 +218,106 @@ def _parent_report(node_id, seed, marker):
     })
 
 
+def _runtime_prerequisites_script(monkeypatch):
+    script = Path(__file__).resolve().parents[1] / "scripts" / (
+        "build_hcwdl_representation_runtime_prerequisites.py"
+    )
+    monkeypatch.syspath_prepend(str(script.parent))
+    module_spec = importlib.util.spec_from_file_location(
+        "_test_hcwdl_representation_runtime_prerequisites", script,
+    )
+    assert module_spec is not None and module_spec.loader is not None
+    module = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(module)
+    return module
+
+
+def _write_screen_wrapper_and_engine(
+    root: Path, *, node_id: str, marker: str,
+    wrapper_engine_sha256: str | None = None,
+) -> tuple[dict, dict]:
+    directory = root / "screen" / node_id
+    checkpoint_sha256 = canonical_sha256({"checkpoint": marker})
+    execution_sha256 = canonical_sha256({"execution": marker})
+    engine = with_content_hash({
+        "contract": PMARD_TRAINING_REPORT_CONTRACT,
+        "schema_version": PMARD_TRAINING_REPORT_VERSION,
+        "config": {"master_seed": derive_seed(1337, f"hcwdl/{node_id}")},
+        "selected_checkpoint_sha256": checkpoint_sha256,
+        "execution_config_sha256": execution_sha256,
+    })
+    semantics = dict(HCWDL_PARENT_LOSS_SEMANTICS)
+    wrapper = with_content_hash({
+        "contract": "HCWDL_TRAINING_REPORT/v1", "schema_version": 1,
+        "node_id": node_id,
+        "pmard_engine_report_sha256": (
+            engine["content_hash"]
+            if wrapper_engine_sha256 is None else wrapper_engine_sha256
+        ),
+        "pmard_execution_config_sha256": execution_sha256,
+        "selected_checkpoint_sha256": checkpoint_sha256,
+        "loss_semantics_contract": HCWDL_PARENT_BASE_LOSS_CONTRACT,
+        "loss_semantics": semantics,
+        "loss_semantics_sha256": canonical_sha256(semantics),
+    })
+    write_immutable_json(directory / "training_report.json", engine)
+    write_immutable_json(directory / "hcwdl_training_report.json", wrapper)
+    return wrapper, engine
+
+
+def test_runtime_prerequisite_projects_authenticated_wrapper_sibling_engine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _runtime_prerequisites_script(monkeypatch)
+    parent_root = tmp_path / "parent_reports"
+    finalist_root = tmp_path / "finalist_models"
+    wrapper, engine = _write_screen_wrapper_and_engine(
+        parent_root, node_id="M0", marker="same",
+    )
+    _write_screen_wrapper_and_engine(
+        finalist_root, node_id="M0", marker="same",
+    )
+    member = module._paired_screen_model_member(
+        node_id="M0", parent_reports_root=parent_root,
+        parent_wrapper_relative="screen/M0/hcwdl_training_report.json",
+        finalist_models_root=finalist_root,
+        finalist_wrapper_relative="screen/M0/hcwdl_training_report.json",
+    )
+    assert member == {
+        "relative": "screen/M0/training_report.json", "report": engine,
+    }
+    assert member["report"]["content_hash"] == wrapper[
+        "pmard_engine_report_sha256"
+    ]
+
+
+def test_runtime_prerequisite_rejects_wrapper_engine_or_bundle_mismatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _runtime_prerequisites_script(monkeypatch)
+    parent_root = tmp_path / "parent_reports"
+    finalist_root = tmp_path / "finalist_models"
+    _write_screen_wrapper_and_engine(parent_root, node_id="M0", marker="parent")
+    _write_screen_wrapper_and_engine(finalist_root, node_id="M0", marker="other")
+    with pytest.raises(ValueError, match="wrapper/model source differs"):
+        module._paired_screen_model_member(
+            node_id="M0", parent_reports_root=parent_root,
+            parent_wrapper_relative="screen/M0/hcwdl_training_report.json",
+            finalist_models_root=finalist_root,
+            finalist_wrapper_relative="screen/M0/hcwdl_training_report.json",
+        )
+
+    broken_root = tmp_path / "broken_parent_reports"
+    _write_screen_wrapper_and_engine(
+        broken_root, node_id="M0", marker="broken",
+        wrapper_engine_sha256="f" * 64,
+    )
+    with pytest.raises(ValueError, match="wrapper/engine hash differs"):
+        module._paired_wrapper_and_engine(
+            broken_root, "screen/M0/hcwdl_training_report.json", node_id="M0",
+        )
+
+
 def _parent_finalist_authority():
     raw_rows = []
     locked = {}
@@ -245,6 +375,59 @@ def _finalists():
     return _parent_finalist_authority()[3]
 
 
+def _parent_import_authority(spec, parent_lock):
+    def imported_row(node_id: str, *, teacher: bool):
+        track = "cold" if node_id.endswith("c") else (
+            "warm" if node_id.endswith("w") else "shared"
+        )
+        domain = (
+            "hlt" if not teacher else
+            "native_offline" if node_id == "TOFF" else
+            "hlt" if node_id.startswith("D0") else
+            f"d{node_id[1:].rstrip('cw').lower()}"
+        )
+        checkpoint = canonical_sha256({"parent-checkpoint": node_id})
+        return {
+            "node_id": node_id, "domain": domain, "track": track,
+            "report_path": f"/parent/{node_id}/training_report.json",
+            "report_sha256": canonical_sha256({"parent-report": node_id}),
+            "checkpoint_path": f"/parent/{node_id}/selected.pt",
+            "checkpoint_sha256": checkpoint,
+            "checkpoint_byte_sha256": checkpoint,
+        }
+
+    parents = {
+        name: canonical_sha256({"parent-import-parent": name})
+        for name in PARENT_AUTHORITY_PARENT_KEYS
+    }
+    parents.update({
+        "parent_campaign_spec": "1" * 64,
+        "split_manifest": spec["split_manifest_sha256"],
+        "finalist_lock": parent_lock["content_hash"],
+        "parent_graph": GRAPH_SHA256,
+    })
+    return with_content_hash({
+        "contract": "HCWDL_REPRESENTATION_PARENT_IMPORT/v2",
+        "schema_version": 1,
+        "parents": parents,
+        "payload": {
+            "parent_source_commit": "1" * 40,
+            "parent_campaign_contract": "HCWDL_CAMPAIGN_SPEC/v7",
+            "parent_recipe_contract": "HCWDL_RECIPE/v4",
+            "endpoint_continuation": "preauthorized_automatic",
+            "teachers": [
+                imported_row(node, teacher=True) for node in IMPORTED_TEACHERS
+            ],
+            "logit_controls": [
+                imported_row(node, teacher=False)
+                for node in IMPORTED_LOGIT_CONTROLS
+            ],
+            "authority_derived_from_registered_files": True,
+            "complete": True,
+        },
+    })
+
+
 def _final_authorities(spec):
     from hlt_classification.scouting.highcov_resources import resource_validation_report
 
@@ -256,11 +439,31 @@ def _final_authorities(spec):
         "role": "final_test", "row_count": spec["role_counts"]["final_test"],
     })
     lock, locked, paired, _ = _parent_finalist_authority()
+    confirmation_lock = with_content_hash({
+        "contract": "HCWDL_LOCK/v1", "schema_version": 1,
+        "campaign": "HCWDL", "level": "confirmation_registry",
+        "campaign_spec_sha256": "1" * 64,
+        "parent_lock_sha256": "c" * 64, "graph_sha256": GRAPH_SHA256,
+        "payload": {
+            "screen_aggregate_sha256": "d" * 64,
+            "registry": [{"node_id": "M0", "seed": 11}],
+        },
+    })
+    parent_import = _parent_import_authority(spec, lock)
+    parent_import["parents"]["confirmation_registry_lock"] = confirmation_lock[
+        "content_hash"
+    ]
+    parent_import = with_content_hash({
+        key: value for key, value in parent_import.items() if key != "content_hash"
+    })
+    spec["parent_import_sha256"] = parent_import["content_hash"]
     return {
         "shared_final_population": population,
         "parent_final_state": _parent_state(),
         "final_disposition": _final_disposition(spec["disposition"]),
+        "parent_import": parent_import,
         "parent_finalist_registry": lock,
+        "parent_confirmation_registry": confirmation_lock,
         "locked_model_members": locked,
         "paired_screen_model_members": paired,
         "matcher_resources": resource_validation_report(),
@@ -283,8 +486,19 @@ def _target_forward_specs(static):
     }
 
 
-def _prerequisites(spec):
+def _prerequisites(
+    spec, *, representation_recipe=None,
+    canonical_prebuilt_layout: bool = False,
+):
     static = _static_inputs(spec)
+    if canonical_prebuilt_layout:
+        static = deepcopy(static)
+        static["${prebuilt_parent_import}"]["path"] = (
+            "/campaign/import/parent_import.json"
+        )
+        static["${prebuilt_representation_recipe}"]["path"] = (
+            "/campaign/recipes/representation_recipe.json"
+        )
     authorities = _final_authorities(spec)
     forward_specs = _target_forward_specs(static)
     hashes = {
@@ -295,6 +509,7 @@ def _prerequisites(spec):
         "${parent_final_state}": authorities["parent_final_state"]["content_hash"],
         "${final_disposition}": authorities["final_disposition"]["content_hash"],
         "${matcher_resources}": authorities["matcher_resources"]["content_hash"],
+        "${prebuilt_parent_import}": authorities["parent_import"]["content_hash"],
     })
     prerequisites = {
         "contract": RUNTIME_PREREQUISITES_CONTRACT, "schema_version": 1,
@@ -317,6 +532,9 @@ def _prerequisites(spec):
                 node: f"reports/{node}/hcwdl_training_report.json"
                 for node in (*IMPORTED_TEACHERS, *IMPORTED_LOGIT_CONTROLS)
             },
+            "parent_confirmation_reports": {
+                "000:M0:11": "confirmation/000_M0_11/hcwdl_training_report.json",
+            },
             "parent_model_sources": {
                 "D0w": {
                     "relative": "reports/D0w/training_report.json", "kind": "pmard",
@@ -324,7 +542,13 @@ def _prerequisites(spec):
                 "hcwdl_surfaces": "source/hcwdl_surfaces.py",
                 "scouting_particle_transformer": "source/scouting_particle_transformer.py",
             },
-            "parent_runtime_sources": ["runtime/engine.py", "runtime/loss.py"],
+            "parent_runtime_sources": {
+                "engine": "src/hlt_classification/scouting/engine.py",
+                "parent_loss": (
+                    "src/hlt_classification/scouting/hcwdl_parent_loss.py"
+                ),
+                "training": "src/hlt_classification/scouting/hcwdl_training.py",
+            },
             "finalist_models": {
                 row["finalist_id"]: row["model_relative"] for row in _finalists()
             },
@@ -356,6 +580,7 @@ def _prerequisites(spec):
                 "parent_finalist_lock": None,
                 "parent_finalist_registry_relative": "registry/registry.json",
                 "parent_finalist_registry_sha256": None,
+                "parent_confirmation_report_keys": None,
                 "rows_per_class": None,
                 "selection_rule_sha256": None,
                 "step_size": 8192,
@@ -379,6 +604,10 @@ def _prerequisites(spec):
         split_manifest=_split_manifest(),
         final_authorities=authorities,
         target_forward_specs=forward_specs,
+        representation_recipe=(
+            _representation_recipe()
+            if representation_recipe is None else representation_recipe
+        ),
     )
 
 
@@ -430,15 +659,117 @@ def test_all_combined_rows_build_bind_and_validate_without_hand_assembly(
     assert audit["scheduler_mutated"] is False
 
 
+def test_all_rows_bind_with_documented_in_place_prebuilt_layout() -> None:
+    spec = _spec()
+    prerequisites = _prerequisites(
+        spec, canonical_prebuilt_layout=True,
+    )
+    assert prerequisites["static_inputs"]["${prebuilt_parent_import}"][
+        "path"
+    ] == "/campaign/import/parent_import.json"
+    assert prerequisites["static_inputs"]["${prebuilt_representation_recipe}"][
+        "path"
+    ] == "/campaign/recipes/representation_recipe.json"
+
+    task_rows = build_runtime_task_rows(spec, prerequisites)
+    validate_runtime_task_rows(spec, prerequisites, task_rows)
+    assert len(task_rows) == 86
+    assert sum(len(rows) for rows in task_rows.values()) == 152
+    binding = build_runtime_binding(
+        spec=spec, runtime_facts=prerequisites["runtime_facts"],
+        task_rows=task_rows,
+    )
+    validate_runtime_binding(binding, spec=spec)
+
+    expected = {
+        "parent_import": (
+            "${prebuilt_parent_import}", "import/parent_import.json",
+            spec["parent_import_sha256"],
+        ),
+        "representation_recipe": (
+            "${prebuilt_representation_recipe}",
+            "recipes/representation_recipe.json",
+            spec["representation_recipe_sha256"],
+        ),
+    }
+    for task_key, (logical, output, content_hash) in expected.items():
+        reference = resolve_runtime_row(
+            binding, spec=spec, task_key=task_key, array_index=None,
+        )["inputs"][logical]
+        assert reference["path"] == f"/campaign/{output}"
+        descriptor = reference[PREPUBLISHED_OUTPUT_BINDING]
+        assert descriptor["consumer_task_key"] == task_key
+        assert descriptor["consumer_task_kind"] == task_key
+        assert descriptor["owner_task_key"] == task_key
+        assert descriptor["owner_task_kind"] == task_key
+        assert descriptor["registered_input"] == logical
+        assert descriptor["registered_output"] == output
+        assert descriptor["expected_schema_version"] == 1
+        assert descriptor["expected_content_hash"] == content_hash
+
+    kernel_reference = resolve_runtime_row(
+        binding, spec=spec, task_key="kernel_resources", array_index=None,
+    )["inputs"]["${prebuilt_representation_recipe}"]
+    assert kernel_reference["path"] == (
+        "/campaign/recipes/representation_recipe.json"
+    )
+    kernel_descriptor = kernel_reference[PREPUBLISHED_OUTPUT_BINDING]
+    assert kernel_descriptor["consumer_task_key"] == "kernel_resources"
+    assert kernel_descriptor["consumer_task_kind"] == "kernel_resources"
+    assert kernel_descriptor["owner_task_key"] == "representation_recipe"
+    assert kernel_descriptor["owner_task_kind"] == "representation_recipe"
+    assert kernel_descriptor["registered_output"] == (
+        "recipes/representation_recipe.json"
+    )
+    assert kernel_descriptor["expected_content_hash"] == spec[
+        "representation_recipe_sha256"
+    ]
+
+
+def test_recipe_producer_source_is_bound_to_measured_runtime_snapshot() -> None:
+    spec = _spec()
+    prerequisites = _prerequisites(spec)
+    task_rows = build_runtime_task_rows(spec, prerequisites)
+    parameters = task_rows["representation_recipe"]["single"]["parameters"]
+    assert parameters["producer_source_sha256"] == "b" * 64
+    assert parameters["representation_graph"] == {
+        "registered_reference": "${representation_graph}",
+    }
+    assert parameters["control_registry"] == {
+        "registered_reference": "${control_registry}",
+    }
+    assert parameters["parent_import"] == {
+        "registered_reference": "${parent_import}",
+    }
+
+    mismatched = _representation_recipe("e" * 64)
+    mismatched_spec = {
+        **_spec(),
+        "representation_recipe_sha256": mismatched["content_hash"],
+    }
+    with pytest.raises(PermissionError, match="measured runtime source"):
+        _prerequisites(
+            mismatched_spec, representation_recipe=mismatched,
+        )
+
+
 def test_runtime_rows_route_parent_sources_through_imported_fresh_evidence() -> None:
     spec = _spec()
     task_rows = build_runtime_task_rows(spec, _prerequisites(spec))
     parent_loss = task_rows["parent_loss_attestation"]["single"]["parameters"]
     assert set(parent_loss) == {
-        "adapter_contract", "task_kind", "parent_report_paths",
-        "runtime_source_paths",
+        "adapter_contract", "task_kind", "parent_campaign_spec_path",
+        "parent_recipe_path", "parent_report_paths", "runtime_source_paths",
     }
     assert "${active_scientific_plan}" not in next(
+        task for task in spec["tasks"]
+        if task["task_key"] == "parent_loss_attestation"
+    )["registered_inputs"]
+    assert "${parent_recipe}" in next(
+        task for task in spec["tasks"]
+        if task["task_key"] == "parent_loss_attestation"
+    )["registered_inputs"]
+    assert "${parent_campaign_spec}" in next(
         task for task in spec["tasks"]
         if task["task_key"] == "parent_loss_attestation"
     )["registered_inputs"]
@@ -446,12 +777,47 @@ def test_runtime_rows_route_parent_sources_through_imported_fresh_evidence() -> 
     assert set(parent) == {
         "adapter_contract", "task_kind", "artifact", "architecture_attestation",
         "parent_loss_attestation", "parent_report_paths", "model_source_paths",
+        "authority_files", "qualifier_report_paths", "confirmation_report_paths",
     }
     assert set(parent["parent_report_paths"]) == set(IMPORTED_TEACHERS) | set(
         IMPORTED_LOGIT_CONTROLS
     )
     assert set(parent["model_source_paths"]) == {
         "D0w", "hcwdl_surfaces", "scouting_particle_transformer",
+    }
+    assert set(PARENT_IMPORT_AUTHORITY_ROUTES) == (
+        set(PARENT_AUTHORITY_FILE_KEYS)
+        - {"architecture_attestation", "parent_loss_attestation"}
+    )
+    assert set(parent["authority_files"]) == set(PARENT_AUTHORITY_FILE_KEYS)
+    assert set(parent["qualifier_report_paths"]) == set(
+        PARENT_QUALIFIER_REPORT_ROUTES
+    )
+    assert parent["confirmation_report_paths"] == {
+        "000:M0:11": {
+            "registered_member": {
+                "input": "${parent_confirmation_reports}",
+                "relative": "confirmation/000_M0_11/hcwdl_training_report.json",
+                "mode": "path",
+            },
+        },
+    }
+    parent_task = next(
+        task for task in spec["tasks"] if task["task_key"] == "parent_import"
+    )
+    assert set(PARENT_IMPORT_AUTHORITY_ROUTES.values()) <= set(
+        parent_task["registered_inputs"]
+    )
+    assert set(PARENT_QUALIFIER_REPORT_ROUTES.values()) <= set(
+        parent_task["registered_inputs"]
+    )
+    assert "${parent_confirmation_reports}" in parent_task["registered_inputs"]
+    assert parent["authority_files"]["finalist_lock"] == {
+        "registered_member": {
+            "input": "${parent_finalist_registry}",
+            "relative": "registry/registry.json",
+            "mode": "path",
+        },
     }
     target = task_rows["target_D75c_screen"]["single"]["parameters"]["assembly"]
     assert target["parent_import"] == {
@@ -468,6 +834,55 @@ def test_runtime_rows_route_parent_sources_through_imported_fresh_evidence() -> 
         "adapter_contract", "task_kind", "parent_import",
         "architecture_attestation", "builder_arguments",
     }
+
+
+def test_upstream_schema_versions_distinguish_semantic_v2_from_envelope_v2() -> None:
+    tasks = {task.task_key: task for task in rows_module._tasks(_spec())}
+    expected = {
+        "parent_loss_attestation": (
+            "HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v2", 2,
+        ),
+        "parent_import": ("HCWDL_REPRESENTATION_PARENT_IMPORT/v2", 1),
+        "representation_recipe": ("HCWDL_REPRESENTATION_RECIPE/v2", 1),
+    }
+    for task_key, (contract, schema_version) in expected.items():
+        descriptor = rows_module._upstream_reference(
+            tasks[task_key], ordinal=0, array_index=None,
+        )["upstream_output"]
+        assert descriptor["expected_contract"] == contract
+        assert descriptor["expected_schema_version"] == schema_version
+
+
+def test_final_authority_rejects_cross_campaign_parent_import_splice() -> None:
+    spec = _spec()
+    static = _static_inputs(spec)
+    authorities = _final_authorities(spec)
+    forged = deepcopy(authorities["parent_import"])
+    forged.pop("content_hash")
+    forged["parents"] = dict(forged["parents"])
+    forged["parents"]["parent_campaign_spec"] = "2" * 64
+    forged = with_content_hash(forged)
+    authorities["parent_import"] = forged
+    spec["parent_import_sha256"] = forged["content_hash"]
+    hashes = {
+        logical: canonical_sha256({"content": logical}) for logical in static
+    }
+    hashes.update({
+        "${shared_final_population}": authorities[
+            "shared_final_population"
+        ]["content_hash"],
+        "${parent_final_state}": authorities["parent_final_state"]["content_hash"],
+        "${final_disposition}": authorities["final_disposition"]["content_hash"],
+        "${matcher_resources}": authorities["matcher_resources"]["content_hash"],
+        "${prebuilt_parent_import}": forged["content_hash"],
+    })
+    with pytest.raises(ValueError, match="parent import/final authority lineage"):
+        rows_module._derived_final_authority(
+            spec=spec,
+            runtime_facts={"source_snapshot_sha256": "b" * 64},
+            artifact_content_hashes=hashes,
+            split_manifest=_split_manifest(), final_authorities=authorities,
+        )
 
 
 def test_validation_only_rows_are_also_closed_and_exhaustive() -> None:
@@ -494,6 +909,21 @@ def test_generator_rejects_missing_exogenous_route_and_hand_edited_assembly() ->
     task_rows["tap_schema"]["single"]["parameters"]["ad_hoc"] = True
     with pytest.raises(ValueError, match="deterministic assembly"):
         validate_runtime_task_rows(spec, prerequisites, task_rows)
+
+
+def test_runtime_prerequisites_reject_incomplete_parent_confirmation_bundle() -> None:
+    spec = _spec()
+    prerequisites = _prerequisites(spec)
+    forged = deepcopy(prerequisites)
+    forged.pop("content_hash")
+    forged["bundle_members"]["parent_confirmation_reports"] = {
+        "999:spliced:55": "confirmation/spliced/hcwdl_training_report.json",
+    }
+    forged = with_content_hash(forged)
+    with pytest.raises(
+        ValueError, match="parent confirmation-report bundle is incomplete or expanded"
+    ):
+        build_runtime_task_rows(spec, forged)
 
 
 def test_pilot_runtime_inputs_cannot_downgrade_scientific_sixty_pass_training() -> None:

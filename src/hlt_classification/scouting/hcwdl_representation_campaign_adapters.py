@@ -44,7 +44,7 @@ def _registered_json(inputs: Mapping[str, Any], name: str) -> Mapping[str, Any]:
 
 
 def control_registry_adapter(spec, task, index, runtime_row):
-    del spec, index
+    del index
     _, _, publish, require_parameters, validate_outputs = _runtime_helpers()
     require_parameters(task, runtime_row)
     from .hcwdl_representation_graph import (
@@ -56,7 +56,26 @@ def control_registry_adapter(spec, task, index, runtime_row):
     if not isinstance(reference, Mapping):
         raise ValueError("control registry lacks the ascent-graph input")
     graph = _registered_json(runtime_row["inputs"], "${representation_graph}")
-    graph_hash = validate_ascent_graph_artifact(graph)
+    parent_import = _registered_json(
+        runtime_row["inputs"], "${task_output:parent_import:0}",
+    )
+    from .hcwdl_representation_locks import validate_parent_import
+
+    parent_import_sha256 = validate_parent_import(parent_import)
+    graph_hash = validate_ascent_graph_artifact(
+        graph,
+        expected_parents={
+            "parent_graph": parent_import["parents"]["parent_graph"],
+            "parent_import": parent_import_sha256,
+        },
+    )
+    if (
+        graph_hash != spec["graph_sha256"]
+        or parent_import_sha256 != spec["parent_import_sha256"]
+    ):
+        raise PermissionError(
+            "control registry graph/parent import differs from campaign identity"
+        )
     artifact = control_registry_artifact(
         ascent_graph_artifact_sha256=graph_hash,
     )
@@ -77,7 +96,8 @@ def zero_coefficient_acceptance_adapter(spec, task, index, runtime_row):
         raise ValueError("zero-coefficient registered input registry is absent")
     required_inputs = {
         "${parent_import}", "${task_output:architecture_attestation}",
-        "${task_output:parent_loss_attestation}",
+        "${task_output:parent_loss_attestation}", "${parent_recipe}",
+        "${representation_recipe}",
     }
     if not required_inputs <= set(inputs):
         raise ValueError("zero-coefficient authenticated lineage inputs are absent")
@@ -88,8 +108,11 @@ def zero_coefficient_acceptance_adapter(spec, task, index, runtime_row):
     parent_loss = _registered_json(
         inputs, "${task_output:parent_loss_attestation}",
     )
+    parent_recipe = _registered_json(inputs, "${parent_recipe}")
+    representation_recipe = _registered_json(inputs, "${representation_recipe}")
     from .hcwdl_representation_locks import validate_parent_import
     from .hcwdl_parent_loss import validate_parent_loss_attestation
+    from .hcwdl_representation_recipe import validate_representation_recipe
     from hlt_classification.models.hcwdl_surfaces import (
         validate_architecture_attestation,
     )
@@ -98,18 +121,27 @@ def zero_coefficient_acceptance_adapter(spec, task, index, runtime_row):
     architecture_hash = validate_architecture_attestation(
         architecture, require_authorized=True,
     )
-    parent_loss_hash = validate_parent_loss_attestation(parent_loss)
+    parent_loss_hash = validate_parent_loss_attestation(
+        parent_loss, parent_recipe=parent_recipe,
+    )
+    representation_recipe_hash = validate_representation_recipe(
+        representation_recipe,
+    )
     if (
         parent_import.get("parents", {}).get("architecture_attestation")
         != architecture_hash
         or parent_import.get("parents", {}).get("parent_loss_attestation")
         != parent_loss_hash
+        or parent_import.get("parents", {}).get("parent_recipe")
+        != parent_recipe.get("content_hash")
+        or representation_recipe_hash != spec["representation_recipe_sha256"]
     ):
         raise PermissionError(
             "zero-coefficient attestations differ from authenticated parent import"
         )
     from .hcwdl_representation_campaign_artifacts import (
         build_zero_coefficient_acceptance,
+        validate_zero_coefficient_measurements,
         validate_zero_coefficient_acceptance,
     )
     from .hcwdl_representation_smoke import measure_zero_coefficient_parity
@@ -117,6 +149,15 @@ def zero_coefficient_acceptance_adapter(spec, task, index, runtime_row):
     measurements = measure_zero_coefficient_parity(
         device=str(runtime_row["device"]),
     )
+    if (
+        validate_zero_coefficient_measurements(measurements)
+        != representation_recipe["payload"]["acceptance_evidence"][
+            "zero_coefficient_parity"
+        ]
+    ):
+        raise ValueError(
+            "zero-coefficient measurements differ from the prebuilt recipe"
+        )
 
     artifact = build_zero_coefficient_acceptance(
         architecture_attestation_sha256=architecture_hash,

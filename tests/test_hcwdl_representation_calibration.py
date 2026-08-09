@@ -134,7 +134,7 @@ def test_calibration_uses_one_forward_and_restores_every_runtime_state():
         return CalibrationForwardResult(
             base_rows=base,
             labels=labels,
-            class_weights=torch.arange(1, 16, dtype=torch.float32),
+            class_weights=torch.ones(15, dtype=torch.float32),
             components={
                 "jet": CalibrationComponentRows(jet, torch.ones(len(batch), dtype=torch.bool), {"rows": len(batch)}),
                 "set": CalibrationComponentRows(set_rows, torch.ones(len(batch), dtype=torch.bool), {"rows": len(batch)}),

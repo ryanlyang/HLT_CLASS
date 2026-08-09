@@ -163,6 +163,7 @@ def test_parent_import_and_downstream_parent_consumers_bind_fresh_evidence() -> 
     assert {
         "${prebuilt_parent_import}", "${parent_reports}",
         "${parent_model_sources}",
+        "${parent_confirmation_reports}",
         "${task_output:architecture_attestation:0}",
         "${task_output:parent_loss_attestation:0}",
     } <= set(parent_import.registered_inputs)

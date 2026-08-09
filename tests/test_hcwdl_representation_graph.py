@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import json
 
 import pytest
 
@@ -153,6 +154,10 @@ def test_graph_and_control_artifacts_bind_parent_lineage_and_exact_payloads():
     )
     assert validate_control_registry_artifact(
         control, ascent_graph_artifact_sha256=graph["content_hash"],
+    ) == control["content_hash"]
+    round_tripped = json.loads(json.dumps(control))
+    assert validate_control_registry_artifact(
+        round_tripped, ascent_graph_artifact_sha256=graph["content_hash"],
     ) == control["content_hash"]
 
     with pytest.raises(ValueError, match="parent lineage"):

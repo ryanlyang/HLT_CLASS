@@ -6,10 +6,12 @@ The parent HCWDL campaign remains governed by
 [`HIGH_COVERAGE_COLD_WARM_DISTILLATION_LADDER.md`](plans/HIGH_COVERAGE_COLD_WARM_DISTILLATION_LADDER.md).
 
 Current boundary: the repository may be implemented, tested, and rendered as
-a non-submitting command plan locally. A live Tigris miniature, installed-
-Weaver acceptance, measured resources, a clean pushed source identity, and
-explicit user authorization are separate gates. Local fixtures never satisfy
-those gates and never authorize final-test access.
+a non-submitting command plan locally. A fresh corrected parent v7/v4
+execution, a separately reviewed non-final authority for the missing
+two-update/USR1/validation-proxy acceptance actions, a live Tigris miniature,
+installed-Weaver acceptance, measured resources, a clean pushed source
+identity, and explicit user authorization are separate gates. Local fixtures
+never satisfy those gates and never authorize final-test access.
 
 ## Scientific identity
 
@@ -30,12 +32,27 @@ Privileged D/TOFF views are opened only by authenticated target builders;
 students join detached compact summaries by canonical identity. Representation
 heads are training-only and are absent from extracted deployable checkpoints.
 
-The parent base objective is class-weighted CE plus unweighted FP32 forward-KL
-row means. Parent artifacts created under class-weighted KD are incompatible;
-the parent-loss attestation must reject them rather than relabel them.
+The required parent is the primary `HCWDL_RECIPE/v4` artifact with an exact
+fifteen-one loss vector, so CE and FP32 forward-KL are all unweighted
+natural-population row means. Parent artifacts created under nonuniform v3
+weights or class-weighted KD are incompatible; the v2 parent-loss attestation
+must reject them rather than relabel them.
+The parent campaign must be the executable `HCWDL_CAMPAIGN_SPEC/v7` artifact.
+The current artifact tuples are deliberately nonparallel:
+parent import v2 uses `schema_version=1`, parent-loss attestation v2 uses
+`schema_version=2`, and representation recipe v2 uses `schema_version=1`.
+Always validate both the contract string and schema version.
 Its executable policy hash is derived from the versioned code constant and
 authenticated runtime-source bytes; workers never read this plan or another
 concept document to decide loss semantics.
+
+The existing unweighted campaign candidate at commit `b3154d67` is not an
+eligible parent for this import.  That commit predates the explicit
+loss-semantics fields required in wrapper reports, PMARD engine reports, and
+checkpoints, and it does not contain `hcwdl_parent_loss.py`.  The v2 attestation
+must reject those outputs rather than infer or relabel them.  Create a fresh
+HCWDL v7/v4 campaign identity from the new exact clean commit and complete its
+required parent artifacts before running the parent-evidence command below.
 
 ## Local environment
 
@@ -99,6 +116,93 @@ The operator-visible order is fixed:
 11. only after explicit user approval, bind that exact candidate hash in the
     submission authorization and recreate the same campaign identity as the
     authorized live spec.
+
+The architecture and loss attestations, followed by the first parent-import
+publication, are pre-campaign operations; they cannot be dispatched through a
+campaign that already requires their hashes. First create JSON objects mapping
+the complete parent node registry to report paths, canonical model-source
+logical names to paths, and parent runtime-source logical names to paths. All
+values are absolute immutable files. `model-sources.json` has exactly three
+keys: `hcwdl_surfaces` and `scouting_particle_transformer` point to those two
+canonical source files in the exact checkout, while `D0w` points to the PMARD
+engine `training_report.json` authenticated through the D0w HCWDL wrapper
+report. Missing keys, extra keys, or using the wrapper report itself for
+`D0w` fail closed. `runtime-sources.json` also has exactly three keys:
+`engine`, `parent_loss`, and `training`, pointing respectively to
+`src/hlt_classification/scouting/engine.py`, `hcwdl_parent_loss.py`, and
+`hcwdl_training.py` in that checkout. Their logical names, repository-relative
+locations, and bytes are all hashed; an arbitrary nonempty source list is not
+accepted. All three paths must resolve under one clean Git top level whose HEAD
+is exactly the `source_commit` in the reopened executable parent v7 campaign.
+The attestation records that campaign hash, commit, complete clean-source
+snapshot, exact three-row source registry, and registry digest; every imported
+report/checkpoint evidence row is bound to that same digest. Then run the
+installed-Weaver boundary:
+
+```powershell
+& $python scripts/prepare_hcwdl_representation_parent_evidence.py `
+  --representation-root <representation-root> `
+  --parent-campaign-spec <parent-v7-campaign-spec.json> `
+  --parent-recipe <parent-v4-recipe.json> `
+  --parent-reports <parent-reports.json> `
+  --model-sources <model-sources.json> `
+  --runtime-sources <runtime-sources.json> `
+  --device cpu
+```
+
+This publishes the canonical tap, installed-Weaver surface parity,
+architecture attestation, and v2 parent-loss attestation. Synthetic Weaver or
+an unauthorized parity result fails before the architecture file is
+published.
+
+Next create three JSON
+objects whose values are absolute immutable file paths: `authority-files.json`
+must contain every key reported by
+`PARENT_AUTHORITY_FILE_KEYS`, and `qualifier-reports.json` must contain exactly
+`T0`, `TFS`, `THC`, `TSOFT`, `TSHELL`, and `TOFF`.
+`confirmation-reports.json` must map every row of the canonical confirmation
+registry to its report using the exact key
+`{index:03d}:{node_id}:{seed}`. Then run:
+
+```powershell
+& $python scripts/prepare_hcwdl_representation_parent_import.py `
+  --authority-files <authority-files.json> `
+  --qualifier-report-paths <qualifier-reports.json> `
+  --confirmation-report-paths <confirmation-reports.json> `
+  --output <representation-root>/import/parent_import.json
+```
+
+The builder reopens the actual executable parent v7 campaign, authorized
+primary v4 recipe, assignment/audit and complete lock chain, architecture and
+loss attestations, all six qualifier reports, and every canonical confirmation
+report. It derives teacher/control
+rows from the authenticated architecture audits; no caller-supplied Boolean
+or checkpoint registry can authorize the import. The similarly named
+`build_hcwdl_representation_parent_import.py` remains the registered campaign
+task dispatcher that revalidates this prebuilt artifact against fresh task
+evidence.
+
+Finally derive the graph, control registry, frozen kernel identities, complete
+numerical acceptance, installed-Weaver zero-coefficient measurements, and v2
+overlay recipe before creating the planning campaign:
+
+```powershell
+& $python scripts/prepare_hcwdl_representation_recipe_assets.py `
+  --representation-root <representation-root> `
+  --parent-import <representation-root>/import/parent_import.json `
+  --parent-recipe <parent-v4-recipe.json> `
+  --project-dir <absolute-clean-project-checkout> `
+  --device cpu
+```
+
+The producer-source hash is derived from that checkout's authenticated clean
+Git source snapshot; there is no caller-entered digest. Commit the exact code
+first, and do not build this recipe from a dirty or different checkout.
+The kernel envelope is intentionally published later by its registered task,
+after the campaign identity exists. The recipe binds the deterministic logical
+bundle and per-block array hashes; the task regenerates and byte-compares them
+before publication. Numerical and zero-coefficient tasks likewise reproduce
+the preflight evidence and reject any hash difference.
 
 The three pre-campaign final-state producers are intentionally separate:
 
@@ -248,7 +352,11 @@ manufactures this live evidence.
 ```
 
 The prerequisite builder rejects missing or extra exogenous routes and the row
-builder validates every fixed production-adapter schema. Pilot and production
+builder validates every fixed production-adapter schema. It also reopens the
+registered prebuilt recipe and requires its producer-source parent to equal
+`runtime_facts.source_snapshot_sha256`; the recipe gate repeats that comparison
+and binds the recipe parents to the registered ascent graph, control registry,
+and parent import before publishing its campaign output. Pilot and production
 rows always bind scientific mode and exactly 60 passes; operator settings
 cannot downgrade them to synthetic execution.
 

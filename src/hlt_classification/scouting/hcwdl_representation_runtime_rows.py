@@ -25,10 +25,14 @@ from hlt_classification.data.cache_contracts import (
     validate_content_hash, with_content_hash,
 )
 
-from .hcwdl_representation_campaign import CampaignTask
+from .hcwdl_representation_campaign import (
+    CampaignTask,
+    PARENT_IMPORT_AUTHORITY_ROUTES,
+    PARENT_QUALIFIER_REPORT_ROUTES,
+)
 from .hcwdl_representation_contracts import (
     RUNTIME_DRY_RUN_AUDIT_CONTRACT, RUNTIME_PREREQUISITES_CONTRACT,
-    SURFACE_PARITY_CONTRACT,
+    SURFACE_PARITY_CONTRACT, contract_schema_version,
 )
 from .hcwdl_representation_graph import CONTROL_REGISTRY, NODE_REGISTRY
 from .hcwdl_representation_locks import IMPORTED_LOGIT_CONTROLS, IMPORTED_TEACHERS
@@ -134,6 +138,7 @@ _FINAL_SETTINGS_KEYS: Final = frozenset({
     "finalist_registry_commitment_sha256", "legacy_jobs_present",
     "parent_campaign_sha256", "parent_finalist_lock",
     "parent_finalist_registry_relative", "parent_finalist_registry_sha256",
+    "parent_confirmation_report_keys",
     "rows_per_class", "step_size",
     "source_partitions", "finalists", "comparison_registry",
 })
@@ -204,8 +209,9 @@ def _derived_final_authority(
 ) -> dict[str, Any]:
     required = {
         "shared_final_population", "parent_final_state", "final_disposition",
-        "parent_finalist_registry", "locked_model_members",
-        "paired_screen_model_members", "matcher_resources",
+        "parent_import", "parent_finalist_registry", "locked_model_members",
+        "parent_confirmation_registry", "paired_screen_model_members",
+        "matcher_resources",
     }
     if not isinstance(final_authorities, Mapping) or set(final_authorities) != required:
         raise ValueError("final authority registry differs")
@@ -239,6 +245,57 @@ def _derived_final_authority(
     parent_state_sha256 = validate_parent_final_state(parent_state)
     if hashes.get("${parent_final_state}") != parent_state_sha256:
         raise ValueError("parent final-state authority differs from registered input")
+
+    from .hcwdl_representation_locks import validate_parent_import
+
+    parent_import = final_authorities["parent_import"]
+    if not isinstance(parent_import, Mapping):
+        raise ValueError("parent-import final authority differs")
+    parent_import_sha256 = validate_parent_import(parent_import)
+    if (
+        parent_import_sha256 != spec["parent_import_sha256"]
+        or hashes.get("${prebuilt_parent_import}") != parent_import_sha256
+        or parent_import["parents"].get("parent_campaign_spec")
+        != parent_state.get("parent_campaign_sha256")
+        or parent_import["parents"].get("split_manifest")
+        != spec["split_manifest_sha256"]
+    ):
+        raise ValueError("parent import/final authority lineage differs")
+
+    from .hcwdl_locks import validate_lock
+
+    confirmation_lock = final_authorities["parent_confirmation_registry"]
+    if not isinstance(confirmation_lock, Mapping):
+        raise ValueError("parent confirmation-registry authority differs")
+    confirmation_lock_sha256 = validate_lock(
+        confirmation_lock, expected_level="confirmation_registry",
+    )
+    confirmation_payload = confirmation_lock.get("payload")
+    confirmation_registry = (
+        confirmation_payload.get("registry")
+        if isinstance(confirmation_payload, Mapping) else None
+    )
+    if (
+        confirmation_lock_sha256
+        != parent_import["parents"].get("confirmation_registry_lock")
+        or confirmation_lock.get("campaign_spec_sha256")
+        != parent_import["parents"].get("parent_campaign_spec")
+        or not isinstance(confirmation_registry, list)
+        or not confirmation_registry
+    ):
+        raise ValueError("parent confirmation registry differs from parent import")
+    confirmation_report_keys: list[str] = []
+    for index, row in enumerate(confirmation_registry):
+        node_id = row.get("node_id") if isinstance(row, Mapping) else None
+        seed = row.get("seed") if isinstance(row, Mapping) else None
+        if (
+            not isinstance(node_id, str) or not node_id
+            or isinstance(seed, bool) or not isinstance(seed, int) or seed < 0
+        ):
+            raise ValueError("parent confirmation registry row identity differs")
+        confirmation_report_keys.append(f"{index:03d}:{node_id}:{seed}")
+    if len(confirmation_report_keys) != len(set(confirmation_report_keys)):
+        raise ValueError("parent confirmation report keys are not unique")
 
     disposition = final_authorities["final_disposition"]
     if not isinstance(disposition, Mapping):
@@ -295,7 +352,11 @@ def _derived_final_authority(
     parent_registry_sha256 = require_sha256(
         parent_lock.get("content_hash"), name="parent finalist lock",
     )
-    if parent_lock.get("campaign_spec_sha256") != parent_state["parent_campaign_sha256"]:
+    if (
+        parent_lock.get("campaign_spec_sha256")
+        != parent_state["parent_campaign_sha256"]
+        or parent_registry_sha256 != parent_import["parents"].get("finalist_lock")
+    ):
         raise ValueError("parent finalist lock belongs to another parent campaign")
 
     matcher_resources = final_authorities["matcher_resources"]
@@ -322,6 +383,7 @@ def _derived_final_authority(
         ),
         "parent_finalist_registry_sha256": parent_registry_sha256,
         "parent_finalist_lock": dict(parent_lock),
+        "parent_confirmation_report_keys": sorted(confirmation_report_keys),
         "legacy_jobs_present": bool(parent_state.get("legacy_jobs")),
         "source_partitions": source_partitions,
         "finalists": list(parent_finalists),
@@ -421,18 +483,24 @@ _OUTER_REQUIRED: Final[Mapping[str, tuple[str, ...]]] = {
         "model_source_paths",
     ),
     "parent_loss_attestation": (
-        "parent_report_paths", "runtime_source_paths",
+        "parent_campaign_spec_path", "parent_recipe_path", "parent_report_paths",
+        "runtime_source_paths",
     ),
     "parent_import": (
         "artifact", "architecture_attestation", "parent_loss_attestation",
-        "parent_report_paths", "model_source_paths",
+        "parent_report_paths", "model_source_paths", "authority_files",
+        "qualifier_report_paths", "confirmation_report_paths",
     ),
     "control_registry": (),
     "kernel_resources": (
         "root", "producer_task_id", "immutable_parent_hashes",
-        "registered_output_row", "campaign_or_recovery_owner",
+        "registered_output_row", "campaign_or_recovery_owner", "recipe",
     ),
-    "representation_recipe": ("artifact",), "numerical_acceptance": (),
+    "representation_recipe": (
+        "artifact", "producer_source_sha256", "representation_graph",
+        "control_registry", "parent_import",
+    ),
+    "numerical_acceptance": ("representation_recipe",),
     "cache_miniature_bank": (
         "bank_root", "generation_id", "bounded_row_limit", "cleanup_root",
     ),
@@ -558,13 +626,13 @@ def _output_contract(task: CampaignTask, ordinal: int) -> str | None:
             "HCWDL_REPRESENTATION_ARCHITECTURE_ATTESTATION/v1",
         ),
         "parent_loss_attestation": (
-            "HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v1",
+            "HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v2",
         ),
-        "parent_import": ("HCWDL_REPRESENTATION_PARENT_IMPORT/v1",),
+        "parent_import": ("HCWDL_REPRESENTATION_PARENT_IMPORT/v2",),
         "control_registry": ("HCWDL_REPRESENTATION_CONTROL_REGISTRY/v1",),
         "kernel_resources": (None,),
         "representation_recipe": (
-            "HCWDL_REPRESENTATION_RECIPE/v1",
+            "HCWDL_REPRESENTATION_RECIPE/v2",
         ),
         "numerical_acceptance": (
             "HCWDL_REPRESENTATION_NUMERICAL_ACCEPTANCE/v1",
@@ -669,7 +737,14 @@ def _upstream_reference(
         "registered_output": logical,
         "artifact_kind": kind,
         "expected_contract": contract,
-        "expected_schema_version": 1 if contract is not None else None,
+        "expected_schema_version": (
+            2
+            if contract == "HIGHCOV_DENSE_ASSIGNMENT_MANIFEST/v2"
+            else (
+                contract_schema_version(contract)
+                if contract is not None else None
+            )
+        ),
     }}
 
 
@@ -1328,16 +1403,22 @@ def _parent_engine_report_registry(
     return result
 
 
-def _runtime_source_list(prerequisites: Mapping[str, Any]) -> list[Any]:
+def _runtime_source_list(prerequisites: Mapping[str, Any]) -> dict[str, Any]:
     raw = _bundle_members(prerequisites, "parent_runtime_sources")
-    if not isinstance(raw, list) or any(
-        not isinstance(value, str) or not value for value in raw
+    from .hcwdl_parent_loss import PARENT_LOSS_RUNTIME_SOURCE_FILES
+
+    if (
+        not isinstance(raw, Mapping)
+        or set(raw) != set(PARENT_LOSS_RUNTIME_SOURCE_FILES)
+        or any(not isinstance(value, str) or not value for value in raw.values())
     ):
         raise ValueError("parent runtime-source member registry differs")
-    return [
-        _registered_member("${parent_runtime_sources}", value, mode="path")
-        for value in raw
-    ]
+    return {
+        name: _registered_member(
+            "${parent_runtime_sources}", raw[name], mode="path",
+        )
+        for name in sorted(PARENT_LOSS_RUNTIME_SOURCE_FILES)
+    }
 
 
 def _parameters_base(task: CampaignTask) -> dict[str, Any]:
@@ -1565,7 +1646,7 @@ def _simple_parameters(
     kind = task.kind
     settings = _settings(prerequisites)
     if kind in {
-        "tap_schema", "control_registry", "numerical_acceptance",
+        "tap_schema", "control_registry",
         "cache_miniature", "smoke_probe", "zero_coefficient_acceptance",
     }:
         return base
@@ -1590,6 +1671,8 @@ def _simple_parameters(
     if kind == "parent_loss_attestation":
         return {
             **base,
+            "parent_campaign_spec_path": _registered_path("${parent_campaign_spec}"),
+            "parent_recipe_path": _registered_path("${parent_recipe}"),
             "parent_report_paths": _member_registry(
                 prerequisites, bundle="parent_reports",
                 logical="${parent_reports}", mode="path",
@@ -1597,6 +1680,29 @@ def _simple_parameters(
             "runtime_source_paths": _runtime_source_list(prerequisites),
         }
     if kind == "parent_import":
+        final = settings.get("final")
+        if not isinstance(final, Mapping):
+            raise ValueError("runtime settings lack the final registry")
+        parent_finalist_relative = final.get("parent_finalist_registry_relative")
+        if not isinstance(parent_finalist_relative, str) or not parent_finalist_relative:
+            raise ValueError("parent finalist-registry member path differs")
+        authority_files = {}
+        for name, logical in PARENT_IMPORT_AUTHORITY_ROUTES.items():
+            authority_files[name] = (
+                _registered_member(
+                    logical, parent_finalist_relative, mode="path",
+                )
+                if name == "finalist_lock"
+                else _registered_path(logical)
+            )
+        authority_files.update({
+            "architecture_attestation": _registered_path(
+                "${task_output:architecture_attestation:0}"
+            ),
+            "parent_loss_attestation": _registered_path(
+                "${task_output:parent_loss_attestation:0}"
+            ),
+        })
         return {
             **base,
             "artifact": _registered_reference("${prebuilt_parent_import}"),
@@ -1614,11 +1720,36 @@ def _simple_parameters(
                 prerequisites, bundle="parent_model_sources",
                 logical="${parent_model_sources}", mode="path",
             ),
+            "authority_files": authority_files,
+            "qualifier_report_paths": {
+                name: _registered_path(logical)
+                for name, logical in PARENT_QUALIFIER_REPORT_ROUTES.items()
+            },
+            "confirmation_report_paths": _member_registry(
+                prerequisites, bundle="parent_confirmation_reports",
+                logical="${parent_confirmation_reports}", mode="path",
+            ),
         }
     if kind == "representation_recipe":
         return {
             **base,
             "artifact": _registered_reference("${prebuilt_representation_recipe}"),
+            "producer_source_sha256": require_sha256(
+                prerequisites["runtime_facts"]["source_snapshot_sha256"],
+                name="representation recipe producer source snapshot",
+            ),
+            "representation_graph": _registered_reference(
+                "${representation_graph}"
+            ),
+            "control_registry": _registered_reference("${control_registry}"),
+            "parent_import": _registered_reference("${parent_import}"),
+        }
+    if kind == "numerical_acceptance":
+        return {
+            **base,
+            "representation_recipe": _registered_reference(
+                "${task_output:representation_recipe:0}"
+            ),
         }
     if kind == "kernel_resources":
         logical = task.registered_outputs[0]
@@ -1630,6 +1761,7 @@ def _simple_parameters(
             "immutable_parent_hashes": dict(settings["kernel_parent_hashes"]),
             "registered_output_row": _registered_output_row(task, None, logical),
             "campaign_or_recovery_owner": _producer_owner(spec, task, None),
+            "recipe": _registered_reference("${prebuilt_representation_recipe}"),
         }
     if kind == "cache_miniature_bank":
         build_task = by_key[f"miniature_{task.logical_bank}_build"]
@@ -2514,6 +2646,9 @@ def _validate_prerequisites(
     _content_hashes(prerequisites)
     parent_reports = _bundle_members(prerequisites, "parent_reports")
     parent_models = _bundle_members(prerequisites, "parent_model_sources")
+    parent_confirmations = _bundle_members(
+        prerequisites, "parent_confirmation_reports",
+    )
     expected_parent_nodes = set(IMPORTED_TEACHERS) | set(IMPORTED_LOGIT_CONTROLS)
     if not isinstance(parent_reports, Mapping) or set(parent_reports) != expected_parent_nodes:
         raise ValueError("parent report bundle is incomplete or expanded")
@@ -2521,6 +2656,17 @@ def _validate_prerequisites(
         "D0w", "hcwdl_surfaces", "scouting_particle_transformer",
     }:
         raise ValueError("parent model-source bundle is incomplete or expanded")
+    expected_confirmation_keys = _final_settings(prerequisites).get(
+        "parent_confirmation_report_keys"
+    )
+    if (
+        not isinstance(parent_confirmations, Mapping)
+        or not isinstance(expected_confirmation_keys, list)
+        or not expected_confirmation_keys
+        or expected_confirmation_keys != sorted(expected_confirmation_keys)
+        or set(parent_confirmations) != set(expected_confirmation_keys)
+    ):
+        raise ValueError("parent confirmation-report bundle is incomplete or expanded")
     d0w_source = parent_models["D0w"]
     if (
         not isinstance(d0w_source, Mapping)
@@ -2632,6 +2778,7 @@ def build_runtime_prerequisites(
     settings: Mapping[str, Any], split_manifest: Mapping[str, Any],
     final_authorities: Mapping[str, Any],
     target_forward_specs: Mapping[str, Any],
+    representation_recipe: Mapping[str, Any],
 ) -> dict[str, Any]:
     """Assemble and validate the sole explicit operator-input document.
 
@@ -2643,6 +2790,23 @@ def build_runtime_prerequisites(
 
     if set(settings) != _SETTINGS_KEYS:
         raise ValueError("operator runtime settings schema differs")
+    from .hcwdl_representation_recipe import validate_representation_recipe
+
+    recipe_sha256 = validate_representation_recipe(representation_recipe)
+    if recipe_sha256 != require_sha256(
+        spec["representation_recipe_sha256"], name="campaign representation recipe",
+    ):
+        raise ValueError("runtime representation recipe differs from campaign identity")
+    runtime_source_sha256 = require_sha256(
+        runtime_facts.get("source_snapshot_sha256"),
+        name="runtime source snapshot",
+    )
+    if representation_recipe["parents"].get(
+        "producer_source"
+    ) != runtime_source_sha256:
+        raise PermissionError(
+            "representation recipe producer source differs from measured runtime source"
+        )
     quotas, selection_rule = _final_selection_policy(spec, split_manifest)
     normalized_settings = dict(settings)
     expected_target_runtime = _derived_target_runtime_environment(

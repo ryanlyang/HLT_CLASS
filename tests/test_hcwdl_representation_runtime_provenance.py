@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -16,7 +17,7 @@ from hlt_classification.scouting.hcwdl_representation_runtime_adapters import (
 )
 from hlt_classification.scouting.hcwdl_representation_runtime_binding import (
     CAMPAIGN_ARTIFACT_BINDING, IMMUTABLE_OUTPUT_ROOT_BINDING,
-    build_runtime_binding, runtime_campaign_identity,
+    PREPUBLISHED_OUTPUT_BINDING, build_runtime_binding, runtime_campaign_identity,
     resolve_runtime_row,
     validate_runtime_binding,
 )
@@ -24,6 +25,7 @@ from hlt_classification.scouting.hcwdl_representation_campaign import (
     build_command_plan, create_campaign_spec, materialize_command,
 )
 from hlt_classification.scouting.hcwdl_representation_contracts import (
+    PARENT_IMPORT_CONTRACT, REPRESENTATION_RECIPE_CONTRACT,
     SHUFFLE_MAP_CONTRACT, SUBMISSION_LEDGER_CONTRACT,
 )
 from hlt_classification.scouting import hcwdl_representation_task_runtime as task_runtime
@@ -110,6 +112,59 @@ def _binding_fixture(*, producer: str = "producer", frozen_path: str | None = No
         })},
     }
     return spec, runtime_facts, task_rows
+
+
+def _prepublished_binding_fixture(
+    *, parent_import_sha256: str = "a" * 64,
+    representation_recipe_sha256: str = "b" * 64,
+):
+    tasks = [
+        {
+            "task_key": "parent_import", "kind": "parent_import",
+            "dependencies": [], "resource_class": "cpu_small",
+            "registered_inputs": ["${prebuilt_parent_import}"],
+            "registered_outputs": ["import/parent_import.json"],
+        },
+        {
+            "task_key": "representation_recipe", "kind": "representation_recipe",
+            "dependencies": ["parent_import"], "resource_class": "cpu_small",
+            "registered_inputs": ["${prebuilt_representation_recipe}"],
+            "registered_outputs": ["recipes/representation_recipe.json"],
+        },
+    ]
+    spec = {
+        "campaign_root": "/campaign", "project_dir": "/project",
+        "source_commit": "1" * 40,
+        "parent_import_sha256": parent_import_sha256,
+        "representation_recipe_sha256": representation_recipe_sha256,
+        "tasks": tasks,
+    }
+    runtime_facts = {
+        "conda_environment": "atlas_kd_tigris", "data_root": "/data",
+        "device": "cpu", "project_dir": "/project",
+        "python_no_user_site": True, "source_snapshot_sha256": "2" * 64,
+        "weaver_runtime_sha256": "3" * 64,
+    }
+
+    def row(logical_input: str, registered_output: str, byte_hash: str):
+        path = f"/campaign/{registered_output}"
+        return {
+            "array_index": None, "device": "cpu",
+            "inputs": {logical_input: {"path": path, "sha256": byte_hash}},
+            "outputs": {registered_output: path}, "parameters": {},
+            "runtime_signature_sha256": "4" * 64,
+        }
+
+    rows = {
+        "parent_import": {"single": row(
+            "${prebuilt_parent_import}", "import/parent_import.json", "5" * 64,
+        )},
+        "representation_recipe": {"single": row(
+            "${prebuilt_representation_recipe}",
+            "recipes/representation_recipe.json", "6" * 64,
+        )},
+    }
+    return spec, runtime_facts, rows
 
 
 def test_registered_argument_tags_resolve_only_authenticated_input_bytes(
@@ -303,6 +358,216 @@ def test_late_bound_route_rejects_wrong_path_or_nonancestor_producer() -> None:
     with pytest.raises(PermissionError, match="not a transitive dependency"):
         build_runtime_binding(
             spec=spec, runtime_facts=runtime_facts, task_rows=task_rows,
+        )
+
+
+def test_canonical_prepublished_parent_import_and_recipe_layout_binds() -> None:
+    spec, runtime_facts, task_rows = _prepublished_binding_fixture()
+    binding = build_runtime_binding(
+        spec=spec, runtime_facts=runtime_facts, task_rows=task_rows,
+    )
+    validate_runtime_binding(binding, spec=spec)
+
+    expected = {
+        "parent_import": (
+            "${prebuilt_parent_import}", "import/parent_import.json",
+            PARENT_IMPORT_CONTRACT, spec["parent_import_sha256"],
+        ),
+        "representation_recipe": (
+            "${prebuilt_representation_recipe}",
+            "recipes/representation_recipe.json",
+            REPRESENTATION_RECIPE_CONTRACT,
+            spec["representation_recipe_sha256"],
+        ),
+    }
+    for task_key, (logical, output, contract, content_hash) in expected.items():
+        row = resolve_runtime_row(
+            binding, spec=spec, task_key=task_key, array_index=None,
+        )
+        reference = row["inputs"][logical]
+        assert reference["path"] == f"/campaign/{output}"
+        descriptor = reference[PREPUBLISHED_OUTPUT_BINDING]
+        assert descriptor == {
+            "consumer_task_key": task_key,
+            "consumer_task_kind": task_key,
+            "owner_task_key": task_key,
+            "owner_task_kind": task_key,
+            "registered_input": logical,
+            "registered_output": output,
+            "expected_contract": contract,
+            "expected_schema_version": 1,
+            "expected_content_hash": content_hash,
+        }
+
+
+def test_static_output_overlap_remains_closed_except_exact_designated_route() -> None:
+    spec, runtime_facts, task_rows = _binding_fixture()
+    task_rows["consumer"]["single"]["inputs"]["${producer}"] = {
+        "path": "/campaign/artifacts/consumer.json", "sha256": "5" * 64,
+    }
+    with pytest.raises(PermissionError, match="upstream_output"):
+        build_runtime_binding(
+            spec=spec, runtime_facts=runtime_facts, task_rows=task_rows,
+        )
+
+    spec, runtime_facts, task_rows = _prepublished_binding_fixture()
+    task_rows["parent_import"]["single"]["inputs"][
+        "${prebuilt_parent_import}"
+    ]["path"] = "/campaign/recipes/representation_recipe.json"
+    with pytest.raises(PermissionError, match="exact own output"):
+        build_runtime_binding(
+            spec=spec, runtime_facts=runtime_facts, task_rows=task_rows,
+        )
+
+    spec, runtime_facts, task_rows = _prepublished_binding_fixture()
+    spec["tasks"].append({
+        "task_key": "unlisted_recipe_reader", "kind": "kernel_resources",
+        "dependencies": [], "resource_class": "cpu_small",
+        "registered_inputs": ["${prebuilt_representation_recipe}"],
+        "registered_outputs": ["artifacts/unlisted.json"],
+    })
+    task_rows["unlisted_recipe_reader"] = {"single": {
+        "array_index": None, "device": "cpu",
+        "inputs": {"${prebuilt_representation_recipe}": {
+            "path": "/campaign/recipes/representation_recipe.json",
+            "sha256": "7" * 64,
+        }},
+        "outputs": {"artifacts/unlisted.json": "/campaign/artifacts/unlisted.json"},
+        "parameters": {}, "runtime_signature_sha256": "4" * 64,
+    }}
+    with pytest.raises(PermissionError, match="upstream_output"):
+        build_runtime_binding(
+            spec=spec, runtime_facts=runtime_facts, task_rows=task_rows,
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "changed"),
+    (
+        ("expected_contract", "WRONG_CONTRACT/v1"),
+        ("expected_schema_version", 2),
+        ("expected_content_hash", "f" * 64),
+    ),
+)
+def test_prepublished_binding_rejects_mutated_contract_schema_or_hash(
+    field: str, changed: object,
+) -> None:
+    spec, runtime_facts, task_rows = _prepublished_binding_fixture()
+    binding = build_runtime_binding(
+        spec=spec, runtime_facts=runtime_facts, task_rows=task_rows,
+    )
+    forged = deepcopy(binding)
+    parent = next(
+        row for row in forged["tasks"] if row["task_key"] == "parent_import"
+    )
+    parent["rows"][0]["inputs"]["${prebuilt_parent_import}"][
+        PREPUBLISHED_OUTPUT_BINDING
+    ][field] = changed
+    forged = with_content_hash({
+        key: value for key, value in forged.items() if key != "content_hash"
+    })
+    with pytest.raises(PermissionError, match="designated task output"):
+        validate_runtime_binding(forged, spec=spec)
+
+
+def test_prepublished_worker_authenticates_bytes_and_publication_is_noop(
+    tmp_path: Path,
+) -> None:
+    parent = with_content_hash({
+        "contract": PARENT_IMPORT_CONTRACT, "schema_version": 1,
+        "payload": {"kind": "parent"},
+    })
+    recipe = with_content_hash({
+        "contract": REPRESENTATION_RECIPE_CONTRACT, "schema_version": 1,
+        "payload": {"kind": "recipe"},
+    })
+    spec, runtime_facts, task_rows = _prepublished_binding_fixture(
+        parent_import_sha256=parent["content_hash"],
+        representation_recipe_sha256=recipe["content_hash"],
+    )
+    binding = build_runtime_binding(
+        spec=spec, runtime_facts=runtime_facts, task_rows=task_rows,
+    )
+    parent_path = tmp_path / "import" / "parent_import.json"
+    recipe_path = tmp_path / "recipes" / "representation_recipe.json"
+    write_immutable_json(parent_path, parent)
+    write_immutable_json(recipe_path, recipe)
+    local_spec = {**spec, "campaign_root": str(tmp_path)}
+    inputs = {}
+    for task_key, logical, path in (
+        ("parent_import", "${prebuilt_parent_import}", parent_path),
+        (
+            "representation_recipe", "${prebuilt_representation_recipe}",
+            recipe_path,
+        ),
+    ):
+        bound = resolve_runtime_row(
+            binding, spec=spec, task_key=task_key, array_index=None,
+        )["inputs"][logical]
+        inputs[logical] = {
+            **bound, "path": str(path), "sha256": sha256_file(path),
+        }
+    assert task_runtime._validate_input_bytes(
+        {"inputs": inputs}, spec=local_spec,
+    ) == {
+        logical: {"path": reference["path"], "sha256": reference["sha256"]}
+        for logical, reference in inputs.items()
+    }
+
+    from hlt_classification.scouting.hcwdl_representation_runtime_adapters import (
+        _publish_exact_json,
+    )
+
+    before = parent_path.read_bytes()
+    _publish_exact_json(parent_path, parent)
+    assert parent_path.read_bytes() == before
+
+    parent_path.write_bytes(before + b" ")
+    with pytest.raises(ValueError, match="byte/hash identity"):
+        task_runtime._validate_input_bytes(
+            {"inputs": {"${prebuilt_parent_import}": inputs[
+                "${prebuilt_parent_import}"
+            ]}},
+            spec=local_spec,
+        )
+
+
+@pytest.mark.parametrize(
+    ("contract", "schema_version", "payload"),
+    (
+        ("WRONG_PARENT_IMPORT/v1", 1, {"kind": "parent"}),
+        (PARENT_IMPORT_CONTRACT, 2, {"kind": "parent"}),
+        (PARENT_IMPORT_CONTRACT, 1, {"kind": "changed"}),
+    ),
+)
+def test_prepublished_worker_rejects_wrong_contract_schema_or_content(
+    tmp_path: Path, contract: str, schema_version: int,
+    payload: dict[str, str],
+) -> None:
+    expected = with_content_hash({
+        "contract": PARENT_IMPORT_CONTRACT, "schema_version": 1,
+        "payload": {"kind": "parent"},
+    })
+    actual = with_content_hash({
+        "contract": contract, "schema_version": schema_version,
+        "payload": payload,
+    })
+    spec, runtime_facts, task_rows = _prepublished_binding_fixture(
+        parent_import_sha256=expected["content_hash"],
+    )
+    binding = build_runtime_binding(
+        spec=spec, runtime_facts=runtime_facts, task_rows=task_rows,
+    )
+    path = tmp_path / "import" / "parent_import.json"
+    write_immutable_json(path, actual)
+    reference = resolve_runtime_row(
+        binding, spec=spec, task_key="parent_import", array_index=None,
+    )["inputs"]["${prebuilt_parent_import}"]
+    reference = {**reference, "path": str(path), "sha256": sha256_file(path)}
+    with pytest.raises((ValueError, PermissionError)):
+        task_runtime._validate_input_bytes(
+            {"inputs": {"${prebuilt_parent_import}": reference}},
+            spec={**spec, "campaign_root": str(tmp_path)},
         )
 
 

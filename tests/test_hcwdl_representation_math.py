@@ -316,7 +316,7 @@ def test_toff_set_and_relation_keep_families_separate_and_exclude_unclassified()
         )
 
 
-def test_jet_class_weighted_gram_orthogonality_and_exact_schedules():
+def test_jet_unweighted_gram_orthogonality_and_exact_schedules():
     torch.manual_seed(12)
     student = torch.randn(3, 128, requires_grad=True)
     teacher = torch.randn(3, 128)
@@ -324,9 +324,13 @@ def test_jet_class_weighted_gram_orthogonality_and_exact_schedules():
     nn.init.eye_(projection.weight)
     result = losses.jet_representation_loss(
         student, teacher, projection, labels=torch.tensor([0, 1, 2]),
-        class_weights=torch.arange(1, 16, dtype=torch.float32),
+        class_weights=torch.ones(15, dtype=torch.float32),
     )
     assert result.gram_pair_weights.diag().eq(0).all()
+    assert torch.equal(
+        result.gram_pair_weights[~torch.eye(3, dtype=torch.bool)],
+        torch.ones(6),
+    )
     result.loss.backward()
     assert student.grad is not None and projection.weight.grad is not None
     orth = losses.projection_orthogonality({"jet": projection})

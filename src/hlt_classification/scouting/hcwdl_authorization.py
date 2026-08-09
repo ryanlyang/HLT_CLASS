@@ -10,8 +10,28 @@ from typing import Any, Final
 from hlt_classification.data.cache_contracts import require_sha256, validate_content_hash, with_content_hash
 
 
-SUBMISSION_AUTHORIZATION_CONTRACT: Final = "HCWDL_SUBMISSION_AUTHORIZATION/v3"
+LEGACY_SUBMISSION_AUTHORIZATION_CONTRACT: Final = "HCWDL_SUBMISSION_AUTHORIZATION/v3"
+PREVIOUS_SUBMISSION_AUTHORIZATION_CONTRACT: Final = "HCWDL_SUBMISSION_AUTHORIZATION/v4"
+PRIOR_SUBMISSION_AUTHORIZATION_CONTRACT: Final = "HCWDL_SUBMISSION_AUTHORIZATION/v5"
+RECENT_SUBMISSION_AUTHORIZATION_CONTRACT: Final = "HCWDL_SUBMISSION_AUTHORIZATION/v6"
+SUBMISSION_AUTHORIZATION_CONTRACT: Final = "HCWDL_SUBMISSION_AUTHORIZATION/v7"
 AUTHORIZATION_PHRASE: Final = "AUTHORIZE EXACT HCWDL SPEC FOR TIGRIS"
+MANUAL_ENDPOINT_CONTINUATION: Final = "manual_posthoc"
+AUTOMATIC_ENDPOINT_CONTINUATION: Final = "preauthorized_automatic"
+ENDPOINT_CONTINUATION_MODES: Final = frozenset({
+    MANUAL_ENDPOINT_CONTINUATION, AUTOMATIC_ENDPOINT_CONTINUATION,
+})
+LEGACY_MODES: Final = frozenset({"smoke", "pilot", "production"})
+PREVIOUS_MODES: Final = frozenset({
+    "smoke", "pilot", "midscale500k", "production",
+})
+PRIOR_MODES: Final = frozenset({
+    "smoke", "pilot", "midscale500k", "midscale1m", "production",
+})
+MODES: Final = frozenset({
+    "smoke", "pilot", "midscale500k", "midscale1m", "midscale2m",
+    "production",
+})
 
 
 def require_canonical_campaign_spec_path(
@@ -53,19 +73,22 @@ def build_submission_authorization(
     resource_request_sha256: str, command_plan_sha256: str,
     authorization_phrase: str,
     production_authorization_sha256: str | None = None,
+    endpoint_continuation: str = MANUAL_ENDPOINT_CONTINUATION,
 ) -> dict[str, Any]:
-    if mode not in {"smoke", "pilot", "production"}:
+    if mode not in MODES:
         raise ValueError("HCWDL authorization mode differs")
     if authorization_phrase != AUTHORIZATION_PHRASE:
         raise PermissionError("HCWDL submission authorization phrase differs")
     if len(source_commit) != 40 or any(c not in "0123456789abcdef" for c in source_commit):
         raise ValueError("HCWDL authorization source commit differs")
+    if endpoint_continuation not in ENDPOINT_CONTINUATION_MODES:
+        raise ValueError("HCWDL endpoint-continuation authorization differs")
     if mode == "production":
         require_sha256(production_authorization_sha256, name="production authorization SHA-256")
     elif production_authorization_sha256 is not None:
         raise ValueError("nonproduction HCWDL authorization names a production decision")
     return with_content_hash({
-        "contract": SUBMISSION_AUTHORIZATION_CONTRACT, "schema_version": 3,
+        "contract": SUBMISSION_AUTHORIZATION_CONTRACT, "schema_version": 7,
         "mode": mode, "source_commit": source_commit,
         "source_manifest_sha256": require_sha256(source_manifest_sha256, name="source SHA-256"),
         "split_manifest_sha256": require_sha256(split_manifest_sha256, name="split SHA-256"),
@@ -77,6 +100,10 @@ def build_submission_authorization(
             command_plan_sha256, name="exact command-plan SHA-256",
         ),
         "production_authorization_sha256": production_authorization_sha256,
+        "endpoint_continuation": endpoint_continuation,
+        "endpoint_diagnostic_review_waived_before_execution": (
+            endpoint_continuation == AUTOMATIC_ENDPOINT_CONTINUATION
+        ),
         "explicit_user_authorization": True,
     })
 
@@ -86,10 +113,31 @@ def validate_submission_authorization(
     source_manifest_sha256: str, split_manifest_sha256: str,
     recipe_sha256: str, resource_request_sha256: str, command_plan_sha256: str,
     production_authorization_sha256: str | None,
+    endpoint_continuation: str = MANUAL_ENDPOINT_CONTINUATION,
 ) -> str:
+    contract = value.get("contract")
+    if contract == LEGACY_SUBMISSION_AUTHORIZATION_CONTRACT:
+        schema_version = 3
+        allowed_modes = LEGACY_MODES
+    elif contract == PREVIOUS_SUBMISSION_AUTHORIZATION_CONTRACT:
+        schema_version = 4
+        allowed_modes = PREVIOUS_MODES
+    elif contract == PRIOR_SUBMISSION_AUTHORIZATION_CONTRACT:
+        schema_version = 5
+        allowed_modes = PRIOR_MODES
+    elif contract == RECENT_SUBMISSION_AUTHORIZATION_CONTRACT:
+        schema_version = 6
+        allowed_modes = MODES
+    elif contract == SUBMISSION_AUTHORIZATION_CONTRACT:
+        schema_version = 7
+        allowed_modes = MODES
+    else:
+        raise ValueError("HCWDL submission authorization contract differs")
     digest = validate_content_hash(
-        value, expected_contract=SUBMISSION_AUTHORIZATION_CONTRACT, expected_schema_version=3,
+        value, expected_contract=str(contract), expected_schema_version=schema_version,
     )
+    if not isinstance(value.get("mode"), str) or value.get("mode") not in allowed_modes:
+        raise ValueError("HCWDL submission authorization mode differs")
     expected = {
         "mode": mode, "source_commit": source_commit,
         "source_manifest_sha256": source_manifest_sha256,
@@ -100,13 +148,31 @@ def validate_submission_authorization(
         "production_authorization_sha256": production_authorization_sha256,
         "explicit_user_authorization": True,
     }
+    if schema_version >= 7:
+        if endpoint_continuation not in ENDPOINT_CONTINUATION_MODES:
+            raise ValueError("HCWDL endpoint-continuation authorization differs")
+        expected.update({
+            "endpoint_continuation": endpoint_continuation,
+            "endpoint_diagnostic_review_waived_before_execution": (
+                endpoint_continuation == AUTOMATIC_ENDPOINT_CONTINUATION
+            ),
+        })
+    elif endpoint_continuation != MANUAL_ENDPOINT_CONTINUATION:
+        raise PermissionError(
+            "legacy HCWDL authorization cannot preauthorize endpoint continuation"
+        )
     if any(value.get(name) != item for name, item in expected.items()):
         raise PermissionError("HCWDL submission authorization lineage differs")
     return digest
 
 
 __all__ = [
-    "AUTHORIZATION_PHRASE", "SUBMISSION_AUTHORIZATION_CONTRACT",
+    "AUTHORIZATION_PHRASE", "AUTOMATIC_ENDPOINT_CONTINUATION",
+    "ENDPOINT_CONTINUATION_MODES", "MANUAL_ENDPOINT_CONTINUATION",
+    "LEGACY_SUBMISSION_AUTHORIZATION_CONTRACT",
+    "PREVIOUS_SUBMISSION_AUTHORIZATION_CONTRACT",
+    "PRIOR_SUBMISSION_AUTHORIZATION_CONTRACT",
+    "RECENT_SUBMISSION_AUTHORIZATION_CONTRACT", "SUBMISSION_AUTHORIZATION_CONTRACT",
     "build_submission_authorization", "validate_submission_authorization",
     "require_canonical_campaign_spec_path", "validate_source_checkout",
 ]

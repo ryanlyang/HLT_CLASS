@@ -6,6 +6,7 @@ import pytest
 import torch
 from torch import nn
 
+from hlt_classification.models import hcwdl_surfaces as surfaces
 from hlt_classification.models import scouting_particle_transformer as scouting
 from hlt_classification.models.hcwdl_representation import (
     HCWDLRepresentationStudent,
@@ -22,6 +23,7 @@ from hlt_classification.models.hcwdl_surfaces import (
     validate_architecture_attestation,
 )
 from hlt_classification.data.cache_contracts import (
+    canonical_sha256,
     sha256_file,
     validate_content_hash,
     with_content_hash,
@@ -135,6 +137,25 @@ def _parameter_gradients(model):
         name: None if parameter.grad is None else parameter.grad.detach().clone()
         for name, parameter in model.named_parameters()
     }
+
+
+def _synthetic_model_source_rows() -> list[dict[str, str]]:
+    return [
+        {"logical_name": "D0w", "path": "/fixture/D0w/training_report.json", "sha256": "3" * 64},
+        {"logical_name": "hcwdl_surfaces", "path": "/fixture/hcwdl_surfaces.py", "sha256": "4" * 64},
+        {
+            "logical_name": "scouting_particle_transformer",
+            "path": "/fixture/scouting_particle_transformer.py",
+            "sha256": "5" * 64,
+        },
+    ]
+
+
+def _model_source_hash(rows: list[dict[str, str]]) -> str:
+    return canonical_sha256([
+        {"logical_name": row["logical_name"], "sha256": row["sha256"]}
+        for row in rows
+    ])
 
 
 def test_ordinary_surface_is_one_forward_with_exact_logits_gradients_and_metadata(fake_hcwdl_weaver):
@@ -267,11 +288,13 @@ def test_synthetic_surface_parity_is_recorded_but_cannot_authorize(fake_hcwdl_we
         native, native.state_dict(), node_id="TOFF", domain="native_offline",
         model_role="teacher", checkpoint_sha256="2" * 64,
     )
+    model_sources = _synthetic_model_source_rows()
     attestation = build_architecture_attestation(
         parity_report=parity,
         runtime_signature=parity["runtime_signature"],
-        model_source_sha256="4" * 64,
+        model_source_sha256=_model_source_hash(model_sources),
         checkpoint_audits=(ordinary_audit, native_audit),
+        model_source_files=model_sources,
     )
     assert not attestation["scientific_authorization"]
     assert validate_architecture_attestation(
@@ -279,6 +302,27 @@ def test_synthetic_surface_parity_is_recorded_but_cannot_authorize(fake_hcwdl_we
     ) == attestation["content_hash"]
     with pytest.raises(ValueError, match="installed-Weaver"):
         validate_architecture_attestation(attestation, require_authorized=True)
+    for invalid_sources in (
+        model_sources[:-1],
+        [*model_sources, {
+            "logical_name": "unexpected", "path": "/fixture/unexpected.py",
+            "sha256": "6" * 64,
+        }],
+    ):
+        with pytest.raises(ValueError, match="incomplete or expanded"):
+            build_architecture_attestation(
+                parity_report=parity,
+                runtime_signature=parity["runtime_signature"],
+                model_source_sha256=_model_source_hash(invalid_sources),
+                checkpoint_audits=(ordinary_audit, native_audit),
+                model_source_files=invalid_sources,
+            )
+        tampered = dict(attestation)
+        tampered["model_source_files"] = invalid_sources
+        with pytest.raises(ValueError, match="incomplete or expanded"):
+            validate_architecture_attestation(
+                with_content_hash(tampered), require_authorized=False,
+            )
 
     broken = dict(ordinary.state_dict())
     first = next(iter(broken)); broken[first] = torch.zeros(999)
@@ -365,11 +409,22 @@ def _tap_file(tmp_path: Path) -> Path:
     return path
 
 
+def _file_model_source_paths(d0w_report_path: Path) -> dict[str, Path]:
+    assert surfaces.__file__ is not None
+    assert scouting.__file__ is not None
+    return {
+        "D0w": d0w_report_path.parent / "training_report.json",
+        "hcwdl_surfaces": Path(surfaces.__file__),
+        "scouting_particle_transformer": Path(scouting.__file__),
+    }
+
+
 def test_file_backed_architecture_audit_opens_reports_and_strict_loads_checkpoint(
     fake_hcwdl_weaver, monkeypatch, tmp_path: Path,
 ):
     _patch_file_report_validators(monkeypatch)
     parity_path, ordinary = _parity_file(tmp_path)
+    d0w_report = _parent_report_fixture(tmp_path, node_id="D0w", model=ordinary)
     report_path = _parent_report_fixture(tmp_path, node_id="D100", model=ordinary)
 
     audit = audit_parent_checkpoint_file(
@@ -382,7 +437,8 @@ def test_file_backed_architecture_audit_opens_reports_and_strict_loads_checkpoin
     attestation = build_architecture_attestation_from_files(
         tap_schema_path=_tap_file(tmp_path),
         surface_parity_path=parity_path,
-        parent_reports={"D100": report_path},
+        parent_reports={"D0w": d0w_report, "D100": report_path},
+        model_source_paths=_file_model_source_paths(d0w_report),
     )
     assert attestation["exact_file_evidence"] is True
     assert attestation["scientific_authorization"] is False
@@ -391,6 +447,18 @@ def test_file_backed_architecture_audit_opens_reports_and_strict_loads_checkpoin
     assert validate_architecture_attestation(
         attestation, require_authorized=False,
     ) == attestation["content_hash"]
+    forged_sources = [dict(row) for row in attestation["model_source_files"]]
+    forged_d0w = next(
+        row for row in forged_sources if row["logical_name"] == "D0w"
+    )
+    forged_d0w["sha256"] = "e" * 64
+    forged = dict(attestation)
+    forged["model_source_files"] = forged_sources
+    forged["model_source_sha256"] = _model_source_hash(forged_sources)
+    with pytest.raises(ValueError, match="authenticated PMARD engine report"):
+        validate_architecture_attestation(
+            with_content_hash(forged), require_authorized=False,
+        )
     with (report_path.parent / "selected_model.pt").open("ab") as handle:
         handle.write(b"post-attestation-tamper")
     with pytest.raises(ValueError, match="byte lineage|stale"):
@@ -431,13 +499,15 @@ def test_file_backed_architecture_gate_rejects_checkpoint_report_and_runtime_tam
     # class makes its exact runtime signature stale.
     clean = tmp_path / "runtime_stale"
     clean_parity, clean_model = _parity_file(clean)
+    clean_d0w = _parent_report_fixture(clean, node_id="D0w", model=clean_model)
     clean_parent = _parent_report_fixture(clean, node_id="D100", model=clean_model)
     monkeypatch.setattr(scouting, "_weaver_class", lambda: _AlternateFakeHCWDLWeaver)
     with pytest.raises(ValueError, match="stale Weaver runtime"):
         build_architecture_attestation_from_files(
             tap_schema_path=_tap_file(clean),
             surface_parity_path=clean_parity,
-            parent_reports={"D100": clean_parent},
+            parent_reports={"D0w": clean_d0w, "D100": clean_parent},
+            model_source_paths=_file_model_source_paths(clean_d0w),
         )
 
 
@@ -446,6 +516,7 @@ def test_file_backed_architecture_gate_rejects_stale_tap_parity_and_model_source
 ):
     _patch_file_report_validators(monkeypatch)
     parity_path, ordinary = _parity_file(tmp_path)
+    d0w_report = _parent_report_fixture(tmp_path, node_id="D0w", model=ordinary)
     report_path = _parent_report_fixture(tmp_path, node_id="D100", model=ordinary)
 
     stale_tap = tap_schema()
@@ -477,9 +548,34 @@ def test_file_backed_architecture_gate_rejects_stale_tap_parity_and_model_source
         build_architecture_attestation_from_files(
             tap_schema_path=_tap_file(tmp_path),
             surface_parity_path=parity_path,
-            parent_reports={"D100": report_path},
+            parent_reports={"D0w": d0w_report, "D100": report_path},
             model_source_paths={
+                "D0w": d0w_report.parent / "training_report.json",
                 "hcwdl_surfaces": unrelated,
                 "scouting_particle_transformer": unrelated,
+            },
+        )
+
+    model_sources = _file_model_source_paths(d0w_report)
+    for invalid_sources in (
+        {name: path for name, path in model_sources.items() if name != "D0w"},
+        {**model_sources, "unexpected": unrelated},
+    ):
+        with pytest.raises(ValueError, match="incomplete or expanded"):
+            build_architecture_attestation_from_files(
+                tap_schema_path=_tap_file(tmp_path),
+                surface_parity_path=parity_path,
+                parent_reports={"D0w": d0w_report, "D100": report_path},
+                model_source_paths=invalid_sources,
+            )
+
+    with pytest.raises(ValueError, match="authenticated PMARD engine report"):
+        build_architecture_attestation_from_files(
+            tap_schema_path=_tap_file(tmp_path),
+            surface_parity_path=parity_path,
+            parent_reports={"D0w": d0w_report, "D100": report_path},
+            model_source_paths={
+                **model_sources,
+                "D0w": report_path.parent / "training_report.json",
             },
         )

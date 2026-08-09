@@ -70,6 +70,9 @@ SCRIPTS = (
     "measure_hcwdl_representation_worker_runtime.py",
     "monitor_hcwdl_representation_campaign.py",
     "predict_hcwdl_shared_final_shard.py",
+    "prepare_hcwdl_representation_parent_evidence.py",
+    "prepare_hcwdl_representation_parent_import.py",
+    "prepare_hcwdl_representation_recipe_assets.py",
     "recover_hcwdl_shared_final.py",
     "register_hcwdl_shared_final_population.py",
     "resume_hcwdl_representation_campaign.py",
@@ -123,6 +126,69 @@ def test_campaign_creation_names_authority_and_inventory_inputs_explicitly() -> 
     assert "--executable-candidate-audit" in result.stdout
     assert "--fixed-size-inventory" in result.stdout
     assert '"--executable-candidate",' not in source
+
+
+def test_recipe_assets_cli_derives_source_from_clean_project_checkout() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(REPOSITORY / "scripts/prepare_hcwdl_representation_recipe_assets.py"),
+            "--help",
+        ],
+        cwd=REPOSITORY,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "--project-dir" in result.stdout
+    assert "--producer-source-sha256" not in result.stdout
+
+
+def test_parent_evidence_cli_rejects_missing_or_extra_model_sources_before_publication(
+    tmp_path: Path,
+) -> None:
+    placeholder = tmp_path / "placeholder.json"
+    placeholder.write_text("{}\n", encoding="utf-8")
+    parent_reports = tmp_path / "parent-reports.json"
+    runtime_sources = tmp_path / "runtime-sources.json"
+    parent_reports.write_text(
+        json.dumps({"D0w": str(placeholder.resolve())}), encoding="utf-8",
+    )
+    runtime_sources.write_text(
+        json.dumps({"engine": str(placeholder.resolve())}), encoding="utf-8",
+    )
+    canonical_sources = {
+        "D0w": str(placeholder.resolve()),
+        "hcwdl_surfaces": str((
+            REPOSITORY / "src/hlt_classification/models/hcwdl_surfaces.py"
+        ).resolve()),
+        "scouting_particle_transformer": str((
+            REPOSITORY / "src/hlt_classification/models/scouting_particle_transformer.py"
+        ).resolve()),
+    }
+    output_root = (tmp_path / "representation").resolve()
+    base_command = [
+        sys.executable,
+        str(REPOSITORY / "scripts/prepare_hcwdl_representation_parent_evidence.py"),
+        "--representation-root", str(output_root),
+        "--parent-campaign-spec", str(placeholder.resolve()),
+        "--parent-recipe", str(placeholder.resolve()),
+        "--parent-reports", str(parent_reports.resolve()),
+        "--runtime-sources", str(runtime_sources.resolve()),
+    ]
+    for index, sources in enumerate((
+        {name: path for name, path in canonical_sources.items() if name != "D0w"},
+        {**canonical_sources, "unexpected": str(placeholder.resolve())},
+    )):
+        model_sources = tmp_path / f"model-sources-{index}.json"
+        model_sources.write_text(json.dumps(sources), encoding="utf-8")
+        result = subprocess.run(
+            [*base_command, "--model-sources", str(model_sources.resolve())],
+            cwd=REPOSITORY, capture_output=True, text=True,
+        )
+        assert result.returncode != 0
+        assert "model source registry is incomplete or expanded" in result.stderr
+        assert not (output_root / "architecture/tap.json").exists()
 
 
 def test_fixed_size_inventory_and_storage_clis_build_validated_artifacts(

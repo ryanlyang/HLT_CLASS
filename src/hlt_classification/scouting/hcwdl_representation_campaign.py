@@ -72,6 +72,32 @@ CONTROLS: Final = (
     "RREL_M5c_WITHIN_CLASS_SHUFFLED_REP",
 )
 DETERMINISTIC_KINDS: Final = ("target_build", "prediction_shard")
+PARENT_IMPORT_AUTHORITY_ROUTES: Final = {
+    "campaign_spec": "${parent_campaign_spec}",
+    "source_manifest": "${parent_source_manifest}",
+    "split_manifest": "${split_manifest}",
+    "row_selection": "${train_row_selection}",
+    "matcher_resources": "${matcher_resources}",
+    "train_assignment_manifest": "${assignment_manifest:train}",
+    "validation_assignment_manifest": "${parent_assignment_manifest:validation}",
+    "train_recomputation_audit": "${parent_assignment_recomputation:train}",
+    "validation_recomputation_audit": "${parent_assignment_recomputation:validation}",
+    "assignment_lock": "${parent_assignment_lock}",
+    "recipe": "${parent_recipe}",
+    "recipe_lock": "${parent_recipe_lock}",
+    "cache_miniature": "${parent_cache_miniature}",
+    "diagnostic_authority": "${parent_diagnostic_authority}",
+    "qualification_report": "${parent_qualification_report}",
+    "endpoint_qualification_lock": "${parent_endpoint_qualification_lock}",
+    "screen_aggregate": "${parent_screen_aggregate}",
+    "confirmation_registry_lock": "${parent_confirmation_registry_lock}",
+    "confirmation_aggregate": "${parent_confirmation_aggregate}",
+    "finalist_lock": "${parent_finalist_registry}",
+}
+PARENT_QUALIFIER_REPORT_ROUTES: Final = {
+    name: f"${{parent_qualifier_report:{name}}}"
+    for name in ("T0", "TFS", "THC", "TSOFT", "TSHELL", "TOFF")
+}
 _TASK_KEY_PATTERN = r"[A-Za-z0-9_.-]+"
 DEPENDENCY_TOKEN = re.compile(
     rf"^\$\{{afterok:({_TASK_KEY_PATTERN}(?:,{_TASK_KEY_PATTERN})*)\}}$"
@@ -744,7 +770,8 @@ def adapter_registered_input_requirements(
         ))
     elif kind == "parent_loss_attestation":
         rows.extend((
-            "${parent_reports}", "${parent_runtime_sources}",
+            "${parent_campaign_spec}", "${parent_recipe}", "${parent_reports}",
+            "${parent_runtime_sources}",
         ))
     elif kind == "parent_import":
         rows.extend((
@@ -752,6 +779,9 @@ def adapter_registered_input_requirements(
             _producer_output_route("architecture_attestation", 0),
             _producer_output_route("parent_loss_attestation", 0),
             "${parent_reports}", "${parent_model_sources}",
+            "${parent_confirmation_reports}",
+            *PARENT_IMPORT_AUTHORITY_ROUTES.values(),
+            *PARENT_QUALIFIER_REPORT_ROUTES.values(),
         ))
     elif kind == "representation_recipe":
         rows.append("${prebuilt_representation_recipe}")
@@ -1036,7 +1066,10 @@ def _registered_inputs(
             "${task_output:parent_loss_attestation}",
             _producer_output_route("architecture_attestation", 0),
             _producer_output_route("parent_loss_attestation", 0),
+            "${parent_recipe}",
         ))
+    if task.kind == "kernel_resources":
+        rows.append("${prebuilt_representation_recipe}")
     if task.kind == "cache_miniature":
         for bank in ("D100", "TOFF"):
             rows.extend((

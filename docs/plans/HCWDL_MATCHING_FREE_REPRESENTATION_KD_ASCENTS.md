@@ -1,9 +1,12 @@
 # HCWDL Matching-Free Privileged Representation-KD Ascents
 
-Status: **local implementation and local verification are complete;
-installed-Weaver evidence, genuine Tigris acceptance, measured production
-resources, exact pushed source, and explicit pilot authorization remain
-pending; this document authorizes no submission or final-role access**.
+Status: **the local scientific/data-plane implementation and v7/v4 migration
+are verified; a fresh corrected parent v7/v4 execution and a separately
+reviewed non-final authority for the two-update/USR1/validation-proxy
+acceptance actions are still required before installed-Weaver and genuine
+Tigris acceptance can close; measured production resources, exact pushed
+source, and explicit pilot authorization also remain pending; this document
+authorizes no submission or final-role access**.
 
 Short name: **HCWDL-RKD**.
 
@@ -160,9 +163,10 @@ has not yet been implemented.
 ### 3.2 Required prefix-import artifact
 
 Before any representation target or student is built, publish and validate a
-`HCWDL_REPRESENTATION_PARENT_IMPORT/v1` artifact containing:
+`HCWDL_REPRESENTATION_PARENT_IMPORT/v2` artifact containing:
 
-- parent campaign-spec hash and source commit;
+- an executable parent campaign with contract exactly
+  `HCWDL_CAMPAIGN_SPEC/v7`, plus its campaign-spec hash and source commit;
 - source, split, and exact row-selection hashes;
 - train and validation assignment-manifest hashes;
 - assignment, recipe, and endpoint-qualification lock hashes;
@@ -181,21 +185,34 @@ recoverable without changing parent artifacts.
 
 ### 3.3 Parent loss-semantics blocker and required attestation
 
-The active parent plan defines class weighting for CE and explicitly leaves KD
-unweighted. The current implementation of
-`src/hlt_classification/scouting/training.py::pmard_loss`, however, multiplies
-CE and both KD row losses by the class weight. HCWDL-RKD must not choose one
-silently or call the two executions paired.
+The active parent plan and `HCWDL_RECIPE/v4` define unweighted
+natural-population per-jet CE and KD reductions. The recipe nevertheless binds
+the authenticated train counts and an exact fifteen-one runtime weight vector.
+The historical implementation of
+`src/hlt_classification/scouting/training.py::pmard_loss` multiplies CE and
+both KD row losses by its supplied vector, while the versioned HCWDL base-loss
+surface applies that vector only to CE. With the required v4 all-ones vector
+both formulas are numerically unweighted, but the versioned HCWDL surface is
+still mandatory so old nonuniform, class-weighted-KD reports cannot be
+silently relabeled or called paired.
 
 Before parent import, publish
-`HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v1` proving that the parent
+`HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v2` proving that the parent
 runtime, parent reports, and authoritative plan agree on:
 
 ```text
-CE reduction: class-weighted row mean
+CE reduction: recipe-weighted row mean, with v4 exact ones (unweighted)
 KD reduction: unweighted row mean
 temperature:  tau^2 forward KL in FP32
 ```
+
+The attested runtime-source registry is closed to the exact logical files
+`engine`, `parent_loss`, and `training`, at repository-relative paths
+`src/hlt_classification/scouting/engine.py`,
+`src/hlt_classification/scouting/hcwdl_parent_loss.py`, and
+`src/hlt_classification/scouting/hcwdl_training.py`. The attestation hashes
+those logical names, relative paths, and bytes. An operator-chosen nonempty
+file list cannot substitute for this registry.
 
 Under the current documentation authority, the runtime must be corrected and
 any affected parent logit controls/teachers required for direct comparison
@@ -206,8 +223,19 @@ parent scientific plan followed by consistent parent reruns. Until this
 attestation validates, target construction and all HCWDL-RKD nodes are
 blocked.
 
-Representation per-jet class weighting in Section 18 is a new, explicit
-HCWDL-RKD ablation semantic; it does not change the unweighted base KD rows.
+The runtime-source proof is derived from exactly `engine.py`,
+`hcwdl_parent_loss.py`, and `hcwdl_training.py` under one clean Git checkout at
+the reopened executable parent campaign's `source_commit`. The attestation
+binds the parent campaign hash, commit, clean source snapshot, exact logical
+file registry, and registry digest. Every parent report/checkpoint evidence row
+must name that same registry digest; a caller-entered digest, mixed checkout,
+dirty checkout, or matching path suffix outside the authenticated checkout
+cannot authorize import.
+
+Representation per-jet reductions in Section 18 inherit the same exact v4
+all-ones vector and are therefore unweighted natural-population means. The
+superseded v1 overlay described nonuniform class weighting and is not accepted
+as the v2 primary overlay.
 
 ### 3.4 Existing logit ascents remain controls
 
@@ -979,7 +1007,7 @@ G_rep,k   = sqrt(sum_{p in Theta_cal} ||d L_k[support_k] / dp||_2^2
 For jet loss, `support_k` is every jet. For a family-aware set or relation
 component it is exactly the jets that enter that component's denominator under
 Sections 9 and 10. Both base and representation losses are re-reduced over the
-same rows with their declared class weights for calibration only. Padding,
+same rows with the parent v4 exact all-ones vector for calibration only. Padding,
 ineligible families, ineligible strata, and zero-filled target storage never
 enter either gradient. A batch with no eligible rows supplies no value for
 that component and is not replaced by zero.
@@ -1044,10 +1072,12 @@ L_base = 0.25 * weighted_CE
        + 0.35 * KD(privileged source, temperature=2)
 ```
 
-The existing temperature-squared correction, class-weighted CE, unweighted KD
-row reduction required by Section 3.3, FP32 CE/KL, and BF16 model execution
-remain exact. Representation KD does not renormalize, reduce, or replace any
-of these coefficients.
+Here `weighted_CE` denotes the versioned HCWDL helper's recipe-vector
+operation; the required v4 vector is fifteen exact ones, so it is exactly the
+unweighted natural-population CE mean. The existing temperature-squared
+correction, unweighted CE/KD reductions required by Section 3.3, FP32 CE/KL,
+and BF16 model execution remain exact. Representation KD does not renormalize,
+reduce, or replace any of these coefficients.
 
 ### 13.5 Nominal auxiliary coefficient
 
@@ -1365,36 +1395,31 @@ construction buffers are included.
 All reported interval losses are means over examples, not one instantaneous
 batch. Resume restores partially accumulated logging windows exactly.
 
-## 18. Class weighting and paired stochastic streams
+## 18. Unweighted reductions and paired stochastic streams
 
 ### 18.1 Per-jet representation reduction
 
 `L_jet_direct`, `L_set`, and `L_rel` first produce one value per eligible jet.
-They are reduced with the same authenticated square-root inverse-frequency
-class weights stored in the parent recipe:
+They are reduced with the authenticated fifteen-one vector stored in the v4
+parent recipe:
 
 ```text
-weighted_mean(l_j) = sum_j class_weight[y_j] * l_j
-                     / sum_j class_weight[y_j]
+natural_mean(l_j) = sum_j l_j / number_of_eligible_jets
 ```
 
-This prevents the natural QCD majority from owning nearly every
-representation gradient while checkpoint selection is macro-AUC first. Labels
-are already authorized train-time inputs for CE. The target bank may carry an
-audit-only label column for count conservation and the registered shuffled
-control, but identity derivation remains label-free and the label column can
-never enter a representation target or student forward.
+This preserves the parent's natural-population estimand while checkpoint
+selection remains macro-AUC first. Labels are already authorized train-time
+inputs for CE. The target bank may carry an audit-only label column for count
+conservation and the registered shuffled control, but identity derivation
+remains label-free and the label column can never enter a representation
+target or student forward.
 
-For the batch Gram term, an off-diagonal pair `(i,j)` receives weight
-`sqrt(class_weight[y_i] * class_weight[y_j])`, normalized over valid
-off-diagonal pairs. Empty-family and ineligible-relation jets are removed from
-the relevant denominator rather than assigned a fabricated zero target.
-
-This Gram rule attenuates natural-population majority dominance; it does not
-make every observed class-pair cell equal weight. Reports therefore include
-the effective Gram weight and squared-error contribution for every observed
-unordered class pair. No macro-balanced interpretation is made from the Gram
-term itself.
+For the batch Gram term, every valid off-diagonal pair `(i,j)` receives equal
+weight, normalized over valid off-diagonal pairs. Empty-family and
+ineligible-relation jets are removed from the relevant denominator rather than
+assigned a fabricated zero target. Reports include the squared-error
+contribution for every observed unordered class pair, but no macro-balanced
+interpretation is made from the Gram term.
 
 The ordinary logit KD terms retain their parent reduction semantics. This plan
 does not retroactively call them class-weighted.
@@ -1426,10 +1451,13 @@ remains paired by base rung and track.
 
 ### 19.1 Parent recipe is unchanged
 
-`HCWDL_RECIPE/v3` explicitly defines a logit-only primary graph. It remains
-unchanged. HCWDL-RKD introduces `HCWDL_REPRESENTATION_RECIPE/v1`, a
-`registered_ablation` overlay that binds the exact authorized parent recipe
-hash and may add only the representation semantics in this plan.
+`HCWDL_RECIPE/v4` explicitly defines the current logit-only primary graph and
+its unweighted natural-population loss policy. It remains unchanged.
+HCWDL-RKD introduces `HCWDL_REPRESENTATION_RECIPE/v2`, a
+`registered_ablation` overlay that binds the exact authorized v4 parent recipe
+hash and may add only the representation semantics in this plan. The version
+bump prevents the superseded v1 weighted overlay from being mistaken for the
+current primary semantics.
 
 The overlay contains no alternate CE/KD coefficient, temperature, batch size,
 optimizer, learning rate, class-weight rule, duration, validation cadence, or
@@ -1445,7 +1473,7 @@ The overlay binds at minimum:
 - exact update-coordinate ramps;
 - `particle_block_2` and `jet_penultimate` tap names and shapes;
 - TOFF charged/neutral and pooled tap semantics;
-- token weighting and class-weighted reduction rules;
+- token weighting and exact unweighted natural-population reduction rules;
 - top-32 relation population, pT/index ties, `deltaR` strata, and eligibility;
 - token and relation RFF dimensions and bandwidths;
 - global RFF seed `20260808`, deterministic substream derivation, generated
@@ -1463,6 +1491,14 @@ The overlay binds at minimum:
   teacher-import, and producer-source hashes;
 - evidence that the zero-coefficient path, exact finite-kernel implementation,
   analytic-gradient, and declared diagnostic-reference tests passed.
+
+The producer-source hash is derived from the exact clean Git checkout used to
+build the pre-campaign overlay; it is never accepted as a caller-entered
+digest. Runtime-prerequisite construction and the registered recipe gate both
+require that parent to equal the source-snapshot hash measured from the worker
+runtime before scientific input access. The recipe gate also reopens the exact
+registered ascent graph, control registry, and parent import and requires the
+recipe's projected parents to match them before publication.
 
 The kernel arrays are published once as
 `HCWDL_REPRESENTATION_KERNEL_RESOURCES/v1`. Runtime regenerates them from the
@@ -1630,11 +1666,11 @@ Implementation introduces distinct contracts rather than broadening the
 logit-only HCWDL meanings:
 
 ```text
-HCWDL_REPRESENTATION_PARENT_IMPORT/v1
-HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v1
+HCWDL_REPRESENTATION_PARENT_IMPORT/v2
+HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v2
 HCWDL_REPRESENTATION_ARCHITECTURE_ATTESTATION/v1
 HCWDL_REPRESENTATION_ASCENT_GRAPH/v1
-HCWDL_REPRESENTATION_RECIPE/v1
+HCWDL_REPRESENTATION_RECIPE/v2
 HCWDL_REPRESENTATION_KERNEL_RESOURCES/v1
 HCWDL_REPRESENTATION_TAP/v1
 HCWDL_REPRESENTATION_SURFACE_PARITY/v1
@@ -1729,6 +1765,17 @@ HCWDL_REPRESENTATION_SUBMISSION_AUTHORIZATION/v1
 HCWDL_REPRESENTATION_ACCEPTANCE_BOOTSTRAP/v1
 ```
 
+Contract semantic versions and common-envelope schema versions are separate
+identities. The three migrated parent/overlay artifacts intentionally freeze
+the nonparallel tuples below; consumers must check both components rather than
+inferring the schema version from the `/vN` contract suffix:
+
+```text
+HCWDL_REPRESENTATION_PARENT_IMPORT/v2             schema_version = 1
+HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v2   schema_version = 2
+HCWDL_REPRESENTATION_RECIPE/v2                    schema_version = 1
+```
+
 `HCWDL_REPRESENTATION_ACCEPTANCE_BOOTSTRAP/v1` is a deliberately bounded
 operational authority for collecting the first nonfinal acceptance evidence.
 It is not a campaign spec, executable-candidate audit, submission
@@ -1750,8 +1797,10 @@ artifact is immutable but explicitly nonauthorizing and scheduler-neutral.
 
 Every reusable JSON artifact has a canonical content hash and explicit parent
 hashes. Binary objects record byte and logical hashes. Old PMARD representation
-arms, `HCWDL_GRAPH/v1`, and `HCWDL_RECIPE/v3` remain valid under their existing
-consumers and are never accepted as if they already implemented this plan.
+arms, `HCWDL_GRAPH/v1`, and legacy `HCWDL_RECIPE/v3` artifacts remain valid
+under their existing consumers; current primary parents use
+`HCWDL_RECIPE/v4`. Neither parent recipe is ever accepted as if it already
+implemented this representation plan.
 
 Every non-resume binary-plus-JSON artifact uses the common
 `HCWDL_SHARED_IMMUTABLE_BINARY_ENVELOPE/v1` publication protocol. Validate all
@@ -2600,8 +2649,9 @@ exist.
 ### 28.1 Separation from the parent implementation
 
 HCWDL-RKD is an additive campaign package. The implementation must not edit
-the meaning of `HCWDL_GRAPH/v1`, `HCWDL_RECIPE/v3`, any existing node ID, or
-any completed parent artifact. New code may reuse general-purpose readers,
+the meaning of `HCWDL_GRAPH/v1`, legacy `HCWDL_RECIPE/v3`, current
+`HCWDL_RECIPE/v4`, any existing node ID, or any completed parent artifact.
+New code may reuse general-purpose readers,
 metrics, checkpoint utilities, and HLT view caches, but every representation
 artifact is namespaced under the contracts in Section 21.
 
@@ -2729,13 +2779,13 @@ The implementation should reuse:
 - `hcwdl_authorization.py` and `hcwdl_resources.py` authorization/resource
   patterns.
 
-`training.py::pmard_loss` is **not** reusable for the locked base objective
-until the Section 3.3 parent-loss attestation issue is resolved: today it
-multiplies both KL rows by class weights, while the authoritative recipe in
-this plan requires unweighted KL row means. The implementation must add a
-tested locked-loss function or version the shared helper and rerun any parent
-artifacts whose declared semantics disagree. Reusing the current helper and
-merely relabeling its report is forbidden.
+`training.py::pmard_loss` is **not** the authority for the locked base
+objective. The dedicated `HCWDL_PARENT_BASE_LOSS/v1` surface leaves both KL
+rows unweighted and applies the authenticated recipe vector only to CE; under
+the required v4 fifteen-one vector every row reduction is an unweighted
+natural-population mean. The v2 parent-loss attestation must bind that exact
+recipe and the corrected report/checkpoint lineage. Reusing a legacy
+nonuniform v3 report and merely relabeling it is forbidden.
 
 If a reusable parent helper is extended, the old call signature and default
 behavior must remain byte/gradient equivalent. A contract is bumped if an old
@@ -3018,6 +3068,9 @@ once.
 Add thin scripts with no scientific logic:
 
 ```text
+scripts/prepare_hcwdl_representation_parent_evidence.py
+scripts/prepare_hcwdl_representation_parent_import.py
+scripts/prepare_hcwdl_representation_recipe_assets.py
 scripts/build_hcwdl_representation_parent_import.py
 scripts/build_hcwdl_representation_recipe.py
 scripts/audit_hcwdl_representation_parent_final_state.py
@@ -3450,7 +3503,7 @@ Add focused tests for:
 - schema freeze -> tap implementation/parity -> architecture attestation ->
   parent import ordering, with pre-parity attestation/import rejected;
 - parent-import rejection for every stale/missing hash class;
-- rejection of the current class-weighted-KD runtime under the required
+- rejection of any legacy class-weighted-KD runtime under the required
   unweighted-KD parent-loss attestation, plus acceptance only after corrected
   loss/report/checkpoint lineage agrees;
 - exact four-row control registry distinct from the 24-node primary graph;
@@ -3512,7 +3565,7 @@ For `RSET` and `RREL`, require:
 - zero encoder gradient for a deliberately raw-physics-only relation loss;
 - FP32 normalization, Gram construction, RFF evaluation, and reductions under
   BF16 model execution;
-- class-weighted per-jet and geometric-pair reductions;
+- exact unweighted per-jet and uniform geometric-pair reductions;
 - one-row Gram behavior;
 - projection identity initialization, no weight decay, orthogonality,
   nonfinite-projection failure, and finite `condition_number > 1e4`
@@ -3812,9 +3865,9 @@ The exact parent base recipe is also frozen by authenticated import rather
 than copied approximately: peak LR `3e-4`, M1 CE/teacher weights `0.25/0.75`,
 M2--M6 CE/predecessor/privileged weights `0.25/0.40/0.35`, predecessor
 temperature `1`, privileged temperature `2`, effective/microbatch `256/256`,
-AdamW/schedule/class-weight details, and BF16 execution come from the exact
-authorized `HCWDL_RECIPE/v3` hash. If that parent recipe differs, this plan's
-campaign cannot silently adapt to it.
+AdamW/schedule, exact all-ones loss vector, and BF16 execution come from the
+exact authorized `HCWDL_RECIPE/v4` hash. If that parent recipe differs, this
+plan's campaign cannot silently adapt to it.
 
 ### 34.2 Operational values measured before submission
 

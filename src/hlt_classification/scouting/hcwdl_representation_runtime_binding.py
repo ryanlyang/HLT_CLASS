@@ -29,7 +29,12 @@ from hlt_classification.data.cache_contracts import (
 )
 
 from .hcwdl_representation_campaign import CampaignTask
-from .hcwdl_representation_contracts import RUNTIME_BINDING_CONTRACT
+from .hcwdl_representation_contracts import (
+    PARENT_IMPORT_CONTRACT,
+    REPRESENTATION_RECIPE_CONTRACT,
+    RUNTIME_BINDING_CONTRACT,
+    contract_schema_version,
+)
 from .hcwdl_representation_workflow import array_indices
 
 
@@ -37,6 +42,7 @@ RUNTIME_BINDING_KIND: Final = "runtime_binding_v2"
 UPSTREAM_OUTPUT_BINDING: Final = "upstream_output"
 CAMPAIGN_ARTIFACT_BINDING: Final = "campaign_artifact"
 IMMUTABLE_OUTPUT_ROOT_BINDING: Final = "immutable_output_root"
+PREPUBLISHED_OUTPUT_BINDING: Final = "prepublished_output"
 UPSTREAM_ARTIFACT_KINDS: Final = frozenset({"json", "file", "directory"})
 RUNTIME_FACT_KEYS: Final = frozenset({
     "conda_environment",
@@ -51,6 +57,51 @@ _FORBIDDEN_DYNAMIC_KEYS: Final = frozenset({
     "argv", "callable", "command", "entry_point", "function", "import",
     "module", "python", "script", "shell",
 })
+
+# These are the only campaign rows allowed to read an immutable pre-campaign
+# artifact at a designated campaign output.  The owner gate reopens and
+# validates those exact bytes, then publication is an identical-file no-op.
+# Kernel-resource generation is the one closed read-only consumer required
+# before the recipe owner gate runs.  All other static-input/output path
+# overlap remains forbidden.
+_PREPUBLISHED_OUTPUT_ROUTES: Final = {
+    ("parent_import", "parent_import", "${prebuilt_parent_import}"): {
+        "owner_task_key": "parent_import",
+        "owner_task_kind": "parent_import",
+        "registered_output": "import/parent_import.json",
+        "expected_contract": PARENT_IMPORT_CONTRACT,
+        "expected_schema_version": contract_schema_version(
+            PARENT_IMPORT_CONTRACT,
+        ),
+        "campaign_hash_field": "parent_import_sha256",
+    },
+    (
+        "representation_recipe", "representation_recipe",
+        "${prebuilt_representation_recipe}",
+    ): {
+        "owner_task_key": "representation_recipe",
+        "owner_task_kind": "representation_recipe",
+        "registered_output": "recipes/representation_recipe.json",
+        "expected_contract": REPRESENTATION_RECIPE_CONTRACT,
+        "expected_schema_version": contract_schema_version(
+            REPRESENTATION_RECIPE_CONTRACT,
+        ),
+        "campaign_hash_field": "representation_recipe_sha256",
+    },
+    (
+        "kernel_resources", "kernel_resources",
+        "${prebuilt_representation_recipe}",
+    ): {
+        "owner_task_key": "representation_recipe",
+        "owner_task_kind": "representation_recipe",
+        "registered_output": "recipes/representation_recipe.json",
+        "expected_contract": REPRESENTATION_RECIPE_CONTRACT,
+        "expected_schema_version": contract_schema_version(
+            REPRESENTATION_RECIPE_CONTRACT,
+        ),
+        "campaign_hash_field": "representation_recipe_sha256",
+    },
+}
 
 
 def _campaign_tasks(spec: Mapping[str, Any]) -> tuple[CampaignTask, ...]:
@@ -110,6 +161,128 @@ def _artifact_reference(value: object, *, name: str) -> dict[str, str]:
         "path": _absolute_tigris_path(value["path"], name=f"{name} path"),
         "sha256": require_sha256(value["sha256"], name=f"{name} SHA-256"),
     }
+
+
+def _prepublished_output_reference(value: object, *, name: str) -> dict[str, Any]:
+    if not isinstance(value, Mapping) or set(value) != {
+        "path", "sha256", PREPUBLISHED_OUTPUT_BINDING,
+    }:
+        raise ValueError(f"HCWDL-RKD prepublished output reference differs: {name}")
+    raw = value[PREPUBLISHED_OUTPUT_BINDING]
+    required = {
+        "consumer_task_key", "consumer_task_kind", "owner_task_key",
+        "owner_task_kind", "registered_input", "registered_output",
+        "expected_contract", "expected_schema_version",
+        "expected_content_hash",
+    }
+    if not isinstance(raw, Mapping) or set(raw) != required:
+        raise ValueError(f"HCWDL-RKD prepublished output fields differ: {name}")
+    schema = raw["expected_schema_version"]
+    normalized = {
+        "path": _absolute_tigris_path(
+            value["path"], name=f"{name} prepublished path",
+        ),
+        "sha256": require_sha256(
+            value["sha256"], name=f"{name} prepublished byte SHA-256",
+        ),
+        PREPUBLISHED_OUTPUT_BINDING: {
+            "consumer_task_key": str(raw["consumer_task_key"]),
+            "consumer_task_kind": str(raw["consumer_task_kind"]),
+            "owner_task_key": str(raw["owner_task_key"]),
+            "owner_task_kind": str(raw["owner_task_kind"]),
+            "registered_input": str(raw["registered_input"]),
+            "registered_output": str(raw["registered_output"]),
+            "expected_contract": str(raw["expected_contract"]),
+            "expected_schema_version": schema,
+            "expected_content_hash": require_sha256(
+                raw["expected_content_hash"],
+                name=f"{name} prepublished content hash",
+            ),
+        },
+    }
+    descriptor = normalized[PREPUBLISHED_OUTPUT_BINDING]
+    if (
+        not descriptor["consumer_task_key"]
+        or not descriptor["consumer_task_kind"]
+        or not descriptor["owner_task_key"]
+        or not descriptor["owner_task_kind"]
+        or not descriptor["registered_input"]
+        or not descriptor["registered_output"]
+        or not descriptor["expected_contract"]
+        or isinstance(schema, bool) or not isinstance(schema, int) or schema < 1
+    ):
+        raise ValueError(f"HCWDL-RKD prepublished output identity differs: {name}")
+    return normalized
+
+
+def _expected_prepublished_output_binding(
+    *, task_key: str, task_kind: str, logical_input: str,
+    spec: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    route = _PREPUBLISHED_OUTPUT_ROUTES.get((task_key, task_kind, logical_input))
+    if route is None:
+        return None
+    return {
+        "consumer_task_key": task_key,
+        "consumer_task_kind": task_kind,
+        "owner_task_key": str(route["owner_task_key"]),
+        "owner_task_kind": str(route["owner_task_kind"]),
+        "registered_input": logical_input,
+        "registered_output": str(route["registered_output"]),
+        "expected_contract": str(route["expected_contract"]),
+        "expected_schema_version": int(route["expected_schema_version"]),
+        "expected_content_hash": require_sha256(
+            spec.get(str(route["campaign_hash_field"])),
+            name=f"{task_key} prepublished campaign content hash",
+        ),
+    }
+
+
+def validate_prepublished_output_binding(
+    value: object, *, logical_input: str, spec: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Validate the one allowed in-place prepublication route.
+
+    The descriptor is self-identifying so a production worker can recheck the
+    exact task/input/output route, JSON contract/schema, and campaign-bound
+    logical content hash before an adapter opens the file.
+    """
+
+    if not isinstance(value, Mapping):
+        raise ValueError("HCWDL-RKD prepublished output descriptor is not an object")
+    task_key = str(value.get("consumer_task_key", ""))
+    task_kind = str(value.get("consumer_task_kind", ""))
+    expected = _expected_prepublished_output_binding(
+        task_key=task_key, task_kind=task_kind,
+        logical_input=logical_input, spec=spec,
+    )
+    if expected is None or dict(value) != expected:
+        raise PermissionError(
+            "HCWDL-RKD prepublished input is not its designated task output"
+        )
+    matching_consumers = [
+        row for row in spec.get("tasks", ())
+        if isinstance(row, Mapping) and row.get("task_key") == task_key
+    ]
+    owner_key = expected["owner_task_key"]
+    matching_owners = [
+        row for row in spec.get("tasks", ())
+        if isinstance(row, Mapping) and row.get("task_key") == owner_key
+    ]
+    if (
+        len(matching_consumers) != 1
+        or matching_consumers[0].get("kind") != task_kind
+        or logical_input not in matching_consumers[0].get("registered_inputs", ())
+        or len(matching_owners) != 1
+        or matching_owners[0].get("kind") != expected["owner_task_kind"]
+        or expected["registered_output"] not in matching_owners[0].get(
+            "registered_outputs", ()
+        )
+    ):
+        raise PermissionError(
+            "HCWDL-RKD prepublished input route is absent from the campaign task"
+        )
+    return expected
 
 
 def _upstream_output_reference(value: object, *, name: str) -> dict[str, Any]:
@@ -360,6 +533,8 @@ def _parent_source_reference(value: object, *, name: str) -> dict[str, Any]:
 
 
 def _input_reference(value: object, *, name: str) -> dict[str, Any]:
+    if isinstance(value, Mapping) and PREPUBLISHED_OUTPUT_BINDING in value:
+        return _prepublished_output_reference(value, name=name)
     if isinstance(value, Mapping) and UPSTREAM_OUTPUT_BINDING in value:
         return _upstream_output_reference(value, name=name)
     if isinstance(value, Mapping) and CAMPAIGN_ARTIFACT_BINDING in value:
@@ -626,11 +801,51 @@ def build_runtime_binding(
                         "path": exact_path,
                     }
                     continue
+                prepublished = reference.get(PREPUBLISHED_OUTPUT_BINDING)
+                if prepublished is not None:
+                    descriptor = validate_prepublished_output_binding(
+                        prepublished, logical_input=logical_input, spec=spec,
+                    )
+                    route = (
+                        descriptor["owner_task_key"], None,
+                        descriptor["registered_output"],
+                    )
+                    expected_output = output_routes.get(route)
+                    if (
+                        isinstance(expected_output, Mapping)
+                        or reference.get("path") != expected_output
+                        or reference.get("path") not in all_output_paths
+                    ):
+                        raise PermissionError(
+                            "prepublished input path differs from its exact own output"
+                        )
+                    continue
                 if UPSTREAM_OUTPUT_BINDING not in reference:
                     if reference["path"] in all_output_paths:
-                        raise PermissionError(
-                            "campaign-produced inputs must use an upstream_output binding"
+                        current_task = task_by_key[consumer]
+                        descriptor = _expected_prepublished_output_binding(
+                            task_key=current_task.task_key,
+                            task_kind=current_task.kind,
+                            logical_input=logical_input,
+                            spec=spec,
                         )
+                        if descriptor is None:
+                            raise PermissionError(
+                                "campaign-produced inputs must use an upstream_output binding"
+                            )
+                        route = (
+                            descriptor["owner_task_key"], None,
+                            descriptor["registered_output"],
+                        )
+                        expected_output = output_routes.get(route)
+                        if (
+                            isinstance(expected_output, Mapping)
+                            or reference["path"] != expected_output
+                        ):
+                            raise PermissionError(
+                                "prepublished input path differs from its exact own output"
+                            )
+                        reference[PREPUBLISHED_OUTPUT_BINDING] = descriptor
                     continue
                 upstream = reference[UPSTREAM_OUTPUT_BINDING]
                 producer = upstream["task_key"]
@@ -774,9 +989,9 @@ def load_runtime_binding(spec: Mapping[str, Any]) -> dict[str, Any]:
 
 __all__ = [
     "CAMPAIGN_ARTIFACT_BINDING", "IMMUTABLE_OUTPUT_ROOT_BINDING",
-    "RUNTIME_BINDING_CONTRACT", "RUNTIME_BINDING_KIND", "RUNTIME_FACT_KEYS",
-    "UPSTREAM_OUTPUT_BINDING",
+    "PREPUBLISHED_OUTPUT_BINDING", "RUNTIME_BINDING_CONTRACT",
+    "RUNTIME_BINDING_KIND", "RUNTIME_FACT_KEYS", "UPSTREAM_OUTPUT_BINDING",
     "build_runtime_binding",
     "load_runtime_binding", "resolve_runtime_row", "runtime_campaign_identity",
-    "validate_runtime_binding",
+    "validate_prepublished_output_binding", "validate_runtime_binding",
 ]

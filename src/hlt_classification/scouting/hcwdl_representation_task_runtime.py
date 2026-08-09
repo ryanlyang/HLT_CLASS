@@ -13,10 +13,11 @@ from hlt_classification.data.cache_contracts import canonical_sha256, sha256_fil
 
 from .hcwdl_representation_runtime_binding import (
     CAMPAIGN_ARTIFACT_BINDING, IMMUTABLE_OUTPUT_ROOT_BINDING,
-    UPSTREAM_OUTPUT_BINDING,
+    PREPUBLISHED_OUTPUT_BINDING, UPSTREAM_OUTPUT_BINDING,
     load_runtime_binding,
     resolve_runtime_row,
     runtime_campaign_identity,
+    validate_prepublished_output_binding,
 )
 from .hcwdl_representation_smoke import FINAL_ROLE_KINDS
 from .hcwdl_representation_workflow import RepresentationWorkflow
@@ -321,6 +322,54 @@ def _validate_input_bytes(
             validate_submission_ledger(ledger, spec=spec, command_plan=command_plan)
             materialized[logical_name] = {
                 "path": str(path), "sha256": sha256_file(path),
+            }
+            continue
+        prepublished = reference.get(PREPUBLISHED_OUTPUT_BINDING)
+        if prepublished is not None:
+            if set(reference) != {
+                PREPUBLISHED_OUTPUT_BINDING, "path", "sha256",
+            }:
+                raise ValueError(
+                    "HCWDL-RKD prepublished input reference fields differ"
+                )
+            descriptor = validate_prepublished_output_binding(
+                prepublished, logical_input=logical_name, spec=spec,
+            )
+            path = Path(str(reference["path"]))
+            expected_path = Path(str(spec["campaign_root"])) / str(
+                descriptor["registered_output"]
+            )
+            if path != expected_path:
+                raise PermissionError(
+                    "HCWDL-RKD prepublished input is not its exact own output path"
+                )
+            if not path.is_file() or path.is_symlink():
+                raise FileNotFoundError(
+                    "HCWDL-RKD prepublished immutable output is absent"
+                )
+            observed_sha256 = sha256_file(path)
+            if observed_sha256 != reference["sha256"]:
+                raise ValueError(
+                    "HCWDL-RKD prepublished input byte/hash identity differs"
+                )
+            from hlt_classification.data.cache_contracts import (
+                load_json, validate_content_hash,
+            )
+
+            artifact = load_json(path)
+            content_hash = validate_content_hash(
+                artifact,
+                expected_contract=str(descriptor["expected_contract"]),
+                expected_schema_version=int(
+                    descriptor["expected_schema_version"]
+                ),
+            )
+            if content_hash != descriptor["expected_content_hash"]:
+                raise PermissionError(
+                    "HCWDL-RKD prepublished input differs from campaign content hash"
+                )
+            materialized[logical_name] = {
+                "path": str(path), "sha256": observed_sha256,
             }
             continue
         immutable_root = reference.get(IMMUTABLE_OUTPUT_ROOT_BINDING)

@@ -595,15 +595,16 @@ def _surface_fixture(*, seed: int, device: str):
     return ordinary, native
 
 
-def _surface_parity_adapter(spec, task, index, runtime_row):
-    del spec, index
-    parameters = _require_exact_parameters(
-        task, runtime_row, required=("fixture_seed", "runtime_kind"),
-    )
-    if parameters["runtime_kind"] != "installed_weaver":
-        raise ProductionConfigurationError(
-            "production surface parity requires runtime_kind='installed_weaver'"
-        )
+def build_installed_weaver_surface_parity_artifact(
+    *, fixture_seed: int = 1337, device: str = "cpu",
+) -> dict[str, Any]:
+    """Build the authoritative installed-Weaver parity artifact.
+
+    This reusable path is shared by the pre-campaign evidence CLI and the
+    registered campaign gate, preventing the bootstrap step from depending on
+    a campaign that already requires the resulting parent-import hash.
+    """
+
     from hlt_classification.models.hcwdl_surfaces import (
         build_surface_parity_report, validate_surface_parity_report,
     )
@@ -615,15 +616,32 @@ def _surface_parity_adapter(spec, task, index, runtime_row):
     ordinary = build_scouting_particle_transformer()
     native = build_native_offline_particle_transformer()
     ordinary_inputs, native_inputs = _surface_fixture(
-        seed=int(parameters["fixture_seed"]), device=str(runtime_row["device"]),
+        seed=int(fixture_seed), device=str(device),
     )
-    ordinary.to(runtime_row["device"]); native.to(runtime_row["device"])
+    ordinary.to(device)
+    native.to(device)
     report = build_surface_parity_report(
         ordinary_model=ordinary, native_offline_model=native,
         ordinary_inputs=ordinary_inputs, native_offline_inputs=native_inputs,
         runtime_kind="installed_weaver",
     )
     validate_surface_parity_report(report)
+    return report
+
+
+def _surface_parity_adapter(spec, task, index, runtime_row):
+    del spec, index
+    parameters = _require_exact_parameters(
+        task, runtime_row, required=("fixture_seed", "runtime_kind"),
+    )
+    if parameters["runtime_kind"] != "installed_weaver":
+        raise ProductionConfigurationError(
+            "production surface parity requires runtime_kind='installed_weaver'"
+        )
+    report = build_installed_weaver_surface_parity_artifact(
+        fixture_seed=int(parameters["fixture_seed"]),
+        device=str(runtime_row["device"]),
+    )
     _publish_exact_json(_single_output(task, runtime_row), report)
     return _validate_registered_outputs(task, runtime_row, operation="surface_parity")
 
@@ -631,7 +649,8 @@ def _surface_parity_adapter(spec, task, index, runtime_row):
 def _prebuilt_validated_adapter(
     spec: Mapping[str, Any], task: Any, index: int | None,
     runtime_row: Mapping[str, Any], *, validator: Callable[[Mapping[str, Any]], Any],
-    operation: str,
+    operation: str, additional_required: Sequence[str] = (),
+    pre_publish_check: Callable[[Mapping[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Authenticate an immutable artifact produced during campaign assembly.
 
@@ -642,7 +661,7 @@ def _prebuilt_validated_adapter(
 
     del index
     parameters = _require_exact_parameters(
-        task, runtime_row, required=("artifact",),
+        task, runtime_row, required=("artifact", *additional_required),
     )
     reference = resolve_registered_arguments(
         parameters["artifact"], runtime_row, location=f"{operation}.artifact",
@@ -656,6 +675,8 @@ def _prebuilt_validated_adapter(
     digest = validator(value)
     if value.get("content_hash") is not None and digest != value["content_hash"]:
         raise ValueError(f"{operation} logical artifact hash differs")
+    if pre_publish_check is not None:
+        pre_publish_check(value)
     for path in _outputs(task, runtime_row).values():
         _publish_exact_json(path, value)
     return _validate_registered_outputs(task, runtime_row, operation=operation)
@@ -723,13 +744,17 @@ def _parent_loss_attestation_adapter(spec, task, index, runtime_row):
     del spec, index
     parameters = _require_exact_parameters(
         task, runtime_row,
-        required=("parent_report_paths", "runtime_source_paths"),
+        required=(
+            "parent_campaign_spec_path", "parent_recipe_path",
+            "parent_report_paths", "runtime_source_paths",
+        ),
     )
     raw_reports = parameters["parent_report_paths"]
     raw_sources = parameters["runtime_source_paths"]
-    if not isinstance(raw_reports, Mapping) or not raw_reports or not isinstance(
-        raw_sources, list,
-    ) or not raw_sources:
+    if (
+        not isinstance(raw_reports, Mapping) or not raw_reports
+        or not isinstance(raw_sources, Mapping) or not raw_sources
+    ):
         raise ProductionConfigurationError(
             "parent-loss attestation requires report and runtime-source path registries"
         )
@@ -740,22 +765,34 @@ def _parent_loss_attestation_adapter(spec, task, index, runtime_row):
         )
         for key, value in raw_reports.items()
     }
-    sources = [
-        _resolve_registered_path_argument(
+    sources = {
+        str(name): _resolve_registered_path_argument(
             value, runtime_row,
-            location=f"parent_loss_attestation.runtime_source_paths[{index}]",
+            location=f"parent_loss_attestation.runtime_source_paths.{name}",
         )
-        for index, value in enumerate(raw_sources)
-    ]
+        for name, value in raw_sources.items()
+    }
+    parent_recipe_path = _resolve_registered_path_argument(
+        parameters["parent_recipe_path"], runtime_row,
+        location="parent_loss_attestation.parent_recipe_path",
+    )
+    parent_campaign_spec_path = _resolve_registered_path_argument(
+        parameters["parent_campaign_spec_path"], runtime_row,
+        location="parent_loss_attestation.parent_campaign_spec_path",
+    )
     from .hcwdl_parent_loss import (
         build_parent_loss_attestation_from_reports,
         validate_parent_loss_attestation,
     )
     artifact = build_parent_loss_attestation_from_reports(
+        parent_recipe_path=parent_recipe_path,
+        parent_campaign_spec_path=parent_campaign_spec_path,
         parent_reports=reports,
         runtime_source_paths=sources,
     )
-    validate_parent_loss_attestation(artifact)
+    validate_parent_loss_attestation(
+        artifact, parent_recipe=load_json(Path(parent_recipe_path)),
+    )
     _publish_exact_json(_single_output(task, runtime_row), artifact)
     return _validate_registered_outputs(
         task, runtime_row, operation="parent_loss_attestation",
@@ -824,13 +861,35 @@ def _validate_parent_import_registered_bundles(
         raise ValueError("parent D0w model source is not its attested engine report")
 
 
+def _validate_parent_import_fresh_evidence(
+    imported: Mapping[str, Any], *, architecture_sha256: str,
+    parent_loss_sha256: str,
+) -> None:
+    """Require the just-produced evidence, not only static authority copies."""
+
+    parents = imported.get("parents")
+    if (
+        not isinstance(parents, Mapping)
+        or require_sha256(
+            architecture_sha256, name="fresh architecture attestation",
+        ) != parents.get("architecture_attestation")
+        or require_sha256(
+            parent_loss_sha256, name="fresh parent-loss attestation",
+        ) != parents.get("parent_loss_attestation")
+    ):
+        raise PermissionError(
+            "fresh parent evidence differs from the prebuilt parent import"
+        )
+
+
 def _parent_import_adapter(spec, task, index, runtime_row):
     del index
     parameters = _require_exact_parameters(
         task, runtime_row,
         required=(
             "artifact", "architecture_attestation", "parent_loss_attestation",
-            "parent_report_paths", "model_source_paths",
+            "parent_report_paths", "model_source_paths", "authority_files",
+            "qualifier_report_paths", "confirmation_report_paths",
         ),
     )
     artifact_reference = resolve_registered_arguments(
@@ -876,11 +935,59 @@ def _parent_import_adapter(spec, task, index, runtime_row):
         )
         for name, value in raw_sources.items()
     }
-    from .hcwdl_representation_locks import validate_parent_import_against_evidence
+    raw_authority = parameters["authority_files"]
+    raw_qualifiers = parameters["qualifier_report_paths"]
+    raw_confirmations = parameters["confirmation_report_paths"]
+    if (
+        not isinstance(raw_authority, Mapping)
+        or not isinstance(raw_qualifiers, Mapping)
+        or not isinstance(raw_confirmations, Mapping)
+    ):
+        raise ProductionConfigurationError("parent import authority registries differ")
+    authority_files = {
+        str(name): _resolve_registered_path_argument(
+            value, runtime_row, location=f"parent_import.authority_files.{name}",
+        )
+        for name, value in raw_authority.items()
+    }
+    qualifier_report_paths = {
+        str(name): _resolve_registered_path_argument(
+            value, runtime_row,
+            location=f"parent_import.qualifier_report_paths.{name}",
+        )
+        for name, value in raw_qualifiers.items()
+    }
+    confirmation_report_paths = {
+        str(name): _resolve_registered_path_argument(
+            value, runtime_row,
+            location=f"parent_import.confirmation_report_paths.{name}",
+        )
+        for name, value in raw_confirmations.items()
+    }
+    from .hcwdl_representation_locks import (
+        validate_parent_import_against_authority_files,
+    )
+    from .hcwdl_parent_loss import validate_parent_loss_attestation
+    from hlt_classification.models.hcwdl_surfaces import (
+        validate_architecture_attestation,
+    )
 
-    digest = validate_parent_import_against_evidence(
-        imported, architecture_attestation=architecture,
-        parent_loss_attestation=loss,
+    architecture_sha256 = validate_architecture_attestation(
+        architecture, require_authorized=True,
+    )
+    parent_recipe = load_json(Path(authority_files["recipe"]))
+    parent_loss_sha256 = validate_parent_loss_attestation(
+        loss, parent_recipe=parent_recipe,
+    )
+    _validate_parent_import_fresh_evidence(
+        imported, architecture_sha256=architecture_sha256,
+        parent_loss_sha256=parent_loss_sha256,
+    )
+
+    digest = validate_parent_import_against_authority_files(
+        imported, authority_files=authority_files,
+        qualifier_report_paths=qualifier_report_paths,
+        confirmation_report_paths=confirmation_report_paths,
     )
     if digest != spec["parent_import_sha256"]:
         raise ValueError("parent import differs from campaign identity")
@@ -900,15 +1007,38 @@ def _kernel_resources_adapter(spec, task, index, runtime_row):
         task, runtime_row,
         required=(
             "root", "producer_task_id", "immutable_parent_hashes",
-            "registered_output_row", "campaign_or_recovery_owner",
+            "registered_output_row", "campaign_or_recovery_owner", "recipe",
         ),
     )
     from .hcwdl_representation_kernels import (
         generate_spectral_resource_bundle, publish_spectral_resources,
+        spectral_resource_logical_hashes,
     )
+    from .hcwdl_representation_recipe import validate_representation_recipe
+
+    recipe_reference = resolve_registered_arguments(
+        parameters["recipe"], runtime_row, location="kernel_resources.recipe",
+    )
+    if not isinstance(recipe_reference, Mapping) or set(recipe_reference) != {
+        "path", "sha256",
+    }:
+        raise ProductionConfigurationError(
+            "kernel_resources.recipe must use registered_reference"
+        )
+    recipe = load_json(Path(str(recipe_reference["path"])))
+    validate_representation_recipe(recipe)
+    if recipe["content_hash"] != spec["representation_recipe_sha256"]:
+        raise ValueError("kernel resource recipe differs from campaign identity")
+    resources = generate_spectral_resource_bundle()
+    if (
+        recipe["parents"].get("kernel_resources") != resources.content_hash
+        or recipe["payload"].get("kernel_array_logical_hashes")
+        != spectral_resource_logical_hashes(resources)
+    ):
+        raise ValueError("kernel resources differ from the prebuilt recipe")
 
     published = publish_spectral_resources(
-        generate_spectral_resource_bundle(),
+        resources,
         root=parameters["root"],
         producer_task_id=str(parameters["producer_task_id"]),
         immutable_parent_hashes=parameters["immutable_parent_hashes"],
@@ -924,25 +1054,145 @@ def _kernel_resources_adapter(spec, task, index, runtime_row):
 
 
 def _representation_recipe_adapter(spec, task, index, runtime_row):
+    from .hcwdl_representation_graph import (
+        validate_ascent_graph_artifact, validate_control_registry_artifact,
+    )
+    from .hcwdl_representation_locks import validate_parent_import
     from .hcwdl_representation_recipe import validate_representation_recipe
+
+    lineage_names = (
+        "representation_graph", "control_registry", "parent_import",
+    )
+    parameters = _require_exact_parameters(
+        task, runtime_row,
+        required=("artifact", "producer_source_sha256", *lineage_names),
+    )
+    producer_source_sha256 = require_sha256(
+        parameters["producer_source_sha256"],
+        name="runtime representation recipe producer source",
+    )
+
+    lineage_artifacts: dict[str, Mapping[str, Any]] = {}
+    for name in lineage_names:
+        reference = resolve_registered_arguments(
+            parameters[name], runtime_row,
+            location=f"representation_recipe.{name}",
+        )
+        if not isinstance(reference, Mapping) or set(reference) != {
+            "path", "sha256",
+        }:
+            raise ProductionConfigurationError(
+                f"representation_recipe.{name} must use registered_reference"
+            )
+        lineage_artifacts[name] = load_json(Path(str(reference["path"])))
+
+    parent_import = lineage_artifacts["parent_import"]
+    parent_import_sha256 = validate_parent_import(parent_import)
+    graph = lineage_artifacts["representation_graph"]
+    graph_sha256 = validate_ascent_graph_artifact(
+        graph,
+        expected_parents={
+            "parent_graph": parent_import["parents"]["parent_graph"],
+            "parent_import": parent_import_sha256,
+        },
+    )
+    control_registry_sha256 = validate_control_registry_artifact(
+        lineage_artifacts["control_registry"],
+        ascent_graph_artifact_sha256=graph_sha256,
+    )
+    if (
+        parent_import_sha256 != require_sha256(
+            spec["parent_import_sha256"], name="campaign parent import",
+        )
+        or graph_sha256 != require_sha256(
+            spec["graph_sha256"], name="campaign representation graph",
+        )
+        or parent_import["parents"]["source_manifest"]
+        != require_sha256(
+            spec["source_manifest_sha256"], name="campaign source manifest",
+        )
+        or parent_import["parents"]["split_manifest"]
+        != require_sha256(
+            spec["split_manifest_sha256"], name="campaign split manifest",
+        )
+    ):
+        raise PermissionError(
+            "representation recipe registered lineage differs from campaign identity"
+        )
+
+    def pre_publish_check(recipe: Mapping[str, Any]) -> None:
+        if recipe["content_hash"] != spec["representation_recipe_sha256"]:
+            raise ValueError("representation recipe differs from campaign identity")
+        expected_parent_links = {
+            "architecture_attestation": parent_import["parents"][
+                "architecture_attestation"
+            ],
+            "assignment_manifest": parent_import["parents"][
+                "train_assignment_manifest"
+            ],
+            "parent_graph": parent_import["parents"]["parent_graph"],
+            "parent_loss_attestation": parent_import["parents"][
+                "parent_loss_attestation"
+            ],
+            "parent_recipe": parent_import["parents"]["parent_recipe"],
+            "representation_ascent_graph": graph_sha256,
+            "representation_control_registry": control_registry_sha256,
+            "row_selection": parent_import["parents"]["row_selection"],
+            "source_manifest": parent_import["parents"]["source_manifest"],
+            "split_manifest": parent_import["parents"]["split_manifest"],
+            "teacher_import": parent_import_sha256,
+        }
+        if any(
+            recipe["parents"].get(name) != digest
+            for name, digest in expected_parent_links.items()
+        ):
+            raise PermissionError(
+                "representation recipe parents differ from registered lineage"
+            )
+        if recipe["parents"].get("producer_source") != producer_source_sha256:
+            raise PermissionError(
+                "representation recipe producer source differs from measured runtime source"
+            )
 
     result = _prebuilt_validated_adapter(
         spec, task, index, runtime_row,
         validator=validate_representation_recipe,
         operation="representation_recipe",
+        additional_required=("producer_source_sha256", *lineage_names),
+        pre_publish_check=pre_publish_check,
     )
-    recipe = load_json(_single_output(task, runtime_row))
-    if recipe["content_hash"] != spec["representation_recipe_sha256"]:
-        raise ValueError("representation recipe differs from campaign identity")
     return result
 
 
 def _numerical_acceptance_adapter(spec, task, index, runtime_row):
-    del spec, index
-    _require_exact_parameters(task, runtime_row)
+    del index
+    parameters = _require_exact_parameters(
+        task, runtime_row, required=("representation_recipe",),
+    )
     from .hcwdl_numerical_acceptance import build_numerical_acceptance
+    from .hcwdl_representation_recipe import validate_representation_recipe
 
-    build_numerical_acceptance(output=_single_output(task, runtime_row))
+    reference = resolve_registered_arguments(
+        parameters["representation_recipe"], runtime_row,
+        location="numerical_acceptance.representation_recipe",
+    )
+    if not isinstance(reference, Mapping) or set(reference) != {"path", "sha256"}:
+        raise ProductionConfigurationError(
+            "numerical_acceptance recipe must use registered_reference"
+        )
+    recipe = load_json(Path(str(reference["path"])))
+    validate_representation_recipe(recipe)
+    if recipe["content_hash"] != spec["representation_recipe_sha256"]:
+        raise ValueError("numerical acceptance recipe differs from campaign identity")
+    result = build_numerical_acceptance()
+    expected = recipe["payload"]["acceptance_evidence"]
+    if any(
+        expected[name] != result["content_hash"]
+        for name in ("analytic_gradient", "diagnostic_reference", "finite_kernel")
+    ):
+        raise ValueError("numerical acceptance differs from the prebuilt recipe")
+
+    _publish_exact_json(_single_output(task, runtime_row), result)
     return _validate_registered_outputs(task, runtime_row, operation="numerical_acceptance")
 
 
@@ -1392,12 +1642,9 @@ def _local_target_lifecycle(task: Any, array_index: int | None) -> dict[str, Any
 
 @lru_cache(maxsize=1)
 def _local_parent_import_gate() -> Mapping[str, Any]:
-    from .hcwdl_representation_contracts import (
-        PARENT_IMPORT_CONTRACT, build_versioned_artifact,
-    )
     from .hcwdl_representation_locks import (
         IMPORTED_LOGIT_CONTROLS, IMPORTED_TEACHERS,
-        PARENT_IMPORT_LINEAGE_KEYS, PARENT_IMPORT_VALIDATION_KEYS,
+        PARENT_AUTHORITY_PARENT_KEYS, PARENT_IMPORT_CONTRACT,
         validate_parent_import,
     )
 
@@ -1406,7 +1653,8 @@ def _local_parent_import_gate() -> Mapping[str, Any]:
             "warm" if node_id.endswith("w") else "shared"
         )
         domain = "native_offline" if node_id == "TOFF" else (
-            f"d{node_id[1:].rstrip('cw').lower()}" if teacher else "hlt"
+            "hlt" if not teacher or node_id.startswith("D0") else
+            f"d{node_id[1:].rstrip('cw').lower()}"
         )
         digest = _local_digest(f"parent-checkpoint:{node_id}")
         return {
@@ -1417,33 +1665,40 @@ def _local_parent_import_gate() -> Mapping[str, Any]:
             "checkpoint_sha256": digest, "checkpoint_byte_sha256": digest,
         }
 
-    artifact = build_versioned_artifact(
-        PARENT_IMPORT_CONTRACT,
-        parents={
+    teachers = {
+        node: row(node, teacher=True) for node in IMPORTED_TEACHERS
+    }
+    controls = {
+        node: row(node, teacher=False) for node in IMPORTED_LOGIT_CONTROLS
+    }
+    artifact = with_content_hash({
+        "contract": PARENT_IMPORT_CONTRACT,
+        "schema_version": 1,
+        "parents": {
             name: _local_digest(f"parent-import:{name}")
-            for name in (
-                "parent_campaign_spec", "architecture_attestation",
-                "parent_loss_attestation", *sorted(PARENT_IMPORT_LINEAGE_KEYS),
-            )
+            for name in PARENT_AUTHORITY_PARENT_KEYS
         },
-        payload={
+        "payload": {
             "parent_source_commit": "0" * 40,
-            "teachers": [row(node, teacher=True) for node in IMPORTED_TEACHERS],
-            "logit_controls": [
-                row(node, teacher=False) for node in IMPORTED_LOGIT_CONTROLS
-            ],
-            "original_contract_validation": {
-                name: True for name in sorted(PARENT_IMPORT_VALIDATION_KEYS)
-            },
+            "parent_campaign_contract": "HCWDL_CAMPAIGN_SPEC/v7",
+            "parent_recipe_contract": "HCWDL_RECIPE/v4",
+            "endpoint_continuation": "preauthorized_automatic",
+            "teachers": [teachers[node] for node in sorted(teachers)],
+            "logit_controls": [controls[node] for node in sorted(controls)],
+            "authority_derived_from_registered_files": True,
             "complete": True,
         },
-    )
+    })
     digest = validate_parent_import(artifact)
     return {
         "work_kind": "parent_import_contract_gate",
         "parent_import_sha256": digest,
+        "parent_import_contract": PARENT_IMPORT_CONTRACT,
+        "parent_import_schema_version": 1,
         "teacher_count": len(IMPORTED_TEACHERS),
         "logit_control_count": len(IMPORTED_LOGIT_CONTROLS),
+        "nonauthorizing_synthetic_v2_fixture": True,
+        "authority_files_reopened": False,
     }
 
 
@@ -1919,6 +2174,7 @@ PRODUCTION_ADAPTERS: Final[Mapping[str, Callable[..., Any]]] = {
 __all__ = [
     "LOCAL_PLANNING_WORK_CONTRACT", "LOCAL_SEMANTIC_COVERAGE", "PRODUCTION_ADAPTERS",
     "PRODUCTION_ADAPTER_CONTRACT", "ProductionConfigurationError",
+    "build_installed_weaver_surface_parity_artifact",
     "build_local_planning_handlers", "execute_local_planning_work",
     "execute_local_synthetic_final_work", "local_scientific_probe",
 ]

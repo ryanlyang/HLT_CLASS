@@ -25,6 +25,7 @@ from hlt_classification.scouting.hcwdl_representation_task_runtime import (
     TASK_KINDS, execute_registered_task,
 )
 from hlt_classification.scouting import hcwdl_representation_task_runtime as task_runtime
+from hlt_classification.scouting import hcwdl_representation_runtime_adapters as runtime_adapters
 from hlt_classification.scouting.hcwdl_representation_workflow import (
     RepresentationWorkflow, array_indices, exercise_registered_rows,
 )
@@ -79,6 +80,16 @@ def test_workflow_propagates_the_live_executable_gate(
     RepresentationWorkflow({"tasks": []}, handlers={}, executable=True)
     RepresentationWorkflow({"tasks": []}, handlers={}, executable=False)
     assert observed == [True, False]
+
+
+def test_local_parent_import_gate_exercises_current_v2_shape() -> None:
+    work = runtime_adapters._local_parent_import_gate()
+    assert work["parent_import_contract"] == (
+        "HCWDL_REPRESENTATION_PARENT_IMPORT/v2"
+    )
+    assert work["parent_import_schema_version"] == 1
+    assert work["nonauthorizing_synthetic_v2_fixture"] is True
+    assert work["authority_files_reopened"] is False
 
 
 def test_production_registry_is_closed_and_exhaustive() -> None:

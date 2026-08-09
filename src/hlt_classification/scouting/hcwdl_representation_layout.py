@@ -8,9 +8,16 @@ import and call their typed validators directly.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Final
 
-from .hcwdl_representation_contracts import CALIBRATION_SELECTION_CONTRACT, CONTRACTS
+from .hcwdl_representation_contracts import (
+    CALIBRATION_SELECTION_CONTRACT,
+    CONTRACTS,
+    PARENT_IMPORT_CONTRACT,
+    PARENT_LOSS_ATTESTATION_CONTRACT,
+    REPRESENTATION_RECIPE_CONTRACT,
+)
 
 
 CAMPAIGN_SPEC_PARENT_VALUES: Final = frozenset({".", "planning"})
@@ -31,11 +38,11 @@ def _c(name: str) -> str:
 
 
 ROUTES: Final = {
-    _c("PARENT_IMPORT"): ArtifactRoute("import/parent_import.json", "parent_import", "validate_parent_import"),
-    _c("PARENT_LOSS_ATTESTATION"): ArtifactRoute("import/parent_loss_attestation.json", "parent_loss_attestation", "validate_parent_loss_attestation"),
+    PARENT_IMPORT_CONTRACT: ArtifactRoute("import/parent_import.json", "parent_import", "validate_parent_import"),
+    PARENT_LOSS_ATTESTATION_CONTRACT: ArtifactRoute("import/parent_loss_attestation.json", "parent_loss_attestation", "validate_parent_loss_attestation"),
     _c("ARCHITECTURE_ATTESTATION"): ArtifactRoute("import/architecture_attestation.json", "architecture_attestation", "validate_architecture_attestation"),
     _c("ASCENT_GRAPH"): ArtifactRoute("graph/ascent_graph.json", "graph_freeze", "validate_ascent_graph_artifact"),
-    _c("RECIPE"): ArtifactRoute("recipes/representation_recipe.json", "representation_recipe", "validate_representation_recipe"),
+    REPRESENTATION_RECIPE_CONTRACT: ArtifactRoute("recipes/representation_recipe.json", "representation_recipe", "validate_representation_recipe"),
     _c("KERNEL_RESOURCES"): ArtifactRoute("recipes/kernel_resources/committed/${envelope_id}", "kernel_resources", "validate_kernel_resources"),
     _c("TAP"): ArtifactRoute("architecture/tap.json", "tap_schema", "validate_tap_artifact"),
     _c("SURFACE_PARITY"): ArtifactRoute("architecture/surface_parity.json", "surface_parity", "validate_surface_parity"),
@@ -144,7 +151,7 @@ def validate_routes() -> None:
         raise RuntimeError(f"HCWDL-RKD artifact routes collide: {collisions}")
     for contract, route in ROUTES.items():
         if (
-            not contract.endswith("/v1")
+            re.fullmatch(r".+/v[1-9][0-9]*", contract) is None
             or not route.producer_kind
             or not route.validation_surface
         ):

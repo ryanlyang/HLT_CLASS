@@ -736,10 +736,13 @@ def _validate_kernel_resources(
     context: TargetGenerationContext, token: SpectralKernelResources,
     relation: SpectralKernelResources,
 ) -> None:
-    actual = {
-        block.resource_name: canonical_sha256(block.logical_hashes)
-        for resources in (token, relation) for block in resources.blocks
-    }
+    from .hcwdl_representation_kernels import (
+        SpectralResourceBundle, spectral_resource_logical_hashes,
+    )
+
+    actual = spectral_resource_logical_hashes(
+        SpectralResourceBundle(token=token, relation=relation),
+    )
     if set(actual) != set(KERNEL_RESOURCE_NAMES) or actual != context.forward_spec[
         "payload"
     ]["teacher"]["kernel_array_logical_hashes"]:

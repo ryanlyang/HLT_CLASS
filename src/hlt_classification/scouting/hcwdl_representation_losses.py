@@ -224,7 +224,13 @@ def token_weights(vectors, mask):
 def class_weighted_eligible_mean(
     per_jet, labels, class_weights, eligible,
 ) -> ReducedRows:
-    """Reduce eligible per-jet losses under authenticated class weights."""
+    """Reduce eligible rows by their natural-population mean.
+
+    The historical function name is retained for API stability. Scientific
+    RKD v2 accepts only the authenticated parent-v4 vector of fifteen exact
+    ones; a nonuniform vector is an incompatible legacy semantic and fails
+    before any reduction.
+    """
 
     import torch
 
@@ -238,9 +244,11 @@ def class_weighted_eligible_mean(
         raise ValueError("representation class weights must contain 15 values")
     if label.numel() and (int(label.min()) < 0 or int(label.max()) >= 15):
         raise ValueError("representation labels lie outside 15 classes")
-    if not torch.isfinite(rows).all() or not torch.isfinite(weights).all() or not (weights > 0).all():
+    if not torch.isfinite(rows).all() or not torch.isfinite(weights).all():
         raise FloatingPointError("representation rows/class weights are invalid")
-    selected = weights[label] * active.to(torch.float32)
+    if not torch.equal(weights, torch.ones_like(weights)):
+        raise ValueError("representation v2 requires fifteen exact-one class weights")
+    selected = active.to(torch.float32)
     denominator = selected.sum()
     if bool(active.any()):
         loss = (selected * rows).sum() / denominator
@@ -267,7 +275,11 @@ def jet_representation_loss(
     labels,
     class_weights,
 ) -> JetLossResult:
-    """Paired jet cosine plus raw-space class-weighted Gram geometry."""
+    """Paired jet cosine plus raw-space recipe-vector Gram geometry.
+
+    Scientific RKD execution supplies the v4 parent vector of fifteen exact
+    ones, making both the direct and off-diagonal Gram reductions uniform.
+    """
 
     import torch
 
@@ -296,10 +308,7 @@ def jet_representation_loss(
     ).square()
     batch = len(student)
     off_diagonal = ~torch.eye(batch, dtype=torch.bool, device=student.device)
-    labels_tensor = torch.as_tensor(labels, device=student.device, dtype=torch.long)
-    weights = torch.as_tensor(class_weights, device=student.device, dtype=torch.float32)
-    pair_weights = torch.sqrt(weights[labels_tensor, None] * weights[labels_tensor][None, :])
-    pair_weights = torch.where(off_diagonal, pair_weights, torch.zeros_like(pair_weights))
+    pair_weights = off_diagonal.to(torch.float32)
     pair_denominator = pair_weights.sum()
     gram = (
         (pair_weights * gram_errors).sum() / pair_denominator

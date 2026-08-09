@@ -103,7 +103,10 @@ from .hcwdl_representation_losses import (
     relation_representation_loss,
     scheduled_representation_loss,
 )
-from .hcwdl_representation_recipe import validate_representation_recipe
+from .hcwdl_representation_recipe import (
+    PARENT_RECIPE_CONTRACT,
+    validate_representation_recipe,
+)
 from .hcwdl_representation_reporting import checkpoint_key, select_checkpoint
 from .hcwdl_representation_resume import (
     REQUIRED_LINEAGE_KEYS,
@@ -374,7 +377,7 @@ def representation_training_configuration(
     mode: str = "scientific",
     synthetic_passes: int = 1,
 ) -> RepresentationTrainingConfiguration:
-    """Derive every optimization value from ``HCWDL_RECIPE/v3``.
+    """Derive every optimization value from the exact ``HCWDL_RECIPE/v4`` parent.
 
     ``synthetic_test`` is an explicitly non-authorizing local fixture mode. It
     is the only mode that can shorten the pass count without claiming a
@@ -382,7 +385,20 @@ def representation_training_configuration(
     """
 
     require_authorized = mode in {"scientific", "smoke"}
-    validate_parent_recipe(parent_recipe, require_authorized=require_authorized)
+    validate_parent_recipe(
+        parent_recipe,
+        require_authorized=require_authorized,
+        expected_profile="primary_ladder" if require_authorized else None,
+    )
+    if parent_recipe.get("contract") != PARENT_RECIPE_CONTRACT:
+        raise ValueError(
+            "HCWDL-RKD requires the unweighted HCWDL_RECIPE/v4 parent"
+        )
+    if not np.array_equal(
+        np.asarray(parent_recipe.get("class_weights"), dtype=np.float32),
+        np.ones(15, dtype=np.float32),
+    ):
+        raise ValueError("HCWDL-RKD parent recipe must bind fifteen exact ones")
     execution = resolve_node_execution(execution_id)
     batching = parent_recipe["batching"]
     if int(batching["gradient_accumulation"]) != 1:
@@ -2897,8 +2913,21 @@ def train_hcwdl_representation_node(
         representation_recipe,
     )
     parent_recipe_sha256 = validate_parent_recipe(
-        parent_recipe, require_authorized=mode in {"scientific", "smoke"},
+        parent_recipe,
+        require_authorized=mode in {"scientific", "smoke"},
+        expected_profile=(
+            "primary_ladder" if mode in {"scientific", "smoke"} else None
+        ),
     )
+    if parent_recipe.get("contract") != PARENT_RECIPE_CONTRACT:
+        raise ValueError(
+            "HCWDL-RKD requires the unweighted HCWDL_RECIPE/v4 parent"
+        )
+    if not np.array_equal(
+        np.asarray(parent_recipe.get("class_weights"), dtype=np.float32),
+        np.ones(15, dtype=np.float32),
+    ):
+        raise ValueError("HCWDL-RKD parent recipe must bind fifteen exact ones")
     if representation_recipe["parents"]["parent_recipe"] != parent_recipe_sha256:
         raise ValueError("representation overlay binds a different parent recipe")
     lineage = _validate_runtime_lineage(resume_lineage, producer_runtime_signature)

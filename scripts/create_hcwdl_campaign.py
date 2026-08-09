@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a hashed HCWDL smoke, pilot, or production campaign specification."""
+"""Create a hashed HCWDL smoke, pilot, named-midscale, or production spec."""
 
 from __future__ import annotations
 
@@ -11,13 +11,15 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from hlt_classification.data.cache_contracts import load_json, write_immutable_json  # noqa: E402
-from hlt_classification.scouting.hcwdl_authorization import validate_source_checkout  # noqa: E402
-from hlt_classification.scouting.hcwdl_campaign import create_campaign_spec  # noqa: E402
+from hlt_classification.scouting.hcwdl_authorization import (  # noqa: E402
+    ENDPOINT_CONTINUATION_MODES, validate_source_checkout,
+)
+from hlt_classification.scouting.hcwdl_campaign import MODES, create_campaign_spec  # noqa: E402
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--mode", choices=("smoke", "pilot", "production"), required=True)
+    parser.add_argument("--mode", choices=MODES, required=True)
     parser.add_argument("--campaign-root", type=Path, required=True)
     parser.add_argument("--source-manifest", type=Path, required=True)
     parser.add_argument("--split-manifest", type=Path, required=True)
@@ -31,6 +33,10 @@ def main() -> int:
     parser.add_argument("--resource-profile", type=Path)
     parser.add_argument("--production-authorization-sha256")
     parser.add_argument("--submission-authorization", type=Path)
+    parser.add_argument(
+        "--endpoint-continuation", choices=ENDPOINT_CONTINUATION_MODES,
+        default="manual_posthoc",
+    )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if not args.planning_only:
@@ -65,6 +71,7 @@ def main() -> int:
             False if recipe is None
             else bool(recipe["controls"]["include_label_only_warm_continuation"])
         ),
+        endpoint_continuation=args.endpoint_continuation,
     )
     write_immutable_json(args.output, spec)
     return 0

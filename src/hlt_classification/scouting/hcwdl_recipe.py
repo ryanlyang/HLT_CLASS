@@ -11,8 +11,9 @@ import numpy as np
 from hlt_classification.data.cache_contracts import require_sha256, validate_content_hash, with_content_hash
 
 
-RECIPE_CONTRACT: Final = "HCWDL_RECIPE/v3"
-RECIPE_SCHEMA_VERSION: Final = 3
+LEGACY_RECIPE_CONTRACT: Final = "HCWDL_RECIPE/v3"
+RECIPE_CONTRACT: Final = "HCWDL_RECIPE/v4"
+RECIPE_SCHEMA_VERSION: Final = 4
 PRIMARY_RECIPE_PROFILE: Final = "primary_ladder"
 PRIMARY_DUAL_TEACHER_DECISION: Final = {
     "peak_learning_rate": 3e-4,
@@ -61,7 +62,8 @@ PRIMARY_RECIPE_DECISION: Final = {
     "dual_teacher_peak_learning_rate": 3e-4,
     "amp_dtype": "bfloat16",
 }
-CLASS_WEIGHT_POLICY: Final = "sqrt_inverse_frequency_unit_population_mean_v1"
+LEGACY_CLASS_WEIGHT_POLICY: Final = "sqrt_inverse_frequency_unit_population_mean_v1"
+CLASS_WEIGHT_POLICY: Final = "unweighted_per_jet_population_mean_v1"
 FORBIDDEN_PLACEHOLDERS: Final = frozenset(("", "tbd", "todo", "placeholder", "unknown", "auto", "default"))
 
 
@@ -98,9 +100,18 @@ def validate_recipe(
     value: Mapping[str, Any], *, require_authorized: bool = True,
     expected_profile: str | None = None,
 ) -> str:
+    contract = value.get("contract")
+    if contract == LEGACY_RECIPE_CONTRACT:
+        schema_version = 3
+        class_weight_policy = LEGACY_CLASS_WEIGHT_POLICY
+    elif contract == RECIPE_CONTRACT:
+        schema_version = RECIPE_SCHEMA_VERSION
+        class_weight_policy = CLASS_WEIGHT_POLICY
+    else:
+        raise ValueError("HCWDL recipe contract differs")
     digest = validate_content_hash(
-        value, expected_contract=RECIPE_CONTRACT,
-        expected_schema_version=RECIPE_SCHEMA_VERSION,
+        value, expected_contract=str(contract),
+        expected_schema_version=schema_version,
     )
     _reject_placeholders(value)
     if require_authorized and value.get("authorized_for_execution") is not True:
@@ -191,7 +202,7 @@ def validate_recipe(
         "policy", "train_class_counts", "train_row_selection_sha256",
     }:
         raise ValueError("HCWDL class-weight lineage differs")
-    if class_weighting.get("policy") != CLASS_WEIGHT_POLICY:
+    if class_weighting.get("policy") != class_weight_policy:
         raise ValueError("HCWDL class-weight policy differs")
     counts_raw = class_weighting.get("train_class_counts")
     if (
@@ -205,8 +216,13 @@ def validate_recipe(
         name="HCWDL train row-selection SHA-256",
     )
     counts = np.asarray(counts_raw, np.float64)
-    inverse = 1.0 / np.sqrt(counts)
-    expected_weights = (counts.sum() / np.sum(counts * inverse) * inverse).astype(np.float32)
+    if class_weight_policy == LEGACY_CLASS_WEIGHT_POLICY:
+        inverse = 1.0 / np.sqrt(counts)
+        expected_weights = (
+            counts.sum() / np.sum(counts * inverse) * inverse
+        ).astype(np.float32)
+    else:
+        expected_weights = np.ones(15, np.float32)
     class_weights = np.asarray(value.get("class_weights"), np.float32)
     if class_weights.shape != (15,) or not np.isfinite(class_weights).all() or np.any(class_weights <= 0):
         raise ValueError("HCWDL class weights must contain 15 finite positive values")
@@ -317,8 +333,8 @@ def example_recipe() -> dict[str, Any]:
 
 
 __all__ = [
-    "CLASS_WEIGHT_POLICY", "PRIMARY_DUAL_TEACHER_DECISION", "PRIMARY_RECIPE_DECISION",
-    "PRIMARY_RECIPE_PROFILE",
+    "CLASS_WEIGHT_POLICY", "LEGACY_CLASS_WEIGHT_POLICY", "LEGACY_RECIPE_CONTRACT",
+    "PRIMARY_DUAL_TEACHER_DECISION", "PRIMARY_RECIPE_DECISION", "PRIMARY_RECIPE_PROFILE",
     "RECIPE_CONTRACT", "RECIPE_SCHEMA_VERSION", "build_recipe",
     "example_recipe", "validate_recipe", "validate_recipe_class_weight_lineage",
 ]

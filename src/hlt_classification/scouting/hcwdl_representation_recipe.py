@@ -2,15 +2,24 @@
 
 The overlay authorizes only representation supervision.  It binds, but never
 copies or overrides, the optimization policy in an authenticated
-``HCWDL_RECIPE/v3`` parent.
+``HCWDL_RECIPE/v4`` parent.  Version 2 records the primary parent's exact
+all-ones loss vector and therefore makes every per-jet representation
+reduction an unweighted natural-population mean.
 """
 
 from __future__ import annotations
 
 from copy import deepcopy
+from pathlib import Path
 from typing import Any, Final, Mapping
 
-from hlt_classification.data.cache_contracts import canonical_sha256, require_sha256
+from hlt_classification.data.cache_contracts import (
+    canonical_sha256, require_sha256, validate_content_hash,
+)
+from hlt_classification.provenance import (
+    capture_source_snapshot,
+    validate_source_snapshot_payload,
+)
 
 from .hcwdl_representation_contracts import (
     REPRESENTATION_RECIPE_CONTRACT,
@@ -28,8 +37,11 @@ from .hcwdl_representation_graph import (
 
 
 RECIPE_CONTRACT: Final = REPRESENTATION_RECIPE_CONTRACT
+# RKD JSON artifacts share the common strict envelope schema v1; the scientific
+# semantic version is carried by RECIPE_CONTRACT.
 RECIPE_SCHEMA_VERSION: Final = 1
 RECIPE_PROFILE: Final = "registered_ablation"
+PARENT_RECIPE_CONTRACT: Final = "HCWDL_RECIPE/v4"
 
 REQUIRED_PARENT_KEYS: Final = frozenset({
     "architecture_attestation",
@@ -243,10 +255,9 @@ def _scientific_values() -> dict[str, Any]:
             "training_heads_reset_each_node": True,
             "warm_start_loads_deployable_only": True,
             "deployable_excludes_representation_heads": True,
-            "class_weighted_representation_row_reduction": True,
-            "representation_row_reduction": (
-                "sum(class_weight[label]*per_jet_loss)/sum(class_weight[label])"
-            ),
+            "representation_row_weight_source": "parent_recipe_exact_15_ones",
+            "class_weighted_representation_row_reduction": False,
+            "representation_row_reduction": "mean(per_jet_loss)",
             "parent_base_loss_inherited_without_override": True,
         },
         "target_forward": {
@@ -296,6 +307,24 @@ def frozen_scientific_values() -> dict[str, Any]:
     return deepcopy(_scientific_values())
 
 
+def derive_recipe_producer_source_sha256(repository: str | Path) -> str:
+    """Derive the recipe producer identity from one clean Git checkout.
+
+    The producer source is never a caller-entered digest.  The same source
+    snapshot identity is measured again by every production worker and bound
+    into the runtime facts before any scientific input is opened.
+    """
+
+    snapshot = capture_source_snapshot(repository, require_clean=True)
+    validate_source_snapshot_payload(snapshot)
+    if snapshot.get("worktree_clean") is not True:
+        raise ValueError("representation recipe producer checkout is not clean")
+    return require_sha256(
+        snapshot["source_snapshot_sha256"],
+        name="representation recipe producer source snapshot",
+    )
+
+
 def _hash_registry(
     value: Mapping[str, Any], *, expected_keys: frozenset[str] | tuple[str, ...], label: str,
 ) -> dict[str, str]:
@@ -329,7 +358,7 @@ def build_representation_recipe(
     payload = {
         "recipe_profile": RECIPE_PROFILE,
         "purpose": "hcwdl_matching_free_representation_kd_four_ascents",
-        "parent_recipe_contract": "HCWDL_RECIPE/v3",
+        "parent_recipe_contract": PARENT_RECIPE_CONTRACT,
         "ascent_graph_sha256": ASCENT_GRAPH_SHA256,
         "control_registry_sha256": CONTROL_REGISTRY_SHA256,
         "primary_node_ids": sorted(NODE_REGISTRY),
@@ -343,6 +372,37 @@ def build_representation_recipe(
     )
     validate_representation_recipe(artifact, expected_parents=normalized_parents)
     return artifact
+
+
+def derive_representation_recipe_evidence(
+    *, numerical_acceptance: Mapping[str, Any],
+    zero_coefficient_measurements: Mapping[str, Any],
+) -> dict[str, str]:
+    """Derive the four recipe evidence hashes from reproducible preflight work."""
+
+    numerical_hash = validate_content_hash(
+        numerical_acceptance,
+        expected_contract="HCWDL_REPRESENTATION_NUMERICAL_ACCEPTANCE/v1",
+        expected_schema_version=1,
+    )
+    if (
+        numerical_acceptance.get("passed") is not True
+        or numerical_acceptance.get("scientific_authorization") is not True
+    ):
+        raise ValueError("representation numerical evidence is nonauthorizing")
+    from .hcwdl_representation_campaign_artifacts import (
+        validate_zero_coefficient_measurements,
+    )
+
+    zero_hash = validate_zero_coefficient_measurements(
+        zero_coefficient_measurements,
+    )
+    return {
+        "analytic_gradient": numerical_hash,
+        "diagnostic_reference": numerical_hash,
+        "finite_kernel": numerical_hash,
+        "zero_coefficient_parity": zero_hash,
+    }
 
 
 def validate_representation_recipe(
@@ -376,7 +436,7 @@ def validate_representation_recipe(
     if (
         payload["recipe_profile"] != RECIPE_PROFILE
         or payload["purpose"] != "hcwdl_matching_free_representation_kd_four_ascents"
-        or payload["parent_recipe_contract"] != "HCWDL_RECIPE/v3"
+        or payload["parent_recipe_contract"] != PARENT_RECIPE_CONTRACT
         or payload["ascent_graph_sha256"] != ASCENT_GRAPH_SHA256
         or payload["control_registry_sha256"] != CONTROL_REGISTRY_SHA256
         or payload["primary_node_ids"] != sorted(NODE_REGISTRY)
@@ -442,6 +502,8 @@ __all__ = [
     "REQUIRED_EVIDENCE_KEYS",
     "REQUIRED_PARENT_KEYS",
     "build_representation_recipe",
+    "derive_recipe_producer_source_sha256",
+    "derive_representation_recipe_evidence",
     "example_representation_recipe",
     "frozen_scientific_values",
     "validate_representation_recipe",

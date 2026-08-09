@@ -14,6 +14,98 @@ from hlt_classification.scouting.hcwdl_representation_campaign import (
 from hlt_classification.scouting.hcwdl_representation_runtime_rows import (
     build_runtime_prerequisites,
 )
+from hlt_classification.scouting.engine import validate_pmard_training_report
+from hlt_classification.scouting.hcwdl_training import (
+    validate_hcwdl_training_report,
+)
+
+
+def _paired_wrapper_and_engine(
+    root: Path, relative_text: object, *, node_id: str,
+) -> dict[str, object]:
+    """Open one registered HCWDL wrapper and its authenticated PMARD sibling."""
+
+    relative = PurePosixPath(str(relative_text))
+    if (
+        not str(relative_text) or relative.is_absolute() or "\\" in str(relative_text)
+        or any(part in {"", ".", ".."} for part in relative.parts)
+    ):
+        raise ValueError(f"paired parent wrapper path is unsafe: {node_id}")
+    resolved_root = root.resolve()
+    wrapper_path = root.joinpath(*relative.parts)
+    try:
+        wrapper_path.resolve().relative_to(resolved_root)
+    except ValueError as exc:
+        raise ValueError(
+            f"paired parent wrapper escapes its authenticated bundle: {node_id}"
+        ) from exc
+    if not wrapper_path.is_file() or wrapper_path.is_symlink():
+        raise ValueError(f"paired parent wrapper is absent or a symlink: {node_id}")
+    wrapper = load_json(wrapper_path)
+    wrapper_sha256 = validate_hcwdl_training_report(wrapper)
+    if wrapper.get("node_id") != node_id:
+        raise ValueError(f"paired parent wrapper node differs: {node_id}")
+
+    engine_path = wrapper_path.with_name("training_report.json")
+    try:
+        engine_relative = engine_path.resolve().relative_to(resolved_root).as_posix()
+    except ValueError as exc:
+        raise ValueError(
+            f"paired parent engine report escapes its authenticated bundle: {node_id}"
+        ) from exc
+    if not engine_path.is_file() or engine_path.is_symlink():
+        raise ValueError(
+            f"paired parent wrapper lacks sibling PMARD training_report.json: {node_id}"
+        )
+    engine = load_json(engine_path)
+    engine_sha256 = validate_pmard_training_report(engine)
+    expected_engine_sha256 = require_sha256(
+        wrapper.get("pmard_engine_report_sha256"),
+        name=f"{node_id} wrapper PMARD engine report",
+    )
+    if engine_sha256 != expected_engine_sha256:
+        raise ValueError(f"paired parent wrapper/engine hash differs: {node_id}")
+    if (
+        wrapper.get("selected_checkpoint_sha256")
+        != engine.get("selected_checkpoint_sha256")
+        or wrapper.get("pmard_execution_config_sha256")
+        != engine.get("execution_config_sha256")
+    ):
+        raise ValueError(f"paired parent wrapper/engine lineage differs: {node_id}")
+    return {
+        "wrapper_relative": relative.as_posix(),
+        "wrapper": wrapper,
+        "wrapper_sha256": wrapper_sha256,
+        "engine_relative": engine_relative,
+        "engine_report": engine,
+        "engine_sha256": engine_sha256,
+    }
+
+
+def _paired_screen_model_member(
+    *, node_id: str, parent_reports_root: Path, parent_wrapper_relative: object,
+    finalist_models_root: Path, finalist_wrapper_relative: object,
+) -> dict[str, object]:
+    """Cross-bind both registered wrapper copies and return the PMARD member."""
+
+    parent = _paired_wrapper_and_engine(
+        parent_reports_root, parent_wrapper_relative, node_id=node_id,
+    )
+    finalist = _paired_wrapper_and_engine(
+        finalist_models_root, finalist_wrapper_relative, node_id=node_id,
+    )
+    if parent["wrapper_sha256"] != finalist["wrapper_sha256"]:
+        raise ValueError(
+            f"paired parent screening wrapper/model source differs: {node_id}"
+        )
+    if parent["engine_sha256"] != finalist["engine_sha256"]:
+        raise ValueError(
+            f"paired parent screening engine/model source differs: {node_id}"
+        )
+    return {
+        "relative": finalist["engine_relative"],
+        "report": finalist["engine_report"],
+    }
 
 
 def main() -> int:
@@ -119,25 +211,25 @@ def main() -> int:
 
     paired_screen_model_members = {}
     for node_id in ("M0", "M6c", "M6w"):
-        parent_report = member(
-            parent_reports_root, bundle_relative("parent_reports", node_id),
-        )
         model_relative = bundle_relative("finalist_models", node_id)
-        model_report = member(finalist_models_root, model_relative)
-        if model_report != parent_report:
-            raise ValueError(
-                f"paired parent screening report/model source differs: {node_id}"
-            )
-        paired_screen_model_members[node_id] = {
-            "relative": model_relative, "report": model_report,
-        }
+        paired_screen_model_members[node_id] = _paired_screen_model_member(
+            node_id=node_id,
+            parent_reports_root=parent_reports_root,
+            parent_wrapper_relative=bundle_relative("parent_reports", node_id),
+            finalist_models_root=finalist_models_root,
+            finalist_wrapper_relative=model_relative,
+        )
     final_authorities = {
         "shared_final_population": artifact(
             registered_file("${shared_final_population}")
         ),
         "parent_final_state": artifact(registered_file("${parent_final_state}")),
         "final_disposition": artifact(registered_file("${final_disposition}")),
+        "parent_import": artifact(registered_file("${prebuilt_parent_import}")),
         "parent_finalist_registry": parent_lock,
+        "parent_confirmation_registry": artifact(
+            registered_file("${parent_confirmation_registry_lock}")
+        ),
         "locked_model_members": locked_model_members,
         "paired_screen_model_members": paired_screen_model_members,
         "matcher_resources": artifact(registered_file("${matcher_resources}")),
@@ -159,6 +251,9 @@ def main() -> int:
         split_manifest=artifact(split_path),
         final_authorities=final_authorities,
         target_forward_specs=target_forward_specs,
+        representation_recipe=artifact(
+            registered_file("${prebuilt_representation_recipe}")
+        ),
     )
     publish(args.output, value)
     return 0

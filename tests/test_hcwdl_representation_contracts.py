@@ -10,13 +10,18 @@ from hlt_classification.scouting.hcwdl_representation_contracts import (
     CALIBRATION_SELECTION_CONTRACT,
     CONTRACTS,
     LOGICAL_ARRAY_HASH_DOMAIN,
+    PARENT_IMPORT_CONTRACT,
+    PARENT_LOSS_ATTESTATION_CONTRACT,
     PRODUCTION_WORKER_SMOKE_PROOF_CONTRACT,
+    REPRESENTATION_RECIPE_CONTRACT,
     RUNTIME_BINDING_CONTRACT,
     SHARED_LEGACY_FINAL_EXPOSURE_CONTRACT,
     SUBMISSION_EVENT_CONTRACT,
     TIGRIS_ACTION_PROOF_CONTRACT,
     USR1_EXACT_RESUME_PROOF_CONTRACT,
     VALIDATION_PROXY_PROOF_CONTRACT,
+    build_versioned_artifact,
+    contract_schema_version,
     logical_array_sha256,
     logical_array_sha256_from_byte_hash,
 )
@@ -26,11 +31,11 @@ from hlt_classification.scouting.hcwdl_representation_contracts import (
 # the test prevents a similarly named parent/PMARD contract from being accepted
 # accidentally and makes an in-place semantic expansion fail loudly.
 EXPECTED_CONTRACTS = {
-    "HCWDL_REPRESENTATION_PARENT_IMPORT/v1",
-    "HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v1",
+    "HCWDL_REPRESENTATION_PARENT_IMPORT/v2",
+    "HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v2",
     "HCWDL_REPRESENTATION_ARCHITECTURE_ATTESTATION/v1",
     "HCWDL_REPRESENTATION_ASCENT_GRAPH/v1",
-    "HCWDL_REPRESENTATION_RECIPE/v1",
+    "HCWDL_REPRESENTATION_RECIPE/v2",
     "HCWDL_REPRESENTATION_KERNEL_RESOURCES/v1",
     "HCWDL_REPRESENTATION_TAP/v1",
     "HCWDL_REPRESENTATION_SURFACE_PARITY/v1",
@@ -131,6 +136,17 @@ def test_contract_registry_is_exactly_the_plan_frozen_section_21_registry() -> N
     assert not any("PMARD" in contract for contract in CONTRACTS)
     assert "HCWDL_GRAPH/v1" not in CONTRACTS
     assert "HCWDL_RECIPE/v3" not in CONTRACTS
+
+
+def test_contract_schema_registry_blocks_generic_parent_loss_v2_envelopes() -> None:
+    assert contract_schema_version(PARENT_LOSS_ATTESTATION_CONTRACT) == 2
+    assert contract_schema_version(PARENT_IMPORT_CONTRACT) == 1
+    assert contract_schema_version(REPRESENTATION_RECIPE_CONTRACT) == 1
+    with pytest.raises(ValueError, match="typed artifact builder"):
+        build_versioned_artifact(
+            PARENT_LOSS_ATTESTATION_CONTRACT,
+            parents={"parent_recipe": "a" * 64}, payload={"forged": True},
+        )
 
 
 def test_durable_module_publications_use_central_contract_identities() -> None:

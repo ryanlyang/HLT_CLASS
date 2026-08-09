@@ -99,6 +99,10 @@ class RepresentationControlSpec:
     def payload(self) -> dict[str, object]:
         result = asdict(self)
         result["component_allocation"] = dict(self.component_allocation)
+        # JSON publication canonicalizes tuples to arrays.  Emit the canonical
+        # list form up front so an artifact validates identically before and
+        # after its immutable-file round trip.
+        result["descendants"] = list(self.descendants)
         return result
 
 

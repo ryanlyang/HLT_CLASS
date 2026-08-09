@@ -46,6 +46,9 @@ HCWDL_PARENT_ARCHITECTURE_NODES: Final = frozenset({
     *(f"D{level}{track}" for level in (0, 25, 50, 75) for track in ("c", "w")),
     *(f"M{rung}{track}" for rung in range(1, 7) for track in ("c", "w")),
 })
+HCWDL_ARCHITECTURE_MODEL_SOURCE_KEYS: Final = frozenset({
+    "D0w", "hcwdl_surfaces", "scouting_particle_transformer",
+})
 _FILE_BACKED_ATTESTATION_TOKEN: Final = object()
 
 HCWDL_TAP_SCHEMA: Final = {
@@ -888,6 +891,12 @@ def build_architecture_attestation(
             "path": path,
             "sha256": require_sha256(raw.get("sha256"), name=f"{logical_name} model source"),
         })
+    if source_names != HCWDL_ARCHITECTURE_MODEL_SOURCE_KEYS:
+        raise ValueError(
+            "architecture model-source registry is incomplete or expanded; "
+            f"missing={sorted(HCWDL_ARCHITECTURE_MODEL_SOURCE_KEYS - source_names)}, "
+            f"extra={sorted(source_names - HCWDL_ARCHITECTURE_MODEL_SOURCE_KEYS)}"
+        )
     source_hash = require_sha256(model_source_sha256, name="model source SHA-256")
     source_identity = [
         {"logical_name": row["logical_name"], "sha256": row["sha256"]}
@@ -1041,21 +1050,24 @@ def build_architecture_attestation_from_files(
     scouting_path = getattr(scouting_module, "__file__", None)
     if scouting_path is None:
         raise ValueError("canonical scouting model source path is unavailable")
-    required_model_sources = {
+    required_code_sources = {
         "hcwdl_surfaces": Path(__file__).resolve(),
         "scouting_particle_transformer": Path(scouting_path).resolve(),
     }
-    if model_source_paths is None:
-        model_source_paths = required_model_sources
-    else:
-        for logical_name, required_path in required_model_sources.items():
-            supplied = model_source_paths.get(logical_name)
-            if supplied is None or Path(supplied).resolve() != required_path:
-                raise ValueError(
-                    f"architecture attestation canonical model source differs: {logical_name}"
-                )
-    if not model_source_paths:
-        raise ValueError("architecture attestation model-source registry is empty")
+    supplied_names = set() if model_source_paths is None else set(model_source_paths)
+    if supplied_names != HCWDL_ARCHITECTURE_MODEL_SOURCE_KEYS:
+        raise ValueError(
+            "architecture model-source registry is incomplete or expanded; "
+            f"missing={sorted(HCWDL_ARCHITECTURE_MODEL_SOURCE_KEYS - supplied_names)}, "
+            f"extra={sorted(supplied_names - HCWDL_ARCHITECTURE_MODEL_SOURCE_KEYS)}"
+        )
+    assert model_source_paths is not None
+    for logical_name, required_path in required_code_sources.items():
+        supplied = model_source_paths[logical_name]
+        if Path(supplied).resolve() != required_path:
+            raise ValueError(
+                f"architecture attestation canonical model source differs: {logical_name}"
+            )
     model_sources: list[dict[str, str]] = []
     for logical_name, raw_path in sorted(model_source_paths.items()):
         if not isinstance(logical_name, str) or not logical_name:
@@ -1075,6 +1087,17 @@ def build_architecture_attestation_from_files(
         )
         for node_id, report_path in sorted(parent_reports.items())
     ]
+    d0w_audit = next((audit for audit in audits if audit.node_id == "D0w"), None)
+    if (
+        d0w_audit is None
+        or not d0w_audit.actual_file_evidence
+        or not isinstance(d0w_audit.engine_report_path, str)
+        or Path(model_source_paths["D0w"]).resolve()
+        != Path(d0w_audit.engine_report_path).resolve()
+    ):
+        raise ValueError(
+            "architecture D0w model source must be its authenticated PMARD engine report"
+        )
     return build_architecture_attestation(
         parity_report=parity,
         runtime_signature=active_runtime,
@@ -1198,14 +1221,20 @@ def validate_architecture_attestation(
     model_sources = value.get("model_source_files")
     if not isinstance(model_sources, list):
         raise ValueError("architecture attestation model source files differ")
+    source_names: list[str] = []
     for row in model_sources:
         if not isinstance(row, Mapping) or set(row) != {"logical_name", "path", "sha256"}:
             raise ValueError("architecture attestation model source row differs")
         if not isinstance(row.get("logical_name"), str) or not row["logical_name"]:
             raise ValueError("architecture attestation model source identity differs")
+        source_names.append(row["logical_name"])
         if not isinstance(row.get("path"), str) or not row["path"]:
             raise ValueError("architecture attestation model source path differs")
         require_sha256(row.get("sha256"), name=f"{row['logical_name']} model source")
+    if source_names != sorted(HCWDL_ARCHITECTURE_MODEL_SOURCE_KEYS):
+        raise ValueError(
+            "architecture model-source registry is incomplete or expanded"
+        )
     model_source_hash = require_sha256(
         value.get("model_source_sha256"), name="model source SHA-256",
     )
@@ -1292,6 +1321,21 @@ def validate_architecture_attestation(
         tap_path and tap_bytes and parity_path and parity_bytes and model_sources
         and all(bool(audit["actual_file_evidence"]) for audit in audits)
     )
+    if exact_files:
+        sources_by_name = {row["logical_name"]: row for row in model_sources}
+        audits_by_node = {row["node_id"]: row for row in audits}
+        d0w_audit = audits_by_node.get("D0w")
+        if (
+            d0w_audit is None
+            or not isinstance(d0w_audit.get("engine_report_path"), str)
+            or Path(sources_by_name["D0w"]["path"]).resolve()
+            != Path(d0w_audit["engine_report_path"]).resolve()
+            or sources_by_name["D0w"]["sha256"]
+            != d0w_audit.get("engine_report_byte_sha256")
+        ):
+            raise ValueError(
+                "architecture D0w model source is not its authenticated PMARD engine report"
+            )
     if value.get("exact_file_evidence") is not exact_files:
         raise ValueError("architecture attestation exact-file evidence differs")
     authorized = bool(
@@ -1327,7 +1371,8 @@ def validate_architecture_attestation(
 
 __all__ = [
     "ARCHITECTURE_ATTESTATION_CONTRACT", "CheckpointArchitectureAudit",
-    "FP32_ATOL", "FP32_RTOL", "HCWDL_PARENT_ARCHITECTURE_NODES",
+    "FP32_ATOL", "FP32_RTOL", "HCWDL_ARCHITECTURE_MODEL_SOURCE_KEYS",
+    "HCWDL_PARENT_ARCHITECTURE_NODES",
     "HCWDL_TAP_SCHEMA", "RUNTIME_SIGNATURE_CONTRACT",
     "SURFACE_PARITY_CONTRACT", "TAP_CONTRACT", "audit_checkpoint_architecture",
     "audit_parent_checkpoint_file", "build_architecture_attestation",
