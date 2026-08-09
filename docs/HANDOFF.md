@@ -1,5 +1,38 @@
 # Current Handoff
 
+## HCWDL dense cold 300k supplement (2026-08-09)
+
+The new isolated `HCWDL_DENSE_COLD_GRAPH/v1` implements the requested
+validation-only 300k descent: imported TOFF teaches fresh D100offkd, followed
+by fresh D90/D80/.../D10/D0 and one fresh born-again M1. Every D node uses the
+locked unweighted 0.25 CE plus 0.75 KD recipe at temperature 2; M1 uses the
+same weights at HLT temperature 1. All nodes train for 60 passes, validate
+every pass, and select macro-AUC first. M2--M6 and warm nodes are absent.
+
+The supplement authenticates and directly reuses the completed pilot's split,
+row selection, recipe, train/validation assignment stores, assignment and
+Shell Exact locks, and M0/D100/TOFF reports. It does not rematch, copy repaired
+datasets, or register final-test access. Twelve sequential checkpointable GPU
+jobs feed one CPU aggregate.
+
+The implementation audit found that the original coarse runner used a
+domain-derived discrete repair seed. Individual coarse views remain valid,
+but their discrete switches were not strictly nested across alpha. The dense
+runner explicitly uses one shared seed across every D domain, making the new
+10-point descent a monotone discrete repair trajectory. The old campaign is
+retained as the coarse empirical control and is not mutated or relabeled.
+
+Implementation lives in `hcwdl_dense.py`, `hcwdl_dense_runner.py`, and
+`hcwdl_dense_workflow.py`, with three thin CLIs and
+`sbatch/run_hcwdl_dense_task.sh`. The exact scientific contract and Tigris
+commands are in `docs/contracts/HCWDL_DENSE_COLD_PILOT.md` and
+`docs/HCWDL_DENSE_COLD_RUNBOOK.md`. Focused HCWDL/dense/repair validation
+passes 95/95; the complete repository suite passes 329/329 with the same 14
+Matplotlib/Pyparsing warnings; Python compilation and `git diff --check` pass.
+No remote job was submitted by this change. The remaining runtime boundary is
+an exact pushed clean commit and execution of the creation/dry-run/submission
+sequence in the dense runbook against the completed unweighted pilot root.
+
 ## HCWDL unweighted primary and automatic continuation (2026-08-09)
 
 The primary HCWDL recipe is now `HCWDL_RECIPE/v4`: qualifiers, privileged

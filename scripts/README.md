@@ -224,3 +224,12 @@ An authorized `HCWDL_RECIPE/v4` is built with `--train-row-selection`; the
 builder publishes fifteen exact ones for unweighted per-jet loss and binds
 both the selection hash and its 15 train counts. The campaign's
 deterministic row-selection task must reproduce those exact immutable bytes.
+
+The validation-only dense cold supplement uses
+`create_hcwdl_dense_pilot.py`, `run_hcwdl_dense_task.py`, and
+`submit_hcwdl_dense_pilot.py`. It imports the completed unweighted 300k
+pilot's authenticated selection, compact assignments, locks, M0, label-only
+D100, and TOFF without copying or rematching them. It then runs the sequential
+fresh-start `TOFF -> D100offkd -> D90 -> ... -> D0 -> M1` graph with one
+shared nested repair coordinate system and publishes validation recovery only.
+It has no final-test task. See `docs/HCWDL_DENSE_COLD_RUNBOOK.md`.

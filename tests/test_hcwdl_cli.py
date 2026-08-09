@@ -34,6 +34,8 @@ SCRIPTS = (
     "build_hcwdl_submission_authorization.py",
     "build_hcwdl_endpoint_ack.py",
     "assemble_hcwdl_submission_ledger.py",
+    "create_hcwdl_dense_pilot.py", "run_hcwdl_dense_task.py",
+    "submit_hcwdl_dense_pilot.py",
 )
 
 

@@ -93,11 +93,13 @@ def node_training_config(
     train_rows: int,
     replicate_seed: int,
     require_authorized_recipe: bool = True,
+    registry: Mapping[str, NodeSpec] = NODE_REGISTRY,
+    seed_node_id: str | None = None,
 ) -> PmardTrainingConfig:
     validate_recipe(recipe, require_authorized=require_authorized_recipe)
-    if node_id not in NODE_REGISTRY or train_rows <= 0:
+    if node_id not in registry or train_rows <= 0:
         raise ValueError("HCWDL node or train rows differ")
-    node = NODE_REGISTRY[node_id]
+    node = registry[node_id]
     batch = int(recipe["batching"]["effective_batch_size"])
     updates_per_pass = int(np.ceil(train_rows / batch))
     if len(node.teachers) == 2:
@@ -127,7 +129,9 @@ def node_training_config(
         validation_interval=updates_per_pass,
         validation_checks=60,
         logging_interval=max(1, updates_per_pass // 4),
-        master_seed=derive_seed(replicate_seed, f"hcwdl/{node.node_id}"),
+        master_seed=derive_seed(
+            replicate_seed, f"hcwdl/{node.node_id if seed_node_id is None else seed_node_id}",
+        ),
         amp_dtype=str(recipe["amp_dtype"]),
         model_input=model_input,
         selection_policy="hcwdl_macro_auc",
@@ -141,13 +145,17 @@ def initialize_node_model(
     replicate_seed: int,
     warm_checkpoint: str | Path | None = None,
     expected_checkpoint_sha256: str | None = None,
+    registry: Mapping[str, NodeSpec] = NODE_REGISTRY,
+    seed_node_id: str | None = None,
 ) -> object:
     import torch
 
-    if node_id not in NODE_REGISTRY:
+    if node_id not in registry:
         raise ValueError("unknown HCWDL node")
-    node = NODE_REGISTRY[node_id]
-    seed = derive_seed(replicate_seed, f"hcwdl/init/{node_id}")
+    node = registry[node_id]
+    seed = derive_seed(
+        replicate_seed, f"hcwdl/init/{node_id if seed_node_id is None else seed_node_id}",
+    )
     with torch.random.fork_rng(devices=[]):
         torch.manual_seed(seed)
         model = model_factory()
@@ -187,16 +195,27 @@ def train_hcwdl_node(
     resume: bool = True,
     stop_after_update: int | None = None,
     smoke: bool = False,
+    registry: Mapping[str, NodeSpec] = NODE_REGISTRY,
+    graph_sha256: str = GRAPH_SHA256,
+    report_contract: str = TRAINING_REPORT_CONTRACT,
+    campaign_label: str = "HCWDL",
+    scientific_config_extra: Mapping[str, Any] | None = None,
+    seed_node_id: str | None = None,
 ) -> dict[str, Any]:
     recipe_sha256 = validate_recipe(recipe, require_authorized=True)
-    node = NODE_REGISTRY[node_id]
+    if node_id not in registry:
+        raise ValueError("unknown HCWDL node")
+    node = registry[node_id]
     model = initialize_node_model(
         node_id, model_factory=model_factory, replicate_seed=replicate_seed,
         warm_checkpoint=warm_checkpoint,
         expected_checkpoint_sha256=warm_checkpoint_sha256,
+        registry=registry,
+        seed_node_id=seed_node_id,
     )
     config = node_training_config(
         node_id, recipe, train_rows=train_rows, replicate_seed=replicate_seed,
+        registry=registry, seed_node_id=seed_node_id,
     )
     if smoke:
         config = replace(
@@ -204,8 +223,8 @@ def train_hcwdl_node(
             validation_checks=1, logging_interval=1,
         )
     scientific = {
-        "campaign": "HCWDL",
-        "graph_sha256": GRAPH_SHA256,
+        "campaign": campaign_label,
+        "graph_sha256": graph_sha256,
         "node": node.payload(),
         "recipe_sha256": recipe_sha256,
         "training_passes": 60 if not smoke else None,
@@ -213,6 +232,11 @@ def train_hcwdl_node(
         "smoke_updates": 2 if smoke else None,
         "performance_early_stopping": False,
     }
+    if scientific_config_extra is not None:
+        overlap = set(scientific) & set(scientific_config_extra)
+        if overlap:
+            raise ValueError(f"HCWDL scientific configuration overrides fixed keys: {sorted(overlap)}")
+        scientific.update(dict(scientific_config_extra))
     validated_parents = {name: require_sha256(value, name=f"HCWDL parent {name}") for name, value in parents.items()}
     validated_parents["recipe"] = recipe_sha256
     report = train_pmard(
@@ -234,10 +258,10 @@ def train_hcwdl_node(
     if selection["selected_update"] != report["selected_update"]:
         raise RuntimeError("HCWDL engine and independent checkpoint selection differ")
     output = with_content_hash({
-        "contract": TRAINING_REPORT_CONTRACT,
+        "contract": report_contract,
         "schema_version": 1,
         "node_id": node_id,
-        "graph_sha256": GRAPH_SHA256,
+        "graph_sha256": graph_sha256,
         "recipe_sha256": recipe_sha256,
         "parents": validated_parents,
         "pmard_engine_report_sha256": report["content_hash"],
