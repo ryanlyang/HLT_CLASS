@@ -91,6 +91,7 @@ JetClass data on Tigris:
 - [PMARD research-compute runbook](docs/PMARD_RUNBOOK.md)
 - [HCWDL primary cold/warm ladder plan](docs/plans/HIGH_COVERAGE_COLD_WARM_DISTILLATION_LADDER.md)
 - [HCWDL matching-free representation-KD ascent plan](docs/plans/HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md)
+- [HCWDL-RKD local/research-compute runbook](docs/HCWDL_RKD_RUNBOOK.md)
 - [Tigris miniature acceptance procedure](docs/TIGRIS_ACCEPTANCE.md)
 - [JetClass and HLT data contract](docs/DATA_CONTRACT.md)
 - [Cross-campaign experiment contract](docs/EXPERIMENT_CONTRACT.md)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Iterator, Sequence
+from typing import Any, Iterable, Iterator, Mapping, Sequence
 
 from .contracts import require_role_access
 from .identity import ScoutingJetIdentity
@@ -53,11 +53,30 @@ def iterate_projected_chunks(
     files: Sequence[str | Path], branches: Iterable[str], *, data_root: str | Path,
     role: str, completed_locks: Sequence[str] = (), step_size: int | str = 4096,
     interleave_files: int = 1,
+    shared_final_capability: Mapping[str, Any] | None = None,
+    shared_final_claim: Mapping[str, Any] | None = None,
+    shared_final_task_registry: Mapping[str, Any] | None = None,
+    final_population_sha256: str | None = None,
+    final_task_id: str | None = None,
+    final_branch_family: str | None = None,
+    final_execution_lock_sha256: str | None = None,
+    shared_reservation_active: bool = False,
 ) -> Iterator[ScoutingChunk]:
-    require_role_access(role, branch_read=True, completed_locks=completed_locks)
     requested = tuple(sorted(set(branches)))
     if not requested:
         raise ValueError("a projected ROOT read requires at least one branch")
+    require_role_access(
+        role, branch_read=True, completed_locks=completed_locks,
+        shared_final_capability=shared_final_capability,
+        shared_final_claim=shared_final_claim,
+        shared_final_task_registry=shared_final_task_registry,
+        final_population_sha256=final_population_sha256,
+        final_task_id=final_task_id,
+        final_branch_family=final_branch_family,
+        final_execution_lock_sha256=final_execution_lock_sha256,
+        requested_branches=requested,
+        shared_reservation_active=shared_reservation_active,
+    )
     if interleave_files <= 0:
         raise ValueError("interleave_files must be positive")
     root = Path(data_root).expanduser().resolve()

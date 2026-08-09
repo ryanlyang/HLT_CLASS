@@ -1,7 +1,9 @@
 # HCWDL Matching-Free Privileged Representation-KD Ascents
 
-Status: **implementation-grade registered-ablation plan; implementation has
-not started; no live submission is authorized by this document**.
+Status: **local implementation and local verification are complete;
+installed-Weaver evidence, genuine Tigris acceptance, measured production
+resources, exact pushed source, and explicit pilot authorization remain
+pending; this document authorizes no submission or final-role access**.
 
 Short name: **HCWDL-RKD**.
 
@@ -1271,7 +1273,8 @@ generation manifest is published, create an immutable **post-build**
 actual producer commit/environment/device model and audit-only GPU UUID, every
 enforced backend flag, canonical batch count/partition hash, first/middle/last
 sentinel-batch logits/surface/sketch logical hashes, every completed output
-array logical hash, and the resulting `logical_target_sha256`. The generation
+array logical hash, measured finite target-construction seconds, and the
+resulting `logical_target_sha256`. The generation
 manifest binds both the pre-build spec and this post-build attestation. It
 cannot validate if either was used in the other's place.
 
@@ -1634,6 +1637,7 @@ HCWDL_REPRESENTATION_ASCENT_GRAPH/v1
 HCWDL_REPRESENTATION_RECIPE/v1
 HCWDL_REPRESENTATION_KERNEL_RESOURCES/v1
 HCWDL_REPRESENTATION_TAP/v1
+HCWDL_REPRESENTATION_SURFACE_PARITY/v1
 HCWDL_REPRESENTATION_TARGET_FORWARD_SPEC/v1
 HCWDL_REPRESENTATION_TARGET_EXECUTION_ATTESTATION/v1
 HCWDL_REPRESENTATION_TARGET_LOGICAL_BANK/v1
@@ -1646,29 +1650,38 @@ HCWDL_REPRESENTATION_TARGET_CLEANUP_AUTHORIZATION/v1
 HCWDL_REPRESENTATION_TARGET_CLEANUP_COMPLETION/v1
 HCWDL_REPRESENTATION_RECOVERY_PLAN/v1
 HCWDL_REPRESENTATION_GRADIENT_CALIBRATION/v1
+HCWDL_REP_GRAD_CAL/v1
 HCWDL_REPRESENTATION_GRADIENT_CALIBRATION_MANIFEST/v1
 HCWDL_REPRESENTATION_DIAGNOSTIC_BATCH/v1
 HCWDL_REPRESENTATION_NUMERICAL_ACCEPTANCE/v1
 HCWDL_REPRESENTATION_SMOKE_PROBE/v1
 HCWDL_REPRESENTATION_PAIRED_BOOTSTRAP/v1
 HCWDL_REPRESENTATION_CONTROL_REGISTRY/v1
+HCWDL_REPRESENTATION_ZERO_COEFFICIENT_ACCEPTANCE/v1
 HCWDL_REPRESENTATION_SHUFFLE_MAP/v1
 HCWDL_REPRESENTATION_RESUME_STATE/v1
 HCWDL_REPRESENTATION_TRAINING_REPORT/v1
+HCWDL_REPRESENTATION_SELECTED_TRAINING_CHECKPOINT/v1
+HCWDL_REPRESENTATION_FINAL_TRAINING_CHECKPOINT/v1
 HCWDL_REPRESENTATION_CHECKPOINT_SELECTION/v1
 HCWDL_REPRESENTATION_DEPLOYABLE_EXTRACTION/v1
 HCWDL_REPRESENTATION_SCREEN_AGGREGATE/v1
 HCWDL_REPRESENTATION_CONFIRMATION_REGISTRY/v1
 HCWDL_REPRESENTATION_CONFIRMATION_AGGREGATE/v1
+HCWDL_REPRESENTATION_CONFIRMATION_RUN/v1
+HCWDL_REPRESENTATION_VALIDATION_ONLY_AGGREGATE/v1
 HCWDL_REPRESENTATION_FINAL_DISPOSITION/v1
 HCWDL_REPRESENTATION_PARENT_FINAL_STATE/v1
 HCWDL_SHARED_IMMUTABLE_BINARY_ENVELOPE/v1
 HCWDL_SHARED_FINAL_POPULATION/v1
 HCWDL_SHARED_FINAL_POPULATION_DISJOINTNESS/v1
 HCWDL_SHARED_FINAL_EXPOSURE_LEDGER/v1
+HCWDL_SHARED_LEGACY_FINAL_EXPOSURE/v1
 HCWDL_SHARED_FINAL_POPULATION_REGISTRATION/v1
 HCWDL_SHARED_FINAL_RESERVATION/v1
 HCWDL_SHARED_FINAL_LEGACY_CANCELLATION/v1
+HCWDL_REPRESENTATION_FINAL_ASSIGNMENT_SPEC/v1
+HCWDL_REPRESENTATION_PRETRAINING_FINALIST_POLICY/v1
 HCWDL_REPRESENTATION_FINALIST_LOCK/v1
 HCWDL_SHARED_FINAL_TASK_REGISTRY/v1
 HCWDL_SHARED_FINAL_EXECUTION_CLAIM/v1
@@ -1676,6 +1689,8 @@ HCWDL_SHARED_FINAL_ROLE_CAPABILITY/v1
 HCWDL_SHARED_FINAL_RECOVERY_PLAN/v1
 HCWDL_SHARED_FINAL_ROW_SELECTION/v1
 HCWDL_SHARED_FINAL_LABEL_ESCROW/v1
+HCWDL_SHARED_FINAL_ASSIGNMENT_SHARD/v1
+HCWDL_SHARED_FINAL_BRANCH_ACCESS/v1
 HCWDL_SHARED_FINAL_ASSIGNMENT_AUDIT/v1
 HCWDL_SHARED_FINAL_DATA_ATTESTATION/v1
 HCWDL_REPRESENTATION_EXECUTION_LOCK/v1
@@ -1687,16 +1702,51 @@ HCWDL_REPRESENTATION_METRIC_JOIN/v1
 HCWDL_REPRESENTATION_FINAL_AGGREGATE/v1
 HCWDL_REPRESENTATION_CAMPAIGN_SPEC/v1
 HCWDL_REPRESENTATION_COMMAND_PLAN/v1
+HCWDL_REPRESENTATION_RUNTIME_BINDING/v1
+HCWDL_REPRESENTATION_RUNTIME_PREREQUISITES/v1
+HCWDL_REPRESENTATION_RUNTIME_DRY_RUN_AUDIT/v1
+HCWDL_REPRESENTATION_WORKER_RUNTIME_MEASUREMENT/v1
+HCWDL_REPRESENTATION_EXECUTABLE_CANDIDATE_AUDIT/v1
+HCWDL_REPRESENTATION_SUBMISSION_EVENT/v1
 HCWDL_REPRESENTATION_SUBMISSION_LEDGER/v1
 HCWDL_REPRESENTATION_RECOVERY_SUBMISSION_LEDGER/v1
 HCWDL_REPRESENTATION_MONITOR_REPORT/v1
 HCWDL_REPRESENTATION_RESOURCE_PROFILE/v1
 HCWDL_REPRESENTATION_STORAGE_ESTIMATE/v1
+HCWDL_REPRESENTATION_FIXED_SIZE_INVENTORY/v1
+HCWDL_REPRESENTATION_SCHEDULER_EVIDENCE/v1
+HCWDL_REPRESENTATION_MINIATURE_EVIDENCE/v1
+HCWDL_REPRESENTATION_TIGRIS_EVIDENCE_BUNDLE/v1
+HCWDL_REPRESENTATION_TIGRIS_ACTION_PROOF/v1
+HCWDL_REPRESENTATION_USR1_EXACT_RESUME_PROOF/v1
+HCWDL_REPRESENTATION_VALIDATION_PROXY_PROOF/v1
+HCWDL_REPRESENTATION_PRODUCTION_WORKER_SMOKE_PROOF/v1
 HCWDL_REPRESENTATION_LOCAL_SMOKE_REPORT/v1
 HCWDL_REPRESENTATION_CACHE_MINIATURE/v1
+HCWDL_REPRESENTATION_CACHE_MINIATURE_BANK/v1
 HCWDL_REPRESENTATION_TIGRIS_ACCEPTANCE/v1
 HCWDL_REPRESENTATION_SUBMISSION_AUTHORIZATION/v1
+HCWDL_REPRESENTATION_ACCEPTANCE_BOOTSTRAP/v1
 ```
+
+`HCWDL_REPRESENTATION_ACCEPTANCE_BOOTSTRAP/v1` is a deliberately bounded
+operational authority for collecting the first nonfinal acceptance evidence.
+It is not a campaign spec, executable-candidate audit, submission
+authorization, or pilot authorization. It binds the exact planning spec,
+runtime binding, clean source commit, bootstrap-worker bytes, conservative
+smoke resources, bounded role counts, and a dependency-closed prefix of
+nonfinal acceptance tasks. It cannot name a final-role route, reserve or claim
+a shared-final population, train a ladder node, register a scheduler mutation,
+or satisfy the executable-pilot gate by itself.
+
+The worker-runtime measurement contract and its embedded live-runtime and
+row-signature hash domains close the review-time/runtime boundary. An allocated
+worker measures its exact clean checkout bytes and commit, active Conda/Python
+isolation, installed-Weaver
+source bytes, package stack, device, and backend before registered scientific
+I/O. The reusable row signature excludes only the audit-only physical GPU UUID;
+target execution attestations record that freshly measured UUID. A measurement
+artifact is immutable but explicitly nonauthorizing and scheduler-neutral.
 
 Every reusable JSON artifact has a canonical content hash and explicit parent
 hashes. Binary objects record byte and logical hashes. Old PMARD representation
@@ -2970,6 +3020,20 @@ Add thin scripts with no scientific logic:
 ```text
 scripts/build_hcwdl_representation_parent_import.py
 scripts/build_hcwdl_representation_recipe.py
+scripts/audit_hcwdl_representation_parent_final_state.py
+scripts/build_hcwdl_representation_final_disposition.py
+scripts/build_hcwdl_representation_fixed_size_inventory.py
+scripts/build_hcwdl_representation_storage_estimate.py
+scripts/build_hcwdl_representation_scheduler_evidence.py
+scripts/build_hcwdl_representation_miniature_evidence.py
+scripts/build_hcwdl_representation_resource_profile.py
+scripts/build_hcwdl_representation_usr1_exact_resume_proof.py
+scripts/build_hcwdl_representation_validation_proxy_proof.py
+scripts/build_hcwdl_representation_production_worker_smoke_proof.py
+scripts/build_hcwdl_representation_tigris_action_proof.py
+scripts/build_hcwdl_representation_tigris_evidence_bundle.py
+scripts/build_hcwdl_representation_tigris_acceptance.py
+scripts/measure_hcwdl_representation_worker_runtime.py
 scripts/build_hcwdl_representation_targets.py
 scripts/train_hcwdl_representation_node.py
 scripts/select_hcwdl_representation_checkpoint.py
@@ -2984,13 +3048,21 @@ scripts/build_hcwdl_shared_final_selection.py
 scripts/build_hcwdl_shared_final_assignment_shard.py
 scripts/finalize_hcwdl_shared_final_assignments.py
 scripts/build_hcwdl_shared_final_data_attestation.py
+scripts/build_hcwdl_shared_final_legacy_cancellation.py
 scripts/build_hcwdl_representation_execution_lock.py
 scripts/predict_hcwdl_shared_final_shard.py
 scripts/finalize_hcwdl_shared_final_predictions.py
 scripts/join_hcwdl_shared_final_metrics.py
 scripts/recover_hcwdl_shared_final.py
 scripts/create_hcwdl_representation_campaign.py
+scripts/build_hcwdl_representation_runtime_binding.py
+scripts/build_hcwdl_representation_runtime_prerequisites.py
+scripts/build_hcwdl_representation_runtime_rows.py
 scripts/dry_run_hcwdl_representation_campaign.py
+scripts/audit_hcwdl_representation_executable_candidate.py
+scripts/build_hcwdl_representation_submission_authorization.py
+scripts/build_hcwdl_representation_acceptance_bootstrap.py
+scripts/run_hcwdl_representation_acceptance_bootstrap.py
 scripts/submit_hcwdl_representation_campaign.py
 scripts/run_hcwdl_representation_task.py
 scripts/monitor_hcwdl_representation_campaign.py
@@ -3012,6 +3084,44 @@ Add two thin workers:
 sbatch/run_hcwdl_representation_task.sh
 sbatch/run_hcwdl_representation_deterministic_task.sh
 ```
+
+The first nonfinal evidence prefix additionally has two isolated bootstrap
+workers:
+
+```text
+sbatch/run_hcwdl_representation_acceptance_bootstrap.sh
+sbatch/run_hcwdl_representation_acceptance_bootstrap_deterministic.sh
+```
+
+They require the exact phrase-authorized bootstrap artifact and can dispatch
+only its frozen dependency-closed scalar prefix. The bootstrap contract binds
+their bytes and the clean source commit. They cannot run arrays, ladder
+training, reservations, shared-final/final-role work, or campaign submission,
+and the bootstrap builder never mutates the scheduler. The present prefix ends
+at zero-coefficient acceptance; its full-loss smoke performs no optimizer
+step, so separate two-update/USR1 authority is still required before the
+complete Tigris acceptance bundle can exist. The bootstrap planning spec lives
+at the canonical `campaign_spec.json` of a dedicated smoke root; that root is
+never overwritten or promoted into an executable pilot root.
+
+The action-specific proof contracts make these evidence boundaries explicit,
+but do not authorize or execute the missing actions. Until separately
+authorized actions produce and validate every required proof,
+`HCWDL_REPRESENTATION_TIGRIS_ACCEPTANCE/v1` remains nonauthorizing and fails
+closed. Scheduler completion plus a caller-authored success boolean is not
+evidence of exact USR1 resume, production-worker semantics, or final-role
+isolation. Each of the seven frozen Tigris check rows binds all three of its
+scheduler evidence, miniature evidence, and action proof; no two-record row is
+accepted.
+
+Authorizing scheduler evidence is derived from immutable raw `sacct`
+allocation and step records captured by a separate Tigris Slurm collector,
+not from CLI state/RSS/elapsed arguments. Its pre-submission comment binds the
+exact source, recipe, task, resource request, worker role, and worker bytes.
+The corresponding miniature record binds the exact immutable semantic result
+into that execution lineage. Local scheduler/action fixtures remain explicitly
+nonauthorizing, and the final acceptance validator requires the raw-capture
+provenance class for all resource measurements and all seven action proofs.
 
 Both validate `PROJECT_DIR`, activate the declared Conda environment, set
 `PYTHONNOUSERSITE=1`, and prepend `${CONDA_PREFIX}/lib` to `LD_LIBRARY_PATH`.
@@ -3083,9 +3193,19 @@ campaign root:
 
 ```text
 <representation_root>/
-  campaign_spec.json
+  campaign_spec.json                  # campaign_spec_parent = "."
+  planning/
+    campaign_spec.json                # campaign_spec_parent = "planning"
   command_plan.json
+  runtime/
+    runtime_binding.json
+    runtime_prerequisites.json
+    dry_run_audit.json
+    measurements/
+      ${resource_class}.json
   submission_ledger.json
+  submission_events/
+    <sequence>_<content_hash>.json
   recovery_submission_ledgers/
     <sequence>_<content_hash>.json
   graph/
@@ -3098,24 +3218,39 @@ campaign root:
     final_disposition.json
   architecture/
     tap.json
-    installed_weaver_parity.json
+    surface_parity.json
   recipes/
     representation_recipe.json
     kernel_resources/
       staging/<envelope_id>/<envelope_owner_id>/...
       committed/<envelope_id>/
-        payload.npz
+        kernel_resources.npz
         sidecar.json
         commit.json
   resources/
     measured_profile.json
     storage_estimate.json
+    fixed_size_inventory.json
   acceptance/
     numerical.json
     smoke_probe.json
     local_smoke_report.json
     cache_miniature.json
+    cache_miniature_D100.json
+    cache_miniature_TOFF.json
     tigris_acceptance.json
+    tigris_evidence_bundle.json
+    executable_candidate_audit.json
+    evidence/
+      scheduler/<evidence_id>.json
+      miniature/<evidence_id>.json
+    proofs/
+      <evidence_kind>.json
+      usr1_exact_resume_result.json
+      final_role_validation_proxy_result.json
+      production_worker_smoke_result.json
+    bootstrap/
+      spec.json
   recovery/
     targets/<recovery_id>.json
     training/<recovery_id>.json
@@ -3135,15 +3270,15 @@ campaign root:
           shards/
             <source_partition>.npz
             <source_partition>.json
-  calibration/
-    <execution_id>/
-      diagnostic_batch.json
-      jet_set.json
-      relation.json               # RREL only
-      manifest.json
   training/
     <strategy>/<node_id>/
       <execution_id>/
+        calibration/
+          selection.json
+          diagnostic_batch.json
+          jet_set.json
+          relation.json               # RREL only
+          manifest.json
         resume/
           state_<sequence>.pt
           state_<sequence>.json
@@ -3174,7 +3309,7 @@ campaign root:
     shuffled_representation/
       staging/<envelope_id>/<envelope_owner_id>/...
       committed/<envelope_id>/
-        payload.npz
+        shuffle_map.npz
         sidecar.json
         commit.json
   confirmation/
@@ -3188,24 +3323,22 @@ campaign root:
         completion.json
   locks/
     00_submission_authorization.json
-    01_parent_import.json
-    02_miniature_accepted.json
-    03_screen_complete.json
-    04_confirmation_frozen.json
     05_finalists.json
     06_final_data_attestation.json
     07_execution.json
   reports/
     screen_aggregate.json
+    validation_only_aggregate.json
     final_aggregate.json
     paired_bootstrap/<comparison_id>/
       staging/<envelope_id>/<envelope_owner_id>/...
       committed/<envelope_id>/
-        replicates.npz
+        bootstrap_arrays.npz
         sidecar.json
         commit.json
   final/
     task_registry.json
+    pretraining_finalist_policy.json
     prediction_spec.json
     capabilities/<task_id>.json
     recovery/
@@ -3220,11 +3353,13 @@ campaign root:
           sidecar.json
           commit.json
     assignment/
+      specification.json
       shards/
         <source_partition>/
           staging/<envelope_id>/<envelope_owner_id>/...
           committed/<envelope_id>/
-            assignments.npz
+            assignment.json
+            assignment.npz
             sidecar.json
             commit.json
       manifest.json
@@ -3247,14 +3382,24 @@ campaign root:
     HEAD                              # optional operational atomic pointer
 ```
 
+The campaign-spec contract has one parameterized route template,
+`${campaign_spec_parent}/campaign_spec.json`. The closed parent vocabulary is
+`.` for the live specification (and for a dedicated bounded-bootstrap smoke
+root that is never promoted) or `planning` for the nonauthorizing reviewed
+specification. No other parent value or alias is valid.
+
+The gradient-calibration route's closed `${phase}` vocabulary is `jet_set` or
+`relation`; `selection.json`, `diagnostic_batch.json`, and `manifest.json` are
+distinct contracts and cannot be selected as phase aliases.
+
 The canonical confirmation aggregate exists only at
 `confirmation/aggregate.json`; there is no second copied artifact under
 `reports/`. Every `staging/committed` pair in this layout follows the common
 Section 21 envelope protocol. An ellipsis denotes the already-enumerated
 execution-scoped training schema, not an unregistered artifact family. Every
 contract in Section 21 therefore has one canonical root-relative publication
-path; no producer may invent a timestamped alias or a second authoritative
-copy.
+route template; no producer may invent an unregistered parameter value,
+timestamped alias, or second authoritative copy.
 
 The population-scoped shared reservation and execution claim are deliberately
 outside either campaign root:
@@ -3270,6 +3415,7 @@ outside either campaign root:
 
 <checkpoint_namespace>/final_claims/exposure_ledger/
   registrar.lock                  # operational exclusive-lock inode
+  legacy_final_exposure.json      # immutable marker for pre-shared exposure
   proposals/<registration_owner_id>/...
   generations/<sequence>_<content_hash>.json
   HEAD.json                       # atomic validated pointer, not identity
@@ -3516,7 +3662,8 @@ Require:
   ID for monitoring and exact-ID cancellation;
 - repeated monitors publish a validated immutable sequence/hash chain; an
   operational HEAD may be lost or stale without overwriting a report;
-- every Section 21 contract resolves to exactly one canonical Section 31 path,
+- every Section 21 contract resolves to exactly one canonical Section 31 route
+  template,
   including recovery plans, acceptance artifacts, storage estimate, paired
   bootstrap, and submission authorization;
 - absent final outputs may resume under the same owner/path, whereas a
@@ -3723,9 +3870,10 @@ Implementation is complete only when all of the following are true:
 18. the exact source is committed, pushed, clean, dry-run reviewed, and only
      then explicitly authorized by the user.
 
-Until item 18, the correct project status is **implemented but not authorized
-for pilot submission**. At the current document-only stage, the status remains
-**planned and not implemented**.
+Until item 18, the correct project status is **implemented locally but not
+authorized for pilot submission**. Local source and tests do not substitute
+for installed-Weaver parity, measured Tigris resources, or the genuine Tigris
+miniature.
 
 ## 36. Compact scientific summary
 

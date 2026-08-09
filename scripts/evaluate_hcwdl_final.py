@@ -22,6 +22,7 @@ def main() -> int:
     parser.add_argument("--execution-lock", type=Path, required=True)
     parser.add_argument("--data-root", type=Path, required=True)
     parser.add_argument("--output-root", type=Path, required=True)
+    parser.add_argument("--checkpoint-namespace", type=Path, required=True)
     parser.add_argument("--batch-size", type=int, default=512)
     parser.add_argument("--device", default="cuda")
     args = parser.parse_args()
@@ -31,6 +32,7 @@ def main() -> int:
         test_assignment_manifest_path=args.test_assignment_manifest,
         finalist_lock_path=args.finalist_lock, execution_lock_path=args.execution_lock,
         data_root=args.data_root, output_root=args.output_root,
+        checkpoint_namespace_path=args.checkpoint_namespace,
         device=args.device, batch_size=args.batch_size,
     )
     return 0

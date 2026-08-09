@@ -6,7 +6,9 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Final
 
-from hlt_classification.data.cache_contracts import load_json, with_content_hash, write_immutable_json
+from hlt_classification.data.cache_contracts import (
+    load_json, sha256_file, with_content_hash, write_immutable_json,
+)
 
 from .dataset import iterate_model_batches
 from .engine import evaluate_model
@@ -15,6 +17,9 @@ from .highcov_cache import DenseAssignmentStore
 from .loaders import load_pmard_model, scouting_model_factory_for_report
 from .pmard_stream import iterate_pmard_batches
 from .selective_assignment import RowSelection
+from .hcwdl_shared_final import (
+    claim_legacy_final_exposure, reject_legacy_final_after_shared_reservation,
+)
 
 
 EVALUATION_CONTRACT: Final = "HCWDL_FINAL_EVALUATION/v1"
@@ -25,8 +30,31 @@ def run_final_evaluation(
     *, split_manifest_path: str | Path, selection_manifest_path: str | Path,
     test_assignment_manifest_path: str | Path, finalist_lock_path: str | Path,
     execution_lock_path: str | Path, data_root: str | Path,
-    output_root: str | Path, device: str = "cuda", batch_size: int = 512,
+    output_root: str | Path, checkpoint_namespace_path: str | Path,
+    device: str = "cuda", batch_size: int = 512,
 ) -> dict[str, Any]:
+    # The legacy evaluator is retained only for a population that has never
+    # entered the neutral shared-final protocol.  Once any shared reservation
+    # exists, parent and representation finalists must both use the common
+    # label-free prediction/locked-join pipeline.
+    reject_legacy_final_after_shared_reservation(checkpoint_namespace_path)
+    # Serialize against the neutral registrar and publish an irreversible
+    # exposure marker before any ROOT-backed iterator can open a final-role
+    # branch.  This closes the check-then-read race for pre-shared parent
+    # campaigns while leaving their historical evaluator usable exactly once.
+    claim_legacy_final_exposure(
+        checkpoint_namespace_path,
+        execution_identity={
+            "split_manifest_sha256": sha256_file(split_manifest_path),
+            "selection_manifest_sha256": sha256_file(selection_manifest_path),
+            "test_assignment_manifest_sha256": sha256_file(
+                test_assignment_manifest_path,
+            ),
+            "finalist_lock_sha256": sha256_file(finalist_lock_path),
+            "execution_lock_sha256": sha256_file(execution_lock_path),
+            "evaluator": "HCWDL_FINAL_EVALUATION/v1",
+        },
+    )
     split = load_json(split_manifest_path); selection_raw = load_json(selection_manifest_path)
     finalist = load_json(finalist_lock_path); execution = load_json(execution_lock_path)
     finalist_hash = validate_lock(finalist, expected_level="finalist")

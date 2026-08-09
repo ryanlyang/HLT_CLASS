@@ -166,6 +166,29 @@ Shell Exact/Soft/HC Exact integration is repository-local work in
 `scouting/repair.py`; no donor `repair.py` runtime was copied. The port adds no
 new third-party dependency or license obligation.
 
+## HCWDL-RKD representation campaign provenance
+
+No external source file was copied for the HCWDL matching-free
+representation-KD implementation. Its kernels, loss/calibration code, model
+surface adapters, target lifecycle, training/resume engine, reporting,
+shared-final protections, campaign/runtime adapters, CLIs, workers, and tests
+are repository-local implementations of
+`docs/plans/HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md`.
+
+The local concept note `Three lenses on the HLT-offline gap.pdf` motivated
+the research question, but it is neither donor source nor a runtime resource.
+The implementation deliberately corrected the concept boundary by using
+student-dependent latent relations and fixed finite spectral kernels; no PDF
+content, code, artifact, or absolute path is loaded at runtime.
+
+HCWDL-RKD reuses the already-recorded high-coverage matcher port only through
+the authenticated parent Shell-Exact teacher views. It did not copy another
+matcher file, resource, checkpoint, dataset, log, or result. The exact donor
+inventory and commit `64be1a82f11f42949fdffa639a869ccea2528bfa` therefore
+remain the HCWDL high-coverage table above; there is no additional RKD donor
+commit to record. The additive RKD work introduces no new third-party source
+or license obligation.
+
 ## Approved transfer surfaces
 
 | Transfer block | Donor surface | Intended retained meaning | Migration policy |

@@ -51,10 +51,14 @@ def _slice(arrays: Mapping[str, object], indexes: np.ndarray) -> dict[str, objec
 
 
 def _slice_view(view: ParticleInputs, start: int, stop: int) -> ParticleInputs:
-    return ParticleInputs(
+    values = [
         view.features[start:stop], view.vectors[start:stop],
         view.mask[start:stop], view.raw_lengths[start:stop],
-    )
+    ]
+    for name in ("visible_indices", "family_codes", "family_reason_codes"):
+        if hasattr(view, name):
+            values.append(getattr(view, name)[start:stop])
+    return type(view)(*values)
 
 
 def iterate_pmard_batches(
@@ -76,6 +80,8 @@ def iterate_pmard_batches(
     endpoint_audit_collector: list[dict[str, object]] | None = None,
     shuffle_buffer_rows: int = TRAIN_SHUFFLE_BUFFER_ROWS,
     interleave_source_files: int = TRAIN_INTERLEAVE_FILES,
+    include_hcwdl_metadata: bool = False,
+    canonical_order: bool = False,
 ) -> Iterator[dict[str, object]]:
     repair_family = runtime_repair_family(repair_family)
     if batch_size <= 0:
@@ -86,6 +92,13 @@ def iterate_pmard_batches(
         raise ValueError("PMARD max_rows policy differs")
     if shuffle_buffer_rows < batch_size:
         raise ValueError("shuffle_buffer_rows must be at least batch_size")
+    if canonical_order and (
+        interleave_source_files != 1 or shuffle_buffer_rows != batch_size
+    ):
+        raise ValueError(
+            "canonical PMARD batches require one-file interleave and a one-batch "
+            "drain buffer"
+        )
     categories = frozenset(int(value) for value in eligible_categories)
     if not categories or not categories <= frozenset(range(5)):
         raise ValueError("eligible matcher categories differ from the five-category contract")
@@ -99,8 +112,10 @@ def iterate_pmard_batches(
         raise PermissionError("full endpoint repair requires all five particle categories")
     records = list(role_records(split_manifest, role))
     rng = np.random.default_rng(np.random.SeedSequence([sampler_seed, epoch]))
-    if role == "train": rng.shuffle(records)
+    if role == "train" and not canonical_order: rng.shuffle(records)
     assigned = partition_files(records, rank=rank, world_size=world_size, worker_id=worker_id, num_workers=num_workers)
+    if canonical_order and len(assigned) != 1:
+        raise ValueError("canonical PMARD batching requires a one-source manifest")
     branches = set(BASELINE_BRANCHES) | set(LABEL_BRANCHES) | set(hlt_required_branches()) | set(matching_required_branches())
     if repair_family in full_endpoint_families:
         branches |= set(full_endpoint_required_branches())
@@ -112,6 +127,7 @@ def iterate_pmard_batches(
         class_targets = np.full(15, max_rows // 15, np.int64)
         class_targets[:max_rows % 15] += 1
     pending: dict[str, object] | None = None
+    prior_canonical_entry: int | None = None
     for chunk in iterate_projected_chunks(
         files, branches, data_root=data_root, role=role,
         completed_locks=completed_locks, step_size=step_size,
@@ -130,7 +146,8 @@ def iterate_pmard_batches(
             indexes = indexes[row_selection.mask(chunk.source_path, absolute)]
             if not len(indexes):
                 continue
-        if role == "train": indexes = indexes[rng.permutation(len(indexes))]
+        if role == "train" and not canonical_order:
+            indexes = indexes[rng.permutation(len(indexes))]
         if max_rows is not None and max_rows_policy == "stream_prefix":
             indexes = indexes[:max(0, max_rows - selected_rows)]
             if not len(indexes):
@@ -144,6 +161,17 @@ def iterate_pmard_batches(
             indexes = np.asarray(retained, np.int64)
             if not len(indexes): continue
         arrays = _slice(chunk.arrays, indexes)
+        if canonical_order:
+            absolute_entries = chunk.entry_start + indexes
+            if (
+                np.any(absolute_entries[1:] <= absolute_entries[:-1])
+                or (
+                    prior_canonical_entry is not None
+                    and int(absolute_entries[0]) <= prior_canonical_entry
+                )
+            ):
+                raise ValueError("canonical PMARD source entries reorder or overlap")
+            prior_canonical_entry = int(absolute_entries[-1])
         keys = np.asarray([
             f"{chunk.source_path}::tree::{chunk.entry_start + int(index)}" for index in indexes
         ])
@@ -234,7 +262,16 @@ def iterate_pmard_batches(
             offline_p4.append(offline.p4.astype(np.float32, copy=False))
         if assignment_collector is not None:
             assignment_collector.append((keys.copy(), assignment.copy()))
-        hlt_view = build_hlt_inputs(arrays)
+        if include_hcwdl_metadata:
+            from .hcwdl_representation_data import (
+                HCWDLTokenMetadata,
+                attach_hcwdl_token_metadata,
+                build_hcwdl_hlt_inputs,
+            )
+
+            hlt_view = build_hcwdl_hlt_inputs(arrays)
+        else:
+            hlt_view = build_hlt_inputs(arrays)
         privileged_view = build_alpha_repaired_inputs(
             arrays, offline_p4, assignment, alpha=alpha, repair_family=repair_family,
             confidence_weights=confidence if repair_family in {
@@ -245,6 +282,15 @@ def iterate_pmard_batches(
             identity_keys=keys if repair_family in full_endpoint_families else None,
             discrete_seed=repair_seed,
         )
+        if include_hcwdl_metadata:
+            privileged_view = attach_hcwdl_token_metadata(
+                privileged_view,
+                HCWDLTokenMetadata(
+                    hlt_view.visible_indices,
+                    hlt_view.family_codes,
+                    hlt_view.family_reason_codes,
+                ),
+            )
         if endpoint_audit_collector is not None:
             if repair_family != "HIGHCOV_SHELL_EXACT" or alpha != 1.0:
                 raise ValueError("endpoint audit is defined only for Shell Exact D100")
@@ -287,7 +333,7 @@ def iterate_pmard_batches(
         pending = chunk_batch if pending is None else _concat_batches((pending, chunk_batch))
         drain_at = shuffle_buffer_rows if role == "train" else batch_size
         if len(pending["labels"]) >= drain_at:
-            if role == "train":
+            if role == "train" and not canonical_order:
                 pending = _take_batch(pending, rng.permutation(len(pending["labels"])))
             while len(pending["labels"]) >= batch_size and (
                 role != "train" or len(pending["labels"]) - batch_size >= batch_size
@@ -297,7 +343,7 @@ def iterate_pmard_batches(
         if max_rows is not None and selected_rows >= max_rows:
             break
     if pending is not None and len(pending["labels"]):
-        if role == "train":
+        if role == "train" and not canonical_order:
             pending = _take_batch(pending, rng.permutation(len(pending["labels"])))
         while len(pending["labels"]) > batch_size:
             yield _slice_batch(pending, 0, batch_size)

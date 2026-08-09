@@ -48,47 +48,75 @@ selection/performance metrics remain mandatory, and every exploratory test
 evaluation computes the full current metric set. This attempt also stopped
 before publishing a specification or reading the test role.
 
-## HCWDL matching-free representation-KD plan (2026-08-08)
+## HCWDL matching-free representation-KD local closure (2026-08-09)
 
-The new implementation-grade registered-ablation plan is
+The implementation-grade plan remains
 [`docs/plans/HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md`](plans/HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md).
-It adds four planned full M1--M6 ascents without changing the implemented
-logit-only `HCWDL_GRAPH/v1` or `HCWDL_RECIPE/v3`: paired jet plus unordered
-token-set KD (`RSET`) under cold and warm initialization, and the same package
-plus differentiable latent-relation KD (`RREL`) under cold and warm
-initialization. The existing logit cold/warm ascents remain the primary
-controls.
+The isolated local worktree now contains the complete versioned RKD
+implementation for the four
+registered M1--M6 ascents: paired jet plus unordered token-set KD (`RSET`) and
+the same package plus differentiable latent-relation KD (`RREL`), each under
+cold and warm initialization. The immutable graph contains exactly 24 primary
+nodes plus the four jet-only/no-relation/within-class-shuffle controls and a
+separate zero-coefficient acceptance barrier; the existing logit cold/warm
+ascents remain the primary controls.
 
-The plan freezes 24 new node identities, exact privileged teachers, separate
-native-offline charged/neutral representation spaces, fixed RFF set/relation
-sketches, train-only gradient calibration, a `rho_repr=0.10` auxiliary budget,
-pass-based ramps, 60 passes with validation every pass, macro-AUC-first
-selection, paired stochastic streams, one-time compact target construction,
-generation-aware just-in-time target cleanup/recovery, zero-coefficient,
-jet-only, no-relation, and shuffled-pair controls, and a population-scoped
-combined final-test reservation honored by both evaluator families. It includes the
-proposed source/module map, CLI and Slurm boundaries, artifact layout,
-contracts, failure semantics, complete test matrix, implementation blocks, and
-definition of done.
+Reusable code now covers the corrected opt-in parent loss and attestation,
+single-forward HLT/TOFF model surfaces and architecture taps, fixed
+set/relation kernels, train-only gradient calibration, compact target
+generations and cleanup/recovery, sequence-exact training resume,
+macro-AUC-first checkpoint selection, reports, shared-final registration, and
+fail-closed final disposition/reservation/claim handling. Campaign/runtime
+surfaces include fixed artifact routes, non-submitting dry-run/local-smoke
+paths, ordinary and deterministic Slurm workers, recovery, monitoring, and
+exact campaign-bound cancellation. Thin pre-campaign CLIs audit immutable
+parent-final evidence, freeze the fail-closed disposition, and publish proof
+that every reserved legacy job is terminal; they never perform broad scheduler
+cancellation.
 
-The planning audit found a pre-existing parent-loss mismatch that is now an
-explicit implementation blocker: the active HCWDL plan requires class-weighted
-CE and unweighted KD row means, while the current shared `pmard_loss` runtime
-class-weights CE and both KD terms. HCWDL-RKD requires a versioned
-parent-loss attestation, runtime correction, and consistent parent artifacts;
-affected reports cannot be relabeled as paired. The plan also requires a new
-architecture attestation because current parent artifacts do not publish the
-needed model/tap architecture hash.
+The exact requirement-to-code map and pending acceptance boundaries are in
+[`docs/plans/HCWDL_RKD_IMPLEMENTATION_TRACEABILITY.md`](plans/HCWDL_RKD_IMPLEMENTATION_TRACEABILITY.md),
+and safe local/Tigris operating steps are in
+[`docs/HCWDL_RKD_RUNBOOK.md`](HCWDL_RKD_RUNBOOK.md). The final local evidence
+is:
 
-This is documentation only. No representation-ascent contract, model tap,
-target bank, training node, worker, smoke, or submission was implemented or
-authorized in this step. Before editing, the focused existing HCWDL/PMARD
-training suite passed 40/40 under the local `tagging-hlt` environment with
-`PYTHONPATH=src`. After the final plan audit, the four focused HCWDL suites
-passed 58/58 in the same environment; Markdown targets and `git diff --check`
-also passed aside from line-ending notices. The separately authorized
-primary-HCWDL Tigris-validation work remains independent; this new plan does
-not submit, cancel, or alter it.
+- the repository suite passes **656 tests**, with two Windows-only POSIX-shell
+  checks skipped and 14 pre-existing Matplotlib/PyParsing deprecation warnings;
+- the bounded local smoke covers all **86 tasks / 152 array-expanded rows**,
+  all **24 primary nodes plus four controls**, reports finite losses and active
+  gradients, performs no optimizer or scheduler step, and records
+  `final_role_accessed=false` and `authorizes_tigris_or_pilot=false`;
+- the smoke report content hash is
+  `0ed46019c7c62d9e997ea843051cfb85e1d6cb824b80e0e072445698dac69f67`
+  and its scientific probe hash is
+  `966491893d4b7456dd39d72a29e5bcdf03cde71fdd60a424826a5ce3990ecbba`;
+- the exact adapter-bound, non-submitting command plan covers the same
+  **86 tasks / 152 rows**. Its command-plan hash is
+  `86728de85232c914de92eac751146908025077628c3cee7a3406a67482ed05ea`,
+  runtime-binding hash is
+  `1696ca5e2ea38c5929061b1757011c427a3218486ac27ad762cf71fcae9df7ec`,
+  and dry-run audit hash is
+  `38d5f1851a887c6d9354f2580931d4f7440e0cc18c74e9c1b865804638fe608c`;
+- the dry-run audit records every registered adapter schema as validated and
+  `scheduler_mutated=false`; the retained local artifacts are under the ignored
+  `checkpoints/hcwdl_rkd_local_verification/closure_20260809/` directory;
+- all 389 Python files in `src`, `scripts`, and `tests` parse successfully;
+  `git diff --check` and the separate untracked-file trailing-whitespace scan
+  are clean; and runtime scans found no `Fresh_check`, `TODO`, `FIXME`,
+  `NotImplementedError`, or executable `pass` path.
+
+The local smoke uses bounded authenticated fixtures and a nonauthorizing
+synthetic sealed-final pipeline; it is local behavior and failure-topology
+evidence, not a substitute for installed-Weaver, ROOT, GPU, Slurm, or Tigris
+evidence. The exact production adapters and every registered input/output row
+are separately instantiated and validated by the complete dry run.
+
+No remote mutation, Tigris submission, pilot launch, cancellation, or final
+population access was performed by this implementation step. Authoritative
+installed-Weaver parity and a genuine Tigris worker/cache/USR1 miniature with
+measured resources, exact pushed clean source, and explicit pilot
+authorization remain required. Local synthetic doubles and adapters are not
+evidence for those production gates.
 
 ## Preliminary PMARD pilot evidence (2026-08-07)
 
@@ -934,6 +962,24 @@ exact bound where the former second quota could not.
 Focused cache/stream/HCWDL tests pass 47/47 and the repository-wide suite
 passes 302 with the same 14 warnings. The fix still requires a clean pushed
 commit and a fresh smoke identity.
+
+## HCWDL-RKD contract/layout normalization (2026-08-09)
+
+The matching-free representation-KD implementation now has one central
+97-contract registry that exactly matches active-plan Section 21 and 97 unique
+canonical route templates. Gradient-calibration selection, runtime binding,
+submission events, legacy final exposure, and the four action-specific Tigris
+proof families no longer borrow an unrelated artifact identity. Section 31 now
+uses the implemented kernel, shuffle, bootstrap, checkpoint, and assignment
+member names, and documents execution-scoped calibration routes. The runbook
+uses a portable Python selector and includes the measured fixed-size inventory
+and storage-estimate producers. Local focused evidence is 5 contract/layout,
+5 calibration, 13 campaign, 4 campaign-artifact, 8 runtime-provenance,
+18 shared-final, 8 acceptance-evidence, 2 action-proof, and 57 CLI tests passed;
+two POSIX-only CLI checks
+were skipped on Windows. This is local structural evidence only: installed-
+Weaver and genuine Tigris acceptance, measured resources, clean pushed source,
+and submission authorization remain pending.
 
 ## Exact active next task: separately authorized HCWDL Tigris validation
 

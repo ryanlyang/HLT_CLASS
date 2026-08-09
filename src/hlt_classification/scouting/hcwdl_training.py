@@ -10,10 +10,21 @@ from typing import Any
 
 import numpy as np
 
-from hlt_classification.data.cache_contracts import require_sha256, sha256_file, with_content_hash, write_immutable_json
+from hlt_classification.data.cache_contracts import (
+    canonical_sha256,
+    require_sha256,
+    sha256_file,
+    validate_content_hash,
+    with_content_hash,
+    write_immutable_json,
+)
 
 from .engine import PmardTrainingConfig, train_pmard
 from .hcwdl_ladder import DOMAINS, GRAPH_SHA256, NODE_REGISTRY, NodeSpec
+from .hcwdl_parent_loss import (
+    HCWDL_PARENT_BASE_LOSS_CONTRACT,
+    HCWDL_PARENT_LOSS_SEMANTICS,
+)
 from .hcwdl_recipe import validate_recipe
 from .targets import EphemeralTeacherTargets
 from .training import LossConfiguration, derive_seed
@@ -21,6 +32,32 @@ from .training import LossConfiguration, derive_seed
 
 TRAINING_REPORT_CONTRACT = "HCWDL_TRAINING_REPORT/v1"
 CHECKPOINT_SELECTION_CONTRACT = "HCWDL_CHECKPOINT_SELECTION/v1"
+
+
+def _loss_semantics_payload() -> dict[str, Any]:
+    semantics = dict(HCWDL_PARENT_LOSS_SEMANTICS)
+    return {
+        "loss_semantics_contract": HCWDL_PARENT_BASE_LOSS_CONTRACT,
+        "loss_semantics": semantics,
+        "loss_semantics_sha256": canonical_sha256(semantics),
+    }
+
+
+def validate_hcwdl_training_report(value: Mapping[str, Any]) -> str:
+    """Validate a corrected parent rerun without reinterpreting old reports."""
+
+    digest = validate_content_hash(
+        value, expected_contract=TRAINING_REPORT_CONTRACT,
+        expected_schema_version=1,
+    )
+    expected = _loss_semantics_payload()
+    if any(value.get(name) != item for name, item in expected.items()):
+        raise ValueError("HCWDL training report loss semantics differ")
+    require_sha256(
+        value.get("pmard_execution_config_sha256"),
+        name="PMARD execution-config SHA-256",
+    )
+    return digest
 
 
 def checkpoint_selection_key(metrics: Mapping[str, object], update: int) -> tuple[object, ...]:
@@ -212,6 +249,7 @@ def train_hcwdl_node(
         "validation_every_passes": 1 if not smoke else None,
         "smoke_updates": 2 if smoke else None,
         "performance_early_stopping": False,
+        **_loss_semantics_payload(),
     }
     validated_parents = {name: require_sha256(value, name=f"HCWDL parent {name}") for name, value in parents.items()}
     validated_parents["recipe"] = recipe_sha256
@@ -223,6 +261,7 @@ def train_hcwdl_node(
         parents=validated_parents, device=device,
         hlt_teacher_targets=hlt_teacher_targets,
         privileged_teacher_targets=privileged_teacher_targets,
+        loss_semantics_contract=HCWDL_PARENT_BASE_LOSS_CONTRACT,
         resume=resume, stop_after_update=stop_after_update,
     )
     expected_checks = 1 if smoke else 60
@@ -241,11 +280,14 @@ def train_hcwdl_node(
         "recipe_sha256": recipe_sha256,
         "parents": validated_parents,
         "pmard_engine_report_sha256": report["content_hash"],
+        "pmard_execution_config_sha256": report["execution_config_sha256"],
         "selected_checkpoint_sha256": report["selected_checkpoint_sha256"],
         "final_checkpoint_sha256": report["final_checkpoint_sha256"],
         "selection": selection,
         "complete": True,
+        **_loss_semantics_payload(),
     })
+    validate_hcwdl_training_report(output)
     write_immutable_json(Path(output_dir) / "hcwdl_training_report.json", output)
     return output
 
@@ -253,5 +295,5 @@ def train_hcwdl_node(
 __all__ = [
     "CHECKPOINT_SELECTION_CONTRACT", "TRAINING_REPORT_CONTRACT",
     "checkpoint_selection_key", "initialize_node_model", "node_training_config",
-    "select_checkpoint", "train_hcwdl_node",
+    "select_checkpoint", "train_hcwdl_node", "validate_hcwdl_training_report",
 ]
