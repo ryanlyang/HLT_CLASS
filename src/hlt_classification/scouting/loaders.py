@@ -34,6 +34,10 @@ def load_pmard_model(report_path: str | Path, *, model_factory: Callable[[], obj
     if payload.get("model_runtime") is not None:
         from hlt_classification.training.checkpoints import restore_model_runtime_state
         restore_model_runtime_state(model, payload["model_runtime"])
+    # map_location controls checkpoint tensor deserialization; it does not move
+    # the newly constructed module.  Every caller receives a model on the
+    # explicitly requested execution device.
+    model.to(device)
     return model, report
 
 

@@ -1,5 +1,27 @@
 # Current Handoff
 
+## HCWDL interrupted sealed-final repair (2026-08-10)
+
+The 300k unweighted pilot's sealed evaluation failed after its one-time claim
+because `load_pmard_model()` restored checkpoint storage onto CUDA but left the
+newly constructed ParT module on CPU. The loader now explicitly moves the
+restored module to the requested device.
+
+The repair does not reset or bypass the final-test seal. Exact-claim validation
+and recovery were added alongside `HCWDL_FINAL_EVALUATION_MANIFEST/v2`, which
+validates and reuses completed per-finalist reports and evaluates only missing
+ones after an interruption. A separate source-pinned
+`HCWDL_FINAL_RECOVERY_SPEC/v1` registers only sealed evaluation and aggregation,
+binds the original failed job through an immutable monitor report, and forbids
+new selection. The contract and operator procedure are in
+`docs/contracts/HCWDL_FINAL_EVALUATION_RECOVERY.md` and
+`docs/HCWDL_FINAL_RECOVERY_RUNBOOK.md`.
+
+Focused final-recovery, HCWDL-contract, and CLI validation passes 65/65. The
+complete repository suite passes 337/337 with the same 14
+Matplotlib/Pyparsing warnings; Python compilation and `git diff --check` pass.
+The real Tigris recovery remains to be run from the exact pushed repair commit.
+
 ## HCWDL five-point dense cold 300k supplement (2026-08-09)
 
 The dense cold implementation now also registers an isolated five-point

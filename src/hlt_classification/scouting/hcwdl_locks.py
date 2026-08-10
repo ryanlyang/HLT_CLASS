@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Final
 
 from hlt_classification.data.cache_contracts import (
-    atomic_publish_bytes, canonical_json_bytes, require_sha256,
+    atomic_publish_bytes, canonical_json_bytes, load_json, require_sha256,
     validate_content_hash, with_content_hash,
 )
 
@@ -230,9 +230,58 @@ def claim_final_execution(
     return claim
 
 
+def validate_final_execution_claim(
+    value: Mapping[str, Any], *, execution_lock: Mapping[str, Any],
+    test_assignment_manifest_sha256: str,
+) -> str:
+    digest = validate_content_hash(
+        value, expected_contract=EXECUTION_CLAIM_CONTRACT,
+        expected_schema_version=1,
+    )
+    expected = {
+        "execution_lock_sha256": validate_lock(
+            execution_lock, expected_level="execution",
+        ),
+        "test_assignment_manifest_sha256": require_sha256(
+            test_assignment_manifest_sha256,
+            name="test assignment manifest SHA-256",
+        ),
+        "state": "claimed_once",
+    }
+    if any(value.get(name) != item for name, item in expected.items()):
+        raise PermissionError("HCWDL final-test execution claim lineage differs")
+    return digest
+
+
+def recover_or_claim_final_execution(
+    path: str | Path, *, execution_lock: Mapping[str, Any],
+    test_assignment_manifest_sha256: str,
+) -> tuple[dict[str, Any], str]:
+    """Create the one-time claim, or authenticate the exact prior claim.
+
+    Reuse authorizes only an interrupted execution of the already frozen
+    finalist registry.  A different lock or test assignment always fails.
+    """
+
+    destination = Path(path)
+    if destination.exists():
+        claim = load_json(destination)
+        validate_final_execution_claim(
+            claim, execution_lock=execution_lock,
+            test_assignment_manifest_sha256=test_assignment_manifest_sha256,
+        )
+        return claim, "reused_existing_exact_claim"
+    claim = claim_final_execution(
+        destination, execution_lock=execution_lock,
+        test_assignment_manifest_sha256=test_assignment_manifest_sha256,
+    )
+    return claim, "created_new_claim"
+
+
 __all__ = [
     "EXECUTION_CLAIM_CONTRACT", "LOCK_CONTRACT", "LOCK_ORDER",
     "claim_final_execution", "create_assignment_lock", "create_confirmation_registry_lock",
     "create_execution_lock", "create_finalist_lock", "create_lock", "create_recipe_lock",
-    "create_shell_endpoint_qualification_lock", "validate_lock",
+    "create_shell_endpoint_qualification_lock", "recover_or_claim_final_execution",
+    "validate_final_execution_claim", "validate_lock",
 ]

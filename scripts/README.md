@@ -238,3 +238,11 @@ separate 22-model `TOFF -> D100offkd -> D95 -> ... -> D5 -> D0 -> M1`
 screen. That graph uses distinct `HCWDL_DENSE5_*` contracts, authorization
 phrases, `hcddp5_*` job names, output root, and aggregate. See
 `docs/HCWDL_DENSE5_COLD_RUNBOOK.md`.
+
+An interrupted sealed final evaluation is recovered only through
+`create_hcwdl_final_recovery.py`, `submit_hcwdl_final_recovery.py`, and
+`run_hcwdl_final_recovery_task.py`. That two-job supplement reuses the exact
+existing execution claim and frozen finalist registry, validates and preserves
+any already-published finalist reports, evaluates only missing reports, and
+then reruns aggregation. It never performs a new finalist selection. See
+`docs/HCWDL_FINAL_RECOVERY_RUNBOOK.md`.

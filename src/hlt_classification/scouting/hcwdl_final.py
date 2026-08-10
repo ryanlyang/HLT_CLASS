@@ -7,10 +7,11 @@ from pathlib import Path
 from typing import Any, Final
 
 from hlt_classification.data.cache_contracts import load_json, with_content_hash, write_immutable_json
+from hlt_classification.data.cache_contracts import validate_content_hash
 
 from .dataset import iterate_model_batches
 from .engine import evaluate_model
-from .hcwdl_locks import claim_final_execution, validate_lock
+from .hcwdl_locks import recover_or_claim_final_execution, validate_lock
 from .highcov_cache import DenseAssignmentStore
 from .loaders import load_pmard_model, scouting_model_factory_for_report
 from .pmard_stream import iterate_pmard_batches
@@ -18,7 +19,67 @@ from .selective_assignment import RowSelection
 
 
 EVALUATION_CONTRACT: Final = "HCWDL_FINAL_EVALUATION/v1"
-EVALUATION_MANIFEST_CONTRACT: Final = "HCWDL_FINAL_EVALUATION_MANIFEST/v1"
+PREVIOUS_EVALUATION_MANIFEST_CONTRACT: Final = "HCWDL_FINAL_EVALUATION_MANIFEST/v1"
+EVALUATION_MANIFEST_CONTRACT: Final = "HCWDL_FINAL_EVALUATION_MANIFEST/v2"
+
+
+def _validate_evaluation_report(
+    value: Mapping[str, Any], *, finalist_hash: str, execution_hash: str,
+    assignment_hash: str, row: Mapping[str, Any], node: str, domain: str,
+) -> str:
+    digest = validate_content_hash(
+        value, expected_contract=EVALUATION_CONTRACT, expected_schema_version=1,
+    )
+    expected = {
+        "finalist_lock_sha256": finalist_hash,
+        "execution_lock_sha256": execution_hash,
+        "test_assignment_manifest_sha256": assignment_hash,
+        "node_id": node,
+        "seed": int(row["seed"]),
+        "domain": domain,
+        "training_report_sha256": row["report_sha256"],
+        "checkpoint_sha256": row["checkpoint_sha256"],
+        "selection_performed": False,
+    }
+    if any(value.get(name) != item for name, item in expected.items()):
+        raise PermissionError("HCWDL final evaluation report lineage differs")
+    metrics = value.get("metrics")
+    required = {
+        "cross_entropy", "accuracy", "macro_ovr_auc",
+        "macro_mean_log_qcd_rejection_at_50pct_signal",
+        "top_label_ece_15_bin",
+    }
+    if not isinstance(metrics, Mapping) or not required <= set(metrics):
+        raise ValueError("HCWDL final evaluation metrics are incomplete")
+    return digest
+
+
+def _validate_evaluation_manifest(
+    value: Mapping[str, Any], *, finalist_hash: str, execution_hash: str,
+    assignment_hash: str, claim_hash: str,
+    expected_reports: list[dict[str, object]],
+) -> str:
+    digest = validate_content_hash(
+        value, expected_contract=EVALUATION_MANIFEST_CONTRACT,
+        expected_schema_version=2,
+    )
+    expected = {
+        "finalist_lock_sha256": finalist_hash,
+        "execution_lock_sha256": execution_hash,
+        "test_assignment_manifest_sha256": assignment_hash,
+        "execution_claim_sha256": claim_hash,
+        "reports": expected_reports,
+        "evaluated_exact_frozen_registry": True,
+        "test_used_for_selection": False,
+        "interrupted_execution_recovery_supported": True,
+    }
+    if any(value.get(name) != item for name, item in expected.items()):
+        raise PermissionError("HCWDL final evaluation manifest lineage differs")
+    if value.get("claim_disposition") not in {
+        "created_new_claim", "reused_existing_exact_claim",
+    }:
+        raise ValueError("HCWDL final evaluation claim disposition differs")
+    return digest
 
 
 def run_final_evaluation(
@@ -38,10 +99,11 @@ def run_final_evaluation(
         selection_raw, role="final_test", split_manifest_sha256=split["content_hash"],
     )
     root = Path(output_root)
-    claim_final_execution(
+    claim, claim_disposition = recover_or_claim_final_execution(
         root / "execution_claim.json", execution_lock=execution,
         test_assignment_manifest_sha256=assignment.manifest["content_hash"],
     )
+    claim_hash = claim["content_hash"]
 
     def batches(domain: str):
         if domain in {"hlt", "toff"}:
@@ -65,12 +127,26 @@ def run_final_evaluation(
         raw = load_json(training_path)
         if raw["content_hash"] != row["report_sha256"] or raw["selected_checkpoint_sha256"] != row["checkpoint_sha256"]:
             raise ValueError("HCWDL finalist training lineage differs")
-        model, training = load_pmard_model(
-            training_path, model_factory=scouting_model_factory_for_report(raw), device=device,
-        )
         node = str(row["node_id"])
         domain = "toff" if node == "TOFF" else "d100" if node == "D100" else "hlt"
         input_key = "toff" if domain == "toff" else "privileged" if domain == "d100" else "hlt"
+        output = root / f"{index:03d}_{node}_seed{row['seed']}.json"
+        if output.exists():
+            report = load_json(output)
+            _validate_evaluation_report(
+                report, finalist_hash=finalist_hash,
+                execution_hash=execution_hash,
+                assignment_hash=assignment.manifest["content_hash"],
+                row=row, node=node, domain=domain,
+            )
+            reports.append({
+                "path": str(output), "content_hash": report["content_hash"],
+                "node_id": node, "seed": row["seed"],
+            })
+            continue
+        model, training = load_pmard_model(
+            training_path, model_factory=scouting_model_factory_for_report(raw), device=device,
+        )
         metrics = evaluate_model(model, batches(domain), device=device, input_key=input_key)
         report = with_content_hash({
             "contract": EVALUATION_CONTRACT, "schema_version": 1,
@@ -81,17 +157,33 @@ def run_final_evaluation(
             "checkpoint_sha256": row["checkpoint_sha256"], "metrics": metrics,
             "selection_performed": False,
         })
-        output = root / f"{index:03d}_{node}_seed{row['seed']}.json"
         write_immutable_json(output, report)
         reports.append({"path": str(output), "content_hash": report["content_hash"], "node_id": node, "seed": row["seed"]})
     manifest = with_content_hash({
-        "contract": EVALUATION_MANIFEST_CONTRACT, "schema_version": 1,
+        "contract": EVALUATION_MANIFEST_CONTRACT, "schema_version": 2,
         "finalist_lock_sha256": finalist_hash, "execution_lock_sha256": execution_hash,
+        "test_assignment_manifest_sha256": assignment.manifest["content_hash"],
+        "execution_claim_sha256": claim_hash,
+        "claim_disposition": claim_disposition,
         "reports": reports, "evaluated_exact_frozen_registry": True,
         "test_used_for_selection": False,
+        "interrupted_execution_recovery_supported": True,
     })
-    write_immutable_json(root / "evaluation_manifest.json", manifest)
+    manifest_path = root / "evaluation_manifest.json"
+    if manifest_path.exists():
+        existing = load_json(manifest_path)
+        _validate_evaluation_manifest(
+            existing, finalist_hash=finalist_hash,
+            execution_hash=execution_hash,
+            assignment_hash=assignment.manifest["content_hash"],
+            claim_hash=claim_hash, expected_reports=reports,
+        )
+        return existing
+    write_immutable_json(manifest_path, manifest)
     return manifest
 
 
-__all__ = ["EVALUATION_CONTRACT", "EVALUATION_MANIFEST_CONTRACT", "run_final_evaluation"]
+__all__ = [
+    "EVALUATION_CONTRACT", "EVALUATION_MANIFEST_CONTRACT",
+    "PREVIOUS_EVALUATION_MANIFEST_CONTRACT", "run_final_evaluation",
+]
