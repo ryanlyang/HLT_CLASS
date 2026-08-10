@@ -585,6 +585,72 @@ def test_screen_workflow_reads_engine_and_hcwdl_node_reports(tmp_path: Path):
     assert len(aggregate["rows"]) == len(NODE_REGISTRY)
 
 
+def test_primary_workflow_reuses_an_authenticated_completed_node(tmp_path: Path):
+    workflow = object.__new__(HcwdlWorkflow)
+    workflow.root = tmp_path
+    workflow.repository = tmp_path
+    workflow.spec = {
+        "tasks": [{"task_id": "train_M0"}],
+        "split_manifest_sha256": G,
+        "source_manifest_sha256": H,
+        "recipe_sha256": H,
+    }
+    workflow.locks = {
+        "assignment": tmp_path / "locks/assignment.json",
+        "shell_endpoint_qualification": tmp_path / "locks/qualification.json",
+    }
+    for path in workflow.locks.values():
+        write_immutable_json(path, with_content_hash({
+            "contract": "fixture", "schema_version": 1,
+        }))
+
+    output = tmp_path / "training/M0"
+    selected = output / "selected_model.pt"
+    final = output / "final_model.pt"
+    selected.parent.mkdir(parents=True)
+    selected.write_bytes(b"selected")
+    final.write_bytes(b"final")
+    parents = {
+        "split_manifest_sha256": G,
+        "source_snapshot_sha256": H,
+        "assignment_lock_sha256": json.loads(
+            workflow.locks["assignment"].read_text()
+        )["content_hash"],
+        "qualification_lock_sha256": json.loads(
+            workflow.locks["shell_endpoint_qualification"].read_text()
+        )["content_hash"],
+        "recipe": H,
+    }
+    engine = with_content_hash({
+        "contract": PMARD_TRAINING_REPORT_CONTRACT, "schema_version": 6,
+        "complete": True,
+        "scientific_config": {
+            "campaign": "HCWDL", "graph_sha256": GRAPH_SHA256,
+            "node": NODE_REGISTRY["M0"].payload(), "recipe_sha256": H,
+        },
+        "parents": parents,
+        "selected_checkpoint": selected.name,
+        "selected_checkpoint_sha256": sha256_file(selected),
+        "final_checkpoint": final.name,
+        "final_checkpoint_sha256": sha256_file(final),
+    })
+    engine_path = output / "training_report.json"
+    write_immutable_json(engine_path, engine)
+    node = with_content_hash({
+        "contract": TRAINING_REPORT_CONTRACT, "schema_version": 1,
+        "node_id": "M0", "graph_sha256": GRAPH_SHA256,
+        "recipe_sha256": H, "parents": parents,
+        "pmard_engine_report_sha256": engine["content_hash"],
+        "selected_checkpoint_sha256": sha256_file(selected),
+        "final_checkpoint_sha256": sha256_file(final),
+        "complete": True,
+    })
+    node_path = output / "hcwdl_training_report.json"
+    write_immutable_json(node_path, node)
+
+    assert workflow.run("train_M0") == [engine_path, node_path]
+
+
 def _view(rows: int = 3) -> ParticleInputs:
     return ParticleInputs(
         np.zeros((rows, 21, 2), np.float32), np.zeros((rows, 4, 2), np.float32),

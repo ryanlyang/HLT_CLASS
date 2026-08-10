@@ -1,11 +1,33 @@
 # Current Handoff
 
+## HCWDL completed-node recovery idempotency (2026-08-10)
+
+The source-pinned RNG recoveries retrained already-completed dense prefix nodes
+(`D90c` in dense10 and `D95c` in dense5). Training finished successfully, but
+publication then correctly rejected the newly serialized `final_model.pt`
+bytes because an immutable final checkpoint already existed. This was a
+recovery orchestration defect, not a model-training or scientific failure.
+
+Primary and dense HCWDL workflows now authenticate and reuse a completed node
+before constructing views or launching training. Reuse requires both the PMARD
+engine report and HCWDL node report, valid content hashes, exact campaign,
+graph, recipe, node, teacher, lock, split, source, and warm-parent lineage, and
+byte-identical selected and final checkpoints. A partial, stale, corrupt, or
+lineage-mismatched node fails closed. No checkpoint is overwritten, and no
+matching, repair, model, loss, seed, schedule, or graph semantics changed.
+
+Focused dense/primary/recovery/resume tests pass 65/65. The complete repository
+suite passes 355/355 with the same 14 Matplotlib/Pyparsing warnings, and
+`git diff --check` passes apart from Windows line-ending notices. Real Tigris
+validation remains: submit a new source-pinned dense recovery from the pushed
+fix; it should reuse D90c/D95c immediately and begin D80c/D90c respectively.
+
 ## HCWDL structural-feature homotopy implementation plan (2026-08-10)
 
 The new implementation-authoritative supplemental plan is
 [`docs/plans/HCWDL_STRUCTURAL_FEATURE_HOMOTOPY_IMPLEMENTATION_PLAN.md`](plans/HCWDL_STRUCTURAL_FEATURE_HOMOTOPY_IMPLEMENTATION_PLAN.md).
 It specifies the missing upper bridge from native-offline support to exact
-D100 support and a compute-depth-matched comparison between a factorized
+D100 support and an edge/update-depth-matched comparison between a factorized
 `U then D` path and a joint `U+D` path. It is additive: completed primary,
 dense10, dense5, and recovery artifacts retain their original contracts.
 
@@ -13,22 +35,25 @@ The planning audit found and closed a critical representation ambiguity.
 Canonical TOFF is a two-stream 19/7-feature, 90/60-particle oracle, while all
 U/J/D students use the unified 21-channel ParT. The plan therefore defines P0
 as the exact TOFF-visible particle multiset under the existing 21-field
-projection without claiming tensor/adapter identity. It then freezes exact
-A/B/C/O/R endpoint sets, a label-free minimum-disruption residual coupling,
-atomic substitution/removal/insertion edits, a train-calibrated nested
-information-mass coordinate, a maximum-200 carrier, and one `V(s,f)` builder.
-U100 must be byte-identical to current D100; factorized D0 and joint J100 must
-be byte-identical to HLT.
+projection without claiming tensor/adapter identity. It then freezes typed
+A/B/K/C_A/C_B/O/R endpoint records, a label-free maximum-cardinality
+minimum-cost residual coupling, atomic substitution/removal/insertion edits,
+an exact integer train-calibrated switch coordinate, a maximum-200 carrier,
+and one `V(s,f)` builder. U100 must be byte-identical to current D100;
+factorized D0 and joint J100 must be byte-identical to HLT, including canonical
+raw-length metadata.
 
 The factorized and joint paths each contain 20 cold predecessor-KD transitions
 plus one born-again M1, use the locked unweighted 60-pass recipe, and are paired
-by transition seed. P0 adapter controls, direct endpoints, ten-generation
-D100 and 21-generation HLT stationary-depth controls are registered so a path
-gain is not confused with repeated distillation depth. The initial 300k study
-is validation-only and structurally has no final-test task. This step is
-documentation only: no coupling, graph, worker, artifact, Tigris submission,
-or remote mutation was implemented or authorized. The focused pre-edit
-high-coverage/HCWDL suite passed 57/57 in the local `tagging-hlt` environment.
+by transition seed. The exact 80-fit registry includes P0 adapter diagnostics,
+paired/direct endpoints, a ten-generation D100 chain, and a 21-generation HLT
+stationary-depth chain so path gains are not confused with repeated
+distillation depth. The initial 300k study is validation-only and structurally
+has no final-test task. This step is documentation only: no coupling, graph,
+worker, artifact, Tigris submission, or remote mutation was implemented or
+authorized. After the independent science/implementation/editorial audit, the
+focused high-coverage/HCWDL suite passed 60/60 in the local `tagging-hlt`
+environment; `git diff --check` passed apart from line-ending notices.
 
 ## Primary HCWDL source-pinned closure recovery (2026-08-10)
 

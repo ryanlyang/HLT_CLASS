@@ -18,7 +18,7 @@ from .hcwdl_campaign import validate_campaign_spec
 from .hcwdl_contracts import (
     artifact_envelope, authenticate_source_files, validate_artifact,
 )
-from .hcwdl_ladder import NODE_REGISTRY
+from .hcwdl_ladder import GRAPH_SHA256, NODE_REGISTRY
 from .hcwdl_locks import (
     create_assignment_lock, create_confirmation_registry_lock, create_execution_lock,
     create_finalist_lock, create_recipe_lock, create_shell_endpoint_qualification_lock,
@@ -33,6 +33,9 @@ from .hcwdl_qualification import (
 from .engine import validate_pmard_training_report
 from .hcwdl_recipe import validate_recipe, validate_recipe_class_weight_lineage
 from .hcwdl_reporting import build_confirmation_registry, build_final_report, build_screen_aggregate
+from .hcwdl_training import (
+    TRAINING_REPORT_CONTRACT, validate_completed_hcwdl_node,
+)
 from .highcov_resources import resource_validation_report
 from .audit import SOURCE_MANIFEST_CONTRACT, SOURCE_MANIFEST_VERSION
 from .splits import source_file_record_from_manifest_row, validate_split_manifest
@@ -107,6 +110,39 @@ class HcwdlWorkflow:
         if self.spec["mode"] == "smoke":
             command.append("--smoke")
         return command
+
+    def _completed_node_outputs(self, node_id: str) -> tuple[Path, Path] | None:
+        """Authenticate and reuse an already-completed primary graph node."""
+
+        node = NODE_REGISTRY[node_id]
+        expected_parents = {
+            "split_manifest_sha256": self.spec["split_manifest_sha256"],
+            "source_snapshot_sha256": self.spec["source_manifest_sha256"],
+            "assignment_lock_sha256": load_json(
+                self.locks["assignment"]
+            )["content_hash"],
+            "qualification_lock_sha256": load_json(
+                self.locks["shell_endpoint_qualification"]
+            )["content_hash"],
+        }
+        for teacher in node.teachers:
+            report = load_json(self._training_report(teacher.node_id))
+            expected_parents[
+                f"teacher_{teacher.role}_report_sha256"
+            ] = validate_pmard_training_report(report)
+        if node.initialization_parent is not None:
+            report = load_json(self._training_report(node.initialization_parent))
+            expected_parents["warm_parent_report_sha256"] = (
+                validate_pmard_training_report(report)
+            )
+        return validate_completed_hcwdl_node(
+            self.root / f"training/{node_id}", node_id=node_id,
+            expected_campaign="HCWDL", expected_graph_sha256=GRAPH_SHA256,
+            expected_node_payload=node.payload(),
+            expected_recipe_sha256=self.spec["recipe_sha256"],
+            expected_parents=expected_parents,
+            report_contract=TRAINING_REPORT_CONTRACT,
+        )
 
     def run(self, task_id: str) -> list[Path]:
         registered = {row["task_id"] for row in self.spec["tasks"]}
@@ -337,6 +373,9 @@ class HcwdlWorkflow:
         if task_id.startswith("train_"):
             node_id = task_id.removeprefix("train_")
             output = self.root / f"training/{node_id}"
+            completed = self._completed_node_outputs(node_id)
+            if completed is not None:
+                return list(completed)
             _run(self._node_command(node_id, output=output, seed=1337), repository=self.repository)
             return [output / "training_report.json", output / "hcwdl_training_report.json"]
         if task_id == "screen_aggregate":

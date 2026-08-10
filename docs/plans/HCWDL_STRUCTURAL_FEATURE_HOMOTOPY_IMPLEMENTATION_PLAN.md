@@ -60,7 +60,7 @@ registered co-adaptation ablation, not an after-the-fact alternative.
 The ordered questions are:
 
 1. Can a sequence of small structural-support changes transfer more of TOFF
-   into exact D100 inputs than the direct one-step `TOFF -> D100offkd` edge?
+   into exact D100 inputs than the new direct one-step `D100direct` edge?
 2. Does a factorized `U then D` path retain more privileged performance at
    exact HLT than the existing direct or coarse descent?
 3. Does the joint path outperform the factorized path by allowing feature and
@@ -73,10 +73,11 @@ The ordered questions are:
 
 The predeclared hypotheses are:
 
-- **H1:** factorized `U100` has higher validation macro OVR AUC than a paired
-  direct `D100offkd` student.
+- **H1:** factorized `U100` has higher validation macro OVR AUC than the new
+  endpoint-paired direct control `D100direct`. The imported dense
+  `D100offkd` result is contextual only.
 - **H2:** factorized `D0F` and joint `J100` retain more of the M0-to-TOFF macro
-  AUC gap than the imported coarse D0 control.
+  AUC gap than imported coarse cold control `D0c`.
 - **H3:** `D0F` versus `J100` and `M1F` versus `M1J` are two-sided comparisons.
   Neither path is declared the expected winner.
 - **H4:** a view-changing path should outperform an equal-depth stationary
@@ -96,10 +97,11 @@ must authenticate and bind:
 - the `HCWDL_RECIPE/v4` all-ones unweighted loss lineage;
 - train and validation `HIGHCOV_DENSE_ASSIGNMENT_MANIFEST/v2` artifacts;
 - the high-coverage assignment and Shell Exact qualification locks;
-- the selected M0, D100, and TOFF reports and checkpoints;
+- the selected M0, D100, TOFF, and coarse cold D0c reports/checkpoints;
 - the architecture, schema, transform, matcher-resource, and repair hashes;
-- the completed dense10/dense5 reports as contextual controls when their
-  lineage is exact.
+- an immutable, possibly empty list of completed dense10/dense5 reports chosen
+  at spec creation as contextual controls, each with exact lineage and report
+  hash. The aggregate cannot discover later reports by path existence.
 
 Assignments are read in place. They are not copied and the matcher is never
 rerun. The new structural coupling is built once from the selected train and
@@ -148,8 +150,9 @@ single-stream offline endpoint. Define **P0** as follows:
    record is selected;
 5. feed the resulting active set to the ordinary unified 21-channel ParT.
 
-P0 preserves the complete **model-visible TOFF particle multiset and endpoint
-values** under a unified projection. It is not byte-identical to
+P0 preserves the complete **model-visible TOFF particle identities, physical
+p4, and declared raw source values under the unified projection**. It does
+not preserve TOFF-native's 19/7 transformed tensors. It is not byte-identical to
 `NativeOfflineInputs`, does not use the TOFF-native architecture, and is not
 allowed to inherit the old TOFF name or checkpoint.
 
@@ -161,11 +164,17 @@ Two mandatory adapter diagnostics make this visible rather than confounded:
 
 - `P0CE`: a label-only unified ParT trained on P0;
 - `P0KD`: a fresh unified P0 student trained from TOFF-native logits.
+- `U010P0KD`: a fresh `V(.10,0)` diagnostic taught by `P0KD` on P0.
 
 Neither diagnostic is an implicit predecessor of the primary U/J paths. By
 the user's selected graph, `U010` and `J005` receive their first KD targets
 directly from TOFF-native. Their first edge therefore includes the disclosed
-native-to-unified representation change.
+native-to-unified representation change. Neither U010 nor J005 alone can be
+interpreted as a pure structural/feature increment. `U010P0KD` is the
+registered adapter-mediated, extra-KD-depth diagnostic for the primary upper
+bridge; the factorized
+chain remains `TOFF-native -> U010`, and the joint first-edge adapter component
+is disclosed rather than separately fit in this initial graph.
 
 ### 4.3 Exact D100 target endpoint B
 
@@ -179,9 +188,11 @@ B[i] = exact projected offline particle j   when assignment[i] = j >= 0
 ```
 
 `B` is the current `HIGHCOV_SHELL_EXACT/v1` alpha-one view. It has the exact
-HLT token count, HLT slot order, mask, and padding. Assigned slots carry all
-21 projected offline fields and offline p4. Dustbin slots remain all-field
-exact HLT.
+visible HLT token count (capped at 200), HLT slot order, mask, and padding.
+Assigned slots carry all 21 projected offline fields and offline p4. Dustbin
+slots remain all-field exact HLT. The canonical untruncated HLT raw collection
+length is retained separately because `ParticleInputs.raw_lengths` may exceed
+200.
 
 ### 4.4 Exact HLT endpoint
 
@@ -193,9 +204,9 @@ D0F  = exact HLT ParticleInputs
 J100 = exact HLT ParticleInputs
 ```
 
-Only the subsequent `M1F` and `M1J` are deployable scientific finalists in
-this supplemental study. D0F and J100 consume HLT tensors but retain their
-teacher-domain roles.
+`D0F` and `J100` are technically HLT-compatible, deployable path endpoints.
+They remain registered intermediate/teacher-domain roles. Only the subsequent
+`M1F` and `M1J` are designated screen outputs in this supplemental study.
 
 ## 5. Exact per-jet endpoint partition
 
@@ -212,31 +223,47 @@ Lost tracks may appear in P0 but are excluded from high-coverage assignment.
 Conversely, a legal assignment can theoretically reference a regular charged
 or neutral particle beyond P0's bounded visible prefix.
 
-For one jet, define:
+For one jet, define two typed endpoint collections:
 
-- `A`: the exact P0 source particles with persistent native identity;
-- `B`: the exact ordered D100 target tokens from Section 4.3;
-- `C`: particles in `A` whose native offline identity is also used by an
-  assigned D100 slot;
-- `O = A \\ C`: P0-only residual offline particles;
-- `R = B \\ C`: D100-only residual target tokens.
+- `A`: source-particle records in exact P0 membership, keyed by persistent
+  native identity;
+- `B`: ordered D100 target-slot records from Section 4.3, keyed by HLT slot.
+
+The imported assignment must be injective over all nonnegative native indices.
+Define the common-pair bijection and its two projections:
+
+```text
+K   = {(a_j, b_i) : assignment[i] = j and a_j is in A}
+C_A = source records projected from K
+C_B = target-slot records projected from K
+O   = A \\ C_A
+R   = B \\ C_B
+```
+
+For every pair in `K`, the projected offline 21-field endpoint and p4 in
+`C_A` must equal the endpoint payload in `C_B`; `C_B` additionally owns the
+immutable target HLT-slot metadata. A single untyped `C` is deliberately not
+used because a source-particle record and an ordered target-slot record are
+not the same data type.
 
 `R` contains two explicitly typed subsets:
 
 - `R_hlt`: HLT dustbin tokens retained by D100;
 - `R_off`: assigned offline endpoints that lie outside P0's 90/60 visible set.
 
-The simplified interpretation `TOFF = C + O` and `D100 = C + H` is valid only
-when `R_off` is empty. The implementation audits and reports `R_off`; it never
-assumes it away.
+The simplified particle-level interpretation `P0 = common + O` and
+`D100 = common + H` is valid only when `R_off` is empty. The implementation
+audits and reports `R_off`; it never assumes it away.
 
 Required identities and conservation are:
 
 ```text
-C intersect O = empty
-C union O = A
-C intersect R = empty under endpoint identity
-C union R = B
+C_A intersect O = empty
+C_A union O = A
+C_B intersect R = empty
+C_B union R = B
+|K| = |C_A| = |C_B|
+native indices and target slots in K are each unique
 |A| <= 150
 |B| <= 200
 ```
@@ -248,8 +275,8 @@ merely because their numeric fields happen to be close.
 
 ### 6.1 Scientific meaning
 
-The residual-shell coupling is a deterministic minimum-disruption edit
-script between `O` and `R`. It is **not** physical constituent matching,
+The residual-shell coupling is a deterministic maximum-cardinality,
+minimum-cost edit script between `O` and `R`. It is **not** physical constituent matching,
 truth association, confidence calibration, or a claim that an HLT dustbin was
 generated by a particular offline particle.
 
@@ -258,7 +285,8 @@ The new coupling answers an operational question:
 
 > If one must transform the exact P0 particle multiset into the exact D100
 > particle multiset through real-particle substitutions, insertions, and
-> removals, what is the least disruptive deterministic one-to-one edit script?
+> removals, what is the least disruptive deterministic one-to-one edit script
+> after first requiring the maximum possible number of real substitutions?
 
 ### 6.2 Edit types
 
@@ -285,9 +313,10 @@ move together.
 Every real endpoint is represented for coupling purposes by:
 
 - physical p4 and derived finite `pT`, eta, phi, and energy;
-- five-category identity and charge for offline/valid classified endpoints,
-  plus the explicit `unclassified=-1` state allowed only for an observed HLT
-  dustbin target;
+- raw identity flags preserved without repair, plus a decoded six-state cost
+  category `{-1,0,1,2,3,4}` where `-1` means unclassified/nonexclusive;
+- a cost-only charge state `{-1,0,+1,unknown}` and a charged-applicability
+  state `{charged,not_charged,unknown}`;
 - the 21 raw endpoint fields;
 - the eight existing validity groups;
 - charged applicability and track-validity state;
@@ -299,38 +328,112 @@ features are copied from their original endpoint. They are not recomputed from
 the changing U particle set or from a newly derived jet axis. Recomputing them
 would introduce a third global transition and would break exact D100 equality.
 
-### 6.4 Frozen minimum-disruption cost
+Registered raw sentinel/nonfinite measurements are allowed only where the
+existing validity policy marks their field/group invalid; their exact validity
+state is retained and canonical input sanitization must still emit finite
+features. Nonfinite p4 or nonfinite active canonical `ParticleInputs` are
+forbidden. The coupling cannot turn a raw invalid measurement into a valid
+zero merely to compute distance.
+
+### 6.4 Frozen maximum-cardinality minimum-cost metric
 
 All coupling inputs are label-free. Jet class, labels, classifier logits,
 validation metrics, and downstream endpoint performance are forbidden.
+
+The scale-calibration population is exact: for every selected train jet with
+nonempty O and R, enumerate every Cartesian real edge in `O x R` once. Every
+edge has unit weight. There is no per-jet rebalance, class weight, assignment
+subsample, validation contribution, or post-Hungarian selection. A jet with an
+empty side contributes no candidate edge. This edge-weighted choice is part of
+v1 and its multiplicity consequence is reported.
+
+Every source and target p4 must pass the existing `physical_p4_mask()` with
+its registered tolerance `1e-5`: all components finite, `E>0`, and
+`E + 1e-5*max(1,|p|) >= |p|`. The exact helper and tolerance are parents of
+the coupling config. Kinematics use the existing float64 `p4_kinematics()` and
+`wrapped_delta_phi()` primitives. For log-cost primitives only, use the fixed
+floor `epsilon_p4 = 1e-6` in source units:
+
+```text
+pt, eta, phi, E = p4_kinematics(p4)
+pt_star = max(pt, epsilon_p4)
+E_star  = max(E, epsilon_p4)
+delta_phi = wrapped_delta_phi(phi_o, phi_r)
+deltaR = hypot(eta_o - eta_r, delta_phi)
+```
+
+Thus log responses use `log(pt_star_o/pt_star_r)` and
+`log(E_star_o/E_star_r)` with no implementation-selected epsilon. Floor-hit
+counts are reported. A failed physical-p4 mask or nonfinite derived primitive
+fails closed.
+
+For every nonidentity field channel used below, define `T_k` as the exact
+float64 equivalent of the registered HLT median/factor transform followed by
+its finite clip. For common-valid endpoint values define:
+
+```text
+raw_delta_7(o,r) = abs(wrap_to_half_open_minus_pi_pi(T_7(o)-T_7(r)))
+raw_delta_k(o,r) = abs(T_k(o)-T_k(r))                         k != 7
+delta_k(o,r)     = min(raw_delta_k(o,r) / s_k, 1)
+```
+
+Channels with invalid raw endpoint values are not common-valid. The field
+scale population for channel `k` is every common-valid `raw_delta_k` over the
+same Cartesian train edges. Its deterministic scale is:
+
+```text
+s_k = max(edge-weighted 90th percentile, floor_k)
+```
+
+The exact v1 channel table is:
+
+| Distance group | Channels | `floor_k` in transformed units |
+|---|---|---:|
+| quality | 0 | 0.20 |
+| relative kinematics | 7, 8 | 0.05 |
+| relative kinematics | 9 | 0.25 |
+| scale kinematics | 10, 19 | 0.25 |
+| track fit/dz/dxy/btag | 11--18 | 0.25 |
+| lost inner hits | 20 | 1.00 |
+
+Identity/charge channels 1--6 are excluded from field displacement and appear
+only in `d_id`. Lost-inner-hits channel 20 is excluded from `d_track` and
+appears only in the `lost_inner_hits` field group, so it is not double counted.
 
 For real source `o` and real target `r`, define five bounded group distances:
 
 ```text
 d_kin   = mean(
             min(deltaR / s_deltaR, 1),
-            min(abs(log(pt_o / pt_r)) / s_logpt, 1),
-            min(abs(log(E_o / E_r)) / s_logE, 1)
+            min(abs(log(pt_star_o / pt_star_r)) / s_logpt, 1),
+            min(abs(log(E_star_o / E_star_r)) / s_logE, 1)
           )
 
 d_id    = mean(category_o != category_r, charge_o != charge_r)
 
 d_valid = mean over the eight validity groups of group-validity disagreement
 
-d_track = group-balanced mean transformed-field displacement on common-valid
-          track groups, with charged-applicability disagreement contributing 1
+d_track = group-balanced mean delta_k on common-valid channels in
+          (track_fit=(11), track_dz=(12,18), track_dxy=(13,14),
+           track_btag=(15,16,17)), with applicability disagreement equal to 1
 
 d_field = group-balanced mean absolute displacement for quality,
-          relative-kinematic, scale-kinematic, and lost-inner-hit groups,
-          divided by each channel's full clipped span
+          relative-kinematic, scale-kinematic, and lost-inner-hit groups using
+          delta_k and groups (0), (7,8,9), (10,19), and (20)
 ```
 
-If both endpoints are track-inapplicable, `d_track=0`. If applicability
-differs, `d_track=1`. If both are applicable but no track channel is valid at
-both endpoints, `d_track=0` and `d_valid` carries the missingness difference.
-Otherwise `d_track` is the mean over common-valid track channels after the
-canonical clipped transform. A non-track field group with no common-valid
-channel contributes zero to `d_field`; its missingness remains in `d_valid`.
+Category is decoded only for cost/reporting: an exclusive valid identity flag
+maps to 0--4 and every other exact raw flag pattern maps to `-1`. Charge values
+outside the finite integral set `{-1,0,+1}` map to `unknown`. Equal unknown
+states do not incur an identity disagreement; unknown versus known does.
+Charged applicability is derived from those states without rewriting raw
+flags. If both endpoints are `not_charged` or both are `unknown`,
+`d_track=0`; if applicability states differ, `d_track=1`; if both are
+`charged`, each of the four declared track groups contributes the mean of its
+common-valid `delta_k`, or zero when empty, and `d_track` is the mean of all
+four group contributions. Each of the four non-track field groups follows the
+same empty-group-zero rule and `d_field` is their mean. Missingness remains in
+`d_valid`.
 
 The kinematic scales are frozen by a train-only, label-free calibration:
 
@@ -340,12 +443,15 @@ s_logpt  = max(train residual-pair 90th percentile, 0.25)
 s_logE   = max(train residual-pair 90th percentile, 0.25)
 ```
 
-Percentiles use the deterministic complete 300k train selection and no class
-weights. The v1 accumulator uses 65,536 fixed bins on `[0,5]` for delta-R and
-`[0,8]` for each absolute log response; overflow enters the last bin. The
-reported quantile is the upper edge of the first bin whose cumulative count
-reaches 90% under the standard left-to-right order. Empty train residual-pair
-populations use only the stated floors. Validation never refits a scale.
+All percentiles use the Cartesian edge population above. The v1 integer-count
+accumulator uses 65,536 fixed equal-width bins: `[0,5]` for delta-R, `[0,8]`
+for absolute log responses, and `[0,64]` for every `raw_delta_k`; negative is
+invalid and overflow enters the last bin. For finite `x`, bin index is
+`min(65535, floor(x / upper * 65536))`. Shards reduce in canonical source-path
+then entry order with uint64 counts and checked overflow. The quantile is the
+upper edge of the first bin whose cumulative count is at least
+`ceil(0.90 * total_count)`. Empty populations use only the stated floors.
+Validation never refits a scale.
 
 The selected v1 cost is:
 
@@ -363,24 +469,48 @@ residual. The exact field-group averaging, empty-group convention, percentile
 algorithm, floors, and weights are hashed scientific configuration. Changing
 one creates a new coupling family rather than editing v1.
 
-An `unclassified=-1` HLT dustbin is a valid structural target and always
-incurs category disagreement against an offline source. It remains byte-exact
+An `unclassified=-1` HLT dustbin is a valid structural target. It follows the
+same six-state category and four-state charge comparison as every endpoint;
+no special forced agreement or disagreement is added. It remains byte-exact
 HLT in every activated view and can never be reinterpreted as an assigned
 offline identity.
 
 ### 6.5 Global solver and deterministic ties
 
-For nonempty O and R, solve a rectangular Hungarian minimum-cost assignment
-that pairs exactly `n_pair` real endpoints. Costs are quantized as:
+The objective is lexicographic:
+
+1. pair exactly `n_pair=min(|O|,|R|)` real endpoints, which maximizes
+   substitutions and minimizes the number of atomic edit operations;
+2. among those maximum-cardinality couplings, minimize total `cost_q`;
+3. among tied global optima, choose the lexicographically smallest sorted edge
+   list by `(source_native_index, target_hlt_slot, target_kind,
+   target_native_index)`.
+
+This is a **maximum-cardinality minimum-cost residual coupling**, not the
+unconstrained least-cost edit script: a remove-plus-insert alternative is
+deliberately forbidden when a substitution is possible. The priority makes
+particle-count changes as smooth as possible and does not assert physical
+correspondence.
+
+Costs are quantized with nonnegative round-half-up:
 
 ```text
-cost_q = round(cost * 1_000_000)
+cost_q = floor(cost * 1_000_000 + 0.5)
 ```
 
-The primary objective minimizes total `cost_q`. Exact ties are resolved by a
-stable lexicographic order over source native index, target HLT slot, target
-kind, and target native index. Row, chunk, worker, and input permutation cannot
-change the result.
+Rows and columns are first sorted by their canonical endpoint keys. A pinned
+rectangular Hungarian solver obtains the optimum total `cost_q`. The semantic
+tie objective is exact. Canonical edge fixing is the reference oracle for
+fixtures: visit candidate edges in lexicographic order, tentatively force an
+edge, and retain it iff the remaining constrained assignment can still attain
+the optimum. Production may use a provably equivalent optimized lexicographic
+assignment algorithm, but it must match the reference oracle on exhaustive
+small fixtures and deterministic sampled real jets. Merely accepting the
+pinned solver's arbitrary tied output is forbidden. Solver package/version,
+algorithm identity, integer matrix hash, optimum total, and selected-edge
+tuple are recorded. Runtime is benchmarked in the genuine miniature and an
+unbounded per-edge sequence of Hungarian solves is not accepted for launch.
+Row, chunk, worker, and input permutation cannot change the logical result.
 
 No angular gate, PID gate, confidence threshold, or dustbin penalty is used.
 Those would incorrectly imply another physical matcher. The solver is allowed
@@ -392,14 +522,14 @@ cost controls how late and how much that edit counts in the path.
 The logical carrier has exactly:
 
 ```text
-|C| + max(|O|, |R|) = max(|A|, |B|) <= 200
+|K| + max(|O|, |R|) = max(|A|, |B|) <= 200
 ```
 
 slots, so no U or J view requires hidden truncation.
 
 Carrier placement is:
 
-1. every common C particle occupies its eventual D100 HLT slot;
+1. every common pair in K occupies its immutable target D100 HLT slot;
 2. an O-to-R substitution occupies R's target HLT slot;
 3. a padding-to-R insertion occupies R's target HLT slot;
 4. unmatched O-to-padding removals occupy tail slots after the HLT skeleton,
@@ -420,6 +550,13 @@ Consequences:
 - intermediate active count lies between `|A|` and `|B|` and never exceeds
   200;
 - no source or target particle can appear twice.
+
+`ParticleInputs.raw_lengths` has separate contractual semantics. At `s=0` it
+is `|A|`; for `0<s<1` it is the active logical particle count. At `s=1`, the
+builder bypasses the logical count and copies the canonical HLT
+`raw_lengths` verbatim, even when the raw HLT collection exceeds the visible
+200-token cap. `raw_lengths` is metadata rather than a ParT feature, but this
+endpoint override is required for byte-identical D100/HLT artifacts.
 
 The ordinary Particle Transformer is set-based, but carrier order is still
 contractual and tested so endpoint equality and resume do not rely on an
@@ -444,40 +581,93 @@ disruption(e) = cost(source,target) for substitution
                 1.0 for insertion or removal
 
 mass(e) = 1.0 + 4.0 pt_share(e) + 2.0 E_share(e) + 2.0 disruption(e)
+mass_q(e) = floor(mass(e) * 1_000_000 + 0.5)
 ```
 
 Empty denominators contribute zero shares. The constant term preserves edit
 count, pT and energy emphasize important particles, and disruption carries
 identity, track, validity, and all-field changes. Mass is never a model input.
+Within a jet, edit terms are ordered by the canonical edit key and pT/energy
+denominators use float64 `math.fsum` in that order. `mass_q` is the sole value
+used by global reducers and is stored as uint32; a float mass is reporting
+only.
 
-Construction uses three explicit passes to avoid circular calibration:
+Construction uses four immutable stages to avoid circular calibration:
 
-1. a train-only residual-pair pass freezes the kinematic scales in Section
-   6.4 without solving or storing particle views;
-2. source workers solve the train couplings once and publish compact staged
-   edit shards containing cost and mass but no switch coordinate;
-3. the staged train edits build a frozen 4,096-bin mass-weighted empirical CDF
-   of quantized disruption on `[0,1]`; final train shards attach coordinates,
-   and validation workers use the already frozen scale/CDF directly.
+1. a train-only Cartesian-edge pass freezes all kinematic and per-channel
+   scales in Section 6.4 without solving or storing particle views;
+2. source workers solve train couplings once and atomically publish immutable
+   **base shards** containing edits, `cost_q`, and `mass_q`, but no switch; a
+   train base manifest then proves the complete ordered source-unit/expected-
+   row coverage and binds the ordered base-shard hash vector;
+3. one canonical reducer consumes that complete train base manifest and
+   freezes the train switch histogram; separate immutable switch sidecars are
+   then published for train;
+4. validation workers solve with the frozen train scales and publish their
+   base shards plus switch sidecars using the frozen train histogram.
 
-Within a disruption bin, a SHA-256 coordinate derived from the coupling
-contract, canonical jet identity, edit kind, source index, and target index
-spreads indivisible tied edits deterministically across that bin's train mass.
-Staged edit shards are compact authenticated coupling metadata, not repaired
-particle data. They are deleted only after final train shards validate.
+An immutable base shard is never rewritten in place and cannot name a future
+switch artifact. The switch calibration names the complete train base-manifest
+hash; each sidecar names its base-shard and switch-calibration hashes; a final
+role coupling manifest binds the base-manifest plus every ordered base/sidecar
+pair. Recomputing the coupling in the switch stage is forbidden.
 
-Each train or validation edit receives a stored switch coordinate `u_e` from
-that frozen train CDF. Validation uses the train histogram unchanged. The
-compact artifact stores:
+The switch transform is exact integer arithmetic. Let:
 
 ```text
-switch_u16 = round(u_e * 65535)
+B = 4096
+H = 2**64
+bin(e) = min(4095, (cost_q(e) * 4096) // 1_000_001)
+bin_mass_q[b] = sum mass_q of all train edits in bin b
+total_mass_q = sum_b bin_mass_q[b]
+cum_mass_q[b] = sum_{j < b} bin_mass_q[j]
 ```
 
-For `0 < s < 1`, structural view `s` applies an edit when:
+All sums use checked uint64 accumulation in canonical order. Every insertion
+and removal has `cost_q=1_000_000`, hence lies in final bin 4095; this
+concentrates cardinality-changing edits in the final structural-cost interval
+and is reported explicitly.
+
+For each train or validation edit, hash the length-prefixed canonical bytes of
+the coupling-config hash, role-independent jet identity, edit kind, source
+native index, target HLT slot, target kind, and target native index. Let `h`
+be the first eight SHA-256 bytes interpreted as an unsigned big-endian integer.
+For nonzero `total_mass_q`, define the rational coordinate:
 
 ```text
-switch_u16 <= round(s * 65535)
+u_num = 2*H*cum_mass_q[bin] + (2*h + 1)*bin_mass_q[bin]
+u_den = 2*H*total_mass_q
+switch_u16 = min(65535, (u_num*65535 + u_den//2) // u_den)
+```
+
+`u_num`, `u_den`, their products, and rounding use arbitrary-precision integer
+arithmetic (Python `int` semantics), not overflowing uint64 intermediates.
+
+This places an edit at a deterministic hash fraction inside its train-mass
+bin. Its own mass affects the train bin total but not a validation-specific
+refit. A validation edit landing in a zero-train-mass bin maps to that bin's
+left cumulative boundary. If the entire train edit population is empty, the
+frozen degenerate transform is
+`switch_u16=(cost_q*65535+500000)//1000000`; the calibration records the
+degenerate state. No validation quantity selects either rule.
+
+Each train or validation edit receives a stored switch coordinate `u_e` from
+that frozen transform. Validation uses the train histogram unchanged. The
+compact artifact stores `switch_u16` directly; no consumer reconstructs it
+from floating-point CDF values.
+
+```text
+switch_u16 = the exact integer formula above
+```
+
+Every registered `s` is stored as decimal text, exact rational numerator and
+denominator, IEEE-754 hexadecimal float, and precomputed
+`s_u16=(2*numerator*65535+denominator)//(2*denominator)`. The integer formula,
+not binary floating-point evaluation, defines round-half-up. For `0 < s < 1`,
+structural view `s` applies an edit when:
+
+```text
+switch_u16 <= s_u16
 ```
 
 The endpoints are explicit branches:
@@ -488,14 +678,19 @@ s = 1: apply every edit
 ```
 
 Thus edits are strictly nested. Once an edit switches, it never reverts at a
-later U or J rung. The ten-point U rungs target approximately equal cumulative
-train information mass, subject to indivisible edits; validation realizes the
-frozen coordinate rather than rebalancing itself.
+later U or J rung. Because the 4,096 cost bins and within-bin hash placement
+are finite, the ten-point U rungs only **approximately** balance cumulative
+train information mass; validation realizes the frozen coordinate rather than
+rebalancing itself.
 
 Reports must show, at every rung, realized switched edit count, information
 mass, scalar pT, energy, category changes, charged/neutral changes, validity
 changes, active-particle count, and per-jet transition distributions. Class
 slices are reporting-only and never influence the coordinate.
+
+The report also separates O, `R_hlt`, and `R_off` particle-count and scalar-pT
+fractions. A dustbin fraction below 10% does not bound the number or importance
+of P0-only O particles under the asymmetric 90/60 versus 200 visibility caps.
 
 ## 8. One generalized view builder
 
@@ -525,7 +720,7 @@ path.
 For a requested `s`, the builder first resolves every atomic edit from its
 stored switch coordinate:
 
-- common C slots are always active;
+- common K target slots are always active;
 - an unswitched O-to-R slot contains exact O;
 - a switched O-to-R slot contains exact R;
 - an unswitched O-to-padding tail contains exact O;
@@ -535,6 +730,13 @@ stored switch coordinate:
 
 No RNG is sampled at view-build time. The structural decision is already
 contained in the authenticated coupling artifact.
+
+`V(0,0)` sets `raw_lengths=|A|`. Every `0<s<1` view sets it to that view's
+active logical count. For every `V(1,f)`, construction delegates the final
+tensor assembly to the existing Shell Exact builder and copies its canonical
+HLT `raw_lengths`, including values above 200. `V(1,1)` delegates directly to
+canonical HLT input construction. These endpoint branches are required; a
+new builder that only happens to match visible tensors is insufficient.
 
 This structural layer always selects exact source/target records. The
 independent feature layer in Section 8.2 may then apply the already registered
@@ -550,6 +752,15 @@ Let:
 ```text
 alpha = 1 - f
 ```
+
+The current `build_alpha_repaired_inputs()` already permits every finite
+`[0,1]` alpha for `HIGHCOV_SHELL_EXACT`; only legacy non-Shell repair families
+remain restricted to `ALPHA_GRID`. Implementation may extract the already
+defined per-slot Shell Exact state evaluator into a reusable primitive, but it
+must leave both public behaviors unchanged. The homotopy coordinate table is
+additionally bound by `HCWDL_STRUCTURAL_FEATURE_COORDINATE/v1`. The extracted
+primitive must be byte-identical to the current Shell Exact builder at every
+registered UJ coordinate and at deterministic sampled continuous alphas.
 
 For a carrier slot corresponding to an assigned offline D100 endpoint with an
 HLT counterpart, use the existing `HIGHCOV_SHELL_EXACT/v1` strength and shared
@@ -569,6 +780,11 @@ The exact existing all-field semantics apply:
   existing identity-bound nested switches;
 - track applicability follows the identity decision coherently;
 - explicit alpha endpoints directly select HLT or offline values.
+
+Every discrete `_unit_switch` is keyed by canonical jet identity, immutable
+target HLT slot, validity/discrete group, shared repair seed, and
+`HIGHCOV_SHELL_EXACT/v1`. It is never keyed by compacted carrier position,
+which can change as structural edits alter the active prefix.
 
 Other structural particles do not acquire invented counterparts:
 
@@ -623,7 +839,7 @@ At every U rung:
 - no active field is between endpoints;
 - the only change from the previous U rung is a nested set of complete
   structural edits;
-- all common C particles remain exact offline;
+- all common-pair source particles remain exact offline;
 - U100 is byte-identical to imported D100 input tensors.
 
 This is the central upper bridge. It asks whether a model can carry native
@@ -684,7 +900,7 @@ At a joint rung:
 - structural edits with `u_e <= s` have occurred;
 - surviving O particles remain exact projected offline until removed;
 - activated HLT dustbins are exact HLT immediately;
-- common and activated assigned-offline slots use Shell Exact at
+- common-pair and activated assigned-offline slots use Shell Exact at
   `alpha=1-f`;
 - every discrete/validity group uses the same shared nested repair coordinate;
 - J100 is byte-identical to HLT, not merely set-equivalent.
@@ -695,6 +911,14 @@ Shell Exact alpha coordinate. It is **edge-count and update-budget matched** to
 the factorized path, not claimed to be physically equal arc length. Shell
 Exact's confidence warp and discrete switches make realized feature movement
 nonlinear.
+
+This comparison tests the complete path geometry, not simultaneity in
+isolation. Factorized edges change one axis by 0.10, whereas joint edges change
+both axes by 0.05 and therefore sample each individual mechanism at twice the
+resolution. Ordering, simultaneous co-adaptation, and per-axis resolution are
+all part of the registered treatment. A pure resolution-control claim would
+require a separately versioned 40-edge, 5%-per-axis factorized path; it is not
+part of this initial 300k graph.
 
 Every report therefore includes realized per-edge structural mass, normalized
 21-field displacement, switched discrete-group mass, pT displacement, active
@@ -754,7 +978,7 @@ HLT.
 
 The two primary paths each have:
 
-- 20 privileged transition students;
+- 20 homotopy transition students;
 - 20 predecessor-KD edges from TOFF-native to exact HLT;
 - one additional HLT-to-HLT born-again M1;
 - identical per-node train rows, passes, validations, batch size, and update
@@ -782,15 +1006,27 @@ differs from this study.
 
 ### 11.2 New paired endpoint controls
 
-The new study trains:
+The new study trains the exact controls below. `CE` means unweighted label-only
+CE; `KD2` means 0.25 CE + 0.75 KD at temperature 2; `KD1` uses temperature 1.
 
-- `P0CE` and `P0KD`, defined in Section 4.2;
-- `D100direct`, a fresh exact-D100 student taught directly by TOFF-native;
-- `D0direct`, a fresh exact-HLT student taught directly by TOFF-native;
-- `M0self`, a fresh exact-HLT student taught by a paired CE-only M0.
+| Node | Student view | Teacher/view | Loss | Seed alias |
+|---|---|---|---|---|
+| `M0paired` | exact HLT | none | CE | `paired_m0_root` |
+| `P0CE` | P0 | none | CE | `p0_pair_root` |
+| `P0KD` | P0 | TOFF-native/native | KD2 | `p0_pair_root` |
+| `U010P0KD` | `V(.10,0)` | P0KD/P0 | KD2 | primary transition 1 |
+| `D100direct` | exact D100 | TOFF-native/native | KD2 | D100 endpoint/transition 10 |
+| `D0direct` | exact HLT | TOFF-native/native | KD2 | HLT endpoint/transition 20 |
+| `M0self` | exact HLT | M0paired/exact HLT | KD1 | M1/transition 21 |
 
-`D100direct` shares the U100 endpoint seed and sampler trajectory.
-`D0direct` shares the transition-20 endpoint seed used by D0F and J100.
+`M0paired` exists so `M0self` has exact checkpoint and stochastic lineage; it
+does not replace imported M0 in the primary M0-to-TOFF recovery denominator.
+`P0CE` and `P0KD` share initialization, sampler, dropout, optimizer, and
+validation-order seeds so their adapter transfer comparison is paired.
+`D100direct` is endpoint-paired to U100 but differs from transition-1
+`S100_01`. `D0direct` is endpoint-paired to D0F/J100 but differs from
+transition-1 `S0_01`. None of these distinct nodes may be aliased merely
+because student inputs and first teachers match.
 
 ### 11.3 Stationary-depth controls
 
@@ -808,7 +1044,8 @@ All ten students consume exact D100. `S100_01` is the stationary chain's
 one-edge direct control; each later student learns from the preceding
 same-view D100 teacher. It is distinct from `D100direct`, whose initialization
 is endpoint-paired to U100 rather than transition-paired to U010. Compare U100
-primarily with `S100_10`, and secondarily with both one-edge controls.
+primarily with `S100_10`, and secondarily with both one-edge controls. Every
+edge `S100_01` through `S100_10` uses KD2, including same-D100 predecessors.
 
 **HLT stationary chain:**
 
@@ -819,22 +1056,42 @@ TOFF-native -> S0_01 -> S0_02 -> ... -> S0_20 -> S0_21
 All students consume exact HLT. `S0_01` learns directly from TOFF-native and is
 distinct from endpoint-paired `D0direct`; later students learn from the
 preceding HLT teacher. Compare D0F and J100 with `S0_20`, and compare M1F and
-M1J with `S0_21`.
+M1J with `S0_21`. To loss-match the homotopy path, `S0_01` through `S0_20`
+are an explicit temperature-routing exception and use KD2 even for same-HLT
+predecessors. `S0_21` alone uses KD1 to match the born-again M1 edge.
 
 These chains control optimization depth, repeated self-distillation, and the
 number of fresh restarts. They do not change the equal-depth primary graphs.
+
+### 11.4 Frozen fit registry
+
+The initial campaign registers exactly 80 new fits:
+
+```text
+21 factorized + 21 joint
++ 10 stationary D100 + 21 stationary HLT
++ 7 paired/adapter/direct controls
+= 80
+```
+
+TOFF-native, imported M0/D100/TOFF reports, and frozen dense contextual rows
+are not new fits. A graph lock verifies the exact 80 node IDs, views, teachers,
+losses, temperatures, seed aliases, and dependencies. No discovery-time or
+metric-dependent control is allowed.
 
 ## 12. Training protocol
 
 ### 12.1 Shared optimization recipe
 
-Every non-root primary or stationary node uses the locked unweighted primary
-single-teacher recipe:
+The graph-specific `HCWDL_STRUCTURAL_FEATURE_RECIPE/v1` overlay references the
+exact parent `HCWDL_RECIPE/v4` hash and binds every node's view, loss,
+temperature, LR, schedule, and seed role. Every KD node uses the locked
+unweighted single-teacher recipe unless the explicit table below says CE:
 
 ```text
 loss = 0.25 * unweighted per-jet CE + 0.75 * forward-KL KD
-privileged or TOFF-native teacher temperature = 2
-HLT same-view teacher temperature             = 1
+homotopy/direct/depth-control temperature     = 2 through transition 20
+registered HLT born-again temperature         = 1 at transition 21
 peak learning rate                            = 3e-4
 effective/microbatch                          = 256/256
 gradient accumulation                         = 1
@@ -847,14 +1104,16 @@ passes                                        = 60 complete natural passes
 validation                                    = after every pass
 ```
 
-`P0CE` and the paired M0 root use unweighted CE only. Coefficients remain
-constant. There is no performance early stopping.
+`P0CE` and `M0paired` use unweighted CE only. All other controls use the
+KD1/KD2 routing in Section 11. Coefficients remain constant. There is no
+performance early stopping.
 
 For temperature routing, the teacher's declared input domain governs:
 
-- TOFF-native, P0, U, J before exact HLT, and D alpha-positive teachers use 2;
-- D0F, J100, and stationary HLT teachers use 1 when teaching the subsequent
-  same-HLT born-again child;
+- TOFF-native, P0, U, J before exact HLT, D alpha-positive teachers, and the
+  registered stationary controls through transition 20 use 2;
+- D0F, J100, S0_20, and M0paired use 1 only when teaching their registered
+  transition-21 same-HLT born-again child;
 - D0F and J100 themselves still receive temperature-2 KD from their richer
   immediate predecessors.
 
@@ -875,7 +1134,8 @@ architecture_hash)`, not the human node name. At each primary transition:
 - factorized and joint students share initial parameters;
 - sampler order, dropout, augmentation, optimizer RNG, and validation order
   are paired;
-- the corresponding stationary-depth control shares the same transition seed;
+- both `S100_k` and `S0_k` share the transition-k seed for k=1--10;
+  `S0_k` continues that pairing alone for k=11--20;
 - only the declared input view and teacher lineage differ.
 
 U100, `D100direct`, and `S100_10` also receive an explicit endpoint-paired
@@ -893,8 +1153,10 @@ Checkpoint selection uses the established total order:
 1. highest validation macro OVR AUC;
 2. lowest multiclass CE;
 3. highest mean log QCD rejection at 50% signal efficiency;
-4. earliest optimizer update;
-5. canonical checkpoint identity.
+4. earliest optimizer update.
+
+This reuses `HCWDL_CHECKPOINT_SELECTION/v1` exactly; no fifth tie rule is
+invented. Optimizer update is unique within a node.
 
 The final partial batch is retained and every selected train identity appears
 once per pass. Selected and pass-60 model-only checkpoints are retained, plus
@@ -911,30 +1173,36 @@ fix cannot be applied by requeueing an immutable job under its old commit.
 ### 13.1 Persistent coupling only
 
 The durable structural artifact stores the compact edit script, not particle
-features. The selected v1 ragged payload is:
+features. Each immutable base shard has the selected v1 ragged payload:
 
 ```text
-entries                       int64
-row_offsets                   uint64
-edit_kind                     uint8    substitution/removal/insertion
-source_native_offline_index   int16    -1 for padding source
-target_hlt_slot               uint16   65535 for padding target
-target_kind                   uint8    assigned_offline/hlt_dustbin/padding
-target_native_offline_index   int16    -1 unless target is assigned offline
-cost_q                        uint32   round(cost * 1e6)
-mass_f32                      float32  diagnostic/validation value
-switch_u16                    uint16   frozen nested structural coordinate
+entries                       little-endian int64   [n_rows]
+row_offsets                   little-endian uint64  [n_rows+1]
+edit_kind                     uint8                 [n_edits]
+source_native_offline_index   little-endian int32   [n_edits], -1 padding
+target_hlt_slot               little-endian uint16  [n_edits], 65535 padding
+target_kind                   uint8                 [n_edits]
+target_native_offline_index   little-endian int32   [n_edits], -1 unless R_off
+cost_q                        little-endian uint32  [n_edits]
+mass_q                        little-endian uint32  [n_edits]
 ```
 
-An implementation may use an equivalent smaller signed representation only
-if the exact logical arrays above remain reconstructible and logically hashed.
-The sentinel values, dtypes, endianness, and array order are contractual.
+Its immutable sidecar stores `switch_u16` as little-endian uint16 with exactly
+`n_edits` elements and binds the base logical hash plus switch-calibration
+hash. Offsets begin at zero, are nondecreasing, and end at `n_edits`.
+`entries` are canonical source entries in strictly increasing order within a
+source unit. Target-kind integer codes and every sentinel are fixed in the
+coupling config.
 
-One shard is published per authenticated source unit and role. Train and
-validation receive separate manifests under one coupling lock. Final test has
-no coupling artifact in this campaign.
+An implementation may use an equivalent smaller representation only if the
+exact logical arrays above remain reconstructible and logically hashed. The
+sentinel values, shapes, dtypes, endianness, and array order are contractual.
 
-Every shard and manifest binds:
+One base shard is published per authenticated source unit and role. Train and
+validation receive separate base manifests and final coupling manifests under
+one coupling lock. Final test has no coupling artifact in this campaign.
+
+Every base shard binds only parents that already exist:
 
 - source path/tree/file hash and selected entries;
 - split and row-selection hashes;
@@ -942,10 +1210,17 @@ Every shard and manifest binds:
 - matcher resources and Shell Exact qualification lock;
 - Scouting schema, native-index, TOFF-bound, p4, 21-field projection, validity,
   and transform hashes;
-- coupling cost config, train scale-calibration artifact, mass formula,
-  CDF histogram, hash-tie domain, and solver version;
+- coupling cost config, train scale-calibration artifact, mass formula, hash
+  domain, and solver version;
 - producer source commit, logical array hashes, byte hash, and atomic
   publication record.
+
+The role base manifest binds expected source units/rows and the complete
+ordered base-shard hash vector. Switch calibration binds the train base-
+manifest hash and its exact coverage totals. A sidecar binds one base-shard
+hash plus switch-calibration hash. The final role coupling manifest binds its
+base-manifest, ordered base/sidecar pairs, and their reconciled logical totals.
+No child may be named retroactively by an immutable parent.
 
 Path existence never authorizes reuse.
 
@@ -955,25 +1230,42 @@ The coupling lock requires complete train and validation scans. For every
 selected jet and in aggregate it proves:
 
 - scanned rows equal expected selected rows;
-- A, B, C, O, R, `R_hlt`, and `R_off` counts reconcile exactly;
+- A, B, K, `C_A`, `C_B`, O, R, `R_hlt`, and `R_off` counts reconcile exactly;
+- the imported assignment is injective and every K-pair's source/target
+  projected payload is equal;
 - every A residual is consumed once and every B residual is produced once;
 - no common or residual endpoint is duplicated;
 - substitution/removal/insertion counts equal the cardinality equations;
 - every registered U/J rung has active count at most 200 and no truncation;
-- U000 reconstructs the exact A multiset and all projected fields;
-- U100 is byte-identical to imported D100;
-- J100 and D0F are byte-identical to HLT;
+- U000 reconstructs the exact A multiset, all projected fields, and
+  `raw_lengths=|A|`;
+- U100 is byte-identical to imported D100, including canonical raw HLT lengths
+  above 200;
+- J100 and D0F are byte-identical to HLT, including raw lengths;
 - switch coordinates are finite, nested, and generated from the train-only
   calibration;
-- labels and final-test branches were not read.
+- a branch-access trace exactly matches the coupling-stage allowlist and proves
+  labels and final-test branches were not read.
 
 Perfect conservation over 99,999 of 100,000 expected validation jets is not
 complete and cannot authorize training.
 
-A deterministic identity sample is recomputed from ROOT and the parent
-assignment before locking. Count-only full-role audit and sampled all-field
-recomputation are separate requirements; a bounded sample cannot replace the
-complete count audit.
+The coupling-stage branch allowlist is generated exactly from the canonical
+jet-identity/join fields, collection counts, `FULL_ENDPOINT_FIELDS` charged
+and neutral source suffixes, `HLT_FEATURE_SPECS`, `HLT_VECTOR_BRANCHES`, and
+the p4 fields required by the imported assignment. Its sorted names and schema
+hash are stored before I/O. Every label branch and final-test source is outside
+the allowlist. Observer branches are also forbidden except for the exact
+declared count/join fields above. An attempted extra branch read fails
+immediately.
+
+While every row is already loaded to build coupling, the worker performs the
+P0/D100/HLT endpoint reconstructions and equality checks for **every** selected
+row, accumulating exact mismatch counters and logical hashes in canonical
+order. This full-role endpoint proof is separate from a second deterministic
+identity sample that rereads ROOT and the parent assignment to defend against
+persistence/reload bugs. The sample cannot replace the full-role proof, and a
+count-only audit cannot authorize universal byte-equality claims.
 
 ### 13.3 Process-local view caches
 
@@ -992,18 +1284,41 @@ The cache header adds:
 - exact array bytes and safe-memory calculation;
 - `durable_repaired_dataset=false` and `matcher_callable_present=false`.
 
-Before allocation, the exact shape estimate must fit below the smaller of the
-configured cache cap and 75% of the Slurm memory request. No undocumented
+Before allocation, a global peak estimator accounts simultaneously for train
+and validation student caches, identity/label arrays, FP32 logits, model,
+optimizer, scheduler/resume state, the largest ROOT/teacher inference batch,
+allocator overhead, and publication buffers. That peak must fit below the
+smaller of the configured cache cap and 75% of the Slurm memory request. A
+per-array check is not sufficient. Teacher inference streams its own domain
+batchwise and does not retain a second full teacher-view cache. No undocumented
 truncation or alternate sample is a fallback. An authenticated assignment-
 and-coupling-backed streaming fallback may rebuild the identical view without
 rematching.
 
 ### 13.4 Teacher targets
 
-Each frozen teacher is evaluated once over canonical train identities on its
-own declared domain. Fifteen FP32 logits are joined to the student only by
-canonical jet identity. The teacher object and temporary teacher view are
-released from GPU after target construction.
+TOFF-native has seven registered consumers, so one shared durable target cache
+is mandatory rather than optional. It uses:
+
+```text
+HCWDL_TOFF_TARGET_SHARD/v1
+HCWDL_TOFF_TARGET_MANIFEST/v1
+HCWDL_TOFF_TARGET_LOCK/v1
+```
+
+The cache contains only canonical train identity plus 15 materialized FP32
+logits (approximately 18 MB for 300k rows). It binds the selected TOFF
+checkpoint/report, native two-stream adapter and input hashes, source/split/
+selection, identity set and canonical order, class order, exact inference and
+autocast policy, producer commit, shard bytes, and logical logit hash. It is
+built once and reused read-only by `P0KD`, U010, J005, `D100direct`,
+`D0direct`, `S100_01`, and `S0_01`.
+
+Every other frozen teacher is evaluated once per sole-consumer job over
+canonical train identities on its own declared domain. Fifteen materialized
+FP32 logits are joined to the student only by canonical jet identity. The
+teacher object and temporary batchwise teacher view are released from GPU
+after target construction.
 
 Examples:
 
@@ -1016,8 +1331,8 @@ Examples:
 A missing, duplicate, reordered, wrong-domain, nonfinite, wrong-class-order,
 or wrong-checkpoint target fails closed.
 
-Compact durable logit caches are allowed only by a versioned last-consumer
-contract when one teacher has multiple registered consumers or measured
+Additional compact durable logit caches require a versioned last-consumer
+contract when another teacher has multiple registered consumers or measured
 preemption cost justifies it. They contain identity-ordered FP32 logits only,
 never particle inputs.
 
@@ -1045,18 +1360,26 @@ recovery(X; M0, TOFF) = (m_X - m_M0) / (m_TOFF - m_M0)
 
 For CE the sign is reversed. A zero or numerically unresolved denominator is
 reported undefined. Recovery may exceed 100% or be negative; it is never
-clipped.
+clipped. The primary denominator always uses the exact imported authenticated
+M0 and TOFF-native reports named in the campaign spec. `M0paired` is reported
+separately and cannot silently replace imported M0.
 
 Every rung reports:
 
 - M0-to-TOFF recovery;
 - retention relative to its immediate teacher;
-- gain over the paired stationary-depth control at the same transition;
-- factorized-minus-joint paired difference where transition endpoints are
-  comparable;
+- difference from the transition-index-paired stationary control;
+- factorized-minus-joint paired difference;
 - realized structural and feature displacement;
 - active count, pT, energy, category, track, and validity transition summaries;
 - selected pass, full 60-pass history, and measured GPU-hours.
+
+Intermediate path-versus-stationary and factorized-versus-joint rows have
+different input views and are trajectory-descriptive, not same-input causal
+comparisons. The clean identical-input comparisons occur at transition 20
+(`D0F`, `J100`, `S0_20`, `D0direct`) and transition 21 (`M1F`, `M1J`,
+`S0_21`, `M0self`). U100, `S100_10`, and `D100direct` likewise share exact
+D100 input.
 
 ### 14.3 Ordered comparisons
 
@@ -1066,11 +1389,13 @@ The primary comparison table is frozen before execution:
    diagnostic, not an endpoint claim;
 2. `P0KD` versus `P0CE`: transfer across the native-to-unified adapter;
 3. U100 versus `D100direct` and `S100_10`;
-4. D0F versus imported coarse D0, `D0direct`, and `S0_20`;
+4. D0F versus imported coarse cold node `D0c`, `D0direct`, and `S0_20`;
 5. J100 versus `D0direct` and `S0_20`;
 6. D0F versus J100 on identical exact-HLT inputs;
 7. M1F versus M1J and `S0_21` on identical exact-HLT inputs;
-8. every factorized and joint rung versus its immediate teacher.
+8. `U010P0KD` versus primary U010 as an adapter-mediated, extra-depth
+   diagnostic, not a pure adapter isolation;
+9. every factorized and joint rung versus its immediate teacher.
 
 U100 versus `D100direct` alone is descriptive because depth differs. U100
 versus `S100_10` is the path-specific depth control. The same distinction
@@ -1081,7 +1406,9 @@ applies at exact HLT.
 The screening run is one seed and cannot establish a final claim. Compact
 identity-ordered validation logits may be retained under a versioned manifest
 for paired bootstrap comparisons; at 100k rows and 15 FP32 logits they are
-small relative to particle data.
+small relative to particle data. Because the same validation population also
+selects checkpoints, these bootstraps are descriptive uncertainty summaries,
+not independent confirmatory p-values.
 
 If screening motivates confirmation, a separate predeclared validation-only
 confirmation registry uses seeds `(11, 22, 33, 44, 55)` for at least:
@@ -1090,7 +1417,13 @@ confirmation registry uses seeds `(11, 22, 33, 44, 55)` for at least:
 - U100 and S100_10;
 - D0F, J100, and S0_20;
 - M1F, M1J, and S0_21;
-- P0KD when the adapter gap is material.
+- P0KD and `U010P0KD` unconditionally.
+
+For each confirmation seed, every named endpoint instantiates its complete
+seed-consistent causal prefix: all ten U and ten factorized D predecessors for
+D0F/M1F, all twenty J predecessors for J100/M1J, and every required stationary
+prefix. P0KD is retrained before its U010P0KD child. A confirmation endpoint
+may not consume a screening-seed teacher or skip an unattractive predecessor.
 
 Confirmation cannot add an attractive unregistered intermediate after the
 screen. A new untouched final-test source or an explicitly descriptive reused
@@ -1102,17 +1435,20 @@ The 300k campaign DAG is:
 
 ```text
 authenticate parent spec/split/selection/recipe/assignments/checkpoints
-  -> build train-only residual-pair scale calibration
-  -> build staged train coupling shards (cost + mass)
-  -> freeze train-only switch-CDF calibration
-  -> finalize train coupling shards -----+
-  -> build validation coupling shards ---+-> manifests + full-role audit
+  -> build train-only Cartesian-edge scale calibration
+  -> build immutable train base-coupling shards (cost_q + mass_q)
+  -> freeze train-only switch histogram
+  -> build train switch sidecars --------+
+  -> build validation base shards -------+-> validation switch sidecars
+                                             -> manifests + full-role endpoint audit
                                              -> coupling lock
                                              -> bounded V(s,f) cache miniature
                                              -> endpoint equality lock
                                              -> immutable graph/recipe lock
 
-  -> P0CE || P0KD
+  -> build and lock shared TOFF-native train-logit cache
+
+  -> M0paired || P0CE || P0KD; then U010P0KD after P0KD
   -> factorized U/D path (sequential)
   -> joint path          (sequential, parallel with factorized)
   -> D100 stationary     (sequential, parallel)
@@ -1145,16 +1481,24 @@ The implementation introduces at least:
 ```text
 HCWDL_RESIDUAL_SHELL_COUPLING_CONFIG/v1
 HCWDL_RESIDUAL_SHELL_SCALE_CALIBRATION/v1
-HCWDL_RESIDUAL_SHELL_STAGED_SHARD/v1
 HCWDL_RESIDUAL_SHELL_SWITCH_CALIBRATION/v1
-HCWDL_RESIDUAL_SHELL_COUPLING_SHARD/v1
+HCWDL_RESIDUAL_SHELL_BASE_SHARD/v1
+HCWDL_RESIDUAL_SHELL_BASE_MANIFEST/v1
+HCWDL_RESIDUAL_SHELL_SWITCH_SIDECAR/v1
 HCWDL_RESIDUAL_SHELL_COUPLING_MANIFEST/v1
 HCWDL_RESIDUAL_SHELL_COUPLING_AUDIT/v1
 HCWDL_RESIDUAL_SHELL_COUPLING_LOCK/v1
 
+HCWDL_TOFF_TARGET_SHARD/v1
+HCWDL_TOFF_TARGET_MANIFEST/v1
+HCWDL_TOFF_TARGET_LOCK/v1
+
 HCWDL_STRUCTURAL_FEATURE_COORDINATE/v1
 HCWDL_STRUCTURAL_FEATURE_NODE_SPEC/v1
 HCWDL_STRUCTURAL_FEATURE_GRAPH/v1
+HCWDL_STRUCTURAL_FEATURE_RECIPE/v1
+HCWDL_STRUCTURAL_FEATURE_ENDPOINT_EQUALITY_LOCK/v1
+HCWDL_STRUCTURAL_FEATURE_GRAPH_RECIPE_LOCK/v1
 HCWDL_STRUCTURAL_FEATURE_PILOT_SPEC/v1
 HCWDL_STRUCTURAL_FEATURE_COMMAND_PLAN/v1
 HCWDL_STRUCTURAL_FEATURE_TRAINING_REPORT/v1
@@ -1162,17 +1506,34 @@ HCWDL_STRUCTURAL_FEATURE_AGGREGATE/v1
 
 HCWDL_STRUCTURAL_FEATURE_RECOVERY_SPEC/v1
 HCWDL_STRUCTURAL_FEATURE_RECOVERY_COMMAND_PLAN/v1
+HCWDL_STRUCTURAL_FEATURE_RESOURCE_RECOVERY_SPEC/v1
+HCWDL_STRUCTURAL_FEATURE_RESOURCE_RECOVERY_COMMAND_PLAN/v1
 ```
 
-The generic `HCWDL_RECIPE/v4`, PMARD training/resume v6 behavior, checkpoint
+The graph-specific recipe is an overlay that binds the exact imported
+`HCWDL_RECIPE/v4` hash and the per-node table; it does not redefine v4. The
+generic PMARD training/resume v6 behavior, checkpoint
 selection v1, high-coverage assignment manifests v2, Shell Exact v1, generic
 submission ledger v2, monitor v1, and task-attestation v1 may be reused only
 through their existing validators and exact parent hashes.
 
 Any change to P0 membership, endpoint projection, coupling groups or weights,
-scale floors, solver objective, dummy semantics, edit mass, CDF binning,
+scale floors, solver objective, dummy semantics, edit mass, switch binning,
 carrier order, U/J coordinate table, graph, teacher edge, seed alias, or
 stationary controls is a scientific contract change.
+
+`HCWDL_STRUCTURAL_FEATURE_TRAINING_REPORT/v1` is an authenticated outer
+wrapper around the unchanged generic PMARD engine report. It adds node/view/
+teacher/coupling/coordinate/recipe lineage and the engine-report hash; it does
+not relabel the generic report payload.
+
+The endpoint-equality lock binds the full-role endpoint audit, coupling lock,
+coordinate table, bounded cache miniature, public Shell Exact/canonical HLT
+parity evidence, and exact projection code hash. The graph-recipe lock binds
+that endpoint lock, the TOFF-target lock, exact 80-node graph, overlay recipe,
+referenced v4 recipe, per-node engine loss table, seed aliases, command plan,
+and source commit. Their validators are mandatory parents of every view,
+target, training, and aggregate consumer.
 
 ## 17. Proposed durable layout
 
@@ -1180,21 +1541,30 @@ stationary controls is a scientific contract change.
 campaign_root/
   campaign_spec.json
   imported_parent.json
+  graph.json
+  recipe_overlay.json
+  coordinate_table.json
   coupling/
     config.json
-    train_calibration.json
-    train/*.npz
-    validation/*.npz
+    scale_calibration.json
+    switch_calibration.json
+    train/base/*.npz
+    train/switch/*.npz
+    validation/base/*.npz
+    validation/switch/*.npz
     train_manifest.json
     validation_manifest.json
     full_role_audit.json
+  targets/toff_train/{shards,manifest.json,lock.json}
   locks/
     coupling_lock.json
     endpoint_equality_lock.json
     graph_recipe_lock.json
   controls/
+    M0paired/
     P0CE/
     P0KD/
+    U010P0KD/
     direct/{D100direct,D0direct,M0self}/
     stationary_d100/S100_*/
     stationary_hlt/S0_*/
@@ -1220,7 +1590,7 @@ The preferred reusable boundaries are:
 | Path | Responsibility |
 |---|---|
 | `src/hlt_classification/scouting/repair.py` | expose the existing all-21-field offline projection and Shell Exact per-slot state without changing v1 semantics |
-| `src/hlt_classification/scouting/hcwdl_upper_coupling.py` | A/B/C/O/R construction, cost groups, Hungarian coupling, edit mass, train CDF, carrier records |
+| `src/hlt_classification/scouting/hcwdl_upper_coupling.py` | A/B/K/C_A/C_B/O/R construction, exact solver, edit mass, train switch transform, carrier records |
 | `src/hlt_classification/scouting/hcwdl_upper_cache.py` | coupling shards, manifests, full-role audit, ROOT recomputation, lock inputs |
 | `src/hlt_classification/scouting/hcwdl_homotopy.py` | generalized `V(s,f)` raw endpoint builder, carrier compaction, endpoint equality |
 | `src/hlt_classification/scouting/hcwdl_homotopy_stream.py` | bounded ROOT/assignment/coupling streaming into canonical ParticleInputs |
@@ -1253,6 +1623,7 @@ Thin command surfaces should include:
 scripts/build_hcwdl_upper_calibration.py
 scripts/build_hcwdl_upper_coupling_shard.py
 scripts/finalize_hcwdl_upper_coupling.py
+scripts/build_hcwdl_toff_targets.py
 scripts/create_hcwdl_homotopy_pilot.py
 scripts/run_hcwdl_homotopy_task.py
 scripts/submit_hcwdl_homotopy_pilot.py
@@ -1319,6 +1690,14 @@ bound ledger. Broad name cancellation, `scontrol release` repair, deleting a
 rolling checkpoint, or ordinary requeue under known-broken pinned source is
 forbidden.
 
+A measured OOM or time-limit failure is not a source repair. A separate
+resource-only recovery contract may increase memory, walltime, CPUs, or an
+operational array cap while binding the identical source commit, scientific
+graph, recipe, data, coupling, coordinates, seeds, checkpoints, command bytes
+apart from resource flags, and output root. It records the scheduler evidence,
+old/new envelope, exact failed closure, and explicit authorization. It cannot
+change batch size, update count, cache contents, or any scientific semantic.
+
 ## 21. Required test matrix
 
 ### 21.1 Endpoint partition and coupling
@@ -1328,15 +1707,20 @@ forbidden.
 - unclassified HLT dustbin targets remain valid, exact HLT, and never acquire
   an offline correspondence claim;
 - assigned D100 endpoints inside and outside P0 visibility;
-- exact A/B/C/O/R partition and `R_hlt`/`R_off` typing;
+- exact A/B/K/`C_A`/`C_B`/O/R partition, assignment injectivity,
+  K-payload equality, and `R_hlt`/`R_off` typing;
 - empty, O-only, R-only, equal, and rectangular residual sets;
 - exact substitution/removal/insertion counts and unique endpoint use;
-- hand-calculated cost groups, train quantiles, floors, weights, quantization,
-  Hungarian optimum, and lexicographic ties;
+- exact `physical_p4_mask` tolerance plus hand-calculated p4 floors/logs/
+  wrapped angles, channel transforms/scales,
+  cost groups, Cartesian train quantiles, floors, weights, half-up
+  quantization, global optimum, canonical edge-fixing oracle, optimized-solver
+  equivalence, and measured runtime;
 - row/input/worker permutations leave the logical coupling unchanged;
 - no label or final-test branch dependency;
-- edit mass, train CDF, validation transform, hash tie, uint16 round trip, and
-  nested thresholds;
+- integer edit mass, bin indexing, canonical uint64 reduction, exact rational
+  hash placement, zero-bin/zero-population validation transform, uint16 round
+  trip, insertion/removal tail concentration, and nested thresholds;
 - shard corruption, cross-role/source/selection/assignment/config rejection;
 - 99,999-of-100,000 perfect observed rows fails completeness;
 - sampled ROOT recomputation reproduces logical arrays.
@@ -1347,8 +1731,13 @@ forbidden.
 - U000 active multiset and all 21 projected fields equal P0;
 - U100 features, vectors, mask, padding, lengths, and order are byte-identical
   to current D100;
+- P0/intermediate raw lengths equal active counts, while exact endpoints copy
+  canonical raw HLT lengths, including a fixture above 200;
 - `V(1,f)` is byte-identical to existing Shell Exact at `alpha=1-f` for every
   registered f;
+- extracted Shell Exact primitive matches the public continuous-alpha builder
+  at registered and deterministic sampled alphas while legacy grids stay
+  unchanged;
 - D0F and J100 are byte-identical to canonical HLT;
 - atomic O-to-R, O-to-padding, and padding-to-R edits;
 - no fractional discrete values, hybrid residual records, duplicate particles,
@@ -1356,23 +1745,31 @@ forbidden.
 - relative fields and axes are not recomputed from the changing set;
 - structural and discrete switches are nested and invariant to batch, chunk,
   worker, epoch, cache, and resume;
+- carrier compaction cannot alter a switch because its key uses immutable HLT
+  slot rather than compact position;
 - stream and RAM replay emit identical identities, batches, tensors, labels,
   and tails.
 
 ### 21.3 Graph and training
 
-- exact 21-node factorized and 21-node joint registries;
+- exact 21-node factorized, 21-node joint, 31-node stationary, and seven-node
+  control registries: 80 new fits total;
 - exact 10 U, 10 D, 20 J coordinate tables with decimal and hexadecimal
   floats;
 - U010 and J005 teacher is TOFF-native;
 - U100 teaches D90F; D10F teaches D0F; D0F/J100 teach separate M1 nodes;
 - every student is fresh and no cross-path teacher is allowed;
-- exact D100 and HLT stationary-depth chains and direct controls;
+- exact D100/HLT stationary-depth chains, temperature-2 causal routing through
+  transition 20, temperature-1 transition 21, and distinct direct controls;
 - paired transition-index seeds and endpoint seed aliases;
+- P0CE/P0KD share initialization/sampler seed and both stationary chains share
+  transition seeds 1--10;
 - identical rows, 60 passes, 60 validations, update counts, and final partial
   batch across paired nodes;
 - unweighted CE/KD, role-routed temperature, BF16 forward, and FP32 loss math;
 - teacher evaluated on its own domain exactly once and student view built once;
+- shared authenticated TOFF-native target cache is built once, has exact
+  identity/class/checkpoint lineage, and is consumed by all seven roots;
 - macro-AUC/CE/logR/earliest checkpoint tie order;
 - uninterrupted and GPU-mapped interrupted/resumed equivalence;
 - USR1 reaches Python and publishes compatible state;
@@ -1388,9 +1785,12 @@ forbidden.
 - factorized/joint/stationary chains are parallel across chains and sequential
   within each chain;
 - all smoke commands are bounded and no smoke result authorizes full coverage;
-- no initial task can read final test;
-- exact-ID monitor, cancellation, first recovery, and repeated recovery;
+- full-role endpoint hashes/counters, independent ROOT sample, and exact branch
+  allowlist trace; no initial task can read final test;
+- exact-ID monitor, cancellation, source recovery, resource-only recovery, and
+  repeated recovery;
 - task attestations and all-reused restart validation;
+- every confirmation endpoint expands to its complete same-seed causal prefix;
 - no durable repaired-particle artifact and no matcher call after assignment
   authorization.
 
@@ -1413,9 +1813,10 @@ Python compilation, CLI help/static checks, Markdown-link validation, and
 1. **Contract and projection extraction:** create new contract constants,
    expose the existing 21-field endpoint projector, and prove no change to
    Shell Exact v1.
-2. **Endpoint partition and coupling:** implement A/B/C/O/R, train-only scale
-   calibration, cost, global solver, edit mass/CDF, compact shards, manifests,
-   audit, and lock.
+2. **Endpoint partition and coupling:** implement A/B/K/C_A/C_B/O/R,
+   train-only Cartesian scale calibration, exact global solver, integer edit
+   mass/switch transform, immutable base/sidecar shards, manifests, full-role
+   endpoint audit, and lock.
 3. **Generalized view builder:** implement carrier layout and `V(s,f)` with
    exact P0/D100/HLT endpoint tests and shared Shell Exact semantics.
 4. **Graph and training reuse:** register factorized, joint, adapter, direct,
@@ -1461,7 +1862,7 @@ Allowed claims include:
 
 - projected-native-offline carrier endpoint;
 - residual-shell structural coupling;
-- minimum-disruption edit path;
+- maximum-cardinality minimum-cost edit path;
 - exact D100 and HLT endpoints;
 - factorized versus joint knowledge-transfer path;
 - HLT-only deployment for M1F/M1J.
@@ -1470,9 +1871,12 @@ Forbidden claims include:
 
 - residual O-to-R truth matching or physical correspondence;
 - U000 being tensor- or architecture-identical to TOFF-native;
+- U010 or J005 isolating their path increment from the native-to-unified
+  adapter change;
 - U100 being native offline;
 - a switched HLT dustbin being reconstructed from its coupled O particle;
 - equal GPU compute merely because edge/update counts match;
+- factorized-versus-joint isolating simultaneity from per-axis resolution;
 - success proving that unavailable offline particles are inferable at HLT;
 - failure proving an information-theoretic ceiling.
 

@@ -9,7 +9,7 @@ import sys
 import pytest
 
 from hlt_classification.data.cache_contracts import (
-    load_json, with_content_hash, write_immutable_json,
+    load_json, sha256_file, with_content_hash, write_immutable_json,
 )
 from hlt_classification.scouting.engine import PMARD_TRAINING_REPORT_CONTRACT
 from hlt_classification.scouting.hcwdl_dense import (
@@ -20,6 +20,7 @@ from hlt_classification.scouting.hcwdl_dense import (
     validate_dense_spec,
 )
 from hlt_classification.scouting.hcwdl_dense_runner import dense_shared_repair_seed
+from hlt_classification.scouting.hcwdl_dense_workflow import DenseColdWorkflow
 from hlt_classification.scouting.hcwdl_dense_recovery import (
     build_dense_recovery_plan, create_dense_recovery_spec,
     validate_dense_recovery_spec,
@@ -301,6 +302,73 @@ def test_dense_recovery_reuses_completed_top_and_submits_failed_closure(
     assert all("--array" not in item for row in plan["commands"] for item in row["command"])
     worker = Path("sbatch/run_hcwdl_dense_recovery.sh").read_text()
     assert "exec python -s" in worker
+
+
+@pytest.mark.parametrize(("rung_step", "node_id"), ((10, "D90c"), (5, "D95c")))
+def test_replacement_recovery_reuses_a_completed_retry_node(
+    tmp_path: Path, rung_step: int, node_id: str,
+) -> None:
+    spec = _spec(rung_step)
+    spec["campaign_root"] = str(tmp_path / "campaign")
+    spec = _rehash_spec(spec)
+    workflow = DenseColdWorkflow(spec)
+    output = Path(spec["campaign_root"]) / "training" / node_id
+    output.mkdir(parents=True)
+    selected = output / "selected_model.pt"
+    final = output / "final_model.pt"
+    selected.write_bytes(b"selected-complete-model")
+    final.write_bytes(b"final-complete-model")
+
+    profile = dense_profile_for_step(rung_step)
+    node_payload = profile.registry[node_id].payload()
+    node_payload["contract"] = profile.node_contract
+    teacher_hash = "6" * 64
+    parents = {
+        "split_manifest_sha256": spec["split_manifest_sha256"],
+        "source_snapshot_sha256": spec["source_snapshot_sha256"],
+        "assignment_lock_sha256": spec["assignment_lock_sha256"],
+        "qualification_lock_sha256": spec["qualification_lock_sha256"],
+        "parent_campaign_spec_sha256": spec["parent_campaign_spec_sha256"],
+        "teacher_sole_report_sha256": teacher_hash,
+        "recipe": spec["recipe_sha256"],
+    }
+    engine = with_content_hash({
+        "contract": PMARD_TRAINING_REPORT_CONTRACT, "schema_version": 6,
+        "complete": True,
+        "scientific_config": {
+            "campaign": profile.campaign,
+            "graph_sha256": profile.graph_sha256,
+            "node": node_payload,
+            "recipe_sha256": spec["recipe_sha256"],
+            "repair_rng_policy": DENSE_REPAIR_RNG_POLICY,
+        },
+        "parents": parents,
+        "selected_checkpoint": selected.name,
+        "selected_checkpoint_sha256": sha256_file(selected),
+        "final_checkpoint": final.name,
+        "final_checkpoint_sha256": sha256_file(final),
+    })
+    engine_path = output / "training_report.json"
+    write_immutable_json(engine_path, engine)
+    node = with_content_hash({
+        "contract": profile.training_report_contract, "schema_version": 1,
+        "node_id": node_id, "graph_sha256": profile.graph_sha256,
+        "recipe_sha256": spec["recipe_sha256"], "parents": parents,
+        "pmard_engine_report_sha256": engine["content_hash"],
+        "selected_checkpoint_sha256": sha256_file(selected),
+        "final_checkpoint_sha256": sha256_file(final), "complete": True,
+    })
+    node_path = output / "hcwdl_training_report.json"
+    write_immutable_json(node_path, node)
+
+    assert workflow._completed_node_outputs(
+        node_id, teacher_report_sha256=teacher_hash,
+    ) == (engine_path, node_path)
+    final.write_bytes(b"corrupt")
+    with pytest.raises(ValueError, match="final checkpoint hash differs"):
+        workflow._completed_node_outputs(
+            node_id, teacher_report_sha256=teacher_hash,
+        )
 
 
 def test_campaign_monitor_accepts_dense_specs_without_array_fields(

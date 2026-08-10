@@ -15,6 +15,7 @@ from .hcwdl_dense import (
     dense_profile_for_spec, validate_dense_spec,
 )
 from .hcwdl_dense_runner import run_dense_node
+from .hcwdl_training import validate_completed_hcwdl_node
 
 
 class DenseColdWorkflow:
@@ -67,6 +68,34 @@ class DenseColdWorkflow:
             raise ValueError(f"dense cold teacher lineage differs for {teacher_id}")
         return engine_path, engine_hash
 
+    def _completed_node_outputs(
+        self, node_id: str, *, teacher_report_sha256: str,
+    ) -> tuple[Path, Path] | None:
+        node = self.profile.registry[node_id]
+        node_payload = node.payload()
+        node_payload["contract"] = self.profile.node_contract
+        expected_parents = {
+            "split_manifest_sha256": self.spec["split_manifest_sha256"],
+            "source_snapshot_sha256": self.spec["source_snapshot_sha256"],
+            "assignment_lock_sha256": self.spec["assignment_lock_sha256"],
+            "qualification_lock_sha256": self.spec[
+                "qualification_lock_sha256"
+            ],
+            "parent_campaign_spec_sha256": self.spec[
+                "parent_campaign_spec_sha256"
+            ],
+            "teacher_sole_report_sha256": teacher_report_sha256,
+        }
+        return validate_completed_hcwdl_node(
+            self.root / f"training/{node_id}", node_id=node_id,
+            expected_campaign=self.profile.campaign,
+            expected_graph_sha256=self.profile.graph_sha256,
+            expected_node_payload=node_payload,
+            expected_recipe_sha256=self.spec["recipe_sha256"],
+            expected_parents=expected_parents,
+            report_contract=self.profile.training_report_contract,
+        )
+
     def run(self, task_id: str) -> list[Path]:
         by_task = {row["task_id"]: row for row in self.spec["tasks"]}
         if task_id not in by_task:
@@ -76,6 +105,11 @@ class DenseColdWorkflow:
             node_id = str(task["node_id"])
             output = self.root / f"training/{node_id}"
             teacher_path, teacher_hash = self._teacher_report(node_id)
+            completed = self._completed_node_outputs(
+                node_id, teacher_report_sha256=teacher_hash,
+            )
+            if completed is not None:
+                return list(completed)
             run_dense_node(
                 node_id=node_id,
                 recipe_path=self.spec["recipe_path"],

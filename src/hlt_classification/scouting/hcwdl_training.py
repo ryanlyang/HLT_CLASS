@@ -10,9 +10,14 @@ from typing import Any
 
 import numpy as np
 
-from hlt_classification.data.cache_contracts import require_sha256, sha256_file, with_content_hash, write_immutable_json
+from hlt_classification.data.cache_contracts import (
+    canonical_sha256, load_json, require_sha256, sha256_file,
+    validate_content_hash, with_content_hash, write_immutable_json,
+)
 
-from .engine import PmardTrainingConfig, train_pmard
+from .engine import (
+    PmardTrainingConfig, train_pmard, validate_pmard_training_report,
+)
 from .hcwdl_ladder import DOMAINS, GRAPH_SHA256, NODE_REGISTRY, NodeSpec
 from .hcwdl_recipe import validate_recipe
 from .targets import EphemeralTeacherTargets
@@ -21,6 +26,93 @@ from .training import LossConfiguration, derive_seed
 
 TRAINING_REPORT_CONTRACT = "HCWDL_TRAINING_REPORT/v1"
 CHECKPOINT_SELECTION_CONTRACT = "HCWDL_CHECKPOINT_SELECTION/v1"
+
+
+def validate_completed_hcwdl_node(
+    output_dir: str | Path, *, node_id: str, expected_campaign: str,
+    expected_graph_sha256: str, expected_node_payload: Mapping[str, object],
+    expected_recipe_sha256: str, expected_parents: Mapping[str, str],
+    report_contract: str,
+) -> tuple[Path, Path] | None:
+    """Return a complete immutable node, or reject partial/stale artifacts."""
+
+    root = Path(output_dir)
+    engine_path = root / "training_report.json"
+    node_path = root / "hcwdl_training_report.json"
+    present = (engine_path.is_file(), node_path.is_file())
+    if present == (False, False):
+        return None
+    if present != (True, True):
+        raise FileExistsError(
+            f"partial completed HCWDL node artifacts exist for {node_id}"
+        )
+
+    recipe_hash = require_sha256(
+        expected_recipe_sha256, name="completed HCWDL recipe SHA-256",
+    )
+    graph_hash = require_sha256(
+        expected_graph_sha256, name="completed HCWDL graph SHA-256",
+    )
+    parents = {
+        name: require_sha256(value, name=f"completed HCWDL parent {name}")
+        for name, value in expected_parents.items()
+    }
+    parents["recipe"] = recipe_hash
+
+    engine = load_json(engine_path)
+    engine_hash = validate_pmard_training_report(engine)
+    scientific = engine.get("scientific_config")
+    if (
+        engine.get("complete") is not True
+        or not isinstance(scientific, Mapping)
+        or scientific.get("campaign") != expected_campaign
+        or scientific.get("graph_sha256") != graph_hash
+        or scientific.get("recipe_sha256") != recipe_hash
+        or canonical_sha256(scientific.get("node"))
+        != canonical_sha256(expected_node_payload)
+        or engine.get("parents") != parents
+    ):
+        raise ValueError(f"completed HCWDL engine lineage differs for {node_id}")
+
+    checkpoint_hashes: dict[str, str] = {}
+    for label in ("selected", "final"):
+        filename = engine.get(f"{label}_checkpoint")
+        expected_hash = engine.get(f"{label}_checkpoint_sha256")
+        if not isinstance(filename, str):
+            raise ValueError(
+                f"completed HCWDL {label} checkpoint is absent for {node_id}"
+            )
+        if Path(filename).name != filename or Path(filename).is_absolute():
+            raise ValueError(
+                f"completed HCWDL {label} checkpoint path differs for {node_id}"
+            )
+        digest = require_sha256(
+            expected_hash, name=f"completed HCWDL {label} checkpoint SHA-256",
+        )
+        checkpoint = root / filename
+        if not checkpoint.is_file() or sha256_file(checkpoint) != digest:
+            raise ValueError(
+                f"completed HCWDL {label} checkpoint hash differs for {node_id}"
+            )
+        checkpoint_hashes[label] = digest
+
+    node = load_json(node_path)
+    validate_content_hash(
+        node, expected_contract=report_contract, expected_schema_version=1,
+    )
+    if (
+        node.get("complete") is not True
+        or node.get("node_id") != node_id
+        or node.get("graph_sha256") != graph_hash
+        or node.get("recipe_sha256") != recipe_hash
+        or node.get("parents") != parents
+        or node.get("pmard_engine_report_sha256") != engine_hash
+        or node.get("selected_checkpoint_sha256")
+        != checkpoint_hashes["selected"]
+        or node.get("final_checkpoint_sha256") != checkpoint_hashes["final"]
+    ):
+        raise ValueError(f"completed HCWDL node lineage differs for {node_id}")
+    return engine_path, node_path
 
 
 def checkpoint_selection_key(metrics: Mapping[str, object], update: int) -> tuple[object, ...]:
@@ -285,5 +377,5 @@ def train_hcwdl_node(
 __all__ = [
     "CHECKPOINT_SELECTION_CONTRACT", "TRAINING_REPORT_CONTRACT",
     "checkpoint_selection_key", "initialize_node_model", "node_training_config",
-    "select_checkpoint", "train_hcwdl_node",
+    "select_checkpoint", "train_hcwdl_node", "validate_completed_hcwdl_node",
 ]
