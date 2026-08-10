@@ -88,6 +88,13 @@ POSIX-shell skips**.
 The subsequent purged-collector recovery contracts, canonical routes, CLI
 inventory, and exact one-/two-commit compatibility boundary pass **30 focused
 tests** (29 contract/resource tests plus the explicit CLI inventory check).
+Replacement collector `80400` then confirmed that current Tigris returns an
+empty `sacct Comment` column even though the exact `--comment=<binding>` token
+is preserved in `SubmitLine`. The parser now permits only that exact pair:
+blank raw column plus the required bound submit token; altered or missing
+tokens still fail. A requeued collector may reuse the first attempt's partial
+`cpu_small/sacct.psv` only when a fresh capture is byte-identical, and every
+other raw/evidence path must remain fresh.
 
 ## HCWDL non-final corrected-parent prefix (2026-08-09)
 

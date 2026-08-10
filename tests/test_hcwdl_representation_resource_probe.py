@@ -169,6 +169,17 @@ def test_collector_compatibility_is_one_clean_direct_operational_successor(
         tmp_path, expected_commit=expected,
     ) == actual
     responses[("rev-list", "--count", f"{expected}..{actual}")] = "3\n"
+    assert probe._validate_collector_compatible_checkout(
+        tmp_path, expected_commit=expected,
+    ) == actual
+    responses[("rev-parse", "HEAD^")] = expected + "\n"
+    responses[("diff", "--name-only", f"{expected}..{actual}")] = (
+        "\n".join(sorted(probe._POST_RECOVERY_COMPATIBILITY_PATHS)) + "\n"
+    )
+    assert probe._validate_post_recovery_compatible_checkout(
+        tmp_path, authorized_commit=expected,
+    ) == actual
+    responses[("rev-list", "--count", f"{expected}..{actual}")] = "4\n"
     with pytest.raises(PermissionError, match="compatibility successor"):
         probe._validate_collector_compatible_checkout(
             tmp_path, expected_commit=expected,
@@ -231,6 +242,18 @@ def test_one_replacement_collector_is_bound_without_probe_reruns(
             plan=plan, authorization=authority, ledger=ledger,
             recovery_authorization=recovery, replacement_collector_job_id="80194",
         )
+
+
+def test_collector_reuses_only_byte_identical_partial_raw_capture(
+    tmp_path: Path,
+) -> None:
+    from hlt_classification.scouting import hcwdl_representation_resource_probe as probe
+
+    path = tmp_path / "sacct.psv"
+    probe._publish_or_match_raw_accounting(path, b"exact accounting\n")
+    probe._publish_or_match_raw_accounting(path, b"exact accounting\n")
+    with pytest.raises(PermissionError, match="differs from prior immutable capture"):
+        probe._publish_or_match_raw_accounting(path, b"changed accounting\n")
 
 
 def test_dense_storage_uses_measured_templates_and_scales_all_86_nodes(

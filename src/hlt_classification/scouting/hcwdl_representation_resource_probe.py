@@ -59,6 +59,13 @@ _COLLECTOR_RECOVERY_PATHS: Final = _COLLECTOR_COMPATIBILITY_BASE_PATHS | frozens
     "tests/test_hcwdl_representation_contracts.py",
     "tests/test_hcwdl_representation_layout.py",
 })
+_POST_RECOVERY_COMPATIBILITY_PATHS: Final = frozenset({
+    "docs/HANDOFF.md",
+    "src/hlt_classification/scouting/hcwdl_representation_resource_probe.py",
+    "src/hlt_classification/scouting/hcwdl_representation_resources.py",
+    "tests/test_hcwdl_representation_evidence.py",
+    "tests/test_hcwdl_representation_resource_probe.py",
+})
 
 
 def _validate_collector_compatible_checkout(
@@ -91,7 +98,7 @@ def _validate_collector_compatible_checkout(
             "dense resource collector source is not a compatibility successor"
         )
     distance_text = git("rev-list", "--count", f"{expected_commit}..{actual}").stdout.strip()
-    if not distance_text.isdigit() or int(distance_text) not in {1, 2}:
+    if not distance_text.isdigit() or int(distance_text) not in {1, 2, 3}:
         raise PermissionError(
             "dense resource collector source is not a bounded compatibility successor"
         )
@@ -110,6 +117,36 @@ def _validate_collector_compatible_checkout(
         raise PermissionError(
             "dense resource collector source is not the direct compatibility successor"
         )
+    return actual
+
+
+def _validate_post_recovery_compatible_checkout(
+    project: Path, *, authorized_commit: str,
+) -> str:
+    """Permit one direct parser-only successor of a recovery authorization."""
+
+    def git(*arguments: str) -> str:
+        return subprocess.run(
+            ["git", *arguments], cwd=project, check=True,
+            capture_output=True, text=True,
+        ).stdout.strip()
+
+    if git("status", "--porcelain"):
+        raise PermissionError("dense resource collector checkout is dirty")
+    actual = git("rev-parse", "HEAD")
+    if actual == authorized_commit:
+        return actual
+    if git("rev-parse", "HEAD^") != authorized_commit:
+        raise PermissionError(
+            "dense resource collector is not the direct recovery compatibility successor"
+        )
+    changed = frozenset(
+        line for line in git(
+            "diff", "--name-only", f"{authorized_commit}..{actual}",
+        ).splitlines() if line
+    )
+    if changed != _POST_RECOVERY_COMPATIBILITY_PATHS:
+        raise PermissionError("dense resource collector recovery changes differ")
     return actual
 
 
@@ -385,11 +422,26 @@ def _validate_failed_collector_log(
     return {"path": str(path), "sha256": expected_sha256}
 
 
+def _publish_or_match_raw_accounting(path: Path, raw_bytes: bytes) -> None:
+    """Publish fresh accounting or require byte identity with a prior attempt."""
+
+    if not raw_bytes:
+        raise PermissionError("dense resource-probe accounting capture is empty")
+    if path.exists():
+        if path.is_symlink() or path.read_bytes() != raw_bytes:
+            raise PermissionError(
+                "dense resource-probe accounting differs from prior immutable capture"
+            )
+    elif atomic_publish_bytes(path, raw_bytes) != "published":
+        raise PermissionError("dense resource-probe accounting was not freshly captured")
+
+
 def build_dense_resource_probe_collector_recovery_authorization(
     *, plan: Mapping[str, Any], authorization: Mapping[str, Any],
     ledger: Mapping[str, Any], ledger_path: str | Path,
     failed_collector_log: Mapping[str, Any],
     authorization_phrase: str,
+    _compatibility_source_commit: str | None = None,
 ) -> dict[str, Any]:
     """Authorize one replacement collector without rerunning any probe."""
 
@@ -409,9 +461,18 @@ def build_dense_resource_probe_collector_recovery_authorization(
     ):
         raise PermissionError("dense collector-recovery authorization phrase differs")
     project = Path(str(plan["project_dir"])).resolve()
-    compatibility_commit = _validate_collector_compatible_checkout(
+    actual_commit = _validate_collector_compatible_checkout(
         project, expected_commit=str(plan["source_commit"]),
     )
+    compatibility_commit = (
+        actual_commit
+        if _compatibility_source_commit is None
+        else str(_compatibility_source_commit)
+    )
+    if actual_commit != compatibility_commit:
+        _validate_post_recovery_compatible_checkout(
+            project, authorized_commit=compatibility_commit,
+        )
     if compatibility_commit == plan["source_commit"]:
         raise PermissionError("dense collector recovery requires compatibility source")
     failed_id = str(ledger["collector_job_id"])
@@ -466,6 +527,9 @@ def validate_dense_resource_probe_collector_recovery_authorization(
         ledger_path=str(value.get("original_ledger", {}).get("path", "")),
         failed_collector_log=value.get("failed_collector_log", {}),
         authorization_phrase=str(value.get("authorization_phrase", "")),
+        _compatibility_source_commit=str(
+            value.get("compatibility_source_commit", "")
+        ),
     )
     if dict(value) != rebuilt:
         raise PermissionError("dense collector-recovery authorization differs")
@@ -576,8 +640,7 @@ def collect_dense_resource_probe_evidence(
             check=True, capture_output=True,
         )
         raw_bytes = bytes(completed.stdout)
-        if not raw_bytes or atomic_publish_bytes(raw_path, raw_bytes) != "published":
-            raise PermissionError("dense resource-probe accounting was not freshly captured")
+        _publish_or_match_raw_accounting(raw_path, raw_bytes)
         scheduler = build_scheduler_evidence_from_sacct(
             raw_accounting_record=artifact_reference(raw_path),
             task_key=str(row["task_key"]), resource_class=resource_class,

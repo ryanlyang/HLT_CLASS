@@ -456,7 +456,8 @@ def _parse_sacct_reference(
     expected_job_name = f"hcwdlr_{expected_task_key}"
     if parent["JobName"] != expected_job_name:
         raise PermissionError("raw sacct job name differs")
-    if parent["Comment"] != expected_comment:
+    raw_comment = parent["Comment"]
+    if raw_comment not in {"", expected_comment}:
         raise PermissionError("raw sacct binding comment differs")
     try:
         submit_tokens = shlex.split(parent["SubmitLine"], posix=True)
@@ -493,6 +494,12 @@ def _parse_sacct_reference(
         }
         if not required_options.issubset(set(submit_tokens[1:-1])):
             raise PermissionError("raw sacct submit line lacks exact bound Slurm options")
+        # Current Tigris preserves the submitted binding in ``SubmitLine`` but
+        # returns an empty ``Comment`` accounting column.  The exact comment
+        # option above remains mandatory; an empty column never weakens or
+        # replaces that authenticated command-line binding.
+    elif raw_comment != expected_comment:
+        raise PermissionError("raw sacct binding comment differs")
     elif normalized_worker not in submit_tokens:
         raise PermissionError("raw sacct submit line lacks the exact production worker")
     completed = [row for row in rows if row["State"].split("+", 1)[0] == "COMPLETED"]
@@ -524,7 +531,7 @@ def _parse_sacct_reference(
         "requested_memory_bytes": _slurm_bytes(parent["ReqMem"], name="ReqMem"),
         "requested_gpu": _requested_gpu_from_tres(parent["ReqTRES"]),
         "peak_rss_bytes": max(rss_values),
-        "binding_comment": parent["Comment"],
+        "binding_comment": expected_comment,
         "submit_line": parent["SubmitLine"],
         "submit_argv": submit_tokens,
     }

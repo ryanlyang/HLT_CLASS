@@ -443,6 +443,34 @@ def test_scheduler_evidence_rejects_wrong_identity_request_or_elapsed(
         )
 
 
+def test_blank_sacct_comment_uses_only_exact_submit_line_binding(
+    tmp_path: Path,
+) -> None:
+    profile, _, _ = _resource_profile(tmp_path)
+    name = "cpu_small"
+    request = profile["requests"][name]
+    workers = profile["measurement_environment"]["production_workers"]
+    scheduler, _ = _scheduler(
+        tmp_path, request=request, resource_class=name, workers=workers,
+        job_id=9_200, task_key="blank-comment", raw_overrides={"Comment": ""},
+    )
+    assert scheduler["binding_comment"].startswith("hcwdl-rkd-evidence-v1:")
+
+    worker = workers["ordinary"]
+    without_binding = " ".join((
+        "sbatch", "--parsable", "--account=reu-aisocial",
+        "--partition=tigris", "--job-name=hcwdlr_blank-comment",
+        "--cpus-per-task=2", "--mem=8G", "--time=00:30:00",
+        shlex.quote(worker["path"]),
+    ))
+    with pytest.raises(PermissionError, match="lacks exact bound Slurm options"):
+        _scheduler(
+            tmp_path, request=request, resource_class=name, workers=workers,
+            job_id=9_201, task_key="blank-comment",
+            raw_overrides={"Comment": "", "SubmitLine": without_binding},
+        )
+
+
 def _tigris_acceptance(tmp_path: Path):
     profile, profile_ref, _ = _resource_profile(tmp_path)
     storage, storage_ref, inventory_ref, _ = _measured_storage(tmp_path)
