@@ -26,6 +26,8 @@ from .hcwdl_representation_contracts import (
     DENSE_RESOURCE_PROFILE_CONTRACT,
     DENSE_RESOURCE_PROBE_PLAN_CONTRACT,
     DENSE_RESOURCE_PROBE_AUTHORIZATION_CONTRACT,
+    DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_AUTHORIZATION_CONTRACT,
+    DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_LEDGER_CONTRACT,
     DENSE_RESOURCE_PROBE_LEDGER_CONTRACT,
     DENSE_STORAGE_ESTIMATE_CONTRACT,
     DENSE_STORAGE_TEMPLATE_CONTRACT,
@@ -107,6 +109,16 @@ ROUTES: Final = {
     DENSE_RESOURCE_PROBE_LEDGER_CONTRACT: ArtifactRoute(
         "review/resource_probe_ledger.json", "resource_probe_submission",
         "validate_dense_resource_probe_ledger",
+    ),
+    DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_AUTHORIZATION_CONTRACT: ArtifactRoute(
+        "review/dense_resource_probe_collector_recovery_authorization.json",
+        "resource_probe_collector_recovery_authorization",
+        "validate_dense_resource_probe_collector_recovery_authorization",
+    ),
+    DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_LEDGER_CONTRACT: ArtifactRoute(
+        "review/dense_resource_probe_collector_recovery_ledger.json",
+        "resource_probe_collector_recovery_submission",
+        "validate_dense_resource_probe_collector_recovery_ledger",
     ),
     DENSE_STORAGE_TEMPLATE_CONTRACT: ArtifactRoute(
         "resources/dense_storage_template.json", "resource_measurement",

@@ -63,6 +63,12 @@ def test_every_contract_has_one_canonical_route() -> None:
         "HCWDL_REPRESENTATION_DENSE_STORAGE_ESTIMATE/v1"
     ].path_template == "resources/dense_storage_estimate.json"
     assert ROUTES[
+        "HCWDL_REPRESENTATION_DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_AUTHORIZATION/v1"
+    ].path_template == "review/dense_resource_probe_collector_recovery_authorization.json"
+    assert ROUTES[
+        "HCWDL_REPRESENTATION_DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_LEDGER/v1"
+    ].path_template == "review/dense_resource_probe_collector_recovery_ledger.json"
+    assert ROUTES[
         "HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_ACTION_INPUTS/v1"
     ].path_template == "acceptance/nonfinal/action_inputs.json"
     assert ROUTES[

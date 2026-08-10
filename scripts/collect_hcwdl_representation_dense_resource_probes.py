@@ -28,6 +28,13 @@ def main() -> int:
     collect_dense_resource_probe_evidence(
         plan=artifact(args.plan), authorization=artifact(args.authorization),
         job_ids=jobs, collector_job_id=os.environ["SLURM_JOB_ID"].split("_", 1)[0],
+        recovery_authorization=(
+            artifact(Path(os.environ[
+                "HCWDL_REPRESENTATION_PROBE_RECOVERY_AUTHORIZATION"
+            ]))
+            if os.environ.get("HCWDL_REPRESENTATION_PROBE_RECOVERY_AUTHORIZATION")
+            else None
+        ),
     )
     return 0
 

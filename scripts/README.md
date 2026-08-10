@@ -236,13 +236,19 @@ grouped as follows:
   `prepare_hcwdl_representation_dense_target_assets.py`,
   `build_hcwdl_representation_dense_resource_probe_plan.py`,
   `build_hcwdl_representation_dense_resource_probe_authorization.py`,
+  `build_hcwdl_representation_dense_resource_probe_collector_recovery_authorization.py`,
   `submit_hcwdl_representation_dense_resource_probes.py`,
+  `submit_hcwdl_representation_dense_resource_probe_collector_recovery.py`,
   `run_hcwdl_representation_resource_probe.py`,
   `collect_hcwdl_representation_dense_resource_probes.py`,
   `build_hcwdl_representation_dense_resource_profile.py`,
   `build_hcwdl_representation_dense_storage_estimate.py`,
   `audit_hcwdl_representation_campaign_outputs.py`, and
   `build_hcwdl_representation_dense_smoke_acceptance.py`;
+
+The collector-recovery pair is a fail-closed exception for one purged failed
+accounting collector. It reuses the original four completed probe IDs and has
+no probe, training, array, pilot, or final-role submission path.
 
 - pre-campaign audit and freezing:
   `audit_hcwdl_representation_parent_final_state.py`,

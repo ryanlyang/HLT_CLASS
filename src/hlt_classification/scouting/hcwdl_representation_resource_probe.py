@@ -15,6 +15,8 @@ from hlt_classification.data.cache_contracts import (
 
 from .hcwdl_representation_contracts import (
     DENSE_RESOURCE_PROBE_AUTHORIZATION_CONTRACT,
+    DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_AUTHORIZATION_CONTRACT,
+    DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_LEDGER_CONTRACT,
     DENSE_RESOURCE_PROBE_LEDGER_CONTRACT,
     DENSE_RESOURCE_PROBE_PLAN_CONTRACT,
 )
@@ -28,12 +30,15 @@ from .hcwdl_representation_resources import (
 DENSE_RESOURCE_PROBE_AUTHORIZATION_PHRASE: Final = (
     "AUTHORIZE EXACT HCWDL-RKD DENSE RESOURCE PROBES FOR TIGRIS"
 )
+DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_AUTHORIZATION_PHRASE: Final = (
+    "AUTHORIZE EXACT HCWDL-RKD DENSE RESOURCE COLLECTOR RECOVERY FOR TIGRIS"
+)
 _WORKERS: Final = {
     "ordinary": "run_hcwdl_representation_resource_probe.sh",
     "deterministic": "run_hcwdl_representation_resource_probe_deterministic.sh",
 }
 _COLLECTOR_WORKER: Final = "collect_hcwdl_representation_resource_probes.sh"
-_COLLECTOR_COMPATIBILITY_PATHS: Final = frozenset({
+_COLLECTOR_COMPATIBILITY_BASE_PATHS: Final = frozenset({
     "docs/HANDOFF.md",
     "src/hlt_classification/scouting/hcwdl_representation_resource_probe.py",
     "src/hlt_classification/scouting/hcwdl_representation_resources.py",
@@ -41,11 +46,24 @@ _COLLECTOR_COMPATIBILITY_PATHS: Final = frozenset({
     "tests/test_hcwdl_representation_nonfinal_resources.py",
     "tests/test_hcwdl_representation_resource_probe.py",
 })
+_COLLECTOR_RECOVERY_PATHS: Final = _COLLECTOR_COMPATIBILITY_BASE_PATHS | frozenset({
+    "docs/HCWDL_RKD_RUNBOOK.md",
+    "docs/plans/HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md",
+    "scripts/README.md",
+    "scripts/build_hcwdl_representation_dense_resource_probe_collector_recovery_authorization.py",
+    "scripts/collect_hcwdl_representation_dense_resource_probes.py",
+    "scripts/submit_hcwdl_representation_dense_resource_probe_collector_recovery.py",
+    "src/hlt_classification/scouting/hcwdl_representation_contracts.py",
+    "src/hlt_classification/scouting/hcwdl_representation_layout.py",
+    "tests/test_hcwdl_representation_cli.py",
+    "tests/test_hcwdl_representation_contracts.py",
+    "tests/test_hcwdl_representation_layout.py",
+})
 
 
 def _validate_collector_compatible_checkout(
     project: Path, *, expected_commit: str,
-) -> None:
+) -> str:
     """Permit the one direct, collector-only compatibility successor.
 
     Probe workers and their scientific outputs remain bound to the original
@@ -66,8 +84,17 @@ def _validate_collector_compatible_checkout(
         raise PermissionError("dense resource collector checkout is dirty")
     actual = git("rev-parse", "HEAD").stdout.strip()
     if actual == expected_commit:
-        return
-    parent = git("rev-parse", "HEAD^").stdout.strip()
+        return actual
+    ancestry = git("merge-base", "--is-ancestor", expected_commit, actual, check=False)
+    if ancestry.returncode != 0:
+        raise PermissionError(
+            "dense resource collector source is not a compatibility successor"
+        )
+    distance_text = git("rev-list", "--count", f"{expected_commit}..{actual}").stdout.strip()
+    if not distance_text.isdigit() or int(distance_text) not in {1, 2}:
+        raise PermissionError(
+            "dense resource collector source is not a bounded compatibility successor"
+        )
     changed = frozenset(
         line.strip()
         for line in git(
@@ -75,10 +102,15 @@ def _validate_collector_compatible_checkout(
         ).stdout.splitlines()
         if line.strip()
     )
-    if parent != expected_commit or changed != _COLLECTOR_COMPATIBILITY_PATHS:
+    expected_paths = (
+        _COLLECTOR_COMPATIBILITY_BASE_PATHS
+        if int(distance_text) == 1 else _COLLECTOR_RECOVERY_PATHS
+    )
+    if changed != expected_paths:
         raise PermissionError(
             "dense resource collector source is not the direct compatibility successor"
         )
+    return actual
 
 
 def _walltime(value: str) -> str:
@@ -328,9 +360,176 @@ def validate_dense_resource_probe_ledger(
     return digest
 
 
+def _validate_failed_collector_log(
+    value: Mapping[str, Any], *, failed_collector_job_id: str,
+) -> dict[str, str]:
+    if not isinstance(value, Mapping) or set(value) != {"path", "sha256"}:
+        raise ValueError("failed dense collector log reference differs")
+    path = Path(str(value["path"]))
+    expected_sha256 = require_sha256(
+        value["sha256"], name="failed dense collector log bytes",
+    )
+    if (
+        not path.is_absolute() or not path.is_file() or path.is_symlink()
+        or path.name != f"slurm-{failed_collector_job_id}.out"
+        or sha256_file(path) != expected_sha256
+    ):
+        raise PermissionError("failed dense collector log bytes differ")
+    text = path.read_text(encoding="utf-8")
+    required = (
+        "collect_hcwdl_representation_dense_resource_probes.py",
+        "ReqGRES", "returned non-zero exit status 1",
+    )
+    if any(marker not in text for marker in required):
+        raise PermissionError("failed dense collector log reason differs")
+    return {"path": str(path), "sha256": expected_sha256}
+
+
+def build_dense_resource_probe_collector_recovery_authorization(
+    *, plan: Mapping[str, Any], authorization: Mapping[str, Any],
+    ledger: Mapping[str, Any], ledger_path: str | Path,
+    failed_collector_log: Mapping[str, Any],
+    authorization_phrase: str,
+) -> dict[str, Any]:
+    """Authorize one replacement collector without rerunning any probe."""
+
+    plan_sha256 = validate_dense_resource_probe_plan(
+        plan, allow_collector_recovery=True,
+    )
+    authorization_sha256 = validate_dense_resource_probe_authorization(
+        authorization, plan=plan, allow_collector_recovery=True,
+    )
+    ledger_sha256 = validate_dense_resource_probe_ledger(
+        ledger, plan=plan, authorization=authorization,
+        allow_collector_recovery=True,
+    )
+    if (
+        authorization_phrase
+        != DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_AUTHORIZATION_PHRASE
+    ):
+        raise PermissionError("dense collector-recovery authorization phrase differs")
+    project = Path(str(plan["project_dir"])).resolve()
+    compatibility_commit = _validate_collector_compatible_checkout(
+        project, expected_commit=str(plan["source_commit"]),
+    )
+    if compatibility_commit == plan["source_commit"]:
+        raise PermissionError("dense collector recovery requires compatibility source")
+    failed_id = str(ledger["collector_job_id"])
+    original_ledger_path = Path(ledger_path).resolve()
+    if (
+        not original_ledger_path.is_file() or original_ledger_path.is_symlink()
+        or load_json(original_ledger_path) != dict(ledger)
+    ):
+        raise PermissionError("original dense resource-probe ledger bytes differ")
+    failed_log = _validate_failed_collector_log(
+        failed_collector_log, failed_collector_job_id=failed_id,
+    )
+    return with_content_hash({
+        "contract": DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_AUTHORIZATION_CONTRACT,
+        "schema_version": 1,
+        "plan_sha256": plan_sha256,
+        "authorization_sha256": authorization_sha256,
+        "original_ledger_sha256": ledger_sha256,
+        "original_ledger": {
+            "path": str(original_ledger_path),
+            "sha256": sha256_file(original_ledger_path),
+        },
+        "measured_source_commit": plan["source_commit"],
+        "compatibility_source_commit": compatibility_commit,
+        "probe_job_ids": dict(ledger["jobs"]),
+        "failed_collector_job_id": failed_id,
+        "failed_collector_log": failed_log,
+        "failure_class": "slurm_reqgres_removed_use_reqtres",
+        "authorization_phrase": authorization_phrase,
+        "replacement_collector_job_count": 1,
+        "measurement_probe_job_count": 0,
+        "probe_jobs_rerun_authorized": False,
+        "dense_graph_submission_authorized": False,
+        "pilot_submission_authorized": False,
+        "final_role_access_authorized": False,
+    })
+
+
+def validate_dense_resource_probe_collector_recovery_authorization(
+    value: Mapping[str, Any], *, plan: Mapping[str, Any],
+    authorization: Mapping[str, Any], ledger: Mapping[str, Any],
+) -> str:
+    digest = validate_content_hash(
+        value,
+        expected_contract=(
+            DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_AUTHORIZATION_CONTRACT
+        ),
+        expected_schema_version=1,
+    )
+    rebuilt = build_dense_resource_probe_collector_recovery_authorization(
+        plan=plan, authorization=authorization, ledger=ledger,
+        ledger_path=str(value.get("original_ledger", {}).get("path", "")),
+        failed_collector_log=value.get("failed_collector_log", {}),
+        authorization_phrase=str(value.get("authorization_phrase", "")),
+    )
+    if dict(value) != rebuilt:
+        raise PermissionError("dense collector-recovery authorization differs")
+    return digest
+
+
+def build_dense_resource_probe_collector_recovery_ledger(
+    *, plan: Mapping[str, Any], authorization: Mapping[str, Any],
+    ledger: Mapping[str, Any], recovery_authorization: Mapping[str, Any],
+    replacement_collector_job_id: str,
+) -> dict[str, Any]:
+    recovery_sha256 = validate_dense_resource_probe_collector_recovery_authorization(
+        recovery_authorization, plan=plan, authorization=authorization, ledger=ledger,
+    )
+    replacement = str(replacement_collector_job_id)
+    occupied = {str(value) for value in ledger["jobs"].values()} | {
+        str(ledger["collector_job_id"]),
+    }
+    if not replacement.isdigit() or int(replacement) <= 0 or replacement in occupied:
+        raise ValueError("replacement dense collector job ID differs")
+    return with_content_hash({
+        "contract": DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_LEDGER_CONTRACT,
+        "schema_version": 1,
+        "recovery_authorization_sha256": recovery_sha256,
+        "original_ledger_sha256": ledger["content_hash"],
+        "measured_source_commit": plan["source_commit"],
+        "compatibility_source_commit": recovery_authorization[
+            "compatibility_source_commit"
+        ],
+        "probe_job_ids": dict(ledger["jobs"]),
+        "failed_collector_job_id": str(ledger["collector_job_id"]),
+        "replacement_collector_job_id": replacement,
+        "probe_jobs_rerun": False,
+        "dense_graph_submitted": False,
+        "final_role_accessed": False,
+    })
+
+
+def validate_dense_resource_probe_collector_recovery_ledger(
+    value: Mapping[str, Any], *, plan: Mapping[str, Any],
+    authorization: Mapping[str, Any], ledger: Mapping[str, Any],
+    recovery_authorization: Mapping[str, Any],
+) -> str:
+    digest = validate_content_hash(
+        value,
+        expected_contract=DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_LEDGER_CONTRACT,
+        expected_schema_version=1,
+    )
+    rebuilt = build_dense_resource_probe_collector_recovery_ledger(
+        plan=plan, authorization=authorization, ledger=ledger,
+        recovery_authorization=recovery_authorization,
+        replacement_collector_job_id=str(
+            value.get("replacement_collector_job_id", "")
+        ),
+    )
+    if dict(value) != rebuilt:
+        raise PermissionError("dense collector-recovery ledger differs")
+    return digest
+
+
 def collect_dense_resource_probe_evidence(
     *, plan: Mapping[str, Any], authorization: Mapping[str, Any],
     job_ids: Mapping[str, str], collector_job_id: str,
+    recovery_authorization: Mapping[str, Any] | None = None,
 ) -> dict[str, dict[str, str]]:
     """Capture all four completed probes from the authorized collector job."""
 
@@ -343,6 +542,25 @@ def collect_dense_resource_probe_evidence(
     current_job = os.environ.get("SLURM_JOB_ID", "").split("_", 1)[0]
     if current_job != str(collector_job_id) or not current_job.isdigit():
         raise PermissionError("dense resource-probe collector identity differs")
+    actual_commit = _validate_collector_compatible_checkout(
+        Path(str(plan["project_dir"])).resolve(),
+        expected_commit=str(plan["source_commit"]),
+    )
+    if actual_commit != plan["source_commit"]:
+        if recovery_authorization is None:
+            raise PermissionError(
+                "compatibility collector requires recovery authorization"
+            )
+        validate_dense_resource_probe_collector_recovery_authorization(
+            recovery_authorization, plan=plan, authorization=authorization,
+            ledger=load_json(recovery_authorization["original_ledger"]["path"]),
+        )
+        if (
+            recovery_authorization["probe_job_ids"]
+            != {key: str(job_ids[key]) for key in DENSE_RESOURCE_CLASSES}
+            or current_job == recovery_authorization["failed_collector_job_id"]
+        ):
+            raise PermissionError("dense collector-recovery job lineage differs")
     output_root = Path(str(plan["collector"]["output_root"])).resolve()
     result: dict[str, dict[str, str]] = {}
     rows = {str(row["resource_class"]): row for row in plan["rows"]}
@@ -420,8 +638,13 @@ def collect_dense_resource_probe_evidence(
 
 __all__ = [
     "DENSE_RESOURCE_PROBE_AUTHORIZATION_PHRASE",
+    "DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_AUTHORIZATION_PHRASE",
     "build_dense_resource_probe_authorization", "build_dense_resource_probe_ledger",
+    "build_dense_resource_probe_collector_recovery_authorization",
+    "build_dense_resource_probe_collector_recovery_ledger",
     "build_dense_resource_probe_plan", "collect_dense_resource_probe_evidence",
     "validate_dense_resource_probe_authorization",
+    "validate_dense_resource_probe_collector_recovery_authorization",
+    "validate_dense_resource_probe_collector_recovery_ledger",
     "validate_dense_resource_probe_ledger", "validate_dense_resource_probe_plan",
 ]

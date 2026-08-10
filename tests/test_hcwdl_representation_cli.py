@@ -40,6 +40,7 @@ SCRIPTS = (
     "build_hcwdl_representation_final_disposition.py",
     "build_hcwdl_representation_fixed_size_inventory.py",
     "build_hcwdl_representation_dense_resource_probe_authorization.py",
+    "build_hcwdl_representation_dense_resource_probe_collector_recovery_authorization.py",
     "build_hcwdl_representation_dense_resource_probe_plan.py",
     "build_hcwdl_representation_dense_resource_profile.py",
     "build_hcwdl_representation_dense_storage_estimate.py",
@@ -99,6 +100,7 @@ SCRIPTS = (
     "select_hcwdl_representation_checkpoint.py",
     "submit_hcwdl_representation_campaign.py",
     "submit_hcwdl_representation_dense_resource_probes.py",
+    "submit_hcwdl_representation_dense_resource_probe_collector_recovery.py",
     "train_hcwdl_representation_node.py",
 )
 

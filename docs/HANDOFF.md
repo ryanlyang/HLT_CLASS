@@ -76,11 +76,18 @@ Tigris host families, and distinguishes the dense resource collector from the
 non-final acceptance collector.  Collector recovery is limited to requeuing
 the same failed collector ID from one clean direct compatibility successor of
 the measured commit; that successor may change only the exact parser,
-collector validation, focused tests, and this handoff.  It cannot rerun probes
-or authorize dense training.
+collector validation, focused tests, and this handoff.  Job `80194` was then
+found to be purged from Slurm, so requeue is impossible. A separate v1
+collector-recovery authorization/ledger now binds the original four completed
+probe IDs, failed log, original ledger, exact compatibility source, and one
+replacement collector. It records zero measurement jobs and has no probe,
+dense-training, pilot, array, or final-role submission path.
 The final parser/recovery-focused suite is **26 passed**; the broader
 scheduler/resource/contracts/CLI suite is **116 passed, 8 expected
 POSIX-shell skips**.
+The subsequent purged-collector recovery contracts, canonical routes, CLI
+inventory, and exact one-/two-commit compatibility boundary pass **30 focused
+tests** (29 contract/resource tests plus the explicit CLI inventory check).
 
 ## HCWDL non-final corrected-parent prefix (2026-08-09)
 

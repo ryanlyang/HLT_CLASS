@@ -111,6 +111,10 @@ The operator-visible order is fixed:
    `gpu_target`, `gpu_representation`) and one dependent accounting collector;
 5. after a separate exact-hash phrase authorization, run only those five
    scalar jobs; they cannot train the graph or open a final role;
+   if the collector alone fails on a removed Slurm accounting field and is
+   purged before requeue, build a collector-recovery authorization and submit
+   exactly one replacement collector over the original four job IDs; never
+   rerun the probes;
 6. build the genuine dense resource profile, measured maximum-state storage
    template, and conservative dense storage estimate;
 7. publish the 83 just-in-time target authorities, exhaustive runtime rows,

@@ -12,10 +12,15 @@ from hlt_classification.scouting.hcwdl_representation_campaign import (
 )
 from hlt_classification.scouting.hcwdl_representation_resource_probe import (
     DENSE_RESOURCE_PROBE_AUTHORIZATION_PHRASE,
+    DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_AUTHORIZATION_PHRASE,
     build_dense_resource_probe_authorization,
+    build_dense_resource_probe_collector_recovery_authorization,
+    build_dense_resource_probe_collector_recovery_ledger,
     build_dense_resource_probe_ledger,
     build_dense_resource_probe_plan,
     validate_dense_resource_probe_authorization,
+    validate_dense_resource_probe_collector_recovery_authorization,
+    validate_dense_resource_probe_collector_recovery_ledger,
     validate_dense_resource_probe_ledger,
     validate_dense_resource_probe_plan,
 )
@@ -140,9 +145,10 @@ def test_collector_compatibility_is_one_clean_direct_operational_successor(
     responses = {
         ("status", "--porcelain"): "",
         ("rev-parse", "HEAD"): actual + "\n",
-        ("rev-parse", "HEAD^"): expected + "\n",
+        ("merge-base", "--is-ancestor", expected, actual): "",
+        ("rev-list", "--count", f"{expected}..{actual}"): "1\n",
         ("diff", "--name-only", f"{expected}..{actual}"): (
-            "\n".join(sorted(probe._COLLECTOR_COMPATIBILITY_PATHS)) + "\n"
+            "\n".join(sorted(probe._COLLECTOR_COMPATIBILITY_BASE_PATHS)) + "\n"
         ),
     }
 
@@ -155,10 +161,75 @@ def test_collector_compatibility_is_one_clean_direct_operational_successor(
     probe._validate_collector_compatible_checkout(
         tmp_path, expected_commit=expected,
     )
-    responses[("rev-parse", "HEAD^")] = "3" * 40 + "\n"
-    with pytest.raises(PermissionError, match="direct compatibility successor"):
+    responses[("rev-list", "--count", f"{expected}..{actual}")] = "2\n"
+    responses[("diff", "--name-only", f"{expected}..{actual}")] = (
+        "\n".join(sorted(probe._COLLECTOR_RECOVERY_PATHS)) + "\n"
+    )
+    assert probe._validate_collector_compatible_checkout(
+        tmp_path, expected_commit=expected,
+    ) == actual
+    responses[("rev-list", "--count", f"{expected}..{actual}")] = "3\n"
+    with pytest.raises(PermissionError, match="compatibility successor"):
         probe._validate_collector_compatible_checkout(
             tmp_path, expected_commit=expected,
+        )
+
+
+def test_one_replacement_collector_is_bound_without_probe_reruns(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from hlt_classification.scouting import hcwdl_representation_resource_probe as probe
+
+    plan = _plan(tmp_path, monkeypatch)
+    authority = build_dense_resource_probe_authorization(
+        plan=plan,
+        authorization_phrase=DENSE_RESOURCE_PROBE_AUTHORIZATION_PHRASE,
+    )
+    jobs = {name: str(80_190 + index) for index, name in enumerate(
+        DENSE_RESOURCE_CLASSES,
+    )}
+    ledger = build_dense_resource_probe_ledger(
+        plan=plan, authorization=authority, job_ids=jobs,
+        collector_job_id="80194",
+    )
+    ledger_path = tmp_path / "dense_resource_probe_ledger.json"
+    write_immutable_json(ledger_path, ledger)
+    failed_log = tmp_path / "slurm-80194.out"
+    failed_log.write_text(
+        "collect_hcwdl_representation_dense_resource_probes.py ReqGRES "
+        "returned non-zero exit status 1",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        probe, "_validate_collector_compatible_checkout", lambda *a, **k: "9" * 40,
+    )
+    recovery = build_dense_resource_probe_collector_recovery_authorization(
+        plan=plan, authorization=authority, ledger=ledger,
+        ledger_path=ledger_path, failed_collector_log=artifact_reference(failed_log),
+        authorization_phrase=(
+            DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_AUTHORIZATION_PHRASE
+        ),
+    )
+    assert validate_dense_resource_probe_collector_recovery_authorization(
+        recovery, plan=plan, authorization=authority, ledger=ledger,
+    ) == recovery["content_hash"]
+    assert recovery["probe_job_ids"] == jobs
+    assert recovery["measurement_probe_job_count"] == 0
+    assert recovery["probe_jobs_rerun_authorized"] is False
+    assert recovery["dense_graph_submission_authorized"] is False
+    replacement = build_dense_resource_probe_collector_recovery_ledger(
+        plan=plan, authorization=authority, ledger=ledger,
+        recovery_authorization=recovery, replacement_collector_job_id="80200",
+    )
+    assert validate_dense_resource_probe_collector_recovery_ledger(
+        replacement, plan=plan, authorization=authority, ledger=ledger,
+        recovery_authorization=recovery,
+    ) == replacement["content_hash"]
+    assert replacement["probe_jobs_rerun"] is False
+    with pytest.raises(ValueError, match="replacement dense collector"):
+        build_dense_resource_probe_collector_recovery_ledger(
+            plan=plan, authorization=authority, ledger=ledger,
+            recovery_authorization=recovery, replacement_collector_job_id="80194",
         )
 
 
