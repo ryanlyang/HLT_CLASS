@@ -130,7 +130,13 @@ def _scheduler(
         "TimelimitRaw": str((_walltime_seconds(request) + 59) // 60),
         "ReqCPUS": str(request["cpus"]),
         "ReqMem": request["memory"],
-        "ReqGRES": "(null)" if request["gpu"] is None else request["gpu"],
+        "ReqTRES": ",".join((
+            f"cpu={request['cpus']}",
+            f"mem={request['memory']}",
+            *(() if request["gpu"] is None else (
+                "gres/gpu=1", "gres/gpu:gh200=1",
+            )),
+        )),
         "MaxRSS": "",
         "Comment": comment,
         "SubmitLine": (
@@ -155,7 +161,7 @@ def _scheduler(
     fields = (
         "JobIDRaw", "JobName", "Account", "Partition", "Cluster", "State",
         "ExitCode", "ElapsedRaw", "TimelimitRaw", "ReqCPUS", "ReqMem",
-        "ReqGRES", "MaxRSS", "Comment", "SubmitLine",
+        "ReqTRES", "MaxRSS", "Comment", "SubmitLine",
     )
     raw_path = tmp_path / "sacct" / f"{task_key}-{job_id}.txt"
     raw_path.parent.mkdir(parents=True, exist_ok=True)

@@ -33,6 +33,52 @@ _WORKERS: Final = {
     "deterministic": "run_hcwdl_representation_resource_probe_deterministic.sh",
 }
 _COLLECTOR_WORKER: Final = "collect_hcwdl_representation_resource_probes.sh"
+_COLLECTOR_COMPATIBILITY_PATHS: Final = frozenset({
+    "docs/HANDOFF.md",
+    "src/hlt_classification/scouting/hcwdl_representation_resource_probe.py",
+    "src/hlt_classification/scouting/hcwdl_representation_resources.py",
+    "tests/test_hcwdl_representation_evidence.py",
+    "tests/test_hcwdl_representation_nonfinal_resources.py",
+    "tests/test_hcwdl_representation_resource_probe.py",
+})
+
+
+def _validate_collector_compatible_checkout(
+    project: Path, *, expected_commit: str,
+) -> None:
+    """Permit the one direct, collector-only compatibility successor.
+
+    Probe workers and their scientific outputs remain bound to the original
+    plan commit.  This exception exists only so a failed accounting collector
+    can be requeued under the immediate compatibility commit that replaces
+    removed Slurm ``ReqGRES`` accounting with ``ReqTRES``.  Any later commit,
+    dirty checkout, or changed file outside this exact operational/test/doc
+    set fails closed.
+    """
+
+    def git(*arguments: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["git", *arguments], cwd=project, check=check,
+            capture_output=True, text=True,
+        )
+
+    if git("status", "--porcelain").stdout.strip():
+        raise PermissionError("dense resource collector checkout is dirty")
+    actual = git("rev-parse", "HEAD").stdout.strip()
+    if actual == expected_commit:
+        return
+    parent = git("rev-parse", "HEAD^").stdout.strip()
+    changed = frozenset(
+        line.strip()
+        for line in git(
+            "diff", "--name-only", f"{expected_commit}..{actual}",
+        ).stdout.splitlines()
+        if line.strip()
+    )
+    if parent != expected_commit or changed != _COLLECTOR_COMPATIBILITY_PATHS:
+        raise PermissionError(
+            "dense resource collector source is not the direct compatibility successor"
+        )
 
 
 def _walltime(value: str) -> str:
@@ -45,6 +91,7 @@ def _walltime(value: str) -> str:
 def build_dense_resource_probe_plan(
     *, planning_spec_path: str | Path, planning_spec: Mapping[str, Any],
     data_root: str | Path, conda_environment: str,
+    _collector_recovery: bool = False,
 ) -> dict[str, Any]:
     from .hcwdl_representation_campaign import (
         DENSE_TRAINING_DISPOSITION, validate_campaign_spec,
@@ -71,9 +118,14 @@ def build_dense_resource_probe_plan(
         raise ValueError("dense resource-probe operational paths differ")
     if load_json(spec_path) != dict(planning_spec):
         raise PermissionError("dense resource-probe planning spec file differs")
-    validate_source_checkout(
-        project, expected_commit=str(planning_spec["source_commit"]),
-    )
+    if _collector_recovery:
+        _validate_collector_compatible_checkout(
+            project, expected_commit=str(planning_spec["source_commit"]),
+        )
+    else:
+        validate_source_checkout(
+            project, expected_commit=str(planning_spec["source_commit"]),
+        )
     resources = planning_spec["resources"]
     if set(resources) != set(DENSE_RESOURCE_CLASSES):
         raise ValueError("dense resource-probe resource classes differ")
@@ -161,7 +213,9 @@ def build_dense_resource_probe_plan(
     })
 
 
-def validate_dense_resource_probe_plan(value: Mapping[str, Any]) -> str:
+def validate_dense_resource_probe_plan(
+    value: Mapping[str, Any], *, allow_collector_recovery: bool = False,
+) -> str:
     digest = validate_content_hash(
         value, expected_contract=DENSE_RESOURCE_PROBE_PLAN_CONTRACT,
         expected_schema_version=1,
@@ -177,6 +231,7 @@ def validate_dense_resource_probe_plan(value: Mapping[str, Any]) -> str:
         planning_spec_path=spec_path, planning_spec=load_json(spec_path),
         data_root=str(value.get("data_root")),
         conda_environment=str(value.get("conda_environment")),
+        _collector_recovery=allow_collector_recovery,
     )
     if dict(value) != rebuilt:
         raise PermissionError("dense resource-probe plan is not canonical")
@@ -185,8 +240,11 @@ def validate_dense_resource_probe_plan(value: Mapping[str, Any]) -> str:
 
 def build_dense_resource_probe_authorization(
     *, plan: Mapping[str, Any], authorization_phrase: str,
+    _collector_recovery: bool = False,
 ) -> dict[str, Any]:
-    plan_sha256 = validate_dense_resource_probe_plan(plan)
+    plan_sha256 = validate_dense_resource_probe_plan(
+        plan, allow_collector_recovery=_collector_recovery,
+    )
     if authorization_phrase != DENSE_RESOURCE_PROBE_AUTHORIZATION_PHRASE:
         raise PermissionError("dense resource-probe authorization phrase differs")
     return with_content_hash({
@@ -206,6 +264,7 @@ def build_dense_resource_probe_authorization(
 
 def validate_dense_resource_probe_authorization(
     value: Mapping[str, Any], *, plan: Mapping[str, Any],
+    allow_collector_recovery: bool = False,
 ) -> str:
     digest = validate_content_hash(
         value, expected_contract=DENSE_RESOURCE_PROBE_AUTHORIZATION_CONTRACT,
@@ -213,6 +272,7 @@ def validate_dense_resource_probe_authorization(
     )
     rebuilt = build_dense_resource_probe_authorization(
         plan=plan, authorization_phrase=str(value.get("authorization_phrase")),
+        _collector_recovery=allow_collector_recovery,
     )
     if dict(value) != rebuilt:
         raise PermissionError("dense resource-probe authorization differs")
@@ -222,10 +282,14 @@ def validate_dense_resource_probe_authorization(
 def build_dense_resource_probe_ledger(
     *, plan: Mapping[str, Any], authorization: Mapping[str, Any],
     job_ids: Mapping[str, str], collector_job_id: str,
+    _collector_recovery: bool = False,
 ) -> dict[str, Any]:
-    plan_sha256 = validate_dense_resource_probe_plan(plan)
+    plan_sha256 = validate_dense_resource_probe_plan(
+        plan, allow_collector_recovery=_collector_recovery,
+    )
     authorization_sha256 = validate_dense_resource_probe_authorization(
         authorization, plan=plan,
+        allow_collector_recovery=_collector_recovery,
     )
     if set(job_ids) != set(DENSE_RESOURCE_CLASSES) or any(
         not str(value).isdigit() or int(value) <= 0 for value in job_ids.values()
@@ -248,7 +312,7 @@ def build_dense_resource_probe_ledger(
 
 def validate_dense_resource_probe_ledger(
     value: Mapping[str, Any], *, plan: Mapping[str, Any],
-    authorization: Mapping[str, Any],
+    authorization: Mapping[str, Any], allow_collector_recovery: bool = False,
 ) -> str:
     digest = validate_content_hash(
         value, expected_contract=DENSE_RESOURCE_PROBE_LEDGER_CONTRACT,
@@ -257,6 +321,7 @@ def validate_dense_resource_probe_ledger(
     rebuilt = build_dense_resource_probe_ledger(
         plan=plan, authorization=authorization, job_ids=value.get("jobs", {}),
         collector_job_id=str(value.get("collector_job_id", "")),
+        _collector_recovery=allow_collector_recovery,
     )
     if dict(value) != rebuilt:
         raise PermissionError("dense resource-probe ledger differs")
@@ -269,8 +334,10 @@ def collect_dense_resource_probe_evidence(
 ) -> dict[str, dict[str, str]]:
     """Capture all four completed probes from the authorized collector job."""
 
-    validate_dense_resource_probe_plan(plan)
-    validate_dense_resource_probe_authorization(authorization, plan=plan)
+    validate_dense_resource_probe_plan(plan, allow_collector_recovery=True)
+    validate_dense_resource_probe_authorization(
+        authorization, plan=plan, allow_collector_recovery=True,
+    )
     if set(job_ids) != set(DENSE_RESOURCE_CLASSES):
         raise ValueError("dense resource-probe collector job registry differs")
     current_job = os.environ.get("SLURM_JOB_ID", "").split("_", 1)[0]
@@ -301,6 +368,9 @@ def collect_dense_resource_probe_evidence(
             worker_role=str(row["worker_role"]),
             worker=artifact_reference(row["worker_path"]),
             request=row["request"],
+            expected_collector_job_name=(
+                "hcwdlr_resource_probe_collector"
+            ),
         )
         if str(scheduler["job_id"]) != job_id:
             raise PermissionError("dense resource-probe accounting job differs")

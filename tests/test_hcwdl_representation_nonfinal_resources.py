@@ -142,7 +142,8 @@ def _raw_sacct_bytes(
         "Cluster": resources.TIGRIS_PARTITION, "State": "COMPLETED",
         "ExitCode": "0:0", "ElapsedRaw": "30", "TimelimitRaw": "120",
         "ReqCPUS": str(request["cpus"]), "ReqMem": request["memory"],
-        "ReqGRES": request["gpu"], "MaxRSS": "", "Comment": comment,
+        "ReqTRES": "gres/gpu=1,gres/gpu:gh200=1",
+        "MaxRSS": "", "Comment": comment,
         "SubmitLine": submit,
     }
     batch = dict(parent)
@@ -201,6 +202,34 @@ def test_collector_runtime_rejects_non_tigris_or_path_shadowing(
     runtime[field] = value
     with pytest.raises(PermissionError, match="Tigris worker environment"):
         resources._validate_capture_runtime(runtime)
+
+
+def test_dense_collector_accepts_tigris_cpu_host_and_current_req_tres() -> None:
+    runtime = {
+        "site": resources.TIGRIS_SITE,
+        "cluster": resources.TIGRIS_PARTITION,
+        "collector_job_id": 80194,
+        "capture_host": "gg-a-031",
+        "account": resources.TIGRIS_ACCOUNT,
+        "partition": resources.TIGRIS_PARTITION,
+        "collector_job_name": resources.DENSE_RESOURCE_COLLECTOR_JOB_NAME,
+        "sacct_executable": "/usr/bin/sacct",
+        "python_no_user_site": True,
+        "conda_environment": "atlas_kd_tigris",
+        "conda_prefix": "/opt/conda/envs/atlas_kd_tigris",
+        "python_executable": "/opt/conda/envs/atlas_kd_tigris/bin/python",
+        "ld_library_path_prefix": "/opt/conda/envs/atlas_kd_tigris/lib",
+        "platform": "posix",
+    }
+    assert resources._validate_capture_runtime(runtime)[
+        "collector_job_id"
+    ] == 80194
+    assert resources._requested_gpu_from_tres(
+        "billing=16,cpu=4,gres/gpu=1,gres/gpu:gh200=1,mem=64G,node=1"
+    ) == "gpu:gh200:1"
+    assert resources._requested_gpu_from_tres(
+        "billing=2,cpu=2,mem=8G,node=1"
+    ) is None
 
 
 def test_live_collector_freezes_exact_worker_argv_and_rejects_manual_bytes(

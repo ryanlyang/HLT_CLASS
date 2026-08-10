@@ -67,6 +67,20 @@ tap, parity, and dense-teacher artifacts; graph/control/recipe/disposition were
 absent at failure.
 The post-fix focused dense-teacher, target, registered-artifact, and CLI suite
 is **130 passed, 8 expected POSIX-shell skips** on Windows.
+The first exact dense resource probes all completed, but their dependent
+collector exposed two site-interface mismatches before publishing accounting
+evidence: current Tigris removed `ReqGRES` in favor of `ReqTRES`, and CPU
+collector hosts use the `gg-*` family in addition to GPU `gh-*` hosts.  The
+parser now authenticates typed GPU requests from `ReqTRES`, recognizes both
+Tigris host families, and distinguishes the dense resource collector from the
+non-final acceptance collector.  Collector recovery is limited to requeuing
+the same failed collector ID from one clean direct compatibility successor of
+the measured commit; that successor may change only the exact parser,
+collector validation, focused tests, and this handoff.  It cannot rerun probes
+or authorize dense training.
+The final parser/recovery-focused suite is **26 passed**; the broader
+scheduler/resource/contracts/CLI suite is **116 passed, 8 expected
+POSIX-shell skips**.
 
 ## HCWDL non-final corrected-parent prefix (2026-08-09)
 

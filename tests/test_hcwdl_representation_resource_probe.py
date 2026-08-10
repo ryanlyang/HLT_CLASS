@@ -130,6 +130,38 @@ def test_dense_resource_probe_authority_and_ledger_are_exact_and_nonpromoting(
         )
 
 
+def test_collector_compatibility_is_one_clean_direct_operational_successor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from hlt_classification.scouting import hcwdl_representation_resource_probe as probe
+
+    expected = "1" * 40
+    actual = "2" * 40
+    responses = {
+        ("status", "--porcelain"): "",
+        ("rev-parse", "HEAD"): actual + "\n",
+        ("rev-parse", "HEAD^"): expected + "\n",
+        ("diff", "--name-only", f"{expected}..{actual}"): (
+            "\n".join(sorted(probe._COLLECTOR_COMPATIBILITY_PATHS)) + "\n"
+        ),
+    }
+
+    def fake_run(command, *, cwd, check, capture_output, text):
+        assert command[0] == "git" and cwd == tmp_path
+        key = tuple(command[1:])
+        return subprocess.CompletedProcess(command, 0, responses[key], "")
+
+    monkeypatch.setattr(probe.subprocess, "run", fake_run)
+    probe._validate_collector_compatible_checkout(
+        tmp_path, expected_commit=expected,
+    )
+    responses[("rev-parse", "HEAD^")] = "3" * 40 + "\n"
+    with pytest.raises(PermissionError, match="direct compatibility successor"):
+        probe._validate_collector_compatible_checkout(
+            tmp_path, expected_commit=expected,
+        )
+
+
 def test_dense_storage_uses_measured_templates_and_scales_all_86_nodes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:

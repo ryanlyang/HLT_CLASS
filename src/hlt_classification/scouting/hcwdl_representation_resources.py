@@ -62,7 +62,7 @@ SACCT_FIELDS: Final = (
     "TimelimitRaw",
     "ReqCPUS",
     "ReqMem",
-    "ReqGRES",
+    "ReqTRES",
     "MaxRSS",
     "Comment",
     "SubmitLine",
@@ -83,13 +83,18 @@ DENSE_STORAGE_CAMPAIGN_FIXED_RESERVE: Final = 1024 * 1024 * 1024
 NONFINAL_COLLECTOR_WORKER: Final = (
     "run_hcwdl_representation_nonfinal_evidence_collector.sh"
 )
+DENSE_RESOURCE_COLLECTOR_JOB_NAME: Final = "hcwdlr_resource_probe_collector"
 NONFINAL_COLLECTOR_CLI: Final = (
     "build_hcwdl_representation_nonfinal_acceptance_scheduler_evidence.py"
 )
 NONFINAL_COLLECTOR_JOB_NAME: Final = "hcwdl-rkd-nonfinal-evidence-collector"
 _TIGRIS_CAPTURE_HOST: Final = re.compile(
-    r"^(?:tigris|gh-[a-z]+-[0-9]+)(?:\.[A-Za-z0-9.-]+)?$"
+    r"^(?:tigris|g[gh]-[a-z]+-[0-9]+)(?:\.[A-Za-z0-9.-]+)?$"
 )
+_COLLECTOR_JOB_NAMES: Final = frozenset({
+    DENSE_RESOURCE_COLLECTOR_JOB_NAME,
+    NONFINAL_COLLECTOR_JOB_NAME,
+})
 
 
 @dataclass(frozen=True)
@@ -181,6 +186,47 @@ def _slurm_bytes(value: object, *, name: str) -> int:
     if not math.isfinite(result) or result <= 0 or not result.is_integer():
         raise ValueError(f"raw sacct {name} differs")
     return int(result)
+
+
+def _requested_gpu_from_tres(value: object) -> str | None:
+    """Normalize Slurm's current ReqTRES GPU entries to ``gpu:type:count``.
+
+    Tigris removed the legacy ``ReqGRES`` accounting field.  Current
+    ``ReqTRES`` rows include ordinary CPU/memory/billing entries plus both a
+    generic ``gres/gpu`` count and the typed ``gres/gpu:<type>`` count.  Only
+    the typed request is authoritative for this campaign.
+    """
+
+    raw = str(value).strip()
+    if raw in {"", "(null)"}:
+        return None
+    generic: int | None = None
+    typed: list[tuple[str, int]] = []
+    for token in raw.split(","):
+        key, separator, count_text = token.strip().partition("=")
+        if not separator:
+            raise ValueError("raw sacct ReqTRES entry differs")
+        if key == "gres/gpu":
+            if not count_text.isdigit() or int(count_text) <= 0:
+                raise ValueError("raw sacct ReqTRES generic GPU count differs")
+            generic = int(count_text)
+        elif key.startswith("gres/gpu:"):
+            gpu_type = key.removeprefix("gres/gpu:")
+            if (
+                not gpu_type
+                or not re.fullmatch(r"[A-Za-z0-9_.-]+", gpu_type)
+                or not count_text.isdigit()
+                or int(count_text) <= 0
+            ):
+                raise ValueError("raw sacct ReqTRES typed GPU count differs")
+            typed.append((gpu_type, int(count_text)))
+    if not typed:
+        if generic is None:
+            return None
+        raise ValueError("raw sacct ReqTRES lacks the typed GPU request")
+    if len(typed) != 1 or (generic is not None and generic != typed[0][1]):
+        raise ValueError("raw sacct ReqTRES GPU request is ambiguous")
+    return f"gpu:{typed[0][0]}:{typed[0][1]}"
 
 
 def _scheduler_binding_payload(
@@ -311,7 +357,7 @@ def _validate_capture_runtime(value: Mapping[str, Any]) -> dict[str, Any]:
         or _TIGRIS_CAPTURE_HOST.fullmatch(str(value["capture_host"])) is None
         or value["account"] != TIGRIS_ACCOUNT
         or value["partition"] != TIGRIS_PARTITION
-        or value["collector_job_name"] != NONFINAL_COLLECTOR_JOB_NAME
+        or value["collector_job_name"] not in _COLLECTOR_JOB_NAMES
         or value["sacct_executable"] != "/usr/bin/sacct"
         or value["python_no_user_site"] is not True
         or value["conda_environment"] != "atlas_kd_tigris"
@@ -476,7 +522,7 @@ def _parse_sacct_reference(
             int(parent["ReqCPUS"]), name="raw sacct requested CPUs",
         ),
         "requested_memory_bytes": _slurm_bytes(parent["ReqMem"], name="ReqMem"),
-        "requested_gpu": None if parent["ReqGRES"] in ("", "(null)") else parent["ReqGRES"],
+        "requested_gpu": _requested_gpu_from_tres(parent["ReqTRES"]),
         "peak_rss_bytes": max(rss_values),
         "binding_comment": parent["Comment"],
         "submit_line": parent["SubmitLine"],
@@ -1401,6 +1447,7 @@ def build_scheduler_evidence_from_sacct(
     resource_class: str, source_commit: str,
     representation_recipe_sha256: str | None, worker_role: str,
     worker: Mapping[str, Any], request: Mapping[str, Any],
+    expected_collector_job_name: str | None = None,
 ) -> dict[str, Any]:
     """Derive authorizing scheduler evidence only from immutable raw sacct bytes."""
 
@@ -1426,6 +1473,11 @@ def build_scheduler_evidence_from_sacct(
     )
     raw_reference = dict(raw_accounting_record)
     capture_runtime = _live_tigris_capture_runtime()
+    if (
+        expected_collector_job_name is not None
+        and capture_runtime["collector_job_name"] != expected_collector_job_name
+    ):
+        raise PermissionError("scheduler evidence collector job name differs")
     parsed = _parse_sacct_reference(
         raw_reference, expected_worker_path=str(worker_path),
         expected_comment=comment, expected_task_key=task_key,
@@ -1672,6 +1724,8 @@ def capture_nonfinal_acceptance_scheduler_evidence(
     )
     target_job_id = _positive_integer(job_id, name="non-final target Slurm job ID")
     capture_runtime = _live_tigris_capture_runtime()
+    if capture_runtime["collector_job_name"] != NONFINAL_COLLECTOR_JOB_NAME:
+        raise PermissionError("non-final sacct capture uses another collector role")
     if int(capture_runtime["collector_job_id"]) == target_job_id:
         raise PermissionError("sacct collector job must differ from the target job")
     if os.environ.get("HCWDL_NONFINAL_EVIDENCE_COLLECTOR") != "1":
