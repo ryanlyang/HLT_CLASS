@@ -564,6 +564,54 @@ def build_live_target_runtime_environment(
     return measured
 
 
+def target_forward_runtime_commitment_from_measurement(
+    measurement: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Project one reviewed deterministic GPU measurement into forward facts."""
+
+    validate_worker_runtime_measurement(measurement)
+    live = measurement["live_worker_runtime"]
+    backend = live["backend"]
+    if (
+        live.get("row_device") != "cuda"
+        or live.get("deterministic_worker") is not True
+        or set(backend) != {
+            "deterministic_algorithms", "cudnn_deterministic",
+            "cudnn_benchmark", "matmul_tf32", "cudnn_tf32",
+            "reduced_precision_fp32_reduction", "cublas_workspace_config",
+            "rng_states_sha256",
+        }
+    ):
+        raise PermissionError(
+            "target forward requires a deterministic measured CUDA worker"
+        )
+    return {
+        "producer": {
+            "source_commit": live["source_commit"],
+            "source_snapshot_sha256": live["source_snapshot_sha256"],
+            "packages": dict(live["packages"]),
+        },
+        "device": dict(live["device"]),
+        "precision": {
+            "parameters": "float32", "inputs": "float32",
+            "activations": "float32", "autocast": False,
+            "matmul_tf32": backend["matmul_tf32"],
+            "cudnn_tf32": backend["cudnn_tf32"],
+            "reduced_precision_fp32_reduction": backend[
+                "reduced_precision_fp32_reduction"
+            ],
+            "output_order": "C",
+        },
+        "determinism": {
+            "deterministic_algorithms": backend["deterministic_algorithms"],
+            "cudnn_deterministic": backend["cudnn_deterministic"],
+            "cudnn_benchmark": backend["cudnn_benchmark"],
+            "cublas_workspace_config": backend["cublas_workspace_config"],
+            "rng_states_sha256": backend["rng_states_sha256"],
+        },
+    }
+
+
 def build_worker_runtime_measurement(
     *, campaign_spec_sha256: str, data_root: str | Path,
     resource_class: str, resource_request: Mapping[str, Any],
@@ -742,4 +790,5 @@ __all__ = [
     "measure_live_worker_runtime", "measure_registered_worker_runtime",
     "measure_weaver_runtime_source", "validate_live_task_runtime",
     "validate_live_worker_runtime", "validate_worker_runtime_measurement",
+    "target_forward_runtime_commitment_from_measurement",
 ]

@@ -175,7 +175,7 @@ def test_any_scientific_or_graph_mutation_fails_even_when_rehashed(path, replace
 def test_recipe_rejects_missing_extra_or_cross_lineage_parents_and_hashes():
     parents, kernels, evidence = _fixture_inputs()
     missing = dict(parents)
-    missing.pop("teacher_import")
+    missing.pop("dense_teacher_import")
     with pytest.raises(ValueError, match="parent lineage keys"):
         build_representation_recipe(
             parents=missing, kernel_array_logical_hashes=kernels, evidence=evidence,

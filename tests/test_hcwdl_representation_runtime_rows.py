@@ -487,7 +487,7 @@ def _target_forward_specs(static):
     }
     return {
         logical: with_content_hash({
-            "contract": "HCWDL_REPRESENTATION_TARGET_FORWARD_SPEC/v2",
+            "contract": "HCWDL_REPRESENTATION_TARGET_FORWARD_SPEC/v3",
             "schema_version": 1, "payload": environment,
         })
         for logical in static if logical.startswith("${target_forward_spec:")
@@ -859,7 +859,7 @@ def test_upstream_schema_versions_distinguish_semantic_v2_from_envelope_v2() -> 
             "HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v3", 3,
         ),
         "parent_import": ("HCWDL_REPRESENTATION_PARENT_IMPORT/v3", 2),
-        "representation_recipe": ("HCWDL_REPRESENTATION_RECIPE/v3", 1),
+        "representation_recipe": ("HCWDL_REPRESENTATION_RECIPE/v4", 1),
     }
     for task_key, (contract, schema_version) in expected.items():
         descriptor = rows_module._upstream_reference(

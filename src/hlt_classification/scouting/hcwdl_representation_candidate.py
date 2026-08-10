@@ -62,13 +62,17 @@ def _strict_gate_summary(
     # Imports remain local so the campaign module can validate a candidate
     # from its executable-spec path without introducing an import cycle.
     from .hcwdl_representation_campaign import (
-        build_command_plan,
+        DENSE_TRAINING_DISPOSITION, build_command_plan,
         validate_campaign_spec,
         validate_source_checkout,
         validate_command_plan,
         validate_tigris_acceptance,
     )
     from .hcwdl_representation_resources import (
+        validate_dense_storage_availability,
+        validate_dense_storage_estimate,
+        validate_dense_storage_template,
+        validate_dense_measured_profile,
         validate_measured_profile,
         validate_storage_estimate,
     )
@@ -101,32 +105,76 @@ def _strict_gate_summary(
     storage = planning_spec.get("storage_estimate")
     inventory = planning_spec.get("fixed_size_inventory")
     acceptance = planning_spec.get("tigris_acceptance")
+    dense_smoke = (
+        planning_spec.get("mode") == "smoke"
+        and planning_spec.get("disposition") == DENSE_TRAINING_DISPOSITION
+    )
     if not all(isinstance(value, Mapping) for value in (
-        profile, storage, inventory, acceptance,
-    )):
+        profile, storage, inventory,
+    )) or (not dense_smoke and not isinstance(acceptance, Mapping)):
         raise PermissionError(
             "candidate review requires measured resources, storage, fixed-size "
-            "inventory, and genuine Tigris acceptance"
+            "inventory, and (outside the dense smoke) genuine Tigris acceptance"
         )
-    profile_hash = validate_measured_profile(
-        profile, require_genuine_tigris=True,
-        expected_source_commit=source_commit,
+    if dense_smoke and acceptance is not None:
+        raise PermissionError("dense smoke candidate cannot consume its future acceptance")
+    profile_hash = (
+        validate_dense_measured_profile(
+            profile, expected_source_commit=source_commit,
+        )
+        if planning_spec.get("disposition") == DENSE_TRAINING_DISPOSITION else
+        validate_measured_profile(
+            profile, require_genuine_tigris=True,
+            expected_source_commit=source_commit,
+        )
     )
-    storage_hash = validate_storage_estimate(
-        storage, require_measured_fixed_sizes=True,
-        fixed_size_inventory=inventory,
-    )
-    inventory_hash = require_sha256(
-        planning_spec.get("fixed_size_inventory_sha256"),
-        name="candidate fixed-size inventory",
-    )
-    acceptance_hash = validate_tigris_acceptance(
-        acceptance,
-        source_commit=source_commit,
-        representation_recipe_sha256=planning_spec["representation_recipe_sha256"],
-        resource_profile_sha256=profile_hash,
-        storage_estimate_sha256=storage_hash,
-        fixed_size_inventory_sha256=inventory_hash,
+    if planning_spec.get("disposition") == DENSE_TRAINING_DISPOSITION:
+        inventory_hash = validate_dense_storage_template(
+            load_json(inventory["path"]),
+            expected_source_commit=source_commit,
+            expected_recipe_sha256=str(
+                planning_spec["representation_recipe_sha256"]
+            ),
+            expected_graph_sha256=str(planning_spec["graph_sha256"]),
+            expected_dense_teacher_import_sha256=str(
+                planning_spec["parent_import_sha256"]
+            ),
+        )
+        storage_hash = validate_dense_storage_estimate(
+            storage, storage_template=inventory,
+            expected_source_commit=source_commit,
+            expected_recipe_sha256=str(
+                planning_spec["representation_recipe_sha256"]
+            ),
+            expected_graph_sha256=str(planning_spec["graph_sha256"]),
+            expected_dense_teacher_import_sha256=str(
+                planning_spec["parent_import_sha256"]
+            ),
+        )
+        validate_dense_storage_availability(
+            storage, campaign_root=str(planning_spec["campaign_root"]),
+        )
+    else:
+        storage_hash = validate_storage_estimate(
+            storage, require_measured_fixed_sizes=True,
+            fixed_size_inventory=inventory,
+        )
+        inventory_hash = require_sha256(
+            planning_spec.get("fixed_size_inventory_sha256"),
+            name="candidate fixed-size inventory",
+        )
+    acceptance_hash = (
+        None if dense_smoke else validate_tigris_acceptance(
+            acceptance,
+            source_commit=source_commit,
+            representation_recipe_sha256=planning_spec["representation_recipe_sha256"],
+            resource_profile_sha256=profile_hash,
+            storage_estimate_sha256=storage_hash,
+            fixed_size_inventory_sha256=inventory_hash,
+            disposition=str(planning_spec["disposition"]),
+            parent_import_sha256=str(planning_spec["parent_import_sha256"]),
+            graph_sha256=str(planning_spec["graph_sha256"]),
+        )
     )
     expected_hashes = {
         "resource_profile_sha256": profile_hash,

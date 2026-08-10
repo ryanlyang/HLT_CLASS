@@ -158,13 +158,11 @@ def run_local_target_lifecycle_probe() -> dict[str, Any]:
                     name: _smoke_sha(f"{bank_id}:{name}")
                     for name in (
                         "source", "split", "train_row_selection", "graph",
-                        "assignment", "repair", "architecture", "parent_recipe",
+                        "assignment", "repair", "surface_parity", "parent_recipe",
                         "representation_recipe", "kernel_resources", "parent_import",
-                        "parent_loss_attestation",
                     )
                 }
                 checkpoint_bytes = _smoke_sha(f"{bank_id}:bytes")
-                checkpoint_logical = _smoke_sha(f"{bank_id}:logical")
                 tap_sha256 = _smoke_sha(f"{bank_id}:tap")
                 if bank_id == "TOFF":
                     teacher = {
@@ -174,7 +172,6 @@ def run_local_target_lifecycle_probe() -> dict[str, Any]:
                         "track": "shared",
                         "selected_report_sha256": _smoke_sha(f"{bank_id}:report"),
                         "checkpoint_byte_sha256": checkpoint_bytes,
-                        "checkpoint_logical_sha256": checkpoint_logical,
                         "tap_sha256": tap_sha256,
                         "installed_weaver_signature_sha256": _smoke_sha(
                             f"{bank_id}:weaver"
@@ -196,7 +193,7 @@ def run_local_target_lifecycle_probe() -> dict[str, Any]:
                 )
                 forward_teacher = {
                     "source_kind": teacher["source_kind"],
-                    "architecture_sha256": parents["architecture"],
+                    "surface_parity_sha256": parents["surface_parity"],
                     "tap_sha256": tap_sha256,
                     "kernel_resources_sha256": parents["kernel_resources"],
                     "kernel_array_logical_hashes": kernel_hashes,
@@ -204,7 +201,6 @@ def run_local_target_lifecycle_probe() -> dict[str, Any]:
                 if bank_id == "TOFF":
                     forward_teacher.update({
                         "checkpoint_byte_sha256": checkpoint_bytes,
-                        "checkpoint_logical_sha256": checkpoint_logical,
                         "model_config_sha256": _smoke_sha("model-config"),
                     })
                 else:

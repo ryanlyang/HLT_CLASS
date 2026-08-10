@@ -81,6 +81,7 @@ class RepresentationPreemptionMonitor:
 TASK_KINDS: Final = frozenset({
     "tap_schema", "surface_parity", "architecture_attestation",
     "parent_loss_attestation", "parent_import", "kernel_resources",
+    "dense_teacher_import", "dense_training_aggregate",
     "representation_recipe", "numerical_acceptance", "target_build",
     "control_registry", "cache_miniature_bank", "cache_miniature",
     "smoke_probe", "zero_coefficient_acceptance", "reservation",

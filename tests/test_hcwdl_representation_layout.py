@@ -27,11 +27,11 @@ def test_every_contract_has_one_canonical_route() -> None:
     assert ROUTES["HCWDL_SHARED_FINAL_ROLE_CAPABILITY/v1"].producer_kind == (
         "branch_opening_task"
     )
-    assert ROUTES["HCWDL_REPRESENTATION_CAMPAIGN_SPEC/v2"].path_template == (
+    assert ROUTES["HCWDL_REPRESENTATION_CAMPAIGN_SPEC/v3"].path_template == (
         "${campaign_spec_parent}/campaign_spec.json"
     )
     assert CAMPAIGN_SPEC_PARENT_VALUES == {".", "planning"}
-    assert ROUTES["HCWDL_REPRESENTATION_COMMAND_PLAN/v2"].path_template == (
+    assert ROUTES["HCWDL_REPRESENTATION_COMMAND_PLAN/v3"].path_template == (
         "command_plan.json"
     )
     assert ROUTES["HCWDL_REPRESENTATION_RUNTIME_BINDING/v1"].path_template == (
@@ -56,6 +56,12 @@ def test_every_contract_has_one_canonical_route() -> None:
     assert ROUTES[
         "HCWDL_REPRESENTATION_TIGRIS_ACCEPTANCE/v2"
     ].path_template == "acceptance/tigris_acceptance.json"
+    assert ROUTES[
+        "HCWDL_REPRESENTATION_DENSE_STORAGE_TEMPLATE/v1"
+    ].path_template == "resources/dense_storage_template.json"
+    assert ROUTES[
+        "HCWDL_REPRESENTATION_DENSE_STORAGE_ESTIMATE/v1"
+    ].path_template == "resources/dense_storage_estimate.json"
     assert ROUTES[
         "HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_ACTION_INPUTS/v1"
     ].path_template == "acceptance/nonfinal/action_inputs.json"

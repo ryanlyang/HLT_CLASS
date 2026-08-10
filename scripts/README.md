@@ -229,6 +229,21 @@ HCWDL-RKD is an additive representation-distillation campaign; it does not
 broaden the logit-only HCWDL graph or recipe. Its thin command surface is
 grouped as follows:
 
+- current four-track dense-descent preparation:
+  `prepare_hcwdl_representation_dense_teacher_import.py`,
+  `prepare_hcwdl_representation_dense_surface_evidence.py`,
+  `prepare_hcwdl_representation_recipe_assets.py`,
+  `prepare_hcwdl_representation_dense_target_assets.py`,
+  `build_hcwdl_representation_dense_resource_probe_plan.py`,
+  `build_hcwdl_representation_dense_resource_probe_authorization.py`,
+  `submit_hcwdl_representation_dense_resource_probes.py`,
+  `run_hcwdl_representation_resource_probe.py`,
+  `collect_hcwdl_representation_dense_resource_probes.py`,
+  `build_hcwdl_representation_dense_resource_profile.py`,
+  `build_hcwdl_representation_dense_storage_estimate.py`,
+  `audit_hcwdl_representation_campaign_outputs.py`, and
+  `build_hcwdl_representation_dense_smoke_acceptance.py`;
+
 - pre-campaign audit and freezing:
   `audit_hcwdl_representation_parent_final_state.py`,
   `build_hcwdl_representation_final_disposition.py`,
@@ -274,7 +289,7 @@ grouped as follows:
   `prepare_hcwdl_representation_parent_import.py` (the pre-campaign,
   file-authority builder),
   `prepare_hcwdl_representation_recipe_assets.py` (the deterministic graph,
-  control, kernel/evidence, and v2 overlay-recipe preflight, with producer
+  control, kernel/evidence, and v4 overlay-recipe preflight, with producer
   source derived from an exact clean Git checkout and rechecked against
   measured runtime facts),
   `build_hcwdl_representation_parent_import.py`,

@@ -318,7 +318,7 @@ def test_target_partition_factory_applies_deterministic_miniature_prefix() -> No
 
 def test_validation_only_adapter_publishes_registered_real_aggregate(tmp_path: Path) -> None:
     screen = with_content_hash({
-        "contract": "HCWDL_REPRESENTATION_SCREEN_AGGREGATE/v2",
+            "contract": "HCWDL_REPRESENTATION_SCREEN_AGGREGATE/v3",
         "schema_version": 1,
     })
     confirmation = with_content_hash({

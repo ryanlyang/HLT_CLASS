@@ -169,15 +169,7 @@ def main() -> int:
     split_path = registered_file("${split_manifest}")
     settings = load_json_mapping(args.settings)
     bundle_members = load_json_mapping(args.bundle_members)
-    final = settings.get("final")
-    if not isinstance(final, dict):
-        raise ValueError("operator settings lack the final registry")
-    finalist_root = registered_directory("${parent_finalist_registry}")
-    finalist_models_root = registered_directory("${finalist_models}")
-    parent_reports_root = registered_directory("${parent_reports}")
-    parent_lock = member(
-        finalist_root, final.get("parent_finalist_registry_relative"),
-    )
+    dense_training_only = spec.get("disposition") == "dense_training_only"
 
     def relative_member(root: Path, path: Path) -> tuple[str, dict]:
         resolved = path.resolve()
@@ -189,16 +181,6 @@ def main() -> int:
             raise ValueError("parent finalist report is absent or a symlink")
         return relative, load_json(resolved)
 
-    locked_model_members = {}
-    for row in parent_lock.get("payload", {}).get("finalists", ()):
-        if not isinstance(row, dict):
-            raise ValueError("parent finalist lock row differs")
-        key = f"{row.get('node_id')}:{row.get('seed')}"
-        relative, report = relative_member(
-            finalist_models_root, Path(str(row.get("report_path"))),
-        )
-        locked_model_members[key] = {"relative": relative, "report": report}
-
     def bundle_relative(bundle: str, key: str) -> str:
         registry = bundle_members.get(bundle)
         if not isinstance(registry, dict) or key not in registry:
@@ -209,31 +191,56 @@ def main() -> int:
             raise ValueError(f"runtime bundle member differs: {bundle}:{key}")
         return relative
 
-    paired_screen_model_members = {}
-    for node_id in ("M0", "M1c", "M1w"):
-        model_relative = bundle_relative("finalist_models", node_id)
-        paired_screen_model_members[node_id] = _paired_screen_model_member(
-            node_id=node_id,
-            parent_reports_root=parent_reports_root,
-            parent_wrapper_relative=bundle_relative("parent_reports", node_id),
-            finalist_models_root=finalist_models_root,
-            finalist_wrapper_relative=model_relative,
+    if dense_training_only:
+        if bundle_members:
+            raise ValueError("dense runtime cannot accept parent/final bundle members")
+        final_authorities = {}
+    else:
+        final = settings.get("final")
+        if not isinstance(final, dict):
+            raise ValueError("operator settings lack the final registry")
+        finalist_root = registered_directory("${parent_finalist_registry}")
+        finalist_models_root = registered_directory("${finalist_models}")
+        parent_reports_root = registered_directory("${parent_reports}")
+        parent_lock = member(
+            finalist_root, final.get("parent_finalist_registry_relative"),
         )
-    final_authorities = {
-        "shared_final_population": artifact(
-            registered_file("${shared_final_population}")
-        ),
-        "parent_final_state": artifact(registered_file("${parent_final_state}")),
-        "final_disposition": artifact(registered_file("${final_disposition}")),
-        "parent_import": artifact(registered_file("${prebuilt_parent_import}")),
-        "parent_finalist_registry": parent_lock,
-        "parent_confirmation_registry": artifact(
-            registered_file("${parent_confirmation_registry_lock}")
-        ),
-        "locked_model_members": locked_model_members,
-        "paired_screen_model_members": paired_screen_model_members,
-        "matcher_resources": artifact(registered_file("${matcher_resources}")),
-    }
+        locked_model_members = {}
+        for row in parent_lock.get("payload", {}).get("finalists", ()):
+            if not isinstance(row, dict):
+                raise ValueError("parent finalist lock row differs")
+            key = f"{row.get('node_id')}:{row.get('seed')}"
+            relative, report = relative_member(
+                finalist_models_root, Path(str(row.get("report_path"))),
+            )
+            locked_model_members[key] = {"relative": relative, "report": report}
+        paired_screen_model_members = {}
+        for node_id in ("M0", "M1c", "M1w"):
+            model_relative = bundle_relative("finalist_models", node_id)
+            paired_screen_model_members[node_id] = _paired_screen_model_member(
+                node_id=node_id,
+                parent_reports_root=parent_reports_root,
+                parent_wrapper_relative=bundle_relative("parent_reports", node_id),
+                finalist_models_root=finalist_models_root,
+                finalist_wrapper_relative=model_relative,
+            )
+        final_authorities = {
+            "shared_final_population": artifact(
+                registered_file("${shared_final_population}")
+            ),
+            "parent_final_state": artifact(
+                registered_file("${parent_final_state}")
+            ),
+            "final_disposition": artifact(registered_file("${final_disposition}")),
+            "parent_import": artifact(registered_file("${prebuilt_parent_import}")),
+            "parent_finalist_registry": parent_lock,
+            "parent_confirmation_registry": artifact(
+                registered_file("${parent_confirmation_registry_lock}")
+            ),
+            "locked_model_members": locked_model_members,
+            "paired_screen_model_members": paired_screen_model_members,
+            "matcher_resources": artifact(registered_file("${matcher_resources}")),
+        }
     target_forward_specs = {
         logical: artifact(registered_file(logical))
         for logical in sorted(static_inputs)

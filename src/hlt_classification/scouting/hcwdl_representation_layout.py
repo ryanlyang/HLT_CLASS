@@ -22,6 +22,15 @@ from .hcwdl_representation_contracts import (
     NONFINAL_ACCEPTANCE_ACTION_RESULT_CONTRACT,
     NONFINAL_ACCEPTANCE_AUTHORITY_CONTRACT,
     NONFINAL_ACCEPTANCE_EXECUTION_RECEIPT_CONTRACT,
+    DENSE_SMOKE_ACCEPTANCE_CONTRACT,
+    DENSE_RESOURCE_PROFILE_CONTRACT,
+    DENSE_RESOURCE_PROBE_PLAN_CONTRACT,
+    DENSE_RESOURCE_PROBE_AUTHORIZATION_CONTRACT,
+    DENSE_RESOURCE_PROBE_LEDGER_CONTRACT,
+    DENSE_STORAGE_ESTIMATE_CONTRACT,
+    DENSE_STORAGE_TEMPLATE_CONTRACT,
+    DENSE_TEACHER_IMPORT_CONTRACT,
+    DENSE_TRAINING_AGGREGATE_CONTRACT, DENSE_TRAINING_DISPOSITION_CONTRACT,
     NONFINAL_ACCEPTANCE_SCHEDULER_EVIDENCE_CONTRACT,
     PARENT_IMPORT_CONTRACT,
     PARENT_LOSS_ATTESTATION_CONTRACT,
@@ -67,6 +76,46 @@ def _c(name: str) -> str:
 
 
 ROUTES: Final = {
+    DENSE_TEACHER_IMPORT_CONTRACT: ArtifactRoute(
+        "import/dense_teacher_import.json", "dense_teacher_import",
+        "validate_dense_teacher_import_against_files",
+    ),
+    DENSE_TRAINING_AGGREGATE_CONTRACT: ArtifactRoute(
+        "reports/dense_training_aggregate.json", "dense_training_aggregate",
+        "validate_dense_training_aggregate",
+    ),
+    DENSE_TRAINING_DISPOSITION_CONTRACT: ArtifactRoute(
+        "import/dense_training_disposition.json", "pre_campaign",
+        "validate_dense_training_disposition",
+    ),
+    DENSE_SMOKE_ACCEPTANCE_CONTRACT: ArtifactRoute(
+        "acceptance/dense_smoke_acceptance.json", "acceptance_evidence",
+        "validate_dense_smoke_acceptance",
+    ),
+    DENSE_RESOURCE_PROFILE_CONTRACT: ArtifactRoute(
+        "resources/measured_dense_profile.json", "resource_measurement",
+        "validate_dense_measured_profile",
+    ),
+    DENSE_RESOURCE_PROBE_PLAN_CONTRACT: ArtifactRoute(
+        "review/resource_probe_plan.json", "resource_probe_review",
+        "validate_dense_resource_probe_plan",
+    ),
+    DENSE_RESOURCE_PROBE_AUTHORIZATION_CONTRACT: ArtifactRoute(
+        "review/resource_probe_authorization.json", "resource_probe_authorization",
+        "validate_dense_resource_probe_authorization",
+    ),
+    DENSE_RESOURCE_PROBE_LEDGER_CONTRACT: ArtifactRoute(
+        "review/resource_probe_ledger.json", "resource_probe_submission",
+        "validate_dense_resource_probe_ledger",
+    ),
+    DENSE_STORAGE_TEMPLATE_CONTRACT: ArtifactRoute(
+        "resources/dense_storage_template.json", "resource_measurement",
+        "validate_dense_storage_template",
+    ),
+    DENSE_STORAGE_ESTIMATE_CONTRACT: ArtifactRoute(
+        "resources/dense_storage_estimate.json", "resource_measurement",
+        "validate_dense_storage_estimate",
+    ),
     PARENT_IMPORT_CONTRACT: ArtifactRoute("import/parent_import.json", "parent_import", "validate_parent_import"),
     PARENT_LOSS_ATTESTATION_CONTRACT: ArtifactRoute("import/parent_loss_attestation.json", "parent_loss_attestation", "validate_parent_loss_attestation"),
     ARCHITECTURE_ATTESTATION_CONTRACT: ArtifactRoute("import/architecture_attestation.json", "architecture_attestation", "validate_architecture_attestation"),

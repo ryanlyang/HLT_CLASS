@@ -7,7 +7,7 @@ import math
 from typing import Any, Final
 
 from hlt_classification.data.cache_contracts import (
-    canonical_sha256,
+    canonical_sha256, validate_content_hash,
     require_sha256,
     with_content_hash,
 )
@@ -20,6 +20,7 @@ from .hcwdl_representation_contracts import (
     SCREEN_AGGREGATE_CONTRACT,
     TRAINING_REPORT_CONTRACT,
     VALIDATION_ONLY_AGGREGATE_CONTRACT,
+    DENSE_TRAINING_AGGREGATE_CONTRACT, DENSE_TRAINING_DISPOSITION_CONTRACT,
 )
 from .hcwdl_representation_graph import NODE_REGISTRY, TRACKED_LEVELS
 from .hcwdl_paired_bootstrap import BASE_METRICS
@@ -168,6 +169,7 @@ def build_screen_aggregate(
     campaign_spec_sha256: str,
     expected_primary_ids: Sequence[str],
     expected_control_ids: Sequence[str],
+    dense_training_only: bool = False,
 ) -> dict[str, Any]:
     by_id: dict[str, Mapping[str, Any]] = {}
     for report in (*primary_reports, *control_reports):
@@ -184,8 +186,10 @@ def build_screen_aggregate(
     controls = tuple(expected_control_ids)
     if set(by_id) != set(primary) | set(controls):
         raise ValueError("representation screen registry is incomplete")
-    if set(parent_reports) == set():
+    if not dense_training_only and set(parent_reports) == set():
         raise ValueError("representation screen requires authenticated parent controls")
+    if dense_training_only and parent_reports:
+        raise PermissionError("dense training screen cannot import base-ladder reports")
 
     comparisons: list[dict[str, Any]] = []
 
@@ -226,7 +230,7 @@ def build_screen_aggregate(
         parent_id = report.get("parent_counterpart")
         if NODE_REGISTRY[node_id].parent_counterpart != parent_id:
             raise ValueError("representation report parent counterpart differs")
-        comparison_anchor = comparison_parent_anchor(node_id)
+        comparison_anchor = None if dense_training_only else comparison_parent_anchor(node_id)
         if comparison_anchor is not None:
             if comparison_anchor not in parent_reports:
                 raise ValueError(f"missing parent counterpart {comparison_anchor!r}")
@@ -272,17 +276,18 @@ def build_screen_aggregate(
             add_comparison(
                 node_id, predecessor, kind="child_minus_same_branch_teacher",
             )
-    for strategy in ("RSET", "RREL"):
-        for suffix in ("c", "w"):
-            add_comparison(
-                f"{strategy}_M1{suffix}", "M0",
-                kind="terminal_m1_minus_hlt_baseline",
-            )
+    if not dense_training_only:
+        for strategy in ("RSET", "RREL"):
+            for suffix in ("c", "w"):
+                add_comparison(
+                    f"{strategy}_M1{suffix}", "M0",
+                    kind="terminal_m1_minus_hlt_baseline",
+                )
 
-    required_parent_ids = {
+    required_parent_ids = set() if dense_training_only else ({
         comparison_parent_anchor(node_id) for node_id in primary
         if comparison_parent_anchor(node_id) is not None
-    } | {"M0", "D0c", "D0w", "D100", "TOFF"}
+    } | {"M0", "D0c", "D0w", "D100", "TOFF"})
     missing_parent = required_parent_ids - set(parent_reports)
     if missing_parent:
         raise ValueError(
@@ -308,7 +313,7 @@ def build_screen_aggregate(
         for node_id in (*primary, *controls)
     ]
     gap_tables: list[dict[str, Any]] = []
-    for node_id in primary:
+    for node_id in (() if dense_training_only else primary):
         node = NODE_REGISTRY[node_id]
         student_metrics = _metrics(by_id[node_id])
         upper_id = "TOFF"
@@ -348,8 +353,157 @@ def build_screen_aggregate(
             "gap_recovery_metric_directions": dict(GAP_METRIC_DIRECTIONS),
             "all_registered_nodes_completed": True,
             "finite_poor_results_retained": True,
+            "dense_training_only": bool(dense_training_only),
+            "base_ladder_reports_imported": not dense_training_only,
         }
     )
+
+
+def build_dense_training_aggregate(
+    *, screen_aggregate: Mapping[str, Any],
+    confirmation_aggregate: Mapping[str, Any] | None,
+    campaign_spec_sha256: str, mode: str,
+    dense_training_disposition: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Close the four-branch descent without minting final-role authority."""
+
+    screen_sha256 = validate_content_hash(
+        screen_aggregate, expected_contract=SCREEN_CONTRACT,
+        expected_schema_version=1,
+    )
+    if (
+        screen_aggregate.get("dense_training_only") is not True
+        or screen_aggregate.get("base_ladder_reports_imported") is not False
+    ):
+        raise PermissionError("dense aggregate screen imported obsolete parent rows")
+    if mode == "smoke":
+        if confirmation_aggregate is not None:
+            raise ValueError("dense smoke cannot publish confirmation authority")
+        confirmation_sha256 = None
+    elif mode in {"pilot", "production"}:
+        if not isinstance(confirmation_aggregate, Mapping):
+            raise ValueError("scientific dense campaign lacks terminal confirmation")
+        confirmation_sha256 = validate_content_hash(
+            confirmation_aggregate,
+            expected_contract=CONFIRMATION_AGGREGATE_CONTRACT,
+            expected_schema_version=1,
+        )
+    else:
+        raise ValueError("dense aggregate campaign mode differs")
+    disposition_sha256 = validate_dense_training_disposition(
+        dense_training_disposition,
+    )
+    return with_content_hash({
+        "contract": DENSE_TRAINING_AGGREGATE_CONTRACT,
+        "schema_version": 1,
+        "campaign_spec_sha256": require_sha256(
+            campaign_spec_sha256, name="dense campaign spec",
+        ),
+        "mode": mode,
+        "screen_aggregate_sha256": screen_sha256,
+        "confirmation_aggregate_sha256": confirmation_sha256,
+        "disposition": "dense_training_only",
+        "disposition_sha256": disposition_sha256,
+        "terminal_results": ["RSET_M1c", "RSET_M1w", "RREL_M1c", "RREL_M1w"],
+        "full_parent_imported": False,
+        "final_role_accessed": False,
+        "final_tasks_registered": False,
+        "deployable_publication_authorized": False,
+        "scientific_results_retained": True,
+    })
+
+
+def validate_dense_training_aggregate(
+    value: Mapping[str, Any], *, campaign_spec_sha256: str | None = None,
+    disposition_sha256: str | None = None,
+) -> str:
+    digest = validate_content_hash(
+        value, expected_contract=DENSE_TRAINING_AGGREGATE_CONTRACT,
+        expected_schema_version=1,
+    )
+    required = {
+        "contract", "schema_version", "campaign_spec_sha256", "mode",
+        "screen_aggregate_sha256", "confirmation_aggregate_sha256",
+        "disposition", "disposition_sha256", "terminal_results",
+        "full_parent_imported", "final_role_accessed",
+        "final_tasks_registered", "deployable_publication_authorized",
+        "scientific_results_retained", "content_hash",
+    }
+    if set(value) != required:
+        raise ValueError("dense training aggregate schema differs")
+    mode = value.get("mode")
+    if mode not in {"smoke", "pilot", "production"}:
+        raise ValueError("dense training aggregate mode differs")
+    confirmation = value.get("confirmation_aggregate_sha256")
+    if (mode == "smoke") != (confirmation is None):
+        raise PermissionError("dense training aggregate confirmation boundary differs")
+    if confirmation is not None:
+        require_sha256(confirmation, name="dense confirmation aggregate")
+    for name in (
+        "campaign_spec_sha256", "screen_aggregate_sha256", "disposition_sha256",
+    ):
+        require_sha256(value.get(name), name=f"dense aggregate {name}")
+    if campaign_spec_sha256 is not None and value.get(
+        "campaign_spec_sha256"
+    ) != require_sha256(campaign_spec_sha256, name="expected dense campaign"):
+        raise PermissionError("dense aggregate belongs to another campaign")
+    if disposition_sha256 is not None and value.get(
+        "disposition_sha256"
+    ) != require_sha256(disposition_sha256, name="expected dense disposition"):
+        raise PermissionError("dense aggregate disposition lineage differs")
+    expected = {
+        "disposition": "dense_training_only",
+        "terminal_results": [
+            "RSET_M1c", "RSET_M1w", "RREL_M1c", "RREL_M1w",
+        ],
+        "full_parent_imported": False,
+        "final_role_accessed": False,
+        "final_tasks_registered": False,
+        "deployable_publication_authorized": False,
+        "scientific_results_retained": True,
+    }
+    if any(value.get(key) != expected_value for key, expected_value in expected.items()):
+        raise PermissionError("dense training aggregate authority differs")
+    return digest
+
+
+def build_dense_training_disposition(
+    *, dense_teacher_import_sha256: str, representation_recipe_sha256: str,
+    graph_sha256: str,
+) -> dict[str, Any]:
+    return with_content_hash({
+        "contract": DENSE_TRAINING_DISPOSITION_CONTRACT,
+        "schema_version": 1,
+        "disposition": "dense_training_only",
+        "dense_teacher_import_sha256": require_sha256(
+            dense_teacher_import_sha256, name="dense teacher import",
+        ),
+        "representation_recipe_sha256": require_sha256(
+            representation_recipe_sha256, name="dense representation recipe",
+        ),
+        "graph_sha256": require_sha256(graph_sha256, name="dense graph"),
+        "final_role_access_authorized": False,
+        "shared_final_authorized": False,
+        "deployable_publication_authorized": False,
+        "terminal_results": [
+            "RSET_M1c", "RSET_M1w", "RREL_M1c", "RREL_M1w",
+        ],
+    })
+
+
+def validate_dense_training_disposition(value: Mapping[str, Any]) -> str:
+    digest = validate_content_hash(
+        value, expected_contract=DENSE_TRAINING_DISPOSITION_CONTRACT,
+        expected_schema_version=1,
+    )
+    rebuilt = build_dense_training_disposition(
+        dense_teacher_import_sha256=value.get("dense_teacher_import_sha256"),
+        representation_recipe_sha256=value.get("representation_recipe_sha256"),
+        graph_sha256=value.get("graph_sha256"),
+    )
+    if dict(value) != rebuilt:
+        raise PermissionError("dense training disposition semantics differ")
+    return digest
 
 
 def build_confirmation_registry(
@@ -626,6 +780,10 @@ __all__ = [
     "build_confirmation_registry",
     "build_screen_aggregate",
     "build_validation_only_aggregate",
+    "build_dense_training_aggregate",
+    "validate_dense_training_aggregate",
+    "build_dense_training_disposition",
+    "validate_dense_training_disposition",
     "checkpoint_key",
     "derive_representation_execution_id",
     "gap_recovery",

@@ -283,9 +283,8 @@ def _target_forward_spec(live: dict) -> dict:
         "teacher": {
             "source_kind": "imported_checkpoint",
             "checkpoint_byte_sha256": "5" * 64,
-            "checkpoint_logical_sha256": "6" * 64,
             "model_config_sha256": "7" * 64,
-            "architecture_sha256": "8" * 64,
+            "surface_parity_sha256": "8" * 64,
             "tap_sha256": "9" * 64,
             "kernel_resources_sha256": "a" * 64,
             "kernel_array_logical_hashes": {

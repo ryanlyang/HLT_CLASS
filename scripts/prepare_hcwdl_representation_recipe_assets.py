@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the pre-campaign RKD graph, control registry, and v2 overlay recipe."""
+"""Build the dense RKD graph, control registry, and v4 overlay recipe."""
 
 from __future__ import annotations
 
@@ -24,8 +24,8 @@ from hlt_classification.scouting.hcwdl_representation_kernels import (
     generate_spectral_resource_bundle,
     spectral_resource_logical_hashes,
 )
-from hlt_classification.scouting.hcwdl_representation_locks import (
-    validate_parent_import,
+from hlt_classification.scouting.hcwdl_representation_dense_teacher import (
+    validate_dense_teacher_import,
 )
 from hlt_classification.scouting.hcwdl_representation_recipe import (
     build_representation_recipe,
@@ -36,13 +36,17 @@ from hlt_classification.scouting.hcwdl_representation_recipe import (
 from hlt_classification.scouting.hcwdl_representation_smoke import (
     measure_zero_coefficient_parity,
 )
+from hlt_classification.scouting.hcwdl_representation_reporting import (
+    build_dense_training_disposition,
+)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--representation-root", type=Path, required=True)
-    parser.add_argument("--parent-import", type=Path, required=True)
+    parser.add_argument("--dense-teacher-import", type=Path, required=True)
     parser.add_argument("--parent-recipe", type=Path, required=True)
+    parser.add_argument("--assignment-manifest", type=Path, required=True)
     parser.add_argument(
         "--project-dir", type=Path, required=True,
         help="clean Git checkout whose measured source snapshot produces the recipe",
@@ -54,19 +58,22 @@ def main() -> int:
     if not args.project_dir.is_absolute():
         raise ValueError("project directory must be absolute")
 
-    parent_import = artifact(args.parent_import)
-    parent_import_sha256 = validate_parent_import(parent_import)
+    teacher_import = artifact(args.dense_teacher_import)
+    teacher_import_sha256 = validate_dense_teacher_import(teacher_import)
     parent_recipe = artifact(args.parent_recipe)
     parent_recipe_sha256 = validate_recipe(
         parent_recipe, require_authorized=True,
         expected_profile=PRIMARY_RECIPE_PROFILE,
     )
-    if parent_import["parents"]["parent_recipe"] != parent_recipe_sha256:
-        raise ValueError("parent recipe differs from the authoritative parent import")
+    if teacher_import["parents"]["historical_recipe"] != parent_recipe_sha256:
+        raise ValueError("parent recipe differs from the dense teacher import")
+    assignment_manifest = artifact(args.assignment_manifest)
+    from hlt_classification.scouting.highcov_cache import validate_assignment_manifest
+    assignment_manifest_sha256 = validate_assignment_manifest(assignment_manifest)
 
     graph = ascent_graph_artifact(parents={
-        "parent_graph": parent_import["parents"]["parent_graph"],
-        "parent_import": parent_import_sha256,
+        "parent_graph": teacher_import["payload"]["historical_parent_graph_sha256"],
+        "parent_import": teacher_import_sha256,
     })
     graph_sha256 = validate_ascent_graph_artifact(graph)
     controls = control_registry_artifact(
@@ -83,27 +90,21 @@ def main() -> int:
         zero_coefficient_measurements=zero_measurements,
     )
     parents = {
-        "architecture_attestation": parent_import["parents"][
-            "architecture_attestation"
-        ],
-        "assignment_manifest": parent_import["parents"][
-            "train_assignment_manifest"
+        "assignment_manifest": assignment_manifest_sha256,
+        "dense_teacher_import": teacher_import_sha256,
+        "historical_parent_graph": teacher_import["payload"][
+            "historical_parent_graph_sha256"
         ],
         "kernel_resources": kernels.content_hash,
-        "parent_graph": parent_import["parents"]["parent_graph"],
-        "parent_loss_attestation": parent_import["parents"][
-            "parent_loss_attestation"
-        ],
         "parent_recipe": parent_recipe_sha256,
         "producer_source": derive_recipe_producer_source_sha256(
             args.project_dir,
         ),
         "representation_ascent_graph": graph_sha256,
         "representation_control_registry": controls_sha256,
-        "row_selection": parent_import["parents"]["row_selection"],
-        "source_manifest": parent_import["parents"]["source_manifest"],
-        "split_manifest": parent_import["parents"]["split_manifest"],
-        "teacher_import": parent_import_sha256,
+        "row_selection": teacher_import["parents"]["historical_row_selection"],
+        "source_manifest": teacher_import["parents"]["historical_source_manifest"],
+        "split_manifest": teacher_import["parents"]["historical_split_manifest"],
     }
     recipe = build_representation_recipe(
         parents=parents,
@@ -111,11 +112,17 @@ def main() -> int:
         evidence=evidence,
     )
     validate_representation_recipe(recipe, expected_parents=parents)
+    disposition = build_dense_training_disposition(
+        dense_teacher_import_sha256=teacher_import_sha256,
+        representation_recipe_sha256=recipe["content_hash"],
+        graph_sha256=graph_sha256,
+    )
 
     root = args.representation_root
     publish(root / "graph" / "ascent_graph.json", graph)
     publish(root / "controls" / "registry.json", controls)
     publish(root / "recipes" / "representation_recipe.json", recipe)
+    publish(root / "import" / "dense_training_disposition.json", disposition)
     return 0
 
 

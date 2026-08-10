@@ -2,7 +2,8 @@
 
 The overlay authorizes only representation supervision.  It binds, but never
 copies or overrides, the optimization policy in an authenticated
-``HCWDL_RECIPE/v4`` parent.  Version 3 freezes the dense four-track descent:
+``HCWDL_RECIPE/v4`` teacher recipe.  Version 4 freezes the dense four-track descent
+without importing the obsolete base-HCWDL ladder or finalist chain:
 Offline -> D100 -> D95 -> ... -> D0 -> M1 for RSET/RREL, cold/warm.
 """
 
@@ -43,11 +44,10 @@ RECIPE_PROFILE: Final = "registered_ablation"
 PARENT_RECIPE_CONTRACT: Final = "HCWDL_RECIPE/v4"
 
 REQUIRED_PARENT_KEYS: Final = frozenset({
-    "architecture_attestation",
     "assignment_manifest",
+    "dense_teacher_import",
+    "historical_parent_graph",
     "kernel_resources",
-    "parent_graph",
-    "parent_loss_attestation",
     "parent_recipe",
     "producer_source",
     "representation_ascent_graph",
@@ -55,7 +55,6 @@ REQUIRED_PARENT_KEYS: Final = frozenset({
     "row_selection",
     "source_manifest",
     "split_manifest",
-    "teacher_import",
 })
 REQUIRED_EVIDENCE_KEYS: Final = frozenset({
     "analytic_gradient",

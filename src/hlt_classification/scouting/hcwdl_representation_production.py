@@ -33,8 +33,8 @@ from .hcwdl_representation_contracts import (
 )
 
 
-TARGET_ASSEMBLY_CONTRACT: Final = "HCWDL_REPRESENTATION_TARGET_ASSEMBLY/v2"
-TRAINING_ASSEMBLY_CONTRACT: Final = "HCWDL_REPRESENTATION_TRAINING_ASSEMBLY/v2"
+TARGET_ASSEMBLY_CONTRACT: Final = "HCWDL_REPRESENTATION_TARGET_ASSEMBLY/v3"
+TRAINING_ASSEMBLY_CONTRACT: Final = "HCWDL_REPRESENTATION_TRAINING_ASSEMBLY/v3"
 FINAL_SELECTION_ASSEMBLY_CONTRACT: Final = (
     "HCWDL_REPRESENTATION_FINAL_SELECTION_ASSEMBLY/v1"
 )
@@ -483,7 +483,13 @@ def _prepare_target_partitions(
         selection, role="train", split_manifest_sha256=split["content_hash"],
     )
     bank_kind = "toff" if teacher_view == "toff" else "ordinary"
-    if teacher_view not in {"hlt", "d25", "d50", "d75", "d100", "toff"}:
+    if teacher_view in {"hlt", "toff"}:
+        teacher_level = None
+    elif teacher_view.startswith("d") and teacher_view[1:].isdigit():
+        teacher_level = int(teacher_view[1:])
+        if teacher_level not in range(5, 101, 5):
+            raise ValueError("dense target teacher privilege level differs")
+    else:
         raise ValueError("target teacher view differs")
     if teacher_view.startswith("d") and teacher_view != "hlt":
         if assignment_manifest is None:
@@ -543,7 +549,6 @@ def _prepare_target_partitions(
             }
     factories: dict[str, Callable[[], Iterator[Any]]] = {}
     partition_specs: dict[str, dict[str, int]] = {}
-    alpha_by_view = {"d25": 0.25, "d50": 0.50, "d75": 0.75, "d100": 1.0}
     for partition in sorted(normalized_sources):
         source_id, source_record = normalized_sources[partition]
         rank = by_path[source_record.path][0]
@@ -572,7 +577,8 @@ def _prepare_target_partitions(
             else:
                 store = DenseAssignmentStore(assignment_manifest)
                 stream = iterate_pmard_batches(
-                    split, matcher_model=None, alpha=alpha_by_view[expected_view],
+                    split, matcher_model=None,
+                    alpha=int(expected_view[1:]) / 100.0,
                     matcher_variant="highcov_empirical_lexicographic_dr0p30_v1",
                     threshold=0.0, repair_family="HIGHCOV_SHELL_EXACT/v1",
                     assignment_store=store, repair_seed=1337,
@@ -747,6 +753,24 @@ def _validate_imported_pmard_source(
 ) -> dict[str, Any]:
     """Prove a target/training parent source is the exact imported model."""
 
+    if parent_import.get("contract") == (
+        "HCWDL_REPRESENTATION_DENSE_TEACHER_IMPORT/v1"
+    ):
+        from .hcwdl_representation_dense_teacher import validate_dense_teacher_import
+        validate_dense_teacher_import(parent_import)
+        if node_id != "TOFF":
+            raise PermissionError("dense teacher import can authorize only TOFF")
+        chain = _pmard_report_chain(report_reference, name=name)
+        payload = parent_import["payload"]
+        parents = parent_import["parents"]
+        if (
+            chain["engine_path"] != Path(payload["engine_report_path"]).resolve()
+            or chain["engine_sha256"] != parents["toff_engine_report"]
+            or chain["checkpoint"] != Path(payload["selected_checkpoint_path"]).resolve()
+            or chain["checkpoint_sha256"] != parents["toff_selected_checkpoint"]
+        ):
+            raise ValueError(f"{name} differs from the dense TOFF import")
+        return chain
     imported, architecture_rows = _validated_parent_import_rows(
         parent_import, architecture,
     )

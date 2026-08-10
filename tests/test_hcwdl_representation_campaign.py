@@ -9,6 +9,7 @@ import hlt_classification.scouting.hcwdl_representation_campaign as campaign_mod
 from hlt_classification.scouting.hcwdl_representation_campaign import (
     AUTHORIZATION_PHRASE,
     CONTROLS,
+    DENSE_TRAINING_DISPOSITION,
     adapter_registered_input_requirements,
     assemble_submission_ledger_from_events,
     build_command_plan,
@@ -49,6 +50,53 @@ def test_registry_contains_exact_primary_and_controls_and_serial_banks() -> None
     assert len(primary_node_ids()) == 86
     assert len(tasks) == 295
     assert all(row.array is None or "%" not in row.array for row in tasks)
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected_tasks", "terminal_parent"),
+    (("smoke", 261, "screen_aggregate"),
+     ("pilot", 275, "confirmation_aggregate")),
+)
+def test_dense_registry_is_exact_four_branch_descent_without_old_or_final_work(
+    mode: str, expected_tasks: int, terminal_parent: str,
+) -> None:
+    tasks = build_task_registry(
+        disposition=DENSE_TRAINING_DISPOSITION, mode=mode,
+        final_source_partitions=0, combined_finalist_count=0,
+    )
+    by_key = {row.task_key: row for row in tasks}
+    assert len(tasks) == expected_tasks
+    assert by_key["dense_training_aggregate"].dependencies == (terminal_parent,)
+    assert by_key["parent_import"].kind == "dense_teacher_import"
+    assert {row.graph_node for row in tasks if row.kind == "train_node"} == set(
+        primary_node_ids()
+    )
+    assert not any(
+        row.kind in {
+            "architecture_attestation", "parent_loss_attestation", "reservation",
+            "shared_final_claim", "final_selection", "assignment_shard",
+            "assignment_finalize", "data_attestation", "execution_lock",
+            "prediction_shard", "prediction_finalize", "metric_join",
+            "final_aggregate", "finalist_lock",
+        }
+        for row in tasks
+    )
+    assert not any(
+        any(f"M{level}" in value for level in range(2, 7))
+        for row in tasks
+        for value in (row.task_key, str(row.graph_node or ""))
+    )
+    for strategy in ("RSET", "RREL"):
+        root = by_key[f"train_{strategy}_D100"]
+        assert root.dependencies[0] == "target_TOFF_screen"
+        for suffix in ("c", "w"):
+            predecessor = f"{strategy}_D100"
+            for level in range(95, -1, -5):
+                key = f"train_{strategy}_D{level}{suffix}"
+                assert f"train_{predecessor}" in by_key[key].dependencies
+                predecessor = f"{strategy}_D{level}{suffix}"
+            terminal = by_key[f"train_{strategy}_M1{suffix}"]
+            assert f"train_{predecessor}" in terminal.dependencies
 
 
 def test_command_plan_identity_is_acyclic_with_runtime_binding() -> None:
@@ -367,18 +415,21 @@ def test_submission_authorization_binds_strict_candidate_audit() -> None:
     }
     authorization = build_submission_authorization(
         mode="pilot",
+        disposition="combined_confirmatory",
         source_commit="1" * 40,
         authorization_phrase=AUTHORIZATION_PHRASE,
         **hashes,
     )
     validate_submission_authorization(
         authorization, mode="pilot", source_commit="1" * 40, **hashes,
+        disposition="combined_confirmatory",
     )
     with pytest.raises(PermissionError, match="lineage differs"):
         validate_submission_authorization(
             authorization,
-            mode="pilot",
-            source_commit="1" * 40,
+                mode="pilot",
+                disposition="combined_confirmatory",
+                source_commit="1" * 40,
             **{**hashes, "executable_candidate_audit_sha256": "a" * 64},
         )
 

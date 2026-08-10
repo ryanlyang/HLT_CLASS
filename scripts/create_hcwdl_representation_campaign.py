@@ -26,7 +26,10 @@ def main() -> int:
     parser.add_argument("--disposition-sha256", required=True)
     parser.add_argument(
         "--disposition",
-        choices=("combined_confirmatory", "validation_only_parent_claim_consumed"),
+        choices=(
+            "dense_training_only", "combined_confirmatory",
+            "validation_only_parent_claim_consumed",
+        ),
         required=True,
     )
     parser.add_argument("--train-rows", type=int, required=True)
@@ -80,10 +83,14 @@ def main() -> int:
                 else args.campaign_root / {
                     "source_manifest": "inputs/source_manifest.json",
                     "split_manifest": "inputs/split_manifest.json",
-                    "parent_import": "import/parent_import.json",
+                    "parent_import": (
+                        "import/dense_teacher_import.json"
+                        if args.disposition == "dense_training_only"
+                        else "import/parent_import.json"
+                    ),
                     "representation_graph": "graph/ascent_graph.json",
                     "representation_recipe": "recipes/representation_recipe.json",
-                    "final_disposition": "import/final_disposition.json",
+                    "final_disposition": "import/dense_training_disposition.json",
                     "runtime_binding": "runtime/runtime_binding.json",
                 }[name]
             )

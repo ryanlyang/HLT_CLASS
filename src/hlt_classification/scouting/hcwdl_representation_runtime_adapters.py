@@ -48,6 +48,7 @@ LOCAL_SEMANTIC_COVERAGE: Final[Mapping[str, str]] = {
     "architecture_attestation": "architecture_schema_and_local_surface_gate",
     "parent_loss_attestation": "corrected_parent_loss_forward_backward",
     "parent_import": "parent_import_contract_validator",
+    "dense_teacher_import": "historical_toff_training_teacher_file_authority",
     "kernel_resources": "spectral_resource_builder_and_weighted_mean",
     "representation_recipe": "frozen_recipe_builder_and_validator",
     "numerical_acceptance": "spectral_numerical_acceptance_math",
@@ -78,6 +79,7 @@ LOCAL_SEMANTIC_COVERAGE: Final[Mapping[str, str]] = {
     "metric_join": "synthetic_shared_final_metric_join_pipeline",
     "final_aggregate": "synthetic_shared_final_aggregate_pipeline",
     "validation_only_aggregate": "validation_only_reporting_aggregate_builder",
+    "dense_training_aggregate": "dense_training_only_aggregate_builder",
 }
 
 
@@ -1008,6 +1010,54 @@ def _parent_import_adapter(spec, task, index, runtime_row):
     return _validate_registered_outputs(task, runtime_row, operation="parent_import")
 
 
+def _dense_teacher_import_adapter(spec, task, index, runtime_row):
+    del index
+    parameters = _require_exact_parameters(
+        task, runtime_row, required=(
+            "artifact", "authority_files", "historical_project_dir",
+        ),
+    )
+    artifact_reference = resolve_registered_arguments(
+        parameters["artifact"], runtime_row,
+        location="dense_teacher_import.artifact",
+    )
+    if not isinstance(artifact_reference, Mapping) or set(artifact_reference) != {
+        "path", "sha256",
+    }:
+        raise ProductionConfigurationError(
+            "dense teacher artifact must use registered_reference"
+        )
+    imported = load_json(Path(str(artifact_reference["path"])))
+    raw_files = parameters["authority_files"]
+    if not isinstance(raw_files, Mapping):
+        raise ProductionConfigurationError("dense teacher authority files differ")
+    authority_files = {
+        str(name): _resolve_registered_path_argument(
+            value, runtime_row,
+            location=f"dense_teacher_import.authority_files.{name}",
+        )
+        for name, value in raw_files.items()
+    }
+    historical_project = _resolve_registered_path_argument(
+        parameters["historical_project_dir"], runtime_row,
+        location="dense_teacher_import.historical_project_dir",
+    )
+    from .hcwdl_representation_dense_teacher import (
+        validate_dense_teacher_import_against_files,
+    )
+    digest = validate_dense_teacher_import_against_files(
+        imported, authority_files=authority_files,
+        historical_project_dir=historical_project,
+    )
+    if digest != spec["parent_import_sha256"]:
+        raise PermissionError("dense teacher import differs from campaign identity")
+    for path in _outputs(task, runtime_row).values():
+        _publish_exact_json(path, imported)
+    return _validate_registered_outputs(
+        task, runtime_row, operation="dense_teacher_import",
+    )
+
+
 def _kernel_resources_adapter(spec, task, index, runtime_row):
     del index
     parameters = _require_exact_parameters(
@@ -1064,11 +1114,11 @@ def _representation_recipe_adapter(spec, task, index, runtime_row):
     from .hcwdl_representation_graph import (
         validate_ascent_graph_artifact, validate_control_registry_artifact,
     )
-    from .hcwdl_representation_locks import validate_parent_import
     from .hcwdl_representation_recipe import validate_representation_recipe
 
     lineage_names = (
         "representation_graph", "control_registry", "parent_import",
+        "assignment_manifest",
     )
     parameters = _require_exact_parameters(
         task, runtime_row,
@@ -1094,12 +1144,28 @@ def _representation_recipe_adapter(spec, task, index, runtime_row):
         lineage_artifacts[name] = load_json(Path(str(reference["path"])))
 
     parent_import = lineage_artifacts["parent_import"]
-    parent_import_sha256 = validate_parent_import(parent_import)
+    dense_teacher = parent_import.get("contract") == (
+        "HCWDL_REPRESENTATION_DENSE_TEACHER_IMPORT/v1"
+    )
+    if dense_teacher:
+        from .hcwdl_representation_dense_teacher import validate_dense_teacher_import
+        parent_import_sha256 = validate_dense_teacher_import(parent_import)
+        parent_graph_sha256 = parent_import["payload"][
+            "historical_parent_graph_sha256"
+        ]
+        source_sha256 = parent_import["parents"]["historical_source_manifest"]
+        split_sha256 = parent_import["parents"]["historical_split_manifest"]
+    else:
+        from .hcwdl_representation_locks import validate_parent_import
+        parent_import_sha256 = validate_parent_import(parent_import)
+        parent_graph_sha256 = parent_import["parents"]["parent_graph"]
+        source_sha256 = parent_import["parents"]["source_manifest"]
+        split_sha256 = parent_import["parents"]["split_manifest"]
     graph = lineage_artifacts["representation_graph"]
     graph_sha256 = validate_ascent_graph_artifact(
         graph,
         expected_parents={
-            "parent_graph": parent_import["parents"]["parent_graph"],
+            "parent_graph": parent_graph_sha256,
             "parent_import": parent_import_sha256,
         },
     )
@@ -1107,6 +1173,12 @@ def _representation_recipe_adapter(spec, task, index, runtime_row):
         lineage_artifacts["control_registry"],
         ascent_graph_artifact_sha256=graph_sha256,
     )
+    from .highcov_cache import validate_assignment_manifest
+    from .hcwdl_representation_kernels import generate_spectral_resource_bundle
+    assignment_sha256 = validate_assignment_manifest(
+        lineage_artifacts["assignment_manifest"]
+    )
+    kernel_bundle_sha256 = generate_spectral_resource_bundle().content_hash
     if (
         parent_import_sha256 != require_sha256(
             spec["parent_import_sha256"], name="campaign parent import",
@@ -1114,11 +1186,11 @@ def _representation_recipe_adapter(spec, task, index, runtime_row):
         or graph_sha256 != require_sha256(
             spec["graph_sha256"], name="campaign representation graph",
         )
-        or parent_import["parents"]["source_manifest"]
+        or source_sha256
         != require_sha256(
             spec["source_manifest_sha256"], name="campaign source manifest",
         )
-        or parent_import["parents"]["split_manifest"]
+        or split_sha256
         != require_sha256(
             spec["split_manifest_sha256"], name="campaign split manifest",
         )
@@ -1130,7 +1202,18 @@ def _representation_recipe_adapter(spec, task, index, runtime_row):
     def pre_publish_check(recipe: Mapping[str, Any]) -> None:
         if recipe["content_hash"] != spec["representation_recipe_sha256"]:
             raise ValueError("representation recipe differs from campaign identity")
-        expected_parent_links = {
+        expected_parent_links = ({
+            "assignment_manifest": assignment_sha256,
+            "dense_teacher_import": parent_import_sha256,
+            "historical_parent_graph": parent_graph_sha256,
+            "parent_recipe": parent_import["parents"]["historical_recipe"],
+            "row_selection": parent_import["parents"]["historical_row_selection"],
+            "source_manifest": source_sha256,
+            "split_manifest": split_sha256,
+            "representation_ascent_graph": graph_sha256,
+            "representation_control_registry": control_registry_sha256,
+            "kernel_resources": kernel_bundle_sha256,
+        } if dense_teacher else {
             "architecture_attestation": parent_import["parents"][
                 "architecture_attestation"
             ],
@@ -1148,7 +1231,7 @@ def _representation_recipe_adapter(spec, task, index, runtime_row):
             "source_manifest": parent_import["parents"]["source_manifest"],
             "split_manifest": parent_import["parents"]["split_manifest"],
             "teacher_import": parent_import_sha256,
-        }
+        })
         if any(
             recipe["parents"].get(name) != digest
             for name, digest in expected_parent_links.items()
@@ -1281,20 +1364,30 @@ def _screen_aggregate_adapter(spec, task, index, runtime_row):
             "screen_aggregate resolved builder arguments are not an object"
         )
     raw_parent_reports = arguments.get("parent_reports")
-    from .hcwdl_representation_locks import IMPORTED_LOGIT_CONTROLS
-    if not isinstance(raw_parent_reports, Mapping) or set(raw_parent_reports) != set(
-        IMPORTED_LOGIT_CONTROLS
-    ):
-        raise ValueError("screen aggregate parent-report registry differs")
-    from .hcwdl_representation_production import _validate_imported_pmard_source
+    dense_teacher = parent_import.get("contract") == (
+        "HCWDL_REPRESENTATION_DENSE_TEACHER_IMPORT/v1"
+    )
+    if dense_teacher:
+        from .hcwdl_representation_dense_teacher import validate_dense_teacher_import
+        validate_dense_teacher_import(parent_import)
+        if architecture != parent_import or raw_parent_reports != {}:
+            raise PermissionError("dense screen imported obsolete parent authority")
+        parent_reports = {}
+    else:
+        from .hcwdl_representation_locks import IMPORTED_LOGIT_CONTROLS
+        if not isinstance(raw_parent_reports, Mapping) or set(raw_parent_reports) != set(
+            IMPORTED_LOGIT_CONTROLS
+        ):
+            raise ValueError("screen aggregate parent-report registry differs")
+        from .hcwdl_representation_production import _validate_imported_pmard_source
 
-    parent_reports = {
-        str(node_id): _validate_imported_pmard_source(
-            reference, node_id=str(node_id), parent_import=parent_import,
-            architecture=architecture, name=f"{node_id} screen parent",
-        )["engine"]
-        for node_id, reference in raw_parent_reports.items()
-    }
+        parent_reports = {
+            str(node_id): _validate_imported_pmard_source(
+                reference, node_id=str(node_id), parent_import=parent_import,
+                architecture=architecture, name=f"{node_id} screen parent",
+            )["engine"]
+            for node_id, reference in raw_parent_reports.items()
+        }
     from .hcwdl_representation_reporting import build_screen_aggregate
 
     result = build_screen_aggregate(
@@ -1321,6 +1414,41 @@ def _confirmation_aggregate_adapter(spec, task, index, runtime_row):
     return _mapping_builder_adapter(
         spec, task, index, runtime_row, builder=build_confirmation_aggregate,
         operation="confirmation_aggregate",
+    )
+
+
+def _dense_training_aggregate_adapter(spec, task, index, runtime_row):
+    from .hcwdl_representation_reporting import build_dense_training_aggregate
+    del spec, index
+    parameters = _require_exact_parameters(
+        task, runtime_row,
+        required=("builder_arguments", "dense_training_disposition"),
+    )
+    raw_arguments = parameters["builder_arguments"]
+    if not isinstance(raw_arguments, Mapping):
+        raise ProductionConfigurationError(
+            "dense_training_aggregate builder_arguments must be an object"
+        )
+    arguments = resolve_registered_arguments(
+        raw_arguments, runtime_row,
+        location="dense_training_aggregate.builder_arguments",
+    )
+    disposition = resolve_registered_arguments(
+        parameters["dense_training_disposition"], runtime_row,
+        location="dense_training_aggregate.dense_training_disposition",
+    )
+    if not isinstance(arguments, Mapping) or not isinstance(disposition, Mapping):
+        raise ProductionConfigurationError(
+            "dense_training_aggregate registered arguments differ"
+        )
+    result = build_dense_training_aggregate(
+        **dict(arguments), dense_training_disposition=disposition,
+    )
+    _validate_declared_content_hash(result)
+    for path in _outputs(task, runtime_row).values():
+        _publish_exact_json(path, result)
+    return _validate_registered_outputs(
+        task, runtime_row, operation="dense_training_aggregate",
     )
 
 
@@ -2158,6 +2286,7 @@ PRODUCTION_ADAPTERS: Final[Mapping[str, Callable[..., Any]]] = {
     "architecture_attestation": _architecture_attestation_adapter,
     "parent_loss_attestation": _parent_loss_attestation_adapter,
     "parent_import": _parent_import_adapter,
+    "dense_teacher_import": _dense_teacher_import_adapter,
     "control_registry": control_registry_adapter,
     "kernel_resources": _kernel_resources_adapter,
     "representation_recipe": _representation_recipe_adapter,
@@ -2188,6 +2317,7 @@ PRODUCTION_ADAPTERS: Final[Mapping[str, Callable[..., Any]]] = {
     "metric_join": metric_join_adapter,
     "final_aggregate": final_aggregate_adapter,
     "validation_only_aggregate": validation_only_aggregate_adapter,
+    "dense_training_aggregate": _dense_training_aggregate_adapter,
 }
 
 

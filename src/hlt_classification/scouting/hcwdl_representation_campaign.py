@@ -23,6 +23,8 @@ from .hcwdl_representation_contracts import (
     SUBMISSION_LEDGER_CONTRACT,
     TIGRIS_ACCEPTANCE_CONTRACT,
     TIGRIS_EVIDENCE_BUNDLE_CONTRACT,
+    DENSE_STORAGE_ESTIMATE_CONTRACT,
+    DENSE_STORAGE_TEMPLATE_CONTRACT,
 )
 from .hcwdl_representation_resources import (
     FIXED_SIZE_INVENTORY_CONTRACT,
@@ -36,6 +38,10 @@ from .hcwdl_representation_resources import (
     load_authenticated_json_reference,
     resource_table,
     validate_measured_profile,
+    validate_dense_measured_profile,
+    validate_dense_storage_availability,
+    validate_dense_storage_estimate,
+    validate_dense_storage_template,
     validate_miniature_evidence,
     validate_scheduler_evidence,
     validate_storage_estimate,
@@ -64,6 +70,7 @@ def _operational_path(value: str | Path, *, name: str) -> str:
 RECOVERY_LEDGER_CONTRACT: Final = RECOVERY_SUBMISSION_LEDGER_CONTRACT
 LOCAL_SMOKE_CONTRACT: Final = LOCAL_SMOKE_REPORT_CONTRACT
 MODES: Final = ("smoke", "pilot", "production")
+DENSE_TRAINING_DISPOSITION: Final = "dense_training_only"
 STRATEGIES: Final = ("RSET", "RREL")
 TRACKS: Final = ("c", "w")
 CONTROLS: Final = tuple(CONTROL_REGISTRY)
@@ -103,6 +110,11 @@ EXACT_OUTPUT_ROUTE = re.compile(
     rf"^\$\{{task_output:({_TASK_KEY_PATTERN})(?:\[([0-9]+)\])?:([0-9]+)\}}$"
 )
 AUTHORIZATION_PHRASE: Final = "AUTHORIZE EXACT HCWDL-RKD SPEC FOR TIGRIS"
+DENSE_SMOKE_AUTHORIZATION_PHRASE: Final = (
+    "AUTHORIZE EXACT HCWDL-RKD DENSE SMOKE FOR TIGRIS"
+)
+DENSE_SMOKE_AUTHORIZATION_SCOPE: Final = "dense_smoke_miniature"
+SCIENTIFIC_AUTHORIZATION_SCOPE: Final = "scientific_campaign"
 REQUIRED_TIGRIS_CHECKS: Final = (
     "installed_weaver_parity",
     "ordinary_cache_miniature",
@@ -155,20 +167,32 @@ def build_submission_authorization(
     *, mode: str, source_commit: str, command_plan_sha256: str,
     executable_candidate_audit_sha256: str,
     resource_profile_sha256: str, storage_estimate_sha256: str,
-    tigris_acceptance_sha256: str, parent_import_sha256: str,
+    tigris_acceptance_sha256: str | None, parent_import_sha256: str,
     representation_recipe_sha256: str, disposition_sha256: str,
-    authorization_phrase: str,
+    disposition: str, authorization_phrase: str,
 ) -> dict[str, Any]:
     if mode not in MODES:
         raise ValueError("representation authorization mode differs")
-    if authorization_phrase != AUTHORIZATION_PHRASE:
+    dense_campaign = disposition == DENSE_TRAINING_DISPOSITION
+    dense_smoke = mode == "smoke" and dense_campaign
+    expected_phrase = (
+        DENSE_SMOKE_AUTHORIZATION_PHRASE if dense_smoke else AUTHORIZATION_PHRASE
+    )
+    if authorization_phrase != expected_phrase:
         raise PermissionError("representation submission authorization phrase differs")
+    if dense_smoke != (tigris_acceptance_sha256 is None):
+        raise PermissionError("representation authorization acceptance scope differs")
     if len(source_commit) != 40 or any(c not in "0123456789abcdef" for c in source_commit):
         raise ValueError("representation authorization source commit differs")
     return with_content_hash({
         "contract": SUBMISSION_AUTHORIZATION_CONTRACT,
         "schema_version": 1,
         "mode": mode,
+        "disposition": disposition,
+        "authorization_scope": (
+            DENSE_SMOKE_AUTHORIZATION_SCOPE
+            if dense_smoke else SCIENTIFIC_AUTHORIZATION_SCOPE
+        ),
         "source_commit": source_commit,
         "command_plan_sha256": require_sha256(command_plan_sha256, name="command plan"),
         "executable_candidate_audit_sha256": require_sha256(
@@ -177,7 +201,11 @@ def build_submission_authorization(
         ),
         "resource_profile_sha256": require_sha256(resource_profile_sha256, name="resource profile"),
         "storage_estimate_sha256": require_sha256(storage_estimate_sha256, name="storage estimate"),
-        "tigris_acceptance_sha256": require_sha256(tigris_acceptance_sha256, name="Tigris acceptance"),
+        "tigris_acceptance_sha256": (
+            None if tigris_acceptance_sha256 is None else require_sha256(
+                tigris_acceptance_sha256, name="Tigris acceptance",
+            )
+        ),
         "parent_import_sha256": require_sha256(parent_import_sha256, name="parent import"),
         "representation_recipe_sha256": require_sha256(
             representation_recipe_sha256, name="representation recipe",
@@ -191,16 +219,17 @@ def validate_submission_authorization(
     value: Mapping[str, Any], *, mode: str, source_commit: str,
     command_plan_sha256: str, resource_profile_sha256: str,
     executable_candidate_audit_sha256: str,
-    storage_estimate_sha256: str, tigris_acceptance_sha256: str,
+    storage_estimate_sha256: str, tigris_acceptance_sha256: str | None,
     parent_import_sha256: str, representation_recipe_sha256: str,
-    disposition_sha256: str,
+    disposition_sha256: str, disposition: str,
 ) -> str:
     digest = validate_content_hash(
         value, expected_contract=SUBMISSION_AUTHORIZATION_CONTRACT,
         expected_schema_version=1,
     )
     if set(value) != {
-        "contract", "schema_version", "mode", "source_commit",
+        "contract", "schema_version", "mode", "disposition",
+        "authorization_scope", "source_commit",
         "command_plan_sha256", "executable_candidate_audit_sha256",
         "resource_profile_sha256", "storage_estimate_sha256",
         "tigris_acceptance_sha256", "parent_import_sha256",
@@ -208,8 +237,15 @@ def validate_submission_authorization(
         "explicit_user_authorization", "content_hash",
     }:
         raise PermissionError("representation submission authorization fields differ")
+    dense_campaign = disposition == DENSE_TRAINING_DISPOSITION
+    dense_smoke = mode == "smoke" and dense_campaign
     expected = {
         "mode": mode,
+        "disposition": disposition,
+        "authorization_scope": (
+            DENSE_SMOKE_AUTHORIZATION_SCOPE
+            if dense_smoke else SCIENTIFIC_AUTHORIZATION_SCOPE
+        ),
         "source_commit": source_commit,
         "command_plan_sha256": command_plan_sha256,
         "executable_candidate_audit_sha256": executable_candidate_audit_sha256,
@@ -223,6 +259,8 @@ def validate_submission_authorization(
     }
     if any(value.get(key) != expected_value for key, expected_value in expected.items()):
         raise PermissionError("representation submission authorization lineage differs")
+    if dense_smoke != (tigris_acceptance_sha256 is None):
+        raise PermissionError("representation authorization acceptance scope differs")
     return digest
 
 
@@ -230,7 +268,30 @@ def validate_tigris_acceptance(
     value: Mapping[str, Any], *, source_commit: str,
     representation_recipe_sha256: str, resource_profile_sha256: str,
     storage_estimate_sha256: str, fixed_size_inventory_sha256: str,
+    disposition: str | None = None, parent_import_sha256: str | None = None,
+    graph_sha256: str | None = None,
 ) -> str:
+    from .hcwdl_representation_contracts import DENSE_SMOKE_ACCEPTANCE_CONTRACT
+
+    if value.get("contract") == DENSE_SMOKE_ACCEPTANCE_CONTRACT:
+        if (
+            disposition != DENSE_TRAINING_DISPOSITION
+            or parent_import_sha256 is None or graph_sha256 is None
+        ):
+            raise PermissionError("dense smoke acceptance cannot authorize this disposition")
+        from .hcwdl_representation_dense_acceptance import (
+            validate_dense_smoke_acceptance,
+        )
+        return validate_dense_smoke_acceptance(
+            value, source_commit=source_commit,
+            representation_recipe_sha256=representation_recipe_sha256,
+            dense_teacher_import_sha256=parent_import_sha256,
+            graph_sha256=graph_sha256,
+        )
+    if disposition == DENSE_TRAINING_DISPOSITION:
+        raise PermissionError(
+            "dense campaign requires exact 86-node dense-smoke acceptance"
+        )
     digest = validate_content_hash(
         value, expected_contract=TIGRIS_ACCEPTANCE_CONTRACT, expected_schema_version=1,
     )
@@ -552,13 +613,36 @@ def _add_bank_wave(
 
 def build_task_registry(
     *, disposition: str, final_source_partitions: int,
-    combined_finalist_count: int,
+    combined_finalist_count: int, mode: str = "pilot",
 ) -> tuple[CampaignTask, ...]:
-    if disposition not in {"combined_confirmatory", "validation_only_parent_claim_consumed"}:
+    if disposition not in {
+        "combined_confirmatory", "validation_only_parent_claim_consumed",
+        DENSE_TRAINING_DISPOSITION,
+    }:
         raise ValueError("representation campaign disposition differs")
-    if final_source_partitions <= 0 or combined_finalist_count <= 0:
+    if mode not in MODES:
+        raise ValueError("representation campaign mode differs")
+    if disposition == DENSE_TRAINING_DISPOSITION:
+        if final_source_partitions != 0 or combined_finalist_count != 0:
+            raise ValueError("dense training campaign cannot register final resources")
+    elif final_source_partitions <= 0 or combined_finalist_count <= 0:
         raise ValueError("final source/finalist counts must be positive")
-    tasks: list[CampaignTask] = [
+    if disposition == DENSE_TRAINING_DISPOSITION:
+        tasks: list[CampaignTask] = [
+            CampaignTask("tap_schema", "tap_schema", (), "cpu_small"),
+            CampaignTask("surface_parity", "surface_parity", ("tap_schema",), "cpu_small"),
+            CampaignTask(
+                "parent_import", "dense_teacher_import", ("surface_parity",),
+                "cpu_small",
+            ),
+            CampaignTask("control_registry", "control_registry", ("parent_import",), "cpu_small"),
+            CampaignTask("kernel_resources", "kernel_resources", ("control_registry",), "cpu_small"),
+            CampaignTask("representation_recipe", "representation_recipe", ("kernel_resources",), "cpu_small"),
+            CampaignTask("numerical_acceptance", "numerical_acceptance", ("representation_recipe",), "cpu_small"),
+        ]
+        prior = "numerical_acceptance"
+    else:
+        tasks = [
         CampaignTask("tap_schema", "tap_schema", (), "cpu_small"),
         CampaignTask("surface_parity", "surface_parity", ("tap_schema",), "cpu_small"),
         CampaignTask("architecture_attestation", "architecture_attestation", ("surface_parity",), "cpu_small"),
@@ -606,8 +690,8 @@ def build_task_registry(
             "pretraining_reservation", "reservation",
             ("zero_coefficient_acceptance",), "cpu_small",
         ),
-    ]
-    prior = "pretraining_reservation"
+        ]
+        prior = "pretraining_reservation"
 
     # Both strategy-specific D100 roots are freshly initialized and taught by
     # the one authenticated native-offline target bank.
@@ -634,24 +718,35 @@ def build_task_registry(
             prior = _add_bank_wave(
                 tasks, bank=teacher, prior=prior, nodes=(terminal,),
             )
-    tasks.extend(
-        (
-            CampaignTask("screen_aggregate", "screen_aggregate", (prior,), "cpu_small"),
-            CampaignTask("confirmation_registry", "confirmation_registry", ("screen_aggregate",), "cpu_small"),
-        )
-    )
-    confirmation_cleanup = "confirmation_registry"
-    for node in terminal_node_ids():
-        confirmation_cleanup = _add_bank_wave(
-            tasks,
-            bank=NODE_REGISTRY[node].target_bank_identity,
-            prior=confirmation_cleanup,
-            nodes=(node,),
-            purpose="confirmation",
-        )
-    tasks.append(
-        CampaignTask("confirmation_aggregate", "confirmation_aggregate", (confirmation_cleanup,), "cpu_small")
-    )
+    tasks.append(CampaignTask("screen_aggregate", "screen_aggregate", (prior,), "cpu_small"))
+    if disposition == DENSE_TRAINING_DISPOSITION and mode == "smoke":
+        tasks.append(CampaignTask(
+            "dense_training_aggregate", "dense_training_aggregate",
+            ("screen_aggregate",), "cpu_small",
+        ))
+    else:
+        tasks.append(CampaignTask(
+            "confirmation_registry", "confirmation_registry",
+            ("screen_aggregate",), "cpu_small",
+        ))
+        confirmation_cleanup = "confirmation_registry"
+        for node in terminal_node_ids():
+            confirmation_cleanup = _add_bank_wave(
+                tasks,
+                bank=NODE_REGISTRY[node].target_bank_identity,
+                prior=confirmation_cleanup,
+                nodes=(node,),
+                purpose="confirmation",
+            )
+        tasks.append(CampaignTask(
+            "confirmation_aggregate", "confirmation_aggregate",
+            (confirmation_cleanup,), "cpu_small",
+        ))
+        if disposition == DENSE_TRAINING_DISPOSITION:
+            tasks.append(CampaignTask(
+                "dense_training_aggregate", "dense_training_aggregate",
+                ("confirmation_aggregate",), "cpu_small",
+            ))
     if disposition == "combined_confirmatory":
         assignment_array = f"0-{final_source_partitions - 1}"
         prediction_rows = combined_finalist_count * final_source_partitions
@@ -683,7 +778,7 @@ def build_task_registry(
                 CampaignTask("final_aggregate", "final_aggregate", ("locked_metric_join",), "cpu_small"),
             )
         )
-    else:
+    elif disposition != DENSE_TRAINING_DISPOSITION:
         tasks.append(
             CampaignTask("final_aggregate", "validation_only_aggregate", ("confirmation_aggregate",), "cpu_small")
         )
@@ -704,19 +799,22 @@ def build_task_registry(
         )
         for row in tasks
     ]
-    validate_task_registry(tasks, disposition=disposition)
+    validate_task_registry(tasks, disposition=disposition, mode=mode)
     return tuple(tasks)
 
 
 def _registered_outputs(task: CampaignTask) -> tuple[str, ...]:
     if task.kind == "validation_only_aggregate":
         return ("reports/validation_only_aggregate.json",)
+    if task.kind == "dense_teacher_import":
+        return ("import/dense_teacher_import.json",)
     fixed = {
         "tap_schema": ("architecture/tap.json",),
         "surface_parity": ("architecture/surface_parity.json",),
         "architecture_attestation": ("import/architecture_attestation.json",),
         "parent_loss_attestation": ("import/parent_loss_attestation.json",),
         "parent_import": ("import/parent_import.json",),
+        "dense_training_aggregate": ("reports/dense_training_aggregate.json",),
         "control_registry": ("controls/registry.json",),
         "kernel_resources": ("recipes/kernel_resources/committed/${envelope_id}",),
         "representation_recipe": ("recipes/representation_recipe.json",),
@@ -837,7 +935,7 @@ def _training_model_source_routes(task: CampaignTask) -> tuple[str, ...]:
 
 def adapter_registered_input_requirements(
     task: CampaignTask, *, final_source_partitions: int,
-    combined_finalist_count: int,
+    combined_finalist_count: int, dense_teacher: bool = False,
 ) -> tuple[str, ...]:
     """Return every artifact route consumed by the fixed production adapter.
 
@@ -871,8 +969,20 @@ def adapter_registered_input_requirements(
             *PARENT_IMPORT_AUTHORITY_ROUTES.values(),
             *PARENT_QUALIFIER_REPORT_ROUTES.values(),
         ))
+    elif kind == "dense_teacher_import":
+        rows.extend((
+            "${prebuilt_parent_import}",
+            _producer_output_route("surface_parity", 0),
+            "${dense_teacher_campaign_spec}", "${dense_teacher_recipe}",
+            "${dense_teacher_source_manifest}", "${dense_teacher_split_manifest}",
+            "${dense_teacher_row_selection}", "${dense_teacher_toff_report}",
+            "${dense_teacher_project}",
+        ))
     elif kind == "representation_recipe":
-        rows.append("${prebuilt_representation_recipe}")
+        rows.extend((
+            "${prebuilt_representation_recipe}",
+            "${assignment_manifest:train}",
+        ))
     elif kind == "target_build":
         assert task.logical_bank is not None and task.target_purpose is not None
         bank = task.logical_bank
@@ -882,10 +992,11 @@ def adapter_registered_input_requirements(
             f"${{target_consumer_registry:{bank}:{purpose}}}",
             f"${{target_forward_spec:{bank}:{purpose}}}",
             "${split_manifest}", "${train_row_selection}",
-            _producer_output_route("architecture_attestation", 0),
             _producer_output_route("kernel_resources", 0),
             "${storage_estimate}", "${resource_profile}",
         ))
+        if not dense_teacher:
+            rows.append(_producer_output_route("architecture_attestation", 0))
         if bank in NODE_REGISTRY:
             rows.append(_producer_output_route(f"train_{bank}", 3))
         else:
@@ -916,9 +1027,10 @@ def adapter_registered_input_requirements(
             ),
             _producer_output_route("kernel_resources", 0),
             "${producer_runtime_signature}",
-            _producer_output_route("architecture_attestation", 0),
             *_training_model_source_routes(task),
         ))
+        if not dense_teacher:
+            rows.append(_producer_output_route("architecture_attestation", 0))
         graph_execution = NODE_REGISTRY.get(str(task.graph_node))
         if graph_execution is not None and graph_execution.student_domain != "hlt":
             rows.extend((
@@ -943,10 +1055,11 @@ def adapter_registered_input_requirements(
             else:
                 rows.append(_producer_output_route(consumer, 0))
     elif kind == "screen_aggregate":
-        rows.extend((
-            "${parent_reports}",
-            _producer_output_route("architecture_attestation", 0),
-        ))
+        if not dense_teacher:
+            rows.extend((
+                "${parent_reports}",
+                _producer_output_route("architecture_attestation", 0),
+            ))
         rows.extend(
             _producer_output_route(f"train_{node}", 0)
             for node in primary_node_ids()
@@ -976,6 +1089,13 @@ def adapter_registered_input_requirements(
             _producer_output_route("confirmation_aggregate", 0),
             "${final_disposition}",
         ))
+    elif kind == "dense_training_aggregate":
+        rows.extend((
+            _producer_output_route("screen_aggregate", 0),
+            "${final_disposition}",
+        ))
+        if task.dependencies == ("confirmation_aggregate",):
+            rows.append(_producer_output_route("confirmation_aggregate", 0))
     elif kind == "finalist_lock":
         rows.extend((
             "${parent_finalist_registry}", "${parent_recipe}",
@@ -1125,9 +1245,10 @@ def _registered_inputs(
     """Freeze every task's immutable logical inputs in addition to Slurm edges."""
 
     rows: list[str] = ["${campaign_spec}", "${representation_graph}"]
+    dense_teacher = task_by_key["parent_import"].kind == "dense_teacher_import"
     pre_parent_import = {
         "tap_schema", "surface_parity", "architecture_attestation",
-        "parent_loss_attestation", "parent_import",
+        "parent_loss_attestation", "parent_import", "dense_teacher_import",
     }
     pre_representation_recipe = pre_parent_import | {
         "control_registry", "kernel_resources", "representation_recipe",
@@ -1143,12 +1264,13 @@ def _registered_inputs(
         ))
     if task.kind not in {
         "tap_schema", "surface_parity", "architecture_attestation",
-        "parent_loss_attestation", "parent_import", "control_registry",
+        "parent_loss_attestation", "parent_import", "dense_teacher_import",
+        "control_registry",
     }:
         rows.extend((
             "${control_registry}", _producer_output_route("control_registry", 0),
         ))
-    if task.kind in {
+    if not dense_teacher and task.kind in {
         "reservation", "target_build", "train_node", "train_control",
         "target_cleanup", "screen_aggregate", "confirmation_registry",
         "confirmation", "confirmation_aggregate", "finalist_lock",
@@ -1194,13 +1316,16 @@ def _registered_inputs(
         task,
         final_source_partitions=final_source_partitions,
         combined_finalist_count=combined_finalist_count,
+        dense_teacher=dense_teacher,
     ))
     if task.array_registry is not None:
         rows.append("${array_registry:" + task.array_registry + "}")
     return tuple(dict.fromkeys(rows))
 
 
-def validate_task_registry(tasks: Sequence[CampaignTask], *, disposition: str) -> None:
+def validate_task_registry(
+    tasks: Sequence[CampaignTask], *, disposition: str, mode: str = "pilot",
+) -> None:
     by_key = {row.task_key: row for row in tasks}
     if len(by_key) != len(tasks):
         raise ValueError("representation campaign task keys repeat")
@@ -1208,9 +1333,9 @@ def validate_task_registry(tasks: Sequence[CampaignTask], *, disposition: str) -
         raise ValueError("representation campaign does not contain all 86 descent nodes")
     if {row.graph_node for row in tasks if row.kind == "train_control"} != set(CONTROLS):
         raise ValueError("representation campaign control inventory differs")
-    required_singletons = {
-        "control_registry", "cache_miniature", "zero_coefficient_acceptance",
-    }
+    required_singletons = {"control_registry"}
+    if disposition != DENSE_TRAINING_DISPOSITION:
+        required_singletons |= {"cache_miniature", "zero_coefficient_acceptance"}
     if any(sum(row.kind == kind for row in tasks) != 1 for kind in required_singletons):
         raise ValueError("representation campaign gate-task inventory differs")
     for row in tasks:
@@ -1266,7 +1391,8 @@ def validate_task_registry(tasks: Sequence[CampaignTask], *, disposition: str) -
             producer = by_key.get(producer_key)
             if producer is None or producer_key not in ancestry:
                 raise ValueError(
-                    "registered producer output is not a transitive dependency"
+                    "registered producer output is not a transitive dependency: "
+                    f"{consumer.task_key} -> {logical}"
                 )
             output_index = int(output_text)
             if output_index >= len(producer.registered_outputs):
@@ -1296,6 +1422,7 @@ def validate_task_registry(tasks: Sequence[CampaignTask], *, disposition: str) -
             row,
             final_source_partitions=final_source_partitions,
             combined_finalist_count=combined_finalist_count,
+            dense_teacher=(disposition == DENSE_TRAINING_DISPOSITION),
         ))
         missing = required_inputs - set(row.registered_inputs)
         if missing:
@@ -1319,23 +1446,37 @@ def validate_task_registry(tasks: Sequence[CampaignTask], *, disposition: str) -
             ("miniature_TOFF_build",),
         ),
     )
-    for key, kind, bank, dependencies in miniature:
-        row = by_key.get(key)
-        if (
-            row is None or row.kind != kind or row.logical_bank != bank
-            or row.target_purpose != "miniature"
-            or row.dependencies != dependencies
+    if disposition != DENSE_TRAINING_DISPOSITION:
+        for key, kind, bank, dependencies in miniature:
+            row = by_key.get(key)
+            if (
+                row is None or row.kind != kind or row.logical_bank != bank
+                or row.target_purpose != "miniature"
+                or row.dependencies != dependencies
+            ):
+                raise ValueError("ordinary/TOFF cache-miniature lifecycle differs")
+        if by_key["cache_miniature"].dependencies != (
+            "miniature_D100_verify_cleanup", "miniature_TOFF_verify_cleanup",
         ):
-            raise ValueError("ordinary/TOFF cache-miniature lifecycle differs")
-    if by_key["cache_miniature"].dependencies != (
-        "miniature_D100_verify_cleanup", "miniature_TOFF_verify_cleanup",
-    ):
-        raise ValueError("cache-miniature acceptance lacks both lifecycle reports")
-    if by_key["zero_coefficient_acceptance"].dependencies != ("smoke_probe",):
-        raise ValueError("zero-coefficient acceptance is not post-smoke")
+            raise ValueError("cache-miniature acceptance lacks both lifecycle reports")
+        if by_key["zero_coefficient_acceptance"].dependencies != ("smoke_probe",):
+            raise ValueError("zero-coefficient acceptance is not post-smoke")
     final_kinds = {"final_selection", "assignment_shard", "assignment_finalize", "data_attestation", "execution_lock", "prediction_shard", "prediction_finalize", "metric_join"}
     if disposition != "combined_confirmatory" and any(row.kind in final_kinds for row in tasks):
         raise PermissionError("validation-only campaign registered final-role tasks")
+    if disposition == DENSE_TRAINING_DISPOSITION:
+        forbidden = {
+            "architecture_attestation", "parent_loss_attestation", "parent_import",
+            "reservation", "shared_final_claim", *final_kinds,
+        }
+        if any(row.kind in forbidden for row in tasks):
+            raise PermissionError("dense training campaign registered obsolete parent/final work")
+        terminal = by_key.get("dense_training_aggregate")
+        expected_dependency = (
+            "screen_aggregate" if mode == "smoke" else "confirmation_aggregate"
+        )
+        if terminal is None or terminal.dependencies != (expected_dependency,):
+            raise ValueError("dense training terminal aggregate differs")
     if disposition == "combined_confirmatory":
         if (
             by_key["final_prediction_shards"].dependencies
@@ -1409,10 +1550,26 @@ def create_campaign_spec(
         raise ValueError("representation source commit must be a full lowercase Git SHA")
     if set(role_counts) != {"train", "validation", "final_test"}:
         raise ValueError("representation role counts differ")
-    expected = {"smoke": None, "pilot": (300_000, 100_000, 100_000), "production": None}[mode]
+    dense_campaign = disposition == DENSE_TRAINING_DISPOSITION
+    dense_smoke = mode == "smoke" and dense_campaign
+    expected = {
+        "smoke": (
+            (512, 256, 0) if disposition == DENSE_TRAINING_DISPOSITION else None
+        ),
+        "pilot": (
+            (300_000, 100_000, 0)
+            if disposition == DENSE_TRAINING_DISPOSITION
+            else (300_000, 100_000, 100_000)
+        ),
+        "production": None,
+    }[mode]
     counts = tuple(int(role_counts[name]) for name in ("train", "validation", "final_test"))
-    if any(value <= 0 for value in counts):
-        raise ValueError("representation role counts must be positive")
+    if (
+        any(value <= 0 for value in counts[:2])
+        or counts[2] < 0
+        or (disposition == DENSE_TRAINING_DISPOSITION) != (counts[2] == 0)
+    ):
+        raise ValueError("representation role counts differ from disposition")
     if expected is not None and counts != expected:
         raise ValueError("pilot must contain exactly 300k/100k/100k rows")
     root_text = _operational_path(campaign_root, name="campaign root")
@@ -1421,10 +1578,14 @@ def create_campaign_spec(
         artifact_paths = {
             "source_manifest": root / "inputs" / "source_manifest.json",
             "split_manifest": root / "inputs" / "split_manifest.json",
-            "parent_import": root / "import" / "parent_import.json",
+            "parent_import": root / "import" / (
+                "dense_teacher_import.json"
+                if disposition == DENSE_TRAINING_DISPOSITION
+                else "parent_import.json"
+            ),
             "representation_graph": root / "graph" / "ascent_graph.json",
             "representation_recipe": root / "recipes" / "representation_recipe.json",
-            "final_disposition": root / "import" / "final_disposition.json",
+            "final_disposition": root / "import" / "dense_training_disposition.json",
             "runtime_binding": root / "runtime" / "runtime_binding.json",
         }
     if set(artifact_paths) != REQUIRED_ARTIFACT_PATHS:
@@ -1442,9 +1603,15 @@ def create_campaign_spec(
     profile_hash = None
     array_concurrency_limits: dict[str, int] = {}
     if resource_profile is not None:
-        profile_hash = validate_measured_profile(
-            resource_profile, require_genuine_tigris=not planning_only,
-            expected_source_commit=source_commit,
+        profile_hash = (
+            validate_dense_measured_profile(
+                resource_profile, expected_source_commit=source_commit,
+            )
+            if disposition == DENSE_TRAINING_DISPOSITION else
+            validate_measured_profile(
+                resource_profile, require_genuine_tigris=not planning_only,
+                expected_source_commit=source_commit,
+            )
         )
         resources = dict(resource_profile["requests"])
         array_concurrency_limits = {
@@ -1455,35 +1622,82 @@ def create_campaign_spec(
         }
     else:
         resources = resource_table(mode=mode)
+        if disposition == DENSE_TRAINING_DISPOSITION:
+            resources = {
+                name: resources[name]
+                for name in (
+                    "cpu_small", "cpu_io", "gpu_target", "gpu_representation",
+                )
+            }
     fixed_size_inventory_hash = None
     if fixed_size_inventory is not None:
         _, fixed_size_inventory_hash = load_authenticated_json_reference(
             fixed_size_inventory,
-            expected_contract=FIXED_SIZE_INVENTORY_CONTRACT,
-            name="campaign fixed-size inventory",
+            expected_contract=(
+                DENSE_STORAGE_TEMPLATE_CONTRACT
+                if dense_campaign else FIXED_SIZE_INVENTORY_CONTRACT
+            ),
+            name=(
+                "campaign dense storage template"
+                if dense_campaign else "campaign fixed-size inventory"
+            ),
         )
+        if dense_campaign:
+            validate_dense_storage_template(
+                load_authenticated_json_reference(
+                    fixed_size_inventory,
+                    expected_contract=DENSE_STORAGE_TEMPLATE_CONTRACT,
+                    name="campaign dense storage template",
+                )[0],
+                expected_source_commit=source_commit,
+                expected_recipe_sha256=representation_recipe_sha256,
+                expected_graph_sha256=graph_sha256,
+                expected_dense_teacher_import_sha256=parent_import_sha256,
+            )
     storage_hash = None
     if storage_estimate is not None:
-        storage_hash = validate_storage_estimate(
-            storage_estimate, require_measured_fixed_sizes=not planning_only,
-            fixed_size_inventory=fixed_size_inventory,
+        storage_hash = (
+            validate_dense_storage_estimate(
+                storage_estimate, storage_template=fixed_size_inventory,
+                expected_source_commit=source_commit,
+                expected_recipe_sha256=representation_recipe_sha256,
+                expected_graph_sha256=graph_sha256,
+                expected_dense_teacher_import_sha256=parent_import_sha256,
+            )
+            if dense_campaign else validate_storage_estimate(
+                storage_estimate, require_measured_fixed_sizes=not planning_only,
+                fixed_size_inventory=fixed_size_inventory,
+            )
         )
-        if storage_estimate.get("parent_import_sha256") != parent_import_sha256:
+        if dense_campaign:
+            if storage_estimate.get(
+                "dense_teacher_import_sha256"
+            ) != parent_import_sha256:
+                raise ValueError("representation dense storage teacher differs")
+        elif storage_estimate.get("parent_import_sha256") != parent_import_sha256:
             raise ValueError("representation storage estimate parent differs")
         expected_storage_counts = dict(zip(
             ("train", "validation", "final"), counts, strict=True,
         ))
         if storage_estimate.get("row_counts") != expected_storage_counts:
             raise ValueError("representation storage estimate role populations differ")
-        expected_prediction_finalists = (
-            int(combined_finalist_count)
-            if disposition == "combined_confirmatory"
-            else 0
-        )
-        if storage_estimate.get("prediction_finalists") != expected_prediction_finalists:
-            raise ValueError("representation storage estimate finalist count differs")
+        if dense_campaign:
+            if storage_estimate.get("final_role_storage_bytes") != 0:
+                raise ValueError("dense campaign storage includes final-role bytes")
+        else:
+            expected_prediction_finalists = (
+                int(combined_finalist_count)
+                if disposition == "combined_confirmatory"
+                else 0
+            )
+            if storage_estimate.get("prediction_finalists") != expected_prediction_finalists:
+                raise ValueError("representation storage estimate finalist count differs")
     acceptance_hash = None
     if tigris_acceptance is not None:
+        if dense_smoke:
+            raise PermissionError(
+                "dense smoke produces acceptance evidence and cannot consume it"
+            )
         if any(value is None for value in (
             profile_hash, storage_hash, fixed_size_inventory_hash,
         )):
@@ -1496,12 +1710,15 @@ def create_campaign_spec(
             resource_profile_sha256=profile_hash,
             storage_estimate_sha256=storage_hash,
             fixed_size_inventory_sha256=fixed_size_inventory_hash,
+            disposition=disposition,
+            parent_import_sha256=parent_import_sha256,
+            graph_sha256=graph_sha256,
         )
-    if not planning_only and any(value is None for value in (
+    required_live = (
         executable_candidate_audit, submission_authorization,
-        profile_hash, storage_hash, acceptance_hash, runtime_hash,
-        fixed_size_inventory_hash,
-    )):
+        profile_hash, storage_hash, runtime_hash, fixed_size_inventory_hash,
+    ) + (() if dense_smoke else (acceptance_hash,))
+    if not planning_only and any(value is None for value in required_live):
         raise PermissionError(
             "executable representation campaign requires runtime, measured resources, "
             "storage, genuine Tigris acceptance, and explicit authorization"
@@ -1517,6 +1734,7 @@ def create_campaign_spec(
         disposition=disposition,
         final_source_partitions=int(final_source_partitions),
         combined_finalist_count=int(combined_finalist_count),
+        mode=mode,
     )
     if not set(array_concurrency_limits) <= {
         task.task_key for task in tasks if task.array is not None
@@ -1601,7 +1819,6 @@ def create_campaign_spec(
         assert (
             profile_hash is not None
             and storage_hash is not None
-            and acceptance_hash is not None
             and candidate_hash is not None
         )
         authorization_hash = validate_submission_authorization(
@@ -1613,6 +1830,7 @@ def create_campaign_spec(
             parent_import_sha256=parent_import_sha256,
             representation_recipe_sha256=representation_recipe_sha256,
             disposition_sha256=disposition_sha256,
+            disposition=disposition,
         )
         if (
             submission_authorization_sha256 is not None
@@ -1640,12 +1858,21 @@ def validate_campaign_spec(spec: Mapping[str, Any], *, executable: bool = False)
     normalized_role_counts = tuple(
         int(role_counts[name]) for name in ("train", "validation", "final_test")
     )
-    if any(value <= 0 for value in normalized_role_counts):
-        raise ValueError("representation campaign role counts must be positive")
-    if spec.get("mode") == "pilot" and normalized_role_counts != (
-        300_000, 100_000, 100_000,
+    dense = spec.get("disposition") == DENSE_TRAINING_DISPOSITION
+    dense_smoke = dense and spec.get("mode") == "smoke"
+    if (
+        any(value <= 0 for value in normalized_role_counts[:2])
+        or normalized_role_counts[2] < 0
+        or dense != (normalized_role_counts[2] == 0)
     ):
-        raise ValueError("pilot must contain exactly 300k/100k/100k rows")
+        raise ValueError("representation campaign role counts differ from disposition")
+    expected_counts = (
+        (512, 256, 0) if spec.get("mode") == "smoke" and dense else
+        (300_000, 100_000, 0) if spec.get("mode") == "pilot" and dense else
+        (300_000, 100_000, 100_000) if spec.get("mode") == "pilot" else None
+    )
+    if expected_counts is not None and normalized_role_counts != expected_counts:
+        raise ValueError("representation campaign role counts differ from frozen mode")
     tasks = tuple(
         CampaignTask(
             **{
@@ -1657,23 +1884,39 @@ def validate_campaign_spec(spec: Mapping[str, Any], *, executable: bool = False)
         )
         for row in spec["tasks"]
     )
-    validate_task_registry(tasks, disposition=str(spec["disposition"]))
+    validate_task_registry(
+        tasks, disposition=str(spec["disposition"]), mode=str(spec["mode"]),
+    )
     expected = build_task_registry(
         disposition=str(spec["disposition"]),
         final_source_partitions=int(spec["final_source_partitions"]),
         combined_finalist_count=int(spec["combined_finalist_count"]),
+        mode=str(spec["mode"]),
     )
     if tasks != expected:
         raise ValueError("representation campaign registry differs")
     profile = spec.get("resource_profile")
     if profile is None:
         expected_resources = resource_table(mode=str(spec["mode"]))
+        if dense:
+            expected_resources = {
+                name: expected_resources[name]
+                for name in (
+                    "cpu_small", "cpu_io", "gpu_target", "gpu_representation",
+                )
+            }
         if spec.get("resource_profile_sha256") is not None:
             raise ValueError("representation campaign has a path-only resource profile")
     else:
-        profile_hash = validate_measured_profile(
-            profile, require_genuine_tigris=executable,
-            expected_source_commit=str(spec["source_commit"]),
+        profile_hash = (
+            validate_dense_measured_profile(
+                profile, expected_source_commit=str(spec["source_commit"]),
+            )
+            if dense else
+            validate_measured_profile(
+                profile, require_genuine_tigris=executable,
+                expected_source_commit=str(spec["source_commit"]),
+            )
         )
         if spec.get("resource_profile_sha256") != profile_hash:
             raise ValueError("representation resource-profile lineage differs")
@@ -1713,20 +1956,41 @@ def validate_campaign_spec(spec: Mapping[str, Any], *, executable: bool = False)
     else:
         _, fixed_size_inventory_hash = load_authenticated_json_reference(
             fixed_size_inventory,
-            expected_contract=FIXED_SIZE_INVENTORY_CONTRACT,
-            name="campaign fixed-size inventory",
+            expected_contract=(
+                DENSE_STORAGE_TEMPLATE_CONTRACT
+                if dense else FIXED_SIZE_INVENTORY_CONTRACT
+            ),
+            name=(
+                "campaign dense storage template"
+                if dense else "campaign fixed-size inventory"
+            ),
         )
         if spec.get("fixed_size_inventory_sha256") != fixed_size_inventory_hash:
             raise ValueError("representation fixed-size inventory lineage differs")
     storage = spec.get("storage_estimate")
     if storage is not None:
-        storage_hash = validate_storage_estimate(
-            storage, require_measured_fixed_sizes=executable,
-            fixed_size_inventory=fixed_size_inventory,
+        storage_hash = (
+            validate_dense_storage_estimate(
+                storage, storage_template=fixed_size_inventory,
+                expected_source_commit=str(spec["source_commit"]),
+                expected_recipe_sha256=str(spec["representation_recipe_sha256"]),
+                expected_graph_sha256=str(spec["graph_sha256"]),
+                expected_dense_teacher_import_sha256=str(
+                    spec["parent_import_sha256"]
+                ),
+            )
+            if dense else validate_storage_estimate(
+                storage, require_measured_fixed_sizes=executable,
+                fixed_size_inventory=fixed_size_inventory,
+            )
         )
         if spec.get("storage_estimate_sha256") != storage_hash:
             raise ValueError("representation storage-estimate lineage differs")
-        if storage.get("parent_import_sha256") != spec.get("parent_import_sha256"):
+        if dense and storage.get("dense_teacher_import_sha256") != spec.get(
+            "parent_import_sha256"
+        ):
+            raise ValueError("representation dense storage teacher differs")
+        if not dense and storage.get("parent_import_sha256") != spec.get("parent_import_sha256"):
             raise ValueError("representation storage estimate parent differs")
         expected_storage_counts = {
             "train": int(role_counts["train"]),
@@ -1735,17 +1999,25 @@ def validate_campaign_spec(spec: Mapping[str, Any], *, executable: bool = False)
         }
         if storage.get("row_counts") != expected_storage_counts:
             raise ValueError("representation storage estimate role populations differ")
-        expected_prediction_finalists = (
-            int(spec["combined_finalist_count"])
-            if spec.get("disposition") == "combined_confirmatory"
-            else 0
-        )
-        if storage.get("prediction_finalists") != expected_prediction_finalists:
-            raise ValueError("representation storage estimate finalist count differs")
+        if dense:
+            if storage.get("final_role_storage_bytes") != 0:
+                raise ValueError("dense campaign storage includes final-role bytes")
+        else:
+            expected_prediction_finalists = (
+                int(spec["combined_finalist_count"])
+                if spec.get("disposition") == "combined_confirmatory"
+                else 0
+            )
+            if storage.get("prediction_finalists") != expected_prediction_finalists:
+                raise ValueError("representation storage estimate finalist count differs")
     elif spec.get("storage_estimate_sha256") is not None:
         raise ValueError("representation campaign has a path-only storage estimate")
     acceptance = spec.get("tigris_acceptance")
     if acceptance is not None:
+        if dense_smoke:
+            raise PermissionError(
+                "dense smoke produces acceptance evidence and cannot consume it"
+            )
         if profile is None or storage is None or fixed_size_inventory is None:
             raise ValueError(
                 "representation acceptance lacks measured resource/storage evidence"
@@ -1758,6 +2030,9 @@ def validate_campaign_spec(spec: Mapping[str, Any], *, executable: bool = False)
             fixed_size_inventory_sha256=str(
                 spec["fixed_size_inventory_sha256"]
             ),
+            disposition=str(spec["disposition"]),
+            parent_import_sha256=str(spec["parent_import_sha256"]),
+            graph_sha256=str(spec["graph_sha256"]),
         )
         if spec.get("tigris_acceptance_sha256") != acceptance_hash:
             raise ValueError("representation Tigris-acceptance lineage differs")
@@ -1773,7 +2048,7 @@ def validate_campaign_spec(spec: Mapping[str, Any], *, executable: bool = False)
             or profile is None
             or storage is None
             or fixed_size_inventory is None
-            or acceptance is None
+            or (acceptance is None and not dense_smoke)
             or not isinstance(spec.get("executable_candidate_audit"), Mapping)
         ):
             raise PermissionError("representation campaign is not authorized for live submission")
@@ -1805,10 +2080,14 @@ def validate_campaign_spec(spec: Mapping[str, Any], *, executable: bool = False)
             executable_candidate_audit_sha256=candidate_hash,
             resource_profile_sha256=str(spec["resource_profile_sha256"]),
             storage_estimate_sha256=str(spec["storage_estimate_sha256"]),
-            tigris_acceptance_sha256=str(spec["tigris_acceptance_sha256"]),
+            tigris_acceptance_sha256=(
+                None if spec["tigris_acceptance_sha256"] is None
+                else str(spec["tigris_acceptance_sha256"])
+            ),
             parent_import_sha256=str(spec["parent_import_sha256"]),
             representation_recipe_sha256=str(spec["representation_recipe_sha256"]),
             disposition_sha256=str(spec["disposition_sha256"]),
+            disposition=str(spec["disposition"]),
         )
         if spec.get("submission_authorization_sha256") != authorization_hash:
             raise ValueError("representation authorization hash differs")
@@ -2247,6 +2526,10 @@ def submit_command_plan(
         validate_source_checkout(spec["project_dir"], expected_commit=str(spec["source_commit"]))
     else:
         checkout_validator(spec["project_dir"])
+    if spec.get("disposition") == DENSE_TRAINING_DISPOSITION:
+        validate_dense_storage_availability(
+            spec["storage_estimate"], campaign_root=str(spec["campaign_root"]),
+        )
     if event_writer is None:
         raise ValueError("live submission requires an immutable event writer")
     job_ids, _, pending, events = _submission_prefix_state(

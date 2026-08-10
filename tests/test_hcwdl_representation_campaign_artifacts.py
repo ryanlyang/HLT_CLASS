@@ -35,6 +35,9 @@ from hlt_classification.scouting.hcwdl_representation_runtime_adapters import (
 from hlt_classification.scouting.hcwdl_representation_recipe import (
     build_representation_recipe, example_representation_recipe,
 )
+from hlt_classification.scouting.hcwdl_representation_kernels import (
+    generate_spectral_resource_bundle,
+)
 from hlt_classification.scouting.hcwdl_representation_graph import (
     ascent_graph_artifact,
 )
@@ -171,29 +174,36 @@ def test_zero_coefficient_acceptance_is_exact_and_fails_closed() -> None:
 def test_representation_recipe_adapter_rejects_runtime_source_mismatch_before_publish(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from hlt_classification.scouting import hcwdl_representation_locks as locks
+    from hlt_classification.scouting import hcwdl_representation_dense_teacher as dense_teacher
+    from hlt_classification.scouting import highcov_cache
 
     parent_links = {
-        "architecture_attestation": "1" * 64,
-        "train_assignment_manifest": "2" * 64,
-        "parent_graph": "3" * 64,
-        "parent_loss_attestation": "4" * 64,
-        "parent_recipe": "5" * 64,
-        "row_selection": "6" * 64,
-        "source_manifest": "7" * 64,
-        "split_manifest": "8" * 64,
+        "historical_recipe": "5" * 64,
+        "historical_row_selection": "6" * 64,
+        "historical_source_manifest": "7" * 64,
+        "historical_split_manifest": "8" * 64,
     }
     parent_import = with_content_hash({
-        "contract": "TEST_PARENT_IMPORT/v1", "schema_version": 1,
+        "contract": "HCWDL_REPRESENTATION_DENSE_TEACHER_IMPORT/v1",
+        "schema_version": 1,
         "parents": parent_links,
+        "payload": {"historical_parent_graph_sha256": "3" * 64},
     })
     monkeypatch.setattr(
-        locks, "validate_parent_import", lambda value: validate_content_hash(
-            value, expected_contract="TEST_PARENT_IMPORT/v1",
+        dense_teacher, "validate_dense_teacher_import", lambda value: validate_content_hash(
+            value, expected_contract="HCWDL_REPRESENTATION_DENSE_TEACHER_IMPORT/v1",
+        ),
+    )
+    assignment = with_content_hash({
+        "contract": "TEST_ASSIGNMENT/v1", "schema_version": 1,
+    })
+    monkeypatch.setattr(
+        highcov_cache, "validate_assignment_manifest", lambda value: validate_content_hash(
+            value, expected_contract="TEST_ASSIGNMENT/v1",
         ),
     )
     graph = ascent_graph_artifact(parents={
-        "parent_graph": parent_links["parent_graph"],
+        "parent_graph": parent_import["payload"]["historical_parent_graph_sha256"],
         "parent_import": parent_import["content_hash"],
     })
     controls = control_registry_artifact(
@@ -203,18 +213,17 @@ def test_representation_recipe_adapter_rejects_runtime_source_mismatch_before_pu
     producer_source = "b" * 64
     recipe_parents = {
         **fixture["parents"],
-        "architecture_attestation": parent_links["architecture_attestation"],
-        "assignment_manifest": parent_links["train_assignment_manifest"],
-        "parent_graph": parent_links["parent_graph"],
-        "parent_loss_attestation": parent_links["parent_loss_attestation"],
-        "parent_recipe": parent_links["parent_recipe"],
+        "assignment_manifest": assignment["content_hash"],
+        "dense_teacher_import": parent_import["content_hash"],
+        "historical_parent_graph": parent_import["payload"]["historical_parent_graph_sha256"],
+        "kernel_resources": generate_spectral_resource_bundle().content_hash,
+        "parent_recipe": parent_links["historical_recipe"],
         "producer_source": producer_source,
         "representation_ascent_graph": graph["content_hash"],
         "representation_control_registry": controls["content_hash"],
-        "row_selection": parent_links["row_selection"],
-        "source_manifest": parent_links["source_manifest"],
-        "split_manifest": parent_links["split_manifest"],
-        "teacher_import": parent_import["content_hash"],
+        "row_selection": parent_links["historical_row_selection"],
+        "source_manifest": parent_links["historical_source_manifest"],
+        "split_manifest": parent_links["historical_split_manifest"],
     }
     recipe = build_representation_recipe(
         parents=recipe_parents,
@@ -238,6 +247,7 @@ def test_representation_recipe_adapter_rejects_runtime_source_mismatch_before_pu
         "${representation_graph}": graph,
         "${control_registry}": controls,
         "${parent_import}": parent_import,
+        "${assignment_manifest:train}": assignment,
     }
     inputs = {}
     for position, (logical, artifact) in enumerate(artifacts.items()):
@@ -271,6 +281,9 @@ def test_representation_recipe_adapter_rejects_runtime_source_mismatch_before_pu
             "parent_import": {
                 "registered_reference": "${parent_import}",
             },
+            "assignment_manifest": {
+                "registered_reference": "${assignment_manifest:train}",
+            },
         },
         "runtime_signature_sha256": H,
         "inputs": inputs,
@@ -280,8 +293,8 @@ def test_representation_recipe_adapter_rejects_runtime_source_mismatch_before_pu
         "representation_recipe_sha256": recipe["content_hash"],
         "parent_import_sha256": parent_import["content_hash"],
         "graph_sha256": graph["content_hash"],
-        "source_manifest_sha256": parent_links["source_manifest"],
-        "split_manifest_sha256": parent_links["split_manifest"],
+        "source_manifest_sha256": parent_links["historical_source_manifest"],
+        "split_manifest_sha256": parent_links["historical_split_manifest"],
     }
     with pytest.raises(PermissionError, match="measured runtime source"):
         PRODUCTION_ADAPTERS[task.kind](spec, task, None, runtime_row)

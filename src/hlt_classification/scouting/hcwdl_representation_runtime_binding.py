@@ -30,7 +30,7 @@ from hlt_classification.data.cache_contracts import (
 
 from .hcwdl_representation_campaign import CampaignTask
 from .hcwdl_representation_contracts import (
-    PARENT_IMPORT_CONTRACT,
+    DENSE_TEACHER_IMPORT_CONTRACT, PARENT_IMPORT_CONTRACT,
     REPRESENTATION_RECIPE_CONTRACT,
     RUNTIME_BINDING_CONTRACT,
     contract_schema_version,
@@ -65,6 +65,16 @@ _FORBIDDEN_DYNAMIC_KEYS: Final = frozenset({
 # before the recipe owner gate runs.  All other static-input/output path
 # overlap remains forbidden.
 _PREPUBLISHED_OUTPUT_ROUTES: Final = {
+    ("parent_import", "dense_teacher_import", "${prebuilt_parent_import}"): {
+        "owner_task_key": "parent_import",
+        "owner_task_kind": "dense_teacher_import",
+        "registered_output": "import/dense_teacher_import.json",
+        "expected_contract": DENSE_TEACHER_IMPORT_CONTRACT,
+        "expected_schema_version": contract_schema_version(
+            DENSE_TEACHER_IMPORT_CONTRACT,
+        ),
+        "campaign_hash_field": "parent_import_sha256",
+    },
     ("parent_import", "parent_import", "${prebuilt_parent_import}"): {
         "owner_task_key": "parent_import",
         "owner_task_kind": "parent_import",

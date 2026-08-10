@@ -134,7 +134,15 @@ def _scheduler(
         "MaxRSS": "",
         "Comment": comment,
         "SubmitLine": (
-            f"sbatch --comment={comment} {shlex.quote(worker['path'])} {task_key}"
+            " ".join((
+                "sbatch", "--parsable", f"--account={TIGRIS_ACCOUNT}",
+                f"--partition={TIGRIS_PARTITION}",
+                f"--job-name=hcwdlr_{task_key}", f"--comment={comment}",
+                f"--cpus-per-task={request['cpus']}",
+                f"--mem={request['memory']}", f"--time={request['walltime']}",
+                *(() if request["gpu"] is None else (f"--gres={request['gpu']}",)),
+                shlex.quote(worker["path"]),
+            ))
         ),
     }
     parent.update(raw_overrides or {})

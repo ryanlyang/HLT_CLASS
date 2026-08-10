@@ -14,25 +14,40 @@ The graph contains exactly 86 training nodes.  D100--D5 are authenticated,
 nondeployable repaired-view training intermediates; D0 and M1 are HLT-only
 deployable models, and the four M1 nodes are the primary endpoints.  The old
 M5 controls and M2--M6 representation nodes are absent.  The registered
-campaign contains 295 tasks and expands to 361 runtime rows under the current
-combined disposition.  Representation Slurm job names now begin `hcwdlr_`.
+512/256/0 dense smoke contains 261 tasks, while the 300k/100k/0 pilot contains
+275 tasks.  The additional rows are target-build/cleanup and four-M1
+confirmation lifecycle work, not M2--M6 training rungs. Representation Slurm
+job names begin `hcwdlr_`.
 
-The semantic-version migration includes dense graph v1, recipe v3, target
-family v2, training/checkpoint/model-extraction v2, screen/confirmation v2,
-campaign/command-plan v2, and the M1-bound final artifact chain v2.  Old ascent
-artifacts cannot be relabeled into these identities.  The 089b472 base-HCWDL
-smoke remains valid parent-worker smoke evidence; this representation-only
-change does not require rerunning it.  A genuine representation miniature at
-the final pushed representation commit remains an execution gate.  No job was
-submitted and no final role was accessed during implementation.
+The semantic-version migration includes dense graph v1, recipe v4, target
+family v3, training/checkpoint/model-extraction v2, screen aggregate v3,
+confirmation v2, and campaign/command-plan v3. Old ascent artifacts cannot be
+relabeled into these identities. The 089b472 base-HCWDL smoke remains
+historical base-worker evidence; no new base ladder or corrected-parent prefix
+is required by the dense route. A genuine dense smoke at the final pushed
+representation commit remains the execution gate. No job was submitted and
+no final role was accessed during implementation.
 
-Repository-wide local verification is **789 passed, 6 expected platform
-skips, 0 failures**.  The skips are five directly executable POSIX-shell
-checks and one real-`SIGUSR1` check unavailable on Windows.  The earlier
-ten-action non-final authority is bound to the retired direct-D0/M1 graph and
-must not authorize recipe v3; its historical artifacts remain readable only
-under their original identities.  Recipe v3 requires a newly versioned dense-
-descent miniature authority before any representation submission.
+The complete representation test surface is **427 passed, 9 expected platform
+skips, 0 failures**, executed in three definitive shards after the single
+serial command exceeded its five-minute shell timeout at 66% with no failure.
+Eight skips are directly executable POSIX-shell checks and one is the
+Windows-unavailable real-`SIGUSR1` check. The earlier ten-action non-final
+authority is bound to the retired direct-D0/M1 graph and cannot authorize
+recipe v4.
+
+The launch-preparation implementation adds four phrase-bound Tigris resource
+probes plus one dependent accounting collector, a genuine dense resource
+profile, a maximum-topology `RREL_D100` storage template, conservative
+86-node/83-generation storage estimates for smoke and pilot, and a fresh
+free-space check in both candidate review and immediately before scheduler
+mutation. The probes authorize no training or final access. The dense smoke
+acceptance reopens the 261-task ledger, monitor, filesystem output audit, and
+four-M1 terminal aggregate before it can gate the pilot. No probe, dense
+smoke, or pilot has been authorized or submitted.
+The dense route also has a standalone tap/installed-Weaver parity CLI, so it
+does not require the canceled full-parent evidence preparer merely to
+bootstrap its historical TOFF training teacher.
 
 ## HCWDL non-final corrected-parent prefix (2026-08-09)
 

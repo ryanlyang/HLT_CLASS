@@ -5,16 +5,15 @@ This runbook covers the additive matching-free representation-KD campaign in
 The parent HCWDL campaign remains governed by
 [`HIGH_COVERAGE_COLD_WARM_DISTILLATION_LADDER.md`](plans/HIGH_COVERAGE_COLD_WARM_DISTILLATION_LADDER.md).
 
-Current boundary: the repository may be implemented, tested, and rendered as
-a non-submitting command plan locally. The bounded non-final
-two-update/USR1/validation-proxy authority is implemented, but the present
-authorization covers implementation only: it does not issue an execution
-authority artifact or authorize scheduler mutation. A fresh corrected parent-prefix
-v8/v4 execution, a clean pushed source identity, a separately phrase-issued
-non-final execution authority, live Tigris and installed-Weaver acceptance,
-measured resources, and explicit pilot authorization remain separate gates.
-Local fixtures never satisfy those gates and never authorize final-test
-access.
+Current boundary: the four-track dense-descent implementation is locally
+complete but has not been committed, pushed, or executed on Tigris.  The
+current dense path does **not** consume the canceled 23-node corrected-parent
+prefix.  It imports only the authenticated historical TOFF teacher for
+training-time supervision, then trains the 86-node representation graph.  A
+clean pushed source identity, four phrase-authorized resource probes plus one
+accounting collector, a complete 512/256/0 dense smoke, and a separately
+authorized 300k/100k/0 dense pilot remain distinct gates.  Neither dense mode
+registers final-test rows or final-role tasks.
 
 ## Scientific identity
 
@@ -36,46 +35,27 @@ initialization is fresh at every rung; warm initialization loads the immediate
 predecessor model but resets optimizer and scheduler state.  Slurm jobs use
 the `hcwdlr_` prefix so they cannot be confused with base `hcwdl_` jobs.
 
-The completed exact-source base-HCWDL smoke at 089b472 remains the parent
-worker smoke evidence and is not rerun for this representation-only graph
-change.  Do not reuse an old representation miniature: run the bounded
-representation production-worker miniature from the final pushed commit
-before authorizing a representation campaign.
+The completed exact-source base-HCWDL smoke at 089b472 remains historical
+base-worker evidence.  It does not authorize the dense representation graph
+and is not a reason to rerun the base ladder.  The dense graph receives its
+own exact-source 512/256/0 production-worker smoke after the final dense commit
+is pushed.
 
 The bounded ten-action authority described later in this runbook belongs to
-the retired direct-D0/M1 recipe-v2 graph.  It is not an execution path for the
-dense recipe-v3 graph: in particular, it does not exercise the repaired-view
-D100--D5 chain.  Preserve any existing v1 authority artifacts as historical
-evidence, but do not issue or submit them for recipe v3.  A separately
-versioned dense-descent miniature authority is required.
+the retired direct-D0/M1 graph.  It does not exercise D100--D5 and cannot
+authorize this campaign.  Preserve any existing artifacts only as historical
+evidence.
 
-The required parent is the primary `HCWDL_RECIPE/v4` artifact with an exact
-fifteen-one loss vector, so CE and FP32 forward-KL are all unweighted
-natural-population row means. Parent artifacts created under nonuniform v3
-weights or class-weighted KD are incompatible; the v3 parent-loss attestation
-must reject them rather than relabel them.
-The parent campaign must be executable `HCWDL_CAMPAIGN_SPEC/v8` with exact
-`parent_prefix_through_finalist_lock` scope, a finite-count pilot or named
-midscale mode, 60 passes, validation every pass, terminal `finalist_lock`, no
-registered final tasks, and automatic endpoint continuation. A manual v8
-prefix is not eligible for this RKD parent import.
-The current artifact tuples are deliberately nonparallel:
-parent import v3 uses `schema_version=2`; parent-loss attestation v3 uses
-`schema_version=3`; architecture attestation v2 and surface parity v2 use
-`schema_version=2`;
-and representation recipe v3 uses `schema_version=1`.
-Always validate both the contract string and schema version.
-Its executable policy hash is derived from the versioned code constant and
-authenticated runtime-source bytes; workers never read this plan or another
-concept document to decide loss semantics.
-
-The existing unweighted campaign candidate at commit `b3154d67` is not an
-eligible parent for this import.  That commit predates the explicit
-loss-semantics fields required in wrapper reports, PMARD engine reports, and
-checkpoints, and it does not contain `hcwdl_parent_loss.py`.  The v3 attestation
-must reject those outputs rather than infer or relabel them.  Create a fresh
-HCWDL v8/v4 parent-prefix identity from the new exact clean commit and complete its
-required parent artifacts before running the parent-evidence command below.
+The dense path uses `HCWDL_REPRESENTATION_DENSE_TEACHER_IMPORT/v1` to reopen
+the existing unweighted b315 historical campaign, recipe, graph, row
+selection, TOFF wrapper/engine reports, and exact checkpoint bytes.  That
+authority is deliberately narrow: TOFF may supervise D100 at training time,
+but it grants no parent-finalist, shared-final, final-test, or deployment
+authority.  The active dense identities are graph v1, representation recipe
+v4/schema 1, target family v3, screen aggregate v3, and campaign/command-plan
+v3.  The dense smoke has 261 tasks; the dense pilot has 275 tasks.  Always
+validate both contract and schema version rather than relabeling an older
+artifact.
 
 ## Local environment
 
@@ -118,27 +98,37 @@ git diff --check
 If Weaver is not installed locally, record installed-Weaver CPU parity as
 unavailable; do not replace it with a synthetic-double result.
 
-## Immutable prerequisite order
+## Current dense launch order
 
 The operator-visible order is fixed:
 
-1. freeze the tap schema;
-2. run the public-forward/surface-forward parity boundary;
-3. build the architecture attestation by reopening the parity report, tap,
-   source files, parent reports, and checkpoint bytes;
-4. build the corrected parent-loss attestation from actual parent reports;
-5. publish the complete parent import;
-6. publish kernel resources, numerical acceptance, the 86-node dense-descent
-   graph, the empty v2 control registry, and the v3 representation recipe;
-7. audit the parent final state and freeze the final disposition;
-8. build the exhaustive path/runtime binding and immutable planning campaign;
-9. render and inspect the complete symbolic command plan;
-10. publish the nonauthorizing executable-candidate audit, which reopens the
-    exact planning spec, plan, runtime binding, evidence/source lineage, and
-    every task/array row;
-11. only after explicit user approval, bind that exact candidate hash in the
-    submission authorization and recreate the same campaign identity as the
-    authorized live spec.
+1. publish the standalone tap and installed-Weaver parity, then the narrow
+   historical TOFF teacher import;
+2. publish the dense graph, empty control registry, kernel evidence,
+   representation recipe v4, and dense-only disposition;
+3. create a preliminary 512/256/0 planning spec with no executable authority;
+4. render the exact four resource probes (`cpu_small`, `cpu_io`,
+   `gpu_target`, `gpu_representation`) and one dependent accounting collector;
+5. after a separate exact-hash phrase authorization, run only those five
+   scalar jobs; they cannot train the graph or open a final role;
+6. build the genuine dense resource profile, measured maximum-state storage
+   template, and conservative dense storage estimate;
+7. publish the 83 just-in-time target authorities, exhaustive runtime rows,
+   and immutable runtime binding, then recreate the reviewed planning spec;
+8. render the complete 261-task smoke command plan and publish its strict
+   nonauthorizing executable-candidate audit;
+9. after a separate exact candidate authorization, create and submit the live
+   dense smoke;
+10. monitor all exact ledger IDs, re-audit every output, and publish dense
+    smoke acceptance; and
+11. rebuild the estimate, target/runtime binding, planning spec, dry run, and
+    candidate for 300k/100k/0; only a new explicit pilot authorization may
+    submit the 275-task dense pilot.
+
+No step above creates a base-HCWDL parent-prefix campaign.  The remainder of
+this parent-evidence subsection documents the retained legacy
+combined-confirmatory path only; it is not an input to the current
+`dense_training_only` disposition.
 
 The architecture and loss attestations, followed by the first parent-import
 publication, are pre-campaign operations; they cannot be dispatched through a

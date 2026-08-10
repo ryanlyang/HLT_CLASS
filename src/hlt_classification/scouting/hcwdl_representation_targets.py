@@ -168,8 +168,8 @@ def deterministic_compressed_npz_bytes(
 
 LOGICAL_REQUIRED_PARENTS: Final = frozenset({
     "source", "split", "train_row_selection", "graph", "assignment", "repair",
-    "architecture", "parent_recipe", "representation_recipe", "kernel_resources",
-    "parent_import", "parent_loss_attestation",
+    "surface_parity", "parent_recipe", "representation_recipe", "kernel_resources",
+    "parent_import",
 })
 
 
@@ -468,7 +468,7 @@ def build_logical_target_bank(
         required_teacher = {
             "source_kind", "node_id", "domain", "track",
             "selected_report_sha256", "checkpoint_byte_sha256",
-            "checkpoint_logical_sha256", "tap_sha256",
+            "tap_sha256",
             "installed_weaver_signature_sha256",
         }
         hash_fields = required_teacher - {
@@ -978,13 +978,12 @@ def validate_target_forward_spec_payload(payload: Mapping[str, Any]) -> None:
         raise ValueError("HCWDL-RKD target-forward teacher fields differ")
     source_kind = teacher.get("source_kind")
     shared_teacher_keys = {
-        "source_kind", "architecture_sha256", "tap_sha256",
+        "source_kind", "surface_parity_sha256", "tap_sha256",
         "kernel_resources_sha256", "kernel_array_logical_hashes",
     }
     if source_kind == "imported_checkpoint":
         teacher_keys = shared_teacher_keys | {
-            "checkpoint_byte_sha256", "checkpoint_logical_sha256",
-            "model_config_sha256",
+            "checkpoint_byte_sha256", "model_config_sha256",
         }
         hash_teacher_keys = teacher_keys - {
             "source_kind", "kernel_array_logical_hashes",
@@ -1139,8 +1138,6 @@ def _validate_forward_logical_lineage(
         identity_differs = (
             forward_teacher["checkpoint_byte_sha256"]
             != teacher["checkpoint_byte_sha256"]
-            or forward_teacher["checkpoint_logical_sha256"]
-            != teacher["checkpoint_logical_sha256"]
         )
     else:
         identity_differs = (
@@ -1151,8 +1148,8 @@ def _validate_forward_logical_lineage(
         forward_spec["parents"].get("logical_bank") != logical_hash
         or identity_differs
         or forward_teacher["tap_sha256"] != teacher["tap_sha256"]
-        or forward_teacher["architecture_sha256"]
-        != logical_bank["parents"]["architecture"]
+        or forward_teacher["surface_parity_sha256"]
+        != logical_bank["parents"]["surface_parity"]
         or forward_teacher["kernel_resources_sha256"]
         != logical_bank["parents"]["kernel_resources"]
     ):

@@ -59,13 +59,21 @@ def control_registry_adapter(spec, task, index, runtime_row):
     parent_import = _registered_json(
         runtime_row["inputs"], "${task_output:parent_import:0}",
     )
-    from .hcwdl_representation_locks import validate_parent_import
-
-    parent_import_sha256 = validate_parent_import(parent_import)
+    dense_teacher = parent_import.get("contract") == (
+        "HCWDL_REPRESENTATION_DENSE_TEACHER_IMPORT/v1"
+    )
+    if dense_teacher:
+        from .hcwdl_representation_dense_teacher import validate_dense_teacher_import
+        parent_import_sha256 = validate_dense_teacher_import(parent_import)
+        parent_graph = parent_import["payload"]["historical_parent_graph_sha256"]
+    else:
+        from .hcwdl_representation_locks import validate_parent_import
+        parent_import_sha256 = validate_parent_import(parent_import)
+        parent_graph = parent_import["parents"]["parent_graph"]
     graph_hash = validate_ascent_graph_artifact(
         graph,
         expected_parents={
-            "parent_graph": parent_import["parents"]["parent_graph"],
+            "parent_graph": parent_graph,
             "parent_import": parent_import_sha256,
         },
     )

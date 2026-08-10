@@ -8,7 +8,7 @@ from pathlib import Path
 
 from _hcwdl_representation_common import artifact, publish
 from hlt_classification.scouting.hcwdl_representation_campaign import (
-    AUTHORIZATION_PHRASE,
+    AUTHORIZATION_PHRASE, DENSE_SMOKE_AUTHORIZATION_PHRASE,
     build_submission_authorization,
     validate_campaign_spec,
 )
@@ -24,7 +24,10 @@ def main() -> int:
     parser.add_argument(
         "--authorization-phrase",
         required=True,
-        help=f"must equal exactly: {AUTHORIZATION_PHRASE}",
+        help=(
+            f"must equal {AUTHORIZATION_PHRASE!r}, or for the bounded dense "
+            f"smoke only {DENSE_SMOKE_AUTHORIZATION_PHRASE!r}"
+        ),
     )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -42,12 +45,16 @@ def main() -> int:
         executable_candidate_audit_sha256=candidate_hash,
         resource_profile_sha256=str(planning_spec["resource_profile_sha256"]),
         storage_estimate_sha256=str(planning_spec["storage_estimate_sha256"]),
-        tigris_acceptance_sha256=str(planning_spec["tigris_acceptance_sha256"]),
+        tigris_acceptance_sha256=(
+            None if planning_spec["tigris_acceptance_sha256"] is None
+            else str(planning_spec["tigris_acceptance_sha256"])
+        ),
         parent_import_sha256=str(planning_spec["parent_import_sha256"]),
         representation_recipe_sha256=str(
             planning_spec["representation_recipe_sha256"]
         ),
         disposition_sha256=str(planning_spec["disposition_sha256"]),
+        disposition=str(planning_spec["disposition"]),
         authorization_phrase=args.authorization_phrase,
     )
     publish(args.output, authorization)

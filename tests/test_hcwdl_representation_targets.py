@@ -159,7 +159,6 @@ def _teacher(bank_id: str) -> dict[str, str]:
         "track": track,
         "selected_report_sha256": _sha(f"{bank_id}:report"),
         "checkpoint_byte_sha256": _sha(f"{bank_id}:checkpoint-bytes"),
-        "checkpoint_logical_sha256": _sha(f"{bank_id}:checkpoint-logical"),
         "tap_sha256": _sha(f"{bank_id}:tap"),
         "installed_weaver_signature_sha256": _sha(f"{bank_id}:weaver"),
     }
@@ -170,8 +169,8 @@ def _logical(bank_id: str = "RSET_D0c") -> dict:
         name: _sha(f"{bank_id}:{name}")
         for name in (
             "source", "split", "train_row_selection", "graph", "assignment", "repair",
-            "architecture", "parent_recipe", "representation_recipe", "kernel_resources",
-            "parent_import", "parent_loss_attestation",
+            "surface_parity", "parent_recipe", "representation_recipe",
+            "kernel_resources", "parent_import",
         )
     }
     return build_logical_target_bank(
@@ -356,14 +355,13 @@ def _forward_payload(logical: dict, partitions=("p0", "p1")) -> dict:
         else {
             "source_kind": "imported_checkpoint",
             "checkpoint_byte_sha256": teacher["checkpoint_byte_sha256"],
-            "checkpoint_logical_sha256": teacher["checkpoint_logical_sha256"],
             "model_config_sha256": _sha("model-config"),
         }
     )
     return {
         "teacher": {
             **teacher_identity,
-            "architecture_sha256": logical["parents"]["architecture"],
+            "surface_parity_sha256": logical["parents"]["surface_parity"],
             "tap_sha256": teacher["tap_sha256"],
             "kernel_resources_sha256": logical["parents"]["kernel_resources"],
             "kernel_array_logical_hashes": _kernel_hashes(),

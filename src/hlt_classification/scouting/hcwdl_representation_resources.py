@@ -27,18 +27,25 @@ from hlt_classification.data.cache_contracts import (
     with_content_hash,
 )
 from .hcwdl_representation_contracts import (
+    DENSE_STORAGE_ESTIMATE_CONTRACT,
+    DENSE_STORAGE_TEMPLATE_CONTRACT,
+    DENSE_RESOURCE_PROFILE_CONTRACT,
     FIXED_SIZE_INVENTORY_CONTRACT,
     MINIATURE_EVIDENCE_CONTRACT,
     NONFINAL_ACCEPTANCE_SCHEDULER_EVIDENCE_CONTRACT,
     RESOURCE_PROFILE_CONTRACT,
     SCHEDULER_EVIDENCE_CONTRACT,
     STORAGE_ESTIMATE_CONTRACT,
+    WORKER_RUNTIME_MEASUREMENT_CONTRACT,
 )
 
 TIGRIS_SITE: Final = "tigris.rc.rit.edu"
 TIGRIS_ACCOUNT: Final = "reu-aisocial"
 TIGRIS_PARTITION: Final = "tigris"
 WORKER_ROLES: Final = ("ordinary", "deterministic")
+DENSE_RESOURCE_CLASSES: Final = (
+    "cpu_small", "cpu_io", "gpu_target", "gpu_representation",
+)
 SCHEDULER_EVIDENCE_ORIGINS: Final = (
     "local_fixture/v1",
     "tigris_sacct_raw/v1",
@@ -69,6 +76,10 @@ FIXED_SIZE_KINDS: Final = (
     "final_assignment",
     "fixed_artifact",
 )
+DENSE_STORAGE_NODE_COUNT: Final = 86
+DENSE_STORAGE_TARGET_GENERATION_COUNT: Final = 83
+DENSE_STORAGE_FIXED_METADATA_RESERVE_PER_NODE: Final = 16 * 1024 * 1024
+DENSE_STORAGE_CAMPAIGN_FIXED_RESERVE: Final = 1024 * 1024 * 1024
 NONFINAL_COLLECTOR_WORKER: Final = (
     "run_hcwdl_representation_nonfinal_evidence_collector.sh"
 )
@@ -785,6 +796,384 @@ def validate_storage_estimate(
     return digest
 
 
+def _dense_template_reference(value: Mapping[str, Any], *, name: str) -> tuple[Path, int]:
+    path, _ = _validate_file_reference(value, name=name)
+    size = path.stat().st_size
+    if size <= 0:
+        raise ValueError(f"{name} is empty")
+    return path, size
+
+
+def build_dense_storage_template(
+    *, source_commit: str, planning_spec_sha256: str,
+    representation_recipe_sha256: str, graph_sha256: str,
+    dense_teacher_import_sha256: str,
+    resume_state_template: Mapping[str, Any],
+    selected_checkpoint_template: Mapping[str, Any],
+    deployable_checkpoint_template: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Bind exact serialized maximum-topology files measured by one probe job.
+
+    The template deliberately reserves the pilot-sized 300k identity registry,
+    even when it is produced during the bounded smoke bootstrap.  The three
+    referenced files are immutable worker outputs; the genuine scheduler
+    miniature binds this artifact as the ``gpu_representation`` probe result.
+    """
+
+    references = {
+        "resume_state": dict(resume_state_template),
+        "selected_checkpoint": dict(selected_checkpoint_template),
+        "deployable_checkpoint": dict(deployable_checkpoint_template),
+    }
+    sizes = {
+        name: _dense_template_reference(reference, name=f"dense {name} template")[1]
+        for name, reference in references.items()
+    }
+    return with_content_hash({
+        "contract": DENSE_STORAGE_TEMPLATE_CONTRACT,
+        "schema_version": 1,
+        "source_commit": _full_source_commit(source_commit),
+        "planning_spec_sha256": require_sha256(
+            planning_spec_sha256, name="dense storage planning spec",
+        ),
+        "representation_recipe_sha256": require_sha256(
+            representation_recipe_sha256, name="dense storage recipe",
+        ),
+        "graph_sha256": require_sha256(graph_sha256, name="dense storage graph"),
+        "dense_teacher_import_sha256": require_sha256(
+            dense_teacher_import_sha256, name="dense storage teacher import",
+        ),
+        "maximum_topology_execution_id": "RREL_D100",
+        "pilot_identity_rows_reserved": 300_000,
+        "identity_digest_bytes_per_row": 32,
+        "optimizer_state_initialized": True,
+        "serialization": "torch_canonical_pickle/v1",
+        "templates": references,
+        "template_sizes_bytes": sizes,
+        "fixed_metadata_reserve_per_node_bytes": (
+            DENSE_STORAGE_FIXED_METADATA_RESERVE_PER_NODE
+        ),
+        "genuine_worker_measurement_required": True,
+        "final_role_accessed": False,
+    })
+
+
+def validate_dense_storage_template(
+    value: Mapping[str, Any], *, expected_source_commit: str | None = None,
+    expected_recipe_sha256: str | None = None,
+    expected_graph_sha256: str | None = None,
+    expected_dense_teacher_import_sha256: str | None = None,
+) -> str:
+    digest = validate_content_hash(
+        value, expected_contract=DENSE_STORAGE_TEMPLATE_CONTRACT,
+        expected_schema_version=1,
+    )
+    required = {
+        "contract", "schema_version", "source_commit", "planning_spec_sha256",
+        "representation_recipe_sha256", "graph_sha256",
+        "dense_teacher_import_sha256", "maximum_topology_execution_id",
+        "pilot_identity_rows_reserved", "identity_digest_bytes_per_row",
+        "optimizer_state_initialized", "serialization", "templates",
+        "template_sizes_bytes", "fixed_metadata_reserve_per_node_bytes",
+        "genuine_worker_measurement_required", "final_role_accessed",
+        "content_hash",
+    }
+    if set(value) != required:
+        raise ValueError("dense storage template fields differ")
+    source_commit = _full_source_commit(str(value.get("source_commit")))
+    expected = {
+        "source_commit": (
+            source_commit if expected_source_commit is None
+            else _full_source_commit(expected_source_commit)
+        ),
+        "representation_recipe_sha256": (
+            value.get("representation_recipe_sha256")
+            if expected_recipe_sha256 is None else require_sha256(
+                expected_recipe_sha256, name="expected dense storage recipe",
+            )
+        ),
+        "graph_sha256": (
+            value.get("graph_sha256") if expected_graph_sha256 is None
+            else require_sha256(expected_graph_sha256, name="expected dense graph")
+        ),
+        "dense_teacher_import_sha256": (
+            value.get("dense_teacher_import_sha256")
+            if expected_dense_teacher_import_sha256 is None else require_sha256(
+                expected_dense_teacher_import_sha256,
+                name="expected dense teacher import",
+            )
+        ),
+    }
+    if any(value.get(name) != expected_value for name, expected_value in expected.items()):
+        raise PermissionError("dense storage template lineage differs")
+    require_sha256(value.get("planning_spec_sha256"), name="dense storage planning spec")
+    templates = value.get("templates")
+    if not isinstance(templates, Mapping) or set(templates) != {
+        "resume_state", "selected_checkpoint", "deployable_checkpoint",
+    }:
+        raise ValueError("dense storage template registry differs")
+    sizes = {
+        name: _dense_template_reference(reference, name=f"dense {name} template")[1]
+        for name, reference in templates.items()
+    }
+    if value.get("template_sizes_bytes") != sizes:
+        raise PermissionError("dense storage template byte sizes differ")
+    if (
+        value.get("maximum_topology_execution_id") != "RREL_D100"
+        or value.get("pilot_identity_rows_reserved") != 300_000
+        or value.get("identity_digest_bytes_per_row") != 32
+        or value.get("optimizer_state_initialized") is not True
+        or value.get("serialization") != "torch_canonical_pickle/v1"
+        or value.get("fixed_metadata_reserve_per_node_bytes")
+        != DENSE_STORAGE_FIXED_METADATA_RESERVE_PER_NODE
+        or value.get("genuine_worker_measurement_required") is not True
+        or value.get("final_role_accessed") is not False
+    ):
+        raise PermissionError("dense storage template semantics differ")
+    return digest
+
+
+def measure_dense_storage_template(
+    *, planning_spec: Mapping[str, Any], output_root: str | Path,
+) -> dict[str, Any]:
+    """Serialize the largest dense state using the installed production model.
+
+    This performs no data read and no scientific optimizer update.  AdamW
+    moments are materialized directly so the serialized template has the same
+    tensor inventory as a post-update checkpoint.
+    """
+
+    from .hcwdl_representation_campaign import (
+        DENSE_TRAINING_DISPOSITION, validate_campaign_spec,
+    )
+    spec_sha256 = validate_campaign_spec(planning_spec, executable=False)
+    if (
+        planning_spec.get("mode") != "smoke"
+        or planning_spec.get("disposition") != DENSE_TRAINING_DISPOSITION
+        or planning_spec.get("role_counts")
+        != {"train": 512, "validation": 256, "final_test": 0}
+    ):
+        raise PermissionError("dense storage measurement requires the smoke plan")
+    import numpy as np
+    import torch
+    from .hcwdl_representation_training import (
+        _cpu_tree, _head_state, _torch_bytes, initialize_representation_student,
+    )
+
+    model = initialize_representation_student("RREL_D100", replicate_seed=1337)
+    model.cpu()
+    parameters = [parameter for parameter in model.parameters() if parameter.requires_grad]
+    optimizer = torch.optim.AdamW(parameters, lr=1.0e-3)
+    for parameter in parameters:
+        optimizer.state[parameter] = {
+            "step": torch.tensor(1.0),
+            "exp_avg": torch.zeros_like(parameter, memory_format=torch.preserve_format),
+            "exp_avg_sq": torch.zeros_like(
+                parameter, memory_format=torch.preserve_format,
+            ),
+        }
+    deployable = _cpu_tree(model.deployable_model.state_dict())
+    state = {
+        "contract": "HCWDL_REPRESENTATION_DENSE_STORAGE_STATE_TEMPLATE/v1",
+        "execution_id": "RREL_D100",
+        "deployable_model": deployable,
+        "representation_heads": _head_state(model),
+        "optimizer": _cpu_tree(optimizer.state_dict()),
+        "pilot_identity_registry": np.zeros((300_000, 32), dtype=np.uint8),
+        # This fixed reserve dominates the JSON sidecars, validation history,
+        # calibration records, RNG state and immutable envelope metadata.
+        "metadata_reserve": bytes(DENSE_STORAGE_FIXED_METADATA_RESERVE_PER_NODE),
+    }
+    root = Path(output_root).resolve()
+    paths = {
+        "resume_state": root / "resume_state_template.pt",
+        "selected_checkpoint": root / "selected_checkpoint_template.pt",
+        "deployable_checkpoint": root / "deployable_checkpoint_template.pt",
+    }
+    payloads = {
+        "resume_state": _torch_bytes(state),
+        "selected_checkpoint": _torch_bytes({
+            "contract": "HCWDL_REPRESENTATION_DENSE_SELECTED_TEMPLATE/v1",
+            "state": state,
+        }),
+        "deployable_checkpoint": _torch_bytes(deployable),
+    }
+    for name, path in paths.items():
+        if atomic_publish_bytes(path, payloads[name]) != "published":
+            raise FileExistsError(f"dense storage {name} template already exists")
+    result = build_dense_storage_template(
+        source_commit=str(planning_spec["source_commit"]),
+        planning_spec_sha256=spec_sha256,
+        representation_recipe_sha256=str(
+            planning_spec["representation_recipe_sha256"]
+        ),
+        graph_sha256=str(planning_spec["graph_sha256"]),
+        dense_teacher_import_sha256=str(planning_spec["parent_import_sha256"]),
+        resume_state_template=artifact_reference(paths["resume_state"]),
+        selected_checkpoint_template=artifact_reference(paths["selected_checkpoint"]),
+        deployable_checkpoint_template=artifact_reference(
+            paths["deployable_checkpoint"]
+        ),
+    )
+    validate_dense_storage_template(
+        result, expected_source_commit=str(planning_spec["source_commit"]),
+        expected_recipe_sha256=str(planning_spec["representation_recipe_sha256"]),
+        expected_graph_sha256=str(planning_spec["graph_sha256"]),
+        expected_dense_teacher_import_sha256=str(
+            planning_spec["parent_import_sha256"]
+        ),
+    )
+    return result
+
+
+def build_dense_storage_estimate(
+    *, train_rows: int, validation_rows: int,
+    dense_teacher_import_sha256: str,
+    storage_template: Mapping[str, Any],
+) -> dict[str, Any]:
+    template, template_sha256 = load_authenticated_json_reference(
+        storage_template, expected_contract=DENSE_STORAGE_TEMPLATE_CONTRACT,
+        name="dense storage template",
+    )
+    validate_dense_storage_template(
+        template,
+        expected_dense_teacher_import_sha256=dense_teacher_import_sha256,
+    )
+    train = _positive_integer(train_rows, name="dense storage train rows")
+    validation = _positive_integer(
+        validation_rows, name="dense storage validation rows",
+    )
+    if (train, validation) not in {(512, 256), (300_000, 100_000)}:
+        raise ValueError("dense storage role populations differ")
+    sizes = template["template_sizes_bytes"]
+    per_node_persistent = (
+        2 * int(sizes["resume_state"])
+        + int(sizes["selected_checkpoint"])
+        + int(sizes["deployable_checkpoint"])
+        + DENSE_STORAGE_FIXED_METADATA_RESERVE_PER_NODE
+    )
+    all_node_persistent = DENSE_STORAGE_NODE_COUNT * per_node_persistent
+    transient_training = int(sizes["resume_state"]) + int(
+        sizes["selected_checkpoint"]
+    )
+    ordinary_bank = train * 7_815
+    toff_bank = train * 15_021
+    target_peak = 2 * max(ordinary_bank, toff_bank)
+    retained_target_metadata = DENSE_STORAGE_TARGET_GENERATION_COUNT * 1024 * 1024
+    subtotal = (
+        all_node_persistent + transient_training + target_peak
+        + retained_target_metadata + DENSE_STORAGE_CAMPAIGN_FIXED_RESERVE
+    )
+    # A 50% reserve covers filesystem block allocation, immutable JSON,
+    # envelope duplication and future failure/recovery staging without relying
+    # on compression.
+    headroom = (subtotal + 1) // 2
+    total = subtotal + headroom
+    return with_content_hash({
+        "contract": DENSE_STORAGE_ESTIMATE_CONTRACT,
+        "schema_version": 1,
+        "disposition": "dense_training_only",
+        "dense_teacher_import_sha256": require_sha256(
+            dense_teacher_import_sha256, name="dense storage teacher import",
+        ),
+        "storage_template": dict(storage_template),
+        "storage_template_sha256": template_sha256,
+        "row_counts": {"train": train, "validation": validation, "final": 0},
+        "training_node_count": DENSE_STORAGE_NODE_COUNT,
+        "target_generation_count": DENSE_STORAGE_TARGET_GENERATION_COUNT,
+        "simultaneously_committed_target_banks": 1,
+        "interrupted_target_generation_reserve": 1,
+        "ordinary_target_bank_bytes": ordinary_bank,
+        "toff_target_bank_bytes": toff_bank,
+        "peak_target_staging_plus_committed_bytes": target_peak,
+        "per_node_persistent_bytes": per_node_persistent,
+        "all_nodes_persistent_bytes": all_node_persistent,
+        "transient_training_staging_bytes": transient_training,
+        "retained_target_metadata_bytes": retained_target_metadata,
+        "campaign_fixed_reserve_bytes": DENSE_STORAGE_CAMPAIGN_FIXED_RESERVE,
+        "subtotal_before_filesystem_headroom_bytes": subtotal,
+        "filesystem_headroom_numerator": 1,
+        "filesystem_headroom_denominator": 2,
+        "filesystem_headroom_bytes": headroom,
+        "estimated_campaign_peak_durable_bytes": total,
+        "minimum_free_bytes_at_submission": total,
+        "compression_saving_assumed": False,
+        "operational_template_measured": True,
+        "final_role_storage_bytes": 0,
+    })
+
+
+def validate_dense_storage_estimate(
+    value: Mapping[str, Any], *, storage_template: Mapping[str, Any] | None = None,
+    expected_source_commit: str | None = None,
+    expected_recipe_sha256: str | None = None,
+    expected_graph_sha256: str | None = None,
+    expected_dense_teacher_import_sha256: str | None = None,
+) -> str:
+    digest = validate_content_hash(
+        value, expected_contract=DENSE_STORAGE_ESTIMATE_CONTRACT,
+        expected_schema_version=1,
+    )
+    reference = value.get("storage_template")
+    if not isinstance(reference, Mapping):
+        raise ValueError("dense storage estimate template reference differs")
+    template_reference = dict(reference) if storage_template is None else dict(
+        storage_template
+    )
+    if dict(reference) != template_reference:
+        raise PermissionError("dense storage estimate template differs")
+    template, template_sha256 = load_authenticated_json_reference(
+        template_reference, expected_contract=DENSE_STORAGE_TEMPLATE_CONTRACT,
+        name="dense storage template",
+    )
+    validate_dense_storage_template(
+        template, expected_source_commit=expected_source_commit,
+        expected_recipe_sha256=expected_recipe_sha256,
+        expected_graph_sha256=expected_graph_sha256,
+        expected_dense_teacher_import_sha256=(
+            expected_dense_teacher_import_sha256
+            if expected_dense_teacher_import_sha256 is not None
+            else str(value.get("dense_teacher_import_sha256"))
+        ),
+    )
+    counts = value.get("row_counts")
+    if not isinstance(counts, Mapping) or set(counts) != {
+        "train", "validation", "final",
+    } or counts.get("final") != 0:
+        raise ValueError("dense storage estimate row counts differ")
+    expected = build_dense_storage_estimate(
+        train_rows=int(counts["train"]),
+        validation_rows=int(counts["validation"]),
+        dense_teacher_import_sha256=str(value.get("dense_teacher_import_sha256")),
+        storage_template=template_reference,
+    )
+    if dict(value) != expected or value.get("storage_template_sha256") != template_sha256:
+        raise PermissionError("dense storage estimate is not canonically derived")
+    return digest
+
+
+def validate_dense_storage_availability(
+    value: Mapping[str, Any], *, campaign_root: str | Path,
+) -> int:
+    """Recheck live free bytes immediately before review or scheduler mutation."""
+
+    validate_dense_storage_estimate(value)
+    root = Path(campaign_root).resolve()
+    probe = root if root.exists() else root.parent
+    while not probe.exists() and probe != probe.parent:
+        probe = probe.parent
+    free = int(shutil.disk_usage(probe).free)
+    required = _positive_integer(
+        value.get("minimum_free_bytes_at_submission"),
+        name="dense storage minimum free bytes",
+    )
+    if free < required:
+        raise PermissionError(
+            f"dense campaign requires {required} free bytes but only {free} are available"
+        )
+    return free
+
+
 def validate_scheduler_evidence(
     value: Mapping[str, Any], *, resource_class: str,
     request: Mapping[str, Any], expected_source_commit: str,
@@ -911,6 +1300,7 @@ def validate_scheduler_evidence(
     parsed = _parse_sacct_reference(
         value["raw_accounting_record"], expected_worker_path=str(worker_path),
         expected_comment=expected_comment, expected_task_key=str(value["task_key"]),
+        exact_script_argv=True,
     )
     expected_capture = _sacct_capture_command(parsed["job_id"])
     if value["capture_command"] != expected_capture:
@@ -1039,6 +1429,7 @@ def build_scheduler_evidence_from_sacct(
     parsed = _parse_sacct_reference(
         raw_reference, expected_worker_path=str(worker_path),
         expected_comment=comment, expected_task_key=task_key,
+        exact_script_argv=True,
     )
     artifact = with_content_hash({
         "contract": SCHEDULER_EVIDENCE_CONTRACT,
@@ -1907,7 +2298,160 @@ def build_measured_profile(
     return artifact
 
 
+def validate_dense_measured_profile(
+    profile: Mapping[str, Any], *, expected_source_commit: str,
+) -> str:
+    """Validate the exact four resource classes used by the non-final DAG."""
+
+    digest = validate_content_hash(
+        profile, expected_contract=DENSE_RESOURCE_PROFILE_CONTRACT,
+        expected_schema_version=1,
+    )
+    required = {
+        "contract", "schema_version", "disposition", "requests",
+        "measurements", "array_concurrency_limits", "measurement_environment",
+        "content_hash",
+    }
+    if set(profile) != required or profile.get("disposition") != "dense_training_only":
+        raise PermissionError("dense resource profile schema/disposition differs")
+    requests = profile.get("requests")
+    measurements = profile.get("measurements")
+    expected_requests = resource_table(mode="smoke")
+    expected_requests = {
+        name: expected_requests[name] for name in DENSE_RESOURCE_CLASSES
+    }
+    if requests != expected_requests or not isinstance(measurements, Mapping) or set(
+        measurements
+    ) != set(DENSE_RESOURCE_CLASSES):
+        raise ValueError("dense resource profile class registry differs")
+    concurrency = profile.get("array_concurrency_limits")
+    if not isinstance(concurrency, Mapping) or any(
+        not isinstance(key, str) or not key
+        or isinstance(value, bool) or not isinstance(value, int) or value <= 0
+        for key, value in concurrency.items()
+    ):
+        raise ValueError("dense resource concurrency registry differs")
+    environment = profile.get("measurement_environment")
+    if not isinstance(environment, Mapping) or set(environment) != {
+        "site", "account", "partition", "source_commit",
+        "python_no_user_site", "production_workers",
+    }:
+        raise PermissionError("dense resource profile environment differs")
+    source_commit = _full_source_commit(expected_source_commit)
+    if (
+        environment.get("site") != TIGRIS_SITE
+        or environment.get("account") != TIGRIS_ACCOUNT
+        or environment.get("partition") != TIGRIS_PARTITION
+        or environment.get("source_commit") != source_commit
+        or environment.get("python_no_user_site") is not True
+    ):
+        raise PermissionError("dense resource profile Tigris lineage differs")
+    workers = environment.get("production_workers")
+    if not isinstance(workers, Mapping) or set(workers) != set(WORKER_ROLES):
+        raise PermissionError("dense resource worker registry differs")
+    worker_hashes = {}
+    for role, reference in workers.items():
+        _, worker_hashes[role] = _validate_file_reference(
+            reference, name=f"dense {role} resource worker",
+        )
+    for resource_class in DENSE_RESOURCE_CLASSES:
+        row = measurements[resource_class]
+        if not isinstance(row, Mapping) or set(row) != {
+            "scheduler_evidence", "miniature_evidence",
+        }:
+            raise ValueError("dense resource measurement row differs")
+        scheduler, _ = load_authenticated_json_reference(
+            row["scheduler_evidence"],
+            expected_contract=SCHEDULER_EVIDENCE_CONTRACT,
+            name=f"dense {resource_class} scheduler evidence",
+        )
+        scheduler = validate_scheduler_evidence(
+            scheduler, resource_class=resource_class,
+            request=expected_requests[resource_class],
+            expected_source_commit=source_commit,
+            expected_workers=workers, require_genuine=True,
+        )
+        miniature, _ = load_authenticated_json_reference(
+            row["miniature_evidence"],
+            expected_contract=MINIATURE_EVIDENCE_CONTRACT,
+            name=f"dense {resource_class} miniature evidence",
+        )
+        validate_miniature_evidence(
+            miniature, expected_kind=f"resource_profile:{resource_class}",
+            expected_source_commit=source_commit,
+            expected_recipe_sha256=None, scheduler_evidence=scheduler,
+            require_genuine=True,
+        )
+        result_path, _ = _validate_file_reference(
+            miniature["result_artifact"],
+            name=f"dense {resource_class} measured result",
+        )
+        result = load_json(result_path)
+        if resource_class == "gpu_representation":
+            if miniature.get("result_contract") != DENSE_STORAGE_TEMPLATE_CONTRACT:
+                raise PermissionError(
+                    "dense representation probe lacks its storage template"
+                )
+            validate_dense_storage_template(
+                result, expected_source_commit=source_commit,
+            )
+        elif miniature.get("result_contract") != WORKER_RUNTIME_MEASUREMENT_CONTRACT:
+            raise PermissionError("dense resource probe result contract differs")
+        if miniature["worker_sha256"] != worker_hashes[scheduler["worker_role"]]:
+            raise PermissionError("dense resource worker/result lineage differs")
+    return digest
+
+
+def build_dense_measured_profile(
+    *, source_commit: str,
+    production_workers: Mapping[str, Mapping[str, Any]],
+    measurements: Mapping[str, Mapping[str, Any]],
+    array_concurrency_limits: Mapping[str, int] | None = None,
+) -> dict[str, Any]:
+    requests = resource_table(mode="smoke")
+    requests = {name: requests[name] for name in DENSE_RESOURCE_CLASSES}
+    if set(production_workers) != set(WORKER_ROLES):
+        raise ValueError("dense resource-profile worker registry differs")
+    workers = {role: dict(reference) for role, reference in production_workers.items()}
+    for role, reference in workers.items():
+        _validate_file_reference(reference, name=f"dense {role} resource worker")
+    if set(measurements) != set(DENSE_RESOURCE_CLASSES):
+        raise ValueError("dense resource-profile measurement registry differs")
+    normalized = {
+        name: {
+            key: dict(row[key]) for key in (
+                "scheduler_evidence", "miniature_evidence",
+            )
+        }
+        for name, row in measurements.items()
+        if isinstance(row, Mapping) and set(row) == {
+            "scheduler_evidence", "miniature_evidence",
+        }
+    }
+    if set(normalized) != set(DENSE_RESOURCE_CLASSES):
+        raise ValueError("dense resource-profile measurement row differs")
+    result = with_content_hash({
+        "contract": DENSE_RESOURCE_PROFILE_CONTRACT,
+        "schema_version": 1,
+        "disposition": "dense_training_only",
+        "requests": requests,
+        "measurements": normalized,
+        "array_concurrency_limits": dict(array_concurrency_limits or {}),
+        "measurement_environment": {
+            "site": TIGRIS_SITE, "account": TIGRIS_ACCOUNT,
+            "partition": TIGRIS_PARTITION,
+            "source_commit": _full_source_commit(source_commit),
+            "python_no_user_site": True,
+            "production_workers": workers,
+        },
+    })
+    validate_dense_measured_profile(result, expected_source_commit=source_commit)
+    return result
+
+
 __all__ = [
+    "DENSE_RESOURCE_CLASSES", "DENSE_RESOURCE_PROFILE_CONTRACT",
+    "DENSE_STORAGE_ESTIMATE_CONTRACT", "DENSE_STORAGE_TEMPLATE_CONTRACT",
     "FIXED_SIZE_INVENTORY_CONTRACT", "FIXED_SIZE_KINDS",
     "MINIATURE_EVIDENCE_CONTRACT", "PLANNING_RESOURCES",
     "NONFINAL_ACCEPTANCE_SCHEDULER_EVIDENCE_CONTRACT",
@@ -1916,16 +2460,19 @@ __all__ = [
     "SACCT_FIELDS", "SACCT_FORMAT", "SCHEDULER_EVIDENCE_ORIGINS",
     "SMOKE_RESOURCES", "STORAGE_ESTIMATE_CONTRACT", "TIGRIS_ACCOUNT",
     "TIGRIS_PARTITION", "TIGRIS_SITE", "WORKER_ROLES", "artifact_reference",
-    "build_fixed_size_inventory", "build_measured_profile",
+    "build_dense_measured_profile", "build_dense_storage_estimate",
+    "build_dense_storage_template", "build_fixed_size_inventory", "build_measured_profile",
     "build_miniature_evidence", "build_scheduler_evidence",
     "build_nonfinal_acceptance_scheduler_evidence",
     "build_nonfinal_acceptance_scheduler_evidence_from_sacct",
     "capture_nonfinal_acceptance_scheduler_evidence",
     "build_scheduler_evidence_from_sacct",
-    "build_storage_estimate",
+    "build_storage_estimate", "measure_dense_storage_template",
     "load_authenticated_json_reference", "resource_table",
     "scheduler_evidence_comment",
     "nonfinal_acceptance_scheduler_comment",
+    "validate_dense_measured_profile", "validate_dense_storage_availability",
+    "validate_dense_storage_estimate", "validate_dense_storage_template",
     "validate_fixed_size_inventory", "validate_measured_profile",
     "validate_miniature_evidence", "validate_scheduler_evidence",
     "validate_nonfinal_acceptance_scheduler_evidence",

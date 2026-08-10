@@ -32,6 +32,7 @@ from .hcwdl_representation_campaign import (
 )
 from .hcwdl_representation_contracts import (
     ARCHITECTURE_ATTESTATION_CONTRACT, PARENT_IMPORT_CONTRACT,
+    DENSE_TEACHER_IMPORT_CONTRACT, DENSE_TRAINING_AGGREGATE_CONTRACT,
     PARENT_LOSS_ATTESTATION_CONTRACT,
     CONFIRMATION_AGGREGATE_CONTRACT, CONFIRMATION_REGISTRY_CONTRACT,
     CONFIRMATION_RUN_CONTRACT, DEPLOYABLE_EXTRACTION_CONTRACT,
@@ -138,6 +139,7 @@ _SETTINGS_KEYS: Final = frozenset({
     "target_runtime_environment", "miniature_row_limit", "view_cache_max_gib",
     "synthetic_passes", "training_mode", "final",
 })
+_DENSE_SETTINGS_KEYS: Final = _SETTINGS_KEYS - {"final"}
 _FINAL_SETTINGS_KEYS: Final = frozenset({
     "population_sha256", "selection_rule_sha256", "assignment_spec_sha256",
     "assignment_spec", "finalist_policy",
@@ -470,8 +472,8 @@ _ASSEMBLY_FIELDS: Final[Mapping[str, tuple[str, ...]]] = {
 }
 
 _ASSEMBLY_CONTRACT: Final = {
-    "target_build": "HCWDL_REPRESENTATION_TARGET_ASSEMBLY/v2",
-    "train_node": "HCWDL_REPRESENTATION_TRAINING_ASSEMBLY/v2",
+    "target_build": "HCWDL_REPRESENTATION_TARGET_ASSEMBLY/v3",
+    "train_node": "HCWDL_REPRESENTATION_TRAINING_ASSEMBLY/v3",
     "final_selection": "HCWDL_REPRESENTATION_FINAL_SELECTION_ASSEMBLY/v1",
     "assignment_shard": "HCWDL_REPRESENTATION_FINAL_ASSIGNMENT_ASSEMBLY/v1",
     "assignment_finalize": "HCWDL_REPRESENTATION_FINAL_ASSIGNMENT_ASSEMBLY/v1",
@@ -498,6 +500,9 @@ _OUTER_REQUIRED: Final[Mapping[str, tuple[str, ...]]] = {
         "parent_report_paths", "model_source_paths", "authority_files",
         "qualifier_report_paths", "confirmation_report_paths",
     ),
+    "dense_teacher_import": (
+        "artifact", "authority_files", "historical_project_dir",
+    ),
     "control_registry": (),
     "kernel_resources": (
         "root", "producer_task_id", "immutable_parent_hashes",
@@ -505,7 +510,7 @@ _OUTER_REQUIRED: Final[Mapping[str, tuple[str, ...]]] = {
     ),
     "representation_recipe": (
         "artifact", "producer_source_sha256", "representation_graph",
-        "control_registry", "parent_import",
+        "control_registry", "parent_import", "assignment_manifest",
     ),
     "numerical_acceptance": ("representation_recipe",),
     "cache_miniature_bank": (
@@ -530,6 +535,9 @@ _OUTER_REQUIRED: Final[Mapping[str, tuple[str, ...]]] = {
     ),
     "confirmation_registry": ("builder_arguments",),
     "confirmation_aggregate": ("builder_arguments",),
+    "dense_training_aggregate": (
+        "builder_arguments", "dense_training_disposition",
+    ),
     "finalist_lock": ("builder_arguments",),
     "shared_final_claim": ("task_registry_arguments", "claim_arguments"),
     "data_attestation": ("builder_arguments",),
@@ -636,6 +644,7 @@ def _output_contract(task: CampaignTask, ordinal: int) -> str | None:
             PARENT_LOSS_ATTESTATION_CONTRACT,
         ),
         "parent_import": (PARENT_IMPORT_CONTRACT,),
+        "dense_teacher_import": (DENSE_TEACHER_IMPORT_CONTRACT,),
         "control_registry": (CONTROL_REGISTRY_CONTRACT,),
         "kernel_resources": (None,),
         "representation_recipe": (
@@ -715,6 +724,7 @@ def _output_contract(task: CampaignTask, ordinal: int) -> str | None:
         "validation_only_aggregate": (
             "HCWDL_REPRESENTATION_VALIDATION_ONLY_AGGREGATE/v1",
         ),
+        "dense_training_aggregate": (DENSE_TRAINING_AGGREGATE_CONTRACT,),
     }
     if kind in {"train_node", "train_control", "confirmation"}:
         values: tuple[str | None, ...] = (
@@ -1466,6 +1476,11 @@ def _target_parameters(
         assignment = _registered_reference("${assignment_manifest:train}")
     kernel = "${kernel_resources}"
     settings = _settings(prerequisites)
+    dense_teacher = spec.get("disposition") == "dense_training_only"
+    authority_route = (
+        "${task_output:parent_import:0}"
+        if dense_teacher else "${task_output:architecture_attestation:0}"
+    )
     assembly = {
         "contract": _ASSEMBLY_CONTRACT["target_build"],
         "bank_root": str(
@@ -1500,7 +1515,7 @@ def _target_parameters(
         ),
         "parent_import": _registered_reference("${task_output:parent_import:0}"),
         "architecture_attestation": _registered_reference(
-            "${task_output:architecture_attestation:0}"
+            authority_route
         ),
         "kernel_envelope": {
             "committed_directory": _registered_path(kernel),
@@ -1528,6 +1543,8 @@ def _model_sources(
             execution.predecessor_logit_teacher,
         ) if value is not None
     }
+    if not names:
+        return {}
     parent_members = _bundle_members(prerequisites, "parent_model_sources")
     if not isinstance(parent_members, Mapping):
         raise ValueError("parent model-source member registry differs")
@@ -1603,6 +1620,11 @@ def _training_parameters(
             for role in ("train", "validation")
         }
     )
+    dense_teacher = spec.get("disposition") == "dense_training_only"
+    authority_route = (
+        "${task_output:parent_import:0}"
+        if dense_teacher else "${task_output:architecture_attestation:0}"
+    )
     assembly = {
         "contract": _ASSEMBLY_CONTRACT["train_node"],
         "parent_recipe": _registered_reference("${parent_recipe}"),
@@ -1637,7 +1659,7 @@ def _training_parameters(
             "${producer_runtime_signature}"
         ),
         "architecture_attestation": _registered_reference(
-            "${task_output:architecture_attestation:0}"
+            authority_route
         ),
         "parent_import": _registered_reference("${task_output:parent_import:0}"),
         "model_sources": _model_sources(
@@ -1763,6 +1785,25 @@ def _simple_parameters(
                 logical="${parent_confirmation_reports}", mode="path",
             ),
         }
+    if kind == "dense_teacher_import":
+        return {
+            **base,
+            "artifact": _registered_reference("${prebuilt_parent_import}"),
+            "authority_files": {
+                "campaign_spec": _registered_path("${dense_teacher_campaign_spec}"),
+                "recipe": _registered_path("${dense_teacher_recipe}"),
+                "source_manifest": _registered_path("${dense_teacher_source_manifest}"),
+                "split_manifest": _registered_path("${dense_teacher_split_manifest}"),
+                "row_selection": _registered_path("${dense_teacher_row_selection}"),
+                "surface_parity": _registered_path(
+                    "${task_output:surface_parity:0}"
+                ),
+                "toff_wrapper_report": _registered_path(
+                    "${dense_teacher_toff_report}"
+                ),
+            },
+            "historical_project_dir": _registered_path("${dense_teacher_project}"),
+        }
     if kind == "representation_recipe":
         return {
             **base,
@@ -1773,6 +1814,9 @@ def _simple_parameters(
             ),
             "representation_graph": _registered_reference(
                 "${representation_graph}"
+            ),
+            "assignment_manifest": _registered_reference(
+                "${assignment_manifest:train}"
             ),
             "control_registry": _registered_reference("${control_registry}"),
             "parent_import": _registered_reference("${parent_import}"),
@@ -1898,19 +1942,26 @@ def _reporting_parameters(
             _registered_json(f"${{task_output:control_{node}:0}}")
             for node in sorted(CONTROL_REGISTRY)
         ]
+        dense_teacher = spec.get("disposition") == "dense_training_only"
+        authority_route = (
+            "${task_output:parent_import:0}"
+            if dense_teacher else "${task_output:architecture_attestation:0}"
+        )
         return {
             **base,
             "parent_import": _registered_reference(
                 "${task_output:parent_import:0}"
             ),
             "architecture_attestation": _registered_reference(
-                "${task_output:architecture_attestation:0}"
+                authority_route
             ),
             "builder_arguments": {
             "primary_reports": primary,
             "control_reports": controls,
-            "parent_reports": _parent_engine_report_registry(
-                prerequisites, logical="${parent_reports}",
+            "parent_reports": (
+                {} if dense_teacher else _parent_engine_report_registry(
+                    prerequisites, logical="${parent_reports}",
+                )
             ),
             "graph_sha256": require_sha256(spec["graph_sha256"], name="graph"),
             "recipe_sha256": require_sha256(
@@ -1921,6 +1972,7 @@ def _reporting_parameters(
             ),
             "expected_primary_ids": sorted(NODE_REGISTRY),
             "expected_control_ids": sorted(CONTROL_REGISTRY),
+            "dense_training_only": dense_teacher,
         }}
     if kind == "confirmation_registry":
         objectives = ["RSET_M1c", "RSET_M1w", "RREL_M1c", "RREL_M1w"]
@@ -1979,6 +2031,25 @@ def _reporting_parameters(
                 "${task_output:confirmation_aggregate:0}"
             ),
             "final_disposition": _registered_reference("${final_disposition}"),
+        }}
+    if kind == "dense_training_aggregate":
+        return {
+            **base,
+            "dense_training_disposition": _registered_json(
+                "${final_disposition}"
+            ),
+            "builder_arguments": {
+            "screen_aggregate": _registered_json(
+                "${task_output:screen_aggregate:0}"
+            ),
+            "confirmation_aggregate": (
+                _registered_json("${task_output:confirmation_aggregate:0}")
+                if task.dependencies == ("confirmation_aggregate",) else None
+            ),
+            "campaign_spec_sha256": _registered_field(
+                "${campaign_spec}", "content_hash",
+            ),
+            "mode": str(spec["mode"]),
         }}
     raise KeyError(f"no reporting parameter builder for {task.task_key}")
 
@@ -2537,7 +2608,7 @@ def _parameters_for(
         )
     if task.kind in {
         "screen_aggregate", "confirmation_registry", "confirmation_aggregate",
-        "validation_only_aggregate",
+        "validation_only_aggregate", "dense_training_aggregate",
     }:
         return _reporting_parameters(
             spec=spec, prerequisites=prerequisites, task=task, by_key=by_key,
@@ -2689,40 +2760,48 @@ def _validate_prerequisites(
         _absolute(reference["path"], name=f"{logical} path")
         require_sha256(reference["sha256"], name=f"{logical} byte hash")
     _content_hashes(prerequisites)
-    parent_reports = _bundle_members(prerequisites, "parent_reports")
-    parent_models = _bundle_members(prerequisites, "parent_model_sources")
-    parent_confirmations = _bundle_members(
-        prerequisites, "parent_confirmation_reports",
-    )
-    expected_parent_nodes = set(IMPORTED_TEACHERS) | set(IMPORTED_LOGIT_CONTROLS)
-    if not isinstance(parent_reports, Mapping) or set(parent_reports) != expected_parent_nodes:
-        raise ValueError("parent report bundle is incomplete or expanded")
-    if not isinstance(parent_models, Mapping) or set(parent_models) != {
-        "D0w", "hcwdl_surfaces", "scouting_particle_transformer",
-    }:
-        raise ValueError("parent model-source bundle is incomplete or expanded")
-    expected_confirmation_keys = _final_settings(prerequisites).get(
-        "parent_confirmation_report_keys"
-    )
-    if (
-        not isinstance(parent_confirmations, Mapping)
-        or not isinstance(expected_confirmation_keys, list)
-        or not expected_confirmation_keys
-        or expected_confirmation_keys != sorted(expected_confirmation_keys)
-        or set(parent_confirmations) != set(expected_confirmation_keys)
-    ):
-        raise ValueError("parent confirmation-report bundle is incomplete or expanded")
-    d0w_source = parent_models["D0w"]
-    if (
-        not isinstance(d0w_source, Mapping)
-        or set(d0w_source) != {"relative", "kind"}
-        or d0w_source.get("kind") != "pmard"
-    ):
-        raise ValueError("parent D0w model-source bundle member differs")
+    dense = spec.get("disposition") == "dense_training_only"
     settings = _settings(prerequisites)
-    final = _final_settings(prerequisites)
-    if set(settings) != _SETTINGS_KEYS or set(final) != _FINAL_SETTINGS_KEYS:
-        raise ValueError("runtime settings schema differs")
+    if dense:
+        if set(settings) != _DENSE_SETTINGS_KEYS:
+            raise ValueError("dense runtime settings schema differs")
+        bundles = prerequisites.get("bundle_members")
+        if not isinstance(bundles, Mapping) or bundles:
+            raise ValueError("dense runtime cannot import parent/final bundles")
+    else:
+        parent_reports = _bundle_members(prerequisites, "parent_reports")
+        parent_models = _bundle_members(prerequisites, "parent_model_sources")
+        parent_confirmations = _bundle_members(
+            prerequisites, "parent_confirmation_reports",
+        )
+        expected_parent_nodes = set(IMPORTED_TEACHERS) | set(IMPORTED_LOGIT_CONTROLS)
+        if not isinstance(parent_reports, Mapping) or set(parent_reports) != expected_parent_nodes:
+            raise ValueError("parent report bundle is incomplete or expanded")
+        if not isinstance(parent_models, Mapping) or set(parent_models) != {
+            "D0w", "hcwdl_surfaces", "scouting_particle_transformer",
+        }:
+            raise ValueError("parent model-source bundle is incomplete or expanded")
+        expected_confirmation_keys = _final_settings(prerequisites).get(
+            "parent_confirmation_report_keys"
+        )
+        if (
+            not isinstance(parent_confirmations, Mapping)
+            or not isinstance(expected_confirmation_keys, list)
+            or not expected_confirmation_keys
+            or expected_confirmation_keys != sorted(expected_confirmation_keys)
+            or set(parent_confirmations) != set(expected_confirmation_keys)
+        ):
+            raise ValueError("parent confirmation-report bundle is incomplete or expanded")
+        d0w_source = parent_models["D0w"]
+        if (
+            not isinstance(d0w_source, Mapping)
+            or set(d0w_source) != {"relative", "kind"}
+            or d0w_source.get("kind") != "pmard"
+        ):
+            raise ValueError("parent D0w model-source bundle member differs")
+        final = _final_settings(prerequisites)
+        if set(settings) != _SETTINGS_KEYS or set(final) != _FINAL_SETTINGS_KEYS:
+            raise ValueError("runtime settings schema differs")
     if (
         settings["kernel_parent_hashes"] != _expected_kernel_parents(spec)
         or settings["shuffle_parent_hashes"]
@@ -2754,6 +2833,12 @@ def _validate_prerequisites(
         != _expected_view_cache_gib(spec)
     ):
         raise PermissionError("runtime settings differ from frozen campaign/resource policy")
+    if dense:
+        validate_content_hash(
+            prerequisites, expected_contract=RUNTIME_PREREQUISITES_CONTRACT,
+            expected_schema_version=1,
+        )
+        return
     finalists = _finalists(prerequisites, spec=spec)
     finalist_ids = {str(row["finalist_id"]) for row in finalists}
     required_finalists = {
@@ -2833,7 +2918,9 @@ def build_runtime_prerequisites(
     registry before exhaustive row construction.
     """
 
-    if set(settings) != _SETTINGS_KEYS:
+    dense = spec.get("disposition") == "dense_training_only"
+    expected_setting_keys = _DENSE_SETTINGS_KEYS if dense else _SETTINGS_KEYS
+    if set(settings) != expected_setting_keys:
         raise ValueError("operator runtime settings schema differs")
     from .hcwdl_representation_recipe import validate_representation_recipe
 
@@ -2852,7 +2939,6 @@ def build_runtime_prerequisites(
         raise PermissionError(
             "representation recipe producer source differs from measured runtime source"
         )
-    quotas, selection_rule = _final_selection_policy(spec, split_manifest)
     normalized_settings = dict(settings)
     expected_target_runtime = _derived_target_runtime_environment(
         target_forward_specs,
@@ -2888,41 +2974,47 @@ def build_runtime_prerequisites(
         if settings.get(name) not in (None, expected):
             raise PermissionError(f"operator runtime setting {name!r} differs from frozen policy")
         normalized_settings[name] = expected
-    raw_final = normalized_settings.get("final")
-    if not isinstance(raw_final, Mapping):
-        raise ValueError("runtime prerequisite settings lack final registry")
-    if set(raw_final) != _FINAL_SETTINGS_KEYS:
-        raise ValueError("operator final runtime settings schema differs")
-    derived_final = _derived_final_authority(
-        spec=spec, runtime_facts=runtime_facts,
-        artifact_content_hashes=artifact_content_hashes,
-        split_manifest=split_manifest, final_authorities=final_authorities,
-    )
-    for name, expected in derived_final.items():
-        if raw_final.get(name) not in (None, expected):
-            raise PermissionError(
-                f"operator final setting {name!r} differs from authenticated authority"
-            )
-    supplied_quotas = raw_final.get("rows_per_class")
-    supplied_rule = raw_final.get("selection_rule_sha256")
-    supplied_comparisons = raw_final.get("comparison_registry")
-    comparisons = _required_final_comparisons()
-    if (
-        supplied_quotas not in (None, quotas)
-        or supplied_rule not in (None, selection_rule)
-        or supplied_comparisons not in (None, comparisons)
-        or raw_final.get("step_size") not in (None, 8192)
-    ):
-        raise PermissionError(
-            "operator final selection/comparison settings differ from frozen policy"
+    if dense:
+        if final_authorities:
+            raise PermissionError("dense runtime cannot accept parent/final authority")
+        normalized_settings.pop("final", None)
+    else:
+        quotas, selection_rule = _final_selection_policy(spec, split_manifest)
+        raw_final = normalized_settings.get("final")
+        if not isinstance(raw_final, Mapping):
+            raise ValueError("runtime prerequisite settings lack final registry")
+        if set(raw_final) != _FINAL_SETTINGS_KEYS:
+            raise ValueError("operator final runtime settings schema differs")
+        derived_final = _derived_final_authority(
+            spec=spec, runtime_facts=runtime_facts,
+            artifact_content_hashes=artifact_content_hashes,
+            split_manifest=split_manifest, final_authorities=final_authorities,
         )
-    normalized_settings["final"] = {
-        **raw_final, **derived_final,
-        "rows_per_class": quotas,
-        "selection_rule_sha256": selection_rule,
-        "comparison_registry": comparisons,
-        "step_size": 8192,
-    }
+        for name, expected in derived_final.items():
+            if raw_final.get(name) not in (None, expected):
+                raise PermissionError(
+                    f"operator final setting {name!r} differs from authenticated authority"
+                )
+        supplied_quotas = raw_final.get("rows_per_class")
+        supplied_rule = raw_final.get("selection_rule_sha256")
+        supplied_comparisons = raw_final.get("comparison_registry")
+        comparisons = _required_final_comparisons()
+        if (
+            supplied_quotas not in (None, quotas)
+            or supplied_rule not in (None, selection_rule)
+            or supplied_comparisons not in (None, comparisons)
+            or raw_final.get("step_size") not in (None, 8192)
+        ):
+            raise PermissionError(
+                "operator final selection/comparison settings differ from frozen policy"
+            )
+        normalized_settings["final"] = {
+            **raw_final, **derived_final,
+            "rows_per_class": quotas,
+            "selection_rule_sha256": selection_rule,
+            "comparison_registry": comparisons,
+            "step_size": 8192,
+        }
     value = with_content_hash({
         "contract": RUNTIME_PREREQUISITES_CONTRACT,
         "schema_version": 1,

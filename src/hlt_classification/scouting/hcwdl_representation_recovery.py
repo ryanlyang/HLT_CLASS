@@ -405,11 +405,15 @@ def _audit_path_output(
     if path.is_file():
         if expected_contract is not None:
             value = load_json(path)
+            from .hcwdl_representation_contracts import (
+                CONTRACTS, contract_schema_version,
+            )
             validate_content_hash(
                 value, expected_contract=expected_contract,
                 expected_schema_version=(
                     2 if expected_contract == "HIGHCOV_DENSE_ASSIGNMENT_MANIFEST/v2"
-                    else 1
+                    else contract_schema_version(expected_contract)
+                    if expected_contract in CONTRACTS else 1
                 ),
             )
         digest = sha256_file(path)
