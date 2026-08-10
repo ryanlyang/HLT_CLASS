@@ -120,8 +120,12 @@ The operator-visible order is fixed:
    collector/parser compatibility commits follow the measured commit, publish
    the compatible resource-profile wrapper from the existing profile and
    recovery ledger instead of rerunning any probe;
-7. publish the 83 just-in-time target authorities, exhaustive runtime rows,
-   and immutable runtime binding, then recreate the reviewed planning spec;
+7. run `prepare_hcwdl_representation_dense_smoke_candidate.py` once to
+   project the authenticated runtime signatures across the reviewed
+   accounting-only source transition, publish the 83 just-in-time target
+   authorities, exhaustive runtime rows and immutable runtime binding, then
+   recreate the reviewed planning spec, command plan, dry-run audit and strict
+   candidate; this command has no scheduler call;
 8. render the complete 261-task smoke command plan and publish its strict
    nonauthorizing executable-candidate audit;
 9. after a separate exact candidate authorization, create and submit the live

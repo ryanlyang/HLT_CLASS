@@ -69,6 +69,7 @@ def _strict_gate_summary(
         validate_tigris_acceptance,
     )
     from .hcwdl_representation_resources import (
+        dense_resource_measurement_source_commit,
         validate_dense_storage_availability,
         validate_dense_storage_estimate,
         validate_dense_storage_template,
@@ -129,9 +130,12 @@ def _strict_gate_summary(
         )
     )
     if planning_spec.get("disposition") == DENSE_TRAINING_DISPOSITION:
+        measurement_source_commit = dense_resource_measurement_source_commit(
+            profile,
+        )
         inventory_hash = validate_dense_storage_template(
             load_json(inventory["path"]),
-            expected_source_commit=source_commit,
+            expected_source_commit=measurement_source_commit,
             expected_recipe_sha256=str(
                 planning_spec["representation_recipe_sha256"]
             ),
@@ -142,7 +146,7 @@ def _strict_gate_summary(
         )
         storage_hash = validate_dense_storage_estimate(
             storage, storage_template=inventory,
-            expected_source_commit=source_commit,
+            expected_source_commit=measurement_source_commit,
             expected_recipe_sha256=str(
                 planning_spec["representation_recipe_sha256"]
             ),

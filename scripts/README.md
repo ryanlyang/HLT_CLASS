@@ -232,6 +232,7 @@ grouped as follows:
 - current four-track dense-descent preparation:
   `prepare_hcwdl_representation_dense_teacher_import.py`,
   `prepare_hcwdl_representation_dense_surface_evidence.py`,
+  `prepare_hcwdl_representation_dense_smoke_candidate.py`,
   `prepare_hcwdl_representation_recipe_assets.py`,
   `prepare_hcwdl_representation_dense_target_assets.py`,
   `build_hcwdl_representation_dense_resource_probe_plan.py`,

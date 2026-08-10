@@ -117,6 +117,14 @@ schema. Thus jobs `80190`--`80193` are reused and are not rerun. The complete
 post-change representation suite is **473 passed, 9 expected Windows platform
 skips, 0 failures**; the exact changed-path registry matches the full
 measured-commit-to-working-tree Git diff and `git diff --check` is clean.
+The post-probe path is now one non-submitting command,
+`prepare_hcwdl_representation_dense_smoke_candidate.py`. It projects only the
+source/project fields in the four authenticated runtime signatures, publishes
+all 83 target authorities and all 261 bound runtime rows, and emits the dry-run
+and strict candidate hashes. Candidate review validates the storage template
+against the commit that genuinely measured it, while the compatible profile
+still binds the clean campaign source. No probe or scheduler call occurs in
+this preparer.
 
 ## HCWDL non-final corrected-parent prefix (2026-08-09)
 

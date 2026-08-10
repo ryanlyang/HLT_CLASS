@@ -85,6 +85,7 @@ SCRIPTS = (
     "predict_hcwdl_shared_final_shard.py",
     "prepare_hcwdl_representation_parent_evidence.py",
     "prepare_hcwdl_representation_dense_surface_evidence.py",
+    "prepare_hcwdl_representation_dense_smoke_candidate.py",
     "prepare_hcwdl_representation_dense_target_assets.py",
     "prepare_hcwdl_representation_dense_teacher_import.py",
     "prepare_hcwdl_representation_parent_import.py",
