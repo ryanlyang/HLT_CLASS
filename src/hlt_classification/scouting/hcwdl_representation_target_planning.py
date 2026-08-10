@@ -83,6 +83,16 @@ def _artifact_reference(path: Path, value: Mapping[str, Any]) -> dict[str, str]:
     return {"path": str(path.resolve()), "sha256": sha256_file(path)}
 
 
+def _validated_tap_sha256(value: Mapping[str, Any]) -> str:
+    from hlt_classification.models.hcwdl_surfaces import (
+        tap_schema as canonical_tap_schema, tap_schema_sha256,
+    )
+
+    if dict(value) != canonical_tap_schema():
+        raise ValueError("target planning tap schema differs")
+    return tap_schema_sha256()
+
+
 def build_dense_target_planning_assets(
     *, planning_campaign_spec: Mapping[str, Any], dense_teacher_import: Mapping[str, Any],
     representation_graph: Mapping[str, Any], representation_recipe: Mapping[str, Any],
@@ -116,12 +126,8 @@ def build_dense_target_planning_assets(
         )
     ):
         raise PermissionError("target planning graph/recipe differs from campaign")
-    from hlt_classification.models.hcwdl_surfaces import (
-        tap_schema as canonical_tap_schema, validate_surface_parity_report,
-    )
-    if dict(tap_schema) != canonical_tap_schema():
-        raise ValueError("target planning tap schema differs")
-    tap_sha256 = require_sha256(tap_schema.get("content_hash"), name="tap schema")
+    from hlt_classification.models.hcwdl_surfaces import validate_surface_parity_report
+    tap_sha256 = _validated_tap_sha256(tap_schema)
     parity_sha256 = validate_surface_parity_report(surface_parity)
     if surface_parity.get("authorization_capable") is not True:
         raise PermissionError("target planning requires installed-Weaver parity")

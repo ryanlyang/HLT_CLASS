@@ -80,6 +80,21 @@ from hlt_classification.scouting.hcwdl_representation_targets import (
     validate_target_generation,
     validate_target_consumer_registry,
 )
+
+
+def test_dense_target_planning_uses_canonical_tap_schema_hash() -> None:
+    from hlt_classification.models.hcwdl_surfaces import (
+        tap_schema, tap_schema_sha256,
+    )
+    from hlt_classification.scouting.hcwdl_representation_target_planning import (
+        _validated_tap_sha256,
+    )
+
+    value = tap_schema()
+    assert "content_hash" not in value
+    assert _validated_tap_sha256(value) == tap_schema_sha256()
+    with pytest.raises(ValueError, match="tap schema differs"):
+        _validated_tap_sha256({**value, "content_hash": "1" * 64})
 from hlt_classification.scouting.hcwdl_representation_resources import (
     build_storage_estimate,
     resource_table,

@@ -52,6 +52,9 @@ The first genuine dense-teacher attempt exposed and fixed a validator mismatch:
 JSON wrapper/engine parents use canonical content hashes, while the selected
 checkpoint parent uses its raw file-byte hash. The failed attempt published no
 teacher import and its immutable tap/parity files remain reusable.
+The same operational pass also fixed dense target planning to use the frozen
+tap schema's canonical `tap_schema_sha256()` identity; `tap.json` intentionally
+has no self-referential top-level `content_hash`.
 
 ## HCWDL non-final corrected-parent prefix (2026-08-09)
 
