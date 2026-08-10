@@ -48,6 +48,10 @@ smoke, or pilot has been authorized or submitted.
 The dense route also has a standalone tap/installed-Weaver parity CLI, so it
 does not require the canceled full-parent evidence preparer merely to
 bootstrap its historical TOFF training teacher.
+The first genuine dense-teacher attempt exposed and fixed a validator mismatch:
+JSON wrapper/engine parents use canonical content hashes, while the selected
+checkpoint parent uses its raw file-byte hash. The failed attempt published no
+teacher import and its immutable tap/parity files remain reusable.
 
 ## HCWDL non-final corrected-parent prefix (2026-08-09)
 

@@ -311,15 +311,30 @@ def validate_dense_teacher_import(value: Mapping[str, Any]) -> str:
         payload.get("historical_parent_graph_sha256"),
         name="dense teacher historical graph",
     )
-    path_parents = {
-        "wrapper_report_path": "toff_wrapper_report",
-        "engine_report_path": "toff_engine_report",
-        "selected_checkpoint_path": "toff_selected_checkpoint",
-    }
-    for field, parent in path_parents.items():
-        path = _absolute_regular(str(payload.get(field, "")), name=field)
-        if sha256_file(path) != parents[parent]:
-            raise PermissionError(f"dense teacher {field} bytes differ")
+    wrapper_path = _absolute_regular(
+        str(payload.get("wrapper_report_path", "")), name="wrapper_report_path",
+    )
+    wrapper = load_json(wrapper_path)
+    wrapper_sha256 = validate_content_hash(
+        wrapper, expected_contract="HCWDL_TRAINING_REPORT/v1",
+        expected_schema_version=1,
+    )
+    if wrapper_sha256 != parents["toff_wrapper_report"]:
+        raise PermissionError("dense teacher wrapper report content differs")
+
+    engine_path = _absolute_regular(
+        str(payload.get("engine_report_path", "")), name="engine_report_path",
+    )
+    engine_sha256 = validate_pmard_training_report(load_json(engine_path))
+    if engine_sha256 != parents["toff_engine_report"]:
+        raise PermissionError("dense teacher engine report content differs")
+
+    checkpoint_path = _absolute_regular(
+        str(payload.get("selected_checkpoint_path", "")),
+        name="selected_checkpoint_path",
+    )
+    if sha256_file(checkpoint_path) != parents["toff_selected_checkpoint"]:
+        raise PermissionError("dense teacher selected checkpoint bytes differ")
     return digest
 
 
