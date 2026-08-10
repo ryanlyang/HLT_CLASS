@@ -10,6 +10,9 @@ from _hcwdl_representation_common import artifact, publish
 from hlt_classification.scouting.hcwdl_numerical_acceptance import (
     build_numerical_acceptance,
 )
+from hlt_classification.scouting.hcwdl_assignment import (
+    validate_train_assignment_authority,
+)
 from hlt_classification.scouting.hcwdl_recipe import (
     PRIMARY_RECIPE_PROFILE,
     validate_recipe,
@@ -67,9 +70,24 @@ def main() -> int:
     )
     if teacher_import["parents"]["historical_recipe"] != parent_recipe_sha256:
         raise ValueError("parent recipe differs from the dense teacher import")
-    assignment_manifest = artifact(args.assignment_manifest)
-    from hlt_classification.scouting.highcov_cache import validate_assignment_manifest
-    assignment_manifest_sha256 = validate_assignment_manifest(assignment_manifest)
+    weighting = parent_recipe["class_weighting"]
+    if (
+        weighting["train_row_selection_sha256"]
+        != teacher_import["parents"]["historical_row_selection"]
+    ):
+        raise PermissionError(
+            "parent recipe row selection differs from the dense teacher import"
+        )
+    assignment_manifest_sha256 = validate_train_assignment_authority(
+        args.assignment_manifest,
+        split_manifest_sha256=teacher_import["parents"][
+            "historical_split_manifest"
+        ],
+        row_selection_sha256=teacher_import["parents"][
+            "historical_row_selection"
+        ],
+        expected_mapped_jets=sum(weighting["train_class_counts"]),
+    )
 
     graph = ascent_graph_artifact(parents={
         "parent_graph": teacher_import["payload"]["historical_parent_graph_sha256"],

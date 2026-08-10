@@ -1130,6 +1130,7 @@ def _representation_recipe_adapter(spec, task, index, runtime_row):
     )
 
     lineage_artifacts: dict[str, Mapping[str, Any]] = {}
+    lineage_paths: dict[str, Path] = {}
     for name in lineage_names:
         reference = resolve_registered_arguments(
             parameters[name], runtime_row,
@@ -1141,7 +1142,8 @@ def _representation_recipe_adapter(spec, task, index, runtime_row):
             raise ProductionConfigurationError(
                 f"representation_recipe.{name} must use registered_reference"
             )
-        lineage_artifacts[name] = load_json(Path(str(reference["path"])))
+        lineage_paths[name] = Path(str(reference["path"]))
+        lineage_artifacts[name] = load_json(lineage_paths[name])
 
     parent_import = lineage_artifacts["parent_import"]
     dense_teacher = parent_import.get("contract") == (
@@ -1173,10 +1175,18 @@ def _representation_recipe_adapter(spec, task, index, runtime_row):
         lineage_artifacts["control_registry"],
         ascent_graph_artifact_sha256=graph_sha256,
     )
-    from .highcov_cache import validate_assignment_manifest
+    from .hcwdl_assignment import validate_train_assignment_authority
     from .hcwdl_representation_kernels import generate_spectral_resource_bundle
-    assignment_sha256 = validate_assignment_manifest(
-        lineage_artifacts["assignment_manifest"]
+    assignment = lineage_artifacts["assignment_manifest"]
+    expected_assignment_rows = assignment.get("expected_mapped_jets")
+    assignment_sha256 = validate_train_assignment_authority(
+        lineage_paths["assignment_manifest"],
+        split_manifest_sha256=split_sha256,
+        row_selection_sha256=(
+            parent_import["parents"]["historical_row_selection"]
+            if dense_teacher else parent_import["parents"]["row_selection"]
+        ),
+        expected_mapped_jets=expected_assignment_rows,
     )
     kernel_bundle_sha256 = generate_spectral_resource_bundle().content_hash
     if (

@@ -175,7 +175,7 @@ def test_representation_recipe_adapter_rejects_runtime_source_mismatch_before_pu
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from hlt_classification.scouting import hcwdl_representation_dense_teacher as dense_teacher
-    from hlt_classification.scouting import highcov_cache
+    from hlt_classification.scouting import hcwdl_assignment
 
     parent_links = {
         "historical_recipe": "5" * 64,
@@ -196,10 +196,12 @@ def test_representation_recipe_adapter_rejects_runtime_source_mismatch_before_pu
     )
     assignment = with_content_hash({
         "contract": "TEST_ASSIGNMENT/v1", "schema_version": 1,
+        "expected_mapped_jets": 1,
     })
     monkeypatch.setattr(
-        highcov_cache, "validate_assignment_manifest", lambda value: validate_content_hash(
-            value, expected_contract="TEST_ASSIGNMENT/v1",
+        hcwdl_assignment, "validate_train_assignment_authority",
+        lambda path, **_kwargs: validate_content_hash(
+            load_json(path), expected_contract="TEST_ASSIGNMENT/v1",
         ),
     )
     graph = ascent_graph_artifact(parents={

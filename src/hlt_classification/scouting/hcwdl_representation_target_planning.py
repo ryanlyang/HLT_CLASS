@@ -32,7 +32,7 @@ from .hcwdl_representation_worker_runtime import (
     target_forward_runtime_commitment_from_measurement,
     validate_worker_runtime_measurement,
 )
-from .highcov_cache import validate_assignment_manifest
+from .hcwdl_assignment import validate_train_assignment_authority
 from .selective_assignment import validate_row_selection
 from .splits import role_records, validate_split_manifest
 
@@ -98,7 +98,8 @@ def build_dense_target_planning_assets(
     representation_graph: Mapping[str, Any], representation_recipe: Mapping[str, Any],
     tap_schema: Mapping[str, Any], surface_parity: Mapping[str, Any],
     source_manifest: Mapping[str, Any], split_manifest: Mapping[str, Any],
-    train_row_selection: Mapping[str, Any], train_assignment_manifest: Mapping[str, Any],
+    train_row_selection: Mapping[str, Any],
+    train_assignment_manifest_path: str | Path,
     gpu_target_runtime_measurement: Mapping[str, Any], project_dir: str | Path,
 ) -> dict[str, Any]:
     """Build every logical bank/consumer/forward record in DAG order."""
@@ -138,7 +139,15 @@ def build_dense_target_planning_assets(
     selection_sha256 = validate_row_selection(
         train_row_selection, split_manifest_sha256=split_sha256,
     )
-    assignment_sha256 = validate_assignment_manifest(train_assignment_manifest)
+    train_role = train_row_selection.get("roles", {}).get("train")
+    if not isinstance(train_role, Mapping):
+        raise ValueError("dense target planning train selection differs")
+    assignment_sha256 = validate_train_assignment_authority(
+        train_assignment_manifest_path,
+        split_manifest_sha256=split_sha256,
+        row_selection_sha256=selection_sha256,
+        expected_mapped_jets=int(train_role.get("rows", 0)),
+    )
     parents = representation_recipe["parents"]
     if (
         parents.get("dense_teacher_import") != teacher_import_sha256

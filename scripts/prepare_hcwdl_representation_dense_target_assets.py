@@ -44,7 +44,7 @@ def main() -> int:
         source_manifest=artifact(args.source_manifest),
         split_manifest=artifact(args.split_manifest),
         train_row_selection=artifact(args.train_row_selection),
-        train_assignment_manifest=artifact(args.train_assignment_manifest),
+        train_assignment_manifest_path=args.train_assignment_manifest,
         gpu_target_runtime_measurement=artifact(
             args.gpu_target_runtime_measurement
         ),

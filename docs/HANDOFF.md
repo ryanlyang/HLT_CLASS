@@ -55,6 +55,18 @@ teacher import and its immutable tap/parity files remain reusable.
 The same operational pass also fixed dense target planning to use the frozen
 tap schema's canonical `tap_schema_sha256()` identity; `tap.json` intentionally
 has no self-referential top-level `content_hash`.
+The next Tigris preflight exposed one more stale call to the assignment-cache
+validator before any graph or recipe artifact was published.  The dense
+recipe, target-planning, and registered recipe-task paths now share one
+path-based train-assignment authority check.  It derives the expected train
+row count independently from the authenticated v4 recipe or row selection,
+binds the historical split and row-selection hashes plus the canonical matcher
+resource digest, and reopens every referenced assignment shard.  The failed
+preflight root therefore remains safely reusable for its already authenticated
+tap, parity, and dense-teacher artifacts; graph/control/recipe/disposition were
+absent at failure.
+The post-fix focused dense-teacher, target, registered-artifact, and CLI suite
+is **130 passed, 8 expected POSIX-shell skips** on Windows.
 
 ## HCWDL non-final corrected-parent prefix (2026-08-09)
 

@@ -2,12 +2,25 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
+import pytest
+
 from hlt_classification.data.cache_contracts import (
     sha256_file, validate_content_hash, with_content_hash, write_immutable_json,
 )
 from hlt_classification.scouting import hcwdl_representation_dense_teacher as dense
+from hlt_classification.scouting.hcwdl_assignment import (
+    validate_train_assignment_authority,
+)
 from hlt_classification.scouting.hcwdl_representation_contracts import (
     build_versioned_artifact,
+)
+from hlt_classification.scouting.highcov_cache import (
+    publish_assignment_manifest, publish_assignment_shard,
+)
+from hlt_classification.scouting.highcov_matcher import MatchResult
+from hlt_classification.scouting.highcov_resources import (
+    resource_validation_report,
 )
 
 
@@ -89,3 +102,49 @@ def test_dense_teacher_reopens_json_content_hashes_and_checkpoint_bytes(
         assert "checkpoint bytes differ" in str(error)
     else:
         raise AssertionError("changed checkpoint bytes were accepted")
+
+
+def test_dense_train_assignment_authority_uses_external_lineage_and_shards(
+    tmp_path: Path,
+) -> None:
+    split = "2" * 64
+    selection = "3" * 64
+    matcher = resource_validation_report()["content_hash"]
+    parents = {
+        "split_manifest_sha256": split,
+        "row_selection_sha256": selection,
+        "matcher_resources_sha256": matcher,
+    }
+    result = MatchResult(
+        concatenated_offline_index=np.asarray([0], np.int32),
+        native_offline_index=np.asarray([0], np.int32),
+        confidence=np.asarray([1.0], np.float32),
+        assignment_score=np.asarray([0.0], np.float32),
+        accepted=np.asarray([True]),
+    )
+    publish_assignment_shard(
+        tmp_path / "shard_0000", source_path="source.root", role="train",
+        source_fold=0, entries=[7], hlt_categories=[np.asarray([0], np.int8)],
+        results=[result], parents={**parents, "source_file_sha256": "4" * 64},
+    )
+    manifest_path = tmp_path / "manifest.json"
+    manifest = publish_assignment_manifest(
+        manifest_path, role="train",
+        shard_metadata_paths=[tmp_path / "shard_0000.json"],
+        expected_mapped_jets=1, parents=parents,
+    )
+    assert validate_train_assignment_authority(
+        manifest_path, split_manifest_sha256=split,
+        row_selection_sha256=selection, expected_mapped_jets=1,
+    ) == manifest["content_hash"]
+
+    with pytest.raises(ValueError, match="role or parents"):
+        validate_train_assignment_authority(
+            manifest_path, split_manifest_sha256=split,
+            row_selection_sha256="5" * 64, expected_mapped_jets=1,
+        )
+    with pytest.raises(ValueError, match="mapped-jet coverage"):
+        validate_train_assignment_authority(
+            manifest_path, split_manifest_sha256=split,
+            row_selection_sha256=selection, expected_mapped_jets=2,
+        )

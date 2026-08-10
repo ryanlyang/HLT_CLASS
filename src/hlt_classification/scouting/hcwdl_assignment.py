@@ -8,13 +8,20 @@ from typing import Any, Final
 
 import numpy as np
 
-from hlt_classification.data.cache_contracts import load_json, validate_content_hash, write_immutable_json
+from hlt_classification.data.cache_contracts import (
+    load_json, require_sha256, validate_content_hash, write_immutable_json,
+)
 
 from .assignment import build_source_folds
 from .hcwdl_contracts import require_role_access
-from .highcov_cache import publish_assignment_manifest, publish_assignment_shard
+from .highcov_cache import (
+    publish_assignment_manifest, publish_assignment_shard,
+    validate_assignment_manifest,
+)
 from .highcov_matcher import HighCoverageMatcher, from_scouting_particles, model_key_for_role
-from .highcov_resources import RESOURCE_CONTRACT, load_highcov_resources
+from .highcov_resources import (
+    RESOURCE_CONTRACT, load_highcov_resources, resource_validation_report,
+)
 from .labels import baseline_mask, multiclass_labels
 from .particles import decode_particle_sets
 from .schema import BASELINE_BRANCHES, LABEL_BRANCHES, TREE_NAME, matching_required_branches
@@ -25,6 +32,49 @@ from .streaming import iterate_projected_chunks
 
 SOURCE_FOLD_SEED: Final = 1337
 TRAIN_MATCHER_FOLDS: Final = 4
+
+
+def validate_train_assignment_authority(
+    manifest_path: str | Path, *, split_manifest_sha256: str,
+    row_selection_sha256: str, expected_mapped_jets: int,
+) -> str:
+    """Deep-validate the canonical train assignment and every shard it names.
+
+    Dense RKD reuses the historical HCWDL train assignment.  Its authority is
+    not established by the manifest's self-declared fields: the split,
+    selection, row count, and canonical matcher resource identity are supplied
+    independently by the caller.
+    """
+
+    if (
+        isinstance(expected_mapped_jets, bool)
+        or not isinstance(expected_mapped_jets, int)
+        or expected_mapped_jets <= 0
+    ):
+        raise ValueError("train assignment expected row count must be positive")
+    split_hash = require_sha256(
+        split_manifest_sha256, name="train assignment split manifest",
+    )
+    selection_hash = require_sha256(
+        row_selection_sha256, name="train assignment row selection",
+    )
+    resources = resource_validation_report()
+    matcher_hash = validate_content_hash(
+        resources, expected_contract=RESOURCE_CONTRACT,
+        expected_schema_version=1,
+    )
+    validated = validate_assignment_manifest(
+        manifest_path,
+        expected_role="train",
+        expected_mapped_jets=expected_mapped_jets,
+        expected_parents={
+            "split_manifest_sha256": split_hash,
+            "row_selection_sha256": selection_hash,
+            "matcher_resources_sha256": matcher_hash,
+        },
+        require_sub10pct_dustbins=True,
+    )
+    return str(validated["content_hash"])
 
 
 def source_fold_map(split_manifest: Mapping[str, Any]) -> dict[str, int]:
