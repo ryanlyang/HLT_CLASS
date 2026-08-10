@@ -14,8 +14,10 @@ from hlt_classification.data.cache_contracts import (
 )
 from hlt_classification.training.checkpoints import (
     SelectionRecord,
+    capture_rng_state,
     capture_model_runtime_state,
     load_checkpoint,
+    restore_rng_state,
     restore_model_runtime_state,
     selection_is_better,
 )
@@ -287,6 +289,78 @@ def test_model_runtime_restore_preserves_registered_tensor_counter() -> None:
     assert target.trimmer.enabled is False
     assert target.trimmer._counter is original_counter
     assert target.trimmer._counter.item() == 23
+
+
+def test_rng_restore_normalizes_device_mapped_cuda_state_to_cpu(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class DeviceMappedByteTensor(torch.Tensor):
+        normalized_to_cpu = False
+
+        @staticmethod
+        def __new__(cls) -> "DeviceMappedByteTensor":
+            state = torch.arange(32, dtype=torch.uint8)
+            return torch.Tensor._make_subclass(cls, state, False)
+
+        def cpu(self, *args, **kwargs) -> torch.Tensor:
+            type(self).normalized_to_cpu = True
+            return self.as_subclass(torch.Tensor).clone()
+
+    payload = capture_rng_state()
+    mapped_state = DeviceMappedByteTensor()
+    payload["torch_cuda"] = [mapped_state]
+    restored: list[torch.Tensor] = []
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 1)
+    monkeypatch.setattr(
+        torch.cuda,
+        "set_rng_state_all",
+        lambda states: restored.extend(states),
+    )
+
+    restore_rng_state(payload)
+
+    assert DeviceMappedByteTensor.normalized_to_cpu is True
+    assert len(restored) == 1
+    assert type(restored[0]) is torch.Tensor
+    assert restored[0].device.type == "cpu"
+    assert restored[0].dtype == torch.uint8
+    assert restored[0].is_contiguous()
+
+
+@pytest.mark.parametrize(
+    "invalid_state",
+    [torch.arange(4, dtype=torch.int64), torch.zeros((2, 2), dtype=torch.uint8)],
+)
+def test_rng_restore_rejects_invalid_cuda_state_before_generator_mutation(
+    invalid_state: torch.Tensor,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = capture_rng_state()
+    payload["torch_cuda"] = [invalid_state]
+    monkeypatch.setattr(
+        "hlt_classification.training.checkpoints.random.setstate",
+        lambda state: pytest.fail("invalid RNG state mutated Python RNG"),
+    )
+    monkeypatch.setattr(
+        "hlt_classification.training.checkpoints.np.random.set_state",
+        lambda state: pytest.fail("invalid RNG state mutated NumPy RNG"),
+    )
+    monkeypatch.setattr(
+        torch,
+        "set_rng_state",
+        lambda state: pytest.fail("invalid RNG state mutated CPU Torch RNG"),
+    )
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 1)
+    monkeypatch.setattr(
+        torch.cuda,
+        "set_rng_state_all",
+        lambda states: pytest.fail("invalid RNG state reached CUDA restoration"),
+    )
+
+    with pytest.raises(ValueError, match="one-dimensional ByteTensor"):
+        restore_rng_state(payload)
 
 
 def test_interrupted_resume_matches_uninterrupted_exactly(tmp_path: Path) -> None:

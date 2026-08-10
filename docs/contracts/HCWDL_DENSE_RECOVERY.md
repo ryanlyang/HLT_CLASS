@@ -23,6 +23,14 @@ closed interval `[0,1]`, as required by D95, D90, and the remaining dense
 rungs. All other PMARD repair families retain their registered legacy alpha
 grid.
 
+If a recovery worker exposes a second source defect later in the same closure,
+create another recovery identity from a newer clean commit while retaining the
+same immutable original ledger and failure monitor. The registered retry set
+remains the original failed/downstream closure: workers validate and reuse any
+node completed by the earlier recovery, and the interrupted node resumes from
+its compatible rolling checkpoint. Pending jobs from the superseded recovery
+must be cancelled only through their exact recovery-ledger IDs.
+
 Required creation phrase:
 
 ```text
@@ -34,4 +42,3 @@ Required live-submission phrase:
 ```text
 SUBMIT HCWDL DENSE FAILED CLOSURE RECOVERY
 ```
-

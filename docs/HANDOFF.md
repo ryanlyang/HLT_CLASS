@@ -1,5 +1,29 @@
 # Current Handoff
 
+## GPU-mapped exact-resume RNG repair (2026-08-10)
+
+The live ten-point dense recovery completed D90, then D80 job `77535` exposed
+a shared exact-resume defect after a rolling checkpoint was loaded with
+`map_location=cuda`. That mapping correctly moved model and optimizer tensors,
+but it also moved the serialized CUDA-generator byte states onto CUDA;
+`torch.cuda.set_rng_state_all()` requires CPU `ByteTensor` state even for CUDA
+generators. This was an execution-only resume failure and did not alter dense
+matching, repair, loss, model, sampler, or graph semantics.
+
+Shared RNG restoration now validates every CPU and CUDA state as a
+one-dimensional `uint8` tensor, normalizes it to contiguous CPU storage before
+any generator is mutated, validates the CUDA device count, and only then
+restores all generators. Existing rolling checkpoints and checkpoint contracts
+remain compatible, so D80 can resume rather than restart. Regressions simulate
+a device-mapped tensor without requiring a local GPU and reject malformed
+dtype/shape before generator mutation.
+
+Focused training/resume, PMARD, HCWDL ladder, and dense tests pass 48/48. The
+complete repository suite passes 347/347 with the same 14
+Matplotlib/Pyparsing warnings. The remaining runtime action is an exact pushed
+commit followed by a new source-pinned dense recovery; the completed D90 report
+and D80 rolling checkpoint must be preserved.
+
 ## HCWDL continuous Shell Exact and dense-closure repair (2026-08-10)
 
 The live ten-point D90 and five-point D95 workers exposed a shared runtime

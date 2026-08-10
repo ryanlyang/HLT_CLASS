@@ -74,3 +74,8 @@ remains pinned to the old commit. Generate an immutable monitor report with
 The recovery validates and reuses the completed prefix, beginning at the first
 failed task. Its exact safety contract is
 [`contracts/HCWDL_DENSE_RECOVERY.md`](contracts/HCWDL_DENSE_RECOVERY.md).
+If that recovery exposes a later source defect, retain all campaign outputs and
+the rolling checkpoint, cancel only the exact pending IDs from its recovery
+ledger, and create a new recovery identity from the corrected commit using the
+same original ledger and immutable failure monitor. Already completed retry
+nodes are validated and reused when the replacement closure reaches them.

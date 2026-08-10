@@ -105,15 +105,38 @@ def restore_rng_state(payload: Mapping[str, Any]) -> None:
     required = {"python_random", "numpy_random", "torch_cpu", "torch_cuda"}
     if set(payload) != required:
         raise ValueError("checkpoint RNG state fields differ")
-    random.setstate(payload["python_random"])
-    np.random.set_state(payload["numpy_random"])
-    torch.set_rng_state(payload["torch_cpu"].cpu())
-    cuda_states = list(payload["torch_cuda"])
+
+    def cpu_byte_state(value: Any, *, name: str) -> torch.Tensor:
+        if not torch.is_tensor(value):
+            raise ValueError(f"{name} RNG state must be a tensor")
+        if value.dtype != torch.uint8 or value.ndim != 1:
+            raise ValueError(
+                f"{name} RNG state must be a one-dimensional ByteTensor"
+            )
+        # A checkpoint loaded with ``map_location=cuda`` also maps these RNG
+        # byte tensors onto CUDA. PyTorch's RNG restoration APIs require CPU
+        # ByteTensors even when restoring a CUDA generator, so normalize the
+        # storage device explicitly while preserving the exact bytes.
+        return value.detach().cpu().contiguous()
+
+    cpu_state = cpu_byte_state(payload["torch_cpu"], name="CPU")
+    supplied_cuda_states = payload["torch_cuda"]
+    if not isinstance(supplied_cuda_states, (list, tuple)):
+        raise ValueError("checkpoint CUDA RNG states must be a sequence")
+    cuda_states = [
+        cpu_byte_state(value, name=f"CUDA device {index}")
+        for index, value in enumerate(supplied_cuda_states)
+    ]
     if cuda_states:
         if not torch.cuda.is_available():
             raise RuntimeError("checkpoint contains CUDA RNG state but CUDA is absent")
         if len(cuda_states) != torch.cuda.device_count():
             raise RuntimeError("checkpoint CUDA RNG device count differs")
+
+    random.setstate(payload["python_random"])
+    np.random.set_state(payload["numpy_random"])
+    torch.set_rng_state(cpu_state)
+    if cuda_states:
         torch.cuda.set_rng_state_all(cuda_states)
 
 
