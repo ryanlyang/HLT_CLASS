@@ -1,5 +1,61 @@
 # Current Handoff
 
+## HCWDL structural-feature homotopy implementation plan (2026-08-10)
+
+The new implementation-authoritative supplemental plan is
+[`docs/plans/HCWDL_STRUCTURAL_FEATURE_HOMOTOPY_IMPLEMENTATION_PLAN.md`](plans/HCWDL_STRUCTURAL_FEATURE_HOMOTOPY_IMPLEMENTATION_PLAN.md).
+It specifies the missing upper bridge from native-offline support to exact
+D100 support and a compute-depth-matched comparison between a factorized
+`U then D` path and a joint `U+D` path. It is additive: completed primary,
+dense10, dense5, and recovery artifacts retain their original contracts.
+
+The planning audit found and closed a critical representation ambiguity.
+Canonical TOFF is a two-stream 19/7-feature, 90/60-particle oracle, while all
+U/J/D students use the unified 21-channel ParT. The plan therefore defines P0
+as the exact TOFF-visible particle multiset under the existing 21-field
+projection without claiming tensor/adapter identity. It then freezes exact
+A/B/C/O/R endpoint sets, a label-free minimum-disruption residual coupling,
+atomic substitution/removal/insertion edits, a train-calibrated nested
+information-mass coordinate, a maximum-200 carrier, and one `V(s,f)` builder.
+U100 must be byte-identical to current D100; factorized D0 and joint J100 must
+be byte-identical to HLT.
+
+The factorized and joint paths each contain 20 cold predecessor-KD transitions
+plus one born-again M1, use the locked unweighted 60-pass recipe, and are paired
+by transition seed. P0 adapter controls, direct endpoints, ten-generation
+D100 and 21-generation HLT stationary-depth controls are registered so a path
+gain is not confused with repeated distillation depth. The initial 300k study
+is validation-only and structurally has no final-test task. This step is
+documentation only: no coupling, graph, worker, artifact, Tigris submission,
+or remote mutation was implemented or authorized. The focused pre-edit
+high-coverage/HCWDL suite passed 57/57 in the local `tagging-hlt` environment.
+
+## Primary HCWDL source-pinned closure recovery (2026-08-10)
+
+The unweighted 1M campaign completed both D50 branches, then `D25c` job
+`60508` and `D25w` job `60518` failed while restoring CUDA RNG byte states
+through the old source-pinned checkout. The shared RNG implementation is
+already repaired, but the ordinary HCWDL resumer intentionally cannot execute
+an immutable parent spec through a different commit.
+
+`HCWDL_FAILED_CLOSURE_RECOVERY_SPEC/v1` now provides the missing proper path.
+It authenticates the complete original ledger and immutable Slurm monitor,
+forms the exact union of failed descendants, requires every external parent to
+be completed and artifact-valid, preserves the original scientific spec and
+output root, and executes through a clean pushed repair worktree. For the 1M
+failure this reuses D50c/D50w, resumes D25c/D25w independently from their
+rolling checkpoints, and continues only their cold/warm descendants and
+shared downstream stages. Separate recovery attestations and exact-ID
+supersession lineage are retained.
+
+The implementation is in `hcwdl_campaign_recovery.py` with thin create,
+submit, worker, and Slurm entry points. The operational contract and commands
+are documented in `docs/contracts/HCWDL_CAMPAIGN_RECOVERY.md` and
+`docs/HCWDL_CAMPAIGN_RECOVERY_RUNBOOK.md`. Focused recovery/contract/dense
+tests pass 33/33, all HCWDL CLI tests pass 44/44, and the complete repository
+suite passes 352/352 with the same 14 Matplotlib/Pyparsing warnings. The repair
+still requires an exact pushed commit and a real Tigris recovery run.
+
 ## GPU-mapped exact-resume RNG repair (2026-08-10)
 
 The live ten-point dense recovery completed D90, then D80 job `77535` exposed

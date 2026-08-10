@@ -246,6 +246,14 @@ ledger plus an authenticated monitor, preserves the valid completed prefix,
 and submits only the failed/downstream closure from a clean repair checkout.
 It does not rematch, retrain the valid prefix, or access final test.
 
+Ordinary pilot, named-midscale, and production failed closures pinned to an
+older broken source commit use `create_hcwdl_campaign_recovery.py`,
+`submit_hcwdl_campaign_recovery.py`, and
+`run_hcwdl_campaign_recovery_task.py`. The recovery authenticates every
+external completed parent, resumes the failed task or tasks from compatible
+rolling checkpoints, and rebuilds only their unioned downstream closure under
+the corrected source checkout. See `docs/HCWDL_CAMPAIGN_RECOVERY_RUNBOOK.md`.
+
 An interrupted sealed final evaluation is recovered only through
 `create_hcwdl_final_recovery.py`, `submit_hcwdl_final_recovery.py`, and
 `run_hcwdl_final_recovery_task.py`. That two-job supplement reuses the exact

@@ -38,6 +38,9 @@ SCRIPTS = (
     "submit_hcwdl_dense_pilot.py",
     "create_hcwdl_dense_recovery.py", "run_hcwdl_dense_recovery_task.py",
     "submit_hcwdl_dense_recovery.py",
+    "create_hcwdl_campaign_recovery.py",
+    "run_hcwdl_campaign_recovery_task.py",
+    "submit_hcwdl_campaign_recovery.py",
     "create_hcwdl_final_recovery.py", "run_hcwdl_final_recovery_task.py",
     "submit_hcwdl_final_recovery.py",
 )

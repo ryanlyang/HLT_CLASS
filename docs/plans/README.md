@@ -28,6 +28,17 @@ the final-test lock boundary. Its endpoint qualification is diagnostic rather
 than a validation-driven repair selector. It does not reinterpret the original
 PMARD pilot.
 
+The implementation-authoritative supplemental
+[HCWDL structural-feature homotopy plan](HCWDL_STRUCTURAL_FEATURE_HOMOTOPY_IMPLEMENTATION_PLAN.md)
+defines the next validation-only 300k study. It adds a deeply specified
+`TOFF -> U -> D100` structural-support bridge and compares a depth-matched
+factorized `U then D` path with a joint `U+D` path. It explicitly
+distinguishes the native two-stream TOFF oracle from the unified 21-channel P0
+carrier, requires U100 to be byte-identical to existing D100 and both terminal
+paths to be byte-identical HLT, registers stationary-depth controls, and never
+reinterprets completed HCWDL or dense artifacts. Its presence authorizes
+planning/local implementation only, not a live campaign or final-test access.
+
 The additive
 [HCWDL matching-free privileged representation-KD ascent plan](HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md)
 registers two nested representation strategies, each as a complete cold and
