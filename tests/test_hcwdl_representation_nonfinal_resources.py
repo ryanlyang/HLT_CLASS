@@ -128,7 +128,7 @@ def _raw_sacct_bytes(
     task_key = f"acceptance-nonfinal-{action_id}"
     script = shlex.quote(worker["path"]) if submit_script is None else submit_script
     submit = " ".join((
-        "sbatch", "--parsable", f"--job-name=hcwdl_rkd_{task_key}",
+        "sbatch", "--parsable", f"--job-name=hcwdlr_{task_key}",
         f"--account={resources.TIGRIS_ACCOUNT}",
         f"--partition={resources.TIGRIS_PARTITION}", f"--comment={comment}",
         f"--cpus-per-task={request['cpus']}", f"--mem={request['memory']}",
@@ -136,7 +136,7 @@ def _raw_sacct_bytes(
     ))
     fields = resources.SACCT_FIELDS
     parent = {
-        "JobIDRaw": str(job_id), "JobName": f"hcwdl_rkd_{task_key}",
+        "JobIDRaw": str(job_id), "JobName": f"hcwdlr_{task_key}",
         "Account": resources.TIGRIS_ACCOUNT,
         "Partition": resources.TIGRIS_PARTITION,
         "Cluster": resources.TIGRIS_PARTITION, "State": "COMPLETED",

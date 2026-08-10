@@ -19,14 +19,14 @@ from .hcwdl_representation_contracts import (
 
 
 REPRESENTATION_ENDPOINTS: Final = (
-    "RSET_M6c", "RSET_M6w", "RREL_M6c", "RREL_M6w",
+    "RSET_M1c", "RSET_M1w", "RREL_M1c", "RREL_M1w",
 )
 CHECKPOINT_SELECTOR: Final = (
     "highest_macro_ovr_auc", "lowest_cross_entropy",
     "highest_macro_mean_log_qcd_rejection_at_50pct_signal",
     "earliest_optimizer_update", "lexicographically_smallest_checkpoint_identity",
 )
-PAIRED_SCREEN_PARENT_FINALISTS: Final = ("M0", "M6c", "M6w")
+PAIRED_SCREEN_PARENT_FINALISTS: Final = ("M0", "M1c", "M1w")
 REQUIRED_LOCK_NODE_IDS: Final = (
     "D100", "M0", "M6c", "M6w", "NULL_M1_SELF_KD",
     "NULL_M6_PREDECESSOR_ONLY", "TOFF",
@@ -84,7 +84,7 @@ def _parent_rows(
             raise ValueError("parent finalist model member differs")
         rows.append(row)
     rows.sort(key=lambda row: str(row["finalist_id"]))
-    if not {"D100", "M0", "M6c", "M6w", "TOFF"} <= seen:
+    if not {"D100", "M0", "M1c", "M1w", "TOFF"} <= seen:
         raise ValueError("parent finalist registry omits a mandatory parent endpoint")
     return rows
 

@@ -214,14 +214,23 @@ def canonical_identity_digests(identity_keys: Sequence[str]) -> np.ndarray:
     return np.ascontiguousarray(rows, dtype=np.uint8)
 
 
-def training_batch_from_parent(batch: Mapping[str, object]) -> dict[str, object]:
-    """Strip parent stream fields down to the strict HLT-only trainer API."""
+def training_batch_from_parent(
+    batch: Mapping[str, object], *, student_view: str = "hlt",
+) -> dict[str, object]:
+    """Project a parent stream onto the explicitly registered student view.
+
+    Dense-descent intermediates D100--D5 intentionally consume authenticated
+    repaired views and are nondeployable.  D0 and M1 pass ``student_view='hlt'``
+    and remain the only HLT-deployable results.
+    """
 
     if set(batch) - {"hlt", "labels", "identity_keys", "privileged", "toff", "observers"}:
         raise ValueError("parent batch contains an unknown field")
-    hlt = batch.get("hlt")
+    if student_view not in {"hlt", "privileged"}:
+        raise ValueError("HCWDL-RKD student view differs")
+    hlt = batch.get(student_view)
     if not isinstance(hlt, HCWDLParticleInputs):
-        raise TypeError("parent batch lacks strict HCWDL HLT metadata")
+        raise TypeError("parent batch lacks the registered HCWDL student metadata")
     keys = np.asarray(batch.get("identity_keys"))
     if keys.ndim != 1 or len(keys) != len(hlt.features):
         raise ValueError("parent batch canonical identities differ")

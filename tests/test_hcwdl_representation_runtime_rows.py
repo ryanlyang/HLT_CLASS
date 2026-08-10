@@ -359,7 +359,7 @@ def _parent_finalist_authority():
         },
     })
     paired = {}
-    for node in ("M0", "M6c", "M6w"):
+    for node in ("M0", "M1c", "M1w"):
         report = _parent_report(node, 1337, f"{node}-screen")
         paired[node] = {
             "relative": f"screen/{node}/training_report.json", "report": report,
@@ -487,7 +487,7 @@ def _target_forward_specs(static):
     }
     return {
         logical: with_content_hash({
-            "contract": "HCWDL_REPRESENTATION_TARGET_FORWARD_SPEC/v1",
+            "contract": "HCWDL_REPRESENTATION_TARGET_FORWARD_SPEC/v2",
             "schema_version": 1, "payload": environment,
         })
         for logical in static if logical.startswith("${target_forward_spec:")
@@ -630,8 +630,8 @@ def test_all_combined_rows_build_bind_and_validate_without_hand_assembly(
         1 if task["array"] is None else int(task["array"].split("-")[1]) + 1
         for task in spec["tasks"]
     )
-    assert len(task_rows) == len(spec["tasks"]) == 86
-    assert sum(len(rows) for rows in task_rows.values()) == expected_rows == 152
+    assert len(task_rows) == len(spec["tasks"]) == 295
+    assert sum(len(rows) for rows in task_rows.values()) == expected_rows == 361
     binding = build_runtime_binding(
         spec=spec, runtime_facts=prerequisites["runtime_facts"],
         task_rows=task_rows,
@@ -662,8 +662,8 @@ def test_all_combined_rows_build_bind_and_validate_without_hand_assembly(
         audit, expected_contract=RUNTIME_DRY_RUN_AUDIT_CONTRACT,
         expected_schema_version=1,
     )
-    assert audit["validated_task_count"] == 86
-    assert audit["validated_runtime_row_count"] == 152
+    assert audit["validated_task_count"] == 295
+    assert audit["validated_runtime_row_count"] == 361
     assert audit["scheduler_mutated"] is False
 
 
@@ -681,8 +681,8 @@ def test_all_rows_bind_with_documented_in_place_prebuilt_layout() -> None:
 
     task_rows = build_runtime_task_rows(spec, prerequisites)
     validate_runtime_task_rows(spec, prerequisites, task_rows)
-    assert len(task_rows) == 86
-    assert sum(len(rows) for rows in task_rows.values()) == 152
+    assert len(task_rows) == 295
+    assert sum(len(rows) for rows in task_rows.values()) == 361
     binding = build_runtime_binding(
         spec=spec, runtime_facts=prerequisites["runtime_facts"],
         task_rows=task_rows,
@@ -829,16 +829,22 @@ def test_runtime_rows_route_parent_sources_through_imported_fresh_evidence() -> 
             "mode": "path",
         },
     }
-    target = task_rows["target_D75c_screen"]["single"]["parameters"]["assembly"]
+    target = task_rows["target_RSET_D75c_screen"]["single"]["parameters"]["assembly"]
     assert target["parent_import"] == {
         "registered_reference": "${task_output:parent_import:0}",
     }
     assert target["architecture_attestation"] == {
         "registered_reference": "${task_output:architecture_attestation:0}",
     }
+    assert target["teacher_source"] == {
+        "kind": "hcwdl",
+        "execution_directory": {
+            "registered_path": "${task_output:train_RSET_D75c:3}",
+        },
+    }
     warm = task_rows["train_RSET_M1w"]["single"]["parameters"]["assembly"]
     assert warm["parent_import"] == target["parent_import"]
-    assert set(warm["model_sources"]) == {"D0w"}
+    assert set(warm["model_sources"]) == {"RSET_D0w"}
     screen = task_rows["screen_aggregate"]["single"]["parameters"]
     assert set(screen) == {
         "adapter_contract", "task_kind", "parent_import",
@@ -853,7 +859,7 @@ def test_upstream_schema_versions_distinguish_semantic_v2_from_envelope_v2() -> 
             "HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v3", 3,
         ),
         "parent_import": ("HCWDL_REPRESENTATION_PARENT_IMPORT/v3", 2),
-        "representation_recipe": ("HCWDL_REPRESENTATION_RECIPE/v2", 1),
+        "representation_recipe": ("HCWDL_REPRESENTATION_RECIPE/v3", 1),
     }
     for task_key, (contract, schema_version) in expected.items():
         descriptor = rows_module._upstream_reference(

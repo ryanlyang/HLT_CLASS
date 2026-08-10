@@ -164,8 +164,11 @@ def test_json_builder_adapter_calls_fixed_repository_builder_and_all_outputs(
             "screen_sha256": "a" * 64,
             "campaign_sha256": "b" * 64,
             "recipe_sha256": "c" * 64,
-            "target_logical_bank_sha256": "d" * 64,
-            "objectives": ["RSET_M6c", "RSET_M6w", "RREL_M6c", "RREL_M6w"],
+            "target_logical_bank_sha256s": {
+                objective: "d" * 64
+                for objective in ("RSET_M1c", "RSET_M1w", "RREL_M1c", "RREL_M1w")
+            },
+            "objectives": ["RSET_M1c", "RSET_M1w", "RREL_M1c", "RREL_M1w"],
         },
     }
     row = _runtime_row(task, tmp_path, parameters)
@@ -174,7 +177,7 @@ def test_json_builder_adapter_calls_fixed_repository_builder_and_all_outputs(
     artifacts = [load_json(path) for path in map(Path, row["outputs"].values())]
     assert artifacts[0] == artifacts[1]
     validate_content_hash(
-        artifacts[0], expected_contract="HCWDL_REPRESENTATION_CONFIRMATION_REGISTRY/v1",
+        artifacts[0], expected_contract="HCWDL_REPRESENTATION_CONFIRMATION_REGISTRY/v2",
     )
 
 
@@ -278,9 +281,8 @@ def test_local_fixture_performs_real_work_for_every_nonfinal_task_and_array_row(
         "corrected_parent_loss_forward_backward",
         "fixed_spectral_feature_mean",
         "parent_import_contract_gate",
-        "ascent_graph_and_control_registry_gate",
-        "frozen_representation_recipe_gate",
-        "within_class_shuffle_map_gate",
+            "dense_descent_graph_and_empty_control_registry_gate",
+            "frozen_representation_recipe_gate",
         "screen_aggregate_builder_gate",
         "confirmation_registry_builder_gate",
         "confirmation_aggregate_builder_gate",

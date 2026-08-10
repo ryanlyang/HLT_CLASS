@@ -9,9 +9,12 @@ from hlt_classification.scouting.hcwdl_representation_graph import (
     ASCENT_GRAPH_SHA256,
     CONTROL_REGISTRY,
     CONTROL_REGISTRY_SHA256,
+    DESCENT_LEVELS,
     NODE_REGISTRY,
     RREL_STRATEGY,
     RSET_STRATEGY,
+    TERMINAL_STEP,
+    TRACKED_LEVELS,
     ascent_graph_artifact,
     control_registry_artifact,
     validate_ascent_graph,
@@ -25,123 +28,104 @@ H = "a" * 64
 G = "b" * 64
 
 
-def test_exact_24_node_four_ascent_registry_and_teacher_mapping():
-    expected = {
-        f"{strategy}_M{rung}{suffix}"
+def test_exact_86_node_four_descent_registry_and_teacher_mapping():
+    expected = {f"{strategy}_D100" for strategy in ("RSET", "RREL")}
+    expected |= {
+        f"{strategy}_D{level}{suffix}"
         for strategy in ("RSET", "RREL")
         for suffix in ("c", "w")
-        for rung in range(1, 7)
+        for level in TRACKED_LEVELS
     }
-    assert len(NODE_REGISTRY) == 24
+    expected |= {
+        f"{strategy}_M1{suffix}"
+        for strategy in ("RSET", "RREL")
+        for suffix in ("c", "w")
+    }
+    assert DESCENT_LEVELS == tuple(range(100, -1, -5))
+    assert len(NODE_REGISTRY) == 86
     assert set(NODE_REGISTRY) == expected
     assert validate_ascent_graph() == ASCENT_GRAPH_SHA256
 
-    privileged = {
-        1: "D0", 2: "D25", 3: "D50", 4: "D75", 5: "D100", 6: "TOFF",
-    }
-    domains = {1: "hlt", 2: "d25", 3: "d50", 4: "d75", 5: "d100", 6: "toff"}
-    for node in NODE_REGISTRY.values():
-        prefix = "RSET" if node.strategy == RSET_STRATEGY else "RREL"
-        suffix = "c" if node.track == "cold" else "w"
-        expected_teacher = privileged[node.rung]
-        if node.rung <= 4:
-            expected_teacher += suffix
-        expected_predecessor = (
-            None if node.rung == 1 else f"{prefix}_M{node.rung - 1}{suffix}"
-        )
-        assert node.student_domain == "hlt"
-        assert node.deployable is True
-        assert node.parent_counterpart == f"M{node.rung}{suffix}"
-        assert node.predecessor_logit_teacher == expected_predecessor
-        assert node.representation_logit_teacher == expected_teacher
-        assert node.representation_teacher_domain == domains[node.rung]
-        assert node.target_bank_identity == expected_teacher
-        if node.track == "cold":
-            assert node.initialization == "fresh"
-            assert node.initialization_parent is None
-        elif node.rung == 1:
-            assert node.initialization_parent == f"D0{suffix}"
-        else:
-            assert node.initialization_parent == expected_predecessor
+    for strategy, strategy_id in (("RSET", RSET_STRATEGY), ("RREL", RREL_STRATEGY)):
+        root = NODE_REGISTRY[f"{strategy}_D100"]
+        assert root.strategy == strategy_id
+        assert root.track == "shared"
+        assert root.rung == 0
+        assert root.stage == "offline_to_d100"
+        assert root.representation_logit_teacher == "TOFF"
+        assert root.target_bank_identity == "TOFF"
+        assert root.initialization == "fresh"
+        assert root.initialization_parent is None
+
+        for track, suffix in (("cold", "c"), ("warm", "w")):
+            predecessor = root.node_id
+            predecessor_domain = "d100"
+            for step, level in enumerate(TRACKED_LEVELS, start=1):
+                node = NODE_REGISTRY[f"{strategy}_D{level}{suffix}"]
+                assert node.strategy == strategy_id
+                assert node.track == track
+                assert node.rung == step
+                assert node.stage == "down"
+                assert node.privilege_percent == level
+                assert node.predecessor_logit_teacher is None
+                assert node.representation_logit_teacher == predecessor
+                assert node.representation_teacher_domain == predecessor_domain
+                assert node.target_bank_identity == predecessor
+                assert node.parent_counterpart == f"D{level}{suffix}"
+                assert node.deployable is (level == 0)
+                assert node.initialization == ("fresh" if track == "cold" else "warm")
+                assert node.initialization_parent == (
+                    None if track == "cold" else predecessor
+                )
+                predecessor = node.node_id
+                predecessor_domain = "hlt" if level == 0 else f"d{level}"
+            terminal = NODE_REGISTRY[f"{strategy}_M1{suffix}"]
+            assert terminal.rung == TERMINAL_STEP
+            assert terminal.stage == "terminal_m1"
+            assert terminal.representation_logit_teacher == predecessor
+            assert terminal.target_bank_identity == predecessor
+            assert terminal.predecessor_logit_teacher is None
+            assert terminal.initialization_parent == (
+                None if track == "cold" else predecessor
+            )
+            assert terminal.deployable is True
 
 
-def test_exact_four_controls_are_separate_terminal_validation_rows():
-    assert set(CONTROL_REGISTRY) == {
-        "RSET_M5c_JET_ONLY_REP",
-        "RREL_M5c_NO_REL_REP",
-        "RSET_M5c_WITHIN_CLASS_SHUFFLED_REP",
-        "RREL_M5c_WITHIN_CLASS_SHUFFLED_REP",
-    }
-    assert not set(CONTROL_REGISTRY) & set(NODE_REGISTRY)
+def test_dense_descent_does_not_reinterpret_old_m5_controls():
+    assert not CONTROL_REGISTRY
     assert validate_control_registry() == CONTROL_REGISTRY_SHA256
-
-    expected_allocations = {
-        "RSET_M5c_JET_ONLY_REP": {"jet": 1.0, "set": 0.0, "relation": 0.0},
-        "RREL_M5c_NO_REL_REP": {"jet": 0.4, "set": 0.6, "relation": 0.0},
-        "RSET_M5c_WITHIN_CLASS_SHUFFLED_REP": {
-            "jet": 0.4, "set": 0.6, "relation": 0.0,
-        },
-        "RREL_M5c_WITHIN_CLASS_SHUFFLED_REP": {
-            "jet": 0.3, "set": 0.45, "relation": 0.25,
-        },
-    }
-    for control_id, control in CONTROL_REGISTRY.items():
-        assert control.rung == 5
-        assert control.track == "cold"
-        assert control.predecessor_logit_teacher in {"RSET_M4c", "RREL_M4c"}
-        assert control.representation_logit_teacher == "D100"
-        assert control.target_bank_identity == "D100"
-        assert control.parent_counterpart == "M5c"
-        assert control.disposition == "validation_only_terminal"
-        assert control.descendants == ()
-        assert control.deployable is True
-        assert control.finalist_eligible is False
-        assert control.confirmation_eligible is False
-        assert dict(control.component_allocation) == expected_allocations[control_id]
-        assert control.shuffled_representation_targets == ("SHUFFLED" in control_id)
 
 
 def test_target_bank_consumer_multiplicities_are_frozen():
     consumers: dict[str, list[str]] = {}
     for node in NODE_REGISTRY.values():
         consumers.setdefault(node.target_bank_identity, []).append(node.node_id)
-    for control in CONTROL_REGISTRY.values():
-        consumers.setdefault(control.target_bank_identity, []).append(control.control_id)
-
-    assert {bank: len(rows) for bank, rows in consumers.items()} == {
-        "D0c": 2,
-        "D0w": 2,
-        "D25c": 2,
-        "D25w": 2,
-        "D50c": 2,
-        "D50w": 2,
-        "D75c": 2,
-        "D75w": 2,
-        "D100": 8,
-        "TOFF": 4,
-    }
+    counts = {bank: len(rows) for bank, rows in consumers.items()}
+    assert counts["TOFF"] == 2
+    assert counts["RSET_D100"] == 2
+    assert counts["RREL_D100"] == 2
+    for strategy in ("RSET", "RREL"):
+        for suffix in ("c", "w"):
+            for level in range(95, 0, -5):
+                assert counts[f"{strategy}_D{level}{suffix}"] == 1
+            assert counts[f"{strategy}_D0{suffix}"] == 1
 
 
 def test_graph_and_control_validation_reject_cross_branch_or_absorbed_control():
     graph = dict(NODE_REGISTRY)
-    graph["RREL_M3c"] = replace(
-        graph["RREL_M3c"], predecessor_logit_teacher="RSET_M2c",
+    graph["RREL_D90c"] = replace(
+        graph["RREL_D90c"], representation_logit_teacher="RSET_D95c",
     )
-    with pytest.raises(ValueError, match="same-branch predecessor"):
+    with pytest.raises(ValueError, match="dense descent routing"):
         validate_ascent_graph(graph)
 
     graph = dict(NODE_REGISTRY)
-    graph["RSET_M5c_JET_ONLY_REP"] = graph["RSET_M5c"]
-    with pytest.raises(ValueError, match="exactly 24"):
+    graph["RSET_M5c_JET_ONLY_REP"] = graph["RSET_M1c"]
+    with pytest.raises(ValueError, match="exactly 86"):
         validate_ascent_graph(graph)
 
-    controls = dict(CONTROL_REGISTRY)
-    controls["RREL_M5c_NO_REL_REP"] = replace(
-        controls["RREL_M5c_NO_REL_REP"],
-        predecessor_logit_teacher="RSET_M4c",
-    )
-    with pytest.raises(ValueError, match="lineage differs"):
-        validate_control_registry(controls)
+    with pytest.raises(ValueError, match="must be empty"):
+        validate_control_registry({"legacy": object()})
 
 
 def test_graph_and_control_artifacts_bind_parent_lineage_and_exact_payloads():

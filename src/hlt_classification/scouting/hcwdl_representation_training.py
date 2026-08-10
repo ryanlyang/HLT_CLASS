@@ -1,10 +1,11 @@
 """Dedicated HCWDL matching-free representation-KD node training.
 
 The runtime in this module is intentionally separate from the historical
-PMARD representation arms.  A training update consumes one authenticated HLT
-batch, one RAM-only predecessor-logit join (after M1), and one already
-materialized compact privileged target-bank join.  Privileged particles and
-teacher models are therefore absent while the student optimizer is live.
+PMARD representation arms.  A training update consumes one authenticated
+student-view batch and one already materialized compact target-bank join.
+That one immediate-predecessor bank supplies both logits and representation
+targets.  Teacher particles and teacher models are therefore absent while
+the student optimizer is live.
 
 Production callers must provide the immutable graph/recipe/target lineage and
 the missing repository-specific HLT batch adapter.  The adapter protocol is
@@ -70,6 +71,8 @@ from .hcwdl_representation_contracts import (
     GRADIENT_CALIBRATION_MANIFEST_CONTRACT,
     TARGET_MANIFEST_CONTRACT,
     TRAINING_REPORT_CONTRACT,
+    SELECTED_TRAINING_CHECKPOINT_CONTRACT,
+    FINAL_TRAINING_CHECKPOINT_CONTRACT,
     build_versioned_artifact,
     logical_array_sha256,
     logical_array_sha256_from_byte_hash,
@@ -120,12 +123,6 @@ from .hcwdl_representation_targets import identity_order_sha256, identity_set_sh
 from .training import LossConfiguration, derive_seed
 
 
-SELECTED_TRAINING_CHECKPOINT_CONTRACT: Final = (
-    "HCWDL_REPRESENTATION_SELECTED_TRAINING_CHECKPOINT/v1"
-)
-FINAL_TRAINING_CHECKPOINT_CONTRACT: Final = (
-    "HCWDL_REPRESENTATION_FINAL_TRAINING_CHECKPOINT/v1"
-)
 PREDECESSOR_LOGIT_BANK_CONTRACT: Final = "HCWDL_REP_PREDECESSOR_LOGIT_RAM/v1"
 BATCH_PROTOCOL: Final = "HCWDL_REPRESENTATION_HLT_BATCH/v1"
 EXECUTION_MODES: Final = ("scientific", "smoke", "synthetic_test")
@@ -145,6 +142,8 @@ class NodeExecution:
     strategy: str
     track: str
     rung: int
+    student_domain: str
+    deployable: bool
     parent_counterpart: str
     initialization: str
     initialization_parent: str | None
@@ -190,6 +189,8 @@ def resolve_node_execution(execution_id: str) -> NodeExecution:
             strategy=node.strategy,
             track=node.track,
             rung=node.rung,
+            student_domain=node.student_domain,
+            deployable=node.deployable,
             parent_counterpart=node.parent_counterpart,
             initialization=node.initialization,
             initialization_parent=node.initialization_parent,
@@ -212,6 +213,8 @@ def resolve_node_execution(execution_id: str) -> NodeExecution:
             strategy=control.strategy,
             track=control.track,
             rung=control.rung,
+            student_domain=control.student_domain,
+            deployable=True,
             parent_counterpart=control.parent_counterpart,
             initialization=control.initialization,
             initialization_parent=control.initialization_parent,
@@ -406,11 +409,11 @@ def representation_training_configuration(
         raise ValueError("the frozen HCWDL-RKD one-forward step requires accumulation one")
     if int(batching["microbatch_size"]) != int(batching["effective_batch_size"]):
         raise ValueError("the frozen HCWDL-RKD microbatch must equal effective batch")
-    if execution.rung == 1:
-        lr_role = "warm_child" if execution.initialization == "warm" else "cold_child"
-        peak = float(parent_recipe["optimizer"]["peak_learning_rates"][lr_role])
-    else:
-        peak = float(parent_recipe["dual_teacher_peak_learning_rate"])
+    # Every dense-descent node has one exact teacher: the target bank produced
+    # by its immediate richer predecessor (TOFF for the D100 roots).  The old
+    # ascent-only dual-teacher learning rate is therefore never applicable.
+    lr_role = "warm_child" if execution.initialization == "warm" else "cold_child"
+    peak = float(parent_recipe["optimizer"]["peak_learning_rates"][lr_role])
     passes = 60 if mode != "synthetic_test" else int(synthetic_passes)
     maximum = 2 if mode == "smoke" else None
     updates_per_pass = math.ceil(train_rows / int(batching["effective_batch_size"]))
@@ -789,20 +792,13 @@ def _release_frozen_model(model) -> None:
 
 
 def node_base_loss_configuration(execution: NodeExecution) -> LossConfiguration:
-    if execution.rung == 1:
-        return LossConfiguration.for_mixture(
-            arm=f"HCWDL_RKD_{execution.execution_id}_M1",
-            ce=0.25,
-            hlt_kd=0.75,
-            privileged_kd=0.0,
-            hlt_temperature=1.0,
-            privileged_temperature=2.0,
-        )
+    """Return the single-immediate-teacher base objective for every rung."""
+
     return LossConfiguration.for_mixture(
-        arm=f"HCWDL_RKD_{execution.execution_id}_DUAL",
+        arm=f"HCWDL_RKD_{execution.execution_id}_DENSE_DESCENT",
         ce=0.25,
-        hlt_kd=0.40,
-        privileged_kd=0.35,
+        hlt_kd=0.75,
+        privileged_kd=0.0,
         hlt_temperature=1.0,
         privileged_temperature=2.0,
     )
@@ -1060,15 +1056,10 @@ def compute_node_loss(
     import torch
 
     configuration = node_base_loss_configuration(execution)
-    privileged_logits = privileged_targets["logits"].float()
-    if execution.rung == 1:
-        hlt_logits = privileged_logits
-        privileged_for_base = None
-    else:
-        if predecessor_logits is None:
-            raise ValueError("M2-M6 require predecessor logits")
-        hlt_logits = predecessor_logits.float()
-        privileged_for_base = privileged_logits
+    hlt_logits = privileged_targets["logits"].float()
+    privileged_for_base = None
+    if predecessor_logits is not None:
+        raise ValueError("dense descent forbids a second predecessor-logit teacher")
     base = hcwdl_base_loss(
         surfaces.logits.float(), labels,
         class_weights=class_weights,
@@ -2005,15 +1996,12 @@ def run_representation_diagnostic(
                 ).detach()
             )
             configuration = node_base_loss_configuration(execution)
-            privileged_logits = targets["logits"].float()
-            if execution.rung == 1:
-                hlt_logits = privileged_logits
-                privileged_for_base = None
-            else:
-                if predecessor is None:
-                    raise ValueError("diagnostic lacks predecessor logits")
-                hlt_logits = predecessor
-                privileged_for_base = privileged_logits
+            if predecessor is not None:
+                raise ValueError(
+                    "dense descent diagnostic forbids a second predecessor-logit teacher"
+                )
+            hlt_logits = targets["logits"].float()
+            privileged_for_base = None
             base = hcwdl_base_loss(
                 surfaces.logits.float(), labels, class_weights=class_weights,
                 configuration=configuration, hlt_teacher_logits=hlt_logits,
@@ -2390,12 +2378,12 @@ def _run_calibration(
 
     def losses_from_forward(_raw, forward):
         _batch, labels, surfaces, targets, predecessor = forward
-        if execution.rung == 1:
-            hlt_logits = targets["logits"].float()
-            privileged_logits = None
-        else:
-            hlt_logits = predecessor
-            privileged_logits = targets["logits"].float()
+        if predecessor is not None:
+            raise ValueError(
+                "dense descent calibration forbids a second predecessor-logit teacher"
+            )
+        hlt_logits = targets["logits"].float()
+        privileged_logits = None
         base_rows = hcwdl_base_loss_rows(
             surfaces.logits.float(), labels, class_weights=class_weights,
             configuration=configuration, hlt_teacher_logits=hlt_logits,
@@ -2663,7 +2651,9 @@ def _publish_terminal_checkpoint_envelopes(
         sidecar_payload={
             "node_id": execution.execution_id,
             "registered_execution_id": lineage["execution"],
-            "strict_hlt_only_deployable": True,
+            "student_domain": execution.student_domain,
+            "deployment_authorized": execution.deployable,
+            "strict_hlt_only_deployable": execution.deployable,
         },
     )
     final_payload = {
@@ -2718,7 +2708,9 @@ def _publish_terminal_checkpoint_envelopes(
                 selected_envelope.directory / "deployable_state.pt"
             ),
             "deployable_state_sha256": deployable_sha256,
-            "strict_hlt_only": True,
+            "student_domain": execution.student_domain,
+            "deployment_authorized": execution.deployable,
+            "strict_hlt_only": execution.deployable,
             "training_only_heads_excluded": True,
         },
     )
@@ -2747,7 +2739,9 @@ def _publish_terminal_checkpoint_envelopes(
         "final_envelope_id": final_envelope.envelope_id,
         "final_envelope_sha256": final_envelope.commit["content_hash"],
         "final_training_checkpoint_sha256": final_sha256,
-        "strict_hlt_only": True,
+        "student_domain": execution.student_domain,
+        "deployment_authorized": execution.deployable,
+        "strict_hlt_only": execution.deployable,
     }
     envelope_report = {
         "selected": {
@@ -3371,7 +3365,7 @@ def train_hcwdl_representation_node(
     predecessor_cache_construction_seconds = 0.0
     if execution.predecessor_logit_teacher is not None:
         if predecessor_model_loader is None:
-            raise ValueError("M2-M6 require an authenticated predecessor model loader")
+            raise ValueError("dual-teacher execution requires a predecessor model loader")
         predecessor_rng = capture_rng_state()
         predecessor_sampler_state = (
             None if sampler_external_snapshot is None
@@ -4039,7 +4033,8 @@ def train_hcwdl_representation_node(
         "track": execution.track,
         "rung": execution.rung,
         "mode": config.mode,
-        "student_domain": "hlt",
+        "student_domain": execution.student_domain,
+        "deployment_authorized": execution.deployable,
         "complete": True,
         "scientific_complete": config.mode == "scientific",
         "finite_poor_results_retained": True,
@@ -4137,7 +4132,7 @@ def validate_representation_training_report(
         "graph_sha256", "recipe_sha256",
         "parent_recipe_sha256",
         "parent_counterpart", "strategy", "track", "rung", "mode",
-        "student_domain", "complete", "scientific_complete",
+        "student_domain", "deployment_authorized", "complete", "scientific_complete",
         "finite_poor_results_retained", "performance_early_stopping",
         "completed_optimizer_updates", "completed_natural_population_passes",
         "validation_history", "validation", "selection_sha256",
@@ -4192,7 +4187,8 @@ def validate_representation_training_report(
     ):
         raise ValueError("HCWDL-RKD report graph semantics differ")
     if (
-        report["student_domain"] != "hlt"
+        report["student_domain"] != execution.student_domain
+        or report["deployment_authorized"] is not execution.deployable
         or report["complete"] is not True
         or report["finite_poor_results_retained"] is not True
         or report["performance_early_stopping"] is not False
@@ -4308,8 +4304,13 @@ def validate_representation_training_report(
             name="training-report target-cache row selection",
         )
     extraction = report["deployable_extraction"]
-    if not isinstance(extraction, Mapping) or extraction.get("strict_hlt_only") is not True:
-        raise ValueError("HCWDL-RKD deployable extraction is not strict HLT-only")
+    if (
+        not isinstance(extraction, Mapping)
+        or extraction.get("student_domain") != execution.student_domain
+        or extraction.get("deployment_authorized") is not execution.deployable
+        or extraction.get("strict_hlt_only") is not execution.deployable
+    ):
+        raise ValueError("HCWDL-RKD model extraction domain/deployment differs")
     require_sha256(
         extraction.get("checkpoint_sha256"), name="deployable checkpoint",
     )

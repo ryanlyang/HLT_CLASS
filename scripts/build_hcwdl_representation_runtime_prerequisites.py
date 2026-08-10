@@ -210,7 +210,7 @@ def main() -> int:
         return relative
 
     paired_screen_model_members = {}
-    for node_id in ("M0", "M6c", "M6w"):
+    for node_id in ("M0", "M1c", "M1w"):
         model_relative = bundle_relative("finalist_models", node_id)
         paired_screen_model_members[node_id] = _paired_screen_model_member(
             node_id=node_id,

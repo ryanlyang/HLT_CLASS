@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import re
 from typing import Final
 
+from . import hcwdl_representation_contracts as contracts
 from .hcwdl_representation_contracts import (
     ACCEPTANCE_REAL_BATCH_FULL_LOSS_CONTRACT,
     ARCHITECTURE_ATTESTATION_CONTRACT,
@@ -48,6 +49,18 @@ class ArtifactRoute:
 
 
 def _c(name: str) -> str:
+    special = {
+        "ASCENT_GRAPH": contracts.REPRESENTATION_DESCENT_GRAPH_CONTRACT,
+        "DEPLOYABLE_EXTRACTION": contracts.DEPLOYABLE_EXTRACTION_CONTRACT,
+        "SHARED_IMMUTABLE_BINARY_ENVELOPE": (
+            contracts.SHARED_BINARY_ENVELOPE_CONTRACT
+        ),
+    }
+    if name in special:
+        return special[name]
+    registered = getattr(contracts, f"{name}_CONTRACT", None)
+    if isinstance(registered, str):
+        return registered
     if name.startswith("SHARED_"):
         return "HCWDL_" + name + "/v1"
     return "HCWDL_REPRESENTATION_" + name + "/v1"

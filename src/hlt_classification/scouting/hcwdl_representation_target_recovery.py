@@ -42,6 +42,7 @@ from .hcwdl_representation_targets import (
     validate_target_generation,
 )
 from .hcwdl_representation_reporting import CONFIRMATION_SEEDS
+from .hcwdl_representation_graph import NODE_REGISTRY
 
 
 class TargetRecoveryState(str, Enum):
@@ -129,6 +130,11 @@ def validate_target_consumer_training_report(
     registered_execution_id = require_sha256(
         expected_consumer.get("execution_id"), name="target consumer execution ID",
     )
+    from .hcwdl_representation_graph import CONTROL_REGISTRY, NODE_REGISTRY
+    node_id = str(expected_consumer["node_id"])
+    execution = NODE_REGISTRY.get(node_id) or CONTROL_REGISTRY.get(node_id)
+    if execution is None:
+        raise ValueError("HCWDL-RKD cleanup consumer graph node is absent")
     manifest_payload = manifest["payload"]
     if (
         report["registered_execution_id"] != registered_execution_id
@@ -136,7 +142,8 @@ def validate_target_consumer_training_report(
         or report["node_id"] != expected_consumer["node_id"]
         or report["replicate_seed"] != expected_consumer["seed"]
         or report["complete"] is not True
-        or report["student_domain"] != "hlt"
+        or report["student_domain"] != execution.student_domain
+        or report["deployment_authorized"] is not execution.deployable
         or report["strategy"] != expected_consumer["strategy"]
         or report["track"] != expected_consumer["track"]
         or report["recipe_sha256"]
@@ -178,7 +185,12 @@ def validate_target_consumer_training_report(
     for name in ("selected_training_checkpoint_sha256", "selection_sha256"):
         require_sha256(report[name], name=f"target consumer {name}")
     extraction = report["deployable_extraction"]
-    if not isinstance(extraction, Mapping) or extraction.get("strict_hlt_only") is not True:
+    if (
+        not isinstance(extraction, Mapping)
+        or extraction.get("student_domain") != execution.student_domain
+        or extraction.get("deployment_authorized") is not execution.deployable
+        or extraction.get("strict_hlt_only") is not execution.deployable
+    ):
         raise ValueError("HCWDL-RKD target consumer deployable extraction differs")
     for name in ("checkpoint_sha256", "report_sha256"):
         require_sha256(extraction.get(name), name=f"target consumer extraction {name}")
@@ -847,7 +859,7 @@ def build_target_recovery_plan(
         )
         expected_fields = {
             "contract", "schema_version", "screen_sha256", "campaign_sha256",
-            "recipe_sha256", "logical_bank_sha256", "seeds", "rows",
+            "recipe_sha256", "logical_bank_sha256s", "seeds", "rows",
             "execution_count", "content_hash",
         }
         campaign_hash = require_sha256(
@@ -863,30 +875,47 @@ def build_target_recovery_plan(
             name="confirmation screen SHA-256",
         )
         authorized_rows = consumer_authorization.get("rows")
+        from .hcwdl_representation_reporting import (
+            derive_representation_execution_id,
+        )
+        objectives = ("RSET_M1c", "RSET_M1w", "RREL_M1c", "RREL_M1w")
+        logical_hashes = consumer_authorization.get("logical_bank_sha256s")
+        if not isinstance(logical_hashes, Mapping) or set(logical_hashes) != set(
+            objectives
+        ):
+            raise ValueError("HCWDL-RKD confirmation logical-bank registry differs")
+        logical_hashes = {
+            node_id: require_sha256(
+                logical_hashes[node_id], name=f"{node_id} confirmation logical bank",
+            )
+            for node_id in objectives
+        }
         expected_authorized_rows = []
-        for node_id in expected_screen_consumer_nodes("TOFF"):
+        for node_id in objectives:
+            node = NODE_REGISTRY[node_id]
             for seed in CONFIRMATION_SEEDS:
-                consumer = build_target_consumer_row(
-                    logical_bank,
+                execution_id, identity_payload = derive_representation_execution_id(
                     purpose="confirmation",
                     campaign_sha256=campaign_hash,
                     recipe_sha256=recipe_hash,
                     node_id=node_id,
                     seed=seed,
+                    strategy=node.strategy,
+                    initialization_parent=node.initialization_parent,
+                    teacher=node.representation_logit_teacher,
+                    logical_target_bank_sha256=logical_hashes[node_id],
+                    target_purpose="confirmation",
                 )
                 expected_authorized_rows.append({
-                    "execution_id": consumer["execution_id"],
-                    "execution_identity_payload": consumer[
-                        "execution_identity_payload"
-                    ],
+                    "execution_id": execution_id,
+                    "execution_identity_payload": identity_payload,
                     "objective_id": node_id,
                     "seed": seed,
-                    "logical_bank_sha256": logical_hash,
+                    "logical_bank_sha256": logical_hashes[node_id],
                     "physical_generation_sha256": None,
                 })
         if (
             set(consumer_authorization) != expected_fields
-            or consumer_authorization.get("logical_bank_sha256") != logical_hash
             or consumer_authorization.get("seeds") != list(CONFIRMATION_SEEDS)
             or consumer_authorization.get("execution_count") != 20
             or not isinstance(authorized_rows, list)
@@ -906,6 +935,7 @@ def build_target_recovery_plan(
                 frozen is None
                 or frozen.get("objective_id") != row["node_id"]
                 or int(frozen.get("seed", -1)) != row["seed"]
+                or frozen.get("logical_bank_sha256") != logical_hash
                 or frozen.get("execution_identity_payload")
                 != row["execution_identity_payload"]
                 or frozen.get("logical_bank_sha256") != logical_hash

@@ -33,6 +33,10 @@ from .hcwdl_representation_campaign import (
 from .hcwdl_representation_contracts import (
     ARCHITECTURE_ATTESTATION_CONTRACT, PARENT_IMPORT_CONTRACT,
     PARENT_LOSS_ATTESTATION_CONTRACT,
+    CONFIRMATION_AGGREGATE_CONTRACT, CONFIRMATION_REGISTRY_CONTRACT,
+    CONFIRMATION_RUN_CONTRACT, DEPLOYABLE_EXTRACTION_CONTRACT,
+    CONTROL_REGISTRY_CONTRACT, REPRESENTATION_RECIPE_CONTRACT,
+    SCREEN_AGGREGATE_CONTRACT, TRAINING_REPORT_CONTRACT,
     RUNTIME_DRY_RUN_AUDIT_CONTRACT, RUNTIME_PREREQUISITES_CONTRACT,
     SURFACE_PARITY_CONTRACT, contract_schema_version,
 )
@@ -50,15 +54,15 @@ from .hcwdl_representation_workflow import array_indices
 
 def _required_final_comparisons() -> list[dict[str, str]]:
     pairs = (
-        ("RSET_M6c", "M6c"),
-        ("RREL_M6c", "M6c"),
-        ("RREL_M6c", "RSET_M6c"),
-        ("RSET_M6w", "M6w"),
-        ("RREL_M6w", "M6w"),
-        ("RREL_M6w", "RSET_M6w"),
-        ("M6w", "M6c"),
-        ("RSET_M6w", "RSET_M6c"),
-        ("RREL_M6w", "RREL_M6c"),
+        ("RSET_M1c", "M1c"),
+        ("RREL_M1c", "M1c"),
+        ("RREL_M1c", "RSET_M1c"),
+        ("RSET_M1w", "M1w"),
+        ("RREL_M1w", "M1w"),
+        ("RREL_M1w", "RSET_M1w"),
+        ("M1w", "M1c"),
+        ("RSET_M1w", "RSET_M1c"),
+        ("RREL_M1w", "RREL_M1c"),
     )
     return [
         {
@@ -400,7 +404,7 @@ _ASSEMBLY_FIELDS: Final[Mapping[str, tuple[str, ...]]] = {
     "target_build": (
         "bank_root", "logical_bank", "consumer_registry", "forward_spec",
         "split_manifest", "row_selection", "data_root", "teacher_view",
-        "source_partitions", "assignment_manifest", "teacher_report",
+        "source_partitions", "assignment_manifest", "teacher_source",
         "parent_import", "architecture_attestation",
         "kernel_envelope", "build_owner", "budgets", "storage_estimate",
         "resource_profile", "runtime_environment",
@@ -411,7 +415,8 @@ _ASSEMBLY_FIELDS: Final[Mapping[str, tuple[str, ...]]] = {
         "target", "kernel_envelope", "execution_id", "registered_execution_id",
         "replicate_seed", "mode", "synthetic_passes", "resume_lineage",
         "producer_runtime_signature", "architecture_attestation",
-        "parent_import", "model_sources", "shuffle_map", "view_cache_max_gib",
+        "parent_import", "model_sources", "assignment_manifests", "shuffle_map",
+        "view_cache_max_gib",
         "registered_output_row", "publication_owner", "confirmation_registry",
     ),
     "final_selection": (
@@ -465,8 +470,8 @@ _ASSEMBLY_FIELDS: Final[Mapping[str, tuple[str, ...]]] = {
 }
 
 _ASSEMBLY_CONTRACT: Final = {
-    "target_build": "HCWDL_REPRESENTATION_TARGET_ASSEMBLY/v1",
-    "train_node": "HCWDL_REPRESENTATION_TRAINING_ASSEMBLY/v1",
+    "target_build": "HCWDL_REPRESENTATION_TARGET_ASSEMBLY/v2",
+    "train_node": "HCWDL_REPRESENTATION_TRAINING_ASSEMBLY/v2",
     "final_selection": "HCWDL_REPRESENTATION_FINAL_SELECTION_ASSEMBLY/v1",
     "assignment_shard": "HCWDL_REPRESENTATION_FINAL_ASSIGNMENT_ASSEMBLY/v1",
     "assignment_finalize": "HCWDL_REPRESENTATION_FINAL_ASSIGNMENT_ASSEMBLY/v1",
@@ -631,10 +636,10 @@ def _output_contract(task: CampaignTask, ordinal: int) -> str | None:
             PARENT_LOSS_ATTESTATION_CONTRACT,
         ),
         "parent_import": (PARENT_IMPORT_CONTRACT,),
-        "control_registry": ("HCWDL_REPRESENTATION_CONTROL_REGISTRY/v1",),
+        "control_registry": (CONTROL_REGISTRY_CONTRACT,),
         "kernel_resources": (None,),
         "representation_recipe": (
-            "HCWDL_REPRESENTATION_RECIPE/v2",
+            REPRESENTATION_RECIPE_CONTRACT,
         ),
         "numerical_acceptance": (
             "HCWDL_REPRESENTATION_NUMERICAL_ACCEPTANCE/v1",
@@ -662,14 +667,14 @@ def _output_contract(task: CampaignTask, ordinal: int) -> str | None:
             "HCWDL_REPRESENTATION_TARGET_CLEANUP_AUTHORIZATION/v1",
             "HCWDL_REPRESENTATION_TARGET_CLEANUP_COMPLETION/v1",
         ),
-        "screen_aggregate": ("HCWDL_REPRESENTATION_SCREEN_AGGREGATE/v1",),
+        "screen_aggregate": (SCREEN_AGGREGATE_CONTRACT,),
         "confirmation_registry": (
-            "HCWDL_REPRESENTATION_CONFIRMATION_REGISTRY/v1",
+            CONFIRMATION_REGISTRY_CONTRACT,
         ),
         "confirmation_aggregate": (
-            "HCWDL_REPRESENTATION_CONFIRMATION_AGGREGATE/v1",
+            CONFIRMATION_AGGREGATE_CONTRACT,
         ),
-        "finalist_lock": ("HCWDL_REPRESENTATION_FINALIST_LOCK/v1",),
+        "finalist_lock": ("HCWDL_REPRESENTATION_FINALIST_LOCK/v2",),
         "shared_final_claim": (
             "HCWDL_SHARED_FINAL_EXECUTION_CLAIM/v1",
             "HCWDL_SHARED_FINAL_TASK_REGISTRY/v1",
@@ -691,21 +696,21 @@ def _output_contract(task: CampaignTask, ordinal: int) -> str | None:
             "HCWDL_SHARED_FINAL_DATA_ATTESTATION/v1",
         ),
         "execution_lock": (
-            "HCWDL_REPRESENTATION_EXECUTION_LOCK/v1",
-            "HCWDL_REPRESENTATION_FINAL_PREDICTION_SPEC/v1",
+            "HCWDL_REPRESENTATION_EXECUTION_LOCK/v2",
+            "HCWDL_REPRESENTATION_FINAL_PREDICTION_SPEC/v2",
         ),
         "prediction_shard": (
             None, "HCWDL_SHARED_FINAL_ROLE_CAPABILITY/v1",
         ),
         "prediction_finalize": (
-            "HCWDL_REPRESENTATION_PREDICTION_MANIFEST/v1",
+            "HCWDL_REPRESENTATION_PREDICTION_MANIFEST/v2",
         ),
         "metric_join": (
-            "HCWDL_REPRESENTATION_METRIC_JOIN/v1", None, None,
+            "HCWDL_REPRESENTATION_METRIC_JOIN/v2", None, None,
             "HCWDL_SHARED_FINAL_ROLE_CAPABILITY/v1",
         ),
         "final_aggregate": (
-            "HCWDL_REPRESENTATION_FINAL_AGGREGATE/v1",
+            "HCWDL_REPRESENTATION_FINAL_AGGREGATE/v2",
         ),
         "validation_only_aggregate": (
             "HCWDL_REPRESENTATION_VALIDATION_ONLY_AGGREGATE/v1",
@@ -713,13 +718,13 @@ def _output_contract(task: CampaignTask, ordinal: int) -> str | None:
     }
     if kind in {"train_node", "train_control", "confirmation"}:
         values: tuple[str | None, ...] = (
-            "HCWDL_REPRESENTATION_TRAINING_REPORT/v1",
+            TRAINING_REPORT_CONTRACT,
             "HCWDL_REPRESENTATION_CHECKPOINT_SELECTION/v1",
-            "HCWDL_REPRESENTATION_DEPLOYABLE_EXTRACTION/v1",
+            DEPLOYABLE_EXTRACTION_CONTRACT,
             None,
         )
         if kind == "confirmation":
-            values += ("HCWDL_REPRESENTATION_CONFIRMATION_RUN/v1",)
+            values += (CONFIRMATION_RUN_CONTRACT,)
     else:
         values = fixed[kind]
     if len(values) != len(task.registered_outputs):
@@ -987,7 +992,7 @@ def _finalists(
         finalist = str(row["finalist_id"])
         if (
             not finalist or finalist in ids
-            or finalist in {"RSET_M6c", "RSET_M6w", "RREL_M6c", "RREL_M6w"}
+            or finalist in {"RSET_M1c", "RSET_M1w", "RREL_M1c", "RREL_M1w"}
             or row["source_campaign"] == "representation"
             or row["domain"] not in {
             "hlt", "shell_exact_d100", "native_offline",
@@ -1009,7 +1014,7 @@ def _finalists(
             raise ValueError("finalist model kind differs")
     endpoints = []
     by_key = {task.task_key: task for task in _tasks(spec)}
-    for node in ("RSET_M6c", "RSET_M6w", "RREL_M6c", "RREL_M6w"):
+    for node in ("RSET_M1c", "RSET_M1w", "RREL_M1c", "RREL_M1w"):
         task = by_key[f"train_{node}"]
         report = f"${{task_output:{task.task_key}:0}}"
         selection = f"${{task_output:{task.task_key}:1}}"
@@ -1309,11 +1314,11 @@ def _immutable_parent_sources(
         return {
             "prediction_spec": _json_parent(
                 root / "final/prediction_spec.json",
-                "HCWDL_REPRESENTATION_FINAL_PREDICTION_SPEC/v1",
+                "HCWDL_REPRESENTATION_FINAL_PREDICTION_SPEC/v2",
             ),
             "execution_lock": _json_parent(
                 root / "locks/07_execution.json",
-                "HCWDL_REPRESENTATION_EXECUTION_LOCK/v1",
+                "HCWDL_REPRESENTATION_EXECUTION_LOCK/v2",
             ),
             "checkpoint": {
                 "source_kind": "final_task_registry_field",
@@ -1432,6 +1437,8 @@ def _parameters_base(task: CampaignTask) -> dict[str, Any]:
 
 def _target_teacher_view(task: CampaignTask) -> str:
     bank = str(task.logical_bank)
+    if bank in NODE_REGISTRY:
+        return str(NODE_REGISTRY[bank].student_domain)
     base = bank[:-1] if bank.endswith(("c", "w")) else bank
     mapping = {
         "D0": "hlt", "D25": "d25", "D50": "d50",
@@ -1454,8 +1461,8 @@ def _target_parameters(
     )
     forward = f"${{target_forward_spec:{task.logical_bank}:{task.target_purpose}}}"
     assignment = None
-    base = str(task.logical_bank).rstrip("cw")
-    if base in {"D25", "D50", "D75", "D100"}:
+    teacher_view = _target_teacher_view(task)
+    if teacher_view not in {"hlt", "toff"}:
         assignment = _registered_reference("${assignment_manifest:train}")
     kernel = "${kernel_resources}"
     settings = _settings(prerequisites)
@@ -1473,11 +1480,23 @@ def _target_parameters(
         "data_root": _absolute(
             prerequisites["runtime_facts"]["data_root"], name="data root",
         ),
-        "teacher_view": _target_teacher_view(task),
+        "teacher_view": teacher_view,
         "source_partitions": dict(record["source_partitions"]),
         "assignment_manifest": assignment,
-        "teacher_report": _registered_reference(
-            f"${{teacher_report:{task.logical_bank}}}"
+        "teacher_source": (
+            {
+                "kind": "hcwdl",
+                "execution_directory": _registered_path(
+                    f"${{task_output:train_{task.logical_bank}:3}}"
+                ),
+            }
+            if str(task.logical_bank) in NODE_REGISTRY else
+            {
+                "kind": "pmard",
+                "report": _registered_reference(
+                    f"${{teacher_report:{task.logical_bank}}}"
+                ),
+            }
         ),
         "parent_import": _registered_reference("${task_output:parent_import:0}"),
         "architecture_attestation": _registered_reference(
@@ -1573,6 +1592,17 @@ def _training_parameters(
         _registered_reference("${task_output:confirmation_registry:0}")
         if task.kind == "confirmation" else None
     )
+    graph_execution = NODE_REGISTRY.get(str(task.graph_node))
+    if graph_execution is None:
+        raise ValueError("training graph execution is absent")
+    assignment_manifests = (
+        None
+        if graph_execution.student_domain == "hlt"
+        else {
+            role: _registered_reference(f"${{assignment_manifest:{role}}}")
+            for role in ("train", "validation")
+        }
+    )
     assembly = {
         "contract": _ASSEMBLY_CONTRACT["train_node"],
         "parent_recipe": _registered_reference("${parent_recipe}"),
@@ -1613,6 +1643,7 @@ def _training_parameters(
         "model_sources": _model_sources(
             prerequisites=prerequisites, task=task,
         ),
+        "assignment_manifests": assignment_manifests,
         "shuffle_map": (
             {"committed_directory": _registered_path(shuffle_logical)}
             if shuffled else None
@@ -1892,30 +1923,42 @@ def _reporting_parameters(
             "expected_control_ids": sorted(CONTROL_REGISTRY),
         }}
     if kind == "confirmation_registry":
-        target = next(
-            value for key, value in prerequisites["target_generations"].items()
-            if key == "TOFF:confirmation"
-        )
+        objectives = ["RSET_M1c", "RSET_M1w", "RREL_M1c", "RREL_M1w"]
+        confirmation_targets = {
+            node: prerequisites["target_generations"][
+                f"{NODE_REGISTRY[node].target_bank_identity}:confirmation"
+            ]
+            for node in objectives
+        }
+        campaigns = {
+            value["execution_campaign_sha256"]
+            for value in confirmation_targets.values()
+        }
+        if len(campaigns) != 1:
+            raise ValueError("confirmation target execution campaigns differ")
         return {**base, "builder_arguments": {
             "screen_sha256": _registered_field(
                 "${task_output:screen_aggregate:0}", "content_hash",
             ),
             "campaign_sha256": require_sha256(
-                target["execution_campaign_sha256"],
+                next(iter(campaigns)),
                 name="confirmation execution campaign",
             ),
             "recipe_sha256": require_sha256(
                 spec["representation_recipe_sha256"], name="recipe",
             ),
-            "target_logical_bank_sha256": _content_hashes(prerequisites)[
-                "${logical_bank:TOFF}"
-            ],
-            "objectives": ["RSET_M6c", "RSET_M6w", "RREL_M6c", "RREL_M6w"],
+            "target_logical_bank_sha256s": {
+                node: _content_hashes(prerequisites)[
+                    f"${{logical_bank:{NODE_REGISTRY[node].target_bank_identity}}}"
+                ]
+                for node in objectives
+            },
+            "objectives": objectives,
             "seeds": list(CONFIRMATION_SEEDS),
         }}
     if kind == "confirmation_aggregate":
         reports = []
-        for node in ("RSET_M6c", "RSET_M6w", "RREL_M6c", "RREL_M6w"):
+        for node in ("RSET_M1c", "RSET_M1w", "RREL_M1c", "RREL_M1w"):
             reports.extend(
                 _registered_json(
                     f"${{task_output:confirm_{node}[{seed_index}]:4}}"
@@ -2079,7 +2122,7 @@ def _representation_endpoint_rows(
 ) -> list[dict[str, Any]]:
     rows = []
     by_key = {task.task_key: task for task in _tasks(spec)}
-    for node in ("RSET_M6c", "RSET_M6w", "RREL_M6c", "RREL_M6w"):
+    for node in ("RSET_M1c", "RSET_M1w", "RREL_M1c", "RREL_M1w"):
         task = by_key[f"train_{node}"]
         execution = _registered_execution_id(
             spec=spec, prerequisites=prerequisites, task=task, index=None,
@@ -2714,8 +2757,8 @@ def _validate_prerequisites(
     finalists = _finalists(prerequisites, spec=spec)
     finalist_ids = {str(row["finalist_id"]) for row in finalists}
     required_finalists = {
-        "M0", "D100", "TOFF", "M6c", "M6w",
-        "RSET_M6c", "RSET_M6w", "RREL_M6c", "RREL_M6w",
+        "M0", "D100", "TOFF", "M1c", "M1w",
+        "RSET_M1c", "RSET_M1w", "RREL_M1c", "RREL_M1w",
     }
     if (
         len(finalists) != int(spec["combined_finalist_count"])

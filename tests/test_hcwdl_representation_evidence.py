@@ -120,7 +120,7 @@ def _scheduler(
     )
     parent = {
         "JobIDRaw": str(job_id),
-        "JobName": f"hcwdl_rkd_{task_key}",
+        "JobName": f"hcwdlr_{task_key}",
         "Account": TIGRIS_ACCOUNT,
         "Partition": TIGRIS_PARTITION,
         "Cluster": TIGRIS_PARTITION,

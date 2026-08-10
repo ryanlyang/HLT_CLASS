@@ -281,6 +281,7 @@ def _target_forward_spec(live: dict) -> dict:
     backend = live["backend"]
     payload = {
         "teacher": {
+            "source_kind": "imported_checkpoint",
             "checkpoint_byte_sha256": "5" * 64,
             "checkpoint_logical_sha256": "6" * 64,
             "model_config_sha256": "7" * 64,

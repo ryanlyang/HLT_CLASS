@@ -33,8 +33,8 @@ from .hcwdl_representation_contracts import (
 )
 
 
-TARGET_ASSEMBLY_CONTRACT: Final = "HCWDL_REPRESENTATION_TARGET_ASSEMBLY/v1"
-TRAINING_ASSEMBLY_CONTRACT: Final = "HCWDL_REPRESENTATION_TRAINING_ASSEMBLY/v1"
+TARGET_ASSEMBLY_CONTRACT: Final = "HCWDL_REPRESENTATION_TARGET_ASSEMBLY/v2"
+TRAINING_ASSEMBLY_CONTRACT: Final = "HCWDL_REPRESENTATION_TRAINING_ASSEMBLY/v2"
 FINAL_SELECTION_ASSEMBLY_CONTRACT: Final = (
     "HCWDL_REPRESENTATION_FINAL_SELECTION_ASSEMBLY/v1"
 )
@@ -832,7 +832,7 @@ def target_build_adapter(spec, task, index, runtime_row):
         required=(
             "bank_root", "logical_bank", "consumer_registry", "forward_spec",
             "split_manifest", "row_selection", "data_root", "teacher_view",
-            "source_partitions", "assignment_manifest", "teacher_report",
+            "source_partitions", "assignment_manifest", "teacher_source",
             "parent_import", "architecture_attestation",
             "kernel_envelope", "build_owner", "budgets", "storage_estimate",
             "resource_profile", "runtime_environment",
@@ -981,24 +981,69 @@ def target_build_adapter(spec, task, index, runtime_row):
             task, runtime_row, operation="target_build",
         )
 
-    _validate_imported_pmard_source(
-        value["teacher_report"], node_id=teacher_node,
-        parent_import=parent_import, architecture=architecture,
-        name=f"{teacher_node} target teacher",
-    )
-    model, teacher_report = _load_pmard_teacher(
-        value["teacher_report"], device=str(runtime_row["device"]),
-    )
     teacher = forward_spec["payload"]["teacher"]
-    selected_checkpoint = Path(str(value["teacher_report"]["path"])).parent / str(
-        teacher_report["selected_checkpoint"]
-    )
-    if (
-        teacher_report["selected_checkpoint_sha256"]
-        != teacher["checkpoint_byte_sha256"]
-        or sha256_file(selected_checkpoint) != teacher["checkpoint_byte_sha256"]
-    ):
-        raise ValueError("loaded teacher checkpoint differs from target forward spec")
+    logical_teacher = logical["payload"]["teacher"]
+    teacher_source = value["teacher_source"]
+    if not isinstance(teacher_source, Mapping):
+        raise ValueError("target teacher source fields differ")
+    if teacher_source.get("kind") == "pmard":
+        if set(teacher_source) != {"kind", "report"}:
+            raise ValueError("imported target teacher source fields differ")
+        if (
+            logical_teacher.get("source_kind") != "imported_checkpoint"
+            or teacher.get("source_kind") != "imported_checkpoint"
+        ):
+            raise ValueError("imported target teacher commitment differs")
+        _validate_imported_pmard_source(
+            teacher_source["report"], node_id=teacher_node,
+            parent_import=parent_import, architecture=architecture,
+            name=f"{teacher_node} target teacher",
+        )
+        model, teacher_report = _load_pmard_teacher(
+            teacher_source["report"], device=str(runtime_row["device"]),
+        )
+        selected_checkpoint = (
+            Path(str(teacher_source["report"]["path"])).parent
+            / str(teacher_report["selected_checkpoint"])
+        )
+        if (
+            teacher_report["selected_checkpoint_sha256"]
+            != teacher["checkpoint_byte_sha256"]
+            or sha256_file(selected_checkpoint)
+            != teacher["checkpoint_byte_sha256"]
+        ):
+            raise ValueError("loaded teacher checkpoint differs from target forward spec")
+    elif teacher_source.get("kind") == "hcwdl":
+        if set(teacher_source) != {"kind", "execution_directory"}:
+            raise ValueError("campaign target teacher source fields differ")
+        if (
+            logical_teacher.get("source_kind") != "campaign_execution"
+            or teacher.get("source_kind") != "campaign_execution"
+        ):
+            raise ValueError("campaign target teacher commitment differs")
+        execution_directory = _registered_input_path(
+            teacher_source["execution_directory"],
+            name=f"{teacher_node} target teacher execution",
+        )
+        evidence = _hcwdl_source_evidence(
+            execution_directory, name=f"{teacher_node} target teacher",
+        )
+        expected_execution = require_sha256(
+            logical_teacher["registered_execution_id"],
+            name=f"{teacher_node} target teacher execution",
+        )
+        if (
+            evidence["report"].get("node_id") != teacher_node
+            or evidence["registered_execution_id"] != expected_execution
+            or teacher["registered_execution_id"] != expected_execution
+        ):
+            raise ValueError("campaign target teacher execution lineage differs")
+        model, _, _ = _load_model_source(
+            teacher_source, name=f"{teacher_node} target teacher",
+            device=str(runtime_row["device"]),
+        )
+    else:
+        raise ValueError("target teacher source kind differs")
     forward, input_fields = _teacher_surface_forward(
         model, device=str(runtime_row["device"]),
         bank_kind=str(logical["payload"]["bank_kind"]),
@@ -1133,6 +1178,7 @@ def _calibration_population(
     rows: int,
     campaign_sha256: str,
     parent_logit_counterpart_node_id: str,
+    student_view: str = "hlt",
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Select the frozen campaign/counterpart-hashed calibration population.
 
@@ -1150,7 +1196,7 @@ def _calibration_population(
     for raw in cache.iterate_batches(
         epoch=0, sampler_seed=sampler_seed, batch_size=256,
     ):
-        batch = training_batch_from_parent(raw)
+        batch = training_batch_from_parent(raw, student_view=student_view)
         identity_values.extend(bytes(value) for value in batch["identity_digests"])
     if len(identity_values) != len(set(identity_values)) or len(identity_values) < rows:
         raise ValueError("calibration source identity coverage differs")
@@ -1173,7 +1219,7 @@ def _calibration_population(
     for raw in cache.iterate_batches(
         epoch=0, sampler_seed=sampler_seed, batch_size=256,
     ):
-        batch = training_batch_from_parent(raw)
+        batch = training_batch_from_parent(raw, student_view=student_view)
         indexes = np.asarray([
             index for index, value in enumerate(batch["identity_digests"])
             if bytes(value) in selected
@@ -1202,11 +1248,31 @@ def _calibration_population(
 def _build_training_view_caches(
     *, split: Mapping[str, Any], selection: Mapping[str, Any], data_root: str | Path,
     train_rows: int, validation_rows: int, lineage: Mapping[str, Any], max_gib: float,
+    student_domain: str,
+    assignment_manifests: Mapping[str, Path] | None,
 ):
     from .dataset import iterate_model_batches
+    from .highcov_cache import DenseAssignmentStore
+    from .pmard_stream import iterate_pmard_batches
     from .selective_assignment import RowSelection
     from .splits import role_records
     from .view_cache import EphemeralPmardViewCache, expected_cache_source_rows
+
+    if student_domain == "hlt":
+        student_view = "hlt"
+        if assignment_manifests is not None:
+            raise ValueError("HLT student unexpectedly binds repaired-view assignments")
+    elif student_domain.startswith("d") and student_domain[1:].isdigit():
+        level = int(student_domain[1:])
+        if level not in range(5, 101, 5):
+            raise ValueError("dense-descent student privilege level differs")
+        student_view = "privileged"
+        if not isinstance(assignment_manifests, Mapping) or set(
+            assignment_manifests
+        ) != {"train", "validation"}:
+            raise ValueError("repaired-view student lacks exact assignment manifests")
+    else:
+        raise ValueError("dense-descent student domain differs")
 
     result = {}
     started = time.perf_counter()
@@ -1220,17 +1286,37 @@ def _build_training_view_caches(
         )
         if sum(expected_sources.values()) != expected_rows:
             raise ValueError(f"{role} cache rows differ from the immutable assembly")
-        stream = iterate_model_batches(
-            split, data_root=data_root, role=role, input_mode="hlt", epoch=0,
-            sampler_seed=1337, batch_size=256, rank=0, world_size=1,
-            shuffle_within_chunk=False, shuffle_buffer_rows=256,
-            interleave_source_files=1, row_selection=row_selection,
-            include_hcwdl_metadata=True, canonical_order=True,
+        common = dict(
+            data_root=data_root, role=role, epoch=0, sampler_seed=1337,
+            batch_size=256, rank=0, world_size=1,
+            shuffle_buffer_rows=256, interleave_source_files=1,
+            row_selection=row_selection, include_hcwdl_metadata=True,
+            canonical_order=True,
         )
+        if student_view == "hlt":
+            stream = iterate_model_batches(
+                split, input_mode="hlt", shuffle_within_chunk=False, **common,
+            )
+            assignment_sha256 = None
+        else:
+            assert assignment_manifests is not None
+            store = DenseAssignmentStore(assignment_manifests[role])
+            stream = iterate_pmard_batches(
+                split, matcher_model=None,
+                alpha=int(student_domain[1:]) / 100.0,
+                matcher_variant="highcov_empirical_lexicographic_dr0p30_v1",
+                threshold=0.0, repair_family="HIGHCOV_SHELL_EXACT/v1",
+                assignment_store=store, repair_seed=1337, **common,
+            )
+            assignment_sha256 = store.manifest["content_hash"]
         result[role] = EphemeralPmardViewCache.build(
             stream, expected_rows=expected_rows, records=records, role=role,
-            expected_source_rows=expected_sources, view_keys=("hlt",),
-            lineage=lineage, max_gib=max_gib,
+            expected_source_rows=expected_sources, view_keys=(student_view,),
+            lineage={
+                **dict(lineage), "student_domain": student_domain,
+                "student_view": student_view,
+                "assignment_manifest_sha256": assignment_sha256,
+            }, max_gib=max_gib,
         )
     return result, time.perf_counter() - started
 
@@ -1268,7 +1354,8 @@ def _hcwdl_source_evidence(
         required_payload_keys=(
             "node_id", "registered_execution_id", "selected_envelope_id",
             "selected_training_state_path", "deployable_state_path",
-            "deployable_state_sha256", "strict_hlt_only",
+            "deployable_state_sha256", "student_domain",
+            "deployment_authorized", "strict_hlt_only",
             "training_only_heads_excluded",
         ),
     )
@@ -1281,7 +1368,12 @@ def _hcwdl_source_evidence(
         or extraction["parents"].get("execution") != registered_execution
         or extraction["payload"].get("registered_execution_id") != registered_execution
         or extraction["payload"].get("node_id") != report["node_id"]
-        or extraction["payload"].get("strict_hlt_only") is not True
+        or extraction["payload"].get("student_domain")
+        != report.get("student_domain")
+        or extraction["payload"].get("deployment_authorized")
+        is not report.get("deployment_authorized")
+        or extraction["payload"].get("strict_hlt_only")
+        is not report.get("deployment_authorized")
         or extraction["payload"].get("training_only_heads_excluded") is not True
         or selection["parents"].get("selected_training_checkpoint")
         != report["selected_training_checkpoint_sha256"]
@@ -1530,6 +1622,7 @@ def training_adapter(spec, task, index, runtime_row):
             "replicate_seed", "mode", "synthetic_passes", "resume_lineage",
             "producer_runtime_signature", "architecture_attestation",
             "parent_import", "model_sources", "shuffle_map", "view_cache_max_gib",
+            "assignment_manifests",
             "registered_output_row", "publication_owner", "confirmation_registry",
         ),
         optional=(
@@ -1566,6 +1659,25 @@ def training_adapter(spec, task, index, runtime_row):
 
     execution_id = str(value["execution_id"])
     execution = resolve_node_execution(execution_id)
+    raw_assignments = value["assignment_manifests"]
+    if execution.student_domain == "hlt":
+        if raw_assignments is not None:
+            raise ValueError("HLT training assembly unexpectedly binds assignments")
+        assignment_manifests = None
+        student_view = "hlt"
+    else:
+        if not isinstance(raw_assignments, Mapping) or set(raw_assignments) != {
+            "train", "validation",
+        }:
+            raise ValueError("repaired-view training assembly lacks assignments")
+        assignment_manifests = {
+            role: _reference(
+                raw_assignments[role], name=f"{role} assignment manifest",
+                json_value=False,
+            )
+            for role in ("train", "validation")
+        }
+        student_view = "privileged"
     model_sources = _exact_mapping(value["model_sources"], name="training model sources")
     required_sources = {
         source for source in (
@@ -1648,6 +1760,8 @@ def training_adapter(spec, task, index, runtime_row):
             "row_selection": selection["content_hash"],
         },
         max_gib=float(value["view_cache_max_gib"]),
+        student_domain=execution.student_domain,
+        assignment_manifests=assignment_manifests,
     )
     seed = int(value["replicate_seed"])
     rng_streams = paired_rng_streams(execution_id, seed)
@@ -1659,6 +1773,7 @@ def training_adapter(spec, task, index, runtime_row):
         caches["train"], sampler_seed=sampler_seed, rows=calibration_rows,
         campaign_sha256=str(spec["content_hash"]),
         parent_logit_counterpart_node_id=execution.parent_counterpart,
+        student_view=student_view,
     )
     calibration_batches_count = math.ceil(calibration_rows / 256)
 
@@ -1668,14 +1783,14 @@ def training_adapter(spec, task, index, runtime_row):
             batch_size=int(parent_recipe["batching"]["effective_batch_size"]),
         )):
             if batch_index >= start_batch:
-                yield training_batch_from_parent(raw)
+                yield training_batch_from_parent(raw, student_view=student_view)
 
     def validation_batches():
         for raw in caches["validation"].iterate_batches(
             epoch=0, sampler_seed=sampler_seed,
             batch_size=int(parent_recipe["batching"]["effective_batch_size"]),
         ):
-            yield training_batch_from_parent(raw)
+            yield training_batch_from_parent(raw, student_view=student_view)
 
     def calibration_batches(_phase: str):
         for start in range(0, calibration_rows, 256):

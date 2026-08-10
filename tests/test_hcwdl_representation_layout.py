@@ -12,13 +12,13 @@ def test_every_contract_has_one_canonical_route() -> None:
     assert set(ROUTES) == set(CONTRACTS)
     assert len(ROUTES) == len(CONTRACTS)
     assert len({row.path_template for row in ROUTES.values()}) == len(ROUTES)
-    assert ROUTES["HCWDL_REPRESENTATION_CONFIRMATION_AGGREGATE/v1"].path_template == (
+    assert ROUTES["HCWDL_REPRESENTATION_CONFIRMATION_AGGREGATE/v2"].path_template == (
         "confirmation/aggregate.json"
     )
-    assert ROUTES["HCWDL_REPRESENTATION_CONFIRMATION_RUN/v1"].path_template == (
+    assert ROUTES["HCWDL_REPRESENTATION_CONFIRMATION_RUN/v2"].path_template == (
         "confirmation/runs/${execution_id}.json"
     )
-    assert ROUTES["HCWDL_REPRESENTATION_FINAL_PREDICTION_SPEC/v1"].producer_kind == (
+    assert ROUTES["HCWDL_REPRESENTATION_FINAL_PREDICTION_SPEC/v2"].producer_kind == (
         "execution_lock"
     )
     assert ROUTES["HCWDL_REPRESENTATION_PAIRED_BOOTSTRAP/v1"].producer_kind == (
@@ -27,11 +27,11 @@ def test_every_contract_has_one_canonical_route() -> None:
     assert ROUTES["HCWDL_SHARED_FINAL_ROLE_CAPABILITY/v1"].producer_kind == (
         "branch_opening_task"
     )
-    assert ROUTES["HCWDL_REPRESENTATION_CAMPAIGN_SPEC/v1"].path_template == (
+    assert ROUTES["HCWDL_REPRESENTATION_CAMPAIGN_SPEC/v2"].path_template == (
         "${campaign_spec_parent}/campaign_spec.json"
     )
     assert CAMPAIGN_SPEC_PARENT_VALUES == {".", "planning"}
-    assert ROUTES["HCWDL_REPRESENTATION_COMMAND_PLAN/v1"].path_template == (
+    assert ROUTES["HCWDL_REPRESENTATION_COMMAND_PLAN/v2"].path_template == (
         "command_plan.json"
     )
     assert ROUTES["HCWDL_REPRESENTATION_RUNTIME_BINDING/v1"].path_template == (

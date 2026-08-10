@@ -46,7 +46,8 @@ def test_registry_contains_exact_primary_and_controls_and_serial_banks() -> None
     )
     assert {row.graph_node for row in tasks if row.kind == "train_node"} == set(primary_node_ids())
     assert {row.graph_node for row in tasks if row.kind == "train_control"} == set(CONTROLS)
-    assert len(primary_node_ids()) == 24
+    assert len(primary_node_ids()) == 86
+    assert len(tasks) == 295
     assert all(row.array is None or "%" not in row.array for row in tasks)
 
 
@@ -98,10 +99,8 @@ def test_registry_executes_bounded_cache_control_and_exact_final_producers() -> 
     assert "${representation_recipe}" not in by_key[
         "control_registry"
     ].registered_inputs
-    assert "shuffle_map" in by_key["target_D100_screen"].dependencies
-    assert {
-        "${parent_import}", "${split_manifest}", "${train_row_selection}",
-    } <= set(by_key["shuffle_map"].registered_inputs)
+    assert "shuffle_map" not in by_key
+    assert by_key["target_TOFF_screen"].dependencies[-1] == "pretraining_reservation"
     assert "final/selection/branch_access.json" in by_key[
         "final_selection"
     ].registered_outputs
@@ -139,7 +138,7 @@ def test_confirmation_rows_publish_registered_run_pointers() -> None:
     )
 
 
-def test_warm_m1_binds_parent_model_sources_not_report_bundle() -> None:
+def test_warm_m1_binds_immediate_same_strategy_predecessor() -> None:
     tasks = build_task_registry(
         disposition="combined_confirmatory", final_source_partitions=2,
         combined_finalist_count=3,
@@ -147,10 +146,15 @@ def test_warm_m1_binds_parent_model_sources_not_report_bundle() -> None:
     by_key = {row.task_key: row for row in tasks}
     for strategy in ("RSET", "RREL"):
         warm = by_key[f"train_{strategy}_M1w"]
-        assert "${parent_model_sources}" in warm.registered_inputs
+        assert f"${{task_output:train_{strategy}_D0w:3}}" in warm.registered_inputs
+        assert "${parent_model_sources}" not in warm.registered_inputs
         assert "${parent_reports}" not in warm.registered_inputs
         cold = by_key[f"train_{strategy}_M1c"]
         assert "${parent_model_sources}" not in cold.registered_inputs
+        assert not any(
+            value.startswith("${task_output:train_") and value.endswith(":3}")
+            for value in cold.registered_inputs
+        )
 
 
 def test_parent_import_and_downstream_parent_consumers_bind_fresh_evidence() -> None:
@@ -186,7 +190,7 @@ def test_finalist_lock_registers_every_artifact_it_freezes() -> None:
         "${task_output:architecture_attestation:0}",
         "${task_output:parent_loss_attestation:0}",
     }
-    for node in ("RSET_M6c", "RSET_M6w", "RREL_M6c", "RREL_M6w"):
+    for node in ("RSET_M1c", "RSET_M1w", "RREL_M1c", "RREL_M1w"):
         required.update(
             f"${{task_output:train_{node}:{output_index}}}"
             for output_index in (0, 1, 2)
@@ -203,7 +207,7 @@ def test_finalist_lock_registers_every_artifact_it_freezes() -> None:
     prediction_finalize = next(
         task for task in tasks if task.task_key == "final_prediction_manifests"
     )
-    for node in ("RSET_M6c", "RSET_M6w", "RREL_M6c", "RREL_M6w"):
+    for node in ("RSET_M1c", "RSET_M1w", "RREL_M1c", "RREL_M1w"):
         assert f"${{task_output:train_{node}:2}}" in shared_claim.registered_inputs
         assert f"${{task_output:train_{node}:3}}" in prediction.registered_inputs
         for output_index in (0, 1, 2):
@@ -227,6 +231,10 @@ def test_validation_only_registry_contains_no_final_role_tasks(tmp_path) -> None
 def test_symbolic_command_plan_and_materialization(tmp_path) -> None:
     spec = _spec(tmp_path)
     plan = build_command_plan(spec)
+    assert all(
+        f"--job-name=hcwdlr_{row['task_key']}" in row["command"]
+        for row in plan["commands"]
+    )
     comments = [
         next(token for token in command["command"] if token.startswith("--comment="))
         for command in plan["commands"]

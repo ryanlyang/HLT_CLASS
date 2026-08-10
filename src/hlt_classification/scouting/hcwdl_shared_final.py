@@ -1225,7 +1225,7 @@ def _expected_output_contract(
         return {
             "row_selection": "HCWDL_SHARED_FINAL_LABEL_ESCROW/v1",
             "assignment_shard": "HCWDL_SHARED_FINAL_ASSIGNMENT_SHARD/v1",
-            "prediction_shard": "HCWDL_REPRESENTATION_PREDICTION_SHARD/v1",
+            "prediction_shard": "HCWDL_REPRESENTATION_PREDICTION_SHARD/v2",
             "metric_join": "HCWDL_REPRESENTATION_PAIRED_BOOTSTRAP/v1",
         }.get(str(task["kind"]))
     if "/capabilities/" in f"/{logical}" or logical.startswith("final/capabilities/"):
@@ -1236,17 +1236,17 @@ def _expected_output_contract(
         ("assignment/manifest.json", "HIGHCOV_DENSE_ASSIGNMENT_MANIFEST/v2"),
         ("assignment/audit.json", "HCWDL_SHARED_FINAL_ASSIGNMENT_AUDIT/v1"),
         ("06_final_data_attestation.json", "HCWDL_SHARED_FINAL_DATA_ATTESTATION/v1"),
-        ("07_execution.json", "HCWDL_REPRESENTATION_EXECUTION_LOCK/v1"),
-        ("prediction_spec.json", "HCWDL_REPRESENTATION_FINAL_PREDICTION_SPEC/v1"),
-        ("/manifest.json", "HCWDL_REPRESENTATION_PREDICTION_MANIFEST/v1"),
-        ("metric_join.json", "HCWDL_REPRESENTATION_METRIC_JOIN/v1"),
-        ("final_aggregate.json", "HCWDL_REPRESENTATION_FINAL_AGGREGATE/v1"),
+        ("07_execution.json", "HCWDL_REPRESENTATION_EXECUTION_LOCK/v2"),
+        ("prediction_spec.json", "HCWDL_REPRESENTATION_FINAL_PREDICTION_SPEC/v2"),
+        ("/manifest.json", "HCWDL_REPRESENTATION_PREDICTION_MANIFEST/v2"),
+        ("metric_join.json", "HCWDL_REPRESENTATION_METRIC_JOIN/v2"),
+        ("final_aggregate.json", "HCWDL_REPRESENTATION_FINAL_AGGREGATE/v2"),
     )
     for suffix, contract in exact_suffixes:
         if logical.endswith(suffix):
             return contract
     if logical == "final/evaluations" or logical.startswith("final/evaluations/"):
-        return "HCWDL_REPRESENTATION_FINAL_EVALUATION/v1"
+        return "HCWDL_REPRESENTATION_FINAL_EVALUATION/v2"
     return None
 
 
@@ -1316,7 +1316,7 @@ def _validate_typed_final_output(
             # the capability's observed lock hash to itself.
             execution_lock = _load_registered_json_by_contract(
                 root=root, task_registry=task_registry,
-                contract="HCWDL_REPRESENTATION_EXECUTION_LOCK/v1",
+                contract="HCWDL_REPRESENTATION_EXECUTION_LOCK/v2",
             )
             from .hcwdl_representation_final import validate_execution_lock
             expected_execution = validate_execution_lock(
@@ -1430,13 +1430,13 @@ def _validate_typed_final_output(
             or value.get("task_registry_sha256") != task_registry["content_hash"]
         ):
             raise ValueError("final data attestation claim/registry lineage differs")
-    elif contract == "HCWDL_REPRESENTATION_EXECUTION_LOCK/v1":
+    elif contract == "HCWDL_REPRESENTATION_EXECUTION_LOCK/v2":
         from .hcwdl_representation_final import validate_execution_lock
         validate_execution_lock(value, claim=claim, task_registry=task_registry)
-    elif contract == "HCWDL_REPRESENTATION_FINAL_PREDICTION_SPEC/v1":
+    elif contract == "HCWDL_REPRESENTATION_FINAL_PREDICTION_SPEC/v2":
         from .hcwdl_representation_final import validate_prediction_spec
         validate_prediction_spec(value)
-    elif contract == "HCWDL_REPRESENTATION_PREDICTION_MANIFEST/v1":
+    elif contract == "HCWDL_REPRESENTATION_PREDICTION_MANIFEST/v2":
         _require_typed_schema(value, {
             "finalist", "prediction_spec_sha256", "execution_lock_sha256",
             "rows", "identity_set_sha256", "identity_order_sha256",
@@ -1453,7 +1453,7 @@ def _validate_typed_final_output(
             or not isinstance(value.get("shards"), list) or not value["shards"]
         ):
             raise ValueError("final prediction manifest semantics differ")
-    elif contract == "HCWDL_REPRESENTATION_FINAL_EVALUATION/v1":
+    elif contract == "HCWDL_REPRESENTATION_FINAL_EVALUATION/v2":
         _require_typed_schema(value, {
             "finalist", "prediction_manifest_sha256", "label_escrow_sha256",
             "execution_lock_sha256", "metrics",
@@ -1472,7 +1472,7 @@ def _validate_typed_final_output(
             or not isinstance(value.get("metrics"), Mapping)
         ):
             raise ValueError("final evaluation semantics differ")
-    elif contract == "HCWDL_REPRESENTATION_METRIC_JOIN/v1":
+    elif contract == "HCWDL_REPRESENTATION_METRIC_JOIN/v2":
         _require_typed_schema(value, {
             "execution_lock_sha256", "label_escrow_sha256",
             "prediction_manifests", "evaluation_sha256", "single_label_join",
@@ -1490,7 +1490,7 @@ def _validate_typed_final_output(
             or set(value["prediction_manifests"]) != set(value["evaluation_sha256"])
         ):
             raise ValueError("final metric-join semantics differ")
-    elif contract == "HCWDL_REPRESENTATION_FINAL_AGGREGATE/v1":
+    elif contract == "HCWDL_REPRESENTATION_FINAL_AGGREGATE/v2":
         _require_typed_schema(value, {
             "population_sha256", "finalist_lock_sha256", "execution_lock_sha256",
             "metric_join_sha256", "confirmation_aggregate_sha256",
@@ -1656,14 +1656,14 @@ def _expected_final_envelope_parents(
             "capability": capability["content_hash"],
             "branch_access": branch["content_hash"],
         }
-    if artifact_contract == "HCWDL_REPRESENTATION_PREDICTION_SHARD/v1":
+    if artifact_contract == "HCWDL_REPRESENTATION_PREDICTION_SHARD/v2":
         prediction_spec = _load_registered_json_by_contract(
             root=root, task_registry=task_registry,
-            contract="HCWDL_REPRESENTATION_FINAL_PREDICTION_SPEC/v1",
+            contract="HCWDL_REPRESENTATION_FINAL_PREDICTION_SPEC/v2",
         )
         execution_lock = _load_registered_json_by_contract(
             root=root, task_registry=task_registry,
-            contract="HCWDL_REPRESENTATION_EXECUTION_LOCK/v1",
+            contract="HCWDL_REPRESENTATION_EXECUTION_LOCK/v2",
         )
         branch = load_json(directory / "branch_access.json")
         validate_content_hash(
@@ -1685,7 +1685,7 @@ def _expected_final_envelope_parents(
     if artifact_contract == "HCWDL_REPRESENTATION_PAIRED_BOOTSTRAP/v1":
         metric_join = _load_registered_json_by_contract(
             root=root, task_registry=task_registry,
-            contract="HCWDL_REPRESENTATION_METRIC_JOIN/v1",
+            contract="HCWDL_REPRESENTATION_METRIC_JOIN/v2",
         )
         escrow = _sole_registered_envelope_sidecar(
             root=root, task_registry=task_registry, kind="row_selection",
@@ -1700,12 +1700,12 @@ def _expected_final_envelope_parents(
             raise ValueError("paired-bootstrap comparison identity differs")
         left = _load_registered_json_by_contract(
             root=root, task_registry=task_registry,
-            contract="HCWDL_REPRESENTATION_PREDICTION_MANIFEST/v1",
+            contract="HCWDL_REPRESENTATION_PREDICTION_MANIFEST/v2",
             finalist_id=left_id,
         )
         right = _load_registered_json_by_contract(
             root=root, task_registry=task_registry,
-            contract="HCWDL_REPRESENTATION_PREDICTION_MANIFEST/v1",
+            contract="HCWDL_REPRESENTATION_PREDICTION_MANIFEST/v2",
             finalist_id=right_id,
         )
         return {

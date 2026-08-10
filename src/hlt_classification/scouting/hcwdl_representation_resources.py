@@ -396,7 +396,7 @@ def _parse_sacct_reference(
         for row in rows
     ):
         raise ValueError("raw sacct accounting mixes multiple jobs")
-    expected_job_name = f"hcwdl_rkd_{expected_task_key}"
+    expected_job_name = f"hcwdlr_{expected_task_key}"
     if parent["JobName"] != expected_job_name:
         raise PermissionError("raw sacct job name differs")
     if parent["Comment"] != expected_comment:
@@ -888,7 +888,7 @@ def validate_scheduler_evidence(
             or value["authorization_capable"] is not False
         ):
             raise PermissionError("local scheduler fixture claims external authority")
-        if value["job_name"] != f"hcwdl_rkd_{value['task_key']}":
+        if value["job_name"] != f"hcwdlr_{value['task_key']}":
             raise PermissionError("local scheduler fixture job name differs")
         if require_genuine:
             raise PermissionError(
@@ -991,7 +991,7 @@ def build_scheduler_evidence(
         "evidence_origin": "local_fixture/v1",
         "raw_accounting_record": None,
         "capture_command": None,
-        "job_name": f"hcwdl_rkd_{task_key}",
+        "job_name": f"hcwdlr_{task_key}",
         "binding_comment": None,
         "submit_line": None,
         "capture_runtime": None,
@@ -1106,7 +1106,7 @@ def _nonfinal_scheduler_artifact(
             raise ValueError("local non-final scheduler fixture is incomplete")
         observed = {
             "job_id": _positive_integer(local_job_id, name="Slurm job ID"),
-            "job_name": f"hcwdl_rkd_{task_key}",
+            "job_name": f"hcwdlr_{task_key}",
             "account": TIGRIS_ACCOUNT,
             "partition": TIGRIS_PARTITION,
             "state": "COMPLETED",

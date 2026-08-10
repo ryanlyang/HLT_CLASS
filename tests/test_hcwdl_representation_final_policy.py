@@ -64,7 +64,7 @@ def _parent_authority():
         },
     })
     paired = {}
-    for node_id in ("M0", "M6c", "M6w"):
+    for node_id in ("M0", "M1c", "M1w"):
         report = _report(node_id, 1337, f"{node_id}-screen")
         paired[node_id] = {
             "relative": f"screen/{node_id}/training_report.json", "report": report,
@@ -99,7 +99,7 @@ def test_parent_lock_projection_and_policy_reject_omission_substitution_and_tamp
         paired_screen_model_members=paired,
     )
     ids = {row["finalist_id"] for row in parents}
-    assert {"M0", "M6c", "M6w", "D100", "TOFF"} <= ids
+    assert {"M0", "M1c", "M1w", "D100", "TOFF"} <= ids
     assert {"M0__seed11", "M0__seed22"} <= ids
     value = build_pretraining_finalist_policy_commitment(
         parent_finalists=parents, parent_finalist_lock=lock,

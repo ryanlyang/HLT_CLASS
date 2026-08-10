@@ -18,22 +18,36 @@ access.
 
 ## Scientific identity
 
-The registered ablation contains four complete six-rung ascents:
+The registered ablation contains four complete dense descents:
 
 ```text
-RSET-cold  RSET_M1c ... RSET_M6c
-RSET-warm  RSET_M1w ... RSET_M6w
-RREL-cold  RREL_M1c ... RREL_M6c
-RREL-warm  RREL_M1w ... RREL_M6w
+RSET-cold  TOFF -> RSET_D100 -> RSET_D95c -> ... -> RSET_D0c -> RSET_M1c
+RSET-warm  TOFF -> RSET_D100 -> RSET_D95w -> ... -> RSET_D0w -> RSET_M1w
+RREL-cold  TOFF -> RREL_D100 -> RREL_D95c -> ... -> RREL_D0c -> RREL_M1c
+RREL-warm  TOFF -> RREL_D100 -> RREL_D95w -> ... -> RREL_D0w -> RREL_M1w
 ```
 
-The four validation-only M5 controls are
-`RSET_M5c_JET_ONLY_REP`, `RREL_M5c_NO_REL_REP`,
-`RSET_M5c_WITHIN_CLASS_SHUFFLED_REP`, and
-`RREL_M5c_WITHIN_CLASS_SHUFFLED_REP`. Students always receive HLT inputs.
-Privileged D/TOFF views are opened only by authenticated target builders;
-students join detached compact summaries by canonical identity. Representation
-heads are training-only and are absent from extracted deployable checkpoints.
+The graph has exactly 86 nodes and an empty active control registry.  D100--D5
+students consume authenticated repaired views and are intentionally
+nondeployable training intermediates.  D0 and M1 consume HLT only and are
+deployable; M1 is the terminal result.  Every rung uses its immediate
+predecessor's target bank for both logits and representation targets.  Cold
+initialization is fresh at every rung; warm initialization loads the immediate
+predecessor model but resets optimizer and scheduler state.  Slurm jobs use
+the `hcwdlr_` prefix so they cannot be confused with base `hcwdl_` jobs.
+
+The completed exact-source base-HCWDL smoke at 089b472 remains the parent
+worker smoke evidence and is not rerun for this representation-only graph
+change.  Do not reuse an old representation miniature: run the bounded
+representation production-worker miniature from the final pushed commit
+before authorizing a representation campaign.
+
+The bounded ten-action authority described later in this runbook belongs to
+the retired direct-D0/M1 recipe-v2 graph.  It is not an execution path for the
+dense recipe-v3 graph: in particular, it does not exercise the repaired-view
+D100--D5 chain.  Preserve any existing v1 authority artifacts as historical
+evidence, but do not issue or submit them for recipe v3.  A separately
+versioned dense-descent miniature authority is required.
 
 The required parent is the primary `HCWDL_RECIPE/v4` artifact with an exact
 fifteen-one loss vector, so CE and FP32 forward-KL are all unweighted
@@ -49,7 +63,7 @@ The current artifact tuples are deliberately nonparallel:
 parent import v3 uses `schema_version=2`; parent-loss attestation v3 uses
 `schema_version=3`; architecture attestation v2 and surface parity v2 use
 `schema_version=2`;
-and representation recipe v2 uses `schema_version=1`.
+and representation recipe v3 uses `schema_version=1`.
 Always validate both the contract string and schema version.
 Its executable policy hash is derived from the versioned code constant and
 authenticated runtime-source bytes; workers never read this plan or another
@@ -114,8 +128,8 @@ The operator-visible order is fixed:
    source files, parent reports, and checkpoint bytes;
 4. build the corrected parent-loss attestation from actual parent reports;
 5. publish the complete parent import;
-6. publish kernel resources, numerical acceptance, the 24-node graph, the
-   four-control registry, and the representation overlay recipe;
+6. publish kernel resources, numerical acceptance, the 86-node dense-descent
+   graph, the empty v2 control registry, and the v3 representation recipe;
 7. audit the parent final state and freeze the final disposition;
 8. build the exhaustive path/runtime binding and immutable planning campaign;
 9. render and inspect the complete symbolic command plan;
@@ -409,8 +423,9 @@ failure-path testing only.
 
 The dry-run audit validates every bound scalar/array row against its exact
 production-adapter schema, binds the runtime-binding and command-plan hashes,
-and records `scheduler_mutated=false`. The smoke must enumerate every task and array row, exercise the full RSET/RREL
-math and all four controls, keep `final_role_accessed=false`, and remain
+and records `scheduler_mutated=false`. The smoke must enumerate every task and
+array row, exercise the full RSET/RREL dense-descent math and empty-control
+registry, keep `final_role_accessed=false`, and remain
 `authorizes_tigris_or_pilot=false`. The command plan contains typed dependency
 tokens, exact resources/paths, and no scheduler IDs. Do not invoke the submit
 CLI as part of local acceptance.

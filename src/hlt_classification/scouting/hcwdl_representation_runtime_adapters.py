@@ -1736,7 +1736,7 @@ def _local_graph_control_gate() -> Mapping[str, Any]:
         controls, ascent_graph_artifact_sha256=graph_hash,
     )
     return {
-        "work_kind": "ascent_graph_and_control_registry_gate",
+        "work_kind": "dense_descent_graph_and_empty_control_registry_gate",
         "graph_sha256": graph_hash, "control_registry_sha256": control_hash,
         "node_count": len(NODE_REGISTRY), "control_count": len(CONTROL_REGISTRY),
     }
@@ -1851,8 +1851,12 @@ def _local_reporting_pipeline(campaign_sha256: str) -> Mapping[str, Any]:
     target_sha = _local_digest("reporting-toff-logical-bank")
     registry = build_confirmation_registry(
         screen_sha256=screen["content_hash"], campaign_sha256=campaign_sha256,
-        recipe_sha256=recipe_sha, target_logical_bank_sha256=target_sha,
-        objectives=("RSET_M6c", "RSET_M6w", "RREL_M6c", "RREL_M6w"),
+        recipe_sha256=recipe_sha,
+        target_logical_bank_sha256s={
+            objective: target_sha
+            for objective in ("RSET_M1c", "RSET_M1w", "RREL_M1c", "RREL_M1w")
+        },
+        objectives=("RSET_M1c", "RSET_M1w", "RREL_M1c", "RREL_M1w"),
     )
     confirmation_reports = [
         {

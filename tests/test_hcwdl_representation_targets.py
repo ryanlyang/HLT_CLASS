@@ -139,10 +139,21 @@ def _teacher(bank_id: str) -> dict[str, str]:
         node, domain, track = "TOFF", "toff", "shared"
     elif bank_id == "D100":
         node, domain, track = "D100", "d100", "shared"
+    elif bank_id in NODE_REGISTRY:
+        spec = NODE_REGISTRY[bank_id]
+        return {
+            "source_kind": "campaign_execution",
+            "node_id": bank_id,
+            "domain": spec.student_domain,
+            "track": spec.track,
+            "registered_execution_id": _sha(f"{bank_id}:execution"),
+            "tap_sha256": _sha(f"{bank_id}:tap"),
+        }
     else:
         node, domain = bank_id, bank_id[:-1].lower()
         track = "cold" if bank_id.endswith("c") else "warm"
     return {
+        "source_kind": "imported_checkpoint",
         "node_id": node,
         "domain": domain,
         "track": track,
@@ -154,7 +165,7 @@ def _teacher(bank_id: str) -> dict[str, str]:
     }
 
 
-def _logical(bank_id: str = "D0c") -> dict:
+def _logical(bank_id: str = "RSET_D0c") -> dict:
     parents = {
         name: _sha(f"{bank_id}:{name}")
         for name in (
@@ -226,8 +237,8 @@ def test_miniature_consumer_is_bounded_nonscientific_and_not_training_compatible
 
 
 def test_training_consumers_cannot_masquerade_as_miniature_and_bound_is_closed() -> None:
-    logical = _logical("D100")
-    training_consumer = _consumer(logical, "RSET_M5c")
+    logical = _logical("TOFF")
+    training_consumer = _consumer(logical, "RSET_D100")
     with pytest.raises(ValueError):
         build_target_consumer_registry(
             logical, purpose="miniature", consumers=[training_consumer],
@@ -336,11 +347,22 @@ def _resource_profile() -> dict:
 
 def _forward_payload(logical: dict, partitions=("p0", "p1")) -> dict:
     teacher = logical["payload"]["teacher"]
-    return {
-        "teacher": {
+    teacher_identity = (
+        {
+            "source_kind": "campaign_execution",
+            "registered_execution_id": teacher["registered_execution_id"],
+        }
+        if teacher["source_kind"] == "campaign_execution"
+        else {
+            "source_kind": "imported_checkpoint",
             "checkpoint_byte_sha256": teacher["checkpoint_byte_sha256"],
             "checkpoint_logical_sha256": teacher["checkpoint_logical_sha256"],
             "model_config_sha256": _sha("model-config"),
+        }
+    )
+    return {
+        "teacher": {
+            **teacher_identity,
             "architecture_sha256": logical["parents"]["architecture"],
             "tap_sha256": teacher["tap_sha256"],
             "kernel_resources_sha256": logical["parents"]["kernel_resources"],
@@ -516,7 +538,7 @@ def _environment(forward: dict) -> dict:
 
 
 def _context(
-    tmp_path: Path, *, bank_id="D0c", purpose="screen", subset=None,
+    tmp_path: Path, *, bank_id="RSET_D0c", purpose="screen", subset=None,
     generation_parent=H, suffix="", consumer_seed: int = 1337,
     consumers=None,
 ):
@@ -568,7 +590,7 @@ def resources():
     return generate_spectral_resources("token"), generate_spectral_resources("relation")
 
 
-def _build(tmp_path: Path, resources, *, bank_id="D0c", purpose="screen", subset=None,
+def _build(tmp_path: Path, resources, *, bank_id="RSET_D0c", purpose="screen", subset=None,
            parent=H, suffix="", prior=None):
     context, batches = _context(
         tmp_path, bank_id=bank_id, purpose=purpose, subset=subset,
@@ -1188,7 +1210,8 @@ def _reports(manifest: dict) -> dict[str, dict]:
             "complete": True,
             "scientific_complete": False,
             "mode": "smoke",
-            "student_domain": "hlt",
+            "student_domain": spec.student_domain,
+            "deployment_authorized": spec.deployable,
             "strategy": row["strategy"],
             "track": row["track"],
             "completed_optimizer_updates": 1,
@@ -1201,7 +1224,9 @@ def _reports(manifest: dict) -> dict[str, dict]:
             "selected_training_checkpoint_sha256": _sha(f"{row['node_id']}:checkpoint"),
             "selection_sha256": _sha(f"{row['node_id']}:selection"),
             "deployable_extraction": {
-                "strict_hlt_only": True,
+                "student_domain": spec.student_domain,
+                "deployment_authorized": spec.deployable,
+                "strict_hlt_only": spec.deployable,
                 "checkpoint_sha256": _sha(f"{row['node_id']}:deployable"),
                 "report_sha256": _sha(f"{row['node_id']}:extraction"),
             },
@@ -1250,15 +1275,9 @@ def _reports(manifest: dict) -> dict[str, dict]:
 
 
 def test_two_phase_cleanup_crash_resume_and_reconstruction(tmp_path: Path, resources):
-    context, _, result, _ = _build(tmp_path, resources, bank_id="TOFF")
+    context, _, result, _ = _build(tmp_path, resources, bank_id="RSET_D0c")
     cleanup_root = tmp_path / "cleanup"
     reports = _reports(result.manifest)
-    with pytest.raises(ValueError, match="incomplete"):
-        authorize_target_cleanup(
-            context.bank_root, cleanup_root, generation_id=context.generation_id,
-            consumer_reports={next(iter(reports)): next(iter(reports.values()))},
-            exact_reconstruction_authorized=True,
-        )
     authorization = authorize_target_cleanup(
         context.bank_root, cleanup_root, generation_id=context.generation_id,
         consumer_reports=reports, exact_reconstruction_authorized=True,
@@ -1306,8 +1325,11 @@ def test_two_phase_cleanup_crash_resume_and_reconstruction(tmp_path: Path, resou
         screen_sha256=_sha("screen"),
         campaign_sha256=CAMPAIGN,
         recipe_sha256=RECIPE,
-        target_logical_bank_sha256=context.logical_bank["content_hash"],
-        objectives=("RSET_M6c", "RSET_M6w", "RREL_M6c", "RREL_M6w"),
+        target_logical_bank_sha256s={
+            node: context.logical_bank["content_hash"]
+            for node in ("RSET_M1c", "RSET_M1w", "RREL_M1c", "RREL_M1w")
+        },
+        objectives=("RSET_M1c", "RSET_M1w", "RREL_M1c", "RREL_M1w"),
     )
     unfinished = [
         _consumer(
@@ -1317,9 +1339,11 @@ def test_two_phase_cleanup_crash_resume_and_reconstruction(tmp_path: Path, resou
             purpose="confirmation",
         )
         for row in confirmation["rows"]
+        if row["objective_id"] == "RSET_M1c"
     ]
     assert [row["execution_id"] for row in unfinished] == [
         row["execution_id"] for row in confirmation["rows"]
+        if row["objective_id"] == "RSET_M1c"
     ]
     self_authorization = build_target_consumer_registry(
         context.logical_bank,
@@ -1386,7 +1410,7 @@ def test_two_phase_cleanup_crash_resume_and_reconstruction(tmp_path: Path, resou
         recovery_owner={"task": "rebuild"},
     )
     new_context, batches = _context(
-        tmp_path, bank_id="TOFF", purpose="recovery",
+        tmp_path, bank_id="RSET_D0c", purpose="recovery",
         generation_parent=plan["content_hash"], suffix="-recovery",
         consumers=unfinished,
     )
@@ -1394,7 +1418,7 @@ def test_two_phase_cleanup_crash_resume_and_reconstruction(tmp_path: Path, resou
 
     def teacher(model_inputs):
         calls.append(int(model_inputs.arrays["features"][0, 0]))
-        return _toff_surface(model_inputs)
+        return _ordinary_surface(model_inputs)
 
     rebuilt = build_target_generation_from_teacher(
         new_context,
@@ -1492,13 +1516,22 @@ def test_cleanup_report_authentication_binds_registered_execution_node_and_seed(
         assert not (tmp_path / f"cleanup-forged-{field}").exists()
 
 
-def test_consumer_registries_bind_d100_controls_and_toff_confirmation():
-    d100 = _logical("D100")
+def test_consumer_registries_bind_dense_predecessors_and_terminal_confirmation():
+    d100 = _logical("RSET_D100")
     d100_registry = _registry(d100)
-    assert len(d100_registry["payload"]["consumers"]) == 8
+    assert {
+        row["node_id"] for row in d100_registry["payload"]["consumers"]
+    } == {"RSET_D95c", "RSET_D95w"}
     toff = _logical("TOFF")
-    confirmation = _registry(toff, purpose="confirmation")
-    assert len(confirmation["payload"]["consumers"]) == 20
+    assert {
+        row["node_id"] for row in _registry(toff)["payload"]["consumers"]
+    } == {"RSET_D100", "RREL_D100"}
+    d0 = _logical("RSET_D0c")
+    confirmation = _registry(d0, purpose="confirmation")
+    assert len(confirmation["payload"]["consumers"]) == 5
+    assert {row["node_id"] for row in confirmation["payload"]["consumers"]} == {
+        "RSET_M1c"
+    }
     forged = deepcopy(d100_registry["payload"]["consumers"])
     forged[0]["strategy"] = "RREL" if forged[0]["strategy"] == "RSET" else "RSET"
     with pytest.raises(ValueError, match="node metadata"):

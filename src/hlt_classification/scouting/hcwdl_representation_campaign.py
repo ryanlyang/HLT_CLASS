@@ -40,6 +40,7 @@ from .hcwdl_representation_resources import (
     validate_scheduler_evidence,
     validate_storage_estimate,
 )
+from .hcwdl_representation_graph import CONTROL_REGISTRY, NODE_REGISTRY
 
 
 def _operational_path(value: str | Path, *, name: str) -> str:
@@ -65,12 +66,7 @@ LOCAL_SMOKE_CONTRACT: Final = LOCAL_SMOKE_REPORT_CONTRACT
 MODES: Final = ("smoke", "pilot", "production")
 STRATEGIES: Final = ("RSET", "RREL")
 TRACKS: Final = ("c", "w")
-CONTROLS: Final = (
-    "RSET_M5c_JET_ONLY_REP",
-    "RREL_M5c_NO_REL_REP",
-    "RSET_M5c_WITHIN_CLASS_SHUFFLED_REP",
-    "RREL_M5c_WITHIN_CLASS_SHUFFLED_REP",
-)
+CONTROLS: Final = tuple(CONTROL_REGISTRY)
 DETERMINISTIC_KINDS: Final = ("target_build", "prediction_shard")
 PARENT_IMPORT_AUTHORITY_ROUTES: Final = {
     "campaign_spec": "${parent_campaign_spec}",
@@ -144,11 +140,14 @@ class CampaignTask:
 
 
 def primary_node_ids() -> tuple[str, ...]:
+    return tuple(NODE_REGISTRY)
+
+
+def terminal_node_ids() -> tuple[str, ...]:
     return tuple(
-        f"{strategy}_M{rung}{track}"
-        for strategy in STRATEGIES
-        for track in TRACKS
-        for rung in range(1, 7)
+        node_id
+        for node_id, node in NODE_REGISTRY.items()
+        if node.stage == "terminal_m1"
     )
 
 
@@ -501,27 +500,30 @@ def _add_bank_wave(
     nodes: Sequence[str], controls: Sequence[str] = (), purpose: str = "screen",
 ) -> str:
     build = f"target_{bank}_{purpose}"
+    build_dependencies = [prior]
+    if bank in NODE_REGISTRY:
+        build_dependencies.append(f"train_{bank}")
     tasks.append(
         CampaignTask(
-            build, "target_build", (prior,), "gpu_target",
+            build, "target_build", tuple(dict.fromkeys(build_dependencies)), "gpu_target",
             logical_bank=bank, target_purpose=purpose, deterministic_worker=True,
         )
     )
     consumers = []
     for node in nodes:
+        if node not in NODE_REGISTRY:
+            raise ValueError(f"invalid registered representation node {node!r}")
         key = f"train_{node}" if purpose == "screen" else f"confirm_{node}"
         array = None if purpose == "screen" else "0-4"
-        rung_match = re.fullmatch(r"(RSET|RREL)_M([1-6])([cw])", node)
-        if rung_match is None:
-            raise ValueError(f"invalid registered representation node {node!r}")
-        strategy, rung_text, track = rung_match.groups()
-        rung = int(rung_text)
-        direct_parent = (
-            () if rung == 1
-            else (f"train_{strategy}_M{rung - 1}{track}",)
+        execution = NODE_REGISTRY[node]
+        direct_parent = tuple(
+            f"train_{parent}"
+            for parent in (
+                execution.initialization_parent,
+                execution.representation_logit_teacher,
+            )
+            if parent in NODE_REGISTRY
         )
-        if purpose == "confirmation":
-            direct_parent = (f"train_{strategy}_M5{track}",)
         dependencies = tuple(dict.fromkeys((build, *direct_parent)))
         tasks.append(
             CampaignTask(
@@ -536,16 +538,8 @@ def _add_bank_wave(
         )
         consumers.append(key)
     for control in controls:
-        key = f"control_{control}"
-        tasks.append(
-            CampaignTask(
-                key, "train_control",
-                (build, f"train_{control.split('_M5c_', 1)[0]}_M4c"),
-                "gpu_representation", graph_node=control, logical_bank=bank,
-                target_purpose=purpose,
-            )
-        )
-        consumers.append(key)
+        if control not in CONTROL_REGISTRY:
+            raise ValueError(f"invalid registered representation control {control!r}")
     cleanup = f"cleanup_{bank}_{purpose}"
     tasks.append(
         CampaignTask(
@@ -614,31 +608,47 @@ def build_task_registry(
         ),
     ]
     prior = "pretraining_reservation"
-    for rung, source in enumerate(("D0", "D25", "D50", "D75"), start=1):
-        cold_nodes = tuple(f"{strategy}_M{rung}c" for strategy in STRATEGIES)
-        prior = _add_bank_wave(tasks, bank=f"{source}c", prior=prior, nodes=cold_nodes)
-        warm_nodes = tuple(f"{strategy}_M{rung}w" for strategy in STRATEGIES)
-        prior = _add_bank_wave(tasks, bank=f"{source}w", prior=prior, nodes=warm_nodes)
-    tasks.append(CampaignTask("shuffle_map", "shuffle_map", (prior,), "cpu_io"))
-    m5_nodes = tuple(f"{strategy}_M5{track}" for strategy in STRATEGIES for track in TRACKS)
-    prior = _add_bank_wave(
-        tasks, bank="D100", prior="shuffle_map", nodes=m5_nodes, controls=CONTROLS,
-    )
-    m6_nodes = tuple(f"{strategy}_M6{track}" for strategy in STRATEGIES for track in TRACKS)
-    prior = _add_bank_wave(tasks, bank="TOFF", prior=prior, nodes=m6_nodes)
+
+    # Both strategy-specific D100 roots are freshly initialized and taught by
+    # the one authenticated native-offline target bank.
+    root_nodes = tuple(f"{strategy}_D100" for strategy in STRATEGIES)
+    prior = _add_bank_wave(tasks, bank="TOFF", prior=prior, nodes=root_nodes)
+
+    # Within each strategy, the shared D100 result teaches both D95 tracks.
+    # Thereafter every branch's immediate richer student supplies the sole
+    # logit and representation target for its next five-point step.
+    for strategy in STRATEGIES:
+        root = f"{strategy}_D100"
+        d95_nodes = tuple(f"{strategy}_D95{track}" for track in TRACKS)
+        prior = _add_bank_wave(tasks, bank=root, prior=prior, nodes=d95_nodes)
+    for strategy in STRATEGIES:
+        for track in TRACKS:
+            teacher = f"{strategy}_D95{track}"
+            for level in range(90, -1, -5):
+                child = f"{strategy}_D{level}{track}"
+                prior = _add_bank_wave(
+                    tasks, bank=teacher, prior=prior, nodes=(child,),
+                )
+                teacher = child
+            terminal = f"{strategy}_M1{track}"
+            prior = _add_bank_wave(
+                tasks, bank=teacher, prior=prior, nodes=(terminal,),
+            )
     tasks.extend(
         (
             CampaignTask("screen_aggregate", "screen_aggregate", (prior,), "cpu_small"),
             CampaignTask("confirmation_registry", "confirmation_registry", ("screen_aggregate",), "cpu_small"),
         )
     )
-    confirmation_cleanup = _add_bank_wave(
-        tasks,
-        bank="TOFF",
-        prior="confirmation_registry",
-        nodes=m6_nodes,
-        purpose="confirmation",
-    )
+    confirmation_cleanup = "confirmation_registry"
+    for node in terminal_node_ids():
+        confirmation_cleanup = _add_bank_wave(
+            tasks,
+            bank=NODE_REGISTRY[node].target_bank_identity,
+            prior=confirmation_cleanup,
+            nodes=(node,),
+            purpose="confirmation",
+        )
     tasks.append(
         CampaignTask("confirmation_aggregate", "confirmation_aggregate", (confirmation_cleanup,), "cpu_small")
     )
@@ -807,19 +817,22 @@ def _producer_output_route(
 def _training_model_source_routes(task: CampaignTask) -> tuple[str, ...]:
     node = str(task.graph_node)
     if task.kind == "train_control":
-        strategy = node.split("_M5c_", 1)[0]
-        return (_producer_output_route(f"train_{strategy}_M4c", 3),)
-    match = re.fullmatch(r"(RSET|RREL)_M([1-6])([cw])", node)
-    if match is None:
         return ()
-    strategy, rung_text, track = match.groups()
-    rung = int(rung_text)
-    if rung == 1:
-        # Warm M1 initializes from the authenticated parent D0 checkpoint,
-        # not from the report bundle used only for scalar/report evidence.
-        return ("${parent_model_sources}",) if track == "w" else ()
-    parent_rung = 5 if task.kind == "confirmation" else rung - 1
-    return (_producer_output_route(f"train_{strategy}_M{parent_rung}{track}", 3),)
+    execution = NODE_REGISTRY.get(node)
+    if execution is None:
+        return ()
+    sources = tuple(
+        parent
+        for parent in (
+            execution.initialization_parent,
+            execution.predecessor_logit_teacher,
+        )
+        if parent in NODE_REGISTRY
+    )
+    return tuple(
+        _producer_output_route(f"train_{parent}", 3)
+        for parent in dict.fromkeys(sources)
+    )
 
 
 def adapter_registered_input_requirements(
@@ -869,12 +882,19 @@ def adapter_registered_input_requirements(
             f"${{target_consumer_registry:{bank}:{purpose}}}",
             f"${{target_forward_spec:{bank}:{purpose}}}",
             "${split_manifest}", "${train_row_selection}",
-            f"${{teacher_report:{bank}}}",
             _producer_output_route("architecture_attestation", 0),
             _producer_output_route("kernel_resources", 0),
             "${storage_estimate}", "${resource_profile}",
         ))
-        if bank.startswith(("D25", "D50", "D75", "D100")):
+        if bank in NODE_REGISTRY:
+            rows.append(_producer_output_route(f"train_{bank}", 3))
+        else:
+            rows.append(f"${{teacher_report:{bank}}}")
+        teacher_domain = (
+            NODE_REGISTRY[bank].student_domain
+            if bank in NODE_REGISTRY else str(bank).lower()
+        )
+        if teacher_domain not in {"hlt", "toff"}:
             rows.append("${assignment_manifest:train}")
     elif kind == "cache_miniature_bank":
         rows.append(_producer_output_route(
@@ -899,6 +919,12 @@ def adapter_registered_input_requirements(
             _producer_output_route("architecture_attestation", 0),
             *_training_model_source_routes(task),
         ))
+        graph_execution = NODE_REGISTRY.get(str(task.graph_node))
+        if graph_execution is not None and graph_execution.student_domain != "hlt":
+            rows.extend((
+                "${assignment_manifest:train}",
+                "${assignment_manifest:validation}",
+            ))
         if task.kind == "confirmation":
             rows.append(_producer_output_route("confirmation_registry", 0))
         if task.kind == "train_control" and "SHUFFLED" in str(task.graph_node):
@@ -932,13 +958,14 @@ def adapter_registered_input_requirements(
     elif kind == "confirmation_registry":
         rows.extend((
             _producer_output_route("screen_aggregate", 0),
-            "${logical_bank:TOFF}",
         ))
+        rows.extend(
+            f"${{logical_bank:{NODE_REGISTRY[node].target_bank_identity}}}"
+            for node in terminal_node_ids()
+        )
     elif kind == "confirmation_aggregate":
         rows.append(_producer_output_route("confirmation_registry", 0))
-        for node in (
-            "RSET_M6c", "RSET_M6w", "RREL_M6c", "RREL_M6w",
-        ):
+        for node in terminal_node_ids():
             rows.extend(
                 _producer_output_route(f"confirm_{node}", 4, array_index=seed_index)
                 for seed_index in range(5)
@@ -960,7 +987,7 @@ def adapter_registered_input_requirements(
             _producer_output_route("confirmation_registry", 0),
             _producer_output_route("confirmation_aggregate", 0),
         ))
-        for node in ("RSET_M6c", "RSET_M6w", "RREL_M6c", "RREL_M6w"):
+        for node in terminal_node_ids():
             # The lock authenticates the scientific report together with the
             # selected checkpoint and deployable extraction it freezes.
             rows.extend(
@@ -973,7 +1000,7 @@ def adapter_registered_input_requirements(
             _producer_output_route("finalist_lock", 0),
             "${submission_ledger}",
         ))
-        for node in ("RSET_M6c", "RSET_M6w", "RREL_M6c", "RREL_M6w"):
+        for node in terminal_node_ids():
             rows.append(_producer_output_route(f"train_{node}", 2))
     elif kind == "final_selection":
         rows.extend((
@@ -1033,7 +1060,7 @@ def adapter_registered_input_requirements(
             _producer_output_route("shared_claim_gate", 1),
             _producer_output_route("final_assignment_manifest", 0),
         ))
-        for node in ("RSET_M6c", "RSET_M6w", "RREL_M6c", "RREL_M6w"):
+        for node in terminal_node_ids():
             rows.append(_producer_output_route(f"train_{node}", 3))
     elif kind == "prediction_finalize":
         rows.extend((
@@ -1041,7 +1068,7 @@ def adapter_registered_input_requirements(
             _producer_output_route("representation_execution_lock", 1),
             _producer_output_route("representation_execution_lock", 0),
         ))
-        for node in ("RSET_M6c", "RSET_M6w", "RREL_M6c", "RREL_M6w"):
+        for node in terminal_node_ids():
             rows.extend(
                 _producer_output_route(f"train_{node}", output_index)
                 for output_index in (0, 1, 2)
@@ -1178,12 +1205,11 @@ def validate_task_registry(tasks: Sequence[CampaignTask], *, disposition: str) -
     if len(by_key) != len(tasks):
         raise ValueError("representation campaign task keys repeat")
     if {row.graph_node for row in tasks if row.kind == "train_node"} != set(primary_node_ids()):
-        raise ValueError("representation campaign does not contain all 24 primary nodes")
+        raise ValueError("representation campaign does not contain all 86 descent nodes")
     if {row.graph_node for row in tasks if row.kind == "train_control"} != set(CONTROLS):
-        raise ValueError("representation campaign does not contain the four controls")
+        raise ValueError("representation campaign control inventory differs")
     required_singletons = {
         "control_registry", "cache_miniature", "zero_coefficient_acceptance",
-        "shuffle_map",
     }
     if any(sum(row.kind == kind for row in tasks) != 1 for kind in required_singletons):
         raise ValueError("representation campaign gate-task inventory differs")
@@ -1307,13 +1333,6 @@ def validate_task_registry(tasks: Sequence[CampaignTask], *, disposition: str) -
         raise ValueError("cache-miniature acceptance lacks both lifecycle reports")
     if by_key["zero_coefficient_acceptance"].dependencies != ("smoke_probe",):
         raise ValueError("zero-coefficient acceptance is not post-smoke")
-    d100_builds = [
-        row for row in tasks
-        if row.kind == "target_build" and row.logical_bank == "D100"
-        and row.target_purpose == "screen"
-    ]
-    if len(d100_builds) != 1 or "shuffle_map" not in d100_builds[0].dependencies:
-        raise ValueError("D100 controls can run before the frozen shuffle map")
     final_kinds = {"final_selection", "assignment_shard", "assignment_finalize", "data_attestation", "execution_lock", "prediction_shard", "prediction_finalize", "metric_join"}
     if disposition != "combined_confirmatory" and any(row.kind in final_kinds for row in tasks):
         raise PermissionError("validation-only campaign registered final-role tasks")
@@ -1347,18 +1366,22 @@ def validate_task_registry(tasks: Sequence[CampaignTask], *, disposition: str) -
                 ancestors.add(key); stack.extend(by_key[key].dependencies)
         if previous_cleanup not in ancestors:
             raise ValueError("target-bank lifecycle can overlap committed generations")
-    # Every scientific training row binds its immediate deployable predecessor
-    # directly.  Bank serialization alone is not accepted as model lineage.
+    # Every scientific row binds its exact dynamic teacher and, for warm
+    # tracks, its immediate same-strategy initialization parent directly.
     for row in tasks:
-        match = re.fullmatch(r"(RSET|RREL)_M([1-6])([cw])", str(row.graph_node))
-        if row.kind == "train_node" and match is not None and int(match.group(2)) > 1:
-            expected_parent = f"train_{match.group(1)}_M{int(match.group(2)) - 1}{match.group(3)}"
-            if expected_parent not in row.dependencies:
-                raise ValueError("representation node lacks direct predecessor dependency")
-        if row.kind == "confirmation" and match is not None:
-            expected_parent = f"train_{match.group(1)}_M5{match.group(3)}"
-            if expected_parent not in row.dependencies:
-                raise ValueError("confirmation row lacks its selected M5 parent dependency")
+        execution = NODE_REGISTRY.get(str(row.graph_node))
+        if execution is None or row.kind not in {"train_node", "confirmation"}:
+            continue
+        expected = {
+            f"train_{parent}"
+            for parent in (
+                execution.representation_logit_teacher,
+                execution.initialization_parent,
+            )
+            if parent in NODE_REGISTRY
+        }
+        if not expected.issubset(row.dependencies):
+            raise ValueError("representation node lacks direct descent lineage")
 
 
 def create_campaign_spec(
@@ -1836,7 +1859,7 @@ def _commands(spec: Mapping[str, Any]) -> list[dict[str, Any]]:
         command = [
             "sbatch", "--parsable", "--account=reu-aisocial", "--partition=tigris",
             f"--cpus-per-task={resource['cpus']}", f"--mem={resource['memory']}",
-            f"--time={resource['walltime']}", f"--job-name=hcwdl_rkd_{task['task_key']}",
+            f"--time={resource['walltime']}", f"--job-name=hcwdlr_{task['task_key']}",
             f"--comment=hcwdl-rkd-{reconciliation_token}",
         ]
         if resource["gpu"] is not None:

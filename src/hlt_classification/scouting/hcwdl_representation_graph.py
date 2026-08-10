@@ -1,8 +1,13 @@
-"""Frozen HCWDL matching-free representation-KD ascent and control graphs.
+"""Frozen four-track dense HCWDL matching-free representation-KD descent.
 
-This module is deliberately additive.  It authenticates the 24 representation
-students and four terminal controls without changing ``HCWDL_GRAPH/v1`` or
-deriving scientific semantics from node-name suffixes at runtime.
+The graph has two strategy-specific D100 roots taught by the native offline
+model.  Each root fans out into a cold and a warm five-percentage-point
+descent from D95 through D0 and terminates at M1.  Cold children are freshly
+initialized; warm children load only their immediate same-strategy
+predecessor and reset all optimizer state.
+
+The historical M1--M6 ascent remains a distinct retired contract.  This
+module publishes ``HCWDL_REPRESENTATION_DENSE_DESCENT_GRAPH/v1``.
 """
 
 from __future__ import annotations
@@ -14,14 +19,17 @@ from typing import Final, Mapping
 from hlt_classification.data.cache_contracts import canonical_sha256
 
 from .hcwdl_representation_contracts import (
-    REPRESENTATION_ASCENT_GRAPH_CONTRACT,
     REPRESENTATION_CONTROL_REGISTRY_CONTRACT,
+    REPRESENTATION_DESCENT_GRAPH_CONTRACT,
     build_versioned_artifact,
     validate_versioned_artifact,
 )
 
 
-ASCENT_GRAPH_CONTRACT: Final = REPRESENTATION_ASCENT_GRAPH_CONTRACT
+# Compatibility names are retained for internal imports while their values
+# identify the new scientific artifact explicitly.
+ASCENT_GRAPH_CONTRACT: Final = REPRESENTATION_DESCENT_GRAPH_CONTRACT
+DESCENT_GRAPH_CONTRACT: Final = REPRESENTATION_DESCENT_GRAPH_CONTRACT
 CONTROL_REGISTRY_CONTRACT: Final = REPRESENTATION_CONTROL_REGISTRY_CONTRACT
 SCHEMA_VERSION: Final = 1
 
@@ -29,25 +37,24 @@ RSET_STRATEGY: Final = "HCWDL_REP_SET/v1"
 RREL_STRATEGY: Final = "HCWDL_REP_REL/v1"
 STRATEGIES: Final = (RSET_STRATEGY, RREL_STRATEGY)
 TRACKS: Final = ("cold", "warm")
+DESCENT_LEVELS: Final = tuple(range(100, -1, -5))
+TRACKED_LEVELS: Final = DESCENT_LEVELS[1:]
+TERMINAL_STEP: Final = len(TRACKED_LEVELS) + 1
 
-_PRIVILEGED_BY_RUNG: Final = MappingProxyType({
-    1: ("D0", "hlt"),
-    2: ("D25", "d25"),
-    3: ("D50", "d50"),
-    4: ("D75", "d75"),
-    5: ("D100", "d100"),
-    6: ("TOFF", "toff"),
-})
+
+def domain_for_level(level: int) -> str:
+    if level not in DESCENT_LEVELS:
+        raise ValueError(f"unknown representation privilege level {level}")
+    return "hlt" if level == 0 else f"d{level}"
 
 
 @dataclass(frozen=True)
 class RepresentationNodeSpec:
-    """One explicit primary ascent node.
+    """One explicit dense-descent student.
 
-    Every routing field is stored rather than inferred from ``node_id``.
-    ``initialization_parent`` names a deployable checkpoint source; cold nodes
-    intentionally leave it null and instead bind ``parent_counterpart`` for
-    paired initialization seeds.
+    ``rung`` is the canonical step coordinate: D100 is zero, D95 is one,
+    D0 is twenty, and M1 is twenty-one.  Runtime routing never derives these
+    semantics from the node name.
     """
 
     node_id: str
@@ -55,13 +62,15 @@ class RepresentationNodeSpec:
     strategy: str
     track: str
     rung: int
+    stage: str
+    privilege_percent: int
     student_domain: str
     initialization: str
     initialization_parent: str | None
     predecessor_logit_teacher: str | None
     representation_logit_teacher: str
     representation_teacher_domain: str
-    parent_counterpart: str
+    parent_counterpart: str | None
     target_bank_identity: str
     deployable: bool
 
@@ -71,7 +80,7 @@ class RepresentationNodeSpec:
 
 @dataclass(frozen=True)
 class RepresentationControlSpec:
-    """One registered validation-only M5 control."""
+    """Type surface retained for future explicitly versioned controls."""
 
     control_id: str
     paired_primary_node: str
@@ -99,9 +108,6 @@ class RepresentationControlSpec:
     def payload(self) -> dict[str, object]:
         result = asdict(self)
         result["component_allocation"] = dict(self.component_allocation)
-        # JSON publication canonicalizes tuples to arrays.  Emit the canonical
-        # list form up front so an artifact validates identically before and
-        # after its immutable-file round trip.
         result["descendants"] = list(self.descendants)
         return result
 
@@ -122,135 +128,106 @@ def _track_suffix(track: str) -> str:
     raise ValueError(f"unknown representation track {track!r}")
 
 
-def _teacher_for(track: str, rung: int) -> tuple[str, str, str]:
-    base, domain = _PRIVILEGED_BY_RUNG[rung]
-    suffix = _track_suffix(track)
-    if base in {"D0", "D25", "D50", "D75"}:
-        teacher = f"{base}{suffix}"
-    else:
-        teacher = base
-    return teacher, domain, teacher
-
-
 def _build_node_registry() -> dict[str, RepresentationNodeSpec]:
     nodes: dict[str, RepresentationNodeSpec] = {}
     for strategy in STRATEGIES:
         prefix = _strategy_prefix(strategy)
+        root_id = f"{prefix}_D100"
+        nodes[root_id] = RepresentationNodeSpec(
+            node_id=root_id,
+            branch_id=f"{prefix}-root",
+            strategy=strategy,
+            track="shared",
+            rung=0,
+            stage="offline_to_d100",
+            privilege_percent=100,
+            student_domain="d100",
+            initialization="fresh",
+            initialization_parent=None,
+            predecessor_logit_teacher=None,
+            representation_logit_teacher="TOFF",
+            representation_teacher_domain="toff",
+            parent_counterpart="D100",
+            target_bank_identity="TOFF",
+            deployable=False,
+        )
         for track in TRACKS:
             suffix = _track_suffix(track)
             branch_id = f"{prefix}-{track}"
-            predecessor: str | None = None
-            for rung in range(1, 7):
-                node_id = f"{prefix}_M{rung}{suffix}"
-                teacher, teacher_domain, bank = _teacher_for(track, rung)
-                initialization_parent = (
-                    None
-                    if track == "cold"
-                    else teacher if rung == 1 else predecessor
-                )
+            predecessor = root_id
+            predecessor_domain = "d100"
+            for step, level in enumerate(TRACKED_LEVELS, start=1):
+                node_id = f"{prefix}_D{level}{suffix}"
                 nodes[node_id] = RepresentationNodeSpec(
                     node_id=node_id,
                     branch_id=branch_id,
                     strategy=strategy,
                     track=track,
-                    rung=rung,
-                    student_domain="hlt",
+                    rung=step,
+                    stage="down",
+                    privilege_percent=level,
+                    student_domain=domain_for_level(level),
                     initialization="fresh" if track == "cold" else "warm",
-                    initialization_parent=initialization_parent,
-                    predecessor_logit_teacher=None if rung == 1 else predecessor,
-                    representation_logit_teacher=teacher,
-                    representation_teacher_domain=teacher_domain,
-                    parent_counterpart=f"M{rung}{suffix}",
-                    target_bank_identity=bank,
-                    deployable=True,
+                    initialization_parent=(
+                        None if track == "cold" else predecessor
+                    ),
+                    # The predecessor's target bank supplies both the sole
+                    # logit teacher and the representation teacher.
+                    predecessor_logit_teacher=None,
+                    representation_logit_teacher=predecessor,
+                    representation_teacher_domain=predecessor_domain,
+                    # This is a stochastic-comparison coordinate, not a
+                    # claim that a separately deployable base model exists.
+                    # Every five-point rung therefore has an exact paired
+                    # coordinate even when it is only a training
+                    # intermediate in this dense descent.
+                    parent_counterpart=f"D{level}{suffix}",
+                    target_bank_identity=predecessor,
+                    deployable=level == 0,
                 )
                 predecessor = node_id
+                predecessor_domain = domain_for_level(level)
+            terminal_id = f"{prefix}_M1{suffix}"
+            nodes[terminal_id] = RepresentationNodeSpec(
+                node_id=terminal_id,
+                branch_id=branch_id,
+                strategy=strategy,
+                track=track,
+                rung=TERMINAL_STEP,
+                stage="terminal_m1",
+                privilege_percent=0,
+                student_domain="hlt",
+                initialization="fresh" if track == "cold" else "warm",
+                initialization_parent=None if track == "cold" else predecessor,
+                predecessor_logit_teacher=None,
+                representation_logit_teacher=predecessor,
+                representation_teacher_domain="hlt",
+                parent_counterpart=f"M1{suffix}",
+                target_bank_identity=predecessor,
+                deployable=True,
+            )
     return nodes
 
 
 NODE_REGISTRY: Final[Mapping[str, RepresentationNodeSpec]] = MappingProxyType(
     _build_node_registry()
 )
-
-
-def _control(
-    control_id: str,
-    *,
-    primary: str,
-    strategy: str,
-    allocation: Mapping[str, float],
-    shuffled: bool,
-) -> RepresentationControlSpec:
-    prefix = _strategy_prefix(strategy)
-    return RepresentationControlSpec(
-        control_id=control_id,
-        paired_primary_node=primary,
-        strategy=strategy,
-        track="cold",
-        rung=5,
-        student_domain="hlt",
-        initialization="fresh",
-        initialization_parent=None,
-        predecessor_logit_teacher=f"{prefix}_M4c",
-        representation_logit_teacher="D100",
-        representation_teacher_domain="d100",
-        parent_counterpart="M5c",
-        target_bank_identity="D100",
-        component_allocation=tuple((name, float(allocation[name])) for name in (
-            "jet", "set", "relation"
-        )),
-        shuffled_representation_targets=shuffled,
-        shuffle_map_contract=(
-            "HCWDL_REPRESENTATION_SHUFFLE_MAP/v1" if shuffled else None
-        ),
-        owns_gradient_calibration=True,
-        disposition="validation_only_terminal",
-        deployable=True,
-        finalist_eligible=False,
-        confirmation_eligible=False,
-        descendants=(),
-    )
-
-
-CONTROL_REGISTRY: Final[Mapping[str, RepresentationControlSpec]] = MappingProxyType({
-    "RSET_M5c_JET_ONLY_REP": _control(
-        "RSET_M5c_JET_ONLY_REP",
-        primary="RSET_M5c",
-        strategy=RSET_STRATEGY,
-        allocation={"jet": 1.0, "set": 0.0, "relation": 0.0},
-        shuffled=False,
-    ),
-    "RREL_M5c_NO_REL_REP": _control(
-        "RREL_M5c_NO_REL_REP",
-        primary="RREL_M5c",
-        strategy=RREL_STRATEGY,
-        allocation={"jet": 0.4, "set": 0.6, "relation": 0.0},
-        shuffled=False,
-    ),
-    "RSET_M5c_WITHIN_CLASS_SHUFFLED_REP": _control(
-        "RSET_M5c_WITHIN_CLASS_SHUFFLED_REP",
-        primary="RSET_M5c",
-        strategy=RSET_STRATEGY,
-        allocation={"jet": 0.4, "set": 0.6, "relation": 0.0},
-        shuffled=True,
-    ),
-    "RREL_M5c_WITHIN_CLASS_SHUFFLED_REP": _control(
-        "RREL_M5c_WITHIN_CLASS_SHUFFLED_REP",
-        primary="RREL_M5c",
-        strategy=RREL_STRATEGY,
-        allocation={"jet": 0.3, "set": 0.45, "relation": 0.25},
-        shuffled=True,
-    ),
-})
+# The old M5-only mechanisms do not have a valid dense-descent meaning.
+CONTROL_REGISTRY: Final[Mapping[str, RepresentationControlSpec]] = (
+    MappingProxyType({})
+)
 
 
 def _expected_primary_ids() -> set[str]:
-    return {
-        f"{prefix}_M{rung}{suffix}"
-        for prefix in ("RSET", "RREL")
-        for suffix in ("c", "w")
-        for rung in range(1, 7)
-    }
+    expected: set[str] = set()
+    for prefix in ("RSET", "RREL"):
+        expected.add(f"{prefix}_D100")
+        for suffix in ("c", "w"):
+            expected.update(
+                f"{prefix}_D{level}{suffix}" for level in TRACKED_LEVELS
+            )
+            expected.add(f"{prefix}_M1{suffix}")
+    return expected
 
 
 def _assert_acyclic(registry: Mapping[str, RepresentationNodeSpec]) -> None:
@@ -259,15 +236,18 @@ def _assert_acyclic(registry: Mapping[str, RepresentationNodeSpec]) -> None:
 
     def visit(node_id: str) -> None:
         if node_id in visiting:
-            raise ValueError("representation ascent graph contains a cycle")
+            raise ValueError("representation descent graph contains a cycle")
         if node_id in visited:
             return
         visiting.add(node_id)
-        predecessor = registry[node_id].predecessor_logit_teacher
-        if predecessor is not None:
-            if predecessor not in registry:
-                raise ValueError(f"missing predecessor for {node_id}")
-            visit(predecessor)
+        node = registry[node_id]
+        for parent in (
+            node.representation_logit_teacher,
+            node.initialization_parent,
+            node.predecessor_logit_teacher,
+        ):
+            if parent in registry:
+                visit(str(parent))
         visiting.remove(node_id)
         visited.add(node_id)
 
@@ -278,50 +258,89 @@ def _assert_acyclic(registry: Mapping[str, RepresentationNodeSpec]) -> None:
 def validate_ascent_graph(
     registry: Mapping[str, RepresentationNodeSpec] = NODE_REGISTRY,
 ) -> str:
-    """Validate every frozen primary invariant and return its graph hash."""
+    """Validate the dense descent and return its canonical semantic hash."""
 
-    if len(registry) != 24 or set(registry) != _expected_primary_ids():
-        raise ValueError("representation ascent registry must contain exactly 24 nodes")
+    if len(registry) != 86 or set(registry) != _expected_primary_ids():
+        raise ValueError("representation descent registry must contain exactly 86 nodes")
     if set(registry) != {node.node_id for node in registry.values()}:
-        raise ValueError("representation ascent node IDs differ from registry keys")
+        raise ValueError("representation descent node IDs differ from registry keys")
 
-    for node_id, node in registry.items():
-        expected_prefix = _strategy_prefix(node.strategy)
-        expected_suffix = _track_suffix(node.track)
-        if node.branch_id != f"{expected_prefix}-{node.track}":
-            raise ValueError(f"branch identity differs for {node_id}")
-        if node.student_domain != "hlt" or not node.deployable:
-            raise ValueError(f"representation student {node_id} is not HLT-only deployable")
-        if node.rung not in range(1, 7):
-            raise ValueError(f"invalid representation rung for {node_id}")
-        if node.parent_counterpart != f"M{node.rung}{expected_suffix}":
-            raise ValueError(f"parent counterpart differs for {node_id}")
-
-        teacher, domain, bank = _teacher_for(node.track, node.rung)
+    for strategy in STRATEGIES:
+        prefix = _strategy_prefix(strategy)
+        root = registry[f"{prefix}_D100"]
         if (
-            node.representation_logit_teacher != teacher
-            or node.representation_teacher_domain != domain
-            or node.target_bank_identity != bank
+            root.branch_id != f"{prefix}-root"
+            or root.strategy != strategy
+            or root.track != "shared"
+            or root.rung != 0
+            or root.stage != "offline_to_d100"
+            or root.privilege_percent != 100
+            or root.student_domain != "d100"
+            or root.initialization != "fresh"
+            or root.initialization_parent is not None
+            or root.predecessor_logit_teacher is not None
+            or root.representation_logit_teacher != "TOFF"
+            or root.representation_teacher_domain != "toff"
+            or root.parent_counterpart != "D100"
+            or root.target_bank_identity != "TOFF"
+            or root.deployable
         ):
-            raise ValueError(f"privileged teacher or target bank differs for {node_id}")
+            raise ValueError(f"offline-to-D100 root differs for {prefix}")
 
-        expected_predecessor = (
-            None
-            if node.rung == 1
-            else f"{expected_prefix}_M{node.rung - 1}{expected_suffix}"
-        )
-        if node.predecessor_logit_teacher != expected_predecessor:
-            raise ValueError(f"same-branch predecessor differs for {node_id}")
-        if node.rung > 1 and node.predecessor_logit_teacher == teacher:
-            raise ValueError(f"predecessor supplies representation targets for {node_id}")
+        for track in TRACKS:
+            suffix = _track_suffix(track)
+            predecessor = root.node_id
+            predecessor_domain = "d100"
+            for step, level in enumerate(TRACKED_LEVELS, start=1):
+                node_id = f"{prefix}_D{level}{suffix}"
+                node = registry[node_id]
+                if (
+                    node.branch_id != f"{prefix}-{track}"
+                    or node.strategy != strategy
+                    or node.track != track
+                    or node.rung != step
+                    or node.stage != "down"
+                    or node.privilege_percent != level
+                    or node.student_domain != domain_for_level(level)
+                    or node.predecessor_logit_teacher is not None
+                    or node.representation_logit_teacher != predecessor
+                    or node.representation_teacher_domain != predecessor_domain
+                    or node.target_bank_identity != predecessor
+                    or node.parent_counterpart != f"D{level}{suffix}"
+                    or node.deployable != (level == 0)
+                ):
+                    raise ValueError(f"dense descent routing differs for {node_id}")
+                if track == "cold":
+                    if node.initialization != "fresh" or node.initialization_parent is not None:
+                        raise ValueError(f"cold initialization differs for {node_id}")
+                elif node.initialization != "warm" or node.initialization_parent != predecessor:
+                    raise ValueError(f"warm initialization differs for {node_id}")
+                predecessor = node_id
+                predecessor_domain = domain_for_level(level)
 
-        if node.track == "cold":
-            if node.initialization != "fresh" or node.initialization_parent is not None:
-                raise ValueError(f"cold initialization differs for {node_id}")
-        else:
-            expected_parent = teacher if node.rung == 1 else expected_predecessor
-            if node.initialization != "warm" or node.initialization_parent != expected_parent:
-                raise ValueError(f"warm initialization differs for {node_id}")
+            terminal_id = f"{prefix}_M1{suffix}"
+            terminal = registry[terminal_id]
+            if (
+                terminal.branch_id != f"{prefix}-{track}"
+                or terminal.strategy != strategy
+                or terminal.track != track
+                or terminal.rung != TERMINAL_STEP
+                or terminal.stage != "terminal_m1"
+                or terminal.privilege_percent != 0
+                or terminal.student_domain != "hlt"
+                or terminal.predecessor_logit_teacher is not None
+                or terminal.representation_logit_teacher != predecessor
+                or terminal.representation_teacher_domain != "hlt"
+                or terminal.target_bank_identity != predecessor
+                or terminal.parent_counterpart != f"M1{suffix}"
+                or not terminal.deployable
+            ):
+                raise ValueError(f"terminal M1 routing differs for {terminal_id}")
+            if track == "cold":
+                if terminal.initialization != "fresh" or terminal.initialization_parent is not None:
+                    raise ValueError(f"cold terminal initialization differs for {terminal_id}")
+            elif terminal.initialization != "warm" or terminal.initialization_parent != predecessor:
+                raise ValueError(f"warm terminal initialization differs for {terminal_id}")
 
     _assert_acyclic(registry)
     return canonical_sha256({
@@ -336,76 +355,30 @@ def validate_control_registry(
     *,
     primary_registry: Mapping[str, RepresentationNodeSpec] = NODE_REGISTRY,
 ) -> str:
-    """Validate the exact four terminal controls and return the registry hash."""
+    """Dense descent v1 deliberately has no inherited M5-only controls."""
 
-    expected = {
-        "RSET_M5c_JET_ONLY_REP",
-        "RREL_M5c_NO_REL_REP",
-        "RSET_M5c_WITHIN_CLASS_SHUFFLED_REP",
-        "RREL_M5c_WITHIN_CLASS_SHUFFLED_REP",
-    }
-    if len(registry) != 4 or set(registry) != expected:
-        raise ValueError("representation control registry must contain exactly four controls")
-    if set(registry) != {control.control_id for control in registry.values()}:
-        raise ValueError("representation control IDs differ from registry keys")
-
-    for control_id, control in registry.items():
-        if control.paired_primary_node not in primary_registry:
-            raise ValueError(f"unknown paired primary for {control_id}")
-        primary = primary_registry[control.paired_primary_node]
-        if (
-            primary.track != "cold"
-            or primary.rung != 5
-            or control.strategy != primary.strategy
-            or control.predecessor_logit_teacher != primary.predecessor_logit_teacher
-            or control.representation_logit_teacher != "D100"
-            or control.target_bank_identity != "D100"
-            or control.parent_counterpart != "M5c"
-        ):
-            raise ValueError(f"control lineage differs for {control_id}")
-        if (
-            control.student_domain != "hlt"
-            or control.initialization != "fresh"
-            or control.initialization_parent is not None
-            or control.disposition != "validation_only_terminal"
-            or not control.deployable
-            or control.finalist_eligible
-            or control.confirmation_eligible
-            or control.descendants
-            or not control.owns_gradient_calibration
-        ):
-            raise ValueError(f"control disposition differs for {control_id}")
-        allocation = dict(control.component_allocation)
-        if set(allocation) != {"jet", "set", "relation"}:
-            raise ValueError(f"control allocation fields differ for {control_id}")
-        if abs(sum(allocation.values()) - 1.0) > 1e-12:
-            raise ValueError(f"control component allocation differs for {control_id}")
-        if control.shuffled_representation_targets != ("SHUFFLED" in control_id):
-            raise ValueError(f"shuffle disposition differs for {control_id}")
-        if control.shuffled_representation_targets != (control.shuffle_map_contract is not None):
-            raise ValueError(f"shuffle-map contract differs for {control_id}")
-
+    validate_ascent_graph(primary_registry)
+    if registry:
+        raise ValueError("dense descent control registry must be empty")
     return canonical_sha256({
         "contract": CONTROL_REGISTRY_CONTRACT,
         "schema_version": SCHEMA_VERSION,
-        "ascent_graph_sha256": ASCENT_GRAPH_SHA256,
-        "controls": [registry[control_id].payload() for control_id in sorted(registry)],
+        "descent_graph_sha256": ASCENT_GRAPH_SHA256,
+        "controls": [],
     })
 
 
 def ascent_graph_artifact(*, parents: Mapping[str, str]) -> dict[str, object]:
-    """Build a reusable graph artifact with its authenticated parent lineage."""
+    """Build the reusable dense-descent graph artifact."""
 
     if set(parents) != {"parent_graph", "parent_import"}:
-        raise ValueError("representation ascent graph parent keys differ")
+        raise ValueError("representation descent graph parent keys differ")
     return build_versioned_artifact(
         ASCENT_GRAPH_CONTRACT,
         parents=parents,
         payload={
             "semantic_graph_sha256": ASCENT_GRAPH_SHA256,
-            "nodes": [
-                NODE_REGISTRY[node_id].payload() for node_id in sorted(NODE_REGISTRY)
-            ],
+            "nodes": [NODE_REGISTRY[node_id].payload() for node_id in sorted(NODE_REGISTRY)],
         },
     )
 
@@ -424,22 +397,17 @@ def validate_ascent_graph_artifact(
         "semantic_graph_sha256": ASCENT_GRAPH_SHA256,
         "nodes": [NODE_REGISTRY[node_id].payload() for node_id in sorted(NODE_REGISTRY)],
     }:
-        raise ValueError("representation ascent graph artifact differs")
+        raise ValueError("representation descent graph artifact differs")
     return digest
 
 
 def control_registry_artifact(*, ascent_graph_artifact_sha256: str) -> dict[str, object]:
-    """Build the separate four-control artifact; controls never enter the graph."""
-
     return build_versioned_artifact(
         CONTROL_REGISTRY_CONTRACT,
-        parents={"representation_ascent_graph": ascent_graph_artifact_sha256},
+        parents={"representation_descent_graph": ascent_graph_artifact_sha256},
         payload={
             "semantic_registry_sha256": CONTROL_REGISTRY_SHA256,
-            "controls": [
-                CONTROL_REGISTRY[control_id].payload()
-                for control_id in sorted(CONTROL_REGISTRY)
-            ],
+            "controls": [],
         },
     )
 
@@ -450,22 +418,20 @@ def validate_control_registry_artifact(
     digest = validate_versioned_artifact(
         value,
         expected_contract=CONTROL_REGISTRY_CONTRACT,
-        expected_parents={"representation_ascent_graph": ascent_graph_artifact_sha256},
+        expected_parents={"representation_descent_graph": ascent_graph_artifact_sha256},
         required_payload_keys=("semantic_registry_sha256", "controls"),
     )
     payload = value["payload"]
     if set(payload) != {"semantic_registry_sha256", "controls"} or payload != {
         "semantic_registry_sha256": CONTROL_REGISTRY_SHA256,
-        "controls": [
-            CONTROL_REGISTRY[control_id].payload()
-            for control_id in sorted(CONTROL_REGISTRY)
-        ],
+        "controls": [],
     }:
-        raise ValueError("representation control registry artifact differs")
+        raise ValueError("dense descent control registry artifact differs")
     return digest
 
 
 ASCENT_GRAPH_SHA256: Final = validate_ascent_graph()
+DESCENT_GRAPH_SHA256: Final = ASCENT_GRAPH_SHA256
 CONTROL_REGISTRY_SHA256: Final = validate_control_registry()
 
 
@@ -475,13 +441,19 @@ __all__ = [
     "CONTROL_REGISTRY",
     "CONTROL_REGISTRY_CONTRACT",
     "CONTROL_REGISTRY_SHA256",
+    "DESCENT_GRAPH_CONTRACT",
+    "DESCENT_GRAPH_SHA256",
+    "DESCENT_LEVELS",
     "NODE_REGISTRY",
     "RREL_STRATEGY",
     "RSET_STRATEGY",
     "RepresentationControlSpec",
     "RepresentationNodeSpec",
+    "TERMINAL_STEP",
+    "TRACKED_LEVELS",
     "ascent_graph_artifact",
     "control_registry_artifact",
+    "domain_for_level",
     "validate_ascent_graph",
     "validate_ascent_graph_artifact",
     "validate_control_registry",

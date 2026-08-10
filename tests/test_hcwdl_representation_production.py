@@ -118,7 +118,7 @@ def test_hcwdl_finalist_identity_binds_report_selector_extraction_and_execution(
         "selection_sha256": "5" * 64,
     }
     _validate_finalist_model_source_identity(
-        {"kind": "hcwdl"}, finalist, name="RSET_M6c", evidence=evidence,
+        {"kind": "hcwdl"}, finalist, name="RSET_M1c", evidence=evidence,
     )
     for field in (
         "report_sha256", "extraction_sha256", "registered_execution_id",
@@ -127,7 +127,7 @@ def test_hcwdl_finalist_identity_binds_report_selector_extraction_and_execution(
         forged = {**evidence, field: "f" * 64}
         with pytest.raises(ValueError, match="artifact lineage differs"):
             _validate_finalist_model_source_identity(
-                {"kind": "hcwdl"}, finalist, name="RSET_M6c", evidence=forged,
+                {"kind": "hcwdl"}, finalist, name="RSET_M1c", evidence=forged,
             )
 
 
@@ -318,11 +318,11 @@ def test_target_partition_factory_applies_deterministic_miniature_prefix() -> No
 
 def test_validation_only_adapter_publishes_registered_real_aggregate(tmp_path: Path) -> None:
     screen = with_content_hash({
-        "contract": "HCWDL_REPRESENTATION_SCREEN_AGGREGATE/v1",
+        "contract": "HCWDL_REPRESENTATION_SCREEN_AGGREGATE/v2",
         "schema_version": 1,
     })
     confirmation = with_content_hash({
-        "contract": "HCWDL_REPRESENTATION_CONFIRMATION_AGGREGATE/v1",
+        "contract": "HCWDL_REPRESENTATION_CONFIRMATION_AGGREGATE/v2",
         "schema_version": 1,
     })
     disposition = with_content_hash({
@@ -403,7 +403,7 @@ def test_execution_lock_adapter_publishes_lock_and_prediction_spec(tmp_path: Pat
     assignment_spec_sha256 = "e" * 64
     selection_rule_sha256 = "d" * 64
     finalist_lock = with_content_hash({
-        "contract": "HCWDL_REPRESENTATION_FINALIST_LOCK/v1",
+        "contract": "HCWDL_REPRESENTATION_FINALIST_LOCK/v2",
         "schema_version": 1,
         "population_sha256": population,
         "architecture_attestation_sha256": "9" * 64,

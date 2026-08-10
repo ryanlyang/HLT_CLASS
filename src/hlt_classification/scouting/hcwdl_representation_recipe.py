@@ -2,9 +2,8 @@
 
 The overlay authorizes only representation supervision.  It binds, but never
 copies or overrides, the optimization policy in an authenticated
-``HCWDL_RECIPE/v4`` parent.  Version 2 records the primary parent's exact
-all-ones loss vector and therefore makes every per-jet representation
-reduction an unweighted natural-population mean.
+``HCWDL_RECIPE/v4`` parent.  Version 3 freezes the dense four-track descent:
+Offline -> D100 -> D95 -> ... -> D0 -> M1 for RSET/RREL, cold/warm.
 """
 
 from __future__ import annotations
@@ -251,9 +250,20 @@ def _scientific_values() -> dict[str, Any]:
                 "earliest_optimizer_update",
                 "lexicographically_smallest_checkpoint_identity",
             ],
-            "student_domain": "hlt",
+            "student_domains": sorted({
+                node.student_domain for node in NODE_REGISTRY.values()
+            }),
+            "intermediate_repaired_views_are_training_only": True,
+            "deployable_node_ids": sorted(
+                node.node_id for node in NODE_REGISTRY.values()
+                if node.deployable
+            ),
+            "primary_result_node_suffix": "M1",
+            "terminal_after_m1": True,
             "training_heads_reset_each_node": True,
-            "warm_start_loads_deployable_only": True,
+            "warm_start_loads_immediate_predecessor_model_state_only": True,
+            "warm_start_resets_optimizer_and_scheduler": True,
+            "cold_start_is_fresh_at_every_rung": True,
             "deployable_excludes_representation_heads": True,
             "representation_row_weight_source": "parent_recipe_exact_15_ones",
             "class_weighted_representation_row_reduction": False,
@@ -272,9 +282,13 @@ def _scientific_values() -> dict[str, Any]:
         },
         "target_lifecycle": {
             "logical_banks": [
-                "D0c", "D0w", "D25c", "D25w", "D50c", "D50w",
-                "D75c", "D75w", "D100", "TOFF",
+                "TOFF",
+                *sorted(
+                    node_id for node_id, node in NODE_REGISTRY.items()
+                    if node.stage != "terminal_m1"
+                ),
             ],
+            "campaign_teacher_commitments_are_topologically_derived": True,
             "superset_compact_targets": True,
             "just_in_time": True,
             "cleanup_after_all_authenticated_consumers": True,
@@ -283,12 +297,8 @@ def _scientific_values() -> dict[str, Any]:
             "maximum_committed_scientific_banks_under_serial_dag": 1,
         },
         "controls": {
-            "registered_count": 4,
-            "shuffled_map_seed": 20260809,
-            "shuffle_scope": "within_true_class_cyclic_no_fixed_point",
-            "privileged_logits_remain_correct_identity": True,
-            "shuffled_controls_calibrate_independently": True,
-            "validation_only_terminal": True,
+            "registered_count": 0,
+            "retired_m5_ascent_controls_reused": False,
         },
         "forbidden_parent_overrides": [
             "ce_coefficients", "kd_coefficients", "temperatures", "batch_size",
@@ -357,7 +367,7 @@ def build_representation_recipe(
     )
     payload = {
         "recipe_profile": RECIPE_PROFILE,
-        "purpose": "hcwdl_matching_free_representation_kd_four_ascents",
+        "purpose": "hcwdl_matching_free_representation_kd_four_dense_descents",
         "parent_recipe_contract": PARENT_RECIPE_CONTRACT,
         "ascent_graph_sha256": ASCENT_GRAPH_SHA256,
         "control_registry_sha256": CONTROL_REGISTRY_SHA256,
@@ -435,7 +445,8 @@ def validate_representation_recipe(
         raise ValueError("HCWDL-RKD recipe payload fields differ")
     if (
         payload["recipe_profile"] != RECIPE_PROFILE
-        or payload["purpose"] != "hcwdl_matching_free_representation_kd_four_ascents"
+        or payload["purpose"]
+        != "hcwdl_matching_free_representation_kd_four_dense_descents"
         or payload["parent_recipe_contract"] != PARENT_RECIPE_CONTRACT
         or payload["ascent_graph_sha256"] != ASCENT_GRAPH_SHA256
         or payload["control_registry_sha256"] != CONTROL_REGISTRY_SHA256

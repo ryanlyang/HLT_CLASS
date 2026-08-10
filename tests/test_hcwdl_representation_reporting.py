@@ -49,8 +49,13 @@ def test_confirmation_registry_and_ddof_one_aggregate() -> None:
         screen_sha256="a" * 64,
         campaign_sha256="c" * 64,
         recipe_sha256="d" * 64,
-        target_logical_bank_sha256="b" * 64,
-        objectives=("RSET_M6c", "RSET_M6w", "RREL_M6c", "RREL_M6w"),
+        target_logical_bank_sha256s={
+            node: str(index) * 64
+            for index, node in enumerate(
+                ("RSET_M1c", "RSET_M1w", "RREL_M1c", "RREL_M1w"), start=1,
+            )
+        },
+        objectives=("RSET_M1c", "RSET_M1w", "RREL_M1c", "RREL_M1w"),
     )
     assert registry["execution_count"] == 20
     assert tuple(registry["seeds"]) == CONFIRMATION_SEEDS == (11, 22, 33, 44, 55)
@@ -73,7 +78,7 @@ def test_confirmation_registry_and_ddof_one_aggregate() -> None:
         reports=reports,
         metric_names=CONFIRMATION_METRICS,
     )
-    summary = aggregate["objectives"]["RSET_M6c"]["macro_ovr_auc"]
+    summary = aggregate["objectives"]["RSET_M1c"]["macro_ovr_auc"]
     assert len(summary["raw"]) == 5
     assert summary["student_t_df"] == 4
     assert summary["standard_error"] == pytest.approx(
@@ -81,13 +86,13 @@ def test_confirmation_registry_and_ddof_one_aggregate() -> None:
     )
     assert aggregate["used_for_finalist_selection"] is False
     assert tuple(aggregate["paired_seed_contrasts"]) == (
-        "RREL_M6c-minus-RSET_M6c",
-        "RREL_M6w-minus-RSET_M6w",
-        "RSET_M6w-minus-RSET_M6c",
-        "RREL_M6w-minus-RREL_M6c",
+        "RREL_M1c-minus-RSET_M1c",
+        "RREL_M1w-minus-RSET_M1w",
+        "RSET_M1w-minus-RSET_M1c",
+        "RREL_M1w-minus-RREL_M1c",
     )
     paired_summary = aggregate["paired_seed_contrasts"][
-        "RREL_M6c-minus-RSET_M6c"
+        "RREL_M1c-minus-RSET_M1c"
     ]["macro_ovr_auc"]
     assert paired_summary["standard_error"] == pytest.approx(
         paired_summary["standard_deviation_ddof1"] / math.sqrt(5.0)
@@ -166,9 +171,11 @@ def test_screen_aggregate_contains_every_predeclared_ordered_comparison() -> Non
             "validation": _validation(0.69 + index / 10_000),
             "content_hash": f"{(index + 9) % 16:x}" * 64,
         })
-    parent_ids = {
-        spec.parent_counterpart for spec in NODE_REGISTRY.values()
-    } | {"M0", "D0c", "D0w", "D100", "TOFF"}
+    parent_ids = {"M0", "D100", "TOFF"} | {
+        f"D{level}{suffix}"
+        for level in (75, 50, 25, 0)
+        for suffix in ("c", "w")
+    } | {"M1c", "M1w"}
     parents = {
         node_id: {
             "validation": _validation(0.68),
@@ -186,19 +193,17 @@ def test_screen_aggregate_contains_every_predeclared_ordered_comparison() -> Non
         expected_primary_ids=tuple(NODE_REGISTRY),
         expected_control_ids=tuple(CONTROL_REGISTRY),
     )
-    assert len(aggregate["ordered_comparisons"]) == 80
+    assert len(aggregate["ordered_comparisons"]) == 195
     kinds = {row["kind"] for row in aggregate["ordered_comparisons"]}
     assert kinds == {
-        "representation_minus_logit",
+        "representation_minus_logit_anchor",
         "relation_package_minus_set_package",
         "warm_minus_cold",
-        "registered_m5_control",
-        "child_minus_same_branch_predecessor",
-        "terminal_minus_first_rung",
-        "terminal_minus_hlt_baseline",
+        "child_minus_same_branch_teacher",
+        "terminal_m1_minus_hlt_baseline",
     }
     assert {row["node_id"] for row in aggregate["parent_rows"]} == parent_ids
-    assert len(aggregate["gap_recovery_tables"]) == 24 * 3
+    assert len(aggregate["gap_recovery_tables"]) == 108
     assert all(
         set(row["metrics"]) == {
             "cross_entropy", "macro_ovr_auc",

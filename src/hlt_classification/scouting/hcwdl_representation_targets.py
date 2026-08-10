@@ -63,10 +63,23 @@ from .hcwdl_representation_resources import validate_measured_profile
 ORDINARY_BANK: Final = "ordinary"
 TOFF_BANK: Final = "toff"
 BANK_KINDS: Final = (ORDINARY_BANK, TOFF_BANK)
-LOGICAL_BANK_IDS: Final = (
+LEGACY_LOGICAL_BANK_IDS: Final = (
     "D0c", "D0w", "D25c", "D25w", "D50c", "D50w", "D75c", "D75w",
     "D100", "TOFF",
 )
+ACTIVE_LOGICAL_BANK_IDS: Final = (
+    "TOFF",
+    *sorted(
+        node_id for node_id, node in NODE_REGISTRY.items()
+        if node.stage != "terminal_m1"
+    ),
+)
+# Legacy IDs remain readable only for the separately versioned non-final
+# acceptance fixtures.  A v3 dense-descent recipe must declare the exact
+# ACTIVE_LOGICAL_BANK_IDS inventory.
+LOGICAL_BANK_IDS: Final = tuple(dict.fromkeys(
+    (*ACTIVE_LOGICAL_BANK_IDS, *LEGACY_LOGICAL_BANK_IDS)
+))
 ORDINARY_FAMILIES: Final = ("all",)
 TOFF_FAMILIES: Final = ("charged", "neutral")
 ORDINARY_REASONS: Final = ("ordinary_all",)
@@ -430,6 +443,9 @@ def validate_target_arrays(
 def _expected_teacher(bank_id: str) -> tuple[str, str, str]:
     if bank_id == "TOFF":
         return "TOFF", "toff", "shared"
+    if bank_id in NODE_REGISTRY:
+        node = NODE_REGISTRY[bank_id]
+        return bank_id, str(node.student_domain), str(node.track)
     if bank_id == "D100":
         return "D100", "d100", "shared"
     suffix = bank_id[-1]
@@ -445,12 +461,30 @@ def build_logical_target_bank(
     if not LOGICAL_REQUIRED_PARENTS.issubset(normalized_parents):
         raise ValueError("HCWDL-RKD logical bank lacks required scientific parents")
     expected_node, expected_domain, expected_track = _expected_teacher(bank_id)
-    required_teacher = {
-        "node_id", "domain", "track", "selected_report_sha256",
-        "checkpoint_byte_sha256", "checkpoint_logical_sha256", "tap_sha256",
-        "installed_weaver_signature_sha256",
-    }
-    if not isinstance(teacher, Mapping) or set(teacher) != required_teacher:
+    if not isinstance(teacher, Mapping):
+        raise ValueError("HCWDL-RKD logical-bank teacher record differs")
+    source_kind = teacher.get("source_kind")
+    if source_kind == "imported_checkpoint":
+        required_teacher = {
+            "source_kind", "node_id", "domain", "track",
+            "selected_report_sha256", "checkpoint_byte_sha256",
+            "checkpoint_logical_sha256", "tap_sha256",
+            "installed_weaver_signature_sha256",
+        }
+        hash_fields = required_teacher - {
+            "source_kind", "node_id", "domain", "track",
+        }
+    elif source_kind == "campaign_execution":
+        required_teacher = {
+            "source_kind", "node_id", "domain", "track",
+            "registered_execution_id", "tap_sha256",
+        }
+        hash_fields = {"registered_execution_id", "tap_sha256"}
+        if bank_id not in NODE_REGISTRY:
+            raise ValueError("campaign teacher is not a dense-descent node")
+    else:
+        raise ValueError("HCWDL-RKD logical-bank teacher source kind differs")
+    if set(teacher) != required_teacher:
         raise ValueError("HCWDL-RKD logical-bank teacher record differs")
     if (
         teacher["node_id"] != expected_node
@@ -459,7 +493,7 @@ def build_logical_target_bank(
     ):
         raise ValueError("HCWDL-RKD logical-bank teacher/domain/track differs")
     normalized_teacher = dict(teacher)
-    for name in required_teacher - {"node_id", "domain", "track"}:
+    for name in hash_fields:
         normalized_teacher[name] = require_sha256(
             normalized_teacher[name], name=f"logical-bank teacher {name}",
         )
@@ -513,21 +547,13 @@ def validate_logical_target_bank(
 
 
 def expected_screen_consumer_nodes(bank_id: str) -> tuple[str, ...]:
-    rung = {"D0": 1, "D25": 2, "D50": 3, "D75": 4}
-    if bank_id == "D100":
-        return (
-            "RSET_M5c", "RSET_M5w", "RREL_M5c", "RREL_M5w",
-            "RSET_M5c_JET_ONLY_REP", "RREL_M5c_NO_REL_REP",
-            "RSET_M5c_WITHIN_CLASS_SHUFFLED_REP",
-            "RREL_M5c_WITHIN_CLASS_SHUFFLED_REP",
-        )
-    if bank_id == "TOFF":
-        return ("RSET_M6c", "RSET_M6w", "RREL_M6c", "RREL_M6w")
-    track = bank_id[-1]
-    base = bank_id[:-1]
-    if base not in rung:
-        raise ValueError("unknown HCWDL-RKD target-bank consumer mapping")
-    return (f"RSET_M{rung[base]}{track}", f"RREL_M{rung[base]}{track}")
+    active = tuple(sorted(
+        node_id for node_id, node in NODE_REGISTRY.items()
+        if node.target_bank_identity == bank_id
+    ))
+    if active:
+        return active
+    raise ValueError("unknown dense-descent HCWDL-RKD target-bank consumer mapping")
 
 
 def _consumer_node_spec(node_id: str) -> Any:
@@ -564,9 +590,9 @@ def build_target_consumer_row(
     if spec.target_bank_identity != logical_bank["payload"]["logical_bank_id"]:
         raise ValueError("HCWDL-RKD target consumer uses the wrong logical bank")
     if purpose == "confirmation" and (
-        node_id not in NODE_REGISTRY or int(spec.rung) != 6
+        node_id not in NODE_REGISTRY or str(spec.stage) != "terminal_m1"
     ):
-        raise ValueError("HCWDL-RKD confirmation consumer is not a primary M6 node")
+        raise ValueError("HCWDL-RKD confirmation consumer is not a terminal M1 node")
     execution_id, identity_payload = derive_representation_execution_id(
         campaign_sha256=campaign_sha256,
         strategy=str(spec.strategy),
@@ -645,10 +671,11 @@ def build_nonfinal_acceptance_target_consumer_row(
     if trajectories is None or trajectory_id not in trajectories:
         raise ValueError("non-final acceptance target trajectory differs")
     action_ids, node_id = trajectories[trajectory_id]
-    spec = _consumer_node_spec(node_id)
-    if spec.target_bank_identity != bank_id:
-        raise ValueError("non-final acceptance target consumer uses the wrong bank")
-    short_strategy = "RSET" if str(spec.strategy).endswith("SET/v1") else "RREL"
+    # This acceptance contract predates the dense descent and remains a
+    # bounded compatibility probe of the original direct D0->M1 assembly. It
+    # must not borrow the active graph node and thereby relabel old evidence.
+    short_strategy = "RSET" if node_id.startswith("RSET_") else "RREL"
+    track = "cold" if node_id.endswith("c") else "warm"
     payload = {
         "contract": NONFINAL_ACCEPTANCE_TARGET_CONSUMER_CONTRACT,
         "acceptance_bootstrap_sha256": require_sha256(
@@ -673,7 +700,7 @@ def build_nonfinal_acceptance_target_consumer_row(
         "action_ids": list(action_ids),
         "node_id": node_id,
         "strategy": short_strategy,
-        "track": str(spec.track),
+        "track": track,
         "seed": 1337,
         "role": "train",
         "bounded_row_limit": NONFINAL_ACCEPTANCE_TARGET_ROWS,
@@ -689,7 +716,7 @@ def build_nonfinal_acceptance_target_consumer_row(
         "execution_identity_payload": payload,
         "node_id": node_id,
         "strategy": short_strategy,
-        "track": str(spec.track),
+        "track": track,
         "seed": 1337,
     }
 
@@ -801,7 +828,9 @@ def _validate_consumer_rows(
                 raise ValueError("non-final acceptance target consumer semantics differ")
             normalized.append(item)
             continue
-        if item["strategy"] not in {"RSET", "RREL"} or item["track"] not in {"cold", "warm"}:
+        if item["strategy"] not in {"RSET", "RREL"} or item["track"] not in {
+            "cold", "warm", "shared",
+        }:
             raise ValueError("HCWDL-RKD target consumer strategy/track differs")
         spec = _consumer_node_spec(str(item["node_id"]))
         expected_strategy = "RSET" if str(spec.strategy).endswith("SET/v1") else "RREL"
@@ -849,8 +878,11 @@ def _validate_consumer_rows(
         if any(row["seed"] != 1337 for row in normalized):
             raise ValueError("HCWDL-RKD screen target consumer seed differs")
     elif purpose == "confirmation":
-        expected_nodes = set(expected_screen_consumer_nodes("TOFF"))
-        if bank_id != "TOFF" or len(normalized) != 20:
+        expected_nodes = {
+            node_id for node_id in expected_screen_consumer_nodes(bank_id)
+            if NODE_REGISTRY[node_id].stage == "terminal_m1"
+        }
+        if len(expected_nodes) != 1 or len(normalized) != 5:
             raise ValueError("HCWDL-RKD confirmation target registry differs")
         if {row["node_id"] for row in normalized} != expected_nodes:
             raise ValueError("HCWDL-RKD confirmation target node set differs")
@@ -942,14 +974,31 @@ def validate_target_forward_spec_payload(payload: Mapping[str, Any]) -> None:
     if not isinstance(payload, Mapping) or set(payload) != _FORWARD_REQUIRED:
         raise ValueError("HCWDL-RKD target-forward specification fields differ")
     teacher = payload["teacher"]
-    teacher_keys = {
-        "checkpoint_byte_sha256", "checkpoint_logical_sha256", "model_config_sha256",
-        "architecture_sha256", "tap_sha256", "kernel_resources_sha256",
-        "kernel_array_logical_hashes",
-    }
-    if not isinstance(teacher, Mapping) or set(teacher) != teacher_keys:
+    if not isinstance(teacher, Mapping):
         raise ValueError("HCWDL-RKD target-forward teacher fields differ")
-    for key in teacher_keys - {"kernel_array_logical_hashes"}:
+    source_kind = teacher.get("source_kind")
+    shared_teacher_keys = {
+        "source_kind", "architecture_sha256", "tap_sha256",
+        "kernel_resources_sha256", "kernel_array_logical_hashes",
+    }
+    if source_kind == "imported_checkpoint":
+        teacher_keys = shared_teacher_keys | {
+            "checkpoint_byte_sha256", "checkpoint_logical_sha256",
+            "model_config_sha256",
+        }
+        hash_teacher_keys = teacher_keys - {
+            "source_kind", "kernel_array_logical_hashes",
+        }
+    elif source_kind == "campaign_execution":
+        teacher_keys = shared_teacher_keys | {"registered_execution_id"}
+        hash_teacher_keys = teacher_keys - {
+            "source_kind", "kernel_array_logical_hashes",
+        }
+    else:
+        raise ValueError("HCWDL-RKD target-forward teacher source kind differs")
+    if set(teacher) != teacher_keys:
+        raise ValueError("HCWDL-RKD target-forward teacher fields differ")
+    for key in hash_teacher_keys:
         require_sha256(teacher.get(key), name=f"target-forward teacher {key}")
     kernel_hashes = teacher["kernel_array_logical_hashes"]
     if not isinstance(kernel_hashes, Mapping) or set(kernel_hashes) != set(
@@ -1084,12 +1133,23 @@ def _validate_forward_logical_lineage(
     logical_hash = logical_bank["content_hash"]
     teacher = logical_bank["payload"]["teacher"]
     forward_teacher = forward_spec["payload"]["teacher"]
+    if forward_teacher.get("source_kind") != teacher.get("source_kind"):
+        raise ValueError("HCWDL-RKD target-forward teacher source kind differs")
+    if teacher["source_kind"] == "imported_checkpoint":
+        identity_differs = (
+            forward_teacher["checkpoint_byte_sha256"]
+            != teacher["checkpoint_byte_sha256"]
+            or forward_teacher["checkpoint_logical_sha256"]
+            != teacher["checkpoint_logical_sha256"]
+        )
+    else:
+        identity_differs = (
+            forward_teacher["registered_execution_id"]
+            != teacher["registered_execution_id"]
+        )
     if (
         forward_spec["parents"].get("logical_bank") != logical_hash
-        or forward_teacher["checkpoint_byte_sha256"]
-        != teacher["checkpoint_byte_sha256"]
-        or forward_teacher["checkpoint_logical_sha256"]
-        != teacher["checkpoint_logical_sha256"]
+        or identity_differs
         or forward_teacher["tap_sha256"] != teacher["tap_sha256"]
         or forward_teacher["architecture_sha256"]
         != logical_bank["parents"]["architecture"]

@@ -127,9 +127,17 @@ def test_every_frozen_representation_value_is_explicit():
     assert values["training"]["selection_order"][0] == "highest_macro_ovr_auc"
     assert values["target_forward"]["canonical_rows_per_source_batch"] == 256
     assert values["target_lifecycle"]["logical_banks"] == [
-        "D0c", "D0w", "D25c", "D25w", "D50c", "D50w",
-        "D75c", "D75w", "D100", "TOFF",
+        "TOFF",
+        *sorted(
+            node_id for node_id, node in NODE_REGISTRY.items()
+            if node.stage != "terminal_m1"
+        ),
     ]
+    assert values["training"]["deployable_node_ids"] == [
+        "RREL_D0c", "RREL_D0w", "RREL_M1c", "RREL_M1w",
+        "RSET_D0c", "RSET_D0w", "RSET_M1c", "RSET_M1w",
+    ]
+    assert values["controls"]["registered_count"] == 0
 
 
 def test_frozen_values_are_defensive_and_overlay_contains_no_base_recipe_override():

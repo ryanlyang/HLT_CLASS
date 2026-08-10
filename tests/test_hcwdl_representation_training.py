@@ -76,14 +76,11 @@ def test_paired_rng_streams_match_parent_counterpart_not_representation_node() -
     seed = 1337
     rows = [
         paired_rng_streams(node_id, seed)
-        for node_id in (
-            "RSET_M5c", "RREL_M5c",
-            "RSET_M5c_JET_ONLY_REP", "RREL_M5c_NO_REL_REP",
-        )
+        for node_id in ("RSET_D75c", "RREL_D75c")
     ]
-    assert {row["parent_logit_counterpart_node_id"] for row in rows} == {"M5c"}
+    assert {row["parent_logit_counterpart_node_id"] for row in rows} == {"D75c"}
     sampler = derive_seed(seed, "hcwdl/sampler")
-    master = derive_seed(seed, "hcwdl/M5c")
+    master = derive_seed(seed, "hcwdl/D75c")
     training = derive_seed(master, "training_dropout_and_augmentation")
     assert {row["streams"]["sampler"] for row in rows} == {sampler}
     assert {row["streams"]["validation_order"] for row in rows} == {sampler}
@@ -91,7 +88,7 @@ def test_paired_rng_streams_match_parent_counterpart_not_representation_node() -
         master
     }
     assert {row["streams"]["training_stochastic"] for row in rows} == {training}
-    assert len({row["streams"]["representation_projection"] for row in rows}) == 4
+    assert len({row["streams"]["representation_projection"] for row in rows}) == 2
 
 
 def _vectors(batch: int, tokens: int) -> np.ndarray:
@@ -193,13 +190,13 @@ class FakeTargetBank:
                 "target_generation": generation_sha256,
             },
             payload={
-                "logical_bank_id": "TOFF" if toff else "D25c",
+                "logical_bank_id": "TOFF" if toff else "RSET_D95c",
                 "logical_target_sha256": logical_sha256,
                 "rows": 4,
                 "identity_set_sha256": identity_set_sha256(train_identities),
                 "authorized_consumers": [{
                     "execution_id": execution_sha256,
-                    "node_id": "RSET_M2c",
+                    "node_id": "RSET_D90c",
                     "strategy": "RSET",
                     "track": "cold",
                     "seed": seed,
@@ -272,7 +269,7 @@ def _fixture(*, toff: bool = False) -> Fixture:
         "contract": "HCWDL_TEST_RUNTIME/v1", "schema_version": 1,
         "python": "fixture",
     })
-    logical = canonical_sha256({"target": "TOFF" if toff else "D25"})
+    logical = canonical_sha256({"target": "TOFF" if toff else "RSET_D95c"})
     generation = canonical_sha256({"generation": "fixture"})
     execution = canonical_sha256({"execution": "fixture"})
     lineage = {
@@ -315,31 +312,25 @@ def _extractor(model, *, checkpoint_path, selected_training_checkpoint_sha256,
     }
 
 
-def test_exact_24_nodes_four_controls_and_loss_roles_are_executable():
-    assert len(NODE_REGISTRY) == 24
-    assert len(CONTROL_REGISTRY) == 4
+def test_exact_86_nodes_no_retired_controls_and_loss_roles_are_executable():
+    assert len(NODE_REGISTRY) == 86
+    assert len(CONTROL_REGISTRY) == 0
     for execution_id in (*NODE_REGISTRY, *CONTROL_REGISTRY):
         execution = resolve_node_execution(execution_id)
         configuration = node_base_loss_configuration(execution)
         assert execution.short_strategy in {"RSET", "RREL"}
         assert execution.active_components[0] == "jet"
-        if execution.rung == 1:
-            assert (configuration.ce, configuration.hlt_kd, configuration.privileged_kd) == (.25, .75, 0)
-        else:
-            assert (configuration.ce, configuration.hlt_kd, configuration.privileged_kd) == (.25, .40, .35)
-            assert configuration.hlt_temperature == 1
-            assert configuration.effective_privileged_temperature == 2
-    assert resolve_node_execution("RSET_M5c_JET_ONLY_REP").active_components == ("jet",)
-    assert resolve_node_execution("RREL_M5c_NO_REL_REP").active_components == ("jet", "set")
+        assert (configuration.ce, configuration.hlt_kd, configuration.privileged_kd) == (.25, .75, 0)
+        assert configuration.hlt_temperature == 1
 
 
 def test_cold_pairing_warm_deployable_only_and_fresh_identity_heads(tmp_path):
     cold_set = initialize_representation_student(
-        "RSET_M3c", replicate_seed=1337, deployable_factory=TinyDeployable,
+        "RSET_D85c", replicate_seed=1337, deployable_factory=TinyDeployable,
         wrapper_factory=TinyStudent,
     )
     cold_rel = initialize_representation_student(
-        "RREL_M3c", replicate_seed=1337, deployable_factory=TinyDeployable,
+        "RREL_D85c", replicate_seed=1337, deployable_factory=TinyDeployable,
         wrapper_factory=TinyStudent,
     )
     for left, right in zip(
@@ -359,7 +350,7 @@ def test_cold_pairing_warm_deployable_only_and_fresh_identity_heads(tmp_path):
         return copy_model(warm_source)
 
     warm = initialize_representation_student(
-        "RREL_M2w", replicate_seed=1337, warm_checkpoint=checkpoint,
+        "RREL_D90w", replicate_seed=1337, warm_checkpoint=checkpoint,
         warm_checkpoint_sha256=digest, wrapper_factory=TinyStudent,
         warm_loader=load,
     )
@@ -399,7 +390,7 @@ def test_scientific_configuration_is_exactly_sixty_passes_without_update_cap():
     parent["purpose"] = "hcwdl_primary_ladder"
     parent = with_content_hash(parent)
     configuration = representation_training_configuration(
-        "RSET_M2c", parent, train_rows=300_000,
+        "RSET_D90c", parent, train_rows=300_000,
         replicate_seed=1337, mode="scientific",
     )
     assert configuration.training_passes == 60
@@ -426,7 +417,7 @@ def test_representation_training_rejects_readable_weighted_v3_parent():
 
     with pytest.raises(ValueError, match="unweighted HCWDL_RECIPE/v4"):
         representation_training_configuration(
-            "RSET_M2c", legacy, train_rows=300_000,
+            "RSET_D90c", legacy, train_rows=300_000,
             replicate_seed=1337, mode="synthetic_test",
         )
 
@@ -440,7 +431,7 @@ def test_scientific_representation_training_requires_primary_parent_profile():
 
     with pytest.raises(PermissionError, match="profile is not authorized"):
         representation_training_configuration(
-            "RSET_M2c", ablation, train_rows=300_000,
+            "RSET_D90c", ablation, train_rows=300_000,
             replicate_seed=1337, mode="scientific",
         )
 
@@ -451,7 +442,7 @@ def test_relation_uses_raw_contextual_states_and_ordinary_family_axis(
     fixture = _fixture()
     token_resources, relation_resources = spectral_resources
     model = initialize_representation_student(
-        "RREL_M2c", replicate_seed=1337, deployable_factory=TinyDeployable,
+        "RREL_D90c", replicate_seed=1337, deployable_factory=TinyDeployable,
         wrapper_factory=TinyStudent,
     )
     normalized = normalize_hlt_batch(_batch((0, 1), tokens=20))
@@ -463,11 +454,11 @@ def test_relation_uses_raw_contextual_states_and_ordinary_family_axis(
     )
     targets = training_module._target_tensors(
         fixture.target_bank, normalized.identity_digests,
-        device=torch.device("cpu"), execution=resolve_node_execution("RREL_M2c"),
+        device=torch.device("cpu"), execution=resolve_node_execution("RREL_D90c"),
         shuffled_representation_joiner=None,
     )
     raw = training_module._raw_representation_components(
-        execution=resolve_node_execution("RREL_M2c"), model=model,
+        execution=resolve_node_execution("RREL_D90c"), model=model,
         surfaces=surfaces, targets=targets, labels=labels,
         class_weights=torch.ones(15), token_resources=token_resources,
         relation_resources=relation_resources, components=("relation",),
@@ -492,7 +483,7 @@ def test_rrel_diagnostic_allocation_matches_frozen_equal_budget_schedule():
     zero = torch.zeros(())
     scaled = {"jet": torch.tensor(2.0), "set": torch.tensor(3.0), "relation": torch.tensor(5.0)}
     value, coefficients = training_module._diagnostic_scientific_loss(
-        resolve_node_execution("RREL_M5c"), effective_pass=8.0,
+        resolve_node_execution("RREL_D75c"), effective_pass=8.0,
         scaled=scaled, zero=zero,
     )
     assert coefficients == pytest.approx({"jet": 0.3, "set": 0.45, "relation": 0.25})
@@ -517,10 +508,9 @@ def test_midpass_stream_must_seek_instead_of_replaying_prior_batches():
 
 
 @pytest.mark.parametrize("execution_id,toff", [
-    ("RSET_M2c", False),
-    ("RREL_M2c", False),
-    ("RREL_M6c", True),
-    ("RSET_M5c_JET_ONLY_REP", False),
+    ("RSET_D90c", False),
+    ("RREL_D90c", False),
+    ("RREL_D100", True),
 ])
 def test_forced_full_loss_is_fp32_live_and_does_not_mutate_model_or_rng(
     execution_id, toff, spectral_resources,
@@ -533,16 +523,13 @@ def test_forced_full_loss_is_fp32_live_and_does_not_mutate_model_or_rng(
     )
     state = {name: value.clone() for name, value in model.state_dict().items()}
     batch = _batch((0, 1), tokens=6)
-    predecessor = build_predecessor_logit_bank(
-        TinyDeployable(), [batch], device="cpu", expected_rows=2,
-    )
     # The probe owns neither construction of the synthetic predecessor nor
     # its caller's setup.  Snapshot immediately at the probe boundary.
     rng = torch.get_rng_state().clone()
     result = exercise_full_representation_loss(
         model, execution_id=execution_id, batch=batch,
         target_bank=fixture.target_bank,
-        predecessor_bank=predecessor,
+        predecessor_bank=None,
         class_weights=np.ones(15, np.float32),
         token_resources=token, relation_resources=relation, device="cpu",
     )
@@ -576,7 +563,7 @@ def _run_two_update(
             return TinyDeployable()
 
     report = train_hcwdl_representation_node(
-        execution_id="RSET_M2c",
+        execution_id="RSET_D90c",
         parent_recipe=fixture.parent_recipe,
         representation_recipe=fixture.representation_recipe,
         campaign_sha256="c" * 64,
@@ -596,45 +583,29 @@ def _run_two_update(
         synthetic_passes=1,
         deployable_factory=TinyDeployable,
         wrapper_factory=TinyStudent,
-        predecessor_model_loader=predecessor_loader,
         stop_after_update=stop_after_update,
         extractor=_extractor,
     )
-    assert loads == ["RSET_M1c"]
+    assert loads == []
     return report
 
 
-def test_predecessor_model_factory_rng_is_restored_even_when_cache_build_fails(
+def test_dense_descent_never_builds_a_second_predecessor_logit_cache(
     tmp_path, spectral_resources, monkeypatch,
 ):
     fixture = _fixture()
-    streams = paired_rng_streams("RSET_M2c", 1337)
-    training_module._seed_paired_training_rng(streams)
-    expected = training_module.capture_rng_state()
 
     def fail_cache(*args, **kwargs):
-        raise RuntimeError("injected predecessor cache failure")
+        raise AssertionError("dense descent attempted a second logit-teacher cache")
 
     monkeypatch.setattr(
         training_module, "build_predecessor_logit_bank", fail_cache,
     )
-    with pytest.raises(RuntimeError, match="injected predecessor cache failure"):
-        _run_two_update(
-            tmp_path / "predecessor-rng",
-            fixture,
-            spectral_resources,
-            loader_consumes_rng=True,
-        )
-    actual = training_module.capture_rng_state()
-    assert actual["python_random"] == expected["python_random"]
-    assert actual["numpy_random"][0] == expected["numpy_random"][0]
-    assert np.array_equal(actual["numpy_random"][1], expected["numpy_random"][1])
-    assert actual["numpy_random"][2:] == expected["numpy_random"][2:]
-    assert torch.equal(actual["torch_cpu"], expected["torch_cpu"])
-    assert len(actual["torch_cuda"]) == len(expected["torch_cuda"])
-    assert all(
-        torch.equal(left, right)
-        for left, right in zip(actual["torch_cuda"], expected["torch_cuda"], strict=True)
+    _run_two_update(
+        tmp_path / "predecessor-rng",
+        fixture,
+        spectral_resources,
+        loader_consumes_rng=True,
     )
 
 
@@ -648,7 +619,10 @@ def test_two_update_training_validates_once_reports_interval_means_and_extracts(
     assert report["completed_optimizer_updates"] == 2
     assert report["completed_natural_population_passes"] == 1
     assert len(report["validation_history"]) == 1
-    assert report["deployable_extraction"]["strict_hlt_only"] is True
+    assert report["student_domain"] == "d90"
+    assert report["deployment_authorized"] is False
+    assert report["deployable_extraction"]["strict_hlt_only"] is False
+    assert report["deployable_extraction"]["deployment_authorized"] is False
     assert report["predecessor_model_released_before_optimization"] is True
     assert sum(row["examples"] for row in report["interval_mean_history"]) == 4
     assert all("means" in row and "total" in row["means"] for row in report["interval_mean_history"])
@@ -677,7 +651,7 @@ def test_target_consumer_seed_mismatch_fails_before_model_construction():
     )
     with pytest.raises(PermissionError, match="seed differs"):
         training_module._validate_target_bank_binding(
-            wrong, execution=resolve_node_execution("RSET_M2c"),
+            wrong, execution=resolve_node_execution("RSET_D90c"),
             lineage=fixture.lineage, train_rows=4, replicate_seed=1337,
         )
 
@@ -723,14 +697,11 @@ def test_calibration_adapter_uses_finalized_shared_forward_api_exactly_once_per_
 ):
     fixture = _fixture()
     model = initialize_representation_student(
-        "RSET_M2c", replicate_seed=1337, deployable_factory=TinyDeployable,
+        "RSET_D90c", replicate_seed=1337, deployable_factory=TinyDeployable,
         wrapper_factory=TinyStudent,
     )
     optimizer = torch.optim.AdamW(model.parameters(), lr=1.0e-4)
     raw_batches = [_batch((0, 1)), _batch((2, 3))]
-    predecessor = build_predecessor_logit_bank(
-        TinyDeployable(), raw_batches, device="cpu", expected_rows=4,
-    )
     observed = {"student_forward": 0, "losses": 0}
 
     def finalized_calibrator(
@@ -767,10 +738,10 @@ def test_calibration_adapter_uses_finalized_shared_forward_api_exactly_once_per_
     )
     result = training_module._run_calibration(
         phase="jet_set", component_names=("jet",),
-        execution=resolve_node_execution("RSET_M2c"), model=model,
+        execution=resolve_node_execution("RSET_D90c"), model=model,
         optimizer=optimizer, batches=raw_batches, device=torch.device("cpu"),
         amp_dtype="none", class_weights=torch.ones(15),
-        target_bank=fixture.target_bank, predecessor_bank=predecessor,
+        target_bank=fixture.target_bank, predecessor_bank=None,
         shuffled_representation_joiner=None, token_resources=None,
         relation_resources=None, expected_batches=2,
         minimum_valid_batches=1, external_snapshot=None,
@@ -786,14 +757,11 @@ def test_fixed_diagnostic_is_one_forward_reports_pending_nulls_and_is_nonmutatin
     fixture = _fixture()
     token, relation = spectral_resources
     model = initialize_representation_student(
-        "RSET_M2c", replicate_seed=1337, deployable_factory=TinyDeployable,
+        "RSET_D90c", replicate_seed=1337, deployable_factory=TinyDeployable,
         wrapper_factory=TinyStudent,
     )
     optimizer = torch.optim.AdamW(model.parameters(), lr=1.0e-4)
     batch = _batch((0, 1), tokens=6)
-    predecessor = build_predecessor_logit_bank(
-        TinyDeployable(), [batch], device="cpu", expected_rows=2,
-    )
     model_state = {
         name: value.detach().clone() for name, value in model.state_dict().items()
     }
@@ -808,11 +776,11 @@ def test_fixed_diagnostic_is_one_forward_reports_pending_nulls_and_is_nonmutatin
         },
     }
     result = run_representation_diagnostic(
-        execution=resolve_node_execution("RSET_M2c"), model=model,
+        execution=resolve_node_execution("RSET_D90c"), model=model,
         optimizer=optimizer, batch=batch, completed_pass=1,
         completed_update=2, device=torch.device("cpu"), amp_dtype="none",
         class_weights=torch.ones(15), target_bank=fixture.target_bank,
-        predecessor_bank=predecessor, shuffled_representation_joiner=None,
+        predecessor_bank=None, shuffled_representation_joiner=None,
         token_resources=token, relation_resources=relation,
         calibration=calibration,
         parameter_selector=lambda value: (
@@ -835,8 +803,8 @@ def test_fixed_diagnostic_is_one_forward_reports_pending_nulls_and_is_nonmutatin
 @pytest.mark.parametrize(
     "execution_id,phases,completed_pass",
     [
-        ("RSET_M2c", ("jet_set",), 2),
-        ("RREL_M2c", ("jet_set", "relation"), 4),
+        ("RSET_D90c", ("jet_set",), 2),
+        ("RREL_D90c", ("jet_set", "relation"), 4),
     ],
 )
 def test_calibration_manifest_is_complete_immutable_and_phase_bound(
@@ -896,7 +864,7 @@ def test_diagnostic_batch_manifest_binds_exact_order_and_array_bytes(tmp_path):
         "target_logical": canonical_sha256({"logical": "fixture"}),
     }
     frozen, artifact = training_module._materialize_diagnostic_batch(
-        provider, execution=resolve_node_execution("RSET_M2c"),
+        provider, execution=resolve_node_execution("RSET_D90c"),
         mode="synthetic_test", lineage=lineage,
         representation_recipe_sha256=canonical_sha256({"recipe": "fixture"}),
         output=tmp_path,

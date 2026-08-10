@@ -153,7 +153,7 @@ def run_local_target_lifecycle_probe() -> dict[str, Any]:
     try:
         with tempfile.TemporaryDirectory(prefix="hcwdl-rkd-target-lifecycle-") as directory:
             root = Path(directory)
-            for bank_id, bank_kind in (("D100", "ordinary"), ("TOFF", "toff")):
+            for bank_id, bank_kind in (("RSET_D95c", "ordinary"), ("TOFF", "toff")):
                 parents = {
                     name: _smoke_sha(f"{bank_id}:{name}")
                     for name in (
@@ -163,21 +163,54 @@ def run_local_target_lifecycle_probe() -> dict[str, Any]:
                         "parent_loss_attestation",
                     )
                 }
-                teacher = {
-                    "node_id": bank_id,
-                    "domain": "toff" if bank_id == "TOFF" else "d100",
-                    "track": "shared",
-                    "selected_report_sha256": _smoke_sha(f"{bank_id}:report"),
-                    "checkpoint_byte_sha256": _smoke_sha(f"{bank_id}:bytes"),
-                    "checkpoint_logical_sha256": _smoke_sha(f"{bank_id}:logical"),
-                    "tap_sha256": _smoke_sha(f"{bank_id}:tap"),
-                    "installed_weaver_signature_sha256": _smoke_sha(
-                        f"{bank_id}:weaver"
-                    ),
-                }
+                checkpoint_bytes = _smoke_sha(f"{bank_id}:bytes")
+                checkpoint_logical = _smoke_sha(f"{bank_id}:logical")
+                tap_sha256 = _smoke_sha(f"{bank_id}:tap")
+                if bank_id == "TOFF":
+                    teacher = {
+                        "source_kind": "imported_checkpoint",
+                        "node_id": bank_id,
+                        "domain": "toff",
+                        "track": "shared",
+                        "selected_report_sha256": _smoke_sha(f"{bank_id}:report"),
+                        "checkpoint_byte_sha256": checkpoint_bytes,
+                        "checkpoint_logical_sha256": checkpoint_logical,
+                        "tap_sha256": tap_sha256,
+                        "installed_weaver_signature_sha256": _smoke_sha(
+                            f"{bank_id}:weaver"
+                        ),
+                    }
+                else:
+                    teacher = {
+                        "source_kind": "campaign_execution",
+                        "node_id": bank_id,
+                        "domain": "d95",
+                        "track": "cold",
+                        "registered_execution_id": _smoke_sha(
+                            f"{bank_id}:registered-execution"
+                        ),
+                        "tap_sha256": tap_sha256,
+                    }
                 logical = build_logical_target_bank(
                     bank_id=bank_id, teacher=teacher, parents=parents,
                 )
+                forward_teacher = {
+                    "source_kind": teacher["source_kind"],
+                    "architecture_sha256": parents["architecture"],
+                    "tap_sha256": tap_sha256,
+                    "kernel_resources_sha256": parents["kernel_resources"],
+                    "kernel_array_logical_hashes": kernel_hashes,
+                }
+                if bank_id == "TOFF":
+                    forward_teacher.update({
+                        "checkpoint_byte_sha256": checkpoint_bytes,
+                        "checkpoint_logical_sha256": checkpoint_logical,
+                        "model_config_sha256": _smoke_sha("model-config"),
+                    })
+                else:
+                    forward_teacher["registered_execution_id"] = teacher[
+                        "registered_execution_id"
+                    ]
                 consumer = build_miniature_target_consumer_row(
                     logical, campaign_sha256=_smoke_sha("campaign"),
                     recipe_sha256=_smoke_sha("recipe"), bounded_row_limit=2,
@@ -189,15 +222,7 @@ def run_local_target_lifecycle_probe() -> dict[str, Any]:
                 forward = build_target_forward_spec(
                     parents={"logical_bank": logical["content_hash"]},
                     payload={
-                        "teacher": {
-                            "checkpoint_byte_sha256": teacher["checkpoint_byte_sha256"],
-                            "checkpoint_logical_sha256": teacher["checkpoint_logical_sha256"],
-                            "model_config_sha256": _smoke_sha("model-config"),
-                            "architecture_sha256": parents["architecture"],
-                            "tap_sha256": teacher["tap_sha256"],
-                            "kernel_resources_sha256": parents["kernel_resources"],
-                            "kernel_array_logical_hashes": kernel_hashes,
-                        },
+                        "teacher": forward_teacher,
                         "producer": {
                             "source_commit": "b" * 40,
                             "source_snapshot_sha256": _smoke_sha("snapshot"),
@@ -481,8 +506,8 @@ def run_scientific_full_loss_probe(*, device: str = "cpu") -> dict[str, Any]:
         capture_rng_state, restore_rng_state,
     )
 
-    # The local probe is observational: even construction of its synthetic
-    # predecessor and students must not advance the caller's training RNG.
+    # The local probe is observational: construction of its synthetic
+    # students must not advance the caller's training RNG.
     initial_rng = capture_rng_state()
     initial_cpu_rng = initial_rng["torch_cpu"].clone()
 
@@ -490,7 +515,6 @@ def run_scientific_full_loss_probe(*, device: str = "cpu") -> dict[str, Any]:
 
     from .hcwdl_representation_kernels import generate_spectral_resources
     from .hcwdl_representation_training import (
-        build_predecessor_logit_bank,
         exercise_full_representation_loss,
         initialize_representation_student,
         resolve_node_execution,
@@ -566,9 +590,6 @@ def run_scientific_full_loss_probe(*, device: str = "cpu") -> dict[str, Any]:
     native = _SyntheticTargetBank(range(20), native_offline=True)
     token_resources = generate_spectral_resources("token")
     relation_resources = generate_spectral_resources("relation")
-    predecessor = build_predecessor_logit_bank(
-        TinyDeployable(), [batch], device=device, expected_rows=2,
-    )
     warm_hash = canonical_sha256({"local_smoke": "warm deployable"})
     cases: list[dict[str, Any]] = []
     try:
@@ -598,7 +619,7 @@ def run_scientific_full_loss_probe(*, device: str = "cpu") -> dict[str, Any]:
                 execution_id=execution_id,
                 batch=batch,
                 target_bank=target,
-                predecessor_bank=(None if execution.rung == 1 else predecessor),
+                predecessor_bank=None,
                 class_weights=np.ones(15, dtype=np.float32),
                 token_resources=token_resources,
                 relation_resources=relation_resources,

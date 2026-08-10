@@ -1,5 +1,39 @@
 # Current Handoff
 
+## HCWDL-RKD four-track dense descent (2026-08-10)
+
+The active representation experiment has been versioned away from the retired
+M1--M6 ascents.  It now registers four downward ladders: RSET cold/warm and
+RREL cold/warm.  Each strategy owns a separately trained TOFF-to-D100 root;
+each branch then descends D95, D90, ..., D5, D0 and terminates at M1.  The
+immediate predecessor supplies both logits and representation targets.  Cold
+rungs are fresh; warm rungs load only that immediate predecessor's selected
+model state and reset optimizer/scheduler state.
+
+The graph contains exactly 86 training nodes.  D100--D5 are authenticated,
+nondeployable repaired-view training intermediates; D0 and M1 are HLT-only
+deployable models, and the four M1 nodes are the primary endpoints.  The old
+M5 controls and M2--M6 representation nodes are absent.  The registered
+campaign contains 295 tasks and expands to 361 runtime rows under the current
+combined disposition.  Representation Slurm job names now begin `hcwdlr_`.
+
+The semantic-version migration includes dense graph v1, recipe v3, target
+family v2, training/checkpoint/model-extraction v2, screen/confirmation v2,
+campaign/command-plan v2, and the M1-bound final artifact chain v2.  Old ascent
+artifacts cannot be relabeled into these identities.  The 089b472 base-HCWDL
+smoke remains valid parent-worker smoke evidence; this representation-only
+change does not require rerunning it.  A genuine representation miniature at
+the final pushed representation commit remains an execution gate.  No job was
+submitted and no final role was accessed during implementation.
+
+Repository-wide local verification is **789 passed, 6 expected platform
+skips, 0 failures**.  The skips are five directly executable POSIX-shell
+checks and one real-`SIGUSR1` check unavailable on Windows.  The earlier
+ten-action non-final authority is bound to the retired direct-D0/M1 graph and
+must not authorize recipe v3; its historical artifacts remain readable only
+under their original identities.  Recipe v3 requires a newly versioned dense-
+descent miniature authority before any representation submission.
+
 ## HCWDL non-final corrected-parent prefix (2026-08-09)
 
 The base HCWDL execution layer now has a dedicated non-final 60-pass parent
@@ -137,13 +171,13 @@ source. Only after that parent exists may an operator separately issue the
 non-final execution phrase and run the bounded actions. A pilot and any
 final-test access remain unauthorized.
 
-## HCWDL-RKD v8-prefix/v4 compatibility closure (2026-08-09)
+## Superseded pre-dense-descent v8-prefix/v4 compatibility closure (2026-08-09)
 
 The matching-free representation-KD branch is now reconciled with the current
 parent authority: executable `HCWDL_CAMPAIGN_SPEC/v8` with exact
 `parent_prefix_through_finalist_lock` scope, primary
 `HCWDL_RECIPE/v4`, and an exact fifteen-one loss vector.  The representation
-overlay is `HCWDL_REPRESENTATION_RECIPE/v2` with schema version 1; the strict
+overlay was `HCWDL_REPRESENTATION_RECIPE/v2` with schema version 1; the strict
 parent import is `HCWDL_REPRESENTATION_PARENT_IMPORT/v3` with schema version 2;
 and the corrected parent-loss attestation is
 `HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v3` with schema version 3.

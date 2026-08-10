@@ -12,19 +12,20 @@ from hlt_classification.data.cache_contracts import (
     with_content_hash,
 )
 
-from .hcwdl_representation_graph import NODE_REGISTRY
+from .hcwdl_representation_contracts import (
+    CONFIRMATION_AGGREGATE_CONTRACT,
+    CONFIRMATION_REGISTRY_CONTRACT,
+    CONFIRMATION_RUN_CONTRACT,
+    FINAL_AGGREGATE_CONTRACT,
+    SCREEN_AGGREGATE_CONTRACT,
+    TRAINING_REPORT_CONTRACT,
+    VALIDATION_ONLY_AGGREGATE_CONTRACT,
+)
+from .hcwdl_representation_graph import NODE_REGISTRY, TRACKED_LEVELS
 from .hcwdl_paired_bootstrap import BASE_METRICS
 
 
-TRAINING_REPORT_CONTRACT: Final = "HCWDL_REPRESENTATION_TRAINING_REPORT/v1"
-SCREEN_CONTRACT: Final = "HCWDL_REPRESENTATION_SCREEN_AGGREGATE/v1"
-CONFIRMATION_REGISTRY_CONTRACT: Final = "HCWDL_REPRESENTATION_CONFIRMATION_REGISTRY/v1"
-CONFIRMATION_AGGREGATE_CONTRACT: Final = "HCWDL_REPRESENTATION_CONFIRMATION_AGGREGATE/v1"
-CONFIRMATION_RUN_CONTRACT: Final = "HCWDL_REPRESENTATION_CONFIRMATION_RUN/v1"
-FINAL_AGGREGATE_CONTRACT: Final = "HCWDL_REPRESENTATION_FINAL_AGGREGATE/v1"
-VALIDATION_ONLY_AGGREGATE_CONTRACT: Final = (
-    "HCWDL_REPRESENTATION_VALIDATION_ONLY_AGGREGATE/v1"
-)
+SCREEN_CONTRACT: Final = SCREEN_AGGREGATE_CONTRACT
 CONFIRMATION_SEEDS: Final = (11, 22, 33, 44, 55)
 T_975_DF4: Final = 2.7764451051977987
 CONFIRMATION_METRICS: Final = BASE_METRICS
@@ -188,6 +189,23 @@ def build_screen_aggregate(
 
     comparisons: list[dict[str, Any]] = []
 
+    def comparison_parent_anchor(node_id: str) -> str | None:
+        """Return only an actually registered base-HCWDL comparison anchor.
+
+        ``parent_counterpart`` remains populated for every dense rung because
+        it also freezes paired RNG/calibration coordinates.  The parent HCWDL
+        ladder, however, has model/report anchors only at D100, D75, D50,
+        D25, D0, and M1.  Intermediate repaired-view students must not invent
+        nonexistent parent reports.
+        """
+
+        node = NODE_REGISTRY[node_id]
+        if node.stage in {"offline_to_d100", "terminal_m1"}:
+            return node.parent_counterpart
+        if node.privilege_percent in {75, 50, 25, 0}:
+            return node.parent_counterpart
+        return None
+
     def add_comparison(left_id: str, right_id: str, *, kind: str) -> None:
         left_report = by_id[left_id]
         right_report = by_id.get(right_id, parent_reports.get(right_id))
@@ -205,55 +223,65 @@ def build_screen_aggregate(
 
     for node_id in primary:
         report = by_id[node_id]
-        parent_id = str(report.get("parent_counterpart", ""))
-        parent = parent_reports.get(parent_id)
-        if parent is None:
-            raise ValueError(f"missing parent counterpart {parent_id!r}")
+        parent_id = report.get("parent_counterpart")
         if NODE_REGISTRY[node_id].parent_counterpart != parent_id:
             raise ValueError("representation report parent counterpart differs")
-        add_comparison(node_id, parent_id, kind="representation_minus_logit")
+        comparison_anchor = comparison_parent_anchor(node_id)
+        if comparison_anchor is not None:
+            if comparison_anchor not in parent_reports:
+                raise ValueError(f"missing parent counterpart {comparison_anchor!r}")
+            add_comparison(
+                node_id, comparison_anchor, kind="representation_minus_logit_anchor",
+            )
 
-    for rung in range(1, 7):
+    add_comparison(
+        "RREL_D100", "RSET_D100", kind="relation_package_minus_set_package",
+    )
+    for level in TRACKED_LEVELS:
         for suffix in ("c", "w"):
             add_comparison(
-                f"RREL_M{rung}{suffix}", f"RSET_M{rung}{suffix}",
+                f"RREL_D{level}{suffix}", f"RSET_D{level}{suffix}",
                 kind="relation_package_minus_set_package",
             )
+    for suffix in ("c", "w"):
+        add_comparison(
+            f"RREL_M1{suffix}", f"RSET_M1{suffix}",
+            kind="relation_package_minus_set_package",
+        )
     for strategy in ("RSET", "RREL"):
-        for rung in range(1, 7):
+        for level in TRACKED_LEVELS:
             add_comparison(
-                f"{strategy}_M{rung}w", f"{strategy}_M{rung}c",
+                f"{strategy}_D{level}w", f"{strategy}_D{level}c",
                 kind="warm_minus_cold",
             )
+        add_comparison(
+            f"{strategy}_M1w", f"{strategy}_M1c", kind="warm_minus_cold",
+        )
     for control_id in controls:
         report = by_id[control_id]
         counterpart = str(report.get("control_counterpart", ""))
         if counterpart not in by_id:
             raise ValueError("control counterpart is absent")
-        # The frozen estimand is the primary M5c result minus its registered
-        # ablation/control.  Keeping the primary on the left makes the sign
-        # consistent with every scientific claim in Section 24.3.
+        # The frozen estimand is the primary result minus its registered
+        # ablation/control. Keeping the primary on the left fixes the sign.
         add_comparison(counterpart, control_id, kind="registered_m5_control")
         comparisons[-1]["screening_seed_only"] = True
+    for node_id, node in sorted(NODE_REGISTRY.items()):
+        predecessor = node.representation_logit_teacher
+        if predecessor in by_id:
+            add_comparison(
+                node_id, predecessor, kind="child_minus_same_branch_teacher",
+            )
     for strategy in ("RSET", "RREL"):
         for suffix in ("c", "w"):
-            for rung in range(2, 7):
-                add_comparison(
-                    f"{strategy}_M{rung}{suffix}",
-                    f"{strategy}_M{rung - 1}{suffix}",
-                    kind="child_minus_same_branch_predecessor",
-                )
             add_comparison(
-                f"{strategy}_M6{suffix}", f"{strategy}_M1{suffix}",
-                kind="terminal_minus_first_rung",
-            )
-            add_comparison(
-                f"{strategy}_M6{suffix}", "M0",
-                kind="terminal_minus_hlt_baseline",
+                f"{strategy}_M1{suffix}", "M0",
+                kind="terminal_m1_minus_hlt_baseline",
             )
 
     required_parent_ids = {
-        NODE_REGISTRY[node_id].parent_counterpart for node_id in primary
+        comparison_parent_anchor(node_id) for node_id in primary
+        if comparison_parent_anchor(node_id) is not None
     } | {"M0", "D0c", "D0w", "D100", "TOFF"}
     missing_parent = required_parent_ids - set(parent_reports)
     if missing_parent:
@@ -283,12 +311,11 @@ def build_screen_aggregate(
     for node_id in primary:
         node = NODE_REGISTRY[node_id]
         student_metrics = _metrics(by_id[node_id])
-        upper_id = "TOFF" if node.rung == 6 else "D100"
-        lower_ids = (
-            node.parent_counterpart,
-            "M0",
-            "D0c" if node.track == "c" else "D0w",
-        )
+        upper_id = "TOFF"
+        lower_ids = tuple(dict.fromkeys(
+            value for value in (comparison_parent_anchor(node_id), "M0")
+            if value is not None
+        ))
         for lower_id in lower_ids:
             lower_metrics = _metrics(parent_reports[lower_id])
             upper_metrics = _metrics(parent_reports[upper_id])
@@ -330,17 +357,28 @@ def build_confirmation_registry(
     screen_sha256: str,
     campaign_sha256: str,
     recipe_sha256: str,
-    target_logical_bank_sha256: str,
+    target_logical_bank_sha256s: Mapping[str, str],
     objectives: Sequence[str],
     seeds: Sequence[int] = CONFIRMATION_SEEDS,
 ) -> dict[str, Any]:
     objective_ids = tuple(str(value) for value in objectives)
     seed_values = tuple(int(value) for value in seeds)
-    exact_objectives = ("RSET_M6c", "RSET_M6w", "RREL_M6c", "RREL_M6w")
+    exact_objectives = ("RSET_M1c", "RSET_M1w", "RREL_M1c", "RREL_M1w")
     if objective_ids != exact_objectives:
-        raise ValueError("confirmation requires the ordered four M6 objectives")
+        raise ValueError("confirmation requires the ordered four terminal M1 objectives")
     if seed_values != CONFIRMATION_SEEDS:
         raise ValueError("confirmation seed registry differs from the frozen recipe")
+    if not isinstance(target_logical_bank_sha256s, Mapping) or set(
+        target_logical_bank_sha256s
+    ) != set(exact_objectives):
+        raise ValueError("confirmation target-bank registry differs")
+    logical_hashes = {
+        objective: require_sha256(
+            target_logical_bank_sha256s[objective],
+            name=f"{objective} confirmation logical bank",
+        )
+        for objective in exact_objectives
+    }
     rows = []
     for objective in objective_ids:
         node = NODE_REGISTRY[objective]
@@ -353,7 +391,7 @@ def build_confirmation_registry(
                 seed=seed,
                 initialization_parent=node.initialization_parent,
                 teacher=node.representation_logit_teacher,
-                logical_target_bank_sha256=target_logical_bank_sha256,
+                logical_target_bank_sha256=logical_hashes[objective],
                 target_purpose="confirmation",
                 recipe_sha256=recipe_sha256,
             )
@@ -364,7 +402,8 @@ def build_confirmation_registry(
                     "objective_id": objective,
                     "seed": seed,
                     "logical_bank_sha256": require_sha256(
-                        target_logical_bank_sha256, name="TOFF logical bank"
+                        logical_hashes[objective],
+                        name=f"{objective} logical bank",
                     ),
                     "physical_generation_sha256": None,
                 }
@@ -378,9 +417,7 @@ def build_confirmation_registry(
             "recipe_sha256": require_sha256(
                 recipe_sha256, name="representation recipe",
             ),
-            "logical_bank_sha256": require_sha256(
-                target_logical_bank_sha256, name="TOFF logical bank"
-            ),
+            "logical_bank_sha256s": logical_hashes,
             "seeds": list(seed_values),
             "rows": rows,
             "execution_count": 20,
@@ -497,10 +534,10 @@ def build_confirmation_aggregate(
     # and two same-strategy warm-minus-cold contrasts.  Extra cross-package
     # comparisons are not silently promoted to registered estimands.
     contrasts = (
-        ("RREL_M6c", "RSET_M6c"),
-        ("RREL_M6w", "RSET_M6w"),
-        ("RSET_M6w", "RSET_M6c"),
-        ("RREL_M6w", "RREL_M6c"),
+        ("RREL_M1c", "RSET_M1c"),
+        ("RREL_M1w", "RSET_M1w"),
+        ("RSET_M1w", "RSET_M1c"),
+        ("RREL_M1w", "RREL_M1c"),
     )
     for left, right in contrasts:
         left_by_seed = {
@@ -532,7 +569,7 @@ def build_confirmation_aggregate(
             "registry_sha256": require_sha256(registry["content_hash"], name="confirmation registry"),
             "objectives": by_objective,
             "paired_seed_contrasts": paired,
-            "conditional_terminal_m6_only": True,
+            "conditional_terminal_m1_only": True,
             "used_for_finalist_selection": False,
         }
     )
