@@ -333,6 +333,41 @@ def test_highcov_shell_exact_all_field_endpoints_and_confidence_warp():
         np.testing.assert_allclose(quarter.vectors[0, :, token], expected, rtol=1e-6)
 
 
+def test_highcov_shell_exact_accepts_dense_continuous_alphas_only_in_range():
+    arrays, offline_p4, assignment, _, _ = _full_endpoint_fixture()
+    canonical = build_hlt_inputs(arrays)
+    confidence = np.zeros((1, 200), np.float32)
+    confidence[0, :2] = [0.0, 1.0]
+
+    for alpha in (.9, .95):
+        repaired = build_alpha_repaired_inputs(
+            arrays, offline_p4, assignment, alpha=alpha,
+            repair_family=HIGHCOV_SHELL_EXACT_FAMILY,
+            confidence_weights=confidence, offline_arrays=arrays,
+            identity_keys=("file.root::tree::dense-shell",), discrete_seed=8,
+        )
+        strengths = np.asarray([alpha ** 2.0, alpha ** .7])
+        for token, strength in enumerate(strengths):
+            expected = (
+                (1 - strength) * canonical.vectors[0, :, token]
+                + strength * offline_p4[0][assignment[0, token]]
+            )
+            np.testing.assert_allclose(
+                repaired.vectors[0, :, token], expected, rtol=1e-6,
+            )
+
+    for invalid in (-.01, 1.01, np.nan, np.inf):
+        with pytest.raises(ValueError, match="finite scalar in"):
+            build_alpha_repaired_inputs(
+                arrays, offline_p4, assignment, alpha=invalid,
+                repair_family=HIGHCOV_SHELL_EXACT_FAMILY,
+            )
+    with pytest.raises(ValueError, match="legacy grid"):
+        build_alpha_repaired_inputs(
+            arrays, offline_p4, assignment, alpha=.9, repair_family="P4_ONLY",
+        )
+
+
 def test_highcov_soft_and_core_families_keep_declared_hlt_tokens():
     arrays, offline_p4, assignment, _, _ = _full_endpoint_fixture()
     canonical = build_hlt_inputs(arrays)

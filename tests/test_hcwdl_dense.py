@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import json
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
-from hlt_classification.data.cache_contracts import with_content_hash
+from hlt_classification.data.cache_contracts import (
+    load_json, with_content_hash, write_immutable_json,
+)
 from hlt_classification.scouting.engine import PMARD_TRAINING_REPORT_CONTRACT
 from hlt_classification.scouting.hcwdl_dense import (
     DENSE5_DOMAINS, DENSE5_GRAPH_SHA256, DENSE5_NODE_REGISTRY,
@@ -15,6 +20,13 @@ from hlt_classification.scouting.hcwdl_dense import (
     validate_dense_spec,
 )
 from hlt_classification.scouting.hcwdl_dense_runner import dense_shared_repair_seed
+from hlt_classification.scouting.hcwdl_dense_recovery import (
+    build_dense_recovery_plan, create_dense_recovery_spec,
+    validate_dense_recovery_spec,
+)
+from hlt_classification.scouting.hcwdl_recovery import (
+    build_monitor_report, build_submission_ledger,
+)
 from hlt_classification.scouting.hcwdl_recipe import example_recipe
 from hlt_classification.scouting.hcwdl_training import node_training_config
 
@@ -224,6 +236,109 @@ def test_dense_repair_seed_is_shared_and_spec_is_sequential() -> None:
         argument.startswith("--job-name=hcddp5_")
         for argument in dense5_plan["commands"][0]["command"]
     )
+
+
+@pytest.mark.parametrize(
+    ("rung_step", "failed_task"),
+    ((10, "train_D90c"), (5, "train_D95c")),
+)
+def test_dense_recovery_reuses_completed_top_and_submits_failed_closure(
+    tmp_path: Path, rung_step: int, failed_task: str,
+) -> None:
+    parent_root = tmp_path / f"parent_{rung_step}"
+    parent = _spec(rung_step)
+    parent["campaign_root"] = str(parent_root)
+    parent["project_dir"] = str(tmp_path / "old_source")
+    parent = _rehash_spec(parent)
+    parent_path = parent_root / "campaign_spec.json"
+    write_immutable_json(parent_path, parent)
+
+    commands = {
+        row["task_id"]: row["command"]
+        for row in build_dense_command_plan(parent)["commands"]
+    }
+    jobs = {task: str(80_000 + index) for index, task in enumerate(commands)}
+    ledger = build_submission_ledger(
+        campaign_spec_sha256=parent["content_hash"], jobs=jobs,
+        commands=commands, dry_run=False,
+    )
+    ledger_path = parent_root / "submission_ledger.json"
+    write_immutable_json(ledger_path, ledger)
+    task_order = list(commands)
+    failure_index = task_order.index(failed_task)
+    states = {
+        jobs[task]: (
+            "COMPLETED" if index < failure_index
+            else "FAILED" if index == failure_index else "PENDING"
+        )
+        for index, task in enumerate(task_order)
+    }
+    validity = {
+        task: index < failure_index for index, task in enumerate(task_order)
+    }
+    monitor = build_monitor_report(
+        ledger, states_by_job_id=states, artifact_validity=validity,
+    )
+    monitor_path = parent_root / "failure_monitor.json"
+    write_immutable_json(monitor_path, monitor)
+
+    recovery = create_dense_recovery_spec(
+        parent_campaign_spec=parent_path,
+        parent_submission_ledger=ledger_path, monitor_report=monitor_path,
+        recovery_root=tmp_path / f"recovery_{rung_step}",
+        project_dir=tmp_path / "fixed_source", source_commit="f" * 40,
+        authorization_phrase="AUTHORIZE HCWDL DENSE FAILED CLOSURE RECOVERY",
+    )
+    assert validate_dense_recovery_spec(
+        recovery, executable=True,
+    ) == recovery["content_hash"]
+    assert recovery["retry_tasks"][0] == failed_task
+    assert "train_D100offkd" not in recovery["retry_tasks"]
+    plan = build_dense_recovery_plan(recovery)
+    assert plan["commands"][0]["task_id"] == failed_task
+    assert plan["commands"][0]["dependencies"] == []
+    assert plan["commands"][1]["dependencies"] == [failed_task]
+    assert all("--array" not in item for row in plan["commands"] for item in row["command"])
+    worker = Path("sbatch/run_hcwdl_dense_recovery.sh").read_text()
+    assert "exec python -s" in worker
+
+
+def test_campaign_monitor_accepts_dense_specs_without_array_fields(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "dense_monitor"
+    spec = _spec()
+    spec["campaign_root"] = str(root)
+    spec = _rehash_spec(spec)
+    spec_path = root / "campaign_spec.json"
+    write_immutable_json(spec_path, spec)
+    commands = {
+        row["task_id"]: row["command"]
+        for row in build_dense_command_plan(spec)["commands"]
+    }
+    jobs = {task: str(90_000 + index) for index, task in enumerate(commands)}
+    ledger = build_submission_ledger(
+        campaign_spec_sha256=spec["content_hash"], jobs=jobs,
+        commands=commands, dry_run=False,
+    )
+    ledger_path = root / "submission_ledger.json"
+    write_immutable_json(ledger_path, ledger)
+    states_path = root / "states.json"
+    states_path.write_text(
+        json.dumps({job: "PENDING" for job in jobs.values()}), encoding="utf-8",
+    )
+    output = root / "monitor.json"
+    result = subprocess.run(
+        [
+            sys.executable, "scripts/monitor_hcwdl_campaign.py",
+            "--campaign-spec", str(spec_path),
+            "--submission-ledger", str(ledger_path),
+            "--states-json", str(states_path), "--output", str(output),
+        ],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert len(load_json(output)["rows"]) == len(spec["tasks"])
 
 
 def test_dense_aggregate_reports_recovery_without_test_access() -> None:

@@ -18,6 +18,17 @@ from hlt_classification.scouting.hcwdl_recovery import (  # noqa: E402
     task_attestation_path, validate_submission_ledger, validate_task_attestation,
 )
 from hlt_classification.scouting.hcwdl_campaign import validate_campaign_spec  # noqa: E402
+from hlt_classification.scouting.hcwdl_dense import (  # noqa: E402
+    DENSE5_SPEC_CONTRACT, DENSE_SPEC_CONTRACT, validate_dense_spec,
+)
+
+
+def _validate_spec(value):
+    contract = str(value.get("contract", ""))
+    if contract in {DENSE_SPEC_CONTRACT, DENSE5_SPEC_CONTRACT}:
+        validate_dense_spec(value)
+        return
+    validate_campaign_spec(value)
 
 
 def _indexes(raw: str | None) -> tuple[int | None, ...]:
@@ -39,7 +50,7 @@ def main() -> int:
     args = parser.parse_args()
     if (args.states_json is None) == (not args.query_slurm):
         parser.error("choose exactly one of --states-json or --query-slurm")
-    spec = load_json(args.campaign_spec); validate_campaign_spec(spec)
+    spec = load_json(args.campaign_spec); _validate_spec(spec)
     ledger = load_json(args.submission_ledger)
     ledger_hash = validate_submission_ledger(ledger)
     if ledger["campaign_spec_sha256"] != spec["content_hash"]:
@@ -63,7 +74,7 @@ def main() -> int:
         if task_id not in tasks:
             raise ValueError("HCWDL ledger task is absent from campaign spec")
         valid = True
-        for index in _indexes(tasks[task_id]["array"]):
+        for index in _indexes(tasks[task_id].get("array")):
             path = task_attestation_path(spec["campaign_root"], task_id, index)
             try:
                 validate_task_attestation(

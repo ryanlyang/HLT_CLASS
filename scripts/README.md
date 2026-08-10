@@ -239,6 +239,13 @@ screen. That graph uses distinct `HCWDL_DENSE5_*` contracts, authorization
 phrases, `hcddp5_*` job names, output root, and aggregate. See
 `docs/HCWDL_DENSE5_COLD_RUNBOOK.md`.
 
+Dense ladders pinned to an older broken source commit are continued with
+`create_hcwdl_dense_recovery.py`, `submit_hcwdl_dense_recovery.py`, and
+`run_hcwdl_dense_recovery_task.py`. The recovery requires a complete original
+ledger plus an authenticated monitor, preserves the valid completed prefix,
+and submits only the failed/downstream closure from a clean repair checkout.
+It does not rematch, retrain the valid prefix, or access final test.
+
 An interrupted sealed final evaluation is recovered only through
 `create_hcwdl_final_recovery.py`, `submit_hcwdl_final_recovery.py`, and
 `run_hcwdl_final_recovery_task.py`. That two-job supplement reuses the exact

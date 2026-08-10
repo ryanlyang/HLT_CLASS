@@ -1,5 +1,29 @@
 # Current Handoff
 
+## HCWDL continuous Shell Exact and dense-closure repair (2026-08-10)
+
+The live ten-point D90 and five-point D95 workers exposed a shared runtime
+guard that still restricted every repair family to PMARD's seven-value alpha
+grid. `HIGHCOV_SHELL_EXACT/v1` now accepts its declared continuous finite
+coordinate on `[0,1]`; other repair families retain the legacy grid. Direct
+regressions construct D90 and D95 confidence-warped views and preserve endpoint
+and range checks.
+
+Because the failed Slurm jobs are immutably pinned to the broken commit,
+ordinary requeue is not valid. `HCWDL_DENSE_RECOVERY_SPEC/v1` binds each
+complete original ledger and monitor report, authenticates the completed
+D100offkd prefix, and submits only the failed/downstream closure from a clean
+repair checkout. It writes into the original scientific campaign root under
+the original graph while keeping separate recovery attestations and never
+accessing final test. The exact contract is
+`docs/contracts/HCWDL_DENSE_RECOVERY.md`.
+
+Focused dense, matching, repair, and CLI validation passes 76/76. The complete
+repository suite passes 344/344 with the same 14 Matplotlib/Pyparsing warnings;
+Python compilation and `git diff --check` pass. The real ten-point and
+five-point Tigris closures remain to be submitted from the exact pushed repair
+commit.
+
 ## HCWDL interrupted sealed-final repair (2026-08-10)
 
 The 300k unweighted pilot's sealed evaluation failed after its one-time claim

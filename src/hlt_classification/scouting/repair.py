@@ -421,9 +421,18 @@ def build_alpha_repaired_inputs(
     identity_keys: Sequence[str] | None = None,
     discrete_seed: int = 1337,
 ) -> ParticleInputs:
-    if alpha not in ALPHA_GRID:
-        raise ValueError(f"alpha must be one of {ALPHA_GRID}")
     repair_family = runtime_repair_family(repair_family)
+    try:
+        alpha = float(alpha)
+    except (TypeError, ValueError) as error:
+        raise ValueError("repair alpha must be a finite scalar in [0, 1]") from error
+    if not np.isfinite(alpha) or not 0.0 <= alpha <= 1.0:
+        raise ValueError("repair alpha must be a finite scalar in [0, 1]")
+    # PMARD's registered repair arms retain their discrete screening grid.
+    # Shell Exact is a continuous, confidence-warped coordinate: the dense
+    # HCWDL contracts deliberately register intermediate D95/D90/... views.
+    if repair_family != "HIGHCOV_SHELL_EXACT" and alpha not in ALPHA_GRID:
+        raise ValueError(f"repair alpha must be one of the legacy grid {ALPHA_GRID}")
     if repair_family in {"TRACK_ONLY", "P4_PLUS_TRACK"}:
         raise PermissionError(
             "track repair is disabled until a locked branch-semantics compatibility audit exists"

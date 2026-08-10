@@ -67,3 +67,10 @@ python -m json.tool \
 ```
 
 Replace `COMMIT` with the eight-character source commit recorded at launch.
+
+If a source defect interrupts this graph, use the source-pinned failed-closure
+recovery in
+[`contracts/HCWDL_DENSE_RECOVERY.md`](contracts/HCWDL_DENSE_RECOVERY.md).
+It authenticates and retains completed D100offkd, then begins at D95 when D95
+is the first failed task. Requeueing the old Slurm job would reuse its broken
+source and is forbidden.

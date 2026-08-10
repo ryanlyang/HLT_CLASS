@@ -64,3 +64,13 @@ python -m json.tool "${DENSE_ROOT}/reports/dense_cold_aggregate.json"
 ```
 
 No final-test command exists in this supplemental DAG.
+
+## Recover an interrupted dense closure
+
+Do not requeue an old failed job after its source defect is fixed: its worker
+remains pinned to the old commit. Generate an immutable monitor report with
+`monitor_hcwdl_campaign.py`, then use `create_hcwdl_dense_recovery.py` and
+`submit_hcwdl_dense_recovery.py` from a clean worktree at the repair commit.
+The recovery validates and reuses the completed prefix, beginning at the first
+failed task. Its exact safety contract is
+[`contracts/HCWDL_DENSE_RECOVERY.md`](contracts/HCWDL_DENSE_RECOVERY.md).
