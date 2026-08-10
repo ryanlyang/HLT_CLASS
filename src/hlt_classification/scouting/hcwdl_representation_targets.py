@@ -39,6 +39,9 @@ from .hcwdl_representation_artifacts import (
     write_staged_immutable_json,
 )
 from .hcwdl_representation_contracts import (
+    DENSE_COMPATIBLE_RESOURCE_PROFILE_CONTRACT,
+    DENSE_RESOURCE_PROFILE_CONTRACT,
+    DENSE_STORAGE_ESTIMATE_CONTRACT,
     TARGET_BUILD_INTENT_CONTRACT,
     TARGET_CONSUMER_REGISTRY_CONTRACT,
     TARGET_EXECUTION_ATTESTATION_CONTRACT,
@@ -57,7 +60,13 @@ from .hcwdl_representation_contracts import (
 )
 from .hcwdl_representation_graph import CONTROL_REGISTRY, NODE_REGISTRY
 from .hcwdl_representation_reporting import derive_representation_execution_id
-from .hcwdl_representation_resources import validate_measured_profile
+from .hcwdl_representation_resources import (
+    dense_resource_measurement_source_commit,
+    dense_resource_peak_rss_bytes,
+    validate_dense_measured_profile,
+    validate_dense_storage_estimate,
+    validate_measured_profile,
+)
 
 
 ORDINARY_BANK: Final = "ordinary"
@@ -1240,6 +1249,90 @@ def _validate_preflight_artifacts(
     slurm_mem_per_node_bytes: int,
     peak_runtime_bytes: int,
 ) -> tuple[str, str]:
+    if storage_estimate.get("contract") == DENSE_STORAGE_ESTIMATE_CONTRACT:
+        if resource_profile.get("contract") not in {
+            DENSE_RESOURCE_PROFILE_CONTRACT,
+            DENSE_COMPATIBLE_RESOURCE_PROFILE_CONTRACT,
+        }:
+            raise ValueError("HCWDL-RKD dense target resource profile differs")
+        parents = logical_bank.get("parents")
+        forward_source = None
+        # The target forward specification is validated separately and owns
+        # the live producer source.  Dense logical banks bind the same current
+        # recipe/graph/import identities needed here, while the profile itself
+        # explicitly records whether measurements came from an older
+        # accounting-compatible commit.
+        if isinstance(parents, Mapping):
+            recipe_sha256 = parents.get("representation_recipe")
+            graph_sha256 = parents.get("graph")
+            parent_import_sha256 = parents.get("parent_import")
+        else:
+            recipe_sha256 = graph_sha256 = parent_import_sha256 = None
+        recipe_sha256 = require_sha256(
+            recipe_sha256, name="dense target representation recipe",
+        )
+        graph_sha256 = require_sha256(
+            graph_sha256, name="dense target graph",
+        )
+        parent_import_sha256 = require_sha256(
+            parent_import_sha256, name="dense target teacher import",
+        )
+        compatibility = resource_profile.get("source_compatibility")
+        environment = resource_profile.get("measurement_environment")
+        if resource_profile.get("contract") == DENSE_COMPATIBLE_RESOURCE_PROFILE_CONTRACT:
+            if isinstance(compatibility, Mapping):
+                forward_source = compatibility.get("campaign_source_commit")
+        elif isinstance(environment, Mapping):
+            forward_source = environment.get("source_commit")
+        if not isinstance(forward_source, str):
+            raise ValueError("HCWDL-RKD dense target source commitment differs")
+        profile_hash = validate_dense_measured_profile(
+            resource_profile,
+            expected_source_commit=forward_source,
+            expected_recipe_sha256=recipe_sha256,
+        )
+        storage_hash = validate_dense_storage_estimate(
+            storage_estimate,
+            expected_source_commit=dense_resource_measurement_source_commit(
+                resource_profile,
+            ),
+            expected_recipe_sha256=recipe_sha256,
+            expected_graph_sha256=graph_sha256,
+            expected_dense_teacher_import_sha256=parent_import_sha256,
+        )
+        kind = str(logical_bank["payload"]["bank_kind"])
+        required_for_kind = rows * target_logical_bytes_per_row(kind)
+        dense_field = (
+            "ordinary_target_bank_bytes"
+            if kind == ORDINARY_BANK else "toff_target_bank_bytes"
+        )
+        row_counts = storage_estimate.get("row_counts")
+        requests = resource_profile.get("requests")
+        request = requests.get("gpu_target") if isinstance(requests, Mapping) else None
+        measured_peak = dense_resource_peak_rss_bytes(
+            resource_profile, resource_class="gpu_target",
+        )
+        if (
+            row_counts != {"train": rows, "validation": 256, "final": 0}
+            or storage_estimate.get("dense_teacher_import_sha256")
+            != parent_import_sha256
+            or storage_estimate.get(dense_field) != required_for_kind
+            or int(storage_estimate.get(
+                "peak_target_staging_plus_committed_bytes", -1,
+            )) < 2 * required_for_kind
+            or storage_estimate.get("training_node_count") != 86
+            or storage_estimate.get("target_generation_count") != 83
+            or storage_estimate.get("final_role_storage_bytes") != 0
+            or not isinstance(request, Mapping)
+            or request.get("gpu") != "gpu:gh200:1"
+            or _gib_request_bytes(request.get("memory"))
+            != slurm_mem_per_node_bytes
+            or int(peak_runtime_bytes) < measured_peak
+            or int(peak_runtime_bytes) * 4 > int(slurm_mem_per_node_bytes) * 3
+        ):
+            raise ValueError("HCWDL-RKD dense target preflight evidence differs")
+        return storage_hash, profile_hash
+
     storage_hash = validate_content_hash(
         storage_estimate,
         expected_contract=STORAGE_ESTIMATE_CONTRACT,

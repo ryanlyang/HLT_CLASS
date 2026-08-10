@@ -44,6 +44,10 @@ from .hcwdl_representation_contracts import (
 from .hcwdl_representation_graph import CONTROL_REGISTRY, NODE_REGISTRY
 from .hcwdl_representation_locks import IMPORTED_LOGIT_CONTROLS, IMPORTED_TEACHERS
 from .hcwdl_representation_reporting import CONFIRMATION_SEEDS
+from .hcwdl_representation_resources import (
+    dense_resource_recipe_producer_source_sha256,
+    validate_dense_measured_profile,
+)
 from .hcwdl_representation_runtime_adapters import PRODUCTION_ADAPTER_CONTRACT
 from .hcwdl_representation_runtime_binding import (
     CAMPAIGN_ARTIFACT_BINDING, IMMUTABLE_OUTPUT_ROOT_BINDING,
@@ -1805,13 +1809,20 @@ def _simple_parameters(
             "historical_project_dir": _registered_path("${dense_teacher_project}"),
         }
     if kind == "representation_recipe":
+        runtime_source_sha256 = require_sha256(
+            prerequisites["runtime_facts"]["source_snapshot_sha256"],
+            name="representation recipe runtime source snapshot",
+        )
+        producer_source_sha256 = runtime_source_sha256
+        if spec.get("disposition") == "dense_training_only":
+            producer_source_sha256 = dense_resource_recipe_producer_source_sha256(
+                spec["resource_profile"],
+                runtime_source_sha256=runtime_source_sha256,
+            )
         return {
             **base,
             "artifact": _registered_reference("${prebuilt_representation_recipe}"),
-            "producer_source_sha256": require_sha256(
-                prerequisites["runtime_facts"]["source_snapshot_sha256"],
-                name="representation recipe producer source snapshot",
-            ),
+            "producer_source_sha256": producer_source_sha256,
             "representation_graph": _registered_reference(
                 "${representation_graph}"
             ),
@@ -2933,9 +2944,23 @@ def build_runtime_prerequisites(
         runtime_facts.get("source_snapshot_sha256"),
         name="runtime source snapshot",
     )
+    expected_recipe_producer_source = runtime_source_sha256
+    if dense:
+        profile = spec.get("resource_profile")
+        if not isinstance(profile, Mapping):
+            raise PermissionError("dense runtime lacks measured resource authority")
+        validate_dense_measured_profile(
+            profile, expected_source_commit=str(spec["source_commit"]),
+            expected_recipe_sha256=recipe_sha256,
+        )
+        expected_recipe_producer_source = (
+            dense_resource_recipe_producer_source_sha256(
+                profile, runtime_source_sha256=runtime_source_sha256,
+            )
+        )
     if representation_recipe["parents"].get(
         "producer_source"
-    ) != runtime_source_sha256:
+    ) != expected_recipe_producer_source:
         raise PermissionError(
             "representation recipe producer source differs from measured runtime source"
         )

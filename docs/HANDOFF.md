@@ -95,6 +95,28 @@ blank raw column plus the required bound submit token; altered or missing
 tokens still fail. A requeued collector may reuse the first attempt's partial
 `cpu_small/sacct.psv` only when a fresh capture is byte-identical, and every
 other raw/evidence path must remain fresh.
+All four measurement jobs (`80190`--`80193`) completed, and replacement
+collector `80400` completed after exact requeue under the blank-comment parser
+compatibility commit. The resulting genuine dense profile is
+`a1069ee9efd9f98798495ee4e663346431175926502b4a59b09d4743df337b92`;
+the 512/256/0 storage estimate is
+`88ba2e77916192d1e7a3dd0816985684ae74e7b3680791e402068422e1bb4f07`,
+requiring 25,718,067,627 bytes against 51,678,019,584 observed free bytes.
+Because the probes measured commit `290f9f8` and the later commits changed
+only the collector/accounting compatibility surface, the new
+`HCWDL_REPRESENTATION_DENSE_COMPATIBLE_RESOURCE_PROFILE/v1` wrapper freezes
+that exact Git diff and reuses the completed measurements without relabeling
+or rerunning them. Any target, model, training, data, graph, or worker change
+fails the wrapper. No dense training or final-role job has been submitted.
+The compatibility projection also reopens the old `gpu_target` result through
+that profile and refreshes only its producer source identity from the clean
+campaign checkout. The production target preflight now consumes the typed
+dense storage/profile contracts directly, including their authenticated
+scheduler peak, instead of routing them through the legacy generic resource
+schema. Thus jobs `80190`--`80193` are reused and are not rerun. The complete
+post-change representation suite is **473 passed, 9 expected Windows platform
+skips, 0 failures**; the exact changed-path registry matches the full
+measured-commit-to-working-tree Git diff and `git diff --check` is clean.
 
 ## HCWDL non-final corrected-parent prefix (2026-08-09)
 

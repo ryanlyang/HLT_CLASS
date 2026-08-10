@@ -37,6 +37,7 @@ from .hcwdl_representation_resources import (
     TIGRIS_SITE,
     load_authenticated_json_reference,
     resource_table,
+    dense_resource_measurement_source_commit,
     validate_measured_profile,
     validate_dense_measured_profile,
     validate_dense_storage_availability,
@@ -1601,11 +1602,13 @@ def create_campaign_spec(
         else require_sha256(runtime_binding_sha256, name="runtime binding")
     )
     profile_hash = None
+    resource_measurement_source_commit = source_commit
     array_concurrency_limits: dict[str, int] = {}
     if resource_profile is not None:
         profile_hash = (
             validate_dense_measured_profile(
                 resource_profile, expected_source_commit=source_commit,
+                expected_recipe_sha256=representation_recipe_sha256,
             )
             if disposition == DENSE_TRAINING_DISPOSITION else
             validate_measured_profile(
@@ -1614,6 +1617,10 @@ def create_campaign_spec(
             )
         )
         resources = dict(resource_profile["requests"])
+        if disposition == DENSE_TRAINING_DISPOSITION:
+            resource_measurement_source_commit = (
+                dense_resource_measurement_source_commit(resource_profile)
+            )
         array_concurrency_limits = {
             str(key): int(value)
             for key, value in resource_profile.get(
@@ -1649,7 +1656,7 @@ def create_campaign_spec(
                     expected_contract=DENSE_STORAGE_TEMPLATE_CONTRACT,
                     name="campaign dense storage template",
                 )[0],
-                expected_source_commit=source_commit,
+                expected_source_commit=resource_measurement_source_commit,
                 expected_recipe_sha256=representation_recipe_sha256,
                 expected_graph_sha256=graph_sha256,
                 expected_dense_teacher_import_sha256=parent_import_sha256,
@@ -1659,7 +1666,7 @@ def create_campaign_spec(
         storage_hash = (
             validate_dense_storage_estimate(
                 storage_estimate, storage_template=fixed_size_inventory,
-                expected_source_commit=source_commit,
+                expected_source_commit=resource_measurement_source_commit,
                 expected_recipe_sha256=representation_recipe_sha256,
                 expected_graph_sha256=graph_sha256,
                 expected_dense_teacher_import_sha256=parent_import_sha256,
@@ -1896,6 +1903,7 @@ def validate_campaign_spec(spec: Mapping[str, Any], *, executable: bool = False)
     if tasks != expected:
         raise ValueError("representation campaign registry differs")
     profile = spec.get("resource_profile")
+    resource_measurement_source_commit = str(spec["source_commit"])
     if profile is None:
         expected_resources = resource_table(mode=str(spec["mode"]))
         if dense:
@@ -1911,6 +1919,7 @@ def validate_campaign_spec(spec: Mapping[str, Any], *, executable: bool = False)
         profile_hash = (
             validate_dense_measured_profile(
                 profile, expected_source_commit=str(spec["source_commit"]),
+                expected_recipe_sha256=str(spec["representation_recipe_sha256"]),
             )
             if dense else
             validate_measured_profile(
@@ -1921,6 +1930,10 @@ def validate_campaign_spec(spec: Mapping[str, Any], *, executable: bool = False)
         if spec.get("resource_profile_sha256") != profile_hash:
             raise ValueError("representation resource-profile lineage differs")
         expected_resources = dict(profile["requests"])
+        if dense:
+            resource_measurement_source_commit = (
+                dense_resource_measurement_source_commit(profile)
+            )
     if spec.get("resources") != expected_resources:
         raise ValueError("representation campaign resource requests differ")
     expected_limits = (
@@ -1972,7 +1985,7 @@ def validate_campaign_spec(spec: Mapping[str, Any], *, executable: bool = False)
         storage_hash = (
             validate_dense_storage_estimate(
                 storage, storage_template=fixed_size_inventory,
-                expected_source_commit=str(spec["source_commit"]),
+                expected_source_commit=resource_measurement_source_commit,
                 expected_recipe_sha256=str(spec["representation_recipe_sha256"]),
                 expected_graph_sha256=str(spec["graph_sha256"]),
                 expected_dense_teacher_import_sha256=str(

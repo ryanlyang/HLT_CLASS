@@ -24,6 +24,7 @@ from .hcwdl_representation_contracts import (
     NONFINAL_ACCEPTANCE_EXECUTION_RECEIPT_CONTRACT,
     DENSE_SMOKE_ACCEPTANCE_CONTRACT,
     DENSE_RESOURCE_PROFILE_CONTRACT,
+    DENSE_COMPATIBLE_RESOURCE_PROFILE_CONTRACT,
     DENSE_RESOURCE_PROBE_PLAN_CONTRACT,
     DENSE_RESOURCE_PROBE_AUTHORIZATION_CONTRACT,
     DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_AUTHORIZATION_CONTRACT,
@@ -96,6 +97,11 @@ ROUTES: Final = {
     ),
     DENSE_RESOURCE_PROFILE_CONTRACT: ArtifactRoute(
         "resources/measured_dense_profile.json", "resource_measurement",
+        "validate_dense_measured_profile",
+    ),
+    DENSE_COMPATIBLE_RESOURCE_PROFILE_CONTRACT: ArtifactRoute(
+        "resources/measured_dense_profile_compatible.json",
+        "resource_measurement_compatibility",
         "validate_dense_measured_profile",
     ),
     DENSE_RESOURCE_PROBE_PLAN_CONTRACT: ArtifactRoute(

@@ -19,6 +19,8 @@ from hlt_classification.data.cache_contracts import (
     with_content_hash,
 )
 from hlt_classification.scouting.hcwdl_representation_contracts import (
+    DENSE_COMPATIBLE_RESOURCE_PROFILE_CONTRACT,
+    DENSE_STORAGE_ESTIMATE_CONTRACT,
     RESOURCE_PROFILE_CONTRACT,
     TRAINING_REPORT_CONTRACT,
 )
@@ -95,6 +97,48 @@ def test_dense_target_planning_uses_canonical_tap_schema_hash() -> None:
     assert _validated_tap_sha256(value) == tap_schema_sha256()
     with pytest.raises(ValueError, match="tap schema differs"):
         _validated_tap_sha256({**value, "content_hash": "1" * 64})
+
+
+def test_compatible_target_runtime_refreshes_only_source_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from hlt_classification.scouting import hcwdl_representation_target_planning as planning
+
+    runtime = {
+        "producer": {
+            "source_commit": "1" * 40,
+            "source_snapshot_sha256": "2" * 64,
+            "packages": {"torch": "unchanged"},
+        },
+        "device": {"model": "GH200"},
+        "precision": {"autocast": False},
+        "determinism": {"deterministic_algorithms": True},
+    }
+    snapshot = {
+        "git_commit": "3" * 40,
+        "source_snapshot_sha256": "4" * 64,
+    }
+    monkeypatch.setattr(
+        planning, "capture_source_snapshot", lambda *_a, **_k: dict(snapshot),
+    )
+    monkeypatch.setattr(
+        planning, "validate_source_snapshot_payload", lambda _value: "5" * 64,
+    )
+    refreshed = planning._refresh_compatible_target_producer(
+        runtime, project=tmp_path, campaign_source_commit="3" * 40,
+    )
+    assert refreshed["producer"] == {
+        "source_commit": "3" * 40,
+        "source_snapshot_sha256": "4" * 64,
+        "packages": {"torch": "unchanged"},
+    }
+    assert refreshed["device"] == runtime["device"]
+    assert refreshed["precision"] == runtime["precision"]
+    assert refreshed["determinism"] == runtime["determinism"]
+    with pytest.raises(PermissionError, match="checkout differs"):
+        planning._refresh_compatible_target_producer(
+            runtime, project=tmp_path, campaign_source_commit="6" * 40,
+        )
 from hlt_classification.scouting.hcwdl_representation_resources import (
     build_storage_estimate,
     resource_table,
@@ -357,6 +401,70 @@ def _resource_profile() -> dict:
         },
         "array_concurrency_limits": {},
     })
+
+
+def test_dense_target_preflight_consumes_dense_probe_artifacts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from hlt_classification.scouting import hcwdl_representation_targets as targets
+
+    logical = _logical("RSET_D100")
+    rows = 512
+    ordinary = rows * target_logical_bytes_per_row(ORDINARY_BANK)
+    toff = rows * target_logical_bytes_per_row(TOFF_BANK)
+    storage = {
+        "contract": DENSE_STORAGE_ESTIMATE_CONTRACT,
+        "dense_teacher_import_sha256": logical["parents"]["parent_import"],
+        "row_counts": {"train": rows, "validation": 256, "final": 0},
+        "ordinary_target_bank_bytes": ordinary,
+        "toff_target_bank_bytes": toff,
+        "peak_target_staging_plus_committed_bytes": 2 * max(ordinary, toff),
+        "training_node_count": 86,
+        "target_generation_count": 83,
+        "final_role_storage_bytes": 0,
+    }
+    profile = {
+        "contract": DENSE_COMPATIBLE_RESOURCE_PROFILE_CONTRACT,
+        "source_compatibility": {"campaign_source_commit": "1" * 40},
+        "measurement_environment": {"source_commit": "2" * 40},
+        "requests": {
+            "gpu_target": {
+                "cpus": 4, "memory": "64G", "walltime": "02:00:00",
+                "gpu": "gpu:gh200:1",
+            },
+        },
+    }
+    observed: dict[str, object] = {}
+    monkeypatch.setattr(
+        targets, "validate_dense_measured_profile",
+        lambda value, **kwargs: observed.update(profile_kwargs=kwargs) or "3" * 64,
+    )
+    monkeypatch.setattr(
+        targets, "validate_dense_storage_estimate",
+        lambda value, **kwargs: observed.update(storage_kwargs=kwargs) or "4" * 64,
+    )
+    monkeypatch.setattr(
+        targets, "dense_resource_measurement_source_commit",
+        lambda _value: "2" * 40,
+    )
+    monkeypatch.setattr(
+        targets, "dense_resource_peak_rss_bytes", lambda *_args, **_kwargs: 1024,
+    )
+    assert targets._validate_preflight_artifacts(
+        logical_bank=logical, rows=rows, storage_estimate=storage,
+        resource_profile=profile, slurm_mem_per_node_bytes=64 * 1024**3,
+        peak_runtime_bytes=2048,
+    ) == ("4" * 64, "3" * 64)
+    assert observed["profile_kwargs"] == {
+        "expected_source_commit": "1" * 40,
+        "expected_recipe_sha256": logical["parents"]["representation_recipe"],
+    }
+    assert observed["storage_kwargs"] == {
+        "expected_source_commit": "2" * 40,
+        "expected_recipe_sha256": logical["parents"]["representation_recipe"],
+        "expected_graph_sha256": logical["parents"]["graph"],
+        "expected_dense_teacher_import_sha256": logical["parents"]["parent_import"],
+    }
 
 
 def _forward_payload(logical: dict, partitions=("p0", "p1")) -> dict:

@@ -116,7 +116,10 @@ The operator-visible order is fixed:
    exactly one replacement collector over the original four job IDs; never
    rerun the probes;
 6. build the genuine dense resource profile, measured maximum-state storage
-   template, and conservative dense storage estimate;
+   template, and conservative dense storage estimate; if only the reviewed
+   collector/parser compatibility commits follow the measured commit, publish
+   the compatible resource-profile wrapper from the existing profile and
+   recovery ledger instead of rerunning any probe;
 7. publish the 83 just-in-time target authorities, exhaustive runtime rows,
    and immutable runtime binding, then recreate the reviewed planning spec;
 8. render the complete 261-task smoke command plan and publish its strict

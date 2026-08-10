@@ -5,7 +5,9 @@ import subprocess
 
 import pytest
 
-from hlt_classification.data.cache_contracts import load_json, write_immutable_json
+from hlt_classification.data.cache_contracts import (
+    load_json, with_content_hash, write_immutable_json,
+)
 from hlt_classification.scouting import hcwdl_representation_campaign as campaign
 from hlt_classification.scouting.hcwdl_representation_campaign import (
     DENSE_TRAINING_DISPOSITION, create_campaign_spec,
@@ -315,4 +317,209 @@ def test_dense_storage_uses_measured_templates_and_scales_all_86_nodes(
     with pytest.raises(PermissionError, match="lineage differs"):
         validate_dense_storage_template(
             changed, expected_source_commit=SOURCE_COMMIT,
+        )
+
+
+def test_dense_measurements_cross_only_the_exact_accounting_diff(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from hlt_classification.scouting import hcwdl_representation_resources as resources
+    from hlt_classification.scouting.hcwdl_representation_contracts import (
+        DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_AUTHORIZATION_CONTRACT,
+        DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_LEDGER_CONTRACT,
+    )
+
+    project = tmp_path / "project"
+    (project / "docs").mkdir(parents=True)
+    subprocess.run(["git", "init"], cwd=project, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "dense-test@example.invalid"],
+        cwd=project, check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Dense Test"], cwd=project, check=True,
+    )
+    handoff = project / "docs" / "HANDOFF.md"
+    handoff.write_text("measured\n", encoding="utf-8")
+    subprocess.run(["git", "add", "docs/HANDOFF.md"], cwd=project, check=True)
+    subprocess.run(["git", "commit", "-m", "measured"], cwd=project, check=True)
+    measured = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=project, check=True,
+        capture_output=True, text=True,
+    ).stdout.strip()
+    handoff.write_text("collector compatibility\n", encoding="utf-8")
+    subprocess.run(["git", "commit", "-am", "collector"], cwd=project, check=True)
+    campaign_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=project, check=True,
+        capture_output=True, text=True,
+    ).stdout.strip()
+    monkeypatch.setattr(
+        resources, "_DENSE_RESOURCE_COMPATIBILITY_CHANGED_PATHS",
+        frozenset({"docs/HANDOFF.md"}),
+    )
+    jobs = {name: str(80190 + index) for index, name in enumerate(
+        resources.DENSE_RESOURCE_CLASSES,
+    )}
+    authorization = with_content_hash({
+        "contract": DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_AUTHORIZATION_CONTRACT,
+        "schema_version": 1,
+        "measured_source_commit": measured,
+        "compatibility_source_commit": campaign_commit,
+        "probe_job_ids": jobs,
+        "probe_jobs_rerun_authorized": False,
+        "dense_graph_submission_authorized": False,
+        "pilot_submission_authorized": False,
+        "final_role_access_authorized": False,
+    })
+    ledger = with_content_hash({
+        "contract": DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_LEDGER_CONTRACT,
+        "schema_version": 1,
+        "recovery_authorization_sha256": authorization["content_hash"],
+        "measured_source_commit": measured,
+        "compatibility_source_commit": campaign_commit,
+        "probe_job_ids": jobs,
+        "probe_jobs_rerun": False,
+        "dense_graph_submitted": False,
+        "final_role_accessed": False,
+    })
+    authorization_path = tmp_path / "authorization.json"
+    ledger_path = tmp_path / "ledger.json"
+    write_immutable_json(authorization_path, authorization)
+    write_immutable_json(ledger_path, ledger)
+    projection = resources._dense_resource_source_compatibility(
+        project_dir=project, measured_source_commit=measured,
+        campaign_source_commit=campaign_commit,
+        representation_recipe_sha256="a" * 64,
+        recipe_producer_source_sha256="b" * 64,
+        recovery_authorization=authorization,
+        recovery_authorization_reference=artifact_reference(authorization_path),
+        recovery_ledger=ledger,
+        recovery_ledger_reference=artifact_reference(ledger_path),
+    )
+    assert projection["measurement_jobs_rerun"] is False
+    assert projection["training_code_changed"] is False
+    assert projection["changed_paths"] == ["docs/HANDOFF.md"]
+
+    training = project / "src" / "training.py"
+    training.parent.mkdir()
+    training.write_text("changed = True\n", encoding="utf-8")
+    subprocess.run(["git", "add", "src/training.py"], cwd=project, check=True)
+    subprocess.run(["git", "commit", "-m", "training change"], cwd=project, check=True)
+    changed_campaign = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=project, check=True,
+        capture_output=True, text=True,
+    ).stdout.strip()
+    with pytest.raises(PermissionError, match="accounting boundary"):
+        resources._dense_resource_source_compatibility(
+            project_dir=project, measured_source_commit=measured,
+            campaign_source_commit=changed_campaign,
+            representation_recipe_sha256="a" * 64,
+            recipe_producer_source_sha256="b" * 64,
+            recovery_authorization=authorization,
+            recovery_authorization_reference=artifact_reference(authorization_path),
+            recovery_ledger=ledger,
+            recovery_ledger_reference=artifact_reference(ledger_path),
+        )
+
+
+def test_compatible_profile_preserves_measurements_and_old_recipe_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from hlt_classification.scouting import hcwdl_representation_resources as resources
+    from hlt_classification.scouting.hcwdl_representation_contracts import (
+        DENSE_RESOURCE_PROFILE_CONTRACT,
+        DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_AUTHORIZATION_CONTRACT,
+        DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_LEDGER_CONTRACT,
+    )
+
+    measured = "1" * 40
+    campaign_commit = "2" * 40
+    recipe = "3" * 64
+    producer_source = "4" * 64
+    base = with_content_hash({
+        "contract": DENSE_RESOURCE_PROFILE_CONTRACT,
+        "schema_version": 1,
+        "disposition": "dense_training_only",
+        "requests": {"cpu_small": {"cpus": 2}},
+        "measurements": {"cpu_small": {"measured": True}},
+        "array_concurrency_limits": {},
+        "measurement_environment": {
+            "source_commit": measured,
+            "production_workers": {},
+        },
+    })
+    authorization = with_content_hash({
+        "contract": DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_AUTHORIZATION_CONTRACT,
+        "schema_version": 1,
+    })
+    ledger = with_content_hash({
+        "contract": DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_LEDGER_CONTRACT,
+        "schema_version": 1,
+    })
+    paths = {}
+    for name, value in (
+        ("base", base), ("authorization", authorization), ("ledger", ledger),
+    ):
+        path = tmp_path / f"{name}.json"
+        write_immutable_json(path, value)
+        paths[name] = path
+    projection = {
+        "compatibility_class": "slurm_accounting_only/v1",
+        "project_dir": str(tmp_path.resolve()),
+        "measured_source_commit": measured,
+        "campaign_source_commit": campaign_commit,
+        "changed_paths": ["collector.py"],
+        "changed_paths_sha256": "5" * 64,
+        "representation_recipe_sha256": recipe,
+        "recipe_producer_source_sha256": producer_source,
+        "collector_recovery_authorization": artifact_reference(
+            paths["authorization"]
+        ),
+        "collector_recovery_ledger": artifact_reference(paths["ledger"]),
+        "measurement_jobs_rerun": False,
+        "training_code_changed": False,
+        "dense_graph_submission_authorized": False,
+        "pilot_submission_authorized": False,
+        "final_role_access_authorized": False,
+    }
+    monkeypatch.setattr(
+        resources, "_validate_dense_exact_measured_profile",
+        lambda value, *, expected_source_commit: value["content_hash"],
+    )
+    monkeypatch.setattr(
+        resources, "_dense_resource_source_compatibility",
+        lambda **_kwargs: dict(projection),
+    )
+    compatible = resources.build_dense_compatible_measured_profile(
+        base_profile=base,
+        base_profile_reference=artifact_reference(paths["base"]),
+        project_dir=tmp_path,
+        campaign_source_commit=campaign_commit,
+        representation_recipe_sha256=recipe,
+        recipe_producer_source_sha256=producer_source,
+        recovery_authorization=authorization,
+        recovery_authorization_reference=artifact_reference(paths["authorization"]),
+        recovery_ledger=ledger,
+        recovery_ledger_reference=artifact_reference(paths["ledger"]),
+    )
+    assert resources.validate_dense_measured_profile(
+        compatible, expected_source_commit=campaign_commit,
+        expected_recipe_sha256=recipe,
+    ) == compatible["content_hash"]
+    assert resources.dense_resource_measurement_source_commit(
+        compatible
+    ) == measured
+    assert resources.dense_resource_recipe_producer_source_sha256(
+        compatible, runtime_source_sha256="6" * 64,
+    ) == producer_source
+
+    changed = dict(compatible)
+    changed["measurements"] = {"cpu_small": {"measured": False}}
+    changed = with_content_hash({
+        key: value for key, value in changed.items() if key != "content_hash"
+    })
+    with pytest.raises(PermissionError, match="changes measured resources"):
+        resources.validate_dense_measured_profile(
+            changed, expected_source_commit=campaign_commit,
+            expected_recipe_sha256=recipe,
         )

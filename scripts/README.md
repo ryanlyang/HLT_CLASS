@@ -249,6 +249,11 @@ grouped as follows:
 The collector-recovery pair is a fail-closed exception for one purged failed
 accounting collector. It reuses the original four completed probe IDs and has
 no probe, training, array, pilot, or final-role submission path.
+`build_hcwdl_representation_dense_resource_profile.py` also has a mutually
+exclusive compatible-reuse mode. It wraps the immutable exact-source profile
+and collector recovery artifacts only when the full Git diff is the frozen
+accounting/validation path set; any training, target, model, data, graph, or
+worker change rejects reuse. This mode never submits or reruns a probe.
 
 - pre-campaign audit and freezing:
   `audit_hcwdl_representation_parent_final_state.py`,

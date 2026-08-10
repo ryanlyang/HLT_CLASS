@@ -9,12 +9,18 @@ from typing import Any
 from hlt_classification.data.cache_contracts import (
     canonical_sha256, load_json, require_sha256, sha256_file,
 )
+from hlt_classification.provenance import (
+    capture_source_snapshot, validate_source_snapshot_payload,
+)
 
 from .engine import validate_pmard_training_report
 from .hcwdl_representation_campaign import (
     DENSE_TRAINING_DISPOSITION, validate_campaign_spec,
 )
 from .hcwdl_representation_dense_teacher import validate_dense_teacher_import
+from .hcwdl_representation_contracts import (
+    DENSE_COMPATIBLE_RESOURCE_PROFILE_CONTRACT,
+)
 from .hcwdl_representation_graph import (
     NODE_REGISTRY, validate_ascent_graph_artifact,
 )
@@ -33,6 +39,9 @@ from .hcwdl_representation_worker_runtime import (
     validate_worker_runtime_measurement,
 )
 from .hcwdl_assignment import validate_train_assignment_authority
+from .hcwdl_representation_resources import (
+    validate_dense_profile_runtime_measurement,
+)
 from .selective_assignment import validate_row_selection
 from .splits import role_records, validate_split_manifest
 
@@ -91,6 +100,25 @@ def _validated_tap_sha256(value: Mapping[str, Any]) -> str:
     if dict(value) != canonical_tap_schema():
         raise ValueError("target planning tap schema differs")
     return tap_schema_sha256()
+
+
+def _refresh_compatible_target_producer(
+    runtime: Mapping[str, Any], *, project: Path, campaign_source_commit: str,
+) -> dict[str, Any]:
+    source_snapshot = capture_source_snapshot(project, require_clean=True)
+    validate_source_snapshot_payload(source_snapshot)
+    if source_snapshot.get("git_commit") != campaign_source_commit:
+        raise PermissionError("target compatibility checkout differs from campaign")
+    return {
+        **dict(runtime),
+        "producer": {
+            **dict(runtime["producer"]),
+            "source_commit": source_snapshot["git_commit"],
+            "source_snapshot_sha256": source_snapshot[
+                "source_snapshot_sha256"
+            ],
+        },
+    }
 
 
 def build_dense_target_planning_assets(
@@ -158,20 +186,34 @@ def build_dense_target_planning_assets(
         or parents.get("assignment_manifest") != assignment_sha256
     ):
         raise PermissionError("target planning recipe/data lineage differs")
-    validate_worker_runtime_measurement(gpu_target_runtime_measurement)
-    if gpu_target_runtime_measurement.get("campaign_spec_sha256") != spec_sha256:
-        raise PermissionError("target runtime measurement belongs to another campaign")
-    runtime = target_forward_runtime_commitment_from_measurement(
-        gpu_target_runtime_measurement,
-    )
-    if runtime["producer"]["source_commit"] != planning_campaign_spec.get(
-        "source_commit"
-    ):
-        raise PermissionError("target runtime measurement uses another source")
-
     project = Path(project_dir).resolve()
     if not project.is_dir() or project.is_symlink():
         raise ValueError("dense target project is not an absolute worktree")
+    validate_worker_runtime_measurement(gpu_target_runtime_measurement)
+    profile = planning_campaign_spec.get("resource_profile")
+    compatible_source = (
+        isinstance(profile, Mapping)
+        and profile.get("contract") == DENSE_COMPATIBLE_RESOURCE_PROFILE_CONTRACT
+    )
+    if gpu_target_runtime_measurement.get("campaign_spec_sha256") != spec_sha256:
+        if not compatible_source:
+            raise PermissionError("target runtime measurement belongs to another campaign")
+        validate_dense_profile_runtime_measurement(
+            profile, resource_class="gpu_target",
+            measurement=gpu_target_runtime_measurement,
+        )
+    runtime = target_forward_runtime_commitment_from_measurement(
+        gpu_target_runtime_measurement,
+    )
+    if compatible_source:
+        runtime = _refresh_compatible_target_producer(
+            runtime, project=project,
+            campaign_source_commit=str(planning_campaign_spec["source_commit"]),
+        )
+    elif runtime["producer"]["source_commit"] != planning_campaign_spec.get(
+        "source_commit"
+    ):
+        raise PermissionError("target runtime measurement uses another source")
     kernel_hashes = spectral_resource_logical_hashes(
         generate_spectral_resource_bundle()
     )

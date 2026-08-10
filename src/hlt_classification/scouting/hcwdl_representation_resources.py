@@ -27,6 +27,9 @@ from hlt_classification.data.cache_contracts import (
     with_content_hash,
 )
 from .hcwdl_representation_contracts import (
+    DENSE_COMPATIBLE_RESOURCE_PROFILE_CONTRACT,
+    DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_AUTHORIZATION_CONTRACT,
+    DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_LEDGER_CONTRACT,
     DENSE_STORAGE_ESTIMATE_CONTRACT,
     DENSE_STORAGE_TEMPLATE_CONTRACT,
     DENSE_RESOURCE_PROFILE_CONTRACT,
@@ -84,6 +87,31 @@ NONFINAL_COLLECTOR_WORKER: Final = (
     "run_hcwdl_representation_nonfinal_evidence_collector.sh"
 )
 DENSE_RESOURCE_COLLECTOR_JOB_NAME: Final = "hcwdlr_resource_probe_collector"
+_DENSE_RESOURCE_COMPATIBILITY_CHANGED_PATHS: Final = frozenset({
+    "docs/HANDOFF.md",
+    "docs/HCWDL_RKD_RUNBOOK.md",
+    "docs/plans/HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md",
+    "scripts/README.md",
+    "scripts/build_hcwdl_representation_dense_resource_profile.py",
+    "scripts/build_hcwdl_representation_dense_resource_probe_collector_recovery_authorization.py",
+    "scripts/collect_hcwdl_representation_dense_resource_probes.py",
+    "scripts/submit_hcwdl_representation_dense_resource_probe_collector_recovery.py",
+    "src/hlt_classification/scouting/hcwdl_representation_campaign.py",
+    "src/hlt_classification/scouting/hcwdl_representation_contracts.py",
+    "src/hlt_classification/scouting/hcwdl_representation_layout.py",
+    "src/hlt_classification/scouting/hcwdl_representation_resource_probe.py",
+    "src/hlt_classification/scouting/hcwdl_representation_resources.py",
+    "src/hlt_classification/scouting/hcwdl_representation_runtime_rows.py",
+    "src/hlt_classification/scouting/hcwdl_representation_target_planning.py",
+    "src/hlt_classification/scouting/hcwdl_representation_targets.py",
+    "tests/test_hcwdl_representation_cli.py",
+    "tests/test_hcwdl_representation_contracts.py",
+    "tests/test_hcwdl_representation_evidence.py",
+    "tests/test_hcwdl_representation_layout.py",
+    "tests/test_hcwdl_representation_nonfinal_resources.py",
+    "tests/test_hcwdl_representation_resource_probe.py",
+    "tests/test_hcwdl_representation_targets.py",
+})
 NONFINAL_COLLECTOR_CLI: Final = (
     "build_hcwdl_representation_nonfinal_acceptance_scheduler_evidence.py"
 )
@@ -2359,7 +2387,7 @@ def build_measured_profile(
     return artifact
 
 
-def validate_dense_measured_profile(
+def _validate_dense_exact_measured_profile(
     profile: Mapping[str, Any], *, expected_source_commit: str,
 ) -> str:
     """Validate the exact four resource classes used by the non-final DAG."""
@@ -2463,6 +2491,319 @@ def validate_dense_measured_profile(
     return digest
 
 
+def _dense_resource_source_compatibility(
+    *, project_dir: str | Path, measured_source_commit: str,
+    campaign_source_commit: str, representation_recipe_sha256: str,
+    recipe_producer_source_sha256: str,
+    recovery_authorization: Mapping[str, Any],
+    recovery_authorization_reference: Mapping[str, Any],
+    recovery_ledger: Mapping[str, Any],
+    recovery_ledger_reference: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Rebuild the exact accounting-only source transition.
+
+    The completed probes remain scientific measurements of ``measured``.
+    Their one permitted reuse is a campaign checkout whose intervening diff is
+    exactly the reviewed Slurm-accounting/validation surface.  Any target,
+    model, training, data, worker, or graph change therefore fails here.
+    """
+
+    measured = _full_source_commit(
+        measured_source_commit, name="dense measured source commit",
+    )
+    campaign = _full_source_commit(
+        campaign_source_commit, name="dense campaign source commit",
+    )
+    project = Path(project_dir).resolve()
+    if not project.is_dir() or project.is_symlink():
+        raise ValueError("dense resource compatibility project differs")
+
+    def git(*arguments: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["git", *arguments], cwd=project, check=check,
+            capture_output=True, text=True,
+        )
+
+    if git("status", "--porcelain").stdout.strip():
+        raise PermissionError("dense resource compatibility checkout is dirty")
+    if git("rev-parse", "HEAD").stdout.strip() != campaign:
+        raise PermissionError("dense resource compatibility campaign source differs")
+    if git(
+        "merge-base", "--is-ancestor", measured, campaign, check=False,
+    ).returncode != 0:
+        raise PermissionError("dense measured source is not a campaign ancestor")
+    changed_paths = tuple(sorted(
+        line.strip() for line in git(
+            "diff", "--name-only", f"{measured}..{campaign}",
+        ).stdout.splitlines() if line.strip()
+    ))
+    if frozenset(changed_paths) != _DENSE_RESOURCE_COMPATIBILITY_CHANGED_PATHS:
+        raise PermissionError(
+            "dense resource compatibility changed paths exceed the accounting boundary"
+        )
+
+    authorization_digest = validate_content_hash(
+        recovery_authorization,
+        expected_contract=(
+            DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_AUTHORIZATION_CONTRACT
+        ),
+        expected_schema_version=1,
+    )
+    ledger_digest = validate_content_hash(
+        recovery_ledger,
+        expected_contract=DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_LEDGER_CONTRACT,
+        expected_schema_version=1,
+    )
+    authorization_path, _ = _validate_file_reference(
+        recovery_authorization_reference,
+        name="dense collector-recovery authorization",
+    )
+    ledger_path, _ = _validate_file_reference(
+        recovery_ledger_reference, name="dense collector-recovery ledger",
+    )
+    if (
+        load_json(authorization_path) != dict(recovery_authorization)
+        or load_json(ledger_path) != dict(recovery_ledger)
+    ):
+        raise PermissionError("dense collector-recovery referenced bytes differ")
+    if (
+        recovery_authorization.get("measured_source_commit") != measured
+        or recovery_ledger.get("measured_source_commit") != measured
+        or recovery_ledger.get("compatibility_source_commit")
+        != recovery_authorization.get("compatibility_source_commit")
+        or recovery_ledger.get("recovery_authorization_sha256")
+        != authorization_digest
+        or recovery_ledger.get("probe_job_ids")
+        != recovery_authorization.get("probe_job_ids")
+        or recovery_ledger.get("probe_jobs_rerun") is not False
+        or recovery_ledger.get("dense_graph_submitted") is not False
+        or recovery_ledger.get("final_role_accessed") is not False
+        or recovery_authorization.get("probe_jobs_rerun_authorized") is not False
+        or recovery_authorization.get("dense_graph_submission_authorized") is not False
+        or recovery_authorization.get("pilot_submission_authorized") is not False
+        or recovery_authorization.get("final_role_access_authorized") is not False
+    ):
+        raise PermissionError("dense collector recovery cannot authorize probe reuse")
+    collector_compatibility_commit = _full_source_commit(
+        recovery_authorization.get("compatibility_source_commit"),
+        name="dense collector compatibility source commit",
+    )
+    if git(
+        "merge-base", "--is-ancestor", collector_compatibility_commit,
+        campaign, check=False,
+    ).returncode != 0:
+        raise PermissionError(
+            "dense collector compatibility source is not a campaign ancestor"
+        )
+    if recovery_ledger.get("content_hash") != ledger_digest:
+        raise PermissionError("dense collector-recovery ledger digest differs")
+
+    return {
+        "compatibility_class": "slurm_accounting_only/v1",
+        "project_dir": str(project),
+        "measured_source_commit": measured,
+        "campaign_source_commit": campaign,
+        "changed_paths": list(changed_paths),
+        "changed_paths_sha256": canonical_sha256(list(changed_paths)),
+        "representation_recipe_sha256": require_sha256(
+            representation_recipe_sha256,
+            name="dense compatible representation recipe",
+        ),
+        "recipe_producer_source_sha256": require_sha256(
+            recipe_producer_source_sha256,
+            name="dense compatible recipe producer source",
+        ),
+        "collector_recovery_authorization": dict(
+            recovery_authorization_reference
+        ),
+        "collector_recovery_ledger": dict(recovery_ledger_reference),
+        "measurement_jobs_rerun": False,
+        "training_code_changed": False,
+        "dense_graph_submission_authorized": False,
+        "pilot_submission_authorized": False,
+        "final_role_access_authorized": False,
+    }
+
+
+def dense_resource_measurement_source_commit(profile: Mapping[str, Any]) -> str:
+    """Return the commit genuinely measured by one validated dense profile."""
+
+    environment = profile.get("measurement_environment")
+    if not isinstance(environment, Mapping):
+        raise ValueError("dense resource profile lacks its measurement environment")
+    return _full_source_commit(
+        environment.get("source_commit"), name="dense measured source commit",
+    )
+
+
+def dense_resource_recipe_producer_source_sha256(
+    profile: Mapping[str, Any], *, runtime_source_sha256: str,
+) -> str:
+    """Return the recipe source identity authorized by the resource profile."""
+
+    if profile.get("contract") == DENSE_COMPATIBLE_RESOURCE_PROFILE_CONTRACT:
+        compatibility = profile.get("source_compatibility")
+        if not isinstance(compatibility, Mapping):
+            raise ValueError("dense compatible profile lacks source compatibility")
+        return require_sha256(
+            compatibility.get("recipe_producer_source_sha256"),
+            name="dense compatible recipe producer source",
+        )
+    return require_sha256(
+        runtime_source_sha256, name="runtime source snapshot",
+    )
+
+
+def validate_dense_profile_runtime_measurement(
+    profile: Mapping[str, Any], *, resource_class: str,
+    measurement: Mapping[str, Any],
+) -> str:
+    """Reopen one exact probe result carried by a compatible profile."""
+
+    if profile.get("contract") != DENSE_COMPATIBLE_RESOURCE_PROFILE_CONTRACT:
+        raise PermissionError("runtime-measurement compatibility requires its profile")
+    if resource_class not in DENSE_RESOURCE_CLASSES:
+        raise ValueError("dense compatible runtime-measurement class differs")
+    from .hcwdl_representation_worker_runtime import (
+        validate_worker_runtime_measurement,
+    )
+
+    measurement_sha256 = validate_worker_runtime_measurement(measurement)
+    row = profile.get("measurements", {}).get(resource_class)
+    if not isinstance(row, Mapping):
+        raise ValueError("dense compatible profile lacks its measurement row")
+    miniature, _ = load_authenticated_json_reference(
+        row.get("miniature_evidence", {}),
+        expected_contract=MINIATURE_EVIDENCE_CONTRACT,
+        name=f"dense {resource_class} miniature evidence",
+    )
+    result_path, _ = _validate_file_reference(
+        miniature.get("result_artifact", {}),
+        name=f"dense {resource_class} measured result",
+    )
+    if (
+        load_json(result_path) != dict(measurement)
+        or miniature.get("result_contract")
+        != WORKER_RUNTIME_MEASUREMENT_CONTRACT
+        or miniature.get("result_sha256") != measurement_sha256
+        or miniature.get("source_commit")
+        != dense_resource_measurement_source_commit(profile)
+    ):
+        raise PermissionError("dense compatible runtime measurement differs")
+    return measurement_sha256
+
+
+def dense_resource_peak_rss_bytes(
+    profile: Mapping[str, Any], *, resource_class: str,
+) -> int:
+    """Read one scheduler peak after the enclosing profile was validated.
+
+    Dense profiles retain scheduler/miniature references rather than copying
+    their observations into the profile.  Consumers use this helper only
+    after ``validate_dense_measured_profile`` has reopened the full evidence
+    chain, so the returned value is an authenticated measurement rather than
+    a caller-provided resource claim.
+    """
+
+    if resource_class not in DENSE_RESOURCE_CLASSES:
+        raise ValueError("dense resource peak class differs")
+    measurements = profile.get("measurements")
+    row = measurements.get(resource_class) if isinstance(
+        measurements, Mapping,
+    ) else None
+    if not isinstance(row, Mapping):
+        raise ValueError("dense resource profile lacks its measurement row")
+    scheduler, _ = load_authenticated_json_reference(
+        row.get("scheduler_evidence", {}),
+        expected_contract=SCHEDULER_EVIDENCE_CONTRACT,
+        name=f"dense {resource_class} scheduler evidence",
+    )
+    return _positive_integer(
+        scheduler.get("peak_rss_bytes"),
+        name=f"dense {resource_class} peak RSS bytes",
+    )
+
+
+def validate_dense_measured_profile(
+    profile: Mapping[str, Any], *, expected_source_commit: str,
+    expected_recipe_sha256: str | None = None,
+) -> str:
+    """Validate an exact-source or accounting-compatible dense profile."""
+
+    if profile.get("contract") == DENSE_RESOURCE_PROFILE_CONTRACT:
+        return _validate_dense_exact_measured_profile(
+            profile, expected_source_commit=expected_source_commit,
+        )
+    digest = validate_content_hash(
+        profile, expected_contract=DENSE_COMPATIBLE_RESOURCE_PROFILE_CONTRACT,
+        expected_schema_version=1,
+    )
+    required = {
+        "contract", "schema_version", "disposition", "base_profile",
+        "requests", "measurements", "array_concurrency_limits",
+        "measurement_environment", "source_compatibility", "content_hash",
+    }
+    if set(profile) != required or profile.get("disposition") != "dense_training_only":
+        raise PermissionError("dense compatible resource profile schema differs")
+    base_profile, _ = load_authenticated_json_reference(
+        profile["base_profile"], expected_contract=DENSE_RESOURCE_PROFILE_CONTRACT,
+        name="dense exact-source resource profile",
+    )
+    measured_source = dense_resource_measurement_source_commit(base_profile)
+    _validate_dense_exact_measured_profile(
+        base_profile, expected_source_commit=measured_source,
+    )
+    if any(
+        profile[name] != base_profile[name]
+        for name in (
+            "requests", "measurements", "array_concurrency_limits",
+            "measurement_environment",
+        )
+    ):
+        raise PermissionError("dense compatible profile changes measured resources")
+    compatibility = profile.get("source_compatibility")
+    if not isinstance(compatibility, Mapping):
+        raise ValueError("dense compatible source projection differs")
+    authorization, _ = load_authenticated_json_reference(
+        compatibility.get("collector_recovery_authorization", {}),
+        expected_contract=(
+            DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_AUTHORIZATION_CONTRACT
+        ),
+        name="dense collector-recovery authorization",
+    )
+    ledger, _ = load_authenticated_json_reference(
+        compatibility.get("collector_recovery_ledger", {}),
+        expected_contract=DENSE_RESOURCE_PROBE_COLLECTOR_RECOVERY_LEDGER_CONTRACT,
+        name="dense collector-recovery ledger",
+    )
+    expected_compatibility = _dense_resource_source_compatibility(
+        project_dir=str(compatibility.get("project_dir", "")),
+        measured_source_commit=measured_source,
+        campaign_source_commit=expected_source_commit,
+        representation_recipe_sha256=str(
+            compatibility.get("representation_recipe_sha256", "")
+        ),
+        recipe_producer_source_sha256=str(
+            compatibility.get("recipe_producer_source_sha256", "")
+        ),
+        recovery_authorization=authorization,
+        recovery_authorization_reference=compatibility[
+            "collector_recovery_authorization"
+        ],
+        recovery_ledger=ledger,
+        recovery_ledger_reference=compatibility["collector_recovery_ledger"],
+    )
+    if dict(compatibility) != expected_compatibility:
+        raise PermissionError("dense resource source compatibility differs")
+    if expected_recipe_sha256 is not None and compatibility.get(
+        "representation_recipe_sha256"
+    ) != require_sha256(
+        expected_recipe_sha256, name="campaign representation recipe",
+    ):
+        raise PermissionError("dense compatible resource recipe differs")
+    return digest
+
+
 def build_dense_measured_profile(
     *, source_commit: str,
     production_workers: Mapping[str, Mapping[str, Any]],
@@ -2510,6 +2851,58 @@ def build_dense_measured_profile(
     return result
 
 
+def build_dense_compatible_measured_profile(
+    *, base_profile: Mapping[str, Any],
+    base_profile_reference: Mapping[str, Any], project_dir: str | Path,
+    campaign_source_commit: str, representation_recipe_sha256: str,
+    recipe_producer_source_sha256: str,
+    recovery_authorization: Mapping[str, Any],
+    recovery_authorization_reference: Mapping[str, Any],
+    recovery_ledger: Mapping[str, Any],
+    recovery_ledger_reference: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Reuse completed measurements across the exact collector-only diff."""
+
+    measured_source = dense_resource_measurement_source_commit(base_profile)
+    _validate_dense_exact_measured_profile(
+        base_profile, expected_source_commit=measured_source,
+    )
+    base_path, _ = _validate_file_reference(
+        base_profile_reference, name="dense exact-source resource profile",
+    )
+    if load_json(base_path) != dict(base_profile):
+        raise PermissionError("dense exact-source resource profile bytes differ")
+    compatibility = _dense_resource_source_compatibility(
+        project_dir=project_dir,
+        measured_source_commit=measured_source,
+        campaign_source_commit=campaign_source_commit,
+        representation_recipe_sha256=representation_recipe_sha256,
+        recipe_producer_source_sha256=recipe_producer_source_sha256,
+        recovery_authorization=recovery_authorization,
+        recovery_authorization_reference=recovery_authorization_reference,
+        recovery_ledger=recovery_ledger,
+        recovery_ledger_reference=recovery_ledger_reference,
+    )
+    result = with_content_hash({
+        "contract": DENSE_COMPATIBLE_RESOURCE_PROFILE_CONTRACT,
+        "schema_version": 1,
+        "disposition": "dense_training_only",
+        "base_profile": dict(base_profile_reference),
+        "requests": dict(base_profile["requests"]),
+        "measurements": dict(base_profile["measurements"]),
+        "array_concurrency_limits": dict(
+            base_profile["array_concurrency_limits"]
+        ),
+        "measurement_environment": dict(base_profile["measurement_environment"]),
+        "source_compatibility": compatibility,
+    })
+    validate_dense_measured_profile(
+        result, expected_source_commit=campaign_source_commit,
+        expected_recipe_sha256=representation_recipe_sha256,
+    )
+    return result
+
+
 __all__ = [
     "DENSE_RESOURCE_CLASSES", "DENSE_RESOURCE_PROFILE_CONTRACT",
     "DENSE_STORAGE_ESTIMATE_CONTRACT", "DENSE_STORAGE_TEMPLATE_CONTRACT",
@@ -2521,7 +2914,8 @@ __all__ = [
     "SACCT_FIELDS", "SACCT_FORMAT", "SCHEDULER_EVIDENCE_ORIGINS",
     "SMOKE_RESOURCES", "STORAGE_ESTIMATE_CONTRACT", "TIGRIS_ACCOUNT",
     "TIGRIS_PARTITION", "TIGRIS_SITE", "WORKER_ROLES", "artifact_reference",
-    "build_dense_measured_profile", "build_dense_storage_estimate",
+    "build_dense_compatible_measured_profile", "build_dense_measured_profile",
+    "build_dense_storage_estimate",
     "build_dense_storage_template", "build_fixed_size_inventory", "build_measured_profile",
     "build_miniature_evidence", "build_scheduler_evidence",
     "build_nonfinal_acceptance_scheduler_evidence",
@@ -2532,6 +2926,10 @@ __all__ = [
     "load_authenticated_json_reference", "resource_table",
     "scheduler_evidence_comment",
     "nonfinal_acceptance_scheduler_comment",
+    "dense_resource_peak_rss_bytes",
+    "dense_resource_measurement_source_commit",
+    "dense_resource_recipe_producer_source_sha256",
+    "validate_dense_profile_runtime_measurement",
     "validate_dense_measured_profile", "validate_dense_storage_availability",
     "validate_dense_storage_estimate", "validate_dense_storage_template",
     "validate_fixed_size_inventory", "validate_measured_profile",
