@@ -114,6 +114,36 @@ def _binding_fixture(*, producer: str = "producer", frozen_path: str | None = No
     return spec, runtime_facts, task_rows
 
 
+def test_runtime_binding_allows_only_typed_python_package_metadata() -> None:
+    spec, runtime_facts, rows = _binding_fixture()
+    rows["consumer"]["single"]["parameters"] = {
+        "assembly": {
+            "runtime_environment": {
+                "producer": {"packages": {"python": "3.10.19"}},
+            },
+        },
+    }
+    build_runtime_binding(
+        spec=spec, runtime_facts=runtime_facts, task_rows=rows,
+    )
+
+    forged = deepcopy(rows)
+    forged["consumer"]["single"]["parameters"] = {"python": "3.10.19"}
+    with pytest.raises(PermissionError, match="dynamic dispatch field"):
+        build_runtime_binding(
+            spec=spec, runtime_facts=runtime_facts, task_rows=forged,
+        )
+
+    forged = deepcopy(rows)
+    forged["consumer"]["single"]["parameters"]["assembly"][
+        "runtime_environment"
+    ]["producer"]["packages"]["python"] = "module:forbidden"
+    with pytest.raises(PermissionError, match="dynamic dispatch value"):
+        build_runtime_binding(
+            spec=spec, runtime_facts=runtime_facts, task_rows=forged,
+        )
+
+
 def _prepublished_binding_fixture(
     *, parent_import_sha256: str = "a" * 64,
     representation_recipe_sha256: str = "b" * 64,

@@ -38,11 +38,12 @@ from hlt_classification.scouting.hcwdl_representation_resources import (
 )
 
 
-def test_dense_compatibility_inventory_includes_full_runtime_row_regression() -> None:
-    assert (
-        "tests/test_hcwdl_representation_runtime_rows.py"
-        in resources._DENSE_RESOURCE_COMPATIBILITY_CHANGED_PATHS
-    )
+def test_dense_compatibility_inventory_includes_full_runtime_regressions() -> None:
+    assert {
+        "src/hlt_classification/scouting/hcwdl_representation_runtime_binding.py",
+        "tests/test_hcwdl_representation_runtime_provenance.py",
+        "tests/test_hcwdl_representation_runtime_rows.py",
+    } <= resources._DENSE_RESOURCE_COMPATIBILITY_CHANGED_PATHS
 
 
 REPOSITORY = Path(__file__).resolve().parents[1]

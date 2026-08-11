@@ -57,6 +57,9 @@ _FORBIDDEN_DYNAMIC_KEYS: Final = frozenset({
     "argv", "callable", "command", "entry_point", "function", "import",
     "module", "python", "script", "shell",
 })
+_SAFE_DYNAMIC_KEY_METADATA_PATHS: Final = frozenset({
+    ("parameters.assembly.runtime_environment.producer.packages", "python"),
+})
 
 # These are the only campaign rows allowed to read an immutable pre-campaign
 # artifact at a designated campaign output.  The owner gate reopens and
@@ -556,7 +559,12 @@ def _reject_dynamic_dispatch(value: object, *, location: str = "parameters") -> 
     if isinstance(value, Mapping):
         for raw_key, item in value.items():
             key = str(raw_key)
-            if key.lower() in _FORBIDDEN_DYNAMIC_KEYS:
+            normalized_key = key.lower()
+            if (
+                normalized_key in _FORBIDDEN_DYNAMIC_KEYS
+                and (location, normalized_key)
+                not in _SAFE_DYNAMIC_KEY_METADATA_PATHS
+            ):
                 raise PermissionError(
                     f"dynamic dispatch field is forbidden in runtime binding: {location}.{key}"
                 )

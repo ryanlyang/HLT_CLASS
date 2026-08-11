@@ -535,7 +535,16 @@ def _final_authorities(spec):
 
 def _target_forward_specs(static):
     environment = {
-        "producer": {"source_commit": "1" * 40, "source_snapshot_sha256": "b" * 64},
+        "producer": {
+            "source_commit": "1" * 40,
+            "source_snapshot_sha256": "b" * 64,
+            "packages": {
+                name: "fixture" for name in (
+                    "python", "torch", "cuda", "cudnn", "numpy", "awkward",
+                    "uproot", "weaver",
+                )
+            },
+        },
         "device": {"request": "gpu:gh200:1", "model": "GH200"},
         "precision": {"parameters": "float32", "autocast": False},
         "determinism": {"deterministic_algorithms": True},

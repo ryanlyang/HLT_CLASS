@@ -104,6 +104,7 @@ _DENSE_RESOURCE_COMPATIBILITY_CHANGED_PATHS: Final = frozenset({
     "src/hlt_classification/scouting/hcwdl_representation_layout.py",
     "src/hlt_classification/scouting/hcwdl_representation_resource_probe.py",
     "src/hlt_classification/scouting/hcwdl_representation_resources.py",
+    "src/hlt_classification/scouting/hcwdl_representation_runtime_binding.py",
     "src/hlt_classification/scouting/hcwdl_representation_runtime_rows.py",
     "src/hlt_classification/scouting/hcwdl_representation_target_planning.py",
     "src/hlt_classification/scouting/hcwdl_representation_targets.py",
@@ -114,6 +115,7 @@ _DENSE_RESOURCE_COMPATIBILITY_CHANGED_PATHS: Final = frozenset({
     "tests/test_hcwdl_representation_layout.py",
     "tests/test_hcwdl_representation_nonfinal_resources.py",
     "tests/test_hcwdl_representation_resource_probe.py",
+    "tests/test_hcwdl_representation_runtime_provenance.py",
     "tests/test_hcwdl_representation_runtime_rows.py",
     "tests/test_hcwdl_representation_targets.py",
 })
