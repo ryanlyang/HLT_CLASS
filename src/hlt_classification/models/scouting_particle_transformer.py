@@ -244,11 +244,16 @@ class SplitScoutingParticleTransformer(nn.Module):
 
         features, vectors, mask = partition
         rows = mask[:, 0].any(dim=1)
-        output = features.new_zeros((features.shape[0], 128))
         if rows.any():
             encoded = encoder(features[rows], v=vectors[rows], mask=mask[rows])
-            output[rows] = encoded
-        return output
+            # Weaver follows the active autocast policy and therefore returns
+            # BF16 during Tigris training even though the cached inputs are
+            # FP32.  Allocate from ``encoded`` so index_copy is dtype exact;
+            # allocating from ``features`` makes the scatter fail under BF16.
+            indices = torch.nonzero(rows, as_tuple=False).flatten()
+            output = encoded.new_zeros((features.shape[0], encoded.shape[1]))
+            return output.index_copy(0, indices, encoded)
+        return features.new_zeros((features.shape[0], 128))
 
     def no_weight_decay(self) -> set[str]:
         return {

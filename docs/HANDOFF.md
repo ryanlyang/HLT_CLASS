@@ -1,5 +1,30 @@
 # Current Handoff
 
+## HCWDL architecture-factorial BF16 repair (2026-08-11)
+
+The first genuine Tigris architecture-factorial smoke at source `c2a5510d`
+authenticated its parent and passed architecture-check job `82058`. Unified
+cells `H_U` (`82059`) and `O_U` (`82061`) completed, while split cells `H_S`
+(`82060`) and `O_S` (`82062`) failed before producing scientific results. In
+production BF16 autocast, each Weaver encoder returned a BF16 embedding while
+`SplitScoutingParticleTransformer._encode_nonempty()` allocated its scatter
+destination from the FP32 cached input. PyTorch correctly rejected the
+cross-dtype indexed assignment. This is an implementation-only failure; it
+does not implicate either authenticated input view or the factorial design.
+
+The split encoder now allocates from the encoded embedding and uses
+differentiable `index_copy`, preserving the active autocast dtype and gradient
+flow. The architecture preflight now executes both models under the same BF16
+autocast policy as training and records input, autocast, and output dtypes. A
+focused regression exercises the split model's FP32-cache/BF16-output path.
+Source compilation and `git diff --check` pass. The local Windows Python does
+not provide PyTorch, so focused/full pytest cannot run in this checkout; the
+replacement source-pinned Tigris smoke must first pass its strengthened GPU
+preflight and then all four two-update cells. The completed old unified cells
+are not mixed with repaired-source cells: the scientifically clean smoke is a
+new campaign root, and the old failed campaign's aggregate/completion jobs may
+be cancelled only by their exact IDs `82063` and `82064`.
+
 ## HCWDL common-schema architecture–input factorial (2026-08-11)
 
 The validation-only four-way architecture/input ablation requested after the

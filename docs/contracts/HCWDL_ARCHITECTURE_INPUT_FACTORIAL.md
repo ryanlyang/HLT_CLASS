@@ -23,5 +23,6 @@ Every artifact is content-hashed and parent-bound. A clean source-pinned
 worktree, exact canonical campaign spec, explicit creation and submission
 phrases, installed architecture check, immutable parent lineage, zero
 final-test rows, and exact Slurm job IDs are required. Persistent repaired P0
-or split datasets are forbidden.
-
+or split datasets are forbidden. The installed architecture check must run
+both architectures through finite forward and backward passes under the exact
+BF16 autocast policy used by training; an FP32-only check is insufficient.

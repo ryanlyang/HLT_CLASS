@@ -63,6 +63,17 @@ def test_split_architecture_exhaustively_partitions_without_dropping(monkeypatch
     output.sum().backward()
     assert all(parameter.grad is not None for parameter in model.parameters())
 
+    # Cached particle inputs remain FP32 while Weaver and the classifier emit
+    # BF16 under the production autocast policy.  The two stream embeddings
+    # must be stitched without a cross-dtype indexed assignment.
+    model.zero_grad(set_to_none=True)
+    with torch.autocast(device_type="cpu", dtype=torch.bfloat16):
+        mixed_precision_output = model(features, vectors, mask)
+    assert mixed_precision_output.dtype == torch.bfloat16
+    assert torch.isfinite(mixed_precision_output).all()
+    mixed_precision_output.float().sum().backward()
+    assert all(parameter.grad is not None for parameter in model.parameters())
+
     # A wholly absent branch is represented by an exact zero embedding, not
     # an invented constituent and not an all-masked Weaver call.
     all_charged = features.clone(); all_charged[:, 2:7] = 0

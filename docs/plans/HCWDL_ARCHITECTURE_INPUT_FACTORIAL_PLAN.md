@@ -74,6 +74,9 @@ zero final-test rows and cannot publish a final-test task. Only HLT cells are
 deployable.
 
 The exact DAG is architecture check, four parallel fits, aggregate, completion.
+The architecture check must exercise finite forward and backward passes for
+both models under training's BF16 autocast policy, including split-stream
+embedding assembly from FP32 cached inputs, before it releases any fit.
 Training requests are fixed at 8 CPUs, 96 GiB RAM, six hours, and one GH200.
 A real Tigris smoke using production workers is required before the 300k
 pilot. Scientific performance never controls completion; invalid inputs,

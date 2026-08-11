@@ -46,8 +46,12 @@ def build_architecture_check(spec: Mapping[str, Any], *, device: str) -> dict[st
     unified = build_scouting_particle_transformer().to(target)
     split = build_split_scouting_particle_transformer().to(target)
     unified.train(); split.train()
-    unified_logits = unified(features, vectors, mask)
-    split_logits = split(features, vectors, mask)
+    # Exercise the actual mixed-precision policy used by train_pmard.  The
+    # original FP32-only preflight could not detect a BF16/FP32 stitching bug
+    # in the split encoder before releasing the four training cells.
+    with torch.autocast(device_type=target.type, dtype=torch.bfloat16):
+        unified_logits = unified(features, vectors, mask)
+        split_logits = split(features, vectors, mask)
     (unified_logits.float().sum() + split_logits.float().sum()).backward()
     if (
         unified_logits.shape != (4, 15) or split_logits.shape != (4, 15)
@@ -63,7 +67,12 @@ def build_architecture_check(spec: Mapping[str, Any], *, device: str) -> dict[st
     return with_content_hash({
         "contract": ARCHITECTURE_CHECK_CONTRACT, "schema_version": 1,
         "campaign_spec_sha256": spec["content_hash"], "device": str(target),
-        "dtype": "float32", "parameter_counts": counts,
+        "input_dtype": "float32", "training_autocast_dtype": "bfloat16",
+        "logit_dtypes": {
+            "unified_21_v1": str(unified_logits.dtype).removeprefix("torch."),
+            "split_21x2_v1": str(split_logits.dtype).removeprefix("torch."),
+        },
+        "parameter_counts": counts,
         "parameter_ratio_split_over_unified": counts["split_21x2_v1"] / counts["unified_21_v1"],
         "transformer_blocks_per_encoder": {
             "unified_21_v1": [8], "split_21x2_v1": [8, 8],
