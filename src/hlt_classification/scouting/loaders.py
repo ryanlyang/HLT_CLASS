@@ -14,10 +14,14 @@ def scouting_model_factory_for_report(report: dict[str, object]):
         build_native_offline_particle_transformer,
         build_representation_scouting_particle_transformer,
         build_scouting_particle_transformer,
+        build_split_scouting_particle_transformer,
     )
     config = report["config"]
     if config.get("model_input") == "toff":
         return build_native_offline_particle_transformer
+    scientific = report.get("scientific_config", {})
+    if isinstance(scientific, dict) and scientific.get("model_architecture") == "split_21x2_v1":
+        return build_split_scouting_particle_transformer
     arm = config.get("representation_arm", "R0")
     return build_scouting_particle_transformer if arm == "R0" else lambda: build_representation_scouting_particle_transformer(arm)
 

@@ -12,6 +12,9 @@ from torch import nn
 from dataclasses import dataclass
 
 SCOUTING_PARTICLE_TRANSFORMER_CONTRACT = "hlt_classification_scouting_part_v1"
+SPLIT_SCOUTING_PARTICLE_TRANSFORMER_CONTRACT = (
+    "hlt_classification_split_scouting_part_v1"
+)
 FP32_ATOL = 1.0e-6
 FP32_RTOL = 1.0e-5
 
@@ -162,6 +165,99 @@ def build_representation_scouting_particle_transformer(arm: str) -> Representati
 
 def build_scouting_particle_transformer() -> ScoutingParticleTransformer:
     return ScoutingParticleTransformer()
+
+
+def _compact_partition(
+    features: torch.Tensor, vectors: torch.Tensor, mask: torch.Tensor,
+    *, charged: bool,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Stably compact one exhaustive token partition without dropping tokens.
+
+    The canonical 21-channel schema stores the mutually exclusive charged
+    identity flags in channels 2--4.  Unknown/unclassified and neutral tokens
+    are assigned to the noncharged stream.  Both streams retain the original
+    per-stream token order and remain padded to the original capacity.
+    """
+
+    active = mask[:, 0].bool()
+    charged_identity = features[:, 2:5].amax(dim=1) > 0.5
+    selected = active & (charged_identity if charged else ~charged_identity)
+    # Sorting the binary complement is a stable, vectorized compaction:
+    # selected tokens first, preserving their canonical order.
+    order = torch.argsort((~selected).to(torch.int8), dim=1, stable=True)
+    feature_index = order[:, None, :].expand(-1, features.shape[1], -1)
+    vector_index = order[:, None, :].expand(-1, vectors.shape[1], -1)
+    compact_features = torch.gather(features, 2, feature_index)
+    compact_vectors = torch.gather(vectors, 2, vector_index)
+    lengths = selected.sum(dim=1)
+    positions = torch.arange(features.shape[2], device=features.device)[None, :]
+    compact_mask = (positions < lengths[:, None])[:, None, :]
+    compact_features = compact_features.masked_fill(~compact_mask, 0)
+    compact_vectors = compact_vectors.masked_fill(~compact_mask, 0)
+    return compact_features, compact_vectors, compact_mask
+
+
+class SplitScoutingParticleTransformer(nn.Module):
+    """Common-schema charged/noncharged two-stream architecture control.
+
+    Unlike canonical TOFF this adapter consumes exactly the same unified
+    21-channel particle view as :class:`ScoutingParticleTransformer`.  It is
+    therefore suitable for a clean input-by-architecture factorial; it is not
+    represented as the native 19/7 TOFF adapter.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        model_class = _weaver_class()
+        common = scouting_particle_transformer_config()
+        common["num_classes"] = 128
+        # Retain the native TOFF topology: two full eight-block encoders and
+        # the same 256->128->15 fusion shape. The 21-channel common schema is
+        # the deliberate difference. Exact parameter counts are reported
+        # because this architecture is necessarily larger than the unified arm.
+        self.charged_encoder = model_class(**dict(common))
+        self.noncharged_encoder = model_class(**dict(common))
+        self.classifier = nn.Sequential(
+            nn.LayerNorm(256), nn.Linear(256, 128), nn.GELU(), nn.Linear(128, 15),
+        )
+
+    def forward(
+        self, features: torch.Tensor, vectors: torch.Tensor, mask: torch.Tensor,
+    ) -> torch.Tensor:
+        if features.ndim != 3 or features.shape[1] != 21:
+            raise ValueError("split Scouting features must be [batch,21,particles]")
+        if vectors.shape != (features.shape[0], 4, features.shape[2]):
+            raise ValueError("split Scouting vectors must be [batch,4,particles]")
+        if mask.shape != (features.shape[0], 1, features.shape[2]):
+            raise ValueError("split Scouting mask must be [batch,1,particles]")
+        charged = _compact_partition(features, vectors, mask, charged=True)
+        noncharged = _compact_partition(features, vectors, mask, charged=False)
+        charged_embedding = self._encode_nonempty(self.charged_encoder, charged)
+        noncharged_embedding = self._encode_nonempty(
+            self.noncharged_encoder, noncharged,
+        )
+        return self.classifier(torch.cat((charged_embedding, noncharged_embedding), dim=-1))
+
+    @staticmethod
+    def _encode_nonempty(encoder: nn.Module, partition) -> torch.Tensor:
+        """Encode only nonempty rows; absence is the exact zero embedding."""
+
+        features, vectors, mask = partition
+        rows = mask[:, 0].any(dim=1)
+        output = features.new_zeros((features.shape[0], 128))
+        if rows.any():
+            encoded = encoder(features[rows], v=vectors[rows], mask=mask[rows])
+            output[rows] = encoded
+        return output
+
+    def no_weight_decay(self) -> set[str]:
+        return {
+            "charged_encoder.cls_token", "noncharged_encoder.cls_token",
+        }
+
+
+def build_split_scouting_particle_transformer() -> SplitScoutingParticleTransformer:
+    return SplitScoutingParticleTransformer()
 
 
 class NativeOfflineParticleTransformer(nn.Module):
@@ -395,11 +491,14 @@ def validate_native_offline_weaver_fp32_parity(
 
 
 __all__ = [
-    "SCOUTING_PARTICLE_TRANSFORMER_CONTRACT", "ScoutingParticleTransformer",
+    "SCOUTING_PARTICLE_TRANSFORMER_CONTRACT",
+    "SPLIT_SCOUTING_PARTICLE_TRANSFORMER_CONTRACT",
+    "ScoutingParticleTransformer", "SplitScoutingParticleTransformer",
     "NativeOfflineParticleTransformer", "build_native_offline_particle_transformer",
     "RepresentationScoutingParticleTransformer", "ScoutingRepresentationOutput",
     "build_representation_scouting_particle_transformer",
-    "build_scouting_particle_transformer", "scouting_particle_transformer_config",
+    "build_scouting_particle_transformer", "build_split_scouting_particle_transformer",
+    "scouting_particle_transformer_config",
     "validate_native_offline_weaver_fp32_parity",
     "validate_scouting_weaver_fp32_parity",
 ]

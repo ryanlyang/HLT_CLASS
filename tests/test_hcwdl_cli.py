@@ -53,6 +53,9 @@ SCRIPTS = (
     "build_hcwdl_upper_calibration.py",
     "build_hcwdl_upper_coupling_shard.py",
     "finalize_hcwdl_upper_coupling.py", "build_hcwdl_toff_targets.py",
+    "create_hcwdl_architecture_factorial.py",
+    "submit_hcwdl_architecture_factorial.py",
+    "run_hcwdl_architecture_factorial_task.py",
 )
 
 

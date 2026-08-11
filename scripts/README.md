@@ -290,3 +290,17 @@ durable artifact bytes before any 300k specification can be executable.
 Source-only and resource-only failed closures share
 `resume_hcwdl_homotopy.py` but require distinct contracts and authorization
 phrases. See `docs/HCWDL_STRUCTURAL_FEATURE_HOMOTOPY_RUNBOOK.md`.
+
+## HCWDL architecture–input factorial
+
+The validation-only four-fit common-schema ablation uses
+`create_hcwdl_architecture_factorial.py`,
+`submit_hcwdl_architecture_factorial.py`, and
+`run_hcwdl_architecture_factorial_task.py`. It compares exact HLT and P0
+inputs under unified and full-depth charged/noncharged architectures, imports
+native TOFF as a reference rather than a factorial cell, and registers no
+final-test task. Smoke mode runs two updates per cell; the 300k pilot retains
+the parent recipe's 60-pass/every-pass-validation schedule. Interrupted
+training resumes through the generic rolling checkpoint when its exact Slurm
+job is requeued; partial DAG submission is journaled before retry. See
+`docs/plans/HCWDL_ARCHITECTURE_INPUT_FACTORIAL_PLAN.md`.

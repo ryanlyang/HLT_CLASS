@@ -1,5 +1,35 @@
 # Current Handoff
 
+## HCWDL common-schema architecture–input factorial (2026-08-11)
+
+The validation-only four-way architecture/input ablation requested after the
+HCWDL-UJ smoke is implemented. It registers four fresh, paired, unweighted
+CE-only cells: exact HLT and projected-native P0 inputs under either the
+canonical unified 21-channel ParT or a new common-schema charged/noncharged
+two-stream ParT. The split control retains every visible token exactly once,
+routes unknown/unclassified tokens to the noncharged stream, uses two full
+eight-block 21-channel encoders plus the canonical TOFF fusion topology, and
+handles an absent stream without inventing a particle. Native 19/7 `TOFF`
+remains a fifth imported reference and is never relabeled as a factorial cell.
+
+The separate `HCWDL_ARCHITECTURE_INPUT_FACTORIAL_*/v1` family implements the
+exact four-cell graph, content-hashed parent/source/spec/command lineage,
+process-local one-time HLT/P0 caches, shared sampler and within-architecture
+initialization seeds, 60-pass/every-pass validation, macro-AUC checkpoint
+selection, all five prespecified factorial effects, runtime parameter-count
+disclosure, zero final-test rows, journaled submission, immutable task
+attestations, and generic rolling-checkpoint requeue recovery. The Slurm
+training request is exactly 8 CPUs, 96 GiB, six hours, and one GH200. Campaign
+creation and execution are thin CLIs; no job was submitted locally.
+
+Focused architecture/graph/campaign tests pass 5/5. The complete repository
+suite passes 423/423 with the 14 existing Matplotlib/Pyparsing warnings. All
+three new CLI help surfaces pass, the eight contract identities are asserted,
+Markdown links resolve through the complete suite, and `git diff --check`
+passes with Windows line-ending notices only. The next acceptance layer is a
+real source-pinned Tigris smoke using the completed authenticated unweighted
+HCWDL smoke parent. No donor code or donor commit was used.
+
 ## HCWDL-UJ first Tigris dry-run repair (2026-08-11)
 
 The authenticated unweighted parent smoke completed through aggregate job

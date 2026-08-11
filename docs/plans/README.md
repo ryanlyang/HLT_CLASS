@@ -55,6 +55,14 @@ remain differentiable with respect to the student encoder. It is an
 implementation-grade plan only; no representation-ascent implementation or
 live authorization currently follows from its presence.
 
+The validation-only
+[HCWDL common-schema architecture–input factorial](HCWDL_ARCHITECTURE_INPUT_FACTORIAL_PLAN.md)
+separates HLT versus projected-offline particle information from unified
+versus charged/noncharged split processing. Its four CE-only paired cells use
+one common 21-channel schema; canonical native `TOFF` remains an explicitly
+nonfactorial reference. Its reusable identities are frozen in the
+[factorial contract](../contracts/HCWDL_ARCHITECTURE_INPUT_FACTORIAL.md).
+
 The [PRAD implementation plan](PRIVILEGED_RELATIONAL_ATTENTION_DISTILLATION_IMPLEMENTATION_PLAN.md)
 remains an implemented, separate JetClass campaign. It is not the active
 scientific campaign in this conversation and does not define PMARD semantics.

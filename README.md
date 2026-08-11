@@ -100,6 +100,8 @@ JetClass data on Tigris:
 - [HCWDL structural-feature homotopy implementation plan](docs/plans/HCWDL_STRUCTURAL_FEATURE_HOMOTOPY_IMPLEMENTATION_PLAN.md)
 - [HCWDL structural-feature homotopy contract](docs/contracts/HCWDL_STRUCTURAL_FEATURE_HOMOTOPY.md)
 - [HCWDL structural-feature homotopy runbook](docs/HCWDL_STRUCTURAL_FEATURE_HOMOTOPY_RUNBOOK.md)
+- [HCWDL architecture–input factorial plan](docs/plans/HCWDL_ARCHITECTURE_INPUT_FACTORIAL_PLAN.md)
+- [HCWDL architecture–input factorial contract](docs/contracts/HCWDL_ARCHITECTURE_INPUT_FACTORIAL.md)
 - [HCWDL interrupted final-evaluation recovery](docs/HCWDL_FINAL_RECOVERY_RUNBOOK.md)
 - [HCWDL final-recovery contract](docs/contracts/HCWDL_FINAL_EVALUATION_RECOVERY.md)
 - [HCWDL matching-free representation-KD ascent plan](docs/plans/HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md)
