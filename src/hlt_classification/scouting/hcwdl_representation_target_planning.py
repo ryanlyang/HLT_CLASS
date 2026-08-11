@@ -74,6 +74,29 @@ def _implementation_signature(project_dir: Path, *, toff: bool) -> dict[str, Any
     return result
 
 
+def _historical_engine_config_sha256(engine: Mapping[str, Any]) -> str:
+    """Reconstruct the pre-explicit-loss PMARD execution-config identity.
+
+    The frozen b315 teacher predates the redundant top-level
+    ``execution_config_sha256`` field.  Its trainer nevertheless computed the
+    same identity from the two content-hashed report fields below and used it
+    for checkpoint lineage.  Newer reports may carry the redundant field, in
+    which case it must agree with the reconstruction.
+    """
+
+    training = engine.get("config")
+    scientific = engine.get("scientific_config")
+    if not isinstance(training, Mapping) or not isinstance(scientific, Mapping):
+        raise ValueError("dense historical teacher configuration is absent")
+    derived = canonical_sha256({
+        "training": dict(training), "scientific": dict(scientific),
+    })
+    explicit = engine.get("execution_config_sha256")
+    if explicit not in (None, derived):
+        raise PermissionError("dense historical teacher configuration hash differs")
+    return derived
+
+
 def _source_partitions(split: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     records = tuple(role_records(split, "train"))
     if not records:
@@ -323,7 +346,7 @@ def build_dense_target_planning_assets(
                 "checkpoint_byte_sha256": teacher_payload[
                     "checkpoint_byte_sha256"
                 ],
-                "model_config_sha256": engine["execution_config_sha256"],
+                "model_config_sha256": _historical_engine_config_sha256(engine),
             })
         else:
             forward_teacher["registered_execution_id"] = teacher_payload[

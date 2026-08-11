@@ -18,6 +18,9 @@ from hlt_classification.data.cache_contracts import (
     load_npz_arrays,
     with_content_hash,
 )
+from hlt_classification.scouting.hcwdl_representation_target_planning import (
+    _historical_engine_config_sha256,
+)
 from hlt_classification.scouting.hcwdl_representation_contracts import (
     DENSE_COMPATIBLE_RESOURCE_PROFILE_CONTRACT,
     DENSE_STORAGE_ESTIMATE_CONTRACT,
@@ -1668,3 +1671,22 @@ def test_consumer_registries_bind_dense_predecessors_and_terminal_confirmation()
             consumers=forged_identity,
             generation_parent_sha256=H,
         )
+
+
+def test_historical_teacher_config_hash_is_reconstructed_and_cross_checked() -> None:
+    engine = {
+        "config": {"experiment_id": "TOFF", "total_updates": 17},
+        "scientific_config": {"recipe_sha256": "1" * 64},
+    }
+    expected = canonical_sha256({
+        "training": engine["config"],
+        "scientific": engine["scientific_config"],
+    })
+    assert _historical_engine_config_sha256(engine) == expected
+    assert _historical_engine_config_sha256({
+        **engine, "execution_config_sha256": expected,
+    }) == expected
+    with pytest.raises(PermissionError, match="configuration hash differs"):
+        _historical_engine_config_sha256({
+            **engine, "execution_config_sha256": "2" * 64,
+        })
