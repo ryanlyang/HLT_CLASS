@@ -188,6 +188,7 @@ def node_training_config(
     registry: Mapping[str, NodeSpec] = NODE_REGISTRY,
     domains: Mapping[str, Mapping[str, object]] = DOMAINS,
     seed_node_id: str | None = None,
+    explicit_loss: LossConfiguration | None = None,
 ) -> PmardTrainingConfig:
     validate_recipe(recipe, require_authorized=require_authorized_recipe)
     if node_id not in registry or train_rows <= 0:
@@ -211,7 +212,7 @@ def node_training_config(
     model_input = str(domains[node.student_domain]["input"])
     return PmardTrainingConfig(
         experiment_id=node.node_id,
-        loss=_loss_for_node(node, recipe),
+        loss=_loss_for_node(node, recipe) if explicit_loss is None else explicit_loss,
         total_updates=60 * updates_per_pass,
         effective_batch_size=batch,
         microbatch_size=int(recipe["batching"]["microbatch_size"]),
@@ -298,6 +299,8 @@ def train_hcwdl_node(
     scientific_config_extra: Mapping[str, Any] | None = None,
     seed_node_id: str | None = None,
     node_contract: str | None = None,
+    explicit_loss: LossConfiguration | None = None,
+    recipe_overlay_sha256: str | None = None,
 ) -> dict[str, Any]:
     recipe_sha256 = validate_recipe(recipe, require_authorized=True)
     if node_id not in registry:
@@ -313,6 +316,7 @@ def train_hcwdl_node(
     config = node_training_config(
         node_id, recipe, train_rows=train_rows, replicate_seed=replicate_seed,
         registry=registry, domains=domains, seed_node_id=seed_node_id,
+        explicit_loss=explicit_loss,
     )
     if smoke:
         config = replace(
@@ -332,6 +336,13 @@ def train_hcwdl_node(
         "smoke_updates": 2 if smoke else None,
         "performance_early_stopping": False,
     }
+    if explicit_loss is not None and recipe_overlay_sha256 is None:
+        raise ValueError("explicit HCWDL loss requires an authenticated recipe overlay")
+    if recipe_overlay_sha256 is not None:
+        scientific["recipe_overlay_sha256"] = require_sha256(
+            recipe_overlay_sha256, name="HCWDL recipe overlay SHA-256",
+        )
+        scientific["resolved_loss"] = asdict(config.loss)
     if scientific_config_extra is not None:
         overlap = set(scientific) & set(scientific_config_extra)
         if overlap:
@@ -339,6 +350,10 @@ def train_hcwdl_node(
         scientific.update(dict(scientific_config_extra))
     validated_parents = {name: require_sha256(value, name=f"HCWDL parent {name}") for name, value in parents.items()}
     validated_parents["recipe"] = recipe_sha256
+    if recipe_overlay_sha256 is not None:
+        validated_parents["recipe_overlay"] = require_sha256(
+            recipe_overlay_sha256, name="HCWDL recipe overlay SHA-256",
+        )
     report = train_pmard(
         model=model, train_batches=train_batches,
         validation_batches=validation_batches, config=config,
@@ -357,7 +372,7 @@ def train_hcwdl_node(
     selection = select_checkpoint(report["validation_history"])
     if selection["selected_update"] != report["selected_update"]:
         raise RuntimeError("HCWDL engine and independent checkpoint selection differ")
-    output = with_content_hash({
+    output_payload = {
         "contract": report_contract,
         "schema_version": 1,
         "node_id": node_id,
@@ -369,7 +384,11 @@ def train_hcwdl_node(
         "final_checkpoint_sha256": report["final_checkpoint_sha256"],
         "selection": selection,
         "complete": True,
-    })
+    }
+    if recipe_overlay_sha256 is not None:
+        output_payload["recipe_overlay_sha256"] = scientific["recipe_overlay_sha256"]
+        output_payload["resolved_loss"] = asdict(config.loss)
+    output = with_content_hash(output_payload)
     write_immutable_json(Path(output_dir) / "hcwdl_training_report.json", output)
     return output
 

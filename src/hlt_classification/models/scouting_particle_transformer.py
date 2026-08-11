@@ -260,11 +260,146 @@ def validate_scouting_weaver_fp32_parity(
     }
 
 
+def validate_native_offline_weaver_fp32_parity(
+    *, device: str = "cpu", seed: int = 20260811, batch_size: int = 3,
+    charged_particles: int = 12, neutral_particles: int = 9,
+) -> dict[str, object]:
+    """Validate the two-stream TOFF factory against direct Weaver modules.
+
+    The comparison covers logits, feature gradients, vector-gradient finite
+    topology, parameter gradients, masks, and the exact charged/neutral
+    Weaver configurations in FP32.  It is an installed-runtime acceptance
+    check; it does not replace the native teacher's checkpoint lineage.
+    """
+
+    if batch_size < 2:
+        raise ValueError("batch_size must be at least two")
+    if charged_particles < 2 or neutral_particles < 2:
+        raise ValueError("native parity requires at least two particles per stream")
+    target = torch.device(device)
+    if target.type == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA parity requested but unavailable")
+    torch.manual_seed(seed)
+    model_class = _weaver_class()
+    common = scouting_particle_transformer_config()
+    common["num_classes"] = 128
+    charged_config = dict(common); charged_config["input_dim"] = 19
+    neutral_config = dict(common); neutral_config["input_dim"] = 7
+    direct_charged = model_class(**charged_config).to(target)
+    direct_neutral = model_class(**neutral_config).to(target)
+    direct_classifier = nn.Sequential(
+        nn.LayerNorm(256), nn.Linear(256, 128), nn.GELU(), nn.Linear(128, 15),
+    ).to(target)
+    wrapped = build_native_offline_particle_transformer().to(target)
+    wrapped.charged_encoder.load_state_dict(direct_charged.state_dict(), strict=True)
+    wrapped.neutral_encoder.load_state_dict(direct_neutral.state_dict(), strict=True)
+    wrapped.classifier.load_state_dict(direct_classifier.state_dict(), strict=True)
+    direct_charged.eval(); direct_neutral.eval(); direct_classifier.eval(); wrapped.eval()
+
+    generator = torch.Generator(device=target).manual_seed(seed + 1)
+    charged_feature_base = torch.randn(
+        batch_size, 19, charged_particles, generator=generator, device=target,
+    )
+    neutral_feature_base = torch.randn(
+        batch_size, 7, neutral_particles, generator=generator, device=target,
+    )
+    charged_vector_base = torch.randn(
+        batch_size, 4, charged_particles, generator=generator, device=target,
+    )
+    neutral_vector_base = torch.randn(
+        batch_size, 4, neutral_particles, generator=generator, device=target,
+    )
+    charged_vector_base[:, 3] = charged_vector_base[:, :3].square().sum(1).add(1).sqrt()
+    neutral_vector_base[:, 3] = neutral_vector_base[:, :3].square().sum(1).add(1).sqrt()
+    charged_mask = torch.ones(
+        batch_size, 1, charged_particles, dtype=torch.bool, device=target,
+    )
+    neutral_mask = torch.ones(
+        batch_size, 1, neutral_particles, dtype=torch.bool, device=target,
+    )
+    charged_mask[0, :, -2:] = False
+    neutral_mask[1, :, -1:] = False
+    charged_mask_before = charged_mask.clone(); neutral_mask_before = neutral_mask.clone()
+
+    direct_cf = charged_feature_base.clone().requires_grad_(True)
+    wrapped_cf = charged_feature_base.clone().requires_grad_(True)
+    direct_nf = neutral_feature_base.clone().requires_grad_(True)
+    wrapped_nf = neutral_feature_base.clone().requires_grad_(True)
+    direct_cv = charged_vector_base.clone().requires_grad_(True)
+    wrapped_cv = charged_vector_base.clone().requires_grad_(True)
+    direct_nv = neutral_vector_base.clone().requires_grad_(True)
+    wrapped_nv = neutral_vector_base.clone().requires_grad_(True)
+    context = (
+        torch.autocast(device_type=target.type, enabled=False)
+        if hasattr(torch, "autocast") else nullcontext()
+    )
+    with context:
+        direct_logits = direct_classifier(torch.cat((
+            direct_charged(direct_cf, v=direct_cv, mask=charged_mask),
+            direct_neutral(direct_nf, v=direct_nv, mask=neutral_mask),
+        ), dim=-1))
+        wrapped_logits = wrapped(
+            wrapped_cf, wrapped_cv, charged_mask,
+            wrapped_nf, wrapped_nv, neutral_mask,
+        )
+        weights = torch.linspace(
+            .25, 1.25, direct_logits.numel(), device=target,
+        ).reshape_as(direct_logits)
+        (direct_logits * weights).sum().backward()
+        (wrapped_logits * weights).sum().backward()
+
+    feature_gradients_close = bool(
+        torch.allclose(direct_cf.grad, wrapped_cf.grad, atol=FP32_ATOL, rtol=FP32_RTOL)
+        and torch.allclose(direct_nf.grad, wrapped_nf.grad, atol=FP32_ATOL, rtol=FP32_RTOL)
+    )
+    vector_gradient_topology_exact = bool(
+        torch.equal(torch.isfinite(direct_cv.grad), torch.isfinite(wrapped_cv.grad))
+        and torch.equal(torch.isfinite(direct_nv.grad), torch.isfinite(wrapped_nv.grad))
+    )
+    direct_parameters = list(direct_charged.parameters()) + list(
+        direct_neutral.parameters()
+    ) + list(direct_classifier.parameters())
+    wrapped_parameters = list(wrapped.charged_encoder.parameters()) + list(
+        wrapped.neutral_encoder.parameters()
+    ) + list(wrapped.classifier.parameters())
+    parameter_gradients_close = all(
+        left.grad is not None and right.grad is not None
+        and torch.allclose(left.grad, right.grad, atol=FP32_ATOL, rtol=FP32_RTOL)
+        for left, right in zip(direct_parameters, wrapped_parameters, strict=True)
+    )
+    logits_close = bool(torch.allclose(
+        direct_logits, wrapped_logits, atol=FP32_ATOL, rtol=FP32_RTOL,
+    ))
+    masks_unchanged = bool(
+        torch.equal(charged_mask, charged_mask_before)
+        and torch.equal(neutral_mask, neutral_mask_before)
+    )
+    return {
+        "contract": "hlt_classification_native_offline_part_parity_v1",
+        "passed": bool(
+            direct_logits.shape == (batch_size, 15) and logits_close
+            and feature_gradients_close and vector_gradient_topology_exact
+            and parameter_gradients_close and masks_unchanged
+        ),
+        "device": str(target), "dtype": "float32",
+        "maximum_absolute_difference": float(
+            (direct_logits - wrapped_logits).abs().max().detach().cpu()
+        ),
+        "absolute_tolerance": FP32_ATOL, "relative_tolerance": FP32_RTOL,
+        "charged_config": charged_config, "neutral_config": neutral_config,
+        "feature_gradients_close": feature_gradients_close,
+        "vector_gradient_finite_topology_exact": vector_gradient_topology_exact,
+        "parameter_gradients_close": parameter_gradients_close,
+        "masks_unchanged": masks_unchanged,
+    }
+
+
 __all__ = [
     "SCOUTING_PARTICLE_TRANSFORMER_CONTRACT", "ScoutingParticleTransformer",
     "NativeOfflineParticleTransformer", "build_native_offline_particle_transformer",
     "RepresentationScoutingParticleTransformer", "ScoutingRepresentationOutput",
     "build_representation_scouting_particle_transformer",
     "build_scouting_particle_transformer", "scouting_particle_transformer_config",
+    "validate_native_offline_weaver_fp32_parity",
     "validate_scouting_weaver_fp32_parity",
 ]

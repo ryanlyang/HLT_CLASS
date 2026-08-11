@@ -37,7 +37,12 @@ distinguishes the native two-stream TOFF oracle from the unified 21-channel P0
 carrier, requires U100 to be byte-identical to existing D100 and both terminal
 paths to be byte-identical HLT, registers stationary-depth controls, and never
 reinterprets completed HCWDL or dense artifacts. Its presence authorizes
-planning/local implementation only, not a live campaign or final-test access.
+the implemented validation-only contract and local verification, not a live
+campaign or final-test access. The reusable artifact identities are frozen in
+the [structural-feature homotopy contract](../contracts/HCWDL_STRUCTURAL_FEATURE_HOMOTOPY.md),
+and the source-pinned dry-run, smoke, monitoring, resource-capture, pilot, and
+recovery procedure is in the
+[structural-feature homotopy runbook](../HCWDL_STRUCTURAL_FEATURE_HOMOTOPY_RUNBOOK.md).
 
 The additive
 [HCWDL matching-free privileged representation-KD ascent plan](HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md)

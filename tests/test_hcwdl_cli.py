@@ -43,6 +43,16 @@ SCRIPTS = (
     "submit_hcwdl_campaign_recovery.py",
     "create_hcwdl_final_recovery.py", "run_hcwdl_final_recovery_task.py",
     "submit_hcwdl_final_recovery.py",
+    "create_hcwdl_homotopy_pilot.py", "submit_hcwdl_homotopy_pilot.py",
+    "run_hcwdl_homotopy_task.py", "monitor_hcwdl_homotopy.py",
+    "cancel_hcwdl_homotopy.py", "resume_hcwdl_homotopy.py",
+    "run_hcwdl_homotopy_recovery_task.py",
+    "build_hcwdl_homotopy_resource_profile.py",
+    "validate_hcwdl_homotopy_weaver.py",
+    "run_hcwdl_homotopy_local_smoke.py",
+    "build_hcwdl_upper_calibration.py",
+    "build_hcwdl_upper_coupling_shard.py",
+    "finalize_hcwdl_upper_coupling.py", "build_hcwdl_toff_targets.py",
 )
 
 

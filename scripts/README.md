@@ -261,3 +261,29 @@ existing execution claim and frozen finalist registry, validates and preserves
 any already-published finalist reports, evaluates only missing reports, and
 then reruns aggregation. It never performs a new finalist selection. See
 `docs/HCWDL_FINAL_RECOVERY_RUNBOOK.md`.
+
+## HCWDL structural-feature homotopy
+
+The validation-only 80-fit structural-feature study uses the thin
+`create_hcwdl_homotopy_pilot.py`, `submit_hcwdl_homotopy_pilot.py`,
+`run_hcwdl_homotopy_task.py`, `monitor_hcwdl_homotopy.py`,
+`resume_hcwdl_homotopy.py`, and `cancel_hcwdl_homotopy.py` surfaces.
+Preparation helpers are `build_hcwdl_upper_calibration.py`,
+`build_hcwdl_upper_coupling_shard.py`,
+`finalize_hcwdl_upper_coupling.py`, and `build_hcwdl_toff_targets.py`.
+It imports an authenticated HCWDL smoke or unweighted 300k pilot, registers no
+final-test task, stores only compact coupling/target artifacts, and rebuilds
+particle views in process-local RAM. The exact artifact and recovery rules are
+in `docs/contracts/HCWDL_STRUCTURAL_FEATURE_HOMOTOPY.md`.
+`run_hcwdl_homotopy_local_smoke.py` is a bounded synthetic behavioral check
+that executes all 80 fits without ROOT or Slurm; it is not a substitute for
+the real production-worker miniature. Before the miniature,
+`validate_hcwdl_homotopy_weaver.py` records direct-versus-wrapper FP32 parity
+for both the unified student and two-stream native TOFF factories from the
+clean pinned checkout. After that miniature,
+`build_hcwdl_homotopy_resource_profile.py` authenticates the exact completed
+ledger, monitor, worker GPU measurements, Slurm RAM/wall/I/O counters, and
+durable artifact bytes before any 300k specification can be executable.
+Source-only and resource-only failed closures share
+`resume_hcwdl_homotopy.py` but require distinct contracts and authorization
+phrases. See `docs/HCWDL_STRUCTURAL_FEATURE_HOMOTOPY_RUNBOOK.md`.

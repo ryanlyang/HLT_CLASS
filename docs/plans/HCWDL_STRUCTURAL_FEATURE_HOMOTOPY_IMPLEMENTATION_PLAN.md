@@ -362,6 +362,11 @@ delta_phi = wrapped_delta_phi(phi_o, phi_r)
 deltaR = hypot(eta_o - eta_r, delta_phi)
 ```
 
+This inherits the helper's exact zero-pT behavior: eta is 0 where pT is zero,
+and phi is NumPy float64 `arctan2(py,px)`, including IEEE signed-zero behavior
+under the pinned NumPy version. No alternate hand-written eta/phi routine is
+allowed.
+
 Thus log responses use `log(pt_star_o/pt_star_r)` and
 `log(E_star_o/E_star_r)` with no implementation-selected epsilon. Floor-hit
 counts are reported. A failed physical-p4 mask or nonfinite derived primitive
@@ -434,6 +439,14 @@ common-valid `delta_k`, or zero when empty, and `d_track` is the mean of all
 four group contributions. Each of the four non-track field groups follows the
 same empty-group-zero rule and `d_field` is their mean. Missingness remains in
 `d_valid`.
+
+For `d_valid`, one named validity group disagrees iff any corresponding
+per-channel validity bit differs between endpoints; `d_valid` is the mean of
+those eight binary group indicators in the declared group order. Every
+per-edge channel mean, group mean, `d_kin`, `d_id`, `d_valid`, and final
+weighted cost uses float64 `math.fsum` over the exact displayed/ascending-
+channel order, followed by float64 division. The Python/NumPy versions and
+IEEE mode are pinned before half-up `cost_q` quantization.
 
 The kinematic scales are frozen by a train-only, label-free calibration:
 
@@ -686,7 +699,9 @@ rebalancing itself.
 Reports must show, at every rung, realized switched edit count, information
 mass, scalar pT, energy, category changes, charged/neutral changes, validity
 changes, active-particle count, and per-jet transition distributions. Class
-slices are reporting-only and never influence the coordinate.
+slices are joined only downstream by authenticated training/reporting after
+the coupling lock. No label or class-slice value enters scale calibration,
+base shards/manifests, switch calibration/sidecars, coupling audit, or lock.
 
 The report also separates O, `R_hlt`, and `R_off` particle-count and scalar-pT
 fractions. A dustbin fraction below 10% does not bound the number or importance
@@ -1088,6 +1103,14 @@ exact parent `HCWDL_RECIPE/v4` hash and binds every node's view, loss,
 temperature, LR, schedule, and seed role. Every KD node uses the locked
 unweighted single-teacher recipe unless the explicit table below says CE:
 
+The engine `LossConfiguration` is resolved and validated from this per-node
+overlay, never inferred only from `teacher.domain`. The current generic HCWDL
+domain heuristic would assign temperature 1 to same-HLT `S0_02...S0_20` and
+is therefore insufficient for this graph. The homotopy training adapter must
+pass an explicit validated loss configuration while separately validating the
+referenced v4 recipe. Completed-node reuse and both outer/engine reports bind
+the v4 hash, overlay hash, resolved node row, and serialized engine loss.
+
 ```text
 loss = 0.25 * unweighted per-jet CE + 0.75 * forward-KL KD
 homotopy/direct/depth-control temperature     = 2 through transition 20
@@ -1435,19 +1458,22 @@ The 300k campaign DAG is:
 
 ```text
 authenticate parent spec/split/selection/recipe/assignments/checkpoints
-  -> build train-only Cartesian-edge scale calibration
-  -> build immutable train base-coupling shards (cost_q + mass_q)
-  -> freeze train-only switch histogram
-  -> build train switch sidecars --------+
-  -> build validation base shards -------+-> validation switch sidecars
-                                             -> manifests + full-role endpoint audit
-                                             -> coupling lock
-                                             -> bounded V(s,f) cache miniature
-                                             -> endpoint equality lock
-                                             -> immutable graph/recipe lock
+  +-> build train-only Cartesian-edge scale calibration
+  |    -> build immutable train base-coupling shards (cost_q + mass_q)
+  |    -> lock complete train base manifest -> freeze train switch histogram
+  |    -> build train switch sidecars --------+
+  |    -> build validation base shards
+  |    -> lock validation base manifest ------+-> validation switch sidecars
+  |                                                -> role manifests + full-role audit
+  |                                                -> coupling lock
+  |                                                -> bounded V(s,f) cache miniature
+  |                                                -> endpoint equality lock --------+
+  |
+  +-> build shared TOFF-native train-logit cache -> TOFF target lock -----------+
+                                                                                |
+ endpoint equality lock + TOFF target lock -> immutable graph/recipe lock <----+
 
-  -> build and lock shared TOFF-native train-logit cache
-
+ graph/recipe lock
   -> M0paired || P0CE || P0KD; then U010P0KD after P0KD
   -> factorized U/D path (sequential)
   -> joint path          (sequential, parallel with factorized)
@@ -1456,6 +1482,11 @@ authenticate parent spec/split/selection/recipe/assignments/checkpoints
   -> paired direct/self controls (parallel when parents exist)
   -> validation aggregate
 ```
+
+The TOFF target-cache producer depends on authenticated parent/checkpoint/data
+lineage, not on the later graph-recipe lock. The graph-recipe lock is the join
+that binds both `endpoint_equality_lock` and `toff_target_lock`; all seven TOFF
+target consumers and every other training node depend on that join.
 
 There is no finalist lock, execution lock, test assignment, or final-test
 evaluation task in the initial supplemental DAG.
@@ -1552,6 +1583,8 @@ campaign_root/
     train/switch/*.npz
     validation/base/*.npz
     validation/switch/*.npz
+    train_base_manifest.json
+    validation_base_manifest.json
     train_manifest.json
     validation_manifest.json
     full_role_audit.json
@@ -1596,7 +1629,7 @@ The preferred reusable boundaries are:
 | `src/hlt_classification/scouting/hcwdl_homotopy_stream.py` | bounded ROOT/assignment/coupling streaming into canonical ParticleInputs |
 | `src/hlt_classification/scouting/hcwdl_homotopy_graph.py` | exact factorized, joint, stationary, adapter, and direct-control registries |
 | `src/hlt_classification/scouting/hcwdl_homotopy_contracts.py` | new contract constants, payload builders, and fail-closed validators |
-| `src/hlt_classification/scouting/hcwdl_homotopy_runner.py` | one node: views once, teacher logits once, generic training reuse |
+| `src/hlt_classification/scouting/hcwdl_homotopy_runner.py` | one node: validate per-node overlay loss/temperature, build views/teacher logits once, then call generic engine explicitly |
 | `src/hlt_classification/scouting/hcwdl_homotopy_campaign.py` | 300k DAG, resources, command plan, authorization, task identities |
 | `src/hlt_classification/scouting/hcwdl_homotopy_workflow.py` | thin task dispatch and exact artifact consumption |
 | `src/hlt_classification/scouting/hcwdl_homotopy_reporting.py` | rung, path, recovery, stationary-control, and transition diagnostics |
@@ -1722,6 +1755,9 @@ change batch size, update count, cache contents, or any scientific semantic.
   hash placement, zero-bin/zero-population validation transform, uint16 round
   trip, insertion/removal tail concentration, and nested thresholds;
 - shard corruption, cross-role/source/selection/assignment/config rejection;
+- missing/extra/reordered base shards fail base-manifest completeness; switch
+  calibration binds only the complete train base set and sidecars cannot bind
+  the wrong base/calibration;
 - 99,999-of-100,000 perfect observed rows fails completeness;
 - sampled ROOT recomputation reproduces logical arrays.
 
@@ -1767,6 +1803,8 @@ change batch size, update count, cache contents, or any scientific semantic.
 - identical rows, 60 passes, 60 validations, update counts, and final partial
   batch across paired nodes;
 - unweighted CE/KD, role-routed temperature, BF16 forward, and FP32 loss math;
+- all 80 overlay rows resolve to the exact expected engine loss config;
+  domain-only fallback is rejected and reports bind both recipe hashes;
 - teacher evaluated on its own domain exactly once and student view built once;
 - shared authenticated TOFF-native target cache is built once, has exact
   identity/class/checkpoint lineage, and is consumed by all seven roots;

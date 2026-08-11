@@ -202,6 +202,69 @@ def _combined_endpoint_features(
     return features, validity
 
 
+def project_offline_endpoint_records(
+    offline_arrays: Mapping[str, object], *, row: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Project one complete native row into the frozen 21-field endpoint space.
+
+    The returned arrays retain the repository's persistent native layout:
+    all ``cpfcandlt`` entries followed by all ``npfcand`` entries.  Values are
+    raw endpoint values (invalid registered measurements are represented by
+    zero plus a false validity bit); no HLT normalization is applied here.
+    This is the single public projection primitive used by Shell Exact and by
+    the HCWDL structural-support homotopy.
+    """
+
+    if row < 0:
+        raise ValueError("offline endpoint row must be nonnegative")
+    rows = None
+    for branch in full_endpoint_required_branches():
+        if branch not in offline_arrays:
+            raise KeyError(f"full offline endpoint is missing branch: {branch}")
+        count = len(_rows(offline_arrays[branch]))
+        rows = count if rows is None else rows
+        if count != rows:
+            raise ValueError("full offline endpoint branch row counts differ")
+    if rows is None or row >= rows:
+        raise IndexError("offline endpoint row is outside its input")
+    projected = _full_endpoint_rows(offline_arrays, rows)
+    charged_count = len(projected["cpfcandlt_px"][row])
+    neutral_count = len(projected["npfcand_px"][row])
+    features, validity = _combined_endpoint_features(
+        projected, row=row, charged_count=charged_count,
+        neutral_count=neutral_count,
+    )
+    p4 = combined_offline_p4(offline_arrays, offline_arrays, row).astype(
+        np.float64, copy=False,
+    )
+    if len(p4) != len(features):
+        raise ValueError("offline p4 and projected endpoint lengths differ")
+    return features, validity, p4
+
+
+def transform_endpoint_features(
+    raw_features: np.ndarray, validity: np.ndarray,
+) -> np.ndarray:
+    """Apply the canonical HLT transform to projected endpoint records."""
+
+    values = np.asarray(raw_features, dtype=np.float64)
+    valid = np.asarray(validity, dtype=np.bool_)
+    if values.ndim != 2 or values.shape[1] != len(HLT_FEATURE_SPECS):
+        raise ValueError("endpoint features must be [particles,21]")
+    if valid.shape != values.shape:
+        raise ValueError("endpoint feature validity shape differs")
+    transformed = np.empty_like(values, dtype=np.float32)
+    for channel, spec in enumerate(HLT_FEATURE_SPECS):
+        clean = np.where(valid[:, channel], values[:, channel], 0.0)
+        transformed[:, channel] = np.clip(
+            (clean - float(spec.median)) * float(spec.factor),
+            float(spec.lower), float(spec.upper),
+        ).astype(np.float32, copy=False)
+    if not np.isfinite(transformed).all():
+        raise FloatingPointError("canonical endpoint transform became nonfinite")
+    return transformed
+
+
 def _validate_full_endpoint_features(
     features: np.ndarray, validity: np.ndarray, *, row: int,
 ) -> np.ndarray:
@@ -617,5 +680,6 @@ __all__ = [
     "build_selective_matched_offline_endpoint_inputs",
     "combined_offline_p4",
     "full_endpoint_required_branches",
+    "project_offline_endpoint_records", "transform_endpoint_features",
     "runtime_repair_family",
 ]

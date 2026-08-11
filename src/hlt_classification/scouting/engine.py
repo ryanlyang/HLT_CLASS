@@ -53,6 +53,53 @@ def validate_pmard_training_report(report: Mapping[str, object]) -> str:
     )
 
 
+def _checkpoint_values_equal(left: object, right: object) -> bool:
+    """Semantic equality for an immutable torch checkpoint retry."""
+
+    import torch
+
+    if isinstance(left, torch.Tensor) or isinstance(right, torch.Tensor):
+        return (
+            isinstance(left, torch.Tensor) and isinstance(right, torch.Tensor)
+            and left.dtype == right.dtype and tuple(left.shape) == tuple(right.shape)
+            and torch.equal(left.detach().cpu(), right.detach().cpu())
+        )
+    if isinstance(left, Mapping) or isinstance(right, Mapping):
+        return (
+            isinstance(left, Mapping) and isinstance(right, Mapping)
+            and set(left) == set(right)
+            and all(_checkpoint_values_equal(left[key], right[key]) for key in left)
+        )
+    if isinstance(left, (tuple, list)) or isinstance(right, (tuple, list)):
+        return (
+            type(left) is type(right) and len(left) == len(right)
+            and all(_checkpoint_values_equal(a, b) for a, b in zip(left, right, strict=True))
+        )
+    if isinstance(left, np.ndarray) or isinstance(right, np.ndarray):
+        return (
+            isinstance(left, np.ndarray) and isinstance(right, np.ndarray)
+            and left.dtype == right.dtype and left.shape == right.shape
+            and np.array_equal(left, right)
+        )
+    return left == right
+
+
+def _publish_torch_checkpoint(path: Path, payload: Mapping[str, object]) -> None:
+    """Publish once, accepting only a semantically identical interrupted retry."""
+
+    import torch
+
+    data = _torch_bytes(payload)
+    if not path.exists():
+        atomic_publish_bytes(path, data)
+        return
+    existing = torch.load(path, map_location="cpu", weights_only=False)
+    if not _checkpoint_values_equal(existing, payload):
+        raise FileExistsError(
+            f"immutable checkpoint already exists with different semantic content: {path}"
+        )
+
+
 class PmardTrainingInterrupted(RuntimeError):
     """Intentional post-checkpoint interruption used to prove exact resume."""
 
@@ -584,22 +631,22 @@ def train_pmard(
     final_checkpoint_sha256 = None
     if config.selection_policy == "hcwdl_macro_auc":
         final_checkpoint_path = root / "final_model.pt"
-        atomic_publish_bytes(final_checkpoint_path, _torch_bytes({
+        _publish_torch_checkpoint(final_checkpoint_path, {
             "model": _cpu_state_dict(model), "config": asdict(config),
             "scientific_config": scientific_payload,
             "model_runtime": capture_model_runtime_state(model),
             "final_update": update,
-        }))
+        })
         final_checkpoint_sha256 = sha256_file(final_checkpoint_path)
     model.load_state_dict(best_model)
     if best_runtime is not None:
         restore_model_runtime_state(model, best_runtime)
     checkpoint_path = root / "selected_model.pt"
-    atomic_publish_bytes(checkpoint_path, _torch_bytes({
+    _publish_torch_checkpoint(checkpoint_path, {
         "model": model.state_dict(), "config": asdict(config),
         "scientific_config": scientific_payload, "model_runtime": best_runtime,
         "selected_update": best_update,
-    }))
+    })
     report = with_content_hash({
         "contract": PMARD_TRAINING_REPORT_CONTRACT,
         "schema_version": PMARD_TRAINING_REPORT_VERSION,

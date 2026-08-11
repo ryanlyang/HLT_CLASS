@@ -1,5 +1,69 @@
 # Current Handoff
 
+## HCWDL structural-feature homotopy implementation (2026-08-11)
+
+The validation-only structural/feature homotopy in
+[`docs/plans/HCWDL_STRUCTURAL_FEATURE_HOMOTOPY_IMPLEMENTATION_PLAN.md`](plans/HCWDL_STRUCTURAL_FEATURE_HOMOTOPY_IMPLEMENTATION_PLAN.md)
+is now implemented locally and ready for its required real Tigris smoke. This
+supersedes the earlier documentation-only status below; it does not mutate or
+relabel any completed primary HCWDL, dense10, dense5, or recovery artifact.
+
+Reusable implementation was added under `src/hlt_classification/scouting/`:
+the exact 80-fit graph and recipe overlay; typed P0/D100 endpoint partition;
+label-free maximum-cardinality minimum-cost residual coupling; immutable base
+shards, switch sidecars, manifests, audits, and locks; the generalized
+`V(s,f)` carrier; dedicated homotopy streaming; durable authenticated TOFF
+targets; process-local student/teacher caches; per-node training; campaign,
+workflow, reporting, source recovery, resource-only recovery, and bounded
+synthetic-smoke modules. The existing all-21-field projector is exposed from
+`repair.py` without changing Shell Exact v1. Generic PMARD checkpoint
+publication now accepts only semantically identical interrupted retries, and
+HCWDL training accepts an explicitly validated per-node loss resolver while
+retaining the old default behavior.
+
+Thin command surfaces were added for coupling calibration/build/finalization,
+TOFF targets, campaign creation/submission/workers, monitoring, exact-ID
+cancellation, recovery, resource profiling, installed-Weaver parity, and the
+local smoke. Three Slurm workers use the pinned absolute `PROJECT_DIR`, Tigris
+environment rules, `exec python -s`, and `USR1@120` on checkpointable GPU
+jobs. The smoke/pilot command plan has 101 tasks: 21 infrastructure/reporting
+tasks and all 80 fits. Train/validation roles are 4,096/4,096 for smoke and
+300,000/100,000 for pilot; both register zero final-test rows and no final-test
+task.
+
+The reusable contract index is
+[`docs/contracts/HCWDL_STRUCTURAL_FEATURE_HOMOTOPY.md`](contracts/HCWDL_STRUCTURAL_FEATURE_HOMOTOPY.md).
+It records 36 unique v1 identities covering coupling/config/calibration/cache,
+TOFF targets, coordinates/graph/recipe/locks, node/runtime/aggregate/resource
+reports, installed-Weaver parity, completion, and both recovery families.
+The operator procedure is
+[`docs/HCWDL_STRUCTURAL_FEATURE_HOMOTOPY_RUNBOOK.md`](HCWDL_STRUCTURAL_FEATURE_HOMOTOPY_RUNBOOK.md).
+No donor or exploratory file was copied, so there is no donor commit or new
+`LEGACY_SOURCE_MAP` entry. The pre-existing unrelated modification at
+`.worktrees/hcwdl-rkd-local` was left untouched.
+
+Local evidence from the final tree:
+
+- focused homotopy plus CLI tests: 101/101 passed;
+- cross-module HCWDL/PMARD/Shell Exact tests: 144/144 passed before the final
+  parity-only addition;
+- complete repository suite: 412/412 passed in 142.47 seconds, with one
+  unrelated existing PyTorch warning;
+- bounded synthetic graph: all 80 cold-start fits completed two updates,
+  every loss was finite, teacher-own-domain routing was exercised, and
+  `final_test_accessed` remained false;
+- 14/14 new CLI help paths, three/three Slurm shell syntax checks, Python AST
+  parsing, all documentation links, 36/36 exact contract identities, and
+  `git diff --check` passed (Windows line-ending notices only).
+
+Local installed-Weaver runtime parity cannot be claimed because the Windows
+development environment does not contain Weaver. The exact next acceptance
+step is therefore the runbook's pinned Tigris GPU parity command followed by
+the genuine 4,096/4,096 production-worker smoke. No Slurm job was submitted.
+After the smoke completes, its exact ledger/monitor/runtime reports must be
+converted into the measured resource profile; only then may the runbook emit
+the nonmutating 300k dry run and request separate live-pilot authorization.
+
 ## HCWDL completed-node recovery idempotency (2026-08-10)
 
 The source-pinned RNG recoveries retrained already-completed dense prefix nodes
@@ -53,7 +117,9 @@ has no final-test task. This step is documentation only: no coupling, graph,
 worker, artifact, Tigris submission, or remote mutation was implemented or
 authorized. After the independent science/implementation/editorial audit, the
 focused high-coverage/HCWDL suite passed 60/60 in the local `tagging-hlt`
-environment; `git diff --check` passed apart from line-ending notices.
+environment. The complete suite passed 355/355 with the 14 existing
+Matplotlib/Pyparsing warnings plus one local pytest-cache permission warning;
+`git diff --check` passed apart from line-ending notices.
 
 ## Primary HCWDL source-pinned closure recovery (2026-08-10)
 
