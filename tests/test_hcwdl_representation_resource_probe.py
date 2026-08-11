@@ -9,6 +9,7 @@ from hlt_classification.data.cache_contracts import (
     load_json, with_content_hash, write_immutable_json,
 )
 from hlt_classification.scouting import hcwdl_representation_campaign as campaign
+from hlt_classification.scouting import hcwdl_representation_resources as resources
 from hlt_classification.scouting.hcwdl_representation_campaign import (
     DENSE_TRAINING_DISPOSITION, create_campaign_spec,
 )
@@ -35,6 +36,13 @@ from hlt_classification.scouting.hcwdl_representation_resources import (
     validate_dense_storage_availability,
     validate_dense_storage_template,
 )
+
+
+def test_dense_compatibility_inventory_includes_full_runtime_row_regression() -> None:
+    assert (
+        "tests/test_hcwdl_representation_runtime_rows.py"
+        in resources._DENSE_RESOURCE_COMPATIBILITY_CHANGED_PATHS
+    )
 
 
 REPOSITORY = Path(__file__).resolve().parents[1]

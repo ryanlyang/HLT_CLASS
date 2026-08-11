@@ -114,6 +114,7 @@ _DENSE_RESOURCE_COMPATIBILITY_CHANGED_PATHS: Final = frozenset({
     "tests/test_hcwdl_representation_layout.py",
     "tests/test_hcwdl_representation_nonfinal_resources.py",
     "tests/test_hcwdl_representation_resource_probe.py",
+    "tests/test_hcwdl_representation_runtime_rows.py",
     "tests/test_hcwdl_representation_targets.py",
 })
 NONFINAL_COLLECTOR_CLI: Final = (
