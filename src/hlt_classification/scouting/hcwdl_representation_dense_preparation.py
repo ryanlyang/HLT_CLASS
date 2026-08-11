@@ -78,6 +78,19 @@ def _json_reference(path: Path) -> tuple[dict[str, str], str]:
     )
 
 
+def _runtime_target_forward_specs(
+    forward_specs: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Mapping[str, Any]]:
+    """Project bank-purpose keys into runtime static-input logical names."""
+
+    if not forward_specs:
+        raise ValueError("dense target-forward authority registry is empty")
+    return {
+        f"${{target_forward_spec:{key}}}": value
+        for key, value in forward_specs.items()
+    }
+
+
 def _project_runtime_registry(
     *, project_dir: Path, current_source_commit: str,
     compatible_profile: Mapping[str, Any], measurement_root: Path,
@@ -380,7 +393,7 @@ def prepare_dense_smoke_candidate(
         static_inputs=static_inputs, artifact_content_hashes=content_hashes,
         target_generations=assets["target_generations"], bundle_members={},
         settings=settings, split_manifest=split, final_authorities={},
-        target_forward_specs=assets["forward_specs"],
+        target_forward_specs=_runtime_target_forward_specs(assets["forward_specs"]),
         representation_recipe=recipe,
     )
     prerequisites_path = root / "runtime" / "runtime_prerequisites.json"

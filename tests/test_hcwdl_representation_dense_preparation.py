@@ -13,6 +13,17 @@ MEASURED = "2" * 40
 CURRENT = "3" * 40
 
 
+def test_runtime_target_forward_specs_use_registered_logical_names() -> None:
+    forward_specs = {
+        "RSET_D100:screen": {"content_hash": "4" * 64},
+        "RREL_D95:screen": {"content_hash": "5" * 64},
+    }
+    assert preparation._runtime_target_forward_specs(forward_specs) == {
+        "${target_forward_spec:RSET_D100:screen}": forward_specs["RSET_D100:screen"],
+        "${target_forward_spec:RREL_D95:screen}": forward_specs["RREL_D95:screen"],
+    }
+
+
 def _live(resource_class: str) -> dict:
     cuda = resource_class.startswith("gpu_")
     return with_content_hash({
