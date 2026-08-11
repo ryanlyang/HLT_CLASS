@@ -1,5 +1,31 @@
 # Current Handoff
 
+## HCWDL-UJ first Tigris dry-run repair (2026-08-11)
+
+The authenticated unweighted parent smoke completed through aggregate job
+`80916`, and installed-Weaver CUDA FP32 parity passed for source
+`c70a34e4edb515a9636110ad920dd21ff84d2e07`.  The first HCWDL-UJ campaign
+creation then completed, but its immediate dry-run validation failed closed
+before any of the 101 campaign jobs were submitted.  The immutable graph JSON
+reloaded each node's `teachers` tuple as a JSON list, while
+`HomotopyNodeSpec.payload()` regenerated a Python tuple; the validator
+therefore rejected its own byte-valid artifact as
+`HCWDL-UJ immutable local campaign artifacts differ`.
+
+`HomotopyNodeSpec.payload()` now emits a JSON-native teacher list before
+hashing or publication.  This does not change the canonical graph hash or any
+scientific graph semantics because tuples and lists had the same canonical
+JSON encoding; it makes the in-memory contract representation agree with its
+immutable reloaded representation.  A regression checks JSON round-trip
+identity for all 80 node payloads.  A dependency-isolated execution of the
+actual graph module confirms all 80 payloads round-trip exactly, source/test
+compilation passes, and `git diff --check` passes.  The local Windows Python
+lacks NumPy, so the focused pytest module cannot be collected locally; the
+focused and complete suites must be rerun in `atlas_kd_tigris` on the pushed
+repair before the smoke is relaunched.  Failed launcher jobs `80998`, `81219`,
+`81220`, and `81221` submitted no HCWDL-UJ campaign tasks and do not alter the
+completed parent.
+
 ## HCWDL dense measured-resource reschedule (2026-08-11)
 
 The pending corrected dense10 and dense5 recovery roots inherited the pilot's

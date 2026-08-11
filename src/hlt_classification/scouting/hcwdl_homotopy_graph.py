@@ -36,10 +36,18 @@ class HomotopyNodeSpec:
     temperature: float
 
     def payload(self) -> dict[str, object]:
+        # ``dataclasses.asdict`` preserves tuples.  That is semantically fine
+        # for canonical JSON hashing, but it is not stable across an actual
+        # JSON publication/reload: ``teachers`` returns as a list.  Campaign
+        # validation compares the immutable graph artifact to these payloads,
+        # so the public contract representation must be JSON-native before it
+        # is hashed or written.
+        value = asdict(self)
+        value["teachers"] = [asdict(teacher) for teacher in self.teachers]
         return {
             "contract": NODE_SPEC_CONTRACT,
             "schema_version": 1,
-            **asdict(self),
+            **value,
         }
 
 

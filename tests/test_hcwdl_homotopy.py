@@ -647,6 +647,12 @@ def test_exact_hlt_endpoints_preserve_untruncated_raw_length_above_token_cap() -
 def test_graph_recipe_and_coordinates_are_frozen() -> None:
     assert validate_graph() == GRAPH_SHA256
     assert len(NODE_REGISTRY) == 80
+    # Contract payloads must survive immutable JSON publication without a
+    # tuple/list type drift.  The real Tigris smoke caught this at the first
+    # dry-run validation boundary.
+    for node in NODE_REGISTRY.values():
+        payload = node.payload()
+        assert json.loads(json.dumps(payload)) == payload
     assert sum(node.track == "factorized" for node in NODE_REGISTRY.values()) == 21
     assert sum(node.track == "joint" for node in NODE_REGISTRY.values()) == 21
     assert sum(node.track == "stationary_d100" for node in NODE_REGISTRY.values()) == 10
