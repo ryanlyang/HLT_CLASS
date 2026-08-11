@@ -99,7 +99,8 @@ def _project_runtime_registry(
     """Project measured package/device facts across the reviewed source-only diff."""
 
     snapshot = capture_source_snapshot(project_dir, require_clean=True)
-    snapshot_sha256 = validate_source_snapshot_payload(snapshot)
+    validate_source_snapshot_payload(snapshot)
+    snapshot_sha256 = str(snapshot["source_snapshot_sha256"])
     if snapshot.get("git_commit") != current_source_commit:
         raise PermissionError("dense preparation checkout differs from requested source")
     measured_source = dense_resource_measurement_source_commit(compatible_profile)

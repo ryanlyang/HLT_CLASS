@@ -88,7 +88,9 @@ def test_runtime_projection_reuses_jobs_but_binds_current_source(
             "git_commit": CURRENT, "source_snapshot_sha256": "6" * 64,
         },
     )
-    monkeypatch.setattr(preparation, "validate_source_snapshot_payload", lambda _v: "6" * 64)
+    monkeypatch.setattr(
+        preparation, "validate_source_snapshot_payload", lambda _v: "7" * 64,
+    )
     monkeypatch.setattr(preparation, "validate_worker_runtime_measurement", lambda _v: H)
     monkeypatch.setattr(preparation, "dense_resource_measurement_source_commit", lambda _v: MEASURED)
     facts, signatures, values = preparation._project_runtime_registry(

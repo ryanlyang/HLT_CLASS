@@ -1370,3 +1370,21 @@ execution phrase and run the bounded two-update, USR1 exact-resume, and
 validation-proxy actions. The installed-Weaver boundary and genuine worker
 evidence must then be measured and audited. Do not reuse superseded hashes,
 submit an RKD pilot, or open the final role before every gate passes.
+
+## Dense-smoke runtime source identity correction (2026-08-11)
+
+The first authorized 261-task dense smoke at source `526a620` submitted its
+complete ledger but stopped at the root `tap_schema` job before registered
+input access. Dense candidate preparation had placed the outer serialized
+source-snapshot artifact hash in `runtime_facts.source_snapshot_sha256`; the
+worker correctly measures and compares the snapshot's inner scientific
+checkout identity, so the two hashes could never agree. Preparation now
+validates the source-snapshot artifact and separately binds its exact
+`source_snapshot_sha256` field. The regression deliberately makes the outer
+artifact hash differ from that inner identity. Focused dense-preparation,
+worker-runtime, and campaign tests pass 28/28. This changes the executable
+candidate identity but not the graph, recipe, targets, measured resources, or
+storage estimate. The impossible `526a620` smoke must be cancelled by the
+exact IDs in its immutable submission ledger; its scientific tasks cannot be
+resumed or relabeled. Rebuild one fresh candidate from the existing reusable
+inputs and compatible measured profile at the correction commit.
