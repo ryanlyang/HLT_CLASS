@@ -61,9 +61,12 @@ def _particle_row_bytes(view: ParticleInputs) -> int:
     rows = len(view.raw_lengths)
     if rows <= 0:
         raise ValueError("view-cache seed batch is empty")
-    return sum(array.nbytes for array in (
-        view.features, view.vectors, view.mask, view.raw_lengths,
-    )) // rows
+    names = ["features", "vectors", "mask", "raw_lengths"]
+    names.extend(
+        name for name in ("visible_indices", "family_codes", "family_reason_codes")
+        if hasattr(view, name)
+    )
+    return sum(getattr(view, name).nbytes for name in names) // rows
 
 
 def _view_row_bytes(view: ParticleInputs | NativeOfflineInputs) -> int:
@@ -90,15 +93,31 @@ def _validate_view(view: object) -> None:
             or particle.raw_lengths.dtype != np.int32
         ):
             raise ValueError("view cache requires canonical FP32/bool/int32 particle inputs")
+        metadata_names = ("visible_indices", "family_codes", "family_reason_codes")
+        present = tuple(hasattr(particle, name) for name in metadata_names)
+        if any(present) and not all(present):
+            raise ValueError("view cache received partial HCWDL token metadata")
+        if all(present):
+            if (
+                particle.visible_indices.dtype != np.int64
+                or particle.family_codes.dtype != np.int8
+                or particle.family_reason_codes.dtype != np.int8
+            ):
+                raise ValueError("view cache received invalid HCWDL token metadata dtypes")
 
 
 def _allocate_particle(view: ParticleInputs, rows: int) -> ParticleInputs:
-    return ParticleInputs(
+    values = [
         np.empty((rows, *view.features.shape[1:]), view.features.dtype),
         np.empty((rows, *view.vectors.shape[1:]), view.vectors.dtype),
         np.empty((rows, *view.mask.shape[1:]), view.mask.dtype),
         np.empty(rows, view.raw_lengths.dtype),
-    )
+    ]
+    for name in ("visible_indices", "family_codes", "family_reason_codes"):
+        if hasattr(view, name):
+            array = getattr(view, name)
+            values.append(np.empty((rows, *array.shape[1:]), array.dtype))
+    return type(view)(*values)
 
 
 def _allocate_view(view: ParticleInputs | NativeOfflineInputs, rows: int):
@@ -110,7 +129,14 @@ def _allocate_view(view: ParticleInputs | NativeOfflineInputs, rows: int):
 
 
 def _append_particle(target: ParticleInputs, source: ParticleInputs, start: int, stop: int) -> None:
-    for name in ("features", "vectors", "mask", "raw_lengths"):
+    names = ["features", "vectors", "mask", "raw_lengths"]
+    for name in ("visible_indices", "family_codes", "family_reason_codes"):
+        source_has, target_has = hasattr(source, name), hasattr(target, name)
+        if source_has != target_has:
+            raise ValueError("view-cache particle metadata topology changed within a role")
+        if source_has:
+            names.append(name)
+    for name in names:
         source_array = getattr(source, name); target_array = getattr(target, name)
         if source_array.shape[1:] != target_array.shape[1:] or source_array.dtype != target_array.dtype:
             raise ValueError("view-cache particle shape or dtype changed within a role")
@@ -128,7 +154,12 @@ def _append_view(target, source, start: int, stop: int) -> None:
 
 def _view_array_bytes(view: ParticleInputs | NativeOfflineInputs) -> int:
     if isinstance(view, ParticleInputs):
-        return sum(getattr(view, name).nbytes for name in ("features", "vectors", "mask", "raw_lengths"))
+        names = ["features", "vectors", "mask", "raw_lengths"]
+        names.extend(
+            name for name in ("visible_indices", "family_codes", "family_reason_codes")
+            if hasattr(view, name)
+        )
+        return sum(getattr(view, name).nbytes for name in names)
     return _view_array_bytes(view.charged) + _view_array_bytes(view.neutral)
 
 

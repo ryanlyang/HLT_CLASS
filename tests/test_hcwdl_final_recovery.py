@@ -197,7 +197,9 @@ def test_final_evaluation_resumes_frozen_registry_after_partial_failure(
         split_manifest_path=split_path, selection_manifest_path=selection_path,
         test_assignment_manifest_path=assignment_path,
         finalist_lock_path=finalist_path, execution_lock_path=execution_path,
-        data_root=tmp_path, output_root=output_root, device="cuda",
+        data_root=tmp_path, output_root=output_root,
+        checkpoint_namespace_path=tmp_path / "checkpoint_namespace",
+        device="cuda",
     )
     with pytest.raises(RuntimeError, match="injected interruption"):
         final_module.run_final_evaluation(**arguments)

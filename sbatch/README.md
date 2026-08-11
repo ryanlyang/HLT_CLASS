@@ -52,3 +52,49 @@ hash and the exact resource requests, avoiding any circular dependency on the
 enclosing campaign-spec hash. A first bounded smoke can therefore use
 explicitly authorized conservative bootstrap requests without being mislabeled
 as measured; pilot and production cannot.
+
+`run_hcwdl_homotopy_representation_task.sh` is the sole worker for the
+42-fit U/D RSET/RREL supplement. It requires absolute `PROJECT_DIR`,
+`HCWDL_U_RKD_SPEC`, and `HCWDL_U_RKD_TASK` bindings, activates the Tigris
+environment through `common.sh`, disables user-site imports and bytecode, and
+ends with `exec python -s` so the registered USR1 checkpoint path receives the
+signal directly.
+
+HCWDL-RKD has three disjoint worker pairs. The campaign workers dispatch only
+an executable campaign; the bootstrap workers dispatch only the scalar prefix
+through zero-coefficient acceptance; and
+`run_hcwdl_representation_nonfinal_acceptance.sh` plus
+`run_hcwdl_representation_nonfinal_acceptance_deterministic.sh` accept only a
+phrase-issued `HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_AUTHORITY/v1` and one
+literal registered action. Authority implementation is not execution
+authorization, and none of these workers is submitted by a builder.
+The authority must bind a deeply validated
+`HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_ACTION_INPUTS/v1`; workers reopen
+that artifact rather than trusting a path or caller-authored hash.
+The Python runner dispatches only the authority-bound scalar action through
+the production bridge and publishes an immutable execution receipt over its
+semantic outputs and dependency results. The workers do not submit other jobs
+or acquire any pilot/final capability.
+
+The non-final registry contains bounded D0c/D0w target preparation, the exact
+four M1 cold/warm RSET/RREL probes, the reference/interrupt/resume USR1
+sequence, and one validation-only D0c/D100/TOFF proxy. Training is fixed at 512
+training rows, 256 validation rows, and exactly two optimizer updates. The
+interrupt route requires actual POSIX `SIGUSR1` delivery and an authenticated
+receipt; resume runs in a fresh process. The validation proxy rejects
+`final_test` and every shared-final contract. These workers accept no arrays,
+campaign task keys, pilot submission, reservation, capability, or final role,
+and all results are nonauthorizing evidence. A worker may publish only its
+registered semantic outputs and execution receipt. After that job is
+terminal, `run_hcwdl_representation_nonfinal_evidence_collector.sh` runs as a
+separate Slurm worker, captures fresh raw `sacct` bytes itself, and binds the
+exact submit script/argv, resource class, worker role, and pushed source.
+It must run under exact job name `hcwdl-rkd-nonfinal-evidence-collector`,
+account `reu-aisocial`, and partition `tigris`; the runtime rejects non-Tigris
+compute-host identities and any `sacct` executable other than the root-owned
+`/usr/bin/sacct` client.
+The separate post-job builder combines that collector evidence with the
+execution receipt into an
+`HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_ACTION_RESULT/v1` bound to its exact
+authority, action inputs, action ID, dependency results, Slurm job, worker
+bytes/role, and semantic outputs before higher-level proof assembly.

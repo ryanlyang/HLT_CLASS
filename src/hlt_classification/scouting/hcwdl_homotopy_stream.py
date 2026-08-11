@@ -28,6 +28,7 @@ def iterate_homotopy_batches(
     row_selection: RowSelection, coordinate: HomotopyCoordinate,
     repair_seed: int, batch_size: int, step_size: int = 4096,
     completed_locks: Sequence[str] = (), output_key: str = "privileged",
+    source_index: int | None = None,
 ) -> Iterator[dict[str, object]]:
     """Stream one V(s,f) role exactly once in canonical source/entry order."""
 
@@ -37,7 +38,17 @@ def iterate_homotopy_batches(
         raise ValueError("HCWDL-UJ homotopy stream output key differs")
     if batch_size <= 0:
         raise ValueError("HCWDL-UJ stream batch size must be positive")
-    records = role_records(split_manifest, role)
+    all_records = role_records(split_manifest, role)
+    if source_index is None:
+        records = all_records
+        expected_rows = row_selection.rows
+    else:
+        if isinstance(source_index, bool) or not 0 <= int(source_index) < len(all_records):
+            raise ValueError("HCWDL-UJ homotopy source index differs")
+        records = (all_records[int(source_index)],)
+        expected_rows = row_selection.source_rows(records[0].path)
+        if expected_rows <= 0:
+            raise ValueError("HCWDL-UJ selected source partition is empty")
     branches = (
         set(BASELINE_BRANCHES) | set(LABEL_BRANCHES)
         | set(hlt_required_branches()) | set(full_endpoint_required_branches())
@@ -69,6 +80,7 @@ def iterate_homotopy_batches(
                 arrays, assignments=assignment, confidence=confidence,
                 coupling_rows=coupling_rows, coordinate=coordinate,
                 identity_keys=identities, discrete_seed=repair_seed,
+                include_training_metadata=True,
             )
             block = {
                 "labels": labels[indexes], "identity_keys": identities,
@@ -81,9 +93,9 @@ def iterate_homotopy_batches(
                 pending = _slice_batch(pending, batch_size, len(pending["labels"]))
     if pending is not None and len(pending["labels"]):
         yield pending
-    if observed != row_selection.rows:
+    if observed != expected_rows:
         raise ValueError(
-            f"HCWDL-UJ stream coverage differs: expected {row_selection.rows}, observed {observed}"
+            f"HCWDL-UJ stream coverage differs: expected {expected_rows}, observed {observed}"
         )
 
 

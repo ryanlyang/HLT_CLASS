@@ -55,6 +55,18 @@ remain differentiable with respect to the student encoder. It is an
 implementation-grade plan only; no representation-ascent implementation or
 live authorization currently follows from its presence.
 
+The implementation-authoritative supplemental
+[HCWDL homotopy representation-KD plan](HCWDL_HOMOTOPY_REPRESENTATION_KD_IMPLEMENTATION_PLAN.md)
+combines the authenticated factorized U/D path with two complete cold
+representation-distillation tracks: logit KD plus RSET and logit KD plus the
+corrected raw-state RREL v5 objective. It fixes 42 fits, 41 train-only target
+banks, ten-point rungs, paired seeds, 60-pass pilot training, two-update smoke
+execution, and an HLT-only terminal boundary. Its reusable identities and
+operational procedure are recorded in the
+[contract](../contracts/HCWDL_HOMOTOPY_REPRESENTATION_KD.md) and
+[runbook](../HCWDL_HOMOTOPY_REPRESENTATION_KD_RUNBOOK.md). Local
+implementation does not authorize a Slurm submission or final-test access.
+
 The validation-only
 [HCWDL common-schema architecture–input factorial](HCWDL_ARCHITECTURE_INPUT_FACTORIAL_PLAN.md)
 separates HLT versus projected-offline particle information from unified

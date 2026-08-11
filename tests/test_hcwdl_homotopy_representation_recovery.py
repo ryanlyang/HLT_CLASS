@@ -1,0 +1,90 @@
+from __future__ import annotations
+
+from hlt_classification.data.cache_contracts import with_content_hash
+from hlt_classification.scouting.hcwdl_homotopy_representation_campaign import _task_registry
+from hlt_classification.scouting.hcwdl_homotopy_representation_contracts import (
+    MONITOR_REPORT_CONTRACT, RESOURCE_RECOVERY_CONTRACT,
+    SUBMISSION_LEDGER_CONTRACT, build_artifact,
+)
+from hlt_classification.scouting.hcwdl_homotopy_representation_recovery import (
+    exact_cancellation_commands, failed_downstream_closure,
+    recovery_command_plan, validate_submission_ledger,
+)
+from hlt_classification.scouting.hcwdl_homotopy_representation_campaign import (
+    SMOKE_RESOURCES,
+)
+from hlt_classification.scouting.hcwdl_homotopy_representation_graph import GRAPH_SHA256
+
+
+def _spec():
+    return with_content_hash({
+        "contract": "HCWDL_HOMOTOPY_REPRESENTATION_CAMPAIGN_SPEC/v1",
+        "schema_version": 1, "tasks": _task_registry(),
+        "final_test_accessed": False,
+    })
+
+
+def test_failed_closure_is_exact_strategy_suffix_plus_aggregate():
+    spec = _spec()
+    monitor = build_artifact(
+        MONITOR_REPORT_CONTRACT,
+        parents={"campaign_spec": spec["content_hash"], "submission_ledger": "b" * 64},
+        rows=[
+            {"task_id": row["task_id"], "classification": (
+                "retryable_failure" if row["task_id"] == "train_F_RSET_U050" else "complete"
+            )}
+            for row in spec["tasks"]
+        ],
+    )
+    # Pure closure only needs the graph registry and monitor contract.  Patch
+    # campaign validation is unnecessary here because this fixture omits the
+    # filesystem-bound campaign fields.
+    import hlt_classification.scouting.hcwdl_homotopy_representation_recovery as module
+    original = module.validate_campaign
+    module.validate_campaign = lambda *_args, **_kwargs: spec["content_hash"]
+    try:
+        closure = failed_downstream_closure(spec, monitor)
+    finally:
+        module.validate_campaign = original
+    assert "train_F_RSET_U050" in closure
+    assert "train_F_RSET_M1" in closure
+    assert "train_F_RREL_U050" not in closure
+    assert closure[-2:] == ("aggregate", "campaign_complete")
+
+
+def test_ledger_and_cancellation_are_exact_ids_only():
+    ledger = build_artifact(
+        SUBMISSION_LEDGER_CONTRACT,
+        parents={"campaign_spec": "a" * 64, "command_plan": "b" * 64},
+        jobs={"a": "12", "b": "13"}, submission_phrase="x",
+    )
+    validate_submission_ledger(ledger)
+    assert exact_cancellation_commands(ledger) == (("scancel", "12"), ("scancel", "13"))
+
+
+def test_resource_recovery_rewrites_gpu_request_without_scientific_change(tmp_path):
+    spec = with_content_hash({
+        "contract": "HCWDL_HOMOTOPY_REPRESENTATION_CAMPAIGN_SPEC/v1",
+        "schema_version": 1, "campaign_root": str(tmp_path / "campaign"),
+        "project_dir": str(tmp_path / "old"), "source_commit": "a" * 40,
+        "parent_homotopy_spec_sha256": "b" * 64,
+        "graph_sha256": GRAPH_SHA256, "combined_recipe_sha256": "c" * 64,
+        "resources": SMOKE_RESOURCES, "tasks": _task_registry(),
+        "final_test_accessed": False,
+    })
+    resources = {key: dict(value) for key, value in SMOKE_RESOURCES.items()}
+    resources["training"]["gpu"] = "gpu:h100:1"
+    recovery = build_artifact(
+        RESOURCE_RECOVERY_CONTRACT,
+        parents={
+            "campaign_spec": spec["content_hash"],
+            "submission_ledger": "d" * 64, "monitor_report": "e" * 64,
+        },
+        kind="resource", closure=["train_F_RSET_U010"],
+        project_dir=str(tmp_path / "old"), source_commit="a" * 40,
+        resources=resources, recovery_path=str(tmp_path / "recovery.json"),
+    )
+    plan = recovery_command_plan(spec, recovery)
+    command = plan["commands"][0]["command"]
+    assert "--gres=gpu:h100:1" in command
+    assert command.count("--signal=B:USR1@120") == 1

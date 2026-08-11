@@ -291,6 +291,22 @@ Source-only and resource-only failed closures share
 `resume_hcwdl_homotopy.py` but require distinct contracts and authorization
 phrases. See `docs/HCWDL_STRUCTURAL_FEATURE_HOMOTOPY_RUNBOOK.md`.
 
+## HCWDL homotopy representation KD
+
+The validation-only U/D representation supplement is operated through
+`validate_hcwdl_homotopy_representation_integration.py`,
+`create_hcwdl_homotopy_representation_campaign.py`,
+`dry_run_hcwdl_homotopy_representation_campaign.py`,
+`submit_hcwdl_homotopy_representation_campaign.py`,
+`run_hcwdl_homotopy_representation_task.py`,
+`monitor_hcwdl_homotopy_representation_campaign.py`, and
+`cancel_hcwdl_homotopy_representation_campaign.py`. Source/resource closure
+recovery uses `recover_hcwdl_homotopy_representation_campaign.py` and
+`submit_hcwdl_homotopy_representation_recovery.py`; target cleanup and
+resource publication are separate explicit commands. The graph contains 42
+fits and no final-test task. See
+`docs/HCWDL_HOMOTOPY_REPRESENTATION_KD_RUNBOOK.md`.
+
 ## HCWDL architecture–input factorial
 
 The validation-only four-fit common-schema ablation uses
@@ -304,3 +320,178 @@ the parent recipe's 60-pass/every-pass-validation schedule. Interrupted
 training resumes through the generic rolling checkpoint when its exact Slurm
 job is requeued; partial DAG submission is journaled before retry. See
 `docs/plans/HCWDL_ARCHITECTURE_INPUT_FACTORIAL_PLAN.md`.
+HCWDL-RKD is an additive representation-distillation campaign; it does not
+broaden the logit-only HCWDL graph or recipe. Its thin command surface is
+grouped as follows:
+
+- current four-track dense-descent preparation:
+  `prepare_hcwdl_representation_dense_teacher_import.py`,
+  `prepare_hcwdl_representation_dense_surface_evidence.py`,
+  `prepare_hcwdl_representation_dense_smoke_candidate.py`,
+  `prepare_hcwdl_representation_recipe_assets.py`,
+  `prepare_hcwdl_representation_dense_target_assets.py`,
+  `build_hcwdl_representation_dense_resource_probe_plan.py`,
+  `build_hcwdl_representation_dense_resource_probe_authorization.py`,
+  `build_hcwdl_representation_dense_resource_probe_collector_recovery_authorization.py`,
+  `submit_hcwdl_representation_dense_resource_probes.py`,
+  `submit_hcwdl_representation_dense_resource_probe_collector_recovery.py`,
+  `run_hcwdl_representation_resource_probe.py`,
+  `collect_hcwdl_representation_dense_resource_probes.py`,
+  `build_hcwdl_representation_dense_resource_profile.py`,
+  `build_hcwdl_representation_dense_storage_estimate.py`,
+  `audit_hcwdl_representation_campaign_outputs.py`, and
+  `build_hcwdl_representation_dense_smoke_acceptance.py`;
+
+The collector-recovery pair is a fail-closed exception for one purged failed
+accounting collector. It reuses the original four completed probe IDs and has
+no probe, training, array, pilot, or final-role submission path.
+`build_hcwdl_representation_dense_resource_profile.py` also has a mutually
+exclusive compatible-reuse mode. It wraps the immutable exact-source profile
+and collector recovery artifacts only when the full Git diff is the frozen
+accounting/validation path set; any training, target, model, data, graph, or
+worker change rejects reuse. This mode never submits or reruns a probe.
+
+- pre-campaign audit and freezing:
+  `audit_hcwdl_representation_parent_final_state.py`,
+  `build_hcwdl_representation_final_disposition.py`,
+  `build_hcwdl_representation_fixed_size_inventory.py`,
+  `build_hcwdl_representation_storage_estimate.py`,
+  `measure_hcwdl_representation_worker_runtime.py`,
+  `build_hcwdl_representation_runtime_prerequisites.py`,
+  `build_hcwdl_representation_runtime_rows.py`,
+  `build_hcwdl_representation_runtime_binding.py`,
+  `create_hcwdl_representation_campaign.py`, and
+  `dry_run_hcwdl_representation_campaign.py`;
+- execution review and the separate human authority boundary:
+  `audit_hcwdl_representation_executable_candidate.py` and
+  `build_hcwdl_representation_submission_authorization.py`;
+- bounded first-evidence bootstrap (nonfinal and nonauthorizing):
+  `build_hcwdl_representation_acceptance_bootstrap.py` and
+  `run_hcwdl_representation_acceptance_bootstrap.py`;
+- separately phrase-authorized bounded non-final acceptance (still
+  nonauthorizing for a pilot/final role):
+  `build_hcwdl_representation_nonfinal_acceptance_authority.py`,
+  `run_hcwdl_representation_nonfinal_acceptance_action.py`,
+  `build_hcwdl_representation_nonfinal_acceptance_scheduler_evidence.py`,
+  `build_hcwdl_representation_nonfinal_acceptance_action_result.py`, and
+  `build_hcwdl_representation_two_update_acceptance_proof.py`;
+- nonexecuting resource/evidence capture and action-proof assembly:
+  `build_hcwdl_representation_scheduler_evidence.py`,
+  `build_hcwdl_representation_miniature_evidence.py`,
+  `build_hcwdl_representation_resource_profile.py`,
+  `build_hcwdl_representation_usr1_exact_resume_proof.py`,
+  `build_hcwdl_representation_validation_proxy_proof.py`,
+  `build_hcwdl_representation_production_worker_smoke_proof.py`,
+  `build_hcwdl_representation_tigris_action_proof.py`,
+  `build_hcwdl_representation_tigris_evidence_bundle.py`, and
+  `build_hcwdl_representation_tigris_acceptance.py`;
+- `build_hcwdl_representation_validation_proxy_proof.py` is validation-only:
+  it reopens the worker-published canonical result and prints its content hash;
+  it has no output argument and cannot create a second proof route;
+- parent/tap/recipe/target/training work:
+  `prepare_hcwdl_representation_parent_evidence.py` (installed-Weaver tap,
+  parity, architecture, and corrected parent-loss evidence bound to the
+  exact executable v8 parent-prefix campaign and its clean source checkout before a
+  representation campaign),
+  `prepare_hcwdl_representation_parent_import.py` (the pre-campaign,
+  file-authority builder),
+  `prepare_hcwdl_representation_recipe_assets.py` (the deterministic graph,
+  control, kernel/evidence, and v4 overlay-recipe preflight, with producer
+  source derived from an exact clean Git checkout and rechecked against
+  measured runtime facts),
+  `build_hcwdl_representation_parent_import.py`,
+  `build_hcwdl_representation_recipe.py`,
+  `build_hcwdl_representation_targets.py`,
+  `train_hcwdl_representation_node.py`,
+  `select_hcwdl_representation_checkpoint.py`,
+  `extract_hcwdl_representation_model.py`,
+  `authorize_hcwdl_representation_cleanup.py`, and
+  `complete_hcwdl_representation_cleanup.py`;
+- validation reporting:
+  `aggregate_hcwdl_representation_screen.py` and
+  `build_hcwdl_representation_confirmation_registry.py`;
+- population-scoped final protection and label-free inference:
+  `register_hcwdl_shared_final_population.py`,
+  `build_hcwdl_shared_final_legacy_cancellation.py`,
+  `claim_hcwdl_shared_final_execution.py`, the selection/assignment/data-
+  attestation commands, the prediction shard/finalizer commands,
+  `join_hcwdl_shared_final_metrics.py`, and
+  `recover_hcwdl_shared_final.py`;
+- operations:
+  `submit_hcwdl_representation_campaign.py`,
+  `monitor_hcwdl_representation_campaign.py`,
+  `resume_hcwdl_representation_campaign.py`,
+  `cancel_hcwdl_representation_campaign.py`,
+  `run_hcwdl_representation_task.py`, and
+  `run_hcwdl_representation_local_smoke.py`.
+
+The parent-final audit accepts each immutable legacy candidate through a
+repeated `--candidate-artifact`; an empty list is an explicit audit of no
+candidate artifacts. The final-disposition builder automatically degrades a
+requested combined execution to validation-only when it finds prior exposure
+or a live legacy worker. The legacy-cancellation command only publishes proof
+after its exact reserved job inventory is terminal; it never performs broad
+job-name cancellation.
+
+All task wrappers select only a registered task and optional array index from
+the immutable campaign specification. They expose no coefficient, layer,
+kernel, teacher, row, or seed override. Deterministic target and prediction
+rows use `sbatch/run_hcwdl_representation_deterministic_task.sh`; all other
+rows use `sbatch/run_hcwdl_representation_task.sh`. Both workers use the
+absolute project path and finish with `exec python -s`.
+
+`measure_hcwdl_representation_worker_runtime.py` runs inside one already
+allocated resource class and publishes the clean-checkout, active Conda,
+`python -s`, installed-Weaver byte inventory, device/backend, and reusable row
+runtime signature. Its CPU/memory/walltime/GPU arguments must exactly equal
+the planning spec's request for that class. The immutable result always records
+`scheduler_mutated=false`, `scientific_authorization=false`,
+`authorizes_tigris_or_pilot=false`, and `final_role_accessed=false`; it cannot
+submit a job or stand in for real-worker acceptance.
+
+The isolated acceptance-bootstrap workers are
+`sbatch/run_hcwdl_representation_acceptance_bootstrap.sh` and
+`sbatch/run_hcwdl_representation_acceptance_bootstrap_deterministic.sh`.
+Their exact bytes are bound in the bootstrap artifact. They can run only the
+authorized scalar prefix through zero-coefficient acceptance, never ladder
+training, reservation, array, or final-role work. The full-loss probe performs
+no optimizer step, so these workers do not provide two-update/USR1 evidence
+and cannot complete or authorize Tigris acceptance.
+
+The dedicated bounded non-final action surface is separate from both the
+bootstrap prefix and campaign dispatcher. Its authority builder requires the
+exact phrase `AUTHORIZE BOUNDED NONFINAL HCWDL-RKD ACCEPTANCE ACTIONS`; the
+authorization to implement these files does not invoke the builder or satisfy
+that execution phrase. The builder deeply validates the exact production
+inputs from `acceptance/nonfinal/action_inputs.json` before binding its content
+hash into the authority; it never treats path existence or caller-entered
+digests as input proof. The action runner accepts only `target_d0c`,
+`target_d0w`, `rset_m1c_two_update`, `rset_m1w_two_update`,
+`rrel_m1c_two_update`, `rrel_m1w_two_update`, `usr1_reference`,
+`usr1_interrupt`, `usr1_resume`, or `validation_proxy`. It accepts no array,
+campaign task, pilot operation, or
+final role. Training uses exactly 512 training and 256 validation rows and two
+optimizer updates. USR1 evidence requires an authenticated real-signal
+delivery receipt and a fresh resume process. The D0c/D100/TOFF proxy reads only
+literal validation data and never imports or mints shared-final artifacts.
+The runner reopens the authority, enforces its scalar worker role, executes
+only that registered bounded action through the production bridge, and writes
+an immutable execution receipt at the action's canonical non-final evidence
+route, bound to the registered semantic outputs.
+After the action job is terminal, the dedicated evidence-collector worker
+runs `build_hcwdl_representation_nonfinal_acceptance_scheduler_evidence.py`
+to capture fresh raw `sacct` bytes and the exact submitted script and argv.
+The collector must itself be a scalar Tigris job named exactly
+`hcwdl-rkd-nonfinal-evidence-collector` on account `reu-aisocial`, partition
+`tigris`, using the root-owned `/usr/bin/sacct` client.
+Then
+`build_hcwdl_representation_nonfinal_acceptance_action_result.py`
+reopens both the worker receipt and genuine collector-produced scheduler
+evidence, traverses dependency action results, and publishes a deeply
+validated `HCWDL_REPRESENTATION_NONFINAL_ACCEPTANCE_ACTION_RESULT/v1` binding
+the exact authority, inputs, action, dependency results, Slurm job, worker,
+and semantic outputs. Every envelope remains nonauthorizing.
+
+The complete non-submitting procedure and acceptance boundary are in
+[`docs/HCWDL_RKD_RUNBOOK.md`](../docs/HCWDL_RKD_RUNBOOK.md). Local dry runs,
+fixtures, and smoke reports do not authorize Tigris or final-test access.

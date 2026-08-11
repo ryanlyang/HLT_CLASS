@@ -38,6 +38,36 @@ PMARD_PREEMPTION_EVENT_CONTRACT = "hlt_classification_pmard_preemption_event_v1"
 PMARD_PREEMPTION_EVENT_VERSION = 1
 
 
+def _explicit_loss_semantics(
+    contract: str | None,
+) -> tuple[Callable[..., Mapping[str, object]], dict[str, object] | None]:
+    """Resolve an explicitly authorized base-loss implementation.
+
+    ``None`` intentionally preserves the historical PMARD loss, including its
+    class-weighted KD reductions and its existing resume/config identity.  The
+    corrected HCWDL semantics are selected only by their exact versioned
+    contract.  Accepting a caller-provided callable would let an execution
+    claim one semantic while running another, so dispatch remains closed here.
+    """
+
+    if contract is None:
+        return pmard_loss, None
+    from .hcwdl_parent_loss import (
+        HCWDL_PARENT_BASE_LOSS_CONTRACT,
+        HCWDL_PARENT_LOSS_SEMANTICS,
+        hcwdl_base_loss,
+    )
+
+    if contract != HCWDL_PARENT_BASE_LOSS_CONTRACT:
+        raise ValueError("unsupported explicit PMARD loss-semantics contract")
+    semantics = dict(HCWDL_PARENT_LOSS_SEMANTICS)
+    return hcwdl_base_loss, {
+        "loss_semantics_contract": HCWDL_PARENT_BASE_LOSS_CONTRACT,
+        "loss_semantics": semantics,
+        "loss_semantics_sha256": canonical_sha256(semantics),
+    }
+
+
 def validate_pmard_training_report(report: Mapping[str, object]) -> str:
     """Accept immutable v4 parents while publishing new dual-temperature v5 rows."""
 
@@ -374,9 +404,11 @@ def train_pmard(
     privileged_teacher=None, hlt_teacher_targets: EphemeralTeacherTargets | None = None,
     privileged_teacher_targets: EphemeralTeacherTargets | None = None, resume: bool = True,
     scientific_config: Mapping[str, object] | None = None,
+    loss_semantics_contract: str | None = None,
     stop_after_update: int | None = None,
 ) -> dict[str, object]:
     import torch
+    base_loss, loss_semantics = _explicit_loss_semantics(loss_semantics_contract)
     target = torch.device(device)
     if target.type == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("CUDA training requested but unavailable")
@@ -410,7 +442,26 @@ def train_pmard(
     optimizer = _optimizer_for(model, config)
     root = Path(output_dir); rolling = root / "rolling_resume.pt"
     scientific_payload = dict(scientific_config or {})
-    config_hash = canonical_sha256({"training": asdict(config), "scientific": scientific_payload})
+    semantic_fields = {
+        "loss_semantics_contract", "loss_semantics", "loss_semantics_sha256",
+    }
+    if loss_semantics is None:
+        if semantic_fields.intersection(scientific_payload):
+            raise ValueError(
+                "loss-semantics scientific fields require explicit engine authorization"
+            )
+        config_material = {"training": asdict(config), "scientific": scientific_payload}
+    else:
+        for name, expected in loss_semantics.items():
+            if name in scientific_payload and scientific_payload[name] != expected:
+                raise ValueError("scientific loss-semantics binding differs")
+            scientific_payload[name] = expected
+        config_material = {
+            "training": asdict(config),
+            "scientific": scientific_payload,
+            "explicit_loss_semantics": loss_semantics,
+        }
+    config_hash = canonical_sha256(config_material)
     update = 0; epoch = 0; batch_offset = 0; history = []
     resume_provenance = None
     loss_window_sums: dict[str, object] = {}
@@ -422,6 +473,11 @@ def train_pmard(
         state = torch.load(rolling, map_location=target, weights_only=False)
         if state.get("contract") != PMARD_RESUME_CONTRACT or state.get("config_sha256") != config_hash or state.get("parents") != validated_parents:
             raise ValueError("resume checkpoint lineage differs")
+        if (
+            loss_semantics is not None
+            and state.get("loss_semantics_binding") != loss_semantics
+        ):
+            raise ValueError("resume checkpoint loss semantics differ")
         model.load_state_dict(state["model"]); restore_model_runtime_state(model, state["model_runtime"])
         optimizer.load_state_dict(state["optimizer"]); restore_rng_state(state["rng"])
         update, epoch = int(state["update"]), int(state["epoch"])
@@ -524,7 +580,7 @@ def train_pmard(
                                     "privileged KD requires identity-joined RAM logits or a privileged view"
                                 )
                     with torch.autocast(device_type=target.type, enabled=False):
-                        parts = pmard_loss(
+                        parts = base_loss(
                             student.float(), labels, class_weights=weights, configuration=config.loss,
                             hlt_teacher_logits=None if hlt_logits is None else hlt_logits.float(),
                             privileged_teacher_logits=(
@@ -619,6 +675,8 @@ def train_pmard(
                     "best_model": best_model, "best_runtime": best_runtime,
                     "best_metrics": best_metrics, "best_update": best_update,
                 }
+                if loss_semantics is not None:
+                    state["loss_semantics_binding"] = loss_semantics
                 _rolling_publish(rolling, state)
             if preemption.requested:
                 if preemption.signal_number is None:
@@ -664,23 +722,35 @@ def train_pmard(
     final_checkpoint_sha256 = None
     if config.selection_policy == "hcwdl_macro_auc":
         final_checkpoint_path = root / "final_model.pt"
-        _publish_torch_checkpoint(final_checkpoint_path, {
+        final_checkpoint_payload = {
             "model": _cpu_state_dict(model), "config": asdict(config),
             "scientific_config": scientific_payload,
             "model_runtime": capture_model_runtime_state(model),
             "final_update": update,
-        })
+        }
+        if loss_semantics is not None:
+            final_checkpoint_payload.update({
+                "execution_config_sha256": config_hash,
+                **loss_semantics,
+            })
+        _publish_torch_checkpoint(final_checkpoint_path, final_checkpoint_payload)
         final_checkpoint_sha256 = sha256_file(final_checkpoint_path)
     model.load_state_dict(best_model)
     if best_runtime is not None:
         restore_model_runtime_state(model, best_runtime)
     checkpoint_path = root / "selected_model.pt"
-    _publish_torch_checkpoint(checkpoint_path, {
+    selected_checkpoint_payload = {
         "model": model.state_dict(), "config": asdict(config),
         "scientific_config": scientific_payload, "model_runtime": best_runtime,
         "selected_update": best_update,
-    })
-    report = with_content_hash({
+    }
+    if loss_semantics is not None:
+        selected_checkpoint_payload.update({
+            "execution_config_sha256": config_hash,
+            **loss_semantics,
+        })
+    _publish_torch_checkpoint(checkpoint_path, selected_checkpoint_payload)
+    report_payload = {
         "contract": PMARD_TRAINING_REPORT_CONTRACT,
         "schema_version": PMARD_TRAINING_REPORT_VERSION,
         "experiment_id": config.experiment_id, "config": asdict(config),
@@ -719,7 +789,13 @@ def train_pmard(
         "final_checkpoint": None if final_checkpoint_path is None else final_checkpoint_path.name,
         "final_checkpoint_sha256": final_checkpoint_sha256,
         "resume_provenance": resume_provenance,
-    })
+    }
+    if loss_semantics is not None:
+        report_payload.update({
+            "execution_config_sha256": config_hash,
+            **loss_semantics,
+        })
+    report = with_content_hash(report_payload)
     write_immutable_json(root / "training_report.json", report)
     rolling.unlink(missing_ok=True)
     preemption.restore()

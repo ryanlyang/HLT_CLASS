@@ -16,6 +16,12 @@ from .hcwdl_upper_coupling import (
     EndpointPartition, ResidualEdit, build_endpoint_partition, edit_is_active,
 )
 from .inputs import ParticleInputs, build_hlt_inputs
+from .hcwdl_representation_data import (
+    CHARGED_FAMILY, DIRECT_CHARGED_REASON, DIRECT_NEUTRAL_REASON,
+    HCWDLParticleInputs, HCWDLTokenMetadata, NEUTRAL_FAMILY,
+    PADDED_FAMILY, PADDED_REASON, attach_hcwdl_token_metadata,
+    derive_hcwdl_token_metadata,
+)
 from .repair import (
     HIGHCOV_SHELL_EXACT_FAMILY, build_alpha_repaired_inputs,
     project_offline_endpoint_records, transform_endpoint_features,
@@ -179,7 +185,7 @@ def build_homotopy_inputs(
     arrays: Mapping[str, object], *, assignments: np.ndarray,
     confidence: np.ndarray, coupling_rows: Sequence[Sequence[ResidualEdit]],
     coordinate: HomotopyCoordinate, identity_keys: Sequence[str],
-    discrete_seed: int,
+    discrete_seed: int, include_training_metadata: bool = False,
 ) -> ParticleInputs:
     """Build canonical V(s,f) once without persisting repaired particle data."""
 
@@ -192,9 +198,35 @@ def build_homotopy_inputs(
     if len(coupling_rows) != rows or len(identity_keys) != rows or len(set(map(str, identity_keys))) != rows:
         raise ValueError("HCWDL-UJ coupling/identity rows differ")
     if coordinate.s == 0.0 and coordinate.f == 0.0:
-        return build_p0_inputs(arrays)
+        p0 = build_p0_inputs(arrays)
+        if not include_training_metadata:
+            return p0
+        visible = np.asarray(p0.mask)[:, 0]
+        ids = np.full(visible.shape, -1, np.int64)
+        family = np.full(visible.shape, PADDED_FAMILY, np.int8)
+        reason = np.full(visible.shape, PADDED_REASON, np.int8)
+        for row in range(rows):
+            charged, neutral = _offline_counts(arrays, row)
+            native = [*range(min(charged, 90))]
+            native.extend(charged + index for index in range(min(neutral, 60)))
+            count = len(native)
+            ids[row, :count] = 200 + np.asarray(native, np.int64)
+            charged_mask = np.asarray(native) < charged
+            family[row, :count] = np.where(
+                charged_mask, CHARGED_FAMILY, NEUTRAL_FAMILY,
+            )
+            reason[row, :count] = np.where(
+                charged_mask, DIRECT_CHARGED_REASON, DIRECT_NEUTRAL_REASON,
+            )
+        return attach_hcwdl_token_metadata(
+            p0, HCWDLTokenMetadata(ids, family, reason),
+        )
     if coordinate.s == 1.0 and coordinate.f == 1.0:
-        return canonical
+        if not include_training_metadata:
+            return canonical
+        return attach_hcwdl_token_metadata(
+            canonical, derive_hcwdl_token_metadata(arrays),
+        )
     offline_p4 = [project_offline_endpoint_records(arrays, row=row)[2] for row in range(rows)]
     shell = build_alpha_repaired_inputs(
         arrays, offline_p4, mapping, alpha=coordinate.alpha,
@@ -205,16 +237,46 @@ def build_homotopy_inputs(
     # The exact s=1 branch delegates all tensor assembly and raw-length metadata
     # to the public Shell Exact implementation.
     if coordinate.s == 1.0:
-        return shell
+        if not include_training_metadata:
+            return shell
+        ids = np.full((rows, 200), -1, np.int64)
+        family = np.full((rows, 200), PADDED_FAMILY, np.int8)
+        reason = np.full((rows, 200), PADDED_REASON, np.int8)
+        hlt_metadata = derive_hcwdl_token_metadata(arrays)
+        for row in range(rows):
+            partition, _, _ = _partition_for_row(
+                arrays, row=row, assignment=mapping[row],
+            )
+            charged_count, _ = _offline_counts(arrays, row)
+            for target in partition.d100:
+                slot = target.hlt_slot
+                ids[row, slot] = slot
+                if target.native_index >= 0:
+                    charged = target.native_index < charged_count
+                    family[row, slot] = CHARGED_FAMILY if charged else NEUTRAL_FAMILY
+                    reason[row, slot] = (
+                        DIRECT_CHARGED_REASON if charged else DIRECT_NEUTRAL_REASON
+                    )
+                else:
+                    family[row, slot] = hlt_metadata.family_codes[row, slot]
+                    reason[row, slot] = hlt_metadata.family_reason_codes[row, slot]
+        return attach_hcwdl_token_metadata(
+            shell, HCWDLTokenMetadata(ids, family, reason),
+        )
 
     features = np.zeros_like(canonical.features)
     vectors = np.zeros_like(canonical.vectors)
     mask = np.zeros_like(canonical.mask)
     lengths = np.zeros_like(canonical.raw_lengths)
+    visible_ids = np.full((rows, 200), -1, np.int64)
+    family_codes = np.full((rows, 200), PADDED_FAMILY, np.int8)
+    family_reasons = np.full((rows, 200), PADDED_REASON, np.int8)
+    hlt_metadata = derive_hcwdl_token_metadata(arrays)
     for row in range(rows):
         partition, projected, projected_p4 = _partition_for_row(
             arrays, row=row, assignment=mapping[row],
         )
+        charged_count, _ = _offline_counts(arrays, row)
         edits = tuple(coupling_rows[row]); _validate_edit_partition(partition, edits)
         target_by_slot = {record.hlt_slot: record for record in partition.d100}
         common_by_slot = {pair.target.hlt_slot: pair for pair in partition.common}
@@ -222,9 +284,15 @@ def build_homotopy_inputs(
 
         # Entries are (carrier kind, carrier key, feature, vector).  Target
         # slots sort before tail native slots, exactly as the v1 carrier says.
-        active: list[tuple[int, int, np.ndarray, np.ndarray]] = []
+        active: list[tuple[int, int, np.ndarray, np.ndarray, int, int]] = []
         for slot in sorted(common_by_slot):
-            active.append((0, slot, shell.features[row, :, slot], shell.vectors[row, :, slot]))
+            native = common_by_slot[slot].source.native_index
+            charged_family = native < charged_count
+            active.append((
+                0, slot, shell.features[row, :, slot], shell.vectors[row, :, slot],
+                int(CHARGED_FAMILY if charged_family else NEUTRAL_FAMILY),
+                int(DIRECT_CHARGED_REASON if charged_family else DIRECT_NEUTRAL_REASON),
+            ))
         for edit in edits:
             switched = edit_is_active(
                 edit, numerator=coordinate.structural_numerator,
@@ -233,39 +301,67 @@ def build_homotopy_inputs(
             if edit.edit_kind == EDIT_SUBSTITUTION:
                 if switched:
                     slot = edit.target_hlt_slot
-                    active.append((0, slot, shell.features[row, :, slot], shell.vectors[row, :, slot]))
+                    target = target_by_slot[slot]
+                    if target.native_index >= 0:
+                        charged_family = target.native_index < charged_count
+                        fam = CHARGED_FAMILY if charged_family else NEUTRAL_FAMILY
+                        why = DIRECT_CHARGED_REASON if charged_family else DIRECT_NEUTRAL_REASON
+                    else:
+                        fam = hlt_metadata.family_codes[row, slot]
+                        why = hlt_metadata.family_reason_codes[row, slot]
+                    active.append((0, slot, shell.features[row, :, slot], shell.vectors[row, :, slot], int(fam), int(why)))
                 else:
                     native = edit.source_native_index
                     active.append((0, edit.target_hlt_slot, projected[native],
-                                   projected_p4[native].astype(np.float32)))
+                                   projected_p4[native].astype(np.float32),
+                                   int(CHARGED_FAMILY if native < charged_count else NEUTRAL_FAMILY),
+                                   int(DIRECT_CHARGED_REASON if native < charged_count else DIRECT_NEUTRAL_REASON)))
             elif edit.edit_kind == EDIT_INSERTION:
                 if switched:
                     slot = edit.target_hlt_slot
-                    active.append((0, slot, shell.features[row, :, slot], shell.vectors[row, :, slot]))
+                    target = target_by_slot[slot]
+                    if target.native_index >= 0:
+                        charged_family = target.native_index < charged_count
+                        fam = CHARGED_FAMILY if charged_family else NEUTRAL_FAMILY
+                        why = DIRECT_CHARGED_REASON if charged_family else DIRECT_NEUTRAL_REASON
+                    else:
+                        fam = hlt_metadata.family_codes[row, slot]
+                        why = hlt_metadata.family_reason_codes[row, slot]
+                    active.append((0, slot, shell.features[row, :, slot], shell.vectors[row, :, slot], int(fam), int(why)))
             elif edit.edit_kind == EDIT_REMOVAL:
                 if not switched:
                     native = edit.source_native_index
                     active.append((1, native, projected[native],
-                                   projected_p4[native].astype(np.float32)))
+                                   projected_p4[native].astype(np.float32),
+                                   int(CHARGED_FAMILY if native < charged_count else NEUTRAL_FAMILY),
+                                   int(DIRECT_CHARGED_REASON if native < charged_count else DIRECT_NEUTRAL_REASON)))
             else:
                 raise ValueError("unknown coupling edit kind")
         active.sort(key=lambda item: (item[0], item[1]))
-        if len(active) != len({(kind, key) for kind, key, _, _ in active}):
+        if len(active) != len({(kind, key) for kind, key, *_ in active}):
             raise ValueError("HCWDL-UJ carrier contains duplicate logical slots")
         if len(active) > 200:
             raise ValueError("HCWDL-UJ carrier requires hidden truncation")
         lengths[row] = len(active)
         mask[row, 0, :len(active)] = True
-        for index, (_, _, feature, vector) in enumerate(active):
+        for index, (kind, key, feature, vector, family, reason) in enumerate(active):
             features[row, :, index] = feature
             vectors[row, :, index] = vector
+            visible_ids[row, index] = key if kind == 0 else 200 + key
+            family_codes[row, index] = family
+            family_reasons[row, index] = reason
     if not np.isfinite(features).all() or not np.isfinite(vectors).all():
         raise FloatingPointError("HCWDL-UJ active view became nonfinite")
     if np.any(features[~np.repeat(mask, features.shape[1], axis=1)]) or np.any(
         vectors[~np.repeat(mask, vectors.shape[1], axis=1)]
     ):
         raise RuntimeError("HCWDL-UJ view has nonzero padding")
-    return ParticleInputs(features, vectors, mask, lengths)
+    result = ParticleInputs(features, vectors, mask, lengths)
+    if not include_training_metadata:
+        return result
+    return attach_hcwdl_token_metadata(
+        result, HCWDLTokenMetadata(visible_ids, family_codes, family_reasons),
+    )
 
 
 def particle_inputs_sha256(view: ParticleInputs) -> str:

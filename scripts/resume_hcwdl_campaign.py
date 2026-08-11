@@ -12,9 +12,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from hlt_classification.data.cache_contracts import load_json, write_immutable_json  # noqa: E402
-from hlt_classification.scouting.hcwdl_campaign import slurm_commands, validate_campaign_spec  # noqa: E402
+from hlt_classification.scouting.hcwdl_campaign import (  # noqa: E402
+    campaign_execution_scope, slurm_commands, validate_campaign_spec,
+)
 from hlt_classification.scouting.hcwdl_authorization import (  # noqa: E402
-    require_canonical_campaign_spec_path, validate_source_checkout,
+    require_canonical_campaign_spec_path, resume_phrase, validate_source_checkout,
 )
 from hlt_classification.scouting.hcwdl_recovery import (  # noqa: E402
     build_submission_event, build_submission_ledger, resume_tasks,
@@ -50,7 +52,10 @@ def main() -> int:
             args.campaign_spec, campaign_root=spec["campaign_root"],
         )
         validate_source_checkout(REPO_ROOT, expected_commit=str(spec["source_commit"]))
-        if args.authorization_phrase != "RESUME HCWDL EXACT TASKS":
+        expected_phrase = resume_phrase(
+            execution_scope=campaign_execution_scope(spec),
+        )
+        if args.authorization_phrase != expected_phrase:
             raise PermissionError("HCWDL resume requires the exact authorization phrase")
     jobs = dict(ledger["jobs"])
     emitted: dict[str, list[str]] = {}

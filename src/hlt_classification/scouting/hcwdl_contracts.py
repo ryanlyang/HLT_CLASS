@@ -24,6 +24,15 @@ def require_role_access(
     fit: bool = False,
     select: bool = False,
     completed_locks: Sequence[str] = (),
+    shared_final_capability: Mapping[str, Any] | None = None,
+    shared_final_claim: Mapping[str, Any] | None = None,
+    shared_final_task_registry: Mapping[str, Any] | None = None,
+    final_population_sha256: str | None = None,
+    final_task_id: str | None = None,
+    final_branch_family: str | None = None,
+    final_execution_lock_sha256: str | None = None,
+    requested_branches: Sequence[str] | None = None,
+    shared_reservation_active: bool = False,
 ) -> None:
     if role not in DATA_ROLES:
         raise ValueError(f"unknown HCWDL role {role!r}")
@@ -32,6 +41,35 @@ def require_role_access(
     if select and role != "validation":
         raise PermissionError("HCWDL selection is validation-only")
     if role == "final_test" and branch_read:
+        if shared_final_capability is not None:
+            if (
+                final_population_sha256 is None or final_task_id is None
+                or shared_final_claim is None
+                or shared_final_task_registry is None
+                or final_branch_family is None
+                or requested_branches is None
+            ):
+                raise PermissionError("shared final capability context is incomplete")
+            from .hcwdl_shared_final import validate_role_capability
+            validate_role_capability(
+                shared_final_capability,
+                execution_claim=shared_final_claim,
+                task_registry=shared_final_task_registry,
+                expected_population_sha256=final_population_sha256,
+                expected_task_id=final_task_id,
+                allowed_kinds=("row_selection", "assignment_shard", "prediction_shard"),
+                expected_branch_family=final_branch_family,
+                expected_execution_lock_sha256=final_execution_lock_sha256,
+            )
+            from .hcwdl_final_stream import validate_projected_branches
+            validate_projected_branches(
+                path=final_branch_family, branches=requested_branches,
+            )
+            return
+        if shared_reservation_active:
+            raise PermissionError(
+                "legacy HCWDL locks are invalid after shared final reservation"
+            )
         required = {"finalist", "execution"}
         if not required.issubset(completed_locks):
             raise PermissionError("HCWDL final-test branches are sealed")

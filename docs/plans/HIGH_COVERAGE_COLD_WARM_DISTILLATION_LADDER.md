@@ -1419,6 +1419,25 @@ Dependencies express artifact availability, never a performance threshold.
 Endpoint disappointment, teacher disappointment, or a negative rung gain
 cannot suppress registered descendants.
 
+The separately scoped corrected-parent workflow uses
+`HCWDL_CAMPAIGN_SPEC/v8` with execution scope exactly
+`parent_prefix_through_finalist_lock`. It retains the selected non-smoke
+mode's train and validation populations, the primary v4 recipe, all 23
+screening nodes, canonical confirmation registry, 60 complete natural-role
+passes, and every-pass validation. Its registry is the exact dependency-closed
+prefix above through `finalist_lock`. It ends there: it registers no
+`execution_lock`, final-test selection or assignment, sealed evaluation, or
+post-test aggregate task. The stored final-role count is sealed population
+metadata, not an access grant. This scope exists to produce a corrected
+train/validation parent for a separately authorized downstream import; it is
+not a pilot completion, final-test execution, or production authorization.
+
+The v8 validator reconstructs the registry from this execution scope rather
+than inferring it from campaign mode. A v8 object containing any post-finalist
+task, using smoke execution, changing the terminal task, or granting
+execution-lock/final-role authority fails closed. Existing v3--v7 campaign
+artifacts keep their original full-campaign meaning.
+
 Submission supports two explicitly bound modes. `manual_posthoc` retains the
 two-phase review flow. `preauthorized_automatic` binds the review waiver into
 the submission authorization and submits the complete DAG up front. After all
@@ -1499,8 +1518,13 @@ Implementation introduces separately versioned contracts for:
 - `HCWDL_RECIPE/v4` and recipe lock;
 - `HCWDL_NODE_SPEC/v1` and graph registry;
 - `HCWDL_TRAINING_REPORT/v1`, checkpoint selection, and resume;
-- `HCWDL_CAMPAIGN_SPEC/v7` (v3-v6 readable), `HCWDL_COMMAND_PLAN/v3`, submission ledger,
-  submission authorization v7 (v3-v6 readable), and monitor report;
+- full `HCWDL_CAMPAIGN_SPEC/v7` (v3-v6 readable),
+  `HCWDL_COMMAND_PLAN/v3`, and submission authorization v7;
+- non-final corrected-parent `HCWDL_CAMPAIGN_SPEC/v8`, exact execution scope
+  `parent_prefix_through_finalist_lock`, `HCWDL_COMMAND_PLAN/v4`, and
+  submission authorization v8;
+- shared submission ledger and monitor-report contracts, whose campaign hash
+  binds them to exactly one of those scopes;
 - endpoint qualification, confirmation registry, finalist, execution, and
   aggregate-report contracts.
 
@@ -1583,6 +1607,17 @@ Commands support non-mutating validation/dry-run modes where appropriate.
 Subprocess arguments are converted to strings before launch. Every consumer
 validates exact repair, alpha, matcher, resource, recipe, teacher, graph, and
 source parents.
+
+`create_hcwdl_campaign.py --execution-scope
+parent_prefix_through_finalist_lock` creates only the v8 non-final scope. Its
+authorization phrase is `AUTHORIZE EXACT HCWDL PARENT PREFIX FOR TIGRIS`.
+Submission and recovery use the distinct phrases `SUBMIT HCWDL EXACT PARENT
+PREFIX` (with `WITH PREAUTHORIZED ENDPOINT CONTINUATION` appended for that
+mode) and `RESUME HCWDL EXACT PARENT PREFIX TASKS`. A manual prefix uses
+`CONTINUE HCWDL PARENT PREFIX AFTER ENDPOINT ACK` only after its authenticated
+endpoint acknowledgement. Dry-run, monitor, exact-ID recovery, and
+cancellation reuse the common hashed ledger machinery; their task sets can
+never expand beyond the v8 registry.
 
 Every executable campaign is bound to the exact worktree from which its
 creation CLI runs. The default project directory is that checkout, not a
@@ -1743,3 +1778,10 @@ pushed commit, validated assignments, measured resources, immutable recipe,
 completed Shell Exact qualification with explicit user awareness, full dry
 run, and explicit user launch instruction. Production additionally requires
 completed pilot evidence and a distinct production authorization.
+
+Implementing the v8 parent-prefix scope does not authorize its submission.
+That launch additionally requires a measured resource profile, exact clean
+pushed source, a nonmutating full-prefix dry run, the v8 authorization artifact
+created with its distinct phrase, and an explicit user submission instruction.
+Completion at `finalist_lock` leaves final-test access sealed and cannot be
+described as a completed HCWDL pilot.

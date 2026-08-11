@@ -14,7 +14,8 @@ from .hcwdl_ladder import GRAPH_SHA256, NODE_REGISTRY
 from .hcwdl_resources import validate_resource_profile
 from .hcwdl_authorization import (
     AUTOMATIC_ENDPOINT_CONTINUATION, ENDPOINT_CONTINUATION_MODES,
-    MANUAL_ENDPOINT_CONTINUATION, validate_submission_authorization,
+    EXECUTION_SCOPES, FULL_CAMPAIGN_SCOPE, MANUAL_ENDPOINT_CONTINUATION,
+    PARENT_PREFIX_SCOPE, validate_submission_authorization,
 )
 
 
@@ -23,8 +24,15 @@ PREVIOUS_CAMPAIGN_CONTRACT: Final = "HCWDL_CAMPAIGN_SPEC/v4"
 PRIOR_CAMPAIGN_CONTRACT: Final = "HCWDL_CAMPAIGN_SPEC/v5"
 RECENT_CAMPAIGN_CONTRACT: Final = "HCWDL_CAMPAIGN_SPEC/v6"
 CAMPAIGN_CONTRACT: Final = "HCWDL_CAMPAIGN_SPEC/v7"
+PARENT_PREFIX_CAMPAIGN_CONTRACT: Final = "HCWDL_CAMPAIGN_SPEC/v8"
 RECENT_COMMAND_PLAN_CONTRACT: Final = "HCWDL_COMMAND_PLAN/v2"
 COMMAND_PLAN_CONTRACT: Final = "HCWDL_COMMAND_PLAN/v3"
+PARENT_PREFIX_COMMAND_PLAN_CONTRACT: Final = "HCWDL_COMMAND_PLAN/v4"
+PARENT_PREFIX_SPEC_FIELDS: Final = frozenset({
+    "execution_scope", "terminal_task_id", "training_passes",
+    "validation_every_passes", "execution_lock_authorized",
+    "final_test_access_authorized", "registered_final_test_tasks",
+})
 LEDGER_CONTRACT: Final = "HCWDL_SUBMISSION_LEDGER/v2"
 LEGACY_MODES: Final = ("smoke", "pilot", "production")
 PREVIOUS_MODES: Final = ("smoke", "pilot", "midscale500k", "production")
@@ -35,6 +43,22 @@ MODES: Final = (
     "smoke", "pilot", "midscale500k", "midscale1m", "midscale2m",
     "production",
 )
+
+
+def campaign_execution_scope(value: Mapping[str, Any]) -> str:
+    """Derive scope from the versioned contract, never an untrusted extra field."""
+
+    contract = value.get("contract")
+    if contract == PARENT_PREFIX_CAMPAIGN_CONTRACT:
+        return PARENT_PREFIX_SCOPE
+    if contract in {
+        LEGACY_CAMPAIGN_CONTRACT, PREVIOUS_CAMPAIGN_CONTRACT,
+        PRIOR_CAMPAIGN_CONTRACT, RECENT_CAMPAIGN_CONTRACT, CAMPAIGN_CONTRACT,
+    }:
+        return FULL_CAMPAIGN_SCOPE
+    raise ValueError("HCWDL campaign contract differs")
+
+
 ROLE_COUNTS: Final = {
     "smoke": {"train": 4096, "validation": 4096, "final_test": 0},
     "pilot": {"train": 300_000, "validation": 100_000, "final_test": 100_000},
@@ -49,6 +73,14 @@ ROLE_COUNTS: Final = {
     },
     "production": {"train": None, "validation": None, "final_test": None},
 }
+PARENT_PREFIX_MODES: Final = tuple(
+    mode for mode in MODES
+    if mode != "smoke"
+    and isinstance(ROLE_COUNTS[mode]["train"], int)
+    and int(ROLE_COUNTS[mode]["train"]) > 0
+    and isinstance(ROLE_COUNTS[mode]["validation"], int)
+    and int(ROLE_COUNTS[mode]["validation"]) > 0
+)
 
 
 @dataclass(frozen=True)
@@ -102,11 +134,16 @@ def build_task_registry(
     final_test_source_count: int = 1, include_final_test: bool = True,
     include_label_only_warm_continuation: bool = False,
     endpoint_continuation: str = MANUAL_ENDPOINT_CONTINUATION,
+    execution_scope: str = FULL_CAMPAIGN_SCOPE,
 ) -> tuple[CampaignTask, ...]:
     if min(train_source_count, validation_source_count, final_test_source_count) <= 0:
         raise ValueError("assignment source counts must be positive")
     if endpoint_continuation not in ENDPOINT_CONTINUATION_MODES:
         raise ValueError("unknown HCWDL endpoint-continuation mode")
+    if execution_scope not in EXECUTION_SCOPES:
+        raise ValueError("unknown HCWDL execution scope")
+    if execution_scope == PARENT_PREFIX_SCOPE and include_final_test:
+        raise ValueError("HCWDL parent prefix cannot register final-test tasks")
     tasks = [
         CampaignTask("source_audit", "source_audit", (), "cpu_small"),
         CampaignTask("splits", "split", ("source_audit",), "cpu_small"),
@@ -159,7 +196,12 @@ def build_task_registry(
             "gpu_dual", "0-59" if include_label_only_warm_continuation else "0-54",
         ),
         CampaignTask("finalist_lock", "lock", ("confirmation",), "cpu_small"),
-        CampaignTask("execution_lock", "lock", ("finalist_lock",), "cpu_small"),
+    ))
+    if execution_scope == PARENT_PREFIX_SCOPE:
+        validate_task_registry(tasks, execution_scope=execution_scope)
+        return tuple(tasks)
+    tasks.append(CampaignTask(
+        "execution_lock", "lock", ("finalist_lock",), "cpu_small",
     ))
     if include_final_test:
         tasks.extend((
@@ -174,11 +216,15 @@ def build_task_registry(
         ))
     else:
         tasks.append(CampaignTask("aggregate_report", "aggregate", ("execution_lock",), "cpu_small"))
-    validate_task_registry(tasks)
+    validate_task_registry(tasks, execution_scope=execution_scope)
     return tuple(tasks)
 
 
-def validate_task_registry(tasks: Sequence[CampaignTask]) -> None:
+def validate_task_registry(
+    tasks: Sequence[CampaignTask], *, execution_scope: str = FULL_CAMPAIGN_SCOPE,
+) -> None:
+    if execution_scope not in EXECUTION_SCOPES:
+        raise ValueError("unknown HCWDL execution scope")
     by_id = {task.task_id: task for task in tasks}
     if len(by_id) != len(tasks):
         raise ValueError("HCWDL task IDs are not unique")
@@ -209,6 +255,16 @@ def validate_task_registry(tasks: Sequence[CampaignTask]) -> None:
 
     for task_id in by_id:
         visit(task_id)
+    if execution_scope == PARENT_PREFIX_SCOPE:
+        forbidden = {
+            "execution_lock", "test_row_selection", "assign_test",
+            "test_assignment_manifest", "sealed_final_evaluation",
+            "aggregate_report",
+        }
+        if forbidden & set(by_id):
+            raise ValueError("HCWDL parent prefix registers post-finalist work")
+        if not tasks or tasks[-1].task_id != "finalist_lock":
+            raise ValueError("HCWDL parent prefix does not end at finalist_lock")
     final_only = {"test_row_selection", "assign_test", "test_assignment_manifest", "sealed_final_evaluation"}
     for task_id in final_only:
         if task_id not in by_id:
@@ -245,11 +301,19 @@ def create_campaign_spec(
     submission_authorization: Mapping[str, Any] | None = None,
     include_label_only_warm_continuation: bool = False,
     endpoint_continuation: str = MANUAL_ENDPOINT_CONTINUATION,
+    execution_scope: str = FULL_CAMPAIGN_SCOPE,
 ) -> dict[str, Any]:
     if mode not in MODES:
         raise ValueError("unknown HCWDL campaign mode")
     if endpoint_continuation not in ENDPOINT_CONTINUATION_MODES:
         raise ValueError("unknown HCWDL endpoint-continuation mode")
+    if execution_scope not in EXECUTION_SCOPES:
+        raise ValueError("unknown HCWDL execution scope")
+    if execution_scope == PARENT_PREFIX_SCOPE and mode not in PARENT_PREFIX_MODES:
+        raise ValueError(
+            "HCWDL parent prefix must use a non-smoke 60-pass mode with "
+            "concrete train/validation row counts"
+        )
     if not planning_only and recipe_sha256 is None:
         raise PermissionError("an executable HCWDL spec requires a locked recipe")
     source_hash = require_sha256(source_manifest_sha256, name="source manifest SHA-256")
@@ -288,9 +352,12 @@ def create_campaign_spec(
         train_source_count=int(role_source_counts["train"]),
         validation_source_count=int(role_source_counts["validation"]),
         final_test_source_count=int(role_source_counts["final_test"]),
-        include_final_test=mode != "smoke",
+        include_final_test=(
+            mode != "smoke" and execution_scope == FULL_CAMPAIGN_SCOPE
+        ),
         include_label_only_warm_continuation=include_label_only_warm_continuation,
         endpoint_continuation=endpoint_continuation,
+        execution_scope=execution_scope,
     )
     resources: Mapping[str, Any] = (
         resource_profile["requests"] if resource_profile is not None
@@ -302,8 +369,11 @@ def create_campaign_spec(
     }
     resource_request_sha256 = canonical_sha256(normalized_resources)
     payload = {
-        "contract": CAMPAIGN_CONTRACT,
-        "schema_version": 7,
+        "contract": (
+            PARENT_PREFIX_CAMPAIGN_CONTRACT
+            if execution_scope == PARENT_PREFIX_SCOPE else CAMPAIGN_CONTRACT
+        ),
+        "schema_version": 8 if execution_scope == PARENT_PREFIX_SCOPE else 7,
         "mode": mode,
         "planning_only": bool(planning_only),
         "live_submission_authorized": bool(live_submission_authorized),
@@ -344,6 +414,16 @@ def create_campaign_spec(
         "tasks": [asdict(task) for task in tasks],
         "command_plan_sha256": None,
     }
+    if execution_scope == PARENT_PREFIX_SCOPE:
+        payload.update({
+            "execution_scope": PARENT_PREFIX_SCOPE,
+            "terminal_task_id": "finalist_lock",
+            "training_passes": 60,
+            "validation_every_passes": 1,
+            "execution_lock_authorized": False,
+            "final_test_access_authorized": False,
+            "registered_final_test_tasks": 0,
+        })
     provisional = with_content_hash(payload)
     command_plan_hash = build_command_plan(provisional)["content_hash"]
     payload["command_plan_sha256"] = command_plan_hash
@@ -356,6 +436,7 @@ def create_campaign_spec(
             command_plan_sha256=command_plan_hash,
             production_authorization_sha256=production_authorization_sha256,
             endpoint_continuation=endpoint_continuation,
+            execution_scope=execution_scope,
         )
         payload["submission_authorization_sha256"] = submission_authorization_sha256
     return with_content_hash(payload)
@@ -378,6 +459,11 @@ def validate_campaign_spec(value: Mapping[str, Any], *, executable: bool = False
     elif contract == CAMPAIGN_CONTRACT:
         schema_version = 7
         allowed_modes = MODES
+        execution_scope = FULL_CAMPAIGN_SCOPE
+    elif contract == PARENT_PREFIX_CAMPAIGN_CONTRACT:
+        schema_version = 8
+        allowed_modes = PARENT_PREFIX_MODES
+        execution_scope = value.get("execution_scope")
     else:
         raise ValueError("HCWDL campaign contract differs")
     digest = validate_content_hash(
@@ -390,6 +476,15 @@ def validate_campaign_spec(value: Mapping[str, Any], *, executable: bool = False
         or value.get("graph_sha256") != GRAPH_SHA256
     ):
         raise ValueError("HCWDL campaign mode or graph differs")
+    derived_execution_scope = campaign_execution_scope(value)
+    if schema_version < 8:
+        if PARENT_PREFIX_SPEC_FIELDS & set(value):
+            raise ValueError(
+                "legacy HCWDL campaign contains parent-prefix-only fields"
+            )
+        execution_scope = derived_execution_scope
+    elif execution_scope != derived_execution_scope:
+        raise ValueError("HCWDL v8 campaign execution scope differs")
     if value.get("role_counts") != ROLE_COUNTS[mode]:
         raise ValueError("HCWDL campaign role counts differ from its registered mode")
     if set(value.get("role_source_counts", {})) != {"train", "validation", "final_test"}:
@@ -406,20 +501,35 @@ def validate_campaign_spec(value: Mapping[str, Any], *, executable: bool = False
     tasks = tuple(CampaignTask(
         **{**task, "dependencies": tuple(task["dependencies"])}
     ) for task in value["tasks"])
-    validate_task_registry(tasks)
+    validate_task_registry(tasks, execution_scope=str(execution_scope))
     counts = value["role_source_counts"]
     expected_tasks = build_task_registry(
         train_source_count=int(counts["train"]),
         validation_source_count=int(counts["validation"]),
         final_test_source_count=int(counts["final_test"]),
-        include_final_test=value["mode"] != "smoke",
+        include_final_test=(
+            value["mode"] != "smoke" and execution_scope == FULL_CAMPAIGN_SCOPE
+        ),
         include_label_only_warm_continuation=value[
             "include_label_only_warm_continuation"
         ],
         endpoint_continuation=str(endpoint_continuation),
+        execution_scope=str(execution_scope),
     )
     if tasks != expected_tasks:
         raise ValueError("HCWDL campaign task registry differs from its fixed inputs")
+    if schema_version == 8:
+        expected_prefix_boundary = {
+            "execution_scope": PARENT_PREFIX_SCOPE,
+            "terminal_task_id": "finalist_lock",
+            "training_passes": 60,
+            "validation_every_passes": 1,
+            "execution_lock_authorized": False,
+            "final_test_access_authorized": False,
+            "registered_final_test_tasks": 0,
+        }
+        if any(value.get(name) != item for name, item in expected_prefix_boundary.items()):
+            raise ValueError("HCWDL parent-prefix execution boundary differs")
     resource_request_sha256 = canonical_sha256(value.get("resources"))
     if value.get("resource_request_sha256") != resource_request_sha256:
         raise ValueError("HCWDL campaign resource-request lineage differs")
@@ -459,6 +569,7 @@ def validate_campaign_spec(value: Mapping[str, Any], *, executable: bool = False
             command_plan_sha256=plan_hash,
             production_authorization_sha256=value.get("production_authorization_sha256"),
             endpoint_continuation=str(endpoint_continuation),
+            execution_scope=str(execution_scope),
         )
         if value.get("submission_authorization_sha256") != authorization_hash:
             raise ValueError("HCWDL submission authorization hash differs")
@@ -468,6 +579,10 @@ def validate_campaign_spec(value: Mapping[str, Any], *, executable: bool = False
 def _slurm_commands_unchecked(spec: Mapping[str, Any]) -> list[dict[str, Any]]:
     root = str(spec["campaign_root"])
     project = str(spec["project_dir"])
+    job_prefix = (
+        "hcwdl_parent"
+        if campaign_execution_scope(spec) == PARENT_PREFIX_SCOPE else "hcwdl"
+    )
     result = []
     for row in spec["tasks"]:
         task = CampaignTask(**row)
@@ -475,7 +590,8 @@ def _slurm_commands_unchecked(spec: Mapping[str, Any]) -> list[dict[str, Any]]:
         command = [
             "sbatch", "--parsable", "--account=reu-aisocial", "--partition=tigris",
             f"--cpus-per-task={resource['cpus']}", f"--mem={resource['memory']}",
-            f"--time={resource['walltime']}", f"--job-name=hcwdl_{task.task_id}",
+            f"--time={resource['walltime']}",
+            f"--job-name={job_prefix}_{task.task_id}",
         ]
         if resource.get("gpu"):
             command.append(f"--gres={resource['gpu']}")
@@ -500,9 +616,14 @@ def build_command_plan(spec: Mapping[str, Any]) -> dict[str, Any]:
     """Hash the exact future commands without depending on the enclosing spec hash."""
     commands = _slurm_commands_unchecked(spec)
     current = spec.get("contract") == CAMPAIGN_CONTRACT
+    parent_prefix = spec.get("contract") == PARENT_PREFIX_CAMPAIGN_CONTRACT
     payload = {
-        "contract": COMMAND_PLAN_CONTRACT if current else RECENT_COMMAND_PLAN_CONTRACT,
-        "schema_version": 2 if current else 1,
+        "contract": (
+            PARENT_PREFIX_COMMAND_PLAN_CONTRACT if parent_prefix
+            else COMMAND_PLAN_CONTRACT if current
+            else RECENT_COMMAND_PLAN_CONTRACT
+        ),
+        "schema_version": 3 if parent_prefix else 2 if current else 1,
         "mode": spec["mode"],
         "source_commit": spec["source_commit"],
         "source_manifest_sha256": spec["source_manifest_sha256"],
@@ -513,6 +634,14 @@ def build_command_plan(spec: Mapping[str, Any]) -> dict[str, Any]:
     }
     if current:
         payload["endpoint_continuation"] = spec["endpoint_continuation"]
+    if parent_prefix:
+        payload.update({
+            "endpoint_continuation": spec["endpoint_continuation"],
+            "execution_scope": PARENT_PREFIX_SCOPE,
+            "terminal_task_id": "finalist_lock",
+            "execution_lock_authorized": False,
+            "final_test_access_authorized": False,
+        })
     return with_content_hash(payload)
 
 
@@ -549,8 +678,11 @@ __all__ = [
     "PREVIOUS_CAMPAIGN_CONTRACT", "PREVIOUS_MODES",
     "PRIOR_CAMPAIGN_CONTRACT", "PRIOR_MODES", "RECENT_CAMPAIGN_CONTRACT",
     "RECENT_COMMAND_PLAN_CONTRACT",
+    "PARENT_PREFIX_CAMPAIGN_CONTRACT", "PARENT_PREFIX_COMMAND_PLAN_CONTRACT",
+    "PARENT_PREFIX_MODES",
     "PILOT_PLANNING_RESOURCES", "ROLE_COUNTS", "ResourceRequest", "SMOKE_RESOURCES",
-    "build_command_plan", "build_task_registry", "create_campaign_spec", "slurm_commands",
+    "build_command_plan", "build_task_registry", "campaign_execution_scope",
+    "create_campaign_spec", "slurm_commands",
     "split_submission_commands",
     "validate_campaign_spec", "validate_task_registry",
 ]

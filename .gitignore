@@ -17,6 +17,7 @@ venv/
 .env
 .idea/
 .vscode/
+.worktrees/
 
 # Research data and generated artifacts
 *.root

@@ -362,6 +362,314 @@ Matplotlib/Pyparsing warnings; Python compilation and `git diff --check` pass.
 No remote job was submitted by this change. The remaining runtime boundary is
 an exact pushed clean commit and execution of the creation/dry-run/submission
 sequence in the dense runbook against the completed unweighted pilot root.
+## HCWDL-RKD four-track dense descent (2026-08-10)
+
+The active representation experiment has been versioned away from the retired
+M1--M6 ascents.  It now registers four downward ladders: RSET cold/warm and
+RREL cold/warm.  Each strategy owns a separately trained TOFF-to-D100 root;
+each branch then descends D95, D90, ..., D5, D0 and terminates at M1.  The
+immediate predecessor supplies both logits and representation targets.  Cold
+rungs are fresh; warm rungs load only that immediate predecessor's selected
+model state and reset optimizer/scheduler state.
+
+The graph contains exactly 86 training nodes.  D100--D5 are authenticated,
+nondeployable repaired-view training intermediates; D0 and M1 are HLT-only
+deployable models, and the four M1 nodes are the primary endpoints.  The old
+M5 controls and M2--M6 representation nodes are absent.  The registered
+512/256/0 dense smoke contains 261 tasks, while the 300k/100k/0 pilot contains
+275 tasks.  The additional rows are target-build/cleanup and four-M1
+confirmation lifecycle work, not M2--M6 training rungs. Representation Slurm
+job names begin `hcwdlr_`.
+
+The semantic-version migration includes dense graph v1, recipe v4, target
+family v3, training/checkpoint/model-extraction v2, screen aggregate v3,
+confirmation v2, and campaign/command-plan v3. Old ascent artifacts cannot be
+relabeled into these identities. The 089b472 base-HCWDL smoke remains
+historical base-worker evidence; no new base ladder or corrected-parent prefix
+is required by the dense route. A genuine dense smoke at the final pushed
+representation commit remains the execution gate. No job was submitted and
+no final role was accessed during implementation.
+
+The complete representation test surface is **427 passed, 9 expected platform
+skips, 0 failures**, executed in three definitive shards after the single
+serial command exceeded its five-minute shell timeout at 66% with no failure.
+Eight skips are directly executable POSIX-shell checks and one is the
+Windows-unavailable real-`SIGUSR1` check. The earlier ten-action non-final
+authority is bound to the retired direct-D0/M1 graph and cannot authorize
+recipe v4.
+
+The launch-preparation implementation adds four phrase-bound Tigris resource
+probes plus one dependent accounting collector, a genuine dense resource
+profile, a maximum-topology `RREL_D100` storage template, conservative
+86-node/83-generation storage estimates for smoke and pilot, and a fresh
+free-space check in both candidate review and immediately before scheduler
+mutation. The probes authorize no training or final access. The dense smoke
+acceptance reopens the 261-task ledger, monitor, filesystem output audit, and
+four-M1 terminal aggregate before it can gate the pilot. No probe, dense
+smoke, or pilot has been authorized or submitted.
+The dense route also has a standalone tap/installed-Weaver parity CLI, so it
+does not require the canceled full-parent evidence preparer merely to
+bootstrap its historical TOFF training teacher.
+The first genuine dense-teacher attempt exposed and fixed a validator mismatch:
+JSON wrapper/engine parents use canonical content hashes, while the selected
+checkpoint parent uses its raw file-byte hash. The failed attempt published no
+teacher import and its immutable tap/parity files remain reusable.
+The same operational pass also fixed dense target planning to use the frozen
+tap schema's canonical `tap_schema_sha256()` identity; `tap.json` intentionally
+has no self-referential top-level `content_hash`.
+The next Tigris preflight exposed one more stale call to the assignment-cache
+validator before any graph or recipe artifact was published.  The dense
+recipe, target-planning, and registered recipe-task paths now share one
+path-based train-assignment authority check.  It derives the expected train
+row count independently from the authenticated v4 recipe or row selection,
+binds the historical split and row-selection hashes plus the canonical matcher
+resource digest, and reopens every referenced assignment shard.  The failed
+preflight root therefore remains safely reusable for its already authenticated
+tap, parity, and dense-teacher artifacts; graph/control/recipe/disposition were
+absent at failure.
+The post-fix focused dense-teacher, target, registered-artifact, and CLI suite
+is **130 passed, 8 expected POSIX-shell skips** on Windows.
+The first exact dense resource probes all completed, but their dependent
+collector exposed two site-interface mismatches before publishing accounting
+evidence: current Tigris removed `ReqGRES` in favor of `ReqTRES`, and CPU
+collector hosts use the `gg-*` family in addition to GPU `gh-*` hosts.  The
+parser now authenticates typed GPU requests from `ReqTRES`, recognizes both
+Tigris host families, and distinguishes the dense resource collector from the
+non-final acceptance collector.  Collector recovery is limited to requeuing
+the same failed collector ID from one clean direct compatibility successor of
+the measured commit; that successor may change only the exact parser,
+collector validation, focused tests, and this handoff.  Job `80194` was then
+found to be purged from Slurm, so requeue is impossible. A separate v1
+collector-recovery authorization/ledger now binds the original four completed
+probe IDs, failed log, original ledger, exact compatibility source, and one
+replacement collector. It records zero measurement jobs and has no probe,
+dense-training, pilot, array, or final-role submission path.
+The final parser/recovery-focused suite is **26 passed**; the broader
+scheduler/resource/contracts/CLI suite is **116 passed, 8 expected
+POSIX-shell skips**.
+The subsequent purged-collector recovery contracts, canonical routes, CLI
+inventory, and exact one-/two-commit compatibility boundary pass **30 focused
+tests** (29 contract/resource tests plus the explicit CLI inventory check).
+Replacement collector `80400` then confirmed that current Tigris returns an
+empty `sacct Comment` column even though the exact `--comment=<binding>` token
+is preserved in `SubmitLine`. The parser now permits only that exact pair:
+blank raw column plus the required bound submit token; altered or missing
+tokens still fail. A requeued collector may reuse the first attempt's partial
+`cpu_small/sacct.psv` only when a fresh capture is byte-identical, and every
+other raw/evidence path must remain fresh.
+All four measurement jobs (`80190`--`80193`) completed, and replacement
+collector `80400` completed after exact requeue under the blank-comment parser
+compatibility commit. The resulting genuine dense profile is
+`a1069ee9efd9f98798495ee4e663346431175926502b4a59b09d4743df337b92`;
+the 512/256/0 storage estimate is
+`88ba2e77916192d1e7a3dd0816985684ae74e7b3680791e402068422e1bb4f07`,
+requiring 25,718,067,627 bytes against 51,678,019,584 observed free bytes.
+Because the probes measured commit `290f9f8` and the later commits changed
+only the collector/accounting compatibility surface, the new
+`HCWDL_REPRESENTATION_DENSE_COMPATIBLE_RESOURCE_PROFILE/v1` wrapper freezes
+that exact Git diff and reuses the completed measurements without relabeling
+or rerunning them. Any target, model, training, data, graph, or worker change
+fails the wrapper. No dense training or final-role job has been submitted.
+The compatibility projection also reopens the old `gpu_target` result through
+that profile and refreshes only its producer source identity from the clean
+campaign checkout. The production target preflight now consumes the typed
+dense storage/profile contracts directly, including their authenticated
+scheduler peak, instead of routing them through the legacy generic resource
+schema. Thus jobs `80190`--`80193` are reused and are not rerun. The complete
+post-change representation suite is **473 passed, 9 expected Windows platform
+skips, 0 failures**; the exact changed-path registry matches the full
+measured-commit-to-working-tree Git diff and `git diff --check` is clean.
+The post-probe path is now one non-submitting command,
+`prepare_hcwdl_representation_dense_smoke_candidate.py`. It projects only the
+source/project fields in the four authenticated runtime signatures, publishes
+all 83 target authorities and all 261 bound runtime rows, and emits the dry-run
+and strict candidate hashes. Candidate review validates the storage template
+against the commit that genuinely measured it, while the compatible profile
+still binds the clean campaign source. No probe or scheduler call occurs in
+this preparer.
+
+## HCWDL non-final corrected-parent prefix (2026-08-09)
+
+The base HCWDL execution layer now has a dedicated non-final 60-pass parent
+scope. `HCWDL_CAMPAIGN_SPEC/v8` with execution scope exactly
+`parent_prefix_through_finalist_lock` retains the selected non-smoke
+train/validation populations, v4 recipe, all 23 ladder nodes, canonical
+confirmation registry, 60 complete natural-role passes, and every-pass
+validation. Its task registry ends at `finalist_lock`; it contains no
+execution lock, final-test selection/assignment/evaluation, or aggregate task.
+Stored final-role counts are sealed metadata, while execution-lock and
+final-role authority are explicitly false.
+
+The matching command plan and submission authorization are
+`HCWDL_COMMAND_PLAN/v4` and `HCWDL_SUBMISSION_AUTHORIZATION/v8`. Candidate
+authorization, initial submission, manual continuation, and exact recovery
+use prefix-specific phrases. Dry-run, monitoring, ledgers, and recovery reuse
+the existing exact-ID machinery but reconstruct only the v8 prefix graph.
+Existing v3--v7 campaign and authorization artifacts retain their original
+meaning; they are not upgraded or relabeled.
+
+Final local verification in the `tagging-hlt` environment is **790 passed,
+6 platform skips, 0 failures** across all 796 collected tests. The skips are
+five directly executable POSIX-shell checks and one real-`SIGUSR1` check that
+are unavailable on Windows; the 14 warnings are the existing
+Matplotlib/PyParsing deprecations. The integrated parent-authority, loss,
+locks, central-contract, runtime, non-final-acceptance, parity, and prefix
+shard is **124 passed, 1 expected Windows skip**. The dedicated prefix suite
+is **9 passed** and covers v8 graph closure, scope tampering, smoke and
+open-ended-production rejection, v8 authorization/executable validation,
+worker-route denial, dry-run/submit planning, monitor/recovery closure, and
+create/authorize CLIs. No scheduler command was executed, no campaign was
+authorized or submitted, and no final role was accessed. Operator boundaries
+and exact future commands are documented in
+[`HCWDL_PARENT_PREFIX_RUNBOOK.md`](HCWDL_PARENT_PREFIX_RUNBOOK.md).
+
+The downstream HCWDL-RKD boundary now accepts only this exact v8 prefix scope.
+Parent import v3/schema 2 and parent-loss attestation v3/schema 3 reopen all
+six qualifier, 23 screen, and every registered confirmation engine report;
+they require the exact reconstructed configuration, corrected loss semantics,
+60 validation records at exact pass boundaries, completed update budget,
+independently selected metrics, and authenticated selected/final checkpoint
+bytes. A forged imported artifact cannot bypass the independent v8 campaign
+check in non-final acceptance. No parent run or representation execution is
+authorized by this implementation.
+
+The completed d56 parent smoke (`hcwdl_parent_smoke_d56c622_r1`, 42 tasks) is
+valid smoke evidence only. It is categorically ineligible for parent import or
+non-final action inputs. The failed representation root
+`hcwdl_rkd_nonfinal_acceptance_d56c622_r1` contains review registries and the
+early tap only; it stopped during installed-Weaver parity construction and
+must not be resumed, treated as acceptance evidence, or reused. A new clean
+root backed by an exact completed non-smoke v8 60-pass prefix is required.
+
+## HCWDL-RKD installed-Weaver surface-parity v2 repair (2026-08-09)
+
+The first parent-evidence attempt against installed Weaver on Tigris reached
+the real CPU forward/backward boundary and failed before publishing
+`architecture/surface_parity.json`: the v1 fixture drew the energy component
+of each standard-four vector independently, so most fixture vectors were
+unphysical, and the v1 report also attempted to serialize Weaver's known
+nonfinite auxiliary Lorentz-input derivatives as a numeric maximum. Canonical
+JSON correctly rejected that NaN/Infinity. The environment, corrected parent,
+and registries were not the cause. The failed representation root contains
+only its three review registries and immutable `architecture/tap.json`; no
+Slurm work or final-role access occurred.
+
+The contract is now `HCWDL_REPRESENTATION_SURFACE_PARITY/v2` with schema
+version 2. Its fixture constructs deterministic timelike unit-mass vectors.
+Logits, feature-input gradients, and parameter gradients remain strictly
+finite and parity-gated. Lorentz-vector derivatives are explicitly
+non-training-required and are compared by exact finite/NaN/+Inf/-Inf topology
+plus an absolute tolerance over jointly finite entries, with only JSON-safe
+counts and finite-or-null maxima stored. Ordinary, TOFF charged, and TOFF
+neutral paths are audited separately, closing the v1 native aggregate that
+could hide a NaN behind an earlier finite feature-gradient maximum.
+Because that parity artifact is embedded in the architecture attestation, the
+outer identity is also versioned honestly as
+`HCWDL_REPRESENTATION_ARCHITECTURE_ATTESTATION/v2`, schema version 2; the v1
+identity is not silently reinterpreted to require a v2 nested artifact.
+
+Focused local verification passed: 151 tests passed and 6 platform-specific
+POSIX/SIGUSR1 tests skipped across the model, contract, acceptance-evidence,
+runtime-row, CLI, campaign, provenance, and task-runtime suites. The
+installed-Weaver v2 rerun remains pending and must use the exact pushed commit
+in a fresh representation root. The
+corrected parent smoke remains immutable at its existing source; this repair
+neither authorizes nor submits the bounded actions, a pilot, or any final-role
+work.
+
+## HCWDL-RKD bounded non-final acceptance authority (2026-08-09)
+
+The separately authorized implementation is complete locally. It adds a
+closed ten-action authority outside the campaign DAG: bounded D0c/D0w target
+preparation; exact two-update `RSET_M1c`, `RSET_M1w`, `RREL_M1c`, and
+`RREL_M1w` probes; a real-`SIGUSR1` reference/interrupt/fresh-resume sequence;
+and a validation-only D0c/D100/TOFF proxy. Every action is scalar. Training is
+frozen to 512 train rows, 256 validation rows, seed 1337, effective batch 256,
+and exactly two optimizer updates. Final rows are zero and campaign, pilot,
+reservation, shared-final, final-role, and scheduler-submission powers are all
+explicitly false.
+
+Production execution reuses the reviewed target and training adapters through
+an authority-private bridge, with live runtime validation before scientific
+I/O. The validation proxy performs one label-bearing validation selection;
+assignment and all three prediction streams are label-free, and durable
+artifacts omit labels. Its metrics and paired-bootstrap sidecars are
+validation-only and nonauthorizing. Workers emit immutable execution receipts
+binding the exact action assembly, dependencies, source, recipe, worker bytes,
+Slurm job, and semantic outputs. A separate Tigris collector must capture raw
+terminal `sacct` records before a post-job action result or composite proof can
+be genuine; caller-authored completion fields cannot satisfy the gate.
+
+The new authority/proof family includes action inputs, action assemblies,
+execution receipts, real-batch full-loss evidence, action results, two-update
+evidence, USR1 delivery and exact-resume evidence, validation-proxy branch
+access/result, and non-final scheduler evidence. Tigris evidence and
+acceptance advance to v2. The exact phrase `AUTHORIZE BOUNDED NONFINAL
+HCWDL-RKD ACCEPTANCE ACTIONS` is deliberately separate from the implementation
+authorization and has not been issued or used. No job, pilot, campaign
+submission, shared-final capability, or final role was created or accessed.
+
+Local verification in the `tagging-hlt` environment is **767 passed, 6
+platform skips, 0 failures**, with the same 14 Matplotlib/PyParsing warnings.
+The skips are five directly executable POSIX-shell checks and one real
+`SIGUSR1` check unavailable on Windows. The final focused USR1, execution-
+receipt, scheduler, dependency, and composite-proof lineage gate is **66
+passed**. All 405 Python files under `src`, `scripts`, and `tests` parse, and
+the final whitespace/diff audit is recorded with this handoff.
+
+This implementation does not remove the parent blocker. The existing
+`b3154d67` parent predates explicit loss semantics and cannot be relabeled as
+the required v8/v4 parent-loss v3 authority. The next research-compute step is
+therefore still a fresh corrected HCWDL v8/v4 parent-prefix run from the exact pushed
+source. Only after that parent exists may an operator separately issue the
+non-final execution phrase and run the bounded actions. A pilot and any
+final-test access remain unauthorized.
+
+## Superseded pre-dense-descent v8-prefix/v4 compatibility closure (2026-08-09)
+
+The matching-free representation-KD branch is now reconciled with the current
+parent authority: executable `HCWDL_CAMPAIGN_SPEC/v8` with exact
+`parent_prefix_through_finalist_lock` scope, primary
+`HCWDL_RECIPE/v4`, and an exact fifteen-one loss vector.  The representation
+overlay was `HCWDL_REPRESENTATION_RECIPE/v2` with schema version 1; the strict
+parent import is `HCWDL_REPRESENTATION_PARENT_IMPORT/v3` with schema version 2;
+and the corrected parent-loss attestation is
+`HCWDL_REPRESENTATION_PARENT_LOSS_ATTESTATION/v3` with schema version 3.
+Weighted v3 parents and old v1 representation imports cannot be relabeled as
+these artifacts.
+
+The pre-campaign builders now reopen the real parent v8 prefix, v4 recipe,
+full assignment/qualification/confirmation/finalist authority chain, reports,
+checkpoint bytes, installed-Weaver parity, model sources, and one clean parent
+source checkout at the exact parent campaign commit.  The runtime binding
+supports the two canonical prepublished files in place, including the single
+closed read-only recipe consumer needed before the recipe gate; no duplicate
+input copy or generic output-path exception is permitted.  The complete
+86-task/152-row binding builds at the documented canonical paths.
+
+Current local verification used the `tagging-hlt` environment with bytecode
+and threaded BLAS disabled.  The complete test collection was run as two
+disjoint selections: HCWDL tests passed **454**, with two Windows-inapplicable
+POSIX-shell checks skipped, and the remaining **252** tests passed.  Therefore
+all **708 collected tests** are accounted for: **706 passed, 2 skipped, 0
+failed**.  All 392 Python files under `src`, `scripts`, and `tests` AST-parse;
+`git diff --check`, the untracked-file whitespace scan, and the representation
+`Fresh_check`/TODO/FIXME/`NotImplementedError` scan are clean.  The 14 warnings
+are the existing Matplotlib/PyParsing deprecations.
+
+This is not yet campaign completion.  The existing unweighted parent candidate
+at commit `b3154d67` predates the explicit loss-semantics fields and does not
+contain `hcwdl_parent_loss.py`; its reports and checkpoints therefore cannot
+satisfy the v3 attestation.  The plan forbids relabeling those outputs, so a
+fresh, separately identified HCWDL v8/v4 parent-prefix run from the new exact clean
+commit is required before HCWDL-RKD parent evidence can be built. The bounded
+bootstrap itself still cannot authorize two-update/USR1 or validation-proxy
+actions; the separate non-final implementation described above now closes
+that code path, but its phrase-bound execution and genuine Tigris evidence are
+still pending. Neither limitation authorizes a pilot or final-role access.
+
+No remote job, scheduler state, parent output, or final-role artifact was
+mutated during this compatibility work.
 
 ## HCWDL unweighted primary and automatic continuation (2026-08-09)
 
@@ -471,47 +779,83 @@ selection/performance metrics remain mandatory, and every exploratory test
 evaluation computes the full current metric set. This attempt also stopped
 before publishing a specification or reading the test role.
 
-## HCWDL matching-free representation-KD plan (2026-08-08)
+## Superseded pre-v8-prefix/v4 HCWDL-RKD local evidence (2026-08-09)
 
-The new implementation-grade registered-ablation plan is
+The hashes and counts in this section describe the earlier `b820327` snapshot,
+whose retained runtime binding used parent-import, parent-loss, and overlay
+recipe v1 lineage. The parent campaign has since advanced to executable
+`HCWDL_CAMPAIGN_SPEC/v8` parent prefix plus primary `HCWDL_RECIPE/v4`; therefore none of the
+following smoke/binding hashes is current authorization or closure evidence.
+They are retained only as historical local-test provenance and must not be
+reused for a v3 import.
+
+The implementation-grade plan remains
 [`docs/plans/HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md`](plans/HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md).
-It adds four planned full M1--M6 ascents without changing the implemented
-logit-only `HCWDL_GRAPH/v1` or `HCWDL_RECIPE/v3`: paired jet plus unordered
-token-set KD (`RSET`) under cold and warm initialization, and the same package
-plus differentiable latent-relation KD (`RREL`) under cold and warm
-initialization. The existing logit cold/warm ascents remain the primary
-controls.
+That isolated local worktree contained the then-current versioned RKD
+implementation for the four
+registered M1--M6 ascents: paired jet plus unordered token-set KD (`RSET`) and
+the same package plus differentiable latent-relation KD (`RREL`), each under
+cold and warm initialization. The immutable graph contains exactly 24 primary
+nodes plus the four jet-only/no-relation/within-class-shuffle controls and a
+separate zero-coefficient acceptance barrier; the existing logit cold/warm
+ascents remain the primary controls.
 
-The plan freezes 24 new node identities, exact privileged teachers, separate
-native-offline charged/neutral representation spaces, fixed RFF set/relation
-sketches, train-only gradient calibration, a `rho_repr=0.10` auxiliary budget,
-pass-based ramps, 60 passes with validation every pass, macro-AUC-first
-selection, paired stochastic streams, one-time compact target construction,
-generation-aware just-in-time target cleanup/recovery, zero-coefficient,
-jet-only, no-relation, and shuffled-pair controls, and a population-scoped
-combined final-test reservation honored by both evaluator families. It includes the
-proposed source/module map, CLI and Slurm boundaries, artifact layout,
-contracts, failure semantics, complete test matrix, implementation blocks, and
-definition of done.
+Reusable code now covers the corrected opt-in parent loss and attestation,
+single-forward HLT/TOFF model surfaces and architecture taps, fixed
+set/relation kernels, train-only gradient calibration, compact target
+generations and cleanup/recovery, sequence-exact training resume,
+macro-AUC-first checkpoint selection, reports, shared-final registration, and
+fail-closed final disposition/reservation/claim handling. Campaign/runtime
+surfaces include fixed artifact routes, non-submitting dry-run/local-smoke
+paths, ordinary and deterministic Slurm workers, recovery, monitoring, and
+exact campaign-bound cancellation. Thin pre-campaign CLIs audit immutable
+parent-final evidence, freeze the fail-closed disposition, and publish proof
+that every reserved legacy job is terminal; they never perform broad scheduler
+cancellation.
 
-The planning audit found a pre-existing parent-loss mismatch that is now an
-explicit implementation blocker: the active HCWDL plan requires class-weighted
-CE and unweighted KD row means, while the current shared `pmard_loss` runtime
-class-weights CE and both KD terms. HCWDL-RKD requires a versioned
-parent-loss attestation, runtime correction, and consistent parent artifacts;
-affected reports cannot be relabeled as paired. The plan also requires a new
-architecture attestation because current parent artifacts do not publish the
-needed model/tap architecture hash.
+The exact requirement-to-code map and pending acceptance boundaries are in
+[`docs/plans/HCWDL_RKD_IMPLEMENTATION_TRACEABILITY.md`](plans/HCWDL_RKD_IMPLEMENTATION_TRACEABILITY.md),
+and safe local/Tigris operating steps are in
+[`docs/HCWDL_RKD_RUNBOOK.md`](HCWDL_RKD_RUNBOOK.md). The superseded evidence
+was:
 
-This is documentation only. No representation-ascent contract, model tap,
-target bank, training node, worker, smoke, or submission was implemented or
-authorized in this step. Before editing, the focused existing HCWDL/PMARD
-training suite passed 40/40 under the local `tagging-hlt` environment with
-`PYTHONPATH=src`. After the final plan audit, the four focused HCWDL suites
-passed 58/58 in the same environment; Markdown targets and `git diff --check`
-also passed aside from line-ending notices. The separately authorized
-primary-HCWDL Tigris-validation work remains independent; this new plan does
-not submit, cancel, or alter it.
+- the repository suite passes **656 tests**, with two Windows-only POSIX-shell
+  checks skipped and 14 pre-existing Matplotlib/PyParsing deprecation warnings;
+- the bounded local smoke covers all **86 tasks / 152 array-expanded rows**,
+  all **24 primary nodes plus four controls**, reports finite losses and active
+  gradients, performs no optimizer or scheduler step, and records
+  `final_role_accessed=false` and `authorizes_tigris_or_pilot=false`;
+- the smoke report content hash is
+  `0ed46019c7c62d9e997ea843051cfb85e1d6cb824b80e0e072445698dac69f67`
+  and its scientific probe hash is
+  `966491893d4b7456dd39d72a29e5bcdf03cde71fdd60a424826a5ce3990ecbba`;
+- the exact adapter-bound, non-submitting command plan covers the same
+  **86 tasks / 152 rows**. Its command-plan hash is
+  `86728de85232c914de92eac751146908025077628c3cee7a3406a67482ed05ea`,
+  runtime-binding hash is
+  `1696ca5e2ea38c5929061b1757011c427a3218486ac27ad762cf71fcae9df7ec`,
+  and dry-run audit hash is
+  `38d5f1851a887c6d9354f2580931d4f7440e0cc18c74e9c1b865804638fe608c`;
+- the dry-run audit records every registered adapter schema as validated and
+  `scheduler_mutated=false`; the retained local artifacts are under the ignored
+  `checkpoints/hcwdl_rkd_local_verification/closure_20260809/` directory;
+- all 389 Python files in `src`, `scripts`, and `tests` parse successfully;
+  `git diff --check` and the separate untracked-file trailing-whitespace scan
+  are clean; and runtime scans found no `Fresh_check`, `TODO`, `FIXME`,
+  `NotImplementedError`, or executable `pass` path.
+
+The local smoke uses bounded authenticated fixtures and a nonauthorizing
+synthetic sealed-final pipeline; it is local behavior and failure-topology
+evidence, not a substitute for installed-Weaver, ROOT, GPU, Slurm, or Tigris
+evidence. The exact production adapters and every registered input/output row
+are separately instantiated and validated by the complete dry run.
+
+No remote mutation, Tigris submission, pilot launch, cancellation, or final
+population access was performed by this implementation step. Authoritative
+installed-Weaver parity and a genuine Tigris worker/cache/USR1 miniature with
+measured resources, exact pushed clean source, and explicit pilot
+authorization remain required. Local synthetic doubles and adapters are not
+evidence for those production gates.
 
 ## Preliminary PMARD pilot evidence (2026-08-07)
 
@@ -1358,12 +1702,111 @@ Focused cache/stream/HCWDL tests pass 47/47 and the repository-wide suite
 passes 302 with the same 14 warnings. The fix still requires a clean pushed
 commit and a fresh smoke identity.
 
-## Exact active next task: separately authorized HCWDL Tigris validation
+## HCWDL-RKD contract/layout normalization (2026-08-09)
 
-Resolve and sign the immutable optimization recipe from independent evidence;
-push an exact clean commit only under a separate authorization; run installed
-Weaver parity and a genuine production-worker Tigris miniature; capture
-measured RAM, walltime, I/O, GPU, and storage evidence; build a measured
-resource profile and a fresh complete dry run; then request explicit pilot
-submission authorization. Do not claim runtime acceptance or release the held
-endpoint gate until those steps and the six real endpoint diagnostics exist.
+The matching-free representation-KD implementation now has one central
+97-contract registry that exactly matches active-plan Section 21 and 97 unique
+canonical route templates. Gradient-calibration selection, runtime binding,
+submission events, legacy final exposure, and the four action-specific Tigris
+proof families no longer borrow an unrelated artifact identity. Section 31 now
+uses the implemented kernel, shuffle, bootstrap, checkpoint, and assignment
+member names, and documents execution-scoped calibration routes. The runbook
+uses a portable Python selector and includes the measured fixed-size inventory
+and storage-estimate producers. Local focused evidence is 5 contract/layout,
+5 calibration, 13 campaign, 4 campaign-artifact, 8 runtime-provenance,
+18 shared-final, 8 acceptance-evidence, 2 action-proof, and 57 CLI tests passed;
+two POSIX-only CLI checks
+were skipped on Windows. This is local structural evidence only: installed-
+Weaver and genuine Tigris acceptance, measured resources, clean pushed source,
+and submission authorization remain pending.
+
+## Exact active next task: corrected parent, then bounded Tigris acceptance
+
+The v8-prefix/v4 compatibility migration and bounded non-final authority
+implementation are locally complete. Publish the exact clean branch commit and
+refresh the isolated Tigris worktree. First create a new HCWDL v8/v4 parent prefix
+campaign identity at that commit and run its corrected reports/checkpoints;
+the `b3154d67` outputs cannot be reused as v3 parent-loss evidence. Only after
+that parent validates may an operator separately issue the exact non-final
+execution phrase and run the bounded two-update, USR1 exact-resume, and
+validation-proxy actions. The installed-Weaver boundary and genuine worker
+evidence must then be measured and audited. Do not reuse superseded hashes,
+submit an RKD pilot, or open the final role before every gate passes.
+
+## Dense-smoke runtime source identity correction (2026-08-11)
+
+The first authorized 261-task dense smoke at source `526a620` submitted its
+complete ledger but stopped at the root `tap_schema` job before registered
+input access. Dense candidate preparation had placed the outer serialized
+source-snapshot artifact hash in `runtime_facts.source_snapshot_sha256`; the
+worker correctly measures and compares the snapshot's inner scientific
+checkout identity, so the two hashes could never agree. Preparation now
+validates the source-snapshot artifact and separately binds its exact
+`source_snapshot_sha256` field. The regression deliberately makes the outer
+artifact hash differ from that inner identity. Focused dense-preparation,
+worker-runtime, and campaign tests pass 28/28. This changes the executable
+candidate identity but not the graph, recipe, targets, measured resources, or
+storage estimate. The impossible `526a620` smoke must be cancelled by the
+exact IDs in its immutable submission ledger; its scientific tasks cannot be
+resumed or relabeled. Rebuild one fresh candidate from the existing reusable
+inputs and compatible measured profile at the correction commit.
+
+## HCWDL U/D representation-KD integration (2026-08-11)
+
+The implementation-authoritative
+`docs/plans/HCWDL_HOMOTOPY_REPRESENTATION_KD_IMPLEMENTATION_PLAN.md` is now
+locally implemented in the isolated `hcwdl-u-rkd-local` integration worktree.
+It combines the repository-local homotopy source line at
+`c2a5510d81a1b1edd8f519d271c9dc398a92364c` with the corrected RKD source
+line at `63139ca`, without modifying or deleting the pre-existing dirty RKD
+worktree. No external donor artifact was copied.
+
+The new supplemental v1 family implements the exact 42-fit graph: 21 cold
+`F_RSET` nodes and 21 cold `F_RREL` nodes over
+`U010..U100 -> D90..D0 -> M1`. It uses 41 train-only target banks, including
+one shared TOFF bank, and retains the fixed v4 base loss plus v5 RSET/RREL
+mathematics. U/D use temperature 2, M1 uses temperature 1, all fits use
+unweighted `0.25 CE + 0.75 KD`, and the representation coefficient is 0.10.
+Pilot execution is fixed at 300,000/100,000/0 rows, 60 passes, validation
+every pass, and macro-OVR-AUC-first checkpoint selection. D0/M1 extraction is
+HLT-only and the campaign has no final-test task or capability.
+
+Reusable modules now cover exact graph/recipe contracts, teacher-own-domain
+target generation, one-time RAM views and target loading, cold node training,
+RSET/RREL calibration and exact resume, deployable extraction, reporting,
+campaign/workflow dispatch, exact-ID monitoring/cancellation, source/resource
+failed-closure recovery, resource measurement, and authenticated target
+cleanup. The immutable command plan contains exactly 87 tasks: two setup
+tasks, 41 target generations, 42 fits, aggregate, and completion. GPU target
+and training jobs request 8 CPUs, 96 GiB, six hours, one GH200, and
+`B:USR1@120`. Submission is separately phrase-gated and can resume an exact
+validated generic HCWDL submission-event prefix. Source recovery binds and
+reopens the corrected checkout's complete scientific source-hash table;
+resource recovery can replace CPU, RAM, walltime, and GPU requests without
+changing scientific identity.
+
+Local evidence at the final working state:
+
+- combined focused homotopy/representation suites: 170 passed;
+- complete repository suite: 940 passed, 9 skipped for unavailable POSIX
+  bash/SIGUSR1 behavior on Windows, and 14 dependency deprecation warnings;
+- bounded all-node synthetic smoke:
+  `HCWDL_HOMOTOPY_REPRESENTATION_LOCAL_SMOKE/v1`, 42/42 fits, 41 target banks,
+  graph SHA-256
+  `24168ff987eb7f41fc024c4e06384e26b8360f1e100ed8c48aeeede8d6280633`,
+  content SHA-256
+  `e59501fb5c2654d9d3a296e5d3d57265949686ed9caa149731366dd805240f3c`;
+- all 13 new CLI `--help` surfaces passed;
+- all 27 plan contract identities exactly match the contract module;
+- repository-relative Markdown link test passed;
+- the new Slurm worker passed Git-Bash `bash -n`;
+- `git diff --check` passed.
+
+This is local implementation evidence, not live-run authorization. Remaining
+real closure is: create a clean pushed commit, run installed-Weaver parity and
+full numerical acceptance at that exact source, run the separately authorized
+genuine Tigris two-update smoke (including real USR1 fresh-process resume),
+publish measured memory/CUDA/wall/I/O/storage evidence, and render the complete
+nonmutating 300k dry run. A live smoke or pilot still requires its own exact
+phrase-bound user authorization. No Slurm job was submitted and no final-test
+data were accessed during this implementation.

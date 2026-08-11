@@ -18,6 +18,7 @@ from .dataset import iterate_model_batches
 from .engine import precompute_teacher_targets
 from .engine import PmardTrainingConfig, train_pmard
 from .hcwdl_ladder import DOMAINS, NODE_REGISTRY
+from .hcwdl_parent_loss import HCWDL_PARENT_BASE_LOSS_CONTRACT
 from .hcwdl_recipe import validate_recipe, validate_recipe_class_weight_lineage
 from .hcwdl_training import train_hcwdl_node
 from .highcov_cache import DenseAssignmentStore
@@ -306,6 +307,17 @@ def run_qualifier(
         master_seed=seed, amp_dtype=str(recipe["amp_dtype"]), model_input=input_key,
         selection_policy="hcwdl_macro_auc",
     )
+    scientific = {
+        "campaign": "HCWDL", "qualification_id": qualifier_id,
+        "fixed_primary_repair": "HIGHCOV_SHELL_EXACT/v1",
+        "selection_performed": False,
+        "qualification_rng_policy": "shared_trajectory_across_views_v1",
+        "performance_early_stopping": False,
+    }
+    scientific.update(
+        {"smoke_updates": 2}
+        if smoke else {"training_passes": 60, "validation_every_passes": 1}
+    )
     return train_pmard(
         model=model_factory(), train_batches=lambda epoch: stream("train", epoch),
         validation_batches=lambda: stream("validation", 0),
@@ -316,12 +328,8 @@ def run_qualifier(
             "assignment_lock_sha256": assignment_lock_sha256,
             "recipe_sha256": recipe_hash,
         },
-        scientific_config={
-            "campaign": "HCWDL", "qualification_id": qualifier_id,
-            "fixed_primary_repair": "HIGHCOV_SHELL_EXACT/v1",
-            "selection_performed": False, "training_passes": 2 if smoke else 60,
-            "qualification_rng_policy": "shared_trajectory_across_views_v1",
-        },
+        scientific_config=scientific,
+        loss_semantics_contract=HCWDL_PARENT_BASE_LOSS_CONTRACT,
     )
 
 
@@ -434,6 +442,18 @@ def run_confirmation_control(
         amp_dtype=str(recipe["amp_dtype"]), model_input="hlt",
         selection_policy="hcwdl_macro_auc",
     )
+    scientific = {
+        "campaign": "HCWDL", "control_id": control_id,
+        "performance_early_stopping": False,
+        "initialization": (
+            "selected_M5w_weights_optimizer_reset"
+            if control_id == "NULL_WARM_LABEL_ONLY" else "fresh"
+        ),
+    }
+    scientific.update(
+        {"smoke_updates": 2}
+        if smoke else {"training_passes": 60, "validation_every_passes": 1}
+    )
     return train_pmard(
         model=model,
         train_batches=lambda epoch: stream("train", epoch),
@@ -448,17 +468,8 @@ def run_confirmation_control(
             "recipe_sha256": recipe_hash,
             "teacher_report_sha256": teacher_report["content_hash"],
         },
-        scientific_config={
-            "campaign": "HCWDL", "control_id": control_id,
-            "training_passes": 60 if not smoke else None,
-            "validation_every_passes": 1 if not smoke else None,
-            "smoke_updates": 2 if smoke else None,
-            "performance_early_stopping": False,
-            "initialization": (
-                "selected_M5w_weights_optimizer_reset"
-                if control_id == "NULL_WARM_LABEL_ONLY" else "fresh"
-            ),
-        },
+        scientific_config=scientific,
+        loss_semantics_contract=HCWDL_PARENT_BASE_LOSS_CONTRACT,
     )
 
 

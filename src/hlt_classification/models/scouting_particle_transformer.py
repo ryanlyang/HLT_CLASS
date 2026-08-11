@@ -15,6 +15,8 @@ SCOUTING_PARTICLE_TRANSFORMER_CONTRACT = "hlt_classification_scouting_part_v1"
 SPLIT_SCOUTING_PARTICLE_TRANSFORMER_CONTRACT = (
     "hlt_classification_split_scouting_part_v1"
 )
+HCWDL_SCOUTING_SURFACE_CONTRACT = "HCWDL_SCOUTING_SURFACES/v1"
+HCWDL_NATIVE_OFFLINE_SURFACE_CONTRACT = "HCWDL_NATIVE_OFFLINE_SURFACES/v1"
 FP32_ATOL = 1.0e-6
 FP32_RTOL = 1.0e-5
 
@@ -56,6 +58,201 @@ def _weaver_class() -> type[nn.Module]:
     return model_class
 
 
+@dataclass(frozen=True)
+class HCWDLScoutingSurfaces:
+    """Single-forward HLT/Shell-Exact surfaces used only during RKD training."""
+
+    logits: torch.Tensor
+    particle_block_2: torch.Tensor
+    jet_penultimate: torch.Tensor
+    particle_mask: torch.Tensor
+    vectors: torch.Tensor
+    visible_indices: torch.Tensor
+    family_codes: torch.Tensor
+
+
+@dataclass(frozen=True)
+class HCWDLNativeOfflineSurfaces:
+    """Single-forward native-offline surfaces with separate latent families."""
+
+    logits: torch.Tensor
+    charged_particle_block_2: torch.Tensor
+    neutral_particle_block_2: torch.Tensor
+    offline_jet_penultimate: torch.Tensor
+    charged_mask: torch.Tensor
+    neutral_mask: torch.Tensor
+    charged_vectors: torch.Tensor
+    neutral_vectors: torch.Tensor
+    charged_visible_indices: torch.Tensor
+    neutral_visible_indices: torch.Tensor
+
+
+@dataclass(frozen=True)
+class _WeaverHCWDLSurfaces:
+    output: torch.Tensor
+    particle_block_2: torch.Tensor
+    penultimate: torch.Tensor
+    particle_mask: torch.Tensor
+    vectors: torch.Tensor
+    visible_indices: torch.Tensor
+    family_codes: torch.Tensor | None
+
+
+def _validate_surface_inputs(
+    features: torch.Tensor,
+    vectors: torch.Tensor,
+    mask: torch.Tensor,
+    visible_indices: torch.Tensor,
+    family_codes: torch.Tensor | None,
+    *,
+    input_dim: int,
+) -> None:
+    batch, _, particles = features.shape if features.ndim == 3 else (0, 0, 0)
+    if features.ndim != 3 or features.shape[1] != input_dim:
+        raise ValueError(f"HCWDL features must be [batch,{input_dim},particles]")
+    if vectors.shape != (batch, 4, particles):
+        raise ValueError("HCWDL vectors must be [batch,4,particles]")
+    if mask.shape != (batch, 1, particles) or mask.dtype != torch.bool:
+        raise ValueError("HCWDL mask must be boolean [batch,1,particles]")
+    if visible_indices.shape != (batch, particles) or visible_indices.dtype not in {
+        torch.int16, torch.int32, torch.int64,
+    }:
+        raise ValueError("HCWDL visible indices must be integer [batch,particles]")
+    visible = mask[:, 0]
+    if bool((visible_indices[visible] < 0).any()):
+        raise ValueError("visible HCWDL token IDs must be nonnegative")
+    if bool((visible_indices[~visible] != -1).any()):
+        raise ValueError("padded HCWDL token IDs must equal -1")
+    for row in range(batch):
+        ids = visible_indices[row, visible[row]]
+        if ids.numel() != torch.unique(ids).numel():
+            raise ValueError("visible HCWDL token IDs must be unique within a jet")
+    if family_codes is not None:
+        if family_codes.shape != (batch, particles) or family_codes.dtype not in {
+            torch.int8, torch.int16, torch.int32, torch.int64,
+        }:
+            raise ValueError("HCWDL family codes must be integer [batch,particles]")
+        if bool((family_codes[visible] < -128).any()) or bool((family_codes[visible] > 127).any()):
+            raise ValueError("visible HCWDL family codes exceed int8")
+        if bool((family_codes[~visible] != -1).any()):
+            raise ValueError("padded HCWDL family codes must equal -1")
+
+
+def _attention_mask_blocks(mod: nn.Module) -> tuple[int, ...]:
+    policy = mod.block_ids_with_attn_mask
+    count = len(mod.blocks)
+    if (
+        isinstance(policy, (list, tuple))
+        and len(policy) == count
+        and all(isinstance(item, bool) for item in policy)
+    ):
+        return tuple(index for index, enabled in enumerate(policy) if enabled)
+    try:
+        return tuple(index for index in range(count) if index in policy)
+    except TypeError as error:
+        raise TypeError("installed Weaver attention-mask policy differs") from error
+
+
+def _forward_hcwdl_weaver_surfaces(
+    mod: nn.Module,
+    features: torch.Tensor,
+    vectors: torch.Tensor,
+    mask: torch.Tensor,
+    visible_indices: torch.Tensor,
+    family_codes: torch.Tensor | None,
+    *,
+    input_dim: int,
+    output_dim: int,
+) -> _WeaverHCWDLSurfaces:
+    """Execute one authenticated Weaver path and retain the block-two state.
+
+    Integer bookkeeping is appended only while Weaver's trimmer jointly
+    permutes/truncates the particle axis.  It is removed before ``embed`` and
+    therefore has no parameter or logit path.
+    """
+
+    required = (
+        "trimmer", "embed", "pair_embed", "blocks", "_forward_aggregator",
+        "fc", "block_ids_with_attn_mask",
+    )
+    missing = [name for name in required if not hasattr(mod, name)]
+    if missing:
+        raise TypeError(f"installed Weaver lacks HCWDL surfaces: {missing}")
+    if len(mod.blocks) != 8:
+        raise TypeError("HCWDL surface contract requires eight particle blocks")
+    _validate_surface_inputs(
+        features, vectors, mask, visible_indices, family_codes,
+        input_dim=input_dim,
+    )
+    metadata = [visible_indices[:, None].to(features.dtype)]
+    if family_codes is not None:
+        metadata.append(family_codes[:, None].to(features.dtype))
+    combined = torch.cat((features, *metadata), dim=1)
+    combined, vectors, mask, extra = mod.trimmer(combined, vectors, mask, None)
+    if extra is not None:
+        raise TypeError("installed Weaver trimmer returned unexpected pair payload")
+    model_features = combined[:, :input_dim]
+    transported = combined[:, input_dim:]
+    expected_metadata = 2 if family_codes is not None else 1
+    if transported.shape[1] != expected_metadata:
+        raise TypeError("installed Weaver trimmer changed metadata channels")
+    rounded = transported.float().round()
+    if not torch.equal(transported.float(), rounded):
+        raise RuntimeError("HCWDL trimmer corrupted integer metadata")
+    transported_ids = rounded[:, 0].to(torch.int64)
+    particle_mask = mask.squeeze(1)
+    transported_ids = transported_ids.masked_fill(~particle_mask, -1)
+    transported_family = None
+    if family_codes is not None:
+        transported_family = rounded[:, 1].to(torch.int8).masked_fill(
+            ~particle_mask, -1,
+        )
+    padding_mask = ~particle_mask
+    hidden = mod.embed(model_features)
+    expected_hidden = (features.shape[0], model_features.shape[2], 128)
+    if hidden.shape != expected_hidden:
+        raise TypeError(
+            "installed Weaver embedding layout/width differs from HCWDL: "
+            f"{tuple(hidden.shape)} != {expected_hidden}"
+        )
+    hidden = hidden.masked_fill(~mask.transpose(1, 2), 0)
+    pair = mod.pair_embed(vectors, uu=None, mask=mask)
+    if pair.ndim != 4 or pair.shape[0] != features.shape[0] or pair.shape[1] != 8 or pair.shape[2:] != (
+        model_features.shape[2], model_features.shape[2],
+    ):
+        raise TypeError("installed Weaver pair-bias layout differs from HCWDL")
+    attention_blocks = _attention_mask_blocks(mod)
+    block_two = None
+    for index, block in enumerate(mod.blocks):
+        hidden = block(
+            hidden,
+            x_cls=None,
+            padding_mask=padding_mask,
+            attn_mask=pair if index in attention_blocks else None,
+        )
+        if hidden.shape != expected_hidden:
+            raise TypeError("installed Weaver particle-block layout differs")
+        if index == 1:
+            block_two = hidden
+    if block_two is None:
+        raise RuntimeError("HCWDL particle block two was not captured")
+    penultimate = mod._forward_aggregator(hidden, padding_mask)
+    if penultimate.shape != (features.shape[0], 128):
+        raise TypeError("installed Weaver aggregator width differs from HCWDL")
+    output = mod.fc(penultimate)
+    if output.shape != (features.shape[0], output_dim):
+        raise TypeError("installed Weaver classifier output differs from HCWDL")
+    return _WeaverHCWDLSurfaces(
+        output=output,
+        particle_block_2=block_two,
+        penultimate=penultimate,
+        particle_mask=particle_mask,
+        vectors=vectors,
+        visible_indices=transported_ids,
+        family_codes=transported_family,
+    )
+
+
 class ScoutingParticleTransformer(nn.Module):
     """State-transparent HLT-only adapter; no offline or match argument exists."""
 
@@ -76,6 +273,37 @@ class ScoutingParticleTransformer(nn.Module):
 
     def no_weight_decay(self) -> set[str]:
         return {"mod.cls_token"}
+
+    def forward_hcwdl_surfaces(
+        self,
+        features: torch.Tensor,
+        vectors: torch.Tensor,
+        mask: torch.Tensor,
+        visible_indices: torch.Tensor,
+        family_codes: torch.Tensor,
+    ) -> HCWDLScoutingSurfaces:
+        """Expose the registered RKD taps without changing public inference."""
+
+        output = _forward_hcwdl_weaver_surfaces(
+            self.mod,
+            features,
+            vectors,
+            mask,
+            visible_indices,
+            family_codes,
+            input_dim=21,
+            output_dim=15,
+        )
+        assert output.family_codes is not None
+        return HCWDLScoutingSurfaces(
+            logits=output.output,
+            particle_block_2=output.particle_block_2,
+            jet_penultimate=output.penultimate,
+            particle_mask=output.particle_mask,
+            vectors=output.vectors,
+            visible_indices=output.visible_indices,
+            family_codes=output.family_codes,
+        )
 
     def forward_representations(
         self, features: torch.Tensor, vectors: torch.Tensor, mask: torch.Tensor,
@@ -289,6 +517,70 @@ class NativeOfflineParticleTransformer(nn.Module):
         )
         return self.classifier(torch.cat((charged, neutral), dim=-1))
 
+    def forward_hcwdl_surfaces(
+        self,
+        charged_features: torch.Tensor,
+        charged_vectors: torch.Tensor,
+        charged_mask: torch.Tensor,
+        neutral_features: torch.Tensor,
+        neutral_vectors: torch.Tensor,
+        neutral_mask: torch.Tensor,
+        charged_visible_indices: torch.Tensor,
+        neutral_visible_indices: torch.Tensor,
+    ) -> HCWDLNativeOfflineSurfaces:
+        """Expose TOFF's two latent token spaces in one top-level forward."""
+
+        charged = _forward_hcwdl_weaver_surfaces(
+            self.charged_encoder,
+            charged_features,
+            charged_vectors,
+            charged_mask,
+            charged_visible_indices,
+            None,
+            input_dim=19,
+            output_dim=128,
+        )
+        neutral = _forward_hcwdl_weaver_surfaces(
+            self.neutral_encoder,
+            neutral_features,
+            neutral_vectors,
+            neutral_mask,
+            neutral_visible_indices,
+            None,
+            input_dim=7,
+            output_dim=128,
+        )
+        if (
+            not isinstance(self.classifier, nn.Sequential)
+            or len(self.classifier) != 4
+            or not isinstance(self.classifier[0], nn.LayerNorm)
+            or not isinstance(self.classifier[1], nn.Linear)
+            or not isinstance(self.classifier[2], nn.GELU)
+            or not isinstance(self.classifier[3], nn.Linear)
+        ):
+            raise TypeError("TOFF classifier topology differs from HCWDL")
+        merged = torch.cat((charged.output, neutral.output), dim=-1)
+        penultimate = self.classifier[2](
+            self.classifier[1](self.classifier[0](merged))
+        )
+        if penultimate.shape != (charged_features.shape[0], 128):
+            raise TypeError("TOFF penultimate representation width differs")
+        logits = self.classifier[3](penultimate)
+        if logits.shape != (charged_features.shape[0], 15):
+            raise TypeError("TOFF classifier output differs")
+        return HCWDLNativeOfflineSurfaces(
+            logits=logits,
+            charged_particle_block_2=charged.particle_block_2,
+            neutral_particle_block_2=neutral.particle_block_2,
+            offline_jet_penultimate=penultimate,
+            charged_mask=charged.particle_mask,
+            neutral_mask=neutral.particle_mask,
+            charged_vectors=charged.vectors,
+            neutral_vectors=neutral.vectors,
+            charged_visible_indices=charged.visible_indices,
+            neutral_visible_indices=neutral.visible_indices,
+        )
+
 
 def build_native_offline_particle_transformer() -> NativeOfflineParticleTransformer:
     return NativeOfflineParticleTransformer()
@@ -491,6 +783,8 @@ def validate_native_offline_weaver_fp32_parity(
 
 
 __all__ = [
+    "HCWDL_NATIVE_OFFLINE_SURFACE_CONTRACT", "HCWDL_SCOUTING_SURFACE_CONTRACT",
+    "HCWDLNativeOfflineSurfaces", "HCWDLScoutingSurfaces",
     "SCOUTING_PARTICLE_TRANSFORMER_CONTRACT",
     "SPLIT_SCOUTING_PARTICLE_TRANSFORMER_CONTRACT",
     "ScoutingParticleTransformer", "SplitScoutingParticleTransformer",
