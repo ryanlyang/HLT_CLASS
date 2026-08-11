@@ -108,6 +108,7 @@ _DENSE_RESOURCE_COMPATIBILITY_CHANGED_PATHS: Final = frozenset({
     "src/hlt_classification/scouting/hcwdl_representation_runtime_rows.py",
     "src/hlt_classification/scouting/hcwdl_representation_target_planning.py",
     "src/hlt_classification/scouting/hcwdl_representation_targets.py",
+    "tests/test_hcwdl_representation_campaign.py",
     "tests/test_hcwdl_representation_cli.py",
     "tests/test_hcwdl_representation_contracts.py",
     "tests/test_hcwdl_representation_dense_preparation.py",

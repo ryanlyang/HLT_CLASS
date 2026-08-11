@@ -2340,8 +2340,13 @@ def validate_submission_ledger(
     rows = ledger.get("materialized_commands")
     if not isinstance(jobs, Mapping) or not isinstance(rows, list):
         raise ValueError("representation submission ledger topology differs")
-    if list(jobs) != [row["task_key"] for row in command_plan["commands"]]:
-        raise ValueError("representation submission ledger task order differs")
+    expected_task_keys = [
+        row["task_key"] for row in command_plan["commands"]
+    ]
+    if len(jobs) != len(expected_task_keys) or set(jobs) != set(
+        expected_task_keys
+    ):
+        raise ValueError("representation submission ledger task registry differs")
     if len(rows) != len(command_plan["commands"]):
         raise ValueError("representation submission ledger row count differs")
     prior: dict[str, str] = {}

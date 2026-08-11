@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import json
 from pathlib import Path
 
 import pytest
@@ -21,10 +22,13 @@ from hlt_classification.scouting.hcwdl_representation_campaign import (
     submit_command_plan,
     validate_campaign_spec,
     validate_submission_authorization,
+    validate_submission_ledger,
     validate_submission_event_chain,
     validate_task_registry,
 )
-from hlt_classification.data.cache_contracts import with_content_hash
+from hlt_classification.data.cache_contracts import (
+    canonical_json_bytes, with_content_hash,
+)
 
 
 def _spec(tmp_path, disposition="combined_confirmatory"):
@@ -342,6 +346,11 @@ def test_initial_submission_resumes_from_durable_event_prefix_without_duplicates
     )
     assert ledger == assemble_submission_ledger_from_events(
         events, spec=spec, command_plan=plan,
+    )
+    roundtripped = json.loads(canonical_json_bytes(ledger))
+    assert list(roundtripped["jobs"]) == sorted(roundtripped["jobs"])
+    validate_submission_ledger(
+        roundtripped, spec=spec, command_plan=plan,
     )
 
     tampered = dict(events[0]); tampered.pop("content_hash")
