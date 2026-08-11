@@ -240,8 +240,9 @@ phrases, `hcddp5_*` job names, output root, and aggregate. See
 `docs/HCWDL_DENSE5_COLD_RUNBOOK.md`.
 
 Dense ladders pinned to an older broken source commit are continued with
-`create_hcwdl_dense_recovery.py`, `submit_hcwdl_dense_recovery.py`, and
-`run_hcwdl_dense_recovery_task.py`. The recovery requires a complete original
+`create_hcwdl_dense_recovery.py`, `create_hcwdl_dense_reschedule.py`,
+`submit_hcwdl_dense_recovery.py`, and `run_hcwdl_dense_recovery_task.py`.
+The recovery requires a complete original
 ledger plus an authenticated monitor, preserves the valid completed prefix,
 and submits only the failed/downstream closure from a clean repair checkout.
 It does not rematch, retrain the valid prefix, or access final test.
@@ -270,7 +271,9 @@ The validation-only 80-fit structural-feature study uses the thin
 `resume_hcwdl_homotopy.py`, and `cancel_hcwdl_homotopy.py` surfaces.
 Preparation helpers are `build_hcwdl_upper_calibration.py`,
 `build_hcwdl_upper_coupling_shard.py`,
-`finalize_hcwdl_upper_coupling.py`, and `build_hcwdl_toff_targets.py`.
+`finalize_hcwdl_upper_coupling.py`, `build_hcwdl_toff_targets.py`,
+`build_hcwdl_homotopy_resume_evidence.py`, and
+`build_hcwdl_homotopy_resource_profile.py`.
 It imports an authenticated HCWDL smoke or unweighted 300k pilot, registers no
 final-test task, stores only compact coupling/target artifacts, and rebuilds
 particle views in process-local RAM. The exact artifact and recovery rules are

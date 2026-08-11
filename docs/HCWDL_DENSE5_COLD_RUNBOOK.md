@@ -74,3 +74,8 @@ recovery in
 It authenticates and retains completed D100offkd, then begins at D95 when D95
 is the first failed task. Requeueing the old Slurm job would reuse its broken
 source and is forbidden.
+
+If the corrected recovery remains pending because it inherited the original
+`320G`/72-hour request, replace it through the measured-resource reschedule in
+`contracts/HCWDL_DENSE_RECOVERY.md`. Dense5 receives the identical
+`96G`/six-hour profile and preserves its independent graph and output root.

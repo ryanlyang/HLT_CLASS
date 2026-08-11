@@ -22,6 +22,7 @@ def main() -> int:
     parser.add_argument("--campaign-root", type=Path, required=True)
     parser.add_argument("--project-dir", type=Path, required=True)
     parser.add_argument("--source-commit", required=True)
+    parser.add_argument("--weaver-parity", type=Path, required=True)
     parser.add_argument("--dense-d0-report", type=Path)
     parser.add_argument("--contextual-report", type=Path, action="append", default=[])
     parser.add_argument("--resource-profile", type=Path)
@@ -32,7 +33,8 @@ def main() -> int:
     spec = create_campaign(
         parent_campaign_spec=args.parent_campaign_spec,
         campaign_root=args.campaign_root, project_dir=args.project_dir,
-        source_commit=args.source_commit, dense_d0_report=args.dense_d0_report,
+        source_commit=args.source_commit, weaver_parity=args.weaver_parity,
+        dense_d0_report=args.dense_d0_report,
         contextual_reports=args.contextual_report,
         resource_profile=profile,
         authorize_live_submission=args.authorize_live_submission,

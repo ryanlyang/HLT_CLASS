@@ -37,6 +37,7 @@ def build_graph_recipe_lock(
     graph_semantic_sha256: str, recipe_overlay_sha256: str,
     parent_recipe_sha256: str, coordinate_sha256: str,
     command_plan_sha256: str, source_commit_sha256: str,
+    weaver_parity_sha256: str,
 ) -> dict[str, Any]:
     hashes = {
         name: require_sha256(value, name=name)
@@ -101,6 +102,7 @@ def validate_graph_recipe_lock(
         "graph_semantic_sha256", "recipe_overlay_sha256",
         "parent_recipe_sha256", "coordinate_sha256", "command_plan_sha256",
         "source_commit_sha256",
+        "weaver_parity_sha256",
     ):
         require_sha256(value.get(name), name=name)
     if (

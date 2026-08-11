@@ -9,7 +9,8 @@ import sys
 import pytest
 
 from hlt_classification.data.cache_contracts import (
-    load_json, sha256_file, with_content_hash, write_immutable_json,
+    canonical_sha256, load_json, sha256_file, with_content_hash,
+    write_immutable_json,
 )
 from hlt_classification.scouting.engine import PMARD_TRAINING_REPORT_CONTRACT
 from hlt_classification.scouting.hcwdl_dense import (
@@ -22,8 +23,9 @@ from hlt_classification.scouting.hcwdl_dense import (
 from hlt_classification.scouting.hcwdl_dense_runner import dense_shared_repair_seed
 from hlt_classification.scouting.hcwdl_dense_workflow import DenseColdWorkflow
 from hlt_classification.scouting.hcwdl_dense_recovery import (
-    build_dense_recovery_plan, create_dense_recovery_spec,
-    validate_dense_recovery_spec,
+    DENSE_300K_MEASURED_RESOURCE_PROFILE, build_dense_recovery_plan,
+    create_dense_recovery_spec, create_dense_reschedule_spec,
+    validate_dense_recovery_inputs, validate_dense_recovery_spec,
 )
 from hlt_classification.scouting.hcwdl_recovery import (
     build_monitor_report, build_submission_ledger,
@@ -302,6 +304,59 @@ def test_dense_recovery_reuses_completed_top_and_submits_failed_closure(
     assert all("--array" not in item for row in plan["commands"] for item in row["command"])
     worker = Path("sbatch/run_hcwdl_dense_recovery.sh").read_text()
     assert "exec python -s" in worker
+
+    recovery_root = Path(recovery["recovery_root"])
+    recovery_path = recovery_root / "recovery_spec.json"
+    write_immutable_json(recovery_path, recovery)
+    recovery_commands = {
+        row["task_id"]: row["command"]
+        for row in build_dense_recovery_plan(recovery)["commands"]
+    }
+    recovery_jobs = {
+        task: str(81_000 + index)
+        for index, task in enumerate(recovery_commands)
+    }
+    recovery_ledger = build_submission_ledger(
+        campaign_spec_sha256=recovery["content_hash"], jobs=recovery_jobs,
+        commands=recovery_commands, dry_run=False,
+        parent_ledger_sha256=ledger["content_hash"],
+        monitor_report_sha256=monitor["content_hash"],
+        superseded_jobs=recovery["superseded_jobs"],
+    )
+    recovery_ledger_path = recovery_root / "submission_ledger.json"
+    write_immutable_json(recovery_ledger_path, recovery_ledger)
+    rescheduled = create_dense_reschedule_spec(
+        previous_recovery_spec=recovery_path,
+        previous_recovery_ledger=recovery_ledger_path,
+        recovery_root=tmp_path / f"rescheduled_{rung_step}",
+        project_dir=tmp_path / "right_sized_source", source_commit="e" * 40,
+        authorization_phrase=(
+            "AUTHORIZE HCWDL DENSE MEASURED RESOURCE RESCHEDULE"
+        ),
+    )
+    assert validate_dense_recovery_spec(
+        rescheduled, executable=True,
+    ) == rescheduled["content_hash"]
+    assert validate_dense_recovery_inputs(rescheduled)["parent"] == parent
+    assert rescheduled["retry_tasks"] == recovery["retry_tasks"]
+    assert rescheduled["superseded_jobs"] == recovery_jobs
+    assert rescheduled["parent_resources"] == recovery["resources"]
+    assert rescheduled["resources"]["gpu_single"] == {
+        "cpus": 8, "memory": "96G", "walltime": "06:00:00",
+        "gpu": "gpu:gh200:1",
+    }
+    assert rescheduled["resource_profile"] == DENSE_300K_MEASURED_RESOURCE_PROFILE
+    rescheduled_plan = build_dense_recovery_plan(rescheduled)
+    gpu_command = rescheduled_plan["commands"][0]["command"]
+    assert "--mem=96G" in gpu_command
+    assert "--time=06:00:00" in gpu_command
+    assert any("rs_train_" in item for item in gpu_command)
+    forged = deepcopy(rescheduled)
+    forged["resources"]["gpu_single"]["memory"] = "64G"
+    forged["resource_request_sha256"] = canonical_sha256(forged["resources"])
+    forged = with_content_hash(forged)
+    with pytest.raises(ValueError, match="reschedule identity differs"):
+        validate_dense_recovery_spec(forged)
 
 
 @pytest.mark.parametrize(("rung_step", "node_id"), ((10, "D90c"), (5, "D95c")))

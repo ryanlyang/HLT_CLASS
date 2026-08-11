@@ -26,6 +26,9 @@ from hlt_classification.scouting.hcwdl_homotopy_contracts import (  # noqa: E402
     NODE_RUNTIME_CONTRACT, SMOKE_RESOURCE_MEASUREMENT_CONTRACT,
     TARGET_RESOURCE_MEASUREMENT_CONTRACT,
 )
+from hlt_classification.scouting.hcwdl_homotopy_resume import (  # noqa: E402
+    validate_resume_evidence,
+)
 from hlt_classification.scouting.hcwdl_recovery import (  # noqa: E402
     MONITOR_CONTRACT, validate_submission_ledger,
 )
@@ -209,17 +212,115 @@ def _artifact_bytes(root: Path) -> int:
     return sum(path.stat().st_size for path in root.rglob("*") if path.is_file())
 
 
+def _effective_completed_chain(
+    *, ledger_paths: list[Path], monitor_paths: list[Path],
+    campaign_spec_sha256: str, registered_tasks: set[str],
+) -> tuple[dict[str, Any], list[str], list[str]]:
+    """Authenticate a live ledger/recovery chain and select its final attempts."""
+
+    if not ledger_paths or len(ledger_paths) != len(monitor_paths):
+        raise ValueError("resource evidence requires paired ledger/monitor chains")
+    effective_jobs: dict[str, str] = {}
+    effective_commands: dict[str, Any] = {}
+    effective_rows: dict[str, Mapping[str, Any]] = {}
+    ledger_hashes: list[str] = []
+    monitor_hashes: list[str] = []
+    previous_ledger_hash: str | None = None
+    previous_monitor_hash: str | None = None
+    for index, (ledger_path, monitor_path) in enumerate(
+        zip(ledger_paths, monitor_paths, strict=True)
+    ):
+        ledger = load_json(ledger_path)
+        ledger_hash = validate_submission_ledger(ledger)
+        if (
+            ledger.get("dry_run") is not False
+            or ledger.get("campaign_spec_sha256") != campaign_spec_sha256
+            or not set(ledger["jobs"]) <= registered_tasks
+        ):
+            raise ValueError("resource ledger is not an exact live smoke ledger")
+        if index == 0:
+            if (
+                set(ledger["jobs"]) != registered_tasks
+                or ledger.get("parent_ledger_sha256") is not None
+                or ledger.get("monitor_report_sha256") is not None
+            ):
+                raise ValueError("resource ledger chain must begin with the full root ledger")
+        elif (
+            ledger.get("parent_ledger_sha256") != previous_ledger_hash
+            or ledger.get("monitor_report_sha256") != previous_monitor_hash
+        ):
+            raise ValueError("resource recovery ledger chain is not contiguous")
+
+        monitor = load_json(monitor_path)
+        monitor_hash = validate_content_hash(
+            monitor, expected_contract=MONITOR_CONTRACT, expected_schema_version=1,
+        )
+        if monitor.get("submission_ledger_sha256") != ledger_hash:
+            raise ValueError("resource monitor/ledger lineage differs")
+        rows = {str(row.get("task_id")): row for row in monitor.get("rows", ())}
+        if set(rows) != set(ledger["jobs"]) or any(
+            str(rows[task].get("job_id")) != str(job)
+            for task, job in ledger["jobs"].items()
+        ):
+            raise ValueError("resource monitor does not cover its exact ledger")
+
+        if index:
+            expected_superseded = {
+                task: effective_jobs[task] for task in ledger["jobs"]
+                if task in effective_jobs
+            }
+            if (
+                set(expected_superseded) != set(ledger["jobs"])
+                or ledger.get("superseded_jobs") != expected_superseded
+            ):
+                raise ValueError("resource recovery does not supersede exact prior attempts")
+        for task, job in ledger["jobs"].items():
+            effective_jobs[task] = str(job)
+            effective_commands[task] = list(ledger["commands"][task])
+            effective_rows[task] = rows[task]
+        ledger_hashes.append(ledger_hash)
+        monitor_hashes.append(monitor_hash)
+        previous_ledger_hash = ledger_hash
+        previous_monitor_hash = monitor_hash
+
+    if set(effective_jobs) != registered_tasks or any(
+        row.get("state") != "COMPLETED"
+        or row.get("disposition") != "complete"
+        or row.get("artifacts_valid") is not True
+        for row in effective_rows.values()
+    ):
+        raise ValueError("resource evidence requires a reusable final attempt for every task")
+    effective = {
+        "jobs": effective_jobs,
+        "commands": effective_commands,
+    }
+    return effective, ledger_hashes, monitor_hashes
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--smoke-campaign-spec", type=Path, required=True)
-    parser.add_argument("--submission-ledger", type=Path, required=True)
-    parser.add_argument("--monitor-report", type=Path, required=True)
+    parser.add_argument(
+        "--submission-ledger", type=Path, action="append", required=True,
+        help="Root live ledger followed by each exact recovery ledger.",
+    )
+    parser.add_argument(
+        "--monitor-report", type=Path, action="append", required=True,
+        help="One final monitor for each ledger, in the same order.",
+    )
+    parser.add_argument("--resume-evidence", type=Path, required=True)
     parser.add_argument("--requests-json", type=Path, required=True)
+    parser.add_argument(
+        "--storage-budget-gib", type=float, required=True,
+        help="Durable campaign-root budget; must retain at least 25% smoke headroom.",
+    )
     parser.add_argument("--usage-json", type=Path)
     parser.add_argument("--query-slurm", action="store_true")
     parser.add_argument("--measurement-output", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    if args.storage_budget_gib <= 0:
+        parser.error("--storage-budget-gib must be positive")
     if (args.usage_json is None) == (not args.query_slurm):
         parser.error("choose exactly one of --usage-json or --query-slurm")
 
@@ -234,32 +335,26 @@ def main() -> int:
     )
     if completion.get("campaign_spec_sha256") != spec["content_hash"]:
         raise ValueError("smoke completion belongs to another campaign")
-    ledger = load_json(args.submission_ledger)
-    ledger_hash = validate_submission_ledger(ledger)
-    if ledger.get("dry_run") is not False or ledger.get("campaign_spec_sha256") != spec["content_hash"]:
-        raise ValueError("resource ledger is not the exact live smoke ledger")
-    monitor = load_json(args.monitor_report)
-    monitor_hash = validate_content_hash(
-        monitor, expected_contract=MONITOR_CONTRACT, expected_schema_version=1,
+    registered_tasks = {str(row["task_id"]) for row in spec["tasks"]}
+    ledger, ledger_hashes, monitor_hashes = _effective_completed_chain(
+        ledger_paths=args.submission_ledger, monitor_paths=args.monitor_report,
+        campaign_spec_sha256=spec["content_hash"],
+        registered_tasks=registered_tasks,
     )
-    if monitor.get("submission_ledger_sha256") != ledger_hash:
-        raise ValueError("resource monitor/ledger lineage differs")
-    monitor_rows = {str(row["task_id"]): row for row in monitor.get("rows", ())}
-    if set(monitor_rows) != set(ledger["jobs"]) or any(
-        row.get("state") != "COMPLETED"
-        or row.get("disposition") != "complete"
-        or row.get("artifacts_valid") is not True
-        for row in monitor_rows.values()
-    ):
-        raise ValueError("resource evidence requires every smoke task to be reusable")
-
+    resume_evidence = load_json(args.resume_evidence)
+    resume_evidence_hash = validate_resume_evidence(
+        resume_evidence, campaign_spec_sha256=spec["content_hash"],
+    )
     usage = _query_usage(ledger, spec) if args.query_slurm else _load_usage(args.usage_json, spec, ledger)
     measurement = with_content_hash({
         "contract": SMOKE_RESOURCE_MEASUREMENT_CONTRACT, "schema_version": 1,
         "campaign_spec_sha256": spec["content_hash"],
         "campaign_completion_sha256": completion_hash,
-        "submission_ledger_sha256": ledger_hash,
-        "monitor_report_sha256": monitor_hash,
+        "submission_ledger_sha256": ledger_hashes[-1],
+        "monitor_report_sha256": monitor_hashes[-1],
+        "submission_ledger_chain_sha256": ledger_hashes,
+        "monitor_report_chain_sha256": monitor_hashes,
+        "resume_evidence_sha256": resume_evidence_hash,
         "measurement_host": usage["measurement_host"],
         "campaign_artifact_bytes": _artifact_bytes(root),
         "measurements": usage["measurements"],
@@ -277,6 +372,10 @@ def main() -> int:
     profile = build_resource_profile(
         requests=raw.get("requests", raw),
         measurement_sha256=measurement["content_hash"],
+        resume_evidence_sha256=resume_evidence_hash,
+        source_commit=spec["source_commit"],
+        semantic_source_sha256=spec["semantic_source_sha256"],
+        storage_budget_bytes=int(args.storage_budget_gib * 1024**3),
         measurement_summary={
             "campaign_artifact_bytes": measurement["campaign_artifact_bytes"],
             "resource_class_maxima": measurement["resource_class_maxima"],

@@ -13,7 +13,9 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from hlt_classification.data.cache_contracts import load_json, write_immutable_json  # noqa: E402
 from hlt_classification.scouting.hcwdl_authorization import validate_source_checkout  # noqa: E402
-from hlt_classification.scouting.hcwdl_homotopy_campaign import validate_campaign  # noqa: E402
+from hlt_classification.scouting.hcwdl_homotopy_campaign import (  # noqa: E402
+    validate_campaign, validate_worker_semantics,
+)
 from hlt_classification.scouting.hcwdl_homotopy_workflow import HomotopyWorkflow  # noqa: E402
 from hlt_classification.scouting.hcwdl_recovery import (  # noqa: E402
     build_task_attestation, task_attestation_path,
@@ -31,6 +33,7 @@ def main() -> int:
     if REPO_ROOT.resolve() != Path(spec["project_dir"]).resolve():
         raise PermissionError("HCWDL-UJ worker is not running from its bound worktree")
     validate_source_checkout(REPO_ROOT, expected_commit=spec["source_commit"])
+    validate_worker_semantics(spec, repository=REPO_ROOT)
     index = args.array_index
     if index is None and "SLURM_ARRAY_TASK_ID" in os.environ:
         index = int(os.environ["SLURM_ARRAY_TASK_ID"])

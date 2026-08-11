@@ -14,7 +14,8 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 from hlt_classification.data.cache_contracts import load_json, write_immutable_json  # noqa: E402
 from hlt_classification.scouting.hcwdl_authorization import validate_source_checkout  # noqa: E402
 from hlt_classification.scouting.hcwdl_dense_recovery import (  # noqa: E402
-    DENSE_RECOVERY_SUBMISSION_PHRASE, build_dense_recovery_plan,
+    DENSE_RECOVERY_SUBMISSION_PHRASE, DENSE_RESCHEDULE_SPEC_CONTRACT,
+    DENSE_RESCHEDULE_SUBMISSION_PHRASE, build_dense_recovery_plan,
     validate_dense_recovery_inputs, validate_dense_recovery_spec,
 )
 from hlt_classification.scouting.hcwdl_recovery import (  # noqa: E402
@@ -38,17 +39,25 @@ def main() -> int:
         raise PermissionError("dense recovery submit path is not canonical")
     plan = build_dense_recovery_plan(spec)
     commands = {row["task_id"]: list(row["command"]) for row in plan["commands"]}
+    lineage_ledger = spec.get(
+        "previous_recovery_ledger", spec["parent_submission_ledger"],
+    )
     if not args.execute:
         ledger = build_submission_ledger(
             campaign_spec_sha256=spec["content_hash"],
             jobs={task: "1" for task in commands}, commands=commands, dry_run=True,
-            parent_ledger_sha256=spec["parent_submission_ledger"]["content_hash"],
+            parent_ledger_sha256=lineage_ledger["content_hash"],
             monitor_report_sha256=spec["failure_monitor"]["content_hash"],
             superseded_jobs=spec["superseded_jobs"],
         )
         write_immutable_json(args.output, ledger)
         return 0
-    if args.authorization_phrase != DENSE_RECOVERY_SUBMISSION_PHRASE:
+    expected_phrase = (
+        DENSE_RESCHEDULE_SUBMISSION_PHRASE
+        if spec.get("contract") == DENSE_RESCHEDULE_SPEC_CONTRACT
+        else DENSE_RECOVERY_SUBMISSION_PHRASE
+    )
+    if args.authorization_phrase != expected_phrase:
         raise PermissionError("dense recovery submission phrase differs")
     if REPO_ROOT.resolve() != Path(spec["project_dir"]).resolve():
         raise PermissionError("dense recovery submitter is in another checkout")
@@ -88,9 +97,7 @@ def main() -> int:
                 build_submission_ledger(
                     campaign_spec_sha256=spec["content_hash"], jobs=jobs,
                     commands=emitted, dry_run=False,
-                    parent_ledger_sha256=spec[
-                        "parent_submission_ledger"
-                    ]["content_hash"],
+                    parent_ledger_sha256=lineage_ledger["content_hash"],
                     monitor_report_sha256=spec["failure_monitor"]["content_hash"],
                     superseded_jobs={
                         task: spec["superseded_jobs"][task] for task in jobs
@@ -103,7 +110,7 @@ def main() -> int:
         build_submission_ledger(
             campaign_spec_sha256=spec["content_hash"], jobs=jobs,
             commands=emitted, dry_run=False,
-            parent_ledger_sha256=spec["parent_submission_ledger"]["content_hash"],
+            parent_ledger_sha256=lineage_ledger["content_hash"],
             monitor_report_sha256=spec["failure_monitor"]["content_hash"],
             superseded_jobs=spec["superseded_jobs"],
         ),

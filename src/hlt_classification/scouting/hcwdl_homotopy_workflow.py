@@ -650,6 +650,7 @@ class HomotopyWorkflow:
                 "coordinate_sha256": self.spec["coordinate_sha256"],
                 "command_plan_sha256": plan_hash,
                 "source_commit_sha256": canonical_sha256(self.spec["source_commit"]),
+                "weaver_parity_sha256": self.spec["weaver_parity_sha256"],
             }
             if output.exists():
                 validate_graph_recipe_lock(

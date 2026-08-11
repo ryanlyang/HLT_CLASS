@@ -79,3 +79,10 @@ the rolling checkpoint, cancel only the exact pending IDs from its recovery
 ledger, and create a new recovery identity from the corrected commit using the
 same original ledger and immutable failure monitor. Already completed retry
 nodes are validated and reused when the replacement closure reaches them.
+
+When a live recovery is pending only because the inherited `320G`/72-hour
+envelope is difficult to backfill, use
+`create_hcwdl_dense_reschedule.py`. The measured 300k profile requests
+`96G`/six hours, binds the exact prior recovery spec and ledger, and reuses the
+same completed artifacts and rolling checkpoints. The exact operator sequence
+is specified in `contracts/HCWDL_DENSE_RECOVERY.md`.

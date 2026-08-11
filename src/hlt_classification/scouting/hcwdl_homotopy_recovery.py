@@ -89,6 +89,11 @@ def _scientific_identity(campaign: Mapping[str, Any]) -> str:
             "graph_sha256", "recipe_overlay_sha256", "coordinate_sha256",
             "coupling_config_sha256", "semantic_source_sha256",
             "replicate_seed", "campaign_root",
+            "parent_campaign_spec_sha256", "split_manifest_sha256",
+            "selection_manifest_sha256", "recipe_sha256",
+            "assignment_manifest_sha256", "assignment_lock_sha256",
+            "shell_qualification_lock_sha256", "weaver_parity_sha256",
+            "role_counts",
         )
     })
 

@@ -13,7 +13,9 @@ import pytest
 import torch
 from torch import nn
 
-from hlt_classification.data.cache_contracts import with_content_hash
+from hlt_classification.data.cache_contracts import (
+    canonical_sha256, with_content_hash, write_immutable_json,
+)
 from hlt_classification.models import scouting_particle_transformer as scouting_part
 from hlt_classification.scouting.hcwdl_homotopy_contracts import (
     EDIT_INSERTION, EDIT_REMOVAL, EDIT_SUBSTITUTION, coordinate_payload,
@@ -35,11 +37,23 @@ from hlt_classification.scouting.hcwdl_homotopy_campaign import (
 )
 from hlt_classification.scouting import hcwdl_homotopy_reporting as homotopy_reporting
 from hlt_classification.scouting.engine import (
+    PMARD_PREEMPTION_EVENT_CONTRACT, PMARD_PREEMPTION_EVENT_VERSION,
+    PMARD_TRAINING_REPORT_CONTRACT, PMARD_TRAINING_REPORT_VERSION,
     _checkpoint_values_equal, _publish_torch_checkpoint,
 )
+from hlt_classification.scouting.hcwdl_homotopy_contracts import (
+    NODE_RUNTIME_CONTRACT, TRAINING_REPORT_CONTRACT,
+)
+from hlt_classification.scouting.hcwdl_homotopy_resume import (
+    build_resume_evidence, validate_resume_evidence,
+)
+from hlt_classification.scouting.hcwdl_homotopy_runner import node_output_dir
 from hlt_classification.scouting.hcwdl_homotopy_recovery import (
     _memory_mib, _validate_resource_increase, _wall_seconds,
     aggregate_slurm_states,
+)
+from hlt_classification.scouting.hcwdl_recovery import (
+    build_monitor_report, build_submission_ledger,
 )
 from hlt_classification.scouting.inputs import build_hlt_inputs
 from hlt_classification.scouting.repair import (
@@ -767,7 +781,10 @@ def test_resource_profile_requires_measured_headroom_and_io() -> None:
     }
     profile = build_resource_profile(
         requests=requests, measurement_sha256=H,
-        measurement_summary=summary, tigris_worker_miniature_passed=True,
+        measurement_summary=summary, resume_evidence_sha256=H,
+        source_commit="c" * 40, semantic_source_sha256={"semantic.py": H},
+        storage_budget_bytes=8192,
+        tigris_worker_miniature_passed=True,
     )
     assert validate_resource_profile(profile) == profile["content_hash"]
     too_small = {name: dict(value) for name, value in requests.items()}
@@ -775,8 +792,99 @@ def test_resource_profile_requires_measured_headroom_and_io() -> None:
     with pytest.raises(ValueError, match="lacks headroom"):
         build_resource_profile(
             requests=too_small, measurement_sha256=H,
-            measurement_summary=summary, tigris_worker_miniature_passed=True,
+            measurement_summary=summary, resume_evidence_sha256=H,
+            source_commit="c" * 40, semantic_source_sha256={"semantic.py": H},
+            storage_budget_bytes=8192,
+            tigris_worker_miniature_passed=True,
         )
+    with pytest.raises(ValueError, match="storage budget lacks headroom"):
+        build_resource_profile(
+            requests=requests, measurement_sha256=H,
+            measurement_summary=summary, resume_evidence_sha256=H,
+            source_commit="c" * 40, semantic_source_sha256={"semantic.py": H},
+            storage_budget_bytes=4096,
+            tigris_worker_miniature_passed=True,
+        )
+    missing_gpu = {
+        name: dict(row) for name, row in maxima.items()
+    }
+    missing_gpu["gpu_training"]["peak_gpu_memory_bytes"] = 0
+    with pytest.raises(ValueError, match="GPU measurement is absent"):
+        build_resource_profile(
+            requests=requests, measurement_sha256=H,
+            measurement_summary={**summary, "resource_class_maxima": missing_gpu},
+            resume_evidence_sha256=H, source_commit="c" * 40,
+            semantic_source_sha256={"semantic.py": H},
+            storage_budget_bytes=8192,
+            tigris_worker_miniature_passed=True,
+        )
+
+
+def test_usr1_resume_evidence_binds_exact_checkpoint_and_distinct_jobs(
+    tmp_path: Path,
+) -> None:
+    node_id = "P0CE"
+    spec = {"mode": "smoke", "campaign_root": str(tmp_path), "content_hash": H}
+    output = node_output_dir(tmp_path, node_id)
+    config = {"experiment_id": node_id, "total_updates": 2}
+    scientific = {"node": {"node_id": node_id}}
+    parents = {"source": "b" * 64}
+    rolling_hash = "c" * 64
+    engine = with_content_hash({
+        "contract": PMARD_TRAINING_REPORT_CONTRACT,
+        "schema_version": PMARD_TRAINING_REPORT_VERSION,
+        "experiment_id": node_id, "config": config,
+        "scientific_config": scientific, "parents": parents,
+        "resume_provenance": {
+            "checkpoint_sha256": rolling_hash, "resumed_update": 1,
+            "resumed_epoch": 0, "resumed_batch_offset": 1,
+        },
+    })
+    wrapper = with_content_hash({
+        "contract": TRAINING_REPORT_CONTRACT, "schema_version": 1,
+        "node_id": node_id,
+        "pmard_engine_report_sha256": engine["content_hash"],
+    })
+    runtime = with_content_hash({
+        "contract": NODE_RUNTIME_CONTRACT, "schema_version": 1,
+        "campaign_spec_sha256": H, "node_id": node_id,
+        "training_report_sha256": wrapper["content_hash"],
+        "pmard_engine_report_sha256": engine["content_hash"],
+        "slurm_job_id": "90002", "final_test_accessed": False,
+    })
+    write_immutable_json(output / "training_report.json", engine)
+    write_immutable_json(output / "hcwdl_training_report.json", wrapper)
+    write_immutable_json(output / "runtime.json", runtime)
+    event = with_content_hash({
+        "contract": PMARD_PREEMPTION_EVENT_CONTRACT,
+        "schema_version": PMARD_PREEMPTION_EVENT_VERSION,
+        "experiment_id": node_id,
+        "config_sha256": canonical_sha256({
+            "training": config, "scientific": scientific,
+        }),
+        "parents": parents, "update": 1, "epoch": 0, "batch_offset": 1,
+        "rolling_checkpoint_sha256": rolling_hash,
+        "signal_number": 10, "signal_name": "SIGUSR1",
+        "slurm_job_id": "90001", "final_test_accessed": False,
+    })
+    event_path = tmp_path / "event.json"; write_immutable_json(event_path, event)
+    evidence = build_resume_evidence(
+        spec, node_id=node_id, preemption_event_path=event_path,
+    )
+    assert validate_resume_evidence(
+        evidence, campaign_spec_sha256=H,
+    ) == evidence["content_hash"]
+    assert evidence["interrupted_slurm_job_id"] == "90001"
+    assert evidence["resumed_slurm_job_id"] == "90002"
+
+    runtime["slurm_job_id"] = "90001"
+    runtime.pop("content_hash")
+    write_immutable_json(output / "runtime_same_job.json", with_content_hash(runtime))
+    original_runtime = output / "runtime.json"
+    original_runtime.unlink()
+    (output / "runtime_same_job.json").replace(original_runtime)
+    with pytest.raises(ValueError, match="USR1/resume"):
+        build_resume_evidence(spec, node_id=node_id, preemption_event_path=event_path)
 
 
 def test_semantic_checkpoint_retry_accepts_equal_and_rejects_drift(tmp_path: Path) -> None:
@@ -816,6 +924,78 @@ def test_resource_only_recovery_is_monotonic() -> None:
         _validate_resource_increase(old, {"gpu_training": {**old["gpu_training"], "gpu": "gpu:a100:1"}})
 
 
+def test_resource_measurement_accepts_only_contiguous_completed_recovery_chain(
+    tmp_path: Path,
+) -> None:
+    module_spec = importlib.util.spec_from_file_location(
+        "hcwuj_resource_test",
+        Path("scripts/build_hcwdl_homotopy_resource_profile.py"),
+    )
+    assert module_spec is not None and module_spec.loader is not None
+    module = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(module)
+
+    root = build_submission_ledger(
+        campaign_spec_sha256=H,
+        jobs={"a": "101", "b": "102", "c": "103"},
+        commands={"a": ["a"], "b": ["b"], "c": ["c"]},
+        dry_run=False,
+    )
+    root_monitor = build_monitor_report(
+        root,
+        states_by_job_id={"101": "COMPLETED", "102": "PREEMPTED", "103": "CANCELLED"},
+        artifact_validity={"a": True, "b": False, "c": False},
+    )
+    recovery = build_submission_ledger(
+        campaign_spec_sha256=H,
+        jobs={"b": "202", "c": "203"},
+        commands={"b": ["b2"], "c": ["c2"]},
+        dry_run=False,
+        parent_ledger_sha256=root["content_hash"],
+        monitor_report_sha256=root_monitor["content_hash"],
+        superseded_jobs={"b": "102", "c": "103"},
+    )
+    recovery_monitor = build_monitor_report(
+        recovery,
+        states_by_job_id={"202": "COMPLETED", "203": "COMPLETED"},
+        artifact_validity={"b": True, "c": True},
+    )
+    paths = []
+    for name, value in (
+        ("root_ledger", root), ("root_monitor", root_monitor),
+        ("recovery_ledger", recovery), ("recovery_monitor", recovery_monitor),
+    ):
+        path = tmp_path / f"{name}.json"
+        write_immutable_json(path, value); paths.append(path)
+
+    effective, ledger_hashes, monitor_hashes = module._effective_completed_chain(
+        ledger_paths=[paths[0], paths[2]],
+        monitor_paths=[paths[1], paths[3]],
+        campaign_spec_sha256=H, registered_tasks={"a", "b", "c"},
+    )
+    assert effective["jobs"] == {"a": "101", "b": "202", "c": "203"}
+    assert ledger_hashes == [root["content_hash"], recovery["content_hash"]]
+    assert monitor_hashes == [root_monitor["content_hash"], recovery_monitor["content_hash"]]
+
+    forged = dict(recovery); forged["superseded_jobs"] = {"b": "999", "c": "103"}
+    forged.pop("content_hash")
+    forged = with_content_hash(forged)
+    forged_path = tmp_path / "forged.json"; write_immutable_json(forged_path, forged)
+    forged_monitor = build_monitor_report(
+        forged,
+        states_by_job_id={"202": "COMPLETED", "203": "COMPLETED"},
+        artifact_validity={"b": True, "c": True},
+    )
+    forged_monitor_path = tmp_path / "forged_monitor.json"
+    write_immutable_json(forged_monitor_path, forged_monitor)
+    with pytest.raises(ValueError, match="supersede exact prior"):
+        module._effective_completed_chain(
+            ledger_paths=[paths[0], forged_path],
+            monitor_paths=[paths[1], forged_monitor_path],
+            campaign_spec_sha256=H, registered_tasks={"a", "b", "c"},
+        )
+
+
 def test_exact_array_state_reduction_is_conservative() -> None:
     jobs = {"array": "42", "single": "43"}
     counts = {"array": 3, "single": 1}
@@ -838,6 +1018,11 @@ def test_slurm_worker_is_exec_and_has_no_array_throttle() -> None:
     worker = Path("sbatch/run_hcwdl_homotopy_task.sh").read_text(encoding="utf-8")
     assert "exec python -s" in worker
     assert "PYTHONNOUSERSITE=1" in worker and "LD_LIBRARY_PATH" in worker
+    for script in (
+        "scripts/run_hcwdl_homotopy_task.py",
+        "scripts/run_hcwdl_homotopy_recovery_task.py",
+    ):
+        assert "validate_worker_semantics" in Path(script).read_text(encoding="utf-8")
     from hlt_classification.scouting.hcwdl_homotopy_campaign import _tasks
     tasks = _tasks(train_sources=3, validation_sources=2)
     assert len(tasks) == 101

@@ -1,5 +1,33 @@
 # Current Handoff
 
+## HCWDL dense measured-resource reschedule (2026-08-11)
+
+The pending corrected dense10 and dense5 recovery roots inherited the pilot's
+conservative `gpu_single` request of `320G` for 72 hours. Tigris jobs `77534`
+and `77546` provide direct completed-rung evidence: D90c/D95c finished in
+8,983/9,187 seconds with peak RSS 50,285,376/50,287,104 KiB. The new
+`HCWDL_DENSE_RESCHEDULE_SPEC/v1` therefore freezes a right-sized `96G`,
+six-hour, eight-CPU, one-GH200 request while leaving the original CPU aggregate
+request unchanged.
+
+The reschedule is operational only. It binds the exact prior recovery spec and
+live submission ledger, retains the original dense scientific spec, failed
+closure, graph, recipe, assignments, teachers, seeds, output root, and rolling
+checkpoints, and records the prior ledger's exact IDs as superseded. Arbitrary
+resource edits and recursive resizing fail closed. Operators create and
+dry-run both replacements before cancelling either old ledger, cancel only
+through `cancel_hcwdl_campaign.py`, confirm removal, and then submit the
+right-sized closures. No local or remote Slurm job was mutated during this
+implementation.
+
+Implementation is in `hcwdl_dense_recovery.py` with the thin
+`create_hcwdl_dense_reschedule.py` surface and the existing authenticated
+submitter/worker. Both dense runbooks and the recovery contract document the
+new path. Focused dense/recovery/CLI tests pass 71/71; the complete repository
+suite passes 415/415 with the 14 existing Matplotlib/Pyparsing warnings; both
+CLI help surfaces and `git diff --check` pass (Windows line-ending notices
+only). No donor code or donor commit was used.
+
 ## HCWDL structural-feature homotopy implementation (2026-08-11)
 
 The validation-only structural/feature homotopy in

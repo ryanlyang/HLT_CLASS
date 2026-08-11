@@ -18,7 +18,8 @@ from .hcwdl_homotopy_contracts import (
     AUTHORIZATION_PHRASE, COMMAND_PLAN_CONTRACT, PILOT_SPEC_CONTRACT,
     RESOURCE_PROFILE_CONTRACT, ROLE_COUNTS as PILOT_ROLE_COUNTS,
     SMOKE_ROLE_COUNTS, SUBMISSION_PHRASE, build_coupling_config,
-    coordinate_payload, validate_coordinate, validate_coupling_config,
+    WEAVER_PARITY_CONTRACT, coordinate_payload, validate_coordinate,
+    validate_coupling_config,
 )
 from .hcwdl_homotopy_graph import (
     GRAPH_SHA256, NODE_REGISTRY, build_recipe_overlay, validate_graph,
@@ -36,10 +37,23 @@ CAMPAIGN_LABEL: Final = "HCWDL_STRUCTURAL_FEATURE_HOMOTOPY"
 ACCOUNT: Final = "reu-aisocial"
 PARTITION: Final = "tigris"
 SEMANTIC_SOURCE_FILES: Final = (
+    "src/hlt_classification/models/scouting_particle_transformer.py",
+    "src/hlt_classification/scouting/engine.py",
+    "src/hlt_classification/scouting/hcwdl_homotopy_contracts.py",
+    "src/hlt_classification/scouting/hcwdl_homotopy_graph.py",
+    "src/hlt_classification/scouting/hcwdl_homotopy_locks.py",
+    "src/hlt_classification/scouting/hcwdl_homotopy_runner.py",
+    "src/hlt_classification/scouting/hcwdl_homotopy_stream.py",
     "src/hlt_classification/scouting/repair.py",
+    "src/hlt_classification/scouting/hcwdl_toff_targets.py",
+    "src/hlt_classification/scouting/hcwdl_training.py",
+    "src/hlt_classification/scouting/hcwdl_upper_builder.py",
+    "src/hlt_classification/scouting/hcwdl_upper_cache.py",
     "src/hlt_classification/scouting/hcwdl_upper_coupling.py",
     "src/hlt_classification/scouting/hcwdl_homotopy.py",
-    "src/hlt_classification/scouting/hcwdl_homotopy_graph.py",
+    "src/hlt_classification/scouting/inputs.py",
+    "src/hlt_classification/scouting/pmard_stream.py",
+    "src/hlt_classification/scouting/schema.py",
 )
 
 
@@ -59,13 +73,24 @@ SMOKE_RESOURCES: Final = {
     "gpu_training": ResourceRequest(8, "128G", "01:00:00", "gpu:gh200:1"),
     "cpu_report": ResourceRequest(4, "32G", "00:30:00"),
 }
+GPU_CAPACITY_BYTES: Final = {"gpu:gh200:1": 96 * 1024**3}
 
 
 def build_resource_profile(
     *, requests: Mapping[str, Mapping[str, object]], measurement_sha256: str,
-    measurement_summary: Mapping[str, object],
+    measurement_summary: Mapping[str, object], resume_evidence_sha256: str,
+    source_commit: str, semantic_source_sha256: Mapping[str, str],
+    storage_budget_bytes: int,
     tigris_worker_miniature_passed: bool,
 ) -> dict[str, Any]:
+    if re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
+        raise ValueError("HCWDL-UJ resource profile source commit differs")
+    if not semantic_source_sha256 or any(
+        not isinstance(name, str)
+        or require_sha256(value, name=f"semantic source {name}") != value
+        for name, value in semantic_source_sha256.items()
+    ):
+        raise ValueError("HCWDL-UJ resource profile semantic-source hashes differ")
     normalized = {}
     if set(requests) != set(SMOKE_RESOURCES):
         raise ValueError("HCWDL-UJ resource profile classes differ")
@@ -104,12 +129,33 @@ def build_resource_profile(
             raise ValueError(f"HCWDL-UJ memory request lacks headroom for {name}")
         if requested_wall * 4 < measured["elapsed_seconds"] * 5:
             raise ValueError(f"HCWDL-UJ walltime request lacks headroom for {name}")
+        gpu_request = normalized[name]["gpu"]
+        if gpu_request is None:
+            if measured["peak_gpu_memory_bytes"] != 0:
+                raise ValueError(f"HCWDL-UJ CPU resource measured GPU memory for {name}")
+        else:
+            capacity = GPU_CAPACITY_BYTES.get(str(gpu_request))
+            if capacity is None:
+                raise ValueError(f"HCWDL-UJ GPU capacity is unknown for {gpu_request}")
+            if measured["peak_gpu_memory_bytes"] <= 0:
+                raise ValueError(f"HCWDL-UJ GPU measurement is absent for {name}")
+            if capacity * 4 < measured["peak_gpu_memory_bytes"] * 5:
+                raise ValueError(f"HCWDL-UJ GPU request lacks headroom for {name}")
         evidence[name] = measured
+    artifact_bytes = int(measurement_summary["campaign_artifact_bytes"])
+    if int(storage_budget_bytes) <= 0 or int(storage_budget_bytes) * 4 < artifact_bytes * 5:
+        raise ValueError("HCWDL-UJ durable storage budget lacks headroom")
     return with_content_hash({
         "contract": RESOURCE_PROFILE_CONTRACT, "schema_version": 1,
         "measurement_sha256": require_sha256(measurement_sha256, name="resource measurement"),
+        "resume_evidence_sha256": require_sha256(
+            resume_evidence_sha256, name="USR1 resume evidence",
+        ),
+        "source_commit": source_commit,
+        "semantic_source_sha256": dict(sorted(semantic_source_sha256.items())),
+        "storage_budget_bytes": int(storage_budget_bytes),
         "measurement_summary": {
-            "campaign_artifact_bytes": int(measurement_summary["campaign_artifact_bytes"]),
+            "campaign_artifact_bytes": artifact_bytes,
             "resource_class_maxima": evidence,
             "io_counters_recorded": True,
         },
@@ -126,6 +172,10 @@ def validate_resource_profile(value: Mapping[str, Any]) -> str:
         requests=value.get("requests", {}),
         measurement_sha256=str(value.get("measurement_sha256")),
         measurement_summary=value.get("measurement_summary", {}),
+        resume_evidence_sha256=str(value.get("resume_evidence_sha256")),
+        source_commit=str(value.get("source_commit")),
+        semantic_source_sha256=value.get("semantic_source_sha256", {}),
+        storage_budget_bytes=int(value.get("storage_budget_bytes", -1)),
         tigris_worker_miniature_passed=bool(value.get("tigris_worker_miniature_passed")),
     )
     if value != rebuilt or value.get("tigris_worker_miniature_passed") is not True:
@@ -329,6 +379,7 @@ def _tasks(*, train_sources: int, validation_sources: int) -> list[dict[str, Any
 def create_campaign(
     *, parent_campaign_spec: str | Path, campaign_root: str | Path,
     project_dir: str | Path, source_commit: str,
+    weaver_parity: str | Path,
     dense_d0_report: str | Path | None = None,
     contextual_reports: Sequence[str | Path] = (),
     resource_profile: Mapping[str, Any] | None = None,
@@ -338,6 +389,20 @@ def create_campaign(
     evidence = authenticate_parent(parent_campaign_spec, dense_d0_report=dense_d0_report)
     if len(source_commit) != 40 or any(c not in "0123456789abcdef" for c in source_commit):
         raise ValueError("HCWDL-UJ source commit must be a full lowercase Git SHA")
+    parity_path = Path(weaver_parity).resolve()
+    parity = load_json(parity_path)
+    parity_hash = validate_content_hash(
+        parity, expected_contract=WEAVER_PARITY_CONTRACT,
+        expected_schema_version=1,
+    )
+    if (
+        parity.get("source_commit") != source_commit
+        or parity.get("device") != "cuda"
+        or parity.get("unified_factory", {}).get("passed") is not True
+        or parity.get("native_teacher_factory", {}).get("passed") is not True
+        or parity.get("final_test_accessed") is not False
+    ):
+        raise ValueError("HCWDL-UJ installed-Weaver parity evidence differs")
     root = Path(campaign_root).resolve(); project = Path(project_dir).resolve()
     if root.exists() and any(root.iterdir()):
         raise FileExistsError("HCWDL-UJ campaign root already contains files")
@@ -347,17 +412,21 @@ def create_campaign(
         if resource_profile is None or not resource_profile.get("tigris_worker_miniature_passed"):
             raise PermissionError("300k HCWDL-UJ requires a measured passing Tigris resource profile")
         resource_hash = validate_resource_profile(resource_profile)
+        if (
+            resource_profile.get("source_commit") != source_commit
+            or resource_profile.get("semantic_source_sha256")
+               != semantic_source_hashes(project)
+        ):
+            raise ValueError("300k HCWDL-UJ resource profile source lineage differs")
         requests = resource_profile["requests"]
     else:
         if resource_profile is not None:
             resource_hash = validate_resource_profile(resource_profile); requests = resource_profile["requests"]
         else:
             resource_hash = None; requests = {name: asdict(value) for name, value in SMOKE_RESOURCES.items()}
-    root.mkdir(parents=True, exist_ok=True)
     resource_reference = None
     if resource_profile is not None:
         resource_path = root / "resource_profile.json"
-        write_immutable_json(resource_path, resource_profile)
         resource_reference = {"path": str(resource_path), "content_hash": resource_hash}
     contextual = []
     for report_path in contextual_reports:
@@ -404,14 +473,10 @@ def create_campaign(
     })
     overlay = build_recipe_overlay(parent_recipe_sha256=evidence["recipe_sha256"])
     coordinate = coordinate_payload()
-    for relative, payload in (
-        ("coupling/config.json", coupling_config), ("graph.json", graph),
-        ("recipe_overlay.json", overlay), ("coordinate_table.json", coordinate),
-    ):
-        write_immutable_json(root / relative, payload)
     train_sources = len(role_records(evidence["split"], "train"))
     validation_sources = len(role_records(evidence["split"], "validation"))
     tasks = _tasks(train_sources=train_sources, validation_sources=validation_sources)
+    semantic_hashes = semantic_source_hashes(project)
     base_payload = {
         "contract": PILOT_SPEC_CONTRACT, "schema_version": 1,
         "campaign": CAMPAIGN_LABEL, "mode": evidence["mode"],
@@ -440,7 +505,9 @@ def create_campaign(
         "resource_request_sha256": canonical_sha256(requests),
         "resource_profile_sha256": resource_hash,
         "resource_profile": resource_reference,
-        "semantic_source_sha256": semantic_source_hashes(project),
+        "weaver_parity": {"path": str(parity_path), "content_hash": parity_hash},
+        "weaver_parity_sha256": parity_hash,
+        "semantic_source_sha256": semantic_hashes,
         "live_submission_authorized": bool(authorize_live_submission),
         "authorization_phrase": authorization_phrase if authorize_live_submission else None,
         "command_plan_sha256": None, "final_test_accessed": False,
@@ -448,6 +515,22 @@ def create_campaign(
     provisional = with_content_hash(base_payload)
     base_payload["command_plan_sha256"] = build_command_plan(provisional)["content_hash"]
     payload = with_content_hash(base_payload)
+    command_plan = build_command_plan(payload)
+    if command_plan["content_hash"] != payload["command_plan_sha256"]:
+        raise ValueError("HCWDL-UJ command-plan identity is not stable")
+
+    # Publish only after every source, parent, parity, context, and in-memory
+    # contract check above has succeeded.  A rejected campaign creation must
+    # not leave a misleading partially populated campaign root behind.
+    root.mkdir(parents=True, exist_ok=True)
+    if resource_profile is not None:
+        write_immutable_json(root / "resource_profile.json", resource_profile)
+    for relative, artifact in (
+        ("coupling/config.json", coupling_config), ("graph.json", graph),
+        ("recipe_overlay.json", overlay), ("coordinate_table.json", coordinate),
+    ):
+        write_immutable_json(root / relative, artifact)
+    write_immutable_json(root / "command_plan.json", command_plan)
     write_immutable_json(root / "campaign_spec.json", payload)
     return payload
 
@@ -522,6 +605,24 @@ def validate_campaign(value: Mapping[str, Any], *, executable: bool = False) -> 
             raise ValueError("smoke HCWDL-UJ resource profile differs")
     if value.get("resource_request_sha256") != canonical_sha256(value.get("resources")):
         raise ValueError("HCWDL-UJ resource request lineage differs")
+    parity_reference = value.get("weaver_parity")
+    if not isinstance(parity_reference, Mapping):
+        raise ValueError("HCWDL-UJ campaign lacks installed-Weaver parity evidence")
+    parity = load_json(parity_reference["path"])
+    parity_hash = validate_content_hash(
+        parity, expected_contract=WEAVER_PARITY_CONTRACT,
+        expected_schema_version=1,
+    )
+    if (
+        parity_hash != parity_reference.get("content_hash")
+        or parity_hash != value.get("weaver_parity_sha256")
+        or parity.get("source_commit") != value.get("source_commit")
+        or parity.get("device") != "cuda"
+        or parity.get("unified_factory", {}).get("passed") is not True
+        or parity.get("native_teacher_factory", {}).get("passed") is not True
+        or parity.get("final_test_accessed") is not False
+    ):
+        raise ValueError("HCWDL-UJ installed-Weaver parity evidence drifted")
     if value.get("semantic_source_sha256") != semantic_source_hashes(project):
         raise ValueError("HCWDL-UJ frozen scientific source differs")
     if value.get("command_plan_sha256") != build_command_plan(value)["content_hash"]:
@@ -642,6 +743,7 @@ def build_command_plan(spec: Mapping[str, Any]) -> dict[str, Any]:
             "graph_sha256": spec["graph_sha256"],
             "semantic_source_sha256": spec["semantic_source_sha256"],
             "resource_request_sha256": spec["resource_request_sha256"],
+            "weaver_parity_sha256": spec["weaver_parity_sha256"],
         }),
         "commands": rows,
         "mutated": False, "final_test_accessed": False,

@@ -323,6 +323,7 @@ def run_homotopy_node(
         "coordinate_sha256": spec["coordinate_sha256"],
         "command_plan_sha256": spec["command_plan_sha256"],
         "source_commit_sha256": canonical_sha256(spec["source_commit"]),
+        "weaver_parity_sha256": spec["weaver_parity_sha256"],
     }
     if any(graph_lock.get(name) != value for name, value in expected_graph_lock.items()):
         raise ValueError("HCWDL-UJ graph/recipe lock lineage differs")

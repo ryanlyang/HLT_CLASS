@@ -28,7 +28,8 @@ fail closed; they do not redefine it.
   graph/recipe lock, campaign spec, and command plan;
 - node wrapper and runtime reports, validation aggregate, resource profile,
   and validation-only campaign completion;
-- distinct bounded-cache, TOFF-target, and completed-smoke resource
+- distinct bounded-cache, TOFF-target, completed-smoke resource, and exact
+  USR1/resume
   measurements, so incompatible evidence payloads cannot share a contract
   identity;
 - source-pinned and resource-only recovery specs and command plans.
@@ -64,6 +65,7 @@ HCWDL_STRUCTURAL_FEATURE_CACHE_RESOURCE_MEASUREMENT/v1
 HCWDL_STRUCTURAL_FEATURE_CACHE_MINIATURE/v1
 HCWDL_STRUCTURAL_FEATURE_TARGET_RESOURCE_MEASUREMENT/v1
 HCWDL_STRUCTURAL_FEATURE_SMOKE_RESOURCE_MEASUREMENT/v1
+HCWDL_STRUCTURAL_FEATURE_RESUME_EVIDENCE/v1
 HCWDL_STRUCTURAL_FEATURE_WEAVER_PARITY/v1
 HCWDL_STRUCTURAL_FEATURE_CAMPAIGN_COMPLETE/v1
 HCWDL_STRUCTURAL_FEATURE_SMOKE_SELECTION/v1
@@ -90,7 +92,8 @@ cache miniature, projection implementation, and Shell Exact semantics.
 
 The graph/recipe lock binds both endpoint and TOFF-target locks, the exact
 80-fit graph, parent unweighted recipe, per-node overlay, coordinate table,
-command plan, and source commit. Training cannot start without it.
+command plan, source commit, and installed-Weaver CUDA parity for both the
+unified and native-offline factories. Training cannot start without it.
 
 ## Training and reporting
 
@@ -116,4 +119,10 @@ increases. Cancellation uses only exact campaign-bound job IDs.
 Local tests and dry runs establish implementation readiness, not Tigris
 acceptance. A genuine production-worker smoke must measure coupling, caches,
 targets, training, aggregation, storage, preemption, and recovery. Its signed
-resource profile is mandatory before creating the 300k pilot.
+resource profile is mandatory before creating the 300k pilot. The profile
+requires at least 25% measured headroom for walltime, process RAM, GH200 GPU
+memory, and an explicitly declared durable campaign-root storage budget. It
+cannot be published without an immutable `SIGUSR1` event whose rolling-state
+hash is the exact checkpoint named by a later completed engine report's resume
+provenance; the interrupted and resumed Slurm job IDs must both exist and must
+be distinct.

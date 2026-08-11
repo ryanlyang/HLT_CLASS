@@ -16,6 +16,9 @@ from hlt_classification.scouting.hcwdl_authorization import validate_source_chec
 from hlt_classification.scouting.hcwdl_homotopy_contracts import (  # noqa: E402
     RECOVERY_SPEC_CONTRACT, RESOURCE_RECOVERY_SPEC_CONTRACT,
 )
+from hlt_classification.scouting.hcwdl_homotopy_campaign import (  # noqa: E402
+    validate_worker_semantics,
+)
 from hlt_classification.scouting.hcwdl_homotopy_recovery import (  # noqa: E402
     validate_recovery_spec, validate_resource_recovery_spec,
 )
@@ -44,6 +47,7 @@ def main() -> int:
         raise PermissionError("recovery worker is not running from its bound worktree")
     validate_source_checkout(REPO_ROOT, expected_commit=recovery["source_commit"])
     campaign = load_json(recovery["campaign_spec"]["path"])
+    validate_worker_semantics(campaign, repository=REPO_ROOT)
     index = args.array_index
     if index is None and "SLURM_ARRAY_TASK_ID" in os.environ:
         index = int(os.environ["SLURM_ARRAY_TASK_ID"])

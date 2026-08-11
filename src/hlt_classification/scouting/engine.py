@@ -34,6 +34,8 @@ PMARD_INTERMEDIATE_TRAINING_REPORT_CONTRACT = "hlt_classification_pmard_training
 PMARD_INTERMEDIATE_TRAINING_REPORT_VERSION = 5
 PMARD_RESUME_CONTRACT = "hlt_classification_pmard_resume_checkpoint_v6"
 PMARD_RESUME_VERSION = 6
+PMARD_PREEMPTION_EVENT_CONTRACT = "hlt_classification_pmard_preemption_event_v1"
+PMARD_PREEMPTION_EVENT_VERSION = 1
 
 
 def validate_pmard_training_report(report: Mapping[str, object]) -> str:
@@ -269,6 +271,7 @@ class _PreemptionMonitor:
 
     def __init__(self) -> None:
         self.requested = False
+        self.signal_number: int | None = None
         self.previous: dict[int, object] = {}
 
     def install(self) -> None:
@@ -281,8 +284,9 @@ class _PreemptionMonitor:
             self.previous[number] = signal.getsignal(number)
             signal.signal(number, self._request)
 
-    def _request(self, _signum, _frame) -> None:
+    def _request(self, signum, _frame) -> None:
         self.requested = True
+        self.signal_number = int(signum)
 
     def restore(self) -> None:
         for number, handler in self.previous.items():
@@ -408,11 +412,13 @@ def train_pmard(
     scientific_payload = dict(scientific_config or {})
     config_hash = canonical_sha256({"training": asdict(config), "scientific": scientific_payload})
     update = 0; epoch = 0; batch_offset = 0; history = []
+    resume_provenance = None
     loss_window_sums: dict[str, object] = {}
     loss_window_start = 1; loss_window_updates = 0
     validation_history: list[dict[str, object]] = []
     best_model = None; best_runtime = None; best_metrics = None; best_update = None
     if rolling.exists() and resume:
+        resume_checkpoint_sha256 = sha256_file(rolling)
         state = torch.load(rolling, map_location=target, weights_only=False)
         if state.get("contract") != PMARD_RESUME_CONTRACT or state.get("config_sha256") != config_hash or state.get("parents") != validated_parents:
             raise ValueError("resume checkpoint lineage differs")
@@ -428,6 +434,11 @@ def train_pmard(
         validation_history = list(state["validation_history"])
         best_model, best_runtime = state["best_model"], state["best_runtime"]
         best_metrics, best_update = state["best_metrics"], state["best_update"]
+        resume_provenance = {
+            "checkpoint_sha256": resume_checkpoint_sha256,
+            "resumed_update": update, "resumed_epoch": epoch,
+            "resumed_batch_offset": batch_offset,
+        }
     weights = torch.as_tensor(class_weights, dtype=torch.float32, device=target)
     preemption = _PreemptionMonitor()
     if target.type == "cuda":
@@ -610,6 +621,28 @@ def train_pmard(
                 }
                 _rolling_publish(rolling, state)
             if preemption.requested:
+                if preemption.signal_number is None:
+                    raise RuntimeError("preemption was requested without a signal number")
+                signal_name = signal.Signals(preemption.signal_number).name
+                event = with_content_hash({
+                    "contract": PMARD_PREEMPTION_EVENT_CONTRACT,
+                    "schema_version": PMARD_PREEMPTION_EVENT_VERSION,
+                    "experiment_id": config.experiment_id,
+                    "config_sha256": config_hash,
+                    "parents": validated_parents,
+                    "update": update, "epoch": epoch,
+                    "batch_offset": batch_index + 1,
+                    "rolling_checkpoint_sha256": sha256_file(rolling),
+                    "signal_number": preemption.signal_number,
+                    "signal_name": signal_name,
+                    "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
+                    "final_test_accessed": False,
+                })
+                write_immutable_json(
+                    root / "preemption_events"
+                    / f"update_{update:012d}_{signal_name}.json",
+                    event,
+                )
                 preemption.restore()
                 raise PmardTrainingInterrupted(f"preempted after durable update {update}")
             if stop_due:
@@ -685,6 +718,7 @@ def train_pmard(
         "selected_checkpoint_sha256": sha256_file(checkpoint_path),
         "final_checkpoint": None if final_checkpoint_path is None else final_checkpoint_path.name,
         "final_checkpoint_sha256": final_checkpoint_sha256,
+        "resume_provenance": resume_provenance,
     })
     write_immutable_json(root / "training_report.json", report)
     rolling.unlink(missing_ok=True)
@@ -693,6 +727,7 @@ def train_pmard(
 
 
 __all__ = [
+    "PMARD_PREEMPTION_EVENT_CONTRACT", "PMARD_PREEMPTION_EVENT_VERSION",
     "PmardTrainingConfig", "PmardTrainingInterrupted", "evaluate_model", "learning_rate",
     "precompute_teacher_targets", "train_pmard", "validate_pmard_training_report",
 ]
