@@ -1549,9 +1549,13 @@ def _model_sources(
     }
     if not names:
         return {}
-    parent_members = _bundle_members(prerequisites, "parent_model_sources")
-    if not isinstance(parent_members, Mapping):
-        raise ValueError("parent model-source member registry differs")
+    external_names = names - set(NODE_REGISTRY)
+    if external_names:
+        parent_members = _bundle_members(prerequisites, "parent_model_sources")
+        if not isinstance(parent_members, Mapping):
+            raise ValueError("parent model-source member registry differs")
+    else:
+        parent_members = {}
     result: dict[str, Any] = {}
     for name in sorted(names):
         if name in NODE_REGISTRY:

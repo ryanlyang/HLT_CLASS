@@ -18,7 +18,8 @@ from hlt_classification.scouting.hcwdl_parent_loss import (
     HCWDL_PARENT_BASE_LOSS_CONTRACT, HCWDL_PARENT_LOSS_SEMANTICS,
 )
 from hlt_classification.scouting.hcwdl_representation_campaign import (
-    PARENT_IMPORT_AUTHORITY_ROUTES, PARENT_QUALIFIER_REPORT_ROUTES,
+    DENSE_TRAINING_DISPOSITION, PARENT_IMPORT_AUTHORITY_ROUTES,
+    PARENT_QUALIFIER_REPORT_ROUTES,
     build_command_plan, build_task_registry,
 )
 from hlt_classification.scouting.hcwdl_representation_graph import (
@@ -105,6 +106,29 @@ def _representation_recipe(producer_source: str = "b" * 64):
     )
 
 
+def test_dense_training_model_sources_need_no_parent_bundle() -> None:
+    tasks = build_task_registry(
+        disposition=DENSE_TRAINING_DISPOSITION,
+        final_source_partitions=0,
+        combined_finalist_count=0,
+        mode="smoke",
+    )
+    prerequisites = {"bundle_members": {}}
+    for task in tasks:
+        if task.kind != "train_node":
+            continue
+        sources = rows_module._model_sources(
+            prerequisites=prerequisites,
+            task=task,
+        )
+        execution = NODE_REGISTRY[str(task.graph_node)]
+        if execution.initialization_parent is None:
+            assert sources == {}
+        else:
+            assert set(sources) == {execution.initialization_parent}
+            assert sources[execution.initialization_parent]["kind"] == "hcwdl"
+
+
 def _spec(*, disposition: str = "combined_confirmatory"):
     tasks = build_task_registry(
         disposition=disposition, final_source_partitions=2,
@@ -135,6 +159,37 @@ def _spec(*, disposition: str = "combined_confirmatory"):
         "content_hash": "9" * 64,
     }
     return spec
+
+
+def _dense_spec():
+    tasks = build_task_registry(
+        disposition=DENSE_TRAINING_DISPOSITION,
+        final_source_partitions=0,
+        combined_finalist_count=0,
+        mode="smoke",
+    )
+    resources = resource_table(mode="smoke")
+    return {
+        "mode": "smoke", "campaign_root": "/campaign",
+        "checkpoint_namespace": "/checkpoints", "project_dir": "/project",
+        "source_commit": "1" * 40, "source_manifest_sha256": "2" * 64,
+        "split_manifest_sha256": _split_manifest()["content_hash"],
+        "parent_import_sha256": "4" * 64,
+        "representation_recipe_sha256": _representation_recipe()["content_hash"],
+        "graph_sha256": "6" * 64,
+        "disposition_sha256": "7" * 64,
+        "disposition": DENSE_TRAINING_DISPOSITION,
+        "role_counts": {"train": 512, "validation": 256, "final_test": 0},
+        "final_source_partitions": 0, "combined_finalist_count": 0,
+        "artifact_paths": {
+            "runtime_binding": "/campaign/runtime/runtime_binding.json",
+        },
+        "resources": resources, "array_concurrency_limits": {},
+        "resource_request_sha256": canonical_sha256(resources),
+        "tasks": [asdict(task) for task in tasks],
+        "command_plan_sha256": "8" * 64,
+        "content_hash": "9" * 64,
+    }
 
 
 def _static_inputs(spec):
@@ -665,6 +720,80 @@ def test_all_combined_rows_build_bind_and_validate_without_hand_assembly(
     assert audit["validated_task_count"] == 295
     assert audit["validated_runtime_row_count"] == 361
     assert audit["scheduler_mutated"] is False
+
+
+def test_all_dense_rows_build_without_parent_bundles(monkeypatch) -> None:
+    spec = _dense_spec()
+    spec["resource_profile"] = {"fixture": "dense measured profile"}
+    monkeypatch.setattr(
+        rows_module,
+        "dense_resource_recipe_producer_source_sha256",
+        lambda *_args, **_kwargs: "b" * 64,
+    )
+    static = _static_inputs(spec)
+    hashes = {
+        logical: canonical_sha256({"content": logical}) for logical in static
+    }
+    forward_specs = _target_forward_specs(static)
+    settings = {
+        "kernel_parent_hashes": rows_module._expected_kernel_parents(spec),
+        "shuffle_parent_hashes": rows_module._expected_shuffle_parents(
+            spec, {"artifact_content_hashes": hashes},
+        ),
+        "target_budgets": {
+            "target_storage_cap_bytes": 10**12,
+            "container_overhead_bytes": 1,
+            "staging_recovery_reserve_bytes": 1,
+            "quarantine_reserve_bytes": 1,
+            "filesystem_headroom_bytes": 1,
+            "peak_runtime_bytes": 1,
+            "slurm_mem_per_node_bytes": (
+                int(str(spec["resources"]["gpu_target"]["memory"])[:-1])
+                * 1024**3
+            ),
+            "filesystem_available_bytes": 10**13,
+        },
+        "target_runtime_environment": next(iter(forward_specs.values()))["payload"],
+        "miniature_row_limit": 4096,
+        "view_cache_max_gib": rows_module._expected_view_cache_gib(spec),
+        "synthetic_passes": 1,
+        "training_mode": "smoke",
+    }
+    prerequisites = with_content_hash({
+        "contract": RUNTIME_PREREQUISITES_CONTRACT,
+        "schema_version": 1,
+        "runtime_facts": {
+            "conda_environment": "atlas_kd_tigris", "data_root": "/data",
+            "device": "cuda", "project_dir": "/project",
+            "python_no_user_site": True, "source_snapshot_sha256": "b" * 64,
+            "weaver_runtime_sha256": "c" * 64,
+        },
+        "runtime_signatures": {
+            task["resource_class"]: canonical_sha256({
+                "resource_class": task["resource_class"],
+            }) for task in spec["tasks"]
+        },
+        "static_inputs": static,
+        "artifact_content_hashes": hashes,
+        "target_generations": _target_generations(spec, hashes),
+        "bundle_members": {},
+        "settings": settings,
+    })
+    task_rows = build_runtime_task_rows(spec, prerequisites)
+    validate_runtime_task_rows(spec, prerequisites, task_rows)
+    assert len(task_rows) == len(spec["tasks"]) == 261
+    assert all(
+        "${parent_model_sources}" not in row["inputs"]
+        for task in task_rows.values()
+        for row in task.values()
+    )
+    binding = build_runtime_binding(
+        spec=spec,
+        runtime_facts=prerequisites["runtime_facts"],
+        task_rows=task_rows,
+    )
+    validate_runtime_binding(binding, spec=spec)
+    assert len(binding["tasks"]) == 261
 
 
 def test_all_rows_bind_with_documented_in_place_prebuilt_layout() -> None:
