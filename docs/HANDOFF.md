@@ -1,5 +1,31 @@
 # Current Handoff
 
+## HCWDL direct offline-to-HLT KD ablation (2026-08-12)
+
+The requested five-fit direct ablation is implemented as a separate
+validation-only `HCWDL_DIRECT_OFFLINE_KD_*/v1` campaign. It trains fresh
+paired `HLT_CE`, `HLT_LOGIT`, `HLT_RSET`, and `HLT_RREL` models on exact HLT
+inputs plus a fresh native-offline `TOFF_CE` teacher. The three distilled
+students share one authenticated TOFF train-target bank; no ladder view,
+validation target, repaired dataset, or final-test row is used. HLT stochastic
+streams are paired, training is unweighted for 60 passes with every-pass
+validation and macro-AUC checkpoint selection, and only the four HLT-input
+models are deployable.
+
+The immutable five-node graph, combined recipe, pilot campaign/command plan,
+target contracts and two-phase resumable cleanup, runtime,
+aggregate/completion reporting, thin creation/worker/submission CLIs,
+exact-ID monitor/cancel operations, and repeatable same-source failed-closure
+recovery are present. All GPU tasks are frozen at 8 CPUs, 96 GiB, six hours,
+and one GH200. Source compilation, all six CLI help surfaces, the 17 unique
+direct-contract identities, Markdown/link checks through the full suite, and
+`git diff --check` pass. Focused direct/representation/homotopy tests pass
+39/39. The complete repository suite passes 955 tests with 9 expected
+platform skips and 14 pre-existing Matplotlib/Pyparsing warnings in 688.12
+seconds. No job has been submitted. A source-pinned Tigris production-worker
+miniature and dry-run remain the research-compute acceptance gate before the
+300k live submission, as required by `AGENTS.md`.
+
 ## HCWDL-U-RKD prerequisite bootstrap repair (2026-08-12)
 
 The first real Tigris preflight for commit `a407f056` found a valid completed

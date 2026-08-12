@@ -108,6 +108,7 @@ JetClass data on Tigris:
 - [HCWDL homotopy representation-KD implementation plan](docs/plans/HCWDL_HOMOTOPY_REPRESENTATION_KD_IMPLEMENTATION_PLAN.md)
 - [HCWDL homotopy representation-KD contract](docs/contracts/HCWDL_HOMOTOPY_REPRESENTATION_KD.md)
 - [HCWDL homotopy representation-KD runbook](docs/HCWDL_HOMOTOPY_REPRESENTATION_KD_RUNBOOK.md)
+- [HCWDL direct offline-to-HLT KD contract](docs/contracts/HCWDL_DIRECT_OFFLINE_KD.md)
 - [HCWDL corrected-parent prefix runbook](docs/HCWDL_PARENT_PREFIX_RUNBOOK.md)
 - [HCWDL-RKD local/research-compute runbook](docs/HCWDL_RKD_RUNBOOK.md)
 - [Tigris miniature acceptance procedure](docs/TIGRIS_ACCEPTANCE.md)

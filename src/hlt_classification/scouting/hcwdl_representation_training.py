@@ -257,6 +257,33 @@ def resolve_node_execution(execution_id: str) -> NodeExecution:
             shuffled_representation_targets=False,
             control_counterpart=None,
         )
+    from .hcwdl_direct_offline_kd_graph import (
+        REPRESENTATION_NODE_REGISTRY as DIRECT_REGISTRY,
+    )
+
+    if execution_id in DIRECT_REGISTRY:
+        node = DIRECT_REGISTRY[execution_id]
+        return NodeExecution(
+            execution_id=execution_id,
+            graph_spec=node,
+            strategy=node.strategy,
+            track=node.track,
+            rung=1,
+            student_domain="hlt",
+            deployable=True,
+            parent_counterpart="HLT_DIRECT_PAIR",
+            initialization="fresh",
+            initialization_parent=None,
+            predecessor_logit_teacher=None,
+            representation_logit_teacher="TOFF_CE",
+            representation_teacher_domain="toff",
+            target_bank_identity="TOFF_CE",
+            is_control=False,
+            jet_only=False,
+            relation_enabled=node.strategy == RREL_STRATEGY,
+            shuffled_representation_targets=False,
+            control_counterpart=None,
+        )
     raise KeyError(f"unregistered HCWDL-RKD execution {execution_id!r}")
 
 
@@ -274,6 +301,37 @@ def paired_rng_streams(execution_id: str, replicate_seed: int) -> dict[str, Any]
     if isinstance(replicate_seed, bool) or int(replicate_seed) < 0:
         raise ValueError("HCWDL-RKD replicate seed differs")
     seed = int(replicate_seed)
+    if execution_id in {"HLT_RSET", "HLT_RREL"}:
+        alias = "direct_hlt_pair_v1"
+        training_master = derive_seed(seed, "hcwdl/direct_hlt_pair_v1")
+        domains = {
+            "sampler": "hcwdl_direct/sampler/direct_hlt_pair_v1",
+            "validation_order": "hcwdl_direct/sampler/direct_hlt_pair_v1",
+            "repair": "hcwdl_direct/no_repair",
+            "backbone_initialization": "hcwdl/init/direct_hlt_pair_v1",
+            "counterpart_training_master": "hcwdl/direct_hlt_pair_v1",
+            "training_stochastic": "training_dropout_and_augmentation",
+            "representation_projection": (
+                f"hcwdl_direct/representation_projection/{execution_id}"
+            ),
+        }
+        streams = {name: derive_seed(seed, domain) for name, domain in domains.items()}
+        streams["counterpart_training_master"] = training_master
+        streams["training_stochastic"] = derive_seed(
+            training_master, domains["training_stochastic"],
+        )
+        return with_content_hash({
+            "contract": PAIRED_RNG_STREAMS_CONTRACT,
+            "schema_version": 1,
+            "execution_id": execution_id,
+            "parent_logit_counterpart_node_id": "HLT_DIRECT_PAIR",
+            "replicate_seed": seed,
+            "domains": domains,
+            "streams": streams,
+            "seed_alias": alias,
+            "rff_consumes_training_rng": False,
+            "calibration_restores_training_rng": True,
+        })
     if execution_id.startswith(("F_RSET_", "F_RREL_")):
         from .hcwdl_homotopy_representation_graph import NODE_REGISTRY as U_RKD_REGISTRY
 
@@ -697,8 +755,13 @@ def _validate_target_bank_binding(
     if not isinstance(manifest, Mapping):
         raise ValueError("HCWDL-RKD target bank lacks an immutable manifest")
     supplemental = execution.execution_id.startswith(("F_RSET_", "F_RREL_"))
+    direct = execution.execution_id in {"HLT_RSET", "HLT_RREL"}
     if supplemental:
         from .hcwdl_homotopy_representation_targets import validate_target_manifest
+
+        validate_target_manifest(manifest)
+    elif direct:
+        from .hcwdl_direct_offline_kd_targets import validate_target_manifest
 
         validate_target_manifest(manifest)
     else:
@@ -723,7 +786,7 @@ def _validate_target_bank_binding(
         "strategy": execution.short_strategy,
         "track": execution.track,
     }
-    if not supplemental:
+    if not supplemental and not direct:
         expected["execution_id"] = lineage["execution"]
     matches = [
         row for row in consumers
@@ -866,6 +929,8 @@ def node_base_loss_configuration(execution: NodeExecution) -> LossConfiguration:
         from .hcwdl_homotopy_representation_graph import NODE_REGISTRY as U_RKD_REGISTRY
 
         temperature = U_RKD_REGISTRY[execution.execution_id].temperature
+    elif execution.execution_id in {"HLT_RSET", "HLT_RREL"}:
+        temperature = 2.0
     return LossConfiguration.for_mixture(
         arm=f"HCWDL_RKD_{execution.execution_id}_DENSE_DESCENT",
         ce=0.25,
@@ -3362,6 +3427,10 @@ def train_hcwdl_representation_node(
         from .hcwdl_homotopy_representation_graph import GRAPH_SHA256
 
         expected_graph_sha256 = GRAPH_SHA256
+    elif execution_id in {"HLT_RSET", "HLT_RREL"}:
+        from .hcwdl_direct_offline_kd_graph import GRAPH_SHA256
+
+        expected_graph_sha256 = GRAPH_SHA256
     if lineage["ascent_graph"] != expected_graph_sha256:
         raise ValueError("execution and resume graph identity differ")
     if lineage["representation_recipe"] != representation_recipe_sha256:
@@ -4268,6 +4337,10 @@ def validate_representation_training_report(
     expected_graph_sha256 = ASCENT_GRAPH_SHA256
     if execution_id.startswith(("F_RSET_", "F_RREL_")):
         from .hcwdl_homotopy_representation_graph import GRAPH_SHA256
+
+        expected_graph_sha256 = GRAPH_SHA256
+    elif execution_id in {"HLT_RSET", "HLT_RREL"}:
+        from .hcwdl_direct_offline_kd_graph import GRAPH_SHA256
 
         expected_graph_sha256 = GRAPH_SHA256
     if report["graph_sha256"] != expected_graph_sha256:
