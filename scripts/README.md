@@ -294,6 +294,8 @@ phrases. See `docs/HCWDL_STRUCTURAL_FEATURE_HOMOTOPY_RUNBOOK.md`.
 ## HCWDL homotopy representation KD
 
 The validation-only U/D representation supplement is operated through
+`prepare_hcwdl_homotopy_representation_prerequisites.py` (non-training,
+installed-Weaver/numerical/kernel prerequisite publication),
 `validate_hcwdl_homotopy_representation_integration.py`,
 `create_hcwdl_homotopy_representation_campaign.py`,
 `dry_run_hcwdl_homotopy_representation_campaign.py`,

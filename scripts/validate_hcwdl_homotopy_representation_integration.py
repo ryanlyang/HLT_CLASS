@@ -21,12 +21,14 @@ def main() -> int:
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--architecture-attestation", type=Path, required=True)
     parser.add_argument("--numerical-acceptance", type=Path, required=True)
+    parser.add_argument("--recipe-compatibility", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     artifact = build_integration_attestation(
         repository=REPO_ROOT, source_commit=args.source_commit,
         architecture_attestation=load_json(args.architecture_attestation),
         numerical_acceptance=load_json(args.numerical_acceptance),
+        recipe_compatibility=load_json(args.recipe_compatibility),
     )
     write_immutable_json(args.output, artifact)
     print(artifact["content_hash"])

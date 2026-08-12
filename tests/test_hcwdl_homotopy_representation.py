@@ -11,7 +11,8 @@ from hlt_classification.scouting.hcwdl_homotopy_representation_campaign import (
 )
 from hlt_classification.scouting.hcwdl_homotopy_representation_contracts import (
     CAMPAIGN_SPEC_CONTRACT, FIT_COUNT, ROLE_COUNTS, SMOKE_ROLE_COUNTS,
-    SCHEMA_VERSION, TARGET_BANK_COUNT,
+    SCHEMA_VERSION, TARGET_BANK_COUNT, PREREQUISITE_BUNDLE_CONTRACT,
+    RECIPE_COMPATIBILITY_CONTRACT,
 )
 from hlt_classification.scouting.hcwdl_homotopy_representation_graph import (
     GRAPH_SHA256, NODE_REGISTRY, STRATEGIES, ordered_nodes, resolved_base_loss,
@@ -100,6 +101,8 @@ def test_command_plan_uses_locked_tigris_envelope_and_exact_dependencies(tmp_pat
 def test_role_counts_keep_final_test_sealed():
     assert ROLE_COUNTS == {"train": 300_000, "validation": 100_000, "final_test": 0}
     assert SMOKE_ROLE_COUNTS == {"train": 4096, "validation": 4096, "final_test": 0}
+    assert RECIPE_COMPATIBILITY_CONTRACT.endswith("_RECIPE_COMPATIBILITY/v1")
+    assert PREREQUISITE_BUNDLE_CONTRACT.endswith("_PREREQUISITE_BUNDLE/v1")
 
 
 def test_submission_journal_resumes_exact_completed_prefix(monkeypatch, tmp_path):

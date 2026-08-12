@@ -123,7 +123,10 @@ class HomotopyRepresentationWorkflow:
             lock = load_json(output)
             validate_artifact(
                 lock, contract=GRAPH_RECIPE_LOCK_CONTRACT,
-                required_parents=("parent_import", "integration_attestation", "graph", "combined_recipe"),
+                required_parents=(
+                    "parent_import", "integration_attestation", "graph",
+                    "combined_recipe", "recipe_compatibility",
+                ),
             )
             return self._attest(task, [output])
         if kind == "target":

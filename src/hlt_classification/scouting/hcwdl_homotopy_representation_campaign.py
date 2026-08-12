@@ -45,6 +45,7 @@ SOURCE_FILES = (
     "src/hlt_classification/scouting/hcwdl_homotopy_representation_contracts.py",
     "src/hlt_classification/scouting/hcwdl_homotopy_representation_campaign.py",
     "src/hlt_classification/scouting/hcwdl_homotopy_representation_graph.py",
+    "src/hlt_classification/scouting/hcwdl_homotopy_representation_prerequisites.py",
     "src/hlt_classification/scouting/hcwdl_homotopy_representation_recipe.py",
     "src/hlt_classification/scouting/hcwdl_homotopy_representation_recovery.py",
     "src/hlt_classification/scouting/hcwdl_homotopy_representation_reporting.py",
@@ -57,6 +58,7 @@ SOURCE_FILES = (
     "src/hlt_classification/scouting/hcwdl_representation_targets.py",
     "src/hlt_classification/scouting/hcwdl_representation_training.py",
     "scripts/run_hcwdl_homotopy_representation_task.py",
+    "scripts/prepare_hcwdl_homotopy_representation_prerequisites.py",
     "sbatch/run_hcwdl_homotopy_representation_task.sh",
 )
 
@@ -76,6 +78,7 @@ def build_integration_attestation(
     *, repository: str | Path, source_commit: str,
     architecture_attestation: Mapping[str, Any],
     numerical_acceptance: Mapping[str, Any],
+    recipe_compatibility: Mapping[str, Any],
 ) -> dict[str, Any]:
     if re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
         raise ValueError("HCWDL-U-RKD integration source commit differs")
@@ -94,10 +97,15 @@ def build_integration_attestation(
         or numerical_acceptance.get("scientific_authorization") is not True
     ):
         raise PermissionError("HCWDL-U-RKD numerical acceptance is not authorizing")
+    from .hcwdl_homotopy_representation_prerequisites import (
+        validate_recipe_compatibility,
+    )
+    compatibility_hash = validate_recipe_compatibility(recipe_compatibility)
     return build_artifact(
         INTEGRATION_ATTESTATION_CONTRACT,
         parents={"architecture_attestation": architecture_hash,
-                 "numerical_acceptance": numerical_hash},
+                 "numerical_acceptance": numerical_hash,
+                 "recipe_compatibility": compatibility_hash},
         source_commit=source_commit,
         semantic_source_sha256=semantic_source_hashes(repository),
         public_logit_gradient_parity=True,
@@ -209,6 +217,7 @@ def create_campaign(
     representation_recipe_path: str | Path, kernel_envelope: Mapping[str, Any],
     architecture_attestation_path: str | Path,
     numerical_acceptance_path: str | Path,
+    recipe_compatibility_path: str | Path,
     integration_attestation_path: str | Path,
     resource_profile_path: str | Path | None = None,
     authorize_live_submission: bool = False,
@@ -229,8 +238,15 @@ def create_campaign(
     rep_path = Path(representation_recipe_path).resolve()
     representation = load_json(rep_path)
     rep_hash = validate_representation_recipe(representation)
-    if representation["parents"]["parent_recipe"] != base_hash:
-        raise ValueError("HCWDL-U-RKD representation/base recipe lineage differs")
+    compatibility_path = Path(recipe_compatibility_path).resolve()
+    compatibility = load_json(compatibility_path)
+    from .hcwdl_homotopy_representation_prerequisites import (
+        validate_recipe_compatibility,
+    )
+    compatibility_hash = validate_recipe_compatibility(
+        compatibility, execution_recipe=base,
+        representation_recipe=representation,
+    )
     architecture_path = Path(architecture_attestation_path).resolve()
     architecture = load_json(architecture_path)
     from hlt_classification.models.hcwdl_surfaces import validate_architecture_attestation
@@ -249,7 +265,10 @@ def create_campaign(
     integration = load_json(integration_path)
     integration_hash = validate_artifact(
         integration, contract=INTEGRATION_ATTESTATION_CONTRACT,
-        required_parents=("architecture_attestation", "numerical_acceptance"),
+        required_parents=(
+            "architecture_attestation", "numerical_acceptance",
+            "recipe_compatibility",
+        ),
         required_fields=("source_commit", "semantic_source_sha256"),
     )
     if (
@@ -257,6 +276,7 @@ def create_campaign(
         or integration["semantic_source_sha256"] != semantic_source_hashes(project)
         or integration["parents"]["architecture_attestation"] != architecture_hash
         or integration["parents"]["numerical_acceptance"] != numerical_hash
+        or integration["parents"]["recipe_compatibility"] != compatibility_hash
     ):
         raise ValueError("HCWDL-U-RKD integration attestation differs")
     # Opening the envelope here authenticates all compact kernel members.
@@ -314,6 +334,7 @@ def create_campaign(
             "graph": graph["content_hash"], "combined_recipe": combined["content_hash"],
             "architecture_attestation": architecture_hash,
             "numerical_acceptance": numerical_hash,
+            "recipe_compatibility": compatibility_hash,
             "kernel_resources": kernel_hash,
         },
         fit_count=FIT_COUNT, target_bank_count=TARGET_BANK_COUNT,
@@ -338,6 +359,8 @@ def create_campaign(
         "architecture_attestation_sha256": architecture_hash,
         "numerical_acceptance_path": str(numerical_path),
         "numerical_acceptance_sha256": numerical_hash,
+        "recipe_compatibility_path": str(compatibility_path),
+        "recipe_compatibility_sha256": compatibility_hash,
         "kernel_envelope": dict(kernel_envelope),
         "kernel_resources_sha256": kernel_hash,
         "split_manifest_path": parent["spec"]["split_manifest_path"],
@@ -403,6 +426,18 @@ def validate_campaign(
     root = Path(spec["campaign_root"])
     if load_json(root / "command_plan.json") != build_command_plan(spec):
         raise ValueError("HCWDL-U-RKD command plan changed")
+    base = load_json(spec["base_recipe_path"])
+    representation = load_json(spec["representation_recipe_path"])
+    compatibility = load_json(spec["recipe_compatibility_path"])
+    from .hcwdl_homotopy_representation_prerequisites import (
+        validate_recipe_compatibility,
+    )
+    compatibility_hash = validate_recipe_compatibility(
+        compatibility, execution_recipe=base,
+        representation_recipe=representation,
+    )
+    if compatibility_hash != spec.get("recipe_compatibility_sha256"):
+        raise ValueError("HCWDL-U-RKD recipe compatibility changed")
     if verify_source and (
         spec["semantic_source_sha256"] != semantic_source_hashes(spec["project_dir"])
     ):

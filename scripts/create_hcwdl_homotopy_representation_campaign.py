@@ -31,6 +31,7 @@ def main() -> int:
                         help="JSON mapping accepted by the v5 kernel loader")
     parser.add_argument("--architecture-attestation", type=Path, required=True)
     parser.add_argument("--numerical-acceptance", type=Path, required=True)
+    parser.add_argument("--recipe-compatibility", type=Path, required=True)
     parser.add_argument("--integration-attestation", type=Path, required=True)
     parser.add_argument("--resource-profile", type=Path)
     parser.add_argument("--authorize-live-submission", action="store_true")
@@ -47,6 +48,7 @@ def main() -> int:
         kernel_envelope=envelope,
         architecture_attestation_path=args.architecture_attestation,
         numerical_acceptance_path=args.numerical_acceptance,
+        recipe_compatibility_path=args.recipe_compatibility,
         integration_attestation_path=args.integration_attestation,
         resource_profile_path=args.resource_profile,
         authorize_live_submission=args.authorize_live_submission,

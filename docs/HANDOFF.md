@@ -1,5 +1,34 @@
 # Current Handoff
 
+## HCWDL-U-RKD prerequisite bootstrap repair (2026-08-12)
+
+The first real Tigris preflight for commit `a407f056` found a valid completed
+HCWDL-UJ smoke parent but no reusable representation recipe, architecture
+attestation, numerical acceptance, or kernel envelope. The campaign itself
+correctly refused to create from absent paths, but the implementation lacked
+the promised non-training publication route for those four prerequisites.
+
+`prepare_hcwdl_homotopy_representation_prerequisites.py` and its reusable
+module now publish the complete source-pinned prerequisite bundle from the
+completed U/J parent plus the frozen historical unweighted HCWDL campaign.
+The original exact-hash proposal was rejected by real evidence: the U/J and
+historical recipes have different hashes because their evidence, natural
+class counts, and row-selection lineage differ. The authorized repair binds
+both exact recipes and requires equality of their complete execution-policy
+projection while permitting only those declared lineage fields to differ. It
+reopens the complete historical checkpoint architecture registry, runs real
+installed-Weaver surface parity, numerical and zero-coefficient acceptance,
+publishes the v5 recipe, and commits deterministic spectral resources through
+the shared binary envelope. It runs zero fits and has no final-test input.
+Recipe mismatch fails before creating the output root; later failures leave
+immutable partial evidence and require a new root.
+
+Source compilation and `git diff --check` pass. The focused pytest invocation
+could not collect in the currently exposed Windows Python because that
+interpreter has no NumPy; it failed before running tests. The new prerequisite
+tests and the complete suite must run in `atlas_kd_tigris` after this repair is
+pushed. No local or Tigris job was submitted by this repair.
+
 ## HCWDL common-schema architecture–input factorial (2026-08-11)
 
 The validation-only four-way architecture/input ablation requested after the

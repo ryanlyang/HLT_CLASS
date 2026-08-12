@@ -484,6 +484,8 @@ historical identity and is not accepted by v2 validators:
 
 ```text
 HCWDL_HOMOTOPY_REPRESENTATION_PARENT_IMPORT/v2
+HCWDL_HOMOTOPY_REPRESENTATION_RECIPE_COMPATIBILITY/v1
+HCWDL_HOMOTOPY_REPRESENTATION_PREREQUISITE_BUNDLE/v1
 HCWDL_HOMOTOPY_REPRESENTATION_INTEGRATION_ATTESTATION/v2
 HCWDL_HOMOTOPY_REPRESENTATION_NODE_SPEC/v2
 HCWDL_HOMOTOPY_REPRESENTATION_GRAPH/v2
@@ -529,6 +531,24 @@ The integration attestation proves that the merged implementation preserves:
 - v5 RSET/RREL mathematics and raw-state RREL gradients;
 - deployable extraction and checkpoint selection;
 - no runtime import from either source worktree.
+
+### 13.1 Pre-campaign asset bootstrap
+
+The v2 implementation must provide one non-training bootstrap for sites where
+the four reusable representation assets have not yet been materialized. The
+bootstrap authenticates a completed U/J parent plus the frozen historical
+unweighted HCWDL campaign and publishes the source-compatible v5
+representation recipe, installed-Weaver architecture attestation, numerical
+acceptance, and committed deterministic kernel envelope. It may not train a
+model or read a final-test role. The historical and U/J v4 recipes are
+authenticated independently. Their complete execution policy (optimization,
+schedule, losses, temperatures, duration, checkpointing, unweighted
+reduction, architecture, and exact class weights) must match. Only evidence
+hashes, natural train class counts, and row-selection lineage may differ. A
+versioned compatibility artifact binds both exact recipe hashes and files,
+the equal policy projection, and the explicit difference allowlist. This is
+not authority to translate or approximate a scientific policy. A failed
+bootstrap is immutable partial evidence and is retried in a new root.
 
 Changing rung spacing, node order, teacher routing, representation strategy,
 loss weights, calibration, taps, target sketches, coupling/view semantics, or

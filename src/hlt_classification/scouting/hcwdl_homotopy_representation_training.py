@@ -470,6 +470,7 @@ def train_node(
     engine_report = train_hcwdl_representation_node(
         execution_id=node_id, parent_recipe=base_recipe,
         representation_recipe=representation_recipe,
+        recipe_compatibility=load_json(spec["recipe_compatibility_path"]),
         campaign_sha256=spec["content_hash"],
         train_rows=int(spec["role_counts"]["train"]),
         replicate_seed=int(spec["replicate_seed"]),

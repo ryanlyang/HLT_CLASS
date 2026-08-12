@@ -13,6 +13,31 @@ factorized logit-only reports. Reuse a source-compatible authorized
 `HCWDL_REPRESENTATION_RECIPE/v5`, architecture attestation, full numerical
 acceptance, and committed kernel envelope; path existence alone is not enough.
 
+If those reusable assets are absent, create all four with the non-training
+preparation command below. It authenticates the completed U/J parent and the
+frozen historical unweighted HCWDL campaign. It requires their complete v4
+execution policies to agree and permits only evidence/count/row-selection
+lineage to differ, then runs installed-Weaver parity and numerical checks and
+publishes the deterministic kernels through the committed binary envelope.
+It runs no fit and reads no final-test role. A recipe mismatch fails before
+the output root is created; it is not treated as approximately compatible.
+
+```bash
+python -s "${PROJECT_DIR}/scripts/prepare_hcwdl_homotopy_representation_prerequisites.py" \
+  --parent-homotopy-spec "${PARENT_UJ_SPEC}" \
+  --historical-campaign-root "${HISTORICAL_HCWDL_ROOT}" \
+  --historical-project-dir "${HISTORICAL_PROJECT_DIR}" \
+  --project-dir "${PROJECT_DIR}" \
+  --source-commit "${SOURCE_COMMIT}" \
+  --output-root "${PREREQUISITE_ROOT}" \
+  --device cpu
+```
+
+The command writes `prerequisite_bundle.json`. Its `paths` mapping supplies
+`REP_RECIPE`, `KERNEL_REF`, `ARCH`, `NUMERICAL`, and the already source-pinned
+integration and recipe-compatibility attestations. Preserve a partially published failed root and retry
+under a new root rather than overwriting it.
+
 The kernel reference JSON has one of the existing loader forms:
 
 ```json
@@ -31,7 +56,8 @@ python -s "${PROJECT_DIR}/scripts/run_hcwdl_homotopy_representation_local_smoke.
 ## Genuine smoke candidate
 
 After installed-Weaver parity and the full numerical acceptance exist, publish
-the integration attestation and candidate. Replace only the explicit paths:
+the candidate. Replace only the explicit paths. When the prerequisite helper
+was used, reuse its integration attestation instead of rebuilding it:
 
 ```bash
 export PROJECT_DIR=/home/ryreu/atlas/HLT_Classification_hcwdl_u_rkd_${SHORT}
@@ -41,12 +67,14 @@ export REP_RECIPE=/absolute/representation_recipe_v5.json
 export KERNEL_REF=/absolute/kernel_envelope_reference.json
 export ARCH=/absolute/architecture_attestation.json
 export NUMERICAL=/absolute/full_numerical_acceptance.json
+export RECIPE_COMPATIBILITY=/absolute/recipe_compatibility.json
 export CAMPAIGN_ROOT=/home/ryreu/atlas/HLT_Classification/checkpoints/hcwdl_u_rkd_smoke_${SOURCE_COMMIT:0:8}_r1
 
 python -s "${PROJECT_DIR}/scripts/validate_hcwdl_homotopy_representation_integration.py" \
   --source-commit "${SOURCE_COMMIT}" \
   --architecture-attestation "${ARCH}" \
   --numerical-acceptance "${NUMERICAL}" \
+  --recipe-compatibility "${RECIPE_COMPATIBILITY}" \
   --output /tmp/hcwdl_u_rkd_integration.json
 
 python -s "${PROJECT_DIR}/scripts/create_hcwdl_homotopy_representation_campaign.py" \
@@ -58,6 +86,7 @@ python -s "${PROJECT_DIR}/scripts/create_hcwdl_homotopy_representation_campaign.
   --kernel-envelope "${KERNEL_REF}" \
   --architecture-attestation "${ARCH}" \
   --numerical-acceptance "${NUMERICAL}" \
+  --recipe-compatibility "${RECIPE_COMPATIBILITY}" \
   --integration-attestation /tmp/hcwdl_u_rkd_integration.json \
   --authorize-live-submission \
   --authorization-phrase "AUTHORIZE HCWDL U RKD VALIDATION CAMPAIGN EXACT SPEC"

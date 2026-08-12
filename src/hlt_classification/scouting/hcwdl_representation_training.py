@@ -3261,6 +3261,7 @@ def train_hcwdl_representation_node(
     execution_id: str,
     parent_recipe: Mapping[str, Any],
     representation_recipe: Mapping[str, Any],
+    recipe_compatibility: Mapping[str, Any] | None = None,
     campaign_sha256: str,
     train_rows: int,
     replicate_seed: int,
@@ -3338,7 +3339,23 @@ def train_hcwdl_representation_node(
     ):
         raise ValueError("HCWDL-RKD parent recipe must bind fifteen exact ones")
     if representation_recipe["parents"]["parent_recipe"] != parent_recipe_sha256:
-        raise ValueError("representation overlay binds a different parent recipe")
+        if recipe_compatibility is None:
+            raise ValueError("representation overlay binds a different parent recipe")
+        from .hcwdl_homotopy_representation_prerequisites import (
+            validate_recipe_compatibility,
+        )
+        validate_recipe_compatibility(
+            recipe_compatibility, execution_recipe=parent_recipe,
+            representation_recipe=representation_recipe,
+        )
+    elif recipe_compatibility is not None:
+        from .hcwdl_homotopy_representation_prerequisites import (
+            validate_recipe_compatibility,
+        )
+        validate_recipe_compatibility(
+            recipe_compatibility, execution_recipe=parent_recipe,
+            representation_recipe=representation_recipe,
+        )
     lineage = _validate_runtime_lineage(resume_lineage, producer_runtime_signature)
     expected_graph_sha256 = ASCENT_GRAPH_SHA256
     if execution_id.startswith(("F_RSET_", "F_RREL_")):
