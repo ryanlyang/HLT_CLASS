@@ -1917,3 +1917,16 @@ exact-one class weights. A regression proves this asymmetric boundary. The
 failed partially published prerequisite root is immutable and must not be
 overwritten; the next genuine Tigris attempt uses a new pushed commit and new
 prerequisite/campaign roots.
+
+The next attempt at `31b78378` passed the 19-test focused closure and fully
+published the prerequisite bundle, including installed-Weaver architecture,
+numerical, compatibility, recipe, and committed-kernel evidence. Campaign
+creation then exposed a planning/runtime adapter mismatch: the portable JSON
+stored `committed_directory` as an absolute string, while the shared
+production kernel loader requires its internal `RegisteredInputPath` marker.
+The closed U-RKD kernel adapter now promotes only the exact one-field absolute
+committed-directory form before delegating to the unchanged production
+commit/parent/member validators. Arbitrary files and generic raw production
+paths remain rejected. A focused regression freezes this boundary. The
+complete `31b78378` prerequisite root remains valid evidence but is not reused
+by the corrected source identity; the next attempt uses new roots.

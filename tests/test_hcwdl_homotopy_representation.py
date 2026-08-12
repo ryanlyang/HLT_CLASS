@@ -19,6 +19,12 @@ from hlt_classification.scouting.hcwdl_homotopy_representation_graph import (
     target_bank_registry, validate_graph,
 )
 from hlt_classification.scouting.hcwdl_representation_graph import RREL_STRATEGY
+from hlt_classification.scouting.hcwdl_homotopy_representation_training import (
+    _kernel_bundle,
+)
+from hlt_classification.scouting.hcwdl_representation_runtime_adapters import (
+    RegisteredInputPath,
+)
 
 
 def test_exact_two_track_graph_and_loss_routing():
@@ -59,6 +65,28 @@ def test_exact_two_track_graph_and_loss_routing():
     )
     with pytest.raises(ValueError, match="immediate predecessor"):
         validate_graph(tampered)
+
+
+def test_kernel_reference_promotes_only_absolute_committed_directory(
+    monkeypatch, tmp_path,
+):
+    from hlt_classification.scouting import hcwdl_representation_production
+
+    captured = {}
+
+    def load(reference):
+        captured.update(reference)
+        return "bundle"
+
+    monkeypatch.setattr(
+        hcwdl_representation_production, "_load_kernel_bundle", load,
+    )
+    committed = str((tmp_path / "committed" / ("a" * 64)).resolve())
+    assert _kernel_bundle({"committed_directory": committed}) == "bundle"
+    assert isinstance(captured["committed_directory"], RegisteredInputPath)
+    assert str(captured["committed_directory"]) == committed
+    with pytest.raises(ValueError, match="committed directory"):
+        _kernel_bundle({"committed_directory": "relative/path"})
 
 
 def test_exact_47_task_parallel_sequential_dag():

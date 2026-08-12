@@ -38,11 +38,17 @@ The command writes `prerequisite_bundle.json`. Its `paths` mapping supplies
 integration and recipe-compatibility attestations. Preserve a partially published failed root and retry
 under a new root rather than overwriting it.
 
-The kernel reference JSON has one of the existing loader forms:
+The prerequisite helper persists the committed-envelope coordinate in its
+portable campaign-planning form:
 
 ```json
 {"committed_directory":"/absolute/.../committed/<64-hex-envelope-id>"}
 ```
+
+The closed HCWDL-U-RKD adapter promotes only that absolute coordinate to the
+production loader's internal registered-input path type, after which the
+existing commit, parent, and member validators authenticate the envelope.
+Generic production adapters continue to reject unregistered raw paths.
 
 ## Local nonauthorizing closure
 

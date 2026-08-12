@@ -72,8 +72,24 @@ def target_output_dir(root: str | Path, bank_id: str) -> Path:
 
 def _kernel_bundle(reference: Mapping[str, Any]):
     from .hcwdl_representation_production import _load_kernel_bundle
+    from .hcwdl_representation_runtime_adapters import RegisteredInputPath
 
-    return _load_kernel_bundle(reference)
+    # Campaign specifications persist absolute, immutable committed-envelope
+    # coordinates as ordinary JSON strings.  The shared production loader
+    # deliberately requires its filesystem coordinate to carry the internal
+    # registered-input provenance marker used by runtime-row resolution.  This
+    # closed U-RKD adapter is the campaign-spec registration boundary: it
+    # accepts only the exact committed-directory form, promotes that one path,
+    # and then delegates all commit/parent/member validation to the production
+    # loader.  It does not accept arbitrary files or broaden the generic
+    # production resolver.
+    normalized = dict(reference)
+    if set(normalized) == {"committed_directory"}:
+        raw = normalized["committed_directory"]
+        if not isinstance(raw, str) or not Path(raw).is_absolute():
+            raise ValueError("HCWDL-U-RKD kernel committed directory differs")
+        normalized["committed_directory"] = RegisteredInputPath(raw)
+    return _load_kernel_bundle(normalized)
 
 
 def _target_forward_batch(*args, **kwargs):
