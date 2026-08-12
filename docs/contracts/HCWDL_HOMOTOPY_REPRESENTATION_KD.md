@@ -7,13 +7,16 @@ The plan remains the scientific authority.
 
 ## Immutable scientific identity
 
+- This document describes the twenty-point v2 family. It supersedes the
+  unexecuted ten-point v1 candidate without making v1 artifacts reusable as
+  v2.
 - Two cold, factorized tracks are registered: `F_RSET` and `F_RREL`.
-- Each track has exactly 21 fits:
-  `U010,...,U100,D90,...,D0,M1`.
+- Each track has exactly 11 fits:
+  `U020,U040,U060,U080,U100,D80,D60,D40,D20,D0,M1`.
 - `U000` is a semantic projected-offline endpoint and is never trained.
-- The two `U010` fits share one native-TOFF target bank. Every later fit uses
+- The two `U020` fits share one native-TOFF target bank. Every later fit uses
   a compact bank produced by its own immediate predecessor. There are exactly
-  42 fits and 41 logical banks.
+  22 fits and 21 logical banks.
 - Student/input/sampler seeds are paired with the imported logit-only
   factorized track. Representation-head RNG is strategy-specific.
 - Every fit is a fresh initialization. U/D fits use unweighted
@@ -28,7 +31,7 @@ The plan remains the scientific authority.
 
 ## Lineage and storage
 
-Artifacts use the `HCWDL_HOMOTOPY_REPRESENTATION_*/v1` contracts enumerated
+Artifacts use the `HCWDL_HOMOTOPY_REPRESENTATION_*/v2` contracts enumerated
 in the plan and implemented in
 `hcwdl_homotopy_representation_contracts.py`. The campaign imports an exact,
 completed U/J parent and reopens its coupling, coordinate, endpoint, graph,
@@ -45,8 +48,8 @@ evidence.
 
 ## Execution and recovery
 
-The immutable graph contains 87 tasks: authentication, graph/recipe lock,
-41 target generations, 42 fits, aggregate, and completion. RSET and RREL
+The immutable graph contains 47 tasks: authentication, graph/recipe lock,
+21 target generations, 22 fits, aggregate, and completion. RSET and RREL
 start together after the shared TOFF bank and remain sequential internally.
 Finite poor metrics never prune descendants.
 

@@ -1751,7 +1751,65 @@ exact IDs in its immutable submission ledger; its scientific tasks cannot be
 resumed or relabeled. Rebuild one fresh candidate from the existing reusable
 inputs and compatible measured profile at the correction commit.
 
-## HCWDL U/D representation-KD integration (2026-08-11)
+## HCWDL U/D representation-KD twenty-point v2 revision (2026-08-12)
+
+The user authorized replacing the unexecuted ten-point representation-KD
+candidate with a smaller twenty-point screen. The active implementation plan,
+reusable contract summary, runbook, implementation, recovery, reporting, and
+tests now agree on this exact graph for each of `F_RSET` and `F_RREL`:
+
+```text
+TOFF -> U020 -> U040 -> U060 -> U080 -> U100
+     -> D80 -> D60 -> D40 -> D20 -> D0 -> M1
+```
+
+This is a new `HCWDL_HOMOTOPY_REPRESENTATION_*/v2` family. The historical v1
+candidate below was never executed and is not accepted or relabeled as v2.
+The retained rungs preserve their imported U/J seed identities
+`transition_02,04,06,08,10,12,14,16,18,20,21`; the scientific spacing change
+therefore does not silently renumber the paired stochastic trajectories.
+Every track remains cold-started and immediate-predecessor-taught. U/D use
+unweighted `0.25 CE + 0.75 KD` at temperature 2, M1 uses temperature 1, and
+the v5 RSET/RREL objective remains unchanged.
+
+The immutable v2 graph contains 22 fits and 21 logical train-only target
+banks: the two U020 students share the TOFF bank and every nonterminal student
+produces exactly one bank for its child. Its command plan contains 47 tasks:
+two setup tasks, 21 target generations, 22 fits, aggregate, and completion.
+The pilot remains 300,000/100,000/0 rows with 60 validations over 60 passes;
+the genuine smoke remains 4,096/4,096/0 with two optimizer updates per fit.
+No final-test task or capability was added.
+
+Implementation review also fixed a fail-closed validation defect found during
+the revision: `validate_graph(custom_registry)` previously checked teacher
+routing and target banks through the global registry. It now validates the
+supplied registry throughout, and a tampered predecessor edge has an explicit
+regression test.
+
+Local v2 evidence at the final working state:
+
+- focused homotopy graph/recovery suite: 53 passed;
+- complete repository suite: 940 passed, 9 expected Windows platform skips,
+  and 14 dependency deprecation warnings;
+- bounded all-node synthetic execution:
+  `HCWDL_HOMOTOPY_REPRESENTATION_LOCAL_SMOKE/v2`, 22/22 fits, 21 target banks,
+  graph SHA-256
+  `b24a5ae2460ff872b0adf217ba9c1f4b7da606b9d3bbe6c28a7f6f065113e272`,
+  content SHA-256
+  `b47aa9ea75e3c233e0ed68209f8368b2e21a16a8c4ffddb0b2b33ae9d7cdad97`;
+- all 13 HCWDL-U-RKD CLI `--help` surfaces passed;
+- all 27 documented v2 contract identities exactly match the module;
+- repository-relative Markdown links and Git-Bash worker syntax passed;
+- `git diff --check` passed.
+
+No Slurm job was submitted and no final-test data were accessed. The remaining
+real closure is to commit and push this exact source, create a new clean
+detached Tigris worktree, regenerate integration/numerical evidence at that
+commit, and run the separately authorized genuine v2 smoke. A measured v2
+smoke profile and a new nonmutating 300k dry run are required before pilot
+submission.
+
+## Historical HCWDL U/D representation-KD v1 integration (2026-08-11)
 
 The implementation-authoritative
 `docs/plans/HCWDL_HOMOTOPY_REPRESENTATION_KD_IMPLEMENTATION_PLAN.md` is now

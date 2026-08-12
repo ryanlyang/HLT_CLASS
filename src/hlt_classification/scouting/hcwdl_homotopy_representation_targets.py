@@ -17,7 +17,7 @@ from hlt_classification.data.cache_contracts import (
 from .hcwdl_homotopy_representation_contracts import (
     TARGET_CLEANUP_AUTHORIZATION_CONTRACT, TARGET_CLEANUP_COMPLETION_CONTRACT,
     TARGET_GENERATION_CONTRACT, TARGET_MANIFEST_CONTRACT, TARGET_SHARD_CONTRACT,
-    TARGET_SPEC_CONTRACT,
+    TARGET_SPEC_CONTRACT, SCHEMA_VERSION,
 )
 from .hcwdl_homotopy_representation_graph import (
     GRAPH_SHA256, NODE_REGISTRY, target_bank_registry,
@@ -73,7 +73,7 @@ def build_target_spec(
         "teacher_checkpoint": teacher_checkpoint_sha256,
     }
     return with_content_hash({
-        "contract": TARGET_SPEC_CONTRACT, "schema_version": 1,
+        "contract": TARGET_SPEC_CONTRACT, "schema_version": SCHEMA_VERSION,
         "parents": {name: require_sha256(value, name=name) for name, value in parents.items()},
         "bank_id": bank_id,
         "bank_kind": TOFF_BANK if bank_id == "TOFF" else ORDINARY_BANK,
@@ -88,7 +88,8 @@ def build_target_spec(
 
 def validate_target_spec(value: Mapping[str, Any]) -> str:
     digest = validate_content_hash(
-        value, expected_contract=TARGET_SPEC_CONTRACT, expected_schema_version=1,
+        value, expected_contract=TARGET_SPEC_CONTRACT,
+        expected_schema_version=SCHEMA_VERSION,
     )
     bank_id = str(value.get("bank_id"))
     consumers = target_bank_registry().get(bank_id)
@@ -145,7 +146,8 @@ def publish_prepared_targets(
         data_path = root / "shards" / f"{index:04d}.npz"
         atomic_publish_bytes(data_path, payload)
         sidecar = with_content_hash({
-            "contract": TARGET_SHARD_CONTRACT, "schema_version": 1,
+            "contract": TARGET_SHARD_CONTRACT,
+            "schema_version": SCHEMA_VERSION,
             "parents": {"target_spec": spec_hash},
             "partition": partition, "rows": rows,
             "data_path": str(data_path.resolve()),
@@ -171,7 +173,8 @@ def publish_prepared_targets(
     identities = np.concatenate(global_identities, axis=0)
     labels = np.concatenate(global_labels, axis=0)
     generation = with_content_hash({
-        "contract": TARGET_GENERATION_CONTRACT, "schema_version": 1,
+        "contract": TARGET_GENERATION_CONTRACT,
+        "schema_version": SCHEMA_VERSION,
         "parents": {"target_spec": spec_hash},
         "bank_id": target_spec["bank_id"], "rows": total_rows,
         "teacher_forward_calls": int(prepared.teacher_forward_calls),
@@ -184,7 +187,8 @@ def publish_prepared_targets(
     })
     write_immutable_json(root / "generation.json", generation)
     manifest = with_content_hash({
-        "contract": TARGET_MANIFEST_CONTRACT, "schema_version": 1,
+        "contract": TARGET_MANIFEST_CONTRACT,
+        "schema_version": SCHEMA_VERSION,
         "parents": {"target_spec": spec_hash, "target_generation": generation["content_hash"]},
         "payload": {
             "logical_bank_id": target_spec["bank_id"],
@@ -214,7 +218,8 @@ def validate_target_manifest(
     value: Mapping[str, Any], *, expected_spec_sha256: str | None = None,
 ) -> str:
     digest = validate_content_hash(
-        value, expected_contract=TARGET_MANIFEST_CONTRACT, expected_schema_version=1,
+        value, expected_contract=TARGET_MANIFEST_CONTRACT,
+        expected_schema_version=SCHEMA_VERSION,
     )
     parents = value.get("parents", {})
     spec_hash = require_sha256(parents.get("target_spec"), name="target specification")
@@ -237,7 +242,8 @@ def validate_target_manifest(
             raise ValueError("HCWDL-U-RKD target shard bytes differ")
         sidecar = load_json(sidecar_path)
         validate_content_hash(
-            sidecar, expected_contract=TARGET_SHARD_CONTRACT, expected_schema_version=1,
+            sidecar, expected_contract=TARGET_SHARD_CONTRACT,
+            expected_schema_version=SCHEMA_VERSION,
         )
         if sidecar.get("content_hash") != shard.get("sidecar_sha256"):
             raise ValueError("HCWDL-U-RKD target shard sidecar differs")
@@ -307,7 +313,8 @@ def build_cleanup_authorization(
     if set(completed_consumers) != expected:
         raise PermissionError("target cleanup lacks every registered consumer")
     return with_content_hash({
-        "contract": TARGET_CLEANUP_AUTHORIZATION_CONTRACT, "schema_version": 1,
+        "contract": TARGET_CLEANUP_AUTHORIZATION_CONTRACT,
+        "schema_version": SCHEMA_VERSION,
         "parents": {"target_manifest": manifest_hash, **{
             f"consumer_{node}": require_sha256(value, name=node)
             for node, value in sorted(completed_consumers.items())
@@ -323,12 +330,13 @@ def build_cleanup_completion(
 ) -> dict[str, Any]:
     auth_hash = validate_content_hash(
         authorization, expected_contract=TARGET_CLEANUP_AUTHORIZATION_CONTRACT,
-        expected_schema_version=1,
+        expected_schema_version=SCHEMA_VERSION,
     )
     if sorted(absent_paths) != sorted(authorization["authorized_paths"]):
         raise ValueError("target cleanup completion path set differs")
     return with_content_hash({
-        "contract": TARGET_CLEANUP_COMPLETION_CONTRACT, "schema_version": 1,
+        "contract": TARGET_CLEANUP_COMPLETION_CONTRACT,
+        "schema_version": SCHEMA_VERSION,
         "parents": {"cleanup_authorization": auth_hash},
         "absent_paths": sorted(absent_paths), "all_authorized_paths_absent": True,
         "final_test_accessed": False,

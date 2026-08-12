@@ -303,8 +303,8 @@ The validation-only U/D representation supplement is operated through
 `cancel_hcwdl_homotopy_representation_campaign.py`. Source/resource closure
 recovery uses `recover_hcwdl_homotopy_representation_campaign.py` and
 `submit_hcwdl_homotopy_representation_recovery.py`; target cleanup and
-resource publication are separate explicit commands. The graph contains 42
-fits and no final-test task. See
+resource publication are separate explicit commands. The v2 graph contains
+22 fits on the twenty-point U/D path and no final-test task. See
 `docs/HCWDL_HOMOTOPY_REPRESENTATION_KD_RUNBOOK.md`.
 
 ## HCWDL architecture–input factorial

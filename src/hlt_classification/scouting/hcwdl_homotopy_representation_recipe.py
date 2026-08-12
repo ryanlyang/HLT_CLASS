@@ -9,7 +9,9 @@ import numpy as np
 
 from hlt_classification.data.cache_contracts import require_sha256, validate_content_hash, with_content_hash
 
-from .hcwdl_homotopy_representation_contracts import RECIPE_CONTRACT
+from .hcwdl_homotopy_representation_contracts import (
+    FIT_COUNT, RECIPE_CONTRACT, SCHEMA_VERSION, TARGET_BANK_COUNT,
+)
 from .hcwdl_homotopy_representation_graph import (
     GRAPH_SHA256, NODE_REGISTRY, resolved_base_loss,
 )
@@ -64,7 +66,7 @@ def build_recipe(
         })
     return with_content_hash({
         "contract": RECIPE_CONTRACT,
-        "schema_version": 1,
+        "schema_version": SCHEMA_VERSION,
         "parents": {
             "base_recipe": base_hash,
             "representation_recipe": representation_hash,
@@ -86,8 +88,8 @@ def build_recipe(
             "highest_macro_mean_log_qcd_rejection_at_50pct_signal",
             "earliest_optimizer_update",
         ],
-        "target_bank_count": 41,
-        "node_count": 42,
+        "target_bank_count": TARGET_BANK_COUNT,
+        "node_count": FIT_COUNT,
         "rows": rows,
         "final_test_accessed": False,
     })
@@ -98,7 +100,8 @@ def validate_recipe(
     representation_recipe: Mapping[str, Any],
 ) -> str:
     digest = validate_content_hash(
-        value, expected_contract=RECIPE_CONTRACT, expected_schema_version=1,
+        value, expected_contract=RECIPE_CONTRACT,
+        expected_schema_version=SCHEMA_VERSION,
     )
     rebuilt = build_recipe(
         base_recipe=base_recipe, representation_recipe=representation_recipe,

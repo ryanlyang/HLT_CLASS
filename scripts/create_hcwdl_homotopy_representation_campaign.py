@@ -15,6 +15,9 @@ from hlt_classification.data.cache_contracts import load_json  # noqa: E402
 from hlt_classification.scouting.hcwdl_homotopy_representation_campaign import (  # noqa: E402
     AUTHORIZATION_PHRASE, create_campaign,
 )
+from hlt_classification.scouting.hcwdl_homotopy_representation_contracts import (  # noqa: E402
+    FIT_COUNT, TARGET_BANK_COUNT,
+)
 
 
 def main() -> int:
@@ -51,7 +54,7 @@ def main() -> int:
     )
     print(json.dumps({
         "campaign_root": spec["campaign_root"], "mode": spec["mode"],
-        "fit_count": 42, "target_bank_count": 41,
+        "fit_count": FIT_COUNT, "target_bank_count": TARGET_BANK_COUNT,
         "task_count": len(spec["tasks"]),
         "authorized": spec["live_submission_authorized"],
         "creation_phrase": AUTHORIZATION_PHRASE,

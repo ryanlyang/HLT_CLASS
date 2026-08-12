@@ -8,6 +8,7 @@ import sys
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 from hlt_classification.data.cache_contracts import load_json, with_content_hash, write_immutable_json  # noqa: E402
+from hlt_classification.scouting.hcwdl_homotopy_representation_contracts import SCHEMA_VERSION  # noqa: E402
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--smoke-campaign-spec", type=Path, required=True)
@@ -22,8 +23,8 @@ def main() -> int:
     if spec["mode"] != "smoke" or completion.get("complete") is not True:
         raise ValueError("resource authority requires a completed genuine smoke")
     profile = with_content_hash({
-        "contract": "HCWDL_HOMOTOPY_REPRESENTATION_RESOURCE_PROFILE/v1",
-        "schema_version": 1, "source_commit": args.source_commit,
+        "contract": "HCWDL_HOMOTOPY_REPRESENTATION_RESOURCE_PROFILE/v2",
+        "schema_version": SCHEMA_VERSION, "source_commit": args.source_commit,
         "parents": {"smoke_campaign": spec["content_hash"], "smoke_completion": completion["content_hash"]},
         "measurements": {"peak_cpu_gib": args.peak_cpu_gib, "peak_cuda_gib": args.peak_cuda_gib, "maximum_wall_seconds": args.maximum_wall_seconds, "target_storage_gib": args.target_storage_gib},
         "requests": {

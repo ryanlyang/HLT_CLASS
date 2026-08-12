@@ -10,9 +10,11 @@ from hlt_classification.data.cache_contracts import load_json, validate_content_
 
 from .hcwdl_homotopy_representation_contracts import (
     AGGREGATE_CONTRACT, CAMPAIGN_COMPLETE_CONTRACT, TRAINING_REPORT_CONTRACT,
-    build_artifact, validate_artifact,
+    FIT_COUNT, TARGET_BANK_COUNT, build_artifact, validate_artifact,
 )
-from .hcwdl_homotopy_representation_graph import NODE_REGISTRY, STRATEGIES
+from .hcwdl_homotopy_representation_graph import (
+    CONTROL_SUFFIXES, NODE_REGISTRY, STRATEGIES,
+)
 
 
 METRICS = (
@@ -70,9 +72,7 @@ def build_aggregate(spec: Mapping[str, Any]) -> dict[str, Any]:
         rows[node_id] = _metrics(report)
         report_parents[f"report_{node_id}"] = digest
     paired = []
-    for suffix in [f"U{level:03d}" for level in range(10, 101, 10)] + [
-        f"D{level}" for level in range(90, -1, -10)
-    ] + ["M1"]:
+    for suffix in CONTROL_SUFFIXES:
         rset = rows[f"F_RSET_{suffix}"]
         rrel = rows[f"F_RREL_{suffix}"]
         logit_path = Path(spec["logit_control_reports"][suffix]["report_path"])
@@ -119,7 +119,7 @@ def build_aggregate(spec: Mapping[str, Any]) -> dict[str, Any]:
     return build_artifact(
         AGGREGATE_CONTRACT,
         parents={"campaign_spec": spec["content_hash"], **report_parents},
-        fit_count=42, target_bank_count=41,
+        fit_count=FIT_COUNT, target_bank_count=TARGET_BANK_COUNT,
         terminal_candidates=["F_RSET_M1", "F_RREL_M1"],
         rows=rows, recovery=recovery, paired_comparisons=paired,
         baselines=baselines,
@@ -138,7 +138,8 @@ def build_campaign_complete(
     return build_artifact(
         CAMPAIGN_COMPLETE_CONTRACT,
         parents={"campaign_spec": spec["content_hash"], "aggregate": aggregate_hash},
-        mode=spec["mode"], fit_count=42, target_bank_count=41,
+        mode=spec["mode"], fit_count=FIT_COUNT,
+        target_bank_count=TARGET_BANK_COUNT,
         scientific_result_does_not_control_completion=True,
         final_test_task_registered=False, final_test_capability_issued=False,
         complete=True,

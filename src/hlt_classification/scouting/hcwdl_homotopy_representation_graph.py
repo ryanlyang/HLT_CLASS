@@ -10,7 +10,8 @@ from hlt_classification.data.cache_contracts import canonical_sha256, with_conte
 
 from .hcwdl_homotopy_graph import DOMAINS as HOMOTOPY_DOMAINS
 from .hcwdl_homotopy_representation_contracts import (
-    FIT_COUNT, GRAPH_CONTRACT, NODE_SPEC_CONTRACT, TARGET_BANK_COUNT,
+    FIT_COUNT, GRAPH_CONTRACT, NODE_SPEC_CONTRACT, SCHEMA_VERSION,
+    TARGET_BANK_COUNT,
 )
 from .hcwdl_ladder import TeacherSpec
 from .hcwdl_representation_graph import RREL_STRATEGY, RSET_STRATEGY
@@ -44,22 +45,27 @@ class HomotopyRepresentationNodeSpec:
     def payload(self) -> dict[str, object]:
         value = asdict(self)
         value["teacher"] = asdict(self.teacher)
-        return {"contract": NODE_SPEC_CONTRACT, "schema_version": 1, **value}
+        return {
+            "contract": NODE_SPEC_CONTRACT,
+            "schema_version": SCHEMA_VERSION,
+            **value,
+        }
 
 
-def _path_rows() -> tuple[tuple[str, str, str], ...]:
-    rows: list[tuple[str, str, str]] = []
-    for index in range(1, 11):
-        label = f"U{index * 10:03d}"
-        rows.append((label, f"u{index * 10:03d}", "upper"))
-    for index in range(1, 11):
-        level = 100 - index * 10
-        rows.append((f"D{level}", f"d{level}f", "down"))
-    rows.append(("M1", "hlt", "born_again"))
+def _path_rows() -> tuple[tuple[str, str, str, int], ...]:
+    """Return v2 rungs and their paired transition aliases in the U/J parent."""
+
+    rows: list[tuple[str, str, str, int]] = []
+    for level in range(20, 101, 20):
+        rows.append((f"U{level:03d}", f"u{level:03d}", "upper", level // 10))
+    for level in range(80, -1, -20):
+        rows.append((f"D{level}", f"d{level}f", "down", 20 - level // 10))
+    rows.append(("M1", "hlt", "born_again", 21))
     return tuple(rows)
 
 
 PATH_ROWS: Final = _path_rows()
+CONTROL_SUFFIXES: Final = tuple(row[0] for row in PATH_ROWS)
 
 
 def _build_registry() -> dict[str, HomotopyRepresentationNodeSpec]:
@@ -68,7 +74,9 @@ def _build_registry() -> dict[str, HomotopyRepresentationNodeSpec]:
         prefix = TRACK_PREFIX[strategy]
         predecessor = "TOFF"
         predecessor_domain = "toff"
-        for index, (label, domain, stage) in enumerate(PATH_ROWS, start=1):
+        for index, (label, domain, stage, parent_transition) in enumerate(
+            PATH_ROWS, start=1,
+        ):
             node_id = f"{prefix}_{label}"
             temperature = 1.0 if stage == "born_again" else 2.0
             counterpart = "M1F" if label == "M1" else (
@@ -78,7 +86,8 @@ def _build_registry() -> dict[str, HomotopyRepresentationNodeSpec]:
                 node_id=node_id, strategy=strategy, track="factorized_cold",
                 transition_index=index, stage=stage, student_domain=domain,
                 teacher=TeacherSpec(predecessor, predecessor_domain, "sole"),
-                seed_alias=f"transition_{index:02d}", temperature=temperature,
+                seed_alias=f"transition_{parent_transition:02d}",
+                temperature=temperature,
                 target_bank_identity=predecessor,
                 parent_counterpart=counterpart,
                 deployable=domain == "hlt",
@@ -93,38 +102,44 @@ NODE_REGISTRY: Final[Mapping[str, HomotopyRepresentationNodeSpec]] = MappingProx
 DOMAINS: Final = HOMOTOPY_DOMAINS
 
 
-def ordered_nodes(strategy: str) -> tuple[HomotopyRepresentationNodeSpec, ...]:
+def ordered_nodes(
+    strategy: str,
+    registry: Mapping[str, HomotopyRepresentationNodeSpec] = NODE_REGISTRY,
+) -> tuple[HomotopyRepresentationNodeSpec, ...]:
     if strategy not in STRATEGIES:
         raise ValueError("unknown HCWDL-U-RKD strategy")
     return tuple(sorted(
-        (node for node in NODE_REGISTRY.values() if node.strategy == strategy),
+        (node for node in registry.values() if node.strategy == strategy),
         key=lambda node: node.transition_index,
     ))
 
 
-def target_bank_registry() -> dict[str, tuple[str, ...]]:
+def target_bank_registry(
+    registry: Mapping[str, HomotopyRepresentationNodeSpec] = NODE_REGISTRY,
+) -> dict[str, tuple[str, ...]]:
     consumers: dict[str, list[str]] = {}
-    for node in NODE_REGISTRY.values():
+    for node in registry.values():
         consumers.setdefault(node.target_bank_identity, []).append(node.node_id)
     return {key: tuple(sorted(value)) for key, value in sorted(consumers.items())}
 
 
 def validate_graph(registry: Mapping[str, HomotopyRepresentationNodeSpec] = NODE_REGISTRY) -> str:
     if len(registry) != FIT_COUNT or len(set(registry)) != FIT_COUNT:
-        raise ValueError("HCWDL-U-RKD graph must contain exactly 42 fits")
+        raise ValueError("HCWDL-U-RKD v2 graph must contain exactly 22 fits")
     for strategy in STRATEGIES:
-        rows = ordered_nodes(strategy)
-        if len(rows) != 21 or [row.transition_index for row in rows] != list(range(1, 22)):
+        rows = ordered_nodes(strategy, registry)
+        if len(rows) != 11 or [row.transition_index for row in rows] != list(range(1, 12)):
             raise ValueError("HCWDL-U-RKD strategy transition registry differs")
         if rows[0].teacher != TeacherSpec("TOFF", "toff", "sole"):
             raise ValueError("first representation homotopy node must use native TOFF")
         for parent, child in zip(rows, rows[1:]):
             if child.teacher != TeacherSpec(parent.node_id, parent.student_domain, "sole"):
                 raise ValueError("HCWDL-U-RKD immediate predecessor routing differs")
-    if len(target_bank_registry()) != TARGET_BANK_COUNT:
-        raise ValueError("HCWDL-U-RKD must register exactly 41 logical target banks")
-    if target_bank_registry().get("TOFF") != (
-        "F_RREL_U010", "F_RSET_U010",
+    banks = target_bank_registry(registry)
+    if len(banks) != TARGET_BANK_COUNT:
+        raise ValueError("HCWDL-U-RKD v2 must register exactly 21 logical target banks")
+    if banks.get("TOFF") != (
+        "F_RREL_U020", "F_RSET_U020",
     ):
         raise ValueError("shared TOFF target consumers differ")
     if any(
@@ -141,7 +156,7 @@ def graph_payload(
     registry: Mapping[str, HomotopyRepresentationNodeSpec] = NODE_REGISTRY,
 ) -> dict[str, object]:
     return {
-        "contract": GRAPH_CONTRACT, "schema_version": 1,
+        "contract": GRAPH_CONTRACT, "schema_version": SCHEMA_VERSION,
         "fit_count": FIT_COUNT, "target_bank_count": TARGET_BANK_COUNT,
         "trained_u000": False, "warm_node_count": 0,
         "terminal_candidates": ["F_RSET_M1", "F_RREL_M1"],
@@ -177,8 +192,9 @@ def seed_for_node(replicate_seed: int, node_id: str, *, purpose: str) -> int:
 
 
 __all__ = [
-    "DOMAINS", "GRAPH_LABEL", "GRAPH_SHA256", "HomotopyRepresentationNodeSpec",
-    "NODE_REGISTRY", "PATH_ROWS", "STRATEGIES", "TRAINING_PASSES", "VALIDATIONS",
+    "CONTROL_SUFFIXES", "DOMAINS", "GRAPH_LABEL", "GRAPH_SHA256",
+    "HomotopyRepresentationNodeSpec", "NODE_REGISTRY", "PATH_ROWS", "STRATEGIES",
+    "TRAINING_PASSES", "VALIDATIONS",
     "graph_artifact", "ordered_nodes", "resolved_base_loss", "seed_for_node",
     "target_bank_registry", "validate_graph",
 ]

@@ -4,7 +4,8 @@ from hlt_classification.data.cache_contracts import with_content_hash
 from hlt_classification.scouting.hcwdl_homotopy_representation_campaign import _task_registry
 from hlt_classification.scouting.hcwdl_homotopy_representation_contracts import (
     MONITOR_REPORT_CONTRACT, RESOURCE_RECOVERY_CONTRACT,
-    SUBMISSION_LEDGER_CONTRACT, build_artifact,
+    CAMPAIGN_SPEC_CONTRACT, SCHEMA_VERSION, SUBMISSION_LEDGER_CONTRACT,
+    build_artifact,
 )
 from hlt_classification.scouting.hcwdl_homotopy_representation_recovery import (
     exact_cancellation_commands, failed_downstream_closure,
@@ -18,8 +19,8 @@ from hlt_classification.scouting.hcwdl_homotopy_representation_graph import GRAP
 
 def _spec():
     return with_content_hash({
-        "contract": "HCWDL_HOMOTOPY_REPRESENTATION_CAMPAIGN_SPEC/v1",
-        "schema_version": 1, "tasks": _task_registry(),
+        "contract": CAMPAIGN_SPEC_CONTRACT,
+        "schema_version": SCHEMA_VERSION, "tasks": _task_registry(),
         "final_test_accessed": False,
     })
 
@@ -31,7 +32,7 @@ def test_failed_closure_is_exact_strategy_suffix_plus_aggregate():
         parents={"campaign_spec": spec["content_hash"], "submission_ledger": "b" * 64},
         rows=[
             {"task_id": row["task_id"], "classification": (
-                "retryable_failure" if row["task_id"] == "train_F_RSET_U050" else "complete"
+                "retryable_failure" if row["task_id"] == "train_F_RSET_U060" else "complete"
             )}
             for row in spec["tasks"]
         ],
@@ -46,9 +47,9 @@ def test_failed_closure_is_exact_strategy_suffix_plus_aggregate():
         closure = failed_downstream_closure(spec, monitor)
     finally:
         module.validate_campaign = original
-    assert "train_F_RSET_U050" in closure
+    assert "train_F_RSET_U060" in closure
     assert "train_F_RSET_M1" in closure
-    assert "train_F_RREL_U050" not in closure
+    assert "train_F_RREL_U060" not in closure
     assert closure[-2:] == ("aggregate", "campaign_complete")
 
 
@@ -64,8 +65,9 @@ def test_ledger_and_cancellation_are_exact_ids_only():
 
 def test_resource_recovery_rewrites_gpu_request_without_scientific_change(tmp_path):
     spec = with_content_hash({
-        "contract": "HCWDL_HOMOTOPY_REPRESENTATION_CAMPAIGN_SPEC/v1",
-        "schema_version": 1, "campaign_root": str(tmp_path / "campaign"),
+        "contract": CAMPAIGN_SPEC_CONTRACT,
+        "schema_version": SCHEMA_VERSION,
+        "campaign_root": str(tmp_path / "campaign"),
         "project_dir": str(tmp_path / "old"), "source_commit": "a" * 40,
         "parent_homotopy_spec_sha256": "b" * 64,
         "graph_sha256": GRAPH_SHA256, "combined_recipe_sha256": "c" * 64,
@@ -80,7 +82,7 @@ def test_resource_recovery_rewrites_gpu_request_without_scientific_change(tmp_pa
             "campaign_spec": spec["content_hash"],
             "submission_ledger": "d" * 64, "monitor_report": "e" * 64,
         },
-        kind="resource", closure=["train_F_RSET_U010"],
+        kind="resource", closure=["train_F_RSET_U020"],
         project_dir=str(tmp_path / "old"), source_commit="a" * 40,
         resources=resources, recovery_path=str(tmp_path / "recovery.json"),
     )

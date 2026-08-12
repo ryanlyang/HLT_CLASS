@@ -16,11 +16,13 @@ from .hcwdl_homotopy_contracts import CAMPAIGN_COMPLETION_CONTRACT
 from .hcwdl_homotopy_representation_contracts import (
     AUTHORIZATION_PHRASE, CAMPAIGN_SPEC_CONTRACT, COMMAND_PLAN_CONTRACT,
     GRAPH_RECIPE_LOCK_CONTRACT, INTEGRATION_ATTESTATION_CONTRACT,
-    PARENT_IMPORT_CONTRACT, REPLICATE_SEED, ROLE_COUNTS, SMOKE_ROLE_COUNTS,
-    SUBMISSION_LEDGER_CONTRACT, SUBMISSION_PHRASE, build_artifact, validate_artifact,
+    FIT_COUNT, PARENT_IMPORT_CONTRACT, REPLICATE_SEED, ROLE_COUNTS,
+    SCHEMA_VERSION, SMOKE_ROLE_COUNTS, SUBMISSION_LEDGER_CONTRACT,
+    SUBMISSION_PHRASE, TARGET_BANK_COUNT, build_artifact, validate_artifact,
 )
 from .hcwdl_homotopy_representation_graph import (
-    GRAPH_SHA256, NODE_REGISTRY, STRATEGIES, graph_artifact, ordered_nodes,
+    CONTROL_SUFFIXES, GRAPH_SHA256, NODE_REGISTRY, STRATEGIES, graph_artifact,
+    ordered_nodes,
 )
 from .hcwdl_homotopy_representation_recipe import build_recipe, validate_recipe
 from .hcwdl_homotopy_runner import node_output_dir as parent_node_output_dir
@@ -153,9 +155,7 @@ def authenticate_parent(parent_spec_path: str | Path) -> dict[str, Any]:
         for name in ("M0", "TOFF")
     }
     logit = {}
-    for suffix in [f"U{value:03d}" for value in range(10, 101, 10)] + [
-        f"D{value}" for value in range(90, -1, -10)
-    ] + ["M1"]:
+    for suffix in CONTROL_SUFFIXES:
         parent_id = suffix if suffix.startswith("U") else (
             "M1F" if suffix == "M1" else f"{suffix}F"
         )
@@ -185,7 +185,7 @@ def _task_registry() -> list[dict[str, Any]]:
                 "task_id": train, "kind": "train", "node_id": node.node_id,
                 "dependencies": [target_parent], "resource_class": "training",
             })
-            if node.transition_index < 21:
+            if node.transition_index < len(ordered_nodes(strategy)):
                 target = f"target_{node.node_id}"
                 tasks.append({
                     "task_id": target, "kind": "target", "bank_id": node.node_id,
@@ -198,7 +198,7 @@ def _task_registry() -> list[dict[str, Any]]:
         {"task_id": "aggregate", "kind": "aggregate", "dependencies": terminals, "resource_class": "cpu"},
         {"task_id": "campaign_complete", "kind": "campaign_complete", "dependencies": ["aggregate"], "resource_class": "cpu"},
     ))
-    if len(tasks) != 87:
+    if len(tasks) != 47:
         raise RuntimeError("HCWDL-U-RKD task count differs")
     return tasks
 
@@ -316,12 +316,13 @@ def create_campaign(
             "numerical_acceptance": numerical_hash,
             "kernel_resources": kernel_hash,
         },
-        fit_count=42, target_bank_count=41, graph_sha256=GRAPH_SHA256,
+        fit_count=FIT_COUNT, target_bank_count=TARGET_BANK_COUNT,
+        graph_sha256=GRAPH_SHA256,
         final_test_task_registered=False,
     )
     tasks = _task_registry()
     base_payload = {
-        "contract": CAMPAIGN_SPEC_CONTRACT, "schema_version": 1,
+        "contract": CAMPAIGN_SPEC_CONTRACT, "schema_version": SCHEMA_VERSION,
         "mode": mode, "campaign_root": str(root), "project_dir": str(project),
         "source_commit": source_commit,
         "parent_homotopy_spec_path": str(parent["spec_path"]),
@@ -383,7 +384,8 @@ def validate_campaign(
     verify_source: bool = True,
 ) -> str:
     digest = validate_content_hash(
-        spec, expected_contract=CAMPAIGN_SPEC_CONTRACT, expected_schema_version=1,
+        spec, expected_contract=CAMPAIGN_SPEC_CONTRACT,
+        expected_schema_version=SCHEMA_VERSION,
     )
     if spec.get("mode") not in {"smoke", "pilot"} or spec.get("graph_sha256") != GRAPH_SHA256:
         raise ValueError("HCWDL-U-RKD campaign identity differs")
@@ -391,7 +393,7 @@ def validate_campaign(
         SMOKE_ROLE_COUNTS if spec["mode"] == "smoke" else ROLE_COUNTS
     ) or spec["role_counts"]["final_test"] != 0:
         raise PermissionError("HCWDL-U-RKD role boundary differs")
-    if spec.get("tasks") != _task_registry() or len(spec["tasks"]) != 87:
+    if spec.get("tasks") != _task_registry() or len(spec["tasks"]) != 47:
         raise ValueError("HCWDL-U-RKD task registry differs")
     seen = set()
     for row in spec["tasks"]:
@@ -436,7 +438,7 @@ def build_command_plan(spec: Mapping[str, Any]) -> dict[str, Any]:
         ))
         rows.append({"task_id": task["task_id"], "dependencies": task["dependencies"], "command": command})
     return with_content_hash({
-        "contract": COMMAND_PLAN_CONTRACT, "schema_version": 1,
+        "contract": COMMAND_PLAN_CONTRACT, "schema_version": SCHEMA_VERSION,
         "campaign_identity_sha256": canonical_sha256({
             "root": spec["campaign_root"], "commit": spec["source_commit"],
             "parent": spec["parent_homotopy_spec_sha256"],

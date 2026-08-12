@@ -26,7 +26,7 @@ from .hcwdl_homotopy_graph import DOMAINS
 from .hcwdl_homotopy_representation_contracts import (
     CALIBRATION_CONTRACT, DEPLOYABLE_EXTRACTION_CONTRACT,
     RESUME_STATE_CONTRACT, SELECTED_CHECKPOINT_CONTRACT,
-    TRAINING_REPORT_CONTRACT, build_artifact, validate_artifact,
+    SCHEMA_VERSION, TRAINING_REPORT_CONTRACT, build_artifact, validate_artifact,
 )
 from .hcwdl_homotopy_representation_graph import (
     GRAPH_SHA256, NODE_REGISTRY,
@@ -366,8 +366,8 @@ def _runtime_signature(
     except ImportError:
         torch_version = "unavailable"
     return with_content_hash({
-        "contract": "HCWDL_HOMOTOPY_REPRESENTATION_RUNTIME_SIGNATURE/v1",
-        "schema_version": 1,
+        "contract": "HCWDL_HOMOTOPY_REPRESENTATION_RUNTIME_SIGNATURE/v2",
+        "schema_version": SCHEMA_VERSION,
         # Scientific resume identity remains the immutable campaign source.
         # Corrected execution source is bound separately by the recovery and
         # task-attestation contracts so an existing rolling checkpoint stays

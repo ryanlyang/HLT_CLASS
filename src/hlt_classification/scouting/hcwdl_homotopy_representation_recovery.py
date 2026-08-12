@@ -14,7 +14,7 @@ from .hcwdl_homotopy_representation_campaign import (
 from .hcwdl_homotopy_representation_contracts import (
     COMMAND_PLAN_CONTRACT, MONITOR_REPORT_CONTRACT, RESOURCE_RECOVERY_CONTRACT,
     RESOURCE_RECOVERY_PHRASE, SOURCE_RECOVERY_CONTRACT, SOURCE_RECOVERY_PHRASE,
-    SUBMISSION_LEDGER_CONTRACT, build_artifact, validate_artifact,
+    SCHEMA_VERSION, SUBMISSION_LEDGER_CONTRACT, build_artifact, validate_artifact,
 )
 
 
@@ -238,7 +238,8 @@ def recovery_command_plan(
         commands.append({"task_id": row["task_id"], "dependencies": dependencies, "command": command})
     return with_content_hash({
         "contract": COMMAND_PLAN_CONTRACT,
-        "schema_version": 1, "recovery_sha256": recovery["content_hash"],
+        "schema_version": SCHEMA_VERSION,
+        "recovery_sha256": recovery["content_hash"],
         "commands": commands, "mutated": False, "final_test_accessed": False,
     })
 

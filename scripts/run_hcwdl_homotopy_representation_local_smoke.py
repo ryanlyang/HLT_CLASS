@@ -9,6 +9,7 @@ import sys
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 from hlt_classification.data.cache_contracts import with_content_hash, write_immutable_json  # noqa: E402
+from hlt_classification.scouting.hcwdl_homotopy_representation_contracts import FIT_COUNT, SCHEMA_VERSION  # noqa: E402
 from hlt_classification.scouting.hcwdl_homotopy_representation_graph import NODE_REGISTRY, resolved_base_loss, target_bank_registry, validate_graph  # noqa: E402
 from hlt_classification.scouting.hcwdl_representation_losses import scheduled_representation_loss  # noqa: E402
 from hlt_classification.scouting.hcwdl_representation_graph import RREL_STRATEGY  # noqa: E402
@@ -37,11 +38,11 @@ def main() -> int:
             "base_loss": asdict(base), "schedule": schedules,
         })
     artifact = with_content_hash({
-        "contract": "HCWDL_HOMOTOPY_REPRESENTATION_LOCAL_SMOKE/v1",
-        "schema_version": 1, "graph_sha256": validate_graph(),
+        "contract": "HCWDL_HOMOTOPY_REPRESENTATION_LOCAL_SMOKE/v2",
+        "schema_version": SCHEMA_VERSION, "graph_sha256": validate_graph(),
         "nodes": rows, "fit_count": len(rows),
         "target_bank_count": len(target_bank_registry()),
-        "all_nodes_exercised": len(rows) == 42,
+        "all_nodes_exercised": len(rows) == FIT_COUNT,
         "final_test_accessed": False, "authorizes_tigris_or_pilot": False,
     })
     write_immutable_json(args.output, artifact); print(artifact["content_hash"]); return 0

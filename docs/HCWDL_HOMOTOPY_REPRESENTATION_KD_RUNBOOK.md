@@ -1,6 +1,7 @@
 # HCWDL Homotopy Representation-KD Runbook
 
-This runbook operates the RSET/RREL U/D supplement. It never submits unless
+This runbook operates the twenty-point v2 RSET/RREL U/D supplement (22 fits,
+21 logical target banks, 47 command-plan tasks). It never submits unless
 the operator supplies both the immutable creation authorization and the
 separate submission phrase.
 

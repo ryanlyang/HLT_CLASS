@@ -16,7 +16,8 @@ from .hcwdl_homotopy_representation_campaign import (
 from .hcwdl_homotopy_representation_contracts import (
     AGGREGATE_CONTRACT, CAMPAIGN_COMPLETE_CONTRACT,
     GRAPH_RECIPE_LOCK_CONTRACT, TASK_ATTESTATION_CONTRACT,
-    TRAINING_REPORT_CONTRACT, build_artifact, validate_artifact,
+    RUNTIME_BINDING_CONTRACT, TRAINING_REPORT_CONTRACT, build_artifact,
+    validate_artifact,
 )
 from .hcwdl_homotopy_representation_reporting import (
     build_aggregate, build_campaign_complete,
@@ -103,7 +104,7 @@ class HomotopyRepresentationWorkflow:
                 raise ValueError("HCWDL-U-RKD command plan changed")
             output = self.root / "runtime/authenticated.json"
             artifact = build_artifact(
-                "HCWDL_HOMOTOPY_REPRESENTATION_RUNTIME_BINDING/v1",
+                RUNTIME_BINDING_CONTRACT,
                 parents={
                     "campaign_spec": self.spec["content_hash"],
                     "parent_homotopy_spec": parent["spec_sha256"],

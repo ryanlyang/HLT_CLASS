@@ -59,8 +59,9 @@ The implementation-authoritative supplemental
 [HCWDL homotopy representation-KD plan](HCWDL_HOMOTOPY_REPRESENTATION_KD_IMPLEMENTATION_PLAN.md)
 combines the authenticated factorized U/D path with two complete cold
 representation-distillation tracks: logit KD plus RSET and logit KD plus the
-corrected raw-state RREL v5 objective. It fixes 42 fits, 41 train-only target
-banks, ten-point rungs, paired seeds, 60-pass pilot training, two-update smoke
+corrected raw-state RREL v5 objective. Its v2 identity fixes 22 fits, 21
+train-only target banks, twenty-point rungs, paired parent-transition seeds,
+60-pass pilot training, two-update smoke
 execution, and an HLT-only terminal boundary. Its reusable identities and
 operational procedure are recorded in the
 [contract](../contracts/HCWDL_HOMOTOPY_REPRESENTATION_KD.md) and

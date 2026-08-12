@@ -1,7 +1,8 @@
 # HCWDL Factorized Homotopy with Representation KD
 
-Status: **implementation-authoritative supplemental plan; implementation and
-live submission are not authorized by this document**.
+Status: **implementation-authoritative supplemental plan; the v2 twenty-point
+revision was authorized for local implementation on 2026-08-12; live
+submission is not authorized by this document**.
 
 Short name: **HCWDL-U-RKD**.
 
@@ -13,11 +14,16 @@ logit KD + RSET
 logit KD + RREL
 ```
 
-It freezes ten-percentage-point structural and feature steps. Each variant has
-exactly 20 homotopy-transition students plus one terminal born-again HLT
-student. The two variants therefore add 42 fits in total. The already
+It freezes twenty-percentage-point structural and feature steps. Each variant
+has exactly 10 homotopy-transition students plus one terminal born-again HLT
+student. The two variants therefore add 22 fits in total. The already
 registered logit-only factorized path is the paired control and is not
 silently retrained, relabeled, or absorbed into this graph.
+
+This v2 graph supersedes the unexecuted ten-point HCWDL-U-RKD v1 candidate.
+No v1 artifact may be relabeled or imported as v2. The completed U/J parent
+remains unchanged; v2 imports only its matching twenty-point subset and keeps
+each selected rung's original U/J seed alias.
 
 This plan governs only the new HCWDL-U-RKD artifacts. It does not mutate or
 reinterpret completed HCWDL, HCWDL-UJ, dense5/dense10, representation-dense,
@@ -137,7 +143,7 @@ V(1,1) = byte-identical canonical HLT input
 
 `U000` is **not a trained model**. It is the semantic name for `V(0,0)` and is
 used by endpoint audits and existing P0 adapter diagnostics. The first primary
-student is `U010`, taught directly by native TOFF.
+student is `U020`, taught directly by native TOFF.
 
 This choice is mandatory for a paired comparison. Adding a trained U000/P0KD
 root would add one extra optimization/KD generation to the representation
@@ -149,31 +155,22 @@ The factorized coordinate registry is exactly:
 
 | Transition | View | `s` | `f` | Shell alpha | Meaning |
 |---:|---|---:|---:|---:|---|
-| 1 | `U010` | 0.10 | 0.00 | 1.00 | first 10% structural mass switched |
-| 2 | `U020` | 0.20 | 0.00 | 1.00 | first 20% structural mass switched |
-| 3 | `U030` | 0.30 | 0.00 | 1.00 | first 30% structural mass switched |
-| 4 | `U040` | 0.40 | 0.00 | 1.00 | first 40% structural mass switched |
-| 5 | `U050` | 0.50 | 0.00 | 1.00 | first 50% structural mass switched |
-| 6 | `U060` | 0.60 | 0.00 | 1.00 | first 60% structural mass switched |
-| 7 | `U070` | 0.70 | 0.00 | 1.00 | first 70% structural mass switched |
-| 8 | `U080` | 0.80 | 0.00 | 1.00 | first 80% structural mass switched |
-| 9 | `U090` | 0.90 | 0.00 | 1.00 | first 90% structural mass switched |
-| 10 | `U100` | 1.00 | 0.00 | 1.00 | exact D100 |
-| 11 | `D90` | 1.00 | 0.10 | 0.90 | fixed support, 10% field conversion |
-| 12 | `D80` | 1.00 | 0.20 | 0.80 | fixed support, 20% field conversion |
-| 13 | `D70` | 1.00 | 0.30 | 0.70 | fixed support, 30% field conversion |
-| 14 | `D60` | 1.00 | 0.40 | 0.60 | fixed support, 40% field conversion |
-| 15 | `D50` | 1.00 | 0.50 | 0.50 | fixed support, 50% field conversion |
-| 16 | `D40` | 1.00 | 0.60 | 0.40 | fixed support, 60% field conversion |
-| 17 | `D30` | 1.00 | 0.70 | 0.30 | fixed support, 70% field conversion |
-| 18 | `D20` | 1.00 | 0.80 | 0.20 | fixed support, 80% field conversion |
-| 19 | `D10` | 1.00 | 0.90 | 0.10 | fixed support, 90% field conversion |
-| 20 | `D0` | 1.00 | 1.00 | 0.00 | exact HLT |
-| 21 | `M1` | 1.00 | 1.00 | 0.00 | separate born-again exact-HLT student |
+| 1 | `U020` | 0.20 | 0.00 | 1.00 | first 20% structural mass switched |
+| 2 | `U040` | 0.40 | 0.00 | 1.00 | first 40% structural mass switched |
+| 3 | `U060` | 0.60 | 0.00 | 1.00 | first 60% structural mass switched |
+| 4 | `U080` | 0.80 | 0.00 | 1.00 | first 80% structural mass switched |
+| 5 | `U100` | 1.00 | 0.00 | 1.00 | exact D100 |
+| 6 | `D80` | 1.00 | 0.20 | 0.80 | fixed support, 20% field conversion |
+| 7 | `D60` | 1.00 | 0.40 | 0.60 | fixed support, 40% field conversion |
+| 8 | `D40` | 1.00 | 0.60 | 0.40 | fixed support, 60% field conversion |
+| 9 | `D20` | 1.00 | 0.80 | 0.20 | fixed support, 80% field conversion |
+| 10 | `D0` | 1.00 | 1.00 | 0.00 | exact HLT |
+| 11 | `M1` | 1.00 | 1.00 | 0.00 | separate born-again exact-HLT student |
 
 The structural coordinate is the existing authenticated, nested,
-information-mass coordinate. Ten percent means ten percent of its frozen
-label-free edit mass, not ten percent of particles. The feature coordinate is
+information-mass coordinate. A structural percentage means that percentage
+of its frozen label-free edit mass, not that percentage of particles. The
+feature coordinate is
 the existing Shell Exact alpha convention. No coupling, endpoint, switch,
 confidence, field, identity, p4, carrier, or raw-length semantic changes.
 
@@ -183,23 +180,23 @@ There are two new cold-start strategies and no warm branch:
 
 ```text
 TOFF-native
-  -> F_RSET_U010 -> ... -> F_RSET_U100
-  -> F_RSET_D90  -> ... -> F_RSET_D0 -> F_RSET_M1
+  -> F_RSET_U020 -> F_RSET_U040 -> ... -> F_RSET_U100
+  -> F_RSET_D80  -> F_RSET_D60  -> ... -> F_RSET_D0 -> F_RSET_M1
 
 TOFF-native
-  -> F_RREL_U010 -> ... -> F_RREL_U100
-  -> F_RREL_D90  -> ... -> F_RREL_D0 -> F_RREL_M1
+  -> F_RREL_U020 -> F_RREL_U040 -> ... -> F_RREL_U100
+  -> F_RREL_D80  -> F_RREL_D60  -> ... -> F_RREL_D0 -> F_RREL_M1
 ```
 
 Canonical node IDs are registry values, not names inferred by string parsing:
 
 ```text
-F_RSET_U010 ... F_RSET_U100
-F_RSET_D90  ... F_RSET_D0
+F_RSET_U020 F_RSET_U040 F_RSET_U060 F_RSET_U080 F_RSET_U100
+F_RSET_D80  F_RSET_D60  F_RSET_D40  F_RSET_D20  F_RSET_D0
 F_RSET_M1
 
-F_RREL_U010 ... F_RREL_U100
-F_RREL_D90  ... F_RREL_D0
+F_RREL_U020 F_RREL_U040 F_RREL_U060 F_RREL_U080 F_RREL_U100
+F_RREL_D80  F_RREL_D60  F_RREL_D40  F_RREL_D20  F_RREL_D0
 F_RREL_M1
 ```
 
@@ -207,27 +204,17 @@ The complete edge registry is:
 
 | Index | RSET node | RSET teacher | RREL node | RREL teacher | Student domain | Seed alias |
 |---:|---|---|---|---|---|---|
-| 1 | `F_RSET_U010` | `TOFF` | `F_RREL_U010` | `TOFF` | `u010` | `transition_01` |
-| 2 | `F_RSET_U020` | `F_RSET_U010` | `F_RREL_U020` | `F_RREL_U010` | `u020` | `transition_02` |
-| 3 | `F_RSET_U030` | `F_RSET_U020` | `F_RREL_U030` | `F_RREL_U020` | `u030` | `transition_03` |
-| 4 | `F_RSET_U040` | `F_RSET_U030` | `F_RREL_U040` | `F_RREL_U030` | `u040` | `transition_04` |
-| 5 | `F_RSET_U050` | `F_RSET_U040` | `F_RREL_U050` | `F_RREL_U040` | `u050` | `transition_05` |
-| 6 | `F_RSET_U060` | `F_RSET_U050` | `F_RREL_U060` | `F_RREL_U050` | `u060` | `transition_06` |
-| 7 | `F_RSET_U070` | `F_RSET_U060` | `F_RREL_U070` | `F_RREL_U060` | `u070` | `transition_07` |
-| 8 | `F_RSET_U080` | `F_RSET_U070` | `F_RREL_U080` | `F_RREL_U070` | `u080` | `transition_08` |
-| 9 | `F_RSET_U090` | `F_RSET_U080` | `F_RREL_U090` | `F_RREL_U080` | `u090` | `transition_09` |
-| 10 | `F_RSET_U100` | `F_RSET_U090` | `F_RREL_U100` | `F_RREL_U090` | `u100`/exact D100 | `transition_10` |
-| 11 | `F_RSET_D90` | `F_RSET_U100` | `F_RREL_D90` | `F_RREL_U100` | `d90f` | `transition_11` |
-| 12 | `F_RSET_D80` | `F_RSET_D90` | `F_RREL_D80` | `F_RREL_D90` | `d80f` | `transition_12` |
-| 13 | `F_RSET_D70` | `F_RSET_D80` | `F_RREL_D70` | `F_RREL_D80` | `d70f` | `transition_13` |
-| 14 | `F_RSET_D60` | `F_RSET_D70` | `F_RREL_D60` | `F_RREL_D70` | `d60f` | `transition_14` |
-| 15 | `F_RSET_D50` | `F_RSET_D60` | `F_RREL_D50` | `F_RREL_D60` | `d50f` | `transition_15` |
-| 16 | `F_RSET_D40` | `F_RSET_D50` | `F_RREL_D40` | `F_RREL_D50` | `d40f` | `transition_16` |
-| 17 | `F_RSET_D30` | `F_RSET_D40` | `F_RREL_D30` | `F_RREL_D40` | `d30f` | `transition_17` |
-| 18 | `F_RSET_D20` | `F_RSET_D30` | `F_RREL_D20` | `F_RREL_D30` | `d20f` | `transition_18` |
-| 19 | `F_RSET_D10` | `F_RSET_D20` | `F_RREL_D10` | `F_RREL_D20` | `d10f` | `transition_19` |
-| 20 | `F_RSET_D0` | `F_RSET_D10` | `F_RREL_D0` | `F_RREL_D10` | `hlt`/exact HLT | `transition_20` |
-| 21 | `F_RSET_M1` | `F_RSET_D0` | `F_RREL_M1` | `F_RREL_D0` | `hlt`/exact HLT | `transition_21` |
+| 1 | `F_RSET_U020` | `TOFF` | `F_RREL_U020` | `TOFF` | `u020` | `transition_02` |
+| 2 | `F_RSET_U040` | `F_RSET_U020` | `F_RREL_U040` | `F_RREL_U020` | `u040` | `transition_04` |
+| 3 | `F_RSET_U060` | `F_RSET_U040` | `F_RREL_U060` | `F_RREL_U040` | `u060` | `transition_06` |
+| 4 | `F_RSET_U080` | `F_RSET_U060` | `F_RREL_U080` | `F_RREL_U060` | `u080` | `transition_08` |
+| 5 | `F_RSET_U100` | `F_RSET_U080` | `F_RREL_U100` | `F_RREL_U080` | `u100`/exact D100 | `transition_10` |
+| 6 | `F_RSET_D80` | `F_RSET_U100` | `F_RREL_D80` | `F_RREL_U100` | `d80f` | `transition_12` |
+| 7 | `F_RSET_D60` | `F_RSET_D80` | `F_RREL_D60` | `F_RREL_D80` | `d60f` | `transition_14` |
+| 8 | `F_RSET_D40` | `F_RSET_D60` | `F_RREL_D40` | `F_RREL_D60` | `d40f` | `transition_16` |
+| 9 | `F_RSET_D20` | `F_RSET_D40` | `F_RREL_D20` | `F_RREL_D40` | `d20f` | `transition_18` |
+| 10 | `F_RSET_D0` | `F_RSET_D20` | `F_RREL_D0` | `F_RREL_D20` | `hlt`/exact HLT | `transition_20` |
+| 11 | `F_RSET_M1` | `F_RSET_D0` | `F_RREL_M1` | `F_RREL_D0` | `hlt`/exact HLT | `transition_21` |
 
 The seed resolver is the imported homotopy resolver with replicate seed 1337:
 
@@ -240,22 +227,21 @@ namespace representation-head/resource seeds separately, but it may not
 change the imported deployable-backbone, sampler, dropout, or trimmer seed
 values for a transition alias.
 
-Each strategy has 21 fits:
+Each strategy has 11 fits:
 
-- 10 structural U students;
-- 10 feature D students;
+- 5 structural U students;
+- 5 feature D students;
 - 1 terminal M1 student.
 
-The combined supplement has 42 fits. The phrase â€œ20-model ladderâ€ refers to
-the 20 view-changing transition students in one strategy. It excludes M1 and
-does not mean both RSET and RREL together require only 20 fits.
+The combined supplement has 22 fits: 20 view-changing students plus two M1
+students across both strategies.
 
 For each strategy independently:
 
-- `U010` teacher: imported TOFF-native checkpoint on TOFF-native inputs;
+- `U020` teacher: imported TOFF-native checkpoint on TOFF-native inputs;
 - every later U teacher: immediate same-strategy U predecessor on its own U
   view;
-- `D90` teacher: same-strategy `U100` on exact D100;
+- `D80` teacher: same-strategy `U100` on exact D100;
 - every later D teacher: immediate same-strategy D predecessor on its own D
   view;
 - `M1` teacher: same-strategy `D0` on exact HLT.
@@ -274,7 +260,7 @@ from the predecessor. Only detached teacher targets cross an edge.
 The exact imported logit-only factorized chain is the primary control:
 
 ```text
-TOFF-native -> U010 -> ... -> U100 -> D90F -> ... -> D0F -> M1F
+TOFF-native -> U020 -> U040 -> ... -> U100 -> D80F -> ... -> D0F -> M1F
 ```
 
 At each transition index, the control, RSET, and RREL students must share:
@@ -295,7 +281,7 @@ register and run a fresh paired logit-only factorized chain under a bumped
 graph contract. It may not call an unpaired historical result â€œthe control.â€
 
 `rho_repr=0` wrapper equivalence is a required implementation regression, not
-a third 21-fit scientific track. It must reproduce the ordinary logit-only
+a third 11-fit scientific track. It must reproduce the ordinary logit-only
 loss, backbone gradients, optimizer update, RNG state, and checkpoint bytes
 where serialization permits.
 
@@ -319,9 +305,9 @@ TOFF-native keeps its registered separate charged 19-feature and neutral
 - the native-offline penultimate jet state;
 - charged/neutral masks, p4, token IDs, family codes, and logits.
 
-The first `TOFF-native -> U010` edge therefore crosses both input support and
+The first `TOFF-native -> U020` edge therefore crosses both input support and
 architecture. This is disclosed. The campaign does not claim that its first
-10% structural step isolates structure from adapter conversion.
+20% structural step isolates structure from adapter conversion.
 
 The ordinary and TOFF representation-exposing forwards must pass the existing
 installed-Weaver FP32 surface-parity contracts after the two implementations
@@ -493,36 +479,37 @@ and joined by canonical jet identity.
 
 Existing contract identities are reused only through their exact validators
 and hashes. Their meanings are not broadened. The combined campaign adds a
-new supplemental family:
+new supplemental v2 family. The unexecuted ten-point v1 family remains a
+historical identity and is not accepted by v2 validators:
 
 ```text
-HCWDL_HOMOTOPY_REPRESENTATION_PARENT_IMPORT/v1
-HCWDL_HOMOTOPY_REPRESENTATION_INTEGRATION_ATTESTATION/v1
-HCWDL_HOMOTOPY_REPRESENTATION_NODE_SPEC/v1
-HCWDL_HOMOTOPY_REPRESENTATION_GRAPH/v1
-HCWDL_HOMOTOPY_REPRESENTATION_RECIPE/v1
-HCWDL_HOMOTOPY_REPRESENTATION_GRAPH_RECIPE_LOCK/v1
-HCWDL_HOMOTOPY_REPRESENTATION_TARGET_SPEC/v1
-HCWDL_HOMOTOPY_REPRESENTATION_TARGET_GENERATION/v1
-HCWDL_HOMOTOPY_REPRESENTATION_TARGET_SHARD/v1
-HCWDL_HOMOTOPY_REPRESENTATION_TARGET_MANIFEST/v1
-HCWDL_HOMOTOPY_REPRESENTATION_TARGET_CLEANUP_AUTHORIZATION/v1
-HCWDL_HOMOTOPY_REPRESENTATION_TARGET_CLEANUP_COMPLETION/v1
-HCWDL_HOMOTOPY_REPRESENTATION_CALIBRATION/v1
-HCWDL_HOMOTOPY_REPRESENTATION_RESUME_STATE/v1
-HCWDL_HOMOTOPY_REPRESENTATION_TRAINING_REPORT/v1
-HCWDL_HOMOTOPY_REPRESENTATION_SELECTED_CHECKPOINT/v1
-HCWDL_HOMOTOPY_REPRESENTATION_DEPLOYABLE_EXTRACTION/v1
-HCWDL_HOMOTOPY_REPRESENTATION_AGGREGATE/v1
-HCWDL_HOMOTOPY_REPRESENTATION_CAMPAIGN_SPEC/v1
-HCWDL_HOMOTOPY_REPRESENTATION_COMMAND_PLAN/v1
-HCWDL_HOMOTOPY_REPRESENTATION_RUNTIME_BINDING/v1
-HCWDL_HOMOTOPY_REPRESENTATION_TASK_ATTESTATION/v1
-HCWDL_HOMOTOPY_REPRESENTATION_SUBMISSION_LEDGER/v1
-HCWDL_HOMOTOPY_REPRESENTATION_MONITOR_REPORT/v1
-HCWDL_HOMOTOPY_REPRESENTATION_SOURCE_RECOVERY/v1
-HCWDL_HOMOTOPY_REPRESENTATION_RESOURCE_RECOVERY/v1
-HCWDL_HOMOTOPY_REPRESENTATION_CAMPAIGN_COMPLETE/v1
+HCWDL_HOMOTOPY_REPRESENTATION_PARENT_IMPORT/v2
+HCWDL_HOMOTOPY_REPRESENTATION_INTEGRATION_ATTESTATION/v2
+HCWDL_HOMOTOPY_REPRESENTATION_NODE_SPEC/v2
+HCWDL_HOMOTOPY_REPRESENTATION_GRAPH/v2
+HCWDL_HOMOTOPY_REPRESENTATION_RECIPE/v2
+HCWDL_HOMOTOPY_REPRESENTATION_GRAPH_RECIPE_LOCK/v2
+HCWDL_HOMOTOPY_REPRESENTATION_TARGET_SPEC/v2
+HCWDL_HOMOTOPY_REPRESENTATION_TARGET_GENERATION/v2
+HCWDL_HOMOTOPY_REPRESENTATION_TARGET_SHARD/v2
+HCWDL_HOMOTOPY_REPRESENTATION_TARGET_MANIFEST/v2
+HCWDL_HOMOTOPY_REPRESENTATION_TARGET_CLEANUP_AUTHORIZATION/v2
+HCWDL_HOMOTOPY_REPRESENTATION_TARGET_CLEANUP_COMPLETION/v2
+HCWDL_HOMOTOPY_REPRESENTATION_CALIBRATION/v2
+HCWDL_HOMOTOPY_REPRESENTATION_RESUME_STATE/v2
+HCWDL_HOMOTOPY_REPRESENTATION_TRAINING_REPORT/v2
+HCWDL_HOMOTOPY_REPRESENTATION_SELECTED_CHECKPOINT/v2
+HCWDL_HOMOTOPY_REPRESENTATION_DEPLOYABLE_EXTRACTION/v2
+HCWDL_HOMOTOPY_REPRESENTATION_AGGREGATE/v2
+HCWDL_HOMOTOPY_REPRESENTATION_CAMPAIGN_SPEC/v2
+HCWDL_HOMOTOPY_REPRESENTATION_COMMAND_PLAN/v2
+HCWDL_HOMOTOPY_REPRESENTATION_RUNTIME_BINDING/v2
+HCWDL_HOMOTOPY_REPRESENTATION_TASK_ATTESTATION/v2
+HCWDL_HOMOTOPY_REPRESENTATION_SUBMISSION_LEDGER/v2
+HCWDL_HOMOTOPY_REPRESENTATION_MONITOR_REPORT/v2
+HCWDL_HOMOTOPY_REPRESENTATION_SOURCE_RECOVERY/v2
+HCWDL_HOMOTOPY_REPRESENTATION_RESOURCE_RECOVERY/v2
+HCWDL_HOMOTOPY_REPRESENTATION_CAMPAIGN_COMPLETE/v2
 ```
 
 The combined recipe references, rather than copies approximately:
@@ -558,8 +545,8 @@ authenticate parent UJ campaign + source integration
   -> validate ordinary/TOFF surface parity + kernel resources
   -> publish combined graph/recipe lock
   -> build shared TOFF target generation
-       -> F_RSET_U010 -> build its target -> F_RSET_U020 -> ... -> F_RSET_M1
-       -> F_RREL_U010 -> build its target -> F_RREL_U020 -> ... -> F_RREL_M1
+       -> F_RSET_U020 -> build its target -> F_RSET_U040 -> ... -> F_RSET_M1
+       -> F_RREL_U020 -> build its target -> F_RREL_U040 -> ... -> F_RREL_M1
   -> wait for imported logit-only factorized reports
   -> aggregate all three tracks
   -> campaign-complete report
@@ -570,7 +557,7 @@ strictly sequential because every child consumes its immediate predecessor's
 selected checkpoint. Target generation for a child begins only after the
 teacher report and selected checkpoint validate.
 
-The 42 fits and 41 logical target generations are fixed scientific counts.
+The 22 fits and 21 logical target generations are fixed scientific counts.
 Physical target-build arrays are source-shard dependent. Their exact array
 rows, task IDs, dependency IDs, and total Slurm-job count are frozen in the
 immutable command plan after the authenticated source inventory is known;
@@ -618,7 +605,7 @@ user authorization bound to an exact immutable candidate.
 
 ### 16.1 Local synthetic mode
 
-A bounded synthetic graph exercises all 42 nodes, both teacher-domain types,
+A bounded synthetic graph exercises all 22 nodes, both teacher-domain types,
 every loss component, calibration state, target lifecycle, exact resume,
 aggregate, and no-final-test invariant. It is not scientific evidence.
 
@@ -650,7 +637,7 @@ run from exact pushed source. Live submission requires a new phrase-bound
 authorization naming the exact campaign-spec, command-plan, source, parent,
 resource, storage, and recovery hashes.
 
-The pilot trains all 42 fits for 60 passes. There is no performance early
+The pilot trains all 22 fits for 60 passes. There is no performance early
 stop, no final-test task, and no automatic scientific pruning.
 
 ## 17. Reporting and comparisons
@@ -739,7 +726,7 @@ than expand either existing graph contract in place:
 | Path | Responsibility |
 |---|---|
 | `src/hlt_classification/scouting/hcwdl_homotopy_representation_contracts.py` | new contract identities and validators |
-| `src/hlt_classification/scouting/hcwdl_homotopy_representation_graph.py` | exact 42-node registry, teacher/view/seed table |
+| `src/hlt_classification/scouting/hcwdl_homotopy_representation_graph.py` | exact 22-node registry, teacher/view/seed table |
 | `src/hlt_classification/scouting/hcwdl_homotopy_representation_recipe.py` | v4 base plus v5 representation overlay |
 | `src/hlt_classification/scouting/hcwdl_homotopy_representation_targets.py` | teacher-own-domain target generations and cleanup |
 | `src/hlt_classification/scouting/hcwdl_homotopy_representation_training.py` | one node, surfaces, calibration, loss, resume, extraction |
@@ -766,13 +753,13 @@ Workers must contain no scientific registry duplicated from Python modules.
 
 ### 20.1 Graph and recipe
 
-- exact 21 RSET and 21 RREL nodes, coordinates, teachers, domains, and edges;
+- exact 11 RSET and 11 RREL nodes, coordinates, teachers, domains, and edges;
 - no trained U000 and no warm node;
-- exact 42 fits, 41 target banks, and two terminal candidates;
+- exact 22 fits, 21 target banks, and two terminal candidates;
 - same transition backbone/data RNG aliases across logit/RSET/RREL;
 - strategy-specific auxiliary RNG cannot perturb shared streams;
 - exact base temperatures: 2 for U/D, 1 for M1;
-- all 42 engine loss configurations bind v4, v5, and combined recipe hashes;
+- all 22 engine loss configurations bind v4, v5, and combined recipe hashes;
 - graph JSON round-trip identity and no string-parsed scientific semantics.
 
 ### 20.2 Views, surfaces, and losses
@@ -791,7 +778,7 @@ Workers must contain no scientific registry duplicated from Python modules.
 
 ### 20.3 Targets and training
 
-- exact 41-bank registry and shared TOFF two-consumer bank;
+- exact 21-bank registry and shared TOFF two-consumer bank;
 - teacher evaluated only on predecessor domain;
 - logits and representations originate from one teacher execution;
 - full train identity coverage with no validation/final targets;
@@ -820,13 +807,13 @@ Workers must contain no scientific registry duplicated from Python modules.
 
 1. **Integrate source lines.** Merge homotopy and representation implementations
    into one clean branch; run both complete focused suites before modification.
-2. **Freeze contracts and graph.** Add the new v1 family, exact 42-node table,
+2. **Freeze contracts and graph.** Add the new v2 family, exact 22-node table,
    combined recipe, seed aliases, and fail-closed validators.
 3. **Prove surfaces/endpoints.** Resolve model-forward conflicts, rerun
    installed-Weaver parity, RREL-v5 gradient tests, and all `V(s,f)` endpoint
    tests.
 4. **Adapt target banks.** Add teacher-own-homotopy-domain construction,
-   shared TOFF bank, 40 strategy banks, cleanup, and recovery.
+   shared TOFF bank, 20 strategy banks, cleanup, and recovery.
 5. **Implement node training.** Wire cold starts, calibration, schedules,
    one-time RAM caches, selection, resume, and extraction.
 6. **Implement campaign/reporting.** Add thin CLIs/workers, immutable command
@@ -847,7 +834,7 @@ Implementation is complete only when:
 - both parent source lines exist in one clean runtime tree;
 - all new contracts reject stale, cross-strategy, cross-view, and
   cross-campaign artifacts;
-- the exact 42-node graph and 41 target-bank lifecycle execute end to end;
+- the exact 22-node graph and 21 target-bank lifecycle execute end to end;
 - RSET/RREL mathematics are unchanged from v5 and RREL uses raw block-2 states;
 - coupling/view semantics are unchanged and endpoints remain byte-exact;
 - all nodes are cold, run 60 passes, validate every pass, and select by macro
@@ -882,16 +869,18 @@ Forbidden claims:
 - the first U edge isolates structure from architecture conversion;
 - RREL is â€œfree extra supervisionâ€ beyond RSET;
 - RREL-minus-RSET isolates only the current relation term;
-- 20 transitions means 20 total fits across both strategies;
-- ten-point spacing is proven optimal relative to five-point spacing;
+- the 20 view-changing transitions exhaust the campaign fit count or make the
+  two terminal M1 fits unnecessary;
+- twenty-point spacing is proven optimal relative to ten- or five-point
+  spacing;
 - one validation seed is confirmatory;
 - success reconstructs genuinely unavailable offline particles at inference;
 - failure proves an information-theoretic ceiling.
 
-The ten-point design is chosen as the first manageable, compute-bounded test.
-A five-point representation study requires a new graph/version and scientific
-authorization after this screen; it is not an operational expansion of the
-same campaign.
+The twenty-point design is chosen as the first manageable, compute-bounded
+test. A ten- or five-point representation study requires a new graph/version
+and scientific authorization after this screen; it is not an operational
+expansion of the same campaign.
 
 ## 24. Authorization boundary
 
@@ -907,4 +896,3 @@ local implementation. It does not authorize:
 
 Every real scheduler mutation remains separately phrase-bound to an exact
 source-pinned candidate.
-

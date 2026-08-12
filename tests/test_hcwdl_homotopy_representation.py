@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import replace
 
 import pytest
 
@@ -11,7 +11,7 @@ from hlt_classification.scouting.hcwdl_homotopy_representation_campaign import (
 )
 from hlt_classification.scouting.hcwdl_homotopy_representation_contracts import (
     CAMPAIGN_SPEC_CONTRACT, FIT_COUNT, ROLE_COUNTS, SMOKE_ROLE_COUNTS,
-    TARGET_BANK_COUNT,
+    SCHEMA_VERSION, TARGET_BANK_COUNT,
 )
 from hlt_classification.scouting.hcwdl_homotopy_representation_graph import (
     GRAPH_SHA256, NODE_REGISTRY, STRATEGIES, ordered_nodes, resolved_base_loss,
@@ -22,13 +22,22 @@ from hlt_classification.scouting.hcwdl_representation_graph import RREL_STRATEGY
 
 def test_exact_two_track_graph_and_loss_routing():
     assert validate_graph() == GRAPH_SHA256
-    assert len(NODE_REGISTRY) == FIT_COUNT == 42
-    assert len(target_bank_registry()) == TARGET_BANK_COUNT == 41
-    assert target_bank_registry()["TOFF"] == ("F_RREL_U010", "F_RSET_U010")
+    assert len(NODE_REGISTRY) == FIT_COUNT == 22
+    assert len(target_bank_registry()) == TARGET_BANK_COUNT == 21
+    assert target_bank_registry()["TOFF"] == ("F_RREL_U020", "F_RSET_U020")
     for strategy in STRATEGIES:
         rows = ordered_nodes(strategy)
-        assert len(rows) == 21
-        assert [row.transition_index for row in rows] == list(range(1, 22))
+        assert [row.node_id.rsplit("_", 1)[1] for row in rows] == [
+            "U020", "U040", "U060", "U080", "U100",
+            "D80", "D60", "D40", "D20", "D0", "M1",
+        ]
+        assert [row.transition_index for row in rows] == list(range(1, 12))
+        assert [row.seed_alias for row in rows] == [
+            "transition_02", "transition_04", "transition_06",
+            "transition_08", "transition_10", "transition_12",
+            "transition_14", "transition_16", "transition_18",
+            "transition_20", "transition_21",
+        ]
         assert rows[0].teacher.node_id == "TOFF"
         assert rows[-1].student_domain == "hlt"
         assert rows[-1].temperature == 1.0
@@ -42,15 +51,23 @@ def test_exact_two_track_graph_and_loss_routing():
             assert loss.temperature == pytest.approx(row.temperature)
             assert (row.strategy == RREL_STRATEGY) == row.node_id.startswith("F_RREL_")
 
+    tampered = dict(NODE_REGISTRY)
+    node = tampered["F_RSET_U040"]
+    tampered[node.node_id] = replace(
+        node, teacher=replace(node.teacher, node_id="TOFF", domain="toff"),
+    )
+    with pytest.raises(ValueError, match="immediate predecessor"):
+        validate_graph(tampered)
 
-def test_exact_87_task_parallel_sequential_dag():
+
+def test_exact_47_task_parallel_sequential_dag():
     tasks = _task_registry()
-    assert len(tasks) == 87
+    assert len(tasks) == 47
     by_id = {row["task_id"]: row for row in tasks}
-    assert by_id["train_F_RSET_U010"]["dependencies"] == ["target_TOFF"]
-    assert by_id["train_F_RREL_U010"]["dependencies"] == ["target_TOFF"]
-    assert by_id["target_F_RSET_U010"]["dependencies"] == ["train_F_RSET_U010"]
-    assert by_id["train_F_RSET_U020"]["dependencies"] == ["target_F_RSET_U010"]
+    assert by_id["train_F_RSET_U020"]["dependencies"] == ["target_TOFF"]
+    assert by_id["train_F_RREL_U020"]["dependencies"] == ["target_TOFF"]
+    assert by_id["target_F_RSET_U020"]["dependencies"] == ["train_F_RSET_U020"]
+    assert by_id["train_F_RSET_U040"]["dependencies"] == ["target_F_RSET_U020"]
     assert set(by_id["aggregate"]["dependencies"]) == {
         "train_F_RSET_M1", "train_F_RREL_M1",
     }
@@ -59,7 +76,7 @@ def test_exact_87_task_parallel_sequential_dag():
 
 def test_command_plan_uses_locked_tigris_envelope_and_exact_dependencies(tmp_path):
     spec = with_content_hash({
-        "contract": CAMPAIGN_SPEC_CONTRACT, "schema_version": 1,
+        "contract": CAMPAIGN_SPEC_CONTRACT, "schema_version": SCHEMA_VERSION,
         "campaign_root": str(tmp_path / "campaign"),
         "project_dir": str(tmp_path / "project"), "source_commit": "a" * 40,
         "parent_homotopy_spec_sha256": "b" * 64,
@@ -68,8 +85,8 @@ def test_command_plan_uses_locked_tigris_envelope_and_exact_dependencies(tmp_pat
         "final_test_accessed": False,
     })
     plan = build_command_plan(spec)
-    assert len(plan["commands"]) == 87
-    training = next(row for row in plan["commands"] if row["task_id"] == "train_F_RSET_U010")
+    assert len(plan["commands"]) == 47
+    training = next(row for row in plan["commands"] if row["task_id"] == "train_F_RSET_U020")
     assert "--cpus-per-task=8" in training["command"]
     assert "--mem=96G" in training["command"]
     assert "--time=06:00:00" in training["command"]
@@ -89,7 +106,7 @@ def test_submission_journal_resumes_exact_completed_prefix(monkeypatch, tmp_path
     import hlt_classification.scouting.hcwdl_homotopy_representation_campaign as module
 
     spec = with_content_hash({
-        "contract": CAMPAIGN_SPEC_CONTRACT, "schema_version": 1,
+        "contract": CAMPAIGN_SPEC_CONTRACT, "schema_version": SCHEMA_VERSION,
         "campaign_root": str(tmp_path / "campaign"),
         "project_dir": str(tmp_path / "project"), "source_commit": "a" * 40,
         "parent_homotopy_spec_sha256": "b" * 64,
@@ -124,7 +141,7 @@ def test_submission_journal_resumes_exact_completed_prefix(monkeypatch, tmp_path
         authorization_phrase=SUBMISSION_PHRASE, event_writer=events.append,
         prior_events=events,
     )
-    assert len(resumed_calls) == 85
+    assert len(resumed_calls) == 45
     assert ledger["jobs"]["authenticate"] == "9001"
     assert ledger["jobs"]["graph_recipe_lock"] == "9002"
-    assert len(ledger["jobs"]) == 87
+    assert len(ledger["jobs"]) == 47
