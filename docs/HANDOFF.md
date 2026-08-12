@@ -1,5 +1,24 @@
 # Current Handoff
 
+## HCWDL architecture-factorial measured P0 walltime (2026-08-12)
+
+The first 300k architecture-factorial pilot measured a preprocessing-bound
+failure: `O_U` job `83191` received Slurm `SIGUSR1` at `05:57:39` under its
+six-hour request, with exit `0:10`, empty Python stderr, peak RSS about 24 GiB,
+and no `rolling_resume.pt`. It had not reached the first optimizer update; it
+was still projecting the 300k train plus 100k validation native-offline P0
+population and building the process-local RAM caches. This is neither OOM nor
+a model/scientific failure, and a same-resource requeue would repeat the work.
+
+The replacement campaign policy therefore keeps exact-HLT cells at 8 CPUs,
+96 GiB, six hours, and one GH200, while P0 cells use the same CPU/RAM/GPU with
+a sixteen-hour walltime. Tasks bind explicit `training_hlt` or `training_p0`
+resource classes from their registered input domain; tests assert all four
+exact command rows. The four-cell graph, inputs, seeds, losses, schedule, and
+reports are unchanged. The old campaign must be cancelled only through the
+exact IDs in its immutable submission ledger, and the replacement must use a
+fresh source-pinned root.
+
 ## HCWDL-UJ canonical pilot-parent role-count repair (2026-08-12)
 
 The first waived v2 300k dry-run attempt stopped safely before campaign

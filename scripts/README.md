@@ -304,7 +304,9 @@ The validation-only four-fit common-schema ablation uses
 inputs under unified and full-depth charged/noncharged architectures, imports
 native TOFF as a reference rather than a factorial cell, and registers no
 final-test task. Smoke mode runs two updates per cell; the 300k pilot retains
-the parent recipe's 60-pass/every-pass-validation schedule. Interrupted
+the parent recipe's 60-pass/every-pass-validation schedule. The 300k exact-HLT
+cells request six hours, while the projected-offline P0 cells request sixteen
+hours based on the first pilot's measured pre-training ROOT/cache cost. Interrupted
 training resumes through the generic rolling checkpoint when its exact Slurm
 job is requeued; partial DAG submission is journaled before retry. See
 `docs/plans/HCWDL_ARCHITECTURE_INPUT_FACTORIAL_PLAN.md`.

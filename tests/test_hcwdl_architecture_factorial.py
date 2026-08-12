@@ -156,14 +156,30 @@ def test_campaign_plan_has_stable_identity_and_exact_resources(
     assert campaign.validate_campaign(spec, executable=True) == spec["content_hash"]
     assert spec["command_plan_sha256"] == campaign.build_command_plan(spec)["content_hash"]
     assert len(spec["tasks"]) == 7
-    assert spec["resources"]["training"] == {
+    assert spec["resources"]["training_hlt"] == {
         "cpus": 8, "memory": "96G", "walltime": "06:00:00", "gpu": "gpu:gh200:1",
     }
+    assert spec["resources"]["training_p0"] == {
+        "cpus": 8, "memory": "96G", "walltime": "16:00:00", "gpu": "gpu:gh200:1",
+    }
     plan = campaign.build_command_plan(spec)
-    training = [row for row in plan["commands"] if row["task_id"].startswith("train_")]
-    assert len(training) == 4
-    assert all("--cpus-per-task=8" in row["command"] for row in training)
-    assert all("--mem=96G" in row["command"] for row in training)
-    assert all("--time=06:00:00" in row["command"] for row in training)
-    assert all("--gres=gpu:gh200:1" in row["command"] for row in training)
-    assert all(not any(arg.startswith("--array") for arg in row["command"]) for row in training)
+    training = {
+        row["task_id"]: row for row in plan["commands"]
+        if row["task_id"].startswith("train_")
+    }
+    assert set(training) == {"train_H_U", "train_H_S", "train_O_U", "train_O_S"}
+    assert all("--cpus-per-task=8" in row["command"] for row in training.values())
+    assert all("--mem=96G" in row["command"] for row in training.values())
+    assert all("--gres=gpu:gh200:1" in row["command"] for row in training.values())
+    assert all(
+        "--time=06:00:00" in training[node]["command"]
+        for node in ("train_H_U", "train_H_S")
+    )
+    assert all(
+        "--time=16:00:00" in training[node]["command"]
+        for node in ("train_O_U", "train_O_S")
+    )
+    assert all(
+        not any(arg.startswith("--array") for arg in row["command"])
+        for row in training.values()
+    )

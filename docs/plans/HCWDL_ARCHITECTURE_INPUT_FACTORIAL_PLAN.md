@@ -77,7 +77,10 @@ The exact DAG is architecture check, four parallel fits, aggregate, completion.
 The architecture check must exercise finite forward and backward passes for
 both models under training's BF16 autocast policy, including split-stream
 embedding assembly from FP32 cached inputs, before it releases any fit.
-Training requests are fixed at 8 CPUs, 96 GiB RAM, six hours, and one GH200.
+Training requests use 8 CPUs, 96 GiB RAM, and one GH200. Exact-HLT cells use
+six hours. Projected-offline P0 cells use sixteen hours: the first 300k pilot
+measurement showed that P0 ROOT projection and process-local cache assembly
+alone reached the former six-hour limit before the first optimizer update.
 A real Tigris smoke using production workers is required before the 300k
 pilot. Scientific performance never controls completion; invalid inputs,
 lineage drift, nonfinite values, source drift, or token loss fail closed.

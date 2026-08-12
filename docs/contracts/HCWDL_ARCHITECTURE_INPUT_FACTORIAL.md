@@ -26,3 +26,6 @@ final-test rows, and exact Slurm job IDs are required. Persistent repaired P0
 or split datasets are forbidden. The installed architecture check must run
 both architectures through finite forward and backward passes under the exact
 BF16 autocast policy used by training; an FP32-only check is insufficient.
+Resource requests are operational rather than scientific semantics. Measured
+300k policy uses six hours for exact-HLT cells and sixteen hours for P0 cells,
+with 8 CPUs, 96 GiB, and one GH200 for both.

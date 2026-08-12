@@ -44,7 +44,8 @@ SEMANTIC_SOURCE_FILES: Final = (
 )
 RESOURCES: Final = {
     "check": {"cpus": 8, "memory": "32G", "walltime": "00:30:00", "gpu": "gpu:gh200:1"},
-    "training": {"cpus": 8, "memory": "96G", "walltime": "06:00:00", "gpu": "gpu:gh200:1"},
+    "training_hlt": {"cpus": 8, "memory": "96G", "walltime": "06:00:00", "gpu": "gpu:gh200:1"},
+    "training_p0": {"cpus": 8, "memory": "96G", "walltime": "16:00:00", "gpu": "gpu:gh200:1"},
     "report": {"cpus": 4, "memory": "16G", "walltime": "00:30:00", "gpu": None},
 }
 
@@ -101,9 +102,14 @@ def _tasks() -> list[dict[str, Any]]:
         "dependencies": [], "resource_class": "check", "node_id": None,
     }]
     for node_id in CELLS:
+        resource_class = (
+            "training_p0" if CELLS[node_id].input_domain == "p0"
+            else "training_hlt"
+        )
         rows.append({
             "task_id": f"train_{node_id}", "kind": "train_node",
-            "dependencies": ["architecture_check"], "resource_class": "training",
+            "dependencies": ["architecture_check"],
+            "resource_class": resource_class,
             "node_id": node_id,
         })
     rows.extend((
