@@ -23,7 +23,8 @@ from hlt_classification.scouting.hcwdl_homotopy_contracts import (
     GRAPH_CONTRACT, GRAPH_RECIPE_LOCK_CONTRACT, NODE_SPEC_CONTRACT,
     PILOT_SPEC_CONTRACT, RECIPE_CONTRACT, RECOVERY_COMMAND_PLAN_CONTRACT,
     RECOVERY_SPEC_CONTRACT, RESOURCE_RECOVERY_COMMAND_PLAN_CONTRACT,
-    RESOURCE_RECOVERY_SPEC_CONTRACT, coordinate_payload, validate_coordinate,
+    RESOURCE_RECOVERY_SPEC_CONTRACT, ROLE_COUNTS as HOMOTOPY_ROLE_COUNTS,
+    coordinate_payload, validate_coordinate,
 )
 from hlt_classification.scouting.hcwdl_homotopy import (
     HomotopyCoordinate, assert_particle_inputs_equal, build_homotopy_inputs,
@@ -38,7 +39,8 @@ from hlt_classification.scouting.hcwdl_homotopy_runner import (
 )
 from hlt_classification.scouting.hcwdl_homotopy_campaign import (
     PILOT_GPU_TRAINING_REQUEST, SEMANTIC_SOURCE_FILES, SMOKE_RESOURCES,
-    _validate_pilot_gpu_training_request, build_resource_profile,
+    _parent_role_counts, _validate_pilot_gpu_training_request,
+    build_resource_profile,
     semantic_source_hashes, validate_resource_profile,
     validate_worker_semantics,
 )
@@ -93,6 +95,19 @@ from hlt_classification.scouting.hcwdl_upper_coupling import (
 
 
 H = "a" * 64
+
+
+def test_pilot_parent_population_is_authenticated_before_final_test_projection() -> None:
+    assert _parent_role_counts("pilot") == {
+        "train": 300_000,
+        "validation": 100_000,
+        "final_test": 100_000,
+    }
+    assert HOMOTOPY_ROLE_COUNTS == {
+        "train": 300_000,
+        "validation": 100_000,
+        "final_test": 0,
+    }
 
 
 def test_native_offline_factory_has_authoritative_fp32_parity(monkeypatch) -> None:

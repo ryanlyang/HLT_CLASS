@@ -284,7 +284,7 @@ export UJ_PILOT_PLAN_ROOT="/home/ryreu/atlas/HLT_Classification/checkpoints/hcwd
 test ! -e "${UJ_PILOT_PLAN_ROOT}"
 python -s "${UJ_WORKTREE}/scripts/create_hcwdl_homotopy_pilot.py" \
   --parent-campaign-spec "${PARENT_300K_ROOT}/campaign_spec.json" \
-  --dense-d0-report "${DENSE10_ROOT}/training/D0c/training_report.json" \
+  --dense-d0-report "${PARENT_300K_ROOT}/training/D0c/training_report.json" \
   --contextual-report "${DENSE10_ROOT}/training/D100offkd/training_report.json" \
   --contextual-report "${DENSE5_ROOT}/training/D100offkd/training_report.json" \
   --resource-profile "${UJ_SMOKE_ROOT}/runtime/pilot_resource_profile.json" \

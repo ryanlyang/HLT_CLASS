@@ -1,5 +1,26 @@
 # Current Handoff
 
+## HCWDL-UJ canonical pilot-parent role-count repair (2026-08-12)
+
+The first waived v2 300k dry-run attempt stopped safely before campaign
+publication or submission with `HCWDL-UJ parent role counts differ`. The
+canonical HCWDL 300k parent correctly records 300,000 train, 100,000
+validation, and 100,000 sealed final-test rows; the validation-only U/J child
+correctly records 300,000 train, 100,000 validation, and zero final-test rows.
+`authenticate_parent()` had incorrectly compared the parent against the child
+projection. It now authenticates the parent with its own HCWDL mode contract
+and retains the existing child-side zero-final-test checks. A regression locks
+both populations explicitly. The already published waiver and source parity
+cannot be reused because this validator is semantic source; the corrected
+commit requires new parity and waiver identities. The partial v2 smoke exact
+IDs were cancelled only after its completed infrastructure evidence had been
+bound into the old waiver, and no 300k jobs were submitted.
+
+Local compilation and `git diff --check` pass. Focused pytest cannot collect
+in the current Windows Python because NumPy is not installed; the pinned
+Tigris environment must run the focused parent-population and waiver tests
+before constructing the corrected dry run.
+
 ## HCWDL-UJ v1 operational-evidence carry-forward (2026-08-12)
 
 The human rejected repeating all graph-thinned v2 smoke fits after the

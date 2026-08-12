@@ -262,6 +262,14 @@ def validate_worker_semantics(
         raise ValueError("HCWDL-UJ worker scientific source differs from the frozen campaign")
 
 
+def _parent_role_counts(mode: str) -> dict[str, int]:
+    """Return the authenticated parent population, not the child projection."""
+
+    if mode not in {"smoke", "pilot"}:
+        raise ValueError("HCWDL-UJ parent mode differs")
+    return {role: int(count) for role, count in ROLE_COUNTS[mode].items()}
+
+
 def authenticate_parent(
     parent_spec_path: str | Path, *, dense_d0_report: str | Path | None,
 ) -> dict[str, Any]:
@@ -271,7 +279,12 @@ def authenticate_parent(
     mode = str(parent.get("mode"))
     if mode not in {"smoke", "pilot"}:
         raise ValueError("HCWDL-UJ requires an HCWDL smoke or exact 300k pilot parent")
-    expected_counts = SMOKE_ROLE_COUNTS if mode == "smoke" else PILOT_ROLE_COUNTS
+    # Authenticate the parent under its own HCWDL population contract.  A
+    # pilot parent includes a sealed 100k final-test role even though this
+    # validation-only child deliberately projects that role to zero and never
+    # reads it.  Comparing the parent directly with PILOT_ROLE_COUNTS (the
+    # child's 300k/100k/0 contract) incorrectly rejects the canonical parent.
+    expected_counts = _parent_role_counts(mode)
     if {role: int(parent["role_counts"][role]) for role in expected_counts} != expected_counts:
         raise ValueError("HCWDL-UJ parent role counts differ")
     root = Path(parent["campaign_root"])
