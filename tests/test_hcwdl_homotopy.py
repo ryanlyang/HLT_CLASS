@@ -42,6 +42,11 @@ from hlt_classification.scouting.hcwdl_homotopy_campaign import (
     semantic_source_hashes, validate_resource_profile,
     validate_worker_semantics,
 )
+from hlt_classification.scouting.hcwdl_homotopy_waiver import (
+    AUTHORIZATION_PHRASE as WAIVER_PHRASE,
+    REQUIRED_V2_TASKS, build_operational_waiver,
+    validate_operational_waiver,
+)
 from hlt_classification.scouting import hcwdl_homotopy_reporting as homotopy_reporting
 from hlt_classification.scouting.engine import (
     PMARD_PREEMPTION_EVENT_CONTRACT, PMARD_PREEMPTION_EVENT_VERSION,
@@ -890,6 +895,78 @@ def test_resource_profile_requires_measured_headroom_and_io() -> None:
             storage_budget_bytes=8192,
             tigris_worker_miniature_passed=True,
         )
+
+
+def test_operational_waiver_is_explicit_and_source_bound() -> None:
+    v1_spec = with_content_hash({
+        "contract": "HCWDL_STRUCTURAL_FEATURE_PILOT_SPEC/v1",
+        "schema_version": 1, "mode": "smoke", "graph_sha256": H,
+        "role_counts": {"train": 4096, "validation": 4096, "final_test": 0},
+        "tasks": [
+            {"task_id": f"train_{index}", "kind": "train_node"}
+            for index in range(80)
+        ],
+        "final_test_accessed": False,
+    })
+    v1_completion = with_content_hash({
+        "contract": "HCWDL_STRUCTURAL_FEATURE_CAMPAIGN_COMPLETE/v1",
+        "schema_version": 1, "campaign_spec_sha256": v1_spec["content_hash"],
+        "fit_count": 80, "mode": "smoke", "validation_only": True,
+        "final_test_accessed": False,
+    })
+    v2_spec = with_content_hash({
+        "contract": PILOT_SPEC_CONTRACT, "schema_version": 1,
+        "mode": "smoke", "graph_sha256": GRAPH_SHA256,
+        "role_counts": {"train": 4096, "validation": 4096, "final_test": 0},
+        "source_commit": "a" * 40,
+        "semantic_source_sha256": {"semantic.py": H},
+        "final_test_accessed": False,
+    })
+    endpoint = with_content_hash({
+        "contract": "HCWDL_STRUCTURAL_FEATURE_ENDPOINT_EQUALITY_LOCK/v1",
+        "schema_version": 1, "campaign_spec_sha256": v2_spec["content_hash"],
+        "coupling_lock_sha256": H, "full_role_audit_sha256": H,
+        "cache_miniature_sha256": H, "coordinate_sha256": H,
+        "projection_sha256": H, "shell_parity_sha256": H,
+        "authorized": True, "u100_exact_d100": True, "j100_exact_hlt": True,
+        "d0f_exact_hlt": True, "final_test_accessed": False,
+    })
+    parity = with_content_hash({
+        "contract": "HCWDL_STRUCTURAL_FEATURE_WEAVER_PARITY/v1",
+        "schema_version": 1, "source_commit": "a" * 40, "device": "cuda",
+        "unified_factory": {"passed": True},
+        "native_teacher_factory": {"passed": True},
+        "final_test_accessed": False,
+    })
+    graph_lock = with_content_hash({
+        "contract": GRAPH_RECIPE_LOCK_CONTRACT, "schema_version": 1,
+        "campaign_spec_sha256": v2_spec["content_hash"],
+        "endpoint_equality_lock_sha256": endpoint["content_hash"],
+        "toff_target_lock_sha256": H, "graph_artifact_sha256": H,
+        "graph_semantic_sha256": GRAPH_SHA256, "recipe_overlay_sha256": H,
+        "parent_recipe_sha256": H, "coordinate_sha256": H,
+        "command_plan_sha256": H, "source_commit_sha256": H,
+        "weaver_parity_sha256": parity["content_hash"], "authorized": True,
+        "fit_count": 45, "explicit_per_node_loss_routing": True,
+        "all_students_cold_started": True, "final_test_accessed": False,
+    })
+    waiver = build_operational_waiver(
+        v1_campaign_spec=v1_spec, v1_campaign_completion=v1_completion,
+        v2_campaign_spec=v2_spec, v2_endpoint_lock=endpoint,
+        v2_graph_recipe_lock=graph_lock, v2_weaver_parity=parity,
+        completed_v2_task_ids=REQUIRED_V2_TASKS,
+        authorized_source_commit="b" * 40,
+        authorized_semantic_source_sha256={"semantic.py": "c" * 64},
+        authorization_phrase=WAIVER_PHRASE,
+    )
+    assert validate_operational_waiver(
+        waiver, source_commit="b" * 40,
+        semantic_source_sha256={"semantic.py": "c" * 64},
+    ) == waiver["content_hash"]
+    assert waiver["v2_full_smoke_completed"] is False
+    assert waiver["scientific_graph_waived"] is False
+    with pytest.raises(ValueError, match="source differs"):
+        validate_operational_waiver(waiver, source_commit="d" * 40)
 
 
 def test_usr1_resume_evidence_binds_exact_checkpoint_and_distinct_jobs(

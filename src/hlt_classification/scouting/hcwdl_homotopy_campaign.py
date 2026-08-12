@@ -25,6 +25,7 @@ from .hcwdl_homotopy_graph import (
     FIT_COUNT, GRAPH_SHA256, NODE_REGISTRY, build_recipe_overlay, validate_graph,
     validate_recipe_overlay,
 )
+from .hcwdl_homotopy_waiver import validate_operational_waiver
 from .hcwdl_locks import validate_lock
 from .hcwdl_recipe import CLASS_WEIGHT_POLICY, RECIPE_CONTRACT, validate_recipe
 from .hcwdl_training import CHECKPOINT_SELECTION_CONTRACT
@@ -54,6 +55,7 @@ SEMANTIC_SOURCE_FILES: Final = (
     "src/hlt_classification/scouting/hcwdl_upper_cache.py",
     "src/hlt_classification/scouting/hcwdl_upper_coupling.py",
     "src/hlt_classification/scouting/hcwdl_homotopy.py",
+    "src/hlt_classification/scouting/hcwdl_homotopy_waiver.py",
     "src/hlt_classification/scouting/inputs.py",
     "src/hlt_classification/scouting/pmard_stream.py",
     "src/hlt_classification/scouting/schema.py",
@@ -401,6 +403,7 @@ def create_campaign(
     dense_d0_report: str | Path | None = None,
     contextual_reports: Sequence[str | Path] = (),
     resource_profile: Mapping[str, Any] | None = None,
+    operational_waiver: Mapping[str, Any] | None = None,
     authorize_live_submission: bool = False,
     authorization_phrase: str | None = None,
 ) -> dict[str, Any]:
@@ -427,18 +430,39 @@ def create_campaign(
     if authorize_live_submission and authorization_phrase != AUTHORIZATION_PHRASE:
         raise PermissionError("HCWDL-UJ campaign creation phrase differs")
     if evidence["mode"] == "pilot":
-        if resource_profile is None or not resource_profile.get("tigris_worker_miniature_passed"):
-            raise PermissionError("300k HCWDL-UJ requires a measured passing Tigris resource profile")
-        resource_hash = validate_resource_profile(resource_profile)
-        if (
-            resource_profile.get("source_commit") != source_commit
-            or resource_profile.get("semantic_source_sha256")
-               != semantic_source_hashes(project)
-        ):
-            raise ValueError("300k HCWDL-UJ resource profile source lineage differs")
-        requests = resource_profile["requests"]
+        semantic_hashes = semantic_source_hashes(project)
+        if resource_profile is not None and operational_waiver is not None:
+            raise ValueError(
+                "300k HCWDL-UJ cannot combine measured and waived resources"
+            )
+        if resource_profile is not None:
+            if not resource_profile.get("tigris_worker_miniature_passed"):
+                raise PermissionError("300k HCWDL-UJ resource profile did not pass")
+            resource_hash = validate_resource_profile(resource_profile)
+            if (
+                resource_profile.get("source_commit") != source_commit
+                or resource_profile.get("semantic_source_sha256") != semantic_hashes
+            ):
+                raise ValueError("300k HCWDL-UJ resource profile source lineage differs")
+            requests = resource_profile["requests"]
+            waiver_hash = None
+        elif operational_waiver is not None:
+            waiver_hash = validate_operational_waiver(
+                operational_waiver, source_commit=source_commit,
+                semantic_source_sha256=semantic_hashes,
+            )
+            requests = operational_waiver["authorized_requests"]
+            resource_hash = None
+        else:
+            raise PermissionError(
+                "300k HCWDL-UJ requires measured resources or an explicit "
+                "authenticated operational-evidence waiver"
+            )
         _validate_pilot_gpu_training_request(requests)
     else:
+        if operational_waiver is not None:
+            raise ValueError("HCWDL-UJ smoke cannot consume a pilot waiver")
+        waiver_hash = None
         if resource_profile is not None:
             resource_hash = validate_resource_profile(resource_profile); requests = resource_profile["requests"]
         else:
@@ -447,6 +471,10 @@ def create_campaign(
     if resource_profile is not None:
         resource_path = root / "resource_profile.json"
         resource_reference = {"path": str(resource_path), "content_hash": resource_hash}
+    waiver_reference = None
+    if operational_waiver is not None:
+        waiver_path = root / "operational_evidence_waiver.json"
+        waiver_reference = {"path": str(waiver_path), "content_hash": waiver_hash}
     contextual = []
     for report_path in contextual_reports:
         resolved = Path(report_path).resolve()
@@ -524,6 +552,8 @@ def create_campaign(
         "resource_request_sha256": canonical_sha256(requests),
         "resource_profile_sha256": resource_hash,
         "resource_profile": resource_reference,
+        "operational_evidence_waiver_sha256": waiver_hash,
+        "operational_evidence_waiver": waiver_reference,
         "weaver_parity": {"path": str(parity_path), "content_hash": parity_hash},
         "weaver_parity_sha256": parity_hash,
         "semantic_source_sha256": semantic_hashes,
@@ -544,6 +574,8 @@ def create_campaign(
     root.mkdir(parents=True, exist_ok=True)
     if resource_profile is not None:
         write_immutable_json(root / "resource_profile.json", resource_profile)
+    if operational_waiver is not None:
+        write_immutable_json(root / "operational_evidence_waiver.json", operational_waiver)
     for relative, artifact in (
         ("coupling/config.json", coupling_config), ("graph.json", graph),
         ("recipe_overlay.json", overlay), ("coordinate_table.json", coordinate),
@@ -606,25 +638,48 @@ def validate_campaign(value: Mapping[str, Any], *, executable: bool = False) -> 
     if value.get("mode") == "pilot":
         if "D0c" not in value.get("imported_controls", {}):
             raise ValueError("300k HCWDL-UJ lacks mandatory D0c context")
-        if value.get("resource_profile_sha256") is None:
-            raise ValueError("300k HCWDL-UJ lacks a measured resource profile")
-        reference = value.get("resource_profile")
-        if not isinstance(reference, Mapping):
-            raise ValueError("300k HCWDL-UJ lacks its resource-profile reference")
-        profile = load_json(reference["path"])
-        if (
-            validate_resource_profile(profile) != reference.get("content_hash")
-            or reference.get("content_hash") != value.get("resource_profile_sha256")
-            or profile.get("tigris_worker_miniature_passed") is not True
-            or profile.get("requests", {}).get("gpu_training")
-               != PILOT_GPU_TRAINING_REQUEST
-        ):
-            raise ValueError("300k HCWDL-UJ resource profile differs")
-        _validate_pilot_gpu_training_request(profile["requests"])
+        profile_reference = value.get("resource_profile")
+        waiver_reference = value.get("operational_evidence_waiver")
+        if (profile_reference is None) == (waiver_reference is None):
+            raise ValueError(
+                "300k HCWDL-UJ requires exactly one resource authorization"
+            )
+        if profile_reference is not None:
+            if not isinstance(profile_reference, Mapping):
+                raise ValueError("300k HCWDL-UJ resource-profile reference differs")
+            profile = load_json(profile_reference["path"])
+            if (
+                validate_resource_profile(profile) != profile_reference.get("content_hash")
+                or profile_reference.get("content_hash") != value.get("resource_profile_sha256")
+                or profile.get("tigris_worker_miniature_passed") is not True
+                or value.get("operational_evidence_waiver_sha256") is not None
+            ):
+                raise ValueError("300k HCWDL-UJ resource profile differs")
+            requests = profile["requests"]
+        else:
+            if not isinstance(waiver_reference, Mapping):
+                raise ValueError("300k HCWDL-UJ waiver reference differs")
+            waiver = load_json(waiver_reference["path"])
+            if (
+                validate_operational_waiver(
+                    waiver, source_commit=str(value["source_commit"]),
+                    semantic_source_sha256=value["semantic_source_sha256"],
+                ) != waiver_reference.get("content_hash")
+                or waiver_reference.get("content_hash")
+                   != value.get("operational_evidence_waiver_sha256")
+                or value.get("resource_profile_sha256") is not None
+            ):
+                raise ValueError("300k HCWDL-UJ operational waiver differs")
+            requests = waiver["authorized_requests"]
+        if value.get("resources") != requests:
+            raise ValueError("300k HCWDL-UJ authorized requests differ")
+        _validate_pilot_gpu_training_request(requests)
     elif value.get("resource_profile") is not None:
         profile = load_json(value["resource_profile"]["path"])
         if validate_resource_profile(profile) != value["resource_profile"].get("content_hash"):
             raise ValueError("smoke HCWDL-UJ resource profile differs")
+    elif value.get("operational_evidence_waiver") is not None:
+        raise ValueError("HCWDL-UJ smoke cannot carry a pilot waiver")
     if value.get("resource_request_sha256") != canonical_sha256(value.get("resources")):
         raise ValueError("HCWDL-UJ resource request lineage differs")
     parity_reference = value.get("weaver_parity")

@@ -26,10 +26,15 @@ def main() -> int:
     parser.add_argument("--dense-d0-report", type=Path)
     parser.add_argument("--contextual-report", type=Path, action="append", default=[])
     parser.add_argument("--resource-profile", type=Path)
+    parser.add_argument("--operational-evidence-waiver", type=Path)
     parser.add_argument("--authorize-live-submission", action="store_true")
     parser.add_argument("--authorization-phrase")
     args = parser.parse_args()
     profile = None if args.resource_profile is None else load_json(args.resource_profile)
+    waiver = (
+        None if args.operational_evidence_waiver is None
+        else load_json(args.operational_evidence_waiver)
+    )
     spec = create_campaign(
         parent_campaign_spec=args.parent_campaign_spec,
         campaign_root=args.campaign_root, project_dir=args.project_dir,
@@ -37,6 +42,7 @@ def main() -> int:
         dense_d0_report=args.dense_d0_report,
         contextual_reports=args.contextual_report,
         resource_profile=profile,
+        operational_waiver=waiver,
         authorize_live_submission=args.authorize_live_submission,
         authorization_phrase=args.authorization_phrase,
     )

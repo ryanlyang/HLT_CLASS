@@ -1,7 +1,8 @@
 # HCWDL Structural-Feature Homotopy Implementation Plan
 
-Status: **implemented; v1 production-worker smoke completed; v2 reduced-graph
-smoke required before a separately authorized 300k submission**.
+Status: **implemented; v1 production-worker smoke completed; v2 infrastructure
+acceptance completed; the human may explicitly authorize a versioned
+operational-evidence carry-forward for the thinned v2 300k submission**.
 
 Short name: **HCWDL-UJ**. Here `U` denotes the upper structural-support
 transition and `J` denotes the joint structural-plus-feature transition.
@@ -120,6 +121,23 @@ The parent pilot's test role has already participated in earlier work and is
 not silently reused as a fresh confirmatory holdout.
 
 ## 3.1 Post-smoke v2 launch decision (2026-08-12)
+
+The human controls whether a graph-thinning change requires repeating every
+production-worker smoke fit. The completed 80-fit v1 smoke already exercised
+the U/J view builders, KD routes, checkpoint/resume path, locks, reports, and
+Slurm worker. Before the v2 pilot, its live smoke additionally completed
+installed-Weaver parity, full coupling construction and audit, cache
+miniature, endpoint equality, TOFF targets, and the graph/recipe lock.
+
+Therefore the v2 pilot may use either the original fully completed measured
+resource profile or an explicit
+`HCWDL_STRUCTURAL_FEATURE_OPERATIONAL_EVIDENCE_WAIVER/v1`. The latter must
+bind the completed v1 campaign and completion report, completed v2
+infrastructure locks, exact v2 source and semantic hashes, the fixed resource
+requests, and the exact human authorization phrase. It must state that the v2
+full smoke was not completed and may not be represented as such. This waiver
+changes only the operational launch gate; it does not change the graph, loss,
+data, endpoints, final-test boundary, or scientific interpretation.
 
 The completed v1 Tigris smoke exercised all 80 registered fits and 101 tasks,
 but its two-update metrics were intentionally non-scientific and the full

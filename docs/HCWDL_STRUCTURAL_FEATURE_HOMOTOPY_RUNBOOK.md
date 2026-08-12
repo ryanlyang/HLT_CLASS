@@ -7,11 +7,11 @@ and [reusable contract](contracts/HCWDL_STRUCTURAL_FEATURE_HOMOTOPY.md). It
 does not authorize final-test access. It also does not reinterpret or mutate
 the parent HCWDL campaign, dense ladders, assignments, or checkpoints.
 
-The completed 80-fit v1 smoke is historical evidence only. The reduced v2
-graph changes its coordinate, teacher, and task contracts, so its first remote
-execution must be a genuine 4,096-train/4,096-validation
-Tigris smoke using the production workers. A 300k specification is invalid
-until that smoke completes and its measured resource profile is bound.
+The completed 80-fit v1 smoke is immutable operational evidence. The reduced
+v2 graph may be authorized either by a completed measured v2 smoke or by the
+explicit operational-evidence carry-forward described below after v2 parity,
+coupling, endpoint, target, and graph locks complete. The waiver is a human
+launch decision, not a fabricated v2 completion.
 
 ## 1. Activate Tigris and pin a clean source worktree
 
@@ -263,6 +263,13 @@ The profiler authenticates exact job/array coverage, Slurm RAM/wall/disk I/O,
 worker-recorded GPU peaks, all durable artifact bytes, and campaign completion.
 
 ## 8. Create the 300k pilot dry run
+
+When the human authorizes v1 operational-evidence carry-forward, first publish
+the immutable waiver with
+`build_hcwdl_homotopy_operational_waiver.py`, then pass it as
+`--operational-evidence-waiver` instead of `--resource-profile`. Never pass
+both. The partial v2 smoke remains partial in its own ledger and is not used
+as a scientific result.
 
 The parent must be the exact completed unweighted 300k HCWDL pilot. The D0c
 report and both dense direct controls must share that parent lineage. Paths

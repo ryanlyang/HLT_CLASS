@@ -1,5 +1,23 @@
 # Current Handoff
 
+## HCWDL-UJ v1 operational-evidence carry-forward (2026-08-12)
+
+The human rejected repeating all graph-thinned v2 smoke fits after the
+completed 80-fit v1 production-worker smoke. That decision is now represented
+honestly by `HCWDL_STRUCTURAL_FEATURE_OPERATIONAL_EVIDENCE_WAIVER/v1`, not by
+relabeling the partial v2 run as complete. The waiver binds the v1 campaign
+and completion, completed v2 installed-Weaver parity, coupling/endpoint/TOFF
+target/graph locks, the exact new source and semantic hashes, the 8 CPU/96G/
+six-hour/GH200 pilot request, and the exact human authorization phrase. It
+does not change any scientific graph, loss, dataset, endpoint, or final-test
+rule. A completed measured v2 resource profile remains an alternative, not a
+mandatory gate when this explicit waiver is present.
+
+No jobs were cancelled or submitted by the implementation. The operator may
+cancel only the exact partial-v2 smoke ledger IDs after publishing the waiver,
+then create/dry-run/submit a new source-pinned 300k root. The two unrelated
+worktree entries remain untouched.
+
 ## HCWDL-UJ reduced v2 graph (2026-08-12)
 
 After the successful 80-fit v1 production-worker smoke, the user selected a

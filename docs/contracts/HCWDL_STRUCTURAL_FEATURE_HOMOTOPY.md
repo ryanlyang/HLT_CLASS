@@ -62,6 +62,7 @@ HCWDL_STRUCTURAL_FEATURE_TRAINING_REPORT/v1
 HCWDL_STRUCTURAL_FEATURE_NODE_RUNTIME/v1
 HCWDL_STRUCTURAL_FEATURE_AGGREGATE/v2
 HCWDL_STRUCTURAL_FEATURE_RESOURCE_PROFILE/v1
+HCWDL_STRUCTURAL_FEATURE_OPERATIONAL_EVIDENCE_WAIVER/v1
 HCWDL_STRUCTURAL_FEATURE_CACHE_RESOURCE_MEASUREMENT/v1
 HCWDL_STRUCTURAL_FEATURE_CACHE_MINIATURE/v1
 HCWDL_STRUCTURAL_FEATURE_TARGET_RESOURCE_MEASUREMENT/v1
@@ -81,6 +82,13 @@ Every reusable JSON artifact carries a contract, schema version, canonical
 content hash, exact parents, and `final_test_accessed: false`. Array artifacts
 also bind immutable NPZ bytes and logical array hashes. Path existence alone
 never authorizes reuse.
+
+For the graph-thinned v2 pilot, an explicit operational-evidence waiver may
+carry the completed 80-fit v1 production-worker smoke together with completed
+v2 parity, coupling, endpoint, target, and graph-lock evidence. It records the
+human decision and exact fixed resource requests. It is not a v2 smoke
+completion and cannot change the scientific graph, loss, data, or test
+boundary.
 
 ## Coupling and endpoint authorization
 

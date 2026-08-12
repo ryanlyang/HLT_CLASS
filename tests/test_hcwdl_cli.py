@@ -48,6 +48,7 @@ SCRIPTS = (
     "cancel_hcwdl_homotopy.py", "resume_hcwdl_homotopy.py",
     "run_hcwdl_homotopy_recovery_task.py",
     "build_hcwdl_homotopy_resource_profile.py",
+    "build_hcwdl_homotopy_operational_waiver.py",
     "validate_hcwdl_homotopy_weaver.py",
     "run_hcwdl_homotopy_local_smoke.py",
     "build_hcwdl_upper_calibration.py",

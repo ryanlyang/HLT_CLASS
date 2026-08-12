@@ -274,6 +274,10 @@ Preparation helpers are `build_hcwdl_upper_calibration.py`,
 `finalize_hcwdl_upper_coupling.py`, `build_hcwdl_toff_targets.py`,
 `build_hcwdl_homotopy_resume_evidence.py`, and
 `build_hcwdl_homotopy_resource_profile.py`.
+For the human-authorized thinned-v2 launch, the alternative
+`build_hcwdl_homotopy_operational_waiver.py` records completed v1 worker
+evidence plus completed v2 infrastructure locks without claiming the partial
+v2 smoke completed.
 It imports an authenticated HCWDL smoke or unweighted 300k pilot, registers no
 final-test task, stores only compact coupling/target artifacts, and rebuilds
 particle views in process-local RAM. The exact artifact and recovery rules are
