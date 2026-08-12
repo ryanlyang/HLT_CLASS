@@ -550,6 +550,17 @@ the equal policy projection, and the explicit difference allowlist. This is
 not authority to translate or approximate a scientific policy. A failed
 bootstrap is immutable partial evidence and is retried in a new root.
 
+The installed-Weaver architecture attestation is deliberately narrower than
+parent-loss authority. It may audit the authenticated pre-loss-semantics
+`b3154d67` wrapper/checkpoint bytes because that artifact proves only strict
+model state compatibility. It validates the legacy wrapper's original
+content hash, engine lineage, checkpoint hash, and strict state load without
+adding current loss fields or changing its meaning. Recipe compatibility
+separately proves the exact-one unweighted execution policy. Such a legacy
+wrapper remains categorically invalid wherever corrected parent-loss
+authority is required; architecture evidence may not be reused as a loss
+attestation.
+
 Changing rung spacing, node order, teacher routing, representation strategy,
 loss weights, calibration, taps, target sketches, coupling/view semantics, or
 seed aliases requires a new scientific contract. CPU/RAM/walltime changes

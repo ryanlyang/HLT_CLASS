@@ -424,14 +424,26 @@ def audit_parent_checkpoint_file(
 
     from hlt_classification.scouting.engine import validate_pmard_training_report
     from hlt_classification.scouting.hcwdl_training import (
-        validate_hcwdl_training_report,
+        TRAINING_REPORT_CONTRACT,
     )
 
     report_path = Path(training_report_path).resolve()
     if not report_path.is_file():
         raise FileNotFoundError(f"parent training report is absent: {report_path}")
     wrapper = load_json(report_path)
-    report_sha256 = validate_hcwdl_training_report(wrapper)
+    # This attestation proves checkpoint architecture and byte lineage only.
+    # Some authenticated b315 HCWDL wrappers predate the explicit
+    # ``loss_semantics`` fields, even though their exact-one class weights make
+    # the historical and corrected reductions numerically equal.  Requiring
+    # the current loss wrapper here would silently turn an architecture check
+    # into a loss-semantics migration.  Loss authority remains fail-closed in
+    # ``validate_hcwdl_training_report`` and the separately versioned recipe
+    # compatibility/parent-loss artifacts; it is deliberately not inferred by
+    # this architecture-only audit.
+    report_sha256 = validate_content_hash(
+        wrapper, expected_contract=TRAINING_REPORT_CONTRACT,
+        expected_schema_version=1,
+    )
     if wrapper.get("node_id") != node_id or wrapper.get("complete") is not True:
         raise ValueError(f"parent architecture report identity differs: {node_id}")
 

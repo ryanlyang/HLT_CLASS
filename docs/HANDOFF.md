@@ -1897,3 +1897,23 @@ publish measured memory/CUDA/wall/I/O/storage evidence, and render the complete
 nonmutating 300k dry run. A live smoke or pilot still requires its own exact
 phrase-bound user authorization. No Slurm job was submitted and no final-test
 data were accessed during this implementation.
+## HCWDL-U-RKD Tigris prerequisite architecture boundary (2026-08-12)
+
+The exact `c055ea84` research-compute checkout passed the complete repository
+suite: 952 tests passed with one pre-existing PyTorch warning. The subsequent
+non-training prerequisite bootstrap failed before campaign creation because
+the architecture-only checkpoint audit called the corrected parent-loss
+validator on `b3154d67` wrappers. Those wrappers are content-authenticated but
+predate the explicit loss-semantics fields; the living handoff already records
+that they cannot be relabeled as corrected parent-loss evidence.
+
+The architecture audit now validates their original wrapper contract/content
+hash, engine and selected-checkpoint byte lineage, and strict canonical model
+state load without inferring loss authority. The existing corrected
+`validate_hcwdl_training_report` remains unchanged and still rejects the same
+legacy wrapper. The bootstrap's separately hashed recipe-compatibility
+artifact continues to require complete execution-policy equality and fifteen
+exact-one class weights. A regression proves this asymmetric boundary. The
+failed partially published prerequisite root is immutable and must not be
+overwritten; the next genuine Tigris attempt uses a new pushed commit and new
+prerequisite/campaign roots.

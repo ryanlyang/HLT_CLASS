@@ -589,6 +589,38 @@ def test_file_backed_architecture_audit_opens_reports_and_strict_loads_checkpoin
         )
 
 
+def test_architecture_audit_accepts_authenticated_pre_loss_semantics_wrapper(
+    fake_hcwdl_weaver, monkeypatch, tmp_path: Path,
+):
+    """Architecture lineage must not relabel a legacy wrapper's loss."""
+
+    from hlt_classification.scouting import engine
+    from hlt_classification.scouting.hcwdl_training import (
+        validate_hcwdl_training_report,
+    )
+
+    def validate_engine(value):
+        return validate_content_hash(
+            value, expected_contract=str(value.get("contract")),
+            expected_schema_version=1,
+        )
+
+    monkeypatch.setattr(engine, "validate_pmard_training_report", validate_engine)
+    model = scouting.build_scouting_particle_transformer()
+    report_path = _parent_report_fixture(
+        tmp_path, node_id="D100", model=model,
+    )
+    wrapper = json.loads(report_path.read_text(encoding="utf-8"))
+    with pytest.raises(ValueError, match="loss semantics"):
+        validate_hcwdl_training_report(wrapper)
+
+    audit = audit_parent_checkpoint_file(
+        node_id="D100", training_report_path=report_path,
+    )
+    assert audit.actual_file_evidence is True
+    assert audit.report_sha256 == wrapper["content_hash"]
+
+
 def test_file_backed_architecture_gate_rejects_checkpoint_report_and_runtime_tampering(
     fake_hcwdl_weaver, monkeypatch, tmp_path: Path,
 ):
