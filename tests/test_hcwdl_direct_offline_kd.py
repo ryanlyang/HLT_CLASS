@@ -139,7 +139,10 @@ def _fake_campaign_inputs(monkeypatch, tmp_path: Path):
     selection = tmp_path / "selection.json"; selection.write_text("{}")
     parent = {
         "mode": "pilot", "parent": {
-            "role_counts": dict(ROLE_COUNTS), "data_root": "/data",
+            # The parent owns a sealed final population, but this supplemental
+            # campaign deliberately registers zero final-test rows.
+            "role_counts": {"train": 300_000, "validation": 100_000,
+                            "final_test": 100_000}, "data_root": "/data",
             "content_hash": SHA,
         },
         "parent_path": parent_spec, "recipe_path": base_recipe,

@@ -218,7 +218,10 @@ def create_campaign(
     authorize_live_submission: bool = False, authorization_phrase: str | None = None,
 ) -> dict[str, Any]:
     parent = authenticate_parent(parent_campaign_spec)
-    if parent["mode"] != "pilot" or parent["parent"]["role_counts"] != ROLE_COUNTS:
+    if parent["mode"] != "pilot" or any(
+        int(parent["parent"]["role_counts"][role]) != ROLE_COUNTS[role]
+        for role in ("train", "validation")
+    ):
         raise ValueError("direct offline-KD campaign requires the authenticated 300k pilot parent")
     prereq = _load_prerequisites(prerequisite_bundle)
     from .hcwdl_homotopy_representation_training import _kernel_bundle
