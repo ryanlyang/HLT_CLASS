@@ -67,6 +67,9 @@ from .hcwdl_representation_resources import (
     validate_dense_storage_estimate,
     validate_measured_profile,
 )
+from .schema import (
+    HLT_MAX_LENGTH, OFFLINE_CHARGED_MAX_LENGTH, OFFLINE_NEUTRAL_MAX_LENGTH,
+)
 
 
 ORDINARY_BANK: Final = "ordinary"
@@ -402,8 +405,16 @@ def validate_target_arrays(
     if np.any(token_eligible > 1) or np.any(relation_eligible > 1):
         raise ValueError("HCWDL-RKD target eligibility is not binary")
     token_count = np.asarray(arrays["token_count"])
-    if np.any(token_count > 128):
-        raise ValueError("HCWDL-RKD target token count exceeds canonical trimming")
+    token_limits = (
+        np.asarray((HLT_MAX_LENGTH,), dtype=np.uint16)
+        if bank_kind == ORDINARY_BANK else
+        np.asarray(
+            (OFFLINE_CHARGED_MAX_LENGTH, OFFLINE_NEUTRAL_MAX_LENGTH),
+            dtype=np.uint16,
+        )
+    )
+    if np.any(token_count > token_limits[None, :]):
+        raise ValueError("HCWDL-RKD target token count exceeds its domain limit")
     if not np.array_equal(token_eligible.astype(bool), token_count > 0):
         raise ValueError("HCWDL-RKD token eligibility/count differs")
     token_pt = np.asarray(arrays["token_scalar_pt_sum"])
@@ -437,8 +448,10 @@ def validate_target_arrays(
             raise ValueError("HCWDL-RKD ordinary family reason conservation differs")
     else:
         reasons = np.asarray(arrays["family_reason_counts"])
-        if np.any(np.sum(reasons, axis=1, dtype=np.uint32) > 128):
-            raise ValueError("HCWDL-RKD companion-HLT reasons exceed canonical trimming")
+        if np.any(
+            np.sum(reasons, axis=1, dtype=np.uint32) > HLT_MAX_LENGTH
+        ):
+            raise ValueError("HCWDL-RKD companion-HLT reasons exceed its domain limit")
         for family_index, family in enumerate(TOFF_FAMILIES):
             token = np.asarray(arrays[f"token_kernel_mean_{family}"])
             relation = np.asarray(arrays[f"relation_kernel_mean_{family}"])

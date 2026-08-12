@@ -1955,3 +1955,15 @@ now does the same before Python can import Torch. A regression verifies the
 export exists and precedes the worker `exec`. Since the original specification
 is source-pinned, continuation must use the authenticated failed-closure source
 recovery rather than requeueing the failed job under `38ac499b`.
+
+The first corrected source-recovery TOFF target job at `d9ac4fe9` then reached
+real target-array validation and exposed a distinct count-bound bug. The
+validator had used `128`, the contextual latent width, as a universal particle
+limit. That is not a Scouting collection bound. Validation now imports the
+canonical schema limits and enforces 200 tokens for unified/companion HLT, 90
+for native-offline charged, and 60 for native-offline neutral. The target
+format, target values, family classifier, model forwards, graph, recipes, and
+losses are unchanged. Boundary regressions accept exact 200/90/60 populations
+and reject 201/91/61. The failed recovery published no shared TOFF target bank;
+continuation again requires repeated authenticated source recovery from its
+replacement ledger rather than an ordinary requeue.

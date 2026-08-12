@@ -1234,6 +1234,49 @@ def test_array_ineligibility_and_relation_family_gate_fail_closed():
         validate_target_arrays(arrays, bank_kind=ORDINARY_BANK)
 
 
+def test_target_count_validation_uses_exact_domain_limits_not_latent_width():
+    ordinary = {
+        name: np.zeros(shape, dtype=dtype)
+        for name, (dtype, shape) in target_array_schema(
+            ORDINARY_BANK, 1,
+        ).items()
+    }
+    ordinary["source_entry"][0] = 1
+    ordinary["identity_digest"][0] = _identity(0, 1)
+    ordinary["token_family_eligibility"][0, 0] = 1
+    ordinary["token_count"][0, 0] = 200
+    ordinary["token_scalar_pt_sum"][0, 0] = 1.0
+    ordinary["family_reason_counts"][0, 0] = 200
+    assert validate_target_arrays(ordinary, bank_kind=ORDINARY_BANK) == 1
+    ordinary["token_count"][0, 0] = 201
+    ordinary["family_reason_counts"][0, 0] = 201
+    with pytest.raises(ValueError, match="domain limit"):
+        validate_target_arrays(ordinary, bank_kind=ORDINARY_BANK)
+
+    toff = {
+        name: np.zeros(shape, dtype=dtype)
+        for name, (dtype, shape) in target_array_schema(TOFF_BANK, 1).items()
+    }
+    toff["source_entry"][0] = 1
+    toff["identity_digest"][0] = _identity(0, 1)
+    toff["token_family_eligibility"][0] = (1, 1)
+    toff["token_count"][0] = (90, 60)
+    toff["token_scalar_pt_sum"][0] = (1.0, 1.0)
+    toff["family_reason_counts"][0, 0] = 200
+    assert validate_target_arrays(toff, bank_kind=TOFF_BANK) == 1
+    toff["token_count"][0, 0] = 91
+    with pytest.raises(ValueError, match="domain limit"):
+        validate_target_arrays(toff, bank_kind=TOFF_BANK)
+    toff["token_count"][0, 0] = 90
+    toff["token_count"][0, 1] = 61
+    with pytest.raises(ValueError, match="domain limit"):
+        validate_target_arrays(toff, bank_kind=TOFF_BANK)
+    toff["token_count"][0, 1] = 60
+    toff["family_reason_counts"][0, 0] = 201
+    with pytest.raises(ValueError, match="domain limit"):
+        validate_target_arrays(toff, bank_kind=TOFF_BANK)
+
+
 def test_predecessor_logits_are_built_once_joined_and_model_released():
     batches = {
         "p0": _batch("p0", 0, [0, 1]),
