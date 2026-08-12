@@ -69,6 +69,20 @@ REPRESENTATION_NODE_REGISTRY: Final[
 NODE_ORDER: Final = ("HLT_CE", "TOFF_CE", "HLT_LOGIT", "HLT_RSET", "HLT_RREL")
 
 
+def _base_node_payload(node_id: str) -> dict[str, object]:
+    """Return the canonical JSON-native form of an imported ladder node."""
+    payload = {
+        **BASE_NODE_REGISTRY[node_id].payload(),
+        "contract": NODE_CONTRACT,
+    }
+    # NodeSpec is reusable elsewhere with tuple-valued teachers, but direct
+    # campaign artifacts cross a JSON persistence boundary before submission.
+    # Emit the persisted representation up front so create-time and reload-time
+    # graph validation compare the same Python value types.
+    payload["teachers"] = list(payload["teachers"])
+    return payload
+
+
 def graph_payload() -> dict[str, object]:
     return {
         "contract": GRAPH_CONTRACT,
@@ -76,7 +90,7 @@ def graph_payload() -> dict[str, object]:
         "fit_count": 5,
         "node_order": list(NODE_ORDER),
         "base_nodes": [
-            {**BASE_NODE_REGISTRY[node].payload(), "contract": NODE_CONTRACT}
+            _base_node_payload(node)
             for node in ("HLT_CE", "TOFF_CE", "HLT_LOGIT")
         ],
         "representation_nodes": [

@@ -26,6 +26,16 @@ seconds. No job has been submitted. A source-pinned Tigris production-worker
 miniature and dry-run remain the research-compute acceptance gate before the
 300k live submission, as required by `AGENTS.md`.
 
+The first real pilot creation attempts closed two portable-artifact boundary
+bugs before submission: the direct campaign initially looked for v5
+`scientific_values` outside its authenticated `payload`, then its dry-run
+validator compared tuple-valued in-memory teachers with their JSON list form.
+The v5 lookup is now contract-correct and the graph producer emits canonical
+JSON-native teacher lists before hashing. A create-to-disk-reload validation
+regression now exercises the same boundary as the submission CLI; the direct
+campaign tests pass 8/8 and `git diff --check` passes. Neither failed attempt
+submitted a Slurm job.
+
 ## HCWDL-U-RKD prerequisite bootstrap repair (2026-08-12)
 
 The first real Tigris preflight for commit `a407f056` found a valid completed

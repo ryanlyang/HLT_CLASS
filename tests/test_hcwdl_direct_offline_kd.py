@@ -5,7 +5,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from hlt_classification.data.cache_contracts import load_json, with_content_hash
+from hlt_classification.data.cache_contracts import (
+    load_json, with_content_hash, write_immutable_json,
+)
 from hlt_classification.scouting import hcwdl_direct_offline_kd_campaign as campaign
 from hlt_classification.scouting import hcwdl_direct_offline_kd_targets as direct_targets
 from hlt_classification.scouting.hcwdl_direct_offline_kd_graph import (
@@ -38,6 +40,12 @@ def test_direct_graph_is_exact_five_fit_paired_ablation():
     assert artifact["fit_count"] == 5
     assert artifact["shared_teacher_target_bank"]["consumers"] == list(CONSUMERS)
     assert artifact["final_test_accessed"] is False
+
+
+def test_direct_graph_is_stable_across_json_round_trip(tmp_path: Path):
+    path = tmp_path / "graph.json"
+    write_immutable_json(path, graph_artifact())
+    assert load_json(path) == graph_artifact()
 
 
 def test_direct_representation_executions_are_exact_hlt_and_temperature_two():
@@ -199,3 +207,4 @@ def test_campaign_has_exact_dag_and_training_resources(monkeypatch, tmp_path: Pa
     assert all("--gres=gpu:gh200:1" in row["command"] for row in training)
     assert all("--signal=B:USR1@120" in row["command"] for row in training)
     assert not any("final" in row["task_id"].lower() for row in spec["tasks"])
+    assert campaign.validate_campaign(load_json(root / "campaign_spec.json")) == spec["content_hash"]
