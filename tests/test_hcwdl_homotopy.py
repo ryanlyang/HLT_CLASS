@@ -34,6 +34,7 @@ from hlt_classification.scouting.hcwdl_homotopy_graph import (
     GRAPH_SHA256, NODE_REGISTRY, build_recipe_overlay, resolved_loss,
     validate_graph, validate_recipe_overlay,
 )
+from hlt_classification.scouting import hcwdl_homotopy_campaign as homotopy_campaign
 from hlt_classification.scouting.hcwdl_homotopy_runner import (
     _coordinate, estimate_global_peak_bytes,
 )
@@ -107,6 +108,47 @@ def test_pilot_parent_population_is_authenticated_before_final_test_projection()
         "train": 300_000,
         "validation": 100_000,
         "final_test": 0,
+    }
+
+
+def test_primary_coarse_d0c_uses_primary_graph_lineage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "parent"
+    d0_path = root / "training/D0c/training_report.json"
+    teacher_path = root / "training/D25c/training_report.json"
+    captured = {}
+
+    def selected(path: Path, node_id: str) -> dict[str, object]:
+        assert path.resolve() in {d0_path.resolve(), teacher_path.resolve()}
+        return {
+            "content_hash": "b" * 64 if node_id == "D25c" else "c" * 64,
+            "selected_checkpoint_sha256": "d" * 64,
+        }
+
+    def completed(output_dir: Path, **kwargs):
+        captured.update(kwargs)
+        return d0_path, root / "training/D0c/hcwdl_training_report.json"
+
+    monkeypatch.setattr(homotopy_campaign, "_selected_report", selected)
+    monkeypatch.setattr(
+        homotopy_campaign, "validate_completed_hcwdl_node", completed,
+    )
+    report = homotopy_campaign._authenticate_primary_d0c(
+        report_path=d0_path, parent_root=root,
+        parent={"source_manifest_sha256": "e" * 64},
+        split_sha256="f" * 64, assignment_lock_sha256="1" * 64,
+        qualification_lock_sha256="2" * 64, recipe_sha256="3" * 64,
+    )
+    assert report["content_hash"] == "c" * 64
+    assert captured["expected_campaign"] == "HCWDL"
+    assert captured["expected_graph_sha256"] == homotopy_campaign.PRIMARY_GRAPH_SHA256
+    assert captured["expected_parents"] == {
+        "split_manifest_sha256": "f" * 64,
+        "source_snapshot_sha256": "e" * 64,
+        "assignment_lock_sha256": "1" * 64,
+        "qualification_lock_sha256": "2" * 64,
+        "teacher_sole_report_sha256": "b" * 64,
     }
 
 

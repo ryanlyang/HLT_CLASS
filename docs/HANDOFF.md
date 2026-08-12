@@ -21,6 +21,19 @@ in the current Windows Python because NumPy is not installed; the pinned
 Tigris environment must run the focused parent-population and waiver tests
 before constructing the corrected dry run.
 
+That corrected attempt then reached the next independent validator boundary
+and stopped before publication with `dense D0c control has different HCWDL
+parent lineage`. The implementation plan requires the selected coarse cold
+`D0c` from the primary HCWDL graph; dense10/dense5 reports are separate,
+possibly empty contextual imports. The canonical primary report does not and
+should not carry the dense-supplement `parent_campaign_spec_sha256` field.
+The importer now authenticates canonical path, primary graph/node payload,
+unweighted recipe, split and source snapshot, assignment and qualification
+locks, sole D25c teacher report, wrapper/engine equality, and checkpoint
+bytes through `validate_completed_hcwdl_node()`. A focused regression locks
+that schema. The second failed dry run again published no campaign and
+submitted no 300k jobs.
+
 ## HCWDL-UJ v1 operational-evidence carry-forward (2026-08-12)
 
 The human rejected repeating all graph-thinned v2 smoke fits after the

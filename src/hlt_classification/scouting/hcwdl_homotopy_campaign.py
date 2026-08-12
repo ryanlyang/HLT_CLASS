@@ -26,9 +26,17 @@ from .hcwdl_homotopy_graph import (
     validate_recipe_overlay,
 )
 from .hcwdl_homotopy_waiver import validate_operational_waiver
+from .hcwdl_ladder import (
+    GRAPH_SHA256 as PRIMARY_GRAPH_SHA256,
+    NODE_REGISTRY as PRIMARY_NODE_REGISTRY,
+)
 from .hcwdl_locks import validate_lock
 from .hcwdl_recipe import CLASS_WEIGHT_POLICY, RECIPE_CONTRACT, validate_recipe
-from .hcwdl_training import CHECKPOINT_SELECTION_CONTRACT
+from .hcwdl_training import (
+    CHECKPOINT_SELECTION_CONTRACT,
+    TRAINING_REPORT_CONTRACT as PRIMARY_TRAINING_REPORT_CONTRACT,
+    validate_completed_hcwdl_node,
+)
 from .highcov_cache import DenseAssignmentStore
 from .selective_assignment import ROW_SELECTION_CONTRACT, ROW_SELECTION_VERSION
 from .splits import role_records
@@ -270,6 +278,45 @@ def _parent_role_counts(mode: str) -> dict[str, int]:
     return {role: int(count) for role, count in ROLE_COUNTS[mode].items()}
 
 
+def _authenticate_primary_d0c(
+    *, report_path: Path, parent_root: Path, parent: Mapping[str, Any],
+    split_sha256: str, assignment_lock_sha256: str,
+    qualification_lock_sha256: str, recipe_sha256: str,
+) -> dict[str, Any]:
+    """Authenticate the plan-authorized coarse D0c from the primary graph."""
+
+    canonical = (parent_root / "training/D0c/training_report.json").resolve()
+    if report_path.resolve() != canonical:
+        raise ValueError("coarse D0c is not the canonical primary HCWDL report")
+    node = PRIMARY_NODE_REGISTRY["D0c"]
+    teacher_id = node.teachers[0].node_id
+    teacher_path = parent_root / f"training/{teacher_id}/training_report.json"
+    teacher = _selected_report(teacher_path, teacher_id)
+    expected_parents = {
+        "split_manifest_sha256": split_sha256,
+        "source_snapshot_sha256": require_sha256(
+            parent.get("source_manifest_sha256"),
+            name="primary HCWDL source-manifest SHA-256",
+        ),
+        "assignment_lock_sha256": assignment_lock_sha256,
+        "qualification_lock_sha256": qualification_lock_sha256,
+        "teacher_sole_report_sha256": require_sha256(
+            teacher.get("content_hash"), name="primary D0c teacher report SHA-256",
+        ),
+    }
+    completed = validate_completed_hcwdl_node(
+        parent_root / "training/D0c", node_id="D0c",
+        expected_campaign="HCWDL", expected_graph_sha256=PRIMARY_GRAPH_SHA256,
+        expected_node_payload=node.payload(),
+        expected_recipe_sha256=recipe_sha256,
+        expected_parents=expected_parents,
+        report_contract=PRIMARY_TRAINING_REPORT_CONTRACT,
+    )
+    if completed is None or completed[0].resolve() != canonical:
+        raise ValueError("canonical primary HCWDL D0c is incomplete")
+    return _selected_report(canonical, "D0c")
+
+
 def authenticate_parent(
     parent_spec_path: str | Path, *, dense_d0_report: str | Path | None,
 ) -> dict[str, Any]:
@@ -339,18 +386,15 @@ def authenticate_parent(
         }
     if mode == "pilot":
         if dense_d0_report is None:
-            raise ValueError("300k HCWDL-UJ requires an exact-lineage dense D0c control")
-        d0_path = Path(dense_d0_report).resolve(); d0 = _selected_report(d0_path, "D0c")
-        d0_parents = d0.get("parents", {})
-        d0_scientific = d0.get("scientific_config", {})
-        if (
-            d0_parents.get("split_manifest_sha256") != split_hash
-            or d0_parents.get("assignment_lock_sha256") != assignment_lock_hash
-            or d0_parents.get("qualification_lock_sha256") != shell_lock_hash
-            or d0_parents.get("parent_campaign_spec_sha256") != parent["content_hash"]
-            or d0_scientific.get("recipe_sha256") != recipe_hash
-        ):
-            raise ValueError("dense D0c control has different HCWDL parent lineage")
+            raise ValueError("300k HCWDL-UJ requires an exact-lineage coarse D0c control")
+        d0_path = Path(dense_d0_report).resolve()
+        d0 = _authenticate_primary_d0c(
+            report_path=d0_path, parent_root=root, parent=parent,
+            split_sha256=split_hash,
+            assignment_lock_sha256=assignment_lock_hash,
+            qualification_lock_sha256=shell_lock_hash,
+            recipe_sha256=recipe_hash,
+        )
         imported["D0c"] = {
             "report_path": str(d0_path), "report_sha256": d0["content_hash"],
             "checkpoint_sha256": d0["selected_checkpoint_sha256"],
