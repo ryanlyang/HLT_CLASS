@@ -7,7 +7,9 @@ and [reusable contract](contracts/HCWDL_STRUCTURAL_FEATURE_HOMOTOPY.md). It
 does not authorize final-test access. It also does not reinterpret or mutate
 the parent HCWDL campaign, dense ladders, assignments, or checkpoints.
 
-The first remote execution must be a genuine 4,096-train/4,096-validation
+The completed 80-fit v1 smoke is historical evidence only. The reduced v2
+graph changes its coordinate, teacher, and task contracts, so its first remote
+execution must be a genuine 4,096-train/4,096-validation
 Tigris smoke using the production workers. A 300k specification is invalid
 until that smoke completes and its measured resource profile is bound.
 
@@ -106,7 +108,7 @@ If either parity path fails, do not create or submit the smoke.
 
 ## 3. Optional bounded local behavior check
 
-This exercises all 80 registered fits with synthetic tensors and a two-update
+This exercises all 45 registered v2 fits with synthetic tensors and a two-update
 schedule. It is useful after an environment change but does not replace the
 real Tigris smoke.
 
@@ -122,14 +124,15 @@ Use a disposable planning root. Campaign roots are immutable, so the later
 authorized campaign receives a different root.
 
 ```bash
-export UJ_PLAN_ROOT="/home/ryreu/atlas/HLT_Classification/checkpoints/hcwdl_uj_smoke_${UJ_SHORT}_plan_r1"
+export UJ_PLAN_ROOT="/home/ryreu/atlas/HLT_Classification/checkpoints/hcwdl_uj_v2_smoke_${UJ_SHORT}_plan_r1"
 test ! -e "${UJ_PLAN_ROOT}"
 
 python -s "${UJ_WORKTREE}/scripts/create_hcwdl_homotopy_pilot.py" \
   --parent-campaign-spec "${PARENT_SMOKE_SPEC}" \
   --campaign-root "${UJ_PLAN_ROOT}" \
   --project-dir "${UJ_WORKTREE}" \
-  --source-commit "${UJ_COMMIT}"
+  --source-commit "${UJ_COMMIT}" \
+  --weaver-parity "${UJ_WEAVER_PARITY}"
 
 python -s "${UJ_WORKTREE}/scripts/submit_hcwdl_homotopy_pilot.py" \
   --campaign-spec "${UJ_PLAN_ROOT}/campaign_spec.json" \
@@ -145,11 +148,11 @@ ledger = json.loads((root / 'dry_run_submission_ledger.json').read_text())
 assert spec['mode'] == 'smoke'
 assert spec['role_counts'] == {'train': 4096, 'validation': 4096, 'final_test': 0}
 assert spec['final_test_accessed'] is False
-assert len(spec['tasks']) == 101
-assert len(ledger['jobs']) == 101 and ledger['dry_run'] is True
-assert sum(row['kind'] == 'train_node' for row in spec['tasks']) == 80
+assert len(spec['tasks']) == 66
+assert len(ledger['jobs']) == 66 and ledger['dry_run'] is True
+assert sum(row['kind'] == 'train_node' for row in spec['tasks']) == 45
 print('Dry-run smoke:', spec['content_hash'])
-print('Tasks:', len(spec['tasks']), 'fits:', 80)
+print('Tasks:', len(spec['tasks']), 'fits:', 45)
 PY
 ```
 
@@ -160,12 +163,12 @@ registered, and no final-test task may appear.
 ## 5. Authorized real Tigris smoke
 
 Do not run this block until the user has explicitly authorized the real smoke.
-It creates the exact live specification and submits all 101 tasks once. The
+It creates the exact live specification and submits all 66 tasks once. The
 submitter records an immutable journal and a partial exact-ID ledger even if
 submission is interrupted.
 
 ```bash
-export UJ_SMOKE_ROOT="/home/ryreu/atlas/HLT_Classification/checkpoints/hcwdl_uj_smoke_${UJ_SHORT}_r1"
+export UJ_SMOKE_ROOT="/home/ryreu/atlas/HLT_Classification/checkpoints/hcwdl_uj_v2_smoke_${UJ_SHORT}_r1"
 test -f "${UJ_WEAVER_PARITY}"
 test ! -e "${UJ_SMOKE_ROOT}"
 
@@ -174,6 +177,7 @@ python -s "${UJ_WORKTREE}/scripts/create_hcwdl_homotopy_pilot.py" \
   --campaign-root "${UJ_SMOKE_ROOT}" \
   --project-dir "${UJ_WORKTREE}" \
   --source-commit "${UJ_COMMIT}" \
+  --weaver-parity "${UJ_WEAVER_PARITY}" \
   --authorize-live-submission \
   --authorization-phrase "AUTHORIZE HCWDL UJ VALIDATION CAMPAIGN EXACT SPEC"
 
@@ -221,17 +225,35 @@ python -s "${UJ_WORKTREE}/scripts/cancel_hcwdl_homotopy.py" \
 
 ## 7. Capture measured resources
 
-Only a fully completed, artifact-valid live smoke is admissible. Create a JSON
-object with exactly the six resource classes printed in the smoke spec and
-requests that retain at least 25% headroom over measured wall time and memory.
-Do not guess the 300k requests before reviewing the smoke measurements.
+Only a fully completed, artifact-valid v2 live smoke is admissible. Create a
+JSON object with exactly the six resource classes printed in the smoke spec.
+The 300k training request is fixed at 8 CPUs, 96 GiB, six hours, and one GH200;
+all rows must still retain at least 25% measured smoke headroom or profile
+publication fails closed.
+
+```bash
+cat > "${UJ_SMOKE_ROOT}/reviewed_pilot_requests.json" <<'JSON'
+{
+  "requests": {
+    "cpu_calibration": {"cpus": 8, "memory": "64G", "walltime": "02:00:00", "gpu": null},
+    "cpu_coupling": {"cpus": 8, "memory": "96G", "walltime": "04:00:00", "gpu": null},
+    "cpu_finalize": {"cpus": 4, "memory": "32G", "walltime": "01:00:00", "gpu": null},
+    "gpu_targets": {"cpus": 8, "memory": "96G", "walltime": "06:00:00", "gpu": "gpu:gh200:1"},
+    "gpu_training": {"cpus": 8, "memory": "96G", "walltime": "06:00:00", "gpu": "gpu:gh200:1"},
+    "cpu_report": {"cpus": 4, "memory": "32G", "walltime": "01:00:00", "gpu": null}
+  }
+}
+JSON
+```
 
 ```bash
 python -s "${UJ_WORKTREE}/scripts/build_hcwdl_homotopy_resource_profile.py" \
   --smoke-campaign-spec "${UJ_SMOKE_ROOT}/campaign_spec.json" \
   --submission-ledger "${UJ_SMOKE_ROOT}/submission_ledger.json" \
   --monitor-report "${UJ_SMOKE_ROOT}/monitor/latest.json" \
+  --resume-evidence "${UJ_SMOKE_ROOT}/runtime/resume_evidence.json" \
   --requests-json "${UJ_SMOKE_ROOT}/reviewed_pilot_requests.json" \
+  --storage-budget-gib 20 \
   --query-slurm \
   --measurement-output "${UJ_SMOKE_ROOT}/runtime/smoke_resource_measurement.json" \
   --output "${UJ_SMOKE_ROOT}/runtime/pilot_resource_profile.json"
@@ -250,7 +272,7 @@ below are explicit operator inputs; campaign creation reauthenticates them.
 export PARENT_300K_ROOT=/home/ryreu/atlas/HLT_Classification/checkpoints/hcwdl_pilot_b3154d67_unweighted_auto_r1
 export DENSE10_ROOT=/home/ryreu/atlas/HLT_Classification/checkpoints/hcwdl_densecold300k_4be8576d_fixed_r1
 export DENSE5_ROOT=/home/ryreu/atlas/HLT_Classification/checkpoints/hcwdl_dense5cold300k_4be8576d_r1
-export UJ_PILOT_PLAN_ROOT="/home/ryreu/atlas/HLT_Classification/checkpoints/hcwdl_uj_pilot_${UJ_SHORT}_plan_r1"
+export UJ_PILOT_PLAN_ROOT="/home/ryreu/atlas/HLT_Classification/checkpoints/hcwdl_uj_v2_pilot_${UJ_SHORT}_plan_r1"
 
 test ! -e "${UJ_PILOT_PLAN_ROOT}"
 python -s "${UJ_WORKTREE}/scripts/create_hcwdl_homotopy_pilot.py" \
@@ -261,7 +283,8 @@ python -s "${UJ_WORKTREE}/scripts/create_hcwdl_homotopy_pilot.py" \
   --resource-profile "${UJ_SMOKE_ROOT}/runtime/pilot_resource_profile.json" \
   --campaign-root "${UJ_PILOT_PLAN_ROOT}" \
   --project-dir "${UJ_WORKTREE}" \
-  --source-commit "${UJ_COMMIT}"
+  --source-commit "${UJ_COMMIT}" \
+  --weaver-parity "${UJ_WEAVER_PARITY}"
 
 python -s "${UJ_WORKTREE}/scripts/submit_hcwdl_homotopy_pilot.py" \
   --campaign-spec "${UJ_PILOT_PLAN_ROOT}/campaign_spec.json" \

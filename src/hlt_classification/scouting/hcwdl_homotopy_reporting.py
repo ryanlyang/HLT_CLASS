@@ -16,7 +16,9 @@ from .hcwdl_homotopy_contracts import (
     AGGREGATE_CONTRACT, CAMPAIGN_COMPLETION_CONTRACT, NODE_RUNTIME_CONTRACT,
     TRAINING_REPORT_CONTRACT,
 )
-from .hcwdl_homotopy_graph import DOMAINS, GRAPH_SHA256, NODE_REGISTRY
+from .hcwdl_homotopy_graph import (
+    DOMAINS, FIT_COUNT, GRAPH_SHA256, HOMOTOPY_TRANSITIONS, NODE_REGISTRY,
+)
 from .hcwdl_homotopy_runner import node_output_dir
 from .schema import CLASS_NAMES
 
@@ -88,7 +90,7 @@ def _fraction(value: float, lower: float, upper: float, *, larger: bool = True) 
 
 
 def build_aggregate(spec: Mapping[str, Any]) -> dict[str, Any]:
-    """Build the frozen 80-fit comparison table; finite poor science completes."""
+    """Build the frozen v2 comparison table; finite poor science completes."""
 
     imported: dict[str, dict[str, Any]] = {}
     for node_id, record in spec["imported_controls"].items():
@@ -187,15 +189,29 @@ def build_aggregate(spec: Mapping[str, Any]) -> dict[str, Any]:
     frozen_pairs = (
         ("P0CE", "TOFF"), ("P0KD", "P0CE"),
         ("U100", "D100direct"), ("U100", "S100_01"),
-        ("U100", "S100_10"), ("D100direct", "S100_01"),
-        ("D0F", "D0c"), ("D0F", "D0direct"), ("D0F", "S0_20"),
-        ("J100", "D0direct"), ("J100", "S0_20"),
+        ("U100", "S100_05"), ("D100direct", "S100_01"),
+        ("D0F", "D0c"), ("D0F", "D0direct"), ("D0F", "S0_10"),
+        ("J100", "D0direct"), ("J100", "S0_10"),
         ("D0direct", "S0_01"), ("D0F", "J100"),
-        ("M1F", "M1J"), ("M1F", "S0_21"), ("M1J", "S0_21"),
+        ("M1F", "M1J"), ("M1F", "S0_11"), ("M1J", "S0_11"),
         ("M1F", "M0self"), ("M1J", "M0self"),
-        ("S0_21", "M0self"),
-        ("U010P0KD", "U010"),
+        ("S0_11", "M0self"),
+        ("U020P0KD", "U020"),
     )
+
+    def input_signature(node_id: str) -> tuple[object, ...]:
+        if node_id == "TOFF":
+            return ("native_offline_adapter",)
+        if node_id in {"M0", "D0c"}:
+            return ("unified", 1.0, 1.0)
+        if node_id == "D100":
+            return ("unified", 1.0, 0.0)
+        node = NODE_REGISTRY[node_id]
+        domain = DOMAINS[node.student_domain]
+        if domain["input"] == "toff":
+            return ("native_offline_adapter",)
+        return ("unified", domain["s"], domain["f"])
+
     for left, right in frozen_pairs:
         if left not in by_id or right not in by_id:
             comparisons.append({
@@ -209,17 +225,17 @@ def build_aggregate(spec: Mapping[str, Any]) -> dict[str, Any]:
             "left": left, "right": right, "available": True,
             "delta_macro_ovr_auc": float(by_id[left]["metrics"]["macro_ovr_auc"]) - float(by_id[right]["metrics"]["macro_ovr_auc"]),
             "delta_cross_entropy": float(by_id[left]["metrics"]["cross_entropy"]) - float(by_id[right]["metrics"]["cross_entropy"]),
-            "identical_input": left in {"D0F", "J100", "M1F", "M1J"} and right in {"D0F", "J100", "D0direct", "S0_20", "M1F", "M1J", "S0_21"},
+            "identical_input": input_signature(left) == input_signature(right),
         })
     trajectory_comparisons = []
-    for transition in range(1, 21):
-        if transition <= 10:
-            factorized = f"U{transition * 10:03d}"
+    for transition in range(1, HOMOTOPY_TRANSITIONS + 1):
+        if transition <= 5:
+            factorized = f"U{transition * 20:03d}"
             stationary = f"S100_{transition:02d}"
         else:
-            factorized = f"D{100 - (transition - 10) * 10}F"
+            factorized = f"D{100 - (transition - 5) * 20}F"
             stationary = f"S0_{transition:02d}"
-        joint = f"J{transition * 5:03d}"
+        joint = f"J{transition * 10:03d}"
         for left, right, comparison in (
             (factorized, joint, "factorized_minus_joint"),
             (factorized, stationary, "factorized_minus_stationary"),
@@ -232,8 +248,8 @@ def build_aggregate(spec: Mapping[str, Any]) -> dict[str, Any]:
                     float(by_id[left]["metrics"]["macro_ovr_auc"])
                     - float(by_id[right]["metrics"]["macro_ovr_auc"])
                 ),
-                "same_input": transition == 20,
-                "trajectory_descriptive_only": transition != 20,
+                "same_input": transition == HOMOTOPY_TRANSITIONS,
+                "trajectory_descriptive_only": transition != HOMOTOPY_TRANSITIONS,
             })
     audit = load_json(Path(spec["campaign_root"]) / "coupling/full_role_audit.json")
     displacement = audit.get("sampled_realized_view_displacement", {})
@@ -246,7 +262,7 @@ def build_aggregate(spec: Mapping[str, Any]) -> dict[str, Any]:
         if (
             node is not None and node.track in {"factorized", "joint"}
             and node.transition_index is not None
-            and node.transition_index <= 20
+            and node.transition_index <= HOMOTOPY_TRANSITIONS
         ):
             row["sampled_realized_view_displacement"] = {
                 role: displacement.get(role, {}).get(node.track, {}).get(node_id)
@@ -271,7 +287,7 @@ def build_aggregate(spec: Mapping[str, Any]) -> dict[str, Any]:
     return with_content_hash({
         "contract": AGGREGATE_CONTRACT, "schema_version": 1,
         "campaign_spec_sha256": spec["content_hash"],
-        "graph_sha256": GRAPH_SHA256, "fit_count": 80,
+        "graph_sha256": GRAPH_SHA256, "fit_count": FIT_COUNT,
         "primary_metric": "validation_macro_ovr_auc",
         "rows": rows, "ordered_comparisons": comparisons,
         "trajectory_comparisons": trajectory_comparisons,
@@ -316,7 +332,7 @@ def build_campaign_completion(
                 resource_measurement_sha256, name="resource measurement",
             )
         ),
-        "fit_count": 80,
+        "fit_count": FIT_COUNT,
         "mode": spec["mode"],
         "validation_only": True,
         "screening_seed_only": True,

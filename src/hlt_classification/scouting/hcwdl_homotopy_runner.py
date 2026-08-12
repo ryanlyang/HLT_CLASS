@@ -22,9 +22,9 @@ from .dataset import iterate_model_batches
 from .engine import precompute_teacher_targets, validate_pmard_training_report
 from .hcwdl_homotopy import HomotopyCoordinate
 from .hcwdl_homotopy_contracts import (
-    CACHE_MINIATURE_CONTRACT, GRAPH_RECIPE_LOCK_CONTRACT,
+    CACHE_MINIATURE_CONTRACT, GRAPH_RECIPE_LOCK_CONTRACT, NODE_SPEC_CONTRACT,
     NODE_RUNTIME_CONTRACT, TRAINING_REPORT_CONTRACT,
-    validate_coordinate, validate_coupling_config,
+    coordinate_payload, validate_coordinate, validate_coupling_config,
 )
 from .hcwdl_homotopy_graph import (
     DOMAINS, GRAPH_LABEL, GRAPH_SHA256, NODE_REGISTRY, resolved_loss,
@@ -73,8 +73,22 @@ def _coordinate(domain: str) -> HomotopyCoordinate:
     s, f = row.get("s"), row.get("f")
     if s is None or f is None:
         raise ValueError(f"domain {domain!r} has no homotopy coordinate")
-    # Every registered value is an exact multiple of 1/20.
-    return HomotopyCoordinate(round(float(s) * 20), 20, round(float(f) * 20), 20)
+    for registered in coordinate_payload()["rows"]:
+        if str(registered["node"]).lower() == domain:
+            structural = registered["structural"]
+            feature = registered["feature"]
+            return HomotopyCoordinate(
+                int(structural["numerator"]), int(structural["denominator"]),
+                int(feature["numerator"]), int(feature["denominator"]),
+            )
+    endpoints = {
+        "p0": HomotopyCoordinate(0, 1, 0, 1),
+        "d100": HomotopyCoordinate(1, 1, 0, 1),
+        "hlt": HomotopyCoordinate(1, 1, 1, 1),
+    }
+    if domain not in endpoints:
+        raise ValueError(f"domain {domain!r} is absent from the coordinate contract")
+    return endpoints[domain]
 
 
 def _memory_limit_bytes(configured_gib: float) -> int:
@@ -99,7 +113,7 @@ def estimate_global_peak_bytes(
     expected_keys = {
         f"{role}:{view}"
         for role in ("train", "validation")
-        for view in ("p0", "u010", "j005", "u100", "j100")
+        for view in ("p0", "u020", "j010", "u100", "j100")
     }
     if set(sample_rows) != expected_keys or set(sample_bytes) != expected_keys:
         raise ValueError("HCWDL-UJ cache miniature view registry differs")
@@ -501,7 +515,7 @@ def run_homotopy_node(
             "seed_alias": alias, "coordinate": _coordinate(student_domain).payload()
                 if student_domain not in {"hlt", "toff"} else None,
             "durable_repaired_dataset": False,
-        }, seed_node_id=alias, node_contract="HCWDL_STRUCTURAL_FEATURE_NODE_SPEC/v1",
+        }, seed_node_id=alias, node_contract=NODE_SPEC_CONTRACT,
         explicit_loss=loss, recipe_overlay_sha256=overlay_hash,
     )
     engine_report = load_json(output / "training_report.json")

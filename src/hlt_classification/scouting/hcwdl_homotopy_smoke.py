@@ -1,4 +1,4 @@
-"""Bounded synthetic end-to-end behavioral smoke for the 80-fit U/J graph."""
+"""Bounded synthetic end-to-end behavioral smoke for the 45-fit U/J v2 graph."""
 
 from __future__ import annotations
 

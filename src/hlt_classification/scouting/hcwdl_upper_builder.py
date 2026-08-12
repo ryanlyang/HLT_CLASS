@@ -775,18 +775,18 @@ def audit_full_roles(
                     HomotopyCoordinate(1, 1, 1, 1),
                 )]
                 factorized_coordinates = [
-                    (f"U{index * 10:03d}", HomotopyCoordinate(index, 10, 0, 1))
-                    for index in range(1, 11)
+                    (f"U{index * 20:03d}", HomotopyCoordinate(index, 5, 0, 1))
+                    for index in range(1, 6)
                 ] + [
                     (
-                        f"D{100 - index * 10}F",
-                        HomotopyCoordinate(1, 1, index, 10),
+                        f"D{100 - index * 20}F",
+                        HomotopyCoordinate(1, 1, index, 5),
                     )
-                    for index in range(1, 11)
+                    for index in range(1, 6)
                 ]
                 joint_coordinates = [
-                    (f"J{index * 5:03d}", HomotopyCoordinate(index, 20, index, 20))
-                    for index in range(1, 21)
+                    (f"J{index * 10:03d}", HomotopyCoordinate(index, 10, index, 10))
+                    for index in range(1, 11)
                 ]
                 for track, coordinates in (
                     ("factorized", factorized_coordinates),

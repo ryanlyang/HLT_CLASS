@@ -22,7 +22,7 @@ from .splits import role_records
 
 
 TOFF_TARGET_CONSUMERS = (
-    "P0KD", "U010", "J005", "D100direct", "D0direct", "S100_01", "S0_01",
+    "P0KD", "U020", "J010", "D100direct", "D0direct", "S100_01", "S0_01",
 )
 
 

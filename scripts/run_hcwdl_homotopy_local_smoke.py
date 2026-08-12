@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the bounded synthetic 80-fit HCWDL-UJ behavioral smoke."""
+"""Run the bounded synthetic 45-fit HCWDL-UJ v2 behavioral smoke."""
 
 from __future__ import annotations
 

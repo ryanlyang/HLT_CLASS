@@ -19,13 +19,14 @@ fail closed; they do not redefine it.
 
 ## Immutable artifact families
 
-`hcwdl_homotopy_contracts.py` freezes these v1 families:
+`hcwdl_homotopy_contracts.py` preserves the v1 coupling/runtime families and
+freezes new v2 identities for every artifact whose graph meaning changed:
 
 - residual-shell coupling config, calibrations, base shards/manifests, switch
   sidecars, role manifests, full-role audit, and coupling lock;
 - shared FP32 TOFF target shards, manifest, and lock;
-- coordinate table, 80-node graph, recipe overlay, endpoint equality lock,
-  graph/recipe lock, campaign spec, and command plan;
+- v2 coordinate table, 45-node graph, recipe overlay, graph/recipe lock,
+  campaign spec, and command plan, with the unchanged endpoint-equality claim;
 - node wrapper and runtime reports, validation aggregate, resource profile,
   and validation-only campaign completion;
 - distinct bounded-cache, TOFF-target, completed-smoke resource, and exact
@@ -49,17 +50,17 @@ HCWDL_RESIDUAL_SHELL_COUPLING_LOCK/v1
 HCWDL_TOFF_TARGET_SHARD/v1
 HCWDL_TOFF_TARGET_MANIFEST/v1
 HCWDL_TOFF_TARGET_LOCK/v1
-HCWDL_STRUCTURAL_FEATURE_COORDINATE/v1
-HCWDL_STRUCTURAL_FEATURE_NODE_SPEC/v1
-HCWDL_STRUCTURAL_FEATURE_GRAPH/v1
-HCWDL_STRUCTURAL_FEATURE_RECIPE/v1
+HCWDL_STRUCTURAL_FEATURE_COORDINATE/v2
+HCWDL_STRUCTURAL_FEATURE_NODE_SPEC/v2
+HCWDL_STRUCTURAL_FEATURE_GRAPH/v2
+HCWDL_STRUCTURAL_FEATURE_RECIPE/v2
 HCWDL_STRUCTURAL_FEATURE_ENDPOINT_EQUALITY_LOCK/v1
-HCWDL_STRUCTURAL_FEATURE_GRAPH_RECIPE_LOCK/v1
-HCWDL_STRUCTURAL_FEATURE_PILOT_SPEC/v1
-HCWDL_STRUCTURAL_FEATURE_COMMAND_PLAN/v1
+HCWDL_STRUCTURAL_FEATURE_GRAPH_RECIPE_LOCK/v2
+HCWDL_STRUCTURAL_FEATURE_PILOT_SPEC/v2
+HCWDL_STRUCTURAL_FEATURE_COMMAND_PLAN/v2
 HCWDL_STRUCTURAL_FEATURE_TRAINING_REPORT/v1
 HCWDL_STRUCTURAL_FEATURE_NODE_RUNTIME/v1
-HCWDL_STRUCTURAL_FEATURE_AGGREGATE/v1
+HCWDL_STRUCTURAL_FEATURE_AGGREGATE/v2
 HCWDL_STRUCTURAL_FEATURE_RESOURCE_PROFILE/v1
 HCWDL_STRUCTURAL_FEATURE_CACHE_RESOURCE_MEASUREMENT/v1
 HCWDL_STRUCTURAL_FEATURE_CACHE_MINIATURE/v1
@@ -67,13 +68,13 @@ HCWDL_STRUCTURAL_FEATURE_TARGET_RESOURCE_MEASUREMENT/v1
 HCWDL_STRUCTURAL_FEATURE_SMOKE_RESOURCE_MEASUREMENT/v1
 HCWDL_STRUCTURAL_FEATURE_RESUME_EVIDENCE/v1
 HCWDL_STRUCTURAL_FEATURE_WEAVER_PARITY/v1
-HCWDL_STRUCTURAL_FEATURE_CAMPAIGN_COMPLETE/v1
+HCWDL_STRUCTURAL_FEATURE_CAMPAIGN_COMPLETE/v2
 HCWDL_STRUCTURAL_FEATURE_SMOKE_SELECTION/v1
 HCWDL_STRUCTURAL_FEATURE_SELECTION/v1
-HCWDL_STRUCTURAL_FEATURE_RECOVERY_SPEC/v1
-HCWDL_STRUCTURAL_FEATURE_RECOVERY_COMMAND_PLAN/v1
-HCWDL_STRUCTURAL_FEATURE_RESOURCE_RECOVERY_SPEC/v1
-HCWDL_STRUCTURAL_FEATURE_RESOURCE_RECOVERY_COMMAND_PLAN/v1
+HCWDL_STRUCTURAL_FEATURE_RECOVERY_SPEC/v2
+HCWDL_STRUCTURAL_FEATURE_RECOVERY_COMMAND_PLAN/v2
+HCWDL_STRUCTURAL_FEATURE_RESOURCE_RECOVERY_SPEC/v2
+HCWDL_STRUCTURAL_FEATURE_RESOURCE_RECOVERY_COMMAND_PLAN/v2
 ```
 
 Every reusable JSON artifact carries a contract, schema version, canonical
@@ -91,7 +92,7 @@ cache miniature, projection implementation, and Shell Exact semantics.
 `V(1,0)` is byte-exact D100; `V(1,1)` and factorized D0 are byte-exact HLT.
 
 The graph/recipe lock binds both endpoint and TOFF-target locks, the exact
-80-fit graph, parent unweighted recipe, per-node overlay, coordinate table,
+45-fit v2 graph, parent unweighted recipe, per-node overlay, coordinate table,
 command plan, source commit, and installed-Weaver CUDA parity for both the
 unified and native-offline factories. Training cannot start without it.
 
@@ -103,8 +104,10 @@ its explicit unweighted CE/KD loss from the graph overlay. Smoke uses the same
 production worker for two bounded updates. Each fit publishes the generic
 PMARD report, an HCWDL-UJ lineage wrapper, selected/final checkpoints, and an
 immutable runtime report with measured GPU-hours and peak memory.
+The initial pilot `gpu_training` request is exactly 8 CPUs, 96 GiB, six hours,
+and one GH200; campaign creation rejects a profile with a different row.
 
-The aggregate contains all 80 fits, imported and frozen contextual controls,
+The aggregate contains all 45 fits, imported and frozen contextual controls,
 transition diagnostics, recovery, teacher retention, specified comparisons,
 and total measured GPU-hours. Poor finite scientific performance completes.
 

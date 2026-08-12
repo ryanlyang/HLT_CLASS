@@ -18,8 +18,12 @@ from hlt_classification.data.cache_contracts import (
 )
 from hlt_classification.models import scouting_particle_transformer as scouting_part
 from hlt_classification.scouting.hcwdl_homotopy_contracts import (
-    EDIT_INSERTION, EDIT_REMOVAL, EDIT_SUBSTITUTION, coordinate_payload,
-    validate_coordinate,
+    AGGREGATE_CONTRACT, CAMPAIGN_COMPLETION_CONTRACT, COMMAND_PLAN_CONTRACT,
+    COORDINATE_CONTRACT, EDIT_INSERTION, EDIT_REMOVAL, EDIT_SUBSTITUTION,
+    GRAPH_CONTRACT, GRAPH_RECIPE_LOCK_CONTRACT, NODE_SPEC_CONTRACT,
+    PILOT_SPEC_CONTRACT, RECIPE_CONTRACT, RECOVERY_COMMAND_PLAN_CONTRACT,
+    RECOVERY_SPEC_CONTRACT, RESOURCE_RECOVERY_COMMAND_PLAN_CONTRACT,
+    RESOURCE_RECOVERY_SPEC_CONTRACT, coordinate_payload, validate_coordinate,
 )
 from hlt_classification.scouting.hcwdl_homotopy import (
     HomotopyCoordinate, assert_particle_inputs_equal, build_homotopy_inputs,
@@ -29,9 +33,12 @@ from hlt_classification.scouting.hcwdl_homotopy_graph import (
     GRAPH_SHA256, NODE_REGISTRY, build_recipe_overlay, resolved_loss,
     validate_graph, validate_recipe_overlay,
 )
-from hlt_classification.scouting.hcwdl_homotopy_runner import estimate_global_peak_bytes
+from hlt_classification.scouting.hcwdl_homotopy_runner import (
+    _coordinate, estimate_global_peak_bytes,
+)
 from hlt_classification.scouting.hcwdl_homotopy_campaign import (
-    SEMANTIC_SOURCE_FILES, SMOKE_RESOURCES, build_resource_profile,
+    PILOT_GPU_TRAINING_REQUEST, SEMANTIC_SOURCE_FILES, SMOKE_RESOURCES,
+    _validate_pilot_gpu_training_request, build_resource_profile,
     semantic_source_hashes, validate_resource_profile,
     validate_worker_semantics,
 )
@@ -55,6 +62,7 @@ from hlt_classification.scouting.hcwdl_homotopy_recovery import (
 from hlt_classification.scouting.hcwdl_recovery import (
     build_monitor_report, build_submission_ledger,
 )
+from hlt_classification.scouting.hcwdl_toff_targets import TOFF_TARGET_CONSUMERS
 from hlt_classification.scouting.inputs import build_hlt_inputs
 from hlt_classification.scouting.repair import (
     HIGHCOV_SHELL_EXACT_FAMILY, build_alpha_repaired_inputs,
@@ -645,26 +653,84 @@ def test_exact_hlt_endpoints_preserve_untruncated_raw_length_above_token_cap() -
 
 
 def test_graph_recipe_and_coordinates_are_frozen() -> None:
+    assert PILOT_GPU_TRAINING_REQUEST == {
+        "cpus": 8, "memory": "96G", "walltime": "06:00:00",
+        "gpu": "gpu:gh200:1",
+    }
+    _validate_pilot_gpu_training_request({
+        "gpu_training": dict(PILOT_GPU_TRAINING_REQUEST),
+    })
+    with pytest.raises(ValueError, match="96G"):
+        _validate_pilot_gpu_training_request({
+            "gpu_training": {
+                **PILOT_GPU_TRAINING_REQUEST, "memory": "128G",
+            },
+        })
     assert validate_graph() == GRAPH_SHA256
-    assert len(NODE_REGISTRY) == 80
+    assert len(NODE_REGISTRY) == 45
+    assert TOFF_TARGET_CONSUMERS == (
+        "P0KD", "U020", "J010", "D100direct", "D0direct",
+        "S100_01", "S0_01",
+    )
     # Contract payloads must survive immutable JSON publication without a
     # tuple/list type drift.  The real Tigris smoke caught this at the first
     # dry-run validation boundary.
     for node in NODE_REGISTRY.values():
         payload = node.payload()
         assert json.loads(json.dumps(payload)) == payload
-    assert sum(node.track == "factorized" for node in NODE_REGISTRY.values()) == 21
-    assert sum(node.track == "joint" for node in NODE_REGISTRY.values()) == 21
-    assert sum(node.track == "stationary_d100" for node in NODE_REGISTRY.values()) == 10
-    assert sum(node.track == "stationary_hlt" for node in NODE_REGISTRY.values()) == 21
-    assert NODE_REGISTRY["U010"].teachers[0].node_id == "TOFF"
-    assert NODE_REGISTRY["D90F"].teachers[0].node_id == "U100"
+    assert sum(node.track == "factorized" for node in NODE_REGISTRY.values()) == 11
+    assert sum(node.track == "joint" for node in NODE_REGISTRY.values()) == 11
+    assert sum(node.track == "stationary_d100" for node in NODE_REGISTRY.values()) == 5
+    assert sum(node.track == "stationary_hlt" for node in NODE_REGISTRY.values()) == 11
+    assert NODE_REGISTRY["U020"].teachers[0].node_id == "TOFF"
+    assert NODE_REGISTRY["D80F"].teachers[0].node_id == "U100"
     assert NODE_REGISTRY["M1F"].teachers[0].node_id == "D0F"
-    assert (resolved_loss("U010").ce, resolved_loss("U010").privileged_kd) == (.25, .75)
+    assert (resolved_loss("U020").ce, resolved_loss("U020").privileged_kd) == (.25, .75)
     assert (resolved_loss("M1F").ce, resolved_loss("M1F").hlt_kd) == (.25, .75)
     assert resolved_loss("M1F").temperature == 1
     coordinate = coordinate_payload()
     assert validate_coordinate(coordinate) == coordinate["content_hash"]
+    assert coordinate["contract"] == COORDINATE_CONTRACT
+    assert [row["node"] for row in coordinate["rows"]] == [
+        "U020", "U040", "U060", "U080", "U100",
+        "D80F", "D60F", "D40F", "D20F", "D0F",
+        "J010", "J020", "J030", "J040", "J050",
+        "J060", "J070", "J080", "J090", "J100",
+    ]
+    assert [
+        (row["structural"]["decimal"], row["feature"]["decimal"])
+        for row in coordinate["rows"]
+    ] == [
+        (f"{index / 5:.2f}", "0.00") for index in range(1, 6)
+    ] + [
+        ("1.00", f"{index / 5:.2f}") for index in range(1, 6)
+    ] + [
+        (f"{index / 10:.2f}", f"{index / 10:.2f}")
+        for index in range(1, 11)
+    ]
+    for row in coordinate["rows"]:
+        assert _coordinate(str(row["node"]).lower()).payload() == {
+            "structural": [
+                row["structural"]["numerator"],
+                row["structural"]["denominator"],
+            ],
+            "feature": [
+                row["feature"]["numerator"],
+                row["feature"]["denominator"],
+            ],
+            "s_hex": row["structural"]["float_hex"],
+            "f_hex": row["feature"]["float_hex"],
+            "alpha_hex": row["alpha_hex"],
+        }
+    assert all(contract.endswith("/v2") for contract in (
+        COORDINATE_CONTRACT, NODE_SPEC_CONTRACT, GRAPH_CONTRACT,
+        RECIPE_CONTRACT, GRAPH_RECIPE_LOCK_CONTRACT, PILOT_SPEC_CONTRACT,
+        COMMAND_PLAN_CONTRACT, AGGREGATE_CONTRACT,
+        CAMPAIGN_COMPLETION_CONTRACT,
+        RECOVERY_SPEC_CONTRACT, RECOVERY_COMMAND_PLAN_CONTRACT,
+        RESOURCE_RECOVERY_SPEC_CONTRACT,
+        RESOURCE_RECOVERY_COMMAND_PLAN_CONTRACT,
+    ))
     overlay = build_recipe_overlay(parent_recipe_sha256=H)
     assert validate_recipe_overlay(overlay, parent_recipe_sha256=H) == overlay["content_hash"]
     assert all(row["passes"] == row["validation_checks"] == 60 for row in overlay["rows"])
@@ -679,7 +745,7 @@ def test_graph_recipe_and_coordinates_are_frozen() -> None:
             assert loss.ce == .25
             assert loss.hlt_kd + loss.privileged_kd == .75
             expected_temperature = 1.0 if node_id in {
-                "M1F", "M1J", "M0self", "S0_21",
+                "M1F", "M1J", "M0self", "S0_11",
             } else 2.0
             assert loss.temperature == expected_temperature
 
@@ -731,7 +797,7 @@ def test_global_memory_estimator_accounts_for_noncache_state() -> None:
     keys = [
         f"{role}:{view}"
         for role in ("train", "validation")
-        for view in ("p0", "u010", "j005", "u100", "j100")
+        for view in ("p0", "u020", "j010", "u100", "j100")
     ]
     miniature = {
         "sample_rows": {key: 100 for key in keys},
@@ -750,7 +816,7 @@ def test_global_memory_estimator_uses_largest_view_per_role() -> None:
     keys = [
         f"{role}:{view}"
         for role in ("train", "validation")
-        for view in ("p0", "u010", "j005", "u100", "j100")
+        for view in ("p0", "u020", "j010", "u100", "j100")
     ]
     miniature = {
         "sample_rows": {key: 100 for key in keys},
@@ -1031,7 +1097,7 @@ def test_slurm_worker_is_exec_and_has_no_array_throttle() -> None:
         assert "validate_worker_semantics" in Path(script).read_text(encoding="utf-8")
     from hlt_classification.scouting.hcwdl_homotopy_campaign import _tasks
     tasks = _tasks(train_sources=3, validation_sources=2)
-    assert len(tasks) == 101
+    assert len(tasks) == 66
     assert all("%" not in str(row["array_count"]) for row in tasks)
     assert not any("test" in row["task_id"] for row in tasks)
 
@@ -1090,7 +1156,7 @@ def test_submitter_resumes_authenticated_partial_journal(
     assert ledger["commands"]["second"] == ["sbatch", "after=101"]
 
 
-def test_bounded_synthetic_full_graph_aggregates_all_80_nodes(
+def test_bounded_synthetic_full_graph_aggregates_all_45_nodes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     metric = {
@@ -1152,10 +1218,23 @@ def test_bounded_synthetic_full_graph_aggregates_all_80_nodes(
         "recipe_overlay_sha256": H, "imported_controls": imported,
         "contextual_dense_reports": (),
     })
-    assert aggregate["fit_count"] == 80
-    assert len(aggregate["rows"]) == 84
-    assert aggregate["measured_gpu_hours"] == pytest.approx(.8)
+    assert aggregate["fit_count"] == 45
+    assert len(aggregate["rows"]) == 49
+    assert aggregate["measured_gpu_hours"] == pytest.approx(.45)
     assert aggregate["final_test_accessed"] is False
+    comparisons = {
+        (row["left"], row["right"]): row
+        for row in aggregate["ordered_comparisons"]
+    }
+    assert comparisons[("P0CE", "TOFF")]["identical_input"] is False
+    for pair in (
+        ("P0KD", "P0CE"), ("U100", "D100direct"),
+        ("U100", "S100_05"), ("D0F", "D0direct"),
+        ("D0F", "S0_10"), ("D0F", "J100"),
+        ("M1F", "M1J"), ("M1F", "S0_11"),
+        ("U020P0KD", "U020"),
+    ):
+        assert comparisons[pair]["identical_input"] is True
     smoke_spec = {
         "campaign_root": str(tmp_path), "content_hash": H,
         "recipe_overlay_sha256": H,

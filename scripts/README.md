@@ -265,7 +265,7 @@ then reruns aggregation. It never performs a new finalist selection. See
 
 ## HCWDL structural-feature homotopy
 
-The validation-only 80-fit structural-feature study uses the thin
+The validation-only structural-feature study uses the thin
 `create_hcwdl_homotopy_pilot.py`, `submit_hcwdl_homotopy_pilot.py`,
 `run_hcwdl_homotopy_task.py`, `monitor_hcwdl_homotopy.py`,
 `resume_hcwdl_homotopy.py`, and `cancel_hcwdl_homotopy.py` surfaces.
@@ -279,7 +279,7 @@ final-test task, stores only compact coupling/target artifacts, and rebuilds
 particle views in process-local RAM. The exact artifact and recovery rules are
 in `docs/contracts/HCWDL_STRUCTURAL_FEATURE_HOMOTOPY.md`.
 `run_hcwdl_homotopy_local_smoke.py` is a bounded synthetic behavioral check
-that executes all 80 fits without ROOT or Slurm; it is not a substitute for
+that executes all 45 v2 fits without ROOT or Slurm; it is not a substitute for
 the real production-worker miniature. Before the miniature,
 `validate_hcwdl_homotopy_weaver.py` records direct-versus-wrapper FP32 parity
 for both the unified student and two-stream native TOFF factories from the

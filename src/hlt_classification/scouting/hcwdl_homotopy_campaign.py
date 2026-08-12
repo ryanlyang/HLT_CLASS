@@ -15,14 +15,14 @@ from hlt_classification.data.cache_contracts import (
 from .engine import validate_pmard_training_report
 from .hcwdl_campaign import ROLE_COUNTS, validate_campaign_spec
 from .hcwdl_homotopy_contracts import (
-    AUTHORIZATION_PHRASE, COMMAND_PLAN_CONTRACT, PILOT_SPEC_CONTRACT,
+    AUTHORIZATION_PHRASE, COMMAND_PLAN_CONTRACT, GRAPH_CONTRACT, PILOT_SPEC_CONTRACT,
     RESOURCE_PROFILE_CONTRACT, ROLE_COUNTS as PILOT_ROLE_COUNTS,
     SMOKE_ROLE_COUNTS, SUBMISSION_PHRASE, build_coupling_config,
     WEAVER_PARITY_CONTRACT, coordinate_payload, validate_coordinate,
     validate_coupling_config,
 )
 from .hcwdl_homotopy_graph import (
-    GRAPH_SHA256, NODE_REGISTRY, build_recipe_overlay, validate_graph,
+    FIT_COUNT, GRAPH_SHA256, NODE_REGISTRY, build_recipe_overlay, validate_graph,
     validate_recipe_overlay,
 )
 from .hcwdl_locks import validate_lock
@@ -39,11 +39,14 @@ PARTITION: Final = "tigris"
 SEMANTIC_SOURCE_FILES: Final = (
     "src/hlt_classification/models/scouting_particle_transformer.py",
     "src/hlt_classification/scouting/engine.py",
+    "src/hlt_classification/scouting/hcwdl_homotopy_campaign.py",
     "src/hlt_classification/scouting/hcwdl_homotopy_contracts.py",
     "src/hlt_classification/scouting/hcwdl_homotopy_graph.py",
     "src/hlt_classification/scouting/hcwdl_homotopy_locks.py",
+    "src/hlt_classification/scouting/hcwdl_homotopy_reporting.py",
     "src/hlt_classification/scouting/hcwdl_homotopy_runner.py",
     "src/hlt_classification/scouting/hcwdl_homotopy_stream.py",
+    "src/hlt_classification/scouting/hcwdl_homotopy_workflow.py",
     "src/hlt_classification/scouting/repair.py",
     "src/hlt_classification/scouting/hcwdl_toff_targets.py",
     "src/hlt_classification/scouting/hcwdl_training.py",
@@ -73,7 +76,22 @@ SMOKE_RESOURCES: Final = {
     "gpu_training": ResourceRequest(8, "128G", "01:00:00", "gpu:gh200:1"),
     "cpu_report": ResourceRequest(4, "32G", "00:30:00"),
 }
+PILOT_GPU_TRAINING_REQUEST: Final = {
+    "cpus": 8, "memory": "96G", "walltime": "06:00:00",
+    "gpu": "gpu:gh200:1",
+}
 GPU_CAPACITY_BYTES: Final = {"gpu:gh200:1": 96 * 1024**3}
+TASK_COUNT: Final = FIT_COUNT + 21
+
+
+def _validate_pilot_gpu_training_request(
+    requests: Mapping[str, object],
+) -> None:
+    if requests.get("gpu_training") != PILOT_GPU_TRAINING_REQUEST:
+        raise ValueError(
+            "300k HCWDL-UJ training request must be 8 CPU, 96G, "
+            "06:00:00, and one GH200"
+        )
 
 
 def build_resource_profile(
@@ -419,6 +437,7 @@ def create_campaign(
         ):
             raise ValueError("300k HCWDL-UJ resource profile source lineage differs")
         requests = resource_profile["requests"]
+        _validate_pilot_gpu_training_request(requests)
     else:
         if resource_profile is not None:
             resource_hash = validate_resource_profile(resource_profile); requests = resource_profile["requests"]
@@ -467,8 +486,8 @@ def create_campaign(
         projection_sha256=projection_hash, shell_exact_sha256=projection_hash,
     )
     graph = with_content_hash({
-        "contract": "HCWDL_STRUCTURAL_FEATURE_GRAPH/v1", "schema_version": 1,
-        "graph_sha256": GRAPH_SHA256, "fit_count": 80,
+        "contract": GRAPH_CONTRACT, "schema_version": 1,
+        "graph_sha256": GRAPH_SHA256, "fit_count": FIT_COUNT,
         "nodes": [node.payload() for node in NODE_REGISTRY.values()],
     })
     overlay = build_recipe_overlay(parent_recipe_sha256=evidence["recipe_sha256"])
@@ -572,8 +591,8 @@ def validate_campaign(value: Mapping[str, Any], *, executable: bool = False) -> 
         train_sources=len(role_records(split, "train")),
         validation_sources=len(role_records(split, "validation")),
     )
-    if not isinstance(tasks, list) or tasks != expected_tasks or len(tasks) != 101:
-        raise ValueError("HCWDL-UJ task registry must contain exactly 101 tasks")
+    if not isinstance(tasks, list) or tasks != expected_tasks or len(tasks) != TASK_COUNT:
+        raise ValueError(f"HCWDL-UJ task registry must contain exactly {TASK_COUNT} tasks")
     ids = [str(row.get("task_id")) for row in tasks]
     if len(set(ids)) != len(ids):
         raise ValueError("HCWDL-UJ task IDs are not unique")
@@ -597,8 +616,11 @@ def validate_campaign(value: Mapping[str, Any], *, executable: bool = False) -> 
             validate_resource_profile(profile) != reference.get("content_hash")
             or reference.get("content_hash") != value.get("resource_profile_sha256")
             or profile.get("tigris_worker_miniature_passed") is not True
+            or profile.get("requests", {}).get("gpu_training")
+               != PILOT_GPU_TRAINING_REQUEST
         ):
             raise ValueError("300k HCWDL-UJ resource profile differs")
+        _validate_pilot_gpu_training_request(profile["requests"])
     elif value.get("resource_profile") is not None:
         profile = load_json(value["resource_profile"]["path"])
         if validate_resource_profile(profile) != value["resource_profile"].get("content_hash"):
@@ -639,11 +661,11 @@ def validate_campaign(value: Mapping[str, Any], *, executable: bool = False) -> 
             overlay, parent_recipe_sha256=value["recipe_sha256"],
         ) != value.get("recipe_overlay_sha256")
         or validate_content_hash(
-            graph, expected_contract="HCWDL_STRUCTURAL_FEATURE_GRAPH/v1",
+            graph, expected_contract=GRAPH_CONTRACT,
             expected_schema_version=1,
         ) != value.get("graph_artifact_sha256")
         or graph.get("graph_sha256") != GRAPH_SHA256
-        or graph.get("fit_count") != 80
+        or graph.get("fit_count") != FIT_COUNT
         or graph.get("nodes") != [node.payload() for node in NODE_REGISTRY.values()]
         or validate_content_hash(
             command_plan, expected_contract=COMMAND_PLAN_CONTRACT,
@@ -751,7 +773,8 @@ def build_command_plan(spec: Mapping[str, Any]) -> dict[str, Any]:
 
 
 __all__ = [
-    "AUTHORIZATION_PHRASE", "CAMPAIGN_LABEL", "SMOKE_RESOURCES",
+    "AUTHORIZATION_PHRASE", "CAMPAIGN_LABEL", "PILOT_GPU_TRAINING_REQUEST",
+    "SMOKE_RESOURCES",
     "SUBMISSION_PHRASE", "authenticate_parent", "build_command_plan",
     "build_resource_profile", "create_campaign", "validate_campaign",
     "validate_resource_profile", "validate_worker_semantics",

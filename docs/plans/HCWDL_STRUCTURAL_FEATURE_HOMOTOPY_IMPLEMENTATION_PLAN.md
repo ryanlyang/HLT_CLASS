@@ -1,7 +1,7 @@
 # HCWDL Structural-Feature Homotopy Implementation Plan
 
-Status: **implementation-authoritative supplemental plan; not yet implemented
-or authorized for live submission**.
+Status: **implemented; v1 production-worker smoke completed; v2 reduced-graph
+smoke required before a separately authorized 300k submission**.
 
 Short name: **HCWDL-UJ**. Here `U` denotes the upper structural-support
 transition and `J` denotes the joint structural-plus-feature transition.
@@ -118,6 +118,90 @@ The screening seed is `1337`. The initial study uses train and validation only:
 
 The parent pilot's test role has already participated in earlier work and is
 not silently reused as a fresh confirmatory holdout.
+
+## 3.1 Post-smoke v2 launch decision (2026-08-12)
+
+The completed v1 Tigris smoke exercised all 80 registered fits and 101 tasks,
+but its two-update metrics were intentionally non-scientific and the full
+graph was larger than needed for the first 300k screen. Before any 300k U/J
+submission, the user selected a reduced, still path-matched v2 graph. This
+subsection is the highest-authority graph definition in this plan and
+supersedes every v1 node count, rung name, transition index, stationary-chain
+length, TOFF-consumer name, and graph-bound contract identity later in this
+document. Coupling, carrier, endpoint, projection, training, checkpoint,
+lineage, leakage, and recovery semantics remain unchanged.
+
+The v2 primary paths are:
+
+```text
+factorized:
+TOFF -> U020 -> U040 -> U060 -> U080 -> U100
+     -> D80F -> D60F -> D40F -> D20F -> D0F -> M1F
+
+joint:
+TOFF -> J010 -> J020 -> J030 -> J040 -> J050
+     -> J060 -> J070 -> J080 -> J090 -> J100 -> M1J
+```
+
+The factorized coordinate advances by `(delta s, delta f)=(.20,0)` for five
+edges, then `(0,.20)` for five edges. The joint coordinate advances by
+`(.10,.10)` for ten edges. Thus both paths retain ten predecessor-KD
+homotopy transitions, nominal L1 displacement `.20` per edge, identical
+updates per transition, and one final temperature-1 born-again HLT edge. The
+comparison remains path/update matched; it is not claimed to be exactly
+FLOP-matched.
+
+The v2 stationary controls are:
+
+```text
+TOFF -> S100_01 -> ... -> S100_05
+TOFF -> S0_01   -> ... -> S0_10 -> S0_11
+```
+
+`S100_01..05` and `S0_01..10` use temperature 2. `S0_11` uses temperature 1.
+The seven controls are `M0paired`, `P0CE`, `P0KD`, `U020P0KD`,
+`D100direct`, `D0direct`, and `M0self`. Endpoint seed aliases move with the
+reduced transition indices: D100 is transition 5, HLT is transition 10, and
+M1 is transition 11. The shared TOFF target consumers are `P0KD`, `U020`,
+`J010`, `D100direct`, `D0direct`, `S100_01`, and `S0_01`.
+
+The immutable registry is exactly:
+
+```text
+7 controls
++ 11 factorized nodes
++ 11 joint nodes
++ 5 stationary-D100 nodes
++ 11 stationary-HLT nodes
+= 45 fits
+```
+
+With the unchanged 21 non-fit infrastructure/report tasks, each v2 campaign
+contains exactly 66 tasks. The graph-bound identities are versioned to v2:
+
+```text
+HCWDL_STRUCTURAL_FEATURE_COORDINATE/v2
+HCWDL_STRUCTURAL_FEATURE_NODE_SPEC/v2
+HCWDL_STRUCTURAL_FEATURE_GRAPH/v2
+HCWDL_STRUCTURAL_FEATURE_RECIPE/v2
+HCWDL_STRUCTURAL_FEATURE_GRAPH_RECIPE_LOCK/v2
+HCWDL_STRUCTURAL_FEATURE_PILOT_SPEC/v2
+HCWDL_STRUCTURAL_FEATURE_COMMAND_PLAN/v2
+HCWDL_STRUCTURAL_FEATURE_AGGREGATE/v2
+HCWDL_STRUCTURAL_FEATURE_CAMPAIGN_COMPLETE/v2
+HCWDL_STRUCTURAL_FEATURE_RECOVERY_SPEC/v2
+HCWDL_STRUCTURAL_FEATURE_RECOVERY_COMMAND_PLAN/v2
+HCWDL_STRUCTURAL_FEATURE_RESOURCE_RECOVERY_SPEC/v2
+HCWDL_STRUCTURAL_FEATURE_RESOURCE_RECOVERY_COMMAND_PLAN/v2
+```
+
+The completed v1 smoke remains immutable evidence for v1 only. Because the
+teacher graph, coordinate table, task registry, and semantic source hashes
+changed, it cannot authorize the v2 pilot resource profile. One reduced v2
+production-worker smoke is mandatory; it may reuse the authenticated primary
+HCWDL smoke parent, assignments, and checkpoints. The requested 300k training
+resource row is fixed to 8 CPUs, 96 GiB RAM, 6 hours, and one GH200, subject
+to the v2 smoke's required 25% measured-headroom validator.
 
 ## 4. The representation boundary that must remain explicit
 
@@ -829,6 +913,14 @@ particle that is supposed to remain common. This keeps the U axis purely
 structural.
 
 ### 8.4 Exact U pipeline
+
+> **Historical v1 registry note:** Sections 8.4 through 17 retain the detailed
+> 5%/10% v1 graph rationale as an implementation record. For executable node
+> names, coordinates, teachers, stationary lengths, counts, TOFF consumers,
+> comparison endpoints, and graph-bound contract versions, Section 3.1 is
+> normative and supersedes those v1 examples. The carrier/view/coupling,
+> endpoint, loss, leakage, reporting, and recovery requirements in these
+> sections remain normative.
 
 Define:
 
@@ -1788,22 +1880,22 @@ change batch size, update count, cache contents, or any scientific semantic.
 
 ### 21.3 Graph and training
 
-- exact 21-node factorized, 21-node joint, 31-node stationary, and seven-node
-  control registries: 80 new fits total;
-- exact 10 U, 10 D, 20 J coordinate tables with decimal and hexadecimal
+- exact 11-node factorized, 11-node joint, 16-node stationary, and seven-node
+  control registries: 45 new fits total;
+- exact 5 U, 5 D, and 10 J coordinate tables with decimal and hexadecimal
   floats;
-- U010 and J005 teacher is TOFF-native;
-- U100 teaches D90F; D10F teaches D0F; D0F/J100 teach separate M1 nodes;
+- U020 and J010 teacher is TOFF-native;
+- U100 teaches D80F; D20F teaches D0F; D0F/J100 teach separate M1 nodes;
 - every student is fresh and no cross-path teacher is allowed;
 - exact D100/HLT stationary-depth chains, temperature-2 causal routing through
-  transition 20, temperature-1 transition 21, and distinct direct controls;
+  transition 10, temperature-1 transition 11, and distinct direct controls;
 - paired transition-index seeds and endpoint seed aliases;
 - P0CE/P0KD share initialization/sampler seed and both stationary chains share
   transition seeds 1--10;
 - identical rows, 60 passes, 60 validations, update counts, and final partial
   batch across paired nodes;
 - unweighted CE/KD, role-routed temperature, BF16 forward, and FP32 loss math;
-- all 80 overlay rows resolve to the exact expected engine loss config;
+- all 45 overlay rows resolve to the exact expected engine loss config;
   domain-only fallback is rejected and reports bind both recipe hashes;
 - teacher evaluated on its own domain exactly once and student view built once;
 - shared authenticated TOFF-native target cache is built once, has exact
@@ -1909,7 +2001,7 @@ Forbidden claims include:
 
 - residual O-to-R truth matching or physical correspondence;
 - U000 being tensor- or architecture-identical to TOFF-native;
-- U010 or J005 isolating their path increment from the native-to-unified
+- U020 or J010 isolating their path increment from the native-to-unified
   adapter change;
 - U100 being native offline;
 - a switched HLT dustbin being reconstructed from its coupled O particle;

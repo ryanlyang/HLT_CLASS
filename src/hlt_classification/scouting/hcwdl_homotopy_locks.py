@@ -11,6 +11,7 @@ from hlt_classification.data.cache_contracts import (
 from .hcwdl_homotopy_contracts import (
     ENDPOINT_LOCK_CONTRACT, GRAPH_RECIPE_LOCK_CONTRACT,
 )
+from .hcwdl_homotopy_graph import FIT_COUNT
 
 
 def build_endpoint_equality_lock(
@@ -45,7 +46,7 @@ def build_graph_recipe_lock(
     }
     return with_content_hash({
         "contract": GRAPH_RECIPE_LOCK_CONTRACT, "schema_version": 1,
-        **hashes, "authorized": True, "fit_count": 80,
+        **hashes, "authorized": True, "fit_count": FIT_COUNT,
         "explicit_per_node_loss_routing": True,
         "all_students_cold_started": True,
         "final_test_accessed": False,
@@ -107,7 +108,7 @@ def validate_graph_recipe_lock(
         require_sha256(value.get(name), name=name)
     if (
         value.get("authorized") is not True
-        or value.get("fit_count") != 80
+        or value.get("fit_count") != FIT_COUNT
         or value.get("explicit_per_node_loss_routing") is not True
         or value.get("all_students_cold_started") is not True
         or value.get("final_test_accessed") is not False

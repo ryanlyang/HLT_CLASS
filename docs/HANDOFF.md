@@ -1,5 +1,50 @@
 # Current Handoff
 
+## HCWDL-UJ reduced v2 graph (2026-08-12)
+
+After the successful 80-fit v1 production-worker smoke, the user selected a
+smaller primary screen before any 300k U/J submission. The implemented v2
+graph retains ten equal nominal-L1 predecessor-KD transitions per primary
+path: factorized `U020..U100 -> D80F..D0F -> M1F`, and joint
+`J010..J100 -> M1J`. Its controls are five stationary D100 fits, ten
+temperature-2 stationary HLT fits plus temperature-1 `S0_11`, and the same
+seven direct/adapter controls with `U020P0KD`. The exact registry is 45 fits
+and 66 total tasks. The completed v1 smoke remains immutable historical
+evidence and is not relabeled as v2 acceptance.
+
+Graph-bound coordinate, node, graph, recipe, graph-lock, campaign, command,
+aggregate, completion, and both recovery families now use explicit `/v2`
+contract identities. Coupling, endpoint, view, target, node-wrapper/runtime,
+resource, and resume contracts remain v1 because their underlying semantics
+did not change. Cache miniature keys, full-role displacement coordinates,
+TOFF target consumers, seed aliases, temperature routing, dependencies,
+report comparisons, and same-input metadata all derive from the reduced v2
+registry. The earlier comparison-report bug that marked several exact-input
+controls `false` is fixed by comparing authenticated input-domain signatures.
+
+The requested 300k `gpu_training` row is enforced in campaign creation and
+validation as exactly 8 CPUs, 96 GiB, six hours, and one GH200. The v2 smoke
+must still demonstrate 25% resource headroom before its profile can authorize
+the pilot. No Slurm job was submitted by this change.
+
+Final local evidence from the implementation tree:
+
+- focused homotopy contracts/graph/campaign/reporting: 45/45 passed;
+- complete HCWDL/CLI focus: 107/107 passed;
+- complete repository suite: 423/423 passed with the 14 existing
+  Matplotlib/Pyparsing warnings;
+- bounded synthetic end to end: all 45 fits completed, no final-test access;
+- 13/13 changed graph-bound v2 contract identities and 7/7 primary CLI help
+  surfaces passed;
+- Python compilation and `git diff --check` passed (line-ending notices only).
+
+The existing unrelated `.worktrees/hcwdl-rkd-local` modification and
+`.worktrees/hcwdl-u-rkd-local/` directory remain untouched. No donor code or
+donor commit was used. The next acceptance layer is one clean, pushed,
+source-pinned v2 Tigris smoke using the already authenticated HCWDL parent;
+only after completion, measured resource profiling, and a complete dry run may
+the user separately authorize the 300k pilot.
+
 ## HCWDL architecture-factorial BF16 repair (2026-08-11)
 
 The first genuine Tigris architecture-factorial smoke at source `c2a5510d`

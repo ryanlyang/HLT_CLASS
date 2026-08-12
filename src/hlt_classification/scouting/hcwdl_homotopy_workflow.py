@@ -21,11 +21,13 @@ from .hcwdl_homotopy_contracts import (
     AGGREGATE_CONTRACT, CACHE_RESOURCE_MEASUREMENT_CONTRACT,
     CACHE_MINIATURE_CONTRACT,
     CAMPAIGN_COMPLETION_CONTRACT,
+    COMMAND_PLAN_CONTRACT,
     COUPLING_AUDIT_CONTRACT, COUPLING_LOCK_CONTRACT,
     ENDPOINT_LOCK_CONTRACT, GRAPH_RECIPE_LOCK_CONTRACT,
     TARGET_RESOURCE_MEASUREMENT_CONTRACT, TOFF_TARGET_LOCK_CONTRACT,
     validate_coordinate, validate_coupling_config,
 )
+from .hcwdl_homotopy_graph import FIT_COUNT
 from .hcwdl_homotopy_locks import (
     build_endpoint_equality_lock, build_graph_recipe_lock,
     validate_endpoint_equality_lock, validate_graph_recipe_lock,
@@ -200,8 +202,8 @@ class HomotopyWorkflow:
             coupling = ResidualCouplingStore(self.root / f"coupling/{role}_manifest.json")
             for name, coordinate in (
                 ("p0", HomotopyCoordinate(0, 1, 0, 1)),
-                ("u010", HomotopyCoordinate(1, 10, 0, 1)),
-                ("j005", HomotopyCoordinate(1, 20, 1, 20)),
+                ("u020", HomotopyCoordinate(1, 5, 0, 1)),
+                ("j010", HomotopyCoordinate(1, 10, 1, 10)),
                 ("u100", HomotopyCoordinate(1, 1, 0, 1)),
                 ("j100", HomotopyCoordinate(1, 1, 1, 1)),
             ):
@@ -468,7 +470,7 @@ class HomotopyWorkflow:
             expected_views = {
                 f"{role}:{view}"
                 for role in ("train", "validation")
-                for view in ("p0", "u010", "j005", "u100", "j100")
+                for view in ("p0", "u020", "j010", "u100", "j100")
             }
             if (
                 miniature.get("campaign_spec_sha256") != self.spec["content_hash"]
@@ -635,7 +637,7 @@ class HomotopyWorkflow:
             )
             plan = load_json(self.root / "command_plan.json")
             plan_hash = validate_content_hash(
-                plan, expected_contract="HCWDL_STRUCTURAL_FEATURE_COMMAND_PLAN/v1",
+                plan, expected_contract=COMMAND_PLAN_CONTRACT,
                 expected_schema_version=1,
             )
             if plan_hash != self.spec["command_plan_sha256"] or plan != build_command_plan(self.spec):
@@ -675,7 +677,7 @@ class HomotopyWorkflow:
             output = self.root / "reports/validation_aggregate.json"
             reused = self._load_json_output(
                 output, AGGREGATE_CONTRACT,
-                expected={"campaign_spec_sha256": self.spec["content_hash"], "fit_count": 80},
+                expected={"campaign_spec_sha256": self.spec["content_hash"], "fit_count": FIT_COUNT},
             )
             if reused: return reused
             write_immutable_json(output, build_validation_aggregate(self.spec)); return [output]
@@ -683,7 +685,7 @@ class HomotopyWorkflow:
             output = self.root / "reports/campaign_complete.json"
             reused = self._load_json_output(
                 output, CAMPAIGN_COMPLETION_CONTRACT,
-                expected={"campaign_spec_sha256": self.spec["content_hash"], "fit_count": 80},
+                expected={"campaign_spec_sha256": self.spec["content_hash"], "fit_count": FIT_COUNT},
             )
             if reused: return reused
             aggregate = load_json(self.root / "reports/validation_aggregate.json")
