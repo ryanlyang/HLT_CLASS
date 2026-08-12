@@ -118,7 +118,7 @@ def _combined_recipe(
     *, base_recipe: Mapping[str, Any], representation_recipe: Mapping[str, Any],
     base_hash: str, representation_hash: str,
 ) -> dict[str, Any]:
-    values = representation_recipe["scientific_values"]
+    values = representation_recipe["payload"]["scientific_values"]
     return with_content_hash({
         "contract": COMBINED_RECIPE_CONTRACT, "schema_version": 1,
         "parents": {"base_recipe": base_hash, "representation_recipe": representation_hash},

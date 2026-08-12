@@ -130,7 +130,7 @@ def _fake_campaign_inputs(monkeypatch, tmp_path: Path):
     rep_recipe = tmp_path / "representation_recipe.json"
     rep_recipe.write_text(
         '{"parents":{"parent_recipe":"' + SHA
-        + '"},"scientific_values":{"representation_coefficient":0.1}}'
+        + '"},"payload":{"scientific_values":{"representation_coefficient":0.1}}}'
     )
     arch = tmp_path / "architecture.json"; arch.write_text("{}")
     prereq = tmp_path / "prerequisite_bundle.json"; prereq.write_text("{}")
