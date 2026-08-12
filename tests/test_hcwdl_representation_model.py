@@ -493,7 +493,7 @@ def _parent_report_fixture(tmp_path: Path, *, node_id: str, model) -> Path:
     })
     write_immutable_json(root / "training_report.json", engine)
     wrapper = with_content_hash({
-        "contract": "fixture_hcwdl_report/v1",
+        "contract": "HCWDL_TRAINING_REPORT/v1",
         "schema_version": 1,
         "node_id": node_id,
         "complete": True,
