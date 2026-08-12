@@ -1944,3 +1944,14 @@ passed; the local Windows Python installation lacks NumPy, so the focused
 pytest closure must run in `atlas_kd_tigris` before the corrected attempt is
 submitted. The immutable `2b7947b9` prerequisite root is retained as failed
 attempt evidence and is not reused under the corrected source identity.
+
+The `38ac499b` smoke successfully created and submitted its exact 47-task
+campaign, then failed in the shared TOFF target job before publishing a target
+bank. The strict representation worker backend correctly rejected the process
+because its Slurm wrapper had not exported the required
+`CUBLAS_WORKSPACE_CONFIG=:4096:8`. Existing deterministic representation
+workers already set this value; the combined homotopy-representation wrapper
+now does the same before Python can import Torch. A regression verifies the
+export exists and precedes the worker `exec`. Since the original specification
+is source-pinned, continuation must use the authenticated failed-closure source
+recovery rather than requeueing the failed job under `38ac499b`.

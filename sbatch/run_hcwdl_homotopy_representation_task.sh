@@ -9,6 +9,9 @@ source "${PROJECT_DIR}/sbatch/common.sh"
 hlt_activate
 export PYTHONNOUSERSITE=1
 export PYTHONDONTWRITEBYTECODE=1
+# Target generation and representation training use the authenticated
+# deterministic CUDA backend. cuBLAS reads this before CUDA initialization.
+export CUBLAS_WORKSPACE_CONFIG=:4096:8
 export PYTHONPATH="${PROJECT_DIR}/src${PYTHONPATH:+:${PYTHONPATH}}"
 export LD_LIBRARY_PATH="${CONDA_PREFIX}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -158,6 +159,18 @@ def test_role_counts_keep_final_test_sealed():
     assert SMOKE_ROLE_COUNTS == {"train": 4096, "validation": 4096, "final_test": 0}
     assert RECIPE_COMPATIBILITY_CONTRACT.endswith("_RECIPE_COMPATIBILITY/v1")
     assert PREREQUISITE_BUNDLE_CONTRACT.endswith("_PREREQUISITE_BUNDLE/v1")
+
+
+def test_slurm_worker_sets_deterministic_cublas_before_python():
+    repository = Path(__file__).resolve().parents[1]
+    worker = (
+        repository / "sbatch/run_hcwdl_homotopy_representation_task.sh"
+    ).read_text(encoding="utf-8")
+    export = "export CUBLAS_WORKSPACE_CONFIG=:4096:8"
+    execution = 'exec python -s "${PROJECT_DIR}/scripts/run_hcwdl_homotopy_representation_task.py"'
+    assert export in worker
+    assert execution in worker
+    assert worker.index(export) < worker.index(execution)
 
 
 def test_submission_journal_resumes_exact_completed_prefix(monkeypatch, tmp_path):
