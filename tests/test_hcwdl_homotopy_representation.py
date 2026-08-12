@@ -22,6 +22,12 @@ from hlt_classification.scouting.hcwdl_representation_graph import RREL_STRATEGY
 from hlt_classification.scouting.hcwdl_homotopy_representation_training import (
     _kernel_bundle,
 )
+from hlt_classification.scouting.hcwdl_homotopy_representation_recipe import (
+    build_recipe as build_homotopy_representation_recipe,
+)
+from hlt_classification.scouting.hcwdl_representation_recipe import (
+    example_representation_recipe,
+)
 from hlt_classification.scouting.hcwdl_representation_runtime_adapters import (
     RegisteredInputPath,
 )
@@ -65,6 +71,27 @@ def test_exact_two_track_graph_and_loss_routing():
     )
     with pytest.raises(ValueError, match="immediate predecessor"):
         validate_graph(tampered)
+
+
+def test_combined_recipe_reads_versioned_v5_payload(monkeypatch):
+    """Exercise the real v5 envelope shape used by prerequisite publication."""
+
+    from hlt_classification.scouting import hcwdl_homotopy_representation_recipe as module
+
+    representation = example_representation_recipe()
+    base = {
+        "contract": "HCWDL_RECIPE/v4",
+        "class_weights": [1.0] * 15,
+    }
+    monkeypatch.setattr(module, "validate_base_recipe", lambda *_args, **_kwargs: "a" * 64)
+    combined = build_homotopy_representation_recipe(
+        base_recipe=base,
+        representation_recipe=representation,
+        parent_graph_recipe_lock_sha256="b" * 64,
+        integration_attestation_sha256="c" * 64,
+    )
+    assert combined["parents"]["representation_recipe"] == representation["content_hash"]
+    assert combined["node_count"] == FIT_COUNT
 
 
 def test_kernel_reference_promotes_only_absolute_committed_directory(

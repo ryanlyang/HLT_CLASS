@@ -1930,3 +1930,17 @@ commit/parent/member validators. Arbitrary files and generic raw production
 paths remain rejected. A focused regression freezes this boundary. The
 complete `31b78378` prerequisite root remains valid evidence but is not reused
 by the corrected source identity; the next attempt uses new roots.
+
+The `2b7947b9` attempt then passed the nine-test kernel-focused closure and
+published the complete prerequisite bundle. Campaign creation exposed one
+remaining artifact-envelope mismatch: the combined U-RKD recipe builder read
+`scientific_values` from the top level of an authenticated
+`HCWDL_REPRESENTATION_RECIPE/v5`, although the reusable v5 contract stores all
+scientific fields under `payload`. The builder now reads the validated v5
+payload, and a focused regression joins a genuine v5 example artifact through
+the combined-recipe builder so this producer/consumer boundary is exercised
+before Tigris campaign creation. Local `py_compile` and `git diff --check`
+passed; the local Windows Python installation lacks NumPy, so the focused
+pytest closure must run in `atlas_kd_tigris` before the corrected attempt is
+submitted. The immutable `2b7947b9` prerequisite root is retained as failed
+attempt evidence and is not reused under the corrected source identity.

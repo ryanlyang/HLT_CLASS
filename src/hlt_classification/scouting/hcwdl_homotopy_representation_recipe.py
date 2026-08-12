@@ -35,7 +35,11 @@ def build_recipe(
         np.ones(15, dtype=np.float32),
     ):
         raise ValueError("HCWDL-U-RKD requires the unweighted base recipe")
-    values = representation_recipe["scientific_values"]
+    # HCWDL_REPRESENTATION_RECIPE/v5 is a versioned artifact.  Its frozen
+    # scientific values belong to the authenticated payload, not the artifact
+    # envelope.  Reading the envelope directly made campaign creation fail
+    # only after all prerequisite artifacts had been published.
+    values = representation_recipe["payload"]["scientific_values"]
     if (
         values["relations"].get("latent_state_source") != "raw_particle_block_2"
         or values["relations"].get("latent_projection_applied") is not False
