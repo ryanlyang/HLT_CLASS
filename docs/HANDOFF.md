@@ -1967,3 +1967,14 @@ losses are unchanged. Boundary regressions accept exact 200/90/60 populations
 and reject 201/91/61. The failed recovery published no shared TOFF target bank;
 continuation again requires repeated authenticated source recovery from its
 replacement ledger rather than an ordinary requeue.
+
+Under `2f6658c6`, the shared TOFF target bank completed and both first U020
+students completed optimization and checkpoint selection. Both failed only at
+terminal deployable extraction: the freshly strict-loaded public model was
+CPU-resident while parity inputs captured from validation were on CUDA. The
+extractor now requires all parity inputs on one device and moves only the
+temporary restored public model to that device before comparing logits. This
+does not change selected checkpoints, deployable state bytes, training,
+metrics, or inference. A regression records that the restored model is moved
+to the parity-input device. Source recovery is expected to reuse the exact
+rolling/selected training state and repeat terminal extraction/publication.

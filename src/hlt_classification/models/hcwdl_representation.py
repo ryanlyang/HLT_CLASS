@@ -214,6 +214,13 @@ def publish_hcwdl_deployable_extraction(
     load_result = restored.load_state_dict(state, strict=True)
     if load_result.missing_keys or load_result.unexpected_keys:
         raise RuntimeError("extracted deployable state did not load strictly")
+    parity_devices = {tensor.device for tensor in parity_inputs}
+    if len(parity_devices) != 1:
+        raise ValueError("deployable parity inputs span multiple devices")
+    # A freshly constructed public model is CPU-resident even when extraction
+    # follows CUDA training. Run strict-load parity on the same device as the
+    # captured validation inputs; this does not alter checkpoint bytes.
+    restored.to(next(iter(parity_devices)))
     prior_wrapper_mode = model.training
     prior_deployable_mode = model.deployable_model.training
     model.eval(); restored.eval()

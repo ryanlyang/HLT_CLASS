@@ -291,7 +291,11 @@ def test_native_offline_surface_preserves_separate_latent_spaces_and_public_pari
     assert model.neutral_encoder.embed.last_input_channels == 7
 
 
-def test_wrapper_heads_are_identity_training_only_and_extract_strict_hlt_checkpoint(fake_hcwdl_weaver, tmp_path: Path):
+def test_wrapper_heads_are_identity_training_only_and_extract_strict_hlt_checkpoint(
+    fake_hcwdl_weaver, monkeypatch, tmp_path: Path,
+):
+    from hlt_classification.models import hcwdl_representation as representation
+
     wrapper = HCWDLRepresentationStudent(
         strategy="RREL", teacher_latent_domain="native_offline",
     )
@@ -304,6 +308,19 @@ def test_wrapper_heads_are_identity_training_only_and_extract_strict_hlt_checkpo
     features, vectors, mask, _, _ = _ordinary_inputs(batch=2)
     assert torch.equal(wrapper(features, vectors, mask), wrapper.deployable_model(features, vectors, mask))
 
+    restored = scouting.build_scouting_particle_transformer()
+    restored_to = restored.to
+    moved_to = []
+
+    def tracked_to(*args, **kwargs):
+        moved_to.append((args, kwargs))
+        return restored_to(*args, **kwargs)
+
+    monkeypatch.setattr(restored, "to", tracked_to)
+    monkeypatch.setattr(
+        representation, "build_scouting_particle_transformer", lambda: restored,
+    )
+
     extraction = publish_hcwdl_deployable_extraction(
         wrapper,
         checkpoint_path=tmp_path / "deployable.pt",
@@ -311,6 +328,7 @@ def test_wrapper_heads_are_identity_training_only_and_extract_strict_hlt_checkpo
         architecture_attestation_sha256="b" * 64,
         parity_inputs=(features, vectors, mask),
     )
+    assert moved_to == [((features.device,), {})]
     loaded = load_hcwdl_deployable_checkpoint(
         extraction.checkpoint_path, expected_sha256=extraction.checkpoint_sha256,
     )
