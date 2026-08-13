@@ -9,6 +9,7 @@ from hlt_classification.data.cache_contracts import (
     load_json, with_content_hash, write_immutable_json,
 )
 from hlt_classification.scouting import hcwdl_direct_offline_kd_campaign as campaign
+from hlt_classification.scouting import hcwdl_direct_offline_kd_runner as direct_runner
 from hlt_classification.scouting import hcwdl_direct_offline_kd_targets as direct_targets
 from hlt_classification.scouting.hcwdl_direct_offline_kd_graph import (
     BASE_NODE_REGISTRY, GRAPH_SHA256, HLT_SEED_ALIAS, NODE_ORDER,
@@ -104,6 +105,48 @@ def test_direct_target_spec_is_one_train_only_shared_forward():
     bad = dict(spec); bad.pop("content_hash"); bad["role"] = "validation"
     with pytest.raises(ValueError, match="differs"):
         validate_target_spec(with_content_hash(bad))
+
+
+def test_direct_ram_target_parent_uses_engine_split_lineage_key():
+    parents = direct_runner._base_training_parents({
+        "content_hash": "b" * 64,
+        "split_manifest_sha256": "c" * 64,
+        "selection_manifest_sha256": "d" * 64,
+    })
+    assert parents["split_manifest_sha256"] == "c" * 64
+    assert "split_manifest" not in parents
+
+
+def test_direct_representation_cache_builds_registered_hlt_metadata(monkeypatch):
+    observed: list[bool] = []
+    selections = {"train": object(), "validation": object()}
+    monkeypatch.setattr(
+        direct_runner, "_selections", lambda _spec: ({}, selections),
+    )
+    monkeypatch.setattr(direct_runner, "role_records", lambda *_args: ())
+    monkeypatch.setattr(direct_runner, "expected_cache_source_rows", lambda *_args, **_kwargs: {})
+
+    def fake_stream(_spec, **kwargs):
+        observed.append(bool(kwargs["paired_metadata"]))
+        return ()
+
+    class FakeCache:
+        header = {"array_bytes": 0}
+
+    monkeypatch.setattr(direct_runner, "_input_stream", fake_stream)
+    monkeypatch.setattr(
+        direct_runner.EphemeralPmardViewCache, "build",
+        lambda *_args, **_kwargs: FakeCache(),
+    )
+    direct_runner._view_caches(
+        {
+            "content_hash": SHA,
+            "role_counts": {"train": 2, "validation": 1},
+        },
+        domain="hlt", batch_size=1, sampler_seed=1337,
+        require_hcwdl_metadata=True,
+    )
+    assert observed == [True, True]
 
 
 def test_target_cleanup_authorization_makes_partial_delete_resumable(

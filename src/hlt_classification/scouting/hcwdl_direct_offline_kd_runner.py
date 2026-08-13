@@ -90,7 +90,10 @@ def _input_stream(
 def _view_caches(
     spec: Mapping[str, Any], *, domain: str, batch_size: int,
     sampler_seed: int, max_gib: float = 72.0,
+    require_hcwdl_metadata: bool = False,
 ) -> tuple[dict[str, EphemeralPmardViewCache], float]:
+    if require_hcwdl_metadata and domain != "hlt":
+        raise ValueError("registered HCWDL metadata is only defined for the HLT view")
     started = time.perf_counter(); split, selections = _selections(spec)
     caches = {}; remaining = float(max_gib)
     for role in ("train", "validation"):
@@ -99,6 +102,7 @@ def _view_caches(
             _input_stream(
                 spec, domain=domain, role=role, selection=selections[role],
                 batch_size=batch_size, sampler_seed=sampler_seed,
+                paired_metadata=require_hcwdl_metadata,
             ),
             expected_rows=int(spec["role_counts"][role]), records=records, role=role,
             expected_source_rows=expected_cache_source_rows(
@@ -130,6 +134,19 @@ def _runtime_signature(spec: Mapping[str, Any]) -> dict[str, Any]:
         "torch": torch_version, "graph_sha256": GRAPH_SHA256,
         "final_test_accessed": False,
     })
+
+
+def _base_training_parents(spec: Mapping[str, Any]) -> dict[str, str]:
+    """Build the exact parent namespace consumed by the PMARD engine."""
+    return {
+        "campaign_spec": str(spec["content_hash"]),
+        "graph": GRAPH_SHA256,
+        # The PMARD engine authenticates RAM teacher targets against this
+        # exact parent key. Keep the artifact name explicit; the former
+        # ``split_manifest`` alias made a correct target bank fail closed.
+        "split_manifest_sha256": str(spec["split_manifest_sha256"]),
+        "selection_manifest": str(spec["selection_manifest_sha256"]),
+    }
 
 
 def _base_wrapper(
@@ -242,11 +259,7 @@ def train_base_node(
         )
 
     targets = None
-    parents = {
-        "campaign_spec": spec["content_hash"], "graph": GRAPH_SHA256,
-        "split_manifest": spec["split_manifest_sha256"],
-        "selection_manifest": spec["selection_manifest_sha256"],
-    }
+    parents = _base_training_parents(spec)
     if node_id == "HLT_LOGIT":
         bank = DirectTargetBank.load(
             target_output_dir(spec["campaign_root"]) / "manifest.json", strategy="RSET",
@@ -417,6 +430,7 @@ def train_representation_node(
     sampler_seed = int(rng["streams"]["sampler"])
     caches, cache_seconds = _view_caches(
         spec, domain="hlt", batch_size=batch_size, sampler_seed=sampler_seed,
+        require_hcwdl_metadata=True,
     )
 
     def batches(role: str, epoch: int):
