@@ -15,7 +15,8 @@ from hlt_classification.data.cache_contracts import (
 
 from .hcwdl_homotopy import HomotopyCoordinate, particle_inputs_sha256
 from .hcwdl_homotopy_campaign import (
-    build_command_plan, validate_campaign, validate_worker_semantics,
+    build_command_plan, semantic_source_hashes, validate_campaign,
+    validate_worker_semantics,
 )
 from .hcwdl_homotopy_contracts import (
     AGGREGATE_CONTRACT, CACHE_RESOURCE_MEASUREMENT_CONTRACT,
@@ -65,9 +66,16 @@ class HomotopyWorkflow:
         self, spec: Mapping[str, Any], *, repository: str | Path,
         producer_commit: str | None = None,
         recovery_spec_sha256: str | None = None,
+        execution_semantic_source_sha256: Mapping[str, str] | None = None,
     ) -> None:
         validate_campaign(spec, executable=False)
-        validate_worker_semantics(spec, repository=repository)
+        if execution_semantic_source_sha256 is None:
+            validate_worker_semantics(spec, repository=repository)
+        elif (
+            dict(execution_semantic_source_sha256)
+            != semantic_source_hashes(repository)
+        ):
+            raise ValueError("HCWDL-UJ recovery execution source differs")
         self.spec = dict(spec); self.root = Path(spec["campaign_root"])
         self.repository = Path(repository)
         self.producer_commit = str(producer_commit or spec["source_commit"])
@@ -78,6 +86,10 @@ class HomotopyWorkflow:
         self.recovery_spec_sha256 = recovery_spec_sha256
         if self.producer_commit != spec["source_commit"]:
             require_sha256(recovery_spec_sha256, name="source recovery specification")
+            if execution_semantic_source_sha256 is None:
+                raise ValueError("HCWDL-UJ source recovery lineage is absent")
+        elif execution_semantic_source_sha256 is not None:
+            raise ValueError("HCWDL-UJ unchanged-source worker received recovery lineage")
         self.split = load_json(spec["split_manifest_path"])
         self.selection = load_json(spec["selection_manifest_path"])
         self.config = load_json(self.root / "coupling/config.json")

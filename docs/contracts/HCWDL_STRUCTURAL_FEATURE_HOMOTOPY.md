@@ -83,6 +83,14 @@ content hash, exact parents, and `final_test_accessed: false`. Array artifacts
 also bind immutable NPZ bytes and logical array hashes. Path existence alone
 never authorizes reuse.
 
+The exhaustive coupling audit may execute one process task per authenticated
+train or validation source unit. Its reducers are exact integers, while
+endpoint and solver hashes are framed per source and combined in canonical
+train-then-validation source order. Completion order and worker count are
+operational details, not scientific identity; the audit records this reduction
+scheme and validators fail closed on an unknown scheme. Parallel execution
+does not weaken the every-row endpoint, conservation, or solver-optimum checks.
+
 For the graph-thinned v2 pilot, an explicit operational-evidence waiver may
 carry the completed 80-fit v1 production-worker smoke together with completed
 v2 parity, coupling, endpoint, target, and graph-lock evidence. It records the
@@ -123,9 +131,15 @@ and total measured GPU-hours. Poor finite scientific performance completes.
 
 Recovery consumes an immutable ledger and monitor and submits only the exact
 failed/downstream closure. Source recovery changes only the clean pinned
-worktree/commit. Resource-only recovery requires OOM/timeout evidence,
-identical source/science/output, and monotonic CPU, memory, or walltime
-increases. Cancellation uses only exact campaign-bound job IDs.
+worktree/commit. It retains the campaign's original scientific-source map in
+the scientific identity while separately binding the complete corrected
+execution-source map, every changed semantic-file hash pair, and the explicit
+`execution_only_human_authorized_v1` classification. Source-recovery workers
+must match that corrected map exactly; they may not pretend the corrected
+bytes equal the original campaign bytes. Resource-only recovery requires
+OOM/timeout evidence, identical source/science/output, and monotonic CPU,
+memory, or walltime increases. Cancellation uses only exact campaign-bound
+job IDs.
 
 Local tests and dry runs establish implementation readiness, not Tigris
 acceptance. A genuine production-worker smoke must measure coupling, caches,

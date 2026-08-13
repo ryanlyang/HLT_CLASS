@@ -65,7 +65,7 @@ from hlt_classification.scouting.hcwdl_homotopy_resume import (
 from hlt_classification.scouting.hcwdl_homotopy_runner import node_output_dir
 from hlt_classification.scouting.hcwdl_homotopy_recovery import (
     _memory_mib, _validate_resource_increase, _wall_seconds,
-    aggregate_slurm_states,
+    aggregate_slurm_states, validate_recovery_worker_semantics,
 )
 from hlt_classification.scouting.hcwdl_recovery import (
     build_monitor_report, build_submission_ledger,
@@ -80,13 +80,17 @@ from hlt_classification.scouting.schema import HLT_FEATURE_SPECS
 from hlt_classification.scouting.schema import CLASS_NAMES
 from hlt_classification.scouting.schema import LABEL_BRANCHES, OBSERVER_BRANCHES
 from hlt_classification.scouting.hcwdl_upper_builder import (
-    _empty_transition_summary, _fraction_percent_bin,
+    _empty_transition_summary, _framed_source_digest, _fraction_percent_bin,
+    _merge_displacement, _merge_transition_summary,
+    _run_audit_workers,
     coupling_branch_allowlist,
 )
 from hlt_classification.scouting.hcwdl_upper_cache import (
-    ResidualCouplingStore, load_base_shard, publish_base_manifest,
+    ResidualCouplingStore, build_coupling_audit, load_base_shard,
+    publish_base_manifest,
     publish_base_shard, publish_coupling_manifest, publish_switch_sidecar,
     validate_base_manifest, validate_coupling_manifest,
+    validate_coupling_audit,
 )
 from hlt_classification.scouting.hcwdl_upper_coupling import (
     EndpointRecord, ResidualEdit, ScaleAccumulator, assign_edit_masses, attach_switches,
@@ -459,6 +463,136 @@ def test_coupling_branch_allowlist_is_label_free_with_only_count_observers() -> 
     assert branches.isdisjoint(LABEL_BRANCHES)
     allowed_observers = {"n_scoutpfcands", "n_cpfcands", "n_lts", "n_npfcands"}
     assert branches.intersection(OBSERVER_BRANCHES) == allowed_observers
+
+
+def test_full_role_audit_reducers_are_exact_and_source_order_deterministic() -> None:
+    first = _empty_transition_summary()
+    first["rows"] = 2
+    first["active_tokens_sum"] = 7
+    first["active_tokens_min"] = 3
+    first["active_tokens_max"] = 4
+    first["mass_q"] = 11
+    first["per_jet_distributions"]["active_tokens"][3] = 1
+    first["per_jet_distributions"]["active_tokens"][4] = 1
+    second = _empty_transition_summary()
+    second["rows"] = 1
+    second["active_tokens_sum"] = 5
+    second["active_tokens_min"] = 5
+    second["active_tokens_max"] = 5
+    second["mass_q"] = 13
+    second["per_jet_distributions"]["active_tokens"][5] = 1
+    merged = _empty_transition_summary()
+    _merge_transition_summary(merged, first)
+    _merge_transition_summary(merged, second)
+    assert merged["rows"] == 3
+    assert merged["active_tokens_sum"] == 12
+    assert merged["active_tokens_min"] == 3
+    assert merged["active_tokens_max"] == 5
+    assert merged["mass_q"] == 24
+    assert merged["per_jet_distributions"]["active_tokens"][3:6] == [1, 1, 1]
+
+    partials = [
+        {
+            "role": "train", "source_index": 0, "source_path": "a.root",
+            "observed": 2, "endpoint_p0_sha256": "1" * 64,
+        },
+        {
+            "role": "validation", "source_index": 0,
+            "source_path": "b.root", "observed": 1,
+            "endpoint_p0_sha256": "2" * 64,
+        },
+    ]
+    expected = _framed_source_digest(
+        partials, key="endpoint_p0_sha256", domain="endpoint",
+    )
+    completed_out_of_order = list(reversed(partials))
+    completed_out_of_order.sort(
+        key=lambda row: (("train", "validation").index(row["role"]), row["source_index"]),
+    )
+    assert _framed_source_digest(
+        completed_out_of_order, key="endpoint_p0_sha256", domain="endpoint",
+    ) == expected
+
+
+def test_full_role_sample_displacement_reduction_is_integer_exact() -> None:
+    destination = {"factorized": {}, "joint": {}}
+    _merge_displacement(destination, {
+        "factorized": {
+            "U020": {
+                "sample_rows": 3, "feature_l1_micro": 7,
+                "p4_l1_micro": 11, "mask_change_count": 2,
+            },
+        },
+        "joint": {},
+    })
+    _merge_displacement(destination, {
+        "factorized": {
+            "U020": {
+                "sample_rows": 5, "feature_l1_micro": 13,
+                "p4_l1_micro": 17, "mask_change_count": 3,
+            },
+        },
+        "joint": {},
+    })
+    assert destination["factorized"]["U020"] == {
+        "sample_rows": 8, "feature_l1_micro": 20,
+        "p4_l1_micro": 28, "mask_change_count": 5,
+    }
+
+
+def test_full_role_audit_process_pool_executes_source_units() -> None:
+    results = _run_audit_workers(
+        sum, [(1, 2), (3, 4), (5, 6)], workers=2, label="test audit",
+    )
+    assert sorted(results) == [3, 7, 11]
+
+
+def test_parallel_audit_execution_lineage_is_validated() -> None:
+    counters = {
+        name: 0 for name in (
+            "partition_failures", "assignment_injectivity_failures",
+            "endpoint_payload_mismatches", "duplicate_endpoint_failures",
+            "cardinality_failures", "active_count_overflow",
+            "truncation_events", "u000_mismatches", "u100_mismatches",
+            "j100_mismatches", "nonfinite_active_values",
+            "forbidden_branch_reads", "independent_sample_mismatches",
+            "solver_optimum_failures",
+        )
+    }
+    audit = build_coupling_audit(
+        coupling_config_sha256=H, train_manifest_sha256=H,
+        validation_manifest_sha256=H,
+        expected_rows={"train": 2, "validation": 1},
+        observed_rows={"train": 2, "validation": 1}, counters=counters,
+        endpoint_logical_sha256={"p0": H, "d100": H, "hlt": H},
+        branch_allowlist_sha256=H, branch_access_trace_sha256=H,
+        independent_sample_sha256=H,
+    )
+    audit["switch_calibration_sha256"] = H
+    audit["audit_execution"] = {
+        "source_partition": "one_process_task_per_authenticated_source_unit_v1",
+        "reduction": "canonical_role_source_order_framed_subhashes_v1",
+        "integer_reduction_order": (
+            "train_then_validation_canonical_source_index_v1"
+        ),
+        "worker_count_not_scientific_identity": True,
+    }
+    audit["solver_audit"] = {
+        "algorithm": "scipy_hungarian_plus_canonical_edge_fixing_v1",
+        "scipy_version": "test", "rows": 3,
+        "integer_matrix_sha256": H, "selected_edge_tuple_sha256": H,
+        "optimum_total_cost_q": 0,
+        "digest_reduction": "canonical_role_source_order_framed_subhashes_v1",
+    }
+    audit = with_content_hash(audit)
+    validate_coupling_audit(audit)
+
+    bad = dict(audit)
+    bad["audit_execution"] = dict(audit["audit_execution"])
+    bad["audit_execution"]["worker_count_not_scientific_identity"] = False
+    bad = with_content_hash(bad)
+    with pytest.raises(ValueError, match="parallel execution semantics"):
+        validate_coupling_audit(bad)
 
 
 def test_switch_transform_is_deterministic_nested_and_endpoint_exact() -> None:
@@ -855,6 +989,50 @@ def test_worker_semantics_are_source_pinned(
         )
 
 
+def test_source_recovery_binds_reviewed_execution_source_drift(
+    tmp_path: Path,
+) -> None:
+    repository = Path(__file__).resolve().parents[1]
+    frozen = semantic_source_hashes(repository)
+    copied = tmp_path / "source"
+    for relative in SEMANTIC_SOURCE_FILES:
+        target = copied / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(repository / relative, target)
+    changed_path = SEMANTIC_SOURCE_FILES.index(
+        "src/hlt_classification/scouting/hcwdl_upper_builder.py"
+    )
+    target = copied / SEMANTIC_SOURCE_FILES[changed_path]
+    target.write_bytes(target.read_bytes() + b"\n# execution-only repair\n")
+    execution = semantic_source_hashes(copied)
+    changed = {
+        SEMANTIC_SOURCE_FILES[changed_path]: {
+            "campaign_sha256": frozen[SEMANTIC_SOURCE_FILES[changed_path]],
+            "recovery_sha256": execution[SEMANTIC_SOURCE_FILES[changed_path]],
+        },
+    }
+    recovery = {
+        "execution_semantic_source_sha256": execution,
+        "changed_semantic_sources": changed,
+        "semantic_change_classification": "execution_only_human_authorized_v1",
+        "live_submission_authorized": True,
+    }
+    validate_recovery_worker_semantics(
+        {"semantic_source_sha256": frozen}, recovery, repository=copied,
+    )
+    recovery["live_submission_authorized"] = False
+    with pytest.raises(ValueError, match="execution source lineage"):
+        validate_recovery_worker_semantics(
+            {"semantic_source_sha256": frozen}, recovery, repository=copied,
+        )
+    recovery["live_submission_authorized"] = True
+    recovery["changed_semantic_sources"] = {}
+    with pytest.raises(ValueError, match="execution source lineage"):
+        validate_recovery_worker_semantics(
+            {"semantic_source_sha256": frozen}, recovery, repository=copied,
+        )
+
+
 def test_global_memory_estimator_accounts_for_noncache_state() -> None:
     keys = [
         f"{role}:{view}"
@@ -1229,6 +1407,11 @@ def test_slurm_worker_is_exec_and_has_no_array_throttle() -> None:
         "scripts/run_hcwdl_homotopy_recovery_task.py",
     ):
         assert "validate_worker_semantics" in Path(script).read_text(encoding="utf-8")
+    recovery_worker = Path(
+        "scripts/run_hcwdl_homotopy_recovery_task.py"
+    ).read_text(encoding="utf-8")
+    assert "validate_recovery_worker_semantics" in recovery_worker
+    assert "execution_semantic_source_sha256" in recovery_worker
     from hlt_classification.scouting.hcwdl_homotopy_campaign import _tasks
     tasks = _tasks(train_sources=3, validation_sources=2)
     assert len(tasks) == 66

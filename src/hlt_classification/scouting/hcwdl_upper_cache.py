@@ -407,6 +407,17 @@ def validate_coupling_audit(value: Mapping[str, Any]) -> str:
         raise ValueError("coupling solver audit differs")
     require_sha256(solver.get("integer_matrix_sha256"), name="solver matrix")
     require_sha256(solver.get("selected_edge_tuple_sha256"), name="solver selection")
+    execution = value.get("audit_execution")
+    if execution is not None:
+        if execution != {
+            "source_partition": "one_process_task_per_authenticated_source_unit_v1",
+            "reduction": "canonical_role_source_order_framed_subhashes_v1",
+            "integer_reduction_order": "train_then_validation_canonical_source_index_v1",
+            "worker_count_not_scientific_identity": True,
+        }:
+            raise ValueError("coupling audit parallel execution semantics differ")
+        if solver.get("digest_reduction") != execution["reduction"]:
+            raise ValueError("coupling audit solver reduction differs")
     return digest
 
 

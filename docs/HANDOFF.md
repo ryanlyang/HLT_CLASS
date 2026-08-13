@@ -1,5 +1,64 @@
 # Current Handoff
 
+## HCWDL-UJ exhaustive-audit source parallelism repair (2026-08-14)
+
+The 300k v2 coupling audit timed out twice: original job `83434` exhausted its
+four-hour request, and resource-recovery job `83884` exhausted twelve hours.
+This is an operational implementation failure, not a failed coupling
+invariant or a scientific result. The audit task requested eight CPUs but
+`audit_full_roles()` executed the entire 300,000-train plus
+100,000-validation source population in one Python process. For every jet it
+also accumulated all twenty structural thresholds, reconstructed and compared
+the P0/D100/HLT endpoints, rebuilt the residual cost matrix, reran the exact
+Hungarian optimum check, and later performed the independent ROOT reread. The
+extra walltime therefore left seven requested CPUs unused by the dominant
+loop.
+
+The exhaustive audit is now partitioned into one process task per
+authenticated train or validation source unit, using up to
+`SLURM_CPUS_PER_TASK` workers. Every source still performs the complete row,
+endpoint, conservation, transition, and solver-optimum checks. Results are
+reduced with exact integer addition in canonical train-then-validation source
+order; endpoint and solver proofs use domain-separated, length-framed
+per-source hashes. Independent sample rereads use the same source partition.
+Completion order and worker count are explicitly excluded from scientific
+identity, while the reduction scheme is recorded in the audit and validated
+fail-closed. The frozen single-process implementation remains private as a
+reference for future Tigris parity audits. No coupling, switch, endpoint,
+graph, loss, or dataset semantics changed, and no contract version was
+bumped.
+
+Self-review also found that the pre-existing source-recovery worker would have
+rejected any corrected file listed in the campaign's semantic-source map,
+including this execution-only repair. Source recovery now preserves that
+original map inside the unchanged scientific identity and separately binds
+the complete corrected execution-source map, the exact old/new hash pair for
+every changed semantic file, and an explicit human-authorized execution-only
+classification. Both the recovery validator and worker checkout validate
+that second map; resource-only recovery continues to require byte-identical
+campaign source. This closes the recovery path without disguising changed
+source bytes as the original campaign source.
+
+Local evidence for this repair:
+
+- focused HCWDL homotopy and CLI suite: 114/114 passed before the final
+  execution-lineage regression, followed by 4/4 targeted reducer,
+  process-pool, and validator tests;
+- complete repository suite: 432/432 passed with the 14 existing
+  Matplotlib/Pyparsing warnings plus one non-scientific pytest-cache warning;
+- changed-source AST parsing, four recovery/task CLI help surfaces, v2 graph,
+  pilot, and recovery contract identity checks, and `git diff --check` passed;
+- no donor code or donor commit was used; unrelated user worktrees, figures,
+  and plotting files remain untouched.
+
+The current resource-recovery ledger must be monitored immutably and cancelled
+by its exact IDs before a source-pinned failed-closure recovery is submitted.
+That recovery reuses the completed calibrations, shards, manifests, switches,
+and TOFF targets, retains the twelve-hour CPU-coupling envelope, and starts at
+`coupling_audit`; no earlier data work or completed artifact is recomputed.
+Real Tigris validation of the parallel audit remains the next required runtime
+evidence.
+
 ## HCWDL architecture-factorial measured P0 walltime (2026-08-12)
 
 The first 300k architecture-factorial pilot measured a preprocessing-bound

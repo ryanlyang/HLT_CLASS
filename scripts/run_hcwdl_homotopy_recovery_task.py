@@ -20,7 +20,8 @@ from hlt_classification.scouting.hcwdl_homotopy_campaign import (  # noqa: E402
     validate_worker_semantics,
 )
 from hlt_classification.scouting.hcwdl_homotopy_recovery import (  # noqa: E402
-    validate_recovery_spec, validate_resource_recovery_spec,
+    validate_recovery_spec, validate_recovery_worker_semantics,
+    validate_resource_recovery_spec,
 )
 from hlt_classification.scouting.hcwdl_homotopy_workflow import HomotopyWorkflow  # noqa: E402
 from hlt_classification.scouting.hcwdl_recovery import (  # noqa: E402
@@ -35,7 +36,8 @@ def main() -> int:
     parser.add_argument("--array-index", type=int)
     args = parser.parse_args()
     recovery = load_json(args.recovery_spec)
-    if recovery.get("contract") == RECOVERY_SPEC_CONTRACT:
+    source_recovery = recovery.get("contract") == RECOVERY_SPEC_CONTRACT
+    if source_recovery:
         validate_recovery_spec(recovery, executable=True)
     elif recovery.get("contract") == RESOURCE_RECOVERY_SPEC_CONTRACT:
         validate_resource_recovery_spec(recovery, executable=True)
@@ -47,7 +49,12 @@ def main() -> int:
         raise PermissionError("recovery worker is not running from its bound worktree")
     validate_source_checkout(REPO_ROOT, expected_commit=recovery["source_commit"])
     campaign = load_json(recovery["campaign_spec"]["path"])
-    validate_worker_semantics(campaign, repository=REPO_ROOT)
+    if source_recovery:
+        validate_recovery_worker_semantics(
+            campaign, recovery, repository=REPO_ROOT,
+        )
+    else:
+        validate_worker_semantics(campaign, repository=REPO_ROOT)
     index = args.array_index
     if index is None and "SLURM_ARRAY_TASK_ID" in os.environ:
         index = int(os.environ["SLURM_ARRAY_TASK_ID"])
@@ -55,6 +62,10 @@ def main() -> int:
         campaign, repository=REPO_ROOT,
         producer_commit=recovery["source_commit"],
         recovery_spec_sha256=recovery["content_hash"],
+        execution_semantic_source_sha256=(
+            recovery["execution_semantic_source_sha256"]
+            if source_recovery else None
+        ),
     ).run(
         args.task, array_index=index,
     )

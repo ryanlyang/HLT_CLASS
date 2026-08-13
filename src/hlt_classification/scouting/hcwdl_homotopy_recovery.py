@@ -11,7 +11,7 @@ from hlt_classification.data.cache_contracts import (
     with_content_hash,
 )
 
-from .hcwdl_homotopy_campaign import validate_campaign
+from .hcwdl_homotopy_campaign import semantic_source_hashes, validate_campaign
 from .hcwdl_homotopy_contracts import (
     RECOVERY_AUTHORIZATION_PHRASE, RECOVERY_COMMAND_PLAN_CONTRACT,
     RECOVERY_SPEC_CONTRACT, RESOURCE_RECOVERY_AUTHORIZATION_PHRASE,
@@ -96,6 +96,47 @@ def _scientific_identity(campaign: Mapping[str, Any]) -> str:
             "role_counts",
         )
     })
+
+
+def _execution_source_lineage(
+    campaign: Mapping[str, Any], *, project_dir: str | Path,
+) -> tuple[dict[str, str], dict[str, dict[str, str]]]:
+    frozen = campaign.get("semantic_source_sha256")
+    current = semantic_source_hashes(project_dir)
+    if not isinstance(frozen, Mapping) or set(frozen) != set(current):
+        raise ValueError("HCWDL-UJ recovery semantic source registry differs")
+    changed = {
+        name: {
+            "campaign_sha256": require_sha256(
+                frozen[name], name=f"campaign semantic source {name}",
+            ),
+            "recovery_sha256": require_sha256(
+                current[name], name=f"recovery semantic source {name}",
+            ),
+        }
+        for name in sorted(current)
+        if frozen[name] != current[name]
+    }
+    return current, changed
+
+
+def validate_recovery_worker_semantics(
+    campaign: Mapping[str, Any], recovery: Mapping[str, Any], *,
+    repository: str | Path,
+) -> None:
+    """Authenticate a reviewed execution-only source correction."""
+
+    current, changed = _execution_source_lineage(
+        campaign, project_dir=repository,
+    )
+    if (
+        recovery.get("execution_semantic_source_sha256") != current
+        or recovery.get("changed_semantic_sources") != changed
+        or recovery.get("live_submission_authorized") is not True
+        or recovery.get("semantic_change_classification")
+        != "execution_only_human_authorized_v1"
+    ):
+        raise ValueError("HCWDL-UJ recovery execution source lineage differs")
 
 
 def _validate_monitor_lineage(
@@ -291,6 +332,9 @@ def create_recovery_spec(
     )
     tasks, failed, _ = _closure(campaign, ledger, monitor)
     resources = _resources_from_ledger(campaign, ledger)
+    execution_sources, changed_sources = _execution_source_lineage(
+        campaign, project_dir=project_dir,
+    )
     authorized = authorization_phrase is not None
     if authorized and authorization_phrase != RECOVERY_AUTHORIZATION_PHRASE:
         raise PermissionError("HCWDL-UJ source recovery phrase differs")
@@ -302,6 +346,12 @@ def create_recovery_spec(
         "project_dir": str(Path(project_dir).resolve()), "source_commit": source_commit,
         "parent_source_commit": campaign["source_commit"], "retry_tasks": tasks,
         "failed_job_ids": failed, "resources": resources,
+        "execution_semantic_source_sha256": execution_sources,
+        "changed_semantic_sources": changed_sources,
+        "semantic_change_classification": (
+            "execution_only_human_authorized_v1"
+            if authorized else "execution_only_unreviewed_v1"
+        ),
         "scientific_identity_sha256": _scientific_identity(campaign),
         "live_submission_authorized": authorized, "final_test_accessed": False,
     }
@@ -326,9 +376,19 @@ def validate_recovery_spec(value: Mapping[str, Any], *, executable: bool = False
         campaign_sha256=campaign["content_hash"],
     )
     tasks, failed, _ = _closure(campaign, ledger, monitor)
+    execution_sources, changed_sources = _execution_source_lineage(
+        campaign, project_dir=value["project_dir"],
+    )
     if (
         tasks != value.get("retry_tasks") or failed != value.get("failed_job_ids")
         or value.get("resources") != _resources_from_ledger(campaign, ledger)
+        or value.get("execution_semantic_source_sha256") != execution_sources
+        or value.get("changed_semantic_sources") != changed_sources
+        or value.get("semantic_change_classification") != (
+            "execution_only_human_authorized_v1"
+            if value.get("live_submission_authorized") is True
+            else "execution_only_unreviewed_v1"
+        )
         or value.get("scientific_identity_sha256") != _scientific_identity(campaign)
         or value.get("parent_source_commit") != campaign.get("source_commit")
         or value.get("recovery_root") != str(Path(value["recovery_root"]).resolve())
@@ -470,5 +530,6 @@ def recovery_plan(
 __all__ = [
     "aggregate_slurm_states",
     "create_recovery_spec", "create_resource_recovery_spec", "recovery_plan",
-    "validate_recovery_spec", "validate_resource_recovery_spec",
+    "validate_recovery_spec", "validate_recovery_worker_semantics",
+    "validate_resource_recovery_spec",
 ]

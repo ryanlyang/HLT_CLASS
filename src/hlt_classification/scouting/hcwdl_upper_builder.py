@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
-from concurrent.futures import ProcessPoolExecutor
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import hashlib
 import heapq
 import os
@@ -456,7 +456,524 @@ def _transition_attributes(partition: object, edit: ResidualEdit) -> tuple[int, 
     )
 
 
-def audit_full_roles(
+_AUDIT_COUNTER_NAMES = (
+    "partition_failures", "assignment_injectivity_failures",
+    "endpoint_payload_mismatches", "duplicate_endpoint_failures",
+    "cardinality_failures", "active_count_overflow", "truncation_events",
+    "u000_mismatches", "u100_mismatches", "j100_mismatches",
+    "nonfinite_active_values", "forbidden_branch_reads",
+    "independent_sample_mismatches", "solver_optimum_failures",
+)
+_PARTITION_NAMES = ("A", "B", "K", "O", "R", "R_hlt", "R_off")
+_ROLE_SUMMARY_NAMES = (
+    "rows", "A_count", "O_count", "B_count", "R_hlt_count",
+    "R_off_count", "A_pt_micro", "O_pt_micro", "B_pt_micro",
+    "R_hlt_pt_micro", "R_off_pt_micro",
+)
+_EDIT_NAMES = ("substitution", "removal", "insertion")
+_TRANSITION_SCALAR_SUMS = (
+    "rows", "active_tokens_sum", "edit_count", "switched_edit_count",
+    "mass_q", "switched_mass_q", "absolute_pt_change_micro",
+    "switched_absolute_pt_change_micro", "absolute_energy_change_micro",
+    "switched_absolute_energy_change_micro", "category_change_count",
+    "switched_category_change_count", "track_applicability_change_count",
+    "switched_track_applicability_change_count",
+    "validity_group_change_count", "switched_validity_group_change_count",
+)
+_AUDIT_DIGEST_REDUCTION = "canonical_role_source_order_framed_subhashes_v1"
+
+
+def _empty_role_summary() -> dict[str, int]:
+    return {name: 0 for name in _ROLE_SUMMARY_NAMES}
+
+
+def _empty_switch_totals() -> dict[str, dict[str, Any]]:
+    return {
+        f"s{level:03d}": _empty_transition_summary()
+        for level in range(5, 101, 5)
+    }
+
+
+def _merge_transition_summary(
+    destination: dict[str, Any], source: Mapping[str, Any],
+) -> None:
+    for name in _TRANSITION_SCALAR_SUMS:
+        destination[name] += int(source[name])
+    destination["active_tokens_min"] = min(
+        int(destination["active_tokens_min"]), int(source["active_tokens_min"]),
+    )
+    destination["active_tokens_max"] = max(
+        int(destination["active_tokens_max"]), int(source["active_tokens_max"]),
+    )
+    for name, counts in source["per_jet_distributions"].items():
+        target = destination["per_jet_distributions"][name]
+        if len(target) != len(counts):
+            raise ValueError("HCWDL-UJ transition distribution shape differs")
+        for index, count in enumerate(counts):
+            target[index] += int(count)
+
+
+def _merge_displacement(
+    destination: dict[str, dict[str, dict[str, int]]],
+    source: Mapping[str, Mapping[str, Mapping[str, int]]],
+) -> None:
+    for track, rows in source.items():
+        for node_id, row in rows.items():
+            target = destination[track].setdefault(
+                node_id,
+                {
+                    "sample_rows": 0, "feature_l1_micro": 0,
+                    "p4_l1_micro": 0, "mask_change_count": 0,
+                },
+            )
+            for name in target:
+                target[name] += int(row[name])
+
+
+def _framed_source_digest(
+    results: Sequence[Mapping[str, Any]], *, key: str, domain: str,
+) -> str:
+    digest = hashlib.sha256()
+    encoded_domain = domain.encode("utf-8")
+    digest.update(len(encoded_domain).to_bytes(4, "little")); digest.update(encoded_domain)
+    for result in results:
+        for value in (
+            str(result["role"]), str(result["source_path"]),
+            str(int(result["observed"])), str(result[key]),
+        ):
+            encoded = value.encode("utf-8")
+            digest.update(len(encoded).to_bytes(4, "little")); digest.update(encoded)
+    return digest.hexdigest()
+
+
+def _run_audit_workers(
+    worker: Callable[[tuple[Any, ...]], Any],
+    arguments: Sequence[tuple[Any, ...]], *, workers: int,
+    label: str,
+) -> list[Any]:
+    if workers <= 0:
+        raise ValueError("HCWDL-UJ audit worker count differs")
+    if workers == 1:
+        results = []
+        for index, argument in enumerate(arguments, start=1):
+            results.append(worker(argument))
+            print(
+                f"HCWDL-UJ {label}: completed source {index}/{len(arguments)}",
+                flush=True,
+            )
+        return results
+    results = []
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(worker, argument) for argument in arguments]
+        for index, future in enumerate(as_completed(futures), start=1):
+            results.append(future.result())
+            print(
+                f"HCWDL-UJ {label}: completed source {index}/{len(arguments)}",
+                flush=True,
+            )
+    return results
+
+
+def _audit_source_worker(arguments: tuple[Any, ...]) -> dict[str, Any]:
+    (
+        split_manifest, selection_manifest, assignment_manifest,
+        coupling_manifest, data_root, role, source_index, scales,
+        discrete_seed, step_size,
+    ) = arguments
+    split_hash = str(split_manifest["content_hash"])
+    selection = RowSelection(
+        selection_manifest, role=role, split_manifest_sha256=split_hash,
+    )
+    assignments = DenseAssignmentStore(assignment_manifest)
+    couplings = ResidualCouplingStore(coupling_manifest)
+    record = role_records(split_manifest, role)[source_index]
+    counters = {name: 0 for name in _AUDIT_COUNTER_NAMES}
+    digests = {name: hashlib.sha256() for name in ("p0", "d100", "hlt")}
+    solver_matrix_digest = hashlib.sha256()
+    solver_selection_digest = hashlib.sha256()
+    solver_optimum_total = 0
+    solver_rows = 0
+    partition_totals = {name: 0 for name in _PARTITION_NAMES}
+    role_summary = _empty_role_summary()
+    edit_totals = {name: 0 for name in _EDIT_NAMES}
+    switch_totals = _empty_switch_totals()
+    sample_heap: list[tuple[int, str, str]] = []
+    observed = 0
+    for _, source_path, entries, arrays in _selected_source_chunks(
+        split_manifest=split_manifest, selection=selection, data_root=data_root,
+        role=role, source_index=source_index, step_size=step_size,
+    ):
+        if source_path != record.path:
+            raise ValueError("HCWDL-UJ audit source identity differs")
+        mapping, confidence = assignments.join(source_path, entries)
+        edit_rows = [couplings.get(source_path, int(entry)).edits for entry in entries]
+        identities = [f"{source_path}::tree::{int(entry)}" for entry in entries]
+        for row, edits in enumerate(edit_rows):
+            partition = build_partition_from_arrays(
+                arrays, row=row, assignment=mapping[row],
+            )
+            values = {
+                "A": len(partition.p0), "B": len(partition.d100),
+                "K": len(partition.common), "O": len(partition.source_only),
+                "R": len(partition.target_only), "R_hlt": len(partition.r_hlt),
+                "R_off": len(partition.r_off),
+            }
+            for name, count in values.items():
+                partition_totals[name] += count
+            role_summary["rows"] += 1
+            for name, records in (
+                ("A", partition.p0), ("O", partition.source_only),
+                ("B", partition.d100), ("R_hlt", partition.r_hlt),
+                ("R_off", partition.r_off),
+            ):
+                role_summary[f"{name}_count"] += len(records)
+                role_summary[f"{name}_pt_micro"] += sum(
+                    int(np.floor(
+                        float(np.hypot(item.p4[0], item.p4[1])) * 1_000_000 + .5
+                    ))
+                    for item in records
+                )
+            if (
+                values["K"] + values["O"] != values["A"]
+                or values["K"] + values["R"] != values["B"]
+            ):
+                counters["cardinality_failures"] += 1
+            attributes = [_transition_attributes(partition, edit) for edit in edits]
+            for edit in edits:
+                edit_totals[_EDIT_NAMES[edit.edit_kind]] += 1
+            for level in range(5, 101, 5):
+                summary = switch_totals[f"s{level:03d}"]
+                switched = [
+                    edit_is_active(edit, numerator=level, denominator=100)
+                    for edit in edits
+                ]
+                active_count = len(partition.common)
+                for edit, active in zip(edits, switched, strict=True):
+                    if (
+                        edit.edit_kind == 0
+                        or (edit.edit_kind == 1 and not active)
+                        or (edit.edit_kind == 2 and active)
+                    ):
+                        active_count += 1
+                summary["rows"] += 1
+                summary["active_tokens_sum"] += active_count
+                summary["active_tokens_min"] = min(
+                    summary["active_tokens_min"], active_count,
+                )
+                summary["active_tokens_max"] = max(
+                    summary["active_tokens_max"], active_count,
+                )
+                summary["edit_count"] += len(edits)
+                switched_count = 0
+                row_totals = [0, 0, 0, 0, 0, 0]
+                row_switched = [0, 0, 0, 0, 0, 0]
+                for edit, active, diagnostic in zip(
+                    edits, switched, attributes, strict=True,
+                ):
+                    pt, energy, category, track, validity = diagnostic
+                    values_for_fraction = (
+                        int(edit.mass_q), pt, energy, category, track, validity,
+                    )
+                    for item_index, item in enumerate(values_for_fraction):
+                        row_totals[item_index] += item
+                    summary["mass_q"] += int(edit.mass_q)
+                    summary["absolute_pt_change_micro"] += pt
+                    summary["absolute_energy_change_micro"] += energy
+                    summary["category_change_count"] += category
+                    summary["track_applicability_change_count"] += track
+                    summary["validity_group_change_count"] += validity
+                    if active:
+                        switched_count += 1
+                        for item_index, item in enumerate(values_for_fraction):
+                            row_switched[item_index] += item
+                        summary["switched_edit_count"] += 1
+                        summary["switched_mass_q"] += int(edit.mass_q)
+                        summary["switched_absolute_pt_change_micro"] += pt
+                        summary["switched_absolute_energy_change_micro"] += energy
+                        summary["switched_category_change_count"] += category
+                        summary["switched_track_applicability_change_count"] += track
+                        summary["switched_validity_group_change_count"] += validity
+                distributions = summary["per_jet_distributions"]
+                distributions["active_tokens"][active_count] += 1
+                distributions["edit_count"][len(edits)] += 1
+                distributions["switched_edit_count"][switched_count] += 1
+                for name, numerator_value, denominator_value in zip(
+                    (
+                        "switched_mass_fraction_percent",
+                        "switched_pt_change_fraction_percent",
+                        "switched_energy_change_fraction_percent",
+                        "switched_category_change_fraction_percent",
+                        "switched_track_change_fraction_percent",
+                        "switched_validity_change_fraction_percent",
+                    ),
+                    row_switched, row_totals, strict=True,
+                ):
+                    distributions[name][
+                        _fraction_percent_bin(numerator_value, denominator_value)
+                    ] += 1
+            source = tuple(sorted(
+                partition.source_only, key=lambda value: value.source_key,
+            ))
+            target = tuple(sorted(
+                partition.target_only, key=lambda value: value.target_key,
+            ))
+            matrix = np.asarray([
+                [endpoint_cost(left, right, scales)[1] for right in target]
+                for left in source
+            ], dtype="<i8") if source and target else np.empty(
+                (len(source), len(target)), dtype="<i8",
+            )
+            _update_digest(
+                solver_matrix_digest, np.asarray(matrix.shape, dtype="<i8"), matrix,
+            )
+            selected = np.asarray([
+                edit.key for edit in edits if edit.edit_kind == 0
+            ], dtype="<i8").reshape(-1, 5)
+            _update_digest(solver_selection_digest, selected)
+            stored_total = sum(
+                edit.cost_q for edit in edits if edit.edit_kind == 0
+            )
+            if source and target:
+                from scipy.optimize import linear_sum_assignment
+                optimum_rows, optimum_columns = linear_sum_assignment(matrix)
+                optimum_total = sum(
+                    int(matrix[row_index, column_index])
+                    for row_index, column_index in zip(
+                        optimum_rows, optimum_columns, strict=True,
+                    )
+                )
+            else:
+                optimum_total = 0
+            if stored_total != optimum_total:
+                counters["solver_optimum_failures"] += 1
+            solver_optimum_total += optimum_total
+            solver_rows += 1
+        p0 = build_homotopy_inputs(
+            arrays, assignments=mapping, confidence=confidence,
+            coupling_rows=edit_rows, coordinate=HomotopyCoordinate(0, 1, 0, 1),
+            identity_keys=identities, discrete_seed=discrete_seed,
+        )
+        u100 = build_homotopy_inputs(
+            arrays, assignments=mapping, confidence=confidence,
+            coupling_rows=edit_rows, coordinate=HomotopyCoordinate(1, 1, 0, 1),
+            identity_keys=identities, discrete_seed=discrete_seed,
+        )
+        j100 = build_homotopy_inputs(
+            arrays, assignments=mapping, confidence=confidence,
+            coupling_rows=edit_rows, coordinate=HomotopyCoordinate(1, 1, 1, 1),
+            identity_keys=identities, discrete_seed=discrete_seed,
+        )
+        hlt = build_hlt_inputs(arrays)
+        expected_p0 = build_p0_inputs(arrays)
+        offline_p4 = [
+            project_offline_endpoint_records(arrays, row=index)[2]
+            for index in range(len(entries))
+        ]
+        d100 = build_alpha_repaired_inputs(
+            arrays, offline_p4, mapping, alpha=1.0,
+            repair_family=HIGHCOV_SHELL_EXACT_FAMILY,
+            confidence_weights=confidence, offline_arrays=arrays,
+            identity_keys=identities, discrete_seed=discrete_seed,
+        )
+        try:
+            assert_particle_inputs_equal(u100, d100, endpoint="U100/D100")
+        except ValueError:
+            counters["u100_mismatches"] += len(entries)
+        try:
+            assert_particle_inputs_equal(j100, hlt, endpoint="J100/HLT")
+        except ValueError:
+            counters["j100_mismatches"] += len(entries)
+        try:
+            for index in range(len(entries)):
+                n_left = int(p0.raw_lengths[index])
+                n_right = int(expected_p0.raw_lengths[index])
+                if n_left != n_right:
+                    raise ValueError("P0 visible length differs")
+                left_tokens = sorted(
+                    np.concatenate((
+                        p0.features[index, :, token], p0.vectors[index, :, token],
+                    )).tobytes()
+                    for token in range(n_left)
+                )
+                right_tokens = sorted(
+                    np.concatenate((
+                        expected_p0.features[index, :, token],
+                        expected_p0.vectors[index, :, token],
+                    )).tobytes()
+                    for token in range(n_right)
+                )
+                if left_tokens != right_tokens:
+                    raise ValueError("P0 projected multiset differs")
+        except ValueError:
+            counters["u000_mismatches"] += len(entries)
+        if any(
+            np.any(~np.isfinite(value.features))
+            or np.any(~np.isfinite(value.vectors))
+            for value in (p0, u100, j100)
+        ):
+            counters["nonfinite_active_values"] += len(entries)
+        _update_digest(
+            digests["p0"], p0.features, p0.vectors, p0.mask, p0.raw_lengths,
+        )
+        _update_digest(
+            digests["d100"], d100.features, d100.vectors, d100.mask,
+            d100.raw_lengths,
+        )
+        _update_digest(
+            digests["hlt"], hlt.features, hlt.vectors, hlt.mask, hlt.raw_lengths,
+        )
+        for row, identity in enumerate(identities):
+            rank = int.from_bytes(
+                hashlib.sha256(identity.encode("utf-8")).digest()[:8], "big",
+            )
+            item = (-rank, identity, _row_endpoint_hash(p0, u100, j100, row=row))
+            if len(sample_heap) < 128:
+                heapq.heappush(sample_heap, item)
+            elif item > sample_heap[0]:
+                heapq.heapreplace(sample_heap, item)
+        observed += len(entries)
+    expected = selection.source_rows(record.path)
+    if expected < 0:
+        expected = record.mapped_entries
+    if observed != expected or role_summary["rows"] != expected:
+        raise ValueError("HCWDL-UJ per-source full-role audit coverage differs")
+    return {
+        "role": role, "source_index": source_index, "source_path": record.path,
+        "expected": expected, "observed": observed, "counters": counters,
+        "endpoint_p0_sha256": digests["p0"].hexdigest(),
+        "endpoint_d100_sha256": digests["d100"].hexdigest(),
+        "endpoint_hlt_sha256": digests["hlt"].hexdigest(),
+        "solver_matrix_sha256": solver_matrix_digest.hexdigest(),
+        "solver_selection_sha256": solver_selection_digest.hexdigest(),
+        "solver_optimum_total": solver_optimum_total, "solver_rows": solver_rows,
+        "partition_totals": partition_totals, "role_summary": role_summary,
+        "edit_totals": edit_totals, "switch_totals": switch_totals,
+        "sample_heap": sample_heap,
+    }
+
+
+def _audit_sample_source_worker(arguments: tuple[Any, ...]) -> dict[str, Any]:
+    (
+        split_manifest, selection_manifest, assignment_manifest,
+        coupling_manifest, data_root, role, source_index, scale_calibration,
+        switch_calibration, coupling_config_sha256, discrete_seed, step_size,
+        wanted,
+    ) = arguments
+    split_hash = str(split_manifest["content_hash"])
+    selection = RowSelection(
+        selection_manifest, role=role, split_manifest_sha256=split_hash,
+    )
+    assignments = DenseAssignmentStore(assignment_manifest)
+    couplings = ResidualCouplingStore(coupling_manifest)
+    record = role_records(split_manifest, role)[source_index]
+    sample_observed: dict[str, str] = {}
+    mismatches = 0
+    sampled_displacement = {"factorized": {}, "joint": {}}
+    for _, source_path, entries, arrays in _selected_source_chunks(
+        split_manifest=split_manifest, selection=selection, data_root=data_root,
+        role=role, source_index=source_index, step_size=step_size,
+    ):
+        if source_path != record.path:
+            raise ValueError("HCWDL-UJ sample-audit source identity differs")
+        selected = [
+            index for index, entry in enumerate(entries)
+            if f"{source_path}::tree::{int(entry)}" in wanted
+        ]
+        if not selected:
+            continue
+        chosen = np.asarray(selected, dtype=np.int64)
+        subset = _slice(arrays, chosen)
+        chosen_entries = entries[chosen]
+        mapping, confidence = assignments.join(source_path, chosen_entries)
+        edits = [couplings.get(source_path, int(entry)).edits for entry in chosen_entries]
+        identities = [f"{source_path}::tree::{int(entry)}" for entry in chosen_entries]
+        for row, identity in enumerate(identities):
+            partition = build_partition_from_arrays(
+                subset, row=row, assignment=mapping[row],
+            )
+            independently_recomputed = attach_switches(
+                assign_edit_masses(
+                    couple_partition(partition, scale_calibration), partition,
+                ),
+                identity_key=identity,
+                coupling_config_sha256=coupling_config_sha256,
+                calibration=switch_calibration,
+            )
+            if tuple(edits[row]) != independently_recomputed:
+                mismatches += 1
+        views = [build_homotopy_inputs(
+            subset, assignments=mapping, confidence=confidence,
+            coupling_rows=edits, coordinate=coordinate,
+            identity_keys=identities, discrete_seed=discrete_seed,
+        ) for coordinate in (
+            HomotopyCoordinate(0, 1, 0, 1),
+            HomotopyCoordinate(1, 1, 0, 1),
+            HomotopyCoordinate(1, 1, 1, 1),
+        )]
+        factorized_coordinates = [
+            (f"U{index * 20:03d}", HomotopyCoordinate(index, 5, 0, 1))
+            for index in range(1, 6)
+        ] + [
+            (
+                f"D{100 - index * 20}F",
+                HomotopyCoordinate(1, 1, index, 5),
+            )
+            for index in range(1, 6)
+        ]
+        joint_coordinates = [
+            (f"J{index * 10:03d}", HomotopyCoordinate(index, 10, index, 10))
+            for index in range(1, 11)
+        ]
+        for track, coordinates in (
+            ("factorized", factorized_coordinates),
+            ("joint", joint_coordinates),
+        ):
+            previous = views[0]
+            for node_id, coordinate in coordinates:
+                current = build_homotopy_inputs(
+                    subset, assignments=mapping, confidence=confidence,
+                    coupling_rows=edits, coordinate=coordinate,
+                    identity_keys=identities, discrete_seed=discrete_seed,
+                )
+                summary = sampled_displacement[track].setdefault(
+                    node_id,
+                    {
+                        "sample_rows": 0, "feature_l1_micro": 0,
+                        "p4_l1_micro": 0, "mask_change_count": 0,
+                    },
+                )
+                summary["sample_rows"] += len(identities)
+                summary["feature_l1_micro"] += int(np.floor(
+                    np.abs(
+                        current.features.astype(np.float64)
+                        - previous.features.astype(np.float64)
+                    ).sum() * 1_000_000 + .5
+                ))
+                summary["p4_l1_micro"] += int(np.floor(
+                    np.abs(
+                        current.vectors.astype(np.float64)
+                        - previous.vectors.astype(np.float64)
+                    ).sum() * 1_000_000 + .5
+                ))
+                summary["mask_change_count"] += int(
+                    np.count_nonzero(current.mask != previous.mask)
+                )
+                previous = current
+        for row, identity in enumerate(identities):
+            digest = _row_endpoint_hash(*views, row=row)
+            sample_observed[identity] = digest
+            if digest != wanted[identity]:
+                mismatches += 1
+    if set(sample_observed) != set(wanted):
+        mismatches += 1
+    return {
+        "role": role, "source_index": source_index, "source_path": record.path,
+        "sample_observed": sample_observed, "mismatches": mismatches,
+        "sampled_displacement": sampled_displacement,
+    }
+
+
+def _audit_full_roles_serial_reference(
     *, split_manifest: Mapping[str, Any], selection_manifest: Mapping[str, Any],
     assignment_manifests: Mapping[str, str | Path],
     coupling_manifests: Mapping[str, str | Path], data_root: str | Path,
@@ -464,6 +981,8 @@ def audit_full_roles(
     switch_calibration: Mapping[str, Any],
     discrete_seed: int, output: str | Path, step_size: int = 4096,
 ) -> dict[str, Any]:
+    """Frozen single-process reference retained for reducer parity audits."""
+
     if set(assignment_manifests) != {"train", "validation"} or set(coupling_manifests) != {"train", "validation"}:
         raise ValueError("HCWDL-UJ full-role audit inputs differ")
     validate_scale_calibration(
@@ -891,6 +1410,250 @@ def audit_full_roles(
     }
     from hlt_classification.data.cache_contracts import with_content_hash
     payload = with_content_hash(payload); write_immutable_json(output, payload); return payload
+
+
+def audit_full_roles(
+    *, split_manifest: Mapping[str, Any], selection_manifest: Mapping[str, Any],
+    assignment_manifests: Mapping[str, str | Path],
+    coupling_manifests: Mapping[str, str | Path], data_root: str | Path,
+    coupling_config_sha256: str, scale_calibration: Mapping[str, Any],
+    switch_calibration: Mapping[str, Any], discrete_seed: int,
+    output: str | Path, step_size: int = 4096,
+    workers: int | None = None,
+) -> dict[str, Any]:
+    """Exhaustively audit each source in parallel and reduce canonically."""
+
+    if (
+        set(assignment_manifests) != {"train", "validation"}
+        or set(coupling_manifests) != {"train", "validation"}
+    ):
+        raise ValueError("HCWDL-UJ full-role audit inputs differ")
+    validate_scale_calibration(
+        scale_calibration, coupling_config_sha256=coupling_config_sha256,
+    )
+    validate_switch_calibration(
+        switch_calibration, coupling_config_sha256=coupling_config_sha256,
+    )
+    switch_calibration_sha256 = str(switch_calibration["content_hash"])
+    split_hash = str(split_manifest["content_hash"])
+    role_order = {"train": 0, "validation": 1}
+    expected: dict[str, int] = {}
+    arguments: list[tuple[Any, ...]] = []
+    expected_keys: list[tuple[str, int, str]] = []
+    for role in ("train", "validation"):
+        selection = RowSelection(
+            selection_manifest, role=role, split_manifest_sha256=split_hash,
+        )
+        expected[role] = selection.rows
+        for source_index, record in enumerate(role_records(split_manifest, role)):
+            expected_keys.append((role, source_index, record.path))
+            arguments.append((
+                split_manifest, selection_manifest,
+                str(assignment_manifests[role]), str(coupling_manifests[role]),
+                str(data_root), role, source_index, scale_calibration["scales"],
+                discrete_seed, step_size,
+            ))
+    requested_workers = (
+        int(os.environ.get("SLURM_CPUS_PER_TASK", "1"))
+        if workers is None else int(workers)
+    )
+    worker_count = min(len(arguments), max(1, requested_workers))
+    results = _run_audit_workers(
+        _audit_source_worker, arguments, workers=worker_count,
+        label="full-role audit",
+    )
+    results.sort(key=lambda row: (role_order[str(row["role"])], int(row["source_index"])))
+    actual_keys = [
+        (str(row["role"]), int(row["source_index"]), str(row["source_path"]))
+        for row in results
+    ]
+    if actual_keys != expected_keys:
+        raise ValueError("HCWDL-UJ audit source reduction order differs")
+
+    observed = {"train": 0, "validation": 0}
+    counters = {name: 0 for name in _AUDIT_COUNTER_NAMES}
+    partition_totals = {name: 0 for name in _PARTITION_NAMES}
+    partition_role_summaries = {
+        role: _empty_role_summary() for role in ("train", "validation")
+    }
+    edit_totals = {name: 0 for name in _EDIT_NAMES}
+    switch_totals = {
+        role: _empty_switch_totals() for role in ("train", "validation")
+    }
+    sample_heaps: dict[str, list[tuple[int, str, str]]] = {
+        "train": [], "validation": [],
+    }
+    solver_optimum_total = 0
+    solver_rows = 0
+    for result in results:
+        role = str(result["role"])
+        observed[role] += int(result["observed"])
+        for name in counters:
+            counters[name] += int(result["counters"][name])
+        for name in partition_totals:
+            partition_totals[name] += int(result["partition_totals"][name])
+        for name in _ROLE_SUMMARY_NAMES:
+            partition_role_summaries[role][name] += int(
+                result["role_summary"][name]
+            )
+        for name in edit_totals:
+            edit_totals[name] += int(result["edit_totals"][name])
+        for level, summary in result["switch_totals"].items():
+            _merge_transition_summary(switch_totals[role][level], summary)
+        for item in result["sample_heap"]:
+            heap = sample_heaps[role]
+            if len(heap) < 128:
+                heapq.heappush(heap, item)
+            elif item > heap[0]:
+                heapq.heapreplace(heap, item)
+        solver_optimum_total += int(result["solver_optimum_total"])
+        solver_rows += int(result["solver_rows"])
+    if observed != expected:
+        raise ValueError("HCWDL-UJ full-role audit coverage differs")
+
+    endpoint_hashes = {
+        name: _framed_source_digest(
+            results, key=f"endpoint_{name}_sha256",
+            domain=f"HCWDL-UJ/full-role/{name}/v1",
+        )
+        for name in ("p0", "d100", "hlt")
+    }
+    solver_matrix_hash = _framed_source_digest(
+        results, key="solver_matrix_sha256",
+        domain="HCWDL-UJ/full-role/solver-matrix/v1",
+    )
+    solver_selection_hash = _framed_source_digest(
+        results, key="solver_selection_sha256",
+        domain="HCWDL-UJ/full-role/solver-selection/v1",
+    )
+
+    sample_expected = {
+        role: {identity: digest for _, identity, digest in heap}
+        for role, heap in sample_heaps.items()
+    }
+    sample_arguments: list[tuple[Any, ...]] = []
+    for result in results:
+        role = str(result["role"])
+        wanted = {
+            identity: sample_expected[role][identity]
+            for _, identity, _ in result["sample_heap"]
+            if identity in sample_expected[role]
+        }
+        if not wanted:
+            continue
+        sample_arguments.append((
+            split_manifest, selection_manifest,
+            str(assignment_manifests[role]), str(coupling_manifests[role]),
+            str(data_root), role, int(result["source_index"]),
+            scale_calibration, switch_calibration, coupling_config_sha256,
+            discrete_seed, step_size, wanted,
+        ))
+    sample_results = _run_audit_workers(
+        _audit_sample_source_worker, sample_arguments,
+        workers=min(worker_count, max(1, len(sample_arguments))),
+        label="independent sample audit",
+    ) if sample_arguments else []
+    sample_results.sort(
+        key=lambda row: (role_order[str(row["role"])], int(row["source_index"])),
+    )
+    sample_observed: dict[str, str] = {}
+    sampled_displacement = {
+        role: {"factorized": {}, "joint": {}}
+        for role in ("train", "validation")
+    }
+    for result in sample_results:
+        overlap = set(sample_observed).intersection(result["sample_observed"])
+        if overlap:
+            raise ValueError("HCWDL-UJ independent sample identity is duplicated")
+        sample_observed.update(result["sample_observed"])
+        counters["independent_sample_mismatches"] += int(result["mismatches"])
+        _merge_displacement(
+            sampled_displacement[str(result["role"])],
+            result["sampled_displacement"],
+        )
+    expected_sample_identities = {
+        identity for rows in sample_expected.values() for identity in rows
+    }
+    if set(sample_observed) != expected_sample_identities:
+        counters["independent_sample_mismatches"] += 1
+    sample_hash = canonical_sha256({
+        "selection": {role: sorted(rows) for role, rows in sample_expected.items()},
+        "recomputed": dict(sorted(sample_observed.items())),
+        "method": "lowest_sha256_identity_second_root_assignment_reread_v1",
+    })
+
+    payload = build_coupling_audit(
+        coupling_config_sha256=coupling_config_sha256,
+        train_manifest_sha256=ResidualCouplingStore(
+            coupling_manifests["train"],
+        ).manifest["content_hash"],
+        validation_manifest_sha256=ResidualCouplingStore(
+            coupling_manifests["validation"],
+        ).manifest["content_hash"],
+        expected_rows=expected, observed_rows=observed, counters=counters,
+        endpoint_logical_sha256=endpoint_hashes,
+        branch_allowlist_sha256=branch_allowlist_sha256(),
+        branch_access_trace_sha256=canonical_sha256({
+            "branches": coupling_branch_allowlist(),
+            "roles": ["train", "validation"],
+        }),
+        independent_sample_sha256=sample_hash,
+    )
+    payload["switch_calibration_sha256"] = require_sha256(
+        switch_calibration_sha256, name="switch calibration",
+    )
+    payload["partition_totals"] = partition_totals
+    for role, summary in partition_role_summaries.items():
+        summary["O_count_fraction_of_A"] = (
+            None if summary["A_count"] == 0
+            else summary["O_count"] / summary["A_count"]
+        )
+        summary["R_hlt_count_fraction_of_B"] = (
+            None if summary["B_count"] == 0
+            else summary["R_hlt_count"] / summary["B_count"]
+        )
+        summary["R_off_count_fraction_of_B"] = (
+            None if summary["B_count"] == 0
+            else summary["R_off_count"] / summary["B_count"]
+        )
+        summary["O_pt_fraction_of_A"] = (
+            None if summary["A_pt_micro"] == 0
+            else summary["O_pt_micro"] / summary["A_pt_micro"]
+        )
+        summary["R_hlt_pt_fraction_of_B"] = (
+            None if summary["B_pt_micro"] == 0
+            else summary["R_hlt_pt_micro"] / summary["B_pt_micro"]
+        )
+        summary["R_off_pt_fraction_of_B"] = (
+            None if summary["B_pt_micro"] == 0
+            else summary["R_off_pt_micro"] / summary["B_pt_micro"]
+        )
+    payload["partition_role_summaries"] = partition_role_summaries
+    payload["edit_totals"] = edit_totals
+    payload["transition_summaries"] = switch_totals
+    payload["sampled_realized_view_displacement"] = sampled_displacement
+    payload["independent_sample_rows"] = {
+        role: len(rows) for role, rows in sample_expected.items()
+    }
+    payload["audit_execution"] = {
+        "source_partition": "one_process_task_per_authenticated_source_unit_v1",
+        "reduction": _AUDIT_DIGEST_REDUCTION,
+        "integer_reduction_order": "train_then_validation_canonical_source_index_v1",
+        "worker_count_not_scientific_identity": True,
+    }
+    import scipy
+    payload["solver_audit"] = {
+        "algorithm": "scipy_hungarian_plus_canonical_edge_fixing_v1",
+        "scipy_version": scipy.__version__, "rows": solver_rows,
+        "integer_matrix_sha256": solver_matrix_hash,
+        "selected_edge_tuple_sha256": solver_selection_hash,
+        "optimum_total_cost_q": solver_optimum_total,
+        "digest_reduction": _AUDIT_DIGEST_REDUCTION,
+    }
+    from hlt_classification.data.cache_contracts import with_content_hash
+    payload = with_content_hash(payload)
+    write_immutable_json(output, payload)
+    return payload
 
 
 __all__ = [
