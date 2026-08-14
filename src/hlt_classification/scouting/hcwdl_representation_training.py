@@ -80,13 +80,15 @@ from .hcwdl_representation_contracts import (
 )
 from .hcwdl_representation_artifacts import publish_binary_envelope
 from .hcwdl_representation_graph import (
-    ASCENT_GRAPH_SHA256,
     CONTROL_REGISTRY,
     NODE_REGISTRY,
     RREL_STRATEGY,
     RSET_STRATEGY,
     RepresentationControlSpec,
     RepresentationNodeSpec,
+)
+from .hcwdl_representation_graph_registry import (
+    registered_graph_sha256 as _registered_graph_sha256,
 )
 from .hcwdl_representation_kernels import SpectralKernelResources
 from .hcwdl_representation_losses import (
@@ -1619,20 +1621,6 @@ def _restore_state(
         copy.deepcopy(dict(state["calibration"])),
         np.ascontiguousarray(pass_identities).copy(),
     )
-
-
-def _registered_graph_sha256(execution_id: str) -> str:
-    """Resolve the one graph contract authorized for an execution."""
-
-    if execution_id.startswith(("F_RSET_", "F_RREL_")):
-        from .hcwdl_homotopy_representation_graph import GRAPH_SHA256
-
-        return GRAPH_SHA256
-    if execution_id in {"HLT_RSET", "HLT_RREL"}:
-        from .hcwdl_direct_offline_kd_graph import GRAPH_SHA256
-
-        return GRAPH_SHA256
-    return ASCENT_GRAPH_SHA256
 
 
 def _validate_runtime_lineage(

@@ -146,6 +146,24 @@ dependency warnings in 429.16 seconds, and `git diff --check` passes. The
 failed `d2dfa8f5` jobs published no representation training report and require
 a fresh immutable source identity under the v1 recovery contract.
 
+The `e0e1181f` pilot advanced both representation students through one full
+natural-population pass, validation, and checkpoint-candidate creation. They
+failed before publishing their first durable resume generation because the
+generic resume module retained its own older two-graph allowlist. Graph
+identity is now centralized in one closed representation-runtime registry
+containing exactly the original representation graph, the U/D homotopy-RKD
+graph, and the direct offline-KD graph. Training admission, report validation,
+resume publication, resume scanning, and resume restoration all consume that
+registry. A new regression executes the exact failed boundary end to end for
+the direct graph (publish, scan, highest-valid restore, tensor equality) and
+rejects an unregistered well-formed SHA-256. Focused resume/direct/training
+coverage passes 53/53; the broader direct and representation closure passes
+117/117; the complete suite passes 967 tests with 9 expected Windows platform
+skips and 14 dependency warnings in 1236.50 seconds. `git diff --check`
+passes. No committed resume generation or representation report was published
+by the failed jobs, so corrected execution again requires a fresh immutable
+source identity under the v1 recovery contract.
+
 ## HCWDL-U-RKD prerequisite bootstrap repair (2026-08-12)
 
 The first real Tigris preflight for commit `a407f056` found a valid completed

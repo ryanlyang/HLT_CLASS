@@ -6,6 +6,9 @@ from pathlib import Path
 import pytest
 import torch
 
+from hlt_classification.scouting.hcwdl_direct_offline_kd_graph import (
+    GRAPH_SHA256 as DIRECT_GRAPH_SHA256,
+)
 from hlt_classification.scouting.hcwdl_representation_graph import ASCENT_GRAPH_SHA256
 from hlt_classification.scouting.hcwdl_representation_training import (
     _prune_checkpoint_candidates_for_resume,
@@ -171,6 +174,32 @@ def test_publish_load_and_two_generation_retention(tmp_path: Path):
         loaded.state["deployable_model"]["weight"],
         _state(sequence=3)["deployable_model"]["weight"],
     )
+
+
+def test_direct_graph_publish_scan_and_restore_cycle(tmp_path: Path):
+    lineage = {**_lineage(), "ascent_graph": DIRECT_GRAPH_SHA256}
+    published = _publish(tmp_path, 1, lineage=lineage)
+    assert published.sidecar["parents"]["ascent_graph"] == DIRECT_GRAPH_SHA256
+
+    scan = scan_resume_generations(tmp_path, expected_lineage=lineage)
+    assert scan.invalid_commits == ()
+    assert [row.sequence for row in scan.valid_generations] == [1]
+
+    loaded, restored_scan = load_highest_valid_resume(
+        tmp_path, expected_lineage=lineage,
+    )
+    assert loaded is not None and loaded.sequence == 1
+    assert restored_scan.invalid_commits == ()
+    assert torch.equal(
+        loaded.state["deployable_model"]["weight"],
+        _state(sequence=1, lineage=lineage)["deployable_model"]["weight"],
+    )
+
+
+def test_resume_rejects_unregistered_graph_even_when_sha_is_well_formed(tmp_path: Path):
+    lineage = {**_lineage(), "ascent_graph": "f" * 64}
+    with pytest.raises(ValueError, match="resume ascent graph differs"):
+        _publish(tmp_path, 1, lineage=lineage)
 
 
 @pytest.mark.parametrize(

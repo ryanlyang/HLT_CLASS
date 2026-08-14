@@ -34,7 +34,7 @@ from .hcwdl_representation_contracts import (
     validate_parent_hashes,
     validate_versioned_artifact,
 )
-from .hcwdl_representation_graph import ASCENT_GRAPH_SHA256
+from .hcwdl_representation_graph_registry import validate_registered_graph_sha256
 
 
 RESUME_STATE_CONTRACT: Final = REPRESENTATION_RESUME_STATE_CONTRACT
@@ -297,10 +297,10 @@ def _normalize_lineage(lineage: Mapping[str, Any]) -> dict[str, str]:
     normalized = validate_parent_hashes(lineage)
     if set(normalized) != REQUIRED_LINEAGE_KEYS:
         raise ValueError("resume lineage keys differ")
-    from .hcwdl_homotopy_representation_graph import GRAPH_SHA256 as U_RKD_GRAPH_SHA256
-
-    if normalized["ascent_graph"] not in {ASCENT_GRAPH_SHA256, U_RKD_GRAPH_SHA256}:
-        raise ValueError("resume ascent graph differs")
+    try:
+        validate_registered_graph_sha256(normalized["ascent_graph"])
+    except ValueError as error:
+        raise ValueError("resume ascent graph differs") from error
     return normalized
 
 
