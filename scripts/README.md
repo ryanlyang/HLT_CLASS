@@ -282,6 +282,10 @@ It imports an authenticated HCWDL smoke or unweighted 300k pilot, registers no
 final-test task, stores only compact coupling/target artifacts, and rebuilds
 particle views in process-local RAM. The exact artifact and recovery rules are
 in `docs/contracts/HCWDL_STRUCTURAL_FEATURE_HOMOTOPY.md`.
+`resume_hcwdl_homotopy.py --execution-and-resource-recovery` selects the
+separately versioned path that binds a reviewed execution-source correction
+and a monotonic resource increase in the same exact failed closure; it is not
+an alias for either legacy v2 recovery mode.
 `run_hcwdl_homotopy_local_smoke.py` is a bounded synthetic behavioral check
 that executes all 45 v2 fits without ROOT or Slurm; it is not a substitute for
 the real production-worker miniature. Before the miniature,

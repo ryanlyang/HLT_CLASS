@@ -1,5 +1,87 @@
 # Current Handoff
 
+## HCWDL-UJ combined execution/resource recovery (2026-08-14)
+
+The linear endpoint-preparation correction changes semantic-source bytes while
+the operator also requested that replacement training jobs use 16 rather than
+8 CPUs. The pre-existing source-recovery v2 contract preserves resources, and
+the resource-only v2 contract preserves source, so neither may be repurposed
+or bypassed. A distinct
+`HCWDL_STRUCTURAL_FEATURE_EXECUTION_RESOURCE_RECOVERY_{SPEC,COMMAND_PLAN}/v1`
+family now binds both reviewed changes without changing the original campaign's
+scientific identity.
+
+The combined recovery authenticates the exact cancelled/failed downstream
+closure, original ledger and monitor, complete old/new semantic-source maps,
+execution-only human classification, and complete old/replacement resource
+maps. Resources may only increase; the GPU type cannot change; at least one
+resource class used by the closure must increase. The intended 300k recovery
+changes only `gpu_training.cpus` from 8 to 16 and retains 96G, six hours, and
+one GH200. A dedicated worker environment and distinct authorization and
+submission phrases prevent old v2 recovery artifacts from being interpreted
+under the combined semantics.
+
+Local evidence at this checkpoint: the focused recovery/resource/worker suite
+passes 7/7; the broader HCWDL/stream/repair/cache suite passes 185/185; and the
+complete repository suite passes 436/436 with the 14 existing
+Matplotlib/Pyparsing warnings. CLI help and `git diff --check` pass. Tigris
+evidence is pending pushed source. No scheduler mutation has been performed.
+
+## HCWDL-UJ linear endpoint preparation and ordered CPU overlap (2026-08-14)
+
+Live 300k recovery jobs `84176`, `84177`, `84179`, `84182`, `84193`, and
+`84204` each remained before their first validation checkpoint after roughly
+four hours, while HLT-only job `84211` reached update 38,676/70,320 in about
+one hour.  Slurm accounting showed approximately one CPU-hour per elapsed
+hour for every blocked job.  This excludes ordinary optimizer training and
+the already locked matcher/coupling production as the dominant cost.
+
+The concrete defect was repeated whole-chunk ragged conversion.  The public
+one-row offline projector converts every required Awkward branch into all
+rows.  P0, D100, U, J, calibration, and audit callers invoked that projector
+inside a row loop over a 4,096-row chunk; U/J partition construction also
+reconverted every raw HLT branch per row.  The resulting work was quadratic
+in chunk population.  Cache allocation itself was already preallocated and
+linear.
+
+The execution repair leaves `repair.py`, Shell Exact v1, coupling artifacts,
+coordinates, graph, loss, inputs, endpoints, and checkpoint selection
+unchanged.  `hcwdl_homotopy.py` now prepares every offline and HLT branch once
+per chunk, validates the same count/length rules, and reuses exact raw feature,
+validity, and float32-to-float64 p4 endpoints across P0, Shell, partition, and
+carrier construction.  Coupling calibration/audit reuse the same prepared
+chunk.  The homotopy stream bounds one in-flight chunk per worker, overlaps
+chunk construction with a deterministic thread pool sized from
+`SLURM_CPUS_PER_TASK`, and always consumes futures in canonical submission
+order.  `HCWDL_UJ_VIEW_BUILD_WORKERS` may request fewer workers but is rejected
+if it exceeds the Slurm allocation.  Workers now print explicit train-cache,
+validation-cache, teacher-target, and optimizer-training phase boundaries.
+
+Local evidence:
+
+- pre-change focused baseline: 77/77 passed;
+- post-change endpoint/homotopy/cache focus: 80/80 passed;
+- broader HCWDL/CLI/contracts/smoke/repair/cache focus: 168/168 passed;
+- complete repository suite: 435/435 passed with the 14 existing
+  Matplotlib/Pyparsing warnings;
+- exact prepared-versus-legacy raw feature, validity, and p4 arrays are locked
+  across a seven-row fixture, and every required branch is converted exactly
+  once rather than once per row;
+- ordered one-worker versus four-worker emission is locked by regression;
+- synthetic P0 preparation at 1,024 rows improved from 4.837 s to 0.364 s
+  (13.30x) with exact p4 equality; because the removed term was quadratic,
+  the production 4,096-row chunks should benefit more;
+- Python compilation and `git diff --check` pass at this checkpoint.
+
+This is local execution evidence, not Tigris acceptance.  The running jobs
+remain pinned to the old source and cannot acquire this fix.  After exact-ID
+closure handling, the corrected commit requires the existing human-authorized
+source-recovery path; completed reports and compatible rolling checkpoints
+remain reusable. The eight requested CPUs are now available to bounded
+concurrent chunk construction; raising the request above eight should wait for
+the corrected Tigris timing rather than masking the eliminated algorithmic
+defect.
+
 ## HCWDL-UJ exhaustive-audit source parallelism repair (2026-08-14)
 
 The 300k v2 coupling audit timed out twice: original job `83434` exhausted its

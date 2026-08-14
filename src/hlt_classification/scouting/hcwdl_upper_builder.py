@@ -19,7 +19,8 @@ from hlt_classification.data.cache_contracts import (
 
 from .hcwdl_homotopy import (
     HomotopyCoordinate, assert_particle_inputs_equal, build_homotopy_inputs,
-    build_p0_inputs, build_partition_from_arrays,
+    build_p0_inputs, build_partition_from_arrays, prepare_hlt_endpoints,
+    prepare_offline_endpoints,
 )
 from .inputs import build_hlt_inputs
 from .hcwdl_upper_cache import (
@@ -35,7 +36,7 @@ from .hcwdl_upper_coupling import (
 from .highcov_cache import DenseAssignmentStore
 from .repair import (
     FULL_VALIDITY_GROUPS, HIGHCOV_SHELL_EXACT_FAMILY, build_alpha_repaired_inputs,
-    full_endpoint_required_branches, project_offline_endpoint_records,
+    full_endpoint_required_branches,
 )
 from .schema import HLT_FEATURE_SPECS, HLT_VECTOR_BRANCHES
 from .selective_assignment import RowSelection
@@ -59,6 +60,26 @@ def branch_allowlist_sha256() -> str:
 
 def _slice(arrays: Mapping[str, object], indexes: np.ndarray) -> dict[str, object]:
     return {name: value[indexes] for name, value in arrays.items()}
+
+
+def _prepared_partitions(
+    arrays: Mapping[str, object], assignments: np.ndarray,
+):
+    """Build a chunk's endpoint projections once and reuse them for every row."""
+
+    offline = prepare_offline_endpoints(arrays)
+    hlt = prepare_hlt_endpoints(arrays)
+    mapping = np.asarray(assignments)
+    if mapping.shape[0] != offline.rows or hlt.rows != offline.rows:
+        raise ValueError("HCWDL-UJ prepared partition row counts differ")
+    partitions = tuple(
+        build_partition_from_arrays(
+            arrays, row=row, assignment=mapping[row],
+            prepared_offline=offline, prepared_hlt=hlt,
+        )
+        for row in range(offline.rows)
+    )
+    return partitions, offline, hlt
 
 
 def _selected_source_chunks(
@@ -102,12 +123,11 @@ def _calibrate_source_worker(
         if actual_source != source_path:
             raise ValueError("HCWDL-UJ calibration source identity differs")
         assignment, _ = store.join(source_path, entries)
+        partitions, _, _ = _prepared_partitions(arrays, assignment)
         for row, entry in enumerate(entries):
             identity = f"{source_path}::tree::{int(entry)}".encode("utf-8")
             identity_digest.update(len(identity).to_bytes(4, "little")); identity_digest.update(identity)
-            accumulator.update_partition(build_partition_from_arrays(
-                arrays, row=row, assignment=assignment[row],
-            ))
+            accumulator.update_partition(partitions[row])
         observed += len(entries)
     expected = selection.source_rows(source_path)
     if expected < 0:
@@ -219,10 +239,9 @@ def build_coupling_source(
         role=role, source_index=source_index, step_size=step_size,
     ):
         assignment, _ = store.join(source_path, entries)
+        partitions, _, _ = _prepared_partitions(arrays, assignment)
         for row, entry in enumerate(entries):
-            partition = build_partition_from_arrays(
-                arrays, row=row, assignment=assignment[row],
-            )
+            partition = partitions[row]
             edits = assign_edit_masses(
                 couple_partition(partition, scale_calibration), partition,
             )
@@ -608,10 +627,11 @@ def _audit_source_worker(arguments: tuple[Any, ...]) -> dict[str, Any]:
         mapping, confidence = assignments.join(source_path, entries)
         edit_rows = [couplings.get(source_path, int(entry)).edits for entry in entries]
         identities = [f"{source_path}::tree::{int(entry)}" for entry in entries]
+        partitions, prepared_offline, prepared_hlt = _prepared_partitions(
+            arrays, mapping,
+        )
         for row, edits in enumerate(edit_rows):
-            partition = build_partition_from_arrays(
-                arrays, row=row, assignment=mapping[row],
-            )
+            partition = partitions[row]
             values = {
                 "A": len(partition.p0), "B": len(partition.d100),
                 "K": len(partition.common), "O": len(partition.source_only),
@@ -752,23 +772,23 @@ def _audit_source_worker(arguments: tuple[Any, ...]) -> dict[str, Any]:
             arrays, assignments=mapping, confidence=confidence,
             coupling_rows=edit_rows, coordinate=HomotopyCoordinate(0, 1, 0, 1),
             identity_keys=identities, discrete_seed=discrete_seed,
+            prepared_offline=prepared_offline, prepared_hlt=prepared_hlt,
         )
         u100 = build_homotopy_inputs(
             arrays, assignments=mapping, confidence=confidence,
             coupling_rows=edit_rows, coordinate=HomotopyCoordinate(1, 1, 0, 1),
             identity_keys=identities, discrete_seed=discrete_seed,
+            prepared_offline=prepared_offline, prepared_hlt=prepared_hlt,
         )
         j100 = build_homotopy_inputs(
             arrays, assignments=mapping, confidence=confidence,
             coupling_rows=edit_rows, coordinate=HomotopyCoordinate(1, 1, 1, 1),
             identity_keys=identities, discrete_seed=discrete_seed,
+            prepared_offline=prepared_offline, prepared_hlt=prepared_hlt,
         )
         hlt = build_hlt_inputs(arrays)
-        expected_p0 = build_p0_inputs(arrays)
-        offline_p4 = [
-            project_offline_endpoint_records(arrays, row=index)[2]
-            for index in range(len(entries))
-        ]
+        expected_p0 = build_p0_inputs(arrays, prepared=prepared_offline)
+        offline_p4 = prepared_offline.p4
         d100 = build_alpha_repaired_inputs(
             arrays, offline_p4, mapping, alpha=1.0,
             repair_family=HIGHCOV_SHELL_EXACT_FAMILY,
@@ -887,10 +907,11 @@ def _audit_sample_source_worker(arguments: tuple[Any, ...]) -> dict[str, Any]:
         mapping, confidence = assignments.join(source_path, chosen_entries)
         edits = [couplings.get(source_path, int(entry)).edits for entry in chosen_entries]
         identities = [f"{source_path}::tree::{int(entry)}" for entry in chosen_entries]
+        partitions, prepared_offline, prepared_hlt = _prepared_partitions(
+            subset, mapping,
+        )
         for row, identity in enumerate(identities):
-            partition = build_partition_from_arrays(
-                subset, row=row, assignment=mapping[row],
-            )
+            partition = partitions[row]
             independently_recomputed = attach_switches(
                 assign_edit_masses(
                     couple_partition(partition, scale_calibration), partition,
@@ -905,6 +926,7 @@ def _audit_sample_source_worker(arguments: tuple[Any, ...]) -> dict[str, Any]:
             subset, assignments=mapping, confidence=confidence,
             coupling_rows=edits, coordinate=coordinate,
             identity_keys=identities, discrete_seed=discrete_seed,
+            prepared_offline=prepared_offline, prepared_hlt=prepared_hlt,
         ) for coordinate in (
             HomotopyCoordinate(0, 1, 0, 1),
             HomotopyCoordinate(1, 1, 0, 1),
@@ -934,6 +956,7 @@ def _audit_sample_source_worker(arguments: tuple[Any, ...]) -> dict[str, Any]:
                     subset, assignments=mapping, confidence=confidence,
                     coupling_rows=edits, coordinate=coordinate,
                     identity_keys=identities, discrete_seed=discrete_seed,
+                    prepared_offline=prepared_offline, prepared_hlt=prepared_hlt,
                 )
                 summary = sampled_displacement[track].setdefault(
                     node_id,
@@ -1037,10 +1060,11 @@ def _audit_full_roles_serial_reference(
                 mapping, confidence = assignments.join(source_path, entries)
                 edit_rows = [couplings.get(source_path, int(entry)).edits for entry in entries]
                 identities = [f"{source_path}::tree::{int(entry)}" for entry in entries]
+                partitions, prepared_offline, prepared_hlt = _prepared_partitions(
+                    arrays, mapping,
+                )
                 for row, edits in enumerate(edit_rows):
-                    partition = build_partition_from_arrays(
-                        arrays, row=row, assignment=mapping[row],
-                    )
+                    partition = partitions[row]
                     values = {
                         "A": len(partition.p0), "B": len(partition.d100),
                         "K": len(partition.common), "O": len(partition.source_only),
@@ -1182,20 +1206,23 @@ def _audit_full_roles_serial_reference(
                     arrays, assignments=mapping, confidence=confidence,
                     coupling_rows=edit_rows, coordinate=HomotopyCoordinate(0, 1, 0, 1),
                     identity_keys=identities, discrete_seed=discrete_seed,
+                    prepared_offline=prepared_offline, prepared_hlt=prepared_hlt,
                 )
                 u100 = build_homotopy_inputs(
                     arrays, assignments=mapping, confidence=confidence,
                     coupling_rows=edit_rows, coordinate=HomotopyCoordinate(1, 1, 0, 1),
                     identity_keys=identities, discrete_seed=discrete_seed,
+                    prepared_offline=prepared_offline, prepared_hlt=prepared_hlt,
                 )
                 j100 = build_homotopy_inputs(
                     arrays, assignments=mapping, confidence=confidence,
                     coupling_rows=edit_rows, coordinate=HomotopyCoordinate(1, 1, 1, 1),
                     identity_keys=identities, discrete_seed=discrete_seed,
+                    prepared_offline=prepared_offline, prepared_hlt=prepared_hlt,
                 )
                 hlt = build_hlt_inputs(arrays)
-                expected_p0 = build_p0_inputs(arrays)
-                offline_p4 = [project_offline_endpoint_records(arrays, row=i)[2] for i in range(len(entries))]
+                expected_p0 = build_p0_inputs(arrays, prepared=prepared_offline)
+                offline_p4 = prepared_offline.p4
                 d100 = build_alpha_repaired_inputs(
                     arrays, offline_p4, mapping, alpha=1.0,
                     repair_family=HIGHCOV_SHELL_EXACT_FAMILY,
@@ -1270,10 +1297,11 @@ def _audit_full_roles_serial_reference(
                 mapping, confidence = assignments.join(source_path, chosen_entries)
                 edits = [couplings.get(source_path, int(entry)).edits for entry in chosen_entries]
                 identities = [f"{source_path}::tree::{int(entry)}" for entry in chosen_entries]
+                partitions, prepared_offline, prepared_hlt = _prepared_partitions(
+                    subset, mapping,
+                )
                 for row, identity in enumerate(identities):
-                    partition = build_partition_from_arrays(
-                        subset, row=row, assignment=mapping[row],
-                    )
+                    partition = partitions[row]
                     independently_recomputed = attach_switches(
                         assign_edit_masses(
                             couple_partition(partition, scale_calibration), partition,
@@ -1288,6 +1316,7 @@ def _audit_full_roles_serial_reference(
                     subset, assignments=mapping, confidence=confidence,
                     coupling_rows=edits, coordinate=coordinate,
                     identity_keys=identities, discrete_seed=discrete_seed,
+                    prepared_offline=prepared_offline, prepared_hlt=prepared_hlt,
                 ) for coordinate in (
                     HomotopyCoordinate(0, 1, 0, 1),
                     HomotopyCoordinate(1, 1, 0, 1),
@@ -1317,6 +1346,7 @@ def _audit_full_roles_serial_reference(
                             subset, assignments=mapping, confidence=confidence,
                             coupling_rows=edits, coordinate=coordinate,
                             identity_keys=identities, discrete_seed=discrete_seed,
+                            prepared_offline=prepared_offline, prepared_hlt=prepared_hlt,
                         )
                         row = sampled_displacement[role][track].setdefault(
                             node_id,

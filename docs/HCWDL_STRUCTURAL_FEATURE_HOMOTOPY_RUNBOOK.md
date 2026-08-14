@@ -209,6 +209,16 @@ lineage mismatches do. Completion is
 `reports/campaign_complete.json`; the full validation report is
 `reports/validation_aggregate.json`.
 
+Corrected workers emit explicit `student_view_cache`, `teacher_targets`, and
+`optimizer_training` phase lines. Homotopy view construction defaults to the
+complete `SLURM_CPUS_PER_TASK` allocation, keeps at most one chunk per worker
+in flight, and consumes completed chunks in canonical input order. An
+operator may set `HCWDL_UJ_VIEW_BUILD_WORKERS` to a smaller positive value for
+diagnosis; a value larger than the allocated CPU count fails closed. Absence
+of a first validation checkpoint is therefore distinguishable from training
+by inspecting the corresponding Slurm output. The matcher is never callable
+from a training worker.
+
 Exact cancellation first prints, then optionally executes, only the IDs bound
 to this campaign ledger:
 
@@ -328,6 +338,36 @@ Live source recovery additionally requires
 `SUBMIT HCWDL UJ FAILED CLOSURE RECOVERY`. Resource recovery supplies
 `--replacement-resources`, uses its distinct resource-only phrases, and is
 accepted only when at least one failed task's requested resource increases.
+
+When the same failed closure requires both an authenticated execution-only
+source correction and a monotonic resource increase, use the separately
+versioned combined path. The replacement JSON must contain the complete
+effective resource-class map reconstructed from the parent ledger; classes
+not being increased remain byte-for-byte equal. For the 2026-08-14 linear
+endpoint-preparation recovery, only `gpu_training.cpus` changes from 8 to 16;
+memory remains 96G, walltime remains six hours, and the GPU remains one GH200.
+
+```bash
+python -s "${UJ_WORKTREE}/scripts/resume_hcwdl_homotopy.py" \
+  --campaign-spec "${UJ_PILOT_ROOT}/campaign_spec.json" \
+  --submission-ledger "${UJ_PARENT_RECOVERY_LEDGER}" \
+  --monitor-report "${UJ_POST_CANCEL_MONITOR}" \
+  --recovery-root "${UJ_EXECUTION_RESOURCE_ROOT}" \
+  --project-dir "${UJ_WORKTREE}" \
+  --source-commit "${UJ_COMMIT}" \
+  --replacement-resources "${UJ_REPLACEMENT_RESOURCES}" \
+  --execution-and-resource-recovery \
+  --authorization-phrase \
+    "AUTHORIZE HCWDL UJ EXECUTION AND RESOURCE RECOVERY" \
+  --execute \
+  --submission-phrase \
+    "SUBMIT HCWDL UJ EXECUTION AND RESOURCE RECOVERY"
+```
+
+This path accepts an exact-ID `CANCELLED` closure after the operator has
+cancelled the superseded ledger. It preserves completed reports and compatible
+rolling checkpoints, and every generated training command must contain
+`--cpus-per-task=16` before live submission.
 
 ## 10. Claims boundary
 

@@ -13,6 +13,9 @@ from hlt_classification.data.cache_contracts import (
 
 from .hcwdl_homotopy_campaign import semantic_source_hashes, validate_campaign
 from .hcwdl_homotopy_contracts import (
+    EXECUTION_RESOURCE_RECOVERY_AUTHORIZATION_PHRASE,
+    EXECUTION_RESOURCE_RECOVERY_COMMAND_PLAN_CONTRACT,
+    EXECUTION_RESOURCE_RECOVERY_SPEC_CONTRACT,
     RECOVERY_AUTHORIZATION_PHRASE, RECOVERY_COMMAND_PLAN_CONTRACT,
     RECOVERY_SPEC_CONTRACT, RESOURCE_RECOVERY_AUTHORIZATION_PHRASE,
     RESOURCE_RECOVERY_COMMAND_PLAN_CONTRACT, RESOURCE_RECOVERY_SPEC_CONTRACT,
@@ -402,6 +405,161 @@ def validate_recovery_spec(value: Mapping[str, Any], *, executable: bool = False
     return digest
 
 
+def create_execution_resource_recovery_spec(
+    *, campaign_spec: str | Path, submission_ledger: str | Path,
+    monitor_report: str | Path, recovery_root: str | Path,
+    project_dir: str | Path, source_commit: str,
+    replacement_resources: Mapping[str, Any],
+    authorization_phrase: str | None = None,
+) -> dict[str, Any]:
+    """Bind one reviewed execution repair and monotonic resource increase.
+
+    This is deliberately distinct from source-only and resource-only recovery:
+    it may change only the authenticated execution source map and may only
+    increase the exact resource envelope inherited from the failed ledger.
+    """
+
+    if _COMMIT.fullmatch(source_commit) is None:
+        raise ValueError("HCWDL-UJ execution/resource recovery source commit differs")
+    campaign = load_json(campaign_spec); validate_campaign(campaign, executable=True)
+    ledger = load_json(submission_ledger); ledger_hash = validate_submission_ledger(ledger)
+    monitor = load_json(monitor_report)
+    _validate_monitor_lineage(
+        monitor, ledger, ledger_hash=ledger_hash,
+        campaign_sha256=campaign["content_hash"],
+    )
+    tasks, failed, states = _closure(campaign, ledger, monitor)
+    old_resources = _resources_from_ledger(campaign, ledger)
+    _validate_resource_increase(old_resources, replacement_resources)
+    relevant_classes = {
+        next(row for row in campaign["tasks"] if row["task_id"] == task)["resource_class"]
+        for task in tasks
+    }
+    if not any(
+        old_resources[name] != replacement_resources[name]
+        for name in relevant_classes
+    ):
+        raise PermissionError(
+            "execution/resource recovery does not increase a failed-closure resource"
+        )
+    execution_sources, changed_sources = _execution_source_lineage(
+        campaign, project_dir=project_dir,
+    )
+    if not changed_sources:
+        raise PermissionError(
+            "execution/resource recovery requires an authenticated source correction"
+        )
+    authorized = authorization_phrase is not None
+    if (
+        authorized
+        and authorization_phrase
+        != EXECUTION_RESOURCE_RECOVERY_AUTHORIZATION_PHRASE
+    ):
+        raise PermissionError("HCWDL-UJ execution/resource recovery phrase differs")
+    root = Path(recovery_root).resolve()
+    payload = {
+        "contract": EXECUTION_RESOURCE_RECOVERY_SPEC_CONTRACT,
+        "schema_version": 1,
+        "campaign_spec": _reference(campaign_spec),
+        "submission_ledger": _reference(submission_ledger),
+        "failure_monitor": _reference(monitor_report),
+        "recovery_root": str(root),
+        "project_dir": str(Path(project_dir).resolve()),
+        "source_commit": source_commit,
+        "parent_source_commit": campaign["source_commit"],
+        "retry_tasks": tasks,
+        "failed_job_ids": failed,
+        "failure_states": states,
+        "old_resources": old_resources,
+        "resources": dict(replacement_resources),
+        "execution_semantic_source_sha256": execution_sources,
+        "changed_semantic_sources": changed_sources,
+        "semantic_change_classification": (
+            "execution_only_human_authorized_v1"
+            if authorized else "execution_only_unreviewed_v1"
+        ),
+        "resource_change_classification": (
+            "monotonic_human_authorized_v1"
+            if authorized else "monotonic_unreviewed_v1"
+        ),
+        "scientific_identity_sha256": _scientific_identity(campaign),
+        "live_submission_authorized": authorized,
+        "final_test_accessed": False,
+    }
+    plan = _commands(
+        campaign, tasks=tasks, project_dir=payload["project_dir"],
+        spec_path=str(root / "execution_resource_recovery_spec.json"),
+        env_name="HCWDL_UJ_EXECUTION_RESOURCE_RECOVERY_SPEC",
+        worker_name="sbatch/run_hcwdl_homotopy_execution_resource_recovery.sh",
+        resources=payload["resources"],
+        contract=EXECUTION_RESOURCE_RECOVERY_COMMAND_PLAN_CONTRACT,
+    )
+    return with_content_hash({**payload, "command_plan_sha256": plan["content_hash"]})
+
+
+def validate_execution_resource_recovery_spec(
+    value: Mapping[str, Any], *, executable: bool = False,
+) -> str:
+    digest = validate_content_hash(
+        value, expected_contract=EXECUTION_RESOURCE_RECOVERY_SPEC_CONTRACT,
+        expected_schema_version=1,
+    )
+    campaign = _load(value["campaign_spec"]); validate_campaign(campaign, executable=True)
+    ledger = _load(value["submission_ledger"]); ledger_hash = validate_submission_ledger(ledger)
+    monitor = _load(value["failure_monitor"])
+    _validate_monitor_lineage(
+        monitor, ledger, ledger_hash=ledger_hash,
+        campaign_sha256=campaign["content_hash"],
+    )
+    tasks, failed, states = _closure(campaign, ledger, monitor)
+    old_resources = _resources_from_ledger(campaign, ledger)
+    _validate_resource_increase(old_resources, value.get("resources", {}))
+    relevant_classes = {
+        next(row for row in campaign["tasks"] if row["task_id"] == task)["resource_class"]
+        for task in tasks
+    }
+    execution_sources, changed_sources = _execution_source_lineage(
+        campaign, project_dir=value["project_dir"],
+    )
+    authorized = value.get("live_submission_authorized") is True
+    if (
+        tasks != value.get("retry_tasks")
+        or failed != value.get("failed_job_ids")
+        or states != value.get("failure_states")
+        or value.get("old_resources") != old_resources
+        or set(value.get("resources", {})) != set(campaign["resources"])
+        or not any(
+            old_resources[name] != value["resources"][name]
+            for name in relevant_classes
+        )
+        or value.get("execution_semantic_source_sha256") != execution_sources
+        or value.get("changed_semantic_sources") != changed_sources
+        or not changed_sources
+        or value.get("semantic_change_classification") != (
+            "execution_only_human_authorized_v1"
+            if authorized else "execution_only_unreviewed_v1"
+        )
+        or value.get("resource_change_classification") != (
+            "monotonic_human_authorized_v1"
+            if authorized else "monotonic_unreviewed_v1"
+        )
+        or value.get("source_commit") is None
+        or _COMMIT.fullmatch(str(value.get("source_commit"))) is None
+        or value.get("parent_source_commit") != campaign.get("source_commit")
+        or value.get("scientific_identity_sha256") != _scientific_identity(campaign)
+        or value.get("recovery_root") != str(Path(value["recovery_root"]).resolve())
+        or value.get("project_dir") != str(Path(value["project_dir"]).resolve())
+        or value.get("final_test_accessed") is not False
+    ):
+        raise ValueError("HCWDL-UJ execution/resource recovery semantics differ")
+    plan = recovery_plan(value, _skip_validation=True)
+    if plan["content_hash"] != value.get("command_plan_sha256"):
+        raise ValueError("HCWDL-UJ execution/resource recovery command plan differs")
+    if executable and not authorized:
+        raise PermissionError("HCWDL-UJ execution/resource recovery is not authorized")
+    return digest
+
+
 def create_resource_recovery_spec(
     *, campaign_spec: str | Path, submission_ledger: str | Path,
     monitor_report: str | Path, recovery_root: str | Path,
@@ -524,12 +682,28 @@ def recovery_plan(
             worker_name="sbatch/run_hcwdl_homotopy_resource_recovery.sh",
             resources=value["resources"], contract=RESOURCE_RECOVERY_COMMAND_PLAN_CONTRACT,
         )
+    if contract == EXECUTION_RESOURCE_RECOVERY_SPEC_CONTRACT:
+        if not _skip_validation:
+            validate_execution_resource_recovery_spec(value)
+        campaign = _load(value["campaign_spec"])
+        return _commands(
+            campaign, tasks=value["retry_tasks"], project_dir=value["project_dir"],
+            spec_path=str(
+                Path(value["recovery_root"])
+                / "execution_resource_recovery_spec.json"
+            ),
+            env_name="HCWDL_UJ_EXECUTION_RESOURCE_RECOVERY_SPEC",
+            worker_name="sbatch/run_hcwdl_homotopy_execution_resource_recovery.sh",
+            resources=value["resources"],
+            contract=EXECUTION_RESOURCE_RECOVERY_COMMAND_PLAN_CONTRACT,
+        )
     raise ValueError("unknown HCWDL-UJ recovery contract")
 
 
 __all__ = [
     "aggregate_slurm_states",
-    "create_recovery_spec", "create_resource_recovery_spec", "recovery_plan",
-    "validate_recovery_spec", "validate_recovery_worker_semantics",
-    "validate_resource_recovery_spec",
+    "create_execution_resource_recovery_spec", "create_recovery_spec",
+    "create_resource_recovery_spec", "recovery_plan",
+    "validate_execution_resource_recovery_spec", "validate_recovery_spec",
+    "validate_recovery_worker_semantics", "validate_resource_recovery_spec",
 ]

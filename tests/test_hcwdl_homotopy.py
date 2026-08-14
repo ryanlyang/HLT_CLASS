@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
 
 import numpy as np
 import pytest
@@ -20,6 +21,8 @@ from hlt_classification.models import scouting_particle_transformer as scouting_
 from hlt_classification.scouting.hcwdl_homotopy_contracts import (
     AGGREGATE_CONTRACT, CAMPAIGN_COMPLETION_CONTRACT, COMMAND_PLAN_CONTRACT,
     COORDINATE_CONTRACT, EDIT_INSERTION, EDIT_REMOVAL, EDIT_SUBSTITUTION,
+    EXECUTION_RESOURCE_RECOVERY_COMMAND_PLAN_CONTRACT,
+    EXECUTION_RESOURCE_RECOVERY_SPEC_CONTRACT,
     GRAPH_CONTRACT, GRAPH_RECIPE_LOCK_CONTRACT, NODE_SPEC_CONTRACT,
     PILOT_SPEC_CONTRACT, RECIPE_CONTRACT, RECOVERY_COMMAND_PLAN_CONTRACT,
     RECOVERY_SPEC_CONTRACT, RESOURCE_RECOVERY_COMMAND_PLAN_CONTRACT,
@@ -29,14 +32,17 @@ from hlt_classification.scouting.hcwdl_homotopy_contracts import (
 from hlt_classification.scouting.hcwdl_homotopy import (
     HomotopyCoordinate, assert_particle_inputs_equal, build_homotopy_inputs,
     build_p0_inputs, build_partition_from_arrays,
+    prepare_hlt_endpoints, prepare_offline_endpoints,
 )
+from hlt_classification.scouting import hcwdl_homotopy as homotopy_views
+from hlt_classification.scouting import hcwdl_homotopy_stream as homotopy_stream
 from hlt_classification.scouting.hcwdl_homotopy_graph import (
     GRAPH_SHA256, NODE_REGISTRY, build_recipe_overlay, resolved_loss,
     validate_graph, validate_recipe_overlay,
 )
 from hlt_classification.scouting import hcwdl_homotopy_campaign as homotopy_campaign
 from hlt_classification.scouting.hcwdl_homotopy_runner import (
-    _coordinate, estimate_global_peak_bytes,
+    _coordinate, estimate_global_peak_bytes, view_build_workers,
 )
 from hlt_classification.scouting.hcwdl_homotopy_campaign import (
     PILOT_GPU_TRAINING_REQUEST, SEMANTIC_SOURCE_FILES, SMOKE_RESOURCES,
@@ -67,6 +73,7 @@ from hlt_classification.scouting.hcwdl_homotopy_recovery import (
     _memory_mib, _validate_resource_increase, _wall_seconds,
     aggregate_slurm_states, validate_recovery_worker_semantics,
 )
+from hlt_classification.scouting import hcwdl_homotopy_recovery as homotopy_recovery
 from hlt_classification.scouting.hcwdl_recovery import (
     build_monitor_report, build_submission_ledger,
 )
@@ -74,7 +81,7 @@ from hlt_classification.scouting.hcwdl_toff_targets import TOFF_TARGET_CONSUMERS
 from hlt_classification.scouting.inputs import build_hlt_inputs
 from hlt_classification.scouting.repair import (
     HIGHCOV_SHELL_EXACT_FAMILY, build_alpha_repaired_inputs,
-    project_offline_endpoint_records,
+    full_endpoint_required_branches, project_offline_endpoint_records,
 )
 from hlt_classification.scouting.schema import HLT_FEATURE_SPECS
 from hlt_classification.scouting.schema import CLASS_NAMES
@@ -258,6 +265,16 @@ def _raw_arrays():
     return arrays
 
 
+def _repeated_raw_arrays(rows: int):
+    source = _raw_arrays(); result = {}
+    for name, value in source.items():
+        if isinstance(value, list):
+            result[name] = [np.asarray(value[0]).copy() for _ in range(rows)]
+        else:
+            result[name] = np.repeat(np.asarray(value), rows, axis=0)
+    return result
+
+
 def _resized_offline_arrays(charged: int, neutral: int, *, lost: int = 0):
     if not 0 <= lost <= charged:
         raise ValueError("invalid synthetic lost-track count")
@@ -360,6 +377,66 @@ def test_p0_exact_bounds_native_offsets_and_lost_track_membership() -> None:
     assert set(range(90, 100)).isdisjoint(native)
     assert np.allclose(p0.vectors[0, :, 89], [20, 0, 1, 20.1])
     assert np.allclose(p0.vectors[0, :, 90], [0, 12, -1, 12.1])
+
+
+def test_prepared_endpoint_batches_are_legacy_exact_and_convert_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    arrays = _repeated_raw_arrays(7)
+    expected = [project_offline_endpoint_records(arrays, row=row) for row in range(7)]
+    calls: dict[str, int] = {}
+    original = homotopy_views._rows
+
+    def counted(value):
+        for name, candidate in arrays.items():
+            if candidate is value:
+                calls[name] = calls.get(name, 0) + 1
+                break
+        return original(value)
+
+    monkeypatch.setattr(homotopy_views, "_rows", counted)
+    offline = prepare_offline_endpoints(arrays)
+    hlt = prepare_hlt_endpoints(arrays)
+    assert offline.rows == hlt.rows == 7
+    for row, (features, validity, p4) in enumerate(expected):
+        assert np.array_equal(offline.raw_features[row], features)
+        assert np.array_equal(offline.validity[row], validity)
+        assert np.array_equal(offline.p4[row], p4)
+    expected_branches = set(full_endpoint_required_branches()) | {
+        "n_cpfcands", "n_lts", "n_npfcands", "n_scoutpfcands",
+        *(spec.branch for spec in HLT_FEATURE_SPECS),
+        "scoutpfcand_px", "scoutpfcand_py", "scoutpfcand_pz",
+        "scoutpfcand_energy",
+    }
+    assert set(calls) == expected_branches
+    assert set(calls.values()) == {1}
+
+
+def test_parallel_view_blocks_preserve_submission_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_build(arguments):
+        index = int(arguments[0]); time.sleep((5 - index) * .001)
+        return {"labels": np.asarray([index], np.int64)}
+
+    monkeypatch.setattr(homotopy_stream, "_build_block", fake_build)
+    arguments = tuple((index,) for index in range(6))
+    serial = list(homotopy_stream._ordered_blocks(iter(arguments), workers=1))
+    parallel = list(homotopy_stream._ordered_blocks(iter(arguments), workers=4))
+    assert [int(row["labels"][0]) for row in serial] == list(range(6))
+    assert [int(row["labels"][0]) for row in parallel] == list(range(6))
+
+
+def test_view_build_workers_are_bounded_by_slurm_allocation() -> None:
+    assert view_build_workers({}) == 1
+    assert view_build_workers({"SLURM_CPUS_PER_TASK": "8"}) == 8
+    assert view_build_workers({
+        "SLURM_CPUS_PER_TASK": "8", "HCWDL_UJ_VIEW_BUILD_WORKERS": "6",
+    }) == 6
+    with pytest.raises(ValueError, match="exceed"):
+        view_build_workers({
+            "SLURM_CPUS_PER_TASK": "8", "HCWDL_UJ_VIEW_BUILD_WORKERS": "9",
+        })
 
 
 def test_partition_types_unclassified_dustbin_and_outside_p0_assignment() -> None:
@@ -927,6 +1004,8 @@ def test_graph_recipe_and_coordinates_are_frozen() -> None:
         RESOURCE_RECOVERY_SPEC_CONTRACT,
         RESOURCE_RECOVERY_COMMAND_PLAN_CONTRACT,
     ))
+    assert EXECUTION_RESOURCE_RECOVERY_SPEC_CONTRACT.endswith("/v1")
+    assert EXECUTION_RESOURCE_RECOVERY_COMMAND_PLAN_CONTRACT.endswith("/v1")
     overlay = build_recipe_overlay(parent_recipe_sha256=H)
     assert validate_recipe_overlay(overlay, parent_recipe_sha256=H) == overlay["content_hash"]
     assert all(row["passes"] == row["validation_checks"] == 60 for row in overlay["rows"])
@@ -1308,6 +1387,96 @@ def test_resource_only_recovery_is_monotonic() -> None:
         _validate_resource_increase(old, {"gpu_training": {**old["gpu_training"], "gpu": "gpu:a100:1"}})
 
 
+def test_execution_resource_recovery_binds_source_and_16_cpu_envelope(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    old_resources = {
+        "gpu_training": {
+            "cpus": 8, "memory": "96G", "walltime": "06:00:00",
+            "gpu": "gpu:gh200:1",
+        },
+        "cpu_report": {
+            "cpus": 4, "memory": "32G", "walltime": "01:00:00",
+            "gpu": None,
+        },
+    }
+    replacement = {
+        **old_resources,
+        "gpu_training": {**old_resources["gpu_training"], "cpus": 16},
+    }
+    campaign = {
+        "content_hash": H, "source_commit": "a" * 40,
+        "semantic_source_sha256": {"worker.py": "b" * 64},
+        "resources": old_resources,
+        "tasks": [{
+            "task_id": "train_U020", "resource_class": "gpu_training",
+            "dependencies": [], "array_count": 1,
+        }],
+    }
+    ledger = {"jobs": {"train_U020": "42"}}
+    monitor = {"rows": []}
+    by_path = {"campaign": campaign, "ledger": ledger, "monitor": monitor}
+    monkeypatch.setattr(
+        homotopy_recovery, "load_json", lambda path: by_path[str(path)],
+    )
+    monkeypatch.setattr(
+        homotopy_recovery, "_load",
+        lambda reference: by_path[str(reference["path"])],
+    )
+    monkeypatch.setattr(homotopy_recovery, "validate_campaign", lambda *a, **k: H)
+    monkeypatch.setattr(homotopy_recovery, "validate_submission_ledger", lambda value: H)
+    monkeypatch.setattr(homotopy_recovery, "_validate_monitor_lineage", lambda *a, **k: None)
+    monkeypatch.setattr(
+        homotopy_recovery, "_closure",
+        lambda *a, **k: (["train_U020"], ["42"], ["CANCELLED"]),
+    )
+    monkeypatch.setattr(
+        homotopy_recovery, "_resources_from_ledger",
+        lambda *a, **k: old_resources,
+    )
+    monkeypatch.setattr(
+        homotopy_recovery, "_execution_source_lineage",
+        lambda *a, **k: (
+            {"worker.py": "c" * 64},
+            {"worker.py": {
+                "campaign_sha256": "b" * 64,
+                "recovery_sha256": "c" * 64,
+            }},
+        ),
+    )
+    monkeypatch.setattr(
+        homotopy_recovery, "_reference",
+        lambda path: {"path": str(path), "content_hash": H},
+    )
+    monkeypatch.setattr(homotopy_recovery, "_scientific_identity", lambda value: H)
+    spec = homotopy_recovery.create_execution_resource_recovery_spec(
+        campaign_spec="campaign", submission_ledger="ledger",
+        monitor_report="monitor", recovery_root=tmp_path / "recovery",
+        project_dir=tmp_path, source_commit="d" * 40,
+        replacement_resources=replacement,
+        authorization_phrase=(
+            "AUTHORIZE HCWDL UJ EXECUTION AND RESOURCE RECOVERY"
+        ),
+    )
+    assert spec["contract"] == EXECUTION_RESOURCE_RECOVERY_SPEC_CONTRACT
+    assert spec["old_resources"] == old_resources
+    assert spec["resources"]["gpu_training"]["cpus"] == 16
+    plan = homotopy_recovery.recovery_plan(spec)
+    assert plan["contract"] == EXECUTION_RESOURCE_RECOVERY_COMMAND_PLAN_CONTRACT
+    command = plan["commands"][0]["command"]
+    assert "--cpus-per-task=16" in command
+    assert any(
+        "HCWDL_UJ_EXECUTION_RESOURCE_RECOVERY_SPEC=" in item
+        for item in command
+    )
+    assert Path(command[-1]).name == (
+        "run_hcwdl_homotopy_execution_resource_recovery.sh"
+    )
+    assert homotopy_recovery.validate_execution_resource_recovery_spec(
+        spec, executable=True,
+    ) == spec["content_hash"]
+
+
 def test_resource_measurement_accepts_only_contiguous_completed_recovery_chain(
     tmp_path: Path,
 ) -> None:
@@ -1412,6 +1581,11 @@ def test_slurm_worker_is_exec_and_has_no_array_throttle() -> None:
     ).read_text(encoding="utf-8")
     assert "validate_recovery_worker_semantics" in recovery_worker
     assert "execution_semantic_source_sha256" in recovery_worker
+    combined_worker = Path(
+        "sbatch/run_hcwdl_homotopy_execution_resource_recovery.sh"
+    ).read_text(encoding="utf-8")
+    assert "exec python -s" in combined_worker
+    assert "HCWDL_UJ_EXECUTION_RESOURCE_RECOVERY_SPEC" in combined_worker
     from hlt_classification.scouting.hcwdl_homotopy_campaign import _tasks
     tasks = _tasks(train_sources=3, validation_sources=2)
     assert len(tasks) == 66

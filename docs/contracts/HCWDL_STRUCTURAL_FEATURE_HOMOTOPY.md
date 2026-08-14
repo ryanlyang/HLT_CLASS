@@ -76,6 +76,8 @@ HCWDL_STRUCTURAL_FEATURE_RECOVERY_SPEC/v2
 HCWDL_STRUCTURAL_FEATURE_RECOVERY_COMMAND_PLAN/v2
 HCWDL_STRUCTURAL_FEATURE_RESOURCE_RECOVERY_SPEC/v2
 HCWDL_STRUCTURAL_FEATURE_RESOURCE_RECOVERY_COMMAND_PLAN/v2
+HCWDL_STRUCTURAL_FEATURE_EXECUTION_RESOURCE_RECOVERY_SPEC/v1
+HCWDL_STRUCTURAL_FEATURE_EXECUTION_RESOURCE_RECOVERY_COMMAND_PLAN/v1
 ```
 
 Every reusable JSON artifact carries a contract, schema version, canonical
@@ -140,6 +142,16 @@ bytes equal the original campaign bytes. Resource-only recovery requires
 OOM/timeout evidence, identical source/science/output, and monotonic CPU,
 memory, or walltime increases. Cancellation uses only exact campaign-bound
 job IDs.
+
+The separately versioned execution-and-resource recovery is used only when a
+single failed closure needs both a reviewed execution-only source correction
+and a monotonic resource increase. It binds the same original scientific
+identity, complete old/new semantic-source maps, exact prior ledger and
+monitor, old and replacement resource envelopes, and distinct human
+authorization/submission phrases. It never permits a GPU-type change, a
+resource decrease, a graph/data/loss change, or a task outside the exact
+failed/downstream closure. This combined contract does not broaden either
+legacy v2 recovery identity.
 
 Local tests and dry runs establish implementation readiness, not Tigris
 acceptance. A genuine production-worker smoke must measure coupling, caches,

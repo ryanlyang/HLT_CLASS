@@ -211,6 +211,8 @@ HCWDL_STRUCTURAL_FEATURE_RECOVERY_SPEC/v2
 HCWDL_STRUCTURAL_FEATURE_RECOVERY_COMMAND_PLAN/v2
 HCWDL_STRUCTURAL_FEATURE_RESOURCE_RECOVERY_SPEC/v2
 HCWDL_STRUCTURAL_FEATURE_RESOURCE_RECOVERY_COMMAND_PLAN/v2
+HCWDL_STRUCTURAL_FEATURE_EXECUTION_RESOURCE_RECOVERY_SPEC/v1
+HCWDL_STRUCTURAL_FEATURE_EXECUTION_RESOURCE_RECOVERY_COMMAND_PLAN/v1
 ```
 
 The completed v1 smoke remains immutable evidence for v1 only. Because the
@@ -1840,6 +1842,20 @@ graph, recipe, data, coupling, coordinates, seeds, checkpoints, command bytes
 apart from resource flags, and output root. It records the scheduler evidence,
 old/new envelope, exact failed closure, and explicit authorization. It cannot
 change batch size, update count, cache contents, or any scientific semantic.
+
+An operator-authorized execution repair may coincide with a monotonic resource
+increase only through the distinct
+`HCWDL_STRUCTURAL_FEATURE_EXECUTION_RESOURCE_RECOVERY_{SPEC,COMMAND_PLAN}/v1`
+family. It combines the complete source-recovery lineage proof with the
+complete old/new resource-envelope proof and distinct human authorization and
+submission phrases. It preserves the original scientific identity and may
+submit only the exact cancelled/failed downstream closure. It may not change
+GPU type or reduce any resource. For the linear endpoint-preparation repair,
+the only replacement-resource change is `gpu_training.cpus: 8 -> 16`; 96 GiB,
+six hours, one GH200, all graph/data/loss coordinates, and all completed or
+compatible rolling artifacts remain fixed. This operational recovery does not
+retroactively relabel the original v2 campaign request or either legacy v2
+recovery contract.
 
 ## 21. Required test matrix
 

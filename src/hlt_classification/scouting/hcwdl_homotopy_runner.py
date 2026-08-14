@@ -103,6 +103,21 @@ def _memory_limit_bytes(configured_gib: float) -> int:
     return configured
 
 
+def view_build_workers(environ: Mapping[str, str] | None = None) -> int:
+    """Use the authenticated Slurm CPU allocation without oversubscription."""
+
+    values = os.environ if environ is None else environ
+    raw_allocated = values.get("SLURM_CPUS_PER_TASK", "1")
+    raw_requested = values.get("HCWDL_UJ_VIEW_BUILD_WORKERS", raw_allocated)
+    try:
+        allocated = int(raw_allocated); requested = int(raw_requested)
+    except ValueError as error:
+        raise ValueError("HCWDL-UJ view-build worker count must be an integer") from error
+    if allocated <= 0 or requested <= 0 or requested > allocated:
+        raise ValueError("HCWDL-UJ view-build workers exceed the allocated CPUs")
+    return requested
+
+
 def estimate_global_peak_bytes(
     *, miniature: Mapping[str, Any], train_rows: int, validation_rows: int,
 ) -> dict[str, int]:
@@ -409,6 +424,7 @@ def run_homotopy_node(
             raise ValueError("completed HCWDL-UJ node runtime lineage differs")
         return report
     batch_size = int(recipe["batching"]["effective_batch_size"])
+    build_workers = view_build_workers()
     alias = node.seed_alias
     sampler_seed = derive_seed(int(spec["replicate_seed"]), f"hcwdl_uj/sampler/{alias}")
     repair_seed = derive_seed(int(spec["replicate_seed"]), "hcwdl_uj/repair/shared_v1")
@@ -426,6 +442,7 @@ def run_homotopy_node(
             row_selection=selections[role], coordinate=_coordinate(domain),
             repair_seed=repair_seed, batch_size=batch_size,
             output_key=str(DOMAINS[domain]["input"]),
+            workers=build_workers,
         )
 
     student_domain = node.student_domain
@@ -442,6 +459,12 @@ def run_homotopy_node(
         )
     remaining_bytes = memory_limit
     for role in ("train", "validation"):
+        phase_started = time.monotonic()
+        print(
+            f"HCWDL-UJ phase=student_view_cache role={role} "
+            f"domain={student_domain} workers={build_workers} status=started",
+            flush=True,
+        )
         records = role_records(split, role)
         cache = EphemeralPmardViewCache.build(
             online_stream(student_domain, role), expected_rows=selections[role].rows,
@@ -460,6 +483,12 @@ def run_homotopy_node(
             },
         )
         caches[role] = cache
+        print(
+            f"HCWDL-UJ phase=student_view_cache role={role} "
+            f"domain={student_domain} workers={build_workers} status=complete "
+            f"rows={selections[role].rows} seconds={time.monotonic() - phase_started:.3f}",
+            flush=True,
+        )
         remaining_bytes -= int(cache.header["array_bytes"])
         if remaining_bytes <= 0:
             raise MemoryError("HCWDL-UJ simultaneous train/validation caches exceed global cap")
@@ -478,6 +507,12 @@ def run_homotopy_node(
                 teacher_report_sha256=teacher_hash, split_manifest_sha256=split_hash,
             )
         else:
+            target_started = time.monotonic()
+            print(
+                f"HCWDL-UJ phase=teacher_targets teacher={teacher.node_id} "
+                f"domain={teacher.domain} status=started",
+                flush=True,
+            )
             assert teacher_path is not None and teacher_raw is not None
             teacher_model, teacher_report = load_pmard_model(
                 teacher_path, model_factory=scouting_model_factory_for_report(teacher_raw),
@@ -495,8 +530,19 @@ def run_homotopy_node(
             import torch
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+            print(
+                f"HCWDL-UJ phase=teacher_targets teacher={teacher.node_id} "
+                f"domain={teacher.domain} status=complete "
+                f"seconds={time.monotonic() - target_started:.3f}",
+                flush=True,
+            )
 
     teacher_domain = None if not node.teachers else node.teachers[0].domain
+    training_started = time.monotonic()
+    print(
+        f"HCWDL-UJ phase=optimizer_training node={node_id} status=started",
+        flush=True,
+    )
     report = train_hcwdl_node(
         node_id=node_id, recipe=recipe, train_rows=selections["train"].rows,
         replicate_seed=int(spec["replicate_seed"]),
@@ -517,6 +563,11 @@ def run_homotopy_node(
             "durable_repaired_dataset": False,
         }, seed_node_id=alias, node_contract=NODE_SPEC_CONTRACT,
         explicit_loss=loss, recipe_overlay_sha256=overlay_hash,
+    )
+    print(
+        f"HCWDL-UJ phase=optimizer_training node={node_id} status=complete "
+        f"seconds={time.monotonic() - training_started:.3f}",
+        flush=True,
     )
     engine_report = load_json(output / "training_report.json")
     engine_report_hash = validate_pmard_training_report(engine_report)
@@ -548,6 +599,7 @@ def run_homotopy_node(
         "peak_rss_growth_kib": max(0, peak_rss_kib - initial_peak_rss_kib),
         "peak_gpu_allocated_bytes": peak_gpu_allocated,
         "peak_gpu_reserved_bytes": peak_gpu_reserved,
+        "view_build_workers": build_workers,
         "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
         "final_test_accessed": False,
     })
@@ -555,4 +607,7 @@ def run_homotopy_node(
     return report
 
 
-__all__ = ["estimate_global_peak_bytes", "node_output_dir", "run_homotopy_node"]
+__all__ = [
+    "estimate_global_peak_bytes", "node_output_dir", "run_homotopy_node",
+    "view_build_workers",
+]

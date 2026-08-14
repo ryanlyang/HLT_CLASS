@@ -17,8 +17,9 @@ from .hcwdl_upper_coupling import (
 )
 from .inputs import ParticleInputs, build_hlt_inputs
 from .repair import (
-    HIGHCOV_SHELL_EXACT_FAMILY, build_alpha_repaired_inputs,
-    project_offline_endpoint_records, transform_endpoint_features,
+    HIGHCOV_SHELL_EXACT_FAMILY, _combined_endpoint_features,
+    build_alpha_repaired_inputs, full_endpoint_required_branches,
+    transform_endpoint_features,
 )
 from .schema import HLT_FEATURE_SPECS, HLT_VECTOR_BRANCHES
 
@@ -62,6 +63,35 @@ class HomotopyCoordinate:
         }
 
 
+@dataclass(frozen=True)
+class PreparedOfflineEndpoints:
+    """One canonical conversion of every offline branch in a source chunk."""
+
+    rows_by_branch: Mapping[str, Sequence[np.ndarray]]
+    raw_features: tuple[np.ndarray, ...]
+    validity: tuple[np.ndarray, ...]
+    p4: tuple[np.ndarray, ...]
+    charged_counts: np.ndarray
+    neutral_counts: np.ndarray
+
+    @property
+    def rows(self) -> int:
+        return len(self.raw_features)
+
+
+@dataclass(frozen=True)
+class PreparedHltEndpoints:
+    """One canonical conversion of every raw HLT endpoint branch in a chunk."""
+
+    raw_features: tuple[np.ndarray, ...]
+    p4: tuple[np.ndarray, ...]
+    raw_lengths: np.ndarray
+
+    @property
+    def rows(self) -> int:
+        return len(self.raw_features)
+
+
 def _rows(value: object) -> list[np.ndarray]:
     try:
         import awkward as ak
@@ -72,50 +102,122 @@ def _rows(value: object) -> list[np.ndarray]:
     return [np.asarray(row) for row in value]  # type: ignore[arg-type]
 
 
-def _raw_hlt_row(arrays: Mapping[str, object], row: int) -> tuple[np.ndarray, np.ndarray, int]:
-    features = np.stack([
-        _rows(arrays[spec.branch])[row] for spec in HLT_FEATURE_SPECS
-    ], axis=1).astype(np.float64, copy=False)
-    vectors = np.stack([
-        _rows(arrays[branch])[row] for branch in HLT_VECTOR_BRANCHES
-    ], axis=1).astype(np.float64, copy=False)
-    if len(features) != len(vectors):
-        raise ValueError("HLT raw feature/vector row lengths differ")
-    raw_count = _scalar_count(arrays, "n_scoutpfcands", row)
-    if len(features) != raw_count:
-        raise ValueError("HLT endpoint collection differs from n_scoutpfcands")
-    return features, vectors, raw_count
+def prepare_offline_endpoints(
+    arrays: Mapping[str, object],
+) -> PreparedOfflineEndpoints:
+    """Convert offline ragged branches once, then prepare every row linearly."""
 
+    required = full_endpoint_required_branches()
+    missing = sorted(required - set(arrays))
+    if missing:
+        raise KeyError(f"full offline endpoint is missing branches: {missing}")
+    rows_by_branch = {branch: _rows(arrays[branch]) for branch in required}
+    rows = len(next(iter(rows_by_branch.values()))) if rows_by_branch else 0
+    if rows <= 0 or any(len(values) != rows for values in rows_by_branch.values()):
+        raise ValueError("full offline endpoint branch row counts differ")
 
-def _scalar_count(arrays: Mapping[str, object], branch: str, row: int) -> int:
-    if branch not in arrays:
-        raise KeyError(f"HCWDL-UJ endpoint input lacks {branch}")
-    value = np.asarray(_rows(arrays[branch])[row])
-    if value.ndim != 0 or not np.isfinite(value) or int(value) != value or int(value) < 0:
-        raise ValueError(f"{branch} must be a nonnegative integer scalar")
-    return int(value)
-
-
-def _offline_counts(arrays: Mapping[str, object], row: int) -> tuple[int, int]:
-    charged = _scalar_count(arrays, "n_cpfcands", row) + _scalar_count(
-        arrays, "n_lts", row,
+    count_rows = {
+        branch: _rows(arrays[branch])
+        for branch in ("n_cpfcands", "n_lts", "n_npfcands")
+    }
+    if any(len(values) != rows for values in count_rows.values()):
+        raise ValueError("offline endpoint count row counts differ")
+    raw_features: list[np.ndarray] = []
+    validity: list[np.ndarray] = []
+    p4_rows: list[np.ndarray] = []
+    charged_counts = np.empty(rows, np.int32)
+    neutral_counts = np.empty(rows, np.int32)
+    for row in range(rows):
+        charged = len(rows_by_branch["cpfcandlt_px"][row])
+        neutral = len(rows_by_branch["npfcand_px"][row])
+        scalar_counts = {}
+        for branch, values in count_rows.items():
+            value = np.asarray(values[row])
+            if (
+                value.ndim != 0 or not np.isfinite(value)
+                or int(value) != value or int(value) < 0
+            ):
+                raise ValueError(f"{branch} must be a nonnegative integer scalar")
+            scalar_counts[branch] = int(value)
+        if scalar_counts["n_cpfcands"] + scalar_counts["n_lts"] != charged:
+            raise ValueError("cpfcandlt endpoint collection differs from n_cpfcands + n_lts")
+        if scalar_counts["n_npfcands"] != neutral:
+            raise ValueError("npfcand endpoint collection differs from n_npfcands")
+        charged_counts[row] = charged; neutral_counts[row] = neutral
+        features, valid = _combined_endpoint_features(
+            rows_by_branch, row=row, charged_count=charged, neutral_count=neutral,
+        )
+        charged_p4 = np.stack([
+            rows_by_branch[f"cpfcandlt_{name}"][row]
+            for name in ("px", "py", "pz", "energy")
+        ], axis=1).astype(np.float32, copy=False)
+        neutral_p4 = np.stack([
+            rows_by_branch[f"npfcand_{name}"][row]
+            for name in ("px", "py", "pz", "energy")
+        ], axis=1).astype(np.float32, copy=False)
+        if len(charged_p4) != charged or len(neutral_p4) != neutral:
+            raise ValueError("offline endpoint p4 collection lengths differ")
+        combined_p4 = np.concatenate((charged_p4, neutral_p4), axis=0).astype(
+            np.float64, copy=False,
+        )
+        if len(combined_p4) != len(features):
+            raise ValueError("offline p4 and projected endpoint lengths differ")
+        raw_features.append(features); validity.append(valid); p4_rows.append(combined_p4)
+    return PreparedOfflineEndpoints(
+        rows_by_branch=rows_by_branch,
+        raw_features=tuple(raw_features), validity=tuple(validity), p4=tuple(p4_rows),
+        charged_counts=charged_counts, neutral_counts=neutral_counts,
     )
-    neutral = _scalar_count(arrays, "n_npfcands", row)
-    if len(_rows(arrays["cpfcandlt_px"])[row]) != charged:
-        raise ValueError("cpfcandlt endpoint collection differs from n_cpfcands + n_lts")
-    if len(_rows(arrays["npfcand_px"])[row]) != neutral:
-        raise ValueError("npfcand endpoint collection differs from n_npfcands")
-    return charged, neutral
+
+
+def prepare_hlt_endpoints(arrays: Mapping[str, object]) -> PreparedHltEndpoints:
+    """Convert raw HLT ragged branches once for all endpoint partitions."""
+
+    feature_rows = {spec.branch: _rows(arrays[spec.branch]) for spec in HLT_FEATURE_SPECS}
+    vector_rows = {branch: _rows(arrays[branch]) for branch in HLT_VECTOR_BRANCHES}
+    count_rows = _rows(arrays["n_scoutpfcands"])
+    rows = len(count_rows)
+    if rows <= 0 or any(
+        len(values) != rows for values in (*feature_rows.values(), *vector_rows.values())
+    ):
+        raise ValueError("HLT endpoint branch row counts differ")
+    raw_features: list[np.ndarray] = []
+    p4_rows: list[np.ndarray] = []
+    raw_lengths = np.empty(rows, np.int32)
+    for row in range(rows):
+        features = np.stack([
+            feature_rows[spec.branch][row] for spec in HLT_FEATURE_SPECS
+        ], axis=1).astype(np.float64, copy=False)
+        vectors = np.stack([
+            vector_rows[branch][row] for branch in HLT_VECTOR_BRANCHES
+        ], axis=1).astype(np.float64, copy=False)
+        count_value = np.asarray(count_rows[row])
+        if (
+            count_value.ndim != 0 or not np.isfinite(count_value)
+            or int(count_value) != count_value or int(count_value) < 0
+        ):
+            raise ValueError("n_scoutpfcands must be a nonnegative integer scalar")
+        count = int(count_value)
+        if len(features) != len(vectors) or len(features) != count:
+            raise ValueError("HLT endpoint collection differs from n_scoutpfcands")
+        raw_features.append(features); p4_rows.append(vectors); raw_lengths[row] = count
+    return PreparedHltEndpoints(
+        raw_features=tuple(raw_features), p4=tuple(p4_rows), raw_lengths=raw_lengths,
+    )
 
 
 def _partition_for_row(
-    arrays: Mapping[str, object], *, row: int, assignment: np.ndarray,
+    *, row: int, assignment: np.ndarray,
+    offline: PreparedOfflineEndpoints, hlt: PreparedHltEndpoints,
 ) -> tuple[EndpointPartition, np.ndarray, np.ndarray]:
-    offline_features, offline_validity, offline_p4 = project_offline_endpoint_records(
-        arrays, row=row,
-    )
-    charged, neutral = _offline_counts(arrays, row)
-    hlt_features, hlt_p4, raw_hlt = _raw_hlt_row(arrays, row)
+    charged = int(offline.charged_counts[row])
+    neutral = int(offline.neutral_counts[row])
+    offline_features = offline.raw_features[row]
+    offline_validity = offline.validity[row]
+    offline_p4 = offline.p4[row]
+    hlt_features = hlt.raw_features[row]
+    hlt_p4 = hlt.p4[row]
+    raw_hlt = int(hlt.raw_lengths[row])
     partition = build_endpoint_partition(
         offline_features=offline_features, offline_validity=offline_validity,
         offline_p4=offline_p4, charged_count=charged, neutral_count=neutral,
@@ -127,32 +229,46 @@ def _partition_for_row(
 
 def build_partition_from_arrays(
     arrays: Mapping[str, object], *, row: int, assignment: np.ndarray,
+    prepared_offline: PreparedOfflineEndpoints | None = None,
+    prepared_hlt: PreparedHltEndpoints | None = None,
 ) -> EndpointPartition:
     """Public one-row endpoint partition used by coupling production/audits."""
 
-    return _partition_for_row(arrays, row=row, assignment=assignment)[0]
+    return _partition_for_row(
+        row=row, assignment=assignment,
+        offline=(
+            prepare_offline_endpoints(arrays)
+            if prepared_offline is None else prepared_offline
+        ),
+        hlt=prepare_hlt_endpoints(arrays) if prepared_hlt is None else prepared_hlt,
+    )[0]
 
 
-def build_p0_inputs(arrays: Mapping[str, object]) -> ParticleInputs:
+def build_p0_inputs(
+    arrays: Mapping[str, object], *, prepared: PreparedOfflineEndpoints | None = None,
+) -> ParticleInputs:
     """Build the independent projected-native P0 endpoint in native order."""
 
-    rows = len(_rows(arrays["cpfcandlt_px"]))
+    prepared = prepare_offline_endpoints(arrays) if prepared is None else prepared
+    rows = prepared.rows
     features = np.zeros((rows, 21, 200), np.float32)
     vectors = np.zeros((rows, 4, 200), np.float32)
     mask = np.zeros((rows, 1, 200), np.bool_)
     lengths = np.zeros(rows, np.int32)
     for row in range(rows):
-        raw, validity, p4 = project_offline_endpoint_records(arrays, row=row)
-        charged, neutral = _offline_counts(arrays, row)
+        charged = int(prepared.charged_counts[row])
+        neutral = int(prepared.neutral_counts[row])
         indices = [*range(min(charged, 90))]
         indices.extend(charged + index for index in range(min(neutral, 60)))
-        projected = transform_endpoint_features(raw, validity)
+        projected = transform_endpoint_features(
+            prepared.raw_features[row], prepared.validity[row],
+        )
         length = len(indices)
         if length > 150:
             raise RuntimeError("P0 visible population exceeds the 90/60 bound")
         if length:
             features[row, :, :length] = projected[indices].T
-            vectors[row, :, :length] = np.asarray(p4, np.float32)[indices].T
+            vectors[row, :, :length] = np.asarray(prepared.p4[row], np.float32)[indices].T
             mask[row, 0, :length] = True
         lengths[row] = length
     return ParticleInputs(features, vectors, mask, lengths)
@@ -179,7 +295,8 @@ def build_homotopy_inputs(
     arrays: Mapping[str, object], *, assignments: np.ndarray,
     confidence: np.ndarray, coupling_rows: Sequence[Sequence[ResidualEdit]],
     coordinate: HomotopyCoordinate, identity_keys: Sequence[str],
-    discrete_seed: int,
+    discrete_seed: int, prepared_offline: PreparedOfflineEndpoints | None = None,
+    prepared_hlt: PreparedHltEndpoints | None = None,
 ) -> ParticleInputs:
     """Build canonical V(s,f) once without persisting repaired particle data."""
 
@@ -192,10 +309,18 @@ def build_homotopy_inputs(
     if len(coupling_rows) != rows or len(identity_keys) != rows or len(set(map(str, identity_keys))) != rows:
         raise ValueError("HCWDL-UJ coupling/identity rows differ")
     if coordinate.s == 0.0 and coordinate.f == 0.0:
-        return build_p0_inputs(arrays)
+        prepared_offline = (
+            prepare_offline_endpoints(arrays) if prepared_offline is None else prepared_offline
+        )
+        return build_p0_inputs(arrays, prepared=prepared_offline)
     if coordinate.s == 1.0 and coordinate.f == 1.0:
         return canonical
-    offline_p4 = [project_offline_endpoint_records(arrays, row=row)[2] for row in range(rows)]
+    prepared_offline = (
+        prepare_offline_endpoints(arrays) if prepared_offline is None else prepared_offline
+    )
+    if prepared_offline.rows != rows:
+        raise ValueError("prepared offline endpoint row count differs")
+    offline_p4 = prepared_offline.p4
     shell = build_alpha_repaired_inputs(
         arrays, offline_p4, mapping, alpha=coordinate.alpha,
         repair_family=HIGHCOV_SHELL_EXACT_FAMILY,
@@ -207,13 +332,18 @@ def build_homotopy_inputs(
     if coordinate.s == 1.0:
         return shell
 
+    prepared_hlt = prepare_hlt_endpoints(arrays) if prepared_hlt is None else prepared_hlt
+    if prepared_hlt.rows != rows:
+        raise ValueError("prepared HLT endpoint row count differs")
+
     features = np.zeros_like(canonical.features)
     vectors = np.zeros_like(canonical.vectors)
     mask = np.zeros_like(canonical.mask)
     lengths = np.zeros_like(canonical.raw_lengths)
     for row in range(rows):
         partition, projected, projected_p4 = _partition_for_row(
-            arrays, row=row, assignment=mapping[row],
+            row=row, assignment=mapping[row],
+            offline=prepared_offline, hlt=prepared_hlt,
         )
         edits = tuple(coupling_rows[row]); _validate_edit_partition(partition, edits)
         target_by_slot = {record.hlt_slot: record for record in partition.d100}
@@ -287,5 +417,6 @@ def assert_particle_inputs_equal(left: ParticleInputs, right: ParticleInputs, *,
 __all__ = [
     "HOMOTOPY_VIEW_CONTRACT", "HomotopyCoordinate", "assert_particle_inputs_equal",
     "build_homotopy_inputs", "build_p0_inputs", "build_partition_from_arrays",
-    "particle_inputs_sha256",
+    "particle_inputs_sha256", "PreparedHltEndpoints", "PreparedOfflineEndpoints",
+    "prepare_hlt_endpoints", "prepare_offline_endpoints",
 ]

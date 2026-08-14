@@ -14,11 +14,14 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 from hlt_classification.data.cache_contracts import load_json, write_immutable_json  # noqa: E402
 from hlt_classification.scouting.hcwdl_authorization import validate_source_checkout  # noqa: E402
 from hlt_classification.scouting.hcwdl_homotopy_contracts import (  # noqa: E402
+    EXECUTION_RESOURCE_RECOVERY_SUBMISSION_PHRASE,
     RECOVERY_SUBMISSION_PHRASE, RESOURCE_RECOVERY_SUBMISSION_PHRASE,
 )
 from hlt_classification.scouting.hcwdl_homotopy_recovery import (  # noqa: E402
-    create_recovery_spec, create_resource_recovery_spec, recovery_plan,
-    validate_recovery_spec, validate_resource_recovery_spec,
+    create_execution_resource_recovery_spec, create_recovery_spec,
+    create_resource_recovery_spec, recovery_plan,
+    validate_execution_resource_recovery_spec, validate_recovery_spec,
+    validate_resource_recovery_spec,
 )
 from hlt_classification.scouting.hcwdl_recovery import (  # noqa: E402
     assemble_submission_ledger, build_submission_event, build_submission_ledger,
@@ -35,12 +38,23 @@ def main() -> int:
     parser.add_argument("--project-dir", type=Path, required=True)
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--replacement-resources", type=Path)
+    parser.add_argument(
+        "--execution-and-resource-recovery", action="store_true",
+        help=(
+            "bind an execution-only source correction and a monotonic resource "
+            "increase in one separately versioned recovery"
+        ),
+    )
     parser.add_argument("--authorization-phrase")
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--submission-phrase")
     args = parser.parse_args()
     root = args.recovery_root.resolve()
     root.mkdir(parents=True, exist_ok=True)
+    if args.execution_and_resource_recovery and args.replacement_resources is None:
+        parser.error(
+            "--execution-and-resource-recovery requires --replacement-resources"
+        )
     if args.replacement_resources is None:
         spec = create_recovery_spec(
             campaign_spec=args.campaign_spec,
@@ -52,6 +66,20 @@ def main() -> int:
         spec_path = root / "recovery_spec.json"
         expected_submit = RECOVERY_SUBMISSION_PHRASE
         validate = validate_recovery_spec
+    elif args.execution_and_resource_recovery:
+        replacement = load_json(args.replacement_resources)
+        resources = replacement.get("requests", replacement)
+        spec = create_execution_resource_recovery_spec(
+            campaign_spec=args.campaign_spec,
+            submission_ledger=args.submission_ledger,
+            monitor_report=args.monitor_report, recovery_root=root,
+            project_dir=args.project_dir, source_commit=args.source_commit,
+            replacement_resources=resources,
+            authorization_phrase=args.authorization_phrase,
+        )
+        spec_path = root / "execution_resource_recovery_spec.json"
+        expected_submit = EXECUTION_RESOURCE_RECOVERY_SUBMISSION_PHRASE
+        validate = validate_execution_resource_recovery_spec
     else:
         replacement = load_json(args.replacement_resources)
         resources = replacement.get("requests", replacement)

@@ -14,14 +14,15 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 from hlt_classification.data.cache_contracts import load_json, write_immutable_json  # noqa: E402
 from hlt_classification.scouting.hcwdl_authorization import validate_source_checkout  # noqa: E402
 from hlt_classification.scouting.hcwdl_homotopy_contracts import (  # noqa: E402
-    RECOVERY_SPEC_CONTRACT, RESOURCE_RECOVERY_SPEC_CONTRACT,
+    EXECUTION_RESOURCE_RECOVERY_SPEC_CONTRACT, RECOVERY_SPEC_CONTRACT,
+    RESOURCE_RECOVERY_SPEC_CONTRACT,
 )
 from hlt_classification.scouting.hcwdl_homotopy_campaign import (  # noqa: E402
     validate_worker_semantics,
 )
 from hlt_classification.scouting.hcwdl_homotopy_recovery import (  # noqa: E402
-    validate_recovery_spec, validate_recovery_worker_semantics,
-    validate_resource_recovery_spec,
+    validate_execution_resource_recovery_spec, validate_recovery_spec,
+    validate_recovery_worker_semantics, validate_resource_recovery_spec,
 )
 from hlt_classification.scouting.hcwdl_homotopy_workflow import HomotopyWorkflow  # noqa: E402
 from hlt_classification.scouting.hcwdl_recovery import (  # noqa: E402
@@ -36,9 +37,13 @@ def main() -> int:
     parser.add_argument("--array-index", type=int)
     args = parser.parse_args()
     recovery = load_json(args.recovery_spec)
-    source_recovery = recovery.get("contract") == RECOVERY_SPEC_CONTRACT
-    if source_recovery:
+    source_recovery = recovery.get("contract") in {
+        RECOVERY_SPEC_CONTRACT, EXECUTION_RESOURCE_RECOVERY_SPEC_CONTRACT,
+    }
+    if recovery.get("contract") == RECOVERY_SPEC_CONTRACT:
         validate_recovery_spec(recovery, executable=True)
+    elif recovery.get("contract") == EXECUTION_RESOURCE_RECOVERY_SPEC_CONTRACT:
+        validate_execution_resource_recovery_spec(recovery, executable=True)
     elif recovery.get("contract") == RESOURCE_RECOVERY_SPEC_CONTRACT:
         validate_resource_recovery_spec(recovery, executable=True)
     else:
