@@ -1,5 +1,67 @@
 # Current Handoff
 
+## HCWDL-U-RKD ragged preprocessing repair (2026-08-14)
+
+The factorized homotopy representation-KD runtime inherited the original
+row-wise U/J endpoint projection path.  For every selected row that path
+reconverted every ragged offline and HLT branch for the whole source chunk,
+making U/D student-view materialization and every non-TOFF predecessor target
+bank quadratic in the chunk population.  The same defect described by
+`docs/HCWDL_RAGGED_PREPROCESSING_PERFORMANCE_GUIDE.md` therefore applied to
+both representation ladders even though each completed RAM cache was already
+replayed efficiently during the 60 optimizer passes.
+
+The runtime now converts each required ragged branch exactly once per source
+chunk into immutable prepared offline/HLT endpoint records and reuses those
+records for every selected row.  Source chunks are built through a bounded
+ordered thread pool whose default worker count is the authenticated
+`SLURM_CPUS_PER_TASK` allocation (eight for the locked campaign request).  At
+most one chunk per worker is in flight, results are emitted in canonical
+source/entry order, source-index target partitioning is unchanged, and the
+existing identity-authenticated RAM caches remain the only repaired-view
+storage.  The TOFF-native target path is intentionally unchanged.  Explicit
+phase logs now separate teacher-target preparation, train/validation student
+cache construction, and optimizer training so future stalls are attributable.
+
+No endpoint, coupling, U/D coordinate, model input, target, loss, seed,
+schedule, checkpoint-selection, graph, or HLT-only deployment semantics
+changed.  A 1,024-row repeated-input benchmark measured 4.848491 seconds for
+the legacy row-wise projection and 0.229431 seconds for the prepared path, a
+21.13x local speedup.  Focused homotopy/RKD/recovery/target/runtime coverage
+passes 141/141; the complete repository suite passes 965 tests with nine
+expected platform skips and 14 dependency warnings in 474.00 seconds.  All 14
+HCWDL-U-RKD CLI help surfaces pass, all 29 contract identities are unique (27
+v2 and two v1 under schema v2), source compilation passes, and
+`git diff --check` passes with Windows line-ending notices only.  No local or
+Tigris job was submitted by this repair; the corrected source still requires
+a source-pinned Tigris smoke or exact failed-closure recovery before a 300k
+launch.
+
+## HCWDL-U-RKD staged-parent launch correction (2026-08-13)
+
+The implementation-authoritative plan already permits the RSET and RREL
+tracks to start once the U/J coupling, coordinate, endpoint-equality, and
+graph-recipe locks exist; it requires the U/J logit-only reports only for the
+final comparative aggregate. The campaign implementation had incorrectly
+strengthened that into a full-parent-completion launch gate.
+
+The parent importer now authenticates the immutable training inputs and M0/
+TOFF controls at campaign creation, freezes the canonical expected U/J report
+paths and node identities, and allows both representation ladders to train in
+parallel with the U/J logit ladder. The aggregate still fails closed until
+every expected U/J report exists and authenticates its node identity; any
+report already present at creation is additionally hash-frozen. No view,
+target, loss, seed, schedule, checkpoint, or HLT-only deployment semantics
+changed.
+
+When the parent is still running, its authenticated submission ledger supplies
+the exact `campaign_complete` Slurm job ID. Only the child aggregate receives
+that external `afterok` dependency; TOFF target construction and both complete
+RSET/RREL training paths start immediately. Focused staged-parent, graph,
+prerequisite, and recovery tests pass 15/15. The final complete suite passes
+959 tests with 9 expected Windows platform skips and 14 dependency warnings.
+Python compilation, campaign CLI help, and `git diff --check` pass.
+
 ## HCWDL direct offline-to-HLT KD ablation (2026-08-12)
 
 The requested five-fit direct ablation is implemented as a separate
@@ -35,6 +97,54 @@ JSON-native teacher lists before hashing. A create-to-disk-reload validation
 regression now exercises the same boundary as the submission CLI; the direct
 campaign tests pass 8/8 and `git diff --check` passes. Neither failed attempt
 submitted a Slurm job.
+
+The first live direct pilot at `19012e7b` completed authentication, both fresh
+roots, and the single shared TOFF target bank. All three distilled students
+then failed before their first optimizer update. `HLT_LOGIT` exposed a parent
+key mismatch: its authenticated RAM target header carried the correct split
+hash, but the runner registered that hash under `split_manifest` instead of
+the PMARD engine's canonical `split_manifest_sha256` key. `HLT_RSET` and
+`HLT_RREL` exposed an independent cache adapter omission: exact HLT views were
+cached without the HCWDL token metadata required by the representation
+calibration/training boundary. The runner now uses the canonical split parent
+key and requests paired metadata while constructing representation-only HLT
+caches; ordinary HLT inference features and all scientific losses remain
+unchanged. Regressions cover both boundaries. The direct and shared
+representation target/training/production suites pass 88/88. Because the v1
+recovery contract is intentionally same-source only, the corrected source
+must create a new immutable campaign rather than relabel or requeue the
+`19012e7b` artifacts.
+
+The corrected `800574fa` pilot confirmed the logit repair end to end:
+`HLT_LOGIT` completed all training and selection. Its RSET/RREL jobs exposed a
+second, narrower metadata-stream issue before optimization. Metadata
+attachment had also selected the dataset reader's `canonical_order` mode,
+which is intentionally restricted to a one-source manifest, while the 300k
+train role spans multiple authenticated sources. Direct representation caches
+now read only the HLT branches, attach HCWDL metadata, disable the unrelated
+one-source canonical mode, and rely on the existing identity-authenticated RAM
+cache for deterministic epoch replay. A regression freezes all five reader
+arguments (`input_mode=hlt`, metadata on, canonical mode off, no within-chunk
+shuffle, one-file interleave). The direct plus shared representation suites
+pass 89/89 and `git diff --check` passes. Scientific views, targets, losses,
+seeds, and selection are unchanged. As above, corrected execution requires a
+fresh immutable source identity under the v1 contract.
+
+The subsequent `d2dfa8f5` pilot confirmed that repair by carrying both
+representation jobs through multi-source cache construction and into the
+shared representation trainer. `HLT_RSET` and `HLT_RREL` then failed before
+their first optimizer update because the trainer's early resume-lineage gate
+admitted only the original ascent and homotopy-RKD graph hashes, even though
+its execution resolver and terminal report validator already recognized the
+direct graph. One shared graph resolver now selects exactly one registered
+graph for every execution and is used consistently by resume admission,
+training, and report validation; arbitrary graph hashes remain rejected. A
+direct regression admits the exact direct hash and rejects a different valid
+SHA-256. Focused direct/shared representation coverage passes 99/99, the
+complete suite passes 961 tests with 9 expected Windows platform skips and 14
+dependency warnings in 429.16 seconds, and `git diff --check` passes. The
+failed `d2dfa8f5` jobs published no representation training report and require
+a fresh immutable source identity under the v1 recovery contract.
 
 ## HCWDL-U-RKD prerequisite bootstrap repair (2026-08-12)
 

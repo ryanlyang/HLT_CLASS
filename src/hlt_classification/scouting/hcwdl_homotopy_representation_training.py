@@ -37,6 +37,7 @@ from .hcwdl_homotopy_representation_targets import (
     publish_prepared_targets, validate_target_manifest, validate_target_spec,
 )
 from .hcwdl_homotopy_stream import iterate_homotopy_batches
+from .hcwdl_homotopy_runner import view_build_workers
 from .hcwdl_representation_data import training_batch_from_parent
 from .hcwdl_representation_target_runtime import prepare_target_generation_in_memory
 from .hcwdl_representation_training import (
@@ -143,6 +144,7 @@ def _homotopy_stream(
             int(spec["replicate_seed"]), "hcwdl_uj/repair/shared_v1",
         ),
         batch_size=batch_size, source_index=source_index,
+        workers=view_build_workers(),
         output_key="privileged",
     )
 
@@ -305,11 +307,24 @@ def build_target_bank(
         model, device=device, bank_kind=bank_kind,
     )
     _configure_target_backend()
+    target_started = time.perf_counter()
+    workers = 1 if domain == "toff" else view_build_workers()
+    print(
+        f"HCWDL-U-RKD phase=teacher_targets bank={bank_id} domain={domain} "
+        f"workers={workers} status=started",
+        flush=True,
+    )
     prepared = prepare_target_generation_in_memory(
         bank_kind=bank_kind, partition_batches=factories,
         partition_specs=partition_specs, teacher_forward=forward,
         token_resources=bundle.token, relation_resources=bundle.relation,
         teacher_model=model, allowed_input_fields=input_fields,
+    )
+    target_seconds = time.perf_counter() - target_started
+    print(
+        f"HCWDL-U-RKD phase=teacher_targets bank={bank_id} domain={domain} "
+        f"workers={workers} status=complete seconds={target_seconds:.3f}",
+        flush=True,
     )
     target_spec = _expected_target_spec(spec, bank_id)
     write_immutable_json(root / "target_spec.json", target_spec)
@@ -336,7 +351,14 @@ def _build_view_caches(
     split = load_json(spec["split_manifest_path"])
     caches = {}
     remaining = float(max_gib)
+    workers = view_build_workers()
     for role in ("train", "validation"):
+        phase_started = time.perf_counter()
+        print(
+            f"HCWDL-U-RKD phase=student_view_cache role={role} domain={domain} "
+            f"workers={workers} status=started",
+            flush=True,
+        )
         _, _, selection = _stores(spec, role)
         records = role_records(split, role)
         cache = EphemeralPmardViewCache.build(
@@ -360,6 +382,12 @@ def _build_view_caches(
             },
         )
         caches[role] = cache
+        print(
+            f"HCWDL-U-RKD phase=student_view_cache role={role} domain={domain} "
+            f"workers={workers} status=complete rows={spec['role_counts'][role]} "
+            f"seconds={time.perf_counter() - phase_started:.3f}",
+            flush=True,
+        )
         remaining -= int(cache.header["array_bytes"]) / 1024**3
         if remaining <= 0:
             raise MemoryError("HCWDL-U-RKD simultaneous role caches exceed cap")
@@ -483,6 +511,11 @@ def train_node(
         "target_generation": target_manifest["parents"]["target_generation"],
         "target_logical": target_manifest["payload"]["logical_target_sha256"],
     }
+    training_started = time.perf_counter()
+    print(
+        f"HCWDL-U-RKD phase=optimizer_training node={node_id} status=started",
+        flush=True,
+    )
     engine_report = train_hcwdl_representation_node(
         execution_id=node_id, parent_recipe=base_recipe,
         representation_recipe=representation_recipe,
@@ -524,6 +557,11 @@ def train_node(
             "combined_recipe_sha256": spec["combined_recipe_sha256"],
         },
         preemption_requested=preemption_requested,
+    )
+    print(
+        f"HCWDL-U-RKD phase=optimizer_training node={node_id} status=complete "
+        f"seconds={time.perf_counter() - training_started:.3f}",
+        flush=True,
     )
     publish_training_wrappers(
         spec, node_id=node_id, engine_report=engine_report,

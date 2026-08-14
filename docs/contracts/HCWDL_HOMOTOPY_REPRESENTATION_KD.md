@@ -46,6 +46,12 @@ targets are forbidden. Payload cleanup requires every registered consumer's
 completed report and leaves its authorization, manifest, and completion
 evidence.
 
+Endpoint construction materializes each required ragged branch a fixed number
+of times per selected source chunk. Bounded parallel chunk construction may
+use no more than the authenticated Slurm CPU allocation and must emit the same
+canonical identity order and bytes as the one-worker reference path. Exact
+source-index target partitions remain unchanged.
+
 ## Execution and recovery
 
 The immutable graph contains 47 tasks: authentication, graph/recipe lock,

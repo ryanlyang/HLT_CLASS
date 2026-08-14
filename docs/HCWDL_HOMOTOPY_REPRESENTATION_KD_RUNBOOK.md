@@ -7,14 +7,20 @@ separate submission phrase.
 
 ## Prerequisites
 
-Use a clean detached worktree at the pushed commit. The parent must be a
-completed HCWDL structural-feature-homotopy smoke or pilot with the exact
-factorized logit-only reports. Reuse a source-compatible authorized
+Use a clean detached worktree at the pushed commit. The parent must have
+published its authenticated coupling, coordinate, endpoint-equality, and
+graph-recipe locks. Parent completion and factorized logit-only reports are
+not launch prerequisites: their canonical paths are frozen in the child spec
+and authenticated when the final comparative aggregate runs. If the parent is
+still running, only that aggregate is given an external dependency on the
+parent's exact `campaign_complete` job from its authenticated submission
+ledger; representation training starts immediately. Reuse a
+source-compatible authorized
 `HCWDL_REPRESENTATION_RECIPE/v5`, architecture attestation, full numerical
 acceptance, and committed kernel envelope; path existence alone is not enough.
 
 If those reusable assets are absent, create all four with the non-training
-preparation command below. It authenticates the completed U/J parent and the
+preparation command below. It authenticates the training-ready U/J parent and the
 frozen historical unweighted HCWDL campaign. It requires their complete v4
 execution policies to agree and permits only evidence/count/row-selection
 lineage to differ, then runs installed-Weaver parity and numerical checks and
@@ -121,11 +127,38 @@ python -s "${PROJECT_DIR}/scripts/monitor_hcwdl_homotopy_representation_campaign
   --output "${CAMPAIGN_ROOT}/monitor.json"
 ```
 
+## Ragged-view preprocessing
+
+The representation ladder uses the repaired linear-time homotopy builder.
+Every required offline and HLT ragged branch is materialized a fixed number
+of times per source chunk rather than once per selected row. Student train and
+validation views are then cached once in process-local RAM and replayed for
+all passes. Non-TOFF predecessor target jobs use the same repaired builder
+while retaining their exact source-index partitioning.
+
+The bounded ordered worker pool defaults to `SLURM_CPUS_PER_TASK`, which is
+eight for the registered target/training resource class. An operator may set
+`HCWDL_UJ_VIEW_BUILD_WORKERS` to a smaller positive value, but the worker
+rejects a value above the Slurm allocation. Worker count changes execution
+speed only: emitted identities and bytes remain in canonical source order.
+
+Each GPU log prints these phase boundaries:
+
+```text
+HCWDL-U-RKD phase=student_view_cache ... status=started|complete
+HCWDL-U-RKD phase=teacher_targets ... status=started|complete
+HCWDL-U-RKD phase=optimizer_training ... status=started|complete
+```
+
+Absence of `optimizer_training ... status=started` means the job is still in
+one-time preprocessing or target handling, not that an optimizer epoch has
+silently begun.
+
 ## Pilot boundary
 
 After the genuine smoke, build its measured resource profile with
 `build_hcwdl_homotopy_representation_resource_profile.py`. A 300k candidate
-uses an authenticated completed 300k U/J parent plus `--resource-profile`.
+uses an authenticated training-ready 300k U/J parent plus `--resource-profile`.
 Run the complete dry run again and obtain a new explicit creation and
 submission authorization. Smoke permission never carries over to the pilot.
 

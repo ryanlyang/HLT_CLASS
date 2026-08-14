@@ -29,6 +29,7 @@ from .hcwdl_homotopy_runner import node_output_dir as parent_node_output_dir
 from .hcwdl_recovery import (
     SUBMISSION_EVENT_CONTRACT,
     build_submission_event,
+    validate_submission_ledger as validate_parent_submission_ledger,
 )
 from .hcwdl_recipe import validate_recipe as validate_base_recipe
 from .hcwdl_representation_recipe import validate_representation_recipe
@@ -133,7 +134,30 @@ def _parent_report(path: Path, node_id: str) -> dict[str, Any]:
             )}
 
 
+def _parent_logit_reference(root: Path, suffix: str) -> dict[str, Any]:
+    """Bind the canonical future parent report without requiring it at launch."""
+
+    parent_id = suffix if suffix.startswith("U") else (
+        "M1F" if suffix == "M1" else f"{suffix}F"
+    )
+    path = (parent_node_output_dir(root, parent_id) / "training_report.json").resolve()
+    reference: dict[str, Any] = {
+        "report_path": str(path),
+        "expected_node_id": parent_id,
+    }
+    if path.is_file():
+        reference.update(_parent_report(path, parent_id))
+    return reference
+
+
 def authenticate_parent(parent_spec_path: str | Path) -> dict[str, Any]:
+    """Authenticate a training-ready U/J parent.
+
+    Coupling/view/endpoint locks and the imported M0/TOFF controls are actual
+    training inputs.  Parent U/J rung reports and campaign completion are
+    comparison-only evidence and may be published while this campaign trains.
+    """
+
     path = Path(parent_spec_path).resolve()
     parent = load_json(path)
     parent_hash = validate_parent_campaign(parent, executable=False)
@@ -142,13 +166,25 @@ def authenticate_parent(parent_spec_path: str | Path) -> dict[str, Any]:
     root = Path(parent["campaign_root"])
     if path != (root / "campaign_spec.json").resolve():
         raise ValueError("HCWDL-U-RKD parent path is not canonical")
-    completion = load_json(root / "reports/campaign_complete.json")
-    completion_hash = validate_content_hash(
-        completion, expected_contract=CAMPAIGN_COMPLETION_CONTRACT,
-        expected_schema_version=1,
-    )
-    if completion.get("campaign_spec_sha256") != parent_hash:
-        raise ValueError("HCWDL-U-RKD parent completion lineage differs")
+    completion_hash = None
+    completion_job_id = None
+    completion_path = root / "reports/campaign_complete.json"
+    if completion_path.is_file():
+        completion = load_json(completion_path)
+        completion_hash = validate_content_hash(
+            completion, expected_contract=CAMPAIGN_COMPLETION_CONTRACT,
+            expected_schema_version=1,
+        )
+        if completion.get("campaign_spec_sha256") != parent_hash:
+            raise ValueError("HCWDL-U-RKD parent completion lineage differs")
+    else:
+        ledger = load_json(root / "submission_ledger.json")
+        validate_parent_submission_ledger(ledger)
+        if ledger.get("campaign_spec_sha256") != parent_hash:
+            raise ValueError("HCWDL-U-RKD parent submission lineage differs")
+        completion_job_id = str(ledger.get("jobs", {}).get("campaign_complete", ""))
+        if re.fullmatch(r"[1-9][0-9]*", completion_job_id) is None:
+            raise ValueError("HCWDL-U-RKD parent completion job is unavailable")
     locks = {}
     for name in ("coupling_lock", "endpoint_equality_lock", "graph_recipe_lock"):
         artifact = load_json(root / f"locks/{name}.json")
@@ -162,18 +198,15 @@ def authenticate_parent(parent_spec_path: str | Path) -> dict[str, Any]:
         )
         for name in ("M0", "TOFF")
     }
-    logit = {}
-    for suffix in CONTROL_SUFFIXES:
-        parent_id = suffix if suffix.startswith("U") else (
-            "M1F" if suffix == "M1" else f"{suffix}F"
-        )
-        logit[suffix] = _parent_report(
-            parent_node_output_dir(root, parent_id) / "training_report.json",
-            parent_id,
-        )
+    logit = {
+        suffix: _parent_logit_reference(root, suffix)
+        for suffix in CONTROL_SUFFIXES
+    }
     return {
         "spec": parent, "spec_path": path, "spec_sha256": parent_hash,
         "root": root.resolve(), "completion_sha256": completion_hash,
+        "completion_job_id": completion_job_id,
+        "training_ready": True,
         "locks": locks, "controls": controls, "logit": logit,
     }
 
@@ -313,10 +346,11 @@ def create_campaign(
         PARENT_IMPORT_CONTRACT,
         parents={
             "parent_homotopy_spec": parent["spec_sha256"],
-            "parent_completion": parent["completion_sha256"],
             **parent["locks"],
         },
         parent_root=str(parent["root"]), mode=mode,
+        training_requires_parent_completion=False,
+        comparison_reports_resolved_at_aggregate=True,
         imported_controls=parent["controls"],
         logit_control_reports=parent["logit"],
     )
@@ -349,6 +383,7 @@ def create_campaign(
         "parent_homotopy_spec_path": str(parent["spec_path"]),
         "parent_homotopy_spec_sha256": parent["spec_sha256"],
         "parent_homotopy_root": str(parent["root"]),
+        "parent_completion_job_id": parent["completion_job_id"],
         "base_recipe_path": str(base_path), "base_recipe_sha256": base_hash,
         "representation_recipe_path": str(rep_path),
         "representation_recipe_sha256": rep_hash,
@@ -463,9 +498,12 @@ def build_command_plan(spec: Mapping[str, Any]) -> dict[str, Any]:
         if resource.get("gpu"):
             command.extend((f"--gres={resource['gpu']}", "--signal=B:USR1@120"))
         if task["dependencies"]:
-            command.append("--dependency=afterok:" + ":".join(
+            dependencies = [
                 f"${{JOB_{name}}}" for name in task["dependencies"]
-            ))
+            ]
+            if task["task_id"] == "aggregate" and spec.get("parent_completion_job_id"):
+                dependencies.append(str(spec["parent_completion_job_id"]))
+            command.append("--dependency=afterok:" + ":".join(dependencies))
         command.extend((
             "--export=ALL," +
             f"PROJECT_DIR={spec['project_dir']},HCWDL_U_RKD_SPEC={Path(spec['campaign_root']) / 'campaign_spec.json'}," +

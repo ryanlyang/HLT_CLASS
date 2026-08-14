@@ -115,6 +115,11 @@ factorized report and every new RSET/RREL report. Thus training can proceed in
 parallel without allowing a partially completed control path to masquerade as
 a comparison.
 
+For a live concurrent launch, the child freezes the parent's exact submitted
+`campaign_complete` job ID and adds it only to the aggregate's Slurm
+dependencies. It is not a dependency of target construction or either
+representation-training track.
+
 The aggregate may read only the exact contextual report list frozen at new
 campaign creation. It cannot discover later reports by path existence.
 
@@ -475,6 +480,14 @@ process-local RAM caches and replayed across passes. Reconstructed U/D particle
 datasets are never durable artifacts. Teacher targets are loaded once into RAM
 and joined by canonical jet identity.
 
+Ragged endpoint preparation is linear in selected chunk population: every
+required offline and HLT branch is materialized a fixed number of times per
+source chunk, never once per selected row. The same prepared builder serves
+student caches and non-TOFF predecessor target banks. A bounded ordered worker
+pool may use at most the CPUs granted by Slurm while preserving canonical
+source/entry order and byte-identical view and target semantics. Worker count
+is operational and is excluded from scientific identity.
+
 ## 13. Contracts and immutable locks
 
 Existing contract identities are reused only through their exact validators
@@ -536,7 +549,7 @@ The integration attestation proves that the merged implementation preserves:
 
 The v2 implementation must provide one non-training bootstrap for sites where
 the four reusable representation assets have not yet been materialized. The
-bootstrap authenticates a completed U/J parent plus the frozen historical
+bootstrap authenticates a training-ready U/J parent plus the frozen historical
 unweighted HCWDL campaign and publishes the source-compatible v5
 representation recipe, installed-Weaver architecture attestation, numerical
 acceptance, and committed deterministic kernel envelope. It may not train a
@@ -571,7 +584,7 @@ that preserve scientific runtime signatures may use resource recovery.
 The logical dependency graph is:
 
 ```text
-authenticate parent UJ campaign + source integration
+authenticate training-ready parent UJ locks + source integration
   -> validate coupling/coordinate/endpoint locks
   -> validate ordinary/TOFF surface parity + kernel resources
   -> publish combined graph/recipe lock

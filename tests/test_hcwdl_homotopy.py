@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
 
 import numpy as np
 import pytest
@@ -24,12 +25,17 @@ from hlt_classification.scouting.hcwdl_homotopy_contracts import (
 from hlt_classification.scouting.hcwdl_homotopy import (
     HomotopyCoordinate, assert_particle_inputs_equal, build_homotopy_inputs,
     build_p0_inputs, build_partition_from_arrays,
+    prepare_hlt_endpoints, prepare_offline_endpoints,
 )
+from hlt_classification.scouting import hcwdl_homotopy as homotopy_views
+from hlt_classification.scouting import hcwdl_homotopy_stream as homotopy_stream
 from hlt_classification.scouting.hcwdl_homotopy_graph import (
     GRAPH_SHA256, NODE_REGISTRY, build_recipe_overlay, resolved_loss,
     validate_graph, validate_recipe_overlay,
 )
-from hlt_classification.scouting.hcwdl_homotopy_runner import estimate_global_peak_bytes
+from hlt_classification.scouting.hcwdl_homotopy_runner import (
+    estimate_global_peak_bytes, view_build_workers,
+)
 from hlt_classification.scouting.hcwdl_homotopy_campaign import (
     SEMANTIC_SOURCE_FILES, SMOKE_RESOURCES, build_resource_profile,
     semantic_source_hashes, validate_resource_profile,
@@ -58,7 +64,7 @@ from hlt_classification.scouting.hcwdl_recovery import (
 from hlt_classification.scouting.inputs import build_hlt_inputs
 from hlt_classification.scouting.repair import (
     HIGHCOV_SHELL_EXACT_FAMILY, build_alpha_repaired_inputs,
-    project_offline_endpoint_records,
+    full_endpoint_required_branches, project_offline_endpoint_records,
 )
 from hlt_classification.scouting.schema import HLT_FEATURE_SPECS
 from hlt_classification.scouting.schema import CLASS_NAMES
@@ -184,6 +190,17 @@ def _raw_arrays():
     return arrays
 
 
+def _repeated_raw_arrays(rows: int):
+    source = _raw_arrays()
+    result = {}
+    for name, value in source.items():
+        if isinstance(value, list):
+            result[name] = [np.asarray(value[0]).copy() for _ in range(rows)]
+        else:
+            result[name] = np.repeat(np.asarray(value), rows, axis=0)
+    return result
+
+
 def _resized_offline_arrays(charged: int, neutral: int, *, lost: int = 0):
     if not 0 <= lost <= charged:
         raise ValueError("invalid synthetic lost-track count")
@@ -286,6 +303,67 @@ def test_p0_exact_bounds_native_offsets_and_lost_track_membership() -> None:
     assert set(range(90, 100)).isdisjoint(native)
     assert np.allclose(p0.vectors[0, :, 89], [20, 0, 1, 20.1])
     assert np.allclose(p0.vectors[0, :, 90], [0, 12, -1, 12.1])
+
+
+def test_prepared_endpoint_batches_are_legacy_exact_and_convert_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    arrays = _repeated_raw_arrays(7)
+    expected = [project_offline_endpoint_records(arrays, row=row) for row in range(7)]
+    calls: dict[str, int] = {}
+    original = homotopy_views._rows
+
+    def counted(value):
+        for name, candidate in arrays.items():
+            if candidate is value:
+                calls[name] = calls.get(name, 0) + 1
+                break
+        return original(value)
+
+    monkeypatch.setattr(homotopy_views, "_rows", counted)
+    offline = prepare_offline_endpoints(arrays)
+    hlt = prepare_hlt_endpoints(arrays)
+    assert offline.rows == hlt.rows == 7
+    for row, (features, validity, p4) in enumerate(expected):
+        assert np.array_equal(offline.raw_features[row], features)
+        assert np.array_equal(offline.validity[row], validity)
+        assert np.array_equal(offline.p4[row], p4)
+    expected_branches = set(full_endpoint_required_branches()) | {
+        "n_cpfcands", "n_lts", "n_npfcands", "n_scoutpfcands",
+        *(spec.branch for spec in HLT_FEATURE_SPECS),
+        "scoutpfcand_px", "scoutpfcand_py", "scoutpfcand_pz",
+        "scoutpfcand_energy",
+    }
+    assert set(calls) == expected_branches
+    assert set(calls.values()) == {1}
+
+
+def test_parallel_view_blocks_preserve_submission_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_build(arguments):
+        index = int(arguments[0])
+        time.sleep((5 - index) * .001)
+        return {"labels": np.asarray([index], np.int64)}
+
+    monkeypatch.setattr(homotopy_stream, "_build_block", fake_build)
+    arguments = tuple((index,) for index in range(6))
+    serial = list(homotopy_stream._ordered_blocks(iter(arguments), workers=1))
+    parallel = list(homotopy_stream._ordered_blocks(iter(arguments), workers=4))
+    assert [int(row["labels"][0]) for row in serial] == list(range(6))
+    assert [int(row["labels"][0]) for row in parallel] == list(range(6))
+
+
+def test_view_build_workers_are_bounded_by_slurm_allocation() -> None:
+    assert view_build_workers({}) == 1
+    assert view_build_workers({"SLURM_CPUS_PER_TASK": "8"}) == 8
+    assert view_build_workers({
+        "SLURM_CPUS_PER_TASK": "8", "HCWDL_UJ_VIEW_BUILD_WORKERS": "6",
+    }) == 6
+    with pytest.raises(ValueError, match="exceed"):
+        view_build_workers({
+            "SLURM_CPUS_PER_TASK": "8", "HCWDL_UJ_VIEW_BUILD_WORKERS": "9",
+        })
 
 
 def test_partition_types_unclassified_dustbin_and_outside_p0_assignment() -> None:

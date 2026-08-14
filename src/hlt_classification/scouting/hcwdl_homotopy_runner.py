@@ -89,6 +89,22 @@ def _memory_limit_bytes(configured_gib: float) -> int:
     return configured
 
 
+def view_build_workers(environ: Mapping[str, str] | None = None) -> int:
+    """Use the authenticated Slurm CPU allocation without oversubscription."""
+
+    values = os.environ if environ is None else environ
+    raw_allocated = values.get("SLURM_CPUS_PER_TASK", "1")
+    raw_requested = values.get("HCWDL_UJ_VIEW_BUILD_WORKERS", raw_allocated)
+    try:
+        allocated = int(raw_allocated)
+        requested = int(raw_requested)
+    except ValueError as error:
+        raise ValueError("HCWDL-UJ view-build worker count must be an integer") from error
+    if allocated <= 0 or requested <= 0 or requested > allocated:
+        raise ValueError("HCWDL-UJ view-build workers exceed the allocated CPUs")
+    return requested
+
+
 def estimate_global_peak_bytes(
     *, miniature: Mapping[str, Any], train_rows: int, validation_rows: int,
 ) -> dict[str, int]:
@@ -541,4 +557,7 @@ def run_homotopy_node(
     return report
 
 
-__all__ = ["estimate_global_peak_bytes", "node_output_dir", "run_homotopy_node"]
+__all__ = [
+    "estimate_global_peak_bytes", "node_output_dir", "run_homotopy_node",
+    "view_build_workers",
+]

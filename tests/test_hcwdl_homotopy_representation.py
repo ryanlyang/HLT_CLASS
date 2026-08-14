@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import json
 from pathlib import Path
 
 import pytest
@@ -22,6 +23,9 @@ from hlt_classification.scouting.hcwdl_homotopy_representation_graph import (
 from hlt_classification.scouting.hcwdl_representation_graph import RREL_STRATEGY
 from hlt_classification.scouting.hcwdl_homotopy_representation_training import (
     _kernel_bundle,
+)
+from hlt_classification.scouting import (
+    hcwdl_homotopy_representation_training as homotopy_representation_training,
 )
 from hlt_classification.scouting.hcwdl_homotopy_representation_recipe import (
     build_recipe as build_homotopy_representation_recipe,
@@ -72,6 +76,46 @@ def test_exact_two_track_graph_and_loss_routing():
     )
     with pytest.raises(ValueError, match="immediate predecessor"):
         validate_graph(tampered)
+
+
+def test_representation_stream_preserves_source_partition_and_cpu_bound(
+    monkeypatch,
+):
+    captured = {}
+    monkeypatch.setenv("SLURM_CPUS_PER_TASK", "8")
+    monkeypatch.setattr(
+        homotopy_representation_training,
+        "_stores",
+        lambda _spec, _role: ("assignment", "coupling", "selection"),
+    )
+    monkeypatch.setattr(
+        homotopy_representation_training,
+        "load_json",
+        lambda _path: {"authenticated": "split"},
+    )
+
+    def fake_stream(split, **kwargs):
+        captured["split"] = split
+        captured.update(kwargs)
+        return iter(("sentinel",))
+
+    monkeypatch.setattr(
+        homotopy_representation_training,
+        "iterate_homotopy_batches",
+        fake_stream,
+    )
+    stream = homotopy_representation_training._homotopy_stream(
+        {
+            "split_manifest_path": "split.json",
+            "data_root": "data",
+            "replicate_seed": 1337,
+        },
+        domain="u020", role="train", batch_size=256, source_index=3,
+    )
+    assert list(stream) == ["sentinel"]
+    assert captured["source_index"] == 3
+    assert captured["workers"] == 8
+    assert captured["output_key"] == "privileged"
 
 
 def test_combined_recipe_reads_versioned_v5_payload(monkeypatch):
@@ -131,12 +175,68 @@ def test_exact_47_task_parallel_sequential_dag():
     assert not any("final" in row["kind"] for row in tasks)
 
 
+def test_training_ready_parent_does_not_require_completion_or_logit_reports(
+    monkeypatch, tmp_path,
+):
+    from hlt_classification.scouting import hcwdl_homotopy_representation_campaign as module
+
+    root = tmp_path / "parent"
+    root.mkdir()
+    controls = {}
+    for node_id in ("M0", "TOFF"):
+        path = root / "controls" / node_id / "training_report.json"
+        path.parent.mkdir(parents=True)
+        report = with_content_hash({
+            "contract": "TEST_PARENT_REPORT/v1", "schema_version": 1,
+            "experiment_id": node_id,
+            "selected_checkpoint_sha256": (
+                "a" * 64 if node_id == "M0" else "b" * 64
+            ),
+        })
+        path.write_text(json.dumps(report), encoding="utf-8")
+        controls[node_id] = {"report_path": str(path)}
+    for name in ("coupling_lock", "endpoint_equality_lock", "graph_recipe_lock"):
+        path = root / "locks" / f"{name}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        artifact = with_content_hash({
+            "contract": f"TEST_{name.upper()}/v1", "schema_version": 1,
+        })
+        path.write_text(json.dumps(artifact), encoding="utf-8")
+    parent_path = root / "campaign_spec.json"
+    parent_path.write_text(json.dumps({
+        "mode": "pilot", "campaign_root": str(root.resolve()),
+        "imported_controls": controls,
+    }), encoding="utf-8")
+    ledger = with_content_hash({
+        "contract": "HCWDL_SUBMISSION_LEDGER/v2", "schema_version": 2,
+        "campaign_spec_sha256": "a" * 64, "dry_run": False,
+        "jobs": {"campaign_complete": "98765"},
+        "commands": {"campaign_complete": ["sbatch"]},
+        "exact_ids_only": True, "parent_ledger_sha256": None,
+        "monitor_report_sha256": None, "superseded_jobs": {},
+    })
+    (root / "submission_ledger.json").write_text(
+        json.dumps(ledger), encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "validate_parent_campaign", lambda *_args, **_kwargs: "a" * 64)
+
+    evidence = module.authenticate_parent(parent_path)
+    assert evidence["training_ready"] is True
+    assert evidence["completion_sha256"] is None
+    assert evidence["completion_job_id"] == "98765"
+    assert all("report_sha256" not in row for row in evidence["logit"].values())
+    assert evidence["logit"]["U020"]["expected_node_id"] == "U020"
+    assert evidence["logit"]["D80"]["expected_node_id"] == "D80F"
+    assert evidence["logit"]["M1"]["expected_node_id"] == "M1F"
+
+
 def test_command_plan_uses_locked_tigris_envelope_and_exact_dependencies(tmp_path):
     spec = with_content_hash({
         "contract": CAMPAIGN_SPEC_CONTRACT, "schema_version": SCHEMA_VERSION,
         "campaign_root": str(tmp_path / "campaign"),
         "project_dir": str(tmp_path / "project"), "source_commit": "a" * 40,
         "parent_homotopy_spec_sha256": "b" * 64,
+        "parent_completion_job_id": "87654",
         "graph_sha256": GRAPH_SHA256, "combined_recipe_sha256": "c" * 64,
         "resources": SMOKE_RESOURCES, "tasks": _task_registry(),
         "final_test_accessed": False,
@@ -152,6 +252,8 @@ def test_command_plan_uses_locked_tigris_envelope_and_exact_dependencies(tmp_pat
     materialized = materialize_command(training, {"target_TOFF": "12345"})
     assert "--dependency=afterok:12345" in materialized
     assert not any("${JOB_" in token for token in materialized)
+    aggregate = next(row for row in plan["commands"] if row["task_id"] == "aggregate")
+    assert "87654" in next(token for token in aggregate["command"] if token.startswith("--dependency="))
 
 
 def test_role_counts_keep_final_test_sealed():

@@ -99,6 +99,13 @@ class HomotopyRepresentationWorkflow:
             parent = authenticate_parent(self.spec["parent_homotopy_spec_path"])
             if parent["spec_sha256"] != self.spec["parent_homotopy_spec_sha256"]:
                 raise ValueError("HCWDL-U-RKD parent changed")
+            if (
+                parent["locks"]["coupling_lock"] != self.spec["coupling_lock_sha256"]
+                or parent["locks"]["endpoint_equality_lock"] != self.spec["endpoint_lock_sha256"]
+                or parent["locks"]["graph_recipe_lock"]
+                != load_json(self.root / "parent_import.json")["parents"]["graph_recipe_lock"]
+            ):
+                raise ValueError("HCWDL-U-RKD parent training locks changed")
             plan = build_command_plan(self.spec)
             if plan["content_hash"] != self.spec["command_plan_sha256"]:
                 raise ValueError("HCWDL-U-RKD command plan changed")
@@ -108,10 +115,11 @@ class HomotopyRepresentationWorkflow:
                 parents={
                     "campaign_spec": self.spec["content_hash"],
                     "parent_homotopy_spec": parent["spec_sha256"],
-                    "parent_completion": parent["completion_sha256"],
                 },
                 source_commit=self.producer_commit,
                 project_dir=str(self.repository), no_external_worktree_imports=True,
+                parent_training_ready=True,
+                parent_completion_required=False,
             )
             if not output.exists():
                 write_immutable_json(output, artifact)

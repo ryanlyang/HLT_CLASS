@@ -75,13 +75,24 @@ def build_aggregate(spec: Mapping[str, Any]) -> dict[str, Any]:
     for suffix in CONTROL_SUFFIXES:
         rset = rows[f"F_RSET_{suffix}"]
         rrel = rows[f"F_RREL_{suffix}"]
-        logit_path = Path(spec["logit_control_reports"][suffix]["report_path"])
+        reference = spec["logit_control_reports"][suffix]
+        logit_path = Path(reference["report_path"])
+        if not logit_path.is_file():
+            raise FileNotFoundError(
+                f"paired U/J logit-only report is not ready: {logit_path}"
+            )
         logit = load_json(logit_path)
         logit_hash = validate_content_hash(
             logit, expected_contract=str(logit["contract"]),
             expected_schema_version=int(logit["schema_version"]),
         )
-        if logit_hash != spec["logit_control_reports"][suffix]["report_sha256"]:
+        scientific = logit.get("scientific_config", {})
+        node = scientific.get("node") if isinstance(scientific, Mapping) else None
+        observed = node.get("node_id") if isinstance(node, Mapping) else logit.get("experiment_id")
+        if observed != reference["expected_node_id"]:
+            raise ValueError("paired U/J logit-only node identity differs")
+        frozen_hash = reference.get("report_sha256")
+        if frozen_hash is not None and logit_hash != frozen_hash:
             raise ValueError("paired logit-only report changed")
         logit_metrics = _metrics(logit)
         report_parents[f"logit_{suffix}"] = logit_hash
