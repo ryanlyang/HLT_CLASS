@@ -149,6 +149,31 @@ def test_direct_representation_cache_builds_registered_hlt_metadata(monkeypatch)
     assert observed == [True, True]
 
 
+def test_direct_metadata_stream_is_multisource_hlt_not_canonical_paired(monkeypatch):
+    observed = {}
+
+    def fake_reader(_manifest, **kwargs):
+        observed.update(kwargs)
+        return iter(())
+
+    monkeypatch.setattr(direct_runner, "load_json", lambda _path: {"roles": {}})
+    monkeypatch.setattr(direct_runner, "iterate_model_batches", fake_reader)
+    stream = direct_runner._input_stream(
+        {
+            "split_manifest_path": "/split.json",
+            "data_root": "/data",
+        },
+        domain="hlt", role="train", selection=object(), batch_size=256,
+        sampler_seed=1337, paired_metadata=True,
+    )
+    assert tuple(stream) == ()
+    assert observed["input_mode"] == "hlt"
+    assert observed["include_hcwdl_metadata"] is True
+    assert observed["canonical_order"] is False
+    assert observed["shuffle_within_chunk"] is False
+    assert observed["interleave_source_files"] == 1
+
+
 def test_target_cleanup_authorization_makes_partial_delete_resumable(
     monkeypatch, tmp_path: Path,
 ):

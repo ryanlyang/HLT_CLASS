@@ -76,11 +76,16 @@ def _input_stream(
 ):
     return iterate_model_batches(
         load_json(spec["split_manifest_path"]), data_root=spec["data_root"],
-        role=role, input_mode="paired" if paired_metadata else domain,
+        # HCWDL metadata is derived entirely from the HLT branches.  Do not
+        # turn metadata attachment into paired/offline I/O, and do not request
+        # the dataset reader's one-source-only canonical mode for a role that
+        # legitimately spans many source files.  The RAM cache authenticates
+        # identities and owns deterministic epoch replay independently.
+        role=role, input_mode=domain,
         epoch=epoch, batch_size=batch_size, sampler_seed=sampler_seed,
         row_selection=selection,
         include_hcwdl_metadata=paired_metadata,
-        canonical_order=paired_metadata,
+        canonical_order=False,
         shuffle_within_chunk=not paired_metadata,
         shuffle_buffer_rows=batch_size,
         interleave_source_files=1 if paired_metadata else 4,
