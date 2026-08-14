@@ -1,5 +1,88 @@
 # Current Handoff
 
+## HCWDL unified-root balanced six-arm campaign (2026-08-15)
+
+The implementation-authoritative
+[HCWDL unified-root balanced homotopy plan](plans/HCWDL_UNIFIED_BALANCED_HOMOTOPY_IMPLEMENTATION_PLAN.md)
+is now implemented locally as a new additive campaign family. It does not
+mutate or relabel HCWDL-UJ. The reusable v1 semantics are frozen in the
+[contract](contracts/HCWDL_UNIFIED_BALANCED_HOMOTOPY.md), and the exact
+source-pinned foundation/six-arm procedure is in the
+[runbook](HCWDL_UNIFIED_BALANCED_HOMOTOPY_RUNBOOK.md).
+
+The shared 300k foundation owns exactly `U000` and `M0paired`, balanced
+train/validation structural-switch sidecars, endpoint/resource gates, and one
+identity-ordered FP32 U000 target cache. `U000` is the freshly initialized
+unified 21-channel CE root on the exact P0 particle multiset; native TOFF is a
+contextual control, not the primary root. Uniform Shell Exact moves every
+matched continuous field with one exact rational offline strength and switches
+discrete/validity groups with deterministic confidence-independent nested hash
+variates. The original cost-CDF U schedule and confidence-warped D coordinate
+remain paired controls only in `C25P75`.
+
+Six separately authenticated 300k-train/100k-validation arms are registered:
+`C25P75`, `C10P90`, `C05P95`, `C10P75G15`, `C05P80G15`, and `C00P100`.
+Each has its own root, spec, command plan, ledger, monitor, cancellation
+surface, recovery closure, aggregate, and completion artifact. There are no
+cross-arm teachers or scheduler dependencies. The exact registry is 151 fits:
+two shared fits, 34 reference-arm fits, and 23 fits in each of the other five
+arms. Training GPU jobs are locked to 8 CPUs, 96 GiB RAM, six hours, and one
+GH200. Every arm uses 60 natural-population passes, validation every pass,
+macro-AUC-first checkpoint selection, and its declared CE/parent/grandparent
+loss. M1 remains fixed at 0.25 CE plus 0.75 parent KD at temperature one.
+
+The final audit fixed several launch-relevant issues rather than accepting
+scaffolding:
+
+- all new Slurm workers now use the absolute `${PROJECT_DIR}/sbatch/common.sh`
+  activation contract and `exec python -s`;
+- the foundation lock binds both shared report hashes, both selected
+  checkpoint hashes, the compact U000 target manifest, and a semantically
+  validated target lock;
+- each arm validator reauthenticates its exact foundation, recipe arm, graph,
+  waiver, project, source, and frozen semantic-source map;
+- the operational waiver freezes the full model/input/training/cache/runner
+  and worker surface, not only the headline U/D modules;
+- partial foundation, arm, and recovery submissions resume from immutable
+  journals instead of resubmitting already accepted jobs;
+- finalist, execution, sealed-evaluation, and campaign-completion artifacts
+  now receive semantic validation in addition to content-hash validation;
+- recovery is restricted to the exact failed/downstream closure. Source and
+  resource recovery remain separate, and resource recovery may only increase
+  CPU, RAM, or walltime while retaining the GPU class.
+
+Local readiness evidence at this checkpoint:
+
+- focused HCWDL-UB/homotopy/training/worker suite: 110 passed;
+- complete repository suite: 462 passed in 586.68 seconds, with the 14 existing
+  Matplotlib/Pyparsing deprecation warnings plus one local pytest-cache
+  permission warning;
+- bounded synthetic end to end: foundation plus all six arm specs/plans, the
+  real six-arm dry-run wrapper, six validated dry-run ledgers, and an exact
+  resource-recovery closure/command plan all passed;
+- all 17 new CLI help surfaces passed;
+- all 30 new contract constants are exact `/v1` identities and appear in the
+  implementation plan or reusable contract;
+- Python compilation, Git-Bash syntax checks for all three new Slurm workers,
+  six-document Markdown-link validation, and `git diff --check` passed.
+
+There are no external donor files or donor commits for this block, so
+`docs/LEGACY_SOURCE_MAP.md` is unchanged. Existing repository HCWDL and PMARD
+primitives were extended in place; the new campaign modules, scripts, workers,
+contracts, runbook, and focused tests are additive. No SSH, Slurm submission,
+cancellation, remote push, or final-test access occurred during this local
+implementation.
+
+Exact next task: commit and push the complete clean source, create a detached
+Tigris worktree at that full commit, bind the exact completed 300k HCWDL-UJ
+parent, completed 300k architecture-input factorial, and prior UJ smoke
+completion, build the evidence waiver, then create and dry-run the shared
+foundation. Live foundation submission still requires its exact explicit
+phrase. Only after the immutable foundation lock exists should the six arm
+specs be created, dry-run, and submitted in parallel with the single exact
+six-arm authorization command. No additional HCWDL-UB smoke is required or
+claimed.
+
 ## HCWDL-UJ combined execution/resource recovery (2026-08-14)
 
 The linear endpoint-preparation correction changes semantic-source bytes while
@@ -25,7 +108,14 @@ Local evidence at this checkpoint: the focused recovery/resource/worker suite
 passes 7/7; the broader HCWDL/stream/repair/cache suite passes 185/185; and the
 complete repository suite passes 436/436 with the 14 existing
 Matplotlib/Pyparsing warnings. CLI help and `git diff --check` pass. Tigris
-evidence is pending pushed source. No scheduler mutation has been performed.
+accepted corrected commit `f698889`, cancelled only the exact old-ledger IDs,
+authenticated a 41-task failed closure, verified 39 training commands at 16
+CPUs/96G/six hours/one GH200, and published the new live recovery ledger under
+`recovery/linear_16cpu_f6988892_r1/live`. Corrected phase timing and completed
+training evidence remain pending.
+
+The reusable diagnosis and implementation guidance is in
+[HCWDL_RAGGED_PREPROCESSING_PERFORMANCE_GUIDE.md](HCWDL_RAGGED_PREPROCESSING_PERFORMANCE_GUIDE.md).
 
 ## HCWDL-UJ linear endpoint preparation and ordered CPU overlap (2026-08-14)
 

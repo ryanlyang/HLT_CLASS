@@ -44,6 +44,25 @@ and the source-pinned dry-run, smoke, monitoring, resource-capture, pilot, and
 recovery procedure is in the
 [structural-feature homotopy runbook](../HCWDL_STRUCTURAL_FEATURE_HOMOTOPY_RUNBOOK.md).
 
+The implementation-authoritative successor
+[HCWDL unified-root balanced homotopy plan](HCWDL_UNIFIED_BALANCED_HOMOTOPY_IMPLEMENTATION_PLAN.md)
+defines a separate future campaign without changing the running HCWDL-UJ
+execution. It promotes a CE-trained unified P0 model to the `U000` root,
+replaces the cost-ordered U switch schedule with a deterministic balanced
+atomic coordinate, and replaces confidence-warped D motion with uniform
+continuous strength plus deterministic nested population-level switches for
+discrete groups. It also freezes paired legacy-U and legacy-D ablations, a
+sealed larger-data test boundary, and a six-arm concurrent
+CE/parent-KD/grandparent-KD study sharing one authenticated U000 root. The
+successor also records the user's explicit decision to carry forward prior
+production-worker evidence instead of running another standalone smoke
+campaign.
+Its implemented reusable semantics are frozen in the
+[unified-balanced homotopy contract](../contracts/HCWDL_UNIFIED_BALANCED_HOMOTOPY.md),
+and its source-pinned foundation, six-arm submission, monitoring, recovery,
+aggregation, and sealed-test procedure is in the
+[unified-balanced homotopy runbook](../HCWDL_UNIFIED_BALANCED_HOMOTOPY_RUNBOOK.md).
+
 The additive
 [HCWDL matching-free privileged representation-KD ascent plan](HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md)
 registers two nested representation strategies, each as a complete cold and

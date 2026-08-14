@@ -21,7 +21,7 @@ from .engine import (
 from .hcwdl_ladder import DOMAINS, GRAPH_SHA256, NODE_REGISTRY, NodeSpec
 from .hcwdl_recipe import validate_recipe
 from .targets import EphemeralTeacherTargets
-from .training import LossConfiguration, derive_seed
+from .training import GenerationalLossConfiguration, LossConfiguration, derive_seed
 
 
 TRAINING_REPORT_CONTRACT = "HCWDL_TRAINING_REPORT/v1"
@@ -188,7 +188,8 @@ def node_training_config(
     registry: Mapping[str, NodeSpec] = NODE_REGISTRY,
     domains: Mapping[str, Mapping[str, object]] = DOMAINS,
     seed_node_id: str | None = None,
-    explicit_loss: LossConfiguration | None = None,
+    explicit_loss: LossConfiguration | GenerationalLossConfiguration | None = None,
+    peak_learning_rate_override: float | None = None,
 ) -> PmardTrainingConfig:
     validate_recipe(recipe, require_authorized=require_authorized_recipe)
     if node_id not in registry or train_rows <= 0:
@@ -196,7 +197,11 @@ def node_training_config(
     node = registry[node_id]
     batch = int(recipe["batching"]["effective_batch_size"])
     updates_per_pass = int(np.ceil(train_rows / batch))
-    if len(node.teachers) == 2:
+    if peak_learning_rate_override is not None:
+        if not np.isfinite(peak_learning_rate_override) or peak_learning_rate_override <= 0:
+            raise ValueError("explicit HCWDL peak learning rate must be finite and positive")
+        peak_learning_rate = float(peak_learning_rate_override)
+    elif len(node.teachers) == 2:
         peak_learning_rate = float(recipe["dual_teacher_peak_learning_rate"])
     elif node.stage == "root":
         lr_role = "cold_root"
@@ -299,8 +304,11 @@ def train_hcwdl_node(
     scientific_config_extra: Mapping[str, Any] | None = None,
     seed_node_id: str | None = None,
     node_contract: str | None = None,
-    explicit_loss: LossConfiguration | None = None,
+    explicit_loss: LossConfiguration | GenerationalLossConfiguration | None = None,
     recipe_overlay_sha256: str | None = None,
+    parent_teacher_targets: EphemeralTeacherTargets | None = None,
+    grandparent_teacher_targets: EphemeralTeacherTargets | None = None,
+    peak_learning_rate_override: float | None = None,
 ) -> dict[str, Any]:
     recipe_sha256 = validate_recipe(recipe, require_authorized=True)
     if node_id not in registry:
@@ -317,6 +325,7 @@ def train_hcwdl_node(
         node_id, recipe, train_rows=train_rows, replicate_seed=replicate_seed,
         registry=registry, domains=domains, seed_node_id=seed_node_id,
         explicit_loss=explicit_loss,
+        peak_learning_rate_override=peak_learning_rate_override,
     )
     if smoke:
         config = replace(
@@ -362,6 +371,8 @@ def train_hcwdl_node(
         parents=validated_parents, device=device,
         hlt_teacher_targets=hlt_teacher_targets,
         privileged_teacher_targets=privileged_teacher_targets,
+        parent_teacher_targets=parent_teacher_targets,
+        grandparent_teacher_targets=grandparent_teacher_targets,
         resume=resume, stop_after_update=stop_after_update,
     )
     expected_checks = 1 if smoke else 60

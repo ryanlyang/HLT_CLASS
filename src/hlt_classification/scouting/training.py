@@ -92,6 +92,31 @@ class LossConfiguration:
         )
 
 
+@dataclass(frozen=True)
+class GenerationalLossConfiguration:
+    """Unweighted CE plus immediate-parent and grandparent logit KD."""
+
+    arm: str
+    ce: float
+    parent_kd: float
+    grandparent_kd: float
+    parent_temperature: float
+    grandparent_temperature: float
+
+    def __post_init__(self) -> None:
+        if not self.arm.startswith("HCWDL_UB_"):
+            raise ValueError("generational loss requires an HCWDL-UB arm identity")
+        weights = (self.ce, self.parent_kd, self.grandparent_kd)
+        if any(not np.isfinite(value) or value < 0 for value in weights):
+            raise ValueError("generational loss coefficients must be finite and nonnegative")
+        if not np.isclose(sum(weights), 1.0, rtol=0, atol=1e-12):
+            raise ValueError("generational loss coefficients must sum to one")
+        if any(
+            not np.isfinite(value) or value <= 0
+            for value in (self.parent_temperature, self.grandparent_temperature)
+        ):
+            raise ValueError("generational KD temperatures must be finite and positive")
+
 def derive_seed(master_seed: int, domain: str) -> int:
     if not domain:
         raise ValueError("seed domain must be nonempty")
@@ -199,6 +224,75 @@ def pmard_loss(
     return components
 
 
+def generational_pmard_loss(
+    student_logits, labels, *, class_weights,
+    configuration: GenerationalLossConfiguration,
+    parent_teacher_logits=None, grandparent_teacher_logits=None,
+):
+    """Compute the exact HCWDL-UB three-term FP32 population-mean loss."""
+
+    import torch
+    import torch.nn.functional as functional
+
+    if student_logits.ndim != 2 or student_logits.shape[1] != 15:
+        raise ValueError("student logits must be [batch,15]")
+    student = student_logits.float(); labels = labels.long()
+    weights = class_weights.to(device=student.device, dtype=torch.float32)
+    if weights.shape != (15,) or not torch.equal(weights, torch.ones_like(weights)):
+        raise ValueError("HCWDL-UB generational training requires unweighted per-jet CE/KD")
+    ce = functional.cross_entropy(student, labels, reduction="mean")
+
+    def kd(teacher, *, temperature: float, required: bool):
+        if not required:
+            return student.sum() * 0.0
+        if teacher is None:
+            raise ValueError("required generational teacher logits are absent")
+        if teacher.shape != student_logits.shape or teacher.requires_grad:
+            raise ValueError("generational teacher logits must be shape-matched and detached")
+        teacher_fp32 = teacher.float()
+        target = functional.softmax(teacher_fp32 / temperature, dim=-1)
+        return functional.kl_div(
+            functional.log_softmax(student / temperature, dim=-1), target,
+            reduction="batchmean",
+        ) * temperature * temperature
+
+    parent = kd(
+        parent_teacher_logits, temperature=configuration.parent_temperature,
+        required=configuration.parent_kd > 0,
+    )
+    grandparent = kd(
+        grandparent_teacher_logits,
+        temperature=configuration.grandparent_temperature,
+        required=configuration.grandparent_kd > 0,
+    )
+    zero = student.sum() * 0.0
+    parent_agreement = (
+        (student.argmax(dim=-1) == parent_teacher_logits.float().argmax(dim=-1))
+        .float().mean()
+        if parent_teacher_logits is not None else zero
+    )
+    grandparent_agreement = (
+        (student.argmax(dim=-1) == grandparent_teacher_logits.float().argmax(dim=-1))
+        .float().mean()
+        if grandparent_teacher_logits is not None else zero
+    )
+    contributions = {
+        "ce_contribution": configuration.ce * ce,
+        "parent_kd_contribution": configuration.parent_kd * parent,
+        "grandparent_kd_contribution": configuration.grandparent_kd * grandparent,
+    }
+    components = {
+        "ce": ce, "parent_kd": parent, "grandparent_kd": grandparent,
+        "parent_agreement": parent_agreement,
+        "grandparent_agreement": grandparent_agreement,
+        **contributions,
+    }
+    components["total"] = sum(contributions.values())
+    if not all(torch.isfinite(value) for value in components.values()):
+        raise FloatingPointError("generational PMARD loss is nonfinite")
+    return components
+
+
 def normalized_representation_loss(student, teacher, *, mask=None, mode: str = "cosine_mse"):
     import torch
     import torch.nn.functional as functional
@@ -249,10 +343,11 @@ def freeze_teacher(model):
 
 
 __all__ = [
-    "BOOTSTRAP_SEED", "CONFIRMATION_SEEDS", "KD_MIXTURES", "LossConfiguration",
+    "BOOTSTRAP_SEED", "CONFIRMATION_SEEDS", "GenerationalLossConfiguration",
+    "KD_MIXTURES", "LossConfiguration",
     "MATCHER_FOLD_SEED", "REPRESENTATION_ARMS", "SCREENING_SEED", "TEMPERATURE_GRID", "derive_seed",
     "freeze_teacher", "generational_anchor_input_domain",
-    "normalized_representation_loss", "pmard_loss",
+    "generational_pmard_loss", "normalized_representation_loss", "pmard_loss",
     "representation_kd_loss", "requires_privileged_training_views",
     "sqrt_inverse_class_weights", "teacher_target_cache_enabled",
 ]

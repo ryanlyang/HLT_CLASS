@@ -16,12 +16,14 @@ REPAIR_FAMILY = "P4_ONLY/v1"
 FULL_REPAIR_FAMILY = "FULL_PARTICLE_ENDPOINT/v1"
 SELECTIVE_FULL_REPAIR_FAMILY = "SELECTIVE_FULL_PARTICLE_ENDPOINT/v1"
 HIGHCOV_SHELL_EXACT_FAMILY = "HIGHCOV_SHELL_EXACT/v1"
+HCWDL_UNIFORM_SHELL_EXACT_FAMILY = "HCWDL_UNIFORM_SHELL_EXACT/v1"
 HIGHCOV_SHELL_SOFT_FAMILY = "HIGHCOV_SHELL_SOFT/v1"
 HIGHCOV_HC_EXACT_FAMILY = "HIGHCOV_HC_EXACT/v1"
 HIGHCOV_HC_THRESHOLD = 0.958730161190033
 REPAIR_FAMILIES = (
     "P4_ONLY", "FULL_PARTICLE_ENDPOINT", "SELECTIVE_FULL_PARTICLE_ENDPOINT",
     "HIGHCOV_SHELL_EXACT", "HIGHCOV_SHELL_SOFT", "HIGHCOV_HC_EXACT",
+    "HCWDL_UNIFORM_SHELL_EXACT",
     "TRACK_ONLY", "P4_PLUS_TRACK", "DIRECTION_ONLY",
     "RESPONSE_ONLY", "WRONG_DIRECTION", "RANDOM_DIRECTION",
     "LOG_ANGULAR", "CONFIDENCE_WEIGHTED", "MATCH_SHUFFLED",
@@ -35,6 +37,7 @@ def runtime_repair_family(repair_family: str) -> str:
         FULL_REPAIR_FAMILY: "FULL_PARTICLE_ENDPOINT",
         SELECTIVE_FULL_REPAIR_FAMILY: "SELECTIVE_FULL_PARTICLE_ENDPOINT",
         HIGHCOV_SHELL_EXACT_FAMILY: "HIGHCOV_SHELL_EXACT",
+        HCWDL_UNIFORM_SHELL_EXACT_FAMILY: "HCWDL_UNIFORM_SHELL_EXACT",
         HIGHCOV_SHELL_SOFT_FAMILY: "HIGHCOV_SHELL_SOFT",
         HIGHCOV_HC_EXACT_FAMILY: "HIGHCOV_HC_EXACT",
     }
@@ -153,6 +156,40 @@ def _unit_switch(
     ).encode("utf-8")
     integer = int.from_bytes(hashlib.sha256(payload).digest()[:8], "big")
     return integer / float(1 << 64)
+
+
+def _unit_switch_u64(
+    identity_key: str, token_index: int, group: str, *, seed: int,
+    repair_contract: str,
+) -> int:
+    """Return the exact immutable 64-bit switch variate for a semantic group."""
+
+    payload = (
+        f"{repair_contract}\0{int(seed)}\0{identity_key}\0"
+        f"{int(token_index)}\0{group}"
+    ).encode("utf-8")
+    return int.from_bytes(hashlib.sha256(payload).digest()[:8], "big")
+
+
+def _rational_switch_choice(
+    identity_key: str, token_index: int, group: str, *, seed: int,
+    repair_contract: str, numerator: int, denominator: int,
+) -> bool:
+    """Select the offline endpoint using the HCWDL-UB exact rational rule."""
+
+    if denominator <= 0 or not 0 <= numerator <= denominator:
+        raise ValueError("uniform repair fraction must lie in [0,1]")
+    if numerator == 0:
+        return False
+    if numerator == denominator:
+        return True
+    return (
+        _unit_switch_u64(
+            identity_key, token_index, group, seed=seed,
+            repair_contract=repair_contract,
+        ) * denominator
+        < numerator * (1 << 64)
+    )
 
 
 def _full_endpoint_rows(
@@ -305,6 +342,11 @@ def _apply_full_endpoint_repair(
     require_complete: bool = True,
     strength_by_token: np.ndarray | None = None,
     repair_contract: str = FULL_REPAIR_FAMILY,
+    exact_strength_fraction: tuple[int, int] | None = None,
+    prepared_offline_features: Sequence[np.ndarray] | None = None,
+    prepared_offline_validity: Sequence[np.ndarray] | None = None,
+    prepared_charged_counts: Sequence[int] | None = None,
+    prepared_neutral_counts: Sequence[int] | None = None,
 ) -> None:
     rows = canonical.features.shape[0]
     strengths = None if strength_by_token is None else np.asarray(strength_by_token, np.float64)
@@ -313,6 +355,16 @@ def _apply_full_endpoint_repair(
             raise ValueError("full endpoint strength shape or finiteness differs")
         if np.any((strengths < 0) | (strengths > 1)):
             raise ValueError("full endpoint strengths must lie in [0,1]")
+    if exact_strength_fraction is not None:
+        numerator, denominator = map(int, exact_strength_fraction)
+        if denominator <= 0 or not 0 <= numerator <= denominator:
+            raise ValueError("exact full endpoint strength must lie in [0,1]")
+        if strengths is None:
+            raise ValueError("exact full endpoint strength requires aligned token strengths")
+        expected = numerator / denominator
+        active_strengths = strengths[np.asarray(assignments) >= 0]
+        if len(active_strengths) and not np.all(active_strengths == expected):
+            raise ValueError("exact full endpoint strengths differ from their rational value")
     has_intermediate = 0 < alpha < 1 if strengths is None else bool(
         np.any((strengths > 0) & (strengths < 1))
     )
@@ -321,7 +373,20 @@ def _apply_full_endpoint_repair(
             raise ValueError("intermediate full endpoint repair requires one identity key per row")
         if len(set(map(str, identity_keys))) != rows:
             raise ValueError("full endpoint repair identity keys must be unique")
-    offline_rows = _full_endpoint_rows(offline_arrays, rows)
+    prepared_values = (
+        prepared_offline_features, prepared_offline_validity,
+        prepared_charged_counts, prepared_neutral_counts,
+    )
+    if any(value is not None for value in prepared_values) and not all(
+        value is not None for value in prepared_values
+    ):
+        raise ValueError("prepared offline endpoint inputs must be supplied together")
+    if prepared_offline_features is not None:
+        if any(len(value) != rows for value in prepared_values if value is not None):
+            raise ValueError("prepared offline endpoint row counts differ")
+        offline_rows = None
+    else:
+        offline_rows = _full_endpoint_rows(offline_arrays, rows)
     for row in range(rows):
         visible = min(int(canonical.raw_lengths[row]), canonical.features.shape[2])
         row_assignment = np.asarray(assignments[row, :visible], dtype=np.int64)
@@ -353,13 +418,29 @@ def _apply_full_endpoint_repair(
         if not physical_p4_mask(endpoint_p4).all():
             raise ValueError(f"nonphysical selected offline endpoint p4 in row {row}")
 
-        charged_count = len(offline_rows["cpfcandlt_px"][row])
-        neutral_count = len(offline_rows["npfcand_px"][row])
+        charged_count = (
+            int(prepared_charged_counts[row]) if prepared_charged_counts is not None
+            else len(offline_rows["cpfcandlt_px"][row])
+        )
+        neutral_count = (
+            int(prepared_neutral_counts[row]) if prepared_neutral_counts is not None
+            else len(offline_rows["npfcand_px"][row])
+        )
         if charged_count + neutral_count != len(offline_p4):
             raise ValueError(f"offline p4 and feature endpoint lengths differ in row {row}")
-        all_endpoint_features, all_endpoint_validity = _combined_endpoint_features(
-            offline_rows, row=row, charged_count=charged_count, neutral_count=neutral_count,
-        )
+        if prepared_offline_features is not None and prepared_offline_validity is not None:
+            all_endpoint_features = np.asarray(prepared_offline_features[row], np.float64)
+            all_endpoint_validity = np.asarray(prepared_offline_validity[row], np.bool_)
+            if (
+                all_endpoint_features.shape != (charged_count + neutral_count, 21)
+                or all_endpoint_validity.shape != all_endpoint_features.shape
+            ):
+                raise ValueError(f"prepared offline endpoint shape differs in row {row}")
+        else:
+            all_endpoint_features, all_endpoint_validity = _combined_endpoint_features(
+                offline_rows, row=row, charged_count=charged_count,
+                neutral_count=neutral_count,
+            )
         endpoint_features = all_endpoint_features[matched_assignment]
         endpoint_validity = all_endpoint_validity[matched_assignment]
         endpoint_charged = _validate_full_endpoint_features(
@@ -378,16 +459,26 @@ def _apply_full_endpoint_repair(
         hlt_features = np.where(hlt_validity, hlt_features, 0.0)
 
         key = "" if identity_keys is None else str(identity_keys[row])
+        def choose(token: int, group: str, strength: float) -> bool:
+            if exact_strength_fraction is not None:
+                exact_numerator, exact_denominator = exact_strength_fraction
+                return _rational_switch_choice(
+                    key, token, group, seed=discrete_seed,
+                    repair_contract=repair_contract,
+                    numerator=exact_numerator, denominator=exact_denominator,
+                )
+            return _unit_switch(
+                key, token, group, seed=discrete_seed,
+                repair_contract=repair_contract,
+            ) < strength
+
         choices: dict[str, np.ndarray] = {}
         for group in ("identity", "quality", "lost_inner_hits"):
             if np.all(row_strength == 1):
                 choices[group] = np.ones(len(matched_tokens), np.bool_)
             else:
                 choices[group] = np.asarray([
-                    _unit_switch(
-                        key, token, group, seed=discrete_seed,
-                        repair_contract=repair_contract,
-                    ) < strength
+                    choose(token, group, strength)
                     for token, strength in zip(matched_tokens, row_strength, strict=True)
                 ], np.bool_)
         validity_changes = {
@@ -399,10 +490,7 @@ def _apply_full_endpoint_repair(
         validity_choices = {
             group: (
                 np.ones(len(matched_tokens), np.bool_) if np.all(row_strength == 1) else np.asarray([
-                    _unit_switch(
-                        key, token, f"validity_{group}", seed=discrete_seed,
-                        repair_contract=repair_contract,
-                    ) < strength
+                    choose(token, f"validity_{group}", strength)
                     for token, strength in zip(matched_tokens, row_strength, strict=True)
                 ], np.bool_)
             )
@@ -483,6 +571,14 @@ def build_alpha_repaired_inputs(
     offline_arrays: Mapping[str, object] | None = None,
     identity_keys: Sequence[str] | None = None,
     discrete_seed: int = 1337,
+    uniform_fraction: tuple[int, int] | None = None,
+    canonical_inputs: ParticleInputs | None = None,
+    prepared_hlt_features: Sequence[np.ndarray] | None = None,
+    prepared_hlt_p4: Sequence[np.ndarray] | None = None,
+    prepared_offline_features: Sequence[np.ndarray] | None = None,
+    prepared_offline_validity: Sequence[np.ndarray] | None = None,
+    prepared_charged_counts: Sequence[int] | None = None,
+    prepared_neutral_counts: Sequence[int] | None = None,
 ) -> ParticleInputs:
     repair_family = runtime_repair_family(repair_family)
     try:
@@ -494,13 +590,24 @@ def build_alpha_repaired_inputs(
     # PMARD's registered repair arms retain their discrete screening grid.
     # Shell Exact is a continuous, confidence-warped coordinate: the dense
     # HCWDL contracts deliberately register intermediate D95/D90/... views.
-    if repair_family != "HIGHCOV_SHELL_EXACT" and alpha not in ALPHA_GRID:
+    continuous_families = {"HIGHCOV_SHELL_EXACT", "HCWDL_UNIFORM_SHELL_EXACT"}
+    if repair_family not in continuous_families and alpha not in ALPHA_GRID:
         raise ValueError(f"repair alpha must be one of the legacy grid {ALPHA_GRID}")
+    if repair_family == "HCWDL_UNIFORM_SHELL_EXACT":
+        if uniform_fraction is None:
+            raise ValueError("uniform Shell Exact requires an exact rational fraction")
+        numerator, denominator = map(int, uniform_fraction)
+        if denominator <= 0 or not 0 <= numerator <= denominator:
+            raise ValueError("uniform Shell Exact fraction must lie in [0,1]")
+        if alpha != numerator / denominator:
+            raise ValueError("uniform Shell Exact alpha differs from its rational fraction")
+    elif uniform_fraction is not None:
+        raise ValueError("an exact uniform fraction is valid only for uniform Shell Exact")
     if repair_family in {"TRACK_ONLY", "P4_PLUS_TRACK"}:
         raise PermissionError(
             "track repair is disabled until a locked branch-semantics compatibility audit exists"
         )
-    canonical = build_hlt_inputs(hlt_arrays)
+    canonical = build_hlt_inputs(hlt_arrays) if canonical_inputs is None else canonical_inputs
     if alpha == 0:
         return canonical
     mapping = np.asarray(assignments)
@@ -517,11 +624,39 @@ def build_alpha_repaired_inputs(
     if repair_family in confidence_families:
         if confidence is None or confidence.shape != mapping.shape or not np.isfinite(confidence).all() or np.any((confidence < 0) | (confidence > 1)):
             raise ValueError("confidence-weighted repair requires finite aligned probabilities")
-    raw = {name: [row.copy() for row in _rows(value)] for name, value in hlt_arrays.items()}
-    highcov_families = {
+    prepared_hlt = (prepared_hlt_features, prepared_hlt_p4)
+    if any(value is not None for value in prepared_hlt) and not all(
+        value is not None for value in prepared_hlt
+    ):
+        raise ValueError("prepared HLT endpoint inputs must be supplied together")
+    if prepared_hlt_features is None:
+        raw = {name: [row.copy() for row in _rows(value)] for name, value in hlt_arrays.items()}
+    else:
+        if len(prepared_hlt_features) != rows or len(prepared_hlt_p4) != rows:
+            raise ValueError("prepared HLT endpoint row counts differ")
+        raw = {
+            spec.branch: [
+                np.asarray(prepared_hlt_features[row])[:, channel].copy()
+                for row in range(rows)
+            ]
+            for channel, spec in enumerate(HLT_FEATURE_SPECS)
+        }
+        raw.update({
+            branch: [
+                np.asarray(prepared_hlt_p4[row])[:, channel].copy()
+                for row in range(rows)
+            ]
+            for channel, branch in enumerate(HLT_VECTOR_BRANCHES)
+        })
+        raw["n_scoutpfcands"] = np.asarray(canonical.raw_lengths, np.int32).copy()
+    confidence_highcov_families = {
         "HIGHCOV_SHELL_EXACT", "HIGHCOV_SHELL_SOFT", "HIGHCOV_HC_EXACT",
     }
-    if repair_family in {"FULL_PARTICLE_ENDPOINT", "SELECTIVE_FULL_PARTICLE_ENDPOINT"} | highcov_families:
+    full_endpoint_families = {
+        "FULL_PARTICLE_ENDPOINT", "SELECTIVE_FULL_PARTICLE_ENDPOINT",
+        "HCWDL_UNIFORM_SHELL_EXACT",
+    } | confidence_highcov_families
+    if repair_family in full_endpoint_families:
         if offline_arrays is None:
             raise ValueError("full endpoint repair requires native offline arrays")
         effective_mapping = mapping
@@ -530,7 +665,7 @@ def build_alpha_repaired_inputs(
             FULL_REPAIR_FAMILY if repair_family == "FULL_PARTICLE_ENDPOINT"
             else SELECTIVE_FULL_REPAIR_FAMILY
         )
-        if repair_family in highcov_families:
+        if repair_family in confidence_highcov_families:
             assert confidence is not None
             if repair_family == "HIGHCOV_SHELL_EXACT":
                 if alpha == 0:
@@ -558,6 +693,9 @@ def build_alpha_repaired_inputs(
                         alpha ** (2.0 - 1.3 * confidence), 0.0,
                     )
                 repair_contract = HIGHCOV_HC_EXACT_FAMILY
+        elif repair_family == "HCWDL_UNIFORM_SHELL_EXACT":
+            strength_by_token = np.where(mapping >= 0, alpha, 0.0)
+            repair_contract = HCWDL_UNIFORM_SHELL_EXACT_FAMILY
         _apply_full_endpoint_repair(
             raw, canonical, offline_p4_by_row, effective_mapping, alpha=alpha,
             offline_arrays=offline_arrays, identity_keys=identity_keys,
@@ -565,6 +703,14 @@ def build_alpha_repaired_inputs(
             require_complete=repair_family == "FULL_PARTICLE_ENDPOINT",
             strength_by_token=strength_by_token,
             repair_contract=repair_contract,
+            exact_strength_fraction=(
+                uniform_fraction
+                if repair_family == "HCWDL_UNIFORM_SHELL_EXACT" else None
+            ),
+            prepared_offline_features=prepared_offline_features,
+            prepared_offline_validity=prepared_offline_validity,
+            prepared_charged_counts=prepared_charged_counts,
+            prepared_neutral_counts=prepared_neutral_counts,
         )
         result = build_hlt_inputs(raw)
         if not np.array_equal(result.mask, canonical.mask) or not np.array_equal(
@@ -657,6 +803,41 @@ def build_full_offline_endpoint_inputs(
     )
 
 
+def build_uniform_shell_exact_inputs(
+    hlt_arrays: Mapping[str, object], offline_p4_by_row: Sequence[np.ndarray],
+    assignments: np.ndarray, *, offline_numerator: int,
+    offline_denominator: int, offline_arrays: Mapping[str, object],
+    identity_keys: Sequence[str], discrete_seed: int = 1337,
+    canonical_inputs: ParticleInputs | None = None,
+    prepared_hlt_features: Sequence[np.ndarray] | None = None,
+    prepared_hlt_p4: Sequence[np.ndarray] | None = None,
+    prepared_offline_features: Sequence[np.ndarray] | None = None,
+    prepared_offline_validity: Sequence[np.ndarray] | None = None,
+    prepared_charged_counts: Sequence[int] | None = None,
+    prepared_neutral_counts: Sequence[int] | None = None,
+) -> ParticleInputs:
+    """Build HCWDL-UB's confidence-independent, exact-rational D endpoint."""
+
+    numerator = int(offline_numerator); denominator = int(offline_denominator)
+    if denominator <= 0 or not 0 <= numerator <= denominator:
+        raise ValueError("uniform Shell Exact offline fraction must lie in [0,1]")
+    return build_alpha_repaired_inputs(
+        hlt_arrays, offline_p4_by_row, assignments,
+        alpha=numerator / denominator,
+        repair_family=HCWDL_UNIFORM_SHELL_EXACT_FAMILY,
+        offline_arrays=offline_arrays, identity_keys=identity_keys,
+        discrete_seed=discrete_seed,
+        uniform_fraction=(numerator, denominator),
+        canonical_inputs=canonical_inputs,
+        prepared_hlt_features=prepared_hlt_features,
+        prepared_hlt_p4=prepared_hlt_p4,
+        prepared_offline_features=prepared_offline_features,
+        prepared_offline_validity=prepared_offline_validity,
+        prepared_charged_counts=prepared_charged_counts,
+        prepared_neutral_counts=prepared_neutral_counts,
+    )
+
+
 def build_selective_matched_offline_endpoint_inputs(
     hlt_arrays: Mapping[str, object], offline_arrays: Mapping[str, object],
     offline_p4_by_row: Sequence[np.ndarray], assignments: np.ndarray,
@@ -672,11 +853,13 @@ def build_selective_matched_offline_endpoint_inputs(
 __all__ = [
     "ALPHA_GRID", "FULL_ENDPOINT_FIELDS", "FULL_IDENTITY_CHANNELS",
     "FULL_REPAIR_FAMILY", "SELECTIVE_FULL_REPAIR_FAMILY", "FULL_TRACK_CHANNELS", "FULL_VALIDITY_GROUPS",
+    "HCWDL_UNIFORM_SHELL_EXACT_FAMILY",
     "HIGHCOV_HC_EXACT_FAMILY", "HIGHCOV_HC_THRESHOLD", "HIGHCOV_SHELL_EXACT_FAMILY",
     "HIGHCOV_SHELL_SOFT_FAMILY",
     "RECOMPUTED_CHANNELS",
     "REPAIR_FAMILIES", "REPAIR_FAMILY", "RETAINED_CHANNELS",
     "build_alpha_repaired_inputs", "build_full_offline_endpoint_inputs",
+    "build_uniform_shell_exact_inputs",
     "build_selective_matched_offline_endpoint_inputs",
     "combined_offline_p4",
     "full_endpoint_required_branches",

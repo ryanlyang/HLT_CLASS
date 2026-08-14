@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 import hashlib
-from typing import Final
+from typing import Callable, Final
 
 import numpy as np
 
@@ -15,10 +15,12 @@ from .hcwdl_homotopy_contracts import (
 from .hcwdl_upper_coupling import (
     EndpointPartition, ResidualEdit, build_endpoint_partition, edit_is_active,
 )
+from .hcwdl_unified_balanced import balanced_edit_is_active
 from .inputs import ParticleInputs, build_hlt_inputs
 from .repair import (
     HIGHCOV_SHELL_EXACT_FAMILY, _combined_endpoint_features,
-    build_alpha_repaired_inputs, full_endpoint_required_branches,
+    build_alpha_repaired_inputs, build_uniform_shell_exact_inputs,
+    full_endpoint_required_branches,
     transform_endpoint_features,
 )
 from .schema import HLT_FEATURE_SPECS, HLT_VECTOR_BRANCHES
@@ -291,6 +293,70 @@ def _validate_edit_partition(partition: EndpointPartition, edits: Sequence[Resid
         raise ValueError("coupling edit endpoint coverage differs")
 
 
+def _assemble_support_view(
+    *, canonical: ParticleInputs, shell: ParticleInputs,
+    mapping: np.ndarray, coupling_rows: Sequence[Sequence[ResidualEdit]],
+    prepared_offline: PreparedOfflineEndpoints,
+    prepared_hlt: PreparedHltEndpoints, active_edit: Callable[[ResidualEdit], bool],
+    contract_label: str,
+) -> ParticleInputs:
+    features = np.zeros_like(canonical.features)
+    vectors = np.zeros_like(canonical.vectors)
+    mask = np.zeros_like(canonical.mask)
+    lengths = np.zeros_like(canonical.raw_lengths)
+    for row in range(len(canonical.raw_lengths)):
+        partition, projected, projected_p4 = _partition_for_row(
+            row=row, assignment=mapping[row],
+            offline=prepared_offline, hlt=prepared_hlt,
+        )
+        edits = tuple(coupling_rows[row]); _validate_edit_partition(partition, edits)
+        common_by_slot = {pair.target.hlt_slot: pair for pair in partition.common}
+
+        # Target HLT slots precede native-index tail slots. This is the frozen
+        # carrier order shared by old U/J and HCWDL-UB.
+        active: list[tuple[int, int, np.ndarray, np.ndarray]] = []
+        for slot in sorted(common_by_slot):
+            active.append((0, slot, shell.features[row, :, slot], shell.vectors[row, :, slot]))
+        for edit in edits:
+            switched = active_edit(edit)
+            if edit.edit_kind == EDIT_SUBSTITUTION:
+                if switched:
+                    slot = edit.target_hlt_slot
+                    active.append((0, slot, shell.features[row, :, slot], shell.vectors[row, :, slot]))
+                else:
+                    native = edit.source_native_index
+                    active.append((0, edit.target_hlt_slot, projected[native],
+                                   projected_p4[native].astype(np.float32)))
+            elif edit.edit_kind == EDIT_INSERTION:
+                if switched:
+                    slot = edit.target_hlt_slot
+                    active.append((0, slot, shell.features[row, :, slot], shell.vectors[row, :, slot]))
+            elif edit.edit_kind == EDIT_REMOVAL:
+                if not switched:
+                    native = edit.source_native_index
+                    active.append((1, native, projected[native],
+                                   projected_p4[native].astype(np.float32)))
+            else:
+                raise ValueError("unknown coupling edit kind")
+        active.sort(key=lambda item: (item[0], item[1]))
+        if len(active) != len({(kind, key) for kind, key, _, _ in active}):
+            raise ValueError(f"{contract_label} carrier contains duplicate logical slots")
+        if len(active) > 200:
+            raise ValueError(f"{contract_label} carrier requires hidden truncation")
+        lengths[row] = len(active)
+        mask[row, 0, :len(active)] = True
+        for index, (_, _, feature, vector) in enumerate(active):
+            features[row, :, index] = feature
+            vectors[row, :, index] = vector
+    if not np.isfinite(features).all() or not np.isfinite(vectors).all():
+        raise FloatingPointError(f"{contract_label} active view became nonfinite")
+    if np.any(features[~np.repeat(mask, features.shape[1], axis=1)]) or np.any(
+        vectors[~np.repeat(mask, vectors.shape[1], axis=1)]
+    ):
+        raise RuntimeError(f"{contract_label} view has nonzero padding")
+    return ParticleInputs(features, vectors, mask, lengths)
+
+
 def build_homotopy_inputs(
     arrays: Mapping[str, object], *, assignments: np.ndarray,
     confidence: np.ndarray, coupling_rows: Sequence[Sequence[ResidualEdit]],
@@ -336,66 +402,88 @@ def build_homotopy_inputs(
     if prepared_hlt.rows != rows:
         raise ValueError("prepared HLT endpoint row count differs")
 
-    features = np.zeros_like(canonical.features)
-    vectors = np.zeros_like(canonical.vectors)
-    mask = np.zeros_like(canonical.mask)
-    lengths = np.zeros_like(canonical.raw_lengths)
-    for row in range(rows):
-        partition, projected, projected_p4 = _partition_for_row(
-            row=row, assignment=mapping[row],
-            offline=prepared_offline, hlt=prepared_hlt,
-        )
-        edits = tuple(coupling_rows[row]); _validate_edit_partition(partition, edits)
-        target_by_slot = {record.hlt_slot: record for record in partition.d100}
-        common_by_slot = {pair.target.hlt_slot: pair for pair in partition.common}
-        source_by_native = {record.native_index: record for record in partition.source_only}
+    return _assemble_support_view(
+        canonical=canonical, shell=shell, mapping=mapping,
+        coupling_rows=coupling_rows, prepared_offline=prepared_offline,
+        prepared_hlt=prepared_hlt,
+        active_edit=lambda edit: edit_is_active(
+            edit, numerator=coordinate.structural_numerator,
+            denominator=coordinate.structural_denominator,
+        ),
+        contract_label="HCWDL-UJ",
+    )
 
-        # Entries are (carrier kind, carrier key, feature, vector).  Target
-        # slots sort before tail native slots, exactly as the v1 carrier says.
-        active: list[tuple[int, int, np.ndarray, np.ndarray]] = []
-        for slot in sorted(common_by_slot):
-            active.append((0, slot, shell.features[row, :, slot], shell.vectors[row, :, slot]))
-        for edit in edits:
-            switched = edit_is_active(
-                edit, numerator=coordinate.structural_numerator,
-                denominator=coordinate.structural_denominator,
-            )
-            if edit.edit_kind == EDIT_SUBSTITUTION:
-                if switched:
-                    slot = edit.target_hlt_slot
-                    active.append((0, slot, shell.features[row, :, slot], shell.vectors[row, :, slot]))
-                else:
-                    native = edit.source_native_index
-                    active.append((0, edit.target_hlt_slot, projected[native],
-                                   projected_p4[native].astype(np.float32)))
-            elif edit.edit_kind == EDIT_INSERTION:
-                if switched:
-                    slot = edit.target_hlt_slot
-                    active.append((0, slot, shell.features[row, :, slot], shell.vectors[row, :, slot]))
-            elif edit.edit_kind == EDIT_REMOVAL:
-                if not switched:
-                    native = edit.source_native_index
-                    active.append((1, native, projected[native],
-                                   projected_p4[native].astype(np.float32)))
-            else:
-                raise ValueError("unknown coupling edit kind")
-        active.sort(key=lambda item: (item[0], item[1]))
-        if len(active) != len({(kind, key) for kind, key, _, _ in active}):
-            raise ValueError("HCWDL-UJ carrier contains duplicate logical slots")
-        if len(active) > 200:
-            raise ValueError("HCWDL-UJ carrier requires hidden truncation")
-        lengths[row] = len(active)
-        mask[row, 0, :len(active)] = True
-        for index, (_, _, feature, vector) in enumerate(active):
-            features[row, :, index] = feature
-            vectors[row, :, index] = vector
-    if not np.isfinite(features).all() or not np.isfinite(vectors).all():
-        raise FloatingPointError("HCWDL-UJ active view became nonfinite")
-    if np.any(features[~np.repeat(mask, features.shape[1], axis=1)]) or np.any(
-        vectors[~np.repeat(mask, vectors.shape[1], axis=1)]
+
+def build_unified_balanced_inputs(
+    arrays: Mapping[str, object], *, assignments: np.ndarray,
+    confidence: np.ndarray, coupling_rows: Sequence[Sequence[ResidualEdit]],
+    coordinate: HomotopyCoordinate, identity_keys: Sequence[str],
+    discrete_seed: int, prepared_offline: PreparedOfflineEndpoints | None = None,
+    prepared_hlt: PreparedHltEndpoints | None = None,
+) -> ParticleInputs:
+    """Build HCWDL-UB V_UB(s,f) with balanced U and uniform rational D."""
+
+    canonical = build_hlt_inputs(arrays)
+    mapping = np.asarray(assignments)
+    provenance_confidence = np.asarray(confidence, np.float32)
+    rows = len(canonical.raw_lengths)
+    if mapping.shape != (rows, 200) or provenance_confidence.shape != mapping.shape:
+        raise ValueError("HCWDL-UB assignment/confidence shape differs")
+    if not np.isfinite(provenance_confidence).all() or np.any(
+        (provenance_confidence < 0) | (provenance_confidence > 1)
     ):
-        raise RuntimeError("HCWDL-UJ view has nonzero padding")
-    return ParticleInputs(features, vectors, mask, lengths)
+        raise ValueError("HCWDL-UB confidence provenance differs")
+    if (
+        len(coupling_rows) != rows or len(identity_keys) != rows
+        or len(set(map(str, identity_keys))) != rows
+    ):
+        raise ValueError("HCWDL-UB coupling/identity rows differ")
+    if coordinate.structural_numerator == 0 and coordinate.feature_numerator == 0:
+        prepared_offline = (
+            prepare_offline_endpoints(arrays) if prepared_offline is None else prepared_offline
+        )
+        return build_p0_inputs(arrays, prepared=prepared_offline)
+    if (
+        coordinate.structural_numerator == coordinate.structural_denominator
+        and coordinate.feature_numerator == coordinate.feature_denominator
+    ):
+        return canonical
+    prepared_offline = (
+        prepare_offline_endpoints(arrays) if prepared_offline is None else prepared_offline
+    )
+    if prepared_offline.rows != rows:
+        raise ValueError("prepared offline endpoint row count differs")
+    prepared_hlt = prepare_hlt_endpoints(arrays) if prepared_hlt is None else prepared_hlt
+    if prepared_hlt.rows != rows:
+        raise ValueError("prepared HLT endpoint row count differs")
+    shell = build_uniform_shell_exact_inputs(
+        arrays, prepared_offline.p4, mapping,
+        offline_numerator=(
+            coordinate.feature_denominator - coordinate.feature_numerator
+        ),
+        offline_denominator=coordinate.feature_denominator,
+        offline_arrays=arrays, identity_keys=identity_keys,
+        discrete_seed=discrete_seed,
+        canonical_inputs=canonical,
+        prepared_hlt_features=prepared_hlt.raw_features,
+        prepared_hlt_p4=prepared_hlt.p4,
+        prepared_offline_features=prepared_offline.raw_features,
+        prepared_offline_validity=prepared_offline.validity,
+        prepared_charged_counts=prepared_offline.charged_counts,
+        prepared_neutral_counts=prepared_offline.neutral_counts,
+    )
+    if coordinate.structural_numerator == coordinate.structural_denominator:
+        return shell
+    return _assemble_support_view(
+        canonical=canonical, shell=shell, mapping=mapping,
+        coupling_rows=coupling_rows, prepared_offline=prepared_offline,
+        prepared_hlt=prepared_hlt,
+        active_edit=lambda edit: balanced_edit_is_active(
+            edit, numerator=coordinate.structural_numerator,
+            denominator=coordinate.structural_denominator,
+        ),
+        contract_label="HCWDL-UB",
+    )
 
 
 def particle_inputs_sha256(view: ParticleInputs) -> str:
@@ -416,7 +504,8 @@ def assert_particle_inputs_equal(left: ParticleInputs, right: ParticleInputs, *,
 
 __all__ = [
     "HOMOTOPY_VIEW_CONTRACT", "HomotopyCoordinate", "assert_particle_inputs_equal",
-    "build_homotopy_inputs", "build_p0_inputs", "build_partition_from_arrays",
+    "build_homotopy_inputs", "build_unified_balanced_inputs",
+    "build_p0_inputs", "build_partition_from_arrays",
     "particle_inputs_sha256", "PreparedHltEndpoints", "PreparedOfflineEndpoints",
     "prepare_hlt_endpoints", "prepare_offline_endpoints",
 ]

@@ -7,6 +7,12 @@ and [reusable contract](contracts/HCWDL_STRUCTURAL_FEATURE_HOMOTOPY.md). It
 does not authorize final-test access. It also does not reinterpret or mutate
 the parent HCWDL campaign, dense ladders, assignments, or checkpoints.
 
+Agents implementing related offline/P0/U/D/J preprocessing must also read the
+[ragged preprocessing performance guide](HCWDL_RAGGED_PREPROCESSING_PERFORMANCE_GUIDE.md).
+It documents the whole-chunk-inside-row-loop failure mode, the prepared-batch
+repair, deterministic CPU overlap, required instrumentation, and regression
+tests.
+
 The completed 80-fit v1 smoke is immutable operational evidence. The reduced
 v2 graph may be authorized either by a completed measured v2 smoke or by the
 explicit operational-evidence carry-forward described below after v2 parity,

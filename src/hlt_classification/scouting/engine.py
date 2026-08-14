@@ -22,7 +22,8 @@ from hlt_classification.training.checkpoints import capture_model_runtime_state,
 from .evaluation import classification_metrics
 from .dataset import _take_batch
 from .training import (
-    LossConfiguration, derive_seed, freeze_teacher, pmard_loss, representation_kd_loss,
+    GenerationalLossConfiguration, LossConfiguration, derive_seed, freeze_teacher,
+    generational_pmard_loss, pmard_loss, representation_kd_loss,
 )
 from .targets import EphemeralTeacherTargets
 
@@ -109,7 +110,7 @@ class PmardTrainingInterrupted(RuntimeError):
 @dataclass(frozen=True)
 class PmardTrainingConfig:
     experiment_id: str
-    loss: LossConfiguration
+    loss: LossConfiguration | GenerationalLossConfiguration
     total_updates: int
     effective_batch_size: int
     peak_learning_rate: float
@@ -372,7 +373,10 @@ def train_pmard(
     class_weights, config: PmardTrainingConfig, output_dir: str | Path,
     parents: Mapping[str, str], device: str = "cuda", hlt_teacher=None,
     privileged_teacher=None, hlt_teacher_targets: EphemeralTeacherTargets | None = None,
-    privileged_teacher_targets: EphemeralTeacherTargets | None = None, resume: bool = True,
+    privileged_teacher_targets: EphemeralTeacherTargets | None = None,
+    parent_teacher_targets: EphemeralTeacherTargets | None = None,
+    grandparent_teacher_targets: EphemeralTeacherTargets | None = None,
+    resume: bool = True,
     scientific_config: Mapping[str, object] | None = None,
     stop_after_update: int | None = None,
 ) -> dict[str, object]:
@@ -385,6 +389,8 @@ def train_pmard(
     }
     for name, table in (
         ("hlt", hlt_teacher_targets), ("privileged", privileged_teacher_targets),
+        ("parent", parent_teacher_targets),
+        ("grandparent", grandparent_teacher_targets),
     ):
         if table is None:
             continue
@@ -483,54 +489,91 @@ def train_pmard(
                             model, batch, target, config.model_input, config.representation_arm,
                         )
                     with torch.no_grad():
-                        hlt_logits = None
-                        if config.loss.hlt_kd:
-                            if hlt_teacher_targets is not None:
-                                hlt_logits = torch.as_tensor(
-                                    hlt_teacher_targets.join(batch["identity_keys"]),
+                        parent_logits = grandparent_logits = None
+                        hlt_logits = privileged_logits = None
+                        if isinstance(config.loss, GenerationalLossConfiguration):
+                            if config.loss.parent_kd:
+                                if parent_teacher_targets is None:
+                                    raise ValueError(
+                                        "generational parent KD requires identity-joined RAM logits"
+                                    )
+                                parent_logits = torch.as_tensor(
+                                    parent_teacher_targets.join(batch["identity_keys"]),
                                     device=target, dtype=torch.float32,
                                 )
-                            elif hlt_teacher is not None:
-                                hlt_logits = _model_logits(hlt_teacher, batch, target, "hlt")
-                            else:
-                                raise ValueError("HLT KD requires a frozen teacher or RAM targets")
-                        privileged_logits = None
-                        if config.loss.privileged_kd:
-                            if privileged_teacher_targets is not None:
-                                privileged_logits = torch.as_tensor(
-                                    privileged_teacher_targets.join(batch["identity_keys"]),
+                            if config.loss.grandparent_kd:
+                                if grandparent_teacher_targets is None:
+                                    raise ValueError(
+                                        "generational grandparent KD requires identity-joined RAM logits"
+                                    )
+                                grandparent_logits = torch.as_tensor(
+                                    grandparent_teacher_targets.join(batch["identity_keys"]),
                                     device=target, dtype=torch.float32,
                                 )
-                            elif "privileged_logits" in batch:
-                                privileged_logits = torch.as_tensor(
-                                    batch["privileged_logits"], device=target, dtype=torch.float32,
-                                )
-                            elif privileged_teacher is hlt_teacher and hlt_logits is not None:
-                                privileged_logits = hlt_logits
-                            elif privileged_teacher is hlt_teacher and "hlt" in batch:
-                                privileged_logits = _model_logits(
-                                    privileged_teacher, batch, target, "hlt"
-                                )
-                            elif privileged_teacher is not None and "privileged" in batch:
-                                privileged_logits = _model_logits(
-                                    privileged_teacher, batch, target, "privileged"
-                                )
-                            elif privileged_teacher is not None and "toff" in batch:
-                                privileged_logits = _model_logits(
-                                    privileged_teacher, batch, target, "toff"
-                                )
-                            else:
-                                raise ValueError(
-                                    "privileged KD requires identity-joined RAM logits or a privileged view"
-                                )
+                        else:
+                            if config.loss.hlt_kd:
+                                if hlt_teacher_targets is not None:
+                                    hlt_logits = torch.as_tensor(
+                                        hlt_teacher_targets.join(batch["identity_keys"]),
+                                        device=target, dtype=torch.float32,
+                                    )
+                                elif hlt_teacher is not None:
+                                    hlt_logits = _model_logits(hlt_teacher, batch, target, "hlt")
+                                else:
+                                    raise ValueError("HLT KD requires a frozen teacher or RAM targets")
+                            if config.loss.privileged_kd:
+                                if privileged_teacher_targets is not None:
+                                    privileged_logits = torch.as_tensor(
+                                        privileged_teacher_targets.join(batch["identity_keys"]),
+                                        device=target, dtype=torch.float32,
+                                    )
+                                elif "privileged_logits" in batch:
+                                    privileged_logits = torch.as_tensor(
+                                        batch["privileged_logits"], device=target, dtype=torch.float32,
+                                    )
+                                elif privileged_teacher is hlt_teacher and hlt_logits is not None:
+                                    privileged_logits = hlt_logits
+                                elif privileged_teacher is hlt_teacher and "hlt" in batch:
+                                    privileged_logits = _model_logits(
+                                        privileged_teacher, batch, target, "hlt"
+                                    )
+                                elif privileged_teacher is not None and "privileged" in batch:
+                                    privileged_logits = _model_logits(
+                                        privileged_teacher, batch, target, "privileged"
+                                    )
+                                elif privileged_teacher is not None and "toff" in batch:
+                                    privileged_logits = _model_logits(
+                                        privileged_teacher, batch, target, "toff"
+                                    )
+                                else:
+                                    raise ValueError(
+                                        "privileged KD requires identity-joined RAM logits or a privileged view"
+                                    )
                     with torch.autocast(device_type=target.type, enabled=False):
-                        parts = pmard_loss(
-                            student.float(), labels, class_weights=weights, configuration=config.loss,
-                            hlt_teacher_logits=None if hlt_logits is None else hlt_logits.float(),
-                            privileged_teacher_logits=(
-                                None if privileged_logits is None else privileged_logits.float()
-                            ),
-                        )
+                        if isinstance(config.loss, GenerationalLossConfiguration):
+                            parts = generational_pmard_loss(
+                                student.float(), labels, class_weights=weights,
+                                configuration=config.loss,
+                                parent_teacher_logits=(
+                                    None if parent_logits is None else parent_logits.float()
+                                ),
+                                grandparent_teacher_logits=(
+                                    None if grandparent_logits is None
+                                    else grandparent_logits.float()
+                                ),
+                            )
+                        else:
+                            parts = pmard_loss(
+                                student.float(), labels, class_weights=weights,
+                                configuration=config.loss,
+                                hlt_teacher_logits=(
+                                    None if hlt_logits is None else hlt_logits.float()
+                                ),
+                                privileged_teacher_logits=(
+                                    None if privileged_logits is None
+                                    else privileged_logits.float()
+                                ),
+                            )
                     if config.representation_arm != "R0" and config.representation_coefficient > 0:
                         if privileged_teacher is None or "privileged" not in batch:
                             raise ValueError("representation KD requires the alpha teacher and aligned view")
