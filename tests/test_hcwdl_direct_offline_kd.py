@@ -20,6 +20,7 @@ from hlt_classification.scouting.hcwdl_direct_offline_kd_targets import (
     complete_target_cleanup, validate_target_spec,
 )
 from hlt_classification.scouting.hcwdl_representation_training import (
+    _registered_graph_sha256, _validate_runtime_lineage,
     node_base_loss_configuration, paired_rng_streams, resolve_node_execution,
 )
 from hlt_classification.scouting.hcwdl_training import _loss_for_node
@@ -58,6 +59,29 @@ def test_direct_representation_executions_are_exact_hlt_and_temperature_two():
     assert rset.relation_enabled is False and rrel.relation_enabled is True
     assert node_base_loss_configuration(rset).privileged_temperature == 2.0
     assert node_base_loss_configuration(rrel).privileged_temperature == 2.0
+
+
+def test_direct_representation_runtime_accepts_only_the_direct_graph():
+    runtime = with_content_hash({
+        "contract": "HCWDL_DIRECT_TEST_RUNTIME/v1", "schema_version": 1,
+    })
+    lineage = {
+        "ascent_graph": GRAPH_SHA256,
+        "execution": "b" * 64,
+        "producer_runtime_signature": runtime["content_hash"],
+        "representation_recipe": "c" * 64,
+        "target_generation": "d" * 64,
+        "target_logical": "e" * 64,
+    }
+    assert _registered_graph_sha256("HLT_RSET") == GRAPH_SHA256
+    assert _registered_graph_sha256("HLT_RREL") == GRAPH_SHA256
+    assert _validate_runtime_lineage(
+        lineage, runtime, expected_graph_sha256=GRAPH_SHA256,
+    )["ascent_graph"] == GRAPH_SHA256
+    with pytest.raises(ValueError, match="resume graph hash differs"):
+        _validate_runtime_lineage(
+            lineage, runtime, expected_graph_sha256="f" * 64,
+        )
 
 
 def test_direct_logit_control_resolves_same_base_mixture():

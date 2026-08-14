@@ -1621,8 +1621,23 @@ def _restore_state(
     )
 
 
+def _registered_graph_sha256(execution_id: str) -> str:
+    """Resolve the one graph contract authorized for an execution."""
+
+    if execution_id.startswith(("F_RSET_", "F_RREL_")):
+        from .hcwdl_homotopy_representation_graph import GRAPH_SHA256
+
+        return GRAPH_SHA256
+    if execution_id in {"HLT_RSET", "HLT_RREL"}:
+        from .hcwdl_direct_offline_kd_graph import GRAPH_SHA256
+
+        return GRAPH_SHA256
+    return ASCENT_GRAPH_SHA256
+
+
 def _validate_runtime_lineage(
     resume_lineage: Mapping[str, Any], producer_runtime_signature: Mapping[str, Any],
+    *, expected_graph_sha256: str,
 ) -> dict[str, str]:
     if set(resume_lineage) != REQUIRED_LINEAGE_KEYS:
         raise ValueError("HCWDL-RKD resume lineage fields differ")
@@ -1630,9 +1645,10 @@ def _validate_runtime_lineage(
         name: require_sha256(value, name=f"resume lineage {name}")
         for name, value in resume_lineage.items()
     }
-    from .hcwdl_homotopy_representation_graph import GRAPH_SHA256 as U_RKD_GRAPH_SHA256
-
-    if normalized["ascent_graph"] not in {ASCENT_GRAPH_SHA256, U_RKD_GRAPH_SHA256}:
+    expected_graph_sha256 = require_sha256(
+        expected_graph_sha256, name="registered execution graph SHA-256",
+    )
+    if normalized["ascent_graph"] != expected_graph_sha256:
         raise ValueError("HCWDL-RKD resume graph hash differs")
     if producer_runtime_signature.get("content_hash") != normalized[
         "producer_runtime_signature"
@@ -3421,18 +3437,11 @@ def train_hcwdl_representation_node(
             recipe_compatibility, execution_recipe=parent_recipe,
             representation_recipe=representation_recipe,
         )
-    lineage = _validate_runtime_lineage(resume_lineage, producer_runtime_signature)
-    expected_graph_sha256 = ASCENT_GRAPH_SHA256
-    if execution_id.startswith(("F_RSET_", "F_RREL_")):
-        from .hcwdl_homotopy_representation_graph import GRAPH_SHA256
-
-        expected_graph_sha256 = GRAPH_SHA256
-    elif execution_id in {"HLT_RSET", "HLT_RREL"}:
-        from .hcwdl_direct_offline_kd_graph import GRAPH_SHA256
-
-        expected_graph_sha256 = GRAPH_SHA256
-    if lineage["ascent_graph"] != expected_graph_sha256:
-        raise ValueError("execution and resume graph identity differ")
+    expected_graph_sha256 = _registered_graph_sha256(execution_id)
+    lineage = _validate_runtime_lineage(
+        resume_lineage, producer_runtime_signature,
+        expected_graph_sha256=expected_graph_sha256,
+    )
     if lineage["representation_recipe"] != representation_recipe_sha256:
         raise ValueError("resume lineage binds a different representation recipe")
     require_sha256(
@@ -4334,15 +4343,7 @@ def validate_representation_training_report(
         execution_id=execution_id,
         replicate_seed=seed,
     )
-    expected_graph_sha256 = ASCENT_GRAPH_SHA256
-    if execution_id.startswith(("F_RSET_", "F_RREL_")):
-        from .hcwdl_homotopy_representation_graph import GRAPH_SHA256
-
-        expected_graph_sha256 = GRAPH_SHA256
-    elif execution_id in {"HLT_RSET", "HLT_RREL"}:
-        from .hcwdl_direct_offline_kd_graph import GRAPH_SHA256
-
-        expected_graph_sha256 = GRAPH_SHA256
+    expected_graph_sha256 = _registered_graph_sha256(execution_id)
     if report["graph_sha256"] != expected_graph_sha256:
         raise ValueError("HCWDL-RKD report graph lineage differs")
     recipe_sha256 = require_sha256(
