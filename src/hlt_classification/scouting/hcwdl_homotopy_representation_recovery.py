@@ -49,6 +49,10 @@ def validate_submission_ledger(
         _job(job_id)
     if campaign_sha256 is not None and value["parents"]["campaign_spec"] != campaign_sha256:
         raise ValueError("HCWDL-U-RKD ledger campaign differs")
+    if "complete_submission" in value and not isinstance(
+        value["complete_submission"], bool,
+    ):
+        raise ValueError("HCWDL-U-RKD ledger completion flag differs")
     return digest
 
 
@@ -81,10 +85,29 @@ def build_monitor_report(
     spec_hash = validate_campaign(spec, executable=False)
     ledger_hash = validate_submission_ledger(ledger, campaign_sha256=spec_hash)
     by_task = {row["task_id"]: row for row in spec["tasks"]}
-    if set(ledger["jobs"]) != set(by_task):
+    submitted = set(ledger["jobs"])
+    if not submitted <= set(by_task):
         raise ValueError("HCWDL-U-RKD ledger task set differs")
+    complete = bool(ledger.get("complete_submission", True))
+    if complete != (submitted == set(by_task)):
+        raise ValueError("HCWDL-U-RKD ledger completion differs")
+    expected_prefix = {
+        row["task_id"] for row in spec["tasks"][:len(submitted)]
+    }
+    if submitted != expected_prefix:
+        raise ValueError("HCWDL-U-RKD partial ledger is not a submitted prefix")
     rows = []
-    for task_id, job_id in ledger["jobs"].items():
+    for task in spec["tasks"]:
+        task_id = task["task_id"]
+        if task_id not in ledger["jobs"]:
+            rows.append({
+                "task_id": task_id, "job_id": None,
+                "state": "NOT_SUBMITTED",
+                "reason": "interrupted submission journal suffix",
+                "classification": "retryable_failure",
+            })
+            continue
+        job_id = ledger["jobs"][task_id]
         state_row = scheduler_states.get(str(job_id))
         if state_row is None:
             raise ValueError("HCWDL-U-RKD scheduler state is incomplete")

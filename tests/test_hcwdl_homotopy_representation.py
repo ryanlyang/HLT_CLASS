@@ -8,8 +8,9 @@ import pytest
 
 from hlt_classification.data.cache_contracts import with_content_hash
 from hlt_classification.scouting.hcwdl_homotopy_representation_campaign import (
-    SMOKE_RESOURCES, SUBMISSION_PHRASE, _task_registry, build_command_plan,
-    materialize_command, submit_command_plan,
+    SMOKE_RESOURCES, SUBMISSION_PHRASE, _task_registry,
+    assemble_submission_ledger, build_command_plan, materialize_command,
+    submit_command_plan,
 )
 from hlt_classification.scouting.hcwdl_homotopy_representation_contracts import (
     CAMPAIGN_SPEC_CONTRACT, FIT_COUNT, ROLE_COUNTS, SMOKE_ROLE_COUNTS,
@@ -333,6 +334,15 @@ def test_submission_journal_resumes_exact_completed_prefix(monkeypatch, tmp_path
         )
     assert [row["task_id"] for row in events] == ["authenticate", "graph_recipe_lock"]
 
+    partial = assemble_submission_ledger(
+        spec=spec, command_plan=plan, events=events,
+    )
+    assert partial["jobs"] == {
+        "authenticate": "9001", "graph_recipe_lock": "9002",
+    }
+    assert partial["submitted_task_count"] == 2
+    assert partial["complete_submission"] is False
+
     resumed_calls = []
     ledger = submit_command_plan(
         spec=spec, command_plan=plan,
@@ -344,3 +354,4 @@ def test_submission_journal_resumes_exact_completed_prefix(monkeypatch, tmp_path
     assert ledger["jobs"]["authenticate"] == "9001"
     assert ledger["jobs"]["graph_recipe_lock"] == "9002"
     assert len(ledger["jobs"]) == 47
+    assert ledger["complete_submission"] is True

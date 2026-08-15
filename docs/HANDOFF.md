@@ -2248,3 +2248,35 @@ differences in the explicit fixtures are within the existing
 numerical-acceptance tolerances. A repeated 50-batch GH200 profile at the exact
 corrected commit remains required before recovery of the live pilot. No live
 job was submitted by this repair and no final-test data were accessed.
+
+The exact corrected commit `2a1de332` then passed the bounded GH200 acceptance
+profile. Job `87699` measured `F_RSET_U020` at 0.123782 s/batch versus the
+1.723164 s/batch baseline (13.9x overall); its set component fell from
+1.039440 s to 0.009079 s (114.5x). Job `87700` measured `F_RREL_U020` at
+0.202051 s/batch versus 4.862944 s/batch (24.1x overall); relation fell from
+2.170717 s to 0.079659 s (27.2x) and set from 0.957087 s to 0.007650 s
+(125.1x). Both 50-batch jobs completed in under four minutes including
+one-time preparation. This validates the execution repair on the required
+production GPU and supports six-hour recovery requests for the unfinished
+pilot closure.
+
+The pilot submit had separately journaled 45 of 47 reviewed Slurm commands
+before its final ledger was published. Its remaining aggregate command could
+not later be submitted because imported parent-completion job `83488` was
+cancelled and had left the controller; `sbatch --test-only` failed with
+`Job dependency problem`. The v2 operational recovery now authenticates an
+exact contiguous submission-event prefix as `complete_submission=false`,
+represents the absent suffix as `NOT_SUBMITTED`, and includes it in the
+ordinary failed/downstream source-recovery closure. It never fabricates job
+IDs, weakens the original command, or contacts Slurm while assembling the
+partial ledger. No final-test data were accessed.
+
+Local evidence for the partial-ledger repair: the focused homotopy-RKD,
+recovery, and CLI suite passed 103 tests with 8 expected POSIX-shell skips;
+the known slow runtime/provenance boundary passed independently at 35/35.
+Two monolithic Windows runs accumulated unrelated process-global test state
+and reached their 15/25-minute ceilings without an assertion failure, so the
+complete 985-test collection was rerun with fresh interpreter boundaries.
+All 96 modules passed: 976 tests passed and 9 expected Windows platform tests
+skipped. The assembler CLI help, Python compilation, contract identities, and
+`git diff --check` also passed.

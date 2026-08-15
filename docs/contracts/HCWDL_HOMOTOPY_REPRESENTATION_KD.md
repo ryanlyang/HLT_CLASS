@@ -68,6 +68,15 @@ recovery replace only the exact failed/downstream closure and preserve valid
 artifacts and the scientific graph. Cancellation is by campaign-ledger IDs
 only.
 
+Each successful `sbatch` is durably journaled before final ledger publication.
+If submission is interrupted and a later terminal dependency makes the
+remaining reviewed commands impossible to submit, the exact contiguous event
+prefix may be authenticated as an incomplete v2 ledger. Monitoring represents
+the unsubmitted suffix explicitly as retryable failure; source recovery then
+replaces that suffix together with the ordinary failed/downstream closure.
+Missing jobs are never fabricated and invalid original dependencies are never
+silently removed from the original command plan.
+
 Implementation, dry run, and local smoke do not authorize Slurm submission.
 Creation and submission require the two distinct exact phrases defined in the
 contract module. Final-test access is never authorized by this campaign.

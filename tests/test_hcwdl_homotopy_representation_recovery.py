@@ -8,7 +8,7 @@ from hlt_classification.scouting.hcwdl_homotopy_representation_contracts import 
     build_artifact,
 )
 from hlt_classification.scouting.hcwdl_homotopy_representation_recovery import (
-    exact_cancellation_commands, failed_downstream_closure,
+    build_monitor_report, exact_cancellation_commands, failed_downstream_closure,
     recovery_command_plan, validate_submission_ledger,
 )
 from hlt_classification.scouting.hcwdl_homotopy_representation_campaign import (
@@ -61,6 +61,42 @@ def test_ledger_and_cancellation_are_exact_ids_only():
     )
     validate_submission_ledger(ledger)
     assert exact_cancellation_commands(ledger) == (("scancel", "12"), ("scancel", "13"))
+
+
+def test_partial_prefix_monitor_marks_only_unsubmitted_suffix_for_recovery(monkeypatch):
+    import hlt_classification.scouting.hcwdl_homotopy_representation_recovery as module
+
+    spec = _spec()
+    first_two = [row["task_id"] for row in spec["tasks"][:2]]
+    ledger = build_artifact(
+        SUBMISSION_LEDGER_CONTRACT,
+        parents={"campaign_spec": spec["content_hash"], "command_plan": "b" * 64},
+        jobs=dict(zip(first_two, ("12", "13"), strict=True)),
+        submission_phrase="x", submitted_task_count=2,
+        complete_submission=False,
+    )
+    monkeypatch.setattr(
+        module, "validate_campaign", lambda *_args, **_kwargs: spec["content_hash"],
+    )
+    report = build_monitor_report(
+        spec=spec, ledger=ledger,
+        scheduler_states={
+            "12": {"state": "COMPLETED", "reason": "None"},
+            "13": {"state": "COMPLETED", "reason": "None"},
+        },
+    )
+    assert [row["classification"] for row in report["rows"][:2]] == [
+        "complete", "complete",
+    ]
+    assert all(
+        row["state"] == "NOT_SUBMITTED"
+        and row["classification"] == "retryable_failure"
+        and row["job_id"] is None
+        for row in report["rows"][2:]
+    )
+    assert failed_downstream_closure(spec, report) == tuple(
+        row["task_id"] for row in spec["tasks"][2:]
+    )
 
 
 def test_resource_recovery_rewrites_gpu_request_without_scientific_change(tmp_path):

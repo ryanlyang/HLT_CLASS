@@ -127,6 +127,22 @@ python -s "${PROJECT_DIR}/scripts/monitor_hcwdl_homotopy_representation_campaign
   --output "${CAMPAIGN_ROOT}/monitor.json"
 ```
 
+If an interrupted submission has durable events but no final ledger, assemble
+the authenticated submitted prefix without contacting Slurm:
+
+```bash
+python -s "${PROJECT_DIR}/scripts/assemble_hcwdl_homotopy_representation_submission_ledger.py" \
+  --campaign-spec "${CAMPAIGN_ROOT}/campaign_spec.json" \
+  --command-plan "${CAMPAIGN_ROOT}/command_plan.json" \
+  --event-root "${CAMPAIGN_ROOT}/submission_events" \
+  --output "${CAMPAIGN_ROOT}/submission_ledger.json"
+```
+
+`complete_submission=false` is valid only for the exact contiguous command-plan
+prefix proven by those events. Monitoring marks the absent suffix as
+`NOT_SUBMITTED`; failed-closure recovery replaces it. The assembler never calls
+`sbatch`.
+
 ## Ragged-view preprocessing
 
 The representation ladder uses the repaired linear-time homotopy builder.

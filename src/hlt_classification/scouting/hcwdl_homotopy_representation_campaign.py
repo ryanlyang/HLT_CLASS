@@ -680,25 +680,28 @@ def materialize_command(
     return command
 
 
-def submit_command_plan(
+def assemble_submission_ledger(
     *, spec: Mapping[str, Any], command_plan: Mapping[str, Any],
-    scheduler, authorization_phrase: str,
-    event_writer=None, prior_events: Sequence[Mapping[str, Any]] = (),
+    events: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
+    """Authenticate an immutable submitted prefix without contacting Slurm.
+
+    Submission events are durable before the final ledger publication.  A
+    terminal dependency can become invalid before an interrupted submission
+    is resumed, so recovery must be able to represent the exact submitted
+    prefix without inventing job IDs or resubmitting reviewed commands.
+    """
+
     spec_hash = validate_campaign(spec, executable=True)
     plan = build_command_plan(spec)
     if command_plan != plan:
         raise ValueError("HCWDL-U-RKD submitted command plan differs")
-    if authorization_phrase != SUBMISSION_PHRASE:
-        raise PermissionError("HCWDL-U-RKD submission phrase differs")
-    if event_writer is None:
-        raise ValueError("live HCWDL-U-RKD submission requires an immutable event writer")
     ordered_events = sorted(
-        (dict(row) for row in prior_events), key=lambda row: int(row.get("sequence", -1)),
+        (dict(row) for row in events), key=lambda row: int(row.get("sequence", -1)),
     )
-    if [int(row.get("sequence", -1)) for row in ordered_events] != list(
-        range(len(ordered_events))
-    ):
+    if len(ordered_events) > len(plan["commands"]) or [
+        int(row.get("sequence", -1)) for row in ordered_events
+    ] != list(range(len(ordered_events))):
         raise ValueError("HCWDL-U-RKD submission event sequence differs")
     jobs: dict[str, str] = {}
     for sequence, event in enumerate(ordered_events):
@@ -706,8 +709,6 @@ def submit_command_plan(
             event, expected_contract=SUBMISSION_EVENT_CONTRACT,
             expected_schema_version=1,
         )
-        if sequence >= len(plan["commands"]):
-            raise ValueError("HCWDL-U-RKD submission journal exceeds its command plan")
         row = plan["commands"][sequence]
         command = materialize_command(row, jobs)
         expected = build_submission_event(
@@ -719,6 +720,33 @@ def submit_command_plan(
         if event["job_id"] in jobs.values():
             raise ValueError("HCWDL-U-RKD submission journal reuses a job ID")
         jobs[row["task_id"]] = str(event["job_id"])
+    complete = len(ordered_events) == len(plan["commands"])
+    return build_artifact(
+        SUBMISSION_LEDGER_CONTRACT,
+        parents={"campaign_spec": spec_hash, "command_plan": plan["content_hash"]},
+        jobs=jobs, submission_phrase=SUBMISSION_PHRASE,
+        submitted_task_count=len(jobs), complete_submission=complete,
+    )
+
+
+def submit_command_plan(
+    *, spec: Mapping[str, Any], command_plan: Mapping[str, Any],
+    scheduler, authorization_phrase: str,
+    event_writer=None, prior_events: Sequence[Mapping[str, Any]] = (),
+) -> dict[str, Any]:
+    if authorization_phrase != SUBMISSION_PHRASE:
+        raise PermissionError("HCWDL-U-RKD submission phrase differs")
+    if event_writer is None:
+        raise ValueError("live HCWDL-U-RKD submission requires an immutable event writer")
+    partial = assemble_submission_ledger(
+        spec=spec, command_plan=command_plan, events=prior_events,
+    )
+    spec_hash = partial["parents"]["campaign_spec"]
+    plan = build_command_plan(spec)
+    ordered_events = sorted(
+        (dict(row) for row in prior_events), key=lambda row: int(row.get("sequence", -1)),
+    )
+    jobs: dict[str, str] = dict(partial["jobs"])
     for sequence, row in enumerate(
         plan["commands"][len(ordered_events):], start=len(ordered_events),
     ):
@@ -741,7 +769,8 @@ def submit_command_plan(
 
 __all__ = [
     "AUTHORIZATION_PHRASE", "SUBMISSION_PHRASE", "authenticate_parent",
-    "build_command_plan", "build_integration_attestation", "create_campaign",
+    "assemble_submission_ledger", "build_command_plan",
+    "build_integration_attestation", "create_campaign",
     "materialize_command", "semantic_source_hashes", "submit_command_plan",
     "validate_campaign",
 ]
