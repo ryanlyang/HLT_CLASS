@@ -117,5 +117,26 @@ IDs with `cancel_hcwdl_unified_balanced_full.py` before using its explicit
 execution phrase. Recovery is separately source-pinned or resource-only and
 schedules only the authenticated failed/downstream closure.
 
+The initial all-mapped campaign exposed one execution bug: scale calibration
+treated the compact `all_rows: true` selection as every raw ROOT entry instead
+of every assignment-authenticated mapped identity. If and only if the
+assignment lock completed and scale calibration is the first failed task, use
+the classified mapped-identity recovery. It starts at scale calibration and
+reuses the immutable assignment prefix; it does not rebuild assignments or
+change the selected population. The recovery CLI requires:
+
+```text
+--execution-repair all_mapped_assignment_identity_filter_v1
+--authorization-phrase "AUTHORIZE HCWDL UB FULL3 ALL MAPPED IDENTITY EXECUTION REPAIR"
+```
+
+After the recovery foundation lock completes, launch the arms from the
+original scientific worktree/commit named by `foundation_spec.json`. The arms
+do not execute the repaired preprocessing path, so retaining their original
+source binding preserves their registered training semantics. The new
+autolaunch must depend on the recovered `foundation_lock` job ID; the old
+autolaunch dependency can never be satisfied and should be cancelled by its
+exact campaign-bound ID.
+
 Final-test access remains outside this campaign and requires a later,
 separately implemented finalist and execution lock.

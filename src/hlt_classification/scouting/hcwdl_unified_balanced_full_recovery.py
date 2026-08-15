@@ -16,7 +16,22 @@ from .hcwdl_unified_balanced_full_campaign import (
     validate_foundation_campaign,
 )
 from .hcwdl_unified_balanced_full_contracts import (
-    ARM_SPEC_CONTRACT, FOUNDATION_SPEC_CONTRACT, RECOVERY_SPEC_CONTRACT,
+    ARM_SPEC_CONTRACT, FOUNDATION_SPEC_CONTRACT,
+    MAPPED_IDENTITY_RECOVERY_SPEC_CONTRACT,
+    MAPPED_IDENTITY_REPAIR_EVIDENCE_CONTRACT, RECOVERY_SPEC_CONTRACT,
+    validate_assignment_lock,
+)
+from .selective_assignment import validate_row_selection
+
+
+MAPPED_IDENTITY_REPAIR: str = "all_mapped_assignment_identity_filter_v1"
+MAPPED_IDENTITY_REPAIR_PHRASE: str = (
+    "AUTHORIZE HCWDL UB FULL3 ALL MAPPED IDENTITY EXECUTION REPAIR"
+)
+MAPPED_IDENTITY_REPAIR_SEMANTIC_FILES = (
+    "src/hlt_classification/scouting/hcwdl_unified_balanced_full_contracts.py",
+    "src/hlt_classification/scouting/hcwdl_unified_balanced_full_recovery.py",
+    "src/hlt_classification/scouting/hcwdl_upper_builder.py",
 )
 
 
@@ -45,11 +60,73 @@ def _wall_seconds(value: str) -> int:
     return hours * 3600 + minutes * 60 + seconds
 
 
+def _semantic_changes(
+    expected: Mapping[str, str], actual: Mapping[str, str],
+) -> dict[str, dict[str, str | None]]:
+    return {
+        name: {
+            "original_sha256": expected.get(name),
+            "recovery_sha256": actual.get(name),
+        }
+        for name in sorted(set(expected) | set(actual))
+        if expected.get(name) != actual.get(name)
+    }
+
+
+def _mapped_identity_repair_evidence(
+    foundation: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Authenticate the completed mapped assignment prefix reused by repair."""
+
+    selection = load_json(foundation["artifact_paths"]["selection_manifest"])
+    selection_hash = validate_row_selection(
+        selection,
+        split_manifest_sha256=foundation["parents"]["split_manifest_sha256"],
+    )
+    expected_rows = {
+        role: int(foundation["role_counts"][role])
+        for role in ("train", "validation")
+    }
+    if any(
+        selection["roles"].get(role, {}).get("all_rows") is not True
+        or int(selection["roles"][role].get("rows", -1)) != expected_rows[role]
+        for role in expected_rows
+    ):
+        raise ValueError("HCWDL-UB-FULL3 repair requires the exact all-mapped selection")
+
+    lock_path = Path(foundation["campaign_root"]) / "locks/assignment.json"
+    assignment_lock = load_json(lock_path)
+    assignment_lock_hash = validate_assignment_lock(assignment_lock)
+    if (
+        assignment_lock.get("foundation_spec_sha256") != foundation["content_hash"]
+        or assignment_lock.get("role_rows") != expected_rows
+        or assignment_lock.get("parents", {}).get("row_selection_sha256")
+        != selection_hash
+    ):
+        raise ValueError("HCWDL-UB-FULL3 mapped assignment repair lineage differs")
+    return with_content_hash({
+        "contract": MAPPED_IDENTITY_REPAIR_EVIDENCE_CONTRACT,
+        "schema_version": 1,
+        "classification": MAPPED_IDENTITY_REPAIR,
+        "foundation_spec_sha256": foundation["content_hash"],
+        "row_selection_sha256": selection_hash,
+        "assignment_lock_sha256": assignment_lock_hash,
+        "role_rows": expected_rows,
+        "selection_semantics": "all_authenticated_mapped_rows_v1",
+        "assignment_entries_are_population_identity": True,
+        "raw_root_entries_are_not_population_identity": True,
+        "completed_assignment_outputs_preserved": True,
+        "final_test_accessed": False,
+    })
+
+
 def build_recovery_spec(
     *, scope_spec_path: str | Path, submission_ledger_path: str | Path,
     monitor_report_path: str | Path, recovery_root: str | Path,
     project_dir: str | Path, source_commit: str,
     resource_overrides: Mapping[str, Mapping[str, Any]] | None = None,
+    execution_repair: str | None = None,
+    authorization_phrase: str | None = None,
 ) -> dict[str, Any]:
     scope_path = Path(scope_spec_path).resolve()
     scope = load_json(scope_path)
@@ -94,10 +171,7 @@ def build_recovery_spec(
     if re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
         raise ValueError("HCWDL-UB-FULL3 recovery source commit differs")
     actual_semantic = semantic_source_hashes(project_dir)
-    if actual_semantic != foundation["semantic_source_sha256"]:
-        raise ValueError(
-            "HCWDL-UB-FULL3 ordinary recovery changes frozen scientific source"
-        )
+    expected_semantic = foundation["semantic_source_sha256"]
     overrides = {
         name: dict(row) for name, row in (resource_overrides or {}).items()
     }
@@ -106,6 +180,43 @@ def build_recovery_spec(
         raise ValueError("HCWDL-UB-FULL3 source/resource recovery must be separate")
     if not source_changed and not overrides:
         raise ValueError("HCWDL-UB-FULL3 recovery requires source or resource change")
+    if not source_changed and execution_repair is not None:
+        raise ValueError("HCWDL-UB-FULL3 execution repair requires new source")
+
+    semantic_changes: dict[str, dict[str, str | None]] = {}
+    repair_evidence: dict[str, Any] | None = None
+    if source_changed and actual_semantic == expected_semantic:
+        if execution_repair is not None or authorization_phrase is not None:
+            raise ValueError("HCWDL-UB-FULL3 ordinary source recovery claims repair")
+        contract = RECOVERY_SPEC_CONTRACT
+    elif source_changed:
+        if execution_repair != MAPPED_IDENTITY_REPAIR:
+            raise ValueError(
+                "HCWDL-UB-FULL3 recovery changes frozen scientific source"
+            )
+        if authorization_phrase != MAPPED_IDENTITY_REPAIR_PHRASE:
+            raise PermissionError("HCWDL-UB-FULL3 mapped-identity repair phrase differs")
+        if not foundation_scope or not closure or closure[0] != "scale_calibration":
+            raise ValueError(
+                "HCWDL-UB-FULL3 mapped-identity repair requires the failed "
+                "foundation scale-calibration closure"
+            )
+        semantic_changes = _semantic_changes(expected_semantic, actual_semantic)
+        if tuple(semantic_changes) != MAPPED_IDENTITY_REPAIR_SEMANTIC_FILES or any(
+            row["original_sha256"] is None or row["recovery_sha256"] is None
+            for row in semantic_changes.values()
+        ):
+            raise ValueError(
+                "HCWDL-UB-FULL3 mapped-identity repair changes unexpected source"
+            )
+        repair_evidence = _mapped_identity_repair_evidence(foundation)
+        contract = MAPPED_IDENTITY_RECOVERY_SPEC_CONTRACT
+    else:
+        if authorization_phrase is not None:
+            raise ValueError("HCWDL-UB-FULL3 resource recovery carries execution phrase")
+        if actual_semantic != expected_semantic:
+            raise ValueError("HCWDL-UB-FULL3 resource recovery changes scientific source")
+        contract = RESOURCE_RECOVERY_SPEC_CONTRACT
     resources = {name: dict(row) for name, row in scope["resources"].items()}
     for name, row in overrides.items():
         if name not in resources or set(row) - {"cpus", "memory", "walltime", "gpu"}:
@@ -121,11 +232,7 @@ def build_recovery_spec(
             raise ValueError("HCWDL-UB-FULL3 resources may only increase")
         resources[name] = merged
     tasks = [row for row in scope["tasks"] if row["task_id"] in closure]
-    contract = (
-        RECOVERY_SPEC_CONTRACT if source_changed
-        else RESOURCE_RECOVERY_SPEC_CONTRACT
-    )
-    return with_content_hash({
+    payload: dict[str, Any] = {
         "contract": contract, "schema_version": 1,
         "scope_spec_path": str(scope_path),
         "scope_spec_sha256": scope["content_hash"],
@@ -143,7 +250,17 @@ def build_recovery_spec(
         "scientific_spec_unchanged": True,
         "completed_outputs_preserved": True,
         "final_test_accessed": False,
-    })
+    }
+    if contract == MAPPED_IDENTITY_RECOVERY_SPEC_CONTRACT:
+        payload.update({
+            "execution_repair": execution_repair,
+            "authorization_phrase": authorization_phrase,
+            "semantic_source_changes": semantic_changes,
+            "mapped_identity_repair_evidence": repair_evidence,
+            "semantic_source_unchanged": False,
+            "repair_is_execution_only": True,
+        })
+    return with_content_hash(payload)
 
 
 def recovery_command_plan(spec: Mapping[str, Any]) -> dict[str, Any]:
@@ -190,7 +307,10 @@ def recovery_command_plan(spec: Mapping[str, Any]) -> dict[str, Any]:
 
 def validate_recovery_spec(value: Mapping[str, Any]) -> str:
     contract = str(value.get("contract"))
-    if contract not in {RECOVERY_SPEC_CONTRACT, RESOURCE_RECOVERY_SPEC_CONTRACT}:
+    if contract not in {
+        RECOVERY_SPEC_CONTRACT, RESOURCE_RECOVERY_SPEC_CONTRACT,
+        MAPPED_IDENTITY_RECOVERY_SPEC_CONTRACT,
+    }:
         raise ValueError("HCWDL-UB-FULL3 recovery contract differs")
     digest = validate_content_hash(
         value, expected_contract=contract, expected_schema_version=1,
@@ -203,6 +323,11 @@ def validate_recovery_spec(value: Mapping[str, Any]) -> str:
         != list(value.get("task_ids", []))
     ):
         raise ValueError("HCWDL-UB-FULL3 recovery semantics differ")
+    if contract == MAPPED_IDENTITY_RECOVERY_SPEC_CONTRACT and (
+        value.get("semantic_source_unchanged") is not False
+        or value.get("repair_is_execution_only") is not True
+    ):
+        raise ValueError("HCWDL-UB-FULL3 mapped-identity recovery scope differs")
     if build_recovery_spec(
         scope_spec_path=value["scope_spec_path"],
         submission_ledger_path=value["submission_ledger_path"],
@@ -210,6 +335,8 @@ def validate_recovery_spec(value: Mapping[str, Any]) -> str:
         recovery_root=value["recovery_root"], project_dir=value["project_dir"],
         source_commit=value["source_commit"],
         resource_overrides=value.get("resource_overrides"),
+        execution_repair=value.get("execution_repair"),
+        authorization_phrase=value.get("authorization_phrase"),
     ) != value:
         raise ValueError("HCWDL-UB-FULL3 recovery evidence drifted")
     return digest
@@ -228,7 +355,9 @@ def validate_recovery_command_plan(
 
 
 __all__ = [
-    "RECOVERY_COMMAND_PLAN_CONTRACT", "RESOURCE_RECOVERY_SPEC_CONTRACT",
+    "MAPPED_IDENTITY_REPAIR", "MAPPED_IDENTITY_REPAIR_PHRASE",
+    "MAPPED_IDENTITY_REPAIR_SEMANTIC_FILES", "RECOVERY_COMMAND_PLAN_CONTRACT",
+    "RESOURCE_RECOVERY_SPEC_CONTRACT",
     "build_recovery_spec", "recovery_command_plan",
     "validate_recovery_command_plan", "validate_recovery_spec",
 ]

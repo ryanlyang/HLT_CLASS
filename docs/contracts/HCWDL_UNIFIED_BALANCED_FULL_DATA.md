@@ -15,6 +15,14 @@ must equal the split inventory. The final-test count is recorded, but ordinary
 access is exactly zero. A final-test path, assignment, coupling, cache, or
 metric is forbidden in this contract family.
 
+For an `all_rows: true` row selection, "all rows" means all authenticated
+*mapped* identities, not every raw ROOT entry. The complete assignment shard
+entry index is the immutable population carrier used by scale calibration,
+coupling construction, and coupling audits. The compact row-selection record
+independently authorizes that population and the split inventory supplies its
+expected count. Raw entries absent from the assignment manifest must never be
+read as selected coupling rows.
+
 ## Scientific registry
 
 The registry contains exactly 38 fresh fits:
@@ -66,3 +74,14 @@ Changing the row population, graph, arm weights, rung coordinates, pass count,
 checkpoint policy, endpoint construction, target routing, seeds, or final-test
 boundary is a scientific version change. Resource recovery may only increase
 CPU, RAM, or walltime while preserving GPU class and all scientific hashes.
+
+The one classified execution repair
+`all_mapped_assignment_identity_filter_v1` may change only
+`hcwdl_upper_builder.py`, the full-data recovery module, and this family's
+contract constants. It is authorized only when a completed full-data
+assignment lock proves exact train/validation mapped coverage and the failed
+closure begins at scale calibration. Its recovery spec uses
+`HCWDL_UNIFIED_BALANCED_FULL_MAPPED_IDENTITY_RECOVERY_SPEC/v1`, binds
+`HCWDL_UNIFIED_BALANCED_FULL_MAPPED_IDENTITY_REPAIR_EVIDENCE/v1`, preserves
+the completed assignment artifacts, and leaves every scientific spec, row
+identity, graph, recipe, seed, endpoint, and final-test boundary unchanged.

@@ -33,7 +33,7 @@ from .hcwdl_upper_coupling import (
     build_switch_calibration, couple_partition, edit_is_active, endpoint_cost,
     validate_scale_calibration, validate_switch_calibration,
 )
-from .highcov_cache import DenseAssignmentStore
+from .highcov_cache import DenseAssignmentStore, load_assignment_shard
 from .repair import (
     FULL_VALIDITY_GROUPS, HIGHCOV_SHELL_EXACT_FAMILY, build_alpha_repaired_inputs,
     full_endpoint_required_branches,
@@ -84,21 +84,79 @@ def _prepared_partitions(
 
 def _selected_source_chunks(
     *, split_manifest: Mapping[str, Any], selection: RowSelection,
-    data_root: str | Path, role: str, source_index: int, step_size: int,
+    assignments: DenseAssignmentStore, data_root: str | Path, role: str,
+    source_index: int, step_size: int,
 ):
+    """Yield the assignment-locked selected population for one source.
+
+    ``RowSelection.all_rows`` means every *mapped* row in the split, not every
+    raw ROOT entry.  Bounded selections encode their mapped identities
+    explicitly, whereas the all-mapped representation deliberately omits that
+    redundant multi-million-entry list.  The dense assignment shard is the
+    authenticated identity index common to both representations, so coupling
+    consumers use it as the population carrier and use ``RowSelection`` as an
+    independent authorization check.
+    """
+
     records = role_records(split_manifest, role)
     if role not in {"train", "validation"} or not 0 <= source_index < len(records):
         raise ValueError("HCWDL-UJ source role/index differs")
     record = records[source_index]
+    matching = [
+        row for row in assignments.manifest.get("shards", ())
+        if str(row.get("source_path")) == record.path
+    ]
+    if len(matching) != 1:
+        raise ValueError("HCWDL-UJ assignment source identity differs")
+    assignment_record = matching[0]
+    metadata, assignment_arrays = load_assignment_shard(
+        assignments.path.parent / str(assignment_record["metadata_path"]),
+    )
+    # Retain only the compact identity index.  ``DenseAssignmentStore.join``
+    # lazily owns the full ragged shard when endpoint rows are needed; keeping
+    # this temporary load alive would otherwise duplicate every assignment
+    # array for the duration of a full-source scan.
+    assignment_entries = np.asarray(
+        assignment_arrays["entries"], dtype=np.int64,
+    ).copy()
+    if (
+        metadata.get("content_hash") != assignment_record.get("metadata_sha256")
+        or metadata.get("source_path") != record.path
+        or int(assignment_record.get("rows", -1)) != len(assignment_entries)
+        or (
+            len(assignment_entries) > 1
+            and np.any(assignment_entries[1:] <= assignment_entries[:-1])
+        )
+    ):
+        raise ValueError("HCWDL-UJ assignment source-entry index differs")
+    del assignment_arrays, metadata
+    expected = selection.source_rows(record.path)
+    if expected < 0:
+        expected = record.mapped_entries
+    if len(assignment_entries) != expected:
+        raise ValueError("HCWDL-UJ assignment/selection source coverage differs")
+
+    observed = 0
     for chunk in iterate_projected_chunks(
         (Path(data_root) / record.path,), coupling_branch_allowlist(),
         data_root=data_root, role=role, step_size=step_size,
     ):
-        entries = np.arange(chunk.entry_start, chunk.entry_stop, dtype=np.int64)
-        keep = selection.mask(chunk.source_path, entries)
-        indexes = np.flatnonzero(keep)
-        if len(indexes):
-            yield record, chunk.source_path, entries[indexes], _slice(chunk.arrays, indexes)
+        if chunk.source_path != record.path:
+            raise ValueError("HCWDL-UJ streamed source identity differs")
+        left = int(np.searchsorted(assignment_entries, chunk.entry_start, side="left"))
+        right = int(np.searchsorted(assignment_entries, chunk.entry_stop, side="left"))
+        entries = assignment_entries[left:right]
+        if not len(entries):
+            continue
+        if not np.all(selection.mask(chunk.source_path, entries)):
+            raise ValueError("HCWDL-UJ assignment identity is outside row selection")
+        indexes = entries - int(chunk.entry_start)
+        if np.any(indexes < 0) or np.any(indexes >= chunk.entry_stop - chunk.entry_start):
+            raise RuntimeError("HCWDL-UJ assignment/chunk join differs")
+        observed += len(entries)
+        yield record, chunk.source_path, entries, _slice(chunk.arrays, indexes)
+    if observed != len(assignment_entries):
+        raise ValueError("HCWDL-UJ assignment identities are absent from ROOT source")
 
 
 def _calibrate_source_worker(
@@ -117,8 +175,9 @@ def _calibrate_source_worker(
     accumulator = ScaleAccumulator(); observed = 0; identity_digest = hashlib.sha256()
     source_path = role_records(split_manifest, "train")[source_index].path
     for _, actual_source, entries, arrays in _selected_source_chunks(
-        split_manifest=split_manifest, selection=selection, data_root=data_root,
-        role="train", source_index=source_index, step_size=step_size,
+        split_manifest=split_manifest, selection=selection, assignments=store,
+        data_root=data_root, role="train", source_index=source_index,
+        step_size=step_size,
     ):
         if actual_source != source_path:
             raise ValueError("HCWDL-UJ calibration source identity differs")
@@ -235,8 +294,9 @@ def build_coupling_source(
     records = role_records(split_manifest, role); record = records[source_index]
     entries_out: list[int] = []; edits_out: list[tuple[ResidualEdit, ...]] = []
     for _, source_path, entries, arrays in _selected_source_chunks(
-        split_manifest=split_manifest, selection=selection, data_root=data_root,
-        role=role, source_index=source_index, step_size=step_size,
+        split_manifest=split_manifest, selection=selection, assignments=store,
+        data_root=data_root, role=role, source_index=source_index,
+        step_size=step_size,
     ):
         assignment, _ = store.join(source_path, entries)
         partitions, _, _ = _prepared_partitions(arrays, assignment)
@@ -619,8 +679,9 @@ def _audit_source_worker(arguments: tuple[Any, ...]) -> dict[str, Any]:
     sample_heap: list[tuple[int, str, str]] = []
     observed = 0
     for _, source_path, entries, arrays in _selected_source_chunks(
-        split_manifest=split_manifest, selection=selection, data_root=data_root,
-        role=role, source_index=source_index, step_size=step_size,
+        split_manifest=split_manifest, selection=selection,
+        assignments=assignments, data_root=data_root, role=role,
+        source_index=source_index, step_size=step_size,
     ):
         if source_path != record.path:
             raise ValueError("HCWDL-UJ audit source identity differs")
@@ -890,8 +951,9 @@ def _audit_sample_source_worker(arguments: tuple[Any, ...]) -> dict[str, Any]:
     mismatches = 0
     sampled_displacement = {"factorized": {}, "joint": {}}
     for _, source_path, entries, arrays in _selected_source_chunks(
-        split_manifest=split_manifest, selection=selection, data_root=data_root,
-        role=role, source_index=source_index, step_size=step_size,
+        split_manifest=split_manifest, selection=selection,
+        assignments=assignments, data_root=data_root, role=role,
+        source_index=source_index, step_size=step_size,
     ):
         if source_path != record.path:
             raise ValueError("HCWDL-UJ sample-audit source identity differs")
@@ -1054,8 +1116,9 @@ def _audit_full_roles_serial_reference(
         expected[role] = selection.rows; observed[role] = 0
         for source_index, _record in enumerate(role_records(split_manifest, role)):
             for _, source_path, entries, arrays in _selected_source_chunks(
-                split_manifest=split_manifest, selection=selection, data_root=data_root,
-                role=role, source_index=source_index, step_size=step_size,
+                split_manifest=split_manifest, selection=selection,
+                assignments=assignments, data_root=data_root, role=role,
+                source_index=source_index, step_size=step_size,
             ):
                 mapping, confidence = assignments.join(source_path, entries)
                 edit_rows = [couplings.get(source_path, int(entry)).edits for entry in entries]
@@ -1286,8 +1349,9 @@ def _audit_full_roles_serial_reference(
         wanted = sample_expected[role]
         for source_index, _record in enumerate(role_records(split_manifest, role)):
             for _, source_path, entries, arrays in _selected_source_chunks(
-                split_manifest=split_manifest, selection=selection, data_root=data_root,
-                role=role, source_index=source_index, step_size=step_size,
+                split_manifest=split_manifest, selection=selection,
+                assignments=assignments, data_root=data_root, role=role,
+                source_index=source_index, step_size=step_size,
             ):
                 selected = [index for index, entry in enumerate(entries) if f"{source_path}::tree::{int(entry)}" in wanted]
                 if not selected:

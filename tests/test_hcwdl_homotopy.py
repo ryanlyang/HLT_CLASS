@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import time
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -57,6 +58,7 @@ from hlt_classification.scouting.hcwdl_homotopy_waiver import (
     validate_operational_waiver,
 )
 from hlt_classification.scouting import hcwdl_homotopy_reporting as homotopy_reporting
+from hlt_classification.scouting import hcwdl_upper_builder as upper_builder
 from hlt_classification.scouting.engine import (
     PMARD_PREEMPTION_EVENT_CONTRACT, PMARD_PREEMPTION_EVENT_VERSION,
     PMARD_TRAINING_REPORT_CONTRACT, PMARD_TRAINING_REPORT_VERSION,
@@ -410,6 +412,119 @@ def test_prepared_endpoint_batches_are_legacy_exact_and_convert_once(
     }
     assert set(calls) == expected_branches
     assert set(calls.values()) == {1}
+
+
+def test_all_mapped_coupling_stream_uses_assignment_identity_population(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """All mapped rows exclude raw ROOT entries absent from assignments."""
+
+    source_path = "sample/data.root"
+    record = SimpleNamespace(path=source_path, mapped_entries=3)
+    assignments = SimpleNamespace(
+        path=tmp_path / "assignment_manifest.json",
+        manifest={
+            "shards": [{
+                "source_path": source_path,
+                "metadata_path": "assignments/source.json",
+                "metadata_sha256": H,
+                "rows": 3,
+            }],
+        },
+    )
+    assignment_entries = np.asarray([0, 2, 5], np.int64)
+    monkeypatch.setattr(upper_builder, "role_records", lambda manifest, role: [record])
+    monkeypatch.setattr(
+        upper_builder,
+        "load_assignment_shard",
+        lambda path: (
+            {"content_hash": H, "source_path": source_path},
+            {"entries": assignment_entries},
+        ),
+    )
+    chunks = (
+        SimpleNamespace(
+            source_path=source_path, entry_start=0, entry_stop=4,
+            arrays={"value": np.asarray([10, 11, 12, 13], np.int64)},
+        ),
+        SimpleNamespace(
+            source_path=source_path, entry_start=4, entry_stop=7,
+            arrays={"value": np.asarray([14, 15, 16], np.int64)},
+        ),
+    )
+    monkeypatch.setattr(
+        upper_builder, "iterate_projected_chunks", lambda *args, **kwargs: iter(chunks),
+    )
+
+    class AllMappedSelection:
+        @staticmethod
+        def source_rows(path: str) -> int:
+            assert path == source_path
+            return -1
+
+        @staticmethod
+        def mask(path: str, entries: np.ndarray) -> np.ndarray:
+            assert path == source_path
+            return np.ones(len(entries), np.bool_)
+
+    selected = list(upper_builder._selected_source_chunks(
+        split_manifest={}, selection=AllMappedSelection(),
+        assignments=assignments, data_root=tmp_path, role="train",
+        source_index=0, step_size=4,
+    ))
+    assert [row[2].tolist() for row in selected] == [[0, 2], [5]]
+    assert [row[3]["value"].tolist() for row in selected] == [[10, 12], [15]]
+
+
+def test_coupling_stream_rejects_assignment_outside_bounded_selection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_path = "sample/data.root"
+    record = SimpleNamespace(path=source_path, mapped_entries=2)
+    assignments = SimpleNamespace(
+        path=tmp_path / "assignment_manifest.json",
+        manifest={
+            "shards": [{
+                "source_path": source_path,
+                "metadata_path": "assignments/source.json",
+                "metadata_sha256": H,
+                "rows": 2,
+            }],
+        },
+    )
+    monkeypatch.setattr(upper_builder, "role_records", lambda manifest, role: [record])
+    monkeypatch.setattr(
+        upper_builder,
+        "load_assignment_shard",
+        lambda path: (
+            {"content_hash": H, "source_path": source_path},
+            {"entries": np.asarray([0, 2], np.int64)},
+        ),
+    )
+    monkeypatch.setattr(
+        upper_builder,
+        "iterate_projected_chunks",
+        lambda *args, **kwargs: iter((SimpleNamespace(
+            source_path=source_path, entry_start=0, entry_stop=3,
+            arrays={"value": np.asarray([10, 11, 12], np.int64)},
+        ),)),
+    )
+
+    class DriftedSelection:
+        @staticmethod
+        def source_rows(path: str) -> int:
+            return 2
+
+        @staticmethod
+        def mask(path: str, entries: np.ndarray) -> np.ndarray:
+            return entries == 0
+
+    with pytest.raises(ValueError, match="outside row selection"):
+        list(upper_builder._selected_source_chunks(
+            split_manifest={}, selection=DriftedSelection(),
+            assignments=assignments, data_root=tmp_path, role="train",
+            source_index=0, step_size=4,
+        ))
 
 
 def test_parallel_view_blocks_preserve_submission_order(

@@ -1,5 +1,72 @@
 # Current Handoff
 
+## HCWDL full-data mapped-identity preprocessing repair (2026-08-15)
+
+The all-mapped FULL3 foundation at source commit
+`8403b1a1c3c0e3bdaef9d63a858163a1922d85fb` completed its complete
+train/validation assignment prefix and assignment lock (job `87461`), then
+scale-calibration job `87462` failed on raw ROOT entry
+`H0HpHm_mixed_new/dnnTuples_nanov15_0000.root::46`. That entry is absent
+from the authenticated assignment shard because it is not in the mapped
+population. The compact `all_rows: true` row selection had been interpreted
+by coupling preprocessing as every raw ROOT entry instead of every
+authenticated mapped entry. Bounded 300k selections store explicit entry
+lists and therefore did not expose this full-data-only execution bug.
+
+`hcwdl_upper_builder._selected_source_chunks` now uses each validated dense
+assignment shard's sorted entry array as the selected-population carrier,
+checks its exact per-source count against the split/selection inventory, and
+independently proves that every entry is authorized by `RowSelection` and
+present in the streamed ROOT source. Scale calibration, coupling construction,
+full audit, and sampled audit all use this one path. Other training/data
+streams were reviewed and already apply `baseline_mask & labels >= 0` before
+the row-selection mask, so no second all-mapped leak was found. The fix is
+label-free and does not change assignment construction, row identities,
+coupling science, graph, losses, seeds, endpoints, or final-test access.
+
+A classified execution-only recovery was added because ordinary recovery
+correctly rejects changed semantic source. Its exact identities are
+`HCWDL_UNIFIED_BALANCED_FULL_MAPPED_IDENTITY_REPAIR_EVIDENCE/v1` and
+`HCWDL_UNIFIED_BALANCED_FULL_MAPPED_IDENTITY_RECOVERY_SPEC/v1`, with repair
+classification `all_mapped_assignment_identity_filter_v1`. It is authorized
+only for a foundation closure beginning at `scale_calibration`, requires the
+completed all-mapped assignment lock, preserves that prefix, and fails closed
+unless the only changed semantic files are `hcwdl_upper_builder.py`, the
+FULL3 recovery module, and the FULL3 contract constants. The recovered
+foundation starts at scale calibration. After its foundation lock completes,
+the three unchanged scientific arms must be launched from the original
+source-bound worktree; they do not execute the repaired preprocessing path.
+
+Files changed for this repair:
+
+- `src/hlt_classification/scouting/hcwdl_upper_builder.py`;
+- `src/hlt_classification/scouting/hcwdl_unified_balanced_full_recovery.py`;
+- `src/hlt_classification/scouting/hcwdl_unified_balanced_full_contracts.py`;
+- `scripts/create_hcwdl_unified_balanced_full_recovery.py`;
+- `tests/test_hcwdl_homotopy.py` and
+  `tests/test_hcwdl_unified_balanced_full.py`;
+- the FULL3 reusable contract, runbook, and this handoff.
+
+Local evidence after the final review:
+
+- direct all-mapped regression proves raw entries absent from assignments are
+  excluded; a bounded-selection regression rejects assignment drift;
+- recovery closure/evidence regression starts at scale calibration, reuses the
+  exact assignment lock, and rejects any fourth semantic-file change;
+- post-review homotopy/unified-balanced/full-data focused suite: 91 passed in
+  76.53 seconds;
+- complete repository suite: 470 passed in 290.96 seconds, with the 14
+  existing Matplotlib/Pyparsing deprecation warnings;
+- recovery create/submit CLI help, focused Python compilation, the two new
+  contract identities, and `git diff --check` passed.
+
+No external donor file or donor commit is involved. No local SSH, Slurm
+submission/cancellation, ROOT write, final-test access, or Tigris execution of
+the repaired code occurred. Exact next task: commit and push the repair, make
+a clean detached Tigris recovery worktree, authenticate the failed foundation
+ledger/monitor, submit the classified closure beginning at scale calibration,
+and bind a replacement arm autolaunch to the recovered foundation-lock job.
+
 ## HCWDL unified-balanced all-mapped three-arm scale-up (2026-08-15)
 
 The implementation-authoritative

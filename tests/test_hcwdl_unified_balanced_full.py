@@ -27,9 +27,11 @@ from hlt_classification.scouting.hcwdl_unified_balanced_full_campaign import (
     validate_foundation_campaign,
 )
 from hlt_classification.scouting.hcwdl_unified_balanced_full_contracts import (
+    MAPPED_IDENTITY_RECOVERY_SPEC_CONTRACT,
     assignment_lock_payload, foundation_lock_payload, validate_assignment_lock,
     validate_campaign_submission, validate_foundation_lock, validate_graph,
 )
+from hlt_classification.scouting import hcwdl_unified_balanced_full_recovery as full_recovery
 from hlt_classification.scouting.hcwdl_unified_balanced_full_graph import (
     ARM_IDS, ARM_WEIGHTS, FACTORIZED_NODES, META_REGISTRY, arm_registry,
     idealized_u000_ancestry, training_registry_for_arm,
@@ -312,3 +314,103 @@ def test_full3_creation_dry_run_and_recovery_closure(
     assert "train_D100direct" not in recovery["task_ids"]
     plan = recovery_command_plan(recovery)
     assert validate_recovery_command_plan(plan, recovery_spec=recovery) == plan["content_hash"]
+
+    selection = with_content_hash({
+        "contract": "hlt_classification_pmard_row_selection_v1",
+        "schema_version": 1,
+        "split_manifest_sha256": spec["parents"]["split_manifest_sha256"],
+        "seed": 1337,
+        "roles": {
+            role: {
+                "all_rows": True,
+                "rows": int(spec["role_counts"][role]),
+                "class_counts": list(split_records[role].class_counts),
+                "sources": [{
+                    "path": split_records[role].path,
+                    "rows": split_records[role].mapped_entries,
+                }],
+            }
+            for role in ("train", "validation")
+        },
+        "selection_rule": "per_class_smallest_identity_sha256_rank_v1",
+        "access_lock_sha256": {},
+    })
+    selection_path = Path(spec["artifact_paths"]["selection_manifest"])
+    write_immutable_json(selection_path, selection)
+    mapped_lock = assignment_lock_payload(
+        foundation_spec_sha256=spec["content_hash"],
+        role_rows={
+            role: int(spec["role_counts"][role])
+            for role in ("train", "validation")
+        },
+        parents={"row_selection_sha256": selection["content_hash"]},
+        manifests={"train": H, "validation": H},
+        recomputation_audits={"train": H, "validation": H},
+        dustbin_fractions={"train": .08, "validation": .08},
+    )
+    write_immutable_json(foundation_root / "locks/assignment.json", mapped_lock)
+
+    foundation_dry = load_json(tmp_path / "foundation_dry.json")
+    foundation_live = build_submission_ledger(
+        campaign_spec_sha256=spec["content_hash"],
+        jobs={
+            task: str(91000 + index)
+            for index, task in enumerate(foundation_dry["jobs"])
+        },
+        commands=foundation_dry["commands"], dry_run=False,
+    )
+    foundation_live_path = tmp_path / "foundation_live.json"
+    write_immutable_json(foundation_live_path, foundation_live)
+    foundation_states = {
+        job: "COMPLETED" for job in foundation_live["jobs"].values()
+    }
+    foundation_states[foundation_live["jobs"]["scale_calibration"]] = "FAILED"
+    foundation_monitor = build_monitor_report(
+        foundation_live, states_by_job_id=foundation_states,
+    )
+    foundation_monitor_path = tmp_path / "foundation_monitor.json"
+    write_immutable_json(foundation_monitor_path, foundation_monitor)
+
+    repaired_semantic = dict(spec["semantic_source_sha256"])
+    for name in full_recovery.MAPPED_IDENTITY_REPAIR_SEMANTIC_FILES:
+        repaired_semantic[name] = "b" * 64
+    monkeypatch.setattr(
+        full_recovery, "semantic_source_hashes", lambda _project: repaired_semantic,
+    )
+    execution_recovery = build_recovery_spec(
+        scope_spec_path=foundation_root / "foundation_spec.json",
+        submission_ledger_path=foundation_live_path,
+        monitor_report_path=foundation_monitor_path,
+        recovery_root=tmp_path / "mapped_identity_recovery",
+        project_dir=project, source_commit="e" * 40,
+        execution_repair=full_recovery.MAPPED_IDENTITY_REPAIR,
+        authorization_phrase=full_recovery.MAPPED_IDENTITY_REPAIR_PHRASE,
+    )
+    assert execution_recovery["contract"] == MAPPED_IDENTITY_RECOVERY_SPEC_CONTRACT
+    assert execution_recovery["task_ids"][0] == "scale_calibration"
+    assert execution_recovery["mapped_identity_repair_evidence"][
+        "assignment_lock_sha256"
+    ] == mapped_lock["content_hash"]
+    assert validate_recovery_spec(execution_recovery) == execution_recovery["content_hash"]
+    execution_plan = recovery_command_plan(execution_recovery)
+    assert validate_recovery_command_plan(
+        execution_plan, recovery_spec=execution_recovery,
+    ) == execution_plan["content_hash"]
+
+    unexpected_semantic = dict(repaired_semantic)
+    unexpected_semantic[
+        "src/hlt_classification/scouting/engine.py"
+    ] = "c" * 64
+    monkeypatch.setattr(
+        full_recovery, "semantic_source_hashes", lambda _project: unexpected_semantic,
+    )
+    with pytest.raises(ValueError, match="unexpected source"):
+        build_recovery_spec(
+            scope_spec_path=foundation_root / "foundation_spec.json",
+            submission_ledger_path=foundation_live_path,
+            monitor_report_path=foundation_monitor_path,
+            recovery_root=tmp_path / "invalid_mapped_identity_recovery",
+            project_dir=project, source_commit="e" * 40,
+            execution_repair=full_recovery.MAPPED_IDENTITY_REPAIR,
+            authorization_phrase=full_recovery.MAPPED_IDENTITY_REPAIR_PHRASE,
+        )
