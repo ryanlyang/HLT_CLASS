@@ -14,11 +14,12 @@ def main()->int:
  for line in raw.splitlines():
   fields=line.split("|")
   if len(fields)>=2 and fields[0] in ids and "." not in fields[0]:states[fields[0]]=fields[1]
- tasks={row["task_id"]:row for row in spec["tasks"]};validity={}
+ tasks={row["task_id"]:row for row in spec["tasks"]};validity={};attestation_root=spec.get("campaign_root",spec.get("recovery_root"))
+ if not attestation_root:raise ValueError("HCWDL-UB-FULL3 monitor scope root differs")
  for task,job in ledger["jobs"].items():
   count=int(tasks[task]["array_count"]);indexes=[None] if count==1 else list(range(count));ok=True
   for index in indexes:
-   path=task_attestation_path(spec["campaign_root"],task,index)
+   path=task_attestation_path(attestation_root,task,index)
    if not path.is_file():ok=False;continue
    try:validate_task_attestation(load_json(path),campaign_spec_sha256=spec["content_hash"],task_id=task,array_index=index)
    except Exception:ok=False

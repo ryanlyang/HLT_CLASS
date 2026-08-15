@@ -55,8 +55,9 @@ def build_balanced_sidecar_for_source(
     base_lookup = {int(entry): row for row, entry in enumerate(base["entries"])}
     observed: set[int] = set(); placement_rows = [None] * len(base["entries"])
     for _, source_path, entries, arrays in _selected_source_chunks(
-        split_manifest=split_manifest, selection=selection, data_root=data_root,
-        role=role, source_index=source_index, step_size=step_size,
+        split_manifest=split_manifest, selection=selection,
+        assignments=assignments, data_root=data_root, role=role,
+        source_index=source_index, step_size=step_size,
     ):
         if source_path != record.path:
             raise ValueError("HCWDL-UB selected source identity differs")

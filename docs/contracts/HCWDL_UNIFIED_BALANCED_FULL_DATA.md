@@ -85,3 +85,25 @@ closure begins at scale calibration. Its recovery spec uses
 `HCWDL_UNIFIED_BALANCED_FULL_MAPPED_IDENTITY_REPAIR_EVIDENCE/v1`, preserves
 the completed assignment artifacts, and leaves every scientific spec, row
 identity, graph, recipe, seed, endpoint, and final-test boundary unchanged.
+
+A second, narrowly classified execution repair is permitted only after the
+mapped-identity recovery has completed the coupling audit, coupling lock, and
+balanced-switch configuration, and both balanced-sidecar arrays fail at their
+first call into the assignment-locked selected-row iterator. Its
+classification is `balanced_assignment_store_wiring_v1`. The only authorized
+semantic changes are `hcwdl_unified_balanced_builder.py`, the FULL3 recovery
+module, and this family's contract constants. The repaired builder passes the
+already authenticated `DenseAssignmentStore` to the common selected-row
+iterator; it does not change any row, residual edit, mass, coordinate, graph,
+loss, seed, or endpoint.
+
+This repeated recovery uses
+`HCWDL_UNIFIED_BALANCED_FULL_BALANCED_WIRING_RECOVERY_SPEC/v1` and binds
+`HCWDL_UNIFIED_BALANCED_FULL_BALANCED_WIRING_REPAIR_EVIDENCE/v1`. It
+authenticates the canonical mapped-identity recovery spec and its live
+ledger/monitor, requires the failed closure to begin with both
+`train_balanced` and `validation_balanced`, and binds the existing coupling
+lock plus balanced-switch configuration. It schedules only that exact
+failed/downstream closure. The original scientific foundation spec remains
+the workflow scope, while the two recovery specifications provide an
+immutable source/scheduler lineage chain.

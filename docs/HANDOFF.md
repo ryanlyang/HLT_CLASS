@@ -1,5 +1,40 @@
 # Current Handoff
 
+## HCWDL full-data balanced-sidecar wiring repair (2026-08-15)
+
+The source-pinned mapped-identity recovery completed scale calibration, every
+train/validation residual-base and legacy-switch shard, both manifests, the
+exhaustive coupling audit, coupling lock, and balanced-switch configuration.
+Its `train_balanced` and `validation_balanced` arrays then failed uniformly in
+seconds. Review found one missed external caller of the corrected
+assignment-locked iterator: `build_balanced_sidecar_for_source()` constructed
+a validated `DenseAssignmentStore` but did not pass it to
+`_selected_source_chunks()`. The call now forwards that exact store. No data,
+coupling, coordinate, model, loss, or graph semantics changed.
+
+Because the failed ledger is itself a source-pinned mapped-identity recovery,
+ordinary recovery cannot safely describe the next execution. A versioned
+second-generation recovery now authenticates the original foundation, the
+canonical first recovery, its exact ledger and monitor, and the completed
+coupling lock/balanced configuration. It accepts only the three semantic-file
+changes for `balanced_assignment_store_wiring_v1`, requires the closure to
+begin with `train_balanced` and `validation_balanced`, and preserves the full
+completed coupling prefix. Its contracts are
+`HCWDL_UNIFIED_BALANCED_FULL_BALANCED_WIRING_REPAIR_EVIDENCE/v1` and
+`HCWDL_UNIFIED_BALANCED_FULL_BALANCED_WIRING_RECOVERY_SPEC/v1`.
+
+Files changed for this repair are the balanced builder, FULL3 recovery and
+contract modules, recovery creation and monitor CLIs, the FULL3 regression
+test, reusable contract, runbook, and this handoff. No external donor is
+involved. Final local evidence: the direct wiring regression and synthetic
+repeated-recovery closure pass; the homotopy/unified-balanced/FULL3 focused
+suite passes 92/92 in 62.60 seconds; and the complete repository suite passes
+471/471 in 262.41 seconds with 14 existing Matplotlib/Pyparsing warnings plus
+one local pytest-cache permission warning. Recovery create/monitor/submit/run
+help, focused compilation, contract-identity checks, Markdown links, and
+`git diff --check` pass. No Slurm mutation or final-test access was performed
+locally.
+
 ## HCWDL full-data mapped-identity preprocessing repair (2026-08-15)
 
 The all-mapped FULL3 foundation at source commit

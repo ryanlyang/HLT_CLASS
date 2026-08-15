@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import subprocess
 import sys
 
+import numpy as np
 import pytest
 
 from hlt_classification.data.cache_contracts import (
@@ -27,11 +28,13 @@ from hlt_classification.scouting.hcwdl_unified_balanced_full_campaign import (
     validate_foundation_campaign,
 )
 from hlt_classification.scouting.hcwdl_unified_balanced_full_contracts import (
+    BALANCED_WIRING_RECOVERY_SPEC_CONTRACT,
     MAPPED_IDENTITY_RECOVERY_SPEC_CONTRACT,
     assignment_lock_payload, foundation_lock_payload, validate_assignment_lock,
     validate_campaign_submission, validate_foundation_lock, validate_graph,
 )
 from hlt_classification.scouting import hcwdl_unified_balanced_full_recovery as full_recovery
+from hlt_classification.scouting import hcwdl_unified_balanced_builder as balanced_builder
 from hlt_classification.scouting.hcwdl_unified_balanced_full_graph import (
     ARM_IDS, ARM_WEIGHTS, FACTORIZED_NODES, META_REGISTRY, arm_registry,
     idealized_u000_ancestry, training_registry_for_arm,
@@ -44,6 +47,10 @@ from hlt_classification.scouting.hcwdl_unified_balanced_full_workflow import (
     _full_recipe,
 )
 from hlt_classification.scouting.hcwdl_unified_balanced_runner import DOMAINS
+from hlt_classification.scouting.hcwdl_unified_balanced_contracts import (
+    balanced_switch_config_payload,
+)
+from hlt_classification.scouting.hcwdl_upper_cache import build_coupling_lock
 from hlt_classification.scouting.highcov_resources import (
     resource_validation_report,
 )
@@ -51,6 +58,71 @@ from hlt_classification.scouting.splits import SourceFileRecord
 
 
 H = "a" * 64
+
+
+def test_balanced_sidecar_stream_receives_authenticated_assignment_store(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Guard the external caller of the assignment-locked row iterator."""
+
+    source_path = "sample.root"
+    store = SimpleNamespace(
+        join=lambda path, entries: (
+            np.full((len(entries), 200), -1, np.int16),
+            np.zeros((len(entries), 200), np.float32),
+        ),
+    )
+    monkeypatch.setattr(
+        balanced_builder, "load_base_shard", lambda path: (
+            {"role": "train", "source_path": source_path},
+            {
+                "entries": np.asarray([7], np.int64),
+                "row_offsets": np.asarray([0, 0], np.uint64),
+                **{
+                    name: np.empty(0, np.int64)
+                    for name in (
+                        "edit_kind", "source_native_offline_index",
+                        "target_hlt_slot", "target_kind",
+                        "target_native_offline_index", "cost_q", "mass_q",
+                    )
+                },
+            },
+        ),
+    )
+    monkeypatch.setattr(
+        balanced_builder, "role_records",
+        lambda manifest, role: [SimpleNamespace(path=source_path)],
+    )
+    monkeypatch.setattr(balanced_builder, "RowSelection", lambda *args, **kwargs: object())
+    monkeypatch.setattr(balanced_builder, "DenseAssignmentStore", lambda path: store)
+
+    def selected(*, assignments, **kwargs):
+        assert assignments is store
+        yield None, source_path, np.asarray([7], np.int64), {}
+
+    monkeypatch.setattr(balanced_builder, "_selected_source_chunks", selected)
+    monkeypatch.setattr(
+        balanced_builder, "_prepared_partitions",
+        lambda arrays, mapping: ([object()], None, None),
+    )
+    monkeypatch.setattr(
+        balanced_builder, "balanced_switch_placements",
+        lambda edits, **kwargs: (),
+    )
+    published = object()
+    monkeypatch.setattr(
+        balanced_builder, "publish_balanced_sidecar",
+        lambda *args, **kwargs: published,
+    )
+
+    assert balanced_builder.build_balanced_sidecar_for_source(
+        split_manifest={"content_hash": H}, selection_manifest={},
+        assignment_manifest=tmp_path / "assignments.json", data_root=tmp_path,
+        role="train", source_index=0,
+        base_metadata_path=tmp_path / "base.json",
+        switch_config_sha256=H, output_base=tmp_path / "balanced",
+        producer_commit="a" * 40,
+    ) is published
 
 
 def _primary_recipe() -> dict:
@@ -396,6 +468,101 @@ def test_full3_creation_dry_run_and_recovery_closure(
     assert validate_recovery_command_plan(
         execution_plan, recovery_spec=execution_recovery,
     ) == execution_plan["content_hash"]
+
+    # A later integration failure may be repaired from this recovery ledger
+    # without republishing the already authenticated coupling prefix.
+    parent_recovery_path = (
+        Path(execution_recovery["recovery_root"]) / "recovery_spec.json"
+    )
+    write_immutable_json(parent_recovery_path, execution_recovery)
+    execution_commands = {
+        row["task_id"]: row["command"]
+        for row in execution_plan["commands"]
+    }
+    execution_live = build_submission_ledger(
+        campaign_spec_sha256=execution_recovery["content_hash"],
+        jobs={
+            task: str(92000 + index)
+            for index, task in enumerate(execution_commands)
+        },
+        commands=execution_commands, dry_run=False,
+    )
+    execution_live_path = tmp_path / "mapped_identity_live.json"
+    write_immutable_json(execution_live_path, execution_live)
+    execution_states = {
+        job: "COMPLETED" for job in execution_live["jobs"].values()
+    }
+    for task in ("train_balanced", "validation_balanced"):
+        execution_states[execution_live["jobs"][task]] = "FAILED"
+    execution_monitor = build_monitor_report(
+        execution_live, states_by_job_id=execution_states,
+    )
+    execution_monitor_path = tmp_path / "mapped_identity_monitor.json"
+    write_immutable_json(execution_monitor_path, execution_monitor)
+
+    coupling = build_coupling_lock(
+        campaign_spec_sha256=spec["content_hash"],
+        coupling_config_sha256=H, scale_calibration_sha256=H,
+        switch_calibration_sha256=H, train_manifest_sha256=H,
+        validation_manifest_sha256=H, audit_sha256=H,
+    )
+    write_immutable_json(foundation_root / "locks/coupling.json", coupling)
+    balanced = balanced_switch_config_payload(
+        base_coupling_lock_sha256=coupling["content_hash"],
+    )
+    write_immutable_json(foundation_root / "balanced/config.json", balanced)
+
+    balanced_semantic = dict(repaired_semantic)
+    for name in full_recovery.BALANCED_WIRING_REPAIR_SEMANTIC_FILES:
+        balanced_semantic[name] = "d" * 64
+    monkeypatch.setattr(
+        full_recovery, "semantic_source_hashes", lambda _project: balanced_semantic,
+    )
+    balanced_recovery = build_recovery_spec(
+        scope_spec_path=foundation_root / "foundation_spec.json",
+        parent_recovery_spec_path=parent_recovery_path,
+        submission_ledger_path=execution_live_path,
+        monitor_report_path=execution_monitor_path,
+        recovery_root=tmp_path / "balanced_wiring_recovery",
+        project_dir=project, source_commit="f" * 40,
+        execution_repair=full_recovery.BALANCED_WIRING_REPAIR,
+        authorization_phrase=full_recovery.BALANCED_WIRING_REPAIR_PHRASE,
+    )
+    assert balanced_recovery["contract"] == BALANCED_WIRING_RECOVERY_SPEC_CONTRACT
+    assert balanced_recovery["task_ids"][:2] == [
+        "train_balanced", "validation_balanced",
+    ]
+    assert "scale_calibration" not in balanced_recovery["task_ids"]
+    assert balanced_recovery["balanced_wiring_repair_evidence"][
+        "coupling_lock_sha256"
+    ] == coupling["content_hash"]
+    assert balanced_recovery["balanced_wiring_repair_evidence"][
+        "balanced_switch_config_sha256"
+    ] == balanced["content_hash"]
+    assert validate_recovery_spec(balanced_recovery) == balanced_recovery["content_hash"]
+    balanced_plan = recovery_command_plan(balanced_recovery)
+    assert validate_recovery_command_plan(
+        balanced_plan, recovery_spec=balanced_recovery,
+    ) == balanced_plan["content_hash"]
+
+    unexpected_balanced = dict(balanced_semantic)
+    unexpected_balanced[
+        "src/hlt_classification/scouting/engine.py"
+    ] = "e" * 64
+    monkeypatch.setattr(
+        full_recovery, "semantic_source_hashes", lambda _project: unexpected_balanced,
+    )
+    with pytest.raises(ValueError, match="unexpected source"):
+        build_recovery_spec(
+            scope_spec_path=foundation_root / "foundation_spec.json",
+            parent_recovery_spec_path=parent_recovery_path,
+            submission_ledger_path=execution_live_path,
+            monitor_report_path=execution_monitor_path,
+            recovery_root=tmp_path / "invalid_balanced_wiring_recovery",
+            project_dir=project, source_commit="f" * 40,
+            execution_repair=full_recovery.BALANCED_WIRING_REPAIR,
+            authorization_phrase=full_recovery.BALANCED_WIRING_REPAIR_PHRASE,
+        )
 
     unexpected_semantic = dict(repaired_semantic)
     unexpected_semantic[

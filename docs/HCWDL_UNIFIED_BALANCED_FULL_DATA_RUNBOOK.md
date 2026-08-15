@@ -130,6 +130,25 @@ change the selected population. The recovery CLI requires:
 --authorization-phrase "AUTHORIZE HCWDL UB FULL3 ALL MAPPED IDENTITY EXECUTION REPAIR"
 ```
 
+The mapped-identity recovery may expose a separate integration-only miss if
+it completes `coupling_lock` and `balanced_config`, then both balanced-sidecar
+arrays fail at their first call into the corrected common iterator. Monitor
+the *canonical first recovery spec* and its live ledger, then create a
+repeated recovery with the original foundation spec as `--scope-spec` and the
+first recovery as `--parent-recovery-spec`. The exact authorization is:
+
+```text
+--execution-repair balanced_assignment_store_wiring_v1
+--authorization-phrase "AUTHORIZE HCWDL UB FULL3 BALANCED ASSIGNMENT WIRING EXECUTION REPAIR"
+```
+
+`monitor_hcwdl_unified_balanced_full.py` accepts both campaign specs and
+recovery specs; it reads task attestations from `campaign_root` or
+`recovery_root`, respectively. This second recovery must start with
+`train_balanced` and `validation_balanced`. It reuses the completed coupling
+lock and balanced configuration and does not repeat calibration, residual
+coupling construction, or the exhaustive coupling audit.
+
 After the recovery foundation lock completes, launch the arms from the
 original scientific worktree/commit named by `foundation_spec.json`. The arms
 do not execute the repaired preprocessing path, so retaining their original
