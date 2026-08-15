@@ -779,8 +779,16 @@ def scheduled_representation_loss(
         relation_coefficient = 0.0
     elif strategy == "RREL":
         if scaled_relation is None:
-            raise ValueError("RREL requires a relation component")
-        relation_value = torch.as_tensor(scaled_relation, device=jet.device).float()
+            if rel > 0:
+                raise ValueError("active RREL requires a relation component")
+            # Jet/set supervision begins two passes before the relation ramp.
+            # During that declared interval the relation term is identically
+            # zero and need not be constructed by the caller.
+            relation_value = torch.zeros_like(jet)
+        else:
+            relation_value = torch.as_tensor(
+                scaled_relation, device=jet.device,
+            ).float()
         common = js - 0.25 * rel
         jet_coefficient = 0.40 * common
         set_coefficient = 0.60 * common

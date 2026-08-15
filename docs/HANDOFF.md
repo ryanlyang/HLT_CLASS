@@ -164,6 +164,23 @@ passes. No committed resume generation or representation report was published
 by the failed jobs, so corrected execution again requires a fresh immutable
 source identity under the v1 recovery contract.
 
+The `e8df4690` retry confirmed durable direct-graph resume publication and
+advanced both representation students beyond the earlier boundary. RSET
+continued training; RREL failed during its first jet/set-only ramp interval.
+The frozen schedule activates jet/set representation KD after pass 2 and
+relation KD after pass 4. The component builder correctly omitted relation
+while its coefficient was exactly zero, but the lower-level RREL scheduler
+incorrectly required the relation tensor unconditionally. It now substitutes
+an exact zero only while the frozen relation ramp is zero and continues to
+fail closed if relation is absent once that ramp is active. Schedule-level and
+real `compute_node_loss` regressions cover the pre-relation interval and the
+active-relation rejection. Focused schedule/calibration/training/resume/direct
+coverage passes 70/70; the complete suite passes 968 tests with 9 expected
+Windows platform skips and 14 dependency warnings in 425.81 seconds.
+Compilation and `git diff --check` pass. The change affects neither the
+scientific coefficients nor RSET; it implements the already-declared staggered
+RREL ramp.
+
 ## HCWDL-U-RKD prerequisite bootstrap repair (2026-08-12)
 
 The first real Tigris preflight for commit `a407f056` found a valid completed

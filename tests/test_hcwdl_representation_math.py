@@ -359,6 +359,20 @@ def test_jet_unweighted_gram_orthogonality_and_exact_schedules():
     assert scheduled.scientific == pytest.approx(1.0)
     assert scheduled.total == pytest.approx(.10)
 
+    pre_relation = losses.scheduled_representation_loss(
+        strategy="RREL", effective_pass=3, scaled_jet=torch.tensor(2.),
+        scaled_set=torch.tensor(4.), orthogonality=torch.tensor(0.),
+    )
+    assert pre_relation.ramp_jet_set == pytest.approx(.25)
+    assert pre_relation.ramp_relation == 0
+    assert pre_relation.relation_coefficient == 0
+    assert pre_relation.scientific == pytest.approx(.8)
+    with pytest.raises(ValueError, match="active RREL requires"):
+        losses.scheduled_representation_loss(
+            strategy="RREL", effective_pass=5, scaled_jet=torch.tensor(2.),
+            scaled_set=torch.tensor(4.), orthogonality=torch.tensor(0.),
+        )
+
 
 def test_one_row_jet_gram_is_literal_zero():
     projection = nn.Linear(128, 128, bias=False); nn.init.eye_(projection.weight)

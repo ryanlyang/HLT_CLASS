@@ -479,6 +479,41 @@ def test_relation_uses_raw_contextual_states_and_ordinary_family_axis(
     assert float(backbone_gradient.norm()) > 0
 
 
+def test_rrel_jet_set_ramp_precedes_relation_construction(spectral_resources):
+    fixture = _fixture()
+    token_resources, relation_resources = spectral_resources
+    execution = resolve_node_execution("RREL_D90c")
+    model = initialize_representation_student(
+        "RREL_D90c", replicate_seed=1337, deployable_factory=TinyDeployable,
+        wrapper_factory=TinyStudent,
+    )
+    normalized = normalize_hlt_batch(_batch((0, 1), tokens=20))
+    features, vectors, mask, visible, family, labels = training_module._batch_tensors(
+        normalized, torch.device("cpu"),
+    )
+    surfaces = model.forward_hcwdl_surfaces(
+        features, vectors, mask, visible, family,
+    )
+    targets = training_module._target_tensors(
+        fixture.target_bank, normalized.identity_digests,
+        device=torch.device("cpu"), execution=execution,
+        shuffled_representation_joiner=None,
+    )
+    result = training_module.compute_node_loss(
+        execution=execution, model=model, surfaces=surfaces, labels=labels,
+        class_weights=torch.ones(15), privileged_targets=targets,
+        predecessor_logits=None,
+        calibration_scales={"jet": 1.0, "set": 1.0}, effective_pass=3.0,
+        token_resources=token_resources, relation_resources=relation_resources,
+    )
+    assert result.raw_components is not None
+    assert result.raw_components.relation is None
+    assert result.scheduled is not None
+    assert result.scheduled.ramp_jet_set > 0
+    assert result.scheduled.ramp_relation == 0
+    assert result.scheduled.relation_coefficient == 0
+
+
 def test_rrel_diagnostic_allocation_matches_frozen_equal_budget_schedule():
     zero = torch.zeros(())
     scaled = {"jet": torch.tensor(2.0), "set": torch.tensor(3.0), "relation": torch.tensor(5.0)}
