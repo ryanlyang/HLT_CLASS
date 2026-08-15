@@ -34,8 +34,10 @@ The plan remains the scientific authority.
 Artifacts use the `HCWDL_HOMOTOPY_REPRESENTATION_*/v2` contracts enumerated
 in the plan and implemented in
 `hcwdl_homotopy_representation_contracts.py`. The campaign imports an exact,
-completed U/J parent and reopens its coupling, coordinate, endpoint, graph,
-recipe, M0, TOFF, and complete factorized logit-control evidence.
+training-ready U/J parent and reopens its coupling, coordinate, endpoint,
+graph, recipe, M0, and TOFF evidence. Complete factorized logit-control reports
+and parent completion are required by the comparative aggregate, not by the
+two representation-training paths.
 
 Homotopy student views are reconstructed once per job into process-local RAM.
 No repaired particle dataset is durable. Target banks contain FP32 logits,

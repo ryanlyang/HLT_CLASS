@@ -230,6 +230,32 @@ def test_training_ready_parent_does_not_require_completion_or_logit_reports(
     assert evidence["logit"]["M1"]["expected_node_id"] == "M1F"
 
 
+def test_parent_campaign_dispatches_v1_and_v2_without_relabelling(monkeypatch):
+    from hlt_classification.scouting import hcwdl_homotopy_representation_campaign as module
+
+    calls = []
+    monkeypatch.setattr(
+        module, "_validate_parent_campaign_v1",
+        lambda value, *, executable: calls.append(("v1", executable)) or "1" * 64,
+    )
+    monkeypatch.setattr(
+        module, "_validate_consumed_parent_v2",
+        lambda value: calls.append(("v2", False)) or "2" * 64,
+    )
+
+    assert module.validate_parent_campaign({
+        "contract": "HCWDL_STRUCTURAL_FEATURE_PILOT_SPEC/v1",
+    }) == "1" * 64
+    assert module.validate_parent_campaign({
+        "contract": "HCWDL_STRUCTURAL_FEATURE_PILOT_SPEC/v2",
+    }) == "2" * 64
+    assert calls == [("v1", False), ("v2", False)]
+    with pytest.raises(ValueError, match="unsupported"):
+        module.validate_parent_campaign({
+            "contract": "HCWDL_STRUCTURAL_FEATURE_PILOT_SPEC/v3",
+        })
+
+
 def test_command_plan_uses_locked_tigris_envelope_and_exact_dependencies(tmp_path):
     spec = with_content_hash({
         "contract": CAMPAIGN_SPEC_CONTRACT, "schema_version": SCHEMA_VERSION,

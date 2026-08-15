@@ -1,5 +1,29 @@
 # Current Handoff
 
+## HCWDL-U-RKD U/J v2 parent compatibility (2026-08-15)
+
+The first 300k autolaunch preparation correctly located the active U/J pilot
+at `hcwdl_uj_v2_pilot_80096d75_auto_r1`, then failed closed before campaign
+creation because HCWDL-U-RKD still dispatched every parent through the frozen
+U/J v1 campaign validator.  The active twenty-point U/J parent is an exact
+`HCWDL_STRUCTURAL_FEATURE_PILOT_SPEC/v2` artifact; changing its contract label
+or weakening content-hash validation would be invalid.
+
+HCWDL-U-RKD now dispatches v1 and v2 parents explicitly.  The existing v1
+validator remains unchanged.  The v2 consumer validator authenticates the
+exact campaign envelope, sealed role boundary, split, selection, base recipe,
+all assignment manifests, coupling configuration, coordinate, overlay, graph,
+command plan, and every frozen semantic-source hash before the existing
+runtime lock/control checks run.  It validates v2 as a consumed parent and
+never relabels it as v1 or treats it as an executable child campaign.  This is
+lineage compatibility only: no view, target, representation loss, schedule,
+seed, checkpoint, resource request, or HLT-only deployment semantics changed.
+
+Focused HCWDL-U-RKD campaign coverage passes 11/11, including exact v1/v2
+dispatch and rejection of unknown future parent versions.  The corrected
+source still requires a clean commit/push and a Tigris authentication check
+against the live v2 parent before creating the immutable 300k candidate.
+
 ## HCWDL-U-RKD ragged preprocessing repair (2026-08-14)
 
 The factorized homotopy representation-KD runtime inherited the original

@@ -21,9 +21,13 @@ registered logit-only factorized path is the paired control and is not
 silently retrained, relabeled, or absorbed into this graph.
 
 This v2 graph supersedes the unexecuted ten-point HCWDL-U-RKD v1 candidate.
-No v1 artifact may be relabeled or imported as v2. The completed U/J parent
-remains unchanged; v2 imports only its matching twenty-point subset and keeps
-each selected rung's original U/J seed alias.
+No v1 artifact may be relabeled or imported as v2. The training-ready U/J v2
+parent remains unchanged; HCWDL-U-RKD imports only its matching twenty-point
+subset and keeps each selected rung's original U/J seed alias. Parent rung
+reports and parent completion are aggregate-only evidence: training may start
+after the immutable coupling, coordinate, endpoint, graph/recipe, M0, and TOFF
+inputs authenticate, while the aggregate remains gated on the complete parent
+comparison set.
 
 This plan governs only the new HCWDL-U-RKD artifacts. It does not mutate or
 reinterpret completed HCWDL, HCWDL-UJ, dense5/dense10, representation-dense,

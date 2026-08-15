@@ -11,7 +11,9 @@ from hlt_classification.data.cache_contracts import (
     validate_content_hash, with_content_hash, write_immutable_json,
 )
 
-from .hcwdl_homotopy_campaign import validate_campaign as validate_parent_campaign
+from .hcwdl_homotopy_campaign import (
+    validate_campaign as _validate_parent_campaign_v1,
+)
 from .hcwdl_homotopy_contracts import CAMPAIGN_COMPLETION_CONTRACT
 from .hcwdl_homotopy_representation_contracts import (
     AUTHORIZATION_PHRASE, CAMPAIGN_SPEC_CONTRACT, COMMAND_PLAN_CONTRACT,
@@ -68,6 +70,144 @@ SMOKE_RESOURCES = {
     "target": {"cpus": 8, "memory": "96G", "walltime": "06:00:00", "gpu": "gpu:gh200:1"},
     "training": {"cpus": 8, "memory": "96G", "walltime": "06:00:00", "gpu": "gpu:gh200:1"},
 }
+
+_PARENT_CAMPAIGN_V1 = "HCWDL_STRUCTURAL_FEATURE_PILOT_SPEC/v1"
+_PARENT_CAMPAIGN_V2 = "HCWDL_STRUCTURAL_FEATURE_PILOT_SPEC/v2"
+
+
+def _validated_reference(
+    value: Mapping[str, Any], *, path_field: str, hash_field: str,
+) -> tuple[dict[str, Any], str]:
+    path = Path(str(value.get(path_field, ""))).resolve()
+    artifact = load_json(path)
+    digest = validate_content_hash(
+        artifact, expected_contract=str(artifact["contract"]),
+        expected_schema_version=int(artifact["schema_version"]),
+    )
+    if digest != value.get(hash_field):
+        raise ValueError(f"HCWDL-U-RKD parent {hash_field} differs")
+    return artifact, digest
+
+
+def _validate_consumed_parent_v2(value: Mapping[str, Any]) -> str:
+    """Authenticate the exact v2 surface consumed by the RKD supplement.
+
+    The v2 U/J campaign changed its graph/coordinate contract family after
+    the RKD branch was cut.  RKD does not execute that parent graph; it
+    consumes its immutable data/view locks, base recipe, controls, and future
+    factorized reports.  This validator therefore authenticates that complete
+    consumer boundary without relabelling v2 artifacts as v1.
+    """
+
+    digest = validate_content_hash(
+        value, expected_contract=_PARENT_CAMPAIGN_V2,
+        expected_schema_version=1,
+    )
+    mode = str(value.get("mode"))
+    expected_counts = SMOKE_ROLE_COUNTS if mode == "smoke" else ROLE_COUNTS
+    if (
+        value.get("campaign") != "HCWDL_STRUCTURAL_FEATURE_HOMOTOPY"
+        or mode not in {"smoke", "pilot"}
+        or value.get("role_counts") != expected_counts
+        or value.get("final_test_accessed") is not False
+    ):
+        raise ValueError("HCWDL-U-RKD v2 parent identity differs")
+
+    root = Path(str(value.get("campaign_root", ""))).resolve()
+    project = Path(str(value.get("project_dir", ""))).resolve()
+    if not root.is_absolute() or not project.is_absolute():
+        raise ValueError("HCWDL-U-RKD v2 parent paths must be absolute")
+    if not re.fullmatch(r"[0-9a-f]{40}", str(value.get("source_commit", ""))):
+        raise ValueError("HCWDL-U-RKD v2 parent source commit differs")
+
+    _validated_reference(
+        value, path_field="split_manifest_path",
+        hash_field="split_manifest_sha256",
+    )
+    _validated_reference(
+        value, path_field="selection_manifest_path",
+        hash_field="selection_manifest_sha256",
+    )
+    _validated_reference(
+        value, path_field="recipe_path", hash_field="recipe_sha256",
+    )
+
+    assignment_paths = value.get("assignment_manifests")
+    assignment_hashes = value.get("assignment_manifest_sha256")
+    if (
+        not isinstance(assignment_paths, Mapping)
+        or not isinstance(assignment_hashes, Mapping)
+        or set(assignment_paths) != set(assignment_hashes)
+        or not {"train", "validation"} <= set(assignment_paths)
+    ):
+        raise ValueError("HCWDL-U-RKD v2 parent assignment registry differs")
+    for role, path in sorted(assignment_paths.items()):
+        artifact = load_json(path)
+        artifact_hash = validate_content_hash(
+            artifact, expected_contract=str(artifact["contract"]),
+            expected_schema_version=int(artifact["schema_version"]),
+        )
+        if artifact_hash != assignment_hashes[role]:
+            raise ValueError(
+                f"HCWDL-U-RKD v2 parent {role} assignment differs"
+            )
+
+    local_artifacts = (
+        ("coupling/config.json", "coupling_config_sha256"),
+        ("coordinate_table.json", "coordinate_sha256"),
+        ("recipe_overlay.json", "recipe_overlay_sha256"),
+        ("graph.json", "graph_artifact_sha256"),
+        ("command_plan.json", "command_plan_sha256"),
+    )
+    loaded = {}
+    for relative, hash_field in local_artifacts:
+        artifact = load_json(root / relative)
+        artifact_hash = validate_content_hash(
+            artifact, expected_contract=str(artifact["contract"]),
+            expected_schema_version=int(artifact["schema_version"]),
+        )
+        if artifact_hash != value.get(hash_field):
+            raise ValueError(f"HCWDL-U-RKD v2 parent {relative} differs")
+        loaded[relative] = artifact
+    graph = loaded["graph.json"]
+    if (
+        graph.get("graph_sha256") != value.get("graph_sha256")
+        or int(graph.get("fit_count", -1)) != len(graph.get("nodes", ()))
+    ):
+        raise ValueError("HCWDL-U-RKD v2 parent graph identity differs")
+    if any(
+        "final_test" in str(row).lower()
+        for row in loaded["command_plan.json"].get("commands", ())
+    ):
+        raise PermissionError("HCWDL-U-RKD v2 parent command plan accesses test")
+
+    semantic = value.get("semantic_source_sha256")
+    if not isinstance(semantic, Mapping) or not semantic:
+        raise ValueError("HCWDL-U-RKD v2 parent lacks scientific source hashes")
+    for relative, expected in sorted(semantic.items()):
+        if sha256_file(project / relative) != expected:
+            raise ValueError(
+                f"HCWDL-U-RKD v2 parent scientific source drifted: {relative}"
+            )
+    return digest
+
+
+def validate_parent_campaign(
+    value: Mapping[str, Any], *, executable: bool = False,
+) -> str:
+    """Dispatch exact v1/v2 U/J validation without contract relabelling."""
+
+    contract = value.get("contract")
+    if contract == _PARENT_CAMPAIGN_V1:
+        return _validate_parent_campaign_v1(value, executable=executable)
+    if contract == _PARENT_CAMPAIGN_V2:
+        if executable:
+            raise ValueError(
+                "HCWDL-U-RKD validates the v2 parent as a consumed artifact, "
+                "not as an executable campaign"
+            )
+        return _validate_consumed_parent_v2(value)
+    raise ValueError(f"unsupported HCWDL-U-RKD parent contract: {contract!r}")
 
 
 def semantic_source_hashes(repository: str | Path) -> dict[str, str]:
