@@ -64,6 +64,13 @@ aggregation, and sealed-test procedure is in the
 [unified-balanced homotopy runbook](../HCWDL_UNIFIED_BALANCED_HOMOTOPY_RUNBOOK.md).
 
 The additive
+[HCWDL unified-balanced full-data three-arm plan](HCWDL_UNIFIED_BALANCED_FULL_DATA_THREE_ARM_PLAN.md)
+scales the same corrected balanced/uniform factorized path to every mapped row
+with 20 passes and exactly `C25P75`, `C10P90`, and `C10P75G15`. It rebuilds
+full-population assignments, couplings, roots, and targets under new contracts
+and does not modify the running 300k six-arm campaign.
+
+The additive
 [HCWDL matching-free privileged representation-KD ascent plan](HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md)
 registers two nested representation strategies, each as a complete cold and
 warm M1--M6 ascent. It preserves the implemented logit-only HCWDL graph and

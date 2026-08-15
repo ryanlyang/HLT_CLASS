@@ -14,6 +14,8 @@ from hlt_classification.data.cache_contracts import require_sha256, validate_con
 LEGACY_RECIPE_CONTRACT: Final = "HCWDL_RECIPE/v3"
 RECIPE_CONTRACT: Final = "HCWDL_RECIPE/v4"
 RECIPE_SCHEMA_VERSION: Final = 4
+FULL_DATA_RECIPE_CONTRACT: Final = "HCWDL_RECIPE/v5"
+FULL_DATA_RECIPE_SCHEMA_VERSION: Final = 5
 PRIMARY_RECIPE_PROFILE: Final = "primary_ladder"
 PRIMARY_DUAL_TEACHER_DECISION: Final = {
     "peak_learning_rate": 3e-4,
@@ -107,6 +109,9 @@ def validate_recipe(
     elif contract == RECIPE_CONTRACT:
         schema_version = RECIPE_SCHEMA_VERSION
         class_weight_policy = CLASS_WEIGHT_POLICY
+    elif contract == FULL_DATA_RECIPE_CONTRACT:
+        schema_version = FULL_DATA_RECIPE_SCHEMA_VERSION
+        class_weight_policy = CLASS_WEIGHT_POLICY
     else:
         raise ValueError("HCWDL recipe contract differs")
     digest = validate_content_hash(
@@ -117,7 +122,10 @@ def validate_recipe(
     if require_authorized and value.get("authorized_for_execution") is not True:
         raise PermissionError("HCWDL recipe is an example or has not been authorized")
     profile = value.get("recipe_profile")
-    if profile not in {PRIMARY_RECIPE_PROFILE, "registered_ablation", "local_test"}:
+    if profile not in {
+        PRIMARY_RECIPE_PROFILE, "registered_ablation", "local_test",
+        "full_data_scaleup",
+    }:
         raise ValueError("HCWDL recipe profile differs")
     if expected_profile is not None and profile != expected_profile:
         raise PermissionError("HCWDL recipe profile is not authorized for this campaign")
@@ -125,7 +133,11 @@ def validate_recipe(
         raise PermissionError("HCWDL local-test recipe cannot authorize execution")
     if value.get("repair_family") != "HIGHCOV_SHELL_EXACT/v1":
         raise ValueError("HCWDL recipe repair family differs")
-    if value.get("training_passes") != 60 or value.get("validation_every_passes") != 1:
+    expected_passes = 20 if contract == FULL_DATA_RECIPE_CONTRACT else 60
+    if (
+        value.get("training_passes") != expected_passes
+        or value.get("validation_every_passes") != 1
+    ):
         raise ValueError("HCWDL training/validation budget differs")
     batching = value.get("batching")
     if not isinstance(batching, Mapping):
@@ -256,6 +268,12 @@ def validate_recipe(
         }
         if primary_actual != PRIMARY_RECIPE_DECISION:
             raise ValueError("primary HCWDL complete recipe decision differs")
+    if profile == "full_data_scaleup" and (
+        contract != FULL_DATA_RECIPE_CONTRACT
+        or value.get("purpose") != "hcwdl_unified_balanced_full_data_three_arm"
+        or value.get("training_passes") != 20
+    ):
+        raise ValueError("HCWDL full-data recipe identity differs")
     return digest
 
 
@@ -333,7 +351,8 @@ def example_recipe() -> dict[str, Any]:
 
 
 __all__ = [
-    "CLASS_WEIGHT_POLICY", "LEGACY_CLASS_WEIGHT_POLICY", "LEGACY_RECIPE_CONTRACT",
+    "CLASS_WEIGHT_POLICY", "FULL_DATA_RECIPE_CONTRACT",
+    "FULL_DATA_RECIPE_SCHEMA_VERSION", "LEGACY_CLASS_WEIGHT_POLICY", "LEGACY_RECIPE_CONTRACT",
     "PRIMARY_DUAL_TEACHER_DECISION", "PRIMARY_RECIPE_DECISION", "PRIMARY_RECIPE_PROFILE",
     "RECIPE_CONTRACT", "RECIPE_SCHEMA_VERSION", "build_recipe",
     "example_recipe", "validate_recipe", "validate_recipe_class_weight_lineage",

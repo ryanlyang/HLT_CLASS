@@ -218,7 +218,7 @@ def node_training_config(
     return PmardTrainingConfig(
         experiment_id=node.node_id,
         loss=_loss_for_node(node, recipe) if explicit_loss is None else explicit_loss,
-        total_updates=60 * updates_per_pass,
+        total_updates=int(recipe["training_passes"]) * updates_per_pass,
         effective_batch_size=batch,
         microbatch_size=int(recipe["batching"]["microbatch_size"]),
         gradient_accumulation=int(recipe["batching"]["gradient_accumulation"]),
@@ -228,7 +228,7 @@ def node_training_config(
         warmup_fraction=float(recipe["schedule"]["warmup_fraction"]),
         minimum_lr_fraction=float(recipe["schedule"]["minimum_lr_fraction"]),
         validation_interval=updates_per_pass,
-        validation_checks=60,
+        validation_checks=int(recipe["training_passes"]),
         logging_interval=max(1, updates_per_pass // 4),
         master_seed=derive_seed(
             replicate_seed, f"hcwdl/{node.node_id if seed_node_id is None else seed_node_id}",
@@ -340,7 +340,7 @@ def train_hcwdl_node(
         "graph_sha256": graph_sha256,
         "node": node_payload,
         "recipe_sha256": recipe_sha256,
-        "training_passes": 60 if not smoke else None,
+        "training_passes": int(recipe["training_passes"]) if not smoke else None,
         "validation_every_passes": 1 if not smoke else None,
         "smoke_updates": 2 if smoke else None,
         "performance_early_stopping": False,
@@ -375,7 +375,7 @@ def train_hcwdl_node(
         grandparent_teacher_targets=grandparent_teacher_targets,
         resume=resume, stop_after_update=stop_after_update,
     )
-    expected_checks = 1 if smoke else 60
+    expected_checks = 1 if smoke else int(recipe["training_passes"])
     if len(report["validation_history"]) != expected_checks:
         raise RuntimeError(
             f"HCWDL node did not publish exactly {expected_checks} validation records"

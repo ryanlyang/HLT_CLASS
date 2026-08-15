@@ -1,5 +1,88 @@
 # Current Handoff
 
+## HCWDL unified-balanced all-mapped three-arm scale-up (2026-08-15)
+
+The implementation-authoritative
+[full-data three-arm plan](plans/HCWDL_UNIFIED_BALANCED_FULL_DATA_THREE_ARM_PLAN.md)
+is implemented locally as the additive `HCWDL-UB-FULL3/v1` campaign family.
+Its reusable semantics are frozen in the
+[contract](contracts/HCWDL_UNIFIED_BALANCED_FULL_DATA.md), and the exact
+foundation-to-autolaunch procedure is documented in the
+[runbook](HCWDL_UNIFIED_BALANCED_FULL_DATA_RUNBOOK.md). Existing 300k U/J and
+six-arm artifacts are immutable inputs or contextual results; this work does
+not edit or relabel them.
+
+The campaign derives exact train, validation, and sealed-final-test counts
+from the authenticated split and selects every mapped train/validation row.
+It rebuilds full-population assignments, residual couplings, corrected
+balanced switch sidecars, endpoint/resource evidence, fresh unified `U000`
+and `M0paired` roots, and one compact identity-ordered FP32 U000 target bank.
+Durable reconstructed particle views remain forbidden, and no ordinary task
+selects, assigns, couples, caches, or evaluates a final-test row.
+
+The scientific registry contains exactly 38 fresh fits:
+
+- shared CE roots `U000` and `M0paired`;
+- factorized-only arms `C25P75`, `C10P90`, and `C10P75G15`;
+- in each arm, `U020 -> U040 -> U060 -> U080 -> U100 -> D80F -> D60F ->
+  D40F -> D20F -> D0F -> M1F`, plus `D100direct`.
+
+Every fit uses 20 natural-population passes, validation every pass,
+macro-AUC-first checkpoint selection, and unweighted per-jet CE. The three
+declared homotopy losses are respectively `0.25/0.75/0`, `0.10/0.90/0`, and
+`0.10/0.75/0.15` for CE/parent/grandparent KD; unavailable first-edge
+grandparent weight transfers to the parent. Homotopy KD temperature is two.
+`M1F` remains fixed at `0.25 CE + 0.75 parent KD` with temperature one.
+Twenty full-data passes are intentional: at roughly eight to nine times the
+300k train population, they process about three times as many jet examples as
+a 60-pass 300k fit while avoiding a prohibitive 60-pass full-data bill.
+
+The initial full-data envelopes are 8 CPUs, 256 GiB, 24 hours, and one GH200
+for GPU training/target jobs; 16 CPUs, 192 GiB, 24 hours for assignment and
+coupling arrays; and 4 CPUs, 64 GiB, 4 hours for reducers and reports. A
+measured all-row endpoint/resource gate must stay below 75% of the locked GPU
+RAM request before either shared root trains. Resource recovery may only
+increase CPU, RAM, or walltime while preserving the GPU class and scientific
+identity.
+
+Operationally, one source-pinned campaign submitter registers the foundation
+and one `afterok` autolaunch job. Only after the immutable foundation lock
+exists does the autolaunch create and submit the three independent arm
+ledgers. Foundation, arm, autolaunch, and recovery submissions resume from
+immutable journals/artifacts after interruption; no accepted job is silently
+resubmitted. Exact-ID cancellation, monitor/task-attestation validation, and
+failed/downstream source-pinned or resource-only recovery are present.
+
+Implementation and review evidence:
+
+- focused HCWDL-UB/full-data/ladder suite: 46 passed;
+- complete repository suite: 468 passed in 280.19 seconds, with the 14
+  existing Matplotlib/Pyparsing deprecation warnings;
+- the bounded synthetic all-mapped closure created a 2.6M/1M/1M inventory,
+  exact 38-fit graph, foundation plan, three arm specs, three independent
+  14-task dry-run ledgers, idempotent arm reuse, and an exact resource
+  recovery closure;
+- all 12 full-data CLI help surfaces and Python compilation passed;
+- all 22 full-data/recovery contract constants are explicitly versioned;
+- all three Slurm workers pass Git-Bash syntax checks and use absolute
+  `${PROJECT_DIR}` activation plus `exec python -s`;
+- the five-document Markdown-link audit and `git diff --check` passed.
+
+There are no external donor files or donor commits for this block, so
+`docs/LEGACY_SOURCE_MAP.md` is unchanged. No SSH, push, Slurm submission,
+cancellation, final-test access, or new smoke occurred locally. The existing
+production-worker evidence is reused exactly as allowed by the plan; the new
+all-row endpoint/resource gate is the production preflight and cannot be
+bypassed.
+
+Exact next task: commit and push this implementation, create a clean detached
+Tigris worktree at that full commit, bind the authenticated prepared 300k U/J
+template, create the all-mapped foundation spec, run the nonmutating campaign
+dry run, and then use the single explicit full-campaign submission command in
+the runbook. That live command submits the foundation and automatically
+releases all three arms after its lock; it does not submit a smoke or touch
+final test.
+
 ## HCWDL unified-root balanced six-arm campaign (2026-08-15)
 
 The implementation-authoritative
