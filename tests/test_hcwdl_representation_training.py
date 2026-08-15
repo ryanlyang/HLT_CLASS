@@ -499,12 +499,14 @@ def test_rrel_jet_set_ramp_precedes_relation_construction(spectral_resources):
         device=torch.device("cpu"), execution=execution,
         shuffled_representation_joiner=None,
     )
+    timed = []
     result = training_module.compute_node_loss(
         execution=execution, model=model, surfaces=surfaces, labels=labels,
         class_weights=torch.ones(15), privileged_targets=targets,
         predecessor_logits=None,
         calibration_scales={"jet": 1.0, "set": 1.0}, effective_pass=3.0,
         token_resources=token_resources, relation_resources=relation_resources,
+        timing_callback=lambda name, seconds: timed.append((name, seconds)),
     )
     assert result.raw_components is not None
     assert result.raw_components.relation is None
@@ -512,6 +514,10 @@ def test_rrel_jet_set_ramp_precedes_relation_construction(spectral_resources):
     assert result.scheduled.ramp_jet_set > 0
     assert result.scheduled.ramp_relation == 0
     assert result.scheduled.relation_coefficient == 0
+    assert [name for name, _ in timed] == [
+        "base_logit_loss", "jet_representation_loss", "set_representation_loss",
+    ]
+    assert all(seconds >= 0 for _, seconds in timed)
 
 
 def test_rrel_diagnostic_allocation_matches_frozen_equal_budget_schedule():

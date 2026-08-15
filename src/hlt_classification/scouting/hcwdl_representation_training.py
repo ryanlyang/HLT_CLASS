@@ -1003,6 +1003,36 @@ def _ordinary_eligibility(value, *, batch: int, trailing: tuple[int, ...]):
     return result
 
 
+def _timed_component_call(
+    name: str,
+    *,
+    reference,
+    callback: Callable[[str, float], None] | None,
+    operation: Callable[[], Any],
+):
+    """Time one exact loss component only for the bounded diagnostic worker.
+
+    The ordinary training path supplies no callback and therefore performs no
+    synchronization or extra timing work.  The diagnostic path synchronizes
+    around the existing operation so its wall-clock partition includes every
+    queued CUDA kernel attributable to that component.
+    """
+
+    if callback is None:
+        return operation()
+    import torch
+
+    device = torch.as_tensor(reference).device
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
+    started = time.perf_counter()
+    result = operation()
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
+    callback(name, time.perf_counter() - started)
+    return result
+
+
 def _raw_representation_components(
     *,
     execution: NodeExecution,
@@ -1014,6 +1044,7 @@ def _raw_representation_components(
     token_resources: SpectralKernelResources,
     relation_resources: SpectralKernelResources,
     components: Sequence[str],
+    timing_callback: Callable[[str, float], None] | None = None,
 ) -> RawRepresentationComponents:
     """Compute selected raw components entirely in FP32."""
 
@@ -1037,9 +1068,13 @@ def _raw_representation_components(
     if "jet" in requested:
         if teacher_jet is None:
             raise ValueError("target bank lacks pooled jet representation")
-        jet_result = jet_representation_loss(
-            surfaces.jet_penultimate.float(), teacher_jet.float(), heads["jet"],
-            labels=labels, class_weights=class_weights,
+        jet_result = _timed_component_call(
+            "jet_representation_loss", reference=tokens,
+            callback=timing_callback,
+            operation=lambda: jet_representation_loss(
+                surfaces.jet_penultimate.float(), teacher_jet.float(), heads["jet"],
+                labels=labels, class_weights=class_weights,
+            ),
         )
         losses["jet"] = jet_result.loss
         rows["jet"] = CalibrationComponentRows(
@@ -1055,9 +1090,13 @@ def _raw_representation_components(
             if target is None or eligible is None or "token" not in heads:
                 raise ValueError("ordinary set target/head is absent")
             eligible = _ordinary_eligibility(eligible, batch=len(labels), trailing=())
-            set_result = ordinary_set_representation_loss(
-                tokens, vectors, mask, target, eligible, heads["token"], token_resources,
-                labels=labels, class_weights=class_weights,
+            set_result = _timed_component_call(
+                "set_representation_loss", reference=tokens,
+                callback=timing_callback,
+                operation=lambda: ordinary_set_representation_loss(
+                    tokens, vectors, mask, target, eligible, heads["token"],
+                    token_resources, labels=labels, class_weights=class_weights,
+                ),
             )
         else:
             required = (
@@ -1070,11 +1109,15 @@ def _raw_representation_components(
                 (targets["token_kernel_mean_charged"], targets["token_kernel_mean_neutral"]),
                 dim=1,
             )
-            set_result = native_offline_set_representation_loss(
-                tokens, vectors, mask, family, target,
-                targets["token_family_eligibility"].bool(),
-                (heads["token_charged"], heads["token_neutral"]),
-                token_resources, labels=labels, class_weights=class_weights,
+            set_result = _timed_component_call(
+                "set_representation_loss", reference=tokens,
+                callback=timing_callback,
+                operation=lambda: native_offline_set_representation_loss(
+                    tokens, vectors, mask, family, target,
+                    targets["token_family_eligibility"].bool(),
+                    (heads["token_charged"], heads["token_neutral"]),
+                    token_resources, labels=labels, class_weights=class_weights,
+                ),
             )
         losses["set"] = set_result.reduction.loss
         rows["set"] = CalibrationComponentRows(
@@ -1097,9 +1140,13 @@ def _raw_representation_components(
                 target = target[:, None, :, :]
             eligible = _ordinary_eligibility(eligible, batch=len(labels), trailing=(3,))
             eligible = eligible[:, None, :]
-            relation_result = relation_representation_loss(
-                tokens, vectors, mask, visible, target, eligible, relation_resources,
-                labels=labels, class_weights=class_weights,
+            relation_result = _timed_component_call(
+                "relation_representation_loss", reference=tokens,
+                callback=timing_callback,
+                operation=lambda: relation_representation_loss(
+                    tokens, vectors, mask, visible, target, eligible,
+                    relation_resources, labels=labels, class_weights=class_weights,
+                ),
             )
         else:
             required = (
@@ -1115,10 +1162,15 @@ def _raw_representation_components(
                 ),
                 dim=1,
             )
-            relation_result = relation_representation_loss(
-                tokens, vectors, mask, visible, target,
-                targets["relation_eligibility"].bool(), relation_resources,
-                labels=labels, class_weights=class_weights, family_codes=family,
+            relation_result = _timed_component_call(
+                "relation_representation_loss", reference=tokens,
+                callback=timing_callback,
+                operation=lambda: relation_representation_loss(
+                    tokens, vectors, mask, visible, target,
+                    targets["relation_eligibility"].bool(), relation_resources,
+                    labels=labels, class_weights=class_weights,
+                    family_codes=family,
+                ),
             )
         losses["relation"] = relation_result.reduction.loss
         rows["relation"] = CalibrationComponentRows(
@@ -1189,6 +1241,7 @@ def compute_node_loss(
     token_resources: SpectralKernelResources,
     relation_resources: SpectralKernelResources,
     force_components: bool = False,
+    timing_callback: Callable[[str, float], None] | None = None,
 ) -> NodeLossResult:
     """Compute the locked base objective plus the exact scheduled auxiliary."""
 
@@ -1199,12 +1252,16 @@ def compute_node_loss(
     privileged_for_base = None
     if predecessor_logits is not None:
         raise ValueError("dense descent forbids a second predecessor-logit teacher")
-    base = hcwdl_base_loss(
-        surfaces.logits.float(), labels,
-        class_weights=class_weights,
-        configuration=configuration,
-        hlt_teacher_logits=hlt_logits,
-        privileged_teacher_logits=privileged_for_base,
+    base = _timed_component_call(
+        "base_logit_loss", reference=surfaces.logits,
+        callback=timing_callback,
+        operation=lambda: hcwdl_base_loss(
+            surfaces.logits.float(), labels,
+            class_weights=class_weights,
+            configuration=configuration,
+            hlt_teacher_logits=hlt_logits,
+            privileged_teacher_logits=privileged_for_base,
+        ),
     )
     js = jet_set_ramp(effective_pass)
     rel = relation_ramp(effective_pass)
@@ -1237,7 +1294,7 @@ def compute_node_loss(
         execution=execution, model=model, surfaces=surfaces,
         targets=privileged_targets, labels=labels, class_weights=class_weights,
         token_resources=token_resources, relation_resources=relation_resources,
-        components=required,
+        components=required, timing_callback=timing_callback,
     )
     scaled = {
         name: raw.losses[name] * float(calibration_scales[name]) for name in required

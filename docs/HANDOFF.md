@@ -2183,3 +2183,34 @@ does not change selected checkpoints, deployable state bytes, training,
 metrics, or inference. A regression records that the restored model is moved
 to the parity-input device. Source recovery is expected to reuse the exact
 rolling/selected training state and repeat terminal extraction/publication.
+
+## HCWDL-U-RKD bounded performance diagnostic (2026-08-15)
+
+Live Tigris evidence from pilot jobs `87174` (`F_RSET_U020`) and `87195`
+(`F_RREL_U020`) showed that the slowdown is host-side rather than GPU-memory
+pressure: each process consumed approximately one CPU core despite many idle
+threads, GPU utilization was intermittent and low, and the completed pass
+times were roughly 35--39 minutes. Their one-time train/validation cache builds
+also consumed about 21 and 7 minutes respectively. Live Python stack sampling
+could not be performed because neither `gdb` nor `py-spy` is installed on the
+compute nodes.
+
+A diagnostic-only bounded profiler now exercises the exact optimized U020
+stream, authenticated compact TOFF target bank, student forward, scheduled
+RSET/RREL loss, backward pass, production gradient-finiteness scan, and
+optimizer update over a configurable number of real batches. It separates
+input/target transfer, forward, base logit KD, jet/set/relation representation
+terms, backward, gradient checks, optimizer work, and residual step time using
+explicit CUDA synchronization only in the profiling path. The ordinary
+training path supplies no callback and is unchanged. Profile artifacts use
+`HCWDL_U_RKD_PERFORMANCE_PROFILE/v1`, must be published outside the immutable
+campaign root, and cannot publish checkpoints, metrics, or campaign lineage.
+
+Local evidence: 38 focused tests passed across the profiler, representation
+training, and homotopy-representation campaign modules; Python compilation and
+CLI help passed; `git diff --check` passed (line-ending warnings only). The next
+step is two independent 50-batch Tigris diagnostic jobs for `F_RSET_U020` and
+`F_RREL_U020`. Their measured phase tables will determine whether the primary
+repair targets the representation kernel, repeated synchronization in gradient
+validation, host/device joining, or another step component. No live job was
+submitted by this change and no final-test data were accessed.
