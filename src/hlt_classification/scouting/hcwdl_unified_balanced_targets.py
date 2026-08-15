@@ -137,7 +137,7 @@ def validate_target_manifest(
     value: Mapping[str, Any], *, teacher_id: str | None = None,
     consumers: Sequence[str] | None = None,
 ) -> str:
-    digest = validate_content_hash(
+    manifest_digest = validate_content_hash(
         value, expected_contract=TARGET_MANIFEST_CONTRACT, expected_schema_version=1,
     )
     if (
@@ -154,8 +154,8 @@ def validate_target_manifest(
         raise ValueError("HCWDL-UB target manifest row total differs")
     if not value.get("parents"):
         raise ValueError("HCWDL-UB target manifest parent registry is empty")
-    for name, digest in value["parents"].items():
-        require_sha256(digest, name=f"target manifest parent {name}")
+    for name, parent_digest in value["parents"].items():
+        require_sha256(parent_digest, name=f"target manifest parent {name}")
     for row in value.get("shards", ()):
         if set(row) != {
             "source_path", "metadata_path", "metadata_sha256", "rows",
@@ -166,7 +166,7 @@ def validate_target_manifest(
         raise ValueError("HCWDL-UB target manifest expected teacher differs")
     if consumers is not None and value.get("consumers") != list(consumers):
         raise ValueError("HCWDL-UB target manifest expected consumers differ")
-    return digest
+    return manifest_digest
 
 
 def target_lock_payload(

@@ -973,6 +973,18 @@ resource-only recovery paths, and explicit live submission authorization are
 still required. A measured timeout/OOM uses the versioned resource-recovery
 path; it does not mutate scientific semantics or trigger an improvised smoke.
 
+Operational erratum (2026-08-15): the first completed foundation exposed a
+Python return-value shadow in `validate_target_manifest()`. The manifest was
+fully authenticated, but the validator returned its last parent digest (the
+U000 report hash), so that digest was recorded in the target/foundation lock's
+manifest field. The scientific artifacts and graph are unchanged. Existing
+immutable locks may be reused only through the separately versioned,
+exact-file-allowlisted target-digest execution-repair recovery defined in the
+reusable contract. Ordinary source recovery still requires an identical
+semantic-source map, ordinary execution still rejects the mismatch, and no
+lock may be edited or relabeled. This operational exception is not a new
+scientific arm, loss, view, teacher, or coordinate.
+
 ## 15. Reporting and comparisons
 
 Validation macro OVR AUC is primary. CE, accuracy, balanced accuracy, per-class

@@ -36,6 +36,7 @@ from .hcwdl_unified_balanced_graph import (
 )
 from .hcwdl_unified_balanced_targets import (
     DurableUnifiedBalancedTargets, validate_target_lock,
+    validate_target_manifest,
 )
 from .hcwdl_unified_balanced_targets import (
     publish_target_manifest, publish_target_shard,
@@ -51,6 +52,10 @@ from .view_cache import EphemeralPmardViewCache, expected_cache_source_rows
 
 
 RUNTIME_CONTRACT = "HCWDL_UNIFIED_BALANCED_NODE_RUNTIME/v1"
+TARGET_DIGEST_SHADOW_EVIDENCE_CONTRACT = (
+    "HCWDL_UNIFIED_BALANCED_TARGET_DIGEST_SHADOW_EVIDENCE/v1"
+)
+TARGET_DIGEST_SHADOW_REPAIR = "target_manifest_digest_shadow_execution_repair_v1"
 DOMAINS = {"hlt": {"input": "hlt"}, "privileged": {"input": "privileged"}}
 
 
@@ -213,6 +218,108 @@ def _target_attestation_context(
     return arm_root, arm_spec_sha256
 
 
+def inspect_shared_u000_target_lineage(
+    *, foundation_spec: Mapping[str, Any], foundation_root: str | Path,
+) -> dict[str, Any]:
+    """Authenticate U000 targets and classify the one known legacy lock defect.
+
+    This function never authorizes the defect.  It only returns a complete,
+    content-hashed observation that a separately authenticated recovery spec
+    may bind.  Any mismatch other than the exact historical digest shadow
+    fails closed.
+    """
+
+    root = Path(foundation_root)
+    report_path = root / "training/U000/training_report.json"
+    report = load_json(report_path)
+    report_hash = validate_pmard_training_report(report)
+    checkpoint = report_path.parent / str(report["selected_checkpoint"])
+    checkpoint_hash = sha256_file(checkpoint)
+    if checkpoint_hash != report["selected_checkpoint_sha256"]:
+        raise ValueError("HCWDL-UB U000 selected checkpoint differs")
+
+    manifest = load_json(root / "targets/u000_train/manifest.json")
+    manifest_hash = validate_target_manifest(
+        manifest, teacher_id="shared/U000",
+    )
+    expected_manifest_parents = {
+        "foundation_spec_sha256": foundation_spec["content_hash"],
+        "split_manifest_sha256": foundation_spec["parents"]["split_manifest_sha256"],
+        "teacher_report_sha256": report_hash,
+        "teacher_checkpoint_sha256": checkpoint_hash,
+    }
+    if any(
+        manifest.get("parents", {}).get(name) != digest
+        for name, digest in expected_manifest_parents.items()
+    ):
+        raise ValueError("HCWDL-UB shared target manifest lineage differs")
+
+    foundation_lock = load_json(root / "locks/foundation.json")
+    foundation_lock_hash = validate_foundation_lock(foundation_lock)
+    target_lock = load_json(root / "targets/u000_train/lock.json")
+    target_lock_hash = validate_target_lock(target_lock)
+    expected_target_lock = {
+        "foundation_spec_sha256": foundation_spec["content_hash"],
+        "teacher_report_sha256": report_hash,
+        "teacher_checkpoint_sha256": checkpoint_hash,
+        "split_manifest_sha256": foundation_spec["parents"]["split_manifest_sha256"],
+        "selection_manifest_sha256": foundation_spec["parents"]["selection_manifest_sha256"],
+    }
+    if any(target_lock.get(name) != digest for name, digest in expected_target_lock.items()):
+        raise ValueError("HCWDL-UB shared target lock lineage differs")
+    if (
+        foundation_lock.get("foundation_spec_sha256") != foundation_spec["content_hash"]
+        or foundation_lock.get("u000_report_sha256") != report_hash
+        or foundation_lock.get("u000_checkpoint_sha256") != checkpoint_hash
+        or foundation_lock.get("parents", {}).get("target_lock_sha256")
+        != target_lock_hash
+    ):
+        raise ValueError("HCWDL-UB foundation/U000 target lineage differs")
+
+    direct = (
+        target_lock.get("manifest_sha256") == manifest_hash
+        and foundation_lock.get("u000_target_manifest_sha256") == manifest_hash
+    )
+    legacy_shadow = (
+        manifest_hash != report_hash
+        and target_lock.get("manifest_sha256") == report_hash
+        and foundation_lock.get("u000_target_manifest_sha256") == report_hash
+    )
+    if not direct and not legacy_shadow:
+        raise ValueError("HCWDL-UB shared target manifest is not foundation-locked")
+
+    return with_content_hash({
+        "contract": TARGET_DIGEST_SHADOW_EVIDENCE_CONTRACT,
+        "schema_version": 1,
+        "classification": "direct" if direct else TARGET_DIGEST_SHADOW_REPAIR,
+        "foundation_spec_sha256": foundation_spec["content_hash"],
+        "foundation_lock_sha256": foundation_lock_hash,
+        "target_lock_sha256": target_lock_hash,
+        "actual_target_manifest_sha256": manifest_hash,
+        "recorded_target_manifest_sha256": target_lock["manifest_sha256"],
+        "u000_report_sha256": report_hash,
+        "u000_checkpoint_sha256": checkpoint_hash,
+        "final_test_accessed": False,
+    })
+
+
+def validate_shared_u000_target_lineage(
+    *, foundation_spec: Mapping[str, Any], foundation_root: str | Path,
+    recovery_context: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    evidence = inspect_shared_u000_target_lineage(
+        foundation_spec=foundation_spec, foundation_root=foundation_root,
+    )
+    if evidence["classification"] == "direct":
+        return evidence
+    authorized = None if recovery_context is None else recovery_context.get(
+        "target_digest_shadow_repair"
+    )
+    if authorized != evidence:
+        raise ValueError("HCWDL-UB shared target manifest is not foundation-locked")
+    return evidence
+
+
 def _teacher_targets(
     *, canonical_id: str, foundation_spec, foundation_root: Path,
     arm_root: Path, split, split_hash: str, selections, assignments, balanced,
@@ -228,6 +335,10 @@ def _teacher_targets(
     if not checkpoint.is_file() or sha256_file(checkpoint) != report["selected_checkpoint_sha256"]:
         raise ValueError("HCWDL-UB teacher selected checkpoint differs")
     if canonical_id == "shared/U000":
+        lineage = validate_shared_u000_target_lineage(
+            foundation_spec=foundation_spec, foundation_root=foundation_root,
+            recovery_context=recovery_context,
+        )
         durable = DurableUnifiedBalancedTargets(
             foundation_root / "targets/u000_train/manifest.json",
             teacher_id=canonical_id,
@@ -240,19 +351,8 @@ def _teacher_targets(
         }
         if any(durable.manifest.get("parents", {}).get(name) != value for name, value in expected.items()):
             raise ValueError("HCWDL-UB shared target manifest lineage differs")
-        foundation_lock = load_json(foundation_root / "locks/foundation.json")
-        validate_foundation_lock(foundation_lock)
-        target_lock = load_json(foundation_root / "targets/u000_train/lock.json")
-        target_lock_hash = validate_target_lock(target_lock)
-        if (
-            durable.manifest["content_hash"] != foundation_lock["u000_target_manifest_sha256"]
-            or report_hash != foundation_lock["u000_report_sha256"]
-            or report["selected_checkpoint_sha256"]
-            != foundation_lock["u000_checkpoint_sha256"]
-            or target_lock_hash != foundation_lock["parents"]["target_lock_sha256"]
-            or target_lock["manifest_sha256"] != durable.manifest["content_hash"]
-        ):
-            raise ValueError("HCWDL-UB shared target manifest is not foundation-locked")
+        if durable.manifest["content_hash"] != lineage["actual_target_manifest_sha256"]:
+            raise ValueError("HCWDL-UB shared target manifest changed after preflight")
         targets = durable.as_ephemeral(
             teacher_report_sha256=report_hash,
             split_manifest_sha256=split_hash,
@@ -505,6 +605,13 @@ def run_arm_node(
     sampler_seed = derive_seed(int(foundation_spec["replicate_seed"]), f"ub/sampler/{node.seed_alias}")
     repair_seed = derive_seed(int(foundation_spec["replicate_seed"]), "ub/repair/v1")
     behavior = "hlt" if node.input_domain == "hlt" else node.behavior
+    shared_teachers = {node.parent_id, node.grandparent_id} - {None}
+    shared_lineage = None
+    if "shared/U000" in shared_teachers:
+        shared_lineage = validate_shared_u000_target_lineage(
+            foundation_spec=foundation_spec, foundation_root=foundation_root,
+            recovery_context=recovery_context,
+        )
     caches, input_key = _cache_student_views(
         foundation_spec=foundation_spec, split=split, selections=selections,
         assignments=assignments, balanced=balanced, behavior=behavior,
@@ -544,6 +651,18 @@ def run_arm_node(
         parents["parent_teacher_report_sha256"] = parent_hash
     if grandparent_hash is not None:
         parents["grandparent_teacher_report_sha256"] = grandparent_hash
+    if recovery_context is not None:
+        parents["recovery_spec_sha256"] = require_sha256(
+            recovery_context["spec_sha256"], name="HCWDL-UB recovery spec",
+        )
+    if shared_lineage is not None:
+        parents["shared_u000_target_manifest_sha256"] = shared_lineage[
+            "actual_target_manifest_sha256"
+        ]
+        if shared_lineage["classification"] != "direct":
+            parents["target_digest_shadow_evidence_sha256"] = shared_lineage[
+                "content_hash"
+            ]
     loss = GenerationalLossConfiguration(
         arm=f"HCWDL_UB_{arm_id}_{node_id}", ce=node.ce_weight,
         parent_kd=node.parent_kd_weight,
@@ -581,6 +700,10 @@ def run_arm_node(
             "student_view_built_once": True,
             "parent_targets_built_once": parent_targets is not None,
             "grandparent_targets_built_once": grandparent_targets is not None,
+            "execution_repair": (
+                None if shared_lineage is None
+                else shared_lineage["classification"]
+            ),
         },
     )
     _publish_teacher_targets(
@@ -595,6 +718,9 @@ def run_arm_node(
 
 
 __all__ = [
-    "RUNTIME_CONTRACT", "arm_node_output_dir", "run_arm_node",
+    "RUNTIME_CONTRACT", "TARGET_DIGEST_SHADOW_EVIDENCE_CONTRACT",
+    "TARGET_DIGEST_SHADOW_REPAIR", "arm_node_output_dir",
+    "inspect_shared_u000_target_lineage", "run_arm_node",
     "run_shared_node", "shared_node_output_dir",
+    "validate_shared_u000_target_lineage",
 ]

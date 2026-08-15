@@ -74,15 +74,13 @@ contracts, runbook, and focused tests are additive. No SSH, Slurm submission,
 cancellation, remote push, or final-test access occurred during this local
 implementation.
 
-Exact next task: commit and push the complete clean source, create a detached
-Tigris worktree at that full commit, bind the exact prepared 300k HCWDL-UJ
-prefix through its graph/recipe lock, the completed 300k architecture-input
-factorial, and prior UJ smoke completion, build the evidence waiver, then create and dry-run the shared
-foundation. Live foundation submission still requires its exact explicit
-phrase. Only after the immutable foundation lock exists should the six arm
-specs be created, dry-run, and submitted in parallel with the single exact
-six-arm authorization command. No additional HCWDL-UB smoke is required or
-claimed.
+Exact next task: commit and push the target-digest execution repair described
+below, create a clean detached Tigris worktree at that full commit, publish one
+immutable monitor and execution-repair recovery spec per old arm ledger,
+preview then cancel only those six ledgers' exact IDs, dry-run all six recovery
+closures, and submit the six replacement closures. The completed shared
+foundation must be reused; it must not be rebuilt or edited. No additional
+HCWDL-UB smoke is required or claimed.
 
 The first Tigris launch attempt at `c05e3b7` correctly submitted no jobs but
 exposed two launch-boundary defects: parent discovery required the unrelated
@@ -98,6 +96,46 @@ HCWDL-UJ/UB/recovery focus passes 86/86; the complete repository suite passes
 463/463 in 204.10 seconds with one existing PRAD tensor warning and the local
 pytest-cache permission warning. Python compilation, the revised waiver CLI,
 and `git diff --check` also pass.
+
+### HCWDL-UB U000 target-manifest digest execution repair (2026-08-15)
+
+The first six-arm launch proved that all shared preparation and training
+completed successfully through foundation lock `86841` and autolaunch `86842`.
+Every U000-supervised arm root then failed before optimizer training with
+`HCWDL-UB shared target manifest is not foundation-locked`, after unnecessarily
+building its 300k/100k RAM views. The shared foundation artifacts authenticate
+independently. Tigris reported:
+
+- target manifest content hash:
+  `5de8bde03d6813a686e9e0042d589537e6f0e1be5095d11193f86f73ed93aa68`;
+- U000 training-report hash:
+  `e4a6296e551d369be6d06ecb1bdf270251d4b5eb6545898841322186c883ddc3`;
+- the foundation and target lock both recorded the latter report hash as the
+  manifest hash;
+- U000 report/checkpoint and target-lock/foundation-lock parent hashes matched.
+
+Root cause was a local-variable shadow in `validate_target_manifest()`: after
+authenticating the manifest, its parent-validation loop overwrote `digest` and
+returned the final sorted parent digest, which was the teacher-report hash.
+The manifest, FP32 logits, U000 checkpoint, U000 report, M0paired result,
+balanced couplings, and endpoints are not corrupt and must be reused.
+
+The validator now returns a dedicated `manifest_digest`. The arm runner
+preflights shared-U000 lineage before constructing any RAM view. A distinct
+`HCWDL_UNIFIED_BALANCED_EXECUTION_REPAIR_RECOVERY_SPEC/v1` path reconstructs
+and binds the exact legacy defect, requires an explicit repair phrase, and
+accepts a changed semantic-source map only when the changed files are exactly
+the target validator and arm runner. It never rewrites the old locks. Ordinary
+execution/source/resource recovery still rejects the mismatch. Recovery
+reports bind the recovery spec, actual target-manifest hash, and repair-evidence
+hash.
+
+Local verification for this repair: focused HCWDL-UB tests pass 28/28; the
+complete repository suite passes 464/464 in 238.65 seconds with the 14 existing
+Matplotlib/Pyparsing deprecation warnings; five affected CLI help surfaces,
+Python compilation, versioned-contract documentation, and `git diff --check`
+pass. No SSH, Slurm cancellation/submission, lock mutation, or final-test access
+occurred locally.
 
 ## HCWDL-UJ combined execution/resource recovery (2026-08-14)
 

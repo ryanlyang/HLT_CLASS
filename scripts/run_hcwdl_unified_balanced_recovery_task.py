@@ -16,6 +16,8 @@ def main()->int:
  if a.task not in recovery["task_ids"]:raise PermissionError("task is outside HCWDL-UB recovery closure")
  scope=load_json(recovery["scope_spec_path"]);index=a.array_index
  if index is None and os.environ.get("SLURM_ARRAY_TASK_ID") is not None:index=int(os.environ["SLURM_ARRAY_TASK_ID"])
- workflow=UnifiedBalancedFoundationWorkflow(scope,producer_commit=recovery["source_commit"]) if scope["contract"] == FOUNDATION_SPEC_CONTRACT else UnifiedBalancedArmWorkflow(scope,producer_commit=recovery["source_commit"],recovery_context={"root":recovery["recovery_root"],"spec_sha256":recovery["content_hash"],"task_ids":recovery["task_ids"]});outputs=workflow.run(a.task,array_index=index)
+ context={"root":recovery["recovery_root"],"spec_sha256":recovery["content_hash"],"task_ids":recovery["task_ids"],"recovery_contract":recovery["contract"]}
+ if recovery.get("target_digest_shadow_repair") is not None:context["target_digest_shadow_repair"]=recovery["target_digest_shadow_repair"]
+ workflow=UnifiedBalancedFoundationWorkflow(scope,producer_commit=recovery["source_commit"]) if scope["contract"] == FOUNDATION_SPEC_CONTRACT else UnifiedBalancedArmWorkflow(scope,producer_commit=recovery["source_commit"],recovery_context=context);outputs=workflow.run(a.task,array_index=index)
  att=build_task_attestation(campaign_spec_sha256=recovery["content_hash"],task_id=a.task,array_index=index,outputs=outputs);write_immutable_json(task_attestation_path(recovery["recovery_root"],a.task,index),att);return 0
 if __name__=="__main__":raise SystemExit(main())

@@ -114,6 +114,8 @@ targets and the separately authorized final-test execution:
 HCWDL_UNIFIED_BALANCED_TARGET_SHARD/v1
 HCWDL_UNIFIED_BALANCED_TARGET_MANIFEST/v1
 HCWDL_UNIFIED_BALANCED_TARGET_LOCK/v1
+HCWDL_UNIFIED_BALANCED_TARGET_DIGEST_SHADOW_EVIDENCE/v1
+HCWDL_UNIFIED_BALANCED_EXECUTION_REPAIR_RECOVERY_SPEC/v1
 HCWDL_UNIFIED_BALANCED_EXECUTION_LOCK/v1
 ```
 
@@ -132,6 +134,23 @@ change execution code only while all frozen semantic source hashes remain
 identical. A resource recovery may only increase CPUs, RAM, or walltime and
 may not change the GPU class. Completed outputs are preserved. Cancellation
 uses only exact IDs from one bound ledger.
+
+One separately versioned execution-repair recovery is permitted for the
+historical U000 target-manifest digest-shadow defect. The affected validator
+authenticated the manifest correctly but returned its final parent digest
+(the U000 report hash) instead of the manifest content hash. Consequently the
+already-published target and foundation locks recorded that report hash in
+their manifest fields. The repair does not rewrite or relabel either lock. It
+must instead bind the exact independently authenticated manifest, report,
+checkpoint, target lock, and foundation lock in
+`HCWDL_UNIFIED_BALANCED_TARGET_DIGEST_SHADOW_EVIDENCE/v1`; change exactly
+`hcwdl_unified_balanced_targets.py` and
+`hcwdl_unified_balanced_runner.py` in the frozen semantic-source map; use the
+explicit repair authorization phrase; and run only through
+`HCWDL_UNIFIED_BALANCED_EXECUTION_REPAIR_RECOVERY_SPEC/v1`. Ordinary campaign,
+source-recovery, and resource-recovery paths continue to reject the legacy
+lock mismatch. Any other digest or lineage mismatch fails closed. The repair
+also preflights shared U000 lineage before building an arm's RAM views.
 
 ## Reporting and final-test boundary
 

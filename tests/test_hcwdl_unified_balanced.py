@@ -55,12 +55,16 @@ from hlt_classification.scouting.hcwdl_unified_balanced_reporting import (
     validate_campaign_completion, validate_final_evaluation,
 )
 from hlt_classification.scouting.hcwdl_unified_balanced_runner import (
-    _target_attestation_context, _teacher_consumers,
+    TARGET_DIGEST_SHADOW_REPAIR, _target_attestation_context,
+    _teacher_consumers, validate_shared_u000_target_lineage,
 )
 from hlt_classification.scouting.hcwdl_recovery import (
     build_monitor_report, build_submission_ledger, validate_submission_ledger,
 )
 from hlt_classification.scouting.hcwdl_unified_balanced_recovery import (
+    EXECUTION_REPAIR_PHRASE, EXECUTION_REPAIR_SPEC_CONTRACT,
+    TARGET_DIGEST_SHADOW_SEMANTIC_FILES,
+    _validate_target_digest_shadow_source_change,
     build_recovery_spec, recovery_command_plan,
     validate_recovery_command_plan, validate_recovery_spec,
 )
@@ -714,7 +718,11 @@ def test_multi_consumer_teacher_cache_is_generic_and_identity_joined(tmp_path: P
         expected_rows=2, parents={"report": H}, teacher_id=teacher_id,
         consumers=consumers,
     )
-    validate_target_manifest(manifest, teacher_id=teacher_id, consumers=consumers)
+    manifest_hash = validate_target_manifest(
+        manifest, teacher_id=teacher_id, consumers=consumers,
+    )
+    assert manifest_hash == manifest["content_hash"]
+    assert manifest_hash != manifest["parents"]["report"]
     durable = DurableUnifiedBalancedTargets(
         manifest_path, teacher_id=teacher_id, consumers=consumers,
     ).as_ephemeral(teacher_report_sha256=H, split_manifest_sha256=H)
@@ -734,6 +742,51 @@ def test_shared_target_lock_binds_manifest_teacher_and_data_lineage() -> None:
     })
     with pytest.raises(PermissionError, match="incomplete"):
         validate_target_lock(broken)
+
+
+def test_target_digest_shadow_repair_is_exactly_scoped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = {
+        name: hashlib.sha256(f"old:{name}".encode()).hexdigest()
+        for name in TARGET_DIGEST_SHADOW_SEMANTIC_FILES
+    }
+    repaired = {
+        name: hashlib.sha256(f"new:{name}".encode()).hexdigest()
+        for name in TARGET_DIGEST_SHADOW_SEMANTIC_FILES
+    }
+    changes = _validate_target_digest_shadow_source_change(
+        expected=original, actual=repaired,
+    )
+    assert tuple(changes) == TARGET_DIGEST_SHADOW_SEMANTIC_FILES
+    with pytest.raises(ValueError, match="unexpected scientific source"):
+        _validate_target_digest_shadow_source_change(
+            expected={**original, "extra.py": H},
+            actual={**repaired, "extra.py": "b" * 64},
+        )
+
+    evidence = with_content_hash({
+        "contract": "HCWDL_UNIFIED_BALANCED_TARGET_DIGEST_SHADOW_EVIDENCE/v1",
+        "schema_version": 1, "classification": TARGET_DIGEST_SHADOW_REPAIR,
+        "foundation_spec_sha256": H, "foundation_lock_sha256": H,
+        "target_lock_sha256": H, "actual_target_manifest_sha256": H,
+        "recorded_target_manifest_sha256": "b" * 64,
+        "u000_report_sha256": "b" * 64,
+        "u000_checkpoint_sha256": H, "final_test_accessed": False,
+    })
+    monkeypatch.setattr(
+        "hlt_classification.scouting.hcwdl_unified_balanced_runner."
+        "inspect_shared_u000_target_lineage",
+        lambda **_kwargs: evidence,
+    )
+    with pytest.raises(ValueError, match="not foundation-locked"):
+        validate_shared_u000_target_lineage(
+            foundation_spec={}, foundation_root="unused",
+        )
+    assert validate_shared_u000_target_lineage(
+        foundation_spec={}, foundation_root="unused",
+        recovery_context={"target_digest_shadow_repair": evidence},
+    ) == evidence
 
 
 def test_recovered_target_uses_recovery_attestation_only_for_retried_teacher(
@@ -919,3 +972,36 @@ def test_foundation_creation_publishes_a_self_contained_waiver_and_six_arms(
     assert validate_recovery_command_plan(
         recovery_plan, recovery_spec=recovery,
     ) == recovery_plan["content_hash"]
+
+    from hlt_classification.scouting import hcwdl_unified_balanced_recovery as recovery_module
+
+    repaired_semantic = dict(spec["semantic_source_sha256"])
+    for name in TARGET_DIGEST_SHADOW_SEMANTIC_FILES:
+        repaired_semantic[name] = hashlib.sha256(f"fixed:{name}".encode()).hexdigest()
+    repair_evidence = with_content_hash({
+        "contract": "HCWDL_UNIFIED_BALANCED_TARGET_DIGEST_SHADOW_EVIDENCE/v1",
+        "schema_version": 1, "classification": TARGET_DIGEST_SHADOW_REPAIR,
+        "foundation_spec_sha256": spec["content_hash"],
+        "foundation_lock_sha256": lock["content_hash"],
+        "target_lock_sha256": H, "actual_target_manifest_sha256": H,
+        "recorded_target_manifest_sha256": "b" * 64,
+        "u000_report_sha256": "b" * 64,
+        "u000_checkpoint_sha256": H, "final_test_accessed": False,
+    })
+    monkeypatch.setattr(
+        recovery_module, "semantic_source_hashes", lambda _project: repaired_semantic,
+    )
+    monkeypatch.setattr(
+        recovery_module, "inspect_shared_u000_target_lineage",
+        lambda **_kwargs: repair_evidence,
+    )
+    execution_repair = build_recovery_spec(
+        scope_spec_path=tmp_path / f"arms/{recovery_arm}/arm_spec.json",
+        submission_ledger_path=live_path, monitor_report_path=monitor_path,
+        recovery_root=tmp_path / "execution_repair", project_dir=project,
+        source_commit="e" * 40, execution_repair=TARGET_DIGEST_SHADOW_REPAIR,
+        authorization_phrase=EXECUTION_REPAIR_PHRASE,
+    )
+    assert execution_repair["contract"] == EXECUTION_REPAIR_SPEC_CONTRACT
+    assert execution_repair["target_digest_shadow_repair"] == repair_evidence
+    assert validate_recovery_spec(execution_repair) == execution_repair["content_hash"]

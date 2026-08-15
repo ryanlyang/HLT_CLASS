@@ -189,6 +189,29 @@ execution-only commit, or a resource recovery using a JSON increase such as:
 Source and resource changes cannot be combined. Recovery schedules only the
 authenticated failed/downstream closure and preserves completed outputs.
 
+### U000 target-manifest digest-shadow recovery
+
+Foundation `hcwdl_ub_foundation_4edce019_r1` completed with intact U000
+targets, report, and checkpoint, but its target/foundation locks contain the
+report digest in the manifest-digest field because of a validator return-value
+shadow. Do not edit those immutable JSON files and do not rebuild the
+foundation. After monitoring each original arm ledger, create its recovery
+with:
+
+```text
+--execution-repair target_manifest_digest_shadow_execution_repair_v1
+--authorization-phrase \
+  "AUTHORIZE HCWDL UB TARGET MANIFEST DIGEST EXECUTION REPAIR"
+```
+
+The creator accepts this only when the new semantic-source map differs in the
+two exact repaired files, reconstructs the exact legacy defect from the
+foundation artifacts, and records the resulting evidence in the recovery
+spec. The recovery worker passes that evidence to the arm runner. The runner
+accepts it only for the exact old mismatch and validates it before the
+train/validation RAM caches are built. Use the ordinary exact-ID cancellation
+and recovery submission phrases for the original and replacement ledgers.
+
 ## 7. Validation aggregation and sealed test
 
 After all six completion artifacts exist, build the read-only aggregate and
