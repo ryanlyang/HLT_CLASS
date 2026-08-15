@@ -34,7 +34,8 @@ from hlt_classification.scouting.hcwdl_unified_balanced_cache import (
 )
 from hlt_classification.scouting.hcwdl_unified_balanced_campaign import (
     ARM_CREATION_PHRASE, ARM_RESOURCES, FOUNDATION_RESOURCES,
-    create_arm_specs, create_foundation, arm_tasks, foundation_tasks,
+    authenticate_parent_homotopy, create_arm_specs, create_foundation,
+    arm_tasks, foundation_tasks,
     validate_arm_campaign,
 )
 from hlt_classification.scouting.hcwdl_unified_balanced_contracts import (
@@ -529,7 +530,7 @@ def test_aggregate_completion_and_cross_arm_ranking_validate_semantics() -> None
 def test_operational_waiver_rejects_missing_verification_claim(tmp_path: Path) -> None:
     project = Path(__file__).resolve().parents[1]
     waiver = operational_waiver_payload(
-        source_commit="d" * 40, parent_completion_sha256=H,
+        source_commit="d" * 40, parent_preparation_lock_sha256=H,
         prior_smoke_completion_sha256=H, performance_guide_sha256=H,
         parent_weaver_parity_sha256=H, readiness_evidence_sha256=H,
         semantic_source_sha256={"source": H}, resources={"foundation": {}, "arm": {}},
@@ -543,6 +544,84 @@ def test_operational_waiver_rejects_missing_verification_claim(tmp_path: Path) -
     })
     with pytest.raises(PermissionError, match="verification evidence"):
         validate_operational_waiver(broken)
+
+
+def test_parent_authentication_uses_preparation_lock_without_campaign_completion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from hlt_classification.scouting import hcwdl_unified_balanced_campaign as campaign
+
+    root = tmp_path / "parent"
+    primary_root = tmp_path / "primary"
+    for path in (
+        root / "locks", root / "coupling", primary_root,
+    ):
+        path.mkdir(parents=True, exist_ok=True)
+
+    def publish(path: Path, **fields: object) -> dict[str, object]:
+        value = with_content_hash({
+            "contract": "TEST/v1", "schema_version": 1, **fields,
+        })
+        write_immutable_json(path, value)
+        return value
+
+    split = publish(tmp_path / "split.json")
+    selection = publish(tmp_path / "selection.json")
+    primary = publish(
+        primary_root / "campaign_spec.json",
+        role_counts={"train": 300_000, "validation": 100_000, "final_test": 100_000},
+        campaign_root=str(primary_root),
+    )
+    train_base = publish(
+        root / "coupling/train_base_manifest.json", shards=["a", "b"],
+    )
+    validation_base = publish(
+        root / "coupling/validation_base_manifest.json", shards=["c"],
+    )
+    publish(root / "coupling/train_manifest.json", rows=300_000)
+    publish(root / "coupling/validation_manifest.json", rows=100_000)
+    coupling = publish(root / "locks/coupling_lock.json")
+    endpoint = publish(
+        root / "locks/endpoint_equality_lock.json",
+        coupling_lock_sha256=coupling["content_hash"],
+    )
+    preparation = publish(
+        root / "locks/graph_recipe_lock.json",
+        endpoint_equality_lock_sha256=endpoint["content_hash"],
+        weaver_parity_sha256=H,
+    )
+    spec = with_content_hash({
+        "contract": "TEST_PARENT/v1", "schema_version": 1,
+        "mode": "pilot",
+        "role_counts": {"train": 300_000, "validation": 100_000, "final_test": 0},
+        "campaign_root": str(root),
+        "split_manifest_path": str(tmp_path / "split.json"),
+        "selection_manifest_path": str(tmp_path / "selection.json"),
+        "parent_campaign_spec_path": str(primary_root / "campaign_spec.json"),
+        "weaver_parity_sha256": H,
+    })
+    write_immutable_json(root / "campaign_spec.json", spec)
+
+    monkeypatch.setattr(campaign, "validate_parent_homotopy", lambda *_args, **_kwargs: spec["content_hash"])
+    monkeypatch.setattr(campaign, "validate_coupling_lock", lambda *_args, **_kwargs: coupling["content_hash"])
+    monkeypatch.setattr(campaign, "validate_endpoint_equality_lock", lambda *_args, **_kwargs: endpoint["content_hash"])
+    monkeypatch.setattr(campaign, "validate_graph_recipe_lock", lambda *_args, **_kwargs: preparation["content_hash"])
+    monkeypatch.setattr(campaign, "validate_base_manifest", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(campaign, "validate_coupling_manifest", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        campaign, "role_records",
+        lambda _split, role: [object()] * ({"train": 2, "validation": 1}[role]),
+    )
+
+    evidence = authenticate_parent_homotopy(root / "campaign_spec.json")
+    assert evidence["preparation_lock_hash"] == preparation["content_hash"]
+    assert evidence["coupling_lock_hash"] == coupling["content_hash"]
+    assert evidence["train_base_hash"] == train_base["content_hash"]
+    assert evidence["validation_base_hash"] == validation_base["content_hash"]
+    assert not (root / "reports/campaign_complete.json").exists()
+    assert primary["content_hash"] == evidence["primary_hash"]
+    assert split["content_hash"] == evidence["split_hash"]
+    assert selection["content_hash"] == evidence["selection_hash"]
 
 
 def test_final_locks_and_sealed_completion_fail_closed() -> None:
@@ -714,7 +793,9 @@ def test_foundation_creation_publishes_a_self_contained_waiver_and_six_arms(
             },
         },
         "spec_path": tmp_path / "parent_spec.json", "spec_hash": H,
-        "root": parent_root, "completion_hash": H, "coupling_lock_hash": H,
+        "root": parent_root, "preparation_lock_hash": H,
+        "preparation_lock_path": parent_root / "locks/graph_recipe_lock.json",
+        "coupling_lock_hash": H,
         "primary": {}, "primary_path": primary_path, "primary_hash": H,
         "primary_root": primary_root, "split": fake_split, "split_hash": H,
         "selection": {}, "selection_hash": H, "train_base_hash": H,
@@ -741,7 +822,7 @@ def test_foundation_creation_publishes_a_self_contained_waiver_and_six_arms(
     )
     source_commit = "d" * 40
     waiver = operational_waiver_payload(
-        source_commit=source_commit, parent_completion_sha256=H,
+        source_commit=source_commit, parent_preparation_lock_sha256=H,
         prior_smoke_completion_sha256=H,
         performance_guide_sha256=sha256_file(
             project / "docs/HCWDL_RAGGED_PREPROCESSING_PERFORMANCE_GUIDE.md"

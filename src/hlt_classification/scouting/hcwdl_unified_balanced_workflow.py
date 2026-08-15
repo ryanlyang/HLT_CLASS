@@ -221,7 +221,7 @@ class UnifiedBalancedFoundationWorkflow:
             expected = self.spec["parents"]
             actual = {
                 "parent_homotopy_spec_sha256": evidence["spec_hash"],
-                "parent_homotopy_completion_sha256": evidence["completion_hash"],
+                "parent_homotopy_preparation_sha256": evidence["preparation_lock_hash"],
                 "parent_campaign_spec_sha256": evidence["primary_hash"],
                 "split_manifest_sha256": evidence["split_hash"],
                 "selection_manifest_sha256": evidence["selection_hash"],

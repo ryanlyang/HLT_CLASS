@@ -13,6 +13,9 @@ from hlt_classification.data.cache_contracts import (
 )
 
 from .hcwdl_homotopy_campaign import validate_campaign as validate_parent_homotopy
+from .hcwdl_homotopy_locks import (
+    validate_endpoint_equality_lock, validate_graph_recipe_lock,
+)
 from .engine import validate_pmard_training_report
 from .hcwdl_unified_balanced_contracts import (
     ARM_COMMAND_PLAN_CONTRACT, FOUNDATION_COMMAND_PLAN_CONTRACT,
@@ -24,7 +27,9 @@ from .hcwdl_unified_balanced_contracts import (
     validate_foundation_lock, validate_operational_waiver,
 )
 from .hcwdl_unified_balanced_graph import arm_registry
-from .hcwdl_upper_cache import validate_base_manifest, validate_coupling_manifest
+from .hcwdl_upper_cache import (
+    validate_base_manifest, validate_coupling_lock, validate_coupling_manifest,
+)
 from .splits import role_records
 
 
@@ -109,21 +114,37 @@ def _artifact(path: str | Path, contract: str | None = None) -> tuple[dict[str, 
 
 
 def authenticate_parent_homotopy(path: str | Path) -> dict[str, Any]:
-    """Authenticate a complete fixed-preprocessing 300k U/J parent by hash."""
+    """Authenticate the complete fixed-preprocessing prefix of a 300k U/J parent."""
 
     spec_path = Path(path).resolve(); spec = load_json(spec_path)
     spec_hash = validate_parent_homotopy(spec, executable=False)
     if spec.get("mode") != "pilot" or spec.get("role_counts") != {
         "train": 300_000, "validation": 100_000, "final_test": 0,
     }:
-        raise ValueError("HCWDL-UB requires the exact completed 300k U/J parent")
+        raise ValueError("HCWDL-UB requires the exact prepared 300k U/J parent")
     root = Path(spec["campaign_root"])
     if spec_path != (root / "campaign_spec.json").resolve():
         raise ValueError("HCWDL-UB parent specification is not canonical")
-    complete, complete_hash = _artifact(root / "reports/campaign_complete.json")
-    _, coupling_lock_hash = _artifact(root / "locks/coupling.json")
-    if complete.get("final_test_accessed") is not False:
-        raise PermissionError("HCWDL-UB parent accessed final test")
+    coupling_lock_path = root / "locks/coupling_lock.json"
+    coupling_lock, coupling_lock_hash = _artifact(coupling_lock_path)
+    validate_coupling_lock(
+        coupling_lock, campaign_spec_sha256=spec_hash,
+    )
+    endpoint_lock_path = root / "locks/endpoint_equality_lock.json"
+    endpoint_lock, endpoint_lock_hash = _artifact(endpoint_lock_path)
+    validate_endpoint_equality_lock(
+        endpoint_lock, campaign_spec_sha256=spec_hash,
+        expected={"coupling_lock_sha256": coupling_lock_hash},
+    )
+    preparation_lock_path = root / "locks/graph_recipe_lock.json"
+    preparation_lock, preparation_lock_hash = _artifact(preparation_lock_path)
+    validate_graph_recipe_lock(
+        preparation_lock, campaign_spec_sha256=spec_hash,
+        expected={
+            "endpoint_equality_lock_sha256": endpoint_lock_hash,
+            "weaver_parity_sha256": spec["weaver_parity_sha256"],
+        },
+    )
     train_base, train_base_hash = _artifact(root / "coupling/train_base_manifest.json")
     validation_base, validation_base_hash = _artifact(
         root / "coupling/validation_base_manifest.json"
@@ -152,7 +173,9 @@ def authenticate_parent_homotopy(path: str | Path) -> dict[str, Any]:
     primary_root = Path(primary["campaign_root"])
     return {
         "spec": spec, "spec_path": spec_path, "spec_hash": spec_hash,
-        "root": root, "completion": complete, "completion_hash": complete_hash,
+        "root": root,
+        "preparation_lock_path": preparation_lock_path.resolve(),
+        "preparation_lock_hash": preparation_lock_hash,
         "coupling_lock_hash": coupling_lock_hash,
         "split": split, "split_hash": split_hash,
         "selection": selection, "selection_hash": selection_hash,
@@ -340,8 +363,11 @@ def create_foundation(
     waiver_hash = validate_operational_waiver(waiver)
     if waiver.get("source_commit") != source_commit:
         raise ValueError("HCWDL-UB waiver/source commit differs")
-    if waiver.get("parent_completion_sha256") != evidence["completion_hash"]:
-        raise ValueError("HCWDL-UB waiver does not bind this completed parent")
+    if (
+        waiver.get("parent_preparation_lock_sha256")
+        != evidence["preparation_lock_hash"]
+    ):
+        raise ValueError("HCWDL-UB waiver does not bind this prepared parent")
     if waiver.get("parent_weaver_parity_sha256") != evidence["spec"].get("weaver_parity_sha256"):
         raise ValueError("HCWDL-UB waiver does not bind the parent Weaver parity")
     guide = project / "docs/HCWDL_RAGGED_PREPROCESSING_PERFORMANCE_GUIDE.md"
@@ -377,7 +403,8 @@ def create_foundation(
         "legacy_validation_manifest": evidence["root"] / "coupling/validation_manifest.json",
         "assignment_lock": evidence["primary_root"] / "locks/assignment.json",
         "recipe": evidence["spec"]["recipe_path"],
-        "base_coupling_lock": evidence["root"] / "locks/coupling.json",
+        "base_coupling_lock": evidence["root"] / "locks/coupling_lock.json",
+        "parent_preparation_lock": evidence["preparation_lock_path"],
         "operational_waiver": root / "operational_evidence_waiver.json",
         "factorial_spec": factorial["spec_path"],
         "factorial_aggregate": factorial["aggregate_path"],
@@ -385,7 +412,7 @@ def create_foundation(
     }
     parents = {
         "parent_homotopy_spec_sha256": evidence["spec_hash"],
-        "parent_homotopy_completion_sha256": evidence["completion_hash"],
+        "parent_homotopy_preparation_sha256": evidence["preparation_lock_hash"],
         "parent_campaign_spec_sha256": evidence["primary_hash"],
         "split_manifest_sha256": evidence["split_hash"],
         "selection_manifest_sha256": evidence["selection_hash"],

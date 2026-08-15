@@ -9,7 +9,7 @@ from .hcwdl_unified_balanced_campaign import (
     ACCOUNT, PARTITION, semantic_source_hashes,
     validate_arm_campaign, validate_foundation_campaign,
 )
-from .hcwdl_unified_balanced_contracts import RECOVERY_SPEC_CONTRACT, RESOURCE_RECOVERY_SPEC_CONTRACT
+from .hcwdl_unified_balanced_contracts import FOUNDATION_SPEC_CONTRACT, RECOVERY_SPEC_CONTRACT, RESOURCE_RECOVERY_SPEC_CONTRACT
 
 
 def _memory_gib(value: str) -> int:
@@ -33,7 +33,7 @@ def build_recovery_spec(
     resource_overrides: Mapping[str,Mapping[str,Any]]|None=None,
 ) -> dict[str,Any]:
     scope_path=Path(scope_spec_path).resolve(); scope=load_json(scope_path)
-    foundation_scope = scope.get("contract", "").endswith("FOUNDATION_SPEC/v1")
+    foundation_scope = scope.get("contract") == FOUNDATION_SPEC_CONTRACT
     (validate_foundation_campaign if foundation_scope else validate_arm_campaign)(
         scope, executable=False, verify_source_tree=False,
     )

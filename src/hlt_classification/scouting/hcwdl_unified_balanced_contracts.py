@@ -30,7 +30,7 @@ RECIPE_ARM_CONTRACT: Final = "HCWDL_UNIFIED_BALANCED_RECIPE_ARM/v1"
 RECIPE_SWEEP_CONTRACT: Final = "HCWDL_UNIFIED_BALANCED_RECIPE_SWEEP/v1"
 RECIPE_SWEEP_AGGREGATE_CONTRACT: Final = "HCWDL_UNIFIED_BALANCED_RECIPE_SWEEP_AGGREGATE/v1"
 ENDPOINT_LOCK_CONTRACT: Final = "HCWDL_UNIFIED_BALANCED_ENDPOINT_LOCK/v1"
-FOUNDATION_SPEC_CONTRACT: Final = "HCWDL_UNIFIED_BALANCED_FOUNDATION_SPEC/v1"
+FOUNDATION_SPEC_CONTRACT: Final = "HCWDL_UNIFIED_BALANCED_FOUNDATION_SPEC/v2"
 FOUNDATION_COMMAND_PLAN_CONTRACT: Final = "HCWDL_UNIFIED_BALANCED_FOUNDATION_COMMAND_PLAN/v1"
 FOUNDATION_LOCK_CONTRACT: Final = "HCWDL_UNIFIED_BALANCED_FOUNDATION_LOCK/v1"
 ARM_CAMPAIGN_SPEC_CONTRACT: Final = "HCWDL_UNIFIED_BALANCED_ARM_CAMPAIGN_SPEC/v1"
@@ -44,7 +44,7 @@ FINAL_EVALUATION_CONTRACT: Final = "HCWDL_UNIFIED_BALANCED_FINAL_EVALUATION/v1"
 CAMPAIGN_COMPLETION_CONTRACT: Final = "HCWDL_UNIFIED_BALANCED_CAMPAIGN_COMPLETE/v1"
 RECOVERY_SPEC_CONTRACT: Final = "HCWDL_UNIFIED_BALANCED_RECOVERY_SPEC/v1"
 RESOURCE_RECOVERY_SPEC_CONTRACT: Final = "HCWDL_UNIFIED_BALANCED_RESOURCE_RECOVERY_SPEC/v1"
-OPERATIONAL_WAIVER_CONTRACT: Final = "HCWDL_UNIFIED_BALANCED_OPERATIONAL_EVIDENCE_WAIVER/v1"
+OPERATIONAL_WAIVER_CONTRACT: Final = "HCWDL_UNIFIED_BALANCED_OPERATIONAL_EVIDENCE_WAIVER/v2"
 TARGET_SHARD_CONTRACT: Final = "HCWDL_UNIFIED_BALANCED_TARGET_SHARD/v1"
 TARGET_MANIFEST_CONTRACT: Final = "HCWDL_UNIFIED_BALANCED_TARGET_MANIFEST/v1"
 TARGET_LOCK_CONTRACT: Final = "HCWDL_UNIFIED_BALANCED_TARGET_LOCK/v1"
@@ -224,7 +224,7 @@ def foundation_spec_payload(
         "validation_assignment_manifest", "train_base_manifest",
         "validation_base_manifest", "legacy_train_manifest",
         "legacy_validation_manifest", "assignment_lock", "recipe",
-        "base_coupling_lock", "operational_waiver",
+        "base_coupling_lock", "parent_preparation_lock", "operational_waiver",
         "factorial_spec", "factorial_aggregate", "factorial_completion",
     }
     if set(artifact_paths) != required_paths:
@@ -337,7 +337,7 @@ def validate_endpoint_lock(value: Mapping[str, Any]) -> str:
 
 
 def operational_waiver_payload(
-    *, source_commit: str, parent_completion_sha256: str,
+    *, source_commit: str, parent_preparation_lock_sha256: str,
     prior_smoke_completion_sha256: str, performance_guide_sha256: str,
     parent_weaver_parity_sha256: str, readiness_evidence_sha256: str,
     semantic_source_sha256: Mapping[str, str],
@@ -350,8 +350,8 @@ def operational_waiver_payload(
     return with_content_hash({
         "contract": OPERATIONAL_WAIVER_CONTRACT, "schema_version": 1,
         "source_commit": source_commit,
-        "parent_completion_sha256": require_sha256(
-            parent_completion_sha256, name="parent completion",
+        "parent_preparation_lock_sha256": require_sha256(
+            parent_preparation_lock_sha256, name="parent preparation lock",
         ),
         "prior_smoke_completion_sha256": require_sha256(
             prior_smoke_completion_sha256, name="prior smoke completion",
@@ -384,7 +384,7 @@ def validate_operational_waiver(value: Mapping[str, Any]) -> str:
         or value.get("final_test_accessed") is not False
     ):
         raise PermissionError("HCWDL-UB operational waiver differs")
-    for name in ("parent_completion_sha256", "prior_smoke_completion_sha256",
+    for name in ("parent_preparation_lock_sha256", "prior_smoke_completion_sha256",
                  "performance_guide_sha256", "parent_weaver_parity_sha256",
                  "readiness_evidence_sha256"):
         require_sha256(value.get(name), name=name)

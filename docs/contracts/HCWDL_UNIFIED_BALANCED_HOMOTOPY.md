@@ -89,6 +89,11 @@ attestations, monitors, and ledgers.
 
 Every reusable artifact binds source/split/row-selection identities, exact
 parent hashes, producer commit, and logical and byte hashes as appropriate.
+Foundation-spec v2 and operational-waiver v2 bind the completed U/J
+fixed-preprocessing prefix through its graph/recipe lock, endpoint-equality
+lock, coupling lock, and manifests. They deliberately do not require the
+unrelated U/J training graph or validation aggregate to finish before the
+new campaign can run in parallel.
 The foundation lock binds both shared engine-report hashes, both selected
 checkpoint hashes, the U000 target manifest, and the separately validated
 target lock. Every arm validator reauthenticates that foundation lock and its

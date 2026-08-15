@@ -10,10 +10,10 @@ from hlt_classification.scouting.hcwdl_authorization import validate_source_chec
 from hlt_classification.scouting.hcwdl_recovery import assemble_submission_ledger, build_submission_event, build_submission_ledger, validate_submission_ledger  # noqa: E402
 from hlt_classification.scouting.hcwdl_unified_balanced_campaign import ARM_SUBMISSION_PHRASE, FOUNDATION_SUBMISSION_PHRASE  # noqa: E402
 from hlt_classification.scouting.hcwdl_unified_balanced_campaign import validate_arm_campaign, validate_foundation_campaign  # noqa: E402
-from hlt_classification.scouting.hcwdl_unified_balanced_contracts import ARM_COMMAND_PLAN_CONTRACT, FOUNDATION_COMMAND_PLAN_CONTRACT, validate_arm_spec, validate_foundation_spec  # noqa: E402
+from hlt_classification.scouting.hcwdl_unified_balanced_contracts import ARM_COMMAND_PLAN_CONTRACT, FOUNDATION_COMMAND_PLAN_CONTRACT, FOUNDATION_SPEC_CONTRACT, validate_arm_spec, validate_foundation_spec  # noqa: E402
 def main()->int:
     p=argparse.ArgumentParser(description=__doc__); p.add_argument("--spec",type=Path,required=True); p.add_argument("--output",type=Path,required=True); p.add_argument("--execute",action="store_true"); p.add_argument("--authorization-phrase"); a=p.parse_args(); spec=load_json(a.spec)
-    foundation=spec["contract"].endswith("FOUNDATION_SPEC/v1"); (validate_foundation_campaign if foundation else validate_arm_campaign)(spec,executable=a.execute)
+    foundation=spec["contract"] == FOUNDATION_SPEC_CONTRACT; (validate_foundation_campaign if foundation else validate_arm_campaign)(spec,executable=a.execute)
     canonical=Path(spec["campaign_root"])/("foundation_spec.json" if foundation else "arm_spec.json")
     if a.spec.resolve()!=canonical.resolve(): raise PermissionError("HCWDL-UB submitter requires the canonical spec")
     if spec.get("live_submission_authorized") is not True: raise PermissionError("HCWDL-UB spec is not live-authorized")

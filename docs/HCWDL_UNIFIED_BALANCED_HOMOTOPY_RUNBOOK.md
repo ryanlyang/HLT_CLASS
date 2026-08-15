@@ -31,8 +31,10 @@ export UB_ARMS_ROOT="${MAIN_REPO}/checkpoints/hcwdl_ub_arms_${UB_SHORT}_r1"
 export UB_LEDGER_ROOT="${MAIN_REPO}/checkpoints/hcwdl_ub_ledgers_${UB_SHORT}_r1"
 ```
 
-Set these three authenticated inputs explicitly. Do not select them merely by
-newest modification time:
+Set these three authenticated inputs explicitly. The U/J parent needs its
+completed fixed-preprocessing prefix through `locks/graph_recipe_lock.json`;
+its scientifically unrelated training descendants and aggregate do not need
+to be complete. Do not select inputs merely by newest modification time:
 
 ```bash
 export PARENT_UJ_ROOT=/absolute/path/to/completed/300k/hcwdl_uj_campaign
@@ -40,8 +42,10 @@ export PARENT_UJ_SPEC="${PARENT_UJ_ROOT}/campaign_spec.json"
 export FACTORIAL_ROOT=/absolute/path/to/completed/300k/architecture_input_factorial
 export FACTORIAL_SPEC="${FACTORIAL_ROOT}/campaign_spec.json"
 export PRIOR_UJ_SMOKE_COMPLETE=/absolute/path/to/completed/v1/smoke/reports/campaign_complete.json
-test -f "${PARENT_UJ_ROOT}/reports/campaign_complete.json"
 test -f "${PARENT_UJ_SPEC}"
+test -f "${PARENT_UJ_ROOT}/locks/coupling_lock.json"
+test -f "${PARENT_UJ_ROOT}/locks/endpoint_equality_lock.json"
+test -f "${PARENT_UJ_ROOT}/locks/graph_recipe_lock.json"
 test -f "${FACTORIAL_ROOT}/reports/campaign_complete.json"
 test -f "${FACTORIAL_SPEC}"
 test -f "${PRIOR_UJ_SMOKE_COMPLETE}"
@@ -55,7 +59,7 @@ This is an evidence lock, not a claim that HCWDL-UB itself passed a smoke.
 export UB_WAIVER="${MAIN_REPO}/checkpoints/hcwdl_ub_waiver_${UB_SHORT}.json"
 python -s "${UB_WORKTREE}/scripts/build_hcwdl_unified_balanced_waiver.py" \
   --source-commit "${UB_COMMIT}" \
-  --parent-completion "${PARENT_UJ_ROOT}/reports/campaign_complete.json" \
+  --parent-preparation-lock "${PARENT_UJ_ROOT}/locks/graph_recipe_lock.json" \
   --parent-homotopy-spec "${PARENT_UJ_SPEC}" \
   --prior-smoke-completion "${PRIOR_UJ_SMOKE_COMPLETE}" \
   --performance-guide "${UB_WORKTREE}/docs/HCWDL_RAGGED_PREPROCESSING_PERFORMANCE_GUIDE.md" \

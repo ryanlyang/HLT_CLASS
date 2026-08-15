@@ -61,8 +61,9 @@ Local readiness evidence at this checkpoint:
   real six-arm dry-run wrapper, six validated dry-run ledgers, and an exact
   resource-recovery closure/command plan all passed;
 - all 17 new CLI help surfaces passed;
-- all 30 new contract constants are exact `/v1` identities and appear in the
-  implementation plan or reusable contract;
+- all 30 new contract constants are versioned identities and appear in the
+  implementation plan or reusable contract; the launch-boundary correction
+  versions foundation spec and operational waiver to `/v2`;
 - Python compilation, Git-Bash syntax checks for all three new Slurm workers,
   six-document Markdown-link validation, and `git diff --check` passed.
 
@@ -74,14 +75,29 @@ cancellation, remote push, or final-test access occurred during this local
 implementation.
 
 Exact next task: commit and push the complete clean source, create a detached
-Tigris worktree at that full commit, bind the exact completed 300k HCWDL-UJ
-parent, completed 300k architecture-input factorial, and prior UJ smoke
-completion, build the evidence waiver, then create and dry-run the shared
+Tigris worktree at that full commit, bind the exact prepared 300k HCWDL-UJ
+prefix through its graph/recipe lock, the completed 300k architecture-input
+factorial, and prior UJ smoke completion, build the evidence waiver, then create and dry-run the shared
 foundation. Live foundation submission still requires its exact explicit
 phrase. Only after the immutable foundation lock exists should the six arm
 specs be created, dry-run, and submitted in parallel with the single exact
 six-arm authorization command. No additional HCWDL-UB smoke is required or
 claimed.
+
+The first Tigris launch attempt at `c05e3b7` correctly submitted no jobs but
+exposed two launch-boundary defects: parent discovery required the unrelated
+U/J campaign-completion report, and it named the real coupling lock as
+`locks/coupling.json` instead of `locks/coupling_lock.json`. The intended
+parallel experiment only requires the already authorized fixed-preprocessing
+prefix. Foundation-spec v2 and operational-waiver v2 therefore authenticate
+the exact coupling, endpoint-equality, and graph/recipe locks plus their
+manifests without waiting for old U/J training descendants. This changes no
+particle, graph, loss, seed, or resource semantics and still fails closed if
+any required preparation lineage is absent or mismatched. The corrected
+HCWDL-UJ/UB/recovery focus passes 86/86; the complete repository suite passes
+463/463 in 204.10 seconds with one existing PRAD tensor warning and the local
+pytest-cache permission warning. Python compilation, the revised waiver CLI,
+and `git diff --check` also pass.
 
 ## HCWDL-UJ combined execution/resource recovery (2026-08-14)
 
