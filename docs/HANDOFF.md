@@ -2214,3 +2214,37 @@ step is two independent 50-batch Tigris diagnostic jobs for `F_RSET_U020` and
 repair targets the representation kernel, repeated synchronization in gradient
 validation, host/device joining, or another step component. No live job was
 submitted by this change and no final-test data were accessed.
+
+The exact pushed profiler at `3406f2d8` subsequently completed on two GH200s.
+Job `87648` measured 50 `F_RSET_U020` batches at pass 7: mean step time was
+1.723164 s, of which set representation consumed 60.32%, backward 34.46%, and
+model forward 3.29%. Job `87649` measured 50 `F_RREL_U020` batches at pass 5:
+mean step time was 4.862944 s, of which relation representation consumed
+44.64%, set representation 19.68%, backward 33.73%, and model forward 1.15%.
+Transfers, target joins, optimizer updates, and gradient-finiteness scans were
+each below 1.3%. This localizes the optimizer slowdown to the fragmented
+finite-spectral student graph; additional CPUs cannot repair it.
+
+The execution-only repair keeps each immutable spectral omega/phase block on
+its consuming device for the worker lifetime, batches padded ordinary/native
+set means into a small number of tensor operations, and constructs the exact
+top-32 relation topology with the historical FP64 p4, NumPy lexicographic tie,
+stratum, and ESS rules before evaluating all live latent cosines and spectral
+means in one batched differentiable graph. Historical rowwise implementations
+remain independent acceptance oracles. Teacher target generation explicitly
+retains the historical rowwise evaluation order, so recovery cannot change
+previously frozen target bytes. The scientific kernel resources, targets,
+eligibility, reductions, schedules, graph, and contracts are unchanged.
+
+Local pre-Tigris evidence for the repair: 67 combined representation,
+homotopy-representation, profiler, and production tests passed, followed by
+the complete repository suite at 975 passed, 9 platform skips, and 14
+dependency warnings in 462.64 seconds. New parity
+fixtures cover ordinary and native set forward/gradient equality, relation
+eligibility/count/FP64-ESS equality, relation forward/backbone-gradient
+equality, topology reuse and stale-input rejection, padding/ineligible
+populations, and device-resource reuse. The scalar-vs-batched maximum
+differences in the explicit fixtures are within the existing
+numerical-acceptance tolerances. A repeated 50-batch GH200 profile at the exact
+corrected commit remains required before recovery of the live pilot. No live
+job was submitted by this repair and no final-test data were accessed.

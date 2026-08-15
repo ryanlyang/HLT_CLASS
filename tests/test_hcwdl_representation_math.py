@@ -18,6 +18,7 @@ from hlt_classification.scouting.hcwdl_representation_kernels import (
     slow_pairwise_finite_mmd,
     weighted_feature_mean,
 )
+from hlt_classification.scouting import hcwdl_representation_kernels as kernels
 from hlt_classification.scouting.hcwdl_numerical_acceptance import (
     NUMERICAL_ACCEPTANCE_CONTRACT,
     build_numerical_acceptance_preview,
@@ -208,6 +209,120 @@ def test_family_rules_token_weights_and_set_permutation_padding_invariance():
     assert states.grad is not None and torch.isfinite(states.grad).all()
 
 
+def test_vectorized_set_losses_match_rowwise_forward_and_gradients():
+    resources = generate_spectral_resources("token")
+    torch.manual_seed(730)
+    batch, particles = 4, 12
+    vectors = _vectors([
+        (12 - index * .5, index * .03, index * .04)
+        for index in range(particles)
+    ]).repeat(batch, 1, 1)
+    visible = torch.ones(batch, particles, dtype=torch.bool)
+    visible[1, -2:] = False
+    visible[2, -1] = False
+    labels = torch.arange(batch)
+    class_weights = torch.ones(15)
+
+    ordinary_target = torch.randn(batch, resources.total_features)
+    target_present = torch.tensor([True, True, False, True])
+    reference_states = torch.randn(batch, particles, 128, requires_grad=True)
+    optimized_states = reference_states.detach().clone().requires_grad_()
+    reference_projection = nn.Linear(128, 128, bias=False)
+    optimized_projection = nn.Linear(128, 128, bias=False)
+    optimized_projection.load_state_dict(reference_projection.state_dict())
+    reference = losses._ordinary_set_representation_loss_reference(
+        reference_states, vectors, visible, ordinary_target, target_present,
+        reference_projection, resources, labels=labels,
+        class_weights=class_weights,
+    )
+    optimized = losses.ordinary_set_representation_loss(
+        optimized_states, vectors, visible, ordinary_target, target_present,
+        optimized_projection, resources, labels=labels,
+        class_weights=class_weights,
+    )
+    assert torch.equal(reference.family_eligible, optimized.family_eligible)
+    assert torch.allclose(
+        reference.reduction.per_jet, optimized.reduction.per_jet,
+        atol=2.0e-6, rtol=2.0e-6,
+    )
+    reference.reduction.loss.backward()
+    optimized.reduction.loss.backward()
+    assert torch.allclose(
+        reference_states.grad, optimized_states.grad,
+        atol=2.0e-7, rtol=2.0e-5,
+    )
+    assert torch.allclose(
+        reference_projection.weight.grad, optimized_projection.weight.grad,
+        atol=2.0e-6, rtol=2.0e-5,
+    )
+
+    family = torch.tensor(
+        np.tile(np.asarray([0, 1, 0, 1, 2, 3] * 2, np.int8), (batch, 1)),
+    )
+    native_target = torch.randn(batch, 2, resources.total_features)
+    native_present = torch.tensor([
+        [True, True], [True, False], [False, True], [True, True],
+    ])
+    reference_states = torch.randn(batch, particles, 128, requires_grad=True)
+    optimized_states = reference_states.detach().clone().requires_grad_()
+    reference_projections = tuple(
+        nn.Linear(128, 128, bias=False) for _ in range(2)
+    )
+    optimized_projections = tuple(
+        nn.Linear(128, 128, bias=False) for _ in range(2)
+    )
+    for left, right in zip(
+        reference_projections, optimized_projections, strict=True,
+    ):
+        right.load_state_dict(left.state_dict())
+    reference = losses._native_offline_set_representation_loss_reference(
+        reference_states, vectors, visible, family, native_target,
+        native_present, reference_projections, resources, labels=labels,
+        class_weights=class_weights,
+    )
+    optimized = losses.native_offline_set_representation_loss(
+        optimized_states, vectors, visible, family, native_target,
+        native_present, optimized_projections, resources, labels=labels,
+        class_weights=class_weights,
+    )
+    assert torch.equal(reference.family_eligible, optimized.family_eligible)
+    assert torch.allclose(
+        reference.family_losses, optimized.family_losses,
+        atol=2.0e-6, rtol=2.0e-6,
+    )
+    reference.reduction.loss.backward()
+    optimized.reduction.loss.backward()
+    assert torch.allclose(
+        reference_states.grad, optimized_states.grad,
+        atol=2.0e-7, rtol=2.0e-5,
+    )
+    for left, right in zip(
+        reference_projections, optimized_projections, strict=True,
+    ):
+        assert torch.allclose(
+            left.weight.grad, right.weight.grad,
+            atol=2.0e-6, rtol=2.0e-5,
+        )
+
+
+def test_spectral_resources_are_reused_on_one_device_without_value_drift():
+    resources = generate_spectral_resources("token")
+    values = torch.randn(3, 128)
+    kernels._DEVICE_BLOCK_CACHE.clear()
+    first = finite_spectral_features(values, resources)
+    assert len(kernels._DEVICE_BLOCK_CACHE) == 1
+    cached = next(iter(kernels._DEVICE_BLOCK_CACHE.values()))[1]
+    pointers = tuple(
+        (omega.data_ptr(), phase.data_ptr()) for omega, phase in cached
+    )
+    second = finite_spectral_features(values, resources)
+    repeated = next(iter(kernels._DEVICE_BLOCK_CACHE.values()))[1]
+    assert pointers == tuple(
+        (omega.data_ptr(), phase.data_ptr()) for omega, phase in repeated
+    )
+    assert torch.equal(first, second)
+
+
 def test_relation_strata_pair_gate_ties_and_live_encoder_gradient():
     strata = losses._relation_stratum(np.asarray([0.0, 0.049999, 0.05, 0.199999, 0.20]))
     assert strata.tolist() == [0, 0, 1, 1, 2]
@@ -236,6 +351,79 @@ def test_relation_strata_pair_gate_ties_and_live_encoder_gradient():
     assert result.reduction.eligible_count == 1
     result.reduction.loss.backward()
     assert states.grad is not None and states.grad.abs().sum() > 0
+
+
+@pytest.mark.parametrize("with_families", [False, True])
+def test_vectorized_relation_matches_rowwise_forward_gradient_and_topology_reuse(
+    with_families,
+):
+    resources = generate_spectral_resources("relation")
+    torch.manual_seed(811 + int(with_families))
+    batch, particles = 3, 20
+    vectors = _vectors([
+        (
+            20 - index * .6,
+            (index % 5) * .012 + (index // 5) * .24,
+            (index % 5) * .011 + (index // 5) * .27,
+        )
+        for index in range(particles)
+    ]).repeat(batch, 1, 1)
+    visible = torch.ones(batch, particles, dtype=torch.bool)
+    visible[1, -2:] = False
+    identities = torch.arange(particles).repeat(batch, 1)
+    identities[2] = identities[2].flip(0)
+    family = (
+        torch.tensor(
+            np.tile(np.asarray([0, 1] * 10, np.int8), (batch, 1)),
+        )
+        if with_families else None
+    )
+    reference_states = torch.randn(
+        batch, particles, 128, requires_grad=True,
+    )
+    optimized_states = reference_states.detach().clone().requires_grad_()
+    reference = losses._build_student_relation_sketches_reference(
+        reference_states, vectors, visible, identities, resources,
+        family_codes=family,
+    )
+    topology = losses.build_relation_topology(
+        vectors, visible, identities, family_codes=family,
+    )
+    optimized = losses.build_student_relation_sketches(
+        optimized_states, vectors, visible, identities, resources,
+        family_codes=family, topology=topology,
+    )
+    assert torch.equal(reference.eligible, optimized.eligible)
+    assert torch.equal(reference.pair_counts, optimized.pair_counts)
+    assert torch.equal(
+        reference.effective_sample_sizes, optimized.effective_sample_sizes,
+    )
+    assert torch.allclose(
+        reference.means, optimized.means, atol=2.0e-7, rtol=2.0e-6,
+    )
+    repeated = losses.build_student_relation_sketches(
+        optimized_states, vectors, visible, identities, resources,
+        family_codes=family, topology=topology,
+    )
+    assert torch.equal(optimized.eligible, repeated.eligible)
+    assert torch.equal(optimized.pair_counts, repeated.pair_counts)
+    assert torch.equal(optimized.means, repeated.means)
+    reference_loss = reference.means.square().sum()
+    optimized_loss = optimized.means.square().sum()
+    reference_loss.backward()
+    optimized_loss.backward()
+    assert torch.allclose(
+        reference_states.grad, optimized_states.grad,
+        atol=5.0e-8, rtol=3.0e-5,
+    )
+
+    changed_vectors = vectors.clone()
+    changed_vectors[0, 0, 0] += 1.0
+    with pytest.raises(ValueError, match="topology input lineage differs"):
+        losses.build_student_relation_sketches(
+            optimized_states.detach(), changed_vectors, visible, identities,
+            resources, family_codes=family, topology=topology,
+        )
 
 
 def test_toff_set_and_relation_keep_families_separate_and_exclude_unclassified():

@@ -37,6 +37,18 @@ RELATION_FEATURES_PER_BANDWIDTH: Final = 64
 K_TOKEN: Final = 1024
 K_RELATION: Final = 256
 
+
+# Frozen resources are immutable for the lifetime of a worker.  Keep one
+# device copy per concrete resource object/device instead of copying four
+# omega/phase blocks from NumPy for every jet (and, for RREL, every stratum).
+# The object itself is retained in the value so an id cannot be recycled into
+# a stale entry.  This is a process-local execution cache, never artifact
+# lineage or scientific state.
+_DEVICE_BLOCK_CACHE: dict[
+    tuple[int, str, int | None],
+    tuple["SpectralKernelResources", tuple[tuple[object, object], ...]],
+] = {}
+
 _TOKEN_RESOURCE_NAMES: Final = (
     "token_rbf_sigma_0p10",
     "token_rbf_sigma_0p25",
@@ -469,10 +481,25 @@ def finite_spectral_features(values, resources: SpectralKernelResources):
     if not torch.isfinite(value).all():
         raise FloatingPointError("finite-kernel inputs are nonfinite")
     scale = math.sqrt(2.0 / resources.total_features)
+    key = (id(resources), value.device.type, value.device.index)
+    cached = _DEVICE_BLOCK_CACHE.get(key)
+    if cached is None or cached[0] is not resources:
+        device_blocks = tuple(
+            (
+                torch.as_tensor(
+                    block.omega, dtype=torch.float32, device=value.device,
+                ),
+                torch.as_tensor(
+                    block.phase, dtype=torch.float32, device=value.device,
+                ),
+            )
+            for block in resources.blocks
+        )
+        _DEVICE_BLOCK_CACHE[key] = (resources, device_blocks)
+    else:
+        device_blocks = cached[1]
     outputs = []
-    for block in resources.blocks:
-        omega = torch.as_tensor(block.omega, dtype=torch.float32, device=value.device)
-        phase = torch.as_tensor(block.phase, dtype=torch.float32, device=value.device)
+    for omega, phase in device_blocks:
         outputs.append(scale * torch.cos(value @ omega.transpose(0, 1) + phase))
     result = torch.cat(outputs, dim=-1)
     if result.shape[-1] != resources.total_features or not torch.isfinite(result).all():

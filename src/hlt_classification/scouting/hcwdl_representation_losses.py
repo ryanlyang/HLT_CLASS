@@ -9,6 +9,7 @@ views.  Every reduction and eligibility rule is frozen by
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import math
 from typing import Final, Literal, Mapping, Sequence
 
@@ -87,6 +88,19 @@ class RelationSketches:
     eligible: object
     pair_counts: object
     effective_sample_sizes: object
+
+
+@dataclass(frozen=True)
+class RelationTopology:
+    """Label-free fixed pair geometry for one padded HLT batch."""
+
+    left_indices: np.ndarray
+    right_indices: np.ndarray
+    strata: np.ndarray
+    valid: np.ndarray
+    pair_counts: np.ndarray
+    family_count: int
+    input_sha256: str
 
 
 @dataclass(frozen=True)
@@ -320,7 +334,7 @@ def jet_representation_loss(
     return JetLossResult(loss, direct, gram, direct_rows, gram_errors, pair_weights)
 
 
-def ordinary_set_representation_loss(
+def _ordinary_set_representation_loss_reference(
     student_tokens,
     student_vectors,
     student_mask,
@@ -366,6 +380,98 @@ def ordinary_set_representation_loss(
     )
 
 
+def _batched_weighted_spectral_mean(
+    values,
+    weights,
+    visible,
+    resources: SpectralKernelResources,
+):
+    """Evaluate the frozen feature mean for a padded batch in one graph.
+
+    Padding is zero-filled before the feature map and receives exactly zero
+    normalized weight.  Visible weights are renormalized exactly as in
+    ``cached_finite_mmd``; the only change is replacing one graph per jet with
+    one batched graph.
+    """
+
+    import torch
+
+    value = torch.as_tensor(values).float()
+    active = torch.as_tensor(visible, device=value.device, dtype=torch.bool)
+    raw_weight = torch.as_tensor(weights, device=value.device).float()
+    if value.ndim != 3 or active.shape != value.shape[:2] or raw_weight.shape != active.shape:
+        raise ValueError("batched spectral values/weights/mask shapes differ")
+    safe_value = torch.where(active[..., None], value, torch.zeros_like(value))
+    safe_weight = torch.where(active, raw_weight, torch.zeros_like(raw_weight))
+    if active.any() and (
+        not torch.isfinite(safe_weight).all() or not (safe_weight[active] > 0).all()
+    ):
+        raise ValueError("batched spectral weights must be finite and positive")
+    denominator = safe_weight.sum(-1)
+    present = active.any(-1)
+    normalized = torch.where(
+        present[:, None],
+        safe_weight / denominator.clamp_min(torch.finfo(torch.float32).tiny)[:, None],
+        torch.zeros_like(safe_weight),
+    )
+    features = finite_spectral_features(safe_value, resources)
+    means = (normalized[..., None] * features).sum(-2)
+    if not torch.isfinite(means).all():
+        raise FloatingPointError("batched spectral means are nonfinite")
+    return means, present
+
+
+def ordinary_set_representation_loss(
+    student_tokens,
+    student_vectors,
+    student_mask,
+    teacher_means,
+    teacher_eligible,
+    projection,
+    resources: SpectralKernelResources,
+    *,
+    labels,
+    class_weights,
+) -> SetLossResult:
+    """Vectorized per-jet unordered finite-kernel loss for ordinary teachers."""
+
+    import torch
+
+    tokens = torch.as_tensor(student_tokens).float()
+    mask = torch.as_tensor(student_mask, device=tokens.device, dtype=torch.bool)
+    target = torch.as_tensor(teacher_means, device=tokens.device).float()
+    target_active = torch.as_tensor(
+        teacher_eligible, device=tokens.device, dtype=torch.bool,
+    )
+    if tokens.ndim != 3 or tokens.shape[-1] != 128 or mask.shape != tokens.shape[:2]:
+        raise ValueError("student token surface/mask shapes differ")
+    if target.shape != (len(tokens), resources.total_features) or target_active.shape != (len(tokens),):
+        raise ValueError("ordinary set target shape differs")
+    if target.requires_grad:
+        raise ValueError("ordinary set targets must be detached")
+    weights = token_weights(student_vectors, mask)
+    safe_tokens = torch.where(mask[..., None], tokens, torch.zeros_like(tokens))
+    projected = _unit(projection(safe_tokens).float())
+    student_mean, present = _batched_weighted_spectral_mean(
+        projected, weights, mask, resources,
+    )
+    eligible = target_active & present
+    safe_target = torch.where(eligible[:, None], target, torch.zeros_like(target))
+    squared = (student_mean - safe_target).square().sum(-1)
+    per_jet = torch.where(eligible, squared, squared * 0.0)
+    if bool(eligible.any()) and not torch.isfinite(per_jet[eligible]).all():
+        raise FloatingPointError("ordinary set loss is nonfinite")
+    reduction = class_weighted_eligible_mean(
+        per_jet, labels, class_weights, eligible,
+    )
+    return SetLossResult(
+        reduction=reduction,
+        active_family_count=eligible.to(torch.int64),
+        family_eligible=eligible[:, None],
+        family_losses=per_jet[:, None],
+    )
+
+
 def build_ordinary_token_targets(
     teacher_tokens,
     teacher_vectors,
@@ -382,6 +488,9 @@ def build_ordinary_token_targets(
         raise ValueError("teacher token target construction requires a detached forward")
     if tokens.ndim != 3 or tokens.shape[-1] != 128 or visible.shape != tokens.shape[:2]:
         raise ValueError("ordinary teacher token surface/mask shapes differ")
+    # Target artifacts retain the historical rowwise evaluation order so a
+    # source-recovery execution cannot change already frozen teacher bytes.
+    # Only the live student objective is vectorized.
     weights = token_weights(teacher_vectors, visible)
     means = tokens.float().new_zeros((len(tokens), resources.total_features))
     present = visible.any(-1)
@@ -393,7 +502,7 @@ def build_ordinary_token_targets(
     return TokenKernelTargets(means.detach(), present)
 
 
-def native_offline_set_representation_loss(
+def _native_offline_set_representation_loss_reference(
     student_tokens,
     student_vectors,
     student_mask,
@@ -452,6 +561,83 @@ def native_offline_set_representation_loss(
     return SetLossResult(reduction, active_count, family_eligible, family_losses)
 
 
+def native_offline_set_representation_loss(
+    student_tokens,
+    student_vectors,
+    student_mask,
+    family_codes,
+    teacher_means,
+    teacher_present,
+    projections: Sequence,
+    resources: SpectralKernelResources,
+    *,
+    labels,
+    class_weights,
+) -> SetLossResult:
+    """Vectorized TOFF set loss with independent charged/neutral bases."""
+
+    import torch
+
+    tokens = torch.as_tensor(student_tokens).float()
+    mask = torch.as_tensor(student_mask, device=tokens.device, dtype=torch.bool)
+    family = torch.as_tensor(family_codes, device=tokens.device)
+    target = torch.as_tensor(teacher_means, device=tokens.device).float()
+    present = torch.as_tensor(teacher_present, device=tokens.device, dtype=torch.bool)
+    if tokens.ndim != 3 or tokens.shape[-1] != 128 or mask.shape != tokens.shape[:2] or family.shape != mask.shape:
+        raise ValueError("TOFF student token surfaces differ")
+    if target.shape != (len(tokens), 2, resources.total_features) or present.shape != (len(tokens), 2):
+        raise ValueError("TOFF set targets differ")
+    if target.requires_grad or len(projections) != 2:
+        raise ValueError("TOFF targets/projections differ")
+    family_masks = torch.stack(
+        tuple(mask & (family == family_index) for family_index in (CHARGED_FAMILY, NEUTRAL_FAMILY)),
+        dim=1,
+    )
+    family_weights = torch.stack(
+        tuple(
+            token_weights(student_vectors, family_masks[:, family_index])
+            for family_index in (CHARGED_FAMILY, NEUTRAL_FAMILY)
+        ),
+        dim=1,
+    )
+    family_losses = tokens.new_zeros((len(tokens), 2))
+    family_eligible = present & family_masks.any(-1)
+    losses = []
+    for family_index in (CHARGED_FAMILY, NEUTRAL_FAMILY):
+        selected = family_masks[:, family_index]
+        safe_tokens = torch.where(
+            selected[..., None], tokens, torch.zeros_like(tokens),
+        )
+        projected = _unit(projections[family_index](safe_tokens).float())
+        student_mean, _ = _batched_weighted_spectral_mean(
+            projected, family_weights[:, family_index], selected, resources,
+        )
+        eligible_family = family_eligible[:, family_index]
+        safe_target = torch.where(
+            eligible_family[:, None], target[:, family_index],
+            torch.zeros_like(target[:, family_index]),
+        )
+        squared = (student_mean - safe_target).square().sum(-1)
+        losses.append(torch.where(eligible_family, squared, squared * 0.0))
+    family_losses = torch.stack(losses, dim=1)
+    if bool(family_eligible.any()) and not torch.isfinite(
+        family_losses[family_eligible]
+    ).all():
+        raise FloatingPointError("TOFF set loss is nonfinite")
+    active_count = family_eligible.sum(-1)
+    per_jet = (
+        (family_losses * family_eligible).sum(-1)
+        / active_count.clamp_min(1).to(torch.float32)
+    )
+    eligible = active_count > 0
+    reduction = class_weighted_eligible_mean(
+        per_jet, labels, class_weights, eligible,
+    )
+    return SetLossResult(
+        reduction, active_count, family_eligible, family_losses,
+    )
+
+
 def build_native_offline_token_targets(
     charged_tokens,
     charged_vectors,
@@ -502,7 +688,7 @@ def relation_population_eligibility(pair_weights) -> tuple[bool, float]:
     return bool(value.size >= 4 and ess >= 3.0), ess
 
 
-def build_student_relation_sketches(
+def _build_student_relation_sketches_reference(
     token_states,
     vectors,
     mask,
@@ -598,6 +784,276 @@ def build_student_relation_sketches(
     return RelationSketches(means, eligible, pair_counts, ess)
 
 
+def _relation_topology_input_sha256(
+    p4: np.ndarray,
+    visible: np.ndarray,
+    identities: np.ndarray,
+    family: np.ndarray,
+) -> str:
+    """Hash the normalized inputs that determine relation pair geometry."""
+
+    digest = hashlib.sha256()
+    for name, value, dtype in (
+        ("vectors", p4, np.float32),
+        ("mask", visible, np.bool_),
+        ("visible_indices", identities, np.int64),
+        ("family_codes", family, np.int8),
+    ):
+        array = np.ascontiguousarray(value, dtype=dtype)
+        encoded = name.encode("ascii")
+        digest.update(len(encoded).to_bytes(2, "little"))
+        digest.update(encoded)
+        encoded_dtype = array.dtype.str.encode("ascii")
+        digest.update(len(encoded_dtype).to_bytes(2, "little"))
+        digest.update(encoded_dtype)
+        digest.update(len(array.shape).to_bytes(1, "little"))
+        for dimension in array.shape:
+            digest.update(int(dimension).to_bytes(8, "little"))
+        digest.update(array.tobytes(order="C"))
+    return digest.hexdigest()
+
+
+def build_relation_topology(
+    vectors,
+    mask,
+    visible_indices,
+    *,
+    family_codes=None,
+) -> RelationTopology:
+    """Build the exact top-32/pair/stratum geometry once on the host.
+
+    This retains the historical FP64 ``p4_kinematics`` and NumPy lexicographic
+    tie rules.  Only the latent cosine and frozen feature map move into the
+    batched differentiable CUDA graph.
+    """
+
+    import torch
+
+    p4 = torch.as_tensor(vectors).detach().cpu().numpy()
+    visible = torch.as_tensor(mask, dtype=torch.bool).detach().cpu().numpy()
+    identities = torch.as_tensor(visible_indices).detach().cpu().numpy()
+    if visible.ndim == 3 and visible.shape[1] == 1:
+        visible = visible[:, 0]
+    if p4.ndim != 3 or p4.shape[1] != 4 or visible.shape != (p4.shape[0], p4.shape[2]):
+        raise ValueError("relation vectors/mask shapes differ")
+    if identities.shape != visible.shape:
+        raise ValueError("relation visible-index shape differs")
+    if family_codes is None:
+        family = np.zeros_like(identities, dtype=np.int8)
+        family_count = 1
+    else:
+        family = torch.as_tensor(family_codes).detach().cpu().numpy()
+        if family.shape != visible.shape:
+            raise ValueError("relation family-code shape differs")
+        family_count = 2
+
+    batch, _, particles = p4.shape
+    maximum_pairs = 32 * 31 // 2
+    left_indices = np.zeros((batch, family_count, maximum_pairs), dtype=np.int64)
+    right_indices = np.zeros_like(left_indices)
+    strata = np.full((batch, family_count, maximum_pairs), -1, dtype=np.int8)
+    valid = np.zeros_like(strata, dtype=np.bool_)
+    pair_counts = np.zeros((batch, family_count, 3), dtype=np.int64)
+    p4_rows = p4.transpose(0, 2, 1).astype(np.float64, copy=False)
+    for row in range(batch):
+        for family_index in range(family_count):
+            selected = np.flatnonzero(
+                visible[row] & (family[row] == family_index)
+            )
+            if selected.size < 2:
+                continue
+            pt, eta, phi, _ = p4_kinematics(p4_rows[row, selected])
+            if not (
+                np.isfinite(pt).all()
+                and np.isfinite(eta).all()
+                and np.isfinite(phi).all()
+            ):
+                raise FloatingPointError("student relation geometry is nonfinite")
+            order = np.lexsort((identities[row, selected], -pt))[:32]
+            selected = selected[order]
+            _, eta, phi, _ = p4_kinematics(p4_rows[row, selected])
+            left, right = np.triu_indices(len(selected), k=1)
+            count = len(left)
+            delta_phi = np.arctan2(
+                np.sin(phi[left] - phi[right]),
+                np.cos(phi[left] - phi[right]),
+            )
+            delta_r = np.sqrt(
+                (eta[left] - eta[right]) ** 2 + delta_phi ** 2
+            )
+            if not np.isfinite(delta_r).all():
+                raise FloatingPointError("student relation deltaR is nonfinite")
+            current_strata = _relation_stratum(delta_r)
+            left_indices[row, family_index, :count] = selected[left]
+            right_indices[row, family_index, :count] = selected[right]
+            strata[row, family_index, :count] = current_strata
+            valid[row, family_index, :count] = True
+            pair_counts[row, family_index] = np.bincount(
+                current_strata, minlength=3,
+            )
+    if np.any(left_indices[valid] < 0) or np.any(left_indices[valid] >= particles):
+        raise RuntimeError("relation topology left index differs")
+    if np.any(right_indices[valid] < 0) or np.any(right_indices[valid] >= particles):
+        raise RuntimeError("relation topology right index differs")
+    return RelationTopology(
+        left_indices, right_indices, strata, valid, pair_counts, family_count,
+        _relation_topology_input_sha256(p4, visible, identities, family),
+    )
+
+
+def build_student_relation_sketches(
+    token_states,
+    vectors,
+    mask,
+    visible_indices,
+    resources: SpectralKernelResources,
+    *,
+    family_codes=None,
+    topology: RelationTopology | None = None,
+) -> RelationSketches:
+    """Build exact relation sketches with one batched differentiable graph."""
+
+    import torch
+
+    states = torch.as_tensor(token_states).float()
+    p4 = torch.as_tensor(vectors, device=states.device).float()
+    visible = torch.as_tensor(mask, device=states.device, dtype=torch.bool)
+    if visible.ndim == 3 and visible.shape[1] == 1:
+        visible = visible[:, 0]
+    identities = torch.as_tensor(visible_indices, device=states.device)
+    if states.ndim != 3 or states.shape[-1] != 128 or visible.shape != states.shape[:2]:
+        raise ValueError("relation student state/mask shapes differ")
+    if p4.shape != (states.shape[0], 4, states.shape[1]) or identities.shape != visible.shape:
+        raise ValueError("relation vectors/identity shapes differ")
+    if family_codes is None:
+        family = torch.zeros_like(identities, dtype=torch.int8)
+        family_count = 1
+    else:
+        family = torch.as_tensor(family_codes, device=states.device)
+        if family.shape != visible.shape:
+            raise ValueError("relation family-code shape differs")
+        family_count = 2
+    if visible.any() and not torch.isfinite(states[visible]).all():
+        raise FloatingPointError("visible student relation states are nonfinite")
+    if topology is None:
+        topology = build_relation_topology(
+            p4, visible, identities, family_codes=(
+                None if family_codes is None else family
+            ),
+        )
+    else:
+        current_hash = _relation_topology_input_sha256(
+            p4.detach().cpu().numpy(),
+            visible.detach().cpu().numpy(),
+            identities.detach().cpu().numpy(),
+            family.detach().cpu().numpy(),
+        )
+        if current_hash != topology.input_sha256:
+            raise ValueError("relation topology input lineage differs")
+    if topology.family_count != family_count:
+        raise ValueError("relation topology family count differs")
+    expected_prefix = (len(states), family_count)
+    if (
+        topology.left_indices.shape[:2] != expected_prefix
+        or topology.right_indices.shape != topology.left_indices.shape
+        or topology.strata.shape != topology.left_indices.shape
+        or topology.valid.shape != topology.left_indices.shape
+        or topology.pair_counts.shape != (*expected_prefix, 3)
+    ):
+        raise ValueError("relation topology shapes differ")
+
+    family_masks = torch.stack(
+        tuple(
+            visible & (family == family_index)
+            for family_index in range(family_count)
+        ),
+        dim=1,
+    )
+    weights = torch.stack(
+        tuple(
+            token_weights(p4, family_masks[:, family_index])
+            for family_index in range(family_count)
+        ),
+        dim=1,
+    )
+    device = states.device
+    left = torch.as_tensor(
+        topology.left_indices, dtype=torch.long, device=device,
+    )
+    right = torch.as_tensor(
+        topology.right_indices, dtype=torch.long, device=device,
+    )
+    valid = torch.as_tensor(topology.valid, dtype=torch.bool, device=device)
+    strata = torch.as_tensor(topology.strata, dtype=torch.int8, device=device)
+    pair_counts = torch.as_tensor(
+        topology.pair_counts, dtype=torch.int64, device=device,
+    )
+
+    safe_states = torch.where(
+        visible[..., None], states, torch.zeros_like(states),
+    )
+    normalized_states = _unit(safe_states)
+    cosine_matrix = normalized_states @ normalized_states.transpose(1, 2)
+    particle_count = states.shape[1]
+    linear = left * particle_count + right
+    cosine = cosine_matrix.reshape(len(states), -1).gather(
+        1, linear.reshape(len(states), -1),
+    ).reshape(left.shape)
+    left_weight = weights.gather(-1, left)
+    right_weight = weights.gather(-1, right)
+    pair_weight = left_weight * right_weight
+
+    pair_weight_cpu = pair_weight.detach().cpu().numpy()
+    eligible_cpu = np.zeros((*expected_prefix, 3), dtype=np.bool_)
+    ess_cpu = np.zeros((*expected_prefix, 3), dtype=np.float64)
+    for row in range(len(states)):
+        for family_index in range(family_count):
+            for stratum in range(3):
+                chosen = topology.valid[row, family_index] & (
+                    topology.strata[row, family_index] == stratum
+                )
+                if not np.any(chosen):
+                    continue
+                active, current_ess = relation_population_eligibility(
+                    pair_weight_cpu[row, family_index, chosen],
+                )
+                eligible_cpu[row, family_index, stratum] = active
+                ess_cpu[row, family_index, stratum] = current_ess
+    eligible = torch.as_tensor(eligible_cpu, dtype=torch.bool, device=device)
+    ess = torch.as_tensor(ess_cpu, dtype=torch.float64, device=device)
+
+    # Preserve the historical empty-support autograd boundary: the reference
+    # builder returns a literal detached zero tensor when no stratum passes
+    # the population gate.
+    if not bool(eligible.any()):
+        means = states.new_zeros(
+            (len(states), family_count, 3, resources.total_features),
+        )
+        return RelationSketches(means, eligible, pair_counts, ess)
+
+    safe_cosine = torch.where(valid, cosine, torch.zeros_like(cosine))
+    features = finite_spectral_features(safe_cosine, resources)
+    means_by_stratum = []
+    for stratum in range(3):
+        chosen = valid & (strata == stratum)
+        selected_weight = torch.where(
+            chosen, pair_weight, torch.zeros_like(pair_weight),
+        )
+        denominator = selected_weight.sum(-1)
+        normalized = selected_weight / denominator.clamp_min(
+            torch.finfo(torch.float32).tiny,
+        )[..., None]
+        current = (normalized[..., None] * features).sum(-2)
+        current = torch.where(
+            eligible[..., stratum, None], current, torch.zeros_like(current),
+        )
+        means_by_stratum.append(current)
+    means = torch.stack(means_by_stratum, dim=2)
+    if not torch.isfinite(means).all():
+        raise FloatingPointError("student relation sketches are nonfinite")
+    return RelationSketches(means, eligible, pair_counts, ess)
+
+
 def build_teacher_relation_targets(
     teacher_tokens,
     teacher_vectors,
@@ -614,7 +1070,9 @@ def build_teacher_relation_targets(
     tokens = torch.as_tensor(teacher_tokens)
     if tokens.requires_grad:
         raise ValueError("teacher relation target construction requires a detached forward")
-    result = build_student_relation_sketches(
+    # Preserve exact historical target-artifact bytes.  The optimized batched
+    # path is used only for the live student graph.
+    result = _build_student_relation_sketches_reference(
         tokens, teacher_vectors, teacher_mask, visible_indices, resources,
         family_codes=family_codes,
     )
@@ -823,10 +1281,11 @@ __all__ = [
     "NEUTRAL_FAMILY", "ORTHOGONALITY_COEFFICIENT", "PADDED_FAMILY",
     "ProjectionDiagnostic", "RELATION_EDGES", "RELATION_STRATA",
     "RHO_REPRESENTATION", "RREL_CONTRACT", "RSET_CONTRACT",
-    "ReducedRows", "RelationLossResult", "RelationSketches",
+    "ReducedRows", "RelationLossResult", "RelationSketches", "RelationTopology",
     "ScheduledRepresentationLoss", "SetLossResult", "TokenKernelTargets",
     "build_native_offline_token_targets", "build_ordinary_token_targets",
-    "build_student_relation_sketches", "build_teacher_relation_targets",
+    "build_relation_topology", "build_student_relation_sketches",
+    "build_teacher_relation_targets",
     "class_weighted_eligible_mean",
     "classify_hlt_token_families", "effective_pass_for_update",
     "jet_representation_loss", "jet_set_ramp",
