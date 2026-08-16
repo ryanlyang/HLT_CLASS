@@ -136,9 +136,9 @@ def test_foundation_reuse_dispatch_keeps_legacy_and_300k_paths_separate(
     assert [row[0] for row in calls] == ["full", "300k", "300k"]
 
 
-def test_population_specific_runtime_seed_and_cache_limits():
+def test_population_specific_runtime_seed_and_cache_limits(tmp_path):
     from hlt_classification.scouting.hcwdl_mhpe_runner import (
-        _runtime_parameters,
+        _runtime_parameters, _training_recipe,
     )
 
     assert _runtime_parameters("C25P75") == ("ub_full/repair/v1", 224.0)
@@ -149,6 +149,36 @@ def test_population_specific_runtime_seed_and_cache_limits():
     assert _runtime_parameters(PROFILE_C10P90_300K60) == (
         "ub/repair/v1", 72.0,
     )
+
+    # The 300k foundation root contains the UB scientific overlay, while its
+    # authenticated artifact registry points at the executable HCWDL recipe.
+    # Loading the overlay here caused the real jobs to fail on recipe["batching"].
+    overlay = with_content_hash({
+        "contract": "overlay", "schema_version": 1,
+        "training_passes": 60,
+    })
+    executable = with_content_hash({
+        "contract": "executable", "schema_version": 1,
+        "batching": {"effective_batch_size": 256},
+    })
+    write_immutable_json(tmp_path / "recipe.json", overlay)
+    write_immutable_json(tmp_path / "executable_recipe.json", executable)
+    foundation = {
+        "artifact_paths": {"recipe": str(tmp_path / "executable_recipe.json")},
+    }
+    assert _training_recipe(
+        profile=PROFILE_C25P75_300K60,
+        foundation_root=tmp_path,
+        foundation=foundation,
+    ) == executable
+    assert _training_recipe(
+        profile=PROFILE_C10P90_300K60,
+        foundation_root=tmp_path,
+        foundation=foundation,
+    ) == executable
+    assert _training_recipe(
+        profile="C25P75", foundation_root=tmp_path, foundation=foundation,
+    ) == overlay
 
 
 def test_task_graph_has_stage_parallelism_and_exact_closure():

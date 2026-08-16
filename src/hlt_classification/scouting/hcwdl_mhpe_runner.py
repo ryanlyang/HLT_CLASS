@@ -50,13 +50,36 @@ def _runtime_parameters(profile: str) -> tuple[str, float]:
     )
 
 
+def _training_recipe(
+    *, profile: str, foundation_root: Path, foundation: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Load the executable recipe used by the imported foundation.
+
+    The all-mapped full-data foundation publishes its executable HCWDL recipe
+    at ``foundation_root/recipe.json``.  The 300k unified-balanced foundation
+    instead publishes a small scientific overlay at that location and binds
+    the executable HCWDL recipe (batching, optimizer, and schedule included)
+    through ``foundation_spec.artifact_paths.recipe``.  MHPE must follow the
+    same recipe indirection as the foundation training worker.
+    """
+    if not _is_300k60(profile):
+        return load_json(foundation_root / "recipe.json")
+    artifact_paths = foundation.get("artifact_paths")
+    if not isinstance(artifact_paths, Mapping) or "recipe" not in artifact_paths:
+        raise ValueError("HCWDL-MHPE 300k executable recipe path is absent")
+    return load_json(Path(str(artifact_paths["recipe"])))
+
+
 def _context(spec: Mapping[str, Any], *, verify_source_tree: bool = True):
     validate_campaign(spec, executable=False, verify_source_tree=verify_source_tree)
+    profile = campaign_profile(spec)
     reuse = load_json(spec["reuse_lock_path"])
     foundation_root = Path(reuse["foundation_spec_path"]).parent
     foundation = load_json(reuse["foundation_spec_path"])
     split, split_hash, selection_hash, selections, assignments, balanced = _load_common(foundation)
-    recipe = load_json(foundation_root / "recipe.json")
+    recipe = _training_recipe(
+        profile=profile, foundation_root=foundation_root, foundation=foundation,
+    )
     return reuse, foundation_root, foundation, split, split_hash, selection_hash, selections, assignments, balanced, recipe
 
 

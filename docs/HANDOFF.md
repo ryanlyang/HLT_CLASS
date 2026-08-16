@@ -1,5 +1,38 @@
 # Current Handoff
 
+## HCWDL-MHPE 300k executable-recipe recovery (2026-08-16)
+
+The first `C25P75_300K60` and `C10P90_300K60` jobs (`88447` and
+`88470`) failed before building a view or starting an optimizer step.  Both
+tracebacks ended at `recipe["batching"]`: the MHPE runner loaded the 300k
+unified-balanced foundation's local scientific overlay `recipe.json`, which
+intentionally contains only arm weights, pass count, and selection policy.
+The foundation's own successful training workers instead load the authenticated
+executable HCWDL recipe from `foundation_spec["artifact_paths"]["recipe"]`;
+that artifact owns batching, optimizer, and schedule settings.
+
+`hcwdl_mhpe_runner._training_recipe()` now follows the foundation-specific
+runtime contract: legacy full-data MHPE profiles retain
+`foundation_root/recipe.json` exactly, while both paired 300k profiles load the
+executable recipe through the immutable foundation artifact registry.  A
+regression constructs deliberately different overlay and executable recipes
+and proves both 300k profiles select the latter while the legacy full profile
+still selects the former.  Graphs, losses, seeds, populations, views,
+checkpoints, resources, and final-test policy are unchanged; no contract was
+versioned.  The registered source-repair workflow permits this runner-only
+execution correction and must be used instead of requeueing the old pinned
+jobs.
+
+Local evidence with `PYTHONDONTWRITEBYTECODE=1`, repository `src` on
+`PYTHONPATH`, and pytest caches disabled:
+
+- focused MHPE suite: 22 passed in 5.14 seconds;
+- combined MHPE and unified-balanced regression: 51 passed in 31.86 seconds;
+- complete repository suite: 501 passed in 238.22 seconds, with only the 14
+  existing Matplotlib/Pyparsing deprecation warnings;
+- MHPE recovery creation/submission CLI help: passed;
+- `git diff --check`: passed.
+
 ## HCWDL-MHPE paired 300k/60-pass campaigns (2026-08-16)
 
 The implementation-authoritative
