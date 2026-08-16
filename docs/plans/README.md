@@ -71,6 +71,14 @@ full-population assignments, couplings, roots, and targets under new contracts
 and does not modify the running 300k six-arm campaign.
 
 The additive
+[HCWDL unified-balanced full-data coarse three-arm plan](HCWDL_UNIFIED_BALANCED_FULL_DATA_COARSE_THREE_ARM_PLAN.md)
+reuses the authenticated completed FULL3 foundation and compares six-edge
+factorized and joint paths for `C25P75`, `C10P90`, and `C10P75G15`. Its exact
+thirds/sixths coordinates, paired seeds, 20-pass schedule, 36-fit registry,
+and no-final-test boundary are new immutable contracts; it does not relabel or
+modify the fine-grained FULL3 runs.
+
+The additive
 [HCWDL matching-free privileged representation-KD ascent plan](HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md)
 registers two nested representation strategies, each as a complete cold and
 warm M1--M6 ascent. It preserves the implemented logit-only HCWDL graph and

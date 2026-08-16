@@ -1,5 +1,44 @@
 # Current Handoff
 
+## HCWDL full-data coarse factorized/joint three-arm campaign (2026-08-16)
+
+The additive `HCWDL-UB-FULLCOARSE3` campaign is implemented and locally
+queue-ready. It reuses—but never mutates—the authenticated completed FULL3
+foundation. A new reuse lock checks byte-identical model/view/training core
+source, endpoint projection, all foundation parent hashes, all-mapped role
+counts, U000/M0 reports and checkpoint bytes, and the durable U000-logit
+manifest. It explicitly authorizes all eight direct U000 target consumers:
+the two first rungs in every arm and the two second-rung grandparent consumers
+in `C10P75G15`.
+
+The graph contains exactly 36 fresh fits. Each of `C25P75`, `C10P90`, and
+`C10P75G15` runs a six-edge factorized path at exact thirds and a six-edge
+joint path at exact sixths. Transition-index seeds are paired across paths and
+recipes, the FULL3 discrete repair seed is retained, the first-edge
+grandparent allocation is folded into parent KD, and all later grandparent
+edges use the actual two-rung predecessor. Training remains cold-started,
+unweighted, temperature 2, 20 passes, every-pass validation, and macro-AUC
+checkpoint selection. `D0F` and `J100` are exact HLT endpoints. No M1 or
+final-test task exists.
+
+New implementation includes versioned graph/reuse/recipe/spec/report/
+completion/recovery contracts, source-pinned arm creation, two-path Slurm
+DAGs, independent three-arm submission ledgers, production workers, runtime
+and aggregate reports, monitor, exact-ID cancellation, and same-source or
+resource-only failed-closure recovery. The runbook intentionally requires no
+new smoke: no preprocessing or view semantics changed, and the completed
+FULL3 production foundation is the operational evidence. Creation still
+fails closed if that foundation or the current scientific core differs.
+
+No donor files were copied and no Slurm job or final-test access was performed
+locally. Focused graph/full-data/unified-balanced tests pass 39/39; the new
+coarse module tests pass 7/7; and the complete repository suite passes 478/478
+in 249.44 seconds. All nine new CLIs pass `--help`; focused compilation,
+11 module contract identities plus the runtime contract, Markdown links,
+tracked `git diff --check`, untracked whitespace checks, and the 36-fit graph
+identity check pass. The only warnings are 14 existing Matplotlib/Pyparsing
+deprecations and one local pytest-cache permission warning.
+
 ## HCWDL full-data balanced-sidecar wiring repair (2026-08-15)
 
 The source-pinned mapped-identity recovery completed scale calibration, every
