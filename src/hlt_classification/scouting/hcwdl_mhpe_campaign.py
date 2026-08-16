@@ -18,11 +18,14 @@ from .hcwdl_unified_balanced_full_contracts import validate_foundation_lock
 from .hcwdl_unified_balanced_targets import validate_target_manifest
 
 from .hcwdl_mhpe_contracts import (
-    CAMPAIGN_SPEC_CONTRACT, COMMAND_PLAN_CONTRACT, WAIVER_CONTRACT, graph_payload, recipe_payload,
-    reuse_lock_payload, validate_graph, validate_recipe, validate_reuse_lock,
-    validate_waiver, waiver_payload,
+    COMMAND_PLAN_CONTRACT, campaign_profile, campaign_spec_contract,
+    graph_payload, recipe_payload, reuse_lock_payload, validate_graph,
+    validate_recipe, validate_reuse_lock, validate_waiver, waiver_payload,
 )
-from .hcwdl_mhpe_graph import ENSEMBLE_COMPONENTS, GRAPH_SHA256, NODE_REGISTRY
+from .hcwdl_mhpe_graph import (
+    ENSEMBLE_COMPONENTS, PROFILE_C10P90, PROFILE_C25P75, SUPPORTED_PROFILES,
+    node_registry,
+)
 from .hcwdl_unified_balanced_coarse_campaign import FOUNDATION_CORE_FILES
 
 ACCOUNT: Final = "reu-aisocial"
@@ -30,6 +33,9 @@ PARTITION: Final = "tigris"
 CREATION_PHRASE: Final = "AUTHORIZE HCWDL MHPE FULL EXACT SPEC"
 SUBMISSION_PHRASE: Final = "SUBMIT HCWDL MHPE FULL EXACT LEDGER"
 WAIVER_PHRASE: Final = "AUTHORIZE HCWDL MHPE FULL DIRECT EXECUTION WITHOUT NEW SMOKE"
+CREATION_PHRASE_C10P90: Final = "AUTHORIZE HCWDL MHPE C10P90 FULL EXACT SPEC"
+SUBMISSION_PHRASE_C10P90: Final = "SUBMIT HCWDL MHPE C10P90 FULL EXACT LEDGER"
+WAIVER_PHRASE_C10P90: Final = "AUTHORIZE HCWDL MHPE C10P90 FULL DIRECT EXECUTION WITHOUT NEW SMOKE"
 
 REUSED_FOUNDATION_EXACT_FILES: Final = tuple(FOUNDATION_CORE_FILES)
 
@@ -69,6 +75,10 @@ IMPLEMENTATION_EVIDENCE_FILES: Final = (
     "docs/HCWDL_MHPE_RUNBOOK.md",
     "tests/test_hcwdl_mhpe.py",
 )
+C10P90_IMPLEMENTATION_EVIDENCE_FILES: Final = IMPLEMENTATION_EVIDENCE_FILES + (
+    "docs/plans/HCWDL_MHPE_C10P90_PARALLEL_PLAN.md",
+    "docs/HCWDL_MHPE_C10P90_RUNBOOK.md",
+)
 
 ADDITIVE_ADAPTER_FILES: Final = frozenset({
     "src/hlt_classification/scouting/engine.py",
@@ -99,11 +109,36 @@ def semantic_source_hashes(repository: str | Path) -> dict[str, str]:
     return {name: sha256_file(root / name) for name in SEMANTIC_SOURCE_FILES}
 
 
-def campaign_tasks() -> list[dict[str, Any]]:
+def creation_phrase(profile: str = PROFILE_C25P75) -> str:
+    if profile == PROFILE_C25P75:
+        return CREATION_PHRASE
+    if profile == PROFILE_C10P90:
+        return CREATION_PHRASE_C10P90
+    raise ValueError("unknown HCWDL-MHPE recipe profile")
+
+
+def submission_phrase(profile: str = PROFILE_C25P75) -> str:
+    if profile == PROFILE_C25P75:
+        return SUBMISSION_PHRASE
+    if profile == PROFILE_C10P90:
+        return SUBMISSION_PHRASE_C10P90
+    raise ValueError("unknown HCWDL-MHPE recipe profile")
+
+
+def evidence_files(profile: str = PROFILE_C25P75) -> tuple[str, ...]:
+    if profile == PROFILE_C25P75:
+        return IMPLEMENTATION_EVIDENCE_FILES
+    if profile == PROFILE_C10P90:
+        return C10P90_IMPLEMENTATION_EVIDENCE_FILES
+    raise ValueError("unknown HCWDL-MHPE recipe profile")
+
+
+def campaign_tasks(profile: str = PROFILE_C25P75) -> list[dict[str, Any]]:
+    registry = node_registry(profile)
     tasks: list[dict[str, Any]] = []
     previous = None
     for stage in ("U050", "U100", "D066", "D033", "D000"):
-        stage_nodes = sorted(name for name in NODE_REGISTRY if name.startswith(stage + "_from_"))
+        stage_nodes = sorted(name for name in registry if name.startswith(stage + "_from_"))
         dependencies = [] if previous is None else [previous]
         # U050 is an imported-root child; all later stages wait for their preceding ensemble.
         for node_id in stage_nodes:
@@ -126,7 +161,7 @@ def campaign_tasks() -> list[dict[str, Any]]:
         "task_id": "train_M1", "kind": "train", "node_id": "M1",
         "dependencies": ["ensemble_D000E"], "resource_class": "gpu_training",
     })
-    terminal = [f"train_{name}" for name in NODE_REGISTRY]
+    terminal = [f"train_{name}" for name in registry]
     terminal += [f"ensemble_{name}" for name in ENSEMBLE_COMPONENTS]
     tasks.extend((
         {"task_id": "aggregate", "kind": "aggregate", "dependencies": terminal, "resource_class": "cpu_report"},
@@ -139,13 +174,15 @@ def campaign_tasks() -> list[dict[str, Any]]:
 
 
 def command_plan(spec: Mapping[str, Any]) -> dict[str, Any]:
+    profile = campaign_profile(spec)
+    job_prefix = "hcwmhpe90" if profile == PROFILE_C10P90 else "hcwmhpe"
     commands = []
     for task in spec["tasks"]:
         resource = spec["resources"][task["resource_class"]]
         command = [
             "sbatch", "--parsable", f"--account={ACCOUNT}", f"--partition={PARTITION}",
             f"--cpus-per-task={resource['cpus']}", f"--mem={resource['memory']}",
-            f"--time={resource['walltime']}", f"--job-name=hcwmhpe_{task['task_id']}",
+            f"--time={resource['walltime']}", f"--job-name={job_prefix}_{task['task_id']}",
         ]
         if resource.get("gpu"):
             command.extend((f"--gres={resource['gpu']}", "--signal=B:USR1@120"))
@@ -246,11 +283,14 @@ def create_campaign(
     *, foundation_lock: str | Path, campaign_root: str | Path,
     project_dir: str | Path, source_commit: str,
     authorize_live_submission: bool = False, authorization_phrase: str | None = None,
+    recipe_profile: str = PROFILE_C25P75,
     publish: bool = True,
 ) -> dict[str, Any]:
+    if recipe_profile not in SUPPORTED_PROFILES:
+        raise ValueError("unknown HCWDL-MHPE recipe profile")
     if re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
         raise ValueError("HCWDL-MHPE requires a full lowercase source commit")
-    if authorize_live_submission and authorization_phrase != CREATION_PHRASE:
+    if authorize_live_submission and authorization_phrase != creation_phrase(recipe_profile):
         raise PermissionError("HCWDL-MHPE creation phrase differs")
     root = Path(campaign_root).resolve(); project = Path(project_dir).resolve()
     if publish and root.exists() and any(root.iterdir()):
@@ -258,11 +298,15 @@ def create_campaign(
     reuse = _reuse(foundation_lock=Path(foundation_lock).resolve(), project=project, source_commit=source_commit)
     foundation_root = Path(reuse["foundation_spec_path"]).parent
     foundation_recipe = load_json(foundation_root / "recipe.json")
-    graph = graph_payload(); recipe = recipe_payload(foundation_recipe_sha256=foundation_recipe["content_hash"])
+    graph = graph_payload(recipe_profile)
+    recipe = recipe_payload(
+        foundation_recipe_sha256=foundation_recipe["content_hash"],
+        profile=recipe_profile,
+    )
     semantic_hashes = semantic_source_hashes(project)
     resources = {name: asdict(value) for name, value in RESOURCES.items()}
     evidence_hashes = {
-        name: sha256_file(project / name) for name in IMPLEMENTATION_EVIDENCE_FILES
+        name: sha256_file(project / name) for name in evidence_files(recipe_profile)
     }
     waiver = waiver_payload(
         source_commit=source_commit, graph_sha256=graph["content_hash"],
@@ -270,17 +314,25 @@ def create_campaign(
         semantic_source_registry_sha256=canonical_sha256(semantic_hashes),
         resource_request_sha256=canonical_sha256(resources),
         implementation_evidence_sha256=evidence_hashes,
-        authorization_phrase=WAIVER_PHRASE,
+        authorization_phrase=(
+            WAIVER_PHRASE_C10P90
+            if recipe_profile == PROFILE_C10P90 else WAIVER_PHRASE
+        ),
+        profile=recipe_profile,
     )
     unhashed = {
-        "contract": CAMPAIGN_SPEC_CONTRACT, "schema_version": 1,
-        "campaign": "HCWDL-MHPE-FULL", "campaign_root": str(root),
+        "contract": campaign_spec_contract(recipe_profile), "schema_version": 1,
+        "campaign": (
+            "HCWDL-MHPE-C10P90-FULL"
+            if recipe_profile == PROFILE_C10P90 else "HCWDL-MHPE-FULL"
+        ),
+        "campaign_root": str(root),
         "project_dir": str(project), "source_commit": source_commit,
         "spec_path": str(root / "campaign_spec.json"),
         "reuse_lock_path": str(root / "foundation_reuse_lock.json"),
         "reuse_lock_sha256": reuse["content_hash"], "graph_sha256": graph["content_hash"],
         "recipe_sha256": recipe["content_hash"], "waiver_sha256": waiver["content_hash"],
-        "role_counts": reuse["role_counts"], "tasks": campaign_tasks(),
+        "role_counts": reuse["role_counts"], "tasks": campaign_tasks(recipe_profile),
         # Contextual predecessors are not causal parents of v1.  The empty
         # registry is explicit and immutable; later comparison imports need a
         # new campaign identity rather than path discovery after launch.
@@ -291,6 +343,9 @@ def create_campaign(
         "authorization_phrase": authorization_phrase if authorize_live_submission else None,
         "final_test_accessed": False,
     }
+    if recipe_profile == PROFILE_C10P90:
+        unhashed["recipe_profile"] = recipe_profile
+        unhashed["single_changed_variable"] = "specialist_ce_kd_weights_only"
     spec = with_content_hash(unhashed); plan = command_plan(spec)
     if publish:
         root.mkdir(parents=True, exist_ok=False)
@@ -304,11 +359,23 @@ def create_campaign(
 
 
 def validate_campaign(value: Mapping[str, Any], *, executable: bool = False, verify_source_tree: bool = True) -> str:
-    digest = validate_content_hash(value, expected_contract=CAMPAIGN_SPEC_CONTRACT, expected_schema_version=1)
-    if (value.get("tasks") != campaign_tasks()
+    profile = campaign_profile(value)
+    digest = validate_content_hash(
+        value, expected_contract=campaign_spec_contract(profile), expected_schema_version=1,
+    )
+    if (value.get("tasks") != campaign_tasks(profile)
             or value.get("resources") != {name: asdict(row) for name, row in RESOURCES.items()}
             or value.get("contextual_reports") != []):
         raise ValueError("HCWDL-MHPE task/resources differ")
+    if profile == PROFILE_C10P90:
+        if (value.get("campaign") != "HCWDL-MHPE-C10P90-FULL"
+                or value.get("single_changed_variable")
+                != "specialist_ce_kd_weights_only"):
+            raise ValueError("HCWDL-MHPE C10P90 campaign identity differs")
+    elif (value.get("campaign") != "HCWDL-MHPE-FULL"
+          or "recipe_profile" in value
+          or "single_changed_variable" in value):
+        raise ValueError("HCWDL-MHPE primary campaign identity differs")
     root = Path(value["campaign_root"])
     reuse = load_json(value["reuse_lock_path"])
     if validate_reuse_lock(reuse) != value["reuse_lock_sha256"]:
@@ -320,7 +387,8 @@ def validate_campaign(value: Mapping[str, Any], *, executable: bool = False, ver
     recipe = load_json(root / "recipe.json")
     if validate_recipe(recipe) != value["recipe_sha256"]:
         raise ValueError("HCWDL-MHPE recipe differs")
-    if recipe["foundation_recipe_sha256"] != reuse["foundation_parents"]["foundation_recipe_sha256"]:
+    if (recipe["foundation_recipe_sha256"] != reuse["foundation_parents"]["foundation_recipe_sha256"]
+            or (profile == PROFILE_C10P90 and recipe.get("recipe_profile") != profile)):
         raise ValueError("HCWDL-MHPE recipe/foundation lineage differs")
     waiver = load_json(root / "operational_evidence_waiver.json")
     if (validate_waiver(waiver)
@@ -334,7 +402,7 @@ def validate_campaign(value: Mapping[str, Any], *, executable: bool = False, ver
             != canonical_sha256(value["resources"])
             or waiver.get("implementation_evidence_sha256") != {
                 name: sha256_file(Path(value["project_dir"]) / name)
-                for name in IMPLEMENTATION_EVIDENCE_FILES
+                for name in evidence_files(profile)
             }
             or waiver.get("does_not_claim_new_smoke_evidence") is not True):
         raise ValueError("HCWDL-MHPE operational waiver differs")
@@ -344,15 +412,20 @@ def validate_campaign(value: Mapping[str, Any], *, executable: bool = False, ver
         raise ValueError("HCWDL-MHPE command plan drifted")
     if verify_source_tree and value["semantic_source_sha256"] != semantic_source_hashes(value["project_dir"]):
         raise ValueError("HCWDL-MHPE source tree drifted")
-    if executable and (value.get("live_submission_authorized") is not True or value.get("authorization_phrase") != CREATION_PHRASE):
+    if executable and (
+        value.get("live_submission_authorized") is not True
+        or value.get("authorization_phrase") != creation_phrase(profile)
+    ):
         raise PermissionError("HCWDL-MHPE campaign is not live authorized")
     return digest
 
 
 __all__ = [
     "ADDITIVE_ADAPTER_FILES", "CREATION_PHRASE", "IMPLEMENTATION_EVIDENCE_FILES",
+    "CREATION_PHRASE_C10P90", "C10P90_IMPLEMENTATION_EVIDENCE_FILES",
     "REUSED_FOUNDATION_EXACT_FILES", "RESOURCES",
-    "SEMANTIC_SOURCE_FILES", "SUBMISSION_PHRASE",
+    "SEMANTIC_SOURCE_FILES", "SUBMISSION_PHRASE", "SUBMISSION_PHRASE_C10P90",
+    "WAIVER_PHRASE_C10P90", "creation_phrase", "evidence_files",
     "WAIVER_PHRASE", "campaign_tasks", "command_plan", "create_campaign",
-    "semantic_source_hashes", "validate_campaign",
+    "semantic_source_hashes", "submission_phrase", "validate_campaign",
 ]

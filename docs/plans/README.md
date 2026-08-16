@@ -90,6 +90,14 @@ passes, and records the user's explicit decision to proceed directly to the
 all-mapped campaign after implementation and dry-run acceptance without a new
 Slurm smoke or 300k pilot.
 
+The implementation-authoritative additive
+[HCWDL-MHPE C10P90 parallel plan](HCWDL_MHPE_C10P90_PARALLEL_PLAN.md)
+changes only the 15 non-M1 specialists from `C25P75/T=2` to `C10P90/T=2`.
+M1 remains `C10P90/T=1`; the foundation, graph topology, coordinates,
+teachers, seeds, passes, ensembles, resources, and final-test boundary remain
+paired. It runs in a distinct worktree/root/ledger with `hcwmhpe90_` job names
+and does not modify the running primary campaign.
+
 The additive
 [HCWDL matching-free privileged representation-KD ascent plan](HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md)
 registers two nested representation strategies, each as a complete cold and

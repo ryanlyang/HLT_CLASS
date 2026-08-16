@@ -7,7 +7,8 @@ import sys
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/"src"))
 from hlt_classification.data.cache_contracts import load_json,validate_content_hash,write_immutable_json  # noqa:E402
 from hlt_classification.scouting.hcwdl_authorization import validate_source_checkout  # noqa:E402
-from hlt_classification.scouting.hcwdl_mhpe_campaign import SUBMISSION_PHRASE,validate_campaign  # noqa:E402
+from hlt_classification.scouting.hcwdl_mhpe_campaign import submission_phrase,validate_campaign  # noqa:E402
+from hlt_classification.scouting.hcwdl_mhpe_contracts import campaign_profile  # noqa:E402
 from hlt_classification.scouting.hcwdl_mhpe_contracts import COMMAND_PLAN_CONTRACT  # noqa:E402
 from hlt_classification.scouting.hcwdl_recovery import assemble_submission_ledger,build_submission_event,build_submission_ledger,validate_submission_ledger  # noqa:E402
 def main()->int:
@@ -20,7 +21,7 @@ def main()->int:
   if a.output.exists() and load_json(a.output)!=expected:raise FileExistsError("existing MHPE dry-run ledger differs")
   if not a.output.exists():write_immutable_json(a.output,expected)
   return 0
- if a.authorization_phrase!=SUBMISSION_PHRASE:raise PermissionError("HCWDL-MHPE submission phrase differs")
+ if a.authorization_phrase!=submission_phrase(campaign_profile(spec)):raise PermissionError("HCWDL-MHPE submission phrase differs")
  dry_path=Path(spec["campaign_root"])/"dry_run_submission_ledger.json"
  if not dry_path.is_file():raise FileNotFoundError("HCWDL-MHPE live submission requires the canonical dry-run ledger")
  dry=load_json(dry_path);validate_submission_ledger(dry)

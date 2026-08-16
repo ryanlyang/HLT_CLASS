@@ -1,5 +1,54 @@
 # Current Handoff
 
+## HCWDL-MHPE C10P90 parallel companion (2026-08-16)
+
+The additive
+[C10P90 parallel plan](plans/HCWDL_MHPE_C10P90_PARALLEL_PLAN.md) is fully
+implemented and queue-ready. It adds one independently source-pinned
+`HCWDL-MHPE-C10P90-FULL` companion to the already running primary campaign.
+All 15 non-M1 specialists change from `0.25 CE + 0.75 KD, T=2` to
+`0.10 CE + 0.90 KD, T=2`; M1 remains exactly
+`0.10 CE + 0.90 KD, T=1`. The authenticated FULL3 foundation, imported U000
+and M0paired, 16-fit teacher graph, coordinates, teacher identities, uniform
+probability ensembles, seeds, 20-pass schedule, validation/checkpoint policy,
+resources, finalists, and final-test boundary are unchanged and paired.
+
+The changed graph, node, recipe, campaign, outer training-report, and
+operational-waiver semantics use explicit v2 contracts. Unchanged foundation,
+target, stage-report, aggregate, lock, attestation, monitor, submission, and
+recovery formats remain v1 while binding the v2 campaign hashes. The original
+v1 graph hash remains exactly
+`3399cdf7f19e3461b9f5cfdcee2e38257a567d5bdb8547b8deb9dbddd856daf9`.
+Profile-aware training, ensemble reduction, aggregation, monitoring,
+failed/downstream recovery, and resource recovery use the selected registry;
+the default remains byte-compatible C25P75. A review found and fixed an
+executable-validation bug that initially compared the v2 campaign against the
+v1 creation phrase.
+
+The new [parallel runbook](HCWDL_MHPE_C10P90_RUNBOOK.md) creates a separate
+detached worktree, `hcwdl_mhpe_c10p90_full_*` campaign root, dry/live ledgers,
+and `hcwmhpe90_` jobs. It reads the completed FULL3 foundation but never writes
+to the foundation or the running C25P75 root. It performs a canonical dry run
+before the independently authorized live submission. Per the user's explicit
+decision, this paired recipe-only ablation requires no new smoke or 300k run.
+
+Local acceptance evidence with bytecode and pytest caches disabled:
+
+- focused `tests/test_hcwdl_mhpe.py`: 18 passed in 5.80 seconds;
+- complete repository suite: 497 passed in 291.85 seconds, with only the 14
+  existing Matplotlib/Pyparsing deprecation warnings;
+- all 13 MHPE CLI help surfaces and all 8 MHPE Python modules compiled;
+- all six v2 contract identities have source/documentation traceability;
+- all links in the five changed/new Markdown surfaces resolve;
+- existing Slurm workers retain absolute `PROJECT_DIR`, isolated environment,
+  `LD_LIBRARY_PATH`, and `exec python -s` behavior;
+- `git diff --check` passed.
+
+No donor file was copied, no SSH/Slurm command was issued, no campaign was
+submitted locally, and no final-test row was accessed. The remaining action is
+to commit and push only the listed C10P90 implementation/documentation files,
+then run the exact source-pinned parallel queue block.
+
 ## HCWDL-UB completed-report aggregation repair (2026-08-16)
 
 Recovery aggregate job `87370` failed after all registered `C05P95` training

@@ -10,18 +10,22 @@ from hlt_classification.data.cache_contracts import (
 )
 
 from .hcwdl_mhpe_graph import (
-    ENSEMBLE_COMPONENTS, FINALISTS, GRAPH_SHA256, NODE_REGISTRY,
+    ENSEMBLE_COMPONENTS, FINALISTS, PROFILE_C10P90, PROFILE_C25P75,
+    SUPPORTED_PROFILES, graph_contract, graph_sha256, node_registry,
 )
 
 GRAPH_CONTRACT: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_GRAPH/v1"
 RECIPE_CONTRACT: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_RECIPE/v1"
+RECIPE_CONTRACT_C10P90: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_RECIPE/v2"
 FOUNDATION_REUSE_LOCK_CONTRACT: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_FOUNDATION_REUSE_LOCK/v1"
 TARGET_SHARD_CONTRACT: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_TARGET_SHARD/v1"
 TARGET_MANIFEST_CONTRACT: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_TARGET_MANIFEST/v1"
 TARGET_LOCK_CONTRACT: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_TARGET_LOCK/v1"
 CAMPAIGN_SPEC_CONTRACT: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_CAMPAIGN_SPEC/v1"
+CAMPAIGN_SPEC_CONTRACT_C10P90: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_CAMPAIGN_SPEC/v2"
 COMMAND_PLAN_CONTRACT: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_COMMAND_PLAN/v1"
 TRAINING_REPORT_CONTRACT: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_TRAINING_REPORT/v1"
+TRAINING_REPORT_CONTRACT_C10P90: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_TRAINING_REPORT/v2"
 STAGE_REPORT_CONTRACT: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_STAGE_REPORT/v1"
 AGGREGATE_CONTRACT: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_AGGREGATE/v1"
 FINALIST_LOCK_CONTRACT: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_FINALIST_LOCK/v1"
@@ -31,38 +35,95 @@ FINAL_EVALUATION_CONTRACT: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_FINA
 RECOVERY_SPEC_CONTRACT: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_RECOVERY_SPEC/v1"
 RESOURCE_RECOVERY_SPEC_CONTRACT: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_RESOURCE_RECOVERY_SPEC/v1"
 WAIVER_CONTRACT: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_OPERATIONAL_EVIDENCE_WAIVER/v1"
+WAIVER_CONTRACT_C10P90: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_OPERATIONAL_EVIDENCE_WAIVER/v2"
+
+
+def _profile_contract(profile: str, primary: str, c10p90: str) -> str:
+    if profile == PROFILE_C25P75:
+        return primary
+    if profile == PROFILE_C10P90:
+        return c10p90
+    raise ValueError("unknown HCWDL-MHPE recipe profile")
+
+
+def campaign_spec_contract(profile: str = PROFILE_C25P75) -> str:
+    return _profile_contract(
+        profile, CAMPAIGN_SPEC_CONTRACT, CAMPAIGN_SPEC_CONTRACT_C10P90,
+    )
+
+
+def recipe_contract(profile: str = PROFILE_C25P75) -> str:
+    return _profile_contract(profile, RECIPE_CONTRACT, RECIPE_CONTRACT_C10P90)
+
+
+def training_report_contract(profile: str = PROFILE_C25P75) -> str:
+    return _profile_contract(
+        profile, TRAINING_REPORT_CONTRACT, TRAINING_REPORT_CONTRACT_C10P90,
+    )
+
+
+def waiver_contract(profile: str = PROFILE_C25P75) -> str:
+    return _profile_contract(profile, WAIVER_CONTRACT, WAIVER_CONTRACT_C10P90)
+
+
+def campaign_profile(value: Mapping[str, Any]) -> str:
+    contract = str(value.get("contract"))
+    if contract == CAMPAIGN_SPEC_CONTRACT:
+        return PROFILE_C25P75
+    if contract == CAMPAIGN_SPEC_CONTRACT_C10P90:
+        if value.get("recipe_profile") != PROFILE_C10P90:
+            raise ValueError("HCWDL-MHPE C10P90 campaign profile differs")
+        return PROFILE_C10P90
+    raise ValueError("unknown HCWDL-MHPE campaign contract")
 
 
 def _validate(value: Mapping[str, Any], contract: str) -> str:
     return validate_content_hash(value, expected_contract=contract, expected_schema_version=1)
 
 
-def graph_payload() -> dict[str, Any]:
-    return with_content_hash({
-        "contract": GRAPH_CONTRACT, "schema_version": 1,
-        "graph_sha256": GRAPH_SHA256, "fresh_fit_count": 16,
+def graph_payload(profile: str = PROFILE_C25P75) -> dict[str, Any]:
+    registry = node_registry(profile)
+    payload = {
+        "contract": graph_contract(profile), "schema_version": 1,
+        "graph_sha256": graph_sha256(profile), "fresh_fit_count": 16,
         "imported_models": ["M0paired", "U000"],
-        "nodes": [NODE_REGISTRY[key].payload() for key in NODE_REGISTRY],
+        "nodes": [registry[key].payload() for key in registry],
         "ensemble_components": {key: list(value) for key, value in ENSEMBLE_COMPONENTS.items()},
         "finalists": list(FINALISTS), "final_test_accessed": False,
-    })
+    }
+    if profile == PROFILE_C10P90:
+        payload["recipe_profile"] = profile
+    return with_content_hash(payload)
 
 
 def validate_graph(value: Mapping[str, Any]) -> str:
-    digest = _validate(value, GRAPH_CONTRACT)
-    if value != graph_payload():
+    profile = (
+        PROFILE_C10P90
+        if value.get("contract") == graph_contract(PROFILE_C10P90)
+        else PROFILE_C25P75
+    )
+    digest = _validate(value, graph_contract(profile))
+    if value != graph_payload(profile):
         raise ValueError("HCWDL-MHPE graph differs")
     return digest
 
 
-def recipe_payload(*, foundation_recipe_sha256: str) -> dict[str, Any]:
-    return with_content_hash({
-        "contract": RECIPE_CONTRACT, "schema_version": 1,
+def recipe_payload(
+    *, foundation_recipe_sha256: str, profile: str = PROFILE_C25P75,
+) -> dict[str, Any]:
+    if profile not in SUPPORTED_PROFILES:
+        raise ValueError("unknown HCWDL-MHPE recipe profile")
+    specialist = {
+        PROFILE_C25P75: {"ce": .25, "kd": .75, "temperature": 2.0},
+        PROFILE_C10P90: {"ce": .10, "kd": .90, "temperature": 2.0},
+    }[profile]
+    payload = {
+        "contract": recipe_contract(profile), "schema_version": 1,
         "foundation_recipe_sha256": require_sha256(foundation_recipe_sha256, name="foundation recipe"),
         "training_passes": 20, "validation_every_passes": 1,
         "checkpoint_selection": "macro_auc_ce_logr50_earliest_update_v1",
         "class_weighting": "unweighted_per_jet_population_mean_v1",
-        "specialist_loss": {"ce": .25, "kd": .75, "temperature": 2.0},
+        "specialist_loss": specialist,
         "m1_loss": {"ce": .10, "kd": .90, "temperature": 1.0},
         "ensemble": {
             "weights": "uniform_exact_rational", "reduction_order": "lexical_node_id",
@@ -70,12 +131,24 @@ def recipe_payload(*, foundation_recipe_sha256: str) -> dict[str, Any]:
             "publication_dtype": "<f4", "logit_averaging": False,
         },
         "performance_early_stopping": False,
-    })
+    }
+    if profile == PROFILE_C10P90:
+        payload["recipe_profile"] = profile
+        payload["single_changed_variable"] = "specialist_ce_kd_weights_only"
+    return with_content_hash(payload)
 
 
 def validate_recipe(value: Mapping[str, Any]) -> str:
-    digest = _validate(value, RECIPE_CONTRACT)
-    if value != recipe_payload(foundation_recipe_sha256=str(value.get("foundation_recipe_sha256"))):
+    profile = (
+        PROFILE_C10P90
+        if value.get("contract") == RECIPE_CONTRACT_C10P90
+        else PROFILE_C25P75
+    )
+    digest = _validate(value, recipe_contract(profile))
+    if value != recipe_payload(
+        foundation_recipe_sha256=str(value.get("foundation_recipe_sha256")),
+        profile=profile,
+    ):
         raise ValueError("HCWDL-MHPE recipe differs")
     return digest
 
@@ -156,13 +229,18 @@ def waiver_payload(
     *, source_commit: str, graph_sha256: str, reuse_lock_sha256: str,
     recipe_sha256: str, semantic_source_registry_sha256: str,
     resource_request_sha256: str, implementation_evidence_sha256: Mapping[str, str],
-    authorization_phrase: str,
+    authorization_phrase: str, profile: str = PROFILE_C25P75,
 ) -> dict[str, Any]:
-    expected = "AUTHORIZE HCWDL MHPE FULL DIRECT EXECUTION WITHOUT NEW SMOKE"
+    expected = {
+        PROFILE_C25P75: "AUTHORIZE HCWDL MHPE FULL DIRECT EXECUTION WITHOUT NEW SMOKE",
+        PROFILE_C10P90: "AUTHORIZE HCWDL MHPE C10P90 FULL DIRECT EXECUTION WITHOUT NEW SMOKE",
+    }.get(profile)
+    if expected is None:
+        raise ValueError("unknown HCWDL-MHPE recipe profile")
     if authorization_phrase != expected:
         raise PermissionError("HCWDL-MHPE operational waiver phrase differs")
-    return with_content_hash({
-        "contract": WAIVER_CONTRACT, "schema_version": 1,
+    payload = {
+        "contract": waiver_contract(profile), "schema_version": 1,
         "source_commit": source_commit,
         "graph_sha256": require_sha256(graph_sha256, name="graph"),
         "reuse_lock_sha256": require_sha256(reuse_lock_sha256, name="reuse lock"),
@@ -193,11 +271,20 @@ def waiver_payload(
         "residual_risk": ["new_probability_ensemble_reducer", "new_23_task_dependency_dag"],
         "dry_run_binding": "live submit requires a canonical dry-run ledger whose campaign hash transitively binds this waiver",
         "final_test_accessed": False,
-    })
+    }
+    if profile == PROFILE_C10P90:
+        payload["recipe_profile"] = profile
+        payload["single_changed_variable"] = "specialist_ce_kd_weights_only"
+    return with_content_hash(payload)
 
 
 def validate_waiver(value: Mapping[str, Any]) -> str:
-    digest = _validate(value, WAIVER_CONTRACT)
+    profile = (
+        PROFILE_C10P90
+        if value.get("contract") == WAIVER_CONTRACT_C10P90
+        else PROFILE_C25P75
+    )
+    digest = _validate(value, waiver_contract(profile))
     for name in (
         "graph_sha256", "reuse_lock_sha256", "recipe_sha256",
         "semantic_source_registry_sha256", "resource_request_sha256",
@@ -208,8 +295,18 @@ def validate_waiver(value: Mapping[str, Any]) -> str:
         raise ValueError("HCWDL-MHPE waiver evidence registry is empty")
     for name, evidence_hash in evidence.items():
         require_sha256(evidence_hash, name=f"waiver evidence {name}")
-    if (value.get("authorization_phrase")
-            != "AUTHORIZE HCWDL MHPE FULL DIRECT EXECUTION WITHOUT NEW SMOKE"
+    expected_phrase = {
+        PROFILE_C25P75: "AUTHORIZE HCWDL MHPE FULL DIRECT EXECUTION WITHOUT NEW SMOKE",
+        PROFILE_C10P90: "AUTHORIZE HCWDL MHPE C10P90 FULL DIRECT EXECUTION WITHOUT NEW SMOKE",
+    }[profile]
+    if profile == PROFILE_C10P90:
+        if (value.get("recipe_profile") != profile
+                or value.get("single_changed_variable")
+                != "specialist_ce_kd_weights_only"):
+            raise ValueError("HCWDL-MHPE C10P90 waiver identity differs")
+    elif "recipe_profile" in value or "single_changed_variable" in value:
+        raise ValueError("HCWDL-MHPE primary waiver identity differs")
+    if (value.get("authorization_phrase") != expected_phrase
             or value.get("new_slurm_smoke_run") is not False
             or value.get("new_300k_pilot_run") is not False
             or value.get("does_not_claim_new_smoke_evidence") is not True
@@ -255,7 +352,9 @@ def validate_execution_lock(value: Mapping[str, Any]) -> str:
 
 
 __all__ = [name for name in globals() if name.endswith("_CONTRACT")] + [
-    "execution_lock_payload", "finalist_lock_payload", "graph_payload", "recipe_payload", "reuse_lock_payload",
+    "campaign_profile", "campaign_spec_contract", "execution_lock_payload",
+    "finalist_lock_payload", "graph_payload", "recipe_contract", "recipe_payload",
+    "reuse_lock_payload", "training_report_contract", "waiver_contract",
     "validate_execution_lock", "validate_graph", "validate_recipe", "validate_reuse_lock", "waiver_payload",
     "validate_waiver",
 ]

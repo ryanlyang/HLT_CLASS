@@ -63,3 +63,25 @@ selection, population, views, endpoints, or final-test registry requires a
 new version. Recovery preserves all scientific hashes and the exact failed
 and downstream closure; resource recovery may only increase operational
 requests and may not change the GPU class.
+
+## Additive C10P90 companion
+
+The [C10P90 parallel plan](../plans/HCWDL_MHPE_C10P90_PARALLEL_PLAN.md)
+registers a paired companion that changes only non-M1 specialist loss weights
+from `0.25 CE + 0.75 KD` to `0.10 CE + 0.90 KD`; both use temperature 2. M1
+remains `0.10 CE + 0.90 KD` at temperature 1. Its changed semantic artifacts
+use:
+
+- `HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_GRAPH/v2`;
+- `HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_NODE_SPEC/v2`;
+- `HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_RECIPE/v2`;
+- `HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_CAMPAIGN_SPEC/v2`;
+- `HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_TRAINING_REPORT/v2`;
+- `HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_OPERATIONAL_EVIDENCE_WAIVER/v2`.
+
+Unchanged foundation reuse, probability targets, stage reporting, aggregate,
+finalist/final-evaluation, submission, monitoring, attestation, and recovery
+formats retain v1 while transitively binding the v2 campaign, graph, recipe,
+and training-report hashes. The two campaigns use identical seed aliases and
+separate roots and ledgers, making their comparison paired without permitting
+cross-campaign output reuse.

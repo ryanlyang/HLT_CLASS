@@ -6,15 +6,20 @@ import pytest
 from hlt_classification.data.cache_contracts import canonical_sha256
 from hlt_classification.data.cache_contracts import with_content_hash, write_immutable_json
 from hlt_classification.scouting.hcwdl_mhpe_contracts import (
-    execution_lock_payload, graph_payload, recipe_payload, validate_execution_lock,
-    validate_graph, validate_recipe,
+    CAMPAIGN_SPEC_CONTRACT_C10P90, RECIPE_CONTRACT_C10P90,
+    campaign_profile, execution_lock_payload, graph_payload, recipe_payload,
+    validate_execution_lock, validate_graph, validate_recipe, validate_waiver,
+    waiver_payload,
 )
 from hlt_classification.scouting.hcwdl_mhpe_campaign import (
-    campaign_tasks, command_plan, create_campaign, validate_campaign,
+    campaign_tasks, command_plan, create_campaign, submission_phrase,
+    validate_campaign,
 )
 from hlt_classification.scouting.hcwdl_mhpe_contracts import reuse_lock_payload
 from hlt_classification.scouting.hcwdl_mhpe_graph import (
-    COORDINATES, ENSEMBLE_COMPONENTS, GRAPH_SHA256, NODE_REGISTRY, validate_graph as validate_registry,
+    C10P90_GRAPH_SHA256, C10P90_NODE_REGISTRY, COORDINATES,
+    ENSEMBLE_COMPONENTS, GRAPH_SHA256, NODE_REGISTRY, PROFILE_C10P90,
+    validate_graph as validate_registry,
 )
 from hlt_classification.scouting.hcwdl_mhpe_targets import (
     DurableProbabilityTargets, load_probability_shard,
@@ -30,6 +35,7 @@ from hlt_classification.scouting.training import (
 
 
 def test_exact_graph_shape_and_routes():
+    assert GRAPH_SHA256 == "3399cdf7f19e3461b9f5cfdcee2e38257a567d5bdb8547b8deb9dbddd856daf9"
     assert validate_registry() == GRAPH_SHA256
     assert len(NODE_REGISTRY) == 16
     assert sum(name.startswith("D000_from_") for name in NODE_REGISTRY) == 5
@@ -44,6 +50,30 @@ def test_exact_graph_shape_and_routes():
     assert COORDINATES["D066"].payload()["feature"] == [1, 3]
     assert COORDINATES["D033"].payload()["feature"] == [2, 3]
     assert COORDINATES["D000"].payload()["feature"] == [1, 1]
+
+
+def test_c10p90_graph_changes_only_specialist_loss_contract():
+    assert validate_registry(PROFILE_C10P90) == C10P90_GRAPH_SHA256
+    assert set(C10P90_NODE_REGISTRY) == set(NODE_REGISTRY)
+    for node_id, primary in NODE_REGISTRY.items():
+        parallel = C10P90_NODE_REGISTRY[node_id]
+        assert (
+            parallel.coordinate_name, parallel.teacher_id, parallel.seed_alias,
+            parallel.temperature, parallel.teacher_kind,
+        ) == (
+            primary.coordinate_name, primary.teacher_id, primary.seed_alias,
+            primary.temperature, primary.teacher_kind,
+        )
+        if node_id == "M1":
+            assert (parallel.ce_weight, parallel.kd_weight) == (.10, .90)
+            assert (primary.ce_weight, primary.kd_weight) == (.10, .90)
+        else:
+            assert (parallel.ce_weight, parallel.kd_weight) == (.10, .90)
+            assert (primary.ce_weight, primary.kd_weight) == (.25, .75)
+        assert parallel.contract.endswith("/v2")
+    payload = graph_payload(PROFILE_C10P90)
+    assert payload["recipe_profile"] == PROFILE_C10P90
+    assert validate_graph(payload) == payload["content_hash"]
 
 
 def test_task_graph_has_stage_parallelism_and_exact_closure():
@@ -65,6 +95,32 @@ def test_recipe_is_exactly_locked():
     assert validate_recipe(recipe) == recipe["content_hash"]
     assert recipe["specialist_loss"] == {"ce": .25, "kd": .75, "temperature": 2.0}
     assert recipe["m1_loss"] == {"ce": .10, "kd": .90, "temperature": 1.0}
+    parallel = recipe_payload(
+        foundation_recipe_sha256=parent, profile=PROFILE_C10P90,
+    )
+    assert parallel["contract"] == RECIPE_CONTRACT_C10P90
+    assert parallel["specialist_loss"] == {"ce": .10, "kd": .90, "temperature": 2.0}
+    assert parallel["m1_loss"] == recipe["m1_loss"]
+    assert parallel["single_changed_variable"] == "specialist_ce_kd_weights_only"
+    assert validate_recipe(parallel) == parallel["content_hash"]
+
+    waiver = waiver_payload(
+        source_commit="a" * 40, graph_sha256="b" * 64,
+        reuse_lock_sha256="c" * 64, recipe_sha256=parallel["content_hash"],
+        semantic_source_registry_sha256="d" * 64,
+        resource_request_sha256="e" * 64,
+        implementation_evidence_sha256={"test": "f" * 64},
+        authorization_phrase=(
+            "AUTHORIZE HCWDL MHPE C10P90 FULL DIRECT EXECUTION WITHOUT NEW SMOKE"
+        ),
+        profile=PROFILE_C10P90,
+    )
+    assert validate_waiver(waiver) == waiver["content_hash"]
+    tampered = dict(waiver)
+    tampered.pop("content_hash")
+    tampered["single_changed_variable"] = "wrong"
+    with pytest.raises(ValueError, match="waiver identity"):
+        validate_waiver(with_content_hash(tampered))
 
 
 def test_final_test_requires_exact_human_execution_phrase():
@@ -362,3 +418,33 @@ def test_campaign_publication_and_full_dry_run_shape(tmp_path, monkeypatch):
     drifted = with_content_hash({key: value for key, value in drifted.items() if key != "content_hash"})
     with pytest.raises(ValueError, match="reuse/source"):
         validate_campaign(drifted)
+
+    for name in campaign.C10P90_IMPLEMENTATION_EVIDENCE_FILES:
+        path = worktree / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if not path.exists():
+            path.write_text(f"evidence: {name}\n")
+    parallel_root = tmp_path / "parallel"
+    parallel = create_campaign(
+        foundation_lock=foundation / "locks/foundation.json",
+        campaign_root=parallel_root, project_dir=worktree,
+        source_commit="a" * 40, recipe_profile=PROFILE_C10P90,
+        authorize_live_submission=True,
+        authorization_phrase="AUTHORIZE HCWDL MHPE C10P90 FULL EXACT SPEC",
+    )
+    assert parallel["contract"] == CAMPAIGN_SPEC_CONTRACT_C10P90
+    assert campaign_profile(parallel) == PROFILE_C10P90
+    assert parallel["recipe_profile"] == PROFILE_C10P90
+    assert parallel["single_changed_variable"] == "specialist_ce_kd_weights_only"
+    assert validate_campaign(parallel) == parallel["content_hash"]
+    assert validate_campaign(parallel, executable=True) == parallel["content_hash"]
+    parallel_plan = command_plan(parallel)
+    assert len(parallel_plan["commands"]) == 23
+    assert all(
+        any(item.startswith("--job-name=hcwmhpe90_") for item in row["command"])
+        for row in parallel_plan["commands"]
+    )
+    assert campaign_tasks(PROFILE_C10P90) == campaign_tasks()
+    assert submission_phrase(PROFILE_C10P90) == (
+        "SUBMIT HCWDL MHPE C10P90 FULL EXACT LEDGER"
+    )

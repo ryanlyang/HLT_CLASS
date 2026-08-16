@@ -14,9 +14,11 @@ from .hcwdl_recovery import task_attestation_path, validate_task_attestation
 
 from .hcwdl_mhpe_campaign import ACCOUNT, PARTITION, campaign_tasks, validate_campaign
 from .hcwdl_mhpe_contracts import (
-    CAMPAIGN_SPEC_CONTRACT, COMMAND_PLAN_CONTRACT, RECOVERY_SPEC_CONTRACT,
-    RESOURCE_RECOVERY_SPEC_CONTRACT,
+    CAMPAIGN_SPEC_CONTRACT, CAMPAIGN_SPEC_CONTRACT_C10P90,
+    COMMAND_PLAN_CONTRACT, RECOVERY_SPEC_CONTRACT,
+    RESOURCE_RECOVERY_SPEC_CONTRACT, campaign_profile,
 )
+from .hcwdl_mhpe_graph import PROFILE_C10P90, PROFILE_C25P75
 
 SOURCE_REPAIR_PHRASE = "AUTHORIZE HCWDL MHPE EXECUTION-ONLY SOURCE REPAIR"
 SOURCE_REPAIR_ALLOWLIST = frozenset({
@@ -29,8 +31,10 @@ SOURCE_REPAIR_ALLOWLIST = frozenset({
 })
 
 
-def failed_downstream_closure(failed: Sequence[str]) -> tuple[str, ...]:
-    tasks = campaign_tasks(); known = {row["task_id"] for row in tasks}
+def failed_downstream_closure(
+    failed: Sequence[str], *, profile: str = PROFILE_C25P75,
+) -> tuple[str, ...]:
+    tasks = campaign_tasks(profile); known = {row["task_id"] for row in tasks}
     closure = set(map(str, failed))
     if not closure or not closure <= known:
         raise ValueError("HCWDL-MHPE failed task set differs")
@@ -53,15 +57,19 @@ def create_recovery(
 ) -> dict[str, Any]:
     subject_path = Path(original_spec).resolve(); subject = load_json(subject_path)
     parent_recovery = None
-    if subject.get("contract") == CAMPAIGN_SPEC_CONTRACT:
+    if subject.get("contract") in {
+        CAMPAIGN_SPEC_CONTRACT, CAMPAIGN_SPEC_CONTRACT_C10P90,
+    }:
         spec = subject; validate_campaign(spec, verify_source_tree=False)
-        subject_tasks = tuple(row["task_id"] for row in campaign_tasks())
+        profile = campaign_profile(spec)
+        subject_tasks = tuple(row["task_id"] for row in campaign_tasks(profile))
         attestation_root = Path(spec["campaign_root"])
     else:
         validate_recovery(subject)
         parent_recovery = subject
         spec = load_json(subject["campaign_spec_path"])
         validate_campaign(spec, verify_source_tree=False)
+        profile = campaign_profile(spec)
         subject_tasks = tuple(subject["recovery_tasks"])
         attestation_root = Path(subject["recovery_root"])
     ledger = load_json(original_ledger); ledger_hash = validate_submission_ledger(ledger)
@@ -74,7 +82,7 @@ def create_recovery(
     subject_set = set(subject_tasks)
     dependencies = {
         row["task_id"]: [parent for parent in row["dependencies"] if parent in subject_set]
-        for row in campaign_tasks() if row["task_id"] in subject_set
+        for row in campaign_tasks(profile) if row["task_id"] in subject_set
     }
     failed_tasks = resume_tasks(monitor, dependency_graph=dependencies)
     if re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
@@ -86,7 +94,7 @@ def create_recovery(
     elif (not changed or not set(changed) <= SOURCE_REPAIR_ALLOWLIST
           or repair_authorization_phrase != SOURCE_REPAIR_PHRASE):
         raise PermissionError("HCWDL-MHPE source repair is not exactly authorized")
-    closure = failed_downstream_closure(failed_tasks)
+    closure = failed_downstream_closure(failed_tasks, profile=profile)
     resources = {name: dict(value) for name, value in subject["resources"].items()}
     for name, override in (resource_overrides or {}).items():
         if name not in resources or set(override) - {"cpus", "memory", "walltime"}:
@@ -137,9 +145,15 @@ def create_recovery(
         "scientific_graph_unchanged": True, "completed_outputs_preserved": True,
         "final_test_accessed": False,
     })
+    if profile == PROFILE_C10P90:
+        raw_recovery = {
+            key: item for key, item in recovery.items() if key != "content_hash"
+        }
+        raw_recovery["recipe_profile"] = profile
+        recovery = with_content_hash(raw_recovery)
     commands = []
     closure_set = set(closure)
-    for task in campaign_tasks():
+    for task in campaign_tasks(profile):
         if task["task_id"] not in closure_set:
             continue
         resource = resources[task["resource_class"]]
@@ -147,7 +161,8 @@ def create_recovery(
         command = [
             "sbatch", "--parsable", f"--account={ACCOUNT}", f"--partition={PARTITION}",
             f"--cpus-per-task={resource['cpus']}", f"--mem={resource['memory']}",
-            f"--time={resource['walltime']}", f"--job-name=hcwmhpe_r_{task['task_id']}",
+            f"--time={resource['walltime']}",
+            f"--job-name={'hcwmhpe90_r' if profile == PROFILE_C10P90 else 'hcwmhpe_r'}_{task['task_id']}",
         ]
         if resource.get("gpu"):
             command.extend((f"--gres={resource['gpu']}", "--signal=B:USR1@120"))
@@ -175,8 +190,14 @@ def validate_recovery(value: Mapping[str, Any]) -> str:
     if contract not in {RECOVERY_SPEC_CONTRACT, RESOURCE_RECOVERY_SPEC_CONTRACT}:
         raise ValueError("HCWDL-MHPE recovery contract differs")
     digest = validate_content_hash(value, expected_contract=contract, expected_schema_version=1)
-    if tuple(value.get("recovery_tasks", ())) != failed_downstream_closure(value.get("failed_tasks", ())):
+    campaign = load_json(value["campaign_spec_path"])
+    profile = campaign_profile(campaign)
+    if tuple(value.get("recovery_tasks", ())) != failed_downstream_closure(
+        value.get("failed_tasks", ()), profile=profile,
+    ):
         raise ValueError("HCWDL-MHPE recovery closure differs")
+    if (profile == PROFILE_C10P90) != (value.get("recipe_profile") == PROFILE_C10P90):
+        raise ValueError("HCWDL-MHPE recovery recipe profile differs")
     monitor = load_json(value["monitor_report_path"])
     if (validate_content_hash(monitor, expected_contract=MONITOR_CONTRACT, expected_schema_version=1)
             != value.get("monitor_report_sha256")):
@@ -191,7 +212,6 @@ def validate_recovery(value: Mapping[str, Any]) -> str:
         ) != value.get("original_spec_sha256")
             or ledger.get("campaign_spec_sha256") != subject.get("content_hash")):
         raise ValueError("HCWDL-MHPE recovery subject changed")
-    campaign = load_json(value["campaign_spec_path"])
     if (validate_campaign(campaign, verify_source_tree=False) != value.get("campaign_spec_sha256")
             or campaign.get("reuse_lock_sha256") != value.get("foundation_reuse_lock_sha256")
             or campaign.get("graph_sha256") != value.get("graph_sha256")

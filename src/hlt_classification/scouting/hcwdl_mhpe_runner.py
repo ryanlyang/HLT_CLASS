@@ -16,10 +16,12 @@ from hlt_classification.models.scouting_particle_transformer import build_scouti
 
 from .engine import classification_metrics, precompute_teacher_targets, validate_pmard_training_report
 from .hcwdl_mhpe_campaign import validate_campaign
-from .hcwdl_mhpe_contracts import STAGE_REPORT_CONTRACT, TRAINING_REPORT_CONTRACT
+from .hcwdl_mhpe_contracts import (
+    STAGE_REPORT_CONTRACT, campaign_profile, training_report_contract,
+)
 from .hcwdl_mhpe_graph import (
-    CAMPAIGN_LABEL, COORDINATES, ENSEMBLE_COMPONENTS, GRAPH_SHA256,
-    NODE_CONTRACT, NODE_REGISTRY, training_registry,
+    COORDINATES, ENSEMBLE_COMPONENTS, PROFILE_C10P90, campaign_label,
+    graph_sha256, node_registry, training_registry,
 )
 from .hcwdl_mhpe_targets import (
     DurableProbabilityTargets, publish_probability_manifest,
@@ -63,7 +65,7 @@ def _model_targets(
     *, spec, teacher_id, foundation_root, foundation, split, split_hash,
     selections, assignments, balanced, recipe, sampler_seed, repair_seed,
     selection_hash,
-    device,
+    device, registry,
 ):
     output, report, report_hash = _teacher_checkpoint(spec, teacher_id, foundation_root)
     if teacher_id == "U000":
@@ -75,7 +77,7 @@ def _model_targets(
         ), report_hash
     if teacher_id == "U050":
         consumers = tuple(sorted(
-            candidate.node_id for candidate in NODE_REGISTRY.values()
+            candidate.node_id for candidate in registry.values()
             if candidate.teacher_id == "U050"
         ))
         manifest_path = Path(spec["campaign_root"]) / "targets/U050/train_manifest.json"
@@ -95,7 +97,7 @@ def _model_targets(
         return durable.as_ephemeral(
             teacher_report_sha256=report_hash, split_manifest_sha256=split_hash,
         ), report_hash
-    teacher_node = NODE_REGISTRY["U050_from_U000" if teacher_id == "U050" else teacher_id]
+    teacher_node = registry["U050_from_U000" if teacher_id == "U050" else teacher_id]
     behavior = "hlt" if teacher_node.input_domain == "hlt" else "balanced_uniform"
     input_key = "hlt" if behavior == "hlt" else "privileged"
     stream = _stream(
@@ -119,9 +121,11 @@ def _model_targets(
 
 
 def run_specialist(*, spec: Mapping[str, Any], node_id: str, device: str = "cuda", recovery_spec_sha256: str | None = None) -> dict[str, Any]:
-    if node_id not in NODE_REGISTRY:
+    profile = campaign_profile(spec)
+    registry = node_registry(profile)
+    if node_id not in registry:
         raise ValueError("unknown HCWDL-MHPE specialist")
-    node = NODE_REGISTRY[node_id]
+    node = registry[node_id]
     (reuse, foundation_root, foundation, split, split_hash, selection_hash,
      selections, assignments, balanced, recipe) = _context(spec, verify_source_tree=recovery_spec_sha256 is None)
     sampler_seed = derive_seed(int(foundation["replicate_seed"]), f"mhpe/sampler/{node.seed_alias}")
@@ -138,7 +142,7 @@ def run_specialist(*, spec: Mapping[str, Any], node_id: str, device: str = "cuda
         temperature_dir = "T1" if node.temperature == 1 else "T2"
         target_directory = Path(spec["campaign_root"]) / "targets" / node.teacher_id / temperature_dir
         expected_consumers = sorted(
-            candidate.node_id for candidate in NODE_REGISTRY.values()
+            candidate.node_id for candidate in registry.values()
             if candidate.teacher_id == node.teacher_id
             and candidate.temperature == node.temperature
         )
@@ -161,7 +165,7 @@ def run_specialist(*, spec: Mapping[str, Any], node_id: str, device: str = "cuda
             foundation=foundation, split=split, split_hash=split_hash,
             selections=selections, assignments=assignments, balanced=balanced,
             recipe=recipe, sampler_seed=sampler_seed, repair_seed=repair_seed, device=device,
-            selection_hash=selection_hash,
+            selection_hash=selection_hash, registry=registry,
         )
     loss = GenerationalLossConfiguration(
         arm=f"HCWDL_UB_MHPE_{node_id}", ce=node.ce_weight,
@@ -186,10 +190,11 @@ def run_specialist(*, spec: Mapping[str, Any], node_id: str, device: str = "cuda
         ),
         class_weights=np.ones(15, np.float32),
         output_dir=Path(spec["campaign_root"]) / "training" / node_id,
-        parents=parents, device=device, registry=training_registry(), domains=DOMAINS,
-        graph_sha256=GRAPH_SHA256, report_contract=TRAINING_REPORT_CONTRACT,
-        campaign_label=CAMPAIGN_LABEL, seed_node_id=node.seed_alias,
-        node_contract=NODE_CONTRACT, explicit_loss=loss,
+        parents=parents, device=device, registry=training_registry(profile), domains=DOMAINS,
+        graph_sha256=graph_sha256(profile),
+        report_contract=training_report_contract(profile),
+        campaign_label=campaign_label(profile), seed_node_id=node.seed_alias,
+        node_contract=node.contract, explicit_loss=loss,
         recipe_overlay_sha256=spec["recipe_sha256"],
         parent_teacher_targets=teacher_logits,
         parent_probability_targets=teacher_probability,
@@ -199,6 +204,7 @@ def run_specialist(*, spec: Mapping[str, Any], node_id: str, device: str = "cuda
             "teacher_kind": node.teacher_kind, "input_key": input_key,
             "population_policy": foundation["population_policy"], "final_test_accessed": False,
             "student_view_built_once": True, "teacher_targets_built_once": True,
+            **({"recipe_profile": profile} if profile == PROFILE_C10P90 else {}),
         },
     )
     if node_id == "U050_from_U000":
@@ -206,6 +212,7 @@ def run_specialist(*, spec: Mapping[str, Any], node_id: str, device: str = "cuda
             spec=spec, result=result, caches=caches, input_key=input_key,
             sampler_seed=sampler_seed, batch_size=int(recipe["batching"]["effective_batch_size"]),
             split_hash=split_hash, selection_hash=selection_hash, device=device,
+            registry=registry,
         )
     returned = dict(result)
     returned["_runtime_cache_array_bytes"] = {
@@ -217,7 +224,7 @@ def run_specialist(*, spec: Mapping[str, Any], node_id: str, device: str = "cuda
 def _publish_u050_targets(
     *, spec: Mapping[str, Any], result: Mapping[str, Any], caches,
     input_key: str, sampler_seed: int, batch_size: int, split_hash: str,
-    selection_hash: str, device: str,
+    selection_hash: str, device: str, registry,
 ) -> None:
     """Publish the selected U050 logits once for its four direct consumers."""
     root = Path(spec["campaign_root"])
@@ -254,7 +261,7 @@ def _publish_u050_targets(
         teacher_id="MHPE/U050",
     )
     consumers = tuple(sorted(
-        candidate.node_id for candidate in NODE_REGISTRY.values()
+        candidate.node_id for candidate in registry.values()
         if candidate.teacher_id == "U050"
     ))
     publish_logit_manifest(
@@ -266,6 +273,8 @@ def _publish_u050_targets(
 
 
 def _predict_components(*, spec, ensemble_id, device, recovery_spec_sha256=None):
+    profile = campaign_profile(spec)
+    registry = node_registry(profile)
     (_, foundation_root, foundation, split, split_hash, selection_hash, selections,
      assignments, balanced, recipe) = _context(spec, verify_source_tree=recovery_spec_sha256 is None)
     stage = ensemble_id[:-1]
@@ -327,7 +336,7 @@ def _predict_components(*, spec, ensemble_id, device, recovery_spec_sha256=None)
     cache_bytes = {
         role: int(cache.header["array_bytes"]) for role, cache in caches.items()
     }
-    return role_data, cache_bytes
+    return role_data, cache_bytes, registry
 
 
 def _diversity(component_logits: Mapping[str, np.ndarray], temperature: float, labels: np.ndarray) -> dict[str, Any]:
@@ -364,9 +373,10 @@ def _diversity(component_logits: Mapping[str, np.ndarray], temperature: float, l
 def run_ensemble(*, spec: Mapping[str, Any], ensemble_id: str, device: str = "cuda", recovery_spec_sha256: str | None = None) -> dict[str, Any]:
     if ensemble_id not in ENSEMBLE_COMPONENTS:
         raise ValueError("unknown HCWDL-MHPE ensemble")
+    profile = campaign_profile(spec)
     started = time.monotonic()
     root = Path(spec["campaign_root"]); primary_t = 1.0 if ensemble_id == "D000E" else 2.0
-    role_data, cache_bytes = _predict_components(
+    role_data, cache_bytes, registry = _predict_components(
         spec=spec, ensemble_id=ensemble_id, device=device,
         recovery_spec_sha256=recovery_spec_sha256,
     )
@@ -392,7 +402,7 @@ def run_ensemble(*, spec: Mapping[str, Any], ensemble_id: str, device: str = "cu
                 parents=role_parents,
                 producer_commit=spec["source_commit"],
             )
-            consumers = sorted(node.node_id for node in NODE_REGISTRY.values() if node.teacher_id == ensemble_id and node.temperature == temperature)
+            consumers = sorted(node.node_id for node in registry.values() if node.teacher_id == ensemble_id and node.temperature == temperature)
             manifest_path = directory / f"{role}_manifest.json"
             manifest = publish_probability_manifest(
                 manifest_path, ensemble_id=ensemble_id, role=role, shard_paths=[metadata],
@@ -405,7 +415,7 @@ def run_ensemble(*, spec: Mapping[str, Any], ensemble_id: str, device: str = "cu
         lock = target_lock_payload(
             manifests={role: manifests[f"{label}_{role}"] for role in ("train", "validation")},
             ensemble_id=ensemble_id,
-            consumers=sorted(node.node_id for node in NODE_REGISTRY.values() if node.teacher_id == ensemble_id and node.temperature == temperature),
+            consumers=sorted(node.node_id for node in registry.values() if node.teacher_id == ensemble_id and node.temperature == temperature),
             parents={
                 **target_parents,
                 "split_manifest_sha256": role_data["train"][4],
@@ -459,7 +469,7 @@ def run_ensemble(*, spec: Mapping[str, Any], ensemble_id: str, device: str = "cu
         }
         for name in ENSEMBLE_COMPONENTS[ensemble_id] if name != local_component
     }
-    report = with_content_hash({
+    stage_payload = {
         "contract": STAGE_REPORT_CONTRACT, "schema_version": 1,
         "ensemble_id": ensemble_id, "component_order": list(ENSEMBLE_COMPONENTS[ensemble_id]),
         "component_metrics": component_metrics, "ensemble_metrics": ensemble_metrics,
@@ -479,7 +489,8 @@ def run_ensemble(*, spec: Mapping[str, Any], ensemble_id: str, device: str = "cu
             "target_build_seconds": time.monotonic() - started,
             "cache_array_bytes": cache_bytes,
         },
-    })
+    }
+    report = with_content_hash(stage_payload)
     write_immutable_json(root / "reports" / f"{ensemble_id}_stage.json", report)
     return report
 
