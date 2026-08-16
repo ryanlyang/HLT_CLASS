@@ -1,5 +1,44 @@
 # Current Handoff
 
+## HCWDL-U-RKD resume-publication performance repair (2026-08-17)
+
+The detailed U040 phase logs identified resume publication as the remaining
+dominant runtime cost.  At RREL pass 53 the optimizer required 209.241 seconds,
+validation 5.773 seconds, calibration 0.001 seconds, and the representation
+diagnostic 0.353 seconds, while `resume_commit` alone required 288.235 seconds.
+The job therefore spent more time repeatedly authenticating checkpoint state
+than optimizing the model.  RSET reached a valid completed-pass-60 generation
+before timeout; RREL retained a valid completed-pass-53 generation.
+
+The serialized resume artifact and every-pass boundary are unchanged.  Each
+generation is still fully inventoried, serialized with the complete model,
+representation heads, Adam state, scheduler, sampler, RNG, validation history,
+selection, calibration, and lineage; its state, sidecar, and commit are still
+hashed, atomically linked, fsynced, and byte-verified before continuation.  Two
+independently authenticated generations remain retained.
+
+The execution repair removes redundant validation work only inside one live
+training process.  The process now carries forward handles for generations
+that were already exhaustively authenticated at startup or immediately after
+publication.  It uses those handles for old-generation and selected-candidate
+pruning instead of torch-loading and logically reinventoring the same retained
+states multiple additional times per pass.  A freshly started or recovered
+process continues to perform the full independent disk scan, serialized-byte
+hash verification, torch load, namespace inventory, tensor logical hashing,
+lineage validation, and corruption fallback before restoring any state.
+
+Focused resume/training/recovery coverage passes 50/50.  New regressions prove
+that the in-process path performs no redundant generation reload or scan, that
+candidate pruning consumes only authenticated handles, and that a subsequent
+cold scan independently validates the two durable generations.  Existing
+fault injection—including the optimized pruning path—interrupted publication,
+two-generation retention, corrupt-newest fallback, and exact resume tests
+remain enabled.  No scientific,
+serialized-artifact, or contract version changed.  The complete repository
+suite passes 980 tests with nine expected platform skips and 14 dependency
+warnings in 441.81 seconds.  A source-pinned Tigris recovery remains the
+required performance measurement.
+
 ## HCWDL-U-RKD diagnostic-buffer recovery correction (2026-08-16)
 
 The first source-pinned runtime recovery confirmed that the preceding cache

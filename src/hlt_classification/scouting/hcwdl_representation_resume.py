@@ -359,6 +359,7 @@ def publish_resume_generation(
     active_projections: Sequence[str],
     calibration_artifact_hashes: Mapping[str, Any],
     retain_generations: int = 2,
+    validated_prior_generations: Sequence[LoadedResumeGeneration] | None = None,
     crash_after: str | None = None,
 ) -> LoadedResumeGeneration:
     """Publish and validate one immutable resume generation.
@@ -459,14 +460,74 @@ def publish_resume_generation(
     _publish(commit_path, _json_file_bytes(commit))
     _maybe_interrupt(crash_after, "after_commit")
 
-    generation = validate_resume_generation(
-        directory, sequence=sequence, expected_lineage=normalized_lineage,
-    )
+    if validated_prior_generations is None:
+        generation = validate_resume_generation(
+            directory, sequence=sequence, expected_lineage=normalized_lineage,
+        )
+    else:
+        # The state was just inventoried, serialized, hashed, atomically
+        # linked, and fsynced by this process.  Verify the durable bytes once,
+        # then retain the already authenticated in-memory state instead of
+        # immediately torch-loading and reinventoring the same payload.  A
+        # fresh process always takes the exhaustive validator above through
+        # load_highest_valid_resume().
+        if sha256_file(state_path) != state_byte_sha256:
+            raise ValueError("published resume state bytes differ")
+        if sha256_file(sidecar_path) != sha256_bytes(sidecar_bytes):
+            raise ValueError("published resume sidecar bytes differ")
+        commit_bytes = _json_file_bytes(commit)
+        if sha256_file(commit_path) != sha256_bytes(commit_bytes):
+            raise ValueError("published resume commit bytes differ")
+        generation = LoadedResumeGeneration(
+            sequence=sequence,
+            state=state,
+            sidecar=sidecar,
+            commit=commit,
+            state_path=state_path,
+            sidecar_path=sidecar_path,
+            commit_path=commit_path,
+        )
     _maybe_interrupt(crash_after, "after_validation_before_cleanup")
-    prune_resume_generations(
-        directory, retain=retain_generations, expected_lineage=normalized_lineage,
-        crash_after=crash_after,
-    )
+    fast_priors = None
+    if validated_prior_generations is not None:
+        supplied = tuple(validated_prior_generations)
+        supplied_sequences = tuple(item.sequence for item in supplied)
+        if (
+            supplied_sequences != tuple(sorted(set(supplied_sequences)))
+            or any(item.sequence >= sequence for item in supplied)
+            or any(item.state_path.parent.resolve() != directory.resolve() for item in supplied)
+            or any(
+                _normalize_lineage(item.sidecar.get("parents", {}))
+                != normalized_lineage
+                for item in supplied
+            )
+            or any(
+                not path.is_file()
+                for item in supplied
+                for path in (item.state_path, item.sidecar_path, item.commit_path)
+            )
+        ):
+            raise ValueError("validated prior resume generations differ")
+        files, _ = _sequence_files(directory)
+        committed = {
+            item_sequence for item_sequence, kinds in files.items()
+            if "commit" in kinds
+        }
+        expected_committed = {*supplied_sequences, sequence}
+        if committed == expected_committed:
+            fast_priors = supplied
+    if fast_priors is None:
+        prune_resume_generations(
+            directory, retain=retain_generations,
+            expected_lineage=normalized_lineage, crash_after=crash_after,
+        )
+    else:
+        _prune_validated_resume_generations(
+            directory,
+            generations=(*fast_priors, generation),
+            retain=retain_generations,
+            crash_after=crash_after,
+        )
     return generation
 
 
@@ -722,6 +783,51 @@ def prune_resume_generations(
         _maybe_interrupt(crash_after, "during_pruning_after_sidecar_delete")
         generation.state_path.unlink()
         _fsync_directory(directory)
+        removed.append(generation.sequence)
+    return tuple(removed)
+
+
+def _prune_validated_resume_generations(
+    root: Path,
+    *,
+    generations: Sequence[LoadedResumeGeneration],
+    retain: int,
+    crash_after: str | None,
+) -> tuple[int, ...]:
+    """Prune a caller-owned, already authenticated in-process generation set.
+
+    Recovery/startup always performs the exhaustive independent disk scan.
+    During one uninterrupted training process, every supplied generation was
+    either authenticated by that startup scan or by the immediately preceding
+    publication.  Reusing those handles avoids reloading and reinventoring the
+    same multi-gigabyte states solely to decide which old triple to delete.
+    """
+
+    if isinstance(retain, bool) or not isinstance(retain, int) or retain < 2:
+        raise ValueError("resume cleanup must retain at least two generations")
+    ordered = tuple(generations)
+    sequences = tuple(item.sequence for item in ordered)
+    if sequences != tuple(sorted(set(sequences))):
+        raise ValueError("validated resume generation order differs")
+    removable = ordered[:-retain]
+    removed: list[int] = []
+    for generation in removable:
+        if any(
+            path.parent.resolve() != root.resolve()
+            for path in (
+                generation.commit_path,
+                generation.sidecar_path,
+                generation.state_path,
+            )
+        ):
+            raise ValueError("validated resume generation root differs")
+        generation.commit_path.unlink()
+        _fsync_directory(root)
+        _maybe_interrupt(crash_after, "during_pruning_after_commit_delete")
+        generation.sidecar_path.unlink()
+        _maybe_interrupt(crash_after, "during_pruning_after_sidecar_delete")
+        generation.state_path.unlink()
+        _fsync_directory(root)
         removed.append(generation.sequence)
     return tuple(removed)
 

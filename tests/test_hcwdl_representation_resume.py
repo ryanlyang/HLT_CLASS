@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 import torch
 
+from hlt_classification.scouting import hcwdl_representation_resume as resume_module
+from hlt_classification.scouting import hcwdl_representation_training as training_module
 from hlt_classification.scouting.hcwdl_direct_offline_kd_graph import (
     GRAPH_SHA256 as DIRECT_GRAPH_SHA256,
 )
@@ -176,6 +178,40 @@ def test_publish_load_and_two_generation_retention(tmp_path: Path):
     )
 
 
+def test_in_process_validated_generation_handles_avoid_redundant_rescans(
+    tmp_path: Path, monkeypatch,
+):
+    first = _publish(tmp_path, 0)
+    with monkeypatch.context() as context:
+        context.setattr(
+            resume_module, "validate_resume_generation",
+            lambda *_args, **_kwargs: pytest.fail(
+                "new in-process generation must not be reloaded"
+            ),
+        )
+        context.setattr(
+            resume_module, "prune_resume_generations",
+            lambda *_args, **_kwargs: pytest.fail(
+                "validated in-process generations must not be rescanned"
+            ),
+        )
+        second = _publish(
+            tmp_path, 1, validated_prior_generations=(first,),
+        )
+        third = _publish(
+            tmp_path, 2,
+            validated_prior_generations=(first, second),
+        )
+    assert third.sequence == 2
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        "commit_1.json", "commit_2.json",
+        "state_1.json", "state_1.pt", "state_2.json", "state_2.pt",
+    ]
+    # A new process still performs the exhaustive independent disk audit.
+    scan = scan_resume_generations(tmp_path, expected_lineage=_lineage())
+    assert [row.sequence for row in scan.valid_generations] == [1, 2]
+
+
 def test_direct_graph_publish_scan_and_restore_cycle(tmp_path: Path):
     lineage = {**_lineage(), "ascent_graph": DIRECT_GRAPH_SHA256}
     published = _publish(tmp_path, 1, lineage=lineage)
@@ -262,6 +298,37 @@ def test_crash_during_old_generation_pruning_retains_two_newest_commits(
     assert set(scan.orphan_files) == orphan_names
 
 
+@pytest.mark.parametrize(
+    ("crash_point", "orphan_names"),
+    [
+        (
+            "during_pruning_after_commit_delete",
+            {"state_0.pt", "state_0.json"},
+        ),
+        ("during_pruning_after_sidecar_delete", {"state_0.pt"}),
+    ],
+)
+def test_fast_in_process_pruning_has_identical_crash_fallback(
+    tmp_path: Path, crash_point: str, orphan_names: set[str],
+):
+    first = _publish(tmp_path, 0)
+    second = _publish(
+        tmp_path, 1, validated_prior_generations=(first,),
+    )
+    with pytest.raises(ResumePublicationInterrupted, match=crash_point):
+        _publish(
+            tmp_path, 2,
+            validated_prior_generations=(first, second),
+            crash_after=crash_point,
+        )
+    loaded, scan = load_highest_valid_resume(
+        tmp_path, expected_lineage=_lineage(),
+    )
+    assert loaded is not None and loaded.sequence == 2
+    assert [row.sequence for row in scan.valid_generations] == [1, 2]
+    assert set(scan.orphan_files) == orphan_names
+
+
 def test_corrupt_newest_commit_falls_back_to_highest_fully_valid_generation(tmp_path: Path):
     _publish(tmp_path, 0)
     _publish(tmp_path, 1)
@@ -304,6 +371,33 @@ def test_best_checkpoint_change_retains_candidate_for_two_generation_fallback(
     assert loaded.state["selection_state"]["checkpoint_path"] == str(first.resolve())
     assert first.is_file()
     assert [row.sequence for row in scan.invalid_commits] == [1]
+
+
+def test_candidate_pruning_reuses_validated_generation_handles(
+    tmp_path: Path, monkeypatch,
+):
+    resume = tmp_path / "resume"
+    candidates = tmp_path / "candidates"
+    candidates.mkdir()
+    retained = candidates / "retained.pt"
+    removed = candidates / "removed.pt"
+    retained.write_bytes(b"retained")
+    removed.write_bytes(b"removed")
+    state = _state(sequence=0)
+    state["selection_state"] = {"checkpoint_path": str(retained.resolve())}
+    generation = _publish(resume, 0, state=state)
+    monkeypatch.setattr(
+        training_module, "scan_resume_generations",
+        lambda *_args, **_kwargs: pytest.fail(
+            "candidate pruning must reuse authenticated handles"
+        ),
+    )
+    deleted = _prune_checkpoint_candidates_for_resume(
+        candidates, resume_root=resume, lineage=_lineage(),
+        validated_generations=(generation,),
+    )
+    assert deleted == (removed,)
+    assert retained.is_file()
 
 
 def test_resume_rejects_cross_target_runtime_or_namespace_lineage(tmp_path: Path):

@@ -1710,12 +1710,16 @@ def _prune_checkpoint_candidates_for_resume(
     *,
     resume_root: str | Path,
     lineage: Mapping[str, str],
+    validated_generations: Sequence[Any] | None = None,
 ) -> tuple[Path, ...]:
     """Retain candidates referenced by every still-valid resume generation."""
 
-    retained = scan_resume_generations(
-        resume_root, expected_lineage=lineage,
-    ).valid_generations
+    retained = (
+        scan_resume_generations(
+            resume_root, expected_lineage=lineage,
+        ).valid_generations
+        if validated_generations is None else tuple(validated_generations)
+    )
     referenced = {
         Path(path).resolve()
         for generation in retained
@@ -3869,6 +3873,7 @@ def train_hcwdl_representation_node(
         )
         if calibration.get("diagnostic_batch_sha256") != expected_diagnostic_sha256:
             raise ValueError("resume diagnostic-batch lineage differs")
+    retained_resume_generations = list(scan.valid_generations[-2:])
     pass_identity_parts = (
         [] if len(pass_identity_digests) == 0 else [pass_identity_digests]
     )
@@ -3904,8 +3909,8 @@ def train_hcwdl_representation_node(
         )
 
     def commit_resume(state: Mapping[str, Any] | None = None) -> None:
-        nonlocal resume_sequence
-        publish_resume_generation(
+        nonlocal resume_sequence, retained_resume_generations
+        generation = publish_resume_generation(
             resume_root,
             sequence=resume_sequence,
             state=snapshot_state() if state is None else state,
@@ -3916,8 +3921,12 @@ def train_hcwdl_representation_node(
             active_projections=active_projection_names,
             calibration_artifact_hashes=calibration["artifact_hashes"],
             retain_generations=2,
+            validated_prior_generations=tuple(retained_resume_generations),
         )
         resume_sequence += 1
+        retained_resume_generations = [
+            *retained_resume_generations, generation,
+        ][-2:]
         # Candidate checkpoints are external members of the resume state.
         # Retain every candidate referenced by either of the two committed
         # resume generations, and prune only after the older generation has
@@ -3925,6 +3934,7 @@ def train_hcwdl_representation_node(
         # commit/state becomes corrupt after a best-checkpoint change.
         _prune_checkpoint_candidates_for_resume(
             selected_root, resume_root=resume_root, lineage=lineage,
+            validated_generations=retained_resume_generations,
         )
 
     def maybe_calibrate() -> None:
