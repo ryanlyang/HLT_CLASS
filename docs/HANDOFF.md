@@ -1,5 +1,55 @@
 # Current Handoff
 
+## HCWDL-U-RKD pilot cache and epoch-boundary repair (2026-08-16)
+
+The first optimized 300k recovery jobs reached valid authenticated resume
+generations but exhausted their six-hour allocations: RSET U020 committed
+pass 49/update 57,428 and RREL U020 committed pass 52 plus batch 624 of pass
+53/update 61,568.  Neither resume store contained an invalid generation or an
+orphan file, so the jobs remain exactly recoverable and do not need to restart
+from pass zero.
+
+The production phase logs separated the remaining cost.  RSET materialized
+the 300k train cache in 2,136.530 seconds and the 100k validation cache in
+735.479 seconds; RREL required 1,279.387 and 426.920 seconds respectively.
+Slurm reported only 5:49:53 and 5:41:05 total CPU for the two six-hour,
+eight-CPU jobs, confirming that the ragged cache builder was still effectively
+single-core.  Cache construction was therefore material, but it could not by
+itself explain the remaining wall time after optimizer training began.
+
+The execution-only repair removes both sources of avoidable work while
+preserving the existing scientific and artifact contracts:
+
+- offline endpoint projection is computed once per source row and reused by
+  P0, coupling partitions, and Shell Exact repair;
+- Shell Exact copies/converts only the HLT model-projection branches it can
+  mutate, rather than duplicating the native-offline, label, and observer
+  payload carried alongside them;
+- label bounds are checked before device transfer, while validation retains
+  its small ordered logit/label result on the GPU and performs one finite check
+  and host transfer per role instead of synchronizing once per batch;
+- the per-pass identity audit accumulates immutable chunks and concatenates
+  once at the pass boundary instead of reallocating a growing array for every
+  batch;
+- the representation diagnostic uses tensor identity/version guards instead
+  of cloning and restoring the complete model, gradient, and Adam state each
+  pass; exact checkpoint and resume publication still snapshots full bytes;
+- when a new best checkpoint is selected, its already materialized boundary
+  snapshot is reused for that pass's resume generation; and
+- phase timings now expose optimizer, validation, calibration, representation
+  diagnostic, selected-checkpoint, resume-commit, and total boundary costs for
+  the next Tigris measurement.
+
+No U/D coordinate, particle value/order, token metadata, target, RSET/RREL
+loss, coefficient, stochastic stream, 60-pass schedule, validation metric,
+checkpoint rule, or HLT-only deployment behavior changed.  No durable repaired
+view was introduced and no contract version was broadened.  Focused
+homotopy/repair/training/resume/recovery coverage passes 131/131.  Source
+compilation and the complete repository suite pass 976 tests with nine
+expected platform skips and 14 dependency warnings in 406.01 seconds.  A
+source-pinned Tigris recovery from the two existing valid resume generations
+is the remaining runtime measurement; no job was submitted locally.
+
 ## HCWDL-U-RKD U/J v2 parent compatibility (2026-08-15)
 
 The first 300k autolaunch preparation correctly located the active U/J pilot

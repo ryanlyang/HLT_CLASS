@@ -793,7 +793,7 @@ def test_calibration_adapter_uses_finalized_shared_forward_api_exactly_once_per_
 
 
 def test_fixed_diagnostic_is_one_forward_reports_pending_nulls_and_is_nonmutating(
-    spectral_resources,
+    spectral_resources, monkeypatch,
 ):
     fixture = _fixture()
     token, relation = spectral_resources
@@ -816,6 +816,18 @@ def test_fixed_diagnostic_is_one_forward_reports_pending_nulls_and_is_nonmutatin
             for name in ("jet", "set", "relation")
         },
     }
+    monkeypatch.setattr(
+        model, "load_state_dict",
+        lambda *_args, **_kwargs: pytest.fail(
+            "diagnostic must not round-trip the full model state"
+        ),
+    )
+    monkeypatch.setattr(
+        optimizer, "load_state_dict",
+        lambda *_args, **_kwargs: pytest.fail(
+            "diagnostic must not round-trip the full optimizer state"
+        ),
+    )
     result = run_representation_diagnostic(
         execution=resolve_node_execution("RSET_D90c"), model=model,
         optimizer=optimizer, batch=batch, completed_pass=1,

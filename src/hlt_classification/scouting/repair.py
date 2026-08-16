@@ -305,6 +305,9 @@ def _apply_full_endpoint_repair(
     require_complete: bool = True,
     strength_by_token: np.ndarray | None = None,
     repair_contract: str = FULL_REPAIR_FAMILY,
+    offline_endpoint_rows: Mapping[str, Sequence[np.ndarray]] | None = None,
+    offline_endpoint_features: Sequence[np.ndarray] | None = None,
+    offline_endpoint_validity: Sequence[np.ndarray] | None = None,
 ) -> None:
     rows = canonical.features.shape[0]
     strengths = None if strength_by_token is None else np.asarray(strength_by_token, np.float64)
@@ -321,7 +324,22 @@ def _apply_full_endpoint_repair(
             raise ValueError("intermediate full endpoint repair requires one identity key per row")
         if len(set(map(str, identity_keys))) != rows:
             raise ValueError("full endpoint repair identity keys must be unique")
-    offline_rows = _full_endpoint_rows(offline_arrays, rows)
+    offline_rows = (
+        _full_endpoint_rows(offline_arrays, rows)
+        if offline_endpoint_rows is None else offline_endpoint_rows
+    )
+    required = full_endpoint_required_branches()
+    if set(offline_rows) != required or any(
+        len(offline_rows[name]) != rows for name in required
+    ):
+        raise ValueError("prepared full offline endpoint rows differ")
+    if (offline_endpoint_features is None) != (offline_endpoint_validity is None):
+        raise ValueError("prepared endpoint features and validity must be paired")
+    if offline_endpoint_features is not None and (
+        len(offline_endpoint_features) != rows
+        or len(offline_endpoint_validity) != rows
+    ):
+        raise ValueError("prepared endpoint feature row counts differ")
     for row in range(rows):
         visible = min(int(canonical.raw_lengths[row]), canonical.features.shape[2])
         row_assignment = np.asarray(assignments[row, :visible], dtype=np.int64)
@@ -357,9 +375,24 @@ def _apply_full_endpoint_repair(
         neutral_count = len(offline_rows["npfcand_px"][row])
         if charged_count + neutral_count != len(offline_p4):
             raise ValueError(f"offline p4 and feature endpoint lengths differ in row {row}")
-        all_endpoint_features, all_endpoint_validity = _combined_endpoint_features(
-            offline_rows, row=row, charged_count=charged_count, neutral_count=neutral_count,
-        )
+        if offline_endpoint_features is None:
+            all_endpoint_features, all_endpoint_validity = _combined_endpoint_features(
+                offline_rows, row=row,
+                charged_count=charged_count, neutral_count=neutral_count,
+            )
+        else:
+            all_endpoint_features = np.asarray(
+                offline_endpoint_features[row], dtype=np.float64,
+            )
+            all_endpoint_validity = np.asarray(
+                offline_endpoint_validity[row], dtype=np.bool_,
+            )
+            expected_shape = (charged_count + neutral_count, len(FULL_ENDPOINT_FIELDS))
+            if (
+                all_endpoint_features.shape != expected_shape
+                or all_endpoint_validity.shape != expected_shape
+            ):
+                raise ValueError("prepared endpoint feature shapes differ")
         endpoint_features = all_endpoint_features[matched_assignment]
         endpoint_validity = all_endpoint_validity[matched_assignment]
         endpoint_charged = _validate_full_endpoint_features(
@@ -483,6 +516,9 @@ def build_alpha_repaired_inputs(
     offline_arrays: Mapping[str, object] | None = None,
     identity_keys: Sequence[str] | None = None,
     discrete_seed: int = 1337,
+    offline_endpoint_rows: Mapping[str, Sequence[np.ndarray]] | None = None,
+    offline_endpoint_features: Sequence[np.ndarray] | None = None,
+    offline_endpoint_validity: Sequence[np.ndarray] | None = None,
 ) -> ParticleInputs:
     repair_family = runtime_repair_family(repair_family)
     try:
@@ -517,7 +553,23 @@ def build_alpha_repaired_inputs(
     if repair_family in confidence_families:
         if confidence is None or confidence.shape != mapping.shape or not np.isfinite(confidence).all() or np.any((confidence < 0) | (confidence > 1)):
             raise ValueError("confidence-weighted repair requires finite aligned probabilities")
-    raw = {name: [row.copy() for row in _rows(value)] for name, value in hlt_arrays.items()}
+    # A repair mutates and rebuilds only the canonical HLT tensor branches.
+    # ``hlt_arrays`` can also carry every native-offline, label, and observer
+    # branch needed by its caller.  Materializing that complete mapping here
+    # used to duplicate the dominant ragged payload even though none of those
+    # rows could be consumed below.  Restrict the private mutable copy to the
+    # exact model-input projection without changing any endpoint value.
+    hlt_projection_branches = {
+        *(spec.branch for spec in HLT_FEATURE_SPECS),
+        *HLT_VECTOR_BRANCHES,
+    }
+    missing_hlt = sorted(hlt_projection_branches - set(hlt_arrays))
+    if missing_hlt:
+        raise KeyError(f"repair HLT projection is missing branches: {missing_hlt}")
+    raw = {
+        name: [row.copy() for row in _rows(hlt_arrays[name])]
+        for name in sorted(hlt_projection_branches)
+    }
     highcov_families = {
         "HIGHCOV_SHELL_EXACT", "HIGHCOV_SHELL_SOFT", "HIGHCOV_HC_EXACT",
     }
@@ -565,6 +617,9 @@ def build_alpha_repaired_inputs(
             require_complete=repair_family == "FULL_PARTICLE_ENDPOINT",
             strength_by_token=strength_by_token,
             repair_contract=repair_contract,
+            offline_endpoint_rows=offline_endpoint_rows,
+            offline_endpoint_features=offline_endpoint_features,
+            offline_endpoint_validity=offline_endpoint_validity,
         )
         result = build_hlt_inputs(raw)
         if not np.array_equal(result.mask, canonical.mask) or not np.array_equal(

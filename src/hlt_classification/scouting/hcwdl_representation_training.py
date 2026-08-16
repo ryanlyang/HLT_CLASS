@@ -807,6 +807,11 @@ def _validate_target_bank_binding(
 def _batch_tensors(batch: HLTBatch, device):
     import torch
 
+    label_values = np.asarray(batch.labels)
+    if label_values.size and (
+        int(label_values.min()) < 0 or int(label_values.max()) >= 15
+    ):
+        raise ValueError("HCWDL-RKD labels lie outside 15 classes")
     features = torch.as_tensor(batch.features, dtype=torch.float32, device=device)
     vectors = torch.as_tensor(batch.vectors, dtype=torch.float32, device=device)
     mask = torch.as_tensor(batch.mask, dtype=torch.bool, device=device)
@@ -814,9 +819,7 @@ def _batch_tensors(batch: HLTBatch, device):
         mask = mask[:, None, :]
     visible = torch.as_tensor(batch.visible_indices, dtype=torch.long, device=device)
     family = torch.as_tensor(batch.family_codes, dtype=torch.int8, device=device)
-    labels = torch.as_tensor(batch.labels, dtype=torch.long, device=device)
-    if labels.numel() and (int(labels.min()) < 0 or int(labels.max()) >= 15):
-        raise ValueError("HCWDL-RKD labels lie outside 15 classes")
+    labels = torch.as_tensor(label_values, dtype=torch.long, device=device)
     return features, vectors, mask, visible, family, labels
 
 
@@ -1741,6 +1744,8 @@ def _validation(
     rng = capture_rng_state()
     logits_parts = []
     label_parts = []
+    logits_array = None
+    labels_array = None
     parity_inputs = None
     model.eval()
     try:
@@ -1759,19 +1764,28 @@ def _validation(
                 ):
                     logits = model(features, vectors, mask)
                 logits = logits.float()
-                if logits.shape != (len(labels), 15) or not torch.isfinite(logits).all():
+                if logits.shape != (len(labels), 15):
                     raise FloatingPointError("validation logits are invalid")
-                logits_parts.append(logits.cpu().numpy())
-                label_parts.append(labels.cpu().numpy())
+                # Keep the small validation outputs on device and perform one
+                # ordered host transfer after the complete role.  Copying each
+                # of ~391 pilot batches separately forced a CUDA/CPU
+                # synchronization at every iteration without changing metric
+                # inputs.
+                logits_parts.append(logits)
+                label_parts.append(labels)
+            if logits_parts:
+                all_logits = torch.cat(logits_parts, dim=0)
+                if not torch.isfinite(all_logits).all():
+                    raise FloatingPointError("validation logits are invalid")
+                logits_array = all_logits.cpu().numpy()
+                labels_array = torch.cat(label_parts, dim=0).cpu().numpy()
     finally:
         restore_model_runtime_state(model, runtime)
         restore_rng_state(rng)
         model.train(prior_mode)
-    if not logits_parts or parity_inputs is None:
+    if logits_array is None or labels_array is None or parity_inputs is None:
         raise ValueError("validation stream is empty")
-    metrics = classification_metrics(
-        np.concatenate(logits_parts, axis=0), np.concatenate(label_parts, axis=0),
-    )
+    metrics = classification_metrics(logits_array, labels_array)
     required = (
         "cross_entropy", "macro_ovr_auc",
         "macro_mean_log_qcd_rejection_at_50pct_signal",
@@ -1988,6 +2002,80 @@ def _tree_equal(left: Any, right: Any) -> bool:
     return left == right
 
 
+def _tensor_version_token(value: Any) -> tuple[Any, ...]:
+    """Return a synchronization-free identity/version token for one tensor."""
+
+    return (
+        id(value), int(value._version), tuple(value.shape), tuple(value.stride()),
+        int(value.storage_offset()), str(value.dtype), str(value.device),
+        bool(value.requires_grad),
+    )
+
+
+def _mutation_tree_token(value: Any) -> Any:
+    """Describe optimizer state without copying tensor payloads off device.
+
+    PyTorch increments a tensor's version counter on in-place mutation.  Object
+    identity plus the recursive container/scalar structure also detects tensor
+    replacement or optimizer bookkeeping changes.  This is the production
+    diagnostic guard; exact checkpoint publication still snapshots full bytes.
+    """
+
+    import torch
+
+    if isinstance(value, torch.Tensor):
+        return ("tensor", *_tensor_version_token(value))
+    if isinstance(value, Mapping):
+        return (
+            "mapping",
+            tuple(
+                (
+                    ("tensor-key", id(key))
+                    if isinstance(key, torch.Tensor)
+                    else ("key", type(key).__qualname__, repr(key)),
+                    _mutation_tree_token(item),
+                )
+                for key, item in value.items()
+            ),
+        )
+    if isinstance(value, tuple):
+        return ("tuple", tuple(_mutation_tree_token(item) for item in value))
+    if isinstance(value, list):
+        return ("list", tuple(_mutation_tree_token(item) for item in value))
+    if isinstance(value, np.ndarray):
+        return (
+            "ndarray", id(value), tuple(value.shape), value.dtype.str,
+            sha256_bytes(np.ascontiguousarray(value).tobytes()),
+        )
+    return ("scalar", type(value).__qualname__, copy.deepcopy(value))
+
+
+def _diagnostic_mutation_token(model, optimizer) -> tuple[Any, ...]:
+    """Bind every mutable model/gradient/optimizer object without a CPU clone."""
+
+    model_tensors = tuple(
+        (kind, name, _tensor_version_token(value))
+        for kind, rows in (
+            ("parameter", model.named_parameters()),
+            ("buffer", model.named_buffers()),
+        )
+        for name, value in rows
+    )
+    gradients = tuple(
+        (
+            name, None if parameter.grad is None
+            else _tensor_version_token(parameter.grad)
+        )
+        for name, parameter in model.named_parameters()
+    )
+    return (
+        model_tensors,
+        gradients,
+        _mutation_tree_token(optimizer.state),
+        _mutation_tree_token(optimizer.param_groups),
+    )
+
+
 def _gradient_tensors(loss, named_parameters, *, retain_graph: bool):
     import torch
 
@@ -2142,14 +2230,9 @@ def run_representation_diagnostic(
     if (external_snapshot is None) != (external_restore is None):
         raise ValueError("diagnostic external snapshot/restore must be supplied together")
     normalized = normalize_hlt_batch(batch)
-    prior_model_state = _cpu_tree(model.state_dict())
+    prior_mutation_token = _diagnostic_mutation_token(model, optimizer)
     prior_runtime = capture_model_runtime_state(model)
     prior_modes = {name: module.training for name, module in model.named_modules()}
-    prior_gradients = {
-        name: None if parameter.grad is None else parameter.grad.detach().cpu().clone()
-        for name, parameter in model.named_parameters()
-    }
-    prior_optimizer = _cpu_tree(optimizer.state_dict())
     prior_rng = _cpu_tree(capture_rng_state())
     prior_external = (
         None if external_snapshot is None else _cpu_tree(external_snapshot())
@@ -2500,23 +2583,16 @@ def run_representation_diagnostic(
                 ),
             }
     finally:
-        model.load_state_dict(prior_model_state, strict=True)
         restore_model_runtime_state(model, prior_runtime)
         for name, module in model.named_modules():
             module.training = prior_modes[name]
-        for name, parameter in model.named_parameters():
-            gradient = prior_gradients[name]
-            parameter.grad = None if gradient is None else gradient.to(parameter.device).clone()
-        optimizer.load_state_dict(prior_optimizer)
         restore_rng_state(prior_rng)
         if external_restore is not None:
             external_restore(copy.deepcopy(prior_external))
     if result is None:
         raise RuntimeError("HCWDL-RKD diagnostic did not produce a result")
-    if not _tree_equal(_cpu_tree(model.state_dict()), prior_model_state):
-        raise RuntimeError("diagnostic mutated model state")
-    if not _tree_equal(_cpu_tree(optimizer.state_dict()), prior_optimizer):
-        raise RuntimeError("diagnostic mutated optimizer state")
+    if _diagnostic_mutation_token(model, optimizer) != prior_mutation_token:
+        raise RuntimeError("diagnostic mutated model, gradient, or optimizer state")
     if not _tree_equal(_cpu_tree(capture_rng_state()), prior_rng):
         raise RuntimeError("diagnostic mutated RNG state")
     if external_snapshot is not None and not _tree_equal(
@@ -3758,6 +3834,19 @@ def train_hcwdl_representation_node(
         )
         if calibration.get("diagnostic_batch_sha256") != expected_diagnostic_sha256:
             raise ValueError("resume diagnostic-batch lineage differs")
+    pass_identity_parts = (
+        [] if len(pass_identity_digests) == 0 else [pass_identity_digests]
+    )
+    pass_identity_rows = len(pass_identity_digests)
+
+    def materialized_pass_identities() -> np.ndarray:
+        if not pass_identity_parts:
+            return np.empty((0, 32), dtype=np.uint8)
+        if len(pass_identity_parts) == 1:
+            return np.ascontiguousarray(pass_identity_parts[0], dtype=np.uint8)
+        return np.ascontiguousarray(
+            np.concatenate(pass_identity_parts, axis=0), dtype=np.uint8,
+        )
     active_projection_names = tuple(
         sorted(name for name, _ in model.representation_heads.projection_items())
     )
@@ -3776,15 +3865,15 @@ def train_hcwdl_representation_node(
             rng_streams=rng_streams,
             producer_runtime_signature=producer_runtime_signature,
             sampler_external_state=external_sampler_state(),
-            pass_identity_digests=pass_identity_digests,
+            pass_identity_digests=materialized_pass_identities(),
         )
 
-    def commit_resume() -> None:
+    def commit_resume(state: Mapping[str, Any] | None = None) -> None:
         nonlocal resume_sequence
         publish_resume_generation(
             resume_root,
             sequence=resume_sequence,
-            state=snapshot_state(),
+            state=snapshot_state() if state is None else state,
             lineage=lineage,
             completed_pass=completed_pass,
             completed_update=completed_update,
@@ -3948,9 +4037,16 @@ def train_hcwdl_representation_node(
 
     def validation_boundary(*, completed_natural_pass: bool) -> None:
         nonlocal selection_state, parity_inputs
+        boundary_started = time.perf_counter()
+        phase_started = time.perf_counter()
         metrics, current_parity = _validation(
             model, validation_batches(), device=target_device,
             amp_dtype=config.amp_dtype,
+        )
+        print(
+            f"HCWDL-RKD phase=validation execution={execution_id} "
+            f"pass={completed_pass} seconds={time.perf_counter() - phase_started:.3f}",
+            flush=True,
         )
         parity_inputs = current_parity
         checkpoint_id = (
@@ -3975,7 +4071,14 @@ def train_hcwdl_representation_node(
             },
         }
         validation_history.append(row)
+        phase_started = time.perf_counter()
         maybe_calibrate()
+        print(
+            f"HCWDL-RKD phase=calibration execution={execution_id} "
+            f"pass={completed_pass} seconds={time.perf_counter() - phase_started:.3f}",
+            flush=True,
+        )
+        phase_started = time.perf_counter()
         if diagnostic_materialized is None:
             if config.mode in {"scientific", "smoke"}:
                 raise ValueError("HCWDL-RKD fixed diagnostic batch is absent")
@@ -3999,6 +4102,11 @@ def train_hcwdl_representation_node(
                 external_snapshot=diagnostic_external_snapshot,
                 external_restore=diagnostic_external_restore,
             )
+        print(
+            f"HCWDL-RKD phase=representation_diagnostic execution={execution_id} "
+            f"pass={completed_pass} seconds={time.perf_counter() - phase_started:.3f}",
+            flush=True,
+        )
         row["boundary_order"] = [
             "validation",
             "required_gradient_calibration_barrier",
@@ -4007,6 +4115,7 @@ def train_hcwdl_representation_node(
         ]
         selected = min(validation_history, key=checkpoint_key)
         if selected["checkpoint_id"] == checkpoint_id:
+            phase_started = time.perf_counter()
             candidate_state = snapshot_state()
             candidate_state["selection_state"] = {
                 "best": copy.deepcopy(row),
@@ -4021,19 +4130,41 @@ def train_hcwdl_representation_node(
                 "checkpoint_path": str(path.resolve()),
                 "checkpoint_sha256": digest,
             }
-            commit_resume()
+            resume_state = dict(candidate_state)
+            resume_state["selection_state"] = copy.deepcopy(selection_state)
+            print(
+                f"HCWDL-RKD phase=selected_checkpoint execution={execution_id} "
+                f"pass={completed_pass} seconds={time.perf_counter() - phase_started:.3f}",
+                flush=True,
+            )
+            phase_started = time.perf_counter()
+            commit_resume(resume_state)
         else:
+            phase_started = time.perf_counter()
             commit_resume()
+        print(
+            f"HCWDL-RKD phase=resume_commit execution={execution_id} "
+            f"pass={completed_pass} seconds={time.perf_counter() - phase_started:.3f}",
+            flush=True,
+        )
+        print(
+            f"HCWDL-RKD phase=validation_boundary execution={execution_id} "
+            f"pass={completed_pass} seconds={time.perf_counter() - boundary_started:.3f}",
+            flush=True,
+        )
 
     terminal_bounded = False
     while completed_update < config.active_total_updates:
+        pass_started = time.perf_counter()
         pass_index = completed_pass
         start_batch = next_canonical_batch
         observed_batches = start_batch
-        observed_rows = len(pass_identity_digests)
+        observed_rows = pass_identity_rows
         if observed_rows > config.train_rows:
             raise ValueError("resume in-pass identity count exceeds train rows")
-        seen_pass_identities = {bytes(row) for row in pass_identity_digests}
+        seen_pass_identities = {
+            bytes(row) for part in pass_identity_parts for row in part
+        }
         model.train()
         stream = _train_batch_stream(
             train_batches, pass_index=pass_index, start_batch=start_batch,
@@ -4047,9 +4178,8 @@ def train_hcwdl_representation_node(
             if seen_pass_identities.intersection(keys):
                 raise ValueError("natural-population pass repeats an identity")
             seen_pass_identities.update(keys)
-            pass_identity_digests = np.ascontiguousarray(np.concatenate(
-                (pass_identity_digests, batch.identity_digests), axis=0,
-            ))
+            pass_identity_parts.append(batch.identity_digests)
+            pass_identity_rows += len(batch.identity_digests)
             if batch_index != next_canonical_batch:
                 raise RuntimeError("canonical train batch cursor skipped a batch")
             features, vectors, mask, visible, family, labels = _batch_tensors(
@@ -4139,10 +4269,17 @@ def train_hcwdl_representation_node(
                     terminal_bounded = True
                 break
         if terminal_bounded:
+            print(
+                f"HCWDL-RKD phase=optimizer_pass execution={execution_id} "
+                f"pass={completed_pass} batches={observed_batches - start_batch} "
+                f"seconds={time.perf_counter() - pass_started:.3f}",
+                flush=True,
+            )
             validation_boundary(completed_natural_pass=False)
             break
         if observed_batches != config.updates_per_pass or observed_rows != config.train_rows:
             raise ValueError("natural-population pass batch/row count differs")
+        pass_identity_digests = materialized_pass_identities()
         if identity_set_sha256(pass_identity_digests) != target_manifest_payload[
             "identity_set_sha256"
         ]:
@@ -4150,6 +4287,14 @@ def train_hcwdl_representation_node(
         completed_pass += 1
         next_canonical_batch = 0
         pass_identity_digests = np.empty((0, 32), dtype=np.uint8)
+        pass_identity_parts = []
+        pass_identity_rows = 0
+        print(
+            f"HCWDL-RKD phase=optimizer_pass execution={execution_id} "
+            f"pass={completed_pass} batches={observed_batches - start_batch} "
+            f"seconds={time.perf_counter() - pass_started:.3f}",
+            flush=True,
+        )
         validation_boundary(completed_natural_pass=True)
 
     expected_validations = (

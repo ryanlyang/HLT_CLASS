@@ -65,6 +65,7 @@ from hlt_classification.scouting.inputs import build_hlt_inputs
 from hlt_classification.scouting.repair import (
     HIGHCOV_SHELL_EXACT_FAMILY, build_alpha_repaired_inputs,
     full_endpoint_required_branches, project_offline_endpoint_records,
+    transform_endpoint_features,
 )
 from hlt_classification.scouting.schema import HLT_FEATURE_SPECS
 from hlt_classification.scouting.schema import CLASS_NAMES
@@ -327,6 +328,10 @@ def test_prepared_endpoint_batches_are_legacy_exact_and_convert_once(
     for row, (features, validity, p4) in enumerate(expected):
         assert np.array_equal(offline.raw_features[row], features)
         assert np.array_equal(offline.validity[row], validity)
+        assert np.array_equal(
+            offline.projected_features[row],
+            transform_endpoint_features(features, validity),
+        )
         assert np.array_equal(offline.p4[row], p4)
     expected_branches = set(full_endpoint_required_branches()) | {
         "n_cpfcands", "n_lts", "n_npfcands", "n_scoutpfcands",

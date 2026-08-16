@@ -76,6 +76,7 @@ class PreparedOfflineEndpoints:
     rows_by_branch: Mapping[str, Sequence[np.ndarray]]
     raw_features: tuple[np.ndarray, ...]
     validity: tuple[np.ndarray, ...]
+    projected_features: tuple[np.ndarray, ...]
     p4: tuple[np.ndarray, ...]
     charged_counts: np.ndarray
     neutral_counts: np.ndarray
@@ -130,6 +131,7 @@ def prepare_offline_endpoints(
         raise ValueError("offline endpoint count row counts differ")
     raw_features: list[np.ndarray] = []
     validity: list[np.ndarray] = []
+    projected_features: list[np.ndarray] = []
     p4_rows: list[np.ndarray] = []
     charged_counts = np.empty(rows, np.int32)
     neutral_counts = np.empty(rows, np.int32)
@@ -171,11 +173,13 @@ def prepare_offline_endpoints(
             raise ValueError("offline p4 and projected endpoint lengths differ")
         raw_features.append(features)
         validity.append(valid)
+        projected_features.append(transform_endpoint_features(features, valid))
         p4_rows.append(combined_p4)
     return PreparedOfflineEndpoints(
         rows_by_branch=rows_by_branch,
         raw_features=tuple(raw_features),
         validity=tuple(validity),
+        projected_features=tuple(projected_features),
         p4=tuple(p4_rows),
         charged_counts=charged_counts,
         neutral_counts=neutral_counts,
@@ -240,7 +244,7 @@ def _partition_for_row(
         hlt_features=hlt_features[:200], hlt_p4=hlt_p4[:200],
         assignment=assignment, raw_hlt_length=raw_hlt,
     )
-    return partition, transform_endpoint_features(offline_features, offline_validity), offline_p4
+    return partition, offline.projected_features[row], offline_p4
 
 
 def build_partition_from_arrays(
@@ -277,9 +281,7 @@ def build_p0_inputs(
         neutral = int(prepared.neutral_counts[row])
         indices = [*range(min(charged, 90))]
         indices.extend(charged + index for index in range(min(neutral, 60)))
-        projected = transform_endpoint_features(
-            prepared.raw_features[row], prepared.validity[row],
-        )
+        projected = prepared.projected_features[row]
         length = len(indices)
         if length > 150:
             raise RuntimeError("P0 visible population exceeds the 90/60 bound")
@@ -373,6 +375,9 @@ def build_homotopy_inputs(
         repair_family=HIGHCOV_SHELL_EXACT_FAMILY,
         confidence_weights=weights, offline_arrays=arrays,
         identity_keys=identity_keys, discrete_seed=discrete_seed,
+        offline_endpoint_rows=prepared_offline.rows_by_branch,
+        offline_endpoint_features=prepared_offline.raw_features,
+        offline_endpoint_validity=prepared_offline.validity,
     )
     # The exact s=1 branch delegates all tensor assembly and raw-length metadata
     # to the public Shell Exact implementation.
