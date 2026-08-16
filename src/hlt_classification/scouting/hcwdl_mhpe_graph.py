@@ -17,9 +17,20 @@ CAMPAIGN_LABEL: Final = "HCWDL-MHPE-FULL"
 GRAPH_CONTRACT_C10P90: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_GRAPH/v2"
 NODE_CONTRACT_C10P90: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_NODE_SPEC/v2"
 CAMPAIGN_LABEL_C10P90: Final = "HCWDL-MHPE-C10P90-FULL"
+GRAPH_CONTRACT_C25P75_300K60: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_GRAPH/v3"
+NODE_CONTRACT_C25P75_300K60: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_NODE_SPEC/v3"
+CAMPAIGN_LABEL_C25P75_300K60: Final = "HCWDL-MHPE-C25P75-300K60"
+GRAPH_CONTRACT_C10P90_300K60: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_GRAPH/v4"
+NODE_CONTRACT_C10P90_300K60: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_NODE_SPEC/v4"
+CAMPAIGN_LABEL_C10P90_300K60: Final = "HCWDL-MHPE-C10P90-300K60"
 PROFILE_C25P75: Final = "C25P75"
 PROFILE_C10P90: Final = "C10P90"
-SUPPORTED_PROFILES: Final = (PROFILE_C25P75, PROFILE_C10P90)
+PROFILE_C25P75_300K60: Final = "C25P75_300K60"
+PROFILE_C10P90_300K60: Final = "C10P90_300K60"
+SUPPORTED_PROFILES: Final = (
+    PROFILE_C25P75, PROFILE_C10P90,
+    PROFILE_C25P75_300K60, PROFILE_C10P90_300K60,
+)
 
 COORDINATES: Final = MappingProxyType({
     "U000": HomotopyCoordinate(0, 1, 0, 1),
@@ -54,6 +65,7 @@ class MhpeNode:
     temperature: float
     teacher_kind: str = "logits"
     contract: str = NODE_CONTRACT
+    training_passes: int = 20
 
     @property
     def coordinate(self) -> HomotopyCoordinate:
@@ -77,7 +89,7 @@ class MhpeNode:
             "ce_weight": self.ce_weight,
             "kd_weight": self.kd_weight,
             "temperature": self.temperature,
-            "training_passes": 20,
+            "training_passes": self.training_passes,
         }
 
 
@@ -87,9 +99,21 @@ def _build_registry(profile: str = PROFILE_C25P75) -> Mapping[str, MhpeNode]:
     specialist_weights = {
         PROFILE_C25P75: (.25, .75),
         PROFILE_C10P90: (.10, .90),
+        PROFILE_C25P75_300K60: (.25, .75),
+        PROFILE_C10P90_300K60: (.10, .90),
     }[profile]
-    node_contract = (
-        NODE_CONTRACT if profile == PROFILE_C25P75 else NODE_CONTRACT_C10P90
+    node_contract = {
+        PROFILE_C25P75: NODE_CONTRACT,
+        PROFILE_C10P90: NODE_CONTRACT_C10P90,
+        PROFILE_C25P75_300K60: NODE_CONTRACT_C25P75_300K60,
+        PROFILE_C10P90_300K60: NODE_CONTRACT_C10P90_300K60,
+    }[profile]
+    passes = 60 if profile in {
+        PROFILE_C25P75_300K60, PROFILE_C10P90_300K60,
+    } else 20
+    seed_domain = (
+        "HCWDL-MHPE-300K60/v1"
+        if passes == 60 else "HCWDL-MHPE-FULL/v1"
     )
     nodes: dict[str, MhpeNode] = {}
     for stage, teachers in STAGE_TEACHERS.items():
@@ -97,15 +121,17 @@ def _build_registry(profile: str = PROFILE_C25P75) -> Mapping[str, MhpeNode]:
             node_id = f"{stage}_from_{teacher}"
             nodes[node_id] = MhpeNode(
                 node_id=node_id, coordinate_name=stage, teacher_id=teacher,
-                seed_alias=f"HCWDL-MHPE-FULL/v1/{stage}/paired",
+                seed_alias=f"{seed_domain}/{stage}/paired",
                 ce_weight=specialist_weights[0], kd_weight=specialist_weights[1],
                 temperature=2.0, contract=node_contract,
                 teacher_kind="probabilities" if teacher.endswith("E") else "logits",
+                training_passes=passes,
             )
     nodes["M1"] = MhpeNode(
         node_id="M1", coordinate_name="D000", teacher_id="D000E",
-        seed_alias="HCWDL-MHPE-FULL/v1/M1", ce_weight=.10, kd_weight=.90,
+        seed_alias=f"{seed_domain}/M1", ce_weight=.10, kd_weight=.90,
         temperature=1.0, teacher_kind="probabilities", contract=node_contract,
+        training_passes=passes,
     )
     if len(nodes) != 16:
         raise RuntimeError("HCWDL-MHPE graph must contain exactly 16 fresh fits")
@@ -114,6 +140,8 @@ def _build_registry(profile: str = PROFILE_C25P75) -> Mapping[str, MhpeNode]:
 
 NODE_REGISTRY: Final = _build_registry(PROFILE_C25P75)
 C10P90_NODE_REGISTRY: Final = _build_registry(PROFILE_C10P90)
+C25P75_300K60_NODE_REGISTRY: Final = _build_registry(PROFILE_C25P75_300K60)
+C10P90_300K60_NODE_REGISTRY: Final = _build_registry(PROFILE_C10P90_300K60)
 STAGES: Final = ("U050", "U100", "D066", "D033", "D000", "M1")
 FINALISTS: Final = (
     "M0paired",
@@ -135,6 +163,26 @@ C10P90_GRAPH_SHA256: Final = canonical_sha256({
     "ensemble_components": dict(ENSEMBLE_COMPONENTS),
     "finalists": list(FINALISTS),
 })
+C25P75_300K60_GRAPH_SHA256: Final = canonical_sha256({
+    "contract": GRAPH_CONTRACT_C25P75_300K60,
+    "recipe_profile": PROFILE_C25P75_300K60,
+    "population_profile": "pilot_300k_60pass",
+    "imported": ["U000", "M0paired"],
+    "nodes": [C25P75_300K60_NODE_REGISTRY[key].payload()
+              for key in C25P75_300K60_NODE_REGISTRY],
+    "ensemble_components": dict(ENSEMBLE_COMPONENTS),
+    "finalists": list(FINALISTS),
+})
+C10P90_300K60_GRAPH_SHA256: Final = canonical_sha256({
+    "contract": GRAPH_CONTRACT_C10P90_300K60,
+    "recipe_profile": PROFILE_C10P90_300K60,
+    "population_profile": "pilot_300k_60pass",
+    "imported": ["U000", "M0paired"],
+    "nodes": [C10P90_300K60_NODE_REGISTRY[key].payload()
+              for key in C10P90_300K60_NODE_REGISTRY],
+    "ensemble_components": dict(ENSEMBLE_COMPONENTS),
+    "finalists": list(FINALISTS),
+})
 
 
 def node_registry(profile: str = PROFILE_C25P75) -> Mapping[str, MhpeNode]:
@@ -142,6 +190,10 @@ def node_registry(profile: str = PROFILE_C25P75) -> Mapping[str, MhpeNode]:
         return NODE_REGISTRY
     if profile == PROFILE_C10P90:
         return C10P90_NODE_REGISTRY
+    if profile == PROFILE_C25P75_300K60:
+        return C25P75_300K60_NODE_REGISTRY
+    if profile == PROFILE_C10P90_300K60:
+        return C10P90_300K60_NODE_REGISTRY
     raise ValueError("unknown HCWDL-MHPE recipe profile")
 
 
@@ -150,6 +202,10 @@ def graph_sha256(profile: str = PROFILE_C25P75) -> str:
         return GRAPH_SHA256
     if profile == PROFILE_C10P90:
         return C10P90_GRAPH_SHA256
+    if profile == PROFILE_C25P75_300K60:
+        return C25P75_300K60_GRAPH_SHA256
+    if profile == PROFILE_C10P90_300K60:
+        return C10P90_300K60_GRAPH_SHA256
     raise ValueError("unknown HCWDL-MHPE recipe profile")
 
 
@@ -158,6 +214,10 @@ def graph_contract(profile: str = PROFILE_C25P75) -> str:
         return GRAPH_CONTRACT
     if profile == PROFILE_C10P90:
         return GRAPH_CONTRACT_C10P90
+    if profile == PROFILE_C25P75_300K60:
+        return GRAPH_CONTRACT_C25P75_300K60
+    if profile == PROFILE_C10P90_300K60:
+        return GRAPH_CONTRACT_C10P90_300K60
     raise ValueError("unknown HCWDL-MHPE recipe profile")
 
 
@@ -166,6 +226,10 @@ def campaign_label(profile: str = PROFILE_C25P75) -> str:
         return CAMPAIGN_LABEL
     if profile == PROFILE_C10P90:
         return CAMPAIGN_LABEL_C10P90
+    if profile == PROFILE_C25P75_300K60:
+        return CAMPAIGN_LABEL_C25P75_300K60
+    if profile == PROFILE_C10P90_300K60:
+        return CAMPAIGN_LABEL_C10P90_300K60
     raise ValueError("unknown HCWDL-MHPE recipe profile")
 
 
@@ -196,11 +260,19 @@ def training_registry(profile: str = PROFILE_C25P75):
 
 
 __all__ = [
-    "CAMPAIGN_LABEL", "CAMPAIGN_LABEL_C10P90", "C10P90_GRAPH_SHA256",
-    "C10P90_NODE_REGISTRY", "COORDINATES", "ENSEMBLE_COMPONENTS", "FINALISTS",
-    "GRAPH_CONTRACT", "GRAPH_CONTRACT_C10P90", "GRAPH_SHA256", "MhpeNode",
-    "NODE_CONTRACT", "NODE_CONTRACT_C10P90", "NODE_REGISTRY",
-    "PROFILE_C10P90", "PROFILE_C25P75", "STAGES", "STAGE_TEACHERS",
+    "CAMPAIGN_LABEL", "CAMPAIGN_LABEL_C10P90",
+    "CAMPAIGN_LABEL_C25P75_300K60", "CAMPAIGN_LABEL_C10P90_300K60",
+    "C10P90_GRAPH_SHA256", "C25P75_300K60_GRAPH_SHA256",
+    "C10P90_300K60_GRAPH_SHA256",
+    "C10P90_NODE_REGISTRY", "C25P75_300K60_NODE_REGISTRY",
+    "C10P90_300K60_NODE_REGISTRY", "COORDINATES", "ENSEMBLE_COMPONENTS", "FINALISTS",
+    "GRAPH_CONTRACT", "GRAPH_CONTRACT_C10P90",
+    "GRAPH_CONTRACT_C25P75_300K60", "GRAPH_CONTRACT_C10P90_300K60",
+    "GRAPH_SHA256", "MhpeNode", "NODE_CONTRACT", "NODE_CONTRACT_C10P90",
+    "NODE_CONTRACT_C25P75_300K60", "NODE_CONTRACT_C10P90_300K60",
+    "NODE_REGISTRY",
+    "PROFILE_C10P90", "PROFILE_C25P75", "PROFILE_C25P75_300K60",
+    "PROFILE_C10P90_300K60", "STAGES", "STAGE_TEACHERS",
     "SUPPORTED_PROFILES", "campaign_label", "graph_contract", "graph_sha256",
     "node_registry", "validate_graph", "training_registry",
 ]

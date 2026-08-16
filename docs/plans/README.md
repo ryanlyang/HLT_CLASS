@@ -98,6 +98,13 @@ teachers, seeds, passes, ensembles, resources, and final-test boundary remain
 paired. It runs in a distinct worktree/root/ledger with `hcwmhpe90_` job names
 and does not modify the running primary campaign.
 
+The implementation-authoritative
+[paired 300k/60-pass MHPE study](HCWDL_MHPE_300K_60E_PAIRED_PLAN.md)
+runs the same complete 16-fit/four-ensemble graph twice on the authenticated
+300k/100k/100k population. It compares `C25P75/T=2` with `C10P90/T=2` for
+specialists, keeps M1 at `C10P90/T=1`, and pairs all seeds across the two
+independent 60-pass roots and ledgers.
+
 The additive
 [HCWDL matching-free privileged representation-KD ascent plan](HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md)
 registers two nested representation strategies, each as a complete cold and

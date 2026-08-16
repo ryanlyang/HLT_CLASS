@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dry-run or submit the exact HCWDL-MHPE-FULL DAG."""
+"""Dry-run or submit an exact HCWDL-MHPE campaign DAG."""
 from __future__ import annotations
 import argparse,subprocess
 from pathlib import Path

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create the exact all-mapped HCWDL-MHPE-FULL campaign."""
+"""Create an exact source-pinned HCWDL-MHPE campaign profile."""
 from __future__ import annotations
 import argparse,json
 from pathlib import Path

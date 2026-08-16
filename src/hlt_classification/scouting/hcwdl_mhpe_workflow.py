@@ -1,4 +1,4 @@
-"""Fail-closed task dispatcher and reporting for HCWDL-MHPE-FULL."""
+"""Fail-closed task dispatcher and reporting for HCWDL-MHPE profiles."""
 
 from __future__ import annotations
 

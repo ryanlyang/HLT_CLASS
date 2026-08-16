@@ -15,10 +15,15 @@ from .hcwdl_recovery import task_attestation_path, validate_task_attestation
 from .hcwdl_mhpe_campaign import ACCOUNT, PARTITION, campaign_tasks, validate_campaign
 from .hcwdl_mhpe_contracts import (
     CAMPAIGN_SPEC_CONTRACT, CAMPAIGN_SPEC_CONTRACT_C10P90,
+    CAMPAIGN_SPEC_CONTRACT_C10P90_300K60,
+    CAMPAIGN_SPEC_CONTRACT_C25P75_300K60,
     COMMAND_PLAN_CONTRACT, RECOVERY_SPEC_CONTRACT,
     RESOURCE_RECOVERY_SPEC_CONTRACT, campaign_profile,
 )
-from .hcwdl_mhpe_graph import PROFILE_C10P90, PROFILE_C25P75
+from .hcwdl_mhpe_graph import (
+    PROFILE_C10P90, PROFILE_C25P75,
+    PROFILE_C10P90_300K60, PROFILE_C25P75_300K60,
+)
 
 SOURCE_REPAIR_PHRASE = "AUTHORIZE HCWDL MHPE EXECUTION-ONLY SOURCE REPAIR"
 SOURCE_REPAIR_ALLOWLIST = frozenset({
@@ -59,6 +64,8 @@ def create_recovery(
     parent_recovery = None
     if subject.get("contract") in {
         CAMPAIGN_SPEC_CONTRACT, CAMPAIGN_SPEC_CONTRACT_C10P90,
+        CAMPAIGN_SPEC_CONTRACT_C25P75_300K60,
+        CAMPAIGN_SPEC_CONTRACT_C10P90_300K60,
     }:
         spec = subject; validate_campaign(spec, verify_source_tree=False)
         profile = campaign_profile(spec)
@@ -145,7 +152,7 @@ def create_recovery(
         "scientific_graph_unchanged": True, "completed_outputs_preserved": True,
         "final_test_accessed": False,
     })
-    if profile == PROFILE_C10P90:
+    if profile != PROFILE_C25P75:
         raw_recovery = {
             key: item for key, item in recovery.items() if key != "content_hash"
         }
@@ -153,6 +160,12 @@ def create_recovery(
         recovery = with_content_hash(raw_recovery)
     commands = []
     closure_set = set(closure)
+    recovery_prefix = {
+        PROFILE_C25P75: "hcwmhpe_r",
+        PROFILE_C10P90: "hcwmhpe90_r",
+        PROFILE_C25P75_300K60: "hcwmhpe25p_r",
+        PROFILE_C10P90_300K60: "hcwmhpe90p_r",
+    }[profile]
     for task in campaign_tasks(profile):
         if task["task_id"] not in closure_set:
             continue
@@ -162,7 +175,7 @@ def create_recovery(
             "sbatch", "--parsable", f"--account={ACCOUNT}", f"--partition={PARTITION}",
             f"--cpus-per-task={resource['cpus']}", f"--mem={resource['memory']}",
             f"--time={resource['walltime']}",
-            f"--job-name={'hcwmhpe90_r' if profile == PROFILE_C10P90 else 'hcwmhpe_r'}_{task['task_id']}",
+            f"--job-name={recovery_prefix}_{task['task_id']}",
         ]
         if resource.get("gpu"):
             command.extend((f"--gres={resource['gpu']}", "--signal=B:USR1@120"))
@@ -196,7 +209,8 @@ def validate_recovery(value: Mapping[str, Any]) -> str:
         value.get("failed_tasks", ()), profile=profile,
     ):
         raise ValueError("HCWDL-MHPE recovery closure differs")
-    if (profile == PROFILE_C10P90) != (value.get("recipe_profile") == PROFILE_C10P90):
+    if ((profile != PROFILE_C25P75)
+            != (value.get("recipe_profile") == profile)):
         raise ValueError("HCWDL-MHPE recovery recipe profile differs")
     monitor = load_json(value["monitor_report_path"])
     if (validate_content_hash(monitor, expected_contract=MONITOR_CONTRACT, expected_schema_version=1)

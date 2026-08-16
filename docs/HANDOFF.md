@@ -1,5 +1,61 @@
 # Current Handoff
 
+## HCWDL-MHPE paired 300k/60-pass campaigns (2026-08-16)
+
+The implementation-authoritative
+[paired 300k/60-pass plan](plans/HCWDL_MHPE_300K_60E_PAIRED_PLAN.md) is
+implemented and queue-ready. It registers two complete, independent MHPE
+campaign profiles over the same authenticated 300k train, 100k validation,
+and sealed 100k final-test population:
+
+- `C25P75_300K60`: all 15 specialists use `0.25 CE + 0.75 KD, T=2`;
+- `C10P90_300K60`: all 15 specialists use `0.10 CE + 0.90 KD, T=2`;
+- both keep M1 at `0.10 CE + 0.90 KD, T=1`.
+
+Each profile runs the entire 16-fit/four-ensemble triangular graph for 60
+complete passes with validation every pass. They import the completed 300k
+unified `U000`, CE-only exact-HLT `M0paired`, and U000 logit bank read-only.
+Their graph topology, coordinates, teachers, ensemble semantics, checkpoint
+policy, and target-coordinate seeds are paired; roots, artifacts, ledgers, and
+job prefixes are separate. The old full-data v1 graph hash remains exactly
+`3399cdf7f19e3461b9f5cfdcee2e38257a567d5bdb8547b8deb9dbddd856daf9`,
+and the v2 C10 graph remains
+`34a35d539e54e4b1983b3a6a62563d720149ba64b8bb5c83ae1eb734e89c04f7`.
+
+New graph/node/recipe/campaign/training-report/waiver contracts are v3 for
+C25P75 and v4 for C10P90. The 300k foundation reuse lock is v2 and embeds the
+authenticated U000 target-lineage classification, including the one known
+legacy digest-shadow form when present. Runtime dispatch retains the old
+full-data repair seed and 224-GiB cache ceiling unchanged; the new profiles use
+the original 300k balanced repair seed and a 72-GiB cache ceiling under exact
+8-CPU/96G/6-hour/GH200 requests. CPU reports use 4 CPUs, 32G, and one hour.
+
+The [paired queue runbook](HCWDL_MHPE_300K_60E_RUNBOOK.md) creates one clean
+source-pinned worktree, discovers exactly one completed authenticated 300k
+foundation, creates separate v3/v4 roots, materializes both canonical dry-run
+ledgers, and submits both 23-job DAGs under `hcwmhpe25p_` and `hcwmhpe90p_`.
+Recovery recognizes both new campaign contracts and retains their resources
+and separate namespaces. No Slurm command was run locally and no final-test
+row was accessed.
+
+Local acceptance evidence with `PYTHONDONTWRITEBYTECODE=1` and pytest caches
+disabled:
+
+- pre-change focused MHPE suite: 18 passed;
+- final focused MHPE suite: 22 passed;
+- broader MHPE/UB/contracts/CLI regression before final review: 136 passed;
+- post-review complete repository suite: 501 passed in 258.58 seconds, with only the 14
+  existing Matplotlib/Pyparsing deprecation warnings;
+- all four graph identities, all CLI help surfaces, Python compilation,
+  synthetic paired 23-task dry runs, profile/reuse dispatch, population-specific
+  seed/cache behavior, Markdown links, and `git diff --check` passed.
+
+No donor file was copied. Unrelated dirty/untracked user work was preserved.
+The remaining action is to commit and push only this implementation, then run
+the exact Tigris block in the paired runbook. That block performs both dry runs
+before explicit live submission; it does not touch the running full-data
+campaigns.
+
 ## HCWDL-MHPE C10P90 parallel companion (2026-08-16)
 
 The additive

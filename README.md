@@ -114,6 +114,8 @@ JetClass data on Tigris:
 - [HCWDL multi-horizon projection-ensemble contracts](docs/contracts/HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE.md)
 - [HCWDL multi-horizon projection-ensemble runbook](docs/HCWDL_MHPE_RUNBOOK.md)
 - [HCWDL-MHPE C10P90 parallel runbook](docs/HCWDL_MHPE_C10P90_RUNBOOK.md)
+- [HCWDL-MHPE paired 300k/60-pass plan](docs/plans/HCWDL_MHPE_300K_60E_PAIRED_PLAN.md)
+- [HCWDL-MHPE paired 300k/60-pass runbook](docs/HCWDL_MHPE_300K_60E_RUNBOOK.md)
 - [HCWDL architecture–input factorial plan](docs/plans/HCWDL_ARCHITECTURE_INPUT_FACTORIAL_PLAN.md)
 - [HCWDL architecture–input factorial contract](docs/contracts/HCWDL_ARCHITECTURE_INPUT_FACTORIAL.md)
 - [HCWDL interrupted final-evaluation recovery](docs/HCWDL_FINAL_RECOVERY_RUNBOOK.md)

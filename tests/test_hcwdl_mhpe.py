@@ -6,7 +6,9 @@ import pytest
 from hlt_classification.data.cache_contracts import canonical_sha256
 from hlt_classification.data.cache_contracts import with_content_hash, write_immutable_json
 from hlt_classification.scouting.hcwdl_mhpe_contracts import (
-    CAMPAIGN_SPEC_CONTRACT_C10P90, RECIPE_CONTRACT_C10P90,
+    CAMPAIGN_SPEC_CONTRACT_C10P90,
+    CAMPAIGN_SPEC_CONTRACT_C10P90_300K60,
+    CAMPAIGN_SPEC_CONTRACT_C25P75_300K60, RECIPE_CONTRACT_C10P90,
     campaign_profile, execution_lock_payload, graph_payload, recipe_payload,
     validate_execution_lock, validate_graph, validate_recipe, validate_waiver,
     waiver_payload,
@@ -19,6 +21,8 @@ from hlt_classification.scouting.hcwdl_mhpe_contracts import reuse_lock_payload
 from hlt_classification.scouting.hcwdl_mhpe_graph import (
     C10P90_GRAPH_SHA256, C10P90_NODE_REGISTRY, COORDINATES,
     ENSEMBLE_COMPONENTS, GRAPH_SHA256, NODE_REGISTRY, PROFILE_C10P90,
+    PROFILE_C10P90_300K60, PROFILE_C25P75_300K60,
+    node_registry,
     validate_graph as validate_registry,
 )
 from hlt_classification.scouting.hcwdl_mhpe_targets import (
@@ -74,6 +78,77 @@ def test_c10p90_graph_changes_only_specialist_loss_contract():
     payload = graph_payload(PROFILE_C10P90)
     assert payload["recipe_profile"] == PROFILE_C10P90
     assert validate_graph(payload) == payload["content_hash"]
+
+
+def test_paired_300k60_graphs_change_only_specialist_loss():
+    primary = node_registry(PROFILE_C25P75_300K60)
+    parallel = node_registry(PROFILE_C10P90_300K60)
+    assert set(primary) == set(parallel) == set(NODE_REGISTRY)
+    for node_id in primary:
+        left, right = primary[node_id], parallel[node_id]
+        assert left.training_passes == right.training_passes == 60
+        assert left.seed_alias == right.seed_alias
+        assert left.coordinate == right.coordinate
+        assert left.teacher_id == right.teacher_id
+        assert left.teacher_kind == right.teacher_kind
+        assert left.temperature == right.temperature
+        if node_id == "M1":
+            assert (left.ce_weight, left.kd_weight) == (.10, .90)
+            assert (right.ce_weight, right.kd_weight) == (.10, .90)
+        else:
+            assert (left.ce_weight, left.kd_weight) == (.25, .75)
+            assert (right.ce_weight, right.kd_weight) == (.10, .90)
+    for profile in (PROFILE_C25P75_300K60, PROFILE_C10P90_300K60):
+        graph = graph_payload(profile)
+        recipe = recipe_payload(foundation_recipe_sha256="a" * 64, profile=profile)
+        assert validate_graph(graph) == graph["content_hash"]
+        assert validate_recipe(recipe) == recipe["content_hash"]
+        assert recipe["training_passes"] == 60
+        assert recipe["population_profile"] == "pilot_300k_60pass"
+
+
+def test_foundation_reuse_dispatch_keeps_legacy_and_300k_paths_separate(
+    monkeypatch, tmp_path,
+):
+    from hlt_classification.scouting import hcwdl_mhpe_campaign as campaign
+
+    calls = []
+    monkeypatch.setattr(
+        campaign, "_reuse_full",
+        lambda **kwargs: calls.append(("full", kwargs)) or {"path": "full"},
+    )
+    monkeypatch.setattr(
+        campaign, "_reuse_300k",
+        lambda **kwargs: calls.append(("300k", kwargs)) or {"path": "300k"},
+    )
+    common = {
+        "foundation_lock": tmp_path / "lock.json",
+        "project": tmp_path,
+        "source_commit": "a" * 40,
+    }
+    assert campaign._reuse(**common, profile="C25P75") == {"path": "full"}
+    assert campaign._reuse(
+        **common, profile=PROFILE_C25P75_300K60,
+    ) == {"path": "300k"}
+    assert campaign._reuse(
+        **common, profile=PROFILE_C10P90_300K60,
+    ) == {"path": "300k"}
+    assert [row[0] for row in calls] == ["full", "300k", "300k"]
+
+
+def test_population_specific_runtime_seed_and_cache_limits():
+    from hlt_classification.scouting.hcwdl_mhpe_runner import (
+        _runtime_parameters,
+    )
+
+    assert _runtime_parameters("C25P75") == ("ub_full/repair/v1", 224.0)
+    assert _runtime_parameters("C10P90") == ("ub_full/repair/v1", 224.0)
+    assert _runtime_parameters(PROFILE_C25P75_300K60) == (
+        "ub/repair/v1", 72.0,
+    )
+    assert _runtime_parameters(PROFILE_C10P90_300K60) == (
+        "ub/repair/v1", 72.0,
+    )
 
 
 def test_task_graph_has_stage_parallelism_and_exact_closure():
@@ -448,3 +523,122 @@ def test_campaign_publication_and_full_dry_run_shape(tmp_path, monkeypatch):
     assert submission_phrase(PROFILE_C10P90) == (
         "SUBMIT HCWDL MHPE C10P90 FULL EXACT LEDGER"
     )
+
+
+def test_paired_300k60_campaigns_publish_independent_queue_plans(
+    tmp_path, monkeypatch,
+):
+    from hlt_classification.scouting import hcwdl_mhpe_campaign as campaign
+
+    foundation = tmp_path / "foundation"
+    foundation.mkdir()
+    foundation_recipe = with_content_hash({
+        "contract": "test", "schema_version": 1, "training_passes": 60,
+    })
+    write_immutable_json(foundation / "recipe.json", foundation_recipe)
+    worktree = tmp_path / "worktree"
+    for name in campaign.P300_IMPLEMENTATION_EVIDENCE_FILES:
+        path = worktree / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"evidence: {name}\n")
+    compatibility = {
+        "policy": "authenticated_immutable_300k_products_additive_mhpe_v2",
+        "byte_exact_files": {},
+        "additive_adapter_files": {
+            "src/hlt_classification/scouting/engine.py": {
+                "foundation_sha256": "a" * 64, "current_sha256": "b" * 64,
+            },
+            "src/hlt_classification/scouting/hcwdl_training.py": {
+                "foundation_sha256": "c" * 64, "current_sha256": "d" * 64,
+            },
+        },
+        "authenticated_foundation_source_sha256": {"source": "e" * 64},
+        "u000_target_lineage_evidence": with_content_hash({
+            "contract": "HCWDL_UNIFIED_BALANCED_TARGET_DIGEST_SHADOW_EVIDENCE/v1",
+            "schema_version": 1,
+            "classification": "direct",
+            "actual_target_manifest_sha256": "5" * 64,
+        }),
+        "legacy_logit_path_numerically_regressed": True,
+        "foundation_products_immutable": True,
+        "adapter_scope": "test",
+    }
+
+    def reuse_for(profile):
+        target_evidence_hash = compatibility[
+            "u000_target_lineage_evidence"
+        ]["content_hash"]
+        return reuse_lock_payload(
+            foundation_spec_path=foundation / "foundation_spec.json",
+            foundation_spec_sha256="1" * 64,
+            foundation_lock_sha256="2" * 64,
+            role_counts={
+                "train": 300_000, "validation": 100_000,
+                "final_test": 100_000,
+            },
+            u000_report_sha256="3" * 64,
+            u000_checkpoint_sha256="4" * 64,
+            u000_target_manifest_sha256="5" * 64,
+            m0paired_report_sha256="6" * 64,
+            source_commit="a" * 40,
+            semantic_source_sha256={"source": "7" * 64},
+            foundation_parents={
+                "foundation_recipe_sha256": foundation_recipe["content_hash"],
+                "parent": "8" * 64,
+                "u000_target_lineage_evidence_sha256": target_evidence_hash,
+            },
+            foundation_core_compatibility=compatibility,
+            profile=profile,
+        )
+
+    monkeypatch.setattr(
+        campaign, "_reuse", lambda **kwargs: reuse_for(kwargs["profile"]),
+    )
+    monkeypatch.setattr(
+        campaign, "semantic_source_hashes", lambda path: {"source": "7" * 64},
+    )
+    cases = (
+        (
+            PROFILE_C25P75_300K60,
+            CAMPAIGN_SPEC_CONTRACT_C25P75_300K60,
+            "AUTHORIZE HCWDL MHPE C25P75 300K60 EXACT SPEC",
+            "hcwmhpe25p_",
+        ),
+        (
+            PROFILE_C10P90_300K60,
+            CAMPAIGN_SPEC_CONTRACT_C10P90_300K60,
+            "AUTHORIZE HCWDL MHPE C10P90 300K60 EXACT SPEC",
+            "hcwmhpe90p_",
+        ),
+    )
+    specs = []
+    for profile, contract, phrase, prefix in cases:
+        spec = create_campaign(
+            foundation_lock=foundation / "locks/foundation.json",
+            campaign_root=tmp_path / profile,
+            project_dir=worktree, source_commit="a" * 40,
+            recipe_profile=profile, authorize_live_submission=True,
+            authorization_phrase=phrase,
+        )
+        specs.append(spec)
+        assert spec["contract"] == contract
+        assert spec["role_counts"] == {
+            "train": 300_000, "validation": 100_000,
+            "final_test": 100_000,
+        }
+        assert spec["resources"]["gpu_training"] == {
+            "cpus": 8, "memory": "96G", "walltime": "06:00:00",
+            "gpu": "gpu:gh200:1",
+        }
+        assert validate_campaign(spec, executable=True) == spec["content_hash"]
+        commands = command_plan(spec)["commands"]
+        assert len(commands) == 23
+        assert all(
+            any(item.startswith(f"--job-name={prefix}") for item in row["command"])
+            for row in commands
+        )
+        assert all(
+            node.training_passes == 60 for node in node_registry(profile).values()
+        )
+    assert specs[0]["content_hash"] != specs[1]["content_hash"]
+    assert specs[0]["campaign_root"] != specs[1]["campaign_root"]

@@ -85,3 +85,14 @@ formats retain v1 while transitively binding the v2 campaign, graph, recipe,
 and training-report hashes. The two campaigns use identical seed aliases and
 separate roots and ledgers, making their comparison paired without permitting
 cross-campaign output reuse.
+
+## Additive paired 300k/60-pass study
+
+The [paired 300k/60-pass plan](../plans/HCWDL_MHPE_300K_60E_PAIRED_PLAN.md)
+registers the complete graph at 300k train, 100k validation, 100k sealed test,
+and 60 passes. `C25P75_300K60` uses graph/node/recipe/campaign/training-report/
+waiver v3; `C10P90_300K60` uses the corresponding v4 identities. Both bind the
+`HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_FOUNDATION_REUSE_LOCK/v2` population
+and immutable-product authorization. All probability-ensemble semantics and
+the 16-fit topology remain unchanged. Population, passes, seeds, resources,
+and specialist loss are immutable scientific identity.

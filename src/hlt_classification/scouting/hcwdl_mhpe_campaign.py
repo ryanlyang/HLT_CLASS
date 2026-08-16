@@ -1,4 +1,4 @@
-"""Source-pinned full-data campaign construction for HCWDL-MHPE-FULL."""
+"""Source-pinned full-data and paired 300k campaign construction for HCWDL-MHPE."""
 
 from __future__ import annotations
 
@@ -15,7 +15,15 @@ from .engine import validate_pmard_training_report
 from .hcwdl_recipe import validate_recipe as validate_foundation_recipe
 from .hcwdl_unified_balanced_full_campaign import validate_foundation_campaign
 from .hcwdl_unified_balanced_full_contracts import validate_foundation_lock
+from .hcwdl_unified_balanced_campaign import (
+    SEMANTIC_SOURCE_FILES as UB_300K_SEMANTIC_SOURCE_FILES,
+)
+from .hcwdl_unified_balanced_contracts import (
+    validate_foundation_lock as validate_300k_foundation_lock,
+    validate_foundation_spec as validate_300k_foundation_spec,
+)
 from .hcwdl_unified_balanced_targets import validate_target_manifest
+from .hcwdl_unified_balanced_runner import inspect_shared_u000_target_lineage
 
 from .hcwdl_mhpe_contracts import (
     COMMAND_PLAN_CONTRACT, campaign_profile, campaign_spec_contract,
@@ -23,7 +31,8 @@ from .hcwdl_mhpe_contracts import (
     validate_recipe, validate_reuse_lock, validate_waiver, waiver_payload,
 )
 from .hcwdl_mhpe_graph import (
-    ENSEMBLE_COMPONENTS, PROFILE_C10P90, PROFILE_C25P75, SUPPORTED_PROFILES,
+    ENSEMBLE_COMPONENTS, PROFILE_C10P90, PROFILE_C25P75,
+    PROFILE_C10P90_300K60, PROFILE_C25P75_300K60, SUPPORTED_PROFILES,
     node_registry,
 )
 from .hcwdl_unified_balanced_coarse_campaign import FOUNDATION_CORE_FILES
@@ -36,6 +45,12 @@ WAIVER_PHRASE: Final = "AUTHORIZE HCWDL MHPE FULL DIRECT EXECUTION WITHOUT NEW S
 CREATION_PHRASE_C10P90: Final = "AUTHORIZE HCWDL MHPE C10P90 FULL EXACT SPEC"
 SUBMISSION_PHRASE_C10P90: Final = "SUBMIT HCWDL MHPE C10P90 FULL EXACT LEDGER"
 WAIVER_PHRASE_C10P90: Final = "AUTHORIZE HCWDL MHPE C10P90 FULL DIRECT EXECUTION WITHOUT NEW SMOKE"
+CREATION_PHRASE_C25P75_300K60: Final = "AUTHORIZE HCWDL MHPE C25P75 300K60 EXACT SPEC"
+SUBMISSION_PHRASE_C25P75_300K60: Final = "SUBMIT HCWDL MHPE C25P75 300K60 EXACT LEDGER"
+WAIVER_PHRASE_C25P75_300K60: Final = "AUTHORIZE HCWDL MHPE C25P75 300K60 DIRECT EXECUTION"
+CREATION_PHRASE_C10P90_300K60: Final = "AUTHORIZE HCWDL MHPE C10P90 300K60 EXACT SPEC"
+SUBMISSION_PHRASE_C10P90_300K60: Final = "SUBMIT HCWDL MHPE C10P90 300K60 EXACT LEDGER"
+WAIVER_PHRASE_C10P90_300K60: Final = "AUTHORIZE HCWDL MHPE C10P90 300K60 DIRECT EXECUTION"
 
 REUSED_FOUNDATION_EXACT_FILES: Final = tuple(FOUNDATION_CORE_FILES)
 
@@ -79,6 +94,10 @@ C10P90_IMPLEMENTATION_EVIDENCE_FILES: Final = IMPLEMENTATION_EVIDENCE_FILES + (
     "docs/plans/HCWDL_MHPE_C10P90_PARALLEL_PLAN.md",
     "docs/HCWDL_MHPE_C10P90_RUNBOOK.md",
 )
+P300_IMPLEMENTATION_EVIDENCE_FILES: Final = IMPLEMENTATION_EVIDENCE_FILES + (
+    "docs/plans/HCWDL_MHPE_300K_60E_PAIRED_PLAN.md",
+    "docs/HCWDL_MHPE_300K_60E_RUNBOOK.md",
+)
 
 ADDITIVE_ADAPTER_FILES: Final = frozenset({
     "src/hlt_classification/scouting/engine.py",
@@ -102,6 +121,17 @@ RESOURCES: Final = {
     "gpu_targets": ResourceRequest(8, "256G", "24:00:00", "gpu:gh200:1"),
     "cpu_report": ResourceRequest(4, "64G", "04:00:00"),
 }
+P300_RESOURCES: Final = {
+    "gpu_training": ResourceRequest(8, "96G", "06:00:00", "gpu:gh200:1"),
+    "gpu_targets": ResourceRequest(8, "96G", "06:00:00", "gpu:gh200:1"),
+    "cpu_report": ResourceRequest(4, "32G", "01:00:00"),
+}
+
+
+def resources_for_profile(profile: str) -> Mapping[str, ResourceRequest]:
+    return P300_RESOURCES if profile in {
+        PROFILE_C25P75_300K60, PROFILE_C10P90_300K60,
+    } else RESOURCES
 
 
 def semantic_source_hashes(repository: str | Path) -> dict[str, str]:
@@ -114,6 +144,10 @@ def creation_phrase(profile: str = PROFILE_C25P75) -> str:
         return CREATION_PHRASE
     if profile == PROFILE_C10P90:
         return CREATION_PHRASE_C10P90
+    if profile == PROFILE_C25P75_300K60:
+        return CREATION_PHRASE_C25P75_300K60
+    if profile == PROFILE_C10P90_300K60:
+        return CREATION_PHRASE_C10P90_300K60
     raise ValueError("unknown HCWDL-MHPE recipe profile")
 
 
@@ -122,6 +156,10 @@ def submission_phrase(profile: str = PROFILE_C25P75) -> str:
         return SUBMISSION_PHRASE
     if profile == PROFILE_C10P90:
         return SUBMISSION_PHRASE_C10P90
+    if profile == PROFILE_C25P75_300K60:
+        return SUBMISSION_PHRASE_C25P75_300K60
+    if profile == PROFILE_C10P90_300K60:
+        return SUBMISSION_PHRASE_C10P90_300K60
     raise ValueError("unknown HCWDL-MHPE recipe profile")
 
 
@@ -130,6 +168,8 @@ def evidence_files(profile: str = PROFILE_C25P75) -> tuple[str, ...]:
         return IMPLEMENTATION_EVIDENCE_FILES
     if profile == PROFILE_C10P90:
         return C10P90_IMPLEMENTATION_EVIDENCE_FILES
+    if profile in {PROFILE_C25P75_300K60, PROFILE_C10P90_300K60}:
+        return P300_IMPLEMENTATION_EVIDENCE_FILES
     raise ValueError("unknown HCWDL-MHPE recipe profile")
 
 
@@ -175,7 +215,11 @@ def campaign_tasks(profile: str = PROFILE_C25P75) -> list[dict[str, Any]]:
 
 def command_plan(spec: Mapping[str, Any]) -> dict[str, Any]:
     profile = campaign_profile(spec)
-    job_prefix = "hcwmhpe90" if profile == PROFILE_C10P90 else "hcwmhpe"
+    job_prefix = {
+        PROFILE_C25P75: "hcwmhpe", PROFILE_C10P90: "hcwmhpe90",
+        PROFILE_C25P75_300K60: "hcwmhpe25p",
+        PROFILE_C10P90_300K60: "hcwmhpe90p",
+    }[profile]
     commands = []
     for task in spec["tasks"]:
         resource = spec["resources"][task["resource_class"]]
@@ -200,7 +244,7 @@ def command_plan(spec: Mapping[str, Any]) -> dict[str, Any]:
     })
 
 
-def _reuse(*, foundation_lock: Path, project: Path, source_commit: str) -> dict[str, Any]:
+def _reuse_full(*, foundation_lock: Path, project: Path, source_commit: str) -> dict[str, Any]:
     lock = load_json(foundation_lock); lock_hash = validate_foundation_lock(lock)
     foundation_root = foundation_lock.parent.parent
     foundation = load_json(foundation_root / "foundation_spec.json")
@@ -279,6 +323,125 @@ def _reuse(*, foundation_lock: Path, project: Path, source_commit: str) -> dict[
     )
 
 
+def _reuse_300k(
+    *, foundation_lock: Path, project: Path, source_commit: str, profile: str,
+) -> dict[str, Any]:
+    """Authenticate immutable completed 300k UB products for the paired study."""
+    lock = load_json(foundation_lock)
+    lock_hash = validate_300k_foundation_lock(lock)
+    foundation_root = foundation_lock.parent.parent
+    foundation = load_json(foundation_root / "foundation_spec.json")
+    foundation_hash = validate_300k_foundation_spec(foundation)
+    if (lock.get("foundation_spec_sha256") != foundation_hash
+            or foundation.get("role_counts") != {
+                "train": 300_000, "validation": 100_000,
+                "final_test": 100_000,
+            }
+            or foundation.get("ordinary_access_role_counts", {}).get("final_test") != 0
+            or foundation.get("final_test_accessed") is not False):
+        raise ValueError("HCWDL-MHPE 300k foundation population/lock differs")
+    foundation_recipe = load_json(foundation_root / "recipe.json")
+    foundation_recipe_hash = validate_content_hash(
+        foundation_recipe, expected_contract=str(foundation_recipe["contract"]),
+        expected_schema_version=1,
+    )
+    if int(foundation_recipe.get("training_passes", -1)) != 60:
+        raise ValueError("HCWDL-MHPE 300k foundation is not the 60-pass recipe")
+    target = load_json(foundation_root / "targets/u000_train/manifest.json")
+    target_hash = validate_target_manifest(target, teacher_id="shared/U000")
+    target_evidence = inspect_shared_u000_target_lineage(
+        foundation_spec=foundation, foundation_root=foundation_root,
+    )
+    if target_evidence["actual_target_manifest_sha256"] != target_hash:
+        raise ValueError("HCWDL-MHPE 300k target evidence differs")
+    u000 = load_json(foundation_root / "training/U000/training_report.json")
+    m0 = load_json(foundation_root / "training/M0paired/training_report.json")
+    u000_hash = validate_pmard_training_report(u000)
+    m0_hash = validate_pmard_training_report(m0)
+    for report, directory in ((u000, "U000"), (m0, "M0paired")):
+        checkpoint = foundation_root / "training" / directory / str(report["selected_checkpoint"])
+        if (not checkpoint.is_file()
+                or sha256_file(checkpoint) != report["selected_checkpoint_sha256"]):
+            raise ValueError("HCWDL-MHPE 300k imported checkpoint differs")
+    if (
+        lock.get("u000_report_sha256") != u000_hash
+        or lock.get("u000_checkpoint_sha256") != u000["selected_checkpoint_sha256"]
+        or lock.get("m0paired_report_sha256") != m0_hash
+        or lock.get("m0paired_checkpoint_sha256") != m0["selected_checkpoint_sha256"]
+    ):
+        raise ValueError("HCWDL-MHPE 300k imported foundation lineage differs")
+    current_semantics = {name: sha256_file(project / name) for name in SEMANTIC_SOURCE_FILES}
+    foundation_semantics = foundation.get("semantic_source_sha256", {})
+    missing = [name for name in UB_300K_SEMANTIC_SOURCE_FILES
+               if name not in foundation_semantics]
+    if missing:
+        raise ValueError(f"HCWDL-MHPE 300k foundation source hashes are absent: {missing}")
+    compatibility = {
+        "policy": "authenticated_immutable_300k_products_additive_mhpe_v2",
+        "byte_exact_files": {},
+        "additive_adapter_files": {
+            name: {
+                "foundation_sha256": foundation_semantics[name],
+                "current_sha256": sha256_file(project / name),
+            }
+            for name in sorted(ADDITIVE_ADAPTER_FILES)
+        },
+        "authenticated_foundation_source_sha256": {
+            name: foundation_semantics[name]
+            for name in sorted(UB_300K_SEMANTIC_SOURCE_FILES)
+        },
+        "u000_target_lineage_evidence": dict(target_evidence),
+        "legacy_logit_path_numerically_regressed": True,
+        "foundation_products_immutable": True,
+        "adapter_scope": (
+            "completed U000/M0/checkpoint/target products are hash-authenticated; "
+            "new MHPE execution is source-pinned and additive"
+        ),
+    }
+    parents = {
+        "foundation_lock_sha256": lock_hash,
+        "foundation_spec_sha256": foundation_hash,
+        "foundation_recipe_sha256": foundation_recipe_hash,
+        "u000_report_sha256": u000_hash,
+        "u000_checkpoint_sha256": u000["selected_checkpoint_sha256"],
+        "u000_target_manifest_sha256": target_hash,
+        "m0paired_report_sha256": m0_hash,
+        "m0paired_checkpoint_sha256": m0["selected_checkpoint_sha256"],
+        "u000_target_lineage_evidence_sha256": target_evidence["content_hash"],
+    }
+    parents.update({str(k): str(v) for k, v in lock.get("parents", {}).items()})
+    return reuse_lock_payload(
+        foundation_spec_path=foundation_root / "foundation_spec.json",
+        foundation_spec_sha256=foundation_hash,
+        foundation_lock_sha256=lock_hash,
+        role_counts=foundation["role_counts"],
+        u000_report_sha256=u000_hash,
+        u000_checkpoint_sha256=u000["selected_checkpoint_sha256"],
+        u000_target_manifest_sha256=target_hash,
+        m0paired_report_sha256=m0_hash,
+        source_commit=source_commit,
+        semantic_source_sha256=current_semantics,
+        foundation_parents=parents,
+        foundation_core_compatibility=compatibility,
+        profile=profile,
+    )
+
+
+def _reuse(
+    *, foundation_lock: Path, project: Path, source_commit: str,
+    profile: str = PROFILE_C25P75,
+) -> dict[str, Any]:
+    if profile in {PROFILE_C25P75_300K60, PROFILE_C10P90_300K60}:
+        return _reuse_300k(
+            foundation_lock=foundation_lock, project=project,
+            source_commit=source_commit, profile=profile,
+        )
+    return _reuse_full(
+        foundation_lock=foundation_lock, project=project,
+        source_commit=source_commit,
+    )
+
+
 def create_campaign(
     *, foundation_lock: str | Path, campaign_root: str | Path,
     project_dir: str | Path, source_commit: str,
@@ -295,7 +458,10 @@ def create_campaign(
     root = Path(campaign_root).resolve(); project = Path(project_dir).resolve()
     if publish and root.exists() and any(root.iterdir()):
         raise FileExistsError("HCWDL-MHPE campaign root is not empty")
-    reuse = _reuse(foundation_lock=Path(foundation_lock).resolve(), project=project, source_commit=source_commit)
+    reuse = _reuse(
+        foundation_lock=Path(foundation_lock).resolve(), project=project,
+        source_commit=source_commit, profile=recipe_profile,
+    )
     foundation_root = Path(reuse["foundation_spec_path"]).parent
     foundation_recipe = load_json(foundation_root / "recipe.json")
     graph = graph_payload(recipe_profile)
@@ -304,7 +470,10 @@ def create_campaign(
         profile=recipe_profile,
     )
     semantic_hashes = semantic_source_hashes(project)
-    resources = {name: asdict(value) for name, value in RESOURCES.items()}
+    resources = {
+        name: asdict(value)
+        for name, value in resources_for_profile(recipe_profile).items()
+    }
     evidence_hashes = {
         name: sha256_file(project / name) for name in evidence_files(recipe_profile)
     }
@@ -314,18 +483,22 @@ def create_campaign(
         semantic_source_registry_sha256=canonical_sha256(semantic_hashes),
         resource_request_sha256=canonical_sha256(resources),
         implementation_evidence_sha256=evidence_hashes,
-        authorization_phrase=(
-            WAIVER_PHRASE_C10P90
-            if recipe_profile == PROFILE_C10P90 else WAIVER_PHRASE
-        ),
+        authorization_phrase={
+            PROFILE_C25P75: WAIVER_PHRASE,
+            PROFILE_C10P90: WAIVER_PHRASE_C10P90,
+            PROFILE_C25P75_300K60: WAIVER_PHRASE_C25P75_300K60,
+            PROFILE_C10P90_300K60: WAIVER_PHRASE_C10P90_300K60,
+        }[recipe_profile],
         profile=recipe_profile,
     )
     unhashed = {
         "contract": campaign_spec_contract(recipe_profile), "schema_version": 1,
-        "campaign": (
-            "HCWDL-MHPE-C10P90-FULL"
-            if recipe_profile == PROFILE_C10P90 else "HCWDL-MHPE-FULL"
-        ),
+        "campaign": {
+            PROFILE_C25P75: "HCWDL-MHPE-FULL",
+            PROFILE_C10P90: "HCWDL-MHPE-C10P90-FULL",
+            PROFILE_C25P75_300K60: "HCWDL-MHPE-C25P75-300K60",
+            PROFILE_C10P90_300K60: "HCWDL-MHPE-C10P90-300K60",
+        }[recipe_profile],
         "campaign_root": str(root),
         "project_dir": str(project), "source_commit": source_commit,
         "spec_path": str(root / "campaign_spec.json"),
@@ -343,8 +516,12 @@ def create_campaign(
         "authorization_phrase": authorization_phrase if authorize_live_submission else None,
         "final_test_accessed": False,
     }
-    if recipe_profile == PROFILE_C10P90:
+    if recipe_profile != PROFILE_C25P75:
         unhashed["recipe_profile"] = recipe_profile
+    if recipe_profile in {PROFILE_C25P75_300K60, PROFILE_C10P90_300K60}:
+        unhashed["population_profile"] = "pilot_300k_60pass"
+        unhashed["paired_study"] = "specialist_ce_kd_weights_only"
+    elif recipe_profile == PROFILE_C10P90:
         unhashed["single_changed_variable"] = "specialist_ce_kd_weights_only"
     spec = with_content_hash(unhashed); plan = command_plan(spec)
     if publish:
@@ -364,10 +541,21 @@ def validate_campaign(value: Mapping[str, Any], *, executable: bool = False, ver
         value, expected_contract=campaign_spec_contract(profile), expected_schema_version=1,
     )
     if (value.get("tasks") != campaign_tasks(profile)
-            or value.get("resources") != {name: asdict(row) for name, row in RESOURCES.items()}
+            or value.get("resources") != {
+                name: asdict(row)
+                for name, row in resources_for_profile(profile).items()
+            }
             or value.get("contextual_reports") != []):
         raise ValueError("HCWDL-MHPE task/resources differ")
-    if profile == PROFILE_C10P90:
+    if profile in {PROFILE_C25P75_300K60, PROFILE_C10P90_300K60}:
+        if (value.get("campaign") != {
+                PROFILE_C25P75_300K60: "HCWDL-MHPE-C25P75-300K60",
+                PROFILE_C10P90_300K60: "HCWDL-MHPE-C10P90-300K60",
+            }[profile]
+                or value.get("population_profile") != "pilot_300k_60pass"
+                or value.get("paired_study") != "specialist_ce_kd_weights_only"):
+            raise ValueError("HCWDL-MHPE 300k60 campaign identity differs")
+    elif profile == PROFILE_C10P90:
         if (value.get("campaign") != "HCWDL-MHPE-C10P90-FULL"
                 or value.get("single_changed_variable")
                 != "specialist_ce_kd_weights_only"):
@@ -380,6 +568,10 @@ def validate_campaign(value: Mapping[str, Any], *, executable: bool = False, ver
     reuse = load_json(value["reuse_lock_path"])
     if validate_reuse_lock(reuse) != value["reuse_lock_sha256"]:
         raise ValueError("HCWDL-MHPE reuse lock differs")
+    is_300k60 = profile in {PROFILE_C25P75_300K60, PROFILE_C10P90_300K60}
+    if (is_300k60 != (reuse.get("population_profile") == "pilot_300k_60pass")
+            or (is_300k60 and reuse.get("recipe_profile") != profile)):
+        raise ValueError("HCWDL-MHPE campaign/reuse population differs")
     if reuse["semantic_source_sha256"] != value["semantic_source_sha256"] or reuse["source_commit"] != value["source_commit"]:
         raise ValueError("HCWDL-MHPE reuse/source lineage differs")
     if validate_graph(load_json(root / "graph.json")) != value["graph_sha256"]:
@@ -388,7 +580,8 @@ def validate_campaign(value: Mapping[str, Any], *, executable: bool = False, ver
     if validate_recipe(recipe) != value["recipe_sha256"]:
         raise ValueError("HCWDL-MHPE recipe differs")
     if (recipe["foundation_recipe_sha256"] != reuse["foundation_parents"]["foundation_recipe_sha256"]
-            or (profile == PROFILE_C10P90 and recipe.get("recipe_profile") != profile)):
+            or (profile != PROFILE_C25P75
+                and recipe.get("recipe_profile") != profile)):
         raise ValueError("HCWDL-MHPE recipe/foundation lineage differs")
     waiver = load_json(root / "operational_evidence_waiver.json")
     if (validate_waiver(waiver)
@@ -423,9 +616,10 @@ def validate_campaign(value: Mapping[str, Any], *, executable: bool = False, ver
 __all__ = [
     "ADDITIVE_ADAPTER_FILES", "CREATION_PHRASE", "IMPLEMENTATION_EVIDENCE_FILES",
     "CREATION_PHRASE_C10P90", "C10P90_IMPLEMENTATION_EVIDENCE_FILES",
-    "REUSED_FOUNDATION_EXACT_FILES", "RESOURCES",
+    "REUSED_FOUNDATION_EXACT_FILES", "RESOURCES", "P300_RESOURCES",
     "SEMANTIC_SOURCE_FILES", "SUBMISSION_PHRASE", "SUBMISSION_PHRASE_C10P90",
     "WAIVER_PHRASE_C10P90", "creation_phrase", "evidence_files",
     "WAIVER_PHRASE", "campaign_tasks", "command_plan", "create_campaign",
     "semantic_source_hashes", "submission_phrase", "validate_campaign",
+    "resources_for_profile",
 ]

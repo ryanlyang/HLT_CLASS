@@ -1,4 +1,4 @@
-"""Training and probability-reduction workers for HCWDL-MHPE-FULL."""
+"""Training and probability-reduction workers for HCWDL-MHPE profiles."""
 
 from __future__ import annotations
 
@@ -20,7 +20,8 @@ from .hcwdl_mhpe_contracts import (
     STAGE_REPORT_CONTRACT, campaign_profile, training_report_contract,
 )
 from .hcwdl_mhpe_graph import (
-    COORDINATES, ENSEMBLE_COMPONENTS, PROFILE_C10P90, campaign_label,
+    COORDINATES, ENSEMBLE_COMPONENTS, PROFILE_C10P90,
+    PROFILE_C10P90_300K60, PROFILE_C25P75_300K60, campaign_label,
     graph_sha256, node_registry, training_registry,
 )
 from .hcwdl_mhpe_targets import (
@@ -37,6 +38,16 @@ from .hcwdl_unified_balanced_targets import (
 )
 from .loaders import load_pmard_model, scouting_model_factory_for_report
 from .training import GenerationalLossConfiguration, derive_seed
+
+
+def _is_300k60(profile: str) -> bool:
+    return profile in {PROFILE_C25P75_300K60, PROFILE_C10P90_300K60}
+
+
+def _runtime_parameters(profile: str) -> tuple[str, float]:
+    return ("ub/repair/v1", 72.0) if _is_300k60(profile) else (
+        "ub_full/repair/v1", 224.0,
+    )
 
 
 def _context(spec: Mapping[str, Any], *, verify_source_tree: bool = True):
@@ -129,13 +140,14 @@ def run_specialist(*, spec: Mapping[str, Any], node_id: str, device: str = "cuda
     (reuse, foundation_root, foundation, split, split_hash, selection_hash,
      selections, assignments, balanced, recipe) = _context(spec, verify_source_tree=recovery_spec_sha256 is None)
     sampler_seed = derive_seed(int(foundation["replicate_seed"]), f"mhpe/sampler/{node.seed_alias}")
-    repair_seed = derive_seed(int(foundation["replicate_seed"]), "ub_full/repair/v1")
+    repair_domain, memory_gib = _runtime_parameters(profile)
+    repair_seed = derive_seed(int(foundation["replicate_seed"]), repair_domain)
     caches, input_key = _cache_student_views(
         foundation_spec=foundation, split=split, selections=selections,
         assignments=assignments, balanced=balanced,
         behavior="hlt" if node.input_domain == "hlt" else "balanced_uniform",
         coordinate=node.coordinate, batch_size=int(recipe["batching"]["effective_batch_size"]),
-        sampler_seed=sampler_seed, repair_seed=repair_seed, memory_gib=224.0,
+        sampler_seed=sampler_seed, repair_seed=repair_seed, memory_gib=memory_gib,
     )
     teacher_logits = teacher_probability = None
     if node.teacher_kind == "probabilities":
@@ -202,9 +214,13 @@ def run_specialist(*, spec: Mapping[str, Any], node_id: str, device: str = "cuda
         scientific_config_extra={
             "coordinate_exact": node.coordinate.payload(), "teacher_id": node.teacher_id,
             "teacher_kind": node.teacher_kind, "input_key": input_key,
-            "population_policy": foundation["population_policy"], "final_test_accessed": False,
+            "population_policy": foundation.get(
+                "population_policy", "authenticated_selected_300k_rows_v1",
+            ), "final_test_accessed": False,
             "student_view_built_once": True, "teacher_targets_built_once": True,
-            **({"recipe_profile": profile} if profile == PROFILE_C10P90 else {}),
+            **({"recipe_profile": profile} if profile != "C25P75" else {}),
+            **({"population_profile": "pilot_300k_60pass"}
+               if _is_300k60(profile) else {}),
         },
     )
     if node_id == "U050_from_U000":
@@ -279,13 +295,14 @@ def _predict_components(*, spec, ensemble_id, device, recovery_spec_sha256=None)
      assignments, balanced, recipe) = _context(spec, verify_source_tree=recovery_spec_sha256 is None)
     stage = ensemble_id[:-1]
     sampler_seed = derive_seed(int(foundation["replicate_seed"]), f"mhpe/ensemble/{ensemble_id}")
-    repair_seed = derive_seed(int(foundation["replicate_seed"]), "ub_full/repair/v1")
+    repair_domain, memory_gib = _runtime_parameters(profile)
+    repair_seed = derive_seed(int(foundation["replicate_seed"]), repair_domain)
     caches, input_key = _cache_student_views(
         foundation_spec=foundation, split=split, selections=selections,
         assignments=assignments, balanced=balanced,
         behavior="hlt" if stage == "D000" else "balanced_uniform",
         coordinate=COORDINATES[stage], batch_size=int(recipe["batching"]["effective_batch_size"]),
-        sampler_seed=sampler_seed, repair_seed=repair_seed, memory_gib=224.0,
+        sampler_seed=sampler_seed, repair_seed=repair_seed, memory_gib=memory_gib,
     )
     role_state = {
         role: {"identities": None, "logits": {}, "lineage": {}, "labels": None}
