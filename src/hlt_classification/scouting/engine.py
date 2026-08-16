@@ -25,7 +25,7 @@ from .training import (
     GenerationalLossConfiguration, LossConfiguration, derive_seed, freeze_teacher,
     generational_pmard_loss, pmard_loss, representation_kd_loss,
 )
-from .targets import EphemeralTeacherTargets
+from .targets import EphemeralProbabilityTargets, EphemeralTeacherTargets
 
 PMARD_TRAINING_REPORT_CONTRACT = "hlt_classification_pmard_training_report_v6"
 PMARD_TRAINING_REPORT_VERSION = 6
@@ -376,6 +376,8 @@ def train_pmard(
     privileged_teacher_targets: EphemeralTeacherTargets | None = None,
     parent_teacher_targets: EphemeralTeacherTargets | None = None,
     grandparent_teacher_targets: EphemeralTeacherTargets | None = None,
+    parent_probability_targets: EphemeralProbabilityTargets | None = None,
+    grandparent_probability_targets: EphemeralProbabilityTargets | None = None,
     resume: bool = True,
     scientific_config: Mapping[str, object] | None = None,
     stop_after_update: int | None = None,
@@ -391,13 +393,18 @@ def train_pmard(
         ("hlt", hlt_teacher_targets), ("privileged", privileged_teacher_targets),
         ("parent", parent_teacher_targets),
         ("grandparent", grandparent_teacher_targets),
+        ("parent_probability", parent_probability_targets),
+        ("grandparent_probability", grandparent_probability_targets),
     ):
         if table is None:
             continue
         if table.header.get("split_manifest_sha256") != validated_parents.get("split_manifest_sha256"):
             raise ValueError(f"{name} RAM teacher targets have different split lineage")
-        if table.header.get("teacher_report_sha256") not in set(validated_parents.values()):
-            raise ValueError(f"{name} RAM teacher targets have unauthenticated teacher lineage")
+        lineage = table.header.get("teacher_report_sha256")
+        if lineage is None:
+            lineage = table.header.get("target_manifest_sha256")
+        if lineage not in set(validated_parents.values()):
+            raise ValueError(f"{name} RAM targets have unauthenticated lineage")
     training_seed = derive_seed(config.master_seed, "training_dropout_and_augmentation")
     torch.manual_seed(training_seed); random.seed(training_seed); np.random.seed(training_seed)
     if torch.cuda.is_available():
@@ -490,26 +497,41 @@ def train_pmard(
                         )
                     with torch.no_grad():
                         parent_logits = grandparent_logits = None
+                        parent_probabilities = grandparent_probabilities = None
                         hlt_logits = privileged_logits = None
                         if isinstance(config.loss, GenerationalLossConfiguration):
                             if config.loss.parent_kd:
-                                if parent_teacher_targets is None:
+                                if ((parent_teacher_targets is None)
+                                        == (parent_probability_targets is None)):
                                     raise ValueError(
-                                        "generational parent KD requires identity-joined RAM logits"
+                                        "generational parent KD requires exactly one identity-joined target kind"
                                     )
-                                parent_logits = torch.as_tensor(
-                                    parent_teacher_targets.join(batch["identity_keys"]),
-                                    device=target, dtype=torch.float32,
-                                )
+                                if parent_teacher_targets is not None:
+                                    parent_logits = torch.as_tensor(
+                                        parent_teacher_targets.join(batch["identity_keys"]),
+                                        device=target, dtype=torch.float32,
+                                    )
+                                else:
+                                    parent_probabilities = torch.as_tensor(
+                                        parent_probability_targets.join(batch["identity_keys"]),
+                                        device=target, dtype=torch.float32,
+                                    )
                             if config.loss.grandparent_kd:
-                                if grandparent_teacher_targets is None:
+                                if ((grandparent_teacher_targets is None)
+                                        == (grandparent_probability_targets is None)):
                                     raise ValueError(
-                                        "generational grandparent KD requires identity-joined RAM logits"
+                                        "generational grandparent KD requires exactly one identity-joined target kind"
                                     )
-                                grandparent_logits = torch.as_tensor(
-                                    grandparent_teacher_targets.join(batch["identity_keys"]),
-                                    device=target, dtype=torch.float32,
-                                )
+                                if grandparent_teacher_targets is not None:
+                                    grandparent_logits = torch.as_tensor(
+                                        grandparent_teacher_targets.join(batch["identity_keys"]),
+                                        device=target, dtype=torch.float32,
+                                    )
+                                else:
+                                    grandparent_probabilities = torch.as_tensor(
+                                        grandparent_probability_targets.join(batch["identity_keys"]),
+                                        device=target, dtype=torch.float32,
+                                    )
                         else:
                             if config.loss.hlt_kd:
                                 if hlt_teacher_targets is not None:
@@ -560,6 +582,14 @@ def train_pmard(
                                 grandparent_teacher_logits=(
                                     None if grandparent_logits is None
                                     else grandparent_logits.float()
+                                ),
+                                parent_teacher_probabilities=(
+                                    None if parent_probabilities is None
+                                    else parent_probabilities.float()
+                                ),
+                                grandparent_teacher_probabilities=(
+                                    None if grandparent_probabilities is None
+                                    else grandparent_probabilities.float()
                                 ),
                             )
                         else:

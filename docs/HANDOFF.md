@@ -1,5 +1,87 @@
 # Current Handoff
 
+## HCWDL-UB completed-report aggregation repair (2026-08-16)
+
+Recovery aggregate job `87370` failed after all registered `C05P95` training
+outputs completed.  The traceback was reporting-only:
+`UnifiedBalancedArmWorkflow` read `report["history"]`, but every authenticated
+completed PMARD report contract accepted by the campaign (v4--v6) publishes
+its interval-loss records as `training_history`; `history` is only an internal
+rolling-checkpoint key.  The workflow now uses one fail-closed
+`_report_training_history()` accessor and continues to publish the unchanged
+outer aggregate field `loss_history`.  Metrics, selected checkpoints, graph,
+losses, views, seeds, and final-test state are unchanged.  A regression rejects
+the rolling-checkpoint key and malformed histories.
+
+Focused local evidence after the repair: `tests/test_hcwdl_unified_balanced.py`
+passes 29/29 in 34.36 seconds under the repository's `tagging-hlt` environment.
+The pre-change focused suite passed 28/28.  The remaining operational action is
+an aggregate-only, source-pinned retry for the affected arm; no model training
+must be repeated.
+
+## HCWDL multi-horizon projection-ensemble implementation (2026-08-16)
+
+The implementation-authoritative
+[multi-horizon projection-ensemble full-data plan](plans/HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_IMPLEMENTATION_PLAN.md)
+is fully implemented as the additive `HCWDL-MHPE-FULL` contract family. The
+immutable graph imports authenticated all-mapped `U000` and `M0paired`, trains
+one U050, two U100, three D066, four D033, five exact-HLT D000 specialists,
+and one exact-HLT M1: 16 fresh fits total. Four stage reducers form lexical,
+uniform probability ensembles by max-subtracted FP32 softmax, FP64 canonical
+accumulation/division, and one little-endian FP32 publication. Specialists use
+the locked `C25P75/T=2` recipe; M1 alone uses `C10P90/T=1`. Every fit is cold,
+paired by target-coordinate seed, runs 20 complete passes with every-pass
+validation, and selects macro AUC then CE, logR50, and earliest update.
+
+The implementation adds versioned graph, node, recipe, foundation-reuse,
+probability shard/manifest/lock, campaign, plan, report, aggregate, finalist,
+execution, completion, final-evaluation, recovery/resource-recovery, and
+operational-waiver contracts. The probability-target training adapter is
+additive: old logit KD remains the default and has an exact numerical
+regression. The reuse lock requires every unaffected FULL3 scientific
+model/view/cache/checkpoint/resume core file to remain byte-identical.
+Corrected execution builders are pinned as current campaign source while
+their imported products are authenticated by the completed foundation lock,
+avoiding a false comparison with pre-recovery producer bytes. It records both hashes
+for the two generic training entry points extended by the new target type.
+The selected U050 logits are published once for four direct consumers. Each
+ensemble reducer prepares train and validation views once, loads each
+component once, and publishes authenticated T1/T2 train and validation target
+bundles. No repaired particle dataset or final-test row is touched by the
+ordinary 23-task DAG.
+
+Operational surfaces include source-pinned creation, a complete nonmutating
+dry run, resumable journaled live submission, exact-ID monitoring and
+cancellation, immutable task attestations covering reports/checkpoints/target
+bundles, failed-and-downstream source recovery, monotone resource recovery,
+and repeated recovery. Reporting includes every specialist and ensemble,
+leave-one-out metrics, scalar ensemble deltas, local-versus-skip comparisons,
+pairwise correlation/Jensen-Shannon/classwise disagreement, cache bytes,
+target-build time, GPU-hours, and un-clipped M0paired-to-U000 recovery. The
+ordinary finalist lock freezes exactly M0paired, five D000 specialists,
+D000E, and M1. Final test remains a separate exact-HLT job requiring two
+explicit human locks; no final evaluation was run locally.
+
+Local acceptance evidence, with bytecode and pytest caches disabled:
+
+- focused MHPE, FULL3 reuse, unified-balanced, PMARD evaluation/resume,
+  contracts, and CLI regression suite: 153 passed in 239.73 seconds;
+- complete repository suite: 496 passed in 268.30 seconds, with only the 14
+  existing Matplotlib/Pyparsing deprecation warnings;
+- all 13 MHPE CLI help surfaces and the final 45-test contract/scaffold/MHPE
+  check passed;
+- Python compilation, all Slurm worker invariants, contract-version tests,
+  bounded synthetic 16-fit/four-ensemble flow, probability/KL gradients,
+  target corruption/role/consumer checks, and `git diff --check` passed.
+
+No donor file was copied, no SSH/Slurm command was issued, no campaign was
+submitted, and no final-test row was accessed. Per the user's explicit plan,
+there is no new smoke or 300k prerequisite. The remaining action is to push
+one clean commit, use the runbook's exact authenticated FULL3-foundation
+finder to create the Tigris campaign, inspect its canonical 23-task dry-run
+ledger, and only then separately authorize live submission with
+`SUBMIT HCWDL MHPE FULL EXACT LEDGER`.
+
 ## HCWDL full-data coarse factorized/joint three-arm campaign (2026-08-16)
 
 The additive `HCWDL-UB-FULLCOARSE3` campaign is implemented and locally

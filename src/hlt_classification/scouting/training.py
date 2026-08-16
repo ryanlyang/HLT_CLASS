@@ -228,6 +228,7 @@ def generational_pmard_loss(
     student_logits, labels, *, class_weights,
     configuration: GenerationalLossConfiguration,
     parent_teacher_logits=None, grandparent_teacher_logits=None,
+    parent_teacher_probabilities=None, grandparent_teacher_probabilities=None,
 ):
     """Compute the exact HCWDL-UB three-term FP32 population-mean loss."""
 
@@ -242,26 +243,36 @@ def generational_pmard_loss(
         raise ValueError("HCWDL-UB generational training requires unweighted per-jet CE/KD")
     ce = functional.cross_entropy(student, labels, reduction="mean")
 
-    def kd(teacher, *, temperature: float, required: bool):
+    def kd(teacher, probabilities, *, temperature: float, required: bool):
         if not required:
             return student.sum() * 0.0
-        if teacher is None:
-            raise ValueError("required generational teacher logits are absent")
-        if teacher.shape != student_logits.shape or teacher.requires_grad:
-            raise ValueError("generational teacher logits must be shape-matched and detached")
-        teacher_fp32 = teacher.float()
-        target = functional.softmax(teacher_fp32 / temperature, dim=-1)
+        if (teacher is None) == (probabilities is None):
+            raise ValueError("required generational target must be exactly one of logits/probabilities")
+        source = teacher if teacher is not None else probabilities
+        if source.shape != student_logits.shape or source.requires_grad:
+            raise ValueError("generational targets must be shape-matched and detached")
+        if probabilities is None:
+            target = functional.softmax(teacher.float() / temperature, dim=-1)
+        else:
+            target = probabilities.float()
+            if (not torch.isfinite(target).all() or (target < 0).any()
+                    or not torch.allclose(
+                        target.sum(dim=-1), torch.ones(target.shape[0], device=target.device),
+                        rtol=0, atol=2e-6,
+                    )):
+                raise ValueError("generational probability targets are invalid")
         return functional.kl_div(
             functional.log_softmax(student / temperature, dim=-1), target,
             reduction="batchmean",
         ) * temperature * temperature
 
     parent = kd(
-        parent_teacher_logits, temperature=configuration.parent_temperature,
+        parent_teacher_logits, parent_teacher_probabilities,
+        temperature=configuration.parent_temperature,
         required=configuration.parent_kd > 0,
     )
     grandparent = kd(
-        grandparent_teacher_logits,
+        grandparent_teacher_logits, grandparent_teacher_probabilities,
         temperature=configuration.grandparent_temperature,
         required=configuration.grandparent_kd > 0,
     )
@@ -269,12 +280,18 @@ def generational_pmard_loss(
     parent_agreement = (
         (student.argmax(dim=-1) == parent_teacher_logits.float().argmax(dim=-1))
         .float().mean()
-        if parent_teacher_logits is not None else zero
+        if parent_teacher_logits is not None else (
+            (student.argmax(dim=-1) == parent_teacher_probabilities.argmax(dim=-1)).float().mean()
+            if parent_teacher_probabilities is not None else zero
+        )
     )
     grandparent_agreement = (
         (student.argmax(dim=-1) == grandparent_teacher_logits.float().argmax(dim=-1))
         .float().mean()
-        if grandparent_teacher_logits is not None else zero
+        if grandparent_teacher_logits is not None else (
+            (student.argmax(dim=-1) == grandparent_teacher_probabilities.argmax(dim=-1)).float().mean()
+            if grandparent_teacher_probabilities is not None else zero
+        )
     )
     contributions = {
         "ce_contribution": configuration.ce * ce,

@@ -78,6 +78,18 @@ thirds/sixths coordinates, paired seeds, 20-pass schedule, 36-fit registry,
 and no-final-test boundary are new immutable contracts; it does not relabel or
 modify the fine-grained FULL3 runs.
 
+The implementation-authoritative
+[HCWDL multi-horizon projection-ensemble full-data plan](HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_IMPLEMENTATION_PLAN.md)
+defines a triangular teacher lattice over `U000`, `U050`, `U100`, `D066`,
+`D033`, and exact-HLT `D000`. Historical teachers are projected independently
+into each current student domain before uniform same-domain probability
+ensembling; five exact-HLT specialists form `D000E`, which is compressed into
+one HLT-only `M1`. It reuses the authenticated full-data foundation, fixes
+`C25P75/T=2` for all 15 specialists and `C10P90/T=1` for M1, runs 20 full-data
+passes, and records the user's explicit decision to proceed directly to the
+all-mapped campaign after implementation and dry-run acceptance without a new
+Slurm smoke or 300k pilot.
+
 The additive
 [HCWDL matching-free privileged representation-KD ascent plan](HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md)
 registers two nested representation strategies, each as a complete cold and

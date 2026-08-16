@@ -57,6 +57,22 @@ from .training import derive_seed
 RESOURCE_MEASUREMENT_CONTRACT = "HCWDL_UNIFIED_BALANCED_RESOURCE_MEASUREMENT/v1"
 
 
+def _report_training_history(report: Mapping[str, Any]) -> list[object]:
+    """Return the authenticated PMARD interval-loss history.
+
+    PMARD report contracts v4--v6 publish this field as
+    ``training_history``.  ``history`` is the rolling-checkpoint key and was
+    never part of a completed training report.  Keeping the normalization in
+    one fail-closed accessor prevents reporting-only workers from confusing
+    the two schemas again.
+    """
+
+    history = report.get("training_history")
+    if not isinstance(history, list):
+        raise ValueError("HCWDL-UB PMARD training history is absent or malformed")
+    return list(history)
+
+
 def _task(tasks: list[Mapping[str, Any]], task_id: str) -> Mapping[str, Any]:
     found = [row for row in tasks if row["task_id"] == task_id]
     if len(found) != 1:
@@ -460,7 +476,7 @@ class UnifiedBalancedArmWorkflow:
                         report["validation"], contextual_controls["M0"]["metrics"],
                         contextual_controls["TOFF"]["metrics"],
                     ),
-                    "loss_history": report["history"],
+                    "loss_history": _report_training_history(report),
                     "validation_history": report["validation_history"],
                     "selected_update": report["selected_update"],
                     "report_sha256": report_hash,

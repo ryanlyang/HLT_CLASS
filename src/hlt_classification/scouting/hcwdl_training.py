@@ -20,7 +20,7 @@ from .engine import (
 )
 from .hcwdl_ladder import DOMAINS, GRAPH_SHA256, NODE_REGISTRY, NodeSpec
 from .hcwdl_recipe import validate_recipe
-from .targets import EphemeralTeacherTargets
+from .targets import EphemeralProbabilityTargets, EphemeralTeacherTargets
 from .training import GenerationalLossConfiguration, LossConfiguration, derive_seed
 
 
@@ -308,6 +308,8 @@ def train_hcwdl_node(
     recipe_overlay_sha256: str | None = None,
     parent_teacher_targets: EphemeralTeacherTargets | None = None,
     grandparent_teacher_targets: EphemeralTeacherTargets | None = None,
+    parent_probability_targets: EphemeralProbabilityTargets | None = None,
+    grandparent_probability_targets: EphemeralProbabilityTargets | None = None,
     peak_learning_rate_override: float | None = None,
 ) -> dict[str, Any]:
     recipe_sha256 = validate_recipe(recipe, require_authorized=True)
@@ -373,6 +375,8 @@ def train_hcwdl_node(
         privileged_teacher_targets=privileged_teacher_targets,
         parent_teacher_targets=parent_teacher_targets,
         grandparent_teacher_targets=grandparent_teacher_targets,
+        parent_probability_targets=parent_probability_targets,
+        grandparent_probability_targets=grandparent_probability_targets,
         resume=resume, stop_after_update=stop_after_update,
     )
     expected_checks = 1 if smoke else int(recipe["training_passes"])

@@ -73,6 +73,9 @@ from hlt_classification.scouting.hcwdl_unified_balanced_targets import (
     publish_target_shard, target_lock_payload, validate_target_lock,
     validate_target_manifest,
 )
+from hlt_classification.scouting.hcwdl_unified_balanced_workflow import (
+    _report_training_history,
+)
 from hlt_classification.scouting.hcwdl_upper_cache import (
     publish_base_manifest, publish_base_shard,
 )
@@ -94,6 +97,15 @@ from hlt_classification.scouting.training import (
 
 
 H = "a" * 64
+
+
+def test_aggregate_uses_completed_pmard_training_history_key() -> None:
+    history = [{"end_update": 4, "mean_losses": {"total": 1.25}}]
+    assert _report_training_history({"training_history": history}) == history
+    with pytest.raises(ValueError, match="training history"):
+        _report_training_history({"history": history})
+    with pytest.raises(ValueError, match="training history"):
+        _report_training_history({"training_history": {"not": "a list"}})
 
 
 def _raw_arrays() -> dict[str, object]:
