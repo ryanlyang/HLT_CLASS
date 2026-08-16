@@ -1,5 +1,34 @@
 # Current Handoff
 
+## HCWDL-U-RKD diagnostic-buffer recovery correction (2026-08-16)
+
+The first source-pinned runtime recovery confirmed that the preceding cache
+and boundary repair is effective.  RSET U020's 300k/100k cache phases fell
+from 2,136.530/735.479 seconds to 1,167.599/389.572 seconds (47.9 to 26.0
+minutes total), its resumed pass-50 optimizer phase took 159.134 seconds, and
+validation took 7.393 seconds.  It then failed closed before publishing the
+pass-50 boundary because the new synchronization-free diagnostic mutation
+guard treated an expected registered-buffer update as forbidden model-state
+mutation.
+
+Production Weaver forwards may legitimately mutate registered runtime buffers;
+the historical full-state round trip restored those buffers implicitly.  The
+corrected guard now clones only registered buffers on their existing device,
+rejects buffer topology/object/metadata replacement, and restores their exact
+values after the diagnostic.  Parameters, gradients, Adam state, RNG, trimmer
+runtime state, external sampler state, and module modes retain the cheaper
+fail-closed identity/version or exact-state guards.  The repair therefore
+preserves the original diagnostic's nonmutation guarantee without restoring
+the complete parameter and optimizer payload every pass.
+
+Focused training/resume/recovery coverage passes 46/46, including a regression
+whose diagnostic forward deliberately mutates a registered buffer and proves
+that the exact pre-diagnostic state is restored.  The complete repository
+suite passes 976 tests with nine expected platform skips and 14 dependency
+warnings in 433.30 seconds.  The failed job did not publish a new resume
+generation, so its preceding valid pass-49 generation remains the recovery
+source.  No scientific or artifact contract changed.
+
 ## HCWDL-U-RKD pilot cache and epoch-boundary repair (2026-08-16)
 
 The first optimized 300k recovery jobs reached valid authenticated resume

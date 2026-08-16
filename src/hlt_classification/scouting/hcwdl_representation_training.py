@@ -2051,15 +2051,16 @@ def _mutation_tree_token(value: Any) -> Any:
 
 
 def _diagnostic_mutation_token(model, optimizer) -> tuple[Any, ...]:
-    """Bind every mutable model/gradient/optimizer object without a CPU clone."""
+    """Bind parameters, gradients, and optimizer state without a CPU clone.
 
-    model_tensors = tuple(
-        (kind, name, _tensor_version_token(value))
-        for kind, rows in (
-            ("parameter", model.named_parameters()),
-            ("buffer", model.named_buffers()),
-        )
-        for name, value in rows
+    Registered buffers are handled separately: production Weaver forwards can
+    legitimately mutate forward-runtime buffers, so the diagnostic snapshots
+    and restores that much smaller state explicitly.
+    """
+
+    model_parameters = tuple(
+        (name, _tensor_version_token(value))
+        for name, value in model.named_parameters()
     )
     gradients = tuple(
         (
@@ -2069,11 +2070,43 @@ def _diagnostic_mutation_token(model, optimizer) -> tuple[Any, ...]:
         for name, parameter in model.named_parameters()
     )
     return (
-        model_tensors,
+        model_parameters,
         gradients,
         _mutation_tree_token(optimizer.state),
         _mutation_tree_token(optimizer.param_groups),
     )
+
+
+def _diagnostic_buffer_snapshot(model) -> dict[str, tuple[Any, Any]]:
+    """Clone only registered buffers on device for exact post-forward restore."""
+
+    return {
+        name: (buffer, buffer.detach().clone())
+        for name, buffer in model.named_buffers()
+    }
+
+
+def _restore_diagnostic_buffers(
+    model, snapshot: Mapping[str, tuple[Any, Any]],
+) -> None:
+    """Restore exact buffer bytes while rejecting topology/object replacement."""
+
+    import torch
+
+    current = dict(model.named_buffers())
+    if set(current) != set(snapshot):
+        raise RuntimeError("diagnostic mutated model buffer topology")
+    with torch.no_grad():
+        for name, (original, value) in snapshot.items():
+            if current[name] is not original:
+                raise RuntimeError("diagnostic replaced a model buffer")
+            if (
+                current[name].shape != value.shape
+                or current[name].dtype != value.dtype
+                or current[name].device != value.device
+            ):
+                raise RuntimeError("diagnostic mutated model buffer metadata")
+            current[name].copy_(value)
 
 
 def _gradient_tensors(loss, named_parameters, *, retain_graph: bool):
@@ -2231,6 +2264,7 @@ def run_representation_diagnostic(
         raise ValueError("diagnostic external snapshot/restore must be supplied together")
     normalized = normalize_hlt_batch(batch)
     prior_mutation_token = _diagnostic_mutation_token(model, optimizer)
+    prior_buffers = _diagnostic_buffer_snapshot(model)
     prior_runtime = capture_model_runtime_state(model)
     prior_modes = {name: module.training for name, module in model.named_modules()}
     prior_rng = _cpu_tree(capture_rng_state())
@@ -2583,6 +2617,7 @@ def run_representation_diagnostic(
                 ),
             }
     finally:
+        _restore_diagnostic_buffers(model, prior_buffers)
         restore_model_runtime_state(model, prior_runtime)
         for name, module in model.named_modules():
             module.training = prior_modes[name]

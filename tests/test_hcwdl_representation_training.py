@@ -741,6 +741,17 @@ def test_calibration_adapter_uses_finalized_shared_forward_api_exactly_once_per_
         "RSET_D90c", replicate_seed=1337, deployable_factory=TinyDeployable,
         wrapper_factory=TinyStudent,
     )
+    model.register_buffer(
+        "diagnostic_mutation_fixture", torch.tensor([3.0], dtype=torch.float32),
+    )
+    original_forward = model.forward_hcwdl_surfaces
+
+    def mutating_forward(*args, **kwargs):
+        with torch.no_grad():
+            model.diagnostic_mutation_fixture.add_(1.0)
+        return original_forward(*args, **kwargs)
+
+    monkeypatch.setattr(model, "forward_hcwdl_surfaces", mutating_forward)
     optimizer = torch.optim.AdamW(model.parameters(), lr=1.0e-4)
     raw_batches = [_batch((0, 1)), _batch((2, 3))]
     observed = {"student_forward": 0, "losses": 0}
