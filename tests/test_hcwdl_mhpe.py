@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from fractions import Fraction
 import numpy as np
 import pytest
 
@@ -9,6 +10,7 @@ from hlt_classification.scouting.hcwdl_mhpe_contracts import (
     CAMPAIGN_SPEC_CONTRACT_C10P90,
     CAMPAIGN_SPEC_CONTRACT_C10P90_300K60,
     CAMPAIGN_SPEC_CONTRACT_C25P75_300K60, RECIPE_CONTRACT_C10P90,
+    CAMPAIGN_SPEC_CONTRACT_DENSE_ANCHOR50_300K60,
     campaign_profile, execution_lock_payload, graph_payload, recipe_payload,
     validate_execution_lock, validate_graph, validate_recipe, validate_waiver,
     waiver_payload,
@@ -22,14 +24,16 @@ from hlt_classification.scouting.hcwdl_mhpe_graph import (
     C10P90_GRAPH_SHA256, C10P90_NODE_REGISTRY, COORDINATES,
     ENSEMBLE_COMPONENTS, GRAPH_SHA256, NODE_REGISTRY, PROFILE_C10P90,
     PROFILE_C10P90_300K60, PROFILE_C25P75_300K60,
-    node_registry,
+    PROFILE_DENSE_ANCHOR50_300K60, DENSE_FINALISTS,
+    ensemble_components, ensemble_weight_rationals, node_registry,
+    stage_teachers,
     validate_graph as validate_registry,
 )
 from hlt_classification.scouting.hcwdl_mhpe_targets import (
     DurableProbabilityTargets, load_probability_shard,
     publish_probability_manifest, publish_probability_shard,
     target_lock_payload, uniform_probability_ensemble,
-    validate_probability_bundle,
+    validate_probability_bundle, weighted_probability_ensemble,
 )
 from hlt_classification.scouting.hcwdl_mhpe_recovery import failed_downstream_closure
 from hlt_classification.scouting.targets import EphemeralProbabilityTargets
@@ -107,6 +111,48 @@ def test_paired_300k60_graphs_change_only_specialist_loss():
         assert recipe["population_profile"] == "pilot_300k_60pass"
 
 
+def test_dense_anchor50_graph_exact_shape_routes_and_weights():
+    profile = PROFILE_DENSE_ANCHOR50_300K60
+    registry = node_registry(profile)
+    components = ensemble_components(profile)
+    assert len(registry) == 29
+    assert tuple(components) == (
+        "U066E", "U100E", "D75E", "D50E", "D25E", "D0E",
+    )
+    assert sum(name.startswith("D0_from_") for name in registry) == 7
+    assert registry["M1"].teacher_id == "D0E"
+    assert registry["M1"].temperature == 1
+    assert all(node.training_passes == 60 for node in registry.values())
+    assert all(
+        (node.ce_weight, node.kd_weight) == (.10, .90)
+        for node in registry.values()
+    )
+    assert COORDINATES["U033"].payload()["structural"] == [1, 3]
+    assert COORDINATES["U066"].payload()["structural"] == [2, 3]
+    assert COORDINATES["D75"].payload()["feature"] == [1, 4]
+    assert COORDINATES["D50"].payload()["feature"] == [1, 2]
+    assert COORDINATES["D25"].payload()["feature"] == [3, 4]
+    assert registry["D0_from_D25E"].input_domain == "hlt"
+    assert len(DENSE_FINALISTS) == 10
+    for ensemble_id, names in components.items():
+        weights = ensemble_weight_rationals(profile, ensemble_id)
+        local = {
+            "U066E": "U066_from_U033", "U100E": "U100_from_U066E",
+            "D75E": "D75_from_U100E", "D50E": "D50_from_D75E",
+            "D25E": "D25_from_D50E", "D0E": "D0_from_D25E",
+        }[ensemble_id]
+        assert weights[local] == [1, 2]
+        assert sum(Fraction(*weights[name]) for name in names) == 1
+    graph = graph_payload(profile)
+    recipe = recipe_payload(foundation_recipe_sha256="a" * 64, profile=profile)
+    assert validate_graph(graph) == graph["content_hash"]
+    assert validate_recipe(recipe) == recipe["content_hash"]
+    assert graph["fresh_fit_count"] == 29
+    assert recipe["ensemble"]["weights"] == (
+        "local_predecessor_half_skip_half_exact_rational"
+    )
+
+
 def test_foundation_reuse_dispatch_keeps_legacy_and_300k_paths_separate(
     monkeypatch, tmp_path,
 ):
@@ -133,7 +179,10 @@ def test_foundation_reuse_dispatch_keeps_legacy_and_300k_paths_separate(
     assert campaign._reuse(
         **common, profile=PROFILE_C10P90_300K60,
     ) == {"path": "300k"}
-    assert [row[0] for row in calls] == ["full", "300k", "300k"]
+    assert campaign._reuse(
+        **common, profile=PROFILE_DENSE_ANCHOR50_300K60,
+    ) == {"path": "300k"}
+    assert [row[0] for row in calls] == ["full", "300k", "300k", "300k"]
 
 
 def test_population_specific_runtime_seed_and_cache_limits(tmp_path):
@@ -147,6 +196,9 @@ def test_population_specific_runtime_seed_and_cache_limits(tmp_path):
         "ub/repair/v1", 72.0,
     )
     assert _runtime_parameters(PROFILE_C10P90_300K60) == (
+        "ub/repair/v1", 72.0,
+    )
+    assert _runtime_parameters(PROFILE_DENSE_ANCHOR50_300K60) == (
         "ub/repair/v1", 72.0,
     )
 
@@ -177,6 +229,11 @@ def test_population_specific_runtime_seed_and_cache_limits(tmp_path):
         foundation=foundation,
     ) == executable
     assert _training_recipe(
+        profile=PROFILE_DENSE_ANCHOR50_300K60,
+        foundation_root=tmp_path,
+        foundation=foundation,
+    ) == executable
+    assert _training_recipe(
         profile="C25P75", foundation_root=tmp_path, foundation=foundation,
     ) == overlay
 
@@ -192,6 +249,52 @@ def test_task_graph_has_stage_parallelism_and_exact_closure():
     assert all(tasks[f"train_D000_from_{teacher}"]["dependencies"] == ["ensemble_D033E"] for teacher in ("U000", "U050", "U100E", "D066E", "D033E"))
     closure = failed_downstream_closure(["train_D066_from_U050"])
     assert "ensemble_D066E" in closure and "train_M1" in closure and "train_U100_from_U000" not in closure
+
+
+def test_dense_anchor50_task_graph_is_38_jobs_and_exactly_sequential_by_stage():
+    profile = PROFILE_DENSE_ANCHOR50_300K60
+    tasks = {row["task_id"]: row for row in campaign_tasks(profile)}
+    assert len(tasks) == 38
+    assert sum(row["kind"] == "train" for row in tasks.values()) == 29
+    assert sum(row["kind"] == "ensemble" for row in tasks.values()) == 6
+    assert tasks["train_U033_from_U000"]["dependencies"] == []
+    assert tasks["train_U066_from_U000"]["dependencies"] == [
+        "train_U033_from_U000"
+    ]
+    assert tasks["ensemble_U066E"]["dependencies"] == [
+        "train_U066_from_U000", "train_U066_from_U033",
+    ]
+    assert tasks["train_U100_from_U000"]["dependencies"] == ["ensemble_U066E"]
+    assert tasks["train_M1"]["dependencies"] == ["ensemble_D0E"]
+    assert tasks["aggregate"]["dependencies"] == [
+        *(f"train_{name}" for name in node_registry(profile)),
+        *(f"ensemble_{name}" for name in ensemble_components(profile)),
+    ]
+    closure = failed_downstream_closure(
+        ["train_D50_from_U033"], profile=profile,
+    )
+    assert "ensemble_D50E" in closure
+    assert "train_M1" in closure
+    assert "ensemble_D75E" not in closure
+
+    spec = {
+        "contract": CAMPAIGN_SPEC_CONTRACT_DENSE_ANCHOR50_300K60,
+        "recipe_profile": profile,
+        "population_profile": "pilot_300k_60pass",
+        "project_dir": "/project", "spec_path": "/campaign/spec.json",
+        "content_hash": "a" * 64, "tasks": list(tasks.values()),
+        "resources": {
+            "gpu_training": {"cpus": 8, "memory": "96G", "walltime": "06:00:00", "gpu": "gpu:gh200:1"},
+            "gpu_targets": {"cpus": 8, "memory": "96G", "walltime": "06:00:00", "gpu": "gpu:gh200:1"},
+            "cpu_report": {"cpus": 4, "memory": "32G", "walltime": "01:00:00", "gpu": None},
+        },
+    }
+    plan = command_plan(spec)
+    assert len(plan["commands"]) == 38
+    assert all(
+        any(item.startswith("--job-name=hcwmhped_") for item in row["command"])
+        for row in plan["commands"]
+    )
 
 
 def test_recipe_is_exactly_locked():
@@ -332,6 +435,61 @@ def test_ephemeral_probability_identity_and_temperature_contract():
         table.join(["missing"])
 
 
+def test_anchor50_weighted_probability_reduction_is_exact_and_not_uniform():
+    profile = PROFILE_DENSE_ANCHOR50_300K60
+    ensemble_id = "D0E"
+    names = ensemble_components(profile)[ensemble_id]
+    logits = {
+        name: np.full((3, 15), -4.0, np.float32) for name in names
+    }
+    for index, name in enumerate(names):
+        logits[name][:, index] = 4.0
+    weights = ensemble_weight_rationals(profile, ensemble_id)
+    weighted = weighted_probability_ensemble(
+        logits, temperature=2, weights=weights,
+    )
+    uniform = uniform_probability_ensemble(logits, temperature=2)
+    local = names.index("D0_from_D25E")
+    assert weighted.dtype.str == "<f4"
+    assert np.allclose(weighted.sum(1), 1, rtol=0, atol=2e-6)
+    assert np.all(weighted[:, local] > uniform[:, local])
+    assert not np.array_equal(weighted, uniform)
+    with pytest.raises(ValueError, match="sum to one"):
+        weighted_probability_ensemble(
+            logits, temperature=2,
+            weights={name: [1, len(names) + 1] for name in names},
+        )
+
+
+def test_dense_anchor50_complete_synthetic_graph_executes_all_routes():
+    profile = PROFILE_DENSE_ANCHOR50_300K60
+    teachers = {"U000": np.linspace(-1, 1, 60, dtype=np.float32).reshape(4, 15)}
+    specialists = {}
+    ensembles = {}
+    for stage, teacher_ids in stage_teachers(profile).items():
+        for teacher_index, teacher_id in enumerate(teacher_ids):
+            base = teachers[teacher_id]
+            node_id = f"{stage}_from_{teacher_id}"
+            specialists[node_id] = np.asarray(
+                base + np.float32((teacher_index + 1) / 1000), dtype=np.float32,
+            )
+        if stage == "U033":
+            teachers["U033"] = specialists["U033_from_U000"]
+            continue
+        ensemble_id = f"{stage}E"
+        probability = weighted_probability_ensemble(
+            {name: specialists[name] for name in ensemble_components(profile)[ensemble_id]},
+            temperature=2,
+            weights=ensemble_weight_rationals(profile, ensemble_id),
+        )
+        ensembles[ensemble_id] = probability
+        teachers[ensemble_id] = np.log(np.maximum(probability, 1e-30)).astype(np.float32)
+    specialists["M1"] = np.log(np.maximum(ensembles["D0E"], 1e-30)).astype(np.float32)
+    assert set(specialists) == set(node_registry(profile))
+    assert set(ensembles) == set(ensemble_components(profile))
+    assert all(np.allclose(value.sum(1), 1, atol=2e-6) for value in ensembles.values())
+
+
 def test_probability_artifact_roundtrip_and_lineage(tmp_path):
     identities = ["a", "b"]
     components = ENSEMBLE_COMPONENTS["U100E"]
@@ -353,6 +511,40 @@ def test_probability_artifact_roundtrip_and_lineage(tmp_path):
     assert ephemeral.temperature == 2
     assert ephemeral.header["target_manifest_sha256"] == manifest["content_hash"]
     assert np.array_equal(ephemeral.join(["b", "a"]), durable.probabilities[[1, 0]])
+
+
+def test_dense_anchor50_probability_artifact_binds_profile_and_weights(tmp_path):
+    profile = PROFILE_DENSE_ANCHOR50_300K60
+    ensemble_id = "U066E"
+    components = ensemble_components(profile)[ensemble_id]
+    logits = {
+        name: np.arange(30, dtype=np.float32).reshape(2, 15) * (index + 1) / 100
+        for index, name in enumerate(components)
+    }
+    lineage = {
+        name: {
+            "report_sha256": canonical_sha256(name + "r"),
+            "checkpoint_sha256": canonical_sha256(name + "c"),
+            "logits_sha256": canonical_sha256(name + "l"),
+        }
+        for name in components
+    }
+    _, metadata_path = publish_probability_shard(
+        tmp_path / "dense", ensemble_id=ensemble_id, role="train",
+        identities=["a", "b"], component_logits=logits,
+        component_lineage=lineage, temperature=2, source_path="all",
+        parents={"campaign": "a" * 64}, producer_commit="b" * 40,
+        profile=profile, weights=ensemble_weight_rationals(profile, ensemble_id),
+    )
+    metadata, arrays = load_probability_shard(metadata_path)
+    assert metadata["recipe_profile"] == profile
+    assert metadata["ensemble_weights"] == {
+        "U066_from_U000": [1, 2], "U066_from_U033": [1, 2],
+    }
+    expected = weighted_probability_ensemble(
+        logits, temperature=2, weights=metadata["ensemble_weights"],
+    )
+    assert np.array_equal(arrays["probabilities"], expected)
 
 
 def test_probability_artifacts_reject_duplicate_identity_temperature_and_corruption(tmp_path):
@@ -571,6 +763,11 @@ def test_paired_300k60_campaigns_publish_independent_queue_plans(
         path = worktree / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(f"evidence: {name}\n")
+    for name in campaign.DENSE_IMPLEMENTATION_EVIDENCE_FILES:
+        path = worktree / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if not path.exists():
+            path.write_text(f"evidence: {name}\n")
     compatibility = {
         "policy": "authenticated_immutable_300k_products_additive_mhpe_v2",
         "byte_exact_files": {},
@@ -640,6 +837,12 @@ def test_paired_300k60_campaigns_publish_independent_queue_plans(
             "AUTHORIZE HCWDL MHPE C10P90 300K60 EXACT SPEC",
             "hcwmhpe90p_",
         ),
+        (
+            PROFILE_DENSE_ANCHOR50_300K60,
+            CAMPAIGN_SPEC_CONTRACT_DENSE_ANCHOR50_300K60,
+            "AUTHORIZE HCWDL MHPE DENSE ANCHOR50 300K60 EXACT SPEC",
+            "hcwmhped_",
+        ),
     )
     specs = []
     for profile, contract, phrase, prefix in cases:
@@ -662,7 +865,9 @@ def test_paired_300k60_campaigns_publish_independent_queue_plans(
         }
         assert validate_campaign(spec, executable=True) == spec["content_hash"]
         commands = command_plan(spec)["commands"]
-        assert len(commands) == 23
+        assert len(commands) == (
+            38 if profile == PROFILE_DENSE_ANCHOR50_300K60 else 23
+        )
         assert all(
             any(item.startswith(f"--job-name={prefix}") for item in row["command"])
             for row in commands
@@ -670,5 +875,5 @@ def test_paired_300k60_campaigns_publish_independent_queue_plans(
         assert all(
             node.training_passes == 60 for node in node_registry(profile).values()
         )
-    assert specs[0]["content_hash"] != specs[1]["content_hash"]
-    assert specs[0]["campaign_root"] != specs[1]["campaign_root"]
+    assert len({item["content_hash"] for item in specs}) == 3
+    assert len({item["campaign_root"] for item in specs}) == 3

@@ -31,9 +31,10 @@ from .hcwdl_mhpe_contracts import (
     validate_recipe, validate_reuse_lock, validate_waiver, waiver_payload,
 )
 from .hcwdl_mhpe_graph import (
-    ENSEMBLE_COMPONENTS, PROFILE_C10P90, PROFILE_C25P75,
+    PROFILE_C10P90, PROFILE_C25P75,
     PROFILE_C10P90_300K60, PROFILE_C25P75_300K60, SUPPORTED_PROFILES,
-    node_registry,
+    PROFILE_DENSE_ANCHOR50_300K60, direct_model_teacher,
+    endpoint_ensemble, ensemble_components, node_registry, stages,
 )
 from .hcwdl_unified_balanced_coarse_campaign import FOUNDATION_CORE_FILES
 
@@ -51,6 +52,9 @@ WAIVER_PHRASE_C25P75_300K60: Final = "AUTHORIZE HCWDL MHPE C25P75 300K60 DIRECT 
 CREATION_PHRASE_C10P90_300K60: Final = "AUTHORIZE HCWDL MHPE C10P90 300K60 EXACT SPEC"
 SUBMISSION_PHRASE_C10P90_300K60: Final = "SUBMIT HCWDL MHPE C10P90 300K60 EXACT LEDGER"
 WAIVER_PHRASE_C10P90_300K60: Final = "AUTHORIZE HCWDL MHPE C10P90 300K60 DIRECT EXECUTION"
+CREATION_PHRASE_DENSE_ANCHOR50_300K60: Final = "AUTHORIZE HCWDL MHPE DENSE ANCHOR50 300K60 EXACT SPEC"
+SUBMISSION_PHRASE_DENSE_ANCHOR50_300K60: Final = "SUBMIT HCWDL MHPE DENSE ANCHOR50 300K60 EXACT LEDGER"
+WAIVER_PHRASE_DENSE_ANCHOR50_300K60: Final = "AUTHORIZE HCWDL MHPE DENSE ANCHOR50 300K60 DIRECT EXECUTION"
 
 REUSED_FOUNDATION_EXACT_FILES: Final = tuple(FOUNDATION_CORE_FILES)
 
@@ -98,6 +102,10 @@ P300_IMPLEMENTATION_EVIDENCE_FILES: Final = IMPLEMENTATION_EVIDENCE_FILES + (
     "docs/plans/HCWDL_MHPE_300K_60E_PAIRED_PLAN.md",
     "docs/HCWDL_MHPE_300K_60E_RUNBOOK.md",
 )
+DENSE_IMPLEMENTATION_EVIDENCE_FILES: Final = IMPLEMENTATION_EVIDENCE_FILES + (
+    "docs/plans/HCWDL_MHPE_DENSE_ANCHOR50_300K60_PLAN.md",
+    "docs/HCWDL_MHPE_DENSE_ANCHOR50_300K60_RUNBOOK.md",
+)
 
 ADDITIVE_ADAPTER_FILES: Final = frozenset({
     "src/hlt_classification/scouting/engine.py",
@@ -131,6 +139,7 @@ P300_RESOURCES: Final = {
 def resources_for_profile(profile: str) -> Mapping[str, ResourceRequest]:
     return P300_RESOURCES if profile in {
         PROFILE_C25P75_300K60, PROFILE_C10P90_300K60,
+        PROFILE_DENSE_ANCHOR50_300K60,
     } else RESOURCES
 
 
@@ -148,6 +157,8 @@ def creation_phrase(profile: str = PROFILE_C25P75) -> str:
         return CREATION_PHRASE_C25P75_300K60
     if profile == PROFILE_C10P90_300K60:
         return CREATION_PHRASE_C10P90_300K60
+    if profile == PROFILE_DENSE_ANCHOR50_300K60:
+        return CREATION_PHRASE_DENSE_ANCHOR50_300K60
     raise ValueError("unknown HCWDL-MHPE recipe profile")
 
 
@@ -160,6 +171,8 @@ def submission_phrase(profile: str = PROFILE_C25P75) -> str:
         return SUBMISSION_PHRASE_C25P75_300K60
     if profile == PROFILE_C10P90_300K60:
         return SUBMISSION_PHRASE_C10P90_300K60
+    if profile == PROFILE_DENSE_ANCHOR50_300K60:
+        return SUBMISSION_PHRASE_DENSE_ANCHOR50_300K60
     raise ValueError("unknown HCWDL-MHPE recipe profile")
 
 
@@ -170,6 +183,8 @@ def evidence_files(profile: str = PROFILE_C25P75) -> tuple[str, ...]:
         return C10P90_IMPLEMENTATION_EVIDENCE_FILES
     if profile in {PROFILE_C25P75_300K60, PROFILE_C10P90_300K60}:
         return P300_IMPLEMENTATION_EVIDENCE_FILES
+    if profile == PROFILE_DENSE_ANCHOR50_300K60:
+        return DENSE_IMPLEMENTATION_EVIDENCE_FILES
     raise ValueError("unknown HCWDL-MHPE recipe profile")
 
 
@@ -177,16 +192,19 @@ def campaign_tasks(profile: str = PROFILE_C25P75) -> list[dict[str, Any]]:
     registry = node_registry(profile)
     tasks: list[dict[str, Any]] = []
     previous = None
-    for stage in ("U050", "U100", "D066", "D033", "D000"):
+    stage_names = tuple(item for item in stages(profile) if item != "M1")
+    direct_stage = direct_model_teacher(profile)
+    for stage in stage_names:
         stage_nodes = sorted(name for name in registry if name.startswith(stage + "_from_"))
         dependencies = [] if previous is None else [previous]
-        # U050 is an imported-root child; all later stages wait for their preceding ensemble.
+        # The first stage is an imported-root child; later stages wait for the
+        # preceding durable ensemble.
         for node_id in stage_nodes:
             tasks.append({
                 "task_id": f"train_{node_id}", "kind": "train", "node_id": node_id,
                 "dependencies": list(dependencies), "resource_class": "gpu_training",
             })
-        if stage != "U050":
+        if stage != direct_stage:
             ensemble_id = stage + "E"
             tasks.append({
                 "task_id": f"ensemble_{ensemble_id}", "kind": "ensemble",
@@ -199,17 +217,17 @@ def campaign_tasks(profile: str = PROFILE_C25P75) -> list[dict[str, Any]]:
             previous = f"train_{stage_nodes[0]}"
     tasks.append({
         "task_id": "train_M1", "kind": "train", "node_id": "M1",
-        "dependencies": ["ensemble_D000E"], "resource_class": "gpu_training",
+        "dependencies": [f"ensemble_{endpoint_ensemble(profile)}"], "resource_class": "gpu_training",
     })
     terminal = [f"train_{name}" for name in registry]
-    terminal += [f"ensemble_{name}" for name in ENSEMBLE_COMPONENTS]
+    terminal += [f"ensemble_{name}" for name in ensemble_components(profile)]
     tasks.extend((
         {"task_id": "aggregate", "kind": "aggregate", "dependencies": terminal, "resource_class": "cpu_report"},
         {"task_id": "finalist_lock", "kind": "finalist_lock", "dependencies": ["aggregate"], "resource_class": "cpu_report"},
         {"task_id": "campaign_complete", "kind": "campaign_complete", "dependencies": ["finalist_lock"], "resource_class": "cpu_report"},
     ))
-    if len([row for row in tasks if row["kind"] == "train"]) != 16:
-        raise RuntimeError("HCWDL-MHPE task graph must contain 16 fits")
+    if len([row for row in tasks if row["kind"] == "train"]) != len(registry):
+        raise RuntimeError("HCWDL-MHPE task graph fit count differs")
     return tasks
 
 
@@ -219,6 +237,7 @@ def command_plan(spec: Mapping[str, Any]) -> dict[str, Any]:
         PROFILE_C25P75: "hcwmhpe", PROFILE_C10P90: "hcwmhpe90",
         PROFILE_C25P75_300K60: "hcwmhpe25p",
         PROFILE_C10P90_300K60: "hcwmhpe90p",
+        PROFILE_DENSE_ANCHOR50_300K60: "hcwmhped",
     }[profile]
     commands = []
     for task in spec["tasks"]:
@@ -431,7 +450,8 @@ def _reuse(
     *, foundation_lock: Path, project: Path, source_commit: str,
     profile: str = PROFILE_C25P75,
 ) -> dict[str, Any]:
-    if profile in {PROFILE_C25P75_300K60, PROFILE_C10P90_300K60}:
+    if profile in {PROFILE_C25P75_300K60, PROFILE_C10P90_300K60,
+                   PROFILE_DENSE_ANCHOR50_300K60}:
         return _reuse_300k(
             foundation_lock=foundation_lock, project=project,
             source_commit=source_commit, profile=profile,
@@ -488,6 +508,7 @@ def create_campaign(
             PROFILE_C10P90: WAIVER_PHRASE_C10P90,
             PROFILE_C25P75_300K60: WAIVER_PHRASE_C25P75_300K60,
             PROFILE_C10P90_300K60: WAIVER_PHRASE_C10P90_300K60,
+            PROFILE_DENSE_ANCHOR50_300K60: WAIVER_PHRASE_DENSE_ANCHOR50_300K60,
         }[recipe_profile],
         profile=recipe_profile,
     )
@@ -498,6 +519,7 @@ def create_campaign(
             PROFILE_C10P90: "HCWDL-MHPE-C10P90-FULL",
             PROFILE_C25P75_300K60: "HCWDL-MHPE-C25P75-300K60",
             PROFILE_C10P90_300K60: "HCWDL-MHPE-C10P90-300K60",
+            PROFILE_DENSE_ANCHOR50_300K60: "HCWDL-MHPE-DENSE-ANCHOR50-300K60",
         }[recipe_profile],
         "campaign_root": str(root),
         "project_dir": str(project), "source_commit": source_commit,
@@ -521,6 +543,9 @@ def create_campaign(
     if recipe_profile in {PROFILE_C25P75_300K60, PROFILE_C10P90_300K60}:
         unhashed["population_profile"] = "pilot_300k_60pass"
         unhashed["paired_study"] = "specialist_ce_kd_weights_only"
+    elif recipe_profile == PROFILE_DENSE_ANCHOR50_300K60:
+        unhashed["population_profile"] = "pilot_300k_60pass"
+        unhashed["study"] = "dense_factorized_anchor50_multi_horizon"
     elif recipe_profile == PROFILE_C10P90:
         unhashed["single_changed_variable"] = "specialist_ce_kd_weights_only"
     spec = with_content_hash(unhashed); plan = command_plan(spec)
@@ -555,6 +580,11 @@ def validate_campaign(value: Mapping[str, Any], *, executable: bool = False, ver
                 or value.get("population_profile") != "pilot_300k_60pass"
                 or value.get("paired_study") != "specialist_ce_kd_weights_only"):
             raise ValueError("HCWDL-MHPE 300k60 campaign identity differs")
+    elif profile == PROFILE_DENSE_ANCHOR50_300K60:
+        if (value.get("campaign") != "HCWDL-MHPE-DENSE-ANCHOR50-300K60"
+                or value.get("population_profile") != "pilot_300k_60pass"
+                or value.get("study") != "dense_factorized_anchor50_multi_horizon"):
+            raise ValueError("HCWDL-MHPE dense campaign identity differs")
     elif profile == PROFILE_C10P90:
         if (value.get("campaign") != "HCWDL-MHPE-C10P90-FULL"
                 or value.get("single_changed_variable")
@@ -568,7 +598,8 @@ def validate_campaign(value: Mapping[str, Any], *, executable: bool = False, ver
     reuse = load_json(value["reuse_lock_path"])
     if validate_reuse_lock(reuse) != value["reuse_lock_sha256"]:
         raise ValueError("HCWDL-MHPE reuse lock differs")
-    is_300k60 = profile in {PROFILE_C25P75_300K60, PROFILE_C10P90_300K60}
+    is_300k60 = profile in {PROFILE_C25P75_300K60, PROFILE_C10P90_300K60,
+                            PROFILE_DENSE_ANCHOR50_300K60}
     if (is_300k60 != (reuse.get("population_profile") == "pilot_300k_60pass")
             or (is_300k60 and reuse.get("recipe_profile") != profile)):
         raise ValueError("HCWDL-MHPE campaign/reuse population differs")
@@ -616,8 +647,11 @@ def validate_campaign(value: Mapping[str, Any], *, executable: bool = False, ver
 __all__ = [
     "ADDITIVE_ADAPTER_FILES", "CREATION_PHRASE", "IMPLEMENTATION_EVIDENCE_FILES",
     "CREATION_PHRASE_C10P90", "C10P90_IMPLEMENTATION_EVIDENCE_FILES",
+    "CREATION_PHRASE_DENSE_ANCHOR50_300K60",
+    "DENSE_IMPLEMENTATION_EVIDENCE_FILES",
     "REUSED_FOUNDATION_EXACT_FILES", "RESOURCES", "P300_RESOURCES",
     "SEMANTIC_SOURCE_FILES", "SUBMISSION_PHRASE", "SUBMISSION_PHRASE_C10P90",
+    "SUBMISSION_PHRASE_DENSE_ANCHOR50_300K60",
     "WAIVER_PHRASE_C10P90", "creation_phrase", "evidence_files",
     "WAIVER_PHRASE", "campaign_tasks", "command_plan", "create_campaign",
     "semantic_source_hashes", "submission_phrase", "validate_campaign",

@@ -2237,3 +2237,63 @@ measured RAM, walltime, I/O, GPU, and storage evidence; build a measured
 resource profile and a fresh complete dry run; then request explicit pilot
 submission authorization. Do not claim runtime acceptance or release the held
 endpoint gate until those steps and the six real endpoint diagnostics exist.
+
+## 2026-08-17: dense anchor-50 MHPE 300k/60-pass implementation
+
+The additive implementation-authoritative
+`docs/plans/HCWDL_MHPE_DENSE_ANCHOR50_300K60_PLAN.md` is implemented as
+profile `C10P90_DENSE_ANCHOR50_300K60`. It imports the authenticated 300k
+U000/M0paired foundation and registers 29 fresh cold fits over U033, U066,
+U100, D75, D50, D25, D0, and M1. Six reducers use the frozen anchor-50 rule:
+one half for the immediate-predecessor specialist and the remaining half
+equally divided among skip specialists. The uniform reduction is computed
+only as a validation diagnostic and is not published as a teacher.
+
+Implemented surfaces:
+
+- graph/coordinate/teacher/seed/finalist registration in
+  `hcwdl_mhpe_graph.py`;
+- v5 graph, node, recipe, campaign, training-report, and waiver identities;
+- v3 300k foundation-reuse identity;
+- v2 weighted target shard/manifest/lock, stage report, aggregate, finalist,
+  completion, and sealed-final identities;
+- exact-rational lexical FP32-softmax/FP64 weighted reduction with a single
+  normalization and little-endian FP32 publication;
+- profile-aware U033 logit publication, specialist training, reducer,
+  aggregate, exact-HLT final evaluation, task attestations, monitoring, and
+  failed/downstream source/resource recovery;
+- 38-job Slurm plan: 29 fits, six reducers, aggregate, finalist lock, and
+  completion, with 8 CPUs/96G/06:00:00/GH200 for GPU work and
+  4 CPUs/32G/01:00:00 for CPU reporting;
+- the versioned contract documentation and
+  `docs/HCWDL_MHPE_DENSE_ANCHOR50_300K60_RUNBOOK.md`.
+
+Existing MHPE v1-v4 graph hashes and uniform target semantics remain
+unchanged. Deployable/finally evaluable nodes consume exact HLT only. Ordinary
+execution has zero final-test access. No donor code was copied and
+`docs/LEGACY_SOURCE_MAP.md` therefore did not change.
+
+Final local evidence on the completed implementation:
+
+- focused MHPE suite: 27 passed in 4.07 seconds;
+- complete repository suite: 506 passed in 236.45 seconds, with the existing
+  14 Matplotlib/Pyparsing deprecation warnings only;
+- create/submit/recovery CLI help surfaces passed;
+- contract probe reported graph
+  `HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_GRAPH/v5`, graph SHA-256
+  `4b53cace3e19dd8e4c3e3de09a747c821b46d9aa0f117a9a2b0919c0bcc53f1e`,
+  campaign/recipe/training v5, 29 fits, six ensembles, and 38 tasks;
+- all MHPE Python/CLI surfaces compiled;
+- repository-relative Markdown links passed as part of the complete suite;
+- `git diff --check` passed with line-ending notices only.
+
+Per the active plan and explicit user direction, this additive profile carries
+the completed foundation, installed-Weaver, production-worker, and prior MHPE
+reducer/KD evidence and does not require another standalone smoke. This is an
+operational waiver, not a claim that the new graph completed a smoke. No SSH,
+Slurm submission, cancellation, push, or Tigris mutation occurred during this
+implementation. The exact next task is to commit and push these changes, make
+a clean detached Tigris worktree at that commit, create the canonical campaign
+spec from the completed 300k foundation lock, materialize and inspect the
+38-job dry-run ledger, and only then perform the separately authorized live
+submission.

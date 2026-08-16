@@ -10,13 +10,16 @@ from hlt_classification.scouting.hcwdl_recovery import build_task_attestation,ta
 from hlt_classification.scouting.hcwdl_mhpe_recovery import validate_recovery  # noqa:E402
 from hlt_classification.scouting.hcwdl_mhpe_workflow import MhpeWorkflow  # noqa:E402
 from hlt_classification.scouting.hcwdl_authorization import validate_source_checkout  # noqa:E402
+from hlt_classification.scouting.hcwdl_mhpe_contracts import campaign_profile  # noqa:E402
+from hlt_classification.scouting.hcwdl_mhpe_graph import direct_model_teacher  # noqa:E402
 def main()->int:
  p=argparse.ArgumentParser(description=__doc__);p.add_argument("--recovery-spec",type=Path,required=True);p.add_argument("--task",required=True);a=p.parse_args();recovery=load_json(a.recovery_spec);validate_recovery(recovery)
  if a.task not in recovery["recovery_tasks"]:raise PermissionError("task is outside MHPE recovery closure")
  validate_source_checkout(ROOT,expected_commit=recovery["source_commit"]);original=load_json(recovery["campaign_spec_path"]);MhpeWorkflow(original,recovery_spec_sha256=recovery["content_hash"]).run(a.task);campaign_root=Path(original["campaign_root"])
  if a.task.startswith("train_"):
   node=a.task.removeprefix("train_");report_path=campaign_root/"training"/node/"training_report.json";report=load_json(report_path);outputs=[report_path,campaign_root/"training"/node/"hcwdl_training_report.json",campaign_root/"reports/runtime"/f"{node}.json",campaign_root/"training"/node/report["selected_checkpoint"],campaign_root/"training"/node/report["final_checkpoint"]]
-  if node=="U050_from_U000":outputs.extend([campaign_root/"targets/U050/train_all.npz",campaign_root/"targets/U050/train_all.json",campaign_root/"targets/U050/train_manifest.json"])
+  direct=direct_model_teacher(campaign_profile(original))
+  if node==f"{direct}_from_U000":outputs.extend([campaign_root/"targets"/direct/"train_all.npz",campaign_root/"targets"/direct/"train_all.json",campaign_root/"targets"/direct/"train_manifest.json"])
  elif a.task.startswith("ensemble_"):
   ensemble=a.task.removeprefix("ensemble_");outputs=[campaign_root/"reports"/f"{ensemble}_stage.json"]
   for temperature in ("T1","T2"):

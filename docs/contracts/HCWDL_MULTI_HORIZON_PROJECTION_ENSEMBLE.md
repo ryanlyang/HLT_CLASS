@@ -96,3 +96,15 @@ waiver v3; `C10P90_300K60` uses the corresponding v4 identities. Both bind the
 and immutable-product authorization. All probability-ensemble semantics and
 the 16-fit topology remain unchanged. Population, passes, seeds, resources,
 and specialist loss are immutable scientific identity.
+
+## Additive dense anchor-50 300k/60-pass profile
+
+The [dense anchor-50 plan](../plans/HCWDL_MHPE_DENSE_ANCHOR50_300K60_PLAN.md)
+registers 29 cold C10P90 fits over U033, U066, U100, D75, D50, D25, D0,
+and M1. Six durable ensembles assign exactly one half of their probability
+mass to the immediate-predecessor specialist and divide the other half
+equally among skip specialists. It uses graph/node/recipe/campaign/training
+v5, foundation-reuse v3, and target/stage/aggregate/finalist/completion/final
+v2 identities. Old v1-v4 artifacts retain their original uniform semantics.
+The uniform ensemble is validation-only diagnostics and may not supervise a
+child. See the [dense runbook](../HCWDL_MHPE_DENSE_ANCHOR50_300K60_RUNBOOK.md).

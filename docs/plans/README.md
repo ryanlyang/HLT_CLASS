@@ -106,6 +106,12 @@ specialists, keeps M1 at `C10P90/T=1`, and pairs all seeds across the two
 independent 60-pass roots and ledgers.
 
 The additive
+[dense anchor-50 300k/60-pass MHPE campaign](HCWDL_MHPE_DENSE_ANCHOR50_300K60_PLAN.md)
+uses 29 cold C10P90 fits across seven factorized horizons and six
+predecessor-anchored probability ensembles. It reuses the authenticated 300k
+foundation, keeps final test sealed, and has its own v5/v2 artifact family.
+
+The additive
 [HCWDL matching-free privileged representation-KD ascent plan](HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md)
 registers two nested representation strategies, each as a complete cold and
 warm M1--M6 ascent. It preserves the implemented logit-only HCWDL graph and

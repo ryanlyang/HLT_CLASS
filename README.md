@@ -195,6 +195,10 @@ The repository currently has no Git remote. Transfer an exact commit to
 Tigris (or configure a remote) before creating a campaign specification; the
 source contract rejects dirty or nonidentical worktrees.
 
+The additive [dense anchor-50 MHPE plan](docs/plans/HCWDL_MHPE_DENSE_ANCHOR50_300K60_PLAN.md)
+and [runbook](docs/HCWDL_MHPE_DENSE_ANCHOR50_300K60_RUNBOOK.md) define the
+queue-ready 300k/60-pass, 29-fit predecessor-anchored ensemble campaign.
+
 The available data commands include:
 
 ```bash

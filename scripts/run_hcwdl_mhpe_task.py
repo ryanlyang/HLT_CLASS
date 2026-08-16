@@ -10,11 +10,14 @@ from hlt_classification.data.cache_contracts import write_immutable_json  # noqa
 from hlt_classification.scouting.hcwdl_authorization import validate_source_checkout  # noqa:E402
 from hlt_classification.scouting.hcwdl_recovery import build_task_attestation,task_attestation_path  # noqa:E402
 from hlt_classification.scouting.hcwdl_mhpe_workflow import MhpeWorkflow  # noqa:E402
+from hlt_classification.scouting.hcwdl_mhpe_contracts import campaign_profile  # noqa:E402
+from hlt_classification.scouting.hcwdl_mhpe_graph import direct_model_teacher  # noqa:E402
 def main()->int:
  p=argparse.ArgumentParser(description=__doc__);p.add_argument("--spec",type=Path,required=True);p.add_argument("--task",required=True);p.add_argument("--device",default="cuda");a=p.parse_args();spec=load_json(a.spec);validate_source_checkout(ROOT,expected_commit=spec["source_commit"]);result=MhpeWorkflow(spec).run(a.task,device=a.device);root=Path(spec["campaign_root"])
  if a.task.startswith("train_"):
   node=a.task.removeprefix("train_");report_path=root/"training"/node/"training_report.json";report=load_json(report_path);outputs=[report_path,root/"training"/node/"hcwdl_training_report.json",root/"reports/runtime"/f"{node}.json",root/"training"/node/report["selected_checkpoint"],root/"training"/node/report["final_checkpoint"]]
-  if node=="U050_from_U000":outputs.extend([root/"targets/U050/train_all.npz",root/"targets/U050/train_all.json",root/"targets/U050/train_manifest.json"])
+  direct=direct_model_teacher(campaign_profile(spec))
+  if node==f"{direct}_from_U000":outputs.extend([root/"targets"/direct/"train_all.npz",root/"targets"/direct/"train_all.json",root/"targets"/direct/"train_manifest.json"])
  elif a.task.startswith("ensemble_"):
   ensemble=a.task.removeprefix("ensemble_");outputs=[root/"reports"/f"{ensemble}_stage.json"]
   for temperature in ("T1","T2"):

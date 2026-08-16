@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import gc
+from fractions import Fraction
 from pathlib import Path
 import time
 from typing import Any, Mapping
@@ -17,17 +18,19 @@ from hlt_classification.models.scouting_particle_transformer import build_scouti
 from .engine import classification_metrics, precompute_teacher_targets, validate_pmard_training_report
 from .hcwdl_mhpe_campaign import validate_campaign
 from .hcwdl_mhpe_contracts import (
-    STAGE_REPORT_CONTRACT, campaign_profile, training_report_contract,
+    campaign_profile, stage_report_contract, training_report_contract,
 )
 from .hcwdl_mhpe_graph import (
-    COORDINATES, ENSEMBLE_COMPONENTS, PROFILE_C10P90,
+    COORDINATES, PROFILE_C10P90,
     PROFILE_C10P90_300K60, PROFILE_C25P75_300K60, campaign_label,
-    graph_sha256, node_registry, training_registry,
+    PROFILE_DENSE_ANCHOR50_300K60, direct_model_teacher,
+    endpoint_ensemble, ensemble_components, ensemble_weight_rationals,
+    graph_sha256, local_teacher, node_registry, training_registry,
 )
 from .hcwdl_mhpe_targets import (
     DurableProbabilityTargets, publish_probability_manifest,
     publish_probability_shard, target_lock_payload, uniform_probability_ensemble,
-    validate_probability_bundle,
+    validate_probability_bundle, weighted_probability_ensemble,
 )
 from .hcwdl_training import train_hcwdl_node
 from .hcwdl_unified_balanced_runner import DOMAINS, _cache_student_views, _load_common, _stream
@@ -41,7 +44,10 @@ from .training import GenerationalLossConfiguration, derive_seed
 
 
 def _is_300k60(profile: str) -> bool:
-    return profile in {PROFILE_C25P75_300K60, PROFILE_C10P90_300K60}
+    return profile in {
+        PROFILE_C25P75_300K60, PROFILE_C10P90_300K60,
+        PROFILE_DENSE_ANCHOR50_300K60,
+    }
 
 
 def _runtime_parameters(profile: str) -> tuple[str, float]:
@@ -85,7 +91,8 @@ def _context(spec: Mapping[str, Any], *, verify_source_tree: bool = True):
 
 def _teacher_checkpoint(spec: Mapping[str, Any], teacher_id: str, foundation_root: Path) -> tuple[Path, dict[str, Any], str]:
     root = Path(spec["campaign_root"])
-    canonical = "U050_from_U000" if teacher_id == "U050" else teacher_id
+    direct = direct_model_teacher(campaign_profile(spec))
+    canonical = f"{direct}_from_U000" if teacher_id == direct else teacher_id
     output = foundation_root / "training/U000" if canonical == "U000" else root / "training" / canonical
     report = load_json(output / "training_report.json")
     report_hash = validate_pmard_training_report(report)
@@ -109,14 +116,15 @@ def _model_targets(
         return durable.as_ephemeral(
             teacher_report_sha256=report_hash, split_manifest_sha256=split_hash,
         ), report_hash
-    if teacher_id == "U050":
+    direct = direct_model_teacher(campaign_profile(spec))
+    if teacher_id == direct:
         consumers = tuple(sorted(
             candidate.node_id for candidate in registry.values()
-            if candidate.teacher_id == "U050"
+            if candidate.teacher_id == direct
         ))
-        manifest_path = Path(spec["campaign_root"]) / "targets/U050/train_manifest.json"
+        manifest_path = Path(spec["campaign_root"]) / f"targets/{direct}/train_manifest.json"
         durable = DurableUnifiedBalancedTargets(
-            manifest_path, teacher_id="MHPE/U050", consumers=consumers,
+            manifest_path, teacher_id=f"MHPE/{direct}", consumers=consumers,
         )
         expected_parents = {
             "campaign_spec_sha256": spec["content_hash"],
@@ -131,7 +139,7 @@ def _model_targets(
         return durable.as_ephemeral(
             teacher_report_sha256=report_hash, split_manifest_sha256=split_hash,
         ), report_hash
-    teacher_node = registry["U050_from_U000" if teacher_id == "U050" else teacher_id]
+    teacher_node = registry[f"{direct}_from_U000" if teacher_id == direct else teacher_id]
     behavior = "hlt" if teacher_node.input_domain == "hlt" else "balanced_uniform"
     input_key = "hlt" if behavior == "hlt" else "privileged"
     stream = _stream(
@@ -184,6 +192,7 @@ def run_specialist(*, spec: Mapping[str, Any], node_id: str, device: str = "cuda
         lock_hash, manifests = validate_probability_bundle(
             target_directory, ensemble_id=node.teacher_id,
             temperature=node.temperature, consumers=expected_consumers,
+            profile=profile,
         )
         manifest_path = target_directory / "train_manifest.json"
         durable = DurableProbabilityTargets(manifest_path)
@@ -246,8 +255,8 @@ def run_specialist(*, spec: Mapping[str, Any], node_id: str, device: str = "cuda
                if _is_300k60(profile) else {}),
         },
     )
-    if node_id == "U050_from_U000":
-        _publish_u050_targets(
+    if node_id == f"{direct_model_teacher(profile)}_from_U000":
+        _publish_direct_model_targets(
             spec=spec, result=result, caches=caches, input_key=input_key,
             sampler_seed=sampler_seed, batch_size=int(recipe["batching"]["effective_batch_size"]),
             split_hash=split_hash, selection_hash=selection_hash, device=device,
@@ -260,23 +269,25 @@ def run_specialist(*, spec: Mapping[str, Any], node_id: str, device: str = "cuda
     return returned
 
 
-def _publish_u050_targets(
+def _publish_direct_model_targets(
     *, spec: Mapping[str, Any], result: Mapping[str, Any], caches,
     input_key: str, sampler_seed: int, batch_size: int, split_hash: str,
     selection_hash: str, device: str, registry,
 ) -> None:
-    """Publish the selected U050 logits once for its four direct consumers."""
+    """Publish the selected first-stage logits once for direct consumers."""
     root = Path(spec["campaign_root"])
-    report_path = root / "training/U050_from_U000/training_report.json"
+    profile = campaign_profile(spec)
+    direct = direct_model_teacher(profile)
+    report_path = root / "training" / f"{direct}_from_U000" / "training_report.json"
     report = load_json(report_path)
     report_hash = validate_pmard_training_report(report)
     if result.get("pmard_engine_report_sha256") != report_hash:
-        raise ValueError("HCWDL-MHPE U050 selected report changed")
+        raise ValueError("HCWDL-MHPE direct-stage selected report changed")
     model, loaded = load_pmard_model(
         report_path, model_factory=scouting_model_factory_for_report(report), device=device,
     )
     if loaded["content_hash"] != report_hash:
-        raise ValueError("HCWDL-MHPE U050 changed during target load")
+        raise ValueError("HCWDL-MHPE direct-stage changed during target load")
     targets = precompute_teacher_targets(
         model, caches["train"].iterate_batches(
             epoch=0, sampler_seed=sampler_seed, batch_size=batch_size,
@@ -292,22 +303,22 @@ def _publish_u050_targets(
         "teacher_checkpoint_sha256": report["selected_checkpoint_sha256"],
         "teacher_report_sha256": report_hash,
     }
-    directory = root / "targets/U050"
+    directory = root / "targets" / direct
     _, metadata = publish_logit_shard(
         directory / "train_all", identities=targets.identities,
         logits=targets.logits, source_path="__all_mapped_train__",
         parents=parents, producer_commit=spec["source_commit"],
-        teacher_id="MHPE/U050",
+        teacher_id=f"MHPE/{direct}",
     )
     consumers = tuple(sorted(
         candidate.node_id for candidate in registry.values()
-        if candidate.teacher_id == "U050"
+        if candidate.teacher_id == direct
     ))
     publish_logit_manifest(
         directory / "train_manifest.json", shard_paths=[metadata],
         expected_sources=["__all_mapped_train__"],
         expected_rows=len(targets.identities), parents=parents,
-        teacher_id="MHPE/U050", consumers=consumers,
+        teacher_id=f"MHPE/{direct}", consumers=consumers,
     )
 
 
@@ -323,7 +334,8 @@ def _predict_components(*, spec, ensemble_id, device, recovery_spec_sha256=None)
     caches, input_key = _cache_student_views(
         foundation_spec=foundation, split=split, selections=selections,
         assignments=assignments, balanced=balanced,
-        behavior="hlt" if stage == "D000" else "balanced_uniform",
+        behavior=("hlt" if COORDINATES[stage].feature_numerator
+                  == COORDINATES[stage].feature_denominator else "balanced_uniform"),
         coordinate=COORDINATES[stage], batch_size=int(recipe["batching"]["effective_batch_size"]),
         sampler_seed=sampler_seed, repair_seed=repair_seed, memory_gib=memory_gib,
     )
@@ -331,7 +343,7 @@ def _predict_components(*, spec, ensemble_id, device, recovery_spec_sha256=None)
         role: {"identities": None, "logits": {}, "lineage": {}, "labels": None}
         for role in ("train", "validation")
     }
-    for component in ENSEMBLE_COMPONENTS[ensemble_id]:
+    for component in ensemble_components(profile)[ensemble_id]:
         output, report, report_hash = _teacher_checkpoint(spec, component, foundation_root)
         model, _ = load_pmard_model(output / "training_report.json", model_factory=scouting_model_factory_for_report(report), device=device)
         for role in ("train", "validation"):
@@ -411,11 +423,13 @@ def _diversity(component_logits: Mapping[str, np.ndarray], temperature: float, l
 
 
 def run_ensemble(*, spec: Mapping[str, Any], ensemble_id: str, device: str = "cuda", recovery_spec_sha256: str | None = None) -> dict[str, Any]:
-    if ensemble_id not in ENSEMBLE_COMPONENTS:
-        raise ValueError("unknown HCWDL-MHPE ensemble")
     profile = campaign_profile(spec)
+    components = ensemble_components(profile)
+    if ensemble_id not in components:
+        raise ValueError("unknown HCWDL-MHPE ensemble")
+    weights = ensemble_weight_rationals(profile, ensemble_id)
     started = time.monotonic()
-    root = Path(spec["campaign_root"]); primary_t = 1.0 if ensemble_id == "D000E" else 2.0
+    root = Path(spec["campaign_root"]); primary_t = 1.0 if ensemble_id == endpoint_ensemble(profile) else 2.0
     role_data, cache_bytes, registry = _predict_components(
         spec=spec, ensemble_id=ensemble_id, device=device,
         recovery_spec_sha256=recovery_spec_sha256,
@@ -441,6 +455,7 @@ def run_ensemble(*, spec: Mapping[str, Any], ensemble_id: str, device: str = "cu
                 temperature=temperature, source_path=f"__all_mapped_{role}__",
                 parents=role_parents,
                 producer_commit=spec["source_commit"],
+                profile=profile, weights=weights,
             )
             consumers = sorted(node.node_id for node in registry.values() if node.teacher_id == ensemble_id and node.temperature == temperature)
             manifest_path = directory / f"{role}_manifest.json"
@@ -449,6 +464,7 @@ def run_ensemble(*, spec: Mapping[str, Any], ensemble_id: str, device: str = "cu
                 expected_sources=[f"__all_mapped_{role}__"], expected_rows=len(identities),
                 temperature=temperature, consumers=consumers,
                 parents=role_parents,
+                profile=profile,
             )
             manifests[f"{label}_{role}"] = manifest["content_hash"]
             manifest_paths[f"{label}_{role}"] = str(manifest_path.resolve())
@@ -461,11 +477,17 @@ def run_ensemble(*, spec: Mapping[str, Any], ensemble_id: str, device: str = "cu
                 "split_manifest_sha256": role_data["train"][4],
                 "selection_manifest_sha256": role_data["train"][5],
             },
+            profile=profile,
         )
         write_immutable_json(directory / "lock.json", lock)
         target_locks[label] = lock["content_hash"]
     _, validation_logits, validation_lineage, labels, _, _ = role_data["validation"]
-    ensemble_probability = uniform_probability_ensemble(validation_logits, temperature=1)
+    ensemble_probability = (
+        weighted_probability_ensemble(validation_logits, temperature=1, weights=weights)
+        if profile == PROFILE_DENSE_ANCHOR50_300K60
+        else uniform_probability_ensemble(validation_logits, temperature=1)
+    )
+    uniform_probability = uniform_probability_ensemble(validation_logits, temperature=1)
     ensemble_metrics = classification_metrics(np.log(np.maximum(ensemble_probability, 1e-30)), labels)
     component_metrics = {
         name: classification_metrics(value, labels) for name, value in validation_logits.items()
@@ -474,7 +496,21 @@ def run_ensemble(*, spec: Mapping[str, Any], ensemble_id: str, device: str = "cu
     for omitted in sorted(validation_logits):
         reduced = {name: value for name, value in validation_logits.items() if name != omitted}
         if reduced:
-            probability = uniform_probability_ensemble(reduced, temperature=1)
+            if profile == PROFILE_DENSE_ANCHOR50_300K60:
+                fractions = {
+                    name: Fraction(*weights[name]) for name in reduced
+                }
+                normalizer = sum(fractions.values(), Fraction(0, 1))
+                reduced_weights = {
+                    name: [value.numerator, value.denominator]
+                    for name, raw in fractions.items()
+                    for value in (raw / normalizer,)
+                }
+                probability = weighted_probability_ensemble(
+                    reduced, temperature=1, weights=reduced_weights,
+                )
+            else:
+                probability = uniform_probability_ensemble(reduced, temperature=1)
             leave_one_out[omitted] = classification_metrics(np.log(np.maximum(probability, 1e-30)), labels)
     aucs = [row["macro_ovr_auc"] for row in component_metrics.values()]
     scalar_metrics = sorted(
@@ -497,21 +533,18 @@ def run_ensemble(*, spec: Mapping[str, Any], ensemble_id: str, device: str = "cu
         name: float(ensemble_metrics[name]) - float(component_metrics[best_component][name])
         for name in scalar_metrics
     }
-    local_teacher = {
-        "U100E": "U050", "D066E": "U100E",
-        "D033E": "D066E", "D000E": "D033E",
-    }[ensemble_id]
-    local_component = f"{ensemble_id[:-1]}_from_{local_teacher}"
+    predecessor = local_teacher(profile, ensemble_id)
+    local_component = f"{ensemble_id[:-1]}_from_{predecessor}"
     local_vs_skips = {
         name: {
             metric: float(component_metrics[local_component][metric]) - float(component_metrics[name][metric])
             for metric in scalar_metrics
         }
-        for name in ENSEMBLE_COMPONENTS[ensemble_id] if name != local_component
+        for name in components[ensemble_id] if name != local_component
     }
     stage_payload = {
-        "contract": STAGE_REPORT_CONTRACT, "schema_version": 1,
-        "ensemble_id": ensemble_id, "component_order": list(ENSEMBLE_COMPONENTS[ensemble_id]),
+        "contract": stage_report_contract(profile), "schema_version": 1,
+        "ensemble_id": ensemble_id, "component_order": list(components[ensemble_id]),
         "component_metrics": component_metrics, "ensemble_metrics": ensemble_metrics,
         "component_lineage": validation_lineage,
         "ensemble_minus_mean_component_auc": ensemble_metrics["macro_ovr_auc"] - float(np.mean(aucs)),
@@ -529,6 +562,14 @@ def run_ensemble(*, spec: Mapping[str, Any], ensemble_id: str, device: str = "cu
             "target_build_seconds": time.monotonic() - started,
             "cache_array_bytes": cache_bytes,
         },
+        **({
+            "recipe_profile": profile,
+            "ensemble_weights": weights,
+            "uniform_validation_diagnostic_metrics": classification_metrics(
+                np.log(np.maximum(uniform_probability, 1e-30)), labels,
+            ),
+            "uniform_validation_diagnostic_is_not_a_teacher": True,
+        } if profile == PROFILE_DENSE_ANCHOR50_300K60 else {}),
     }
     report = with_content_hash(stage_payload)
     write_immutable_json(root / "reports" / f"{ensemble_id}_stage.json", report)
