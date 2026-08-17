@@ -2297,3 +2297,53 @@ a clean detached Tigris worktree at that commit, create the canonical campaign
 spec from the completed 300k foundation lock, materialize and inspect the
 38-job dry-run ledger, and only then perform the separately authorized live
 submission.
+
+## 2026-08-17: paired dense C25P75 anchor-50 MHPE implementation
+
+The additive `C25P75_DENSE_ANCHOR50_300K60` profile is implemented under
+`docs/plans/HCWDL_MHPE_DENSE_C25P75_300K60_PLAN.md`. It is a paired loss-only
+comparison against `C10P90_DENSE_ANCHOR50_300K60`: the same authenticated
+300k/100k/100k population, 29-fit graph, six exact anchor-50 probability
+reducers, teacher routes, coordinates, stochastic seed aliases, 60-pass
+schedule, checkpoint policy, resources, and task dependencies are retained.
+Every specialist changes from C10P90/T2 to C25P75/T2. M1 intentionally stays
+C10P90/T1.
+
+New semantic identities are graph/node/recipe/campaign/training-report/waiver
+v6 and foundation-reuse v4. The weighted target/stage/aggregate/finalist/
+completion/final-evaluation v2 contracts are reused because the reducer
+semantics are byte-identical and every payload binds the new recipe profile.
+The old v5 dense C10 graph SHA-256 remains
+`4b53cace3e19dd8e4c3e3de09a747c821b46d9aa0f117a9a2b0919c0bcc53f1e`;
+the new dense C25 graph SHA-256 is
+`1cedac2dd9b94d576aa44cbfca0053386ae681127c3df902b287823a81b9d47b`.
+An independent `hcwmhpe25d` Slurm namespace and `hcwmhpe25d_r` recovery
+namespace prevent collision with the running dense C10 campaign.
+
+Review evidence showed that all 28 specialist nodes differ only in CE/KD
+weights and node-contract version; M1 differs only in node-contract version.
+Task lists and exact ensemble weights compare equal. The complete synthetic
+campaign path publishes and authenticates an independent 38-command ledger
+with 29 fits, six reducers, aggregate, finalist lock, and completion.
+
+Final local evidence:
+
+- focused MHPE suite: 32 passed in 4.23 seconds;
+- complete repository suite: 511 passed in 247.77 seconds, with the existing
+  14 Matplotlib/Pyparsing deprecation warnings only;
+- create, submit, and recovery CLI help checks passed and the create CLI lists
+  `C25P75_DENSE_ANCHOR50_300K60`;
+- all scouting and script Python surfaces compiled;
+- contract probe reported graph/recipe/campaign/training v6, foundation-reuse
+  v4, 29 fits, six ensembles, 38 tasks, identical paired seeds, and exact
+  anchor-50 weights;
+- repository-relative Markdown links passed in the full suite;
+- `git diff --check` passed with line-ending notices only.
+
+No donor code was copied, so `docs/LEGACY_SOURCE_MAP.md` did not change. No
+SSH, Slurm submission, cancellation, push, or Tigris mutation occurred. Per
+the active plan and user direction, no standalone smoke is required for this
+loss-only paired profile. The next operation is a clean commit/push, detached
+Tigris worktree, canonical campaign creation from the completed 300k
+foundation lock, dry-run ledger inspection, and separately authorized live
+submission using `docs/HCWDL_MHPE_DENSE_C25P75_300K60_RUNBOOK.md`.

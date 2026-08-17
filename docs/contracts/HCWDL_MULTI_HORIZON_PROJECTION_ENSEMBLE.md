@@ -108,3 +108,15 @@ v5, foundation-reuse v3, and target/stage/aggregate/finalist/completion/final
 v2 identities. Old v1-v4 artifacts retain their original uniform semantics.
 The uniform ensemble is validation-only diagnostics and may not supervise a
 child. See the [dense runbook](../HCWDL_MHPE_DENSE_ANCHOR50_300K60_RUNBOOK.md).
+
+## Additive dense C25P75 paired profile
+
+The [dense C25P75 plan](../plans/HCWDL_MHPE_DENSE_C25P75_300K60_PLAN.md)
+registers `C25P75_DENSE_ANCHOR50_300K60` as a loss-only pair of the dense C10
+profile. It uses graph/node/recipe/campaign/training/waiver v6 and
+foundation-reuse v4. Specialist loss is unweighted C25P75/T2; M1 remains
+C10P90/T1. Topology, coordinates, seed aliases, 60-pass schedule, population,
+resources, and exact anchor-50 reducer semantics are identical. Therefore the
+existing target/stage/aggregate/finalist/completion/final-evaluation v2
+contracts remain applicable while binding the v6 recipe profile. See the
+[dense C25P75 runbook](../HCWDL_MHPE_DENSE_C25P75_300K60_RUNBOOK.md).

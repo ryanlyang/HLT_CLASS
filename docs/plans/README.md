@@ -111,6 +111,12 @@ uses 29 cold C10P90 fits across seven factorized horizons and six
 predecessor-anchored probability ensembles. It reuses the authenticated 300k
 foundation, keeps final test sealed, and has its own v5/v2 artifact family.
 
+The paired
+[dense C25P75 anchor-50 campaign](HCWDL_MHPE_DENSE_C25P75_300K60_PLAN.md)
+repeats the same 29-fit graph, six exact anchor-weighted ensembles, stochastic
+seeds, 300k/100k/100k population, and 60-pass schedule. Its only scientific
+change is specialist loss from C10P90 to C25P75; M1 remains C10P90/T1.
+
 The additive
 [HCWDL matching-free privileged representation-KD ascent plan](HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md)
 registers two nested representation strategies, each as a complete cold and

@@ -33,7 +33,8 @@ from .hcwdl_mhpe_contracts import (
 from .hcwdl_mhpe_graph import (
     PROFILE_C10P90, PROFILE_C25P75,
     PROFILE_C10P90_300K60, PROFILE_C25P75_300K60, SUPPORTED_PROFILES,
-    PROFILE_DENSE_ANCHOR50_300K60, direct_model_teacher,
+    DENSE_PROFILES, PROFILE_DENSE_ANCHOR50_300K60,
+    PROFILE_DENSE_C25P75_300K60, direct_model_teacher,
     endpoint_ensemble, ensemble_components, node_registry, stages,
 )
 from .hcwdl_unified_balanced_coarse_campaign import FOUNDATION_CORE_FILES
@@ -55,6 +56,9 @@ WAIVER_PHRASE_C10P90_300K60: Final = "AUTHORIZE HCWDL MHPE C10P90 300K60 DIRECT 
 CREATION_PHRASE_DENSE_ANCHOR50_300K60: Final = "AUTHORIZE HCWDL MHPE DENSE ANCHOR50 300K60 EXACT SPEC"
 SUBMISSION_PHRASE_DENSE_ANCHOR50_300K60: Final = "SUBMIT HCWDL MHPE DENSE ANCHOR50 300K60 EXACT LEDGER"
 WAIVER_PHRASE_DENSE_ANCHOR50_300K60: Final = "AUTHORIZE HCWDL MHPE DENSE ANCHOR50 300K60 DIRECT EXECUTION"
+CREATION_PHRASE_DENSE_C25P75_300K60: Final = "AUTHORIZE HCWDL MHPE DENSE C25P75 ANCHOR50 300K60 EXACT SPEC"
+SUBMISSION_PHRASE_DENSE_C25P75_300K60: Final = "SUBMIT HCWDL MHPE DENSE C25P75 ANCHOR50 300K60 EXACT LEDGER"
+WAIVER_PHRASE_DENSE_C25P75_300K60: Final = "AUTHORIZE HCWDL MHPE DENSE C25P75 ANCHOR50 300K60 DIRECT EXECUTION"
 
 REUSED_FOUNDATION_EXACT_FILES: Final = tuple(FOUNDATION_CORE_FILES)
 
@@ -106,6 +110,10 @@ DENSE_IMPLEMENTATION_EVIDENCE_FILES: Final = IMPLEMENTATION_EVIDENCE_FILES + (
     "docs/plans/HCWDL_MHPE_DENSE_ANCHOR50_300K60_PLAN.md",
     "docs/HCWDL_MHPE_DENSE_ANCHOR50_300K60_RUNBOOK.md",
 )
+DENSE_C25P75_IMPLEMENTATION_EVIDENCE_FILES: Final = IMPLEMENTATION_EVIDENCE_FILES + (
+    "docs/plans/HCWDL_MHPE_DENSE_C25P75_300K60_PLAN.md",
+    "docs/HCWDL_MHPE_DENSE_C25P75_300K60_RUNBOOK.md",
+)
 
 ADDITIVE_ADAPTER_FILES: Final = frozenset({
     "src/hlt_classification/scouting/engine.py",
@@ -140,6 +148,7 @@ def resources_for_profile(profile: str) -> Mapping[str, ResourceRequest]:
     return P300_RESOURCES if profile in {
         PROFILE_C25P75_300K60, PROFILE_C10P90_300K60,
         PROFILE_DENSE_ANCHOR50_300K60,
+        PROFILE_DENSE_C25P75_300K60,
     } else RESOURCES
 
 
@@ -159,6 +168,8 @@ def creation_phrase(profile: str = PROFILE_C25P75) -> str:
         return CREATION_PHRASE_C10P90_300K60
     if profile == PROFILE_DENSE_ANCHOR50_300K60:
         return CREATION_PHRASE_DENSE_ANCHOR50_300K60
+    if profile == PROFILE_DENSE_C25P75_300K60:
+        return CREATION_PHRASE_DENSE_C25P75_300K60
     raise ValueError("unknown HCWDL-MHPE recipe profile")
 
 
@@ -173,6 +184,8 @@ def submission_phrase(profile: str = PROFILE_C25P75) -> str:
         return SUBMISSION_PHRASE_C10P90_300K60
     if profile == PROFILE_DENSE_ANCHOR50_300K60:
         return SUBMISSION_PHRASE_DENSE_ANCHOR50_300K60
+    if profile == PROFILE_DENSE_C25P75_300K60:
+        return SUBMISSION_PHRASE_DENSE_C25P75_300K60
     raise ValueError("unknown HCWDL-MHPE recipe profile")
 
 
@@ -185,6 +198,8 @@ def evidence_files(profile: str = PROFILE_C25P75) -> tuple[str, ...]:
         return P300_IMPLEMENTATION_EVIDENCE_FILES
     if profile == PROFILE_DENSE_ANCHOR50_300K60:
         return DENSE_IMPLEMENTATION_EVIDENCE_FILES
+    if profile == PROFILE_DENSE_C25P75_300K60:
+        return DENSE_C25P75_IMPLEMENTATION_EVIDENCE_FILES
     raise ValueError("unknown HCWDL-MHPE recipe profile")
 
 
@@ -238,6 +253,7 @@ def command_plan(spec: Mapping[str, Any]) -> dict[str, Any]:
         PROFILE_C25P75_300K60: "hcwmhpe25p",
         PROFILE_C10P90_300K60: "hcwmhpe90p",
         PROFILE_DENSE_ANCHOR50_300K60: "hcwmhped",
+        PROFILE_DENSE_C25P75_300K60: "hcwmhpe25d",
     }[profile]
     commands = []
     for task in spec["tasks"]:
@@ -451,7 +467,8 @@ def _reuse(
     profile: str = PROFILE_C25P75,
 ) -> dict[str, Any]:
     if profile in {PROFILE_C25P75_300K60, PROFILE_C10P90_300K60,
-                   PROFILE_DENSE_ANCHOR50_300K60}:
+                   PROFILE_DENSE_ANCHOR50_300K60,
+                   PROFILE_DENSE_C25P75_300K60}:
         return _reuse_300k(
             foundation_lock=foundation_lock, project=project,
             source_commit=source_commit, profile=profile,
@@ -509,6 +526,7 @@ def create_campaign(
             PROFILE_C25P75_300K60: WAIVER_PHRASE_C25P75_300K60,
             PROFILE_C10P90_300K60: WAIVER_PHRASE_C10P90_300K60,
             PROFILE_DENSE_ANCHOR50_300K60: WAIVER_PHRASE_DENSE_ANCHOR50_300K60,
+            PROFILE_DENSE_C25P75_300K60: WAIVER_PHRASE_DENSE_C25P75_300K60,
         }[recipe_profile],
         profile=recipe_profile,
     )
@@ -520,6 +538,7 @@ def create_campaign(
             PROFILE_C25P75_300K60: "HCWDL-MHPE-C25P75-300K60",
             PROFILE_C10P90_300K60: "HCWDL-MHPE-C10P90-300K60",
             PROFILE_DENSE_ANCHOR50_300K60: "HCWDL-MHPE-DENSE-ANCHOR50-300K60",
+            PROFILE_DENSE_C25P75_300K60: "HCWDL-MHPE-DENSE-C25P75-ANCHOR50-300K60",
         }[recipe_profile],
         "campaign_root": str(root),
         "project_dir": str(project), "source_commit": source_commit,
@@ -543,9 +562,11 @@ def create_campaign(
     if recipe_profile in {PROFILE_C25P75_300K60, PROFILE_C10P90_300K60}:
         unhashed["population_profile"] = "pilot_300k_60pass"
         unhashed["paired_study"] = "specialist_ce_kd_weights_only"
-    elif recipe_profile == PROFILE_DENSE_ANCHOR50_300K60:
+    elif recipe_profile in DENSE_PROFILES:
         unhashed["population_profile"] = "pilot_300k_60pass"
         unhashed["study"] = "dense_factorized_anchor50_multi_horizon"
+        if recipe_profile == PROFILE_DENSE_C25P75_300K60:
+            unhashed["paired_study"] = "dense_specialist_ce_kd_weights_only"
     elif recipe_profile == PROFILE_C10P90:
         unhashed["single_changed_variable"] = "specialist_ce_kd_weights_only"
     spec = with_content_hash(unhashed); plan = command_plan(spec)
@@ -580,10 +601,19 @@ def validate_campaign(value: Mapping[str, Any], *, executable: bool = False, ver
                 or value.get("population_profile") != "pilot_300k_60pass"
                 or value.get("paired_study") != "specialist_ce_kd_weights_only"):
             raise ValueError("HCWDL-MHPE 300k60 campaign identity differs")
-    elif profile == PROFILE_DENSE_ANCHOR50_300K60:
-        if (value.get("campaign") != "HCWDL-MHPE-DENSE-ANCHOR50-300K60"
+    elif profile in DENSE_PROFILES:
+        expected_campaign = {
+            PROFILE_DENSE_ANCHOR50_300K60:
+                "HCWDL-MHPE-DENSE-ANCHOR50-300K60",
+            PROFILE_DENSE_C25P75_300K60:
+                "HCWDL-MHPE-DENSE-C25P75-ANCHOR50-300K60",
+        }[profile]
+        if (value.get("campaign") != expected_campaign
                 or value.get("population_profile") != "pilot_300k_60pass"
-                or value.get("study") != "dense_factorized_anchor50_multi_horizon"):
+                or value.get("study") != "dense_factorized_anchor50_multi_horizon"
+                or (profile == PROFILE_DENSE_C25P75_300K60
+                    and value.get("paired_study")
+                    != "dense_specialist_ce_kd_weights_only")):
             raise ValueError("HCWDL-MHPE dense campaign identity differs")
     elif profile == PROFILE_C10P90:
         if (value.get("campaign") != "HCWDL-MHPE-C10P90-FULL"
@@ -599,7 +629,8 @@ def validate_campaign(value: Mapping[str, Any], *, executable: bool = False, ver
     if validate_reuse_lock(reuse) != value["reuse_lock_sha256"]:
         raise ValueError("HCWDL-MHPE reuse lock differs")
     is_300k60 = profile in {PROFILE_C25P75_300K60, PROFILE_C10P90_300K60,
-                            PROFILE_DENSE_ANCHOR50_300K60}
+                            PROFILE_DENSE_ANCHOR50_300K60,
+                            PROFILE_DENSE_C25P75_300K60}
     if (is_300k60 != (reuse.get("population_profile") == "pilot_300k_60pass")
             or (is_300k60 and reuse.get("recipe_profile") != profile)):
         raise ValueError("HCWDL-MHPE campaign/reuse population differs")
@@ -648,10 +679,13 @@ __all__ = [
     "ADDITIVE_ADAPTER_FILES", "CREATION_PHRASE", "IMPLEMENTATION_EVIDENCE_FILES",
     "CREATION_PHRASE_C10P90", "C10P90_IMPLEMENTATION_EVIDENCE_FILES",
     "CREATION_PHRASE_DENSE_ANCHOR50_300K60",
+    "CREATION_PHRASE_DENSE_C25P75_300K60",
     "DENSE_IMPLEMENTATION_EVIDENCE_FILES",
+    "DENSE_C25P75_IMPLEMENTATION_EVIDENCE_FILES",
     "REUSED_FOUNDATION_EXACT_FILES", "RESOURCES", "P300_RESOURCES",
     "SEMANTIC_SOURCE_FILES", "SUBMISSION_PHRASE", "SUBMISSION_PHRASE_C10P90",
     "SUBMISSION_PHRASE_DENSE_ANCHOR50_300K60",
+    "SUBMISSION_PHRASE_DENSE_C25P75_300K60",
     "WAIVER_PHRASE_C10P90", "creation_phrase", "evidence_files",
     "WAIVER_PHRASE", "campaign_tasks", "command_plan", "create_campaign",
     "semantic_source_hashes", "submission_phrase", "validate_campaign",

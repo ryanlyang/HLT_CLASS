@@ -26,15 +26,23 @@ CAMPAIGN_LABEL_C10P90_300K60: Final = "HCWDL-MHPE-C10P90-300K60"
 GRAPH_CONTRACT_DENSE_ANCHOR50_300K60: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_GRAPH/v5"
 NODE_CONTRACT_DENSE_ANCHOR50_300K60: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_NODE_SPEC/v5"
 CAMPAIGN_LABEL_DENSE_ANCHOR50_300K60: Final = "HCWDL-MHPE-DENSE-ANCHOR50-300K60"
+GRAPH_CONTRACT_DENSE_C25P75_300K60: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_GRAPH/v6"
+NODE_CONTRACT_DENSE_C25P75_300K60: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_NODE_SPEC/v6"
+CAMPAIGN_LABEL_DENSE_C25P75_300K60: Final = "HCWDL-MHPE-DENSE-C25P75-ANCHOR50-300K60"
 PROFILE_C25P75: Final = "C25P75"
 PROFILE_C10P90: Final = "C10P90"
 PROFILE_C25P75_300K60: Final = "C25P75_300K60"
 PROFILE_C10P90_300K60: Final = "C10P90_300K60"
 PROFILE_DENSE_ANCHOR50_300K60: Final = "C10P90_DENSE_ANCHOR50_300K60"
+PROFILE_DENSE_C25P75_300K60: Final = "C25P75_DENSE_ANCHOR50_300K60"
+DENSE_PROFILES: Final = frozenset({
+    PROFILE_DENSE_ANCHOR50_300K60, PROFILE_DENSE_C25P75_300K60,
+})
 SUPPORTED_PROFILES: Final = (
     PROFILE_C25P75, PROFILE_C10P90,
     PROFILE_C25P75_300K60, PROFILE_C10P90_300K60,
     PROFILE_DENSE_ANCHOR50_300K60,
+    PROFILE_DENSE_C25P75_300K60,
 )
 
 COORDINATES: Final = MappingProxyType({
@@ -84,18 +92,18 @@ DENSE_LOCAL_TEACHERS: Final = MappingProxyType({
 
 
 def stage_teachers(profile: str = PROFILE_C25P75) -> Mapping[str, tuple[str, ...]]:
-    return DENSE_STAGE_TEACHERS if profile == PROFILE_DENSE_ANCHOR50_300K60 else STAGE_TEACHERS
+    return DENSE_STAGE_TEACHERS if profile in DENSE_PROFILES else STAGE_TEACHERS
 
 
 def ensemble_components(profile: str = PROFILE_C25P75) -> Mapping[str, tuple[str, ...]]:
     return (
         DENSE_ENSEMBLE_COMPONENTS
-        if profile == PROFILE_DENSE_ANCHOR50_300K60 else ENSEMBLE_COMPONENTS
+        if profile in DENSE_PROFILES else ENSEMBLE_COMPONENTS
     )
 
 
 def local_teacher(profile: str, ensemble_id: str) -> str:
-    if profile == PROFILE_DENSE_ANCHOR50_300K60:
+    if profile in DENSE_PROFILES:
         try:
             return DENSE_LOCAL_TEACHERS[ensemble_id]
         except KeyError as error:
@@ -116,7 +124,7 @@ def ensemble_weight_rationals(
     components = ensemble_components(profile).get(ensemble_id)
     if components is None:
         raise ValueError("unknown HCWDL-MHPE ensemble")
-    if profile != PROFILE_DENSE_ANCHOR50_300K60:
+    if profile not in DENSE_PROFILES:
         return {name: [1, len(components)] for name in components}
     local = f"{ensemble_id[:-1]}_from_{local_teacher(profile, ensemble_id)}"
     if local not in components or len(components) < 2:
@@ -179,6 +187,7 @@ def _build_registry(profile: str = PROFILE_C25P75) -> Mapping[str, MhpeNode]:
         PROFILE_C25P75_300K60: (.25, .75),
         PROFILE_C10P90_300K60: (.10, .90),
         PROFILE_DENSE_ANCHOR50_300K60: (.10, .90),
+        PROFILE_DENSE_C25P75_300K60: (.25, .75),
     }[profile]
     node_contract = {
         PROFILE_C25P75: NODE_CONTRACT,
@@ -186,14 +195,16 @@ def _build_registry(profile: str = PROFILE_C25P75) -> Mapping[str, MhpeNode]:
         PROFILE_C25P75_300K60: NODE_CONTRACT_C25P75_300K60,
         PROFILE_C10P90_300K60: NODE_CONTRACT_C10P90_300K60,
         PROFILE_DENSE_ANCHOR50_300K60: NODE_CONTRACT_DENSE_ANCHOR50_300K60,
+        PROFILE_DENSE_C25P75_300K60: NODE_CONTRACT_DENSE_C25P75_300K60,
     }[profile]
     passes = 60 if profile in {
         PROFILE_C25P75_300K60, PROFILE_C10P90_300K60,
         PROFILE_DENSE_ANCHOR50_300K60,
+        PROFILE_DENSE_C25P75_300K60,
     } else 20
     seed_domain = (
         "HCWDL-MHPE-DENSE-ANCHOR50-300K60/v1"
-        if profile == PROFILE_DENSE_ANCHOR50_300K60 else
+        if profile in DENSE_PROFILES else
         "HCWDL-MHPE-300K60/v1" if passes == 60 else "HCWDL-MHPE-FULL/v1"
     )
     nodes: dict[str, MhpeNode] = {}
@@ -208,14 +219,14 @@ def _build_registry(profile: str = PROFILE_C25P75) -> Mapping[str, MhpeNode]:
                 teacher_kind="probabilities" if teacher.endswith("E") else "logits",
                 training_passes=passes,
             )
-    endpoint = "D0" if profile == PROFILE_DENSE_ANCHOR50_300K60 else "D000"
+    endpoint = "D0" if profile in DENSE_PROFILES else "D000"
     nodes["M1"] = MhpeNode(
         node_id="M1", coordinate_name=endpoint, teacher_id=f"{endpoint}E",
         seed_alias=f"{seed_domain}/M1", ce_weight=.10, kd_weight=.90,
         temperature=1.0, teacher_kind="probabilities", contract=node_contract,
         training_passes=passes,
     )
-    expected_fits = 29 if profile == PROFILE_DENSE_ANCHOR50_300K60 else 16
+    expected_fits = 29 if profile in DENSE_PROFILES else 16
     if len(nodes) != expected_fits:
         raise RuntimeError(f"HCWDL-MHPE graph must contain exactly {expected_fits} fresh fits")
     return MappingProxyType(dict(sorted(nodes.items())))
@@ -227,6 +238,9 @@ C25P75_300K60_NODE_REGISTRY: Final = _build_registry(PROFILE_C25P75_300K60)
 C10P90_300K60_NODE_REGISTRY: Final = _build_registry(PROFILE_C10P90_300K60)
 DENSE_ANCHOR50_300K60_NODE_REGISTRY: Final = _build_registry(
     PROFILE_DENSE_ANCHOR50_300K60,
+)
+DENSE_C25P75_300K60_NODE_REGISTRY: Final = _build_registry(
+    PROFILE_DENSE_C25P75_300K60,
 )
 STAGES: Final = ("U050", "U100", "D066", "D033", "D000", "M1")
 FINALISTS: Final = (
@@ -290,6 +304,22 @@ DENSE_ANCHOR50_300K60_GRAPH_SHA256: Final = canonical_sha256({
     },
     "finalists": list(DENSE_FINALISTS),
 })
+DENSE_C25P75_300K60_GRAPH_SHA256: Final = canonical_sha256({
+    "contract": GRAPH_CONTRACT_DENSE_C25P75_300K60,
+    "recipe_profile": PROFILE_DENSE_C25P75_300K60,
+    "population_profile": "pilot_300k_60pass",
+    "ensemble_policy": "local_predecessor_half_skip_half_exact_rational_v1",
+    "paired_study": "dense_specialist_ce_kd_weights_only",
+    "imported": ["U000", "M0paired"],
+    "nodes": [DENSE_C25P75_300K60_NODE_REGISTRY[key].payload()
+              for key in DENSE_C25P75_300K60_NODE_REGISTRY],
+    "ensemble_components": dict(DENSE_ENSEMBLE_COMPONENTS),
+    "ensemble_weights": {
+        key: ensemble_weight_rationals(PROFILE_DENSE_C25P75_300K60, key)
+        for key in DENSE_ENSEMBLE_COMPONENTS
+    },
+    "finalists": list(DENSE_FINALISTS),
+})
 
 
 def node_registry(profile: str = PROFILE_C25P75) -> Mapping[str, MhpeNode]:
@@ -303,6 +333,8 @@ def node_registry(profile: str = PROFILE_C25P75) -> Mapping[str, MhpeNode]:
         return C10P90_300K60_NODE_REGISTRY
     if profile == PROFILE_DENSE_ANCHOR50_300K60:
         return DENSE_ANCHOR50_300K60_NODE_REGISTRY
+    if profile == PROFILE_DENSE_C25P75_300K60:
+        return DENSE_C25P75_300K60_NODE_REGISTRY
     raise ValueError("unknown HCWDL-MHPE recipe profile")
 
 
@@ -317,6 +349,8 @@ def graph_sha256(profile: str = PROFILE_C25P75) -> str:
         return C10P90_300K60_GRAPH_SHA256
     if profile == PROFILE_DENSE_ANCHOR50_300K60:
         return DENSE_ANCHOR50_300K60_GRAPH_SHA256
+    if profile == PROFILE_DENSE_C25P75_300K60:
+        return DENSE_C25P75_300K60_GRAPH_SHA256
     raise ValueError("unknown HCWDL-MHPE recipe profile")
 
 
@@ -331,6 +365,8 @@ def graph_contract(profile: str = PROFILE_C25P75) -> str:
         return GRAPH_CONTRACT_C10P90_300K60
     if profile == PROFILE_DENSE_ANCHOR50_300K60:
         return GRAPH_CONTRACT_DENSE_ANCHOR50_300K60
+    if profile == PROFILE_DENSE_C25P75_300K60:
+        return GRAPH_CONTRACT_DENSE_C25P75_300K60
     raise ValueError("unknown HCWDL-MHPE recipe profile")
 
 
@@ -345,6 +381,8 @@ def campaign_label(profile: str = PROFILE_C25P75) -> str:
         return CAMPAIGN_LABEL_C10P90_300K60
     if profile == PROFILE_DENSE_ANCHOR50_300K60:
         return CAMPAIGN_LABEL_DENSE_ANCHOR50_300K60
+    if profile == PROFILE_DENSE_C25P75_300K60:
+        return CAMPAIGN_LABEL_DENSE_C25P75_300K60
     raise ValueError("unknown HCWDL-MHPE recipe profile")
 
 
@@ -353,7 +391,7 @@ def validate_graph(profile: str = PROFILE_C25P75) -> str:
     components_by_ensemble = ensemble_components(profile)
     expected_ensembles = (
         {"U066E", "U100E", "D75E", "D50E", "D25E", "D0E"}
-        if profile == PROFILE_DENSE_ANCHOR50_300K60
+        if profile in DENSE_PROFILES
         else {"U100E", "D066E", "D033E", "D000E"}
     )
     if set(components_by_ensemble) != expected_ensembles:
@@ -371,15 +409,15 @@ def stages(profile: str = PROFILE_C25P75) -> tuple[str, ...]:
 
 
 def finalists(profile: str = PROFILE_C25P75) -> tuple[str, ...]:
-    return DENSE_FINALISTS if profile == PROFILE_DENSE_ANCHOR50_300K60 else FINALISTS
+    return DENSE_FINALISTS if profile in DENSE_PROFILES else FINALISTS
 
 
 def endpoint_ensemble(profile: str = PROFILE_C25P75) -> str:
-    return "D0E" if profile == PROFILE_DENSE_ANCHOR50_300K60 else "D000E"
+    return "D0E" if profile in DENSE_PROFILES else "D000E"
 
 
 def direct_model_teacher(profile: str = PROFILE_C25P75) -> str:
-    return "U033" if profile == PROFILE_DENSE_ANCHOR50_300K60 else "U050"
+    return "U033" if profile in DENSE_PROFILES else "U050"
 
 
 def training_registry(profile: str = PROFILE_C25P75):
@@ -399,24 +437,25 @@ def training_registry(profile: str = PROFILE_C25P75):
 __all__ = [
     "CAMPAIGN_LABEL", "CAMPAIGN_LABEL_C10P90",
     "CAMPAIGN_LABEL_C25P75_300K60", "CAMPAIGN_LABEL_C10P90_300K60",
-    "CAMPAIGN_LABEL_DENSE_ANCHOR50_300K60",
+    "CAMPAIGN_LABEL_DENSE_ANCHOR50_300K60", "CAMPAIGN_LABEL_DENSE_C25P75_300K60",
     "C10P90_GRAPH_SHA256", "C25P75_300K60_GRAPH_SHA256",
     "C10P90_300K60_GRAPH_SHA256",
-    "DENSE_ANCHOR50_300K60_GRAPH_SHA256",
+    "DENSE_ANCHOR50_300K60_GRAPH_SHA256", "DENSE_C25P75_300K60_GRAPH_SHA256",
     "C10P90_NODE_REGISTRY", "C25P75_300K60_NODE_REGISTRY",
     "C10P90_300K60_NODE_REGISTRY", "COORDINATES", "ENSEMBLE_COMPONENTS", "FINALISTS",
-    "DENSE_ANCHOR50_300K60_NODE_REGISTRY", "DENSE_ENSEMBLE_COMPONENTS",
+    "DENSE_ANCHOR50_300K60_NODE_REGISTRY", "DENSE_C25P75_300K60_NODE_REGISTRY",
+    "DENSE_ENSEMBLE_COMPONENTS", "DENSE_PROFILES",
     "DENSE_FINALISTS",
     "GRAPH_CONTRACT", "GRAPH_CONTRACT_C10P90",
     "GRAPH_CONTRACT_C25P75_300K60", "GRAPH_CONTRACT_C10P90_300K60",
-    "GRAPH_CONTRACT_DENSE_ANCHOR50_300K60",
+    "GRAPH_CONTRACT_DENSE_ANCHOR50_300K60", "GRAPH_CONTRACT_DENSE_C25P75_300K60",
     "GRAPH_SHA256", "MhpeNode", "NODE_CONTRACT", "NODE_CONTRACT_C10P90",
     "NODE_CONTRACT_C25P75_300K60", "NODE_CONTRACT_C10P90_300K60",
-    "NODE_CONTRACT_DENSE_ANCHOR50_300K60",
+    "NODE_CONTRACT_DENSE_ANCHOR50_300K60", "NODE_CONTRACT_DENSE_C25P75_300K60",
     "NODE_REGISTRY",
     "PROFILE_C10P90", "PROFILE_C25P75", "PROFILE_C25P75_300K60",
     "PROFILE_C10P90_300K60", "STAGES", "STAGE_TEACHERS",
-    "PROFILE_DENSE_ANCHOR50_300K60",
+    "PROFILE_DENSE_ANCHOR50_300K60", "PROFILE_DENSE_C25P75_300K60",
     "SUPPORTED_PROFILES", "campaign_label", "graph_contract", "graph_sha256",
     "direct_model_teacher", "endpoint_ensemble", "ensemble_components",
     "ensemble_weight_rationals", "finalists", "local_teacher", "node_registry",

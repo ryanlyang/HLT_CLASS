@@ -18,6 +18,7 @@ from .hcwdl_mhpe_contracts import (
     CAMPAIGN_SPEC_CONTRACT_C10P90_300K60,
     CAMPAIGN_SPEC_CONTRACT_C25P75_300K60,
     CAMPAIGN_SPEC_CONTRACT_DENSE_ANCHOR50_300K60,
+    CAMPAIGN_SPEC_CONTRACT_DENSE_C25P75_300K60,
     COMMAND_PLAN_CONTRACT, RECOVERY_SPEC_CONTRACT,
     RESOURCE_RECOVERY_SPEC_CONTRACT, campaign_profile,
 )
@@ -25,6 +26,7 @@ from .hcwdl_mhpe_graph import (
     PROFILE_C10P90, PROFILE_C25P75,
     PROFILE_C10P90_300K60, PROFILE_C25P75_300K60,
     PROFILE_DENSE_ANCHOR50_300K60,
+    PROFILE_DENSE_C25P75_300K60,
 )
 
 SOURCE_REPAIR_PHRASE = "AUTHORIZE HCWDL MHPE EXECUTION-ONLY SOURCE REPAIR"
@@ -69,6 +71,7 @@ def create_recovery(
         CAMPAIGN_SPEC_CONTRACT_C25P75_300K60,
         CAMPAIGN_SPEC_CONTRACT_C10P90_300K60,
         CAMPAIGN_SPEC_CONTRACT_DENSE_ANCHOR50_300K60,
+        CAMPAIGN_SPEC_CONTRACT_DENSE_C25P75_300K60,
     }:
         spec = subject; validate_campaign(spec, verify_source_tree=False)
         profile = campaign_profile(spec)
@@ -169,6 +172,7 @@ def create_recovery(
         PROFILE_C25P75_300K60: "hcwmhpe25p_r",
         PROFILE_C10P90_300K60: "hcwmhpe90p_r",
         PROFILE_DENSE_ANCHOR50_300K60: "hcwmhped_r",
+        PROFILE_DENSE_C25P75_300K60: "hcwmhpe25d_r",
     }[profile]
     for task in campaign_tasks(profile):
         if task["task_id"] not in closure_set:

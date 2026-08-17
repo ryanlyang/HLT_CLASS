@@ -14,10 +14,12 @@ from hlt_classification.data.cache_contracts import (
 )
 
 from .hcwdl_mhpe_contracts import (
-    PROFILE_DENSE_ANCHOR50_300K60, target_lock_contract,
+    target_lock_contract,
     target_manifest_contract, target_shard_contract,
 )
-from .hcwdl_mhpe_graph import COORDINATES, ensemble_components, ensemble_weight_rationals
+from .hcwdl_mhpe_graph import (
+    COORDINATES, DENSE_PROFILES, ensemble_components, ensemble_weight_rationals,
+)
 from .targets import EphemeralProbabilityTargets
 
 
@@ -116,7 +118,7 @@ def publish_probability_shard(
         raise ValueError("HCWDL-MHPE ensemble weights differ")
     probabilities = (
         weighted_probability_ensemble(component_logits, temperature=temperature, weights=weights)
-        if profile == PROFILE_DENSE_ANCHOR50_300K60
+        if profile in DENSE_PROFILES
         else uniform_probability_ensemble(component_logits, temperature=temperature)
     )
     if probabilities.shape[0] != len(keys) or len(set(map(str, keys))) != len(keys):
@@ -143,7 +145,7 @@ def publish_probability_shard(
         }),
         "temperature": float(temperature),
         "numerical_policy": ("lexical_fp32_softmax_exact_rational_fp64_weighted_sum_le_f32_v2"
-                             if profile == PROFILE_DENSE_ANCHOR50_300K60
+                             if profile in DENSE_PROFILES
                              else "lexical_fp32_softmax_fp64_sum_divide_le_f32_v1"),
         "class_order": list(range(15)), "dtype": "<f4",
         "parents": {name: require_sha256(value, name=name) for name, value in sorted(parents.items())},
@@ -151,7 +153,7 @@ def publish_probability_shard(
         **({
             "recipe_profile": profile,
             "ensemble_weights": expected_weights,
-        } if profile == PROFILE_DENSE_ANCHOR50_300K60 else {
+        } if profile in DENSE_PROFILES else {
             "uniform_weight": [1, len(expected)],
         }),
     })
@@ -176,7 +178,7 @@ def load_probability_shard(path: str | Path) -> tuple[dict[str, Any], dict[str, 
         raise ValueError("HCWDL-MHPE target view semantics differ")
     if set(metadata.get("component_lineage", {})) != set(expected):
         raise ValueError("HCWDL-MHPE component lineage set differs")
-    if profile == PROFILE_DENSE_ANCHOR50_300K60 and (
+    if profile in DENSE_PROFILES and (
         metadata.get("ensemble_weights")
         != ensemble_weight_rationals(profile, metadata["ensemble_id"])
     ):
@@ -240,7 +242,7 @@ def publish_probability_manifest(
         "component_lineage": component_lineage,
         "parents": {name: require_sha256(value, name=name) for name, value in sorted(parents.items())},
         "final_test_accessed": False,
-        **({"recipe_profile": profile} if profile == PROFILE_DENSE_ANCHOR50_300K60 else {}),
+        **({"recipe_profile": profile} if profile in DENSE_PROFILES else {}),
     })
     write_immutable_json(output, payload); return payload
 
@@ -288,7 +290,7 @@ def target_lock_payload(*, manifests: Mapping[str, str], ensemble_id: str, consu
         "consumers": sorted(map(str, consumers)),
         "parents": {name: require_sha256(value, name=name) for name, value in sorted(parents.items())},
         "authorized": True, "final_test_accessed": False,
-        **({"recipe_profile": profile} if profile == PROFILE_DENSE_ANCHOR50_300K60 else {}),
+        **({"recipe_profile": profile} if profile in DENSE_PROFILES else {}),
     })
 
 

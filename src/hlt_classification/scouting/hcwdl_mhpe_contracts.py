@@ -12,7 +12,8 @@ from hlt_classification.data.cache_contracts import (
 from .hcwdl_mhpe_graph import (
     ENSEMBLE_COMPONENTS, FINALISTS, PROFILE_C10P90, PROFILE_C25P75,
     PROFILE_C10P90_300K60, PROFILE_C25P75_300K60,
-    PROFILE_DENSE_ANCHOR50_300K60, SUPPORTED_PROFILES, ensemble_components,
+    DENSE_PROFILES, PROFILE_DENSE_ANCHOR50_300K60,
+    PROFILE_DENSE_C25P75_300K60, SUPPORTED_PROFILES, ensemble_components,
     ensemble_weight_rationals, finalists, graph_contract, graph_sha256,
     node_registry,
 )
@@ -62,6 +63,11 @@ AGGREGATE_CONTRACT_ANCHOR50: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_AG
 FINALIST_LOCK_CONTRACT_ANCHOR50: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_FINALIST_LOCK/v2"
 COMPLETION_CONTRACT_ANCHOR50: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_CAMPAIGN_COMPLETE/v2"
 FINAL_EVALUATION_CONTRACT_ANCHOR50: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_FINAL_EVALUATION/v2"
+RECIPE_CONTRACT_DENSE_C25P75_300K60: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_RECIPE/v6"
+FOUNDATION_REUSE_LOCK_CONTRACT_DENSE_C25P75_300K60: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_FOUNDATION_REUSE_LOCK/v4"
+CAMPAIGN_SPEC_CONTRACT_DENSE_C25P75_300K60: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_CAMPAIGN_SPEC/v6"
+TRAINING_REPORT_CONTRACT_DENSE_C25P75_300K60: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_TRAINING_REPORT/v6"
+WAIVER_CONTRACT_DENSE_C25P75_300K60: Final = "HCWDL_MULTI_HORIZON_PROJECTION_ENSEMBLE_OPERATIONAL_EVIDENCE_WAIVER/v6"
 
 
 def _profile_contract(profile: str, contracts: Mapping[str, str]) -> str:
@@ -78,6 +84,7 @@ def campaign_spec_contract(profile: str = PROFILE_C25P75) -> str:
         PROFILE_C25P75_300K60: CAMPAIGN_SPEC_CONTRACT_C25P75_300K60,
         PROFILE_C10P90_300K60: CAMPAIGN_SPEC_CONTRACT_C10P90_300K60,
         PROFILE_DENSE_ANCHOR50_300K60: CAMPAIGN_SPEC_CONTRACT_DENSE_ANCHOR50_300K60,
+        PROFILE_DENSE_C25P75_300K60: CAMPAIGN_SPEC_CONTRACT_DENSE_C25P75_300K60,
     })
 
 
@@ -88,6 +95,7 @@ def recipe_contract(profile: str = PROFILE_C25P75) -> str:
         PROFILE_C25P75_300K60: RECIPE_CONTRACT_C25P75_300K60,
         PROFILE_C10P90_300K60: RECIPE_CONTRACT_C10P90_300K60,
         PROFILE_DENSE_ANCHOR50_300K60: RECIPE_CONTRACT_DENSE_ANCHOR50_300K60,
+        PROFILE_DENSE_C25P75_300K60: RECIPE_CONTRACT_DENSE_C25P75_300K60,
     })
 
 
@@ -98,6 +106,7 @@ def training_report_contract(profile: str = PROFILE_C25P75) -> str:
         PROFILE_C25P75_300K60: TRAINING_REPORT_CONTRACT_C25P75_300K60,
         PROFILE_C10P90_300K60: TRAINING_REPORT_CONTRACT_C10P90_300K60,
         PROFILE_DENSE_ANCHOR50_300K60: TRAINING_REPORT_CONTRACT_DENSE_ANCHOR50_300K60,
+        PROFILE_DENSE_C25P75_300K60: TRAINING_REPORT_CONTRACT_DENSE_C25P75_300K60,
     })
 
 
@@ -108,6 +117,7 @@ def waiver_contract(profile: str = PROFILE_C25P75) -> str:
         PROFILE_C25P75_300K60: WAIVER_CONTRACT_C25P75_300K60,
         PROFILE_C10P90_300K60: WAIVER_CONTRACT_C10P90_300K60,
         PROFILE_DENSE_ANCHOR50_300K60: WAIVER_CONTRACT_DENSE_ANCHOR50_300K60,
+        PROFILE_DENSE_C25P75_300K60: WAIVER_CONTRACT_DENSE_C25P75_300K60,
     })
 
 
@@ -123,6 +133,7 @@ def campaign_profile(value: Mapping[str, Any]) -> str:
         (PROFILE_C25P75_300K60, CAMPAIGN_SPEC_CONTRACT_C25P75_300K60),
         (PROFILE_C10P90_300K60, CAMPAIGN_SPEC_CONTRACT_C10P90_300K60),
         (PROFILE_DENSE_ANCHOR50_300K60, CAMPAIGN_SPEC_CONTRACT_DENSE_ANCHOR50_300K60),
+        (PROFILE_DENSE_C25P75_300K60, CAMPAIGN_SPEC_CONTRACT_DENSE_C25P75_300K60),
     ):
         if contract == expected_contract:
             if (value.get("recipe_profile") != candidate
@@ -138,42 +149,42 @@ def _validate(value: Mapping[str, Any], contract: str) -> str:
 
 def target_shard_contract(profile: str = PROFILE_C25P75) -> str:
     return (TARGET_SHARD_CONTRACT_ANCHOR50
-            if profile == PROFILE_DENSE_ANCHOR50_300K60 else TARGET_SHARD_CONTRACT)
+            if profile in DENSE_PROFILES else TARGET_SHARD_CONTRACT)
 
 
 def target_manifest_contract(profile: str = PROFILE_C25P75) -> str:
     return (TARGET_MANIFEST_CONTRACT_ANCHOR50
-            if profile == PROFILE_DENSE_ANCHOR50_300K60 else TARGET_MANIFEST_CONTRACT)
+            if profile in DENSE_PROFILES else TARGET_MANIFEST_CONTRACT)
 
 
 def target_lock_contract(profile: str = PROFILE_C25P75) -> str:
     return (TARGET_LOCK_CONTRACT_ANCHOR50
-            if profile == PROFILE_DENSE_ANCHOR50_300K60 else TARGET_LOCK_CONTRACT)
+            if profile in DENSE_PROFILES else TARGET_LOCK_CONTRACT)
 
 
 def stage_report_contract(profile: str = PROFILE_C25P75) -> str:
     return (STAGE_REPORT_CONTRACT_ANCHOR50
-            if profile == PROFILE_DENSE_ANCHOR50_300K60 else STAGE_REPORT_CONTRACT)
+            if profile in DENSE_PROFILES else STAGE_REPORT_CONTRACT)
 
 
 def aggregate_contract(profile: str = PROFILE_C25P75) -> str:
     return (AGGREGATE_CONTRACT_ANCHOR50
-            if profile == PROFILE_DENSE_ANCHOR50_300K60 else AGGREGATE_CONTRACT)
+            if profile in DENSE_PROFILES else AGGREGATE_CONTRACT)
 
 
 def finalist_lock_contract(profile: str = PROFILE_C25P75) -> str:
     return (FINALIST_LOCK_CONTRACT_ANCHOR50
-            if profile == PROFILE_DENSE_ANCHOR50_300K60 else FINALIST_LOCK_CONTRACT)
+            if profile in DENSE_PROFILES else FINALIST_LOCK_CONTRACT)
 
 
 def completion_contract(profile: str = PROFILE_C25P75) -> str:
     return (COMPLETION_CONTRACT_ANCHOR50
-            if profile == PROFILE_DENSE_ANCHOR50_300K60 else COMPLETION_CONTRACT)
+            if profile in DENSE_PROFILES else COMPLETION_CONTRACT)
 
 
 def final_evaluation_contract(profile: str = PROFILE_C25P75) -> str:
     return (FINAL_EVALUATION_CONTRACT_ANCHOR50
-            if profile == PROFILE_DENSE_ANCHOR50_300K60 else FINAL_EVALUATION_CONTRACT)
+            if profile in DENSE_PROFILES else FINAL_EVALUATION_CONTRACT)
 
 
 def graph_payload(profile: str = PROFILE_C25P75) -> dict[str, Any]:
@@ -192,7 +203,7 @@ def graph_payload(profile: str = PROFILE_C25P75) -> dict[str, Any]:
         payload["recipe_profile"] = profile
     if profile in {PROFILE_C25P75_300K60, PROFILE_C10P90_300K60}:
         payload["population_profile"] = "pilot_300k_60pass"
-    elif profile == PROFILE_DENSE_ANCHOR50_300K60:
+    elif profile in DENSE_PROFILES:
         payload["population_profile"] = "pilot_300k_60pass"
         payload["ensemble_policy"] = "local_predecessor_half_skip_half_exact_rational_v1"
         payload["ensemble_weights"] = {
@@ -222,6 +233,7 @@ def recipe_payload(
         PROFILE_C25P75_300K60: {"ce": .25, "kd": .75, "temperature": 2.0},
         PROFILE_C10P90_300K60: {"ce": .10, "kd": .90, "temperature": 2.0},
         PROFILE_DENSE_ANCHOR50_300K60: {"ce": .10, "kd": .90, "temperature": 2.0},
+        PROFILE_DENSE_C25P75_300K60: {"ce": .25, "kd": .75, "temperature": 2.0},
     }[profile]
     payload = {
         "contract": recipe_contract(profile), "schema_version": 1,
@@ -230,6 +242,7 @@ def recipe_payload(
             60 if profile in {
                 PROFILE_C25P75_300K60, PROFILE_C10P90_300K60,
                 PROFILE_DENSE_ANCHOR50_300K60,
+                PROFILE_DENSE_C25P75_300K60,
             }
             else 20
         ), "validation_every_passes": 1,
@@ -240,7 +253,7 @@ def recipe_payload(
         "ensemble": {
             "weights": (
                 "local_predecessor_half_skip_half_exact_rational"
-                if profile == PROFILE_DENSE_ANCHOR50_300K60
+                if profile in DENSE_PROFILES
                 else "uniform_exact_rational"
             ), "reduction_order": "lexical_node_id",
             "softmax_input": "max_subtracted_fp32", "accumulator": "float64",
@@ -255,10 +268,12 @@ def recipe_payload(
         payload["paired_study"] = "specialist_ce_kd_weights_only"
     elif profile == PROFILE_C10P90:
         payload["single_changed_variable"] = "specialist_ce_kd_weights_only"
-    elif profile == PROFILE_DENSE_ANCHOR50_300K60:
+    elif profile in DENSE_PROFILES:
         payload["population_profile"] = "pilot_300k_60pass"
         payload["study"] = "dense_factorized_anchor50_multi_horizon"
         payload["uniform_validation_diagnostic"] = True
+        if profile == PROFILE_DENSE_C25P75_300K60:
+            payload["paired_study"] = "dense_specialist_ce_kd_weights_only"
     return with_content_hash(payload)
 
 
@@ -289,6 +304,8 @@ def reuse_lock_payload(
         raise ValueError("HCWDL-MHPE role counts must be positive")
     payload = {
         "contract": (
+            FOUNDATION_REUSE_LOCK_CONTRACT_DENSE_C25P75_300K60
+            if profile == PROFILE_DENSE_C25P75_300K60 else
             FOUNDATION_REUSE_LOCK_CONTRACT_DENSE_ANCHOR50_300K60
             if profile == PROFILE_DENSE_ANCHOR50_300K60 else
             FOUNDATION_REUSE_LOCK_CONTRACT_300K60
@@ -316,6 +333,7 @@ def reuse_lock_payload(
     if profile in {
         PROFILE_C25P75_300K60, PROFILE_C10P90_300K60,
         PROFILE_DENSE_ANCHOR50_300K60,
+        PROFILE_DENSE_C25P75_300K60,
     }:
         payload["population_profile"] = "pilot_300k_60pass"
         payload["recipe_profile"] = profile
@@ -327,23 +345,34 @@ def validate_reuse_lock(value: Mapping[str, Any]) -> str:
     if contract not in {
         FOUNDATION_REUSE_LOCK_CONTRACT, FOUNDATION_REUSE_LOCK_CONTRACT_300K60,
         FOUNDATION_REUSE_LOCK_CONTRACT_DENSE_ANCHOR50_300K60,
+        FOUNDATION_REUSE_LOCK_CONTRACT_DENSE_C25P75_300K60,
     }:
         raise ValueError("HCWDL-MHPE reuse lock contract differs")
     digest = _validate(value, contract)
     if contract in {
         FOUNDATION_REUSE_LOCK_CONTRACT_300K60,
         FOUNDATION_REUSE_LOCK_CONTRACT_DENSE_ANCHOR50_300K60,
+        FOUNDATION_REUSE_LOCK_CONTRACT_DENSE_C25P75_300K60,
     }:
         if (value.get("population_profile") != "pilot_300k_60pass"
                 or value.get("recipe_profile") not in {
                     PROFILE_C25P75_300K60, PROFILE_C10P90_300K60,
                     PROFILE_DENSE_ANCHOR50_300K60,
+                    PROFILE_DENSE_C25P75_300K60,
                 }
                 or value.get("role_counts") != {
                     "train": 300_000, "validation": 100_000,
                     "final_test": 100_000,
                 }):
             raise ValueError("HCWDL-MHPE 300k60 reuse population differs")
+        expected_dense_contract = {
+            PROFILE_DENSE_ANCHOR50_300K60:
+                FOUNDATION_REUSE_LOCK_CONTRACT_DENSE_ANCHOR50_300K60,
+            PROFILE_DENSE_C25P75_300K60:
+                FOUNDATION_REUSE_LOCK_CONTRACT_DENSE_C25P75_300K60,
+        }.get(value.get("recipe_profile"))
+        if expected_dense_contract is not None and contract != expected_dense_contract:
+            raise ValueError("HCWDL-MHPE dense reuse contract/profile differs")
     elif "population_profile" in value or "recipe_profile" in value:
         raise ValueError("HCWDL-MHPE full-data reuse identity differs")
     if value.get("final_test_accessed") is not False or value.get("ordinary_access_role_counts", {}).get("final_test") != 0:
@@ -363,6 +392,7 @@ def validate_reuse_lock(value: Mapping[str, Any]) -> str:
         if contract in {
             FOUNDATION_REUSE_LOCK_CONTRACT_300K60,
             FOUNDATION_REUSE_LOCK_CONTRACT_DENSE_ANCHOR50_300K60,
+            FOUNDATION_REUSE_LOCK_CONTRACT_DENSE_C25P75_300K60,
         }
         else "byte_exact_except_probability_target_adapter_v1"
     )
@@ -380,6 +410,7 @@ def validate_reuse_lock(value: Mapping[str, Any]) -> str:
     if contract in {
         FOUNDATION_REUSE_LOCK_CONTRACT_300K60,
         FOUNDATION_REUSE_LOCK_CONTRACT_DENSE_ANCHOR50_300K60,
+        FOUNDATION_REUSE_LOCK_CONTRACT_DENSE_C25P75_300K60,
     } and (
         compatibility.get("foundation_products_immutable") is not True
         or not compatibility.get("authenticated_foundation_source_sha256")
@@ -388,6 +419,7 @@ def validate_reuse_lock(value: Mapping[str, Any]) -> str:
     if contract in {
         FOUNDATION_REUSE_LOCK_CONTRACT_300K60,
         FOUNDATION_REUSE_LOCK_CONTRACT_DENSE_ANCHOR50_300K60,
+        FOUNDATION_REUSE_LOCK_CONTRACT_DENSE_C25P75_300K60,
     }:
         for name, digest_value in compatibility[
             "authenticated_foundation_source_sha256"
@@ -435,6 +467,7 @@ def waiver_payload(
         PROFILE_C25P75_300K60: "AUTHORIZE HCWDL MHPE C25P75 300K60 DIRECT EXECUTION",
         PROFILE_C10P90_300K60: "AUTHORIZE HCWDL MHPE C10P90 300K60 DIRECT EXECUTION",
         PROFILE_DENSE_ANCHOR50_300K60: "AUTHORIZE HCWDL MHPE DENSE ANCHOR50 300K60 DIRECT EXECUTION",
+        PROFILE_DENSE_C25P75_300K60: "AUTHORIZE HCWDL MHPE DENSE C25P75 ANCHOR50 300K60 DIRECT EXECUTION",
     }.get(profile)
     if expected is None:
         raise ValueError("unknown HCWDL-MHPE recipe profile")
@@ -462,6 +495,7 @@ def waiver_payload(
             if profile in {
                 PROFILE_C25P75_300K60, PROFILE_C10P90_300K60,
                 PROFILE_DENSE_ANCHOR50_300K60,
+                PROFILE_DENSE_C25P75_300K60,
             }
             else "new graph composes authenticated full-data workers; no new smoke by explicit plan authority"
         ),
@@ -469,6 +503,7 @@ def waiver_payload(
         "new_300k_pilot_run": profile in {
             PROFILE_C25P75_300K60, PROFILE_C10P90_300K60,
             PROFILE_DENSE_ANCHOR50_300K60,
+            PROFILE_DENSE_C25P75_300K60,
         },
         "does_not_claim_new_smoke_evidence": True,
         "required_carried_evidence": [
@@ -476,12 +511,14 @@ def waiver_payload(
              if profile in {
                  PROFILE_C25P75_300K60, PROFILE_C10P90_300K60,
                  PROFILE_DENSE_ANCHOR50_300K60,
+                 PROFILE_DENSE_C25P75_300K60,
              }
              else "authenticated_completed_full3_foundation"),
             ("authenticated_selected_300k_lineage"
              if profile in {
                  PROFILE_C25P75_300K60, PROFILE_C10P90_300K60,
                  PROFILE_DENSE_ANCHOR50_300K60,
+                 PROFILE_DENSE_C25P75_300K60,
              }
              else "corrected_prepared_endpoint_and_all_mapped_lineage"),
             "prior_installed_weaver_and_production_worker_evidence",
@@ -491,7 +528,7 @@ def waiver_payload(
         ],
         "residual_risk": (
             ["new_anchor50_probability_ensemble_reducer", "new_38_task_dependency_dag"]
-            if profile == PROFILE_DENSE_ANCHOR50_300K60
+            if profile in DENSE_PROFILES
             else ["new_probability_ensemble_reducer", "new_23_task_dependency_dag"]
         ),
         "dry_run_binding": "live submit requires a canonical dry-run ledger whose campaign hash transitively binds this waiver",
@@ -504,9 +541,11 @@ def waiver_payload(
         payload["paired_study"] = "specialist_ce_kd_weights_only"
     elif profile == PROFILE_C10P90:
         payload["single_changed_variable"] = "specialist_ce_kd_weights_only"
-    elif profile == PROFILE_DENSE_ANCHOR50_300K60:
+    elif profile in DENSE_PROFILES:
         payload["population_profile"] = "pilot_300k_60pass"
         payload["study"] = "dense_factorized_anchor50_multi_horizon"
+        if profile == PROFILE_DENSE_C25P75_300K60:
+            payload["paired_study"] = "dense_specialist_ce_kd_weights_only"
     return with_content_hash(payload)
 
 
@@ -530,6 +569,7 @@ def validate_waiver(value: Mapping[str, Any]) -> str:
         PROFILE_C25P75_300K60: "AUTHORIZE HCWDL MHPE C25P75 300K60 DIRECT EXECUTION",
         PROFILE_C10P90_300K60: "AUTHORIZE HCWDL MHPE C10P90 300K60 DIRECT EXECUTION",
         PROFILE_DENSE_ANCHOR50_300K60: "AUTHORIZE HCWDL MHPE DENSE ANCHOR50 300K60 DIRECT EXECUTION",
+        PROFILE_DENSE_C25P75_300K60: "AUTHORIZE HCWDL MHPE DENSE C25P75 ANCHOR50 300K60 DIRECT EXECUTION",
     }[profile]
     if profile in {PROFILE_C25P75_300K60, PROFILE_C10P90_300K60}:
         if (value.get("recipe_profile") != profile
@@ -542,10 +582,13 @@ def validate_waiver(value: Mapping[str, Any]) -> str:
                 or value.get("single_changed_variable")
                 != "specialist_ce_kd_weights_only"):
             raise ValueError("HCWDL-MHPE C10P90 waiver identity differs")
-    elif profile == PROFILE_DENSE_ANCHOR50_300K60:
+    elif profile in DENSE_PROFILES:
         if (value.get("recipe_profile") != profile
                 or value.get("population_profile") != "pilot_300k_60pass"
                 or value.get("study") != "dense_factorized_anchor50_multi_horizon"
+                or (profile == PROFILE_DENSE_C25P75_300K60
+                    and value.get("paired_study")
+                    != "dense_specialist_ce_kd_weights_only")
                 or value.get("new_300k_pilot_run") is not True):
             raise ValueError("HCWDL-MHPE dense anchor50 waiver identity differs")
     elif "recipe_profile" in value or "single_changed_variable" in value:
@@ -556,6 +599,7 @@ def validate_waiver(value: Mapping[str, Any]) -> str:
                 profile in {
                     PROFILE_C25P75_300K60, PROFILE_C10P90_300K60,
                     PROFILE_DENSE_ANCHOR50_300K60,
+                    PROFILE_DENSE_C25P75_300K60,
                 }
             )
             or value.get("does_not_claim_new_smoke_evidence") is not True
@@ -575,7 +619,7 @@ def finalist_lock_payload(
         "aggregate_sha256": require_sha256(aggregate_sha256, name="aggregate"),
         "entries": [dict(row) for row in entries], "final_test_accessed": False,
     }
-    if profile == PROFILE_DENSE_ANCHOR50_300K60:
+    if profile in DENSE_PROFILES:
         payload["recipe_profile"] = profile
     return with_content_hash(payload)
 

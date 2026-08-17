@@ -23,7 +23,8 @@ from .hcwdl_mhpe_contracts import (
 from .hcwdl_mhpe_graph import (
     COORDINATES, PROFILE_C10P90,
     PROFILE_C10P90_300K60, PROFILE_C25P75_300K60, campaign_label,
-    PROFILE_DENSE_ANCHOR50_300K60, direct_model_teacher,
+    DENSE_PROFILES, PROFILE_DENSE_ANCHOR50_300K60,
+    PROFILE_DENSE_C25P75_300K60, direct_model_teacher,
     endpoint_ensemble, ensemble_components, ensemble_weight_rationals,
     graph_sha256, local_teacher, node_registry, training_registry,
 )
@@ -47,6 +48,7 @@ def _is_300k60(profile: str) -> bool:
     return profile in {
         PROFILE_C25P75_300K60, PROFILE_C10P90_300K60,
         PROFILE_DENSE_ANCHOR50_300K60,
+        PROFILE_DENSE_C25P75_300K60,
     }
 
 
@@ -484,7 +486,7 @@ def run_ensemble(*, spec: Mapping[str, Any], ensemble_id: str, device: str = "cu
     _, validation_logits, validation_lineage, labels, _, _ = role_data["validation"]
     ensemble_probability = (
         weighted_probability_ensemble(validation_logits, temperature=1, weights=weights)
-        if profile == PROFILE_DENSE_ANCHOR50_300K60
+        if profile in DENSE_PROFILES
         else uniform_probability_ensemble(validation_logits, temperature=1)
     )
     uniform_probability = uniform_probability_ensemble(validation_logits, temperature=1)
@@ -496,7 +498,7 @@ def run_ensemble(*, spec: Mapping[str, Any], ensemble_id: str, device: str = "cu
     for omitted in sorted(validation_logits):
         reduced = {name: value for name, value in validation_logits.items() if name != omitted}
         if reduced:
-            if profile == PROFILE_DENSE_ANCHOR50_300K60:
+            if profile in DENSE_PROFILES:
                 fractions = {
                     name: Fraction(*weights[name]) for name in reduced
                 }
@@ -569,7 +571,7 @@ def run_ensemble(*, spec: Mapping[str, Any], ensemble_id: str, device: str = "cu
                 np.log(np.maximum(uniform_probability, 1e-30)), labels,
             ),
             "uniform_validation_diagnostic_is_not_a_teacher": True,
-        } if profile == PROFILE_DENSE_ANCHOR50_300K60 else {}),
+        } if profile in DENSE_PROFILES else {}),
     }
     report = with_content_hash(stage_payload)
     write_immutable_json(root / "reports" / f"{ensemble_id}_stage.json", report)

@@ -17,7 +17,7 @@ from .hcwdl_mhpe_contracts import (
     finalist_lock_contract, validate_execution_lock,
 )
 from .hcwdl_mhpe_graph import (
-    PROFILE_DENSE_ANCHOR50_300K60, endpoint_ensemble,
+    DENSE_PROFILES, endpoint_ensemble,
     ensemble_components, ensemble_weight_rationals, finalists,
 )
 from .hcwdl_mhpe_targets import uniform_probability_ensemble, weighted_probability_ensemble
@@ -96,7 +96,7 @@ def run_sealed_final_evaluation(
             component_logits, temperature=1,
             weights=ensemble_weight_rationals(profile, endpoint),
         )
-        if profile == PROFILE_DENSE_ANCHOR50_300K60
+        if profile in DENSE_PROFILES
         else uniform_probability_ensemble(component_logits, temperature=1)
     )
     ensemble_metrics = classification_metrics(np.log(np.maximum(probability, 1e-30)), labels)

@@ -198,6 +198,9 @@ source contract rejects dirty or nonidentical worktrees.
 The additive [dense anchor-50 MHPE plan](docs/plans/HCWDL_MHPE_DENSE_ANCHOR50_300K60_PLAN.md)
 and [runbook](docs/HCWDL_MHPE_DENSE_ANCHOR50_300K60_RUNBOOK.md) define the
 queue-ready 300k/60-pass, 29-fit predecessor-anchored ensemble campaign.
+The paired [dense C25P75 plan](docs/plans/HCWDL_MHPE_DENSE_C25P75_300K60_PLAN.md)
+and [runbook](docs/HCWDL_MHPE_DENSE_C25P75_300K60_RUNBOOK.md) hold that graph
+fixed while changing specialist supervision from 10/90 to 25/75 CE/KD.
 
 The available data commands include:
 

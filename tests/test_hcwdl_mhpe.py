@@ -11,6 +11,7 @@ from hlt_classification.scouting.hcwdl_mhpe_contracts import (
     CAMPAIGN_SPEC_CONTRACT_C10P90_300K60,
     CAMPAIGN_SPEC_CONTRACT_C25P75_300K60, RECIPE_CONTRACT_C10P90,
     CAMPAIGN_SPEC_CONTRACT_DENSE_ANCHOR50_300K60,
+    CAMPAIGN_SPEC_CONTRACT_DENSE_C25P75_300K60,
     campaign_profile, execution_lock_payload, graph_payload, recipe_payload,
     validate_execution_lock, validate_graph, validate_recipe, validate_waiver,
     waiver_payload,
@@ -25,6 +26,7 @@ from hlt_classification.scouting.hcwdl_mhpe_graph import (
     ENSEMBLE_COMPONENTS, GRAPH_SHA256, NODE_REGISTRY, PROFILE_C10P90,
     PROFILE_C10P90_300K60, PROFILE_C25P75_300K60,
     PROFILE_DENSE_ANCHOR50_300K60, DENSE_FINALISTS,
+    PROFILE_DENSE_C25P75_300K60,
     ensemble_components, ensemble_weight_rationals, node_registry,
     stage_teachers,
     validate_graph as validate_registry,
@@ -153,6 +155,46 @@ def test_dense_anchor50_graph_exact_shape_routes_and_weights():
     )
 
 
+def test_dense_c25p75_is_a_loss_only_pair_of_dense_c10p90():
+    primary = PROFILE_DENSE_ANCHOR50_300K60
+    parallel = PROFILE_DENSE_C25P75_300K60
+    left = node_registry(primary)
+    right = node_registry(parallel)
+    assert set(left) == set(right)
+    assert ensemble_components(primary) == ensemble_components(parallel)
+    for ensemble_id in ensemble_components(primary):
+        assert ensemble_weight_rationals(primary, ensemble_id) == (
+            ensemble_weight_rationals(parallel, ensemble_id)
+        )
+    for node_id in left:
+        old, new = left[node_id], right[node_id]
+        assert (
+            old.coordinate_name, old.teacher_id, old.teacher_kind,
+            old.seed_alias, old.temperature, old.training_passes,
+        ) == (
+            new.coordinate_name, new.teacher_id, new.teacher_kind,
+            new.seed_alias, new.temperature, new.training_passes,
+        )
+        if node_id == "M1":
+            assert (old.ce_weight, old.kd_weight) == (.10, .90)
+            assert (new.ce_weight, new.kd_weight) == (.10, .90)
+        else:
+            assert (old.ce_weight, old.kd_weight) == (.10, .90)
+            assert (new.ce_weight, new.kd_weight) == (.25, .75)
+        assert old.contract.endswith("/v5")
+        assert new.contract.endswith("/v6")
+    graph = graph_payload(parallel)
+    recipe = recipe_payload(foundation_recipe_sha256="a" * 64, profile=parallel)
+    assert validate_graph(graph) == graph["content_hash"]
+    assert validate_recipe(recipe) == recipe["content_hash"]
+    assert graph["fresh_fit_count"] == 29
+    assert recipe["specialist_loss"] == {
+        "ce": .25, "kd": .75, "temperature": 2.0,
+    }
+    assert recipe["m1_loss"] == {"ce": .10, "kd": .90, "temperature": 1.0}
+    assert recipe["paired_study"] == "dense_specialist_ce_kd_weights_only"
+
+
 def test_foundation_reuse_dispatch_keeps_legacy_and_300k_paths_separate(
     monkeypatch, tmp_path,
 ):
@@ -182,7 +224,12 @@ def test_foundation_reuse_dispatch_keeps_legacy_and_300k_paths_separate(
     assert campaign._reuse(
         **common, profile=PROFILE_DENSE_ANCHOR50_300K60,
     ) == {"path": "300k"}
-    assert [row[0] for row in calls] == ["full", "300k", "300k", "300k"]
+    assert campaign._reuse(
+        **common, profile=PROFILE_DENSE_C25P75_300K60,
+    ) == {"path": "300k"}
+    assert [row[0] for row in calls] == [
+        "full", "300k", "300k", "300k", "300k",
+    ]
 
 
 def test_population_specific_runtime_seed_and_cache_limits(tmp_path):
@@ -199,6 +246,9 @@ def test_population_specific_runtime_seed_and_cache_limits(tmp_path):
         "ub/repair/v1", 72.0,
     )
     assert _runtime_parameters(PROFILE_DENSE_ANCHOR50_300K60) == (
+        "ub/repair/v1", 72.0,
+    )
+    assert _runtime_parameters(PROFILE_DENSE_C25P75_300K60) == (
         "ub/repair/v1", 72.0,
     )
 
@@ -230,6 +280,11 @@ def test_population_specific_runtime_seed_and_cache_limits(tmp_path):
     ) == executable
     assert _training_recipe(
         profile=PROFILE_DENSE_ANCHOR50_300K60,
+        foundation_root=tmp_path,
+        foundation=foundation,
+    ) == executable
+    assert _training_recipe(
+        profile=PROFILE_DENSE_C25P75_300K60,
         foundation_root=tmp_path,
         foundation=foundation,
     ) == executable
@@ -295,6 +350,48 @@ def test_dense_anchor50_task_graph_is_38_jobs_and_exactly_sequential_by_stage():
         any(item.startswith("--job-name=hcwmhped_") for item in row["command"])
         for row in plan["commands"]
     )
+
+
+def test_dense_c25p75_task_graph_and_namespace_are_independent():
+    profile = PROFILE_DENSE_C25P75_300K60
+    tasks = campaign_tasks(profile)
+    assert len(tasks) == 38
+    assert sum(row["kind"] == "train" for row in tasks) == 29
+    assert sum(row["kind"] == "ensemble" for row in tasks) == 6
+    assert tasks == campaign_tasks(PROFILE_DENSE_ANCHOR50_300K60)
+    spec = {
+        "contract": CAMPAIGN_SPEC_CONTRACT_DENSE_C25P75_300K60,
+        "recipe_profile": profile,
+        "population_profile": "pilot_300k_60pass",
+        "project_dir": "/project", "spec_path": "/campaign/spec.json",
+        "content_hash": "a" * 64, "tasks": tasks,
+        "resources": {
+            "gpu_training": {
+                "cpus": 8, "memory": "96G", "walltime": "06:00:00",
+                "gpu": "gpu:gh200:1",
+            },
+            "gpu_targets": {
+                "cpus": 8, "memory": "96G", "walltime": "06:00:00",
+                "gpu": "gpu:gh200:1",
+            },
+            "cpu_report": {
+                "cpus": 4, "memory": "32G", "walltime": "01:00:00",
+                "gpu": None,
+            },
+        },
+    }
+    plan = command_plan(spec)
+    assert len(plan["commands"]) == 38
+    assert all(
+        any(item.startswith("--job-name=hcwmhpe25d_") for item in row["command"])
+        for row in plan["commands"]
+    )
+    closure = failed_downstream_closure(
+        ["train_D50_from_U033"], profile=profile,
+    )
+    assert "ensemble_D50E" in closure
+    assert "train_M1" in closure
+    assert "ensemble_D75E" not in closure
 
 
 def test_recipe_is_exactly_locked():
@@ -435,8 +532,11 @@ def test_ephemeral_probability_identity_and_temperature_contract():
         table.join(["missing"])
 
 
-def test_anchor50_weighted_probability_reduction_is_exact_and_not_uniform():
-    profile = PROFILE_DENSE_ANCHOR50_300K60
+@pytest.mark.parametrize("profile", [
+    PROFILE_DENSE_ANCHOR50_300K60,
+    PROFILE_DENSE_C25P75_300K60,
+])
+def test_anchor50_weighted_probability_reduction_is_exact_and_not_uniform(profile):
     ensemble_id = "D0E"
     names = ensemble_components(profile)[ensemble_id]
     logits = {
@@ -461,8 +561,11 @@ def test_anchor50_weighted_probability_reduction_is_exact_and_not_uniform():
         )
 
 
-def test_dense_anchor50_complete_synthetic_graph_executes_all_routes():
-    profile = PROFILE_DENSE_ANCHOR50_300K60
+@pytest.mark.parametrize("profile", [
+    PROFILE_DENSE_ANCHOR50_300K60,
+    PROFILE_DENSE_C25P75_300K60,
+])
+def test_dense_anchor50_complete_synthetic_graph_executes_all_routes(profile):
     teachers = {"U000": np.linspace(-1, 1, 60, dtype=np.float32).reshape(4, 15)}
     specialists = {}
     ensembles = {}
@@ -513,8 +616,13 @@ def test_probability_artifact_roundtrip_and_lineage(tmp_path):
     assert np.array_equal(ephemeral.join(["b", "a"]), durable.probabilities[[1, 0]])
 
 
-def test_dense_anchor50_probability_artifact_binds_profile_and_weights(tmp_path):
-    profile = PROFILE_DENSE_ANCHOR50_300K60
+@pytest.mark.parametrize("profile", [
+    PROFILE_DENSE_ANCHOR50_300K60,
+    PROFILE_DENSE_C25P75_300K60,
+])
+def test_dense_anchor50_probability_artifact_binds_profile_and_weights(
+    tmp_path, profile,
+):
     ensemble_id = "U066E"
     components = ensemble_components(profile)[ensemble_id]
     logits = {
@@ -768,6 +876,11 @@ def test_paired_300k60_campaigns_publish_independent_queue_plans(
         path.parent.mkdir(parents=True, exist_ok=True)
         if not path.exists():
             path.write_text(f"evidence: {name}\n")
+    for name in campaign.DENSE_C25P75_IMPLEMENTATION_EVIDENCE_FILES:
+        path = worktree / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if not path.exists():
+            path.write_text(f"evidence: {name}\n")
     compatibility = {
         "policy": "authenticated_immutable_300k_products_additive_mhpe_v2",
         "byte_exact_files": {},
@@ -843,6 +956,12 @@ def test_paired_300k60_campaigns_publish_independent_queue_plans(
             "AUTHORIZE HCWDL MHPE DENSE ANCHOR50 300K60 EXACT SPEC",
             "hcwmhped_",
         ),
+        (
+            PROFILE_DENSE_C25P75_300K60,
+            CAMPAIGN_SPEC_CONTRACT_DENSE_C25P75_300K60,
+            "AUTHORIZE HCWDL MHPE DENSE C25P75 ANCHOR50 300K60 EXACT SPEC",
+            "hcwmhpe25d_",
+        ),
     )
     specs = []
     for profile, contract, phrase, prefix in cases:
@@ -866,7 +985,10 @@ def test_paired_300k60_campaigns_publish_independent_queue_plans(
         assert validate_campaign(spec, executable=True) == spec["content_hash"]
         commands = command_plan(spec)["commands"]
         assert len(commands) == (
-            38 if profile == PROFILE_DENSE_ANCHOR50_300K60 else 23
+            38 if profile in {
+                PROFILE_DENSE_ANCHOR50_300K60,
+                PROFILE_DENSE_C25P75_300K60,
+            } else 23
         )
         assert all(
             any(item.startswith(f"--job-name={prefix}") for item in row["command"])
@@ -875,5 +997,5 @@ def test_paired_300k60_campaigns_publish_independent_queue_plans(
         assert all(
             node.training_passes == 60 for node in node_registry(profile).values()
         )
-    assert len({item["content_hash"] for item in specs}) == 3
-    assert len({item["campaign_root"] for item in specs}) == 3
+    assert len({item["content_hash"] for item in specs}) == 4
+    assert len({item["campaign_root"] for item in specs}) == 4
