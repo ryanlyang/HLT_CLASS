@@ -729,6 +729,17 @@ def test_probability_bundle_binds_both_roles_and_exact_consumers(tmp_path):
         tmp_path, ensemble_id="U100E", temperature=2,
         consumers=["D066_from_U100E"],
     )
+    # The 300k profiles intentionally reuse the v1 non-dense probability
+    # artifact family.  Its payload omits recipe_profile, while parent hashes
+    # bind the exact campaign graph and recipe.
+    validate_probability_bundle(
+        tmp_path, ensemble_id="U100E", temperature=2,
+        consumers=["D066_from_U100E"], profile=PROFILE_C25P75_300K60,
+    )
+    validate_probability_bundle(
+        tmp_path, ensemble_id="U100E", temperature=2,
+        consumers=["D066_from_U100E"], profile=PROFILE_C10P90_300K60,
+    )
     with pytest.raises(ValueError, match="consumers"):
         validate_probability_bundle(
             tmp_path, ensemble_id="U100E", temperature=2,

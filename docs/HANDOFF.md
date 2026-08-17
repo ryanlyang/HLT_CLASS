@@ -32,6 +32,19 @@ and then compares node reports to its authenticated inner semantic hash. It
 does not waive, rewrite, or weaken any recovered training lineage. A focused
 regression proves both the distinction and fail-closed artifact mismatch.
 
+The first aggregate recovery then advanced to probability-bundle validation
+and exposed a second compatibility defect.  All non-dense MHPE profiles reuse
+the original v1 target shard/manifest/lock family; those payloads intentionally
+omit `recipe_profile` and decode as `C25P75`, while their parent map binds the
+exact campaign, graph, recipe, split, and selection.  The profile-aware bundle
+validator incorrectly compared that artifact-family identity directly with
+the outer `C25P75_300K60` campaign profile.  It now normalizes every non-dense
+campaign to the shared v1 target identity while retaining exact lock,
+manifest, consumer, parent, role, temperature, shard, and content-hash
+validation.  Dense profiles still require their explicit v2 profile.  This is
+an execution/reporting compatibility repair only; no target, model, metric, or
+scientific contract changed.
+
 The numerical contract is max-subtracted FP32 M0 softmax, exact-rational FP64
 mixture accumulation, and little-endian FP32 publication. The four fresh,
 exact-HLT students share initialization, sampler, dropout, optimizer, schedule,

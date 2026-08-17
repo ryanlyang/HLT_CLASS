@@ -18,7 +18,8 @@ from .hcwdl_mhpe_contracts import (
     target_manifest_contract, target_shard_contract,
 )
 from .hcwdl_mhpe_graph import (
-    COORDINATES, DENSE_PROFILES, ensemble_components, ensemble_weight_rationals,
+    COORDINATES, DENSE_PROFILES, PROFILE_C25P75, ensemble_components,
+    ensemble_weight_rationals,
 )
 from .targets import EphemeralProbabilityTargets
 
@@ -316,8 +317,13 @@ def validate_probability_bundle(
     lock = load_json(root / "lock.json")
     lock_hash = validate_target_lock(lock)
     expected_consumers = sorted(map(str, consumers))
+    # Non-dense profiles deliberately reuse the original v1 target artifact
+    # family.  Those payloads omit ``recipe_profile`` and therefore decode as
+    # C25P75; their campaign/graph/recipe identities remain bound in parents.
+    # Dense profiles use v2 artifacts and carry their exact profile explicitly.
+    artifact_profile = profile if profile in DENSE_PROFILES else PROFILE_C25P75
     if (lock["ensemble_id"] != ensemble_id
-            or lock.get("recipe_profile", "C25P75") != profile
+            or lock.get("recipe_profile", PROFILE_C25P75) != artifact_profile
             or lock["consumers"] != expected_consumers):
         raise ValueError("HCWDL-MHPE target lock identity/consumers differ")
     manifests = {}
@@ -326,7 +332,8 @@ def validate_probability_bundle(
         manifest_hash = validate_probability_manifest(manifest)
         if (manifest_hash != lock["manifests"][role]
                 or manifest["ensemble_id"] != ensemble_id
-                or manifest.get("recipe_profile", "C25P75") != profile
+                or manifest.get("recipe_profile", PROFILE_C25P75)
+                != artifact_profile
                 or manifest["role"] != role
                 or float(manifest["temperature"]) != float(temperature)
                 or manifest["consumers"] != expected_consumers
