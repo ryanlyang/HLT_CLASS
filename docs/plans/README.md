@@ -1,5 +1,9 @@
 # Scientific Implementation Plans
 
+The additive [HCWDL-MHPE refined continuation](HCWDL_MHPE_REFINED_CONTINUATION_300K60_PLAN.md)
+tests an ensemble-refine-project route from the completed uniform 300k MHPE
+campaign using seven new fits and three equal-component reducers.
+
 Campaign-specific scientific plans live here. A plan must freeze scientific
 meaning, controls, access rules, selection, metrics, artifacts, and execution
 stages before implementation.

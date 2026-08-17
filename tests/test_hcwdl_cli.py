@@ -57,6 +57,13 @@ SCRIPTS = (
     "create_hcwdl_architecture_factorial.py",
     "submit_hcwdl_architecture_factorial.py",
     "run_hcwdl_architecture_factorial_task.py",
+    "create_hcwdl_mhpe_refined_campaign.py",
+    "run_hcwdl_mhpe_refined_task.py",
+    "submit_hcwdl_mhpe_refined_campaign.py",
+    "monitor_hcwdl_mhpe_refined.py",
+    "create_hcwdl_mhpe_refined_recovery.py",
+    "run_hcwdl_mhpe_refined_recovery_task.py",
+    "submit_hcwdl_mhpe_refined_recovery.py",
 )
 
 

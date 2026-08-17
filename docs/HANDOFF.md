@@ -1,5 +1,68 @@
 # Current Handoff
 
+## HCWDL-MHPE R-augmented refined continuation (2026-08-17)
+
+The additive 300k/100k validation campaign requested after the completed
+`C25P75_300K60` MHPE result is implemented and queue-ready. Its exact graph is:
+
+```text
+U100E -> U100R -> D066_from_U100R -> D066Eplus -> D066R
+      -> D033_from_D066R -> D033Eplus -> D033R
+      -> D000_from_D033R -> D000Eplus -> M1R
+```
+
+`U100R`, `D066R`, `D033R`, and `M1R` are fresh same-view C10P90/T1
+refiners. The three projection children are fresh C25P75/T2 fits. The new
+`D066Eplus`, `D033Eplus`, and `D000Eplus` reducers preserve exact uniform
+underlying-specialist weights: four times 1/4, five times 1/5, and six times
+1/6. Each reducer reloads every authenticated source component, reproduces the
+durable source ensemble byte-for-byte, then performs one canonical all-component
+FP64 reduction with a single little-endian FP32 publication. No validation
+metric, confidence, class, or label controls an ensemble weight.
+
+The new implementation consists of the plan, reusable contract, and runbook;
+three reusable scouting modules; seven create/run/submit/monitor/recovery CLIs;
+two Tigris workers; and focused contract, graph, numerical, target-corruption,
+recovery-closure, campaign-publication, and CLI tests. The aggregate now
+authenticates each PMARD report, outer HCWDL report, runtime record, E+ target
+bundle, and stage-to-lock relationship before completion. Recovery is limited
+to the exact failed/downstream closure and emits recovery-root attestations.
+
+Scientific and operational identities:
+
+- graph: `HCWDL_MHPE_REFINED_CONTINUATION_GRAPH/v1`;
+- campaign: `HCWDL_MHPE_REFINED_CONTINUATION_CAMPAIGN_SPEC/v1`;
+- target shard/manifest/lock: refined-continuation v1;
+- training/runtime/stage/aggregate/completion: refined-continuation v1;
+- recovery specification/command plan: refined-continuation v1;
+- graph SHA-256:
+  `36f5e6a02cd6a78a031e71c659de7a0f65df368005555a3590f8d68369f1484a`;
+- 7 fresh fits, 3 reducers, and 12 total tasks;
+- GPU request: 8 CPUs, 96G, 06:00:00, one GH200;
+- ordinary access: 300k train, 100k validation, zero final-test rows.
+
+Final local evidence:
+
+- expanded focused MHPE plus CLI suite: 123 passed in 215.40 seconds;
+- complete repository suite: 539 passed in 310.62 seconds, with only the
+  existing 14 Matplotlib/Pyparsing deprecation warnings;
+- all seven new CLI help surfaces passed;
+- scouting and script Python compilation passed;
+- contract probe returned the exact graph hash, 12 tasks, 7 fits, 3 reducers,
+  and the registered node/ensemble lists;
+- repository-relative Markdown links passed in the complete suite;
+- `git diff --check` passed with line-ending notices only.
+
+The campaign reuses the authenticated completed source campaign, its 300k
+foundation, production worker, installed-Weaver, view-cache, and ensemble
+evidence. Per the implementation-authoritative additive plan, it does not
+require another standalone smoke; this is evidence carry-forward, not a claim
+that this exact continuation graph completed a smoke. No donor code was copied,
+so `docs/LEGACY_SOURCE_MAP.md` did not change. No SSH, Slurm, cancellation,
+push, or other Tigris mutation occurred. The next step is an explicit commit
+and push, followed by the clean detached-worktree create/dry-run/live sequence
+in `docs/HCWDL_MHPE_REFINED_CONTINUATION_RUNBOOK.md`.
+
 ## HCWDL-MHPE paired endpoint teacher-mixture add-on (2026-08-17)
 
 A separate validation-only endpoint-refinement diagnostic is implemented for

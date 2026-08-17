@@ -314,3 +314,14 @@ hours based on the first pilot's measured pre-training ROOT/cache cost. Interrup
 training resumes through the generic rolling checkpoint when its exact Slurm
 job is requeued; partial DAG submission is journaled before retry. See
 `docs/plans/HCWDL_ARCHITECTURE_INPUT_FACTORIAL_PLAN.md`.
+
+## HCWDL-MHPE refined continuation
+
+`create_hcwdl_mhpe_refined_campaign.py` authenticates the completed
+`C25P75_300K60` source and publishes the seven-fit, three-reducer additive
+campaign. `submit_hcwdl_mhpe_refined_campaign.py` requires a canonical dry-run
+ledger before live submission; `run_hcwdl_mhpe_refined_task.py` executes one
+source-pinned task; and `monitor_hcwdl_mhpe_refined.py` authenticates task
+attestations. The three matching recovery CLIs submit only the exact failed and
+downstream closure. See
+`docs/HCWDL_MHPE_REFINED_CONTINUATION_RUNBOOK.md`.
