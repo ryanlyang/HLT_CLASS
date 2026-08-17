@@ -53,6 +53,16 @@ KD`, `T=1`, runs 60 complete passes with every-pass validation, and selects by
 macro AUC, CE, logR50, then earliest update. The retrained `M1_D0only` is the
 paired baseline; the source campaign's M1 is contextual only.
 
+After the source campaign completed, the first endpoint-mixture creation
+attempt exposed a redundant lineage expectation in the add-on authenticator.
+The immutable 300k reuse-lock schema binds `m0paired_report_sha256`; that
+validated PMARD report binds `selected_checkpoint_sha256`, and creation hashes
+the checkpoint file directly.  The add-on had additionally required a
+nonexistent top-level `m0paired_checkpoint_sha256` in the reuse lock.  Creation
+now follows the actual authenticated chain—reuse lock to report to checkpoint
+file—without weakening or rewriting any source artifact.  A regression proves
+valid acceptance plus fail-closed report and checkpoint tampering.
+
 The campaign is exactly seven jobs: one target builder; four parallel GH200
 fits; aggregate; completion. GPU jobs request 8 CPUs, 96G, 06:00:00, and one
 GH200; CPU jobs request 4 CPUs, 32G, and one hour. The implementation includes

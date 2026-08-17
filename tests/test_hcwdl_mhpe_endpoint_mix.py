@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 import numpy as np
 import pytest
 
 from hlt_classification.data.cache_contracts import canonical_sha256, load_json
 from hlt_classification.scouting.hcwdl_mhpe_endpoint_mix import (
     CREATION_PHRASE, GRAPH_SHA256, NODES, SOURCE_ENDPOINT, campaign_tasks,
-    command_plan, graph_payload, recipe_payload, validate_recipe,
+    _validate_m0paired_lineage, command_plan, graph_payload, recipe_payload,
+    validate_recipe,
     validate_source_semantics,
 )
 from hlt_classification.scouting.hcwdl_mhpe_graph import (
@@ -73,6 +75,35 @@ def test_endpoint_mix_v2_accepts_only_the_original_c25p75_d000e_source():
         validate_source_semantics(spec, profile=PROFILE_DENSE_C25P75_300K60)
     with pytest.raises(ValueError, match="C25P75 300k/60-pass"):
         validate_source_semantics({**spec, "final_test_accessed": True}, profile=PROFILE_C25P75_300K60)
+
+
+def test_endpoint_mix_m0_lineage_uses_report_bound_checkpoint(tmp_path):
+    checkpoint = tmp_path / "best.pt"
+    checkpoint.write_bytes(b"authenticated checkpoint")
+    checkpoint_hash = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+    report_hash = "a" * 64
+    report = {
+        "selected_checkpoint": checkpoint.name,
+        "selected_checkpoint_sha256": checkpoint_hash,
+    }
+    # The immutable 300k reuse-lock schema binds the report, not a redundant
+    # top-level checkpoint field.  The report and file close that lineage.
+    reuse = {"m0paired_report_sha256": report_hash}
+    _validate_m0paired_lineage(
+        reuse=reuse, report=report, report_hash=report_hash,
+        checkpoint=checkpoint,
+    )
+    with pytest.raises(ValueError, match="M0paired lineage"):
+        _validate_m0paired_lineage(
+            reuse={"m0paired_report_sha256": "b" * 64}, report=report,
+            report_hash=report_hash, checkpoint=checkpoint,
+        )
+    checkpoint.write_bytes(b"tampered")
+    with pytest.raises(ValueError, match="M0paired lineage"):
+        _validate_m0paired_lineage(
+            reuse=reuse, report=report, report_hash=report_hash,
+            checkpoint=checkpoint,
+        )
 
 
 def test_endpoint_mix_numerics_are_fp32_softmax_exact_rational_fp64():

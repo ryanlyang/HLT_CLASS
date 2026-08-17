@@ -116,6 +116,23 @@ def validate_source_semantics(spec: Mapping[str, Any], *, profile: str) -> None:
         raise ValueError("endpoint-mixture source is not the C25P75 300k/60-pass campaign")
 
 
+def _validate_m0paired_lineage(
+    *, reuse: Mapping[str, Any], report: Mapping[str, Any],
+    report_hash: str, checkpoint: Path,
+) -> None:
+    """Authenticate M0paired through its report-bound checkpoint identity.
+
+    The 300k MHPE reuse-lock contract stores the authenticated M0paired report
+    hash.  The PMARD report, in turn, stores the selected checkpoint hash; the
+    checkpoint file is verified directly here.  The reuse lock deliberately
+    has no duplicate top-level M0paired checkpoint field.
+    """
+    if (not checkpoint.is_file()
+            or sha256_file(checkpoint) != report["selected_checkpoint_sha256"]
+            or reuse.get("m0paired_report_sha256") != report_hash):
+        raise ValueError("endpoint-mixture M0paired lineage differs")
+
+
 def authenticate_source(source_spec_path: str | Path) -> dict[str, Any]:
     path = Path(source_spec_path).resolve(); spec = load_json(path)
     spec_hash = validate_source_campaign(spec, executable=False, verify_source_tree=False)
@@ -144,11 +161,10 @@ def authenticate_source(source_spec_path: str | Path) -> dict[str, Any]:
     report_path = foundation_root / "training/M0paired/training_report.json"
     report = load_json(report_path); report_hash = validate_pmard_training_report(report)
     checkpoint = report_path.parent / str(report["selected_checkpoint"])
-    if (not checkpoint.is_file()
-            or sha256_file(checkpoint) != report["selected_checkpoint_sha256"]
-            or reuse.get("m0paired_report_sha256") != report_hash
-            or reuse.get("m0paired_checkpoint_sha256") != report["selected_checkpoint_sha256"]):
-        raise ValueError("endpoint-mixture M0paired lineage differs")
+    _validate_m0paired_lineage(
+        reuse=reuse, report=report, report_hash=report_hash,
+        checkpoint=checkpoint,
+    )
     recipe_path = Path(foundation["artifact_paths"]["recipe"])
     recipe = load_json(recipe_path)
     validate_content_hash(recipe, expected_contract=str(recipe["contract"]), expected_schema_version=int(recipe["schema_version"]))
