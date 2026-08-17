@@ -63,6 +63,16 @@ now follows the actual authenticated chain—reuse lock to report to checkpoint
 file—without weakening or rewriting any source artifact.  A regression proves
 valid acceptance plus fail-closed report and checkpoint tampering.
 
+The first live endpoint-mixture training attempt then exposed an execution-
+only arm-label defect shared by all four paired fits.  All four workers built
+the authenticated 300k/100k exact-HLT RAM views and then failed before the
+optimizer started because the new label `HCWDL_MHPE_ENDPOINT_MIX_*` did not
+satisfy `GenerationalLossConfiguration`'s established `HCWDL_UB_*` namespace
+guard.  The runner now emits `HCWDL_UB_MHPE_ENDPOINT_MIX_*`; CE/KD weights,
+temperature, views, targets, seeds, schedules, and graph semantics are
+unchanged.  A regression instantiates and checks the exact registered loss for
+all four nodes.
+
 The campaign is exactly seven jobs: one target builder; four parallel GH200
 fits; aggregate; completion. GPU jobs request 8 CPUs, 96G, 06:00:00, and one
 GH200; CPU jobs request 4 CPUs, 32G, and one hour. The implementation includes

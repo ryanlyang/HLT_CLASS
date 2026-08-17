@@ -177,10 +177,7 @@ def train_node(*, spec: Mapping[str, Any], node_id: str, device: str = "cuda",
     )
     target_path = target_root / node_id / "train_manifest.json"
     probability = ephemeral_from_manifest(target_path, split_manifest_sha256=split_hash)
-    loss = GenerationalLossConfiguration(
-        arm=f"HCWDL_MHPE_ENDPOINT_MIX_{node_id}", ce=.10, parent_kd=.90,
-        grandparent_kd=0, parent_temperature=1.0, grandparent_temperature=1.0,
-    )
+    loss = endpoint_mix_loss(node_id)
     parents = {
         "campaign_spec_sha256": spec["content_hash"],
         "source_campaign_spec_sha256": spec["source"]["source_spec_sha256"],
@@ -222,4 +219,15 @@ def train_node(*, spec: Mapping[str, Any], node_id: str, device: str = "cuda",
     return returned
 
 
-__all__ = ["build_targets", "train_node"]
+def endpoint_mix_loss(node_id: str) -> GenerationalLossConfiguration:
+    """Return the registered endpoint-mixture loss under the UB namespace."""
+    if node_id not in NODES:
+        raise ValueError("unknown endpoint-mixture node")
+    return GenerationalLossConfiguration(
+        arm=f"HCWDL_UB_MHPE_ENDPOINT_MIX_{node_id}",
+        ce=.10, parent_kd=.90, grandparent_kd=0,
+        parent_temperature=1.0, grandparent_temperature=1.0,
+    )
+
+
+__all__ = ["build_targets", "endpoint_mix_loss", "train_node"]

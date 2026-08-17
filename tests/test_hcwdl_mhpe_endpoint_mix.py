@@ -18,6 +18,9 @@ from hlt_classification.scouting.hcwdl_mhpe_endpoint_mix_targets import (
     ephemeral_from_manifest, fp32_softmax, load_target, mix_probabilities,
     publish_lock, publish_manifest, publish_target, validate_bundle,
 )
+from hlt_classification.scouting.hcwdl_mhpe_endpoint_mix_runner import (
+    endpoint_mix_loss,
+)
 from hlt_classification.scouting.hcwdl_mhpe_endpoint_mix_recovery import failed_downstream_closure
 
 
@@ -63,6 +66,14 @@ def test_endpoint_mix_recipe_is_exactly_60_pass_unweighted_c10p90_t1():
     assert recipe["training_passes"] == 60
     assert recipe["loss"] == {"ce": .10, "kd": .90, "temperature": 1.0}
     assert recipe["class_weighting"] == "unweighted_per_jet_population_mean_v1"
+
+
+def test_endpoint_mix_all_nodes_construct_registered_ub_losses():
+    for node_id in NODES:
+        loss = endpoint_mix_loss(node_id)
+        assert loss.arm == f"HCWDL_UB_MHPE_ENDPOINT_MIX_{node_id}"
+        assert (loss.ce, loss.parent_kd, loss.grandparent_kd) == (.10, .90, 0)
+        assert (loss.parent_temperature, loss.grandparent_temperature) == (1.0, 1.0)
 
 
 def test_endpoint_mix_v2_accepts_only_the_original_c25p75_d000e_source():
