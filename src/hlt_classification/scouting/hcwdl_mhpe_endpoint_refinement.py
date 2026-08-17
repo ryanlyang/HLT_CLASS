@@ -35,6 +35,17 @@ BLENDS: Final = (
 )
 
 
+def validate_exact_hlt_training_report(report: Mapping[str, Any]) -> None:
+    """Fail closed unless registration and execution both used exact HLT input."""
+    scientific = report.get("scientific_config", {})
+    node = scientific.get("node", {})
+    config = report.get("config", {})
+    if (node.get("student_domain") != "hlt"
+            or scientific.get("input_key") != "hlt"
+            or config.get("model_input") != "hlt"):
+        raise PermissionError("endpoint-refinement M1 is not exact-HLT")
+
+
 def blend_probabilities(
     endpoint: np.ndarray, refinement: np.ndarray, *,
     endpoint_numerator: int, denominator: int,
@@ -94,10 +105,7 @@ def evaluate_endpoint_refinement_blends(
     report_path = root / "training/M1/training_report.json"
     report = load_json(report_path)
     report_hash = validate_pmard_training_report(report)
-    scientific = report.get("scientific_config", {})
-    if (scientific.get("node", {}).get("input_domain") != "hlt"
-            or scientific.get("input_key", "hlt") != "hlt"):
-        raise PermissionError("endpoint-refinement M1 is not exact-HLT")
+    validate_exact_hlt_training_report(report)
     if (registered["M1"]["report_sha256"] != report_hash
             or registered["M1"]["checkpoint_sha256"]
             != report["selected_checkpoint_sha256"]):
@@ -195,5 +203,5 @@ def evaluate_endpoint_refinement_blends(
 
 __all__ = [
     "BLENDS", "REPORT_CONTRACT", "blend_probabilities",
-    "evaluate_endpoint_refinement_blends",
+    "evaluate_endpoint_refinement_blends", "validate_exact_hlt_training_report",
 ]

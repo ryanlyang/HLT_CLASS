@@ -2466,3 +2466,21 @@ loss-only paired profile. The next operation is a clean commit/push, detached
 Tigris worktree, canonical campaign creation from the completed 300k
 foundation lock, dry-run ledger inspection, and separately authorized live
 submission using `docs/HCWDL_MHPE_DENSE_C25P75_300K60_RUNBOOK.md`.
+
+## 2026-08-17: endpoint-refinement exact-HLT validator correction
+
+Tigris job 89013 failed before inference because the validation-only D000E/M1
+blend diagnostic looked for `scientific_config.node.input_domain`. PMARD
+training reports serialize the registered HCWDL `NodeSpec` under that key,
+whose authoritative field is `student_domain`. The failure therefore rejected
+an exact-HLT M1 despite no privileged or offline input access.
+
+The diagnostic now fails closed across three independent report facts:
+`scientific_config.node.student_domain == "hlt"`,
+`scientific_config.input_key == "hlt"`, and
+`config.model_input == "hlt"`. A regression covers the accepted report and
+each individual privileged-input substitution. Job 89005's durable endpoint
+mixture targets completed successfully and are unrelated to this diagnostic
+validator failure. No training, target generation, or final-test access must
+be repeated; only the single validation diagnostic job needs a source-pinned
+resubmission after commit and push.

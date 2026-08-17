@@ -20,6 +20,7 @@ from hlt_classification.scouting.hcwdl_mhpe_endpoint_mix_targets import (
 )
 from hlt_classification.scouting.hcwdl_mhpe_endpoint_refinement import (
     BLENDS as REFINEMENT_BLENDS, blend_probabilities,
+    validate_exact_hlt_training_report,
 )
 from hlt_classification.scouting.hcwdl_mhpe_endpoint_mix_runner import (
     endpoint_mix_loss,
@@ -151,6 +152,35 @@ def test_endpoint_refinement_blends_are_fixed_and_exact_rational():
         blend_probabilities(
             endpoint, refinement, endpoint_numerator=5, denominator=4,
         )
+
+
+def test_endpoint_refinement_authenticates_registered_and_executed_hlt_input():
+    report = {
+        "scientific_config": {
+            "node": {"student_domain": "hlt"},
+            "input_key": "hlt",
+        },
+        "config": {"model_input": "hlt"},
+    }
+    validate_exact_hlt_training_report(report)
+    for path, value in (
+        (("scientific_config", "node", "student_domain"), "privileged"),
+        (("scientific_config", "input_key"), "privileged"),
+        (("config", "model_input"), "privileged"),
+    ):
+        changed = {
+            "scientific_config": {
+                "node": dict(report["scientific_config"]["node"]),
+                "input_key": report["scientific_config"]["input_key"],
+            },
+            "config": dict(report["config"]),
+        }
+        target = changed
+        for key in path[:-1]:
+            target = target[key]
+        target[path[-1]] = value
+        with pytest.raises(PermissionError, match="not exact-HLT"):
+            validate_exact_hlt_training_report(changed)
 
 
 def test_endpoint_mix_target_bundle_roundtrip_and_tamper(tmp_path):
