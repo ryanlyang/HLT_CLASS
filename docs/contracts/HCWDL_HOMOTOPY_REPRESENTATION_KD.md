@@ -77,6 +77,18 @@ recovery replace only the exact failed/downstream closure and preserve valid
 artifacts and the scientific graph. Cancellation is by campaign-ledger IDs
 only.
 
+A resource-only recovery over a prior source or resource recovery must bind
+that exact effective recovery through the prior ledger. It preserves the
+effective project directory, commit, and semantic-source hashes rather than
+silently reverting to the original campaign checkout. Only the authenticated
+resource table may change. This composition is operational: it does not alter
+the graph, recipe, data, resume cursor, or selected-checkpoint semantics.
+
+Independent live tasks may continue during failed-closure recovery. If a
+recovered join still depends on one, the recovery artifact binds that exact
+task and ledger job ID and the replacement command retains its `afterok`
+dependency. Completed external ancestors are not redundantly rebound.
+
 Each successful `sbatch` is durably journaled before final ledger publication.
 If submission is interrupted and a later terminal dependency makes the
 remaining reviewed commands impossible to submit, the exact contiguous event

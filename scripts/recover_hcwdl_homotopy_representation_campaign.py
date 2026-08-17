@@ -24,12 +24,16 @@ def main() -> int:
     parser.add_argument("--project-dir", type=Path, required=True)
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--resources", type=Path)
+    parser.add_argument("--prior-recovery", type=Path)
     parser.add_argument("--authorization-phrase", required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--command-plan-output", type=Path, required=True)
     args = parser.parse_args()
     spec = load_json(args.campaign_spec)
     resources = None if args.resources is None else load_json(args.resources)
+    prior_recovery = (
+        None if args.prior_recovery is None else load_json(args.prior_recovery)
+    )
     if resources is not None and "requests" in resources:
         resources = resources["requests"]
     recovery = build_recovery(
@@ -37,7 +41,7 @@ def main() -> int:
         monitor=load_json(args.monitor_report), kind=args.kind,
         project_dir=args.project_dir, source_commit=args.source_commit,
         resources=resources, authorization_phrase=args.authorization_phrase,
-        recovery_path=args.output,
+        recovery_path=args.output, prior_recovery=prior_recovery,
     )
     write_immutable_json(args.output, recovery)
     write_immutable_json(args.command_plan_output, recovery_command_plan(spec, recovery))

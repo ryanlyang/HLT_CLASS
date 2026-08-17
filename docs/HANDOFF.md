@@ -1,5 +1,36 @@
 # Current Handoff
 
+## HCWDL-U-RKD chained resource recovery (2026-08-17)
+
+The running pilot's `F_RREL_U100` source-recovery job reached pass 58 of 60,
+committed authenticated state after update 68,448, and then exhausted its
+six-hour allocation. The source-recovery ledger already binds corrected
+commit `8de32baf`; the earlier resource-recovery builder incorrectly required
+the immutable campaign's original source and therefore could not safely
+increase walltime without reverting the runtime repairs.
+
+Resource recovery now accepts the exact prior recovery artifact when and only
+when its hash is the recovery parent of the monitored ledger. It preserves
+that recovery's effective clean project, commit, and semantic-source hashes,
+adds the effective recovery as an immutable parent, and permits only the
+resource table to change. Missing, unrelated, or cross-campaign prior
+recoveries fail closed. This is an operational recovery-composition repair;
+scientific graph, losses, views, target banks, resume cursor, and checkpoint
+selection are unchanged.
+
+Failed-closure construction now rejects live jobs only when they belong to the
+closure being replaced. A concurrent live task on the independent RKD track
+no longer blocks recovery; live failed descendants remain fail-closed and
+must still be cancelled by exact ledger IDs before replacement.
+Any recovered join retains an authenticated `afterok` dependency on the exact
+independent live ledger job, so aggregate/completion cannot overtake the other
+track.
+
+Local evidence in `tagging-hlt` with bytecode disabled: 24 focused homotopy,
+recovery, and storage tests passed; the complete repository suite passed with
+989 tests, 9 expected platform skips, and 14 existing Matplotlib/Pyparsing
+warnings in 452.20 seconds. CLI help and `git diff --check` passed.
+
 ## HCWDL-U-RKD authenticated storage retirement (2026-08-17)
 
 The running 300k HCWDL-U-RKD pilot at

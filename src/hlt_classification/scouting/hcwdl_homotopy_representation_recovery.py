@@ -142,8 +142,6 @@ def failed_downstream_closure(
         row["task_id"] for row in monitor["rows"]
         if row["classification"] in {"retryable_failure", "unknown_fail_closed"}
     }
-    if any(row["classification"] == "live" for row in monitor["rows"]):
-        raise PermissionError("HCWDL-U-RKD recovery cannot replace live tasks")
     closure = set(failed)
     changed = True
     while changed:
@@ -151,6 +149,15 @@ def failed_downstream_closure(
         for row in spec["tasks"]:
             if row["task_id"] not in closure and any(dep in closure for dep in row["dependencies"]):
                 closure.add(row["task_id"]); changed = True
+    live_closure = sorted(
+        row["task_id"] for row in monitor["rows"]
+        if row["classification"] == "live" and row["task_id"] in closure
+    )
+    if live_closure:
+        raise PermissionError(
+            "HCWDL-U-RKD recovery cannot replace live closure tasks: "
+            + ", ".join(live_closure)
+        )
     order = [row["task_id"] for row in spec["tasks"]]
     return tuple(task for task in order if task in closure)
 
@@ -160,6 +167,7 @@ def build_recovery(
     monitor: Mapping[str, Any], kind: str, project_dir: str | Path,
     source_commit: str, resources: Mapping[str, Any] | None,
     authorization_phrase: str, recovery_path: str | Path,
+    prior_recovery: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     spec_hash = validate_campaign(spec, executable=False)
     ledger_hash = validate_submission_ledger(ledger, campaign_sha256=spec_hash)
@@ -170,6 +178,48 @@ def build_recovery(
     closure = failed_downstream_closure(spec, monitor)
     if not closure:
         raise ValueError("HCWDL-U-RKD recovery closure is empty")
+    closure_set = set(closure)
+    monitor_by_task = {row["task_id"]: row for row in monitor["rows"]}
+    external_live_dependencies = {}
+    for task in spec["tasks"]:
+        if task["task_id"] not in closure_set:
+            continue
+        for dependency in task["dependencies"]:
+            if dependency in closure_set:
+                continue
+            dependency_row = monitor_by_task[dependency]
+            if dependency_row["classification"] == "live":
+                external_live_dependencies[dependency] = _job(dependency_row["job_id"])
+    effective_project = str(Path(spec["project_dir"]).resolve())
+    effective_commit = spec["source_commit"]
+    effective_source_hashes = spec["semantic_source_sha256"]
+    recovery_parents = {
+        "campaign_spec": spec_hash, "submission_ledger": ledger_hash,
+        "monitor_report": monitor_hash,
+    }
+    prior_recovery_hash = ledger.get("parents", {}).get("recovery")
+    if prior_recovery_hash is not None:
+        if prior_recovery is None:
+            raise ValueError("chained HCWDL-U-RKD recovery requires its prior recovery")
+        prior_contract = str(prior_recovery.get("contract"))
+        if prior_contract not in {SOURCE_RECOVERY_CONTRACT, RESOURCE_RECOVERY_CONTRACT}:
+            raise ValueError("prior HCWDL-U-RKD recovery contract differs")
+        observed_prior_hash = validate_artifact(
+            prior_recovery, contract=prior_contract,
+            required_parents=("campaign_spec", "submission_ledger", "monitor_report"),
+            required_fields=("source_commit", "project_dir", "semantic_source_sha256"),
+        )
+        if observed_prior_hash != prior_recovery_hash:
+            raise ValueError("prior HCWDL-U-RKD recovery hash differs from ledger")
+        if prior_recovery["parents"]["campaign_spec"] != spec_hash:
+            raise ValueError("prior HCWDL-U-RKD recovery campaign differs")
+        effective_project = str(Path(prior_recovery["project_dir"]).resolve())
+        effective_commit = prior_recovery["source_commit"]
+        effective_source_hashes = prior_recovery["semantic_source_sha256"]
+        recovery_parents["effective_recovery"] = observed_prior_hash
+    elif prior_recovery is not None:
+        raise ValueError("unchained HCWDL-U-RKD ledger cannot import a prior recovery")
+
     if kind == "source":
         contract = SOURCE_RECOVERY_CONTRACT; phrase = SOURCE_RECOVERY_PHRASE
         if resources is not None or source_commit == spec["source_commit"]:
@@ -179,9 +229,13 @@ def build_recovery(
         corrected_source_hashes = semantic_source_hashes(project_dir)
     elif kind == "resource":
         contract = RESOURCE_RECOVERY_CONTRACT; phrase = RESOURCE_RECOVERY_PHRASE
-        if source_commit != spec["source_commit"] or resources is None:
-            raise ValueError("resource recovery must preserve source")
-        corrected_source_hashes = spec["semantic_source_sha256"]
+        if (
+            source_commit != effective_commit
+            or str(Path(project_dir).resolve()) != effective_project
+            or resources is None
+        ):
+            raise ValueError("resource recovery must preserve effective source")
+        corrected_source_hashes = effective_source_hashes
     else:
         raise ValueError("unknown HCWDL-U-RKD recovery kind")
     if authorization_phrase != phrase:
@@ -192,13 +246,11 @@ def build_recovery(
             raise ValueError("HCWDL-U-RKD recovery resource table differs")
     return build_artifact(
         contract,
-        parents={
-            "campaign_spec": spec_hash, "submission_ledger": ledger_hash,
-            "monitor_report": monitor_hash,
-        },
+        parents=recovery_parents,
         kind=kind, closure=list(closure), project_dir=str(Path(project_dir).resolve()),
         source_commit=source_commit, resources=selected_resources,
         semantic_source_sha256=corrected_source_hashes,
+        external_live_dependencies=dict(sorted(external_live_dependencies.items())),
         recovery_path=str(Path(recovery_path).resolve()),
         graph_sha256=spec["graph_sha256"],
         combined_recipe_sha256=spec["combined_recipe_sha256"],
@@ -218,6 +270,10 @@ def recovery_command_plan(
     )
     original = build_command_plan(spec)
     closure = set(recovery["closure"])
+    external_live = {
+        str(task): _job(job)
+        for task, job in recovery.get("external_live_dependencies", {}).items()
+    }
     task_registry = {row["task_id"]: row for row in spec["tasks"]}
     commands = []
     for row in original["commands"]:
@@ -250,7 +306,10 @@ def recovery_command_plan(
                   if token.startswith(prefix)), token)
             for token in command
         ]
-        dependencies = [dep for dep in row["dependencies"] if dep in closure]
+        dependencies = [
+            dep for dep in row["dependencies"]
+            if dep in closure or dep in external_live
+        ]
         command = [token for token in command if not token.startswith("--dependency=")]
         if dependencies:
             command.insert(-2, "--dependency=afterok:" + ":".join(
