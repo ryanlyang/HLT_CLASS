@@ -1,5 +1,51 @@
 # Current Handoff
 
+## HCWDL-U-RKD authenticated storage retirement (2026-08-17)
+
+The running 300k HCWDL-U-RKD pilot at
+`hcwdl_u_rkd_pilot_189486bf_r1` reached 41 GiB. A read-only allocation audit
+identified 22.218 GiB of rolling resume generations and 15.690 GiB of compact
+target payloads; selected and final checkpoint envelopes together occupied
+less than 1 GiB. The existing target-cleanup contract authenticated and
+removed exactly 160 payload shards from `TOFF`, `F_RSET_U020`,
+`F_RSET_U040`, `F_RREL_U020`, and `F_RREL_U040`. Every bank retained its
+manifest plus cleanup authorization/completion evidence, both U080 training
+jobs remained live, and the campaign root fell from 41 GiB to 29 GiB.
+
+The repository now implements the separately user-authorized operational
+retirement of rolling resumes for completed nodes. The new v1 authorization
+and completion contracts do not change the v2 campaign, graph, recipe, loss,
+view, checkpoint-selection, or final-test semantics. Before deletion the tool
+authenticates the immutable campaign, complete 60-pass engine and wrapper
+reports, selected and final binary envelopes and all their members, and every
+direct downstream consumer's completed wrapper. It freezes every exact path,
+serialized byte hash, and byte count; execution revalidates path confinement
+and bytes, deletes commits before sidecars before state payloads, is
+idempotently restartable, and publishes completion evidence. Reports,
+selected/final envelopes, active-node resumes, and still-needed target banks
+are never retirement members.
+
+The immediate eligible set is `F_RSET_U020`, `F_RSET_U040`,
+`F_RREL_U020`, and `F_RREL_U040`. U060 remains ineligible until its direct
+U080 consumer completes. No local command deleted a Tigris resume and no
+scheduler mutation was issued by implementation.
+
+Local evidence under the established `tagging-hlt` environment with
+`PYTHONDONTWRITEBYTECODE=1`, repository `src` on `PYTHONPATH`, and pytest
+caches disabled:
+
+- pre-change focused resume/homotopy suite: 32 passed;
+- final focused storage/resume/homotopy suite: 37 passed in 5.02 seconds;
+- complete repository suite: 985 passed, 9 expected platform skips, and 14
+  existing Matplotlib/Pyparsing warnings in 427.96 seconds;
+- cleanup CLI help and `git diff --check`: passed.
+
+The remaining action is to commit and push this operational amendment, create
+one clean detached Tigris worktree, run the authorization-only pass for the
+four eligible nodes, inspect its byte total, and then execute the exact
+phrase-bound retirement. U060 retirement and U060 target cleanup should be
+run only after both U080 consumers finish.
+
 ## HCWDL-U-RKD resume-publication performance repair (2026-08-17)
 
 The detailed U040 phase logs identified resume publication as the remaining

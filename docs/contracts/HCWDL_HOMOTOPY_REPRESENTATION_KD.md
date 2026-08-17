@@ -48,6 +48,15 @@ targets are forbidden. Payload cleanup requires every registered consumer's
 completed report and leaves its authorization, manifest, and completion
 evidence.
 
+Rolling resume generations are operational crash-recovery state rather than
+selected scientific outputs. Under the user-authorized storage amendment of
+2026-08-17, they may be retired only after the node's terminal report and
+selected/final binary envelopes authenticate and every direct downstream
+consumer has completed. Retirement publishes immutable v1 authorization and
+completion artifacts with the exact deleted member hashes and paths. It never
+removes reports, selected/final envelopes, active-node resumes, or target
+payloads still required by a consumer.
+
 Endpoint construction materializes each required ragged branch a fixed number
 of times per selected source chunk. Bounded parallel chunk construction may
 use no more than the authenticated Slurm CPU allocation and must emit the same

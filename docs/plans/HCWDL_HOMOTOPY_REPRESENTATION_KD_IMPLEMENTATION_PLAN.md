@@ -466,6 +466,15 @@ scheduled = w_common * (0.40 Lhat_jet + 0.60 Lhat_set)
 The base loss remains constant for all …883 tokens truncated…tained metadata; cleanup completion is
 published afterward. Missing bytes without an authorization are corruption.
 
+The user-authorized 2026-08-17 operational storage amendment permits terminal
+retirement of rolling resume generations after the node's report and
+selected/final checkpoint envelopes authenticate and every direct downstream
+consumer has completed. The exact paths and byte hashes are frozen in a v1
+retirement authorization before deletion, and a completion artifact proves
+all authorized paths absent. This does not authorize deletion of selected or
+final checkpoints, reports, active-node resumes, or target bytes outside the
+existing target-cleanup rule, and it changes no scientific identity.
+
 Only train-role targets are stored. Validation runs classification inference
 without representation-target banks because representation loss does not
 select checkpoints.
