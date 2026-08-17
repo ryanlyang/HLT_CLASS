@@ -1,5 +1,60 @@
 # Current Handoff
 
+## HCWDL-MHPE paired endpoint teacher-mixture add-on (2026-08-17)
+
+The implementation-authoritative
+[endpoint teacher-mixture plan](plans/HCWDL_MHPE_ENDPOINT_MIX_300K60_PLAN.md)
+is implemented and queue-ready as a separate validation-only add-on over one
+explicitly selected, completed dense 300k MHPE campaign. It does not retrain or
+mutate the source U/D ladder. The target worker reuses the authenticated
+`D0E/T1` train/validation probability bundle, performs exactly one
+`M0paired` exact-HLT forward pass per role, joins the two components by jet
+identity, and publishes four immutable teacher tables:
+
+- `M1_D0only`: 100% D0E;
+- `M1_mix90`: 90% D0E plus 10% M0paired;
+- `M1_mix75`: 75% D0E plus 25% M0paired;
+- `M1_mix50`: 50% D0E plus 50% M0paired.
+
+The numerical contract is max-subtracted FP32 M0 softmax, exact-rational FP64
+mixture accumulation, and little-endian FP32 publication. The four fresh,
+exact-HLT students share initialization, sampler, dropout, optimizer, schedule,
+population, and update seeds. Each uses unweighted `0.10 CE + 0.90 probability
+KD`, `T=1`, runs 60 complete passes with every-pass validation, and selects by
+macro AUC, CE, logR50, then earliest update. The retrained `M1_D0only` is the
+paired baseline; the source campaign's M1 is contextual only.
+
+The campaign is exactly seven jobs: one target builder; four parallel GH200
+fits; aggregate; completion. GPU jobs request 8 CPUs, 96G, 06:00:00, and one
+GH200; CPU jobs request 4 CPUs, 32G, and one hour. The implementation includes
+content-authenticated targets, campaign/graph/recipe/report/completion
+contracts, restart-safe dry/live submission journals, task attestations,
+monitoring, exact-ID cancellation compatibility, and exact failed/downstream
+same-source recovery. The [runbook](HCWDL_MHPE_ENDPOINT_MIX_RUNBOOK.md) binds
+the source campaign explicitly and never discovers a mutable "latest" result.
+
+Review found and fixed one integration defect before acceptance: the first
+Slurm wrappers activated Conda directly instead of sourcing the mandatory
+repository `sbatch/common.sh`. Both normal and recovery workers now use
+`hlt_activate`, the required environment variables/library path, absolute
+project paths, and `exec python -s`.
+
+Local evidence with `PYTHONDONTWRITEBYTECODE=1` and pytest caches disabled:
+
+- new focused endpoint-mixture suite: 7 passed;
+- combined MHPE regression: 39 passed;
+- worker-contract plus new focused regression after the wrapper repair:
+  8 passed;
+- complete post-repair repository suite: 518 passed in 236.73 seconds, with
+  only the 14 existing Matplotlib/Pyparsing deprecation warnings;
+- all seven new CLI help surfaces, Python compilation, contract/link checks,
+  and `git diff --check`: passed.
+
+No donor file was copied. No Slurm command was submitted, no source campaign
+artifact was modified, and no final-test row was accessed. The remaining
+action is to commit/push this implementation and use the exact runbook block
+with a completed dense campaign spec.
+
 ## HCWDL-MHPE 300k executable-recipe recovery (2026-08-16)
 
 The first `C25P75_300K60` and `C10P90_300K60` jobs (`88447` and

@@ -151,3 +151,6 @@ acceptance:
 ```text
 ../../REPOSITORY_TRANSFER_PLAN.md
 ```
+## HCWDL-MHPE endpoint teacher-mixture add-on
+
+- [Implementation-authoritative 300k/60-pass endpoint mixture plan](HCWDL_MHPE_ENDPOINT_MIX_300K60_PLAN.md)
