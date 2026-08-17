@@ -28,6 +28,17 @@ authenticates each PMARD report, outer HCWDL report, runtime record, E+ target
 bundle, and stage-to-lock relationship before completion. Recovery is limited
 to the exact failed/downstream closure and emits recovery-root attestations.
 
+The first Tigris submission reached the authenticated 300k/100k student-view
+caches for `U100R`, then job 89049 failed before its first training update. The
+new loss helper had emitted `HCWDL_MHPE_REFINED_U100R`, while the reused
+`GenerationalLossConfiguration` contract requires every arm identity to begin
+with `HCWDL_UB_`. The helper now emits
+`HCWDL_UB_MHPE_REFINED_<node_id>` for all seven nodes. A direct regression
+constructs all seven executable loss objects and verifies their exact CE, KD,
+and temperature values, closing the test gap that allowed the invalid string
+through. No checkpoint, target, report, or scientific result was produced by
+the failed fit; a clean source-pinned campaign must replace that submission.
+
 Scientific and operational identities:
 
 - graph: `HCWDL_MHPE_REFINED_CONTINUATION_GRAPH/v1`;
@@ -44,7 +55,8 @@ Scientific and operational identities:
 Final local evidence:
 
 - expanded focused MHPE plus CLI suite: 123 passed in 215.40 seconds;
-- complete repository suite: 539 passed in 310.62 seconds, with only the
+- complete repository suite after the Tigris loss-identity correction: 539
+  passed in 269.81 seconds, with only the
   existing 14 Matplotlib/Pyparsing deprecation warnings;
 - all seven new CLI help surfaces passed;
 - scouting and script Python compilation passed;

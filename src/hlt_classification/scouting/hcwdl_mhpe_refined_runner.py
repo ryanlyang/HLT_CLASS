@@ -73,10 +73,11 @@ def _training_registry() -> Mapping[str, NodeSpec]:
 TRAINING_REGISTRY = _training_registry()
 
 
-def _loss(node_id: str) -> GenerationalLossConfiguration:
+def refined_loss(node_id: str) -> GenerationalLossConfiguration:
+    """Return the registered loss under the required HCWDL-UB namespace."""
     node = NODES[node_id]
     return GenerationalLossConfiguration(
-        arm=f"HCWDL_MHPE_REFINED_{node_id}", ce=node.ce_weight,
+        arm=f"HCWDL_UB_MHPE_REFINED_{node_id}", ce=node.ce_weight,
         parent_kd=node.kd_weight, grandparent_kd=0,
         parent_temperature=node.temperature, grandparent_temperature=1.0,
     )
@@ -205,7 +206,7 @@ def train_node(*, spec: Mapping[str, Any], node_id: str, device: str = "cuda",
         graph_sha256=GRAPH_SHA256, report_contract=TRAINING_REPORT_CONTRACT,
         campaign_label="HCWDL-MHPE-REFINED-CONTINUATION-300K60",
         seed_node_id=node.seed_alias, node_contract=NODE_CONTRACT,
-        explicit_loss=_loss(node_id), recipe_overlay_sha256=spec["recipe_sha256"],
+        explicit_loss=refined_loss(node_id), recipe_overlay_sha256=spec["recipe_sha256"],
         parent_teacher_targets=logits, parent_probability_targets=probability,
         peak_learning_rate_override=float(recipe["optimizer"]["peak_learning_rates"]["cold_child"]),
         scientific_config_extra={
@@ -515,5 +516,5 @@ class RefinedContinuationWorkflow:
 
 __all__ = [
     "RefinedContinuationWorkflow", "TRAINING_REGISTRY", "build_aggregate",
-    "run_ensemble", "train_node",
+    "refined_loss", "run_ensemble", "train_node",
 ]

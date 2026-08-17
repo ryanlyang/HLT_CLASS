@@ -22,7 +22,7 @@ from hlt_classification.scouting.hcwdl_mhpe_refined_recovery import (
     failed_downstream_closure,
 )
 from hlt_classification.scouting.hcwdl_mhpe_refined_runner import (
-    TRAINING_REGISTRY,
+    TRAINING_REGISTRY, refined_loss,
 )
 
 
@@ -63,6 +63,9 @@ def test_refined_teacher_chain_and_losses_are_exact():
         registered = TRAINING_REGISTRY[node_id]
         assert registered.student_domain == ("hlt" if node_id in {"D000_from_D033R", "M1R"} else "privileged")
         assert registered.initialization == "fresh"
+        loss = refined_loss(node_id)
+        assert loss.arm == f"HCWDL_UB_MHPE_REFINED_{node_id}"
+        assert (loss.ce, loss.parent_kd, loss.parent_temperature) == (ce, kd, temperature)
     source = node_registry(PROFILE_C25P75_300K60)
     assert NODES["D066_from_U100R"].seed_alias == source["D066_from_U100E"].seed_alias
     assert NODES["D033_from_D066R"].seed_alias == source["D033_from_D066E"].seed_alias
