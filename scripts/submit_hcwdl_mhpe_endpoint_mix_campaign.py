@@ -12,7 +12,7 @@ from hlt_classification.scouting.hcwdl_recovery import assemble_submission_ledge
 def main()->int:
  p=argparse.ArgumentParser(description=__doc__);p.add_argument("--spec",type=Path,required=True);p.add_argument("--output",type=Path,required=True);p.add_argument("--execute",action="store_true");p.add_argument("--authorization-phrase");a=p.parse_args();spec=load_json(a.spec);validate_campaign(spec,executable=a.execute);canonical=Path(spec["campaign_root"])/"campaign_spec.json"
  if a.spec.resolve()!=canonical.resolve():raise PermissionError("endpoint-mixture submitter requires canonical spec")
- plan=load_json(Path(spec["campaign_root"])/"command_plan.json");validate_content_hash(plan,expected_contract=COMMAND_PLAN_CONTRACT,expected_schema_version=1);commands={row["task_id"]:list(row["command"]) for row in plan["commands"]}
+ plan=load_json(Path(spec["campaign_root"])/"command_plan.json");validate_content_hash(plan,expected_contract=COMMAND_PLAN_CONTRACT,expected_schema_version=2);commands={row["task_id"]:list(row["command"]) for row in plan["commands"]}
  if not a.execute:
   ledger=build_submission_ledger(campaign_spec_sha256=spec["content_hash"],jobs={task:"1" for task in commands},commands=commands,dry_run=True)
   if a.output.exists() and load_json(a.output)!=ledger:raise FileExistsError("endpoint-mixture dry ledger differs")

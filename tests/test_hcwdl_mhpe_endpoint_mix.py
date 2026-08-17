@@ -5,8 +5,12 @@ import pytest
 
 from hlt_classification.data.cache_contracts import canonical_sha256, load_json
 from hlt_classification.scouting.hcwdl_mhpe_endpoint_mix import (
-    CREATION_PHRASE, GRAPH_SHA256, NODES, campaign_tasks, command_plan,
-    graph_payload, recipe_payload, validate_recipe,
+    CREATION_PHRASE, GRAPH_SHA256, NODES, SOURCE_ENDPOINT, campaign_tasks,
+    command_plan, graph_payload, recipe_payload, validate_recipe,
+    validate_source_semantics,
+)
+from hlt_classification.scouting.hcwdl_mhpe_graph import (
+    PROFILE_C25P75_300K60, PROFILE_DENSE_C25P75_300K60,
 )
 from hlt_classification.scouting.hcwdl_mhpe_endpoint_mix_targets import (
     ephemeral_from_manifest, fp32_softmax, load_target, mix_probabilities,
@@ -17,12 +21,15 @@ from hlt_classification.scouting.hcwdl_mhpe_endpoint_mix_recovery import failed_
 
 def test_endpoint_mix_graph_is_exactly_four_paired_m1_fits():
     assert list(NODES) == ["M1_D0only", "M1_mix90", "M1_mix75", "M1_mix50"]
-    assert [NODES[name].payload()["d0e_weight"] for name in NODES] == [
+    assert SOURCE_ENDPOINT == "D000E"
+    assert graph_payload()["source_endpoint"] == SOURCE_ENDPOINT
+    assert [NODES[name].payload()["endpoint_weight"] for name in NODES] == [
         [1, 1], [9, 10], [3, 4], [1, 2],
     ]
     assert len({NODES[name].payload()["seed_alias"] for name in NODES}) == 1
     assert all(NODES[name].payload()["ce_weight"] == .10 for name in NODES)
     assert all(NODES[name].payload()["kd_weight"] == .90 for name in NODES)
+    assert graph_payload()["schema_version"] == 2
     assert graph_payload()["content_hash"] == GRAPH_SHA256
 
 
@@ -43,6 +50,7 @@ def test_endpoint_mix_task_graph_is_seven_jobs_and_four_parallel_children():
         },
     }
     plan = command_plan(spec)
+    assert plan["schema_version"] == 2
     assert len(plan["commands"]) == 7
     assert all(any(item.startswith("--job-name=hcwmix_") for item in row["command"]) for row in plan["commands"])
 
@@ -53,6 +61,18 @@ def test_endpoint_mix_recipe_is_exactly_60_pass_unweighted_c10p90_t1():
     assert recipe["training_passes"] == 60
     assert recipe["loss"] == {"ce": .10, "kd": .90, "temperature": 1.0}
     assert recipe["class_weighting"] == "unweighted_per_jet_population_mean_v1"
+
+
+def test_endpoint_mix_v2_accepts_only_the_original_c25p75_d000e_source():
+    spec = {
+        "role_counts": {"train": 300_000, "validation": 100_000, "final_test": 100_000},
+        "final_test_accessed": False,
+    }
+    validate_source_semantics(spec, profile=PROFILE_C25P75_300K60)
+    with pytest.raises(ValueError, match="C25P75 300k/60-pass"):
+        validate_source_semantics(spec, profile=PROFILE_DENSE_C25P75_300K60)
+    with pytest.raises(ValueError, match="C25P75 300k/60-pass"):
+        validate_source_semantics({**spec, "final_test_accessed": True}, profile=PROFILE_C25P75_300K60)
 
 
 def test_endpoint_mix_numerics_are_fp32_softmax_exact_rational_fp64():
@@ -68,7 +88,7 @@ def test_endpoint_mix_numerics_are_fp32_softmax_exact_rational_fp64():
 
 
 def test_endpoint_mix_target_bundle_roundtrip_and_tamper(tmp_path):
-    parents = {"campaign": "a" * 64}; lineage = {"D0E": "b" * 64, "M0paired": "c" * 64}
+    parents = {"campaign": "a" * 64}; lineage = {SOURCE_ENDPOINT: "b" * 64, "M0paired": "c" * 64}
     identities = ["j0", "j1"]; d0 = np.full((2, 15), 1 / 15, np.float32)
     m0 = fp32_softmax(np.arange(30, dtype=np.float32).reshape(2, 15) / 10)
     manifest_hashes = {}
@@ -80,8 +100,8 @@ def test_endpoint_mix_target_bundle_roundtrip_and_tamper(tmp_path):
                 directory / f"{role}_all", node_id=node_id, role=role,
                 identities=identities,
                 probabilities=mix_probabilities(
-                    d0, m0, numerator=node.d0_weight_numerator,
-                    denominator=node.d0_weight_denominator,
+                    d0, m0, numerator=node.endpoint_weight_numerator,
+                    denominator=node.endpoint_weight_denominator,
                 ), component_lineage=lineage, parents=parents,
                 producer_commit="d" * 40,
             )

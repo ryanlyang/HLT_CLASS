@@ -17,7 +17,8 @@ from .engine import precompute_teacher_targets, validate_pmard_training_report
 from .hcwdl_homotopy import HomotopyCoordinate
 from .hcwdl_ladder import NodeSpec, TeacherSpec
 from .hcwdl_mhpe_endpoint_mix import (
-    GRAPH_SHA256, NODES, TRAINING_REPORT_CONTRACT, validate_campaign,
+    GRAPH_SHA256, NODES, NODE_CONTRACT, SOURCE_ENDPOINT,
+    TARGET_BUILD_REPORT_CONTRACT, TRAINING_REPORT_CONTRACT, validate_campaign,
 )
 from .hcwdl_mhpe_endpoint_mix_targets import (
     ephemeral_from_manifest, fp32_softmax, mix_probabilities, publish_lock,
@@ -58,9 +59,9 @@ def build_targets(*, spec: Mapping[str, Any], device: str = "cuda") -> dict[str,
     if int(recipe.get("training_passes", -1)) != 60:
         raise ValueError("endpoint-mixture source executable recipe is not 60-pass")
     source_profile = spec["source"]["source_profile"]
-    d0_root = Path(spec["source"]["d0e_target_root"])
+    endpoint_root = Path(spec["source"]["endpoint_target_root"])
     validate_probability_bundle(
-        d0_root, ensemble_id="D0E", temperature=1.0,
+        endpoint_root, ensemble_id=SOURCE_ENDPOINT, temperature=1.0,
         consumers=["M1"], profile=source_profile,
     )
     report_path = Path(spec["source"]["m0paired_report_path"])
@@ -86,7 +87,7 @@ def build_targets(*, spec: Mapping[str, Any], device: str = "cuda") -> dict[str,
         "campaign_spec_sha256": spec["content_hash"],
         "source_campaign_spec_sha256": spec["source"]["source_spec_sha256"],
         "source_completion_sha256": spec["source"]["source_completion_sha256"],
-        "source_d0e_target_lock_sha256": spec["source"]["d0e_target_lock_sha256"],
+        "source_endpoint_target_lock_sha256": spec["source"]["endpoint_target_lock_sha256"],
         "foundation_reuse_lock_sha256": spec["source"]["foundation_reuse_lock_sha256"],
         "m0paired_report_sha256": report_hash,
         "m0paired_checkpoint_sha256": report["selected_checkpoint_sha256"],
@@ -105,48 +106,49 @@ def build_targets(*, spec: Mapping[str, Any], device: str = "cuda") -> dict[str,
         )
         m0_probability = fp32_softmax(m0_targets.logits)
         m0_lookup = {key: index for index, key in enumerate(m0_targets.identities)}
-        d0 = DurableProbabilityTargets(d0_root / f"{role}_manifest.json")
+        endpoint_targets = DurableProbabilityTargets(endpoint_root / f"{role}_manifest.json")
         try:
-            indexes = [m0_lookup[key] for key in d0.identities]
+            indexes = [m0_lookup[key] for key in endpoint_targets.identities]
         except KeyError as error:
-            raise KeyError("endpoint-mixture D0E/M0paired identity join is incomplete") from error
+            raise KeyError(f"endpoint-mixture {SOURCE_ENDPOINT}/M0paired identity join is incomplete") from error
         aligned_m0 = m0_probability[indexes]
         if len(indexes) != len(m0_lookup) or len(set(indexes)) != len(indexes):
-            raise ValueError("endpoint-mixture D0E/M0paired identity coverage differs")
-        role_rows[role] = len(d0.identities)
-        if len(d0.identities) != int(spec["role_counts"][role]):
+            raise ValueError(f"endpoint-mixture {SOURCE_ENDPOINT}/M0paired identity coverage differs")
+        role_rows[role] = len(endpoint_targets.identities)
+        if len(endpoint_targets.identities) != int(spec["role_counts"][role]):
             raise ValueError("endpoint-mixture target role population differs")
         component_lineage = {
-            "D0E": spec["source"]["d0e_manifest_sha256"][role],
+            SOURCE_ENDPOINT: spec["source"]["endpoint_manifest_sha256"][role],
             "M0paired": report_hash,
         }
         for node_id, node in NODES.items():
             probabilities = mix_probabilities(
-                d0.probabilities, aligned_m0,
-                numerator=node.d0_weight_numerator,
-                denominator=node.d0_weight_denominator,
+                endpoint_targets.probabilities, aligned_m0,
+                numerator=node.endpoint_weight_numerator,
+                denominator=node.endpoint_weight_denominator,
             )
             directory = target_root / node_id
             metadata = publish_target(
                 directory / f"{role}_all", node_id=node_id, role=role,
-                identities=d0.identities, probabilities=probabilities,
+                identities=endpoint_targets.identities, probabilities=probabilities,
                 component_lineage=component_lineage, parents=parents,
                 producer_commit=spec["source_commit"],
             )
             manifest = publish_manifest(
                 directory / f"{role}_manifest.json", node_id=node_id, role=role,
                 target_metadata=directory / f"{role}_all.json",
-                expected_rows=len(d0.identities), parents=parents,
+                expected_rows=len(endpoint_targets.identities), parents=parents,
             )
             manifest_hashes[node_id][role] = manifest["content_hash"]
     del model; gc.collect()
     lock = publish_lock(target_root / "lock.json", manifests=manifest_hashes, parents=parents)
     output = with_content_hash({
-        "contract": "HCWDL_MHPE_ENDPOINT_MIX_TARGET_BUILD_REPORT/v1",
-        "schema_version": 1, "campaign_spec_sha256": spec["content_hash"],
+        "contract": TARGET_BUILD_REPORT_CONTRACT,
+        "schema_version": 2, "campaign_spec_sha256": spec["content_hash"],
         "target_lock_sha256": lock["content_hash"], "role_rows": role_rows,
         "m0paired_forward_passes_per_role": 1,
-        "d0e_reused_without_model_inference": True,
+        "source_endpoint": SOURCE_ENDPOINT,
+        "endpoint_reused_without_model_inference": True,
         "labels_not_used_in_target_values": True,
         "final_test_accessed": False,
     })
@@ -203,9 +205,9 @@ def train_node(*, spec: Mapping[str, Any], node_id: str, device: str = "cuda",
         output_dir=Path(spec["campaign_root"]) / "training" / node_id,
         parents=parents, device=device, registry=_registry(), domains=DOMAINS,
         graph_sha256=GRAPH_SHA256, report_contract=TRAINING_REPORT_CONTRACT,
-        campaign_label="HCWDL-MHPE-ENDPOINT-MIX-300K60",
+        campaign_label="HCWDL-MHPE-D000E-ENDPOINT-MIX-300K60",
         seed_node_id=node.payload()["seed_alias"],
-        node_contract="HCWDL_MHPE_ENDPOINT_MIX_NODE_SPEC/v1",
+        node_contract=NODE_CONTRACT,
         explicit_loss=loss, recipe_overlay_sha256=spec["recipe_sha256"],
         parent_probability_targets=probability,
         peak_learning_rate_override=float(recipe["optimizer"]["peak_learning_rates"]["cold_child"]),

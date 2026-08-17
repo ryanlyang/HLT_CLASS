@@ -13,7 +13,8 @@ from hlt_classification.data.cache_contracts import (
     sha256_file, validate_content_hash, with_content_hash, write_immutable_json,
 )
 from .hcwdl_mhpe_endpoint_mix import (
-    NODES, TARGET_LOCK_CONTRACT, TARGET_MANIFEST_CONTRACT, TARGET_SHARD_CONTRACT,
+    NODES, SOURCE_ENDPOINT, TARGET_LOCK_CONTRACT, TARGET_MANIFEST_CONTRACT,
+    TARGET_SHARD_CONTRACT,
 )
 from .targets import EphemeralProbabilityTargets
 
@@ -53,7 +54,7 @@ def publish_target(output: str | Path, *, node_id: str, role: str,
                    producer_commit: str) -> dict[str, Any]:
     if node_id not in NODES or role not in {"train", "validation"}:
         raise ValueError("endpoint-mixture target identity/role differs")
-    if set(component_lineage) != {"D0E", "M0paired"}:
+    if set(component_lineage) != {SOURCE_ENDPOINT, "M0paired"}:
         raise ValueError("endpoint-mixture component lineage differs")
     keys = identity_key_array(identities); values = np.asarray(probabilities, dtype="<f4")
     if values.shape != (len(keys), 15) or len(set(map(str, keys))) != len(keys):
@@ -63,14 +64,15 @@ def publish_target(output: str | Path, *, node_id: str, role: str,
     atomic_publish_bytes(npz, deterministic_npz_bytes(arrays))
     node = NODES[node_id]
     metadata = with_content_hash({
-        "contract": TARGET_SHARD_CONTRACT, "schema_version": 1,
+        "contract": TARGET_SHARD_CONTRACT, "schema_version": 2,
         "node_id": node_id, "role": role, "rows": len(keys),
         "npz_filename": npz.name, "npz_sha256": sha256_file(npz),
         "logical_array_sha256": {name: array_sha256(name, value) for name, value in arrays.items()},
         "temperature": 1.0,
-        "d0e_weight": [node.d0_weight_numerator, node.d0_weight_denominator],
-        "m0paired_weight": [node.m0_weight_numerator, node.d0_weight_denominator],
-        "component_order": ["D0E", "M0paired"],
+        "endpoint_id": SOURCE_ENDPOINT,
+        "endpoint_weight": [node.endpoint_weight_numerator, node.endpoint_weight_denominator],
+        "m0paired_weight": [node.m0_weight_numerator, node.endpoint_weight_denominator],
+        "component_order": [SOURCE_ENDPOINT, "M0paired"],
         "component_lineage": {name: require_sha256(value, name=name) for name, value in sorted(component_lineage.items())},
         "parents": {name: require_sha256(value, name=name) for name, value in sorted(parents.items())},
         "numerical_policy": "identity_join_fp32_softmax_exact_rational_fp64_le_f32_v1",
@@ -81,15 +83,16 @@ def publish_target(output: str | Path, *, node_id: str, role: str,
 
 def load_target(path: str | Path) -> tuple[dict[str, Any], dict[str, np.ndarray]]:
     metadata = load_json(path)
-    validate_content_hash(metadata, expected_contract=TARGET_SHARD_CONTRACT, expected_schema_version=1)
+    validate_content_hash(metadata, expected_contract=TARGET_SHARD_CONTRACT, expected_schema_version=2)
     node_id = str(metadata.get("node_id"))
     if node_id not in NODES or metadata.get("role") not in {"train", "validation"}:
         raise ValueError("endpoint-mixture target metadata differs")
     node = NODES[node_id]
-    if (metadata.get("d0e_weight") != [node.d0_weight_numerator, node.d0_weight_denominator]
-            or metadata.get("m0paired_weight") != [node.m0_weight_numerator, node.d0_weight_denominator]
-            or metadata.get("component_order") != ["D0E", "M0paired"]
-            or set(metadata.get("component_lineage", {})) != {"D0E", "M0paired"}
+    if (metadata.get("endpoint_id") != SOURCE_ENDPOINT
+            or metadata.get("endpoint_weight") != [node.endpoint_weight_numerator, node.endpoint_weight_denominator]
+            or metadata.get("m0paired_weight") != [node.m0_weight_numerator, node.endpoint_weight_denominator]
+            or metadata.get("component_order") != [SOURCE_ENDPOINT, "M0paired"]
+            or set(metadata.get("component_lineage", {})) != {SOURCE_ENDPOINT, "M0paired"}
             or metadata.get("final_test_accessed") is not False):
         raise ValueError("endpoint-mixture target semantics differ")
     npz = Path(path).with_name(metadata["npz_filename"])
@@ -113,7 +116,7 @@ def publish_manifest(output: str | Path, *, node_id: str, role: str,
     if metadata["node_id"] != node_id or metadata["role"] != role or len(arrays["identity_keys"]) != expected_rows:
         raise ValueError("endpoint-mixture manifest coverage differs")
     payload = with_content_hash({
-        "contract": TARGET_MANIFEST_CONTRACT, "schema_version": 1,
+        "contract": TARGET_MANIFEST_CONTRACT, "schema_version": 2,
         "node_id": node_id, "role": role, "temperature": 1.0,
         "rows": expected_rows, "metadata_path": str(Path(target_metadata).resolve()),
         "metadata_sha256": metadata["content_hash"],
@@ -125,7 +128,7 @@ def publish_manifest(output: str | Path, *, node_id: str, role: str,
 
 
 def validate_manifest(value: Mapping[str, Any]) -> str:
-    digest = validate_content_hash(value, expected_contract=TARGET_MANIFEST_CONTRACT, expected_schema_version=1)
+    digest = validate_content_hash(value, expected_contract=TARGET_MANIFEST_CONTRACT, expected_schema_version=2)
     metadata, arrays = load_target(value["metadata_path"])
     if (value.get("node_id") not in NODES or value.get("role") not in {"train", "validation"}
             or metadata["content_hash"] != value.get("metadata_sha256")
@@ -144,7 +147,7 @@ def publish_lock(output: str | Path, *, manifests: Mapping[str, Mapping[str, str
     if set(manifests) != set(NODES) or any(set(value) != {"train", "validation"} for value in manifests.values()):
         raise ValueError("endpoint-mixture lock manifest registry differs")
     payload = with_content_hash({
-        "contract": TARGET_LOCK_CONTRACT, "schema_version": 1,
+        "contract": TARGET_LOCK_CONTRACT, "schema_version": 2,
         "manifests": {node: {role: require_sha256(value, name=f"{node} {role}") for role, value in sorted(roles.items())}
                       for node, roles in sorted(manifests.items())},
         "parents": {name: require_sha256(value, name=name) for name, value in sorted(parents.items())},
@@ -155,7 +158,7 @@ def publish_lock(output: str | Path, *, manifests: Mapping[str, Mapping[str, str
 
 def validate_bundle(root: str | Path) -> tuple[str, dict[str, dict[str, Any]]]:
     directory = Path(root); lock = load_json(directory / "lock.json")
-    lock_hash = validate_content_hash(lock, expected_contract=TARGET_LOCK_CONTRACT, expected_schema_version=1)
+    lock_hash = validate_content_hash(lock, expected_contract=TARGET_LOCK_CONTRACT, expected_schema_version=2)
     if set(lock.get("manifests", {})) != set(NODES) or lock.get("authorized") is not True or lock.get("final_test_accessed") is not False:
         raise ValueError("endpoint-mixture target lock differs")
     result = {}

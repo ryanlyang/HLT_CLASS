@@ -3,8 +3,8 @@
 This queues the seven-job 300k/60-pass endpoint teacher-mixture add-on. It
 does not submit until both exact authorization phrases are supplied.
 
-On Tigris, set `SOURCE_SPEC` to one completed dense C10P90 or C25P75 campaign,
-then run:
+On Tigris, set `SOURCE_SPEC` to the completed `C25P75_300K60` campaign, then
+run:
 
 ```bash
 set -euo pipefail
@@ -23,7 +23,7 @@ export MIX_WORKTREE="/home/ryreu/atlas/HLT_Classification_mhpe_endpoint_mix_${MI
 export MIX_ROOT="${MAIN_REPO}/checkpoints/hcwdl_mhpe_endpoint_mix_${MIX_SHORT}_r1"
 
 # Set this explicitly; never discover a source by newest path.
-export SOURCE_SPEC=/home/ryreu/atlas/HLT_Classification/checkpoints/REPLACE_WITH_COMPLETED_DENSE_ROOT/campaign_spec.json
+export SOURCE_SPEC=/home/ryreu/atlas/HLT_Classification/checkpoints/hcwdl_mhpe_c25p75_300k60_7810cc28_r1/campaign_spec.json
 
 test -f "${SOURCE_SPEC}"
 test ! -e "${MIX_ROOT}"
@@ -41,7 +41,7 @@ python -s "${MIX_WORKTREE}/scripts/create_hcwdl_mhpe_endpoint_mix_campaign.py" \
   --project-dir "${MIX_WORKTREE}" \
   --source-commit "${MIX_COMMIT}" \
   --authorize-live-submission \
-  --authorization-phrase "AUTHORIZE HCWDL MHPE ENDPOINT MIX 300K60 EXACT SPEC"
+  --authorization-phrase "AUTHORIZE HCWDL MHPE D000E ENDPOINT MIX 300K60 EXACT SPEC"
 
 python -s "${MIX_WORKTREE}/scripts/submit_hcwdl_mhpe_endpoint_mix_campaign.py" \
   --spec "${MIX_ROOT}/campaign_spec.json" \
@@ -51,7 +51,7 @@ python -s "${MIX_WORKTREE}/scripts/submit_hcwdl_mhpe_endpoint_mix_campaign.py" \
   --spec "${MIX_ROOT}/campaign_spec.json" \
   --output "${MIX_ROOT}/submission_ledger.json" \
   --execute \
-  --authorization-phrase "SUBMIT HCWDL MHPE ENDPOINT MIX 300K60 EXACT LEDGER"
+  --authorization-phrase "SUBMIT HCWDL MHPE D000E ENDPOINT MIX 300K60 EXACT LEDGER"
 
 squeue --me -o "%.18i %.50j %.2t %.10M %R"
 ```

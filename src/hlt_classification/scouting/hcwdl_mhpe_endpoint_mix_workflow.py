@@ -9,8 +9,8 @@ from typing import Any, Mapping
 from hlt_classification.data.cache_contracts import load_json, validate_content_hash, with_content_hash, write_immutable_json
 from .engine import validate_pmard_training_report
 from .hcwdl_mhpe_endpoint_mix import (
-    AGGREGATE_CONTRACT, COMPLETION_CONTRACT, NODES, campaign_tasks,
-    validate_campaign,
+    AGGREGATE_CONTRACT, COMPLETION_CONTRACT, NODES, RUNTIME_CONTRACT,
+    SOURCE_ENDPOINT, campaign_tasks, validate_campaign,
 )
 from .hcwdl_mhpe_contracts import stage_report_contract
 from .hcwdl_mhpe_endpoint_mix_runner import build_targets, train_node
@@ -56,14 +56,18 @@ def build_aggregate(spec: Mapping[str, Any]) -> dict[str, Any]:
     ):
         report = load_json(path); report_hash = validate_pmard_training_report(report)
         source_context.append({"node_id": node_id, "report_sha256": report_hash, "metrics": dict(_metrics(report))})
-    stage = load_json(source_root / "reports/D0E_stage.json")
+    stage = load_json(source_root / f"reports/{SOURCE_ENDPOINT}_stage.json")
     validate_content_hash(
         stage, expected_contract=stage_report_contract(spec["source"]["source_profile"]),
         expected_schema_version=1,
     )
-    source_context.append({"node_id": "source_D0E", "report_sha256": stage["content_hash"], "metrics": dict(stage["ensemble_metrics"])})
+    source_context.append({
+        "node_id": f"source_{SOURCE_ENDPOINT}",
+        "report_sha256": stage["content_hash"],
+        "metrics": dict(stage["ensemble_metrics"]),
+    })
     payload = with_content_hash({
-        "contract": AGGREGATE_CONTRACT, "schema_version": 1,
+        "contract": AGGREGATE_CONTRACT, "schema_version": 2,
         "campaign_spec_sha256": spec["content_hash"], "rows": rows,
         "comparisons": comparisons, "source_context": source_context,
         "primary_comparison": "M1_mix90_minus_M1_D0only",
@@ -91,7 +95,7 @@ class EndpointMixWorkflow:
                 recovery_spec_sha256=self.recovery_spec_sha256,
             )
             runtime = with_content_hash({
-                "contract": "HCWDL_MHPE_ENDPOINT_MIX_RUNTIME/v1", "schema_version": 1,
+                "contract": RUNTIME_CONTRACT, "schema_version": 2,
                 "node_id": task["node_id"], "elapsed_seconds": time.monotonic() - started,
                 "cache_array_bytes": result.pop("_cache_array_bytes"),
                 "final_test_accessed": False,
@@ -103,11 +107,11 @@ class EndpointMixWorkflow:
             write_immutable_json(self.root / "reports/validation_aggregate.json", result)
             return result
         aggregate = load_json(self.root / "reports/validation_aggregate.json")
-        aggregate_hash = validate_content_hash(aggregate, expected_contract=AGGREGATE_CONTRACT, expected_schema_version=1)
+        aggregate_hash = validate_content_hash(aggregate, expected_contract=AGGREGATE_CONTRACT, expected_schema_version=2)
         if aggregate.get("campaign_spec_sha256") != self.spec["content_hash"] or len(aggregate.get("rows", ())) != 4:
             raise ValueError("endpoint-mixture aggregate differs")
         result = with_content_hash({
-            "contract": COMPLETION_CONTRACT, "schema_version": 1,
+            "contract": COMPLETION_CONTRACT, "schema_version": 2,
             "campaign_spec_sha256": self.spec["content_hash"],
             "aggregate_sha256": aggregate_hash, "fresh_fit_count": 4,
             "scientific_result_does_not_control_completion": True,

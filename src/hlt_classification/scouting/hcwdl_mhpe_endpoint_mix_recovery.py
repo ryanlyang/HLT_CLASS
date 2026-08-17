@@ -6,7 +6,10 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from hlt_classification.data.cache_contracts import load_json, validate_content_hash, with_content_hash, write_immutable_json
-from .hcwdl_mhpe_endpoint_mix import RECOVERY_SPEC_CONTRACT, campaign_tasks, validate_campaign
+from .hcwdl_mhpe_endpoint_mix import (
+    RECOVERY_COMMAND_PLAN_CONTRACT, RECOVERY_SPEC_CONTRACT, campaign_tasks,
+    validate_campaign,
+)
 from .hcwdl_recovery import MONITOR_CONTRACT, resume_tasks, validate_submission_ledger
 
 RECOVERY_PHRASE = "AUTHORIZE HCWDL MHPE ENDPOINT MIX EXACT RECOVERY"
@@ -45,7 +48,7 @@ def create_recovery(*, campaign_spec: str | Path, submission_ledger: str | Path,
     closure = failed_downstream_closure(failed)
     root = Path(recovery_root).resolve(); project = Path(project_dir).resolve()
     payload = with_content_hash({
-        "contract": RECOVERY_SPEC_CONTRACT, "schema_version": 1,
+        "contract": RECOVERY_SPEC_CONTRACT, "schema_version": 2,
         "campaign_spec_path": str(Path(campaign_spec).resolve()),
         "campaign_spec_sha256": spec["content_hash"],
         "submission_ledger_path": str(Path(submission_ledger).resolve()),
@@ -71,7 +74,7 @@ def create_recovery(*, campaign_spec: str | Path, submission_ledger: str | Path,
         command += ["--export=ALL," + f"PROJECT_DIR={project},HCWDL_MIX_RECOVERY_SPEC={root / 'recovery_spec.json'},HCWDL_MIX_TASK={task_id}", str(project / "sbatch/run_hcwdl_mhpe_endpoint_mix_recovery_task.sh")]
         commands.append({"task_id": task_id, "dependencies": dependencies, "command": command})
     plan = with_content_hash({
-        "contract": "HCWDL_MHPE_ENDPOINT_MIX_RECOVERY_COMMAND_PLAN/v1", "schema_version": 1,
+        "contract": RECOVERY_COMMAND_PLAN_CONTRACT, "schema_version": 2,
         "spec_sha256": payload["content_hash"], "commands": commands,
         "recovery": True, "final_test_accessed": False,
     })
@@ -83,7 +86,7 @@ def create_recovery(*, campaign_spec: str | Path, submission_ledger: str | Path,
 
 
 def validate_recovery(value: Mapping[str, Any]) -> str:
-    digest = validate_content_hash(value, expected_contract=RECOVERY_SPEC_CONTRACT, expected_schema_version=1)
+    digest = validate_content_hash(value, expected_contract=RECOVERY_SPEC_CONTRACT, expected_schema_version=2)
     spec = load_json(value["campaign_spec_path"])
     if (validate_campaign(spec, verify_source_tree=False) != value.get("campaign_spec_sha256")
             or value.get("source_commit") != spec.get("source_commit")

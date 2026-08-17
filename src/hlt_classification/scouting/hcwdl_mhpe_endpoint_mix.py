@@ -16,34 +16,39 @@ from hlt_classification.data.cache_contracts import (
 from .engine import validate_pmard_training_report
 from .hcwdl_mhpe_campaign import validate_campaign as validate_source_campaign
 from .hcwdl_mhpe_contracts import campaign_profile, completion_contract
-from .hcwdl_mhpe_graph import DENSE_PROFILES, endpoint_ensemble
+from .hcwdl_mhpe_graph import PROFILE_C25P75_300K60, endpoint_ensemble
 from .hcwdl_mhpe_targets import validate_probability_bundle
 
-GRAPH_CONTRACT: Final = "HCWDL_MHPE_ENDPOINT_MIX_GRAPH/v1"
-RECIPE_CONTRACT: Final = "HCWDL_MHPE_ENDPOINT_MIX_RECIPE/v1"
-TARGET_SHARD_CONTRACT: Final = "HCWDL_MHPE_ENDPOINT_MIX_TARGET_SHARD/v1"
-TARGET_MANIFEST_CONTRACT: Final = "HCWDL_MHPE_ENDPOINT_MIX_TARGET_MANIFEST/v1"
-TARGET_LOCK_CONTRACT: Final = "HCWDL_MHPE_ENDPOINT_MIX_TARGET_LOCK/v1"
-CAMPAIGN_SPEC_CONTRACT: Final = "HCWDL_MHPE_ENDPOINT_MIX_CAMPAIGN_SPEC/v1"
-COMMAND_PLAN_CONTRACT: Final = "HCWDL_MHPE_ENDPOINT_MIX_COMMAND_PLAN/v1"
-TRAINING_REPORT_CONTRACT: Final = "HCWDL_MHPE_ENDPOINT_MIX_TRAINING_REPORT/v1"
-AGGREGATE_CONTRACT: Final = "HCWDL_MHPE_ENDPOINT_MIX_AGGREGATE/v1"
-COMPLETION_CONTRACT: Final = "HCWDL_MHPE_ENDPOINT_MIX_CAMPAIGN_COMPLETE/v1"
-RECOVERY_SPEC_CONTRACT: Final = "HCWDL_MHPE_ENDPOINT_MIX_RECOVERY_SPEC/v1"
+GRAPH_CONTRACT: Final = "HCWDL_MHPE_ENDPOINT_MIX_GRAPH/v2"
+NODE_CONTRACT: Final = "HCWDL_MHPE_ENDPOINT_MIX_NODE_SPEC/v2"
+RECIPE_CONTRACT: Final = "HCWDL_MHPE_ENDPOINT_MIX_RECIPE/v2"
+TARGET_SHARD_CONTRACT: Final = "HCWDL_MHPE_ENDPOINT_MIX_TARGET_SHARD/v2"
+TARGET_MANIFEST_CONTRACT: Final = "HCWDL_MHPE_ENDPOINT_MIX_TARGET_MANIFEST/v2"
+TARGET_LOCK_CONTRACT: Final = "HCWDL_MHPE_ENDPOINT_MIX_TARGET_LOCK/v2"
+CAMPAIGN_SPEC_CONTRACT: Final = "HCWDL_MHPE_ENDPOINT_MIX_CAMPAIGN_SPEC/v2"
+COMMAND_PLAN_CONTRACT: Final = "HCWDL_MHPE_ENDPOINT_MIX_COMMAND_PLAN/v2"
+TRAINING_REPORT_CONTRACT: Final = "HCWDL_MHPE_ENDPOINT_MIX_TRAINING_REPORT/v2"
+TARGET_BUILD_REPORT_CONTRACT: Final = "HCWDL_MHPE_ENDPOINT_MIX_TARGET_BUILD_REPORT/v2"
+RUNTIME_CONTRACT: Final = "HCWDL_MHPE_ENDPOINT_MIX_RUNTIME/v2"
+AGGREGATE_CONTRACT: Final = "HCWDL_MHPE_ENDPOINT_MIX_AGGREGATE/v2"
+COMPLETION_CONTRACT: Final = "HCWDL_MHPE_ENDPOINT_MIX_CAMPAIGN_COMPLETE/v2"
+RECOVERY_SPEC_CONTRACT: Final = "HCWDL_MHPE_ENDPOINT_MIX_RECOVERY_SPEC/v2"
+RECOVERY_COMMAND_PLAN_CONTRACT: Final = "HCWDL_MHPE_ENDPOINT_MIX_RECOVERY_COMMAND_PLAN/v2"
 
-CREATION_PHRASE: Final = "AUTHORIZE HCWDL MHPE ENDPOINT MIX 300K60 EXACT SPEC"
-SUBMISSION_PHRASE: Final = "SUBMIT HCWDL MHPE ENDPOINT MIX 300K60 EXACT LEDGER"
+CREATION_PHRASE: Final = "AUTHORIZE HCWDL MHPE D000E ENDPOINT MIX 300K60 EXACT SPEC"
+SUBMISSION_PHRASE: Final = "SUBMIT HCWDL MHPE D000E ENDPOINT MIX 300K60 EXACT LEDGER"
+SOURCE_ENDPOINT: Final = "D000E"
 
 
 @dataclass(frozen=True)
 class MixNode:
     node_id: str
-    d0_weight_numerator: int
-    d0_weight_denominator: int
+    endpoint_weight_numerator: int
+    endpoint_weight_denominator: int
 
     @property
     def m0_weight_numerator(self) -> int:
-        return self.d0_weight_denominator - self.d0_weight_numerator
+        return self.endpoint_weight_denominator - self.endpoint_weight_numerator
 
     def payload(self) -> dict[str, Any]:
         return {
@@ -51,10 +56,11 @@ class MixNode:
             "input_domain": "hlt",
             "teacher_kind": "probabilities",
             "teacher_temperature": 1.0,
-            "d0e_weight": [self.d0_weight_numerator, self.d0_weight_denominator],
-            "m0paired_weight": [self.m0_weight_numerator, self.d0_weight_denominator],
+            "endpoint_id": SOURCE_ENDPOINT,
+            "endpoint_weight": [self.endpoint_weight_numerator, self.endpoint_weight_denominator],
+            "m0paired_weight": [self.m0_weight_numerator, self.endpoint_weight_denominator],
             "initialization": "fresh_paired",
-            "seed_alias": "HCWDL-MHPE-ENDPOINT-MIX-300K60/v1/M1/paired",
+            "seed_alias": "HCWDL-MHPE-ENDPOINT-MIX-300K60/v2/M1/paired",
             "ce_weight": .10, "kd_weight": .90,
             "training_passes": 60,
         }
@@ -72,10 +78,10 @@ NODES: Final = MappingProxyType({
 
 def graph_payload() -> dict[str, Any]:
     return with_content_hash({
-        "contract": GRAPH_CONTRACT, "schema_version": 1,
-        "source_endpoint": "D0E", "source_control": "M0paired",
+        "contract": GRAPH_CONTRACT, "schema_version": 2,
+        "source_endpoint": SOURCE_ENDPOINT, "source_control": "M0paired",
         "nodes": [NODES[name].payload() for name in NODES],
-        "paired_seed": "HCWDL-MHPE-ENDPOINT-MIX-300K60/v1/M1/paired",
+        "paired_seed": "HCWDL-MHPE-ENDPOINT-MIX-300K60/v2/M1/paired",
         "final_test_accessed": False,
     })
 
@@ -85,7 +91,7 @@ GRAPH_SHA256: Final = graph_payload()["content_hash"]
 
 def recipe_payload(*, source_recipe_sha256: str) -> dict[str, Any]:
     return with_content_hash({
-        "contract": RECIPE_CONTRACT, "schema_version": 1,
+        "contract": RECIPE_CONTRACT, "schema_version": 2,
         "source_recipe_sha256": require_sha256(source_recipe_sha256, name="source recipe"),
         "training_passes": 60, "validation_every_passes": 1,
         "class_weighting": "unweighted_per_jet_population_mean_v1",
@@ -97,20 +103,24 @@ def recipe_payload(*, source_recipe_sha256: str) -> dict[str, Any]:
 
 
 def validate_recipe(value: Mapping[str, Any]) -> str:
-    digest = validate_content_hash(value, expected_contract=RECIPE_CONTRACT, expected_schema_version=1)
+    digest = validate_content_hash(value, expected_contract=RECIPE_CONTRACT, expected_schema_version=2)
     if value != recipe_payload(source_recipe_sha256=str(value.get("source_recipe_sha256"))):
         raise ValueError("endpoint-mixture recipe differs")
     return digest
+
+
+def validate_source_semantics(spec: Mapping[str, Any], *, profile: str) -> None:
+    if profile != PROFILE_C25P75_300K60 or spec.get("role_counts") != {
+        "train": 300_000, "validation": 100_000, "final_test": 100_000,
+    } or spec.get("final_test_accessed") is not False:
+        raise ValueError("endpoint-mixture source is not the C25P75 300k/60-pass campaign")
 
 
 def authenticate_source(source_spec_path: str | Path) -> dict[str, Any]:
     path = Path(source_spec_path).resolve(); spec = load_json(path)
     spec_hash = validate_source_campaign(spec, executable=False, verify_source_tree=False)
     profile = campaign_profile(spec)
-    if profile not in DENSE_PROFILES or spec.get("role_counts") != {
-        "train": 300_000, "validation": 100_000, "final_test": 100_000,
-    } or spec.get("final_test_accessed") is not False:
-        raise ValueError("endpoint-mixture source is not a dense 300k campaign")
+    validate_source_semantics(spec, profile=profile)
     root = Path(spec["campaign_root"])
     completion = load_json(root / "reports/campaign_complete.json")
     completion_hash = validate_content_hash(
@@ -119,7 +129,7 @@ def authenticate_source(source_spec_path: str | Path) -> dict[str, Any]:
     if completion.get("campaign_spec_sha256") != spec_hash or completion.get("final_test_accessed") is not False:
         raise ValueError("endpoint-mixture source completion differs")
     endpoint = endpoint_ensemble(profile)
-    if endpoint != "D0E":
+    if endpoint != SOURCE_ENDPOINT:
         raise ValueError("endpoint-mixture source endpoint differs")
     target_root = root / "targets" / endpoint / "T1"
     d0_lock_hash, manifests = validate_probability_bundle(
@@ -148,9 +158,10 @@ def authenticate_source(source_spec_path: str | Path) -> dict[str, Any]:
         "source_root": str(root), "foundation_root": str(foundation_root),
         "foundation_spec_path": str(Path(reuse["foundation_spec_path"]).resolve()),
         "foundation_reuse_lock_sha256": reuse["content_hash"],
-        "d0e_target_root": str(target_root.resolve()),
-        "d0e_target_lock_sha256": d0_lock_hash,
-        "d0e_manifest_sha256": {role: manifests[role]["content_hash"] for role in ("train", "validation")},
+        "endpoint_id": endpoint,
+        "endpoint_target_root": str(target_root.resolve()),
+        "endpoint_target_lock_sha256": d0_lock_hash,
+        "endpoint_manifest_sha256": {role: manifests[role]["content_hash"] for role in ("train", "validation")},
         "m0paired_report_path": str(report_path.resolve()),
         "m0paired_report_sha256": report_hash,
         "m0paired_checkpoint_sha256": report["selected_checkpoint_sha256"],
@@ -192,7 +203,7 @@ def command_plan(spec: Mapping[str, Any], *, recovery: bool = False) -> dict[str
         ]
         commands.append({"task_id": task["task_id"], "dependencies": task["dependencies"], "command": command})
     return with_content_hash({
-        "contract": COMMAND_PLAN_CONTRACT, "schema_version": 1,
+        "contract": COMMAND_PLAN_CONTRACT, "schema_version": 2,
         "spec_sha256": spec["content_hash"], "commands": commands,
         "recovery": recovery, "final_test_accessed": False,
     })
@@ -217,8 +228,8 @@ def create_campaign(*, source_campaign_spec: str | Path, campaign_root: str | Pa
         "cpu": {"cpus": 4, "memory": "32G", "walltime": "01:00:00", "gpu": None},
     }
     spec = with_content_hash({
-        "contract": CAMPAIGN_SPEC_CONTRACT, "schema_version": 1,
-        "campaign": "HCWDL-MHPE-ENDPOINT-MIX-300K60",
+        "contract": CAMPAIGN_SPEC_CONTRACT, "schema_version": 2,
+        "campaign": "HCWDL-MHPE-D000E-ENDPOINT-MIX-300K60",
         "campaign_root": str(root), "project_dir": str(project),
         "source_commit": source_commit, "spec_path": str(root / "campaign_spec.json"),
         "source": source, "graph_sha256": graph["content_hash"],
@@ -240,8 +251,8 @@ def create_campaign(*, source_campaign_spec: str | Path, campaign_root: str | Pa
 
 def validate_campaign(value: Mapping[str, Any], *, executable: bool = False,
                       verify_source_tree: bool = True) -> str:
-    digest = validate_content_hash(value, expected_contract=CAMPAIGN_SPEC_CONTRACT, expected_schema_version=1)
-    if (value.get("campaign") != "HCWDL-MHPE-ENDPOINT-MIX-300K60"
+    digest = validate_content_hash(value, expected_contract=CAMPAIGN_SPEC_CONTRACT, expected_schema_version=2)
+    if (value.get("campaign") != "HCWDL-MHPE-D000E-ENDPOINT-MIX-300K60"
             or value.get("tasks") != campaign_tasks()
             or value.get("resources") != {
                 "gpu": {"cpus": 8, "memory": "96G", "walltime": "06:00:00", "gpu": "gpu:gh200:1"},
@@ -264,7 +275,7 @@ def validate_campaign(value: Mapping[str, Any], *, executable: bool = False,
     if graph != graph_payload() or graph.get("content_hash") != value.get("graph_sha256"):
         raise ValueError("endpoint-mixture graph lineage differs")
     plan = load_json(Path(value["campaign_root"]) / "command_plan.json")
-    validate_content_hash(plan, expected_contract=COMMAND_PLAN_CONTRACT, expected_schema_version=1)
+    validate_content_hash(plan, expected_contract=COMMAND_PLAN_CONTRACT, expected_schema_version=2)
     if plan != command_plan(value):
         raise ValueError("endpoint-mixture command plan differs")
     if executable:
@@ -278,9 +289,12 @@ def validate_campaign(value: Mapping[str, Any], *, executable: bool = False,
 
 __all__ = [
     "AGGREGATE_CONTRACT", "CAMPAIGN_SPEC_CONTRACT", "COMMAND_PLAN_CONTRACT",
-    "COMPLETION_CONTRACT", "CREATION_PHRASE", "GRAPH_SHA256", "NODES",
+    "COMPLETION_CONTRACT", "CREATION_PHRASE", "GRAPH_SHA256", "NODES", "NODE_CONTRACT",
+    "RECOVERY_COMMAND_PLAN_CONTRACT", "RUNTIME_CONTRACT", "SOURCE_ENDPOINT",
+    "TARGET_BUILD_REPORT_CONTRACT",
     "RECIPE_CONTRACT", "SUBMISSION_PHRASE", "TARGET_LOCK_CONTRACT",
     "TARGET_MANIFEST_CONTRACT", "TARGET_SHARD_CONTRACT", "TRAINING_REPORT_CONTRACT",
     "authenticate_source", "campaign_tasks", "command_plan", "create_campaign",
     "graph_payload", "recipe_payload", "validate_campaign", "validate_recipe",
+    "validate_source_semantics",
 ]

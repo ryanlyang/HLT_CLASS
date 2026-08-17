@@ -4,17 +4,23 @@
 
 The implementation-authoritative
 [endpoint teacher-mixture plan](plans/HCWDL_MHPE_ENDPOINT_MIX_300K60_PLAN.md)
-is implemented and queue-ready as a separate validation-only add-on over one
-explicitly selected, completed dense 300k MHPE campaign. It does not retrain or
-mutate the source U/D ladder. The target worker reuses the authenticated
-`D0E/T1` train/validation probability bundle, performs exactly one
+is implemented and queue-ready as a separate validation-only add-on over the
+explicitly selected, completed `C25P75_300K60` campaign. It does not retrain or
+mutate the source U/D ladder. The v2 target worker reuses the authenticated
+`D000E/T1` train/validation probability bundle, performs exactly one
 `M0paired` exact-HLT forward pass per role, joins the two components by jet
 identity, and publishes four immutable teacher tables:
 
-- `M1_D0only`: 100% D0E;
-- `M1_mix90`: 90% D0E plus 10% M0paired;
-- `M1_mix75`: 75% D0E plus 25% M0paired;
-- `M1_mix50`: 50% D0E plus 50% M0paired.
+- `M1_D0only`: 100% D000E;
+- `M1_mix90`: 90% D000E plus 10% M0paired;
+- `M1_mix75`: 75% D000E plus 25% M0paired;
+- `M1_mix50`: 50% D000E plus 50% M0paired.
+
+The first queue attempt exposed that the unexecuted v1 draft had selected the
+wrong source family: dense `D0E` rather than the intended original 300k
+`D000E`. No endpoint-mixture campaign or Slurm job was created by that attempt.
+The source semantics and the entire add-on artifact family are now version 2;
+campaign creation accepts exactly `C25P75_300K60` and rejects dense sources.
 
 The numerical contract is max-subtracted FP32 M0 softmax, exact-rational FP64
 mixture accumulation, and little-endian FP32 publication. The four fresh,
@@ -39,21 +45,24 @@ repository `sbatch/common.sh`. Both normal and recovery workers now use
 `hlt_activate`, the required environment variables/library path, absolute
 project paths, and `exec python -s`.
 
-Local evidence with `PYTHONDONTWRITEBYTECODE=1` and pytest caches disabled:
+Post-correction local evidence with `PYTHONDONTWRITEBYTECODE=1` and pytest
+caches disabled:
 
-- new focused endpoint-mixture suite: 7 passed;
-- combined MHPE regression: 39 passed;
+- new focused endpoint-mixture suite: 8 passed;
+- combined MHPE regression: 40 passed;
 - worker-contract plus new focused regression after the wrapper repair:
   8 passed;
-- complete post-repair repository suite: 518 passed in 236.73 seconds, with
+- complete post-correction repository suite: 519 passed in 243.17 seconds, with
   only the 14 existing Matplotlib/Pyparsing deprecation warnings;
-- all seven new CLI help surfaces, Python compilation, contract/link checks,
-  and `git diff --check`: passed.
+- all seven CLI help surfaces, Python compilation, all 15 v2 contract
+  identities, the exact `D000E` source endpoint, and `git diff --check`:
+  passed.
 
 No donor file was copied. No Slurm command was submitted, no source campaign
 artifact was modified, and no final-test row was accessed. The remaining
-action is to commit/push this implementation and use the exact runbook block
-with a completed dense campaign spec.
+action is to commit/push the v2 correction, allow the already scientifically
+complete `C25P75_300K60` source to publish its authenticated campaign-complete
+tail, and use that exact source spec with the runbook block.
 
 ## HCWDL-MHPE 300k executable-recipe recovery (2026-08-16)
 

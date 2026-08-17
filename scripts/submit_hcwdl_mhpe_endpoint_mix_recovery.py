@@ -7,10 +7,11 @@ import sys
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/"src"))
 from hlt_classification.data.cache_contracts import load_json,validate_content_hash,write_immutable_json  # noqa:E402
 from hlt_classification.scouting.hcwdl_authorization import validate_source_checkout  # noqa:E402
+from hlt_classification.scouting.hcwdl_mhpe_endpoint_mix import RECOVERY_COMMAND_PLAN_CONTRACT  # noqa:E402
 from hlt_classification.scouting.hcwdl_mhpe_endpoint_mix_recovery import RECOVERY_PHRASE,validate_recovery  # noqa:E402
 from hlt_classification.scouting.hcwdl_recovery import assemble_submission_ledger,build_submission_event,build_submission_ledger,validate_submission_ledger  # noqa:E402
 def main()->int:
- p=argparse.ArgumentParser(description=__doc__);p.add_argument("--recovery-spec",type=Path,required=True);p.add_argument("--output",type=Path,required=True);p.add_argument("--execute",action="store_true");p.add_argument("--authorization-phrase");a=p.parse_args();spec=load_json(a.recovery_spec);validate_recovery(spec);plan=load_json(Path(spec["recovery_root"])/"command_plan.json");validate_content_hash(plan,expected_contract="HCWDL_MHPE_ENDPOINT_MIX_RECOVERY_COMMAND_PLAN/v1",expected_schema_version=1);commands={row["task_id"]:list(row["command"]) for row in plan["commands"]}
+ p=argparse.ArgumentParser(description=__doc__);p.add_argument("--recovery-spec",type=Path,required=True);p.add_argument("--output",type=Path,required=True);p.add_argument("--execute",action="store_true");p.add_argument("--authorization-phrase");a=p.parse_args();spec=load_json(a.recovery_spec);validate_recovery(spec);plan=load_json(Path(spec["recovery_root"])/"command_plan.json");validate_content_hash(plan,expected_contract=RECOVERY_COMMAND_PLAN_CONTRACT,expected_schema_version=2);commands={row["task_id"]:list(row["command"]) for row in plan["commands"]}
  if not a.execute:
   ledger=build_submission_ledger(campaign_spec_sha256=spec["content_hash"],jobs={task:"1" for task in commands},commands=commands,dry_run=True)
   if a.output.exists() and load_json(a.output)!=ledger:raise FileExistsError("endpoint-mixture recovery dry ledger differs")

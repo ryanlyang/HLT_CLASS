@@ -4,7 +4,7 @@ Status: implementation authority for the validation-only 300k endpoint add-on.
 
 ## Question
 
-Does the dense exact-HLT endpoint ensemble benefit when its teacher
+Does the original C25P75 exact-HLT endpoint ensemble benefit when its teacher
 distribution is mixed with the independently trained CE-only exact-HLT
 `M0paired` distribution before the final M1 distillation?
 
@@ -13,14 +13,12 @@ reinterpret any U/D specialist or dense ensemble.
 
 ## Authenticated source
 
-One completed 300k/100k dense MHPE campaign is selected explicitly at campaign
-creation. It must use either
-`C10P90_DENSE_ANCHOR50_300K60` or
-`C25P75_DENSE_ANCHOR50_300K60`, have an authenticated completion report, expose
-the complete `D0E/T1` train and validation probability bundle, and bind the
+The completed `C25P75_300K60` MHPE campaign is selected explicitly at campaign
+creation. It must have an authenticated completion report, expose
+the complete `D000E/T1` train and validation probability bundle, and bind the
 completed unified-balanced foundation containing `M0paired`.
 
-The add-on binds the source campaign spec, completion report, D0E target lock
+The add-on binds the source campaign spec, completion report, D000E target lock
 and manifests, foundation reuse lock, M0paired report and checkpoint, split,
 row selection, executable recipe, and exact source commit. Final-test rows are
 forbidden.
@@ -30,7 +28,7 @@ forbidden.
 At temperature one, for every authenticated jet identity, define
 
 ```text
-q_w = w * q_D0E + (1-w) * softmax(z_M0paired)
+q_w = w * q_D000E + (1-w) * softmax(z_M0paired)
 ```
 
 with exact rational weights and the following four paired students:
@@ -42,7 +40,7 @@ M1_mix75   w = 3/4
 M1_mix50   w = 1/2
 ```
 
-The D0E and M0paired components are joined by canonical jet identity, never by
+The D000E and M0paired components are joined by canonical jet identity, never by
 incidental row order. M0paired softmax uses max-subtracted FP32 arithmetic.
 Mixtures are accumulated in lexical component order in FP64, divided by exact
 integer rationals, and published once as little-endian FP32. Every row must be
@@ -74,13 +72,13 @@ build_targets
 This is exactly seven jobs. `build_targets` and the four fits request 8 CPUs,
 96G RAM, 06:00:00, and one GH200. Reporting jobs request 4 CPUs, 32G, and one
 hour. The target builder performs one M0paired forward pass per role and reuses
-the already durable D0E probabilities. No repaired particle datasets or model
+the already durable D000E probabilities. No repaired particle datasets or model
 inputs are persisted.
 
 ## Reporting and claims
 
 The validation aggregate reports all four rows, pairwise deltas from
-`M1_D0only`, source `D0E`, source `M1`, and `M0paired` context, plus macro AUC,
+`M1_D0only`, source `D000E`, source `M1`, and `M0paired` context, plus macro AUC,
 CE, accuracy, macro logR50/R50 and per-class rejection when available. Poor
 metrics never fail or prune a job. The completion report requires all four
 durable reports and states `final_test_accessed=false`.
@@ -103,3 +101,6 @@ No new smoke is required because the worker path is the already accepted
 Campaign creation and a complete dry run remain mandatory. No job may be
 submitted by implementation work itself.
 
+This v2 authority supersedes the unexecuted v1 dense-source draft. V1 named
+`D0E`; v2 intentionally names `D000E` and uses distinct contract identities so
+the two source semantics can never be mistaken for interchangeable artifacts.
