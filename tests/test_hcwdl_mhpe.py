@@ -765,6 +765,24 @@ def test_bounded_synthetic_lattice_exercises_all_specialists_and_ensembles():
     assert all(np.allclose(value.sum(1), 1, atol=2e-6) for value in ensembles.values())
 
 
+def test_aggregate_distinguishes_graph_artifact_and_semantic_hashes(tmp_path):
+    from hlt_classification.scouting.hcwdl_mhpe_contracts import graph_payload
+    from hlt_classification.scouting.hcwdl_mhpe_workflow import (
+        _authenticated_semantic_graph_sha256,
+    )
+
+    graph = graph_payload(PROFILE_C25P75_300K60)
+    assert graph["content_hash"] != graph["graph_sha256"]
+    write_immutable_json(tmp_path / "graph.json", graph)
+    spec = {"graph_sha256": graph["content_hash"]}
+    assert _authenticated_semantic_graph_sha256(spec, tmp_path) == graph["graph_sha256"]
+
+    with pytest.raises(ValueError, match="graph artifact lineage"):
+        _authenticated_semantic_graph_sha256(
+            {"graph_sha256": "0" * 64}, tmp_path,
+        )
+
+
 def test_campaign_publication_and_full_dry_run_shape(tmp_path, monkeypatch):
     from hlt_classification.scouting import hcwdl_mhpe_campaign as campaign
     foundation = tmp_path / "foundation"

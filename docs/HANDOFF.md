@@ -22,6 +22,16 @@ wrong source family: dense `D0E` rather than the intended original 300k
 The source semantics and the entire add-on artifact family are now version 2;
 campaign creation accepts exactly `C25P75_300K60` and rejects dense sources.
 
+Closing that source campaign exposed a separate reporting-only defect after
+all 16 specialists and M1 had completed: the aggregate compared each outer
+training report's semantic graph hash to the content hash of the complete
+`graph.json` artifact. For this campaign those are correctly distinct
+(`9b2635b0...` semantic identity versus `392cc1a8...` artifact identity).
+The aggregate now authenticates `graph.json` against the campaign spec first
+and then compares node reports to its authenticated inner semantic hash. It
+does not waive, rewrite, or weaken any recovered training lineage. A focused
+regression proves both the distinction and fail-closed artifact mismatch.
+
 The numerical contract is max-subtracted FP32 M0 softmax, exact-rational FP64
 mixture accumulation, and little-endian FP32 publication. The four fresh,
 exact-HLT students share initialization, sampler, dropout, optimizer, schedule,
@@ -52,7 +62,7 @@ caches disabled:
 - combined MHPE regression: 40 passed;
 - worker-contract plus new focused regression after the wrapper repair:
   8 passed;
-- complete post-correction repository suite: 519 passed in 243.17 seconds, with
+- complete post-correction repository suite: 520 passed in 237.57 seconds, with
   only the 14 existing Matplotlib/Pyparsing deprecation warnings;
 - all seven CLI help surfaces, Python compilation, all 15 v2 contract
   identities, the exact `D000E` source endpoint, and `git diff --check`:

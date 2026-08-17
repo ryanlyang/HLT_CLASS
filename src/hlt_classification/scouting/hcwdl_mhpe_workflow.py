@@ -14,7 +14,7 @@ from .hcwdl_mhpe_campaign import campaign_tasks, validate_campaign
 from .hcwdl_mhpe_contracts import (
     aggregate_contract, campaign_profile, completion_contract,
     finalist_lock_contract, finalist_lock_payload, stage_report_contract,
-    training_report_contract,
+    training_report_contract, validate_graph,
 )
 from .hcwdl_mhpe_graph import (
     endpoint_ensemble, ensemble_components, finalists, local_teacher,
@@ -32,11 +32,31 @@ def _metrics(report: Mapping[str, Any]) -> Mapping[str, Any]:
     return value
 
 
+def _authenticated_semantic_graph_sha256(
+    spec: Mapping[str, Any], root: Path,
+) -> str:
+    """Return the graph identity used inside node training reports.
+
+    ``spec.graph_sha256`` authenticates the complete graph artifact, while the
+    artifact's ``graph_sha256`` field is the semantic graph identity embedded
+    in every HCWDL training report.  They are intentionally distinct hashes.
+    """
+    graph = load_json(root / "graph.json")
+    artifact_hash = validate_graph(graph)
+    if artifact_hash != spec.get("graph_sha256"):
+        raise ValueError("HCWDL-MHPE graph artifact lineage differs")
+    semantic_hash = graph.get("graph_sha256")
+    if not isinstance(semantic_hash, str) or len(semantic_hash) != 64:
+        raise ValueError("HCWDL-MHPE semantic graph identity differs")
+    return semantic_hash
+
+
 def build_aggregate(spec: Mapping[str, Any]) -> dict[str, Any]:
     profile = campaign_profile(spec)
     registry = node_registry(profile)
     components = ensemble_components(profile)
     root = Path(spec["campaign_root"]); rows = []
+    semantic_graph_sha256 = _authenticated_semantic_graph_sha256(spec, root)
     for node_id in registry:
         report = load_json(root / "training" / node_id / "training_report.json")
         outer = load_json(root / "training" / node_id / "hcwdl_training_report.json")
@@ -47,7 +67,7 @@ def build_aggregate(spec: Mapping[str, Any]) -> dict[str, Any]:
             expected_schema_version=1,
         )
         if (outer.get("node_id") != node_id
-                or outer.get("graph_sha256") != spec["graph_sha256"]
+                or outer.get("graph_sha256") != semantic_graph_sha256
                 or outer.get("recipe_overlay_sha256") != spec["recipe_sha256"]
                 or outer.get("pmard_engine_report_sha256") != report_hash):
             raise ValueError("HCWDL-MHPE outer training report lineage differs")
