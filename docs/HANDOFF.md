@@ -2,6 +2,18 @@
 
 ## HCWDL-MHPE paired endpoint teacher-mixture add-on (2026-08-17)
 
+A separate validation-only endpoint-refinement diagnostic is implemented for
+the now-completed source campaign.  It performs one authenticated exact-HLT
+validation inference pass through the registered source `M1`, reuses the
+authenticated `D000E/T1` validation probability table, joins them by canonical
+jet identity, and reports `D000E`, `75/25`, `50/50`, `25/75`, and `M1` fixed
+probability blends.  Weights are declared before metric evaluation; only
+aggregate metrics are durable and final test remains untouched.  The worker is
+source-pinned, uses the repository Tigris activation contract, and requires one
+GH200 with 8 CPUs, 96G, and a one-hour request.  This diagnostic asks whether
+the raw ensemble retains complementary ranking information after its M1
+distillation; it does not select or modify a campaign finalist.
+
 The implementation-authoritative
 [endpoint teacher-mixture plan](plans/HCWDL_MHPE_ENDPOINT_MIX_300K60_PLAN.md)
 is implemented and queue-ready as a separate validation-only add-on over the

@@ -18,6 +18,9 @@ from hlt_classification.scouting.hcwdl_mhpe_endpoint_mix_targets import (
     ephemeral_from_manifest, fp32_softmax, load_target, mix_probabilities,
     publish_lock, publish_manifest, publish_target, validate_bundle,
 )
+from hlt_classification.scouting.hcwdl_mhpe_endpoint_refinement import (
+    BLENDS as REFINEMENT_BLENDS, blend_probabilities,
+)
 from hlt_classification.scouting.hcwdl_mhpe_endpoint_mix_runner import (
     endpoint_mix_loss,
 )
@@ -127,6 +130,27 @@ def test_endpoint_mix_numerics_are_fp32_softmax_exact_rational_fp64():
     assert np.array_equal(actual, expected)
     assert np.array_equal(mix_probabilities(d0, m0, numerator=1, denominator=1), d0)
     assert np.allclose(actual.sum(1), 1, rtol=0, atol=2e-6)
+
+
+def test_endpoint_refinement_blends_are_fixed_and_exact_rational():
+    assert REFINEMENT_BLENDS == (
+        ("D000E", 1, 1),
+        ("D000E75_M1_25", 3, 4),
+        ("D000E50_M1_50", 1, 2),
+        ("D000E25_M1_75", 1, 4),
+        ("M1", 0, 1),
+    )
+    endpoint = np.zeros((2, 15), np.float32); endpoint[:, 0] = 1
+    refinement = np.zeros((2, 15), np.float32); refinement[:, 1] = 1
+    actual = blend_probabilities(
+        endpoint, refinement, endpoint_numerator=3, denominator=4,
+    )
+    assert actual.dtype.str == "<f4"
+    assert np.array_equal(actual[:, :2], np.asarray([[.75, .25]] * 2, np.float32))
+    with pytest.raises(ValueError, match="weight"):
+        blend_probabilities(
+            endpoint, refinement, endpoint_numerator=5, denominator=4,
+        )
 
 
 def test_endpoint_mix_target_bundle_roundtrip_and_tamper(tmp_path):
