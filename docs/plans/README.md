@@ -122,6 +122,13 @@ seeds, 300k/100k/100k population, and 60-pass schedule. Its only scientific
 change is specialist loss from C10P90 to C25P75; M1 remains C10P90/T1.
 
 The additive
+[D066 optimization schedule screen](HCWDL_MHPE_D066_SCHEDULE_SCREEN_300K_PLAN.md)
+tests 20 pass/peak-LR schedules under three paired teacher horizons. It uses
+300k training rows, partitions the 100k validation role into disjoint 50k
+checkpoint-selection and 50k schedule-scoring subsets, queues all 60 fits
+independently, and never accesses final test.
+
+The additive
 [HCWDL matching-free privileged representation-KD ascent plan](HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md)
 registers two nested representation strategies, each as a complete cold and
 warm M1--M6 ascent. It preserves the implemented logit-only HCWDL graph and

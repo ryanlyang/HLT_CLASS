@@ -1,5 +1,77 @@
 # Current Handoff
 
+## HCWDL-MHPE D066 optimization schedule screen (2026-08-18)
+
+The validation-only schedule study requested after comparing the 20-pass
+full-data and 60-pass 300k MHPE results is implemented and queue-ready. The
+implementation-authoritative
+[plan](plans/HCWDL_MHPE_D066_SCHEDULE_SCREEN_300K_PLAN.md) registers the exact
+Cartesian product
+
+```text
+passes  = {20, 30, 40, 60, 80}
+peak LR = {3e-4, 1.5e-4, 1e-4, 5e-5}
+teacher = {U000, U050, U100E}
+```
+
+as 60 independent fresh D066 C10P90/T2 fits. It imports only a completed,
+authenticated `C10P90_300K60` campaign and reuses its immutable U000/U050
+train logit manifests and U100E/T2 train probability bundle. U000 and U050
+target consumers bind both the target-manifest and teacher-report hashes;
+U100E binds its probability-manifest hash. All fits share exact initialization,
+sampler, dropout, repair, and optimizer seed aliases while varying only the
+registered pass count, peak learning rate, and teacher identity.
+
+The authenticated 100k validation population is partitioned by label-free
+SHA-256 identity rank into 50k checkpoint-selection rows and 50k untouched
+schedule-scoring rows. The latter are evaluated once after loading each
+selected checkpoint and cannot affect training or checkpoint selection.
+Schedules rank by U100E scoring AUC, then CE, local-teacher contrast, passes,
+LR, and lexical identity. Aggregate output also records U100E-U000 and
+U050-U000 contrasts. Final test is absent from the task graph and ordinary
+access counts are zero.
+
+New reusable surfaces are:
+
+- `hcwdl_mhpe_schedule_screen.py`: v1 graph, recipe, validation partition,
+  source-reuse, waiver, campaign, command-plan, report, runtime, aggregate,
+  completion, and recovery contracts;
+- `hcwdl_mhpe_schedule_screen_runner.py`: once-per-job RAM view construction,
+  exact target loading, 60-schedule training, untouched scoring, ranking, and
+  completion;
+- `hcwdl_mhpe_schedule_screen_recovery.py`: exact failed/downstream closure;
+- eight thin create/run/submit/monitor/cancel/recovery CLIs and two Tigris
+  workers;
+- the reusable [contract](contracts/HCWDL_MHPE_D066_SCHEDULE_SCREEN.md) and
+  exact [queue runbook](HCWDL_MHPE_D066_SCHEDULE_SCREEN_RUNBOOK.md).
+
+Operational requests are fixed at 8 CPUs, 96 GiB, 06:00:00, and one GH200 per
+fit; CPU aggregate/completion jobs use 4 CPUs, 32 GiB, and 01:00:00. All 60
+fits have no Slurm dependency on one another. The aggregate depends on all 60
+and completion depends on aggregate. GPU workers receive `USR1@120` and use
+the existing exact rolling-resume implementation. A separately authorized
+carried-evidence waiver records that the completed source already exercised
+the same production D066 builder, target readers, engine, selection policy,
+and Tigris worker; no standalone new smoke was run locally or submitted.
+
+Validation evidence:
+
+- pre-change focused MHPE baseline: 33 passed in 17.50 seconds;
+- new schedule-screen tests: 8 passed after final lineage review;
+- combined schedule-screen plus MHPE regression: 41 passed in 14.35 seconds;
+- complete repository suite: 547 passed in 537.74 seconds, with 15 existing
+  matplotlib/cache warnings and no failures;
+- all 11 new Python package/CLI surfaces compiled and all eight CLI `--help`
+  invocations passed;
+- both new Slurm workers passed `bash -n`;
+- all contract identities are frozen at v1 by focused test;
+- new-file whitespace and final `git diff --check` passed.
+
+No donor files were copied and no donor commit applies. No installed-Weaver
+or Tigris job was run for this additive screen in this workspace. Live Slurm
+submission remains unauthorized until the user pushes an exact clean commit
+and supplies the two phrases in the runbook.
+
 ## HCWDL-MHPE R-augmented refined continuation (2026-08-17)
 
 The additive 300k/100k validation campaign requested after the completed
