@@ -122,10 +122,10 @@ seeds, 300k/100k/100k population, and 60-pass schedule. Its only scientific
 change is specialist loss from C10P90 to C25P75; M1 remains C10P90/T1.
 
 The additive
-[D066 optimization schedule screen](HCWDL_MHPE_D066_SCHEDULE_SCREEN_300K_PLAN.md)
+[D066 full-data optimization schedule screen](HCWDL_MHPE_D066_SCHEDULE_SCREEN_FULL_PLAN.md)
 tests 20 pass/peak-LR schedules under three paired teacher horizons. It uses
-300k training rows, partitions the 100k validation role into disjoint 50k
-checkpoint-selection and 50k schedule-scoring subsets, queues all 60 fits
+all mapped full-data training rows, partitions the full validation role into
+disjoint checkpoint-selection and schedule-scoring halves, queues all 60 fits
 independently, and never accesses final test.
 
 The additive

@@ -3,9 +3,9 @@
 ## HCWDL-MHPE D066 optimization schedule screen (2026-08-18)
 
 The validation-only schedule study requested after comparing the 20-pass
-full-data and 60-pass 300k MHPE results is implemented and queue-ready. The
-implementation-authoritative
-[plan](plans/HCWDL_MHPE_D066_SCHEDULE_SCREEN_300K_PLAN.md) registers the exact
+full-data and 60-pass 300k MHPE results is now explicitly a full-data C25P75
+study. The implementation-authoritative
+[plan](plans/HCWDL_MHPE_D066_SCHEDULE_SCREEN_FULL_PLAN.md) registers the exact
 Cartesian product
 
 ```text
@@ -14,17 +14,20 @@ peak LR = {3e-4, 1.5e-4, 1e-4, 5e-5}
 teacher = {U000, U050, U100E}
 ```
 
-as 60 independent fresh D066 C25P75/T2 fits. It imports only a completed,
-authenticated `C25P75_300K60` campaign and reuses its immutable U000/U050
-train logit manifests and U100E/T2 train probability bundle. U000 and U050
+as 60 independent fresh D066 C25P75/T2 fits. It imports an authenticated
+all-mapped full-data `C25P75` campaign and reuses its immutable U000/U050
+train-logit manifests and U100E/T2 probability bundle. The outer source
+campaign need not be complete; a v3 readiness artifact proves every consumed
+teacher product is already complete. U000 and U050
 target consumers bind both the target-manifest and teacher-report hashes;
 U100E binds its probability-manifest hash. All fits share exact initialization,
 sampler, dropout, repair, and optimizer seed aliases while varying only the
 registered pass count, peak learning rate, and teacher identity.
 
-The authenticated 100k validation population is partitioned by label-free
-SHA-256 identity rank into 50k checkpoint-selection rows and 50k untouched
-schedule-scoring rows. The latter are evaluated once after loading each
+The complete mapped full-data validation population is reconstructed from its
+authenticated assignment shards and partitioned by label-free SHA-256 identity
+rank into deterministic checkpoint-selection and untouched schedule-scoring
+halves. The latter are evaluated once after loading each
 selected checkpoint and cannot affect training or checkpoint selection.
 Schedules rank by U100E scoring AUC, then CE, local-teacher contrast, passes,
 LR, and lexical identity. Aggregate output also records U100E-U000 and
@@ -33,7 +36,7 @@ access counts are zero.
 
 New reusable surfaces are:
 
-- `hcwdl_mhpe_schedule_screen.py`: v2 graph, recipe, validation partition,
+- `hcwdl_mhpe_schedule_screen.py`: v3 graph, recipe, validation partition,
   source-reuse, waiver, campaign, command-plan, report, runtime, aggregate,
   completion, and recovery contracts;
 - `hcwdl_mhpe_schedule_screen_runner.py`: once-per-job RAM view construction,
@@ -43,41 +46,45 @@ New reusable surfaces are:
 - eight thin create/run/submit/monitor/cancel/recovery CLIs and two Tigris
   workers;
 - the reusable [contract](contracts/HCWDL_MHPE_D066_SCHEDULE_SCREEN.md) and
-  exact [queue runbook](HCWDL_MHPE_D066_SCHEDULE_SCREEN_RUNBOOK.md).
+  exact [queue runbook](HCWDL_MHPE_D066_SCHEDULE_SCREEN_FULL_RUNBOOK.md).
 
-Operational requests are fixed at 8 CPUs, 96 GiB, 06:00:00, and one GH200 per
+Operational requests are fixed at 8 CPUs, 96 GiB, 72:00:00, and one GH200 per
 fit; CPU aggregate/completion jobs use 4 CPUs, 32 GiB, and 01:00:00. All 60
 fits have no Slurm dependency on one another. The aggregate depends on all 60
 and completion depends on aggregate. GPU workers receive `USR1@120` and use
 the existing exact rolling-resume implementation. A separately authorized
-carried-evidence waiver records that the completed source already exercised
+carried-evidence waiver records that the source products already exercised
 the same production D066 builder, target readers, engine, selection policy,
 and Tigris worker; no standalone new smoke was run locally or submitted.
 
-Validation evidence:
+Validation evidence for v3:
 
-- pre-change focused MHPE baseline: 33 passed in 17.50 seconds;
-- new schedule-screen tests: 8 passed after final lineage review;
-- combined schedule-screen plus MHPE regression after the C25P75/v2 correction:
-  41 passed in 16.77 seconds;
-- complete repository suite after the C25P75/v2 correction: 547 passed in
-  528.10 seconds, with 14 existing matplotlib warnings and no failures;
-- all 11 new Python package/CLI surfaces compiled and all eight CLI `--help`
-  invocations passed;
-- both new Slurm workers passed `bash -n`;
-- all executable contract identities are frozen at v2 by focused test;
-- new-file whitespace and final `git diff --check` passed.
+- schedule-screen focused suite: 10 passed in 10.47 seconds;
+- combined MHPE regression before the two final source-readiness tests:
+  41 passed in 15.48 seconds;
+- complete repository suite after the final implementation and tests:
+  549 passed in 633.06 seconds, with one existing PyTorch scalar-conversion
+  warning and no failures;
+- eight CLI `--help` checks and all 15 executable v3 contract identities
+  passed;
+- all schedule-screen package/CLI surfaces compiled, both Slurm workers passed
+  `bash -n`, and `git diff --check` passed.
+
+The tests run in an isolated temporary Python 3.14 environment populated from
+the repository's declared dependencies plus scikit-learn, which is imported by
+existing matcher code. Earlier v2 evidence applies only to the retired 300k
+design and does not authorize v3.
 
 No donor files were copied and no donor commit applies. No installed-Weaver
 or Tigris job was run for this additive screen in this workspace. Live Slurm
 submission remains unauthorized until the user pushes an exact clean commit
 and supplies the two phrases in the runbook.
 
-The first pushed but unexecuted draft targeted C10P90/v1. The Tigris creation
-block stopped before making a worktree or campaign root because that source
-had no completion report; it submitted no jobs. The user then explicitly
-selected the completed C25P75 source. The corrected semantics are v2 and the
-retired C10P90/v1 definition must not be executed or relabeled.
+The pushed but unexecuted v1 draft targeted C10P90/300k. The v2 correction
+targeted C25P75/300k, but the user interrupted it during local Python import,
+before campaign creation or Slurm submission. Both definitions answer the
+wrong population-scale question and are retired. Full-data semantics are v3;
+old roots must not be executed or relabeled.
 
 ## HCWDL-MHPE R-augmented refined continuation (2026-08-17)
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create the authenticated 300k D066 pass/learning-rate schedule screen."""
+"""Create the authenticated full-data D066 pass/learning-rate schedule screen."""
 from __future__ import annotations
 
 import argparse

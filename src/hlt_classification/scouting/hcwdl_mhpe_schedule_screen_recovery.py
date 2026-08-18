@@ -16,7 +16,7 @@ from .hcwdl_recovery import (
     MONITOR_CONTRACT, resume_tasks, validate_submission_ledger,
 )
 
-RECOVERY_PHRASE = "AUTHORIZE HCWDL MHPE C25P75 D066 SCHEDULE SCREEN EXACT RECOVERY"
+RECOVERY_PHRASE = "AUTHORIZE HCWDL MHPE FULL C25P75 D066 SCHEDULE SCREEN EXACT RECOVERY"
 
 
 def failed_downstream_closure(failed: Sequence[str]) -> tuple[str, ...]:
@@ -75,7 +75,7 @@ def create_recovery(
         command = [
             "sbatch", "--parsable", "--account=reu-aisocial", "--partition=tigris",
             f"--cpus-per-task={resource['cpus']}", f"--mem={resource['memory']}",
-            f"--time={resource['walltime']}", f"--job-name=hcwsch_r_{sequence:02d}",
+            f"--time={resource['walltime']}", f"--job-name=hcwschf_r_{sequence:02d}",
         ]
         if resource.get("gpu"):
             command += [f"--gres={resource['gpu']}", "--signal=B:USR1@120"]

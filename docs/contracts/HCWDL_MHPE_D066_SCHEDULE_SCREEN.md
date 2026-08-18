@@ -1,36 +1,40 @@
 # HCWDL-MHPE D066 Schedule-Screen Contracts
 
-The scientific authority is the
-[300k D066 schedule-screen plan](../plans/HCWDL_MHPE_D066_SCHEDULE_SCREEN_300K_PLAN.md).
+Authority: [full-data implementation plan](../plans/HCWDL_MHPE_D066_SCHEDULE_SCREEN_FULL_PLAN.md).
 
-The executable C25P75 study uses the additive v2 family:
+The executable full-data C25P75 study uses the additive v3 family:
 
-- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_GRAPH/v2`;
-- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_NODE_SPEC/v2`;
-- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_RECIPE/v2`;
-- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_VALIDATION_PARTITION/v2`;
-- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_SOURCE_REUSE_LOCK/v2`;
-- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_OPERATIONAL_EVIDENCE_WAIVER/v2`;
-- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_CAMPAIGN_SPEC/v2`;
-- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_COMMAND_PLAN/v2`;
-- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_TRAINING_REPORT/v2`;
-- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_RUNTIME/v2`;
-- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_AGGREGATE/v2`;
-- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_CAMPAIGN_COMPLETE/v2`;
-- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_RECOVERY_SPEC/v2`;
-- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_RECOVERY_COMMAND_PLAN/v2`.
+- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_GRAPH/v3`;
+- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_NODE_SPEC/v3`;
+- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_RECIPE/v3`;
+- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_VALIDATION_PARTITION/v3`;
+- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_SOURCE_REUSE_LOCK/v3`;
+- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_SOURCE_READINESS/v3`;
+- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_OPERATIONAL_EVIDENCE_WAIVER/v3`;
+- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_CAMPAIGN_SPEC/v3`;
+- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_COMMAND_PLAN/v3`;
+- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_TRAINING_REPORT/v3`;
+- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_RUNTIME/v3`;
+- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_AGGREGATE/v3`;
+- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_CAMPAIGN_COMPLETE/v3`;
+- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_RECOVERY_SPEC/v3`;
+- `HCWDL_MHPE_D066_SCHEDULE_SCREEN_RECOVERY_COMMAND_PLAN/v3`.
 
-The graph contains exactly 60 independent D066 students, 20 schedules, and
-three authenticated teacher horizons per schedule. All train/checkpoint/
-scoring identities, teacher target hashes, graph, recipe, source commit,
-resources, and semantic source files are parents of the campaign spec.
+The source-reuse lock binds the full-data C25P75 campaign, all-mapped
+foundation and foundation lock, exact role counts, selection, validation
+assignment manifest, source recipe, U000/U050 reports and train targets, and
+U100E/T2 probability lock. Source completion is not an input; a separate
+readiness artifact proves every consumed product is complete and immutable.
 
-Any change to grid values, teacher set, source profile, validation partition,
-loss, temperature, architecture, D066 view, seed aliases, optimizer, schedule
-shape, selection/ranking policy, resources, or final-test registry requires a
-new semantic version. Recovery may only execute the exact failed/downstream
-closure and preserve already authenticated outputs.
+The validation-partition contract binds all full validation identities from
+authenticated assignment shards and the label-free global SHA-rank half split.
+The recipe binds the resulting dynamic checkpoint and scoring row counts.
 
-The pushed but unexecuted v1 definition authenticated C10P90. It produced no
-campaign root or ledger and is retired. v2 authenticates completed
-`C25P75_300K60` products and fixes every screen student to C25P75/T2.
+Each report binds source, graph, recipe, partition, teacher target, selected
+engine report/checkpoint, checkpoint-half metrics, and untouched scoring-half
+metrics. The runtime report proves the full train/checkpoint caches were
+released before the scoring cache was created. Final-test access is false in
+every artifact.
+
+The v1 C10P90/300k and v2 C25P75/300k schemas were never submitted and are
+retired. They are not readable as v3 and may not authorize this campaign.

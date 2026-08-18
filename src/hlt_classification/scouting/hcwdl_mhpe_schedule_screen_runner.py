@@ -97,9 +97,9 @@ def _training_parents(
     return parents
 
 
-def _confirmation_cache(
+def _scoring_cache(
     *, foundation, split, selections, assignments, balanced, recipe,
-    sampler_seed: int, repair_seed: int, checkpoint_caches,
+    sampler_seed: int, repair_seed: int,
 ):
     partition = load_json(Path(foundation["__screen_root"]) / "validation_partition.json")
     scoring = ValidationSubsetSelection(partition, subset="scoring")
@@ -110,13 +110,11 @@ def _confirmation_cache(
         batch_size=int(recipe["batching"]["effective_batch_size"]),
         sampler_seed=sampler_seed, repair_seed=repair_seed, epoch=0,
     )
-    used = sum(int(cache.header["array_bytes"]) for cache in checkpoint_caches.values())
-    remaining_gib = max(1.0, 72.0 - used / 1024**3)
     records = role_records(split, "validation")
     return EphemeralPmardViewCache.build(
         stream, expected_rows=scoring.rows, records=records, role="validation",
         expected_source_rows=expected_cache_source_rows(records, row_selection=scoring),
-        view_keys=("privileged",), max_gib=remaining_gib,
+        view_keys=("privileged",), max_gib=72.0,
         lineage={
             "campaign_spec_sha256": foundation["__screen_spec_sha256"],
             "validation_partition_sha256": scoring.partition_sha256,
@@ -157,19 +155,13 @@ def run_training(
     foundation["__screen_root"] = spec["campaign_root"]
     foundation["__screen_spec_sha256"] = spec["content_hash"]
     sampler_seed = derive_seed(int(foundation_raw["replicate_seed"]), f"mhpe/sampler/{SHARED_SEED_ALIAS}")
-    repair_seed = derive_seed(int(foundation_raw["replicate_seed"]), "ub/repair/v1")
+    repair_seed = derive_seed(int(foundation_raw["replicate_seed"]), "ub_full/repair/v1")
     caches, input_key = _cache_student_views(
         foundation_spec=foundation_raw, split=split, selections=selections,
         assignments=assignments, balanced=balanced, behavior="balanced_uniform",
         coordinate=COORDINATES["D066"],
         batch_size=int(base_recipe["batching"]["effective_batch_size"]),
         sampler_seed=sampler_seed, repair_seed=repair_seed, memory_gib=72.0,
-    )
-    scoring_cache = _confirmation_cache(
-        foundation=foundation, split=split, selections=selections,
-        assignments=assignments, balanced=balanced, recipe=base_recipe,
-        sampler_seed=sampler_seed, repair_seed=repair_seed,
-        checkpoint_caches=caches,
     )
     teacher_logits, teacher_probability, teacher_hash = _teacher_targets(
         spec=spec, node=node, split_hash=split_hash,
@@ -208,12 +200,13 @@ def run_training(
         selection_hash=selection_hash, teacher_target_hash=teacher_hash,
     )
     scientific = {
-        "campaign": "HCWDL-MHPE-C25P75-D066-SCHEDULE-SCREEN-300K",
+        "campaign": "HCWDL-MHPE-FULL-C25P75-D066-SCHEDULE-SCREEN",
         "graph_sha256": GRAPH_SHA256,
         "node": node.payload(), "recipe_overlay_sha256": spec["recipe_sha256"],
         "source_recipe_sha256": spec["source"]["source_recipe_sha256"],
         "training_passes": node.training_passes, "validation_every_passes": 1,
-        "checkpoint_validation_rows": 50_000, "schedule_scoring_rows": 50_000,
+        "checkpoint_validation_rows": checkpoint.rows,
+        "schedule_scoring_rows": int(partition["subsets"]["scoring"]["rows"]),
         "schedule_scoring_controls_checkpoint_selection": False,
         "student_view_built_once": True, "teacher_targets_built_once": True,
         "performance_early_stopping": False, "final_test_accessed": False,
@@ -237,7 +230,18 @@ def run_training(
     independent = select_checkpoint(report["validation_history"])
     if independent["selected_update"] != report["selected_update"]:
         raise RuntimeError("schedule-screen checkpoint selection differs")
-    del model; gc.collect()
+    cache_bytes = {
+        "train": int(caches["train"].header["array_bytes"]),
+        "checkpoint_validation": int(caches["validation"].header["array_bytes"]),
+    }
+    del model, caches
+    gc.collect()
+    scoring_cache = _scoring_cache(
+        foundation=foundation, split=split, selections=selections,
+        assignments=assignments, balanced=balanced, recipe=base_recipe,
+        sampler_seed=sampler_seed, repair_seed=repair_seed,
+    )
+    cache_bytes["schedule_scoring"] = int(scoring_cache.header["array_bytes"])
     selected_model, loaded = load_pmard_model(
         output / "training_report.json",
         model_factory=build_scouting_particle_transformer, device=device,
@@ -274,11 +278,8 @@ def run_training(
         "campaign_spec_sha256": spec["content_hash"], "node_id": node_id,
         "elapsed_seconds": elapsed,
         "measured_gpu_hours": elapsed / 3600 if device.startswith("cuda") else 0.0,
-        "cache_array_bytes": {
-            "train": int(caches["train"].header["array_bytes"]),
-            "checkpoint_validation": int(caches["validation"].header["array_bytes"]),
-            "schedule_scoring": int(scoring_cache.header["array_bytes"]),
-        },
+        "cache_array_bytes": cache_bytes,
+        "full_training_and_checkpoint_caches_released_before_scoring": True,
         "final_test_accessed": False,
     })
     write_immutable_json(output / "screen_training_report.json", wrapper)
@@ -314,6 +315,7 @@ def build_aggregate(spec: Mapping[str, Any]) -> dict[str, Any]:
                 or wrapper.get("final_test_accessed") is not False
                 or runtime.get("campaign_spec_sha256") != spec["content_hash"]
                 or runtime.get("node_id") != node_id
+                or runtime.get("full_training_and_checkpoint_caches_released_before_scoring") is not True
                 or runtime.get("final_test_accessed") is not False):
             raise ValueError("schedule-screen training report lineage differs")
         scoring = wrapper.get("schedule_scoring_metrics", {})
