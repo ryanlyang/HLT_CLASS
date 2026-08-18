@@ -14,8 +14,8 @@ peak LR = {3e-4, 1.5e-4, 1e-4, 5e-5}
 teacher = {U000, U050, U100E}
 ```
 
-as 60 independent fresh D066 C10P90/T2 fits. It imports only a completed,
-authenticated `C10P90_300K60` campaign and reuses its immutable U000/U050
+as 60 independent fresh D066 C25P75/T2 fits. It imports only a completed,
+authenticated `C25P75_300K60` campaign and reuses its immutable U000/U050
 train logit manifests and U100E/T2 train probability bundle. U000 and U050
 target consumers bind both the target-manifest and teacher-report hashes;
 U100E binds its probability-manifest hash. All fits share exact initialization,
@@ -33,7 +33,7 @@ access counts are zero.
 
 New reusable surfaces are:
 
-- `hcwdl_mhpe_schedule_screen.py`: v1 graph, recipe, validation partition,
+- `hcwdl_mhpe_schedule_screen.py`: v2 graph, recipe, validation partition,
   source-reuse, waiver, campaign, command-plan, report, runtime, aggregate,
   completion, and recovery contracts;
 - `hcwdl_mhpe_schedule_screen_runner.py`: once-per-job RAM view construction,
@@ -58,19 +58,26 @@ Validation evidence:
 
 - pre-change focused MHPE baseline: 33 passed in 17.50 seconds;
 - new schedule-screen tests: 8 passed after final lineage review;
-- combined schedule-screen plus MHPE regression: 41 passed in 14.35 seconds;
-- complete repository suite: 547 passed in 537.74 seconds, with 15 existing
-  matplotlib/cache warnings and no failures;
+- combined schedule-screen plus MHPE regression after the C25P75/v2 correction:
+  41 passed in 16.77 seconds;
+- complete repository suite after the C25P75/v2 correction: 547 passed in
+  528.10 seconds, with 14 existing matplotlib warnings and no failures;
 - all 11 new Python package/CLI surfaces compiled and all eight CLI `--help`
   invocations passed;
 - both new Slurm workers passed `bash -n`;
-- all contract identities are frozen at v1 by focused test;
+- all executable contract identities are frozen at v2 by focused test;
 - new-file whitespace and final `git diff --check` passed.
 
 No donor files were copied and no donor commit applies. No installed-Weaver
 or Tigris job was run for this additive screen in this workspace. Live Slurm
 submission remains unauthorized until the user pushes an exact clean commit
 and supplies the two phrases in the runbook.
+
+The first pushed but unexecuted draft targeted C10P90/v1. The Tigris creation
+block stopped before making a worktree or campaign root because that source
+had no completion report; it submitted no jobs. The user then explicitly
+selected the completed C25P75 source. The corrected semantics are v2 and the
+retired C10P90/v1 definition must not be executed or relabeled.
 
 ## HCWDL-MHPE R-augmented refined continuation (2026-08-17)
 

@@ -1,7 +1,7 @@
 # HCWDL-MHPE D066 Schedule-Screen Queue Runbook
 
 This study submits 60 independent GH200 fits, one aggregate, and one
-completion task. It imports exactly one completed `C10P90_300K60` campaign.
+completion task. It imports exactly one completed `C25P75_300K60` campaign.
 The final test remains sealed.
 
 After pushing the implementation commit, run the block below on Tigris. It
@@ -51,7 +51,7 @@ for path in Path(os.environ["MAIN_REPO"]).glob("checkpoints/hcwdl_mhpe_*/campaig
         pass
 if len(candidates) != 1:
     raise SystemExit(
-        f"Expected exactly one completed authenticated C10P90_300K60 source; found {len(candidates)}:\n  "
+        f"Expected exactly one completed authenticated C25P75_300K60 source; found {len(candidates)}:\n  "
         + "\n  ".join(map(str, candidates))
     )
 print(candidates[0])
@@ -64,9 +64,9 @@ python -s "${SCREEN_WORKTREE}/scripts/create_hcwdl_mhpe_schedule_screen.py" \
   --project-dir "${SCREEN_WORKTREE}" \
   --source-commit "${SCREEN_COMMIT}" \
   --authorize-live-submission \
-  --authorization-phrase "AUTHORIZE HCWDL MHPE D066 20 SCHEDULE SCREEN EXACT SPEC" \
+  --authorization-phrase "AUTHORIZE HCWDL MHPE C25P75 D066 20 SCHEDULE SCREEN EXACT SPEC" \
   --operational-evidence-waiver \
-  --waiver-phrase "AUTHORIZE HCWDL MHPE D066 SCHEDULE SCREEN CARRIED OPERATIONAL EVIDENCE"
+  --waiver-phrase "AUTHORIZE HCWDL MHPE C25P75 D066 SCHEDULE SCREEN CARRIED OPERATIONAL EVIDENCE"
 
 python -s "${SCREEN_WORKTREE}/scripts/submit_hcwdl_mhpe_schedule_screen.py" \
   --spec "${SCREEN_ROOT}/campaign_spec.json" \
@@ -76,7 +76,7 @@ python -s "${SCREEN_WORKTREE}/scripts/submit_hcwdl_mhpe_schedule_screen.py" \
   --spec "${SCREEN_ROOT}/campaign_spec.json" \
   --output "${SCREEN_ROOT}/submission_ledger.json" \
   --execute \
-  --authorization-phrase "SUBMIT HCWDL MHPE D066 20 SCHEDULE SCREEN EXACT LEDGER"
+  --authorization-phrase "SUBMIT HCWDL MHPE C25P75 D066 20 SCHEDULE SCREEN EXACT LEDGER"
 
 echo "Source: ${SOURCE_SPEC}"
 echo "Screen: ${SCREEN_ROOT}"

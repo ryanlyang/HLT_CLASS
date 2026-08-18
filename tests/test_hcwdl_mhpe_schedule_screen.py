@@ -42,8 +42,8 @@ def test_schedule_registry_is_exact_cartesian_grid():
         assert {node.teacher_id for node in nodes} == set(screen.TEACHERS)
         assert len({node.training_passes for node in nodes}) == 1
         assert len({node.peak_learning_rate for node in nodes}) == 1
-        assert {node.payload()["ce_weight"] for node in nodes} == {0.10}
-        assert {node.payload()["kd_weight"] for node in nodes} == {0.90}
+        assert {node.payload()["ce_weight"] for node in nodes} == {0.25}
+        assert {node.payload()["kd_weight"] for node in nodes} == {0.75}
         assert {node.payload()["temperature"] for node in nodes} == {2.0}
 
 
@@ -65,7 +65,7 @@ def test_graph_recipe_and_contract_versions_are_frozen():
         screen.WAIVER_CONTRACT, screen.RECOVERY_SPEC_CONTRACT,
         screen.RECOVERY_COMMAND_PLAN_CONTRACT,
     ]
-    assert all(value.endswith("/v1") for value in contracts)
+    assert all(value.endswith("/v2") for value in contracts)
 
 
 def test_validation_partition_is_deterministic_disjoint_and_complete(monkeypatch):
@@ -158,7 +158,7 @@ def test_campaign_creation_requires_both_explicit_authorizations(tmp_path, monke
         "source_spec_path": str(tmp_path / "source_spec.json"),
         "source_spec_sha256": "1" * 64,
         "source_root": str(tmp_path / "source"),
-        "source_profile": "C10P90_300K60",
+        "source_profile": "C25P75_300K60",
         "source_completion_sha256": "2" * 64,
         "source_reuse_lock_sha256": "3" * 64,
         "foundation_root": str(tmp_path / "foundation"),

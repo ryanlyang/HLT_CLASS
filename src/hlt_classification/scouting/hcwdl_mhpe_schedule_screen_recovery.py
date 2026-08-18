@@ -16,7 +16,7 @@ from .hcwdl_recovery import (
     MONITOR_CONTRACT, resume_tasks, validate_submission_ledger,
 )
 
-RECOVERY_PHRASE = "AUTHORIZE HCWDL MHPE D066 SCHEDULE SCREEN EXACT RECOVERY"
+RECOVERY_PHRASE = "AUTHORIZE HCWDL MHPE C25P75 D066 SCHEDULE SCREEN EXACT RECOVERY"
 
 
 def failed_downstream_closure(failed: Sequence[str]) -> tuple[str, ...]:

@@ -9,7 +9,7 @@ does not alter, relabel, or resume any completed MHPE campaign.
 
 ## Scientific question
 
-The completed `C10P90_300K60` campaign showed that some D066 students selected
+The completed `C25P75_300K60` campaign showed that some D066 students selected
 checkpoints well after pass 20, while the full-data campaign was limited to 20
 passes. The screen tests whether the teacher-horizon ordering is stable under
 different optimization schedules before spending full-data GPU time.
@@ -22,7 +22,7 @@ D066 input view and differ only in their immutable teacher targets:
 - `U100E`: nearest structural endpoint ensemble.
 
 All students use fresh but paired initialization, sampler, dropout, repair,
-and optimizer seed domains. Every student uses unweighted `0.10 CE + 0.90 KD`
+and optimizer seed domains. Every student uses unweighted `0.25 CE + 0.75 KD`
 at temperature 2. The student architecture, D066 coordinate, AdamW epsilon,
 weight decay, batch sizes, 5% warmup, cosine decay, minimum-LR fraction,
 validation cadence, and macro-AUC checkpoint-selection policy are imported
@@ -47,7 +47,7 @@ a valid result and never suppresses another fit.
 ## Population and validation partition
 
 The only permitted source is a completed, authenticated
-`C10P90_300K60` campaign with 300,000 training rows, 100,000 validation rows,
+`C25P75_300K60` campaign with 300,000 training rows, 100,000 validation rows,
 and sealed 100,000 final-test rows. The screen reuses its immutable U000 and
 U050 FP32 train logits and U100E/T2 train probability targets by hash. It does
 not rebuild teachers or particle datasets.
@@ -109,3 +109,8 @@ The implementation is accepted only after focused and complete local tests,
 all CLI help checks, source compilation, contract-version checks, and
 `git diff --check`. No implementation action authorizes Slurm submission;
 the human must supply both creation and submission phrases.
+
+The unexecuted v1 draft targeted `C10P90_300K60`. Before any campaign root or
+job was created, the user selected the completed `C25P75_300K60` result as the
+scientific source. The corrected C25P75/T2 study is therefore v2; v1 artifacts
+may not be created, reused, or relabeled as this study.

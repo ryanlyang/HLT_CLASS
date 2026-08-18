@@ -27,7 +27,7 @@ from .engine import (
     validate_pmard_training_report,
 )
 from .hcwdl_mhpe_campaign import validate_campaign as validate_source_campaign
-from .hcwdl_mhpe_graph import COORDINATES, PROFILE_C10P90_300K60
+from .hcwdl_mhpe_graph import COORDINATES
 from .hcwdl_mhpe_runner import _context as source_context
 from .hcwdl_mhpe_schedule_screen import (
     AGGREGATE_CONTRACT,
@@ -183,7 +183,7 @@ def run_training(
     updates_per_pass = int(math.ceil(selections["train"].rows / batch))
     loss = GenerationalLossConfiguration(
         arm="HCWDL_UB_MHPE_D066_SCHEDULE_SCREEN",
-        ce=0.10, parent_kd=0.90, grandparent_kd=0.0,
+        ce=0.25, parent_kd=0.75, grandparent_kd=0.0,
         parent_temperature=2.0, grandparent_temperature=2.0,
     )
     config = PmardTrainingConfig(
@@ -208,7 +208,7 @@ def run_training(
         selection_hash=selection_hash, teacher_target_hash=teacher_hash,
     )
     scientific = {
-        "campaign": "HCWDL-MHPE-D066-SCHEDULE-SCREEN-300K",
+        "campaign": "HCWDL-MHPE-C25P75-D066-SCHEDULE-SCREEN-300K",
         "graph_sha256": GRAPH_SHA256,
         "node": node.payload(), "recipe_overlay_sha256": spec["recipe_sha256"],
         "source_recipe_sha256": spec["source"]["source_recipe_sha256"],

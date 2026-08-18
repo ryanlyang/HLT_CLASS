@@ -29,7 +29,7 @@ from .hcwdl_mhpe_contracts import (
 )
 from .hcwdl_mhpe_graph import (
     COORDINATES,
-    PROFILE_C10P90_300K60,
+    PROFILE_C25P75_300K60,
     node_registry as source_node_registry,
 )
 from .hcwdl_mhpe_targets import validate_probability_bundle
@@ -38,26 +38,26 @@ from .hcwdl_unified_balanced_targets import validate_target_manifest
 from .selective_assignment import validate_row_selection
 
 
-GRAPH_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_GRAPH/v1"
-NODE_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_NODE_SPEC/v1"
-RECIPE_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_RECIPE/v1"
-VALIDATION_PARTITION_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_VALIDATION_PARTITION/v1"
-SOURCE_REUSE_LOCK_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_SOURCE_REUSE_LOCK/v1"
-CAMPAIGN_SPEC_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_CAMPAIGN_SPEC/v1"
-COMMAND_PLAN_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_COMMAND_PLAN/v1"
-TRAINING_REPORT_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_TRAINING_REPORT/v1"
-RUNTIME_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_RUNTIME/v1"
-AGGREGATE_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_AGGREGATE/v1"
-COMPLETION_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_CAMPAIGN_COMPLETE/v1"
-WAIVER_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_OPERATIONAL_EVIDENCE_WAIVER/v1"
-RECOVERY_SPEC_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_RECOVERY_SPEC/v1"
-RECOVERY_COMMAND_PLAN_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_RECOVERY_COMMAND_PLAN/v1"
+GRAPH_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_GRAPH/v2"
+NODE_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_NODE_SPEC/v2"
+RECIPE_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_RECIPE/v2"
+VALIDATION_PARTITION_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_VALIDATION_PARTITION/v2"
+SOURCE_REUSE_LOCK_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_SOURCE_REUSE_LOCK/v2"
+CAMPAIGN_SPEC_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_CAMPAIGN_SPEC/v2"
+COMMAND_PLAN_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_COMMAND_PLAN/v2"
+TRAINING_REPORT_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_TRAINING_REPORT/v2"
+RUNTIME_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_RUNTIME/v2"
+AGGREGATE_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_AGGREGATE/v2"
+COMPLETION_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_CAMPAIGN_COMPLETE/v2"
+WAIVER_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_OPERATIONAL_EVIDENCE_WAIVER/v2"
+RECOVERY_SPEC_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_RECOVERY_SPEC/v2"
+RECOVERY_COMMAND_PLAN_CONTRACT: Final = "HCWDL_MHPE_D066_SCHEDULE_SCREEN_RECOVERY_COMMAND_PLAN/v2"
 
-CREATION_PHRASE: Final = "AUTHORIZE HCWDL MHPE D066 20 SCHEDULE SCREEN EXACT SPEC"
-SUBMISSION_PHRASE: Final = "SUBMIT HCWDL MHPE D066 20 SCHEDULE SCREEN EXACT LEDGER"
-WAIVER_PHRASE: Final = "AUTHORIZE HCWDL MHPE D066 SCHEDULE SCREEN CARRIED OPERATIONAL EVIDENCE"
-VALIDATION_PARTITION_SEED: Final = "HCWDL-MHPE-D066-SCHEDULE-SCREEN/validation/v1"
-SHARED_SEED_ALIAS: Final = "HCWDL-MHPE-D066-SCHEDULE-SCREEN/v1/D066/paired"
+CREATION_PHRASE: Final = "AUTHORIZE HCWDL MHPE C25P75 D066 20 SCHEDULE SCREEN EXACT SPEC"
+SUBMISSION_PHRASE: Final = "SUBMIT HCWDL MHPE C25P75 D066 20 SCHEDULE SCREEN EXACT LEDGER"
+WAIVER_PHRASE: Final = "AUTHORIZE HCWDL MHPE C25P75 D066 SCHEDULE SCREEN CARRIED OPERATIONAL EVIDENCE"
+VALIDATION_PARTITION_SEED: Final = "HCWDL-MHPE-C25P75-D066-SCHEDULE-SCREEN/validation/v2"
+SHARED_SEED_ALIAS: Final = "HCWDL-MHPE-C25P75-D066-SCHEDULE-SCREEN/v2/D066/paired"
 TEACHERS: Final = ("U000", "U050", "U100E")
 PASS_GRID: Final = (20, 30, 40, 60, 80)
 LR_GRID: Final = (3.0e-4, 1.5e-4, 1.0e-4, 5.0e-5)
@@ -101,8 +101,8 @@ class ScreenNode:
             "input_domain": "homotopy",
             "initialization": "fresh_paired",
             "seed_alias": SHARED_SEED_ALIAS,
-            "ce_weight": 0.10,
-            "kd_weight": 0.90,
+            "ce_weight": 0.25,
+            "kd_weight": 0.75,
             "temperature": 2.0,
             "training_passes": self.training_passes,
             "peak_learning_rate": self.peak_learning_rate,
@@ -152,7 +152,7 @@ def recipe_payload(*, source_recipe_sha256: str) -> dict[str, Any]:
         "contract": RECIPE_CONTRACT,
         "schema_version": 1,
         "source_recipe_sha256": require_sha256(source_recipe_sha256, name="source recipe"),
-        "loss": {"ce": 0.10, "teacher_kd": 0.90, "temperature": 2.0},
+        "loss": {"ce": 0.25, "teacher_kd": 0.75, "temperature": 2.0},
         "pass_grid": list(PASS_GRID),
         "peak_learning_rate_grid": list(LR_GRID),
         "peak_learning_rate_grid_hex": [value.hex() for value in LR_GRID],
@@ -301,10 +301,10 @@ def authenticate_source(source_spec_path: str | Path) -> dict[str, Any]:
     path = Path(source_spec_path).resolve(); spec = load_json(path)
     spec_hash = validate_source_campaign(spec, executable=False, verify_source_tree=False)
     profile = campaign_profile(spec)
-    if profile != PROFILE_C10P90_300K60 or spec.get("role_counts") != {
+    if profile != PROFILE_C25P75_300K60 or spec.get("role_counts") != {
         "train": 300_000, "validation": 100_000, "final_test": 100_000,
     } or spec.get("final_test_accessed") is not False:
-        raise ValueError("schedule-screen source must be completed C10P90_300K60")
+        raise ValueError("schedule-screen source must be completed C25P75_300K60")
     root = Path(spec["campaign_root"])
     completion = load_json(root / "reports/campaign_complete.json")
     completion_hash = validate_content_hash(
@@ -467,7 +467,7 @@ def create_campaign(
         "contract": WAIVER_CONTRACT, "schema_version": 1,
         "source_completion_sha256": source["source_completion_sha256"],
         "source_reuse_lock_sha256": reuse["content_hash"],
-        "source_profile": PROFILE_C10P90_300K60,
+        "source_profile": PROFILE_C25P75_300K60,
         "schedule_only_additive_change": True,
         "new_standalone_smoke_completed": False,
         "carried_production_worker_evidence": True,
@@ -483,7 +483,7 @@ def create_campaign(
     semantic_hashes = {name: sha256_file(project / name) for name in SEMANTIC_SOURCE_FILES}
     provisional = {
         "contract": CAMPAIGN_SPEC_CONTRACT, "schema_version": 1,
-        "campaign": "HCWDL-MHPE-D066-SCHEDULE-SCREEN-300K",
+        "campaign": "HCWDL-MHPE-C25P75-D066-SCHEDULE-SCREEN-300K",
         "campaign_root": str(root), "project_dir": str(project),
         "source_commit": source_commit, "spec_path": str(root / "campaign_spec.json"),
         "source": source, "graph_sha256": graph["content_hash"],
@@ -523,7 +523,7 @@ def validate_campaign(
         "gpu": {"cpus": 8, "memory": "96G", "walltime": "06:00:00", "gpu": "gpu:gh200:1"},
         "cpu": {"cpus": 4, "memory": "32G", "walltime": "01:00:00", "gpu": None},
     }
-    if (value.get("campaign") != "HCWDL-MHPE-D066-SCHEDULE-SCREEN-300K"
+    if (value.get("campaign") != "HCWDL-MHPE-C25P75-D066-SCHEDULE-SCREEN-300K"
             or value.get("tasks") != campaign_tasks()
             or value.get("fit_count") != 60 or value.get("schedule_count") != 20
             or value.get("graph_sha256") != GRAPH_SHA256
@@ -569,7 +569,7 @@ def validate_campaign(
     if (waiver_hash != value.get("waiver_sha256")
             or waiver.get("source_completion_sha256") != source["source_completion_sha256"]
             or waiver.get("source_reuse_lock_sha256") != reuse_hash
-            or waiver.get("source_profile") != PROFILE_C10P90_300K60
+            or waiver.get("source_profile") != PROFILE_C25P75_300K60
             or waiver.get("schedule_only_additive_change") is not True
             or waiver.get("new_standalone_smoke_completed") is not False
             or waiver.get("carried_production_worker_evidence") is not True
