@@ -123,6 +123,10 @@ change is specialist loss from C10P90 to C25P75; M1 remains C10P90/T1.
 
 The additive
 [D066 full-data optimization schedule screen](HCWDL_MHPE_D066_SCHEDULE_SCREEN_FULL_PLAN.md)
+is the immutable 60-fit predecessor study. The additive
+[D000 teacher-distance full-data screen](HCWDL_MHPE_D000_TEACHER_DISTANCE_SCHEDULE_SCREEN_FULL_PLAN.md)
+instead trains 24 paired 80-pass exact-HLT students and preserves the best
+checkpoint available by passes 20, 40, 60, and 80.
 tests 20 pass/peak-LR schedules under three paired teacher horizons. It uses
 all mapped full-data training rows, partitions the full validation role into
 disjoint checkpoint-selection and schedule-scoring halves, queues all 60 fits

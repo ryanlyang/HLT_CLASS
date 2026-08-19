@@ -313,6 +313,81 @@ def test_pmard_training_resume_is_exact(tmp_path: Path):
     assert resumed_report["training_history"] == uninterrupted_report["training_history"]
 
 
+def test_pmard_selection_horizons_publish_best_so_far_and_resume_exactly(tmp_path: Path):
+    torch.manual_seed(19); initial = _TinyModel().state_dict()
+    config = PmardTrainingConfig(
+        experiment_id="horizon", loss=LossConfiguration.for_arm("K0", temperature=1),
+        total_updates=4, effective_batch_size=4, peak_learning_rate=1e-3,
+        validation_interval=1, master_seed=81, amp_dtype="none",
+    )
+    parents = {"source": "a" * 64}
+    scientific = {"selection_horizon_updates": [2, 4]}
+    interrupted = _TinyModel(); interrupted.load_state_dict(initial)
+    with pytest.raises(PmardTrainingInterrupted):
+        train_pmard(
+            model=interrupted, train_batches=_batches,
+            validation_batches=lambda: _batches(0), class_weights=torch.ones(15),
+            config=config, output_dir=tmp_path / "horizon_resume", parents=parents,
+            device="cpu", stop_after_update=2, scientific_config=scientific,
+            selection_horizon_updates=(2, 4),
+        )
+    resumed = _TinyModel()
+    resumed_report = train_pmard(
+        model=resumed, train_batches=_batches,
+        validation_batches=lambda: _batches(0), class_weights=torch.ones(15),
+        config=config, output_dir=tmp_path / "horizon_resume", parents=parents,
+        device="cpu", scientific_config=scientific,
+        selection_horizon_updates=(2, 4),
+    )
+    uninterrupted = _TinyModel(); uninterrupted.load_state_dict(initial)
+    full_report = train_pmard(
+        model=uninterrupted, train_batches=_batches,
+        validation_batches=lambda: _batches(0), class_weights=torch.ones(15),
+        config=config, output_dir=tmp_path / "horizon_full", parents=parents,
+        device="cpu", scientific_config=scientific,
+        selection_horizon_updates=(2, 4),
+    )
+    assert resumed_report["validation_history"] == full_report["validation_history"]
+    assert [row["horizon_update"] for row in resumed_report["selection_horizon_checkpoints"]] == [2, 4]
+    for resumed_row, full_row in zip(
+        resumed_report["selection_horizon_checkpoints"],
+        full_report["selection_horizon_checkpoints"], strict=True,
+    ):
+        assert resumed_row["selected_update"] == full_row["selected_update"]
+        assert resumed_row["validation"] == full_row["validation"]
+        resumed_payload = torch.load(
+            tmp_path / "horizon_resume" / resumed_row["checkpoint"],
+            map_location="cpu", weights_only=False,
+        )
+        full_payload = torch.load(
+            tmp_path / "horizon_full" / full_row["checkpoint"],
+            map_location="cpu", weights_only=False,
+        )
+        assert resumed_payload["selected_update"] == full_payload["selected_update"]
+        assert all(
+            torch.equal(resumed_payload["model"][name], value)
+            for name, value in full_payload["model"].items()
+        )
+
+
+def test_pmard_selection_horizons_fail_when_not_bound_or_not_validation_updates(tmp_path: Path):
+    config = PmardTrainingConfig(
+        experiment_id="bad_horizon", loss=LossConfiguration.for_arm("K0", temperature=1),
+        total_updates=4, effective_batch_size=4, peak_learning_rate=1e-3,
+        validation_interval=2, amp_dtype="none",
+    )
+    common = dict(
+        model=_TinyModel(), train_batches=_batches,
+        validation_batches=lambda: _batches(0), class_weights=torch.ones(15),
+        config=config, output_dir=tmp_path / "bad_horizon",
+        parents={"source": "a" * 64}, device="cpu",
+    )
+    with pytest.raises(ValueError, match="validation updates"):
+        train_pmard(**common, selection_horizon_updates=(1, 4))
+    with pytest.raises(ValueError, match="scientific configuration"):
+        train_pmard(**common, selection_horizon_updates=(2, 4))
+
+
 def test_optimizer_exclusions_ram_targets_and_checkpoint_selection(tmp_path: Path, monkeypatch):
     config = PmardTrainingConfig(
         experiment_id="cached", loss=LossConfiguration.for_arm("K1", temperature=1),

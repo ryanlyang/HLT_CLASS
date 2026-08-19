@@ -1,5 +1,85 @@
 # Current Handoff
 
+## HCWDL-MHPE full-data D000 teacher-distance schedule screen (2026-08-19)
+
+The additive validation-only screen requested after comparing full-data
+20-pass and 300k/60-pass MHPE teacher ordering is implemented and locally
+queue-ready. Its implementation-authoritative
+[plan](plans/HCWDL_MHPE_D000_TEACHER_DISTANCE_SCHEDULE_SCREEN_FULL_PLAN.md)
+registers 24 paired exact-HLT fits:
+
+```text
+teacher = {U000, U100E, D066E, D033E}
+peak LR = {3e-4, 2e-4, 1.5e-4, 1e-4, 7.5e-5, 5e-5}
+loss    = C25P75, temperature 2
+budget  = one 80-pass warmup/cosine trajectory per fit
+```
+
+Every-pass validation preserves the best checkpoint available by passes 20,
+40, 60, and 80. These are explicitly not relabeled as independent shorter
+cosine schedules. After train and checkpoint-validation caches are released,
+one untouched scoring-half HLT cache is reused serially for all four horizon
+checkpoints. The graph therefore owns 24 expensive fits, 96 held-out
+evaluations, one aggregate, and one completion task. Initialization, sampling,
+dropout, repair, optimizer, and validation-order seed aliases are paired across
+all teachers and LRs.
+
+Campaign creation requires one authenticated all-mapped full-data `C25P75`
+MHPE source with exactly the consumed teacher products ready. It binds the
+full-data foundation, U000 report/checkpoint/train logits, and the T2 U100E,
+D066E, and D033E probability bundles; whole-source-campaign completion is not
+required. Missing teacher products, C10P90, 300k, and path-only sources fail
+closed. All students consume byte-exact HLT. Ordinary final-test access is
+zero. This source-readiness refinement versions the source-reuse lock,
+operational waiver, and campaign spec to v2 and adds a v1 readiness artifact.
+
+New reusable implementation surfaces are:
+
+- `hcwdl_mhpe_d000_schedule_screen.py`: versioned graph, readiness/source-
+  reuse, recipe, validation partition, waiver, campaign, command-plan, and
+  report contracts;
+- `hcwdl_mhpe_d000_schedule_screen_runner.py`: exact-HLT caches, four target
+  kinds, 80-pass training, horizon authentication, scoring, and aggregate;
+- `hcwdl_mhpe_d000_schedule_screen_recovery.py`: exact failed/downstream
+  closure preserving horizon semantics;
+- opt-in horizon-best state in `scouting/engine.py`, including rolling-resume
+  state and four immutable selected checkpoints while leaving legacy callers
+  unchanged;
+- eight thin CLI surfaces, two Tigris workers, the reusable
+  [contract](contracts/HCWDL_MHPE_D000_TEACHER_DISTANCE_SCHEDULE_SCREEN.md),
+  and exact [runbook](HCWDL_MHPE_D000_TEACHER_DISTANCE_SCREEN_RUNBOOK.md).
+
+Resources are 8 CPUs, 96 GiB, 72:00:00, and one GH200 for each independent
+fit; aggregate/completion use 4 CPUs, 32 GiB, and 01:00:00. GPU jobs receive
+`USR1@120`. Both ordinary and recovery submitters have durable partial-
+submission journals. No performance result can block completion.
+
+Local evidence from the isolated scientific test environment:
+
+- initial focused baseline before edits: 10 passed in 6.56 seconds;
+- final focused engine/new-screen/legacy-screen suite: 37 passed in 76.55
+  seconds;
+- complete repository suite: 564 passed in 650.73 seconds, with one unrelated
+  existing PyTorch scalar-conversion warning;
+- graph probe: 24 nodes, 26 tasks, 96 evaluations, graph SHA-256
+  `682d139a7a2d0000b569b5d743b31ebec88e229b63dbb1f4d93c24923e0af3ff`;
+- all 16 campaign contract identities, eight CLI help surfaces, Python
+  compilation, both Git-Bash `bash -n` worker checks, Markdown links through
+  the full suite, and `git diff --check` passed.
+
+The system-default Python lacked NumPy, so the initial baseline collection
+failed before tests; all authoritative results above used the existing
+isolated environment at `%TEMP%/hcwdl_schedule_screen_testenv`. No donor file
+was copied and no donor commit applies. No installed-Weaver command, Tigris
+job, Git push, cancellation, or final-test access occurred in this workspace.
+The carried-evidence waiver truthfully records that no new standalone smoke
+was run.
+
+The exact next action is to commit and push the implementation and execute the
+dry-run plus live block in the runbook as soon as U000, U100E, D066E, and D033E
+authenticate. Unrelated source rungs and whole-campaign completion are not
+gates. Live submission remains a separate explicit human action.
+
 ## HCWDL-MHPE D066 optimization schedule screen (2026-08-18)
 
 The validation-only schedule study requested after comparing the 20-pass

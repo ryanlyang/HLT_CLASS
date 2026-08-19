@@ -209,6 +209,8 @@ def validation_partition_payload(
     selection_manifest: Mapping[str, Any], *, split_manifest_sha256: str,
     validation_assignment_manifest: Mapping[str, Any],
     validation_assignment_root: str | Path,
+    contract: str = VALIDATION_PARTITION_CONTRACT,
+    partition_seed: str = VALIDATION_PARTITION_SEED,
 ) -> dict[str, Any]:
     selection_hash = validate_row_selection(
         selection_manifest, split_manifest_sha256=split_manifest_sha256,
@@ -238,7 +240,7 @@ def validation_partition_payload(
         for entry in arrays["entries"]:
             identity = _identity(path, int(entry))
             rank = int.from_bytes(hashlib.sha256(
-                f"{VALIDATION_PARTITION_SEED}/{identity}".encode("utf-8")
+                f"{partition_seed}/{identity}".encode("utf-8")
             ).digest(), "big")
             records.append((rank, path, int(entry)))
     if (len(source_order) != len(set(source_order))
@@ -272,14 +274,14 @@ def validation_partition_payload(
             "identity_set_sha256": _identity_set_sha256(identities),
         }
     return with_content_hash({
-        "contract": VALIDATION_PARTITION_CONTRACT,
+        "contract": contract,
         "schema_version": 1,
         "source_selection_manifest_sha256": selection_hash,
         "source_validation_assignment_manifest_sha256": assignment_hash,
         "split_manifest_sha256": require_sha256(split_manifest_sha256, name="split manifest"),
         "source_validation_rows": validation_rows,
         "partition_rule": "global_identity_sha256_rank_first_floor_half_checkpoint_remainder_scoring_v1",
-        "partition_seed": VALIDATION_PARTITION_SEED,
+        "partition_seed": partition_seed,
         "subsets": subsets,
         "disjoint": True,
         "complete_source_validation_coverage": True,
@@ -288,12 +290,16 @@ def validation_partition_payload(
     })
 
 
-def validate_validation_partition(value: Mapping[str, Any]) -> str:
+def validate_validation_partition(
+    value: Mapping[str, Any], *,
+    expected_contract: str = VALIDATION_PARTITION_CONTRACT,
+    partition_seed: str = VALIDATION_PARTITION_SEED,
+) -> str:
     digest = validate_content_hash(
-        value, expected_contract=VALIDATION_PARTITION_CONTRACT, expected_schema_version=1,
+        value, expected_contract=expected_contract, expected_schema_version=1,
     )
     if (value.get("partition_rule") != "global_identity_sha256_rank_first_floor_half_checkpoint_remainder_scoring_v1"
-            or value.get("partition_seed") != VALIDATION_PARTITION_SEED
+            or value.get("partition_seed") != partition_seed
             or value.get("disjoint") is not True
             or value.get("complete_source_validation_coverage") is not True
             or value.get("labels_read") is not False
@@ -338,8 +344,15 @@ def validate_validation_partition(value: Mapping[str, Any]) -> str:
 class ValidationSubsetSelection:
     """Validated duck-typed RowSelection for one validation partition half."""
 
-    def __init__(self, partition: Mapping[str, Any], *, subset: str) -> None:
-        self.partition_sha256 = validate_validation_partition(partition)
+    def __init__(
+        self, partition: Mapping[str, Any], *, subset: str,
+        expected_contract: str = VALIDATION_PARTITION_CONTRACT,
+        partition_seed: str = VALIDATION_PARTITION_SEED,
+    ) -> None:
+        self.partition_sha256 = validate_validation_partition(
+            partition, expected_contract=expected_contract,
+            partition_seed=partition_seed,
+        )
         if subset not in {"checkpoint", "scoring"}:
             raise ValueError("unknown schedule-screen validation subset")
         payload = partition["subsets"][subset]

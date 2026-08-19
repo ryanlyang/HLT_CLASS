@@ -10,7 +10,7 @@ import random
 import signal
 import tempfile
 import threading
-from typing import Callable, Iterable, Mapping
+from typing import Callable, Iterable, Mapping, Sequence
 
 import numpy as np
 
@@ -381,11 +381,17 @@ def train_pmard(
     resume: bool = True,
     scientific_config: Mapping[str, object] | None = None,
     stop_after_update: int | None = None,
+    selection_horizon_updates: Sequence[int] = (),
 ) -> dict[str, object]:
     import torch
     target = torch.device(device)
     if target.type == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("CUDA training requested but unavailable")
+    horizons = tuple(int(value) for value in selection_horizon_updates)
+    if (horizons != tuple(sorted(set(horizons)))
+            or any(value <= 0 or value > config.total_updates for value in horizons)
+            or any(not _validation_due(config, value) for value in horizons)):
+        raise ValueError("selection horizons must be unique validation updates in ascending order")
     validated_parents = {
         str(name): require_sha256(value, name=str(name)) for name, value in sorted(parents.items())
     }
@@ -423,6 +429,8 @@ def train_pmard(
     optimizer = _optimizer_for(model, config)
     root = Path(output_dir); rolling = root / "rolling_resume.pt"
     scientific_payload = dict(scientific_config or {})
+    if horizons and scientific_payload.get("selection_horizon_updates") != list(horizons):
+        raise ValueError("selection horizon updates are absent from scientific configuration")
     config_hash = canonical_sha256({"training": asdict(config), "scientific": scientific_payload})
     update = 0; epoch = 0; batch_offset = 0; history = []
     resume_provenance = None
@@ -430,6 +438,10 @@ def train_pmard(
     loss_window_start = 1; loss_window_updates = 0
     validation_history: list[dict[str, object]] = []
     best_model = None; best_runtime = None; best_metrics = None; best_update = None
+    horizon_models: dict[int, object] = {}
+    horizon_runtimes: dict[int, object] = {}
+    horizon_metrics: dict[int, object] = {}
+    horizon_selected_updates: dict[int, int] = {}
     if rolling.exists() and resume:
         resume_checkpoint_sha256 = sha256_file(rolling)
         state = torch.load(rolling, map_location=target, weights_only=False)
@@ -447,6 +459,20 @@ def train_pmard(
         validation_history = list(state["validation_history"])
         best_model, best_runtime = state["best_model"], state["best_runtime"]
         best_metrics, best_update = state["best_metrics"], state["best_update"]
+        if horizons:
+            if tuple(state.get("selection_horizon_updates", ())) != horizons:
+                raise ValueError("resume checkpoint selection horizons differ")
+            horizon_models = {
+                int(key): {
+                    name: tensor.detach().cpu().clone() for name, tensor in value.items()
+                }
+                for key, value in state["horizon_models"].items()
+            }
+            horizon_runtimes = {int(key): value for key, value in state["horizon_runtimes"].items()}
+            horizon_metrics = {int(key): value for key, value in state["horizon_metrics"].items()}
+            horizon_selected_updates = {
+                int(key): int(value) for key, value in state["horizon_selected_updates"].items()
+            }
         resume_provenance = {
             "checkpoint_sha256": resume_checkpoint_sha256,
             "resumed_update": update, "resumed_epoch": epoch,
@@ -677,6 +703,13 @@ def train_pmard(
                     best_runtime = pre_validation_runtime
                     best_metrics = metrics
                     best_update = update
+                if update in horizons:
+                    horizon_models[update] = {
+                        name: value.detach().cpu().clone() for name, value in best_model.items()
+                    }
+                    horizon_runtimes[update] = best_runtime
+                    horizon_metrics[update] = dict(best_metrics)
+                    horizon_selected_updates[update] = int(best_update)
                 model.train()
             if validation_due or stop_due or preemption.requested:
                 state = {
@@ -692,6 +725,14 @@ def train_pmard(
                     "best_model": best_model, "best_runtime": best_runtime,
                     "best_metrics": best_metrics, "best_update": best_update,
                 }
+                if horizons:
+                    state.update({
+                        "selection_horizon_updates": horizons,
+                        "horizon_models": horizon_models,
+                        "horizon_runtimes": horizon_runtimes,
+                        "horizon_metrics": horizon_metrics,
+                        "horizon_selected_updates": horizon_selected_updates,
+                    })
                 _rolling_publish(rolling, state)
             if preemption.requested:
                 if preemption.signal_number is None:
@@ -733,6 +774,8 @@ def train_pmard(
         best_model = _cpu_state_dict(model); best_runtime = capture_model_runtime_state(model)
         best_metrics = metrics; best_update = update
         validation_history.append({"update": update, **metrics})
+    if horizons and set(horizon_models) != set(horizons):
+        raise RuntimeError("training did not publish every requested selection horizon")
     final_checkpoint_path = None
     final_checkpoint_sha256 = None
     if config.selection_policy == "hcwdl_macro_auc":
@@ -753,7 +796,24 @@ def train_pmard(
         "scientific_config": scientific_payload, "model_runtime": best_runtime,
         "selected_update": best_update,
     })
-    report = with_content_hash({
+    horizon_checkpoints = []
+    for horizon in horizons:
+        horizon_path = root / f"selected_model_through_update_{horizon:012d}.pt"
+        _publish_torch_checkpoint(horizon_path, {
+            "model": horizon_models[horizon], "config": asdict(config),
+            "scientific_config": scientific_payload,
+            "model_runtime": horizon_runtimes[horizon],
+            "horizon_update": horizon,
+            "selected_update": horizon_selected_updates[horizon],
+        })
+        horizon_checkpoints.append({
+            "horizon_update": horizon,
+            "selected_update": horizon_selected_updates[horizon],
+            "validation": horizon_metrics[horizon],
+            "checkpoint": horizon_path.name,
+            "checkpoint_sha256": sha256_file(horizon_path),
+        })
+    report_payload = {
         "contract": PMARD_TRAINING_REPORT_CONTRACT,
         "schema_version": PMARD_TRAINING_REPORT_VERSION,
         "experiment_id": config.experiment_id, "config": asdict(config),
@@ -792,7 +852,13 @@ def train_pmard(
         "final_checkpoint": None if final_checkpoint_path is None else final_checkpoint_path.name,
         "final_checkpoint_sha256": final_checkpoint_sha256,
         "resume_provenance": resume_provenance,
-    })
+    }
+    if horizons:
+        report_payload["selection_horizon_checkpoints"] = horizon_checkpoints
+        report_payload["selection_horizon_rule"] = (
+            "best_checkpoint_available_through_registered_update_v1"
+        )
+    report = with_content_hash(report_payload)
     write_immutable_json(root / "training_report.json", report)
     rolling.unlink(missing_ok=True)
     preemption.restore()
