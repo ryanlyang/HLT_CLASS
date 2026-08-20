@@ -228,18 +228,18 @@ def build_dense_c25p75_roc(
         raise ValueError("ROC command requires the dense C25P75 300k/60-pass profile")
     root = Path(spec["campaign_root"])
     completion_path = root / "reports/campaign_complete.json"
-    if not completion_path.is_file():
-        raise ValueError("dense C25P75 campaign is not complete")
-    completion = load_json(completion_path)
-    validate_content_hash(
-        completion,
-        expected_contract=str(completion.get("contract")),
-        expected_schema_version=int(completion.get("schema_version", -1)),
-    )
-    if completion.get("campaign_spec_sha256") != spec["content_hash"]:
-        raise ValueError("campaign completion/spec lineage differs")
-    if completion.get("final_test_accessed") is not False:
-        raise PermissionError("ROC diagnostic requires a validation-only campaign")
+    completion = None
+    if completion_path.is_file():
+        completion = load_json(completion_path)
+        validate_content_hash(
+            completion,
+            expected_contract=str(completion.get("contract")),
+            expected_schema_version=int(completion.get("schema_version", -1)),
+        )
+        if completion.get("campaign_spec_sha256") != spec["content_hash"]:
+            raise ValueError("campaign completion/spec lineage differs")
+        if completion.get("final_test_accessed") is not False:
+            raise PermissionError("ROC diagnostic requires a validation-only campaign")
     (
         _, foundation_root, foundation, split, split_hash, selection_hash,
         selections, assignments, balanced, recipe,
@@ -365,7 +365,13 @@ def build_dense_c25p75_roc(
         "schema_version": 1,
         "campaign_spec_path": str(spec_path),
         "campaign_spec_sha256": spec["content_hash"],
-        "campaign_complete_sha256": completion["content_hash"],
+        "campaign_complete_sha256": (
+            None if completion is None else completion["content_hash"]
+        ),
+        "campaign_readiness": (
+            "complete_campaign" if completion is not None
+            else "authenticated_required_products_only"
+        ),
         "source_commit": spec["source_commit"],
         "profile": campaign_profile(spec),
         "validation_rows": len(labels),

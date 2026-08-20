@@ -15,11 +15,18 @@ identity set, selected model checkpoints, and authenticated T1 ensemble
 probabilities.  Zero observed QCD passes use the finite empirical ceiling
 `N_QCD`; final test is forbidden.
 
+Whole-campaign completion is not a plotting gate.  When the dense campaign is
+still active, the command authenticates the exact four required products
+directly: the imported U000 and M0paired reports/checkpoints, the U100E T1
+validation probability bundle, and the M1 report/checkpoint.  Its report marks
+this state as `authenticated_required_products_only`; an available completion
+report is still validated and bound when present.
+
 Reusable curve construction and authenticated evaluation live in
 `scouting/hcwdl_mhpe_roc.py`; the thin entry point is
 `scripts/plot_hcwdl_mhpe_dense_roc.py`.  It writes PDF, PNG, deterministic NPZ
 curve arrays, and a content-hashed lineage report.  Final focused MHPE/ROC
-tests passed 39 tests in 7.40 seconds; Python compilation, CLI help, and
+tests passed 39 tests in 7.09 seconds; Python compilation, CLI help, and
 `git diff --check` also passed.  The warnings were deprecations from the
 installed local Matplotlib/Pyparsing combination.  No Tigris inference, job
 submission, sealed-test access, or plot fabrication occurred locally.
