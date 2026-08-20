@@ -144,6 +144,22 @@ def authenticate_foundation(foundation_lock_path: str | Path) -> dict[str, Any]:
         raise ValueError("TRI60 foundation is not the all-mapped population")
     if spec.get("final_test_accessed") is not False:
         raise PermissionError("TRI60 foundation reports final-test access")
+    split = load_json(spec["artifact_paths"]["split_manifest"])
+    split_hash = validate_content_hash(
+        split,
+        expected_contract=str(split["contract"]),
+        expected_schema_version=int(split["schema_version"]),
+    )
+    selection = load_json(spec["artifact_paths"]["selection_manifest"])
+    selection_hash = validate_content_hash(
+        selection,
+        expected_contract=str(selection["contract"]),
+        expected_schema_version=int(selection["schema_version"]),
+    )
+    if spec["parents"].get("split_manifest_sha256") != split_hash:
+        raise ValueError("TRI60 foundation split lineage differs")
+    if selection.get("split_manifest_sha256") != split_hash:
+        raise ValueError("TRI60 foundation selection/split lineage differs")
     m0_path = foundation_root / "training/M0paired/training_report.json"
     m0 = load_json(m0_path)
     m0_hash = validate_pmard_training_report(m0)
@@ -158,8 +174,8 @@ def authenticate_foundation(foundation_lock_path: str | Path) -> dict[str, Any]:
     parent_hashes = {
         "foundation_lock": lock_hash,
         "foundation_spec": spec_hash,
-        "split_manifest": spec["parents"]["split_manifest_sha256"],
-        "selection_manifest": spec["parents"]["selection_manifest_sha256"],
+        "split_manifest": split_hash,
+        "selection_manifest": selection_hash,
         "assignment_lock": lock["parents"]["assignment_lock_sha256"],
         "coupling_lock": lock["parents"]["coupling_lock_sha256"],
         "endpoint_lock": lock["parents"]["endpoint_lock_sha256"],

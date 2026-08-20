@@ -68,6 +68,20 @@ complete 50-job dry ledger. The bounded worker is an operational acceptance,
 not a reduced scientific campaign; live science submission remains separately
 phrase-authorized.
 
+The first read-only Tigris foundation-authentication attempt at pushed commit
+`c5a31a04` exposed a pre-submission integration defect before any Slurm job or
+campaign artifact was created. The TRI60 adapter incorrectly expected a
+`selection_manifest_sha256` entry in the full-foundation spec's `parents`
+mapping. The canonical full-foundation contract stores only the split hash
+there; the authenticated row-selection hash is the `content_hash` of the
+artifact named by `artifact_paths.selection_manifest`. The adapter now loads
+and validates the split and selection artifacts, proves the selection binds
+the exact split, and records both actual hashes. A regression uses the real
+contract shape without the nonexistent parent field. Both changed Python
+files compile and `git diff --check` passes. The local default Python lacks
+NumPy, so the focused regression must be rerun in `atlas_kd_tigris` on the
+corrected pushed commit before proceeding to recipe selection or acceptance.
+
 ## Dense C25P75 validation ROC diagnostic (2026-08-20)
 
 An additive validation-only plotting command now produces the requested

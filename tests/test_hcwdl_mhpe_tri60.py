@@ -41,7 +41,7 @@ from hlt_classification.scouting.hcwdl_recovery import (
     build_submission_event, build_submission_ledger,
 )
 from hlt_classification.data.cache_contracts import (
-    with_content_hash, write_immutable_json,
+    sha256_file, with_content_hash, write_immutable_json,
 )
 from hlt_classification.scouting.hcwdl_representation_data import HCWDLParticleInputs
 from hlt_classification.scouting.hcwdl_representation_target_runtime import (
@@ -57,6 +57,86 @@ from hlt_classification.scouting.hcwdl_representation_targets import (
 
 
 SHA = "a" * 64
+
+
+def test_foundation_authentication_hashes_the_selection_artifact_not_a_missing_parent_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+):
+    from hlt_classification.scouting import hcwdl_mhpe_tri60_integration as integration
+
+    root = tmp_path / "foundation"
+    (root / "locks").mkdir(parents=True)
+    (root / "source").mkdir()
+    (root / "training/M0paired").mkdir(parents=True)
+
+    split = with_content_hash({
+        "contract": "TEST_SPLIT/v1", "schema_version": 1,
+    })
+    split_path = root / "source/split.json"
+    write_immutable_json(split_path, split)
+    selection = with_content_hash({
+        "contract": "TEST_SELECTION/v1", "schema_version": 1,
+        "split_manifest_sha256": split["content_hash"],
+    })
+    selection_path = root / "source/selection.json"
+    write_immutable_json(selection_path, selection)
+    spec = with_content_hash({
+        "contract": "TEST_FOUNDATION/v1", "schema_version": 1,
+        "campaign_root": str(root.resolve()),
+        "artifact_paths": {
+            "split_manifest": str(split_path.resolve()),
+            "selection_manifest": str(selection_path.resolve()),
+        },
+        "parents": {"split_manifest_sha256": split["content_hash"]},
+        "role_counts": {
+            "train": 2_600_000, "validation": 1_000_000,
+            "final_test": 1_000_000,
+        },
+        "final_test_accessed": False,
+    })
+    write_immutable_json(root / "foundation_spec.json", spec)
+
+    checkpoint = root / "training/M0paired/selected.pt"
+    checkpoint.write_bytes(b"checkpoint")
+    m0 = with_content_hash({
+        "contract": "TEST_PMARD_REPORT/v1", "schema_version": 1,
+        "selected_checkpoint": checkpoint.name,
+        "selected_checkpoint_sha256": sha256_file(checkpoint),
+        "completed_natural_population_passes": 20,
+    })
+    write_immutable_json(root / "training/M0paired/training_report.json", m0)
+    lock = with_content_hash({
+        "contract": "TEST_FOUNDATION_LOCK/v1", "schema_version": 1,
+        "foundation_spec_sha256": spec["content_hash"],
+        "m0paired_report_sha256": m0["content_hash"],
+        "m0paired_checkpoint_sha256": m0["selected_checkpoint_sha256"],
+        "parents": {
+            "assignment_lock_sha256": "1" * 64,
+            "coupling_lock_sha256": "2" * 64,
+            "endpoint_lock_sha256": "3" * 64,
+            "train_balanced_manifest_sha256": "4" * 64,
+            "validation_balanced_manifest_sha256": "5" * 64,
+        },
+    })
+    lock_path = root / "locks/foundation.json"
+    write_immutable_json(lock_path, lock)
+
+    monkeypatch.setattr(
+        integration, "validate_foundation_lock",
+        lambda value: value["content_hash"],
+    )
+    monkeypatch.setattr(
+        integration, "validate_foundation_campaign",
+        lambda value, **kwargs: value["content_hash"],
+    )
+    monkeypatch.setattr(
+        integration, "validate_pmard_training_report",
+        lambda value: value["content_hash"],
+    )
+
+    authenticated = integration.authenticate_foundation(lock_path)
+    assert authenticated["parents"]["split_manifest"] == split["content_hash"]
+    assert authenticated["parents"]["selection_manifest"] == selection["content_hash"]
 
 
 def test_graph_has_exact_fit_and_reducer_registries():
