@@ -46,6 +46,16 @@ METRIC_TOLERANCES: Final = {
 }
 
 
+def _validate_optional_frozen_digest(
+    reference: Mapping[str, Any], observed: str,
+) -> None:
+    """Honor launch-time hashes while supporting registered future reports."""
+
+    frozen = reference.get("report_sha256")
+    if frozen is not None and frozen != observed:
+        raise ValueError("HCWDL-U-RKD ensemble logit report changed")
+
+
 def equal_weight_probability_logits(member_logits: Sequence[np.ndarray]) -> np.ndarray:
     """Return log probabilities for a frozen equal-weight probability mean."""
 
@@ -86,8 +96,7 @@ def _load_members(spec: Mapping[str, Any], rung: str, *, device: str):
         expected_contract=str(logit_report["contract"]),
         expected_schema_version=int(logit_report["schema_version"]),
     )
-    if logit_hash != reference["report_sha256"]:
-        raise ValueError("HCWDL-U-RKD ensemble logit report changed")
+    _validate_optional_frozen_digest(reference, logit_hash)
     scientific = logit_report.get("scientific_config", {})
     node = scientific.get("node") if isinstance(scientific, Mapping) else None
     observed = node.get("node_id") if isinstance(node, Mapping) else logit_report.get("experiment_id")

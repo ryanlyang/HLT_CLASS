@@ -15,6 +15,16 @@ repository suite passed 995 tests with nine platform skips and 14 existing
 Matplotlib deprecation warnings in 415.98 seconds. CLI help, Python compilation,
 and `git diff --check` passed. Real results remain pending execution on Tigris.
 
+The first live ensemble attempt at source `f893ace5` failed before inference:
+the evaluator incorrectly required the optional launch-time `report_sha256`
+field on future parent logit references. Parent campaigns created before those
+reports completed intentionally bind only their registered path and expected
+node; the established aggregate authenticates the report when it appears. The
+evaluator now follows that exact behavior, still binds the observed report and
+checkpoint hashes into its own immutable result, and retains strict equality
+when a launch-time hash was present. The repaired focused suite passed 48/48
+and `git diff --check` passed.
+
 ## HCWDL-U-RKD chained resource recovery (2026-08-17)
 
 The running pilot's `F_RREL_U100` source-recovery job reached pass 58 of 60,

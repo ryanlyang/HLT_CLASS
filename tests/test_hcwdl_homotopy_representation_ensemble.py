@@ -13,6 +13,7 @@ from hlt_classification.scouting.hcwdl_homotopy_representation_ensemble import (
     MEMBER_ORDER,
     REPORT_SCHEMA_VERSION,
     WEIGHTS,
+    _validate_optional_frozen_digest,
     equal_weight_probability_logits,
     validate_ensemble_report,
 )
@@ -39,6 +40,16 @@ def test_equal_weight_probability_ensemble_rejects_nonfinite():
     values[1][0, 0] = np.nan
     with pytest.raises(FloatingPointError):
         equal_weight_probability_logits(values)
+
+
+def test_future_parent_logit_reference_may_omit_launch_time_report_hash():
+    _validate_optional_frozen_digest(
+        {"report_path": "/future/report.json", "expected_node_id": "D40F"},
+        "a" * 64,
+    )
+    _validate_optional_frozen_digest({"report_sha256": "a" * 64}, "a" * 64)
+    with pytest.raises(ValueError):
+        _validate_optional_frozen_digest({"report_sha256": "b" * 64}, "a" * 64)
 
 
 def _report():
