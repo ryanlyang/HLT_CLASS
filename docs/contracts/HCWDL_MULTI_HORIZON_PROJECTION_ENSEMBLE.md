@@ -120,3 +120,12 @@ resources, and exact anchor-50 reducer semantics are identical. Therefore the
 existing target/stage/aggregate/finalist/completion/final-evaluation v2
 contracts remain applicable while binding the v6 recipe profile. See the
 [dense C25P75 runbook](../HCWDL_MHPE_DENSE_C25P75_300K60_RUNBOOK.md).
+
+The validation-only frozen-domain diagnostic uses
+`HCWDL_MHPE_DENSE_D100_ON_HLT_VALIDATION/v1`. It evaluates the exact selected
+component checkpoints of `U100E` on canonical HLT inputs and recombines them
+with the unchanged registered T1 anchor-50 weights. It performs no fitting,
+checkpoint selection, ensemble reweighting, or final-test access. Its report
+binds the campaign, validation identity set, native `U100E` and exact-HLT
+`D0E` probability bundles, every component report/checkpoint, `M0paired`, and
+`M1`.

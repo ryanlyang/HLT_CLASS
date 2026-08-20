@@ -10,7 +10,19 @@ from hlt_classification.scouting.hcwdl_mhpe_roc import (
     SIGNALS,
     _plot,
     _plot_progression,
+    _metric_deltas,
+    _probability_metrics,
+    _recovered_fraction,
+    _validate_same_component_checkpoints,
     qcd_rejection_curve,
+)
+from hlt_classification.scouting.hcwdl_mhpe_graph import (
+    PROFILE_DENSE_C25P75_300K60,
+    ensemble_components,
+    ensemble_weight_rationals,
+)
+from hlt_classification.scouting.hcwdl_mhpe_targets import (
+    weighted_probability_ensemble,
 )
 
 matplotlib.use("Agg")
@@ -74,3 +86,55 @@ def test_dense_roc_plot_writes_both_formats(tmp_path):
     progression = _plot_progression(curves, tmp_path)
     assert progression["progression_pdf"].read_bytes().startswith(b"%PDF")
     assert progression["progression_png"].read_bytes().startswith(b"\x89PNG")
+
+
+def test_d100_hlt_transfer_uses_registered_dense_ensemble_weights():
+    profile = PROFILE_DENSE_C25P75_300K60
+    components = ensemble_components(profile)["U100E"]
+    logits = {
+        name: np.full((3, 15), index / 10, dtype=np.float32)
+        for index, name in enumerate(components)
+    }
+    for index, name in enumerate(components):
+        logits[name][:, index] += 1.0
+    actual = weighted_probability_ensemble(
+        logits,
+        temperature=1,
+        weights=ensemble_weight_rationals(profile, "U100E"),
+    )
+    assert actual.shape == (3, 15)
+    np.testing.assert_allclose(actual.sum(axis=1), 1.0, atol=2e-6)
+    local = "U100_from_U066E"
+    assert ensemble_weight_rationals(profile, "U100E")[local] == [1, 2]
+
+
+def test_d100_hlt_transfer_metric_helpers_are_directional_and_finite():
+    probabilities = np.full((30, 15), 0.01, dtype=np.float32)
+    labels = np.arange(30, dtype=np.int64) % 15
+    probabilities[np.arange(30), labels] = 0.86
+    probabilities /= probabilities.sum(axis=1, keepdims=True)
+    metrics = _probability_metrics(probabilities, labels)
+    assert metrics["accuracy"] == 1.0
+    deltas = _metric_deltas(metrics, metrics)
+    assert set(deltas) == {
+        "cross_entropy", "accuracy", "balanced_accuracy", "macro_ovr_auc",
+        "macro_mean_log_qcd_rejection_at_50pct_signal", "top_label_ece_15_bin",
+    }
+    assert all(value == 0 for value in deltas.values())
+    assert _recovered_fraction(0.95, 0.90, 1.00) == pytest.approx(0.5)
+    assert _recovered_fraction(1.0, 1.0, 1.0) is None
+
+
+def test_d100_hlt_transfer_requires_exact_native_component_checkpoints():
+    order = ("a", "b")
+    native = {
+        "a": {"report_sha256": "1" * 64, "checkpoint_sha256": "2" * 64},
+        "b": {"report_sha256": "3" * 64, "checkpoint_sha256": "4" * 64},
+    }
+    _validate_same_component_checkpoints(native, dict(native), order)
+    changed = {key: dict(value) for key, value in native.items()}
+    changed["b"]["checkpoint_sha256"] = "5" * 64
+    with pytest.raises(ValueError, match="checkpoint differs"):
+        _validate_same_component_checkpoints(native, changed, order)
+    with pytest.raises(ValueError, match="lineage set"):
+        _validate_same_component_checkpoints(native, {"a": native["a"]}, order)

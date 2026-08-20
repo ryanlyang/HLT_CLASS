@@ -20,17 +20,20 @@ from hlt_classification.data.cache_contracts import (
 )
 
 from .engine import precompute_teacher_targets, validate_pmard_training_report
-from .evaluation import softmax
+from .evaluation import classification_metrics, softmax
 from .hcwdl_mhpe_contracts import campaign_profile
 from .hcwdl_mhpe_graph import (
     COORDINATES,
     PROFILE_DENSE_C25P75_300K60,
+    ensemble_components,
+    ensemble_weight_rationals,
     node_registry,
 )
 from .hcwdl_mhpe_runner import _context, _runtime_parameters
 from .hcwdl_mhpe_targets import (
     DurableProbabilityTargets,
     validate_probability_bundle,
+    weighted_probability_ensemble,
 )
 from .hcwdl_unified_balanced_runner import _stream
 from .loaders import load_pmard_model, scouting_model_factory_for_report
@@ -39,6 +42,9 @@ from .training import derive_seed
 
 
 ROC_REPORT_CONTRACT = "HCWDL_MHPE_DENSE_VALIDATION_ROC/v1"
+D100_HLT_TRANSFER_REPORT_CONTRACT = (
+    "HCWDL_MHPE_DENSE_D100_ON_HLT_VALIDATION/v1"
+)
 SIGNALS = ("Xbb", "Xcc")
 MAIN_LADDER = (
     ("U000", "Offline"),
@@ -118,7 +124,7 @@ def qcd_rejection_curve(
     }
 
 
-def _validation_predictions(
+def _validation_model_outputs(
     *,
     report_path: Path,
     foundation: Mapping[str, Any],
@@ -177,11 +183,18 @@ def _validation_predictions(
             torch.cuda.empty_cache()
     except ImportError:
         pass
-    return targets.identities, softmax(targets.logits), {
+    return targets.identities, targets.logits.astype(np.float32, copy=False), {
         "report_path": str(report_path.resolve()),
         "report_sha256": report_hash,
         "checkpoint_sha256": report["selected_checkpoint_sha256"],
     }
+
+
+def _validation_predictions(
+    **kwargs: Any,
+) -> tuple[tuple[str, ...], np.ndarray, dict[str, str]]:
+    identities, logits, lineage = _validation_model_outputs(**kwargs)
+    return identities, softmax(logits), lineage
 
 
 def _validation_labels(
@@ -225,6 +238,298 @@ def _align(
     if set(indexes) != set(reference):
         raise ValueError("prediction and validation identity sets differ")
     return np.asarray(values)[[indexes[identity] for identity in reference]]
+
+
+def _durable_validation_ensemble(
+    *, root: Path, ensemble_id: str, profile: str,
+    registry: Mapping[str, Any], reference_ids: Sequence[str],
+) -> tuple[np.ndarray, dict[str, Any]]:
+    directory = root / "targets" / ensemble_id / "T1"
+    expected_consumers = sorted(
+        node.node_id for node in registry.values()
+        if node.teacher_id == ensemble_id and node.temperature == 1
+    )
+    lock_hash, manifests = validate_probability_bundle(
+        directory,
+        ensemble_id=ensemble_id,
+        temperature=1,
+        consumers=expected_consumers,
+        profile=profile,
+    )
+    durable = DurableProbabilityTargets(directory / "validation_manifest.json")
+    if manifests["validation"]["content_hash"] != durable.manifest["content_hash"]:
+        raise ValueError("validated probability bundle changed while loading")
+    return _align(reference_ids, durable.identities, durable.probabilities), {
+        "target_lock_sha256": lock_hash,
+        "validation_manifest_path": str(durable.path.resolve()),
+        "validation_manifest_sha256": durable.manifest["content_hash"],
+        "component_lineage": durable.manifest["component_lineage"],
+    }
+
+
+def _probability_metrics(probability: np.ndarray, labels: np.ndarray) -> dict[str, Any]:
+    values = np.asarray(probability, dtype=np.float32)
+    if (
+        values.shape != (len(labels), len(CLASS_NAMES))
+        or not np.isfinite(values).all()
+        or np.any(values < 0)
+        or not np.allclose(values.sum(axis=1, dtype=np.float64), 1.0,
+                           rtol=0, atol=2e-6)
+    ):
+        raise ValueError("validation probabilities are invalid")
+    return classification_metrics(
+        np.log(np.maximum(values, np.float32(1e-30))), labels,
+    )
+
+
+def _metric_deltas(
+    candidate: Mapping[str, Any], reference: Mapping[str, Any],
+) -> dict[str, float]:
+    names = (
+        "cross_entropy", "accuracy", "balanced_accuracy", "macro_ovr_auc",
+        "macro_mean_log_qcd_rejection_at_50pct_signal", "top_label_ece_15_bin",
+    )
+    return {
+        name: float(candidate[name]) - float(reference[name])
+        for name in names
+    }
+
+
+def _recovered_fraction(value: float, baseline: float, oracle: float) -> float | None:
+    denominator = oracle - baseline
+    if denominator == 0:
+        return None
+    return (value - baseline) / denominator
+
+
+def _validate_same_component_checkpoints(
+    native: Mapping[str, Mapping[str, str]],
+    fresh: Mapping[str, Mapping[str, str]],
+    component_order: Sequence[str],
+) -> None:
+    if set(native) != set(component_order) or set(fresh) != set(component_order):
+        raise ValueError("D100-on-HLT component lineage set differs")
+    for component in component_order:
+        if (
+            native[component].get("report_sha256")
+            != fresh[component].get("report_sha256")
+            or native[component].get("checkpoint_sha256")
+            != fresh[component].get("checkpoint_sha256")
+        ):
+            raise ValueError(
+                "D100-on-HLT checkpoint differs from the native D100 ensemble"
+            )
+
+
+def evaluate_dense_c25p75_d100_on_hlt(
+    campaign_spec_path: str | Path,
+    output_path: str | Path,
+    *,
+    device: str = "cuda",
+) -> dict[str, Any]:
+    """Evaluate the frozen dense D100 ensemble on canonical HLT validation inputs.
+
+    This is a validation-only domain-transfer diagnostic.  It performs no
+    fitting, checkpoint selection, weight adaptation, or final-test access.
+    """
+    spec_path = Path(campaign_spec_path).resolve()
+    spec = load_json(spec_path)
+    profile = campaign_profile(spec)
+    if profile != PROFILE_DENSE_C25P75_300K60:
+        raise ValueError(
+            "D100-on-HLT diagnostic requires the dense C25P75 300k/60-pass profile"
+        )
+    root = Path(spec["campaign_root"])
+    completion_path = root / "reports/campaign_complete.json"
+    completion = None
+    if completion_path.is_file():
+        completion = load_json(completion_path)
+        validate_content_hash(
+            completion,
+            expected_contract=str(completion.get("contract")),
+            expected_schema_version=int(completion.get("schema_version", -1)),
+        )
+        if completion.get("campaign_spec_sha256") != spec["content_hash"]:
+            raise ValueError("campaign completion/spec lineage differs")
+        if completion.get("final_test_accessed") is not False:
+            raise PermissionError("D100-on-HLT diagnostic requires validation-only lineage")
+
+    (
+        _, foundation_root, foundation, split, split_hash, selection_hash,
+        selections, assignments, balanced, recipe,
+    ) = _context(spec, verify_source_tree=False)
+    repair_domain, _ = _runtime_parameters(profile)
+    repair_seed = derive_seed(int(foundation["replicate_seed"]), repair_domain)
+    evaluation_seed = derive_seed(
+        int(foundation["replicate_seed"]),
+        "mhpe/dense_c25p75/d100_on_hlt_validation/v1",
+    )
+    reference_ids, labels = _validation_labels(
+        foundation=foundation,
+        split=split,
+        selections=selections,
+        assignments=assignments,
+        balanced=balanced,
+        recipe=recipe,
+        sampler_seed=evaluation_seed,
+        repair_seed=repair_seed,
+    )
+    if len(reference_ids) != selections["validation"].rows:
+        raise ValueError("D100-on-HLT validation row count differs")
+
+    registry = node_registry(profile)
+    native_d100, native_lineage = _durable_validation_ensemble(
+        root=root,
+        ensemble_id="U100E",
+        profile=profile,
+        registry=registry,
+        reference_ids=reference_ids,
+    )
+    d0_ensemble, d0_lineage = _durable_validation_ensemble(
+        root=root,
+        ensemble_id="D0E",
+        profile=profile,
+        registry=registry,
+        reference_ids=reference_ids,
+    )
+
+    component_order = ensemble_components(profile)["U100E"]
+    weights = ensemble_weight_rationals(profile, "U100E")
+    component_logits: dict[str, np.ndarray] = {}
+    component_lineage: dict[str, Any] = {}
+    component_metrics: dict[str, Any] = {}
+    for component in component_order:
+        identities, logits, lineage = _validation_model_outputs(
+            report_path=root / "training" / component / "training_report.json",
+            foundation=foundation,
+            split=split,
+            split_hash=split_hash,
+            selections=selections,
+            assignments=assignments,
+            balanced=balanced,
+            recipe=recipe,
+            behavior="hlt",
+            coordinate=COORDINATES["D0"],
+            sampler_seed=evaluation_seed,
+            repair_seed=repair_seed,
+            device=device,
+        )
+        aligned = _align(reference_ids, identities, logits).astype(
+            np.float32, copy=False,
+        )
+        component_logits[component] = aligned
+        component_lineage[component] = lineage
+        component_metrics[component] = classification_metrics(aligned, labels)
+    if tuple(sorted(component_logits)) != component_order:
+        raise ValueError("D100-on-HLT component order differs from the graph")
+    _validate_same_component_checkpoints(
+        native_lineage["component_lineage"], component_lineage, component_order,
+    )
+    d100_on_hlt = weighted_probability_ensemble(
+        component_logits, temperature=1, weights=weights,
+    )
+
+    probabilities: dict[str, np.ndarray] = {
+        "D100_on_D100": native_d100,
+        "D100_on_HLT": d100_on_hlt,
+        "D0E_on_HLT": d0_ensemble,
+    }
+    model_lineage: dict[str, Any] = {
+        "D100_on_D100": native_lineage,
+        "D100_on_HLT": {
+            "component_order": list(component_order),
+            "ensemble_weights": weights,
+            "components": component_lineage,
+        },
+        "D0E_on_HLT": d0_lineage,
+    }
+    for node_id, report_path in (
+        ("M1_on_HLT", root / "training/M1/training_report.json"),
+        ("M0paired_on_HLT", foundation_root / "training/M0paired/training_report.json"),
+    ):
+        identities, values, lineage = _validation_predictions(
+            report_path=report_path,
+            foundation=foundation,
+            split=split,
+            split_hash=split_hash,
+            selections=selections,
+            assignments=assignments,
+            balanced=balanced,
+            recipe=recipe,
+            behavior="hlt",
+            coordinate=COORDINATES["D0"],
+            sampler_seed=evaluation_seed,
+            repair_seed=repair_seed,
+            device=device,
+        )
+        probabilities[node_id] = _align(reference_ids, identities, values)
+        model_lineage[node_id] = lineage
+
+    metrics = {
+        name: _probability_metrics(values, labels)
+        for name, values in probabilities.items()
+    }
+    comparisons = {
+        "D100_on_HLT_minus_D100_on_D100": _metric_deltas(
+            metrics["D100_on_HLT"], metrics["D100_on_D100"],
+        ),
+        "D100_on_HLT_minus_M0paired_on_HLT": _metric_deltas(
+            metrics["D100_on_HLT"], metrics["M0paired_on_HLT"],
+        ),
+        "D0E_on_HLT_minus_D100_on_HLT": _metric_deltas(
+            metrics["D0E_on_HLT"], metrics["D100_on_HLT"],
+        ),
+        "M1_on_HLT_minus_D100_on_HLT": _metric_deltas(
+            metrics["M1_on_HLT"], metrics["D100_on_HLT"],
+        ),
+    }
+    recovery = {
+        metric: _recovered_fraction(
+            float(metrics["D100_on_HLT"][metric]),
+            float(metrics["M0paired_on_HLT"][metric]),
+            float(metrics["D100_on_D100"][metric]),
+        )
+        for metric in (
+            "macro_ovr_auc",
+            "macro_mean_log_qcd_rejection_at_50pct_signal",
+        )
+    }
+    report = with_content_hash({
+        "contract": D100_HLT_TRANSFER_REPORT_CONTRACT,
+        "schema_version": 1,
+        "campaign_spec_path": str(spec_path),
+        "campaign_spec_sha256": spec["content_hash"],
+        "campaign_complete_sha256": (
+            None if completion is None else completion["content_hash"]
+        ),
+        "campaign_readiness": (
+            "complete_campaign" if completion is not None
+            else "authenticated_required_products_only"
+        ),
+        "source_commit": spec["source_commit"],
+        "profile": profile,
+        "validation_rows": len(labels),
+        "validation_identity_sha256": identity_order_sha256(reference_ids),
+        "split_manifest_sha256": split_hash,
+        "selection_manifest_sha256": selection_hash,
+        "final_test_accessed": False,
+        "fit_or_checkpoint_selection_performed": False,
+        "diagnostic": (
+            "same frozen U100E component checkpoints and registered weights; "
+            "native D100 view versus canonical HLT view"
+        ),
+        "row_order": list(probabilities),
+        "metrics": metrics,
+        "component_metrics_on_hlt": component_metrics,
+        "comparisons": comparisons,
+        "d100_on_hlt_recovery_between_hlt_baseline_and_native_d100": recovery,
+        "lineage": model_lineage,
+    })
+    destination = Path(output_path).resolve()
+    if destination.exists():
+        raise FileExistsError("D100-on-HLT report already exists")
+    write_immutable_json(destination, report)
+    return report
 
 
 def build_dense_c25p75_roc(
@@ -589,11 +894,13 @@ def _plot_progression(
 
 
 __all__ = [
+    "D100_HLT_TRANSFER_REPORT_CONTRACT",
     "MAIN_LADDER",
     "PROGRESSION_LADDER",
     "PROGRESSION_REFERENCES",
     "ROC_REPORT_CONTRACT",
     "SIGNALS",
     "build_dense_c25p75_roc",
+    "evaluate_dense_c25p75_d100_on_hlt",
     "qcd_rejection_curve",
 ]
