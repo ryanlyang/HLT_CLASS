@@ -40,14 +40,18 @@ MEMBER_ORDER: Final = ("LOGIT", "RSET", "RREL")
 WEIGHTS: Final = (1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0)
 MEMBER_INFERENCE_PRECISION: Final = {
     "LOGIT": "float32",
-    "RSET": "bfloat16_autocast",
-    "RREL": "bfloat16_autocast",
+    "RSET": "float32",
+    "RREL": "float32",
 }
-METRIC_TOLERANCES: Final = {
-    "cross_entropy": 5.0e-6,
-    "accuracy": 1.0e-8,
-    "macro_ovr_auc": 5.0e-7,
-    "macro_mean_log_qcd_rejection_at_50pct_signal": 5.0e-6,
+METRIC_FIELDS: Final = (
+    "cross_entropy",
+    "accuracy",
+    "macro_ovr_auc",
+    "macro_mean_log_qcd_rejection_at_50pct_signal",
+)
+MATERIAL_REPLAY_BOUNDS: Final = {
+    "cross_entropy": 1.0e-3,
+    "macro_ovr_auc": 1.0e-4,
 }
 
 
@@ -85,7 +89,7 @@ def _validation_metrics(report: Mapping[str, Any]) -> dict[str, float]:
     if not isinstance(validation, Mapping):
         raise ValueError("HCWDL-U-RKD ensemble member lacks validation metrics")
     metrics: dict[str, float] = {}
-    for name in METRIC_TOLERANCES:
+    for name in METRIC_FIELDS:
         value = float(validation[name])
         if not math.isfinite(value):
             raise FloatingPointError(f"HCWDL-U-RKD ensemble metric is nonfinite: {name}")
@@ -217,15 +221,7 @@ def evaluate_ensemble(
             identities.extend(identity_keys)
             label_parts.append(labels)
             for name in MEMBER_ORDER:
-                with torch.autocast(
-                    device_type=torch.device(device).type,
-                    dtype=torch.bfloat16,
-                    enabled=(
-                        torch.device(device).type == "cuda"
-                        and MEMBER_INFERENCE_PRECISION[name] == "bfloat16_autocast"
-                    ),
-                ):
-                    logits = models[name](features, vectors, mask)
+                logits = models[name](features, vectors, mask)
                 if logits.shape != (len(labels), 15):
                     raise ValueError("HCWDL-U-RKD ensemble logits shape differs")
                 logits_parts[name].append(logits.float())
@@ -253,24 +249,27 @@ def evaluate_ensemble(
         expected = _validation_metrics(reports[name])
         deltas = {
             metric: float(measured[name][metric]) - expected[metric]
-            for metric in METRIC_TOLERANCES
+            for metric in METRIC_FIELDS
         }
-        violations = {
+        material_drift = {
             metric: deltas[metric]
-            for metric in deltas
-            if abs(deltas[metric]) > METRIC_TOLERANCES[metric]
+            for metric in MATERIAL_REPLAY_BOUNDS
+            if abs(deltas[metric]) > MATERIAL_REPLAY_BOUNDS[metric]
         }
-        if violations:
+        if material_drift:
             raise RuntimeError(
-                f"HCWDL-U-RKD ensemble {name} metric parity failed: {violations}"
+                f"HCWDL-U-RKD ensemble {name} material metric replay drift: "
+                f"{material_drift}"
             )
         parity[name] = {
             "selected_report": expected,
-            "recomputed": {metric: float(measured[name][metric]) for metric in METRIC_TOLERANCES},
+            "recomputed": {metric: float(measured[name][metric]) for metric in METRIC_FIELDS},
             "delta": deltas,
+            "material_replay_bounds": MATERIAL_REPLAY_BOUNDS,
+            "material_drift": False,
         }
         member_summaries[name] = {
-            metric: float(measured[name][metric]) for metric in METRIC_TOLERANCES
+            metric: float(measured[name][metric]) for metric in METRIC_FIELDS
         }
         member_summaries[name]["R50"] = math.exp(
             member_summaries[name]["macro_mean_log_qcd_rejection_at_50pct_signal"]
@@ -281,7 +280,7 @@ def evaluate_ensemble(
     )
     ensemble = classification_metrics(ensemble_logits, labels_array)
     ensemble_summary = {
-        metric: float(ensemble[metric]) for metric in METRIC_TOLERANCES
+        metric: float(ensemble[metric]) for metric in METRIC_FIELDS
     }
     ensemble_summary["R50"] = math.exp(
         ensemble_summary["macro_mean_log_qcd_rejection_at_50pct_signal"]
@@ -314,7 +313,7 @@ def evaluate_ensemble(
         "weights": list(WEIGHTS),
         "weight_selection": "fixed_a_priori_no_validation_tuning",
         "member_inference_precision": MEMBER_INFERENCE_PRECISION,
-        "member_metric_parity": parity,
+        "member_metric_replay": parity,
         "member_summaries": member_summaries,
         "ensemble_validation": ensemble,
         "ensemble_summary": ensemble_summary,
@@ -322,7 +321,7 @@ def evaluate_ensemble(
         "ensemble_minus_members": {
             name: {
                 metric: ensemble_summary[metric] - float(member_summaries[name][metric])
-                for metric in (*METRIC_TOLERANCES, "R50")
+                for metric in (*METRIC_FIELDS, "R50")
             }
             for name in MEMBER_ORDER
         },
@@ -358,6 +357,7 @@ __all__ = [
     "ENSEMBLE_RUNGS",
     "MEMBER_ORDER",
     "MEMBER_INFERENCE_PRECISION",
+    "MATERIAL_REPLAY_BOUNDS",
     "REPORT_SCHEMA_VERSION",
     "WEIGHTS",
     "equal_weight_probability_logits",

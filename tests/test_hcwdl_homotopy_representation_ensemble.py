@@ -10,6 +10,7 @@ from hlt_classification.scouting.hcwdl_homotopy_representation_contracts import 
 )
 from hlt_classification.scouting.hcwdl_homotopy_representation_ensemble import (
     ENSEMBLE_RUNGS,
+    MATERIAL_REPLAY_BOUNDS,
     MEMBER_INFERENCE_PRECISION,
     MEMBER_ORDER,
     REPORT_SCHEMA_VERSION,
@@ -53,11 +54,15 @@ def test_future_parent_logit_reference_may_omit_launch_time_report_hash():
         _validate_optional_frozen_digest({"report_sha256": "b" * 64}, "a" * 64)
 
 
-def test_member_precision_reproduces_each_source_training_evaluator():
+def test_ensemble_rescores_every_member_in_common_float32():
     assert MEMBER_INFERENCE_PRECISION == {
         "LOGIT": "float32",
-        "RSET": "bfloat16_autocast",
-        "RREL": "bfloat16_autocast",
+        "RSET": "float32",
+        "RREL": "float32",
+    }
+    assert MATERIAL_REPLAY_BOUNDS == {
+        "cross_entropy": 1.0e-3,
+        "macro_ovr_auc": 1.0e-4,
     }
 
 

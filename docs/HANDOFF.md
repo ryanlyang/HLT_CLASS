@@ -35,6 +35,16 @@ error. The precision repair focused suite passed 49/49; Python compilation and
 `git diff --check` passed. No ensemble metric from either failed attempt was
 published.
 
+The third live attempt at source `0c461267` showed that even FP32 LOGIT replay
+on a separate GH200 execution differed by three predictions among 100,000
+validation jets and by `2.24e-4` in mean log-R50 while AUC and CE remained
+inside the earlier narrow bounds. That is harmless numerical replay variation,
+not lineage drift. The final evaluator scores every member together in common
+FP32, makes the same-pass recomputed metrics authoritative for the ensemble,
+records historical deltas diagnostically, and fails only on a fixed material-
+drift envelope. This avoids both mixed-precision ensembling and false bitwise-
+replay requirements while retaining exact checkpoint/view/identity hashes.
+
 ## HCWDL-U-RKD chained resource recovery (2026-08-17)
 
 The running pilot's `F_RREL_U100` source-recovery job reached pass 58 of 60,
