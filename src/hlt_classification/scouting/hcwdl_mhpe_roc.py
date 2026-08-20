@@ -53,6 +53,11 @@ PROGRESSION_LADDER = (
     ("D25E", "D25"),
     ("D0E", "D0"),
 )
+PROGRESSION_REFERENCES = (
+    ("U000", "Offline teacher"),
+    ("M0paired", "HLT baseline"),
+)
+PROGRESSION_EFFICIENCY_RANGE = (0.40, 0.60)
 
 
 def qcd_rejection_curve(
@@ -406,6 +411,12 @@ def build_dense_c25p75_roc(
         "progression_curve_order": [
             node_id for node_id, _ in PROGRESSION_LADDER
         ],
+        "progression_references": [
+            node_id for node_id, _ in PROGRESSION_REFERENCES
+        ],
+        "progression_signal_efficiency_range": list(
+            PROGRESSION_EFFICIENCY_RANGE
+        ),
         "display_labels": dict(MAIN_LADDER),
         "lineage": lineage,
         "curves_path": str(curve_path),
@@ -487,9 +498,24 @@ def _plot_progression(
     colors = plt.get_cmap("viridis")(
         np.linspace(0.08, 0.92, len(PROGRESSION_LADDER))
     )
+    reference_styles = {
+        "U000": ("#183153", "-."),
+        "M0paired": ("#555555", "--"),
+    }
+    lower_efficiency, upper_efficiency = PROGRESSION_EFFICIENCY_RANGE
     fig, axes = plt.subplots(1, 2, figsize=(11.5, 4.8), sharey=False)
     for axis, signal in zip(axes, SIGNALS, strict=True):
         visible_rejections: list[np.ndarray] = []
+        offline_id, offline_label = PROGRESSION_REFERENCES[0]
+        offline_curve = curves[offline_id][signal]
+        offline_efficiency = np.asarray(offline_curve["signal_efficiency"])
+        offline_rejection = np.asarray(offline_curve["qcd_rejection"])
+        offline_color, offline_style = reference_styles[offline_id]
+        axis.plot(
+            offline_efficiency, offline_rejection, color=offline_color,
+            linestyle=offline_style, linewidth=2.2, label=offline_label,
+            drawstyle="steps-post",
+        )
         for color, (node_id, label) in zip(
             colors, PROGRESSION_LADDER, strict=True,
         ):
@@ -507,14 +533,36 @@ def _plot_progression(
                 color=color, s=22, zorder=3,
             )
             visible = (
-                (efficiency >= 0.30) & (efficiency <= 0.70)
+                (efficiency >= lower_efficiency)
+                & (efficiency <= upper_efficiency)
+                & np.isfinite(rejection) & (rejection > 0)
+            )
+            if visible.any():
+                visible_rejections.append(rejection[visible])
+        baseline_id, baseline_label = PROGRESSION_REFERENCES[1]
+        baseline_curve = curves[baseline_id][signal]
+        baseline_efficiency = np.asarray(baseline_curve["signal_efficiency"])
+        baseline_rejection = np.asarray(baseline_curve["qcd_rejection"])
+        baseline_color, baseline_style = reference_styles[baseline_id]
+        axis.plot(
+            baseline_efficiency, baseline_rejection, color=baseline_color,
+            linestyle=baseline_style, linewidth=2.2, label=baseline_label,
+            drawstyle="steps-post",
+        )
+        for efficiency, rejection in (
+            (offline_efficiency, offline_rejection),
+            (baseline_efficiency, baseline_rejection),
+        ):
+            visible = (
+                (efficiency >= lower_efficiency)
+                & (efficiency <= upper_efficiency)
                 & np.isfinite(rejection) & (rejection > 0)
             )
             if visible.any():
                 visible_rejections.append(rejection[visible])
         axis.axvline(0.5, color="0.5", linewidth=0.9, linestyle=":")
         axis.set_yscale("log")
-        axis.set_xlim(0.30, 0.70)
+        axis.set_xlim(lower_efficiency, upper_efficiency)
         if visible_rejections:
             values = np.concatenate(visible_rejections)
             lower = max(1.0, float(values.min()) / 1.35)
@@ -543,6 +591,7 @@ def _plot_progression(
 __all__ = [
     "MAIN_LADDER",
     "PROGRESSION_LADDER",
+    "PROGRESSION_REFERENCES",
     "ROC_REPORT_CONTRACT",
     "SIGNALS",
     "build_dense_c25p75_roc",
