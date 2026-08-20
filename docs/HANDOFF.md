@@ -1,5 +1,29 @@
 # Current Handoff
 
+## Dense C25P75 validation ROC diagnostic (2026-08-20)
+
+An additive validation-only plotting command now produces the requested
+two-panel Hbb-versus-QCD and Hcc-versus-QCD rejection overlay for the completed
+`C25P75_DENSE_ANCHOR50_300K60` campaign.  The collaborator-facing comparison
+contains four curves: U000 (displayed as `Offline`), U100E (displayed as
+`D100`), M1 (displayed as `KD-distilled HLT-only`), and M0paired (displayed as
+`HLT baseline`).  The lineage report retains the qualification that `Offline`
+means the projected-native-offline unified U000 model, not native TOFF.
+Every curve uses the campaign's frozen
+`p_signal / (p_signal + p_QCD)` discriminant, the exact shared 100k validation
+identity set, selected model checkpoints, and authenticated T1 ensemble
+probabilities.  Zero observed QCD passes use the finite empirical ceiling
+`N_QCD`; final test is forbidden.
+
+Reusable curve construction and authenticated evaluation live in
+`scouting/hcwdl_mhpe_roc.py`; the thin entry point is
+`scripts/plot_hcwdl_mhpe_dense_roc.py`.  It writes PDF, PNG, deterministic NPZ
+curve arrays, and a content-hashed lineage report.  Final focused MHPE/ROC
+tests passed 39 tests in 7.40 seconds; Python compilation, CLI help, and
+`git diff --check` also passed.  The warnings were deprecations from the
+installed local Matplotlib/Pyparsing combination.  No Tigris inference, job
+submission, sealed-test access, or plot fabrication occurred locally.
+
 ## HCWDL-MHPE full-data D000 teacher-distance schedule screen (2026-08-19)
 
 The additive validation-only screen requested after comparing full-data
