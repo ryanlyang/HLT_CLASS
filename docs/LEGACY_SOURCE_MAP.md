@@ -20,6 +20,64 @@ Because the donor worktree was dirty, the commit alone is insufficient for
 uncommitted donor files. Each migration block must additionally record the
 exact donor path and source content hash used.
 
+## HCWDL representation-KD source integration
+
+The full-data three-track 60-pass campaign integrates the reviewed
+representation-KD implementation from clean commit
+`acecf9f74dab3d4ac675d8160cfb5decf83ba680`. The development worktree was used
+only to locate and review the files; it is not a runtime import, artifact
+parent, or campaign path. The campaign integration lock additionally checks
+the exact committed Git blob IDs of the twelve byte-preserved scientific
+modules before live creation.
+
+| Donor path and SHA-256 | New path | Retained semantics and integration |
+|---|---|---|
+| `src/hlt_classification/models/scouting_particle_transformer.py` — `c6128610d4d249984a8d7af874737e1dd2e00337466ebdd91a119424dbf765cc` | same path | Merged one-forward token/jet/relation surface capture into the current unified model while preserving ordinary-logit parity. |
+| `src/hlt_classification/models/hcwdl_representation.py` — `49d754e3cae1abfbb1c332c90f2db15245303ffbe5ccf2a649e647a25fcd5219` | same path | Exact representation heads, student wrapper, and head-free deployable extraction. |
+| `src/hlt_classification/models/hcwdl_surfaces.py` — `90d8449e862c10e8fe8a73c305d338b7411a4e74c734b353c9be1ccdfa7027ae` | same path | Exact typed one-forward surface container and validation. |
+| `src/hlt_classification/scouting/hcwdl_representation_graph.py` — `5205b158aabc2f31587c5554f4bccadcdf3a878e2b1fa12423481a77522ccb0e` | same path | RSET/RREL strategy identities and paired seed semantics. |
+| `src/hlt_classification/scouting/hcwdl_representation_artifacts.py` — `45cea8226a6e752857b407031d330453f10e999130a1daa9d4aeb33a2a7a5fb7` | same path | Exact representation artifact-envelope and lineage helpers. |
+| `src/hlt_classification/scouting/hcwdl_representation_contracts.py` — `808ca40ed06ecf2ac0df22b2a51c1fc0854c8be1b870aa9beab733654e9c37c1` | same path | Exact versioned representation contract validators. |
+| `src/hlt_classification/scouting/hcwdl_representation_data.py` — `0fa2f085e5646d2410135f61968ab139048b212cf1dacb740467c865689d9bbd` | same path | Exact representation-aware input and batch containers. |
+| `src/hlt_classification/scouting/hcwdl_representation_recipe.py` — `0cc302ce6aa862506db32112038913cb4b9bd58bd64294d50c7193153188c1ed` | same path | Corrected representation recipe v5 schedules, kernels, and calibration. |
+| `src/hlt_classification/scouting/hcwdl_representation_kernels.py` — `c236e668f481d6724f50eca59b693b376000e42788376d483206ed1f7668a173` | same path | Spectral resources, finite kernels, weighted means, and reference oracles. |
+| `src/hlt_classification/scouting/hcwdl_representation_losses.py` — `413bcaebf645dce0811d23c1d3093b2255512f34c6c1b5b2c44560d0edf9d2e3` | same path | Jet, set, relation, topology, scheduling, and support-aware losses. |
+| `src/hlt_classification/scouting/hcwdl_representation_calibration.py` — `c9a94361e09e27eca999e3e93fcf691f5e4d026c8f644b44294d800f311ae9c1` | same path | Train-only deterministic calibration with state/RNG restoration. |
+| `src/hlt_classification/scouting/hcwdl_representation_targets.py` — `97324a3b492ab21785d0fe6be3184afbf91cc7521c93b1881de877965de65b0a` | same path | Target schemas, identity hashes, validation, and support metadata. |
+| `src/hlt_classification/scouting/hcwdl_representation_target_runtime.py` — `450a7843293fe69a73306decc086385c650487c36b63cfc17e0c045d4e5a8b2b` | same path | One-forward in-memory carrier target construction and runtime audits. |
+| `src/hlt_classification/scouting/hcwdl_representation_training.py` — `16f344be23a7ce40ed7c4a45222a8ca769953ffcfbfc06d82a08c82135817f1b` | same path | Representation model initialization, identity joins, normalized components, diagnostics, and extraction. |
+| `src/hlt_classification/scouting/hcwdl_homotopy_stream.py` — `de49beb816ab4f80e83d0159e3143744d3b935cca8428eea1935382a4affcd04` | same path | Merged fixed-work-per-source-chunk endpoint streaming into the current homotopy stream. |
+| `src/hlt_classification/scouting/hcwdl_homotopy_representation_training.py` — `bbf468f1e9bcb199dc5ebce790391f47ec20fbcca79eaf440f56d73d538ae29d` | same path | Retained as the numerical wiring reference for carrier-view target generation and training. |
+| `src/hlt_classification/scouting/hcwdl_homotopy_representation_targets.py` — `e2e10e74c6009f5cecf1fb19fa1ff90045bd76f505caeed053b6821e45ff11d9` | same path | Retained only as a durable-bank numerical oracle; TRI60 never calls its publisher. |
+
+The following exact same-commit support modules were also migrated so the
+representation package and its regression tests remain standalone. They do
+not authorize TRI60 to use a historical campaign graph, rolling-resume
+publisher, or durable representation-target publisher.
+
+| Donor path and SHA-256 | New path | Campaign role |
+|---|---|---|
+| `src/hlt_classification/scouting/hcwdl_direct_offline_kd_graph.py` — `16fd891eb2358f17af4e1a82a4628722ba96aad15304e73a13a0f5248c6bf312` | same path | Donor graph validation/reference only. |
+| `src/hlt_classification/scouting/hcwdl_homotopy_representation_contracts.py` — `593c5ac9215490abab388f315fd1d81b226ca9d0a2bfee5d07bce874219e613a` | same path | Donor contract validation/reference only. |
+| `src/hlt_classification/scouting/hcwdl_homotopy_representation_graph.py` — `d0841a608d1dccf71fa5d474f2ba1e6f19a489f31578079687903bf65d8670c6` | same path | Donor graph/reference fixtures only. |
+| `src/hlt_classification/scouting/hcwdl_homotopy_representation_recipe.py` — `84ad20239df5b1b7c7ffab60caccaab36c8ac83e6265189742335e1ce18c4357` | same path | Donor recipe/reference fixtures only. |
+| `src/hlt_classification/scouting/hcwdl_numerical_acceptance.py` — `3aa8f02919bbfb964fb7225486c929185744c7e7d128c703290f4295f4687596` | same path | Numerical acceptance helpers reused by regression tests. |
+| `src/hlt_classification/scouting/hcwdl_paired_bootstrap.py` — `79d8f5f3e206b3137163208e0780226513e6cc08bb5a6fc954daf12fe049fb1e` | same path | Paired reporting/bootstrap reference. |
+| `src/hlt_classification/scouting/hcwdl_parent_loss.py` — `879c8fc49263006375226398659ad8739cb729222f320f7c20fbff8c429bb2bf` | same path | Parent-loss reference and validation. |
+| `src/hlt_classification/scouting/hcwdl_representation_graph_registry.py` — `63881ffc2e3554b15a9aefab709b12b6d697fb7ad6354066ebc63d2ca0163049` | same path | Donor strategy registry/reference. |
+| `src/hlt_classification/scouting/hcwdl_representation_reporting.py` — `ea6bf42fed13384bdcca13381eb280f0b696dd913ac215640a34950bdf725b6d` | same path | Representation diagnostics/reference reporting. |
+| `src/hlt_classification/scouting/hcwdl_representation_resources.py` — `511e17de3a88e6d9c5670af117ce2095680109383be31a07307ad124ab2a611e` | same path | Resource-envelope reference. |
+| `src/hlt_classification/scouting/hcwdl_representation_resume.py` — `9333574c5edd3b8913df9f8f6039340817f8ec6fc037c9082434773ae213d223` | same path | Numerical no-resume equivalence oracle only; TRI60 never invokes its publisher. |
+
+The donor regression references were
+`tests/test_hcwdl_representation_math.py` (`83a1592346ef0d94f8cff7d313d1298cf98ae78e6f425508e55504a7cbe8ef25`),
+`tests/test_hcwdl_representation_model.py` (`7ef207e1d916265a89f83d57c1709f6a5a8ea4969d8fa458c9a87dd4fe2e5d6b`),
+and `tests/test_hcwdl_representation_training.py`
+(`749f1d76c87c720200f4a0c18e829e2e2143ea24553755df893ff8995bdb7485`).
+The math and training assertions were retained; the model fixture was adapted
+to the current direct model-surface API. No runtime import from the donor
+worktree remains.
+
 ## Migrated code
 
 Transfer Block 1 contained new scaffolding only. Transfer Block 2 extracted and

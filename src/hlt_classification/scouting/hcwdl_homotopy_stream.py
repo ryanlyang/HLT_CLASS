@@ -69,12 +69,13 @@ def _ordered_blocks(
 def _build_balanced_block(arguments: tuple[object, ...]) -> dict[str, object]:
     (
         arrays, labels, identities, assignment, confidence, coupling_rows,
-        coordinate, repair_seed, output_key,
+        coordinate, repair_seed, output_key, include_training_metadata,
     ) = arguments
     view = build_unified_balanced_inputs(
         arrays, assignments=assignment, confidence=confidence,
         coupling_rows=coupling_rows, coordinate=coordinate,
         identity_keys=identities, discrete_seed=repair_seed,
+        include_training_metadata=bool(include_training_metadata),
     )
     return {"labels": labels, "identity_keys": identities, str(output_key): view}
 
@@ -172,6 +173,8 @@ def iterate_unified_balanced_batches(
     coordinate: HomotopyCoordinate, repair_seed: int, batch_size: int,
     step_size: int = 4096, completed_locks: Sequence[str] = (),
     output_key: str = "privileged", workers: int = 1,
+    include_training_metadata: bool = False,
+    source_index: int | None = None,
 ) -> Iterator[dict[str, object]]:
     """Stream HCWDL-UB V_UB(s,f) once in canonical source/entry order."""
 
@@ -180,6 +183,10 @@ def iterate_unified_balanced_batches(
     if output_key not in {"hlt", "privileged"} or batch_size <= 0 or workers <= 0:
         raise ValueError("HCWDL-UB stream output/batch/worker settings differ")
     records = role_records(split_manifest, role)
+    if source_index is not None:
+        if source_index < 0 or source_index >= len(records):
+            raise IndexError("HCWDL-UB stream source index is out of range")
+        records = (records[source_index],)
     branches = (
         set(BASELINE_BRANCHES) | set(LABEL_BRANCHES)
         | set(hlt_required_branches()) | set(full_endpoint_required_branches())
@@ -211,6 +218,7 @@ def iterate_unified_balanced_batches(
                 yield (
                     arrays, labels[indexes], identities, assignment, confidence,
                     coupling_rows, coordinate, repair_seed, output_key,
+                    include_training_metadata,
                 )
 
     pending = None; observed = 0
@@ -222,9 +230,13 @@ def iterate_unified_balanced_batches(
             pending = _slice_batch(pending, batch_size, len(pending["labels"]))
     if pending is not None and len(pending["labels"]):
         yield pending
-    if observed != row_selection.rows:
+    expected_rows = (
+        row_selection.rows if source_index is None
+        else row_selection.source_rows(records[0].path)
+    )
+    if observed != expected_rows:
         raise ValueError(
-            f"HCWDL-UB stream coverage differs: expected {row_selection.rows}, observed {observed}"
+            f"HCWDL-UB stream coverage differs: expected {expected_rows}, observed {observed}"
         )
 
 

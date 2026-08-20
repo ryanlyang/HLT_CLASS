@@ -39,26 +39,40 @@ def _slice(arrays: Mapping[str, object], indexes: np.ndarray) -> dict[str, objec
 
 
 def _slice_particle_view(view, start: int, stop: int):
-    return type(view)(
+    values = [
         view.features[start:stop], view.vectors[start:stop],
         view.mask[start:stop], view.raw_lengths[start:stop],
-    )
+    ]
+    for name in ("visible_indices", "family_codes", "family_reason_codes"):
+        if hasattr(view, name):
+            values.append(getattr(view, name)[start:stop])
+    return type(view)(*values)
 
 
 def _take_particle_view(view, indexes: np.ndarray):
-    return type(view)(
+    values = [
         view.features[indexes], view.vectors[indexes],
         view.mask[indexes], view.raw_lengths[indexes],
-    )
+    ]
+    for name in ("visible_indices", "family_codes", "family_reason_codes"):
+        if hasattr(view, name):
+            values.append(getattr(view, name)[indexes])
+    return type(view)(*values)
 
 
 def _concat_particle_views(views):
-    return type(views[0])(
+    values = [
         np.concatenate([view.features for view in views]),
         np.concatenate([view.vectors for view in views]),
         np.concatenate([view.mask for view in views]),
         np.concatenate([view.raw_lengths for view in views]),
-    )
+    ]
+    for name in ("visible_indices", "family_codes", "family_reason_codes"):
+        if hasattr(views[0], name):
+            if not all(hasattr(view, name) for view in views):
+                raise ValueError("particle-view metadata topology differs")
+            values.append(np.concatenate([getattr(view, name) for view in views]))
+    return type(views[0])(*values)
 
 
 def _slice_batch(batch: Mapping[str, object], start: int, stop: int) -> dict[str, object]:
@@ -66,6 +80,8 @@ def _slice_batch(batch: Mapping[str, object], start: int, stop: int) -> dict[str
         "labels": batch["labels"][start:stop],
         "identity_keys": batch["identity_keys"][start:stop],
     }
+    if "identity_digests" in batch:
+        result["identity_digests"] = batch["identity_digests"][start:stop]
     for key in ("hlt", "privileged"):
         if key in batch:
             result[key] = _slice_particle_view(batch[key], start, stop)
@@ -87,6 +103,8 @@ def _take_batch(batch: Mapping[str, object], indexes: np.ndarray) -> dict[str, o
         "labels": batch["labels"][indexes],
         "identity_keys": batch["identity_keys"][indexes],
     }
+    if "identity_digests" in batch:
+        result["identity_digests"] = batch["identity_digests"][indexes]
     for key in ("hlt", "privileged"):
         if key in batch:
             result[key] = _take_particle_view(batch[key], indexes)
@@ -108,6 +126,12 @@ def _concat_batches(parts: Sequence[Mapping[str, object]]) -> dict[str, object]:
         "labels": np.concatenate([part["labels"] for part in parts]),
         "identity_keys": np.concatenate([part["identity_keys"] for part in parts]),
     }
+    if "identity_digests" in parts[0]:
+        if not all("identity_digests" in part for part in parts):
+            raise ValueError("batch identity-digest topology differs")
+        result["identity_digests"] = np.concatenate(
+            [part["identity_digests"] for part in parts]
+        )
     for key in ("hlt", "privileged"):
         if key in parts[0]:
             result[key] = _concat_particle_views([part[key] for part in parts])
@@ -136,6 +160,8 @@ def iterate_model_batches(
     shuffle_buffer_rows: int = TRAIN_SHUFFLE_BUFFER_ROWS,
     interleave_source_files: int = TRAIN_INTERLEAVE_FILES,
     row_selection: RowSelection | None = None,
+    include_hcwdl_metadata: bool = False,
+    canonical_order: bool = False,
 ) -> Iterator[dict[str, object]]:
     if input_mode not in {"hlt", "toff", "paired"}:
         raise ValueError("input_mode must be hlt, toff, or paired")
@@ -143,14 +169,25 @@ def iterate_model_batches(
         raise ValueError("model batch size must be positive")
     if shuffle_buffer_rows < batch_size:
         raise ValueError("shuffle_buffer_rows must be at least batch_size")
+    if canonical_order and (
+        shuffle_within_chunk
+        or interleave_source_files != 1
+        or shuffle_buffer_rows != batch_size
+    ):
+        raise ValueError(
+            "canonical model batches require no chunk shuffle, one-file interleave, "
+            "and a one-batch drain buffer"
+        )
     records = role_records(split_manifest, role)
     ordered = list(records)
     rng = np.random.default_rng(np.random.SeedSequence([sampler_seed, epoch]))
-    if role == "train":
+    if role == "train" and not canonical_order:
         rng.shuffle(ordered)
     assigned = partition_files(
         ordered, rank=rank, world_size=world_size, worker_id=worker_id, num_workers=num_workers,
     )
+    if canonical_order and len(assigned) != 1:
+        raise ValueError("canonical model batching requires a one-source manifest")
     branches = set(BASELINE_BRANCHES) | set(LABEL_BRANCHES)
     if include_observers:
         branches |= set(OBSERVER_BRANCHES)
@@ -166,6 +203,7 @@ def iterate_model_batches(
         class_targets = np.full(15, max_rows // 15, np.int64)
         class_targets[:max_rows % 15] += 1
     pending: dict[str, object] | None = None
+    prior_canonical_entry: int | None = None
     for chunk in iterate_projected_chunks(
         files, branches, data_root=data_root, role=role,
         completed_locks=completed_locks, step_size=step_size,
@@ -193,6 +231,17 @@ def iterate_model_batches(
             indexes = np.asarray(retained, np.int64)
             if not len(indexes): continue
         selected = _slice(arrays, indexes)
+        if canonical_order:
+            absolute_entries = chunk.entry_start + indexes
+            if (
+                np.any(absolute_entries[1:] <= absolute_entries[:-1])
+                or (
+                    prior_canonical_entry is not None
+                    and int(absolute_entries[0]) <= prior_canonical_entry
+                )
+            ):
+                raise ValueError("canonical model source entries reorder or overlap")
+            prior_canonical_entry = int(absolute_entries[-1])
         chunk_batch: dict[str, object] = {
             "labels": labels[indexes],
             "identity_keys": np.asarray([
@@ -200,7 +249,12 @@ def iterate_model_batches(
             ]),
         }
         if input_mode in {"hlt", "paired"}:
-            chunk_batch["hlt"] = build_hlt_inputs(selected)
+            if include_hcwdl_metadata:
+                from .hcwdl_representation_data import build_hcwdl_hlt_inputs
+
+                chunk_batch["hlt"] = build_hcwdl_hlt_inputs(selected)
+            else:
+                chunk_batch["hlt"] = build_hlt_inputs(selected)
         if include_observers:
             chunk_batch["observers"] = {
                 name: np.asarray(selected[name]) for name in OBSERVER_BRANCHES if name in selected
@@ -217,7 +271,7 @@ def iterate_model_batches(
         pending = chunk_batch if pending is None else _concat_batches((pending, chunk_batch))
         drain_at = shuffle_buffer_rows if role == "train" else batch_size
         if len(pending["labels"]) >= drain_at:
-            if role == "train":
+            if role == "train" and not canonical_order:
                 pending = _take_batch(pending, rng.permutation(len(pending["labels"])))
             while len(pending["labels"]) >= batch_size and (
                 role != "train" or len(pending["labels"]) - batch_size >= batch_size
@@ -227,7 +281,7 @@ def iterate_model_batches(
         if max_rows is not None and selected_rows >= max_rows:
             break
     if pending is not None and len(pending["labels"]):
-        if role == "train":
+        if role == "train" and not canonical_order:
             pending = _take_batch(pending, rng.permutation(len(pending["labels"])))
         while len(pending["labels"]) > batch_size:
             yield _slice_batch(pending, 0, batch_size)

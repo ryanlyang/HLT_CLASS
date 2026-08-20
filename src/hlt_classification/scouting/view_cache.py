@@ -61,9 +61,12 @@ def _particle_row_bytes(view: ParticleInputs) -> int:
     rows = len(view.raw_lengths)
     if rows <= 0:
         raise ValueError("view-cache seed batch is empty")
-    return sum(array.nbytes for array in (
-        view.features, view.vectors, view.mask, view.raw_lengths,
-    )) // rows
+    names = ["features", "vectors", "mask", "raw_lengths"]
+    names.extend(
+        name for name in ("visible_indices", "family_codes", "family_reason_codes")
+        if hasattr(view, name)
+    )
+    return sum(getattr(view, name).nbytes for name in names) // rows
 
 
 def _view_row_bytes(view: ParticleInputs | NativeOfflineInputs) -> int:
@@ -90,15 +93,31 @@ def _validate_view(view: object) -> None:
             or particle.raw_lengths.dtype != np.int32
         ):
             raise ValueError("view cache requires canonical FP32/bool/int32 particle inputs")
+        metadata_names = ("visible_indices", "family_codes", "family_reason_codes")
+        present = tuple(hasattr(particle, name) for name in metadata_names)
+        if any(present) and not all(present):
+            raise ValueError("view cache received partial HCWDL token metadata")
+        if all(present):
+            if (
+                particle.visible_indices.dtype != np.int64
+                or particle.family_codes.dtype != np.int8
+                or particle.family_reason_codes.dtype != np.int8
+            ):
+                raise ValueError("view cache received invalid HCWDL token metadata dtypes")
 
 
 def _allocate_particle(view: ParticleInputs, rows: int) -> ParticleInputs:
-    return ParticleInputs(
+    values = [
         np.empty((rows, *view.features.shape[1:]), view.features.dtype),
         np.empty((rows, *view.vectors.shape[1:]), view.vectors.dtype),
         np.empty((rows, *view.mask.shape[1:]), view.mask.dtype),
         np.empty(rows, view.raw_lengths.dtype),
-    )
+    ]
+    for name in ("visible_indices", "family_codes", "family_reason_codes"):
+        if hasattr(view, name):
+            array = getattr(view, name)
+            values.append(np.empty((rows, *array.shape[1:]), array.dtype))
+    return type(view)(*values)
 
 
 def _allocate_view(view: ParticleInputs | NativeOfflineInputs, rows: int):
@@ -110,7 +129,14 @@ def _allocate_view(view: ParticleInputs | NativeOfflineInputs, rows: int):
 
 
 def _append_particle(target: ParticleInputs, source: ParticleInputs, start: int, stop: int) -> None:
-    for name in ("features", "vectors", "mask", "raw_lengths"):
+    names = ["features", "vectors", "mask", "raw_lengths"]
+    for name in ("visible_indices", "family_codes", "family_reason_codes"):
+        source_has, target_has = hasattr(source, name), hasattr(target, name)
+        if source_has != target_has:
+            raise ValueError("view-cache particle metadata topology changed within a role")
+        if source_has:
+            names.append(name)
+    for name in names:
         source_array = getattr(source, name); target_array = getattr(target, name)
         if source_array.shape[1:] != target_array.shape[1:] or source_array.dtype != target_array.dtype:
             raise ValueError("view-cache particle shape or dtype changed within a role")
@@ -128,7 +154,12 @@ def _append_view(target, source, start: int, stop: int) -> None:
 
 def _view_array_bytes(view: ParticleInputs | NativeOfflineInputs) -> int:
     if isinstance(view, ParticleInputs):
-        return sum(getattr(view, name).nbytes for name in ("features", "vectors", "mask", "raw_lengths"))
+        names = ["features", "vectors", "mask", "raw_lengths"]
+        names.extend(
+            name for name in ("visible_indices", "family_codes", "family_reason_codes")
+            if hasattr(view, name)
+        )
+        return sum(getattr(view, name).nbytes for name in names)
     return _view_array_bytes(view.charged) + _view_array_bytes(view.neutral)
 
 
@@ -153,6 +184,25 @@ class EphemeralPmardViewCache:
         self.identities = tuple(map(str, identities))
         self.records = tuple(records); self.role = role; self.step_size = int(step_size)
         self.header = dict(header)
+        self.identity_digests = (
+            None
+            if "identity_digests" not in self._batch
+            else np.ascontiguousarray(self._batch["identity_digests"])
+        )
+        self._identity_digest_lookup = (
+            {}
+            if self.identity_digests is None
+            else {
+                bytes(row): index
+                for index, row in enumerate(self.identity_digests)
+            }
+        )
+        if self.identity_digests is not None and (
+            self.identity_digests.dtype != np.uint8
+            or self.identity_digests.shape != (len(self.identities), 32)
+            or len(self._identity_digest_lookup) != len(self.identities)
+        ):
+            raise ValueError("view cache canonical identity digests differ")
         if self.step_size <= 0 or role not in {"train", "validation", "final_test"}:
             raise ValueError("view cache has an invalid role or chunk size")
         if len(self.identities) != len(set(self.identities)):
@@ -242,7 +292,20 @@ class EphemeralPmardViewCache:
                 f"view-cache row count differs: expected {expected_rows}, observed {cursor}"
             )
         identity_values = tuple(str(value) for value in identities)
-        array_bytes = labels.nbytes + sum(_view_array_bytes(view) for view in views.values())
+        has_hcwdl_metadata = any(
+            hasattr(view, "visible_indices")
+            for view in views.values() if isinstance(view, ParticleInputs)
+        )
+        identity_digests = None
+        if has_hcwdl_metadata:
+            from .hcwdl_representation_data import canonical_identity_digests
+
+            identity_digests = canonical_identity_digests(identity_values)
+        array_bytes = (
+            labels.nbytes
+            + (0 if identity_digests is None else identity_digests.nbytes)
+            + sum(_view_array_bytes(view) for view in views.values())
+        )
         header = with_content_hash({
             "contract": EPHEMERAL_VIEW_CACHE_CONTRACT,
             "schema_version": EPHEMERAL_VIEW_CACHE_VERSION,
@@ -259,6 +322,8 @@ class EphemeralPmardViewCache:
             "identity_keys": np.asarray(identity_values, dtype=object),
             **views,
         }
+        if identity_digests is not None:
+            batch["identity_digests"] = identity_digests
         return cls(
             batch=batch, identities=identity_values, records=records, role=role,
             step_size=step_size, expected_source_rows=expected_source_rows,
@@ -289,6 +354,23 @@ class EphemeralPmardViewCache:
                     except StopIteration:
                         pass
                 active = remaining
+
+    def iterate_canonical_batches(
+        self, *, batch_size: int,
+    ) -> Iterable[dict[str, object]]:
+        """Replay the process-local cache in its authenticated identity order."""
+
+        if batch_size <= 0:
+            raise ValueError("view-cache canonical batch size must be positive")
+        for start in range(0, int(self.header["rows"]), batch_size):
+            yield _take_batch(
+                self._batch,
+                np.arange(
+                    start,
+                    min(start + batch_size, int(self.header["rows"])),
+                    dtype=np.int64,
+                ),
+            )
 
     def iterate_batches(
         self, *, epoch: int, sampler_seed: int, batch_size: int,
@@ -334,6 +416,26 @@ class EphemeralPmardViewCache:
         expected = len(self.identities) if world_size == num_workers == 1 else observed
         if observed != expected:
             raise ValueError("view-cache replay did not cover its expected row population")
+
+    def iterate_identity_digest_batches(
+        self, identity_hexes: Sequence[str], *, batch_size: int,
+    ) -> Iterable[dict[str, object]]:
+        """Replay an exact, caller-ordered HCWDL identity subset from RAM."""
+
+        if self.identity_digests is None:
+            raise TypeError("view cache was built without HCWDL identity metadata")
+        values = tuple(str(value) for value in identity_hexes)
+        if batch_size <= 0 or not values or len(values) != len(set(values)):
+            raise ValueError("view-cache identity subset/batch size differs")
+        try:
+            indexes = np.asarray(
+                [self._identity_digest_lookup[bytes.fromhex(value)] for value in values],
+                dtype=np.int64,
+            )
+        except (KeyError, ValueError) as error:
+            raise KeyError("view-cache identity subset is incomplete or malformed") from error
+        for start in range(0, len(indexes), batch_size):
+            yield _take_batch(self._batch, indexes[start:start + batch_size])
 
 
 def expected_cache_source_rows(

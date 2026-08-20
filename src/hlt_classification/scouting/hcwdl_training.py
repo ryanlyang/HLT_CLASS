@@ -19,6 +19,10 @@ from .engine import (
     PmardTrainingConfig, train_pmard, validate_pmard_training_report,
 )
 from .hcwdl_ladder import DOMAINS, GRAPH_SHA256, NODE_REGISTRY, NodeSpec
+from .hcwdl_parent_loss import (
+    HCWDL_PARENT_BASE_LOSS_CONTRACT,
+    HCWDL_PARENT_LOSS_SEMANTICS,
+)
 from .hcwdl_recipe import validate_recipe
 from .targets import EphemeralProbabilityTargets, EphemeralTeacherTargets
 from .training import GenerationalLossConfiguration, LossConfiguration, derive_seed
@@ -26,6 +30,34 @@ from .training import GenerationalLossConfiguration, LossConfiguration, derive_s
 
 TRAINING_REPORT_CONTRACT = "HCWDL_TRAINING_REPORT/v1"
 CHECKPOINT_SELECTION_CONTRACT = "HCWDL_CHECKPOINT_SELECTION/v1"
+
+
+def _loss_semantics_payload() -> dict[str, Any]:
+    semantics = dict(HCWDL_PARENT_LOSS_SEMANTICS)
+    return {
+        "loss_semantics_contract": HCWDL_PARENT_BASE_LOSS_CONTRACT,
+        "loss_semantics": semantics,
+        "loss_semantics_sha256": canonical_sha256(semantics),
+    }
+
+
+def validate_hcwdl_training_report(value: Mapping[str, Any]) -> str:
+    """Validate a corrected parent wrapper without relabeling old reports."""
+
+    digest = validate_content_hash(
+        value, expected_contract=TRAINING_REPORT_CONTRACT,
+        expected_schema_version=1,
+    )
+    if any(
+        value.get(name) != expected
+        for name, expected in _loss_semantics_payload().items()
+    ):
+        raise ValueError("HCWDL training report loss semantics differ")
+    require_sha256(
+        value.get("pmard_execution_config_sha256"),
+        name="PMARD execution-config SHA-256",
+    )
+    return digest
 
 
 def validate_completed_hcwdl_node(

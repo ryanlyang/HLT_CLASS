@@ -117,12 +117,29 @@ def _stream(
     selections, assignments, balanced, role: str, behavior: str,
     coordinate, batch_size: int, sampler_seed: int, repair_seed: int,
     legacy: bool = False, epoch: int = 0,
+    include_hcwdl_metadata: bool = False,
+    source_index: int | None = None,
 ):
     if behavior == "hlt":
+        records = role_records(split, role)
+        if source_index is not None:
+            if source_index < 0 or source_index >= len(records):
+                raise IndexError("HCWDL-UB HLT stream source index is out of range")
         return iterate_model_batches(
             split, data_root=foundation_spec["data_root"], role=role,
             input_mode="hlt", epoch=epoch, batch_size=batch_size,
             sampler_seed=sampler_seed, row_selection=selections[role],
+            include_hcwdl_metadata=include_hcwdl_metadata,
+            rank=0 if source_index is None else source_index,
+            world_size=1 if source_index is None else len(records),
+            canonical_order=source_index is not None,
+            shuffle_within_chunk=source_index is None,
+            interleave_source_files=(
+                4 if source_index is None else 1
+            ),
+            shuffle_buffer_rows=(
+                8192 if source_index is None else batch_size
+            ),
         )
     if behavior == "p0":
         # The exact P0 corner is independent of switch coordinates, but the
@@ -133,6 +150,8 @@ def _stream(
             row_selection=selections[role], coordinate=coordinate,
             repair_seed=repair_seed, batch_size=batch_size,
             workers=_view_workers(), output_key="privileged",
+            include_training_metadata=include_hcwdl_metadata,
+            source_index=source_index,
         )
     if legacy:
         legacy_store = ResidualCouplingStore(
@@ -151,6 +170,8 @@ def _stream(
         row_selection=selections[role], coordinate=coordinate,
         repair_seed=repair_seed, batch_size=batch_size,
         workers=_view_workers(), output_key="privileged",
+        include_training_metadata=include_hcwdl_metadata,
+        source_index=source_index,
     )
 
 
@@ -158,6 +179,7 @@ def _cache_student_views(
     *, foundation_spec, split, selections, assignments, balanced,
     behavior: str, coordinate, batch_size: int, sampler_seed: int,
     repair_seed: int, memory_gib: float,
+    include_hcwdl_metadata: bool = False,
 ):
     caches = {}; remaining = _memory_limit_bytes(memory_gib)
     input_key = "hlt" if behavior == "hlt" else "privileged"
@@ -170,6 +192,7 @@ def _cache_student_views(
             batch_size=batch_size, sampler_seed=sampler_seed,
             repair_seed=repair_seed, epoch=0,
             legacy=behavior in {"legacycdf_uniform", "balanced_legacywarp"},
+            include_hcwdl_metadata=include_hcwdl_metadata,
         )
         records = role_records(split, role)
         cache = EphemeralPmardViewCache.build(

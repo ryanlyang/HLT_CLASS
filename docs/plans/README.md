@@ -1,5 +1,17 @@
 # Scientific Implementation Plans
 
+The implementation-authoritative
+[full-data three-track 60-pass ensemble-compression plan](HCWDL_MHPE_THREE_TRACK_60E_FULL_IMPLEMENTATION_PLAN.md)
+defines one shared fresh U000 root, a full triangular LOGIT ladder, shorter
+triangular RSET and RREL ladders, fixed within-track probability ensembles,
+and an `M1_LOGIT + M1_RSET + M1_RREL -> M1E -> M2` HLT-only compression.
+It freezes 32 fresh fits, 12 reducers, batch size 256, 60 passes, RAM-only
+representation targets, durable compact probability banks, disabled rolling
+resumes, and parallel full-data execution under one immutable campaign DAG.
+Its reusable identities and operational handoff are in the
+[contract companion](../contracts/HCWDL_MHPE_THREE_TRACK_60E_FULL.md) and
+[source-pinned runbook](../HCWDL_MHPE_THREE_TRACK_60E_FULL_RUNBOOK.md).
+
 The additive [HCWDL-MHPE refined continuation](HCWDL_MHPE_REFINED_CONTINUATION_300K60_PLAN.md)
 tests an ensemble-refine-project route from the completed uniform 300k MHPE
 campaign using seven new fits and three equal-component reducers.

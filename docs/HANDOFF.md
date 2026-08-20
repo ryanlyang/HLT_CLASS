@@ -1,5 +1,73 @@
 # Current Handoff
 
+## Dense C25P75 frozen-D100-on-HLT diagnostic (2026-08-20)
+
+An additive validation-only evaluator now answers the collaborator's clean
+domain-transfer question.  It loads the exact selected component checkpoints
+of the plotted dense `U100E` D100 ensemble, evaluates every component on the
+canonical HLT validation view without fitting or checkpoint reselection, and
+recombines them with the campaign's authenticated anchor-50 rational weights.
+The content-hashed report compares the same frozen ensemble on native D100 and
+HLT inputs against `M0paired`, exact-HLT `D0E`, and `M1`; it also retains every
+D100 component's HLT metrics and exact report/checkpoint lineage.  The command
+is `scripts/evaluate_hcwdl_mhpe_d100_on_hlt.py`.  It permits only the dense
+C25P75 300k/60-pass profile, uses validation identities only, and records
+`final_test_accessed=false`.
+Focused ROC tests pass 9 tests; the broader MHPE-plus-ROC regression passes
+42 tests. Python compilation, CLI help, and `git diff --check` are clean. No
+Tigris inference or job submission has occurred for this diagnostic yet.
+
+## HCWDL full-data three-track 60-pass plan (2026-08-20)
+
+The implementation-authoritative
+[three-track plan](plans/HCWDL_MHPE_THREE_TRACK_60E_FULL_IMPLEMENTATION_PLAN.md)
+is now implemented and locally acceptance-ready. The immutable graph registers
+one fresh shared all-mapped U000 root; a 15-specialist triangular LOGIT path;
+six-specialist triangular RSET and RREL paths; one M1 per track; the fixed
+three-M1 probability ensemble; and one C10P90/T1 M2. It contains exactly 32
+fresh 60-pass fits, 12 scientific ensemble reducers, the real one-member U000
+probability publication, and 50 topologically ordered Slurm tasks.
+
+The corrected representation implementation was integrated from clean commit
+`acecf9f74dab3d4ac675d8160cfb5decf83ba680`; exact donor blobs and source
+SHA-256 values are recorded in `docs/LEGACY_SOURCE_MAP.md` and authenticated
+again by the campaign integration lock. There is no runtime import or
+published path to either development worktree. Ordinary unified logits and
+RSET/RREL surfaces share one student forward, and installed-Weaver parity is a
+required source-pinned launch parent.
+
+The new `/v1` contract family, graph/recipe, RAM target adapter, no-resume
+training engine, compact probability publisher, runner/workflow, aggregate,
+deployable M2 extraction, source-pinned creation/submission, exact monitor and
+cancellation, restart-from-zero source/resource recovery, bounded production
+acceptance, ten thin CLIs, and three Slurm workers are present. Train/validation
+particle views and all jet/set/relation targets are process-local RAM only.
+Rolling optimizer/RNG/model generations and partial checkpoint reuse are
+forbidden. Durable output is limited to compact 15-class FP32 probabilities,
+selected/final checkpoints, and small lineage/audit/report artifacts; the
+campaign projects 8 GiB durable usage and reserves at least 16 GiB free space.
+
+Final local evidence after self-review:
+
+- representation plus TRI60/UB integration regression: 108 passed;
+- TRI60 and worker-focused regression after failure injection: 24 passed;
+- complete repository suite: 647 passed in 300.00 seconds;
+- all 240 source/script Python files compiled in memory;
+- CLI help: 10/10;
+- contract inventory and repository-relative Markdown links: 2/2;
+- Git-Bash syntax: all three TRI60 workers;
+- `git diff --check`: clean (line-ending notices only).
+
+The implementation-authoritative [contract](contracts/HCWDL_MHPE_THREE_TRACK_60E_FULL.md)
+and [runbook](HCWDL_MHPE_THREE_TRACK_60E_FULL_RUNBOOK.md) are linked from the
+repository indexes. No Tigris job, Git push, cancellation, or final-test access
+was performed locally. The only remaining pre-submission evidence is external:
+on the exact pushed commit, run the source validator, installed-Weaver parity,
+one bounded real-GH200 RAM/no-resume production-worker acceptance, and the
+complete 50-job dry ledger. The bounded worker is an operational acceptance,
+not a reduced scientific campaign; live science submission remains separately
+phrase-authorized.
+
 ## Dense C25P75 validation ROC diagnostic (2026-08-20)
 
 An additive validation-only plotting command now produces the requested

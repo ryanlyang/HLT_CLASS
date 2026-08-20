@@ -17,6 +17,12 @@ from .hcwdl_upper_coupling import (
 )
 from .hcwdl_unified_balanced import balanced_edit_is_active
 from .inputs import ParticleInputs, build_hlt_inputs
+from .hcwdl_representation_data import (
+    CHARGED_FAMILY, DIRECT_CHARGED_REASON, DIRECT_NEUTRAL_REASON,
+    HCWDLParticleInputs, HCWDLTokenMetadata, NEUTRAL_FAMILY,
+    PADDED_FAMILY, PADDED_REASON, attach_hcwdl_token_metadata,
+    derive_hcwdl_token_metadata,
+)
 from .repair import (
     HIGHCOV_SHELL_EXACT_FAMILY, _combined_endpoint_features,
     build_alpha_repaired_inputs, build_uniform_shell_exact_inputs,
@@ -414,12 +420,127 @@ def build_homotopy_inputs(
     )
 
 
+def _attach_balanced_training_metadata(
+    view: ParticleInputs, *, arrays: Mapping[str, object], mapping: np.ndarray,
+    coupling_rows: Sequence[Sequence[ResidualEdit]],
+    coordinate: HomotopyCoordinate,
+    prepared_offline: PreparedOfflineEndpoints,
+    prepared_hlt: PreparedHltEndpoints | None,
+) -> HCWDLParticleInputs:
+    """Attach nondeployable token IDs/families in the exact carrier order."""
+
+    rows, _, tokens = view.features.shape
+    visible_ids = np.full((rows, tokens), -1, np.int64)
+    families = np.full((rows, tokens), PADDED_FAMILY, np.int8)
+    reasons = np.full((rows, tokens), PADDED_REASON, np.int8)
+    if coordinate.structural_numerator == 0 and coordinate.feature_numerator == 0:
+        for row in range(rows):
+            charged = int(prepared_offline.charged_counts[row])
+            neutral = int(prepared_offline.neutral_counts[row])
+            native = [*range(min(charged, 90))]
+            native.extend(charged + index for index in range(min(neutral, 60)))
+            count = len(native)
+            visible_ids[row, :count] = 200 + np.asarray(native, np.int64)
+            charged_mask = np.asarray(native) < charged
+            families[row, :count] = np.where(
+                charged_mask, CHARGED_FAMILY, NEUTRAL_FAMILY,
+            )
+            reasons[row, :count] = np.where(
+                charged_mask, DIRECT_CHARGED_REASON, DIRECT_NEUTRAL_REASON,
+            )
+        return attach_hcwdl_token_metadata(
+            view, HCWDLTokenMetadata(visible_ids, families, reasons),
+        )
+
+    prepared_hlt = (
+        prepare_hlt_endpoints(arrays) if prepared_hlt is None else prepared_hlt
+    )
+    hlt_metadata = derive_hcwdl_token_metadata(arrays)
+    for row in range(rows):
+        partition, _, _ = _partition_for_row(
+            row=row, assignment=mapping[row], offline=prepared_offline,
+            hlt=prepared_hlt,
+        )
+        charged = int(prepared_offline.charged_counts[row])
+        target_by_slot = {target.hlt_slot: target for target in partition.d100}
+
+        def target_metadata(slot: int) -> tuple[int, int]:
+            target = target_by_slot[slot]
+            if target.native_index >= 0:
+                is_charged = target.native_index < charged
+                return (
+                    int(CHARGED_FAMILY if is_charged else NEUTRAL_FAMILY),
+                    int(DIRECT_CHARGED_REASON if is_charged else DIRECT_NEUTRAL_REASON),
+                )
+            return (
+                int(hlt_metadata.family_codes[row, slot]),
+                int(hlt_metadata.family_reason_codes[row, slot]),
+            )
+
+        if coordinate.structural_numerator == coordinate.structural_denominator:
+            count = int(np.asarray(view.mask[row, 0], np.bool_).sum())
+            for slot in range(count):
+                visible_ids[row, slot] = slot
+                families[row, slot], reasons[row, slot] = target_metadata(slot)
+            continue
+
+        common_by_slot = {pair.target.hlt_slot: pair for pair in partition.common}
+        active: list[tuple[int, int, int, int]] = []
+        for slot, pair in common_by_slot.items():
+            native = pair.source.native_index
+            is_charged = native < charged
+            active.append((
+                0, slot,
+                int(CHARGED_FAMILY if is_charged else NEUTRAL_FAMILY),
+                int(DIRECT_CHARGED_REASON if is_charged else DIRECT_NEUTRAL_REASON),
+            ))
+        for edit in coupling_rows[row]:
+            switched = balanced_edit_is_active(
+                edit, numerator=coordinate.structural_numerator,
+                denominator=coordinate.structural_denominator,
+            )
+            if edit.edit_kind == EDIT_SUBSTITUTION:
+                if switched:
+                    family, reason = target_metadata(edit.target_hlt_slot)
+                    active.append((0, edit.target_hlt_slot, family, reason))
+                else:
+                    native = edit.source_native_index
+                    is_charged = native < charged
+                    active.append((
+                        0, edit.target_hlt_slot,
+                        int(CHARGED_FAMILY if is_charged else NEUTRAL_FAMILY),
+                        int(DIRECT_CHARGED_REASON if is_charged else DIRECT_NEUTRAL_REASON),
+                    ))
+            elif edit.edit_kind == EDIT_INSERTION and switched:
+                family, reason = target_metadata(edit.target_hlt_slot)
+                active.append((0, edit.target_hlt_slot, family, reason))
+            elif edit.edit_kind == EDIT_REMOVAL and not switched:
+                native = edit.source_native_index
+                is_charged = native < charged
+                active.append((
+                    1, native,
+                    int(CHARGED_FAMILY if is_charged else NEUTRAL_FAMILY),
+                    int(DIRECT_CHARGED_REASON if is_charged else DIRECT_NEUTRAL_REASON),
+                ))
+        active.sort(key=lambda item: (item[0], item[1]))
+        if len(active) != int(np.asarray(view.mask[row, 0], np.bool_).sum()):
+            raise ValueError("HCWDL-UB training metadata carrier count differs")
+        for index, (kind, key, family, reason) in enumerate(active):
+            visible_ids[row, index] = key if kind == 0 else 200 + key
+            families[row, index] = family
+            reasons[row, index] = reason
+    return attach_hcwdl_token_metadata(
+        view, HCWDLTokenMetadata(visible_ids, families, reasons),
+    )
+
+
 def build_unified_balanced_inputs(
     arrays: Mapping[str, object], *, assignments: np.ndarray,
     confidence: np.ndarray, coupling_rows: Sequence[Sequence[ResidualEdit]],
     coordinate: HomotopyCoordinate, identity_keys: Sequence[str],
     discrete_seed: int, prepared_offline: PreparedOfflineEndpoints | None = None,
     prepared_hlt: PreparedHltEndpoints | None = None,
+    include_training_metadata: bool = False,
 ) -> ParticleInputs:
     """Build HCWDL-UB V_UB(s,f) with balanced U and uniform rational D."""
 
@@ -442,12 +563,19 @@ def build_unified_balanced_inputs(
         prepared_offline = (
             prepare_offline_endpoints(arrays) if prepared_offline is None else prepared_offline
         )
-        return build_p0_inputs(arrays, prepared=prepared_offline)
+        view = build_p0_inputs(arrays, prepared=prepared_offline)
+        return _attach_balanced_training_metadata(
+            view, arrays=arrays, mapping=mapping, coupling_rows=coupling_rows,
+            coordinate=coordinate, prepared_offline=prepared_offline,
+            prepared_hlt=prepared_hlt,
+        ) if include_training_metadata else view
     if (
         coordinate.structural_numerator == coordinate.structural_denominator
         and coordinate.feature_numerator == coordinate.feature_denominator
     ):
-        return canonical
+        return attach_hcwdl_token_metadata(
+            canonical, derive_hcwdl_token_metadata(arrays),
+        ) if include_training_metadata else canonical
     prepared_offline = (
         prepare_offline_endpoints(arrays) if prepared_offline is None else prepared_offline
     )
@@ -473,8 +601,12 @@ def build_unified_balanced_inputs(
         prepared_neutral_counts=prepared_offline.neutral_counts,
     )
     if coordinate.structural_numerator == coordinate.structural_denominator:
-        return shell
-    return _assemble_support_view(
+        return _attach_balanced_training_metadata(
+            shell, arrays=arrays, mapping=mapping, coupling_rows=coupling_rows,
+            coordinate=coordinate, prepared_offline=prepared_offline,
+            prepared_hlt=prepared_hlt,
+        ) if include_training_metadata else shell
+    view = _assemble_support_view(
         canonical=canonical, shell=shell, mapping=mapping,
         coupling_rows=coupling_rows, prepared_offline=prepared_offline,
         prepared_hlt=prepared_hlt,
@@ -484,6 +616,11 @@ def build_unified_balanced_inputs(
         ),
         contract_label="HCWDL-UB",
     )
+    return _attach_balanced_training_metadata(
+        view, arrays=arrays, mapping=mapping, coupling_rows=coupling_rows,
+        coordinate=coordinate, prepared_offline=prepared_offline,
+        prepared_hlt=prepared_hlt,
+    ) if include_training_metadata else view
 
 
 def particle_inputs_sha256(view: ParticleInputs) -> str:
