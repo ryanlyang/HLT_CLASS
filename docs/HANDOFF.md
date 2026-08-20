@@ -9,6 +9,13 @@ contains four curves: U000 (displayed as `Offline`), U100E (displayed as
 `D100`), M1 (displayed as `KD-distilled HLT-only`), and M0paired (displayed as
 `HLT baseline`).  The lineage report retains the qualification that `Offline`
 means the projected-native-offline unified U000 model, not native TOFF.
+The same command also writes a collaborator-requested five-curve progression
+figure containing D100, D75, D50, D25, and D0.  Both Hbb/QCD and Hcc/QCD are
+shown as side-by-side panels, restricted to 30--70% signal efficiency with
+logarithmic QCD rejection, a common color progression, and explicit markers
+at 50% signal efficiency.  This is the exact dense ladder's gradual
+feature-transition sequence; it does not substitute individual specialists
+for the registered stage ensembles.
 Every curve uses the campaign's frozen
 `p_signal / (p_signal + p_QCD)` discriminant, the exact shared 100k validation
 identity set, selected model checkpoints, and authenticated T1 ensemble
@@ -26,7 +33,7 @@ Reusable curve construction and authenticated evaluation live in
 `scouting/hcwdl_mhpe_roc.py`; the thin entry point is
 `scripts/plot_hcwdl_mhpe_dense_roc.py`.  It writes PDF, PNG, deterministic NPZ
 curve arrays, and a content-hashed lineage report.  Final focused MHPE/ROC
-tests passed 39 tests in 7.09 seconds; Python compilation, CLI help, and
+tests passed 39 tests in 8.00 seconds; Python compilation, CLI help, and
 `git diff --check` also passed.  The warnings were deprecations from the
 installed local Matplotlib/Pyparsing combination.  No Tigris inference, job
 submission, sealed-test access, or plot fabrication occurred locally.

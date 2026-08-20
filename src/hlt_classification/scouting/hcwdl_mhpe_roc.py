@@ -46,6 +46,13 @@ MAIN_LADDER = (
     ("M1", "KD-distilled HLT-only"),
     ("M0paired", "HLT baseline"),
 )
+PROGRESSION_LADDER = (
+    ("U100E", "D100"),
+    ("D75E", "D75"),
+    ("D50E", "D50"),
+    ("D25E", "D25"),
+    ("D0E", "D0"),
+)
 
 
 def qcd_rejection_curve(
@@ -284,7 +291,7 @@ def build_dense_c25p75_roc(
     lineage["U000"] = model_lineage
 
     registry = node_registry(campaign_profile(spec))
-    for ensemble_id in ("U100E",):
+    for ensemble_id, _ in PROGRESSION_LADDER:
         directory = root / "targets" / ensemble_id / "T1"
         expected_consumers = sorted(
             node.node_id for node in registry.values()
@@ -330,8 +337,12 @@ def build_dense_c25p75_roc(
         probabilities[node_id] = _align(reference_ids, ids, values)
         lineage[node_id] = model_lineage
 
+    curve_order = tuple(dict.fromkeys(
+        node_id for ladder in (MAIN_LADDER, PROGRESSION_LADDER)
+        for node_id, _ in ladder
+    ))
     curves: dict[str, dict[str, dict[str, np.ndarray | int]]] = {}
-    for node_id, _ in MAIN_LADDER:
+    for node_id in curve_order:
         curves[node_id] = {
             signal: qcd_rejection_curve(
                 probabilities[node_id], labels,
@@ -346,6 +357,8 @@ def build_dense_c25p75_roc(
         output / "dense_c25p75_validation_roc_curves.npz",
         output / "dense_c25p75_hbb_hcc_roc.pdf",
         output / "dense_c25p75_hbb_hcc_roc.png",
+        output / "dense_c25p75_d_progression_high_rejection.pdf",
+        output / "dense_c25p75_d_progression_high_rejection.png",
         output / "dense_c25p75_validation_roc_report.json",
     )
     if any(path.exists() for path in expected_outputs):
@@ -360,6 +373,7 @@ def build_dense_c25p75_roc(
     curve_path = output / "dense_c25p75_validation_roc_curves.npz"
     atomic_publish_bytes(curve_path, deterministic_npz_bytes(arrays))
     figure_paths = _plot(curves, output)
+    figure_paths.update(_plot_progression(curves, output))
     report = with_content_hash({
         "contract": ROC_REPORT_CONTRACT,
         "schema_version": 1,
@@ -389,6 +403,9 @@ def build_dense_c25p75_roc(
             "HLT baseline": "M0paired selected checkpoint at exact HLT input",
         },
         "curve_order": [node_id for node_id, _ in MAIN_LADDER],
+        "progression_curve_order": [
+            node_id for node_id, _ in PROGRESSION_LADDER
+        ],
         "display_labels": dict(MAIN_LADDER),
         "lineage": lineage,
         "curves_path": str(curve_path),
@@ -451,8 +468,81 @@ def _plot(curves: Mapping[str, Mapping[str, Mapping[str, Any]]], output: Path):
     return paths
 
 
+def _plot_progression(
+    curves: Mapping[str, Mapping[str, Mapping[str, Any]]], output: Path,
+):
+    """Plot the five D100-to-D0 stages in the high-rejection region."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    plt.rcParams.update({
+        "font.size": 11,
+        "axes.labelsize": 12,
+        "axes.titlesize": 12,
+        "legend.fontsize": 9,
+        "figure.dpi": 160,
+    })
+    colors = plt.get_cmap("viridis")(
+        np.linspace(0.08, 0.92, len(PROGRESSION_LADDER))
+    )
+    fig, axes = plt.subplots(1, 2, figsize=(11.5, 4.8), sharey=False)
+    for axis, signal in zip(axes, SIGNALS, strict=True):
+        visible_rejections: list[np.ndarray] = []
+        for color, (node_id, label) in zip(
+            colors, PROGRESSION_LADDER, strict=True,
+        ):
+            curve = curves[node_id][signal]
+            efficiency = np.asarray(curve["signal_efficiency"])
+            rejection = np.asarray(curve["qcd_rejection"])
+            axis.plot(
+                efficiency, rejection, color=color, linewidth=2.1,
+                label=label, drawstyle="steps-post",
+            )
+            at_half = int(np.searchsorted(efficiency, 0.5, side="left"))
+            at_half = min(at_half, len(efficiency) - 1)
+            axis.scatter(
+                [efficiency[at_half]], [rejection[at_half]],
+                color=color, s=22, zorder=3,
+            )
+            visible = (
+                (efficiency >= 0.30) & (efficiency <= 0.70)
+                & np.isfinite(rejection) & (rejection > 0)
+            )
+            if visible.any():
+                visible_rejections.append(rejection[visible])
+        axis.axvline(0.5, color="0.5", linewidth=0.9, linestyle=":")
+        axis.set_yscale("log")
+        axis.set_xlim(0.30, 0.70)
+        if visible_rejections:
+            values = np.concatenate(visible_rejections)
+            lower = max(1.0, float(values.min()) / 1.35)
+            upper = float(values.max()) * 1.35
+            if upper > lower:
+                axis.set_ylim(lower, upper)
+        axis.set_xlabel("Signal efficiency")
+        axis.set_title(f"{signal.replace('X', 'H', 1)} vs QCD")
+        axis.grid(True, which="both", alpha=0.22)
+    axes[0].set_ylabel("QCD background rejection  $1/\\epsilon_{\\mathrm{QCD}}$")
+    axes[1].legend(loc="best", frameon=False, title="Gradual model")
+    fig.suptitle(
+        "D100 → D0 progression — high-rejection region", y=1.01,
+    )
+    fig.tight_layout()
+    paths = {
+        "progression_pdf": output / "dense_c25p75_d_progression_high_rejection.pdf",
+        "progression_png": output / "dense_c25p75_d_progression_high_rejection.png",
+    }
+    fig.savefig(paths["progression_pdf"], bbox_inches="tight")
+    fig.savefig(paths["progression_png"], bbox_inches="tight", dpi=220)
+    plt.close(fig)
+    return paths
+
+
 __all__ = [
     "MAIN_LADDER",
+    "PROGRESSION_LADDER",
     "ROC_REPORT_CONTRACT",
     "SIGNALS",
     "build_dense_c25p75_roc",

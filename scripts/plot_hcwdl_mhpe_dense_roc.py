@@ -19,6 +19,8 @@ def main() -> int:
     )
     print(report["figures"]["pdf"]["path"])
     print(report["figures"]["png"]["path"])
+    print(report["figures"]["progression_pdf"]["path"])
+    print(report["figures"]["progression_png"]["path"])
     return 0
 
 

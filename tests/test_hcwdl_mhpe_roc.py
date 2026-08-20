@@ -6,8 +6,10 @@ import pytest
 
 from hlt_classification.scouting.hcwdl_mhpe_roc import (
     MAIN_LADDER,
+    PROGRESSION_LADDER,
     SIGNALS,
     _plot,
+    _plot_progression,
     qcd_rejection_curve,
 )
 
@@ -58,10 +60,17 @@ def test_dense_roc_plot_writes_both_formats(tmp_path):
         "signal_efficiency": np.array([0.0, 0.5, 1.0]),
         "qcd_rejection": np.array([100.0, 10.0, 1.0]),
     }
+    node_ids = {
+        node_id for ladder in (MAIN_LADDER, PROGRESSION_LADDER)
+        for node_id, _ in ladder
+    }
     curves = {
         node_id: {signal: curve for signal in SIGNALS}
-        for node_id, _ in MAIN_LADDER
+        for node_id in node_ids
     }
     paths = _plot(curves, tmp_path)
     assert paths["pdf"].read_bytes().startswith(b"%PDF")
     assert paths["png"].read_bytes().startswith(b"\x89PNG")
+    progression = _plot_progression(curves, tmp_path)
+    assert progression["progression_pdf"].read_bytes().startswith(b"%PDF")
+    assert progression["progression_png"].read_bytes().startswith(b"\x89PNG")
