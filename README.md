@@ -105,6 +105,7 @@ JetClass data on Tigris:
 - [HCWDL interrupted final-evaluation recovery](docs/HCWDL_FINAL_RECOVERY_RUNBOOK.md)
 - [HCWDL final-recovery contract](docs/contracts/HCWDL_FINAL_EVALUATION_RECOVERY.md)
 - [HCWDL matching-free representation-KD ascent plan](docs/plans/HCWDL_MATCHING_FREE_REPRESENTATION_KD_ASCENTS.md)
+- [HCWDL homotopy representation-KD ensemble contract](docs/contracts/HCWDL_HOMOTOPY_REPRESENTATION_ENSEMBLE.md)
 - [HCWDL homotopy representation-KD implementation plan](docs/plans/HCWDL_HOMOTOPY_REPRESENTATION_KD_IMPLEMENTATION_PLAN.md)
 - [HCWDL homotopy representation-KD contract](docs/contracts/HCWDL_HOMOTOPY_REPRESENTATION_KD.md)
 - [HCWDL homotopy representation-KD runbook](docs/HCWDL_HOMOTOPY_REPRESENTATION_KD_RUNBOOK.md)

@@ -1,5 +1,20 @@
 # Current Handoff
 
+## HCWDL-U-RKD matched-rung probability ensembles (2026-08-20)
+
+A validation-only post-hoc evaluator now registers fixed equal-weight
+`LOGIT + RSET + RREL` probability ensembles at D40, D20, and D0. It performs
+no training or weight tuning, reconstructs each exact shared homotopy view
+once, authenticates all selected reports/checkpoints, requires standalone
+metric parity before combining predictions, binds validation identity order,
+and has no final-test capability. The source campaign is not mutated. The
+new v1 report contract and thin Tigris worker are documented in
+[the ensemble contract](contracts/HCWDL_HOMOTOPY_REPRESENTATION_ENSEMBLE.md).
+Focused ensemble/homotopy/training/reporting tests passed 47/47. The complete
+repository suite passed 995 tests with nine platform skips and 14 existing
+Matplotlib deprecation warnings in 415.98 seconds. CLI help, Python compilation,
+and `git diff --check` passed. Real results remain pending execution on Tigris.
+
 ## HCWDL-U-RKD chained resource recovery (2026-08-17)
 
 The running pilot's `F_RREL_U100` source-recovery job reached pass 58 of 60,
