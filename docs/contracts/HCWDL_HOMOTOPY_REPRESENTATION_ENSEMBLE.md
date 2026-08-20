@@ -13,6 +13,12 @@ identical rung of the paired HCWDL-U-RKD campaign. The evaluator reconstructs
 the shared authenticated validation view once, verifies each checkpoint's
 standalone metrics against its immutable training report, and then computes
 the ensemble metrics from the arithmetic mean of the three softmax vectors.
+The paired U/J logit trainer scores its selected checkpoints in FP32, while
+the representation trainer scores RSET/RREL under BF16 autocast. The ensemble
+reproduces those registered per-member inference policies, converts every
+resulting logit tensor to FP32, and only then computes and averages
+probabilities. This preserves parity with the exact ladder metrics being
+compared rather than silently rescoring one arm under another arm's precision.
 
 The report contract is
 `HCWDL_HOMOTOPY_REPRESENTATION_POSTHOC_ENSEMBLE_REPORT/v1`. It binds the source

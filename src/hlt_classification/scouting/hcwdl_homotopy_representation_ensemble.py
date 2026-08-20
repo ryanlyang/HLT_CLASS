@@ -38,6 +38,11 @@ REPORT_SCHEMA_VERSION: Final = 1
 ENSEMBLE_RUNGS: Final = ("D40", "D20", "D0")
 MEMBER_ORDER: Final = ("LOGIT", "RSET", "RREL")
 WEIGHTS: Final = (1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0)
+MEMBER_INFERENCE_PRECISION: Final = {
+    "LOGIT": "float32",
+    "RSET": "bfloat16_autocast",
+    "RREL": "bfloat16_autocast",
+}
 METRIC_TOLERANCES: Final = {
     "cross_entropy": 5.0e-6,
     "accuracy": 1.0e-8,
@@ -215,7 +220,10 @@ def evaluate_ensemble(
                 with torch.autocast(
                     device_type=torch.device(device).type,
                     dtype=torch.bfloat16,
-                    enabled=torch.device(device).type == "cuda",
+                    enabled=(
+                        torch.device(device).type == "cuda"
+                        and MEMBER_INFERENCE_PRECISION[name] == "bfloat16_autocast"
+                    ),
                 ):
                     logits = models[name](features, vectors, mask)
                 if logits.shape != (len(labels), 15):
@@ -247,8 +255,15 @@ def evaluate_ensemble(
             metric: float(measured[name][metric]) - expected[metric]
             for metric in METRIC_TOLERANCES
         }
-        if any(abs(deltas[metric]) > METRIC_TOLERANCES[metric] for metric in deltas):
-            raise RuntimeError(f"HCWDL-U-RKD ensemble {name} metric parity failed")
+        violations = {
+            metric: deltas[metric]
+            for metric in deltas
+            if abs(deltas[metric]) > METRIC_TOLERANCES[metric]
+        }
+        if violations:
+            raise RuntimeError(
+                f"HCWDL-U-RKD ensemble {name} metric parity failed: {violations}"
+            )
         parity[name] = {
             "selected_report": expected,
             "recomputed": {metric: float(measured[name][metric]) for metric in METRIC_TOLERANCES},
@@ -298,6 +313,7 @@ def evaluate_ensemble(
         "ensemble_rule": "arithmetic_mean_of_member_softmax_probabilities",
         "weights": list(WEIGHTS),
         "weight_selection": "fixed_a_priori_no_validation_tuning",
+        "member_inference_precision": MEMBER_INFERENCE_PRECISION,
         "member_metric_parity": parity,
         "member_summaries": member_summaries,
         "ensemble_validation": ensemble,
@@ -329,6 +345,7 @@ def validate_ensemble_report(value: Mapping[str, Any]) -> str:
         value.get("rung") not in ENSEMBLE_RUNGS
         or value.get("member_order") != list(MEMBER_ORDER)
         or value.get("weights") != list(WEIGHTS)
+        or value.get("member_inference_precision") != MEMBER_INFERENCE_PRECISION
         or value.get("role") != "validation"
         or value.get("final_test_accessed") is not False
         or value.get("validation_only") is not True
@@ -340,6 +357,7 @@ def validate_ensemble_report(value: Mapping[str, Any]) -> str:
 __all__ = [
     "ENSEMBLE_RUNGS",
     "MEMBER_ORDER",
+    "MEMBER_INFERENCE_PRECISION",
     "REPORT_SCHEMA_VERSION",
     "WEIGHTS",
     "equal_weight_probability_logits",

@@ -25,6 +25,16 @@ checkpoint hashes into its own immutable result, and retains strict equality
 when a launch-time hash was present. The repaired focused suite passed 48/48
 and `git diff --check` passed.
 
+The second live attempt at source `20cdd7c6` completed prediction but failed
+the standalone LOGIT parity gate because the evaluator applied BF16 autocast
+to all members. The source U/J engine scores LOGIT checkpoints in FP32;
+RSET/RREL's representation engine scores in BF16 autocast. The evaluator now
+reproduces those exact per-member policies, promotes all output logits to FP32
+before probability averaging, and includes metric deltas in any future parity
+error. The precision repair focused suite passed 49/49; Python compilation and
+`git diff --check` passed. No ensemble metric from either failed attempt was
+published.
+
 ## HCWDL-U-RKD chained resource recovery (2026-08-17)
 
 The running pilot's `F_RREL_U100` source-recovery job reached pass 58 of 60,

@@ -10,6 +10,7 @@ from hlt_classification.scouting.hcwdl_homotopy_representation_contracts import 
 )
 from hlt_classification.scouting.hcwdl_homotopy_representation_ensemble import (
     ENSEMBLE_RUNGS,
+    MEMBER_INFERENCE_PRECISION,
     MEMBER_ORDER,
     REPORT_SCHEMA_VERSION,
     WEIGHTS,
@@ -52,6 +53,14 @@ def test_future_parent_logit_reference_may_omit_launch_time_report_hash():
         _validate_optional_frozen_digest({"report_sha256": "b" * 64}, "a" * 64)
 
 
+def test_member_precision_reproduces_each_source_training_evaluator():
+    assert MEMBER_INFERENCE_PRECISION == {
+        "LOGIT": "float32",
+        "RSET": "bfloat16_autocast",
+        "RREL": "bfloat16_autocast",
+    }
+
+
 def _report():
     return with_content_hash({
         "contract": POSTHOC_ENSEMBLE_REPORT_CONTRACT,
@@ -59,6 +68,7 @@ def _report():
         "rung": ENSEMBLE_RUNGS[0],
         "member_order": list(MEMBER_ORDER),
         "weights": list(WEIGHTS),
+        "member_inference_precision": MEMBER_INFERENCE_PRECISION,
         "role": "validation",
         "validation_only": True,
         "final_test_accessed": False,
