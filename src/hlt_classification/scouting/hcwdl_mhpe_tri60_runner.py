@@ -103,7 +103,7 @@ def _runtime(spec: Mapping[str, Any], node_id: str) -> Tri60TrainingRuntime:
 
 
 def _student_caches(
-    spec: Mapping[str, Any], *, node_id: str, include_metadata: bool,
+    spec: Mapping[str, Any], *, node_id: str,
 ):
     foundation = _foundation(spec)
     split, split_hash, selection_hash, selections, assignments, balanced = _load_common(
@@ -118,7 +118,13 @@ def _student_caches(
         assignments=assignments, balanced=balanced,
         behavior=_behavior(node_id), coordinate=node.coordinate,
         batch_size=256, sampler_seed=sampler_seed, repair_seed=repair_seed,
-        memory_gib=requested, include_hcwdl_metadata=include_metadata,
+        memory_gib=requested,
+        # The shared TRI60 normalization boundary authenticates canonical
+        # identity digests, visible indexes, and particle-family codes for
+        # every track.  LOGIT-only models do not consume representation heads,
+        # but their cache batches still require this metadata for identity-
+        # bound probability joins and the common strict batch contract.
+        include_hcwdl_metadata=True,
     )
     return (
         foundation, split, split_hash, selection_hash, selections,
@@ -313,7 +319,7 @@ def run_fit(
     # chunks are gone.  This ordering is a storage and peak-RAM invariant.
     cache_started = time.monotonic()
     _, _, _, _, _, _, _, caches, input_key = _student_caches(
-        spec, node_id=node_id, include_metadata=node.auxiliary != "none",
+        spec, node_id=node_id,
     )
     cache_seconds = time.monotonic() - cache_started
     parents = {
@@ -410,7 +416,7 @@ def run_reducer(
         raise KeyError("unknown TRI60 probability reducer")
     representative = components[0]
     _, _, _, _, _, _, _, caches, input_key = _student_caches(
-        spec, node_id=representative, include_metadata=True,
+        spec, node_id=representative,
     )
     seed_alias = NODE_REGISTRY[representative].seed_alias
     sampler_seed = derive_seed(int(spec["replicate_seed"]), seed_alias + "/sampler")

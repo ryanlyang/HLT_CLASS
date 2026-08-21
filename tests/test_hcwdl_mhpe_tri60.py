@@ -306,6 +306,38 @@ def test_runtime_adapter_maps_recipe_floor_to_runtime_field(tmp_path: Path):
     runtime.validate(execution_mode="scientific")
 
 
+def test_u000_production_cache_requests_strict_identity_metadata(monkeypatch):
+    from hlt_classification.scouting import hcwdl_mhpe_tri60_runner as runner
+
+    observed = {}
+    foundation = {"content_hash": SHA}
+    split = {"contract": "synthetic"}
+    selections = {"train": object(), "validation": object()}
+    assignments = {"train": object(), "validation": object()}
+    balanced = {"train": object(), "validation": object()}
+
+    monkeypatch.setattr(runner, "_foundation", lambda _spec: foundation)
+    monkeypatch.setattr(
+        runner,
+        "_load_common",
+        lambda _foundation: (
+            split, "b" * 64, "c" * 64, selections, assignments, balanced,
+        ),
+    )
+
+    def fake_cache_student_views(**kwargs):
+        observed.update(kwargs)
+        return {"train": object(), "validation": object()}, "privileged"
+
+    monkeypatch.setattr(runner, "_cache_student_views", fake_cache_student_views)
+
+    result = runner._student_caches({"replicate_seed": 1337}, node_id="U000")
+
+    assert result[-1] == "privileged"
+    assert observed["behavior"] == "p0"
+    assert observed["include_hcwdl_metadata"] is True
+
+
 def test_contract_inventory_is_versioned_and_unique():
     assert len(CONTRACTS) == len(set(CONTRACTS))
     assert all(value.startswith("HCWDL_MHPE_THREE_TRACK_60E_") for value in CONTRACTS)

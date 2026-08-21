@@ -101,6 +101,25 @@ Source-pinned recovery must cover the failed/downstream closure from the
 original immutable ledger. No valid U000 selected checkpoint or rolling
 resume exists, so U000 restarts from the beginning.
 
+The first source-repair recovery at pushed commit `91a8da00` proved that the
+runtime-field correction reached `train_tri60_node`, then exposed a second
+pre-update production-adapter defect after rebuilding both full RAM caches.
+Recovery job `90564` failed because the production U000 cache requested
+`include_hcwdl_metadata=false`; consequently it omitted canonical identity
+digests and would also have omitted the visible-index and family-code fields
+required by the common strict TRI60 batch boundary. The bounded acceptance
+had correctly built the same P0 view with HCWDL metadata enabled, so it did
+not exercise this divergent production option. The production student-cache
+adapter now requests the same strict HCWDL metadata for every track, including
+LOGIT-only U000. LOGIT models still consume only features, vectors, and masks;
+the additional fields authenticate identities and the shared batch contract
+and do not add an offline inference input or representation loss. A focused
+regression proves that the real U000 adapter cannot disable this metadata.
+This retains the acceptance-measured memory topology and changes no graph,
+view values, loss weights, seeds, schedule, or checkpoint policy. A new
+source-pinned failed/downstream recovery is required; U000 again has no valid
+partial state and restarts from update zero.
+
 ## Dense C25P75 validation ROC diagnostic (2026-08-20)
 
 An additive validation-only plotting command now produces the requested
