@@ -284,6 +284,28 @@ def test_recipe_locks_ram_only_no_resume_semantics():
     )
 
 
+def test_runtime_adapter_maps_recipe_floor_to_runtime_field(tmp_path: Path):
+    from hlt_classification.scouting import hcwdl_mhpe_tri60_runner as runner
+
+    recipe = recipe_payload(
+        base_recipe_sha256=SHA,
+        representation_recipe_sha256="b" * 64,
+        unified_balanced_recipe_sha256="c" * 64,
+    )
+    recipe_path = tmp_path / "recipe.json"
+    write_immutable_json(recipe_path, recipe)
+
+    runtime = runner._runtime(
+        {"artifact_paths": {"recipe": str(recipe_path)}},
+        "U000",
+    )
+
+    assert runtime.minimum_lr_fraction == recipe["training"][
+        "learning_rate_floor_fraction"
+    ]
+    runtime.validate(execution_mode="scientific")
+
+
 def test_contract_inventory_is_versioned_and_unique():
     assert len(CONTRACTS) == len(set(CONTRACTS))
     assert all(value.startswith("HCWDL_MHPE_THREE_TRACK_60E_") for value in CONTRACTS)

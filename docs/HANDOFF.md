@@ -82,6 +82,25 @@ files compile and `git diff --check` passes. The local default Python lacks
 NumPy, so the focused regression must be rerun in `atlas_kd_tigris` on the
 corrected pushed commit before proceeding to recipe selection or acceptance.
 
+That corrected foundation regression passed on Tigris at pushed commit
+`d218961c`. The source-pinned evidence job `90374` and acceptance job `90375`
+then completed successfully. Dependent autolaunch job `90390` authenticated
+the evidence, created the immutable full campaign, passed the complete dry run
+(`50` jobs, `32` fresh fits), and submitted the exact live ledger. Its final
+status-print snippet subsequently raised a local `NameError`; that happened
+after submission and did not prevent the DAG from being registered.
+`authenticate` (`90455`) and `preflight` (`90456`) completed. `train_U000`
+(`90457`) failed before its first optimizer update, after building both RAM
+caches, because the runner passed the versioned recipe field
+`learning_rate_floor_fraction` as a constructor keyword while the canonical
+`Tri60TrainingRuntime` field is named `minimum_lr_fraction`. The runner now
+maps the versioned recipe key to the canonical runtime field, and a regression
+constructs the runtime through this production adapter. The graph, recipe
+value, foundation, views, losses, seeds, and checkpoint policy are unchanged.
+Source-pinned recovery must cover the failed/downstream closure from the
+original immutable ledger. No valid U000 selected checkpoint or rolling
+resume exists, so U000 restarts from the beginning.
+
 ## Dense C25P75 validation ROC diagnostic (2026-08-20)
 
 An additive validation-only plotting command now produces the requested

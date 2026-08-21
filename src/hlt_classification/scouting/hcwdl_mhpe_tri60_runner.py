@@ -97,7 +97,7 @@ def _runtime(spec: Mapping[str, Any], node_id: str) -> Tri60TrainingRuntime:
         peak_learning_rate=float(training["peak_learning_rate"]),
         weight_decay=float(training["weight_decay"]),
         warmup_fraction=float(training["warmup_fraction"]),
-        learning_rate_floor_fraction=float(training["learning_rate_floor_fraction"]),
+        minimum_lr_fraction=float(training["learning_rate_floor_fraction"]),
         amp_dtype=str(training["forward_precision"]),
     )
 
