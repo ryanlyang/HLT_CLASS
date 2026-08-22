@@ -1109,6 +1109,39 @@ def test_recovery_preserves_active_parent_from_an_independent_track():
         ["90699", "${JOB_train_M1_RSET}", "${JOB_train_M1_RREL}"],
     )
 
+    completed = recovery._recovery_dependency_plan(
+        task={"dependencies": ["preflight", "train_U000"]},
+        closure={"train_U000"},
+        monitor_rows={
+            "train_U000": {"disposition": "retryable_failure"},
+        },
+        subject_jobs={"train_U000": "90900"},
+        completed_external_dependencies={"authenticate", "preflight"},
+    )
+    assert completed == (["train_U000"], [], ["${JOB_train_U000}"])
+
+
+def test_completed_dependency_tasks_walks_recovery_ancestry(tmp_path: Path):
+    from hlt_classification.scouting import hcwdl_mhpe_tri60_recovery as recovery
+    from hlt_classification.scouting.hcwdl_mhpe_tri60_contracts import (
+        RECOVERY_SPEC_CONTRACT, artifact,
+    )
+
+    parent = artifact({
+        "completed_task_attestations": [{"task_id": "preflight"}],
+        "parent_recovery_spec_path": None,
+    }, contract=RECOVERY_SPEC_CONTRACT)
+    parent_path = tmp_path / "parent.json"
+    write_immutable_json(parent_path, parent)
+    child = artifact({
+        "completed_task_attestations": [{"task_id": "train_U000"}],
+        "parent_recovery_spec_path": str(parent_path),
+    }, contract=RECOVERY_SPEC_CONTRACT)
+
+    assert recovery._completed_dependency_tasks(child) == {
+        "preflight", "train_U000",
+    }
+
 
 def test_subject_dependency_registry_accepts_legacy_missing_field(
     tmp_path: Path,

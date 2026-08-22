@@ -145,6 +145,12 @@ external parents need no scheduler dependency because their task attestations
 are authenticated; failed/downstream jobs remain bound to new recovery IDs.
 This prevents recovery from either cancelling healthy LOGIT work or releasing
 the cross-track reducer before that work completes.
+Legacy repeated-recovery chains may also omit a dependency such as
+`preflight` from the current ledger because its authenticated success belongs
+to an older recovery ancestor. Dependency validation therefore walks the
+immutable parent-recovery chain and accepts only task IDs carried by validated
+completed-task attestations; an absent dependency that is neither completed
+in that ancestry nor bound to an active subject job still fails closed.
 
 ## Dense C25P75 validation ROC diagnostic (2026-08-20)
 

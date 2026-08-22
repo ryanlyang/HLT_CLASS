@@ -107,6 +107,7 @@ def _recovery_dependency_plan(
     monitor_rows: Mapping[str, Mapping[str, Any]],
     subject_jobs: Mapping[str, str],
     inherited_subject_dependencies: Mapping[str, str] | None = None,
+    completed_external_dependencies: set[str] | None = None,
 ) -> tuple[list[str], list[dict[str, str]], list[str]]:
     """Preserve active, healthy parents that remain in the subject ledger."""
 
@@ -120,6 +121,8 @@ def _recovery_dependency_plan(
             dependency_jobs.append(f"${{JOB_{parent}}}")
             continue
         if parent not in monitor_rows:
+            if parent in set(completed_external_dependencies or ()):
+                continue
             inherited = dict(inherited_subject_dependencies or {})
             if parent not in inherited:
                 raise ValueError("TRI60 external recovery dependency is unbound")
@@ -136,6 +139,30 @@ def _recovery_dependency_plan(
         subject_dependencies.append({"task_id": parent, "job_id": job_id})
         dependency_jobs.append(job_id)
     return recovery_dependencies, subject_dependencies, dependency_jobs
+
+
+def _completed_dependency_tasks(subject: Mapping[str, Any]) -> set[str]:
+    """Collect authenticated completed tasks across a recovery ancestry."""
+
+    completed = set()
+    current = subject
+    seen = set()
+    while current.get("contract") in {
+        RECOVERY_SPEC_CONTRACT, RESOURCE_RECOVERY_SPEC_CONTRACT,
+    }:
+        identity = str(current.get("content_hash"))
+        if identity in seen:
+            raise ValueError("TRI60 recovery dependency ancestry cycles")
+        seen.add(identity)
+        completed.update(
+            str(row["task_id"])
+            for row in current.get("completed_task_attestations", ())
+        )
+        parent_path = current.get("parent_recovery_spec_path")
+        if parent_path is None:
+            break
+        current = load_json(parent_path)
+    return completed
 
 
 def _subject_dependency_rows(
@@ -285,6 +312,7 @@ def create_recovery(
     inherited_dependencies = _subject_dependency_rows(
         attestation_root, allowed_tasks=allowed_tasks,
     )
+    completed_dependencies = _completed_dependency_tasks(subject)
     worker = project / "sbatch/run_hcwdl_mhpe_tri60_recovery_task.sh"
     for task_id in closure:
         task = _task_map()[task_id]
@@ -294,6 +322,7 @@ def create_recovery(
                 task=task, closure=closure_set, monitor_rows=rows,
                 subject_jobs=ledger["jobs"],
                 inherited_subject_dependencies=inherited_dependencies[task_id],
+                completed_external_dependencies=completed_dependencies,
             )
         )
         command = [
@@ -435,6 +464,7 @@ def validate_recovery(value: Mapping[str, Any]) -> str:
     inherited_dependencies = _subject_dependency_rows(
         subject_root, allowed_tasks=allowed_tasks,
     )
+    completed_dependencies = _completed_dependency_tasks(subject)
     for command_row in plan_commands:
         task = _task_map()[command_row["task_id"]]
         recovery_dependencies, subject_dependencies, dependency_jobs = (
@@ -444,6 +474,7 @@ def validate_recovery(value: Mapping[str, Any]) -> str:
                 inherited_subject_dependencies=(
                     inherited_dependencies[command_row["task_id"]]
                 ),
+                completed_external_dependencies=completed_dependencies,
             )
         )
         dependency_arguments = [
