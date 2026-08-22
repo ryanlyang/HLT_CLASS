@@ -974,7 +974,11 @@ def load_tri60_model(
     if result.missing_keys or result.unexpected_keys:
         raise ValueError("TRI60 selected checkpoint state differs")
     restore_model_runtime_state(model, payload["model_runtime"])
-    model.to(device)
+    # Selected checkpoints are loaded only as inference teachers/components.
+    # Preserve their authenticated non-state-dict trimmer state while
+    # establishing the deterministic FP32 evaluation boundary required by
+    # representation-target generation before returning to any caller.
+    model.to(device).float().eval()
     return model, report
 
 

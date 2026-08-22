@@ -152,6 +152,23 @@ immutable parent-recovery chain and accepts only task IDs carried by validated
 completed-task attestations; an absent dependency that is neither completed
 in that ancestry nor bound to an active subject job still fails closed.
 
+The resulting source-repair jobs (`90920`, `90922`, `90925`, `90929`,
+`90931`, and `90934`) then passed carrier population planning and reached the
+RAM target runtime, where all six failed before a teacher forward because the
+selected-checkpoint loader returned the U000 module in training mode. The
+target runtime correctly rejects training-mode teachers: active dropout would
+make representation targets nondeterministic. The bounded acceptance did not
+expose this production divergence because its probability-target helper called
+`model.eval()` before reusing the same object for representation targets.
+`load_tri60_model` now establishes the canonical inference boundary centrally
+after restoring the authenticated model/trimmer state:
+`model.to(device).float().eval()`. Every existing caller uses selected
+checkpoints only for inference, probability reduction, or teacher-target
+construction. A real selected-checkpoint regression now proves the returned
+model is FP32 and in evaluation mode. This changes no checkpoint bytes,
+teacher outputs under the intended evaluation policy, graph, loss, seed,
+schedule, or population.
+
 ## Dense C25P75 validation ROC diagnostic (2026-08-20)
 
 An additive validation-only plotting command now produces the requested

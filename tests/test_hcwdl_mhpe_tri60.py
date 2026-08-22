@@ -34,7 +34,8 @@ from hlt_classification.scouting.hcwdl_mhpe_tri60_probability import (
     publish_probability_lock, publish_probability_role,
 )
 from hlt_classification.scouting.hcwdl_mhpe_tri60_training import (
-    Tri60TrainingInterrupted, Tri60TrainingRuntime, train_tri60_node,
+    Tri60TrainingInterrupted, Tri60TrainingRuntime, load_tri60_model,
+    train_tri60_node,
     tri60_base_loss,
 )
 from hlt_classification.scouting.hcwdl_recovery import (
@@ -931,6 +932,15 @@ def test_no_resume_synthetic_fit_publishes_only_terminal_checkpoints(tmp_path):
     assert (tmp_path / "selected_model.pt").is_file()
     assert (tmp_path / "final_model.pt").is_file()
     assert not list(tmp_path.rglob("*resume*"))
+    loaded, loaded_report = load_tri60_model(
+        tmp_path / "training_report.json", device="cpu",
+        model_factory=_tiny_model_factory,
+    )
+    assert loaded_report["content_hash"] == report["content_hash"]
+    assert loaded.training is False
+    assert {parameter.dtype for parameter in loaded.parameters()} == {
+        pytest.importorskip("torch").float32,
+    }
 
 
 def test_interrupted_fit_publishes_only_small_restart_from_zero_attestation(
