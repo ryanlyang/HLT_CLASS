@@ -13,6 +13,7 @@ from io import BytesIO
 import math
 import os
 from pathlib import Path
+import queue
 import random
 import re
 import signal
@@ -72,8 +73,165 @@ from .hcwdl_representation_training import (
 from .training import LossConfiguration, derive_seed
 
 
+TRI60_PREFETCH_DEPTH = 1
+
+
 class Tri60TrainingInterrupted(RuntimeError):
     """Raised without a reusable tensor checkpoint after a safe batch boundary."""
+
+
+class _BatchPrefetcher:
+    """Bounded one-producer lookahead without changing iterable order.
+
+    The producer owns all calls into the source iterator.  A semaphore is
+    acquired *before* requesting the next value, so ``depth=1`` retains at
+    most one not-yet-consumed batch (whether queued or currently being
+    constructed).  No Torch or CUDA work occurs in the producer thread.
+    """
+
+    _END = object()
+
+    def __init__(self, batches: Iterable[Any], *, depth: int = 1) -> None:
+        if int(depth) != depth or depth <= 0:
+            raise ValueError("TRI60 prefetch depth must be a positive integer")
+        self._iterator = iter(batches)
+        self._depth = int(depth)
+        self._queue: queue.Queue[tuple[str, Any]] = queue.Queue()
+        self._slots = threading.Semaphore(self._depth)
+        self._stop = threading.Event()
+        self._thread = threading.Thread(
+            target=self._produce,
+            name="hcwdl-tri60-batch-prefetch",
+            daemon=True,
+        )
+        self._started = False
+        self._closed = False
+
+    def _produce(self) -> None:
+        terminal: tuple[str, Any] | None = None
+        try:
+            while not self._stop.is_set():
+                if not self._slots.acquire(timeout=0.1):
+                    continue
+                if self._stop.is_set():
+                    self._slots.release()
+                    break
+                try:
+                    value = next(self._iterator)
+                except StopIteration:
+                    self._slots.release()
+                    terminal = ("end", self._END)
+                    break
+                except BaseException as error:  # delivered on the consumer thread
+                    self._slots.release()
+                    terminal = ("error", (error, error.__traceback__))
+                    break
+                if self._stop.is_set():
+                    self._slots.release()
+                    break
+                self._queue.put(("value", value))
+        except BaseException as error:  # fail on the consumer, not silently in a thread
+            terminal = ("error", (error, error.__traceback__))
+        finally:
+            # Iterator finalizers may own ROOT/file resources.  They execute
+            # on the same producer thread that advanced the iterator.
+            close = getattr(self._iterator, "close", None)
+            try:
+                if callable(close):
+                    close()
+            except BaseException as error:
+                if terminal is None or terminal[0] != "error":
+                    terminal = ("error", (error, error.__traceback__))
+            # Publish completion only after source finalizers succeeded.  A
+            # consumer therefore cannot mistake a failed ROOT/file close for
+            # a cleanly exhausted stream.
+            if terminal is not None and not self._stop.is_set():
+                self._queue.put(terminal)
+
+    def __enter__(self) -> "_BatchPrefetcher":
+        if self._started or self._closed:
+            raise RuntimeError("TRI60 prefetcher cannot be entered twice")
+        self._started = True
+        self._thread.start()
+        return self
+
+    def __iter__(self) -> "_BatchPrefetcher":
+        return self
+
+    def __next__(self) -> Any:
+        if not self._started or self._closed:
+            raise RuntimeError("TRI60 prefetcher is not active")
+        kind, payload = self._queue.get()
+        if kind == "value":
+            self._slots.release()
+            return payload
+        if kind == "error":
+            error, traceback = payload
+            raise error.with_traceback(traceback)
+        if kind == "end" and payload is self._END:
+            raise StopIteration
+        raise RuntimeError("TRI60 prefetch queue item differs")
+
+    def close(self, *, require_stopped: bool = True) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        self._stop.set()
+        # Release a producer waiting for its bounded lookahead slot.
+        self._slots.release()
+        if self._started:
+            self._thread.join(timeout=30.0)
+            if self._thread.is_alive() and require_stopped:
+                raise RuntimeError("TRI60 prefetch producer did not stop")
+
+    def __exit__(self, _type, _value, _traceback) -> None:
+        # Never replace the scientific/input exception already propagating
+        # from the body with a shutdown timeout.  The producer is daemonized
+        # and observes the stop event at its next safe source boundary.
+        self.close(require_stopped=_type is None)
+
+
+class _DeferredMetricAccumulator:
+    """Accumulate detached report-only scalars without per-batch host sync."""
+
+    def __init__(self) -> None:
+        self._names: tuple[str, ...] | None = None
+        self._weighted_sum = None
+        self.rows = 0
+        self.batches = 0
+
+    def add(self, values: Mapping[str, Any], *, rows: int) -> None:
+        import torch
+
+        names = tuple(sorted(map(str, values)))
+        if rows <= 0 or not names:
+            raise ValueError("TRI60 deferred metric batch is empty")
+        if self._names is None:
+            self._names = names
+        elif names != self._names:
+            raise ValueError("TRI60 deferred metric registry changed within a pass")
+        scalars = tuple(values[name] for name in names)
+        if any(not isinstance(value, torch.Tensor) or value.ndim != 0 for value in scalars):
+            raise ValueError("TRI60 deferred metrics must be scalar tensors")
+        devices = {value.device for value in scalars}
+        if len(devices) != 1:
+            raise ValueError("TRI60 deferred metrics span devices")
+        vector = torch.stack(tuple(value.detach().to(torch.float64) for value in scalars))
+        if self._weighted_sum is None:
+            self._weighted_sum = torch.zeros_like(vector)
+        self._weighted_sum.add_(vector, alpha=int(rows))
+        self.rows += int(rows)
+        self.batches += 1
+
+    def means(self) -> dict[str, float]:
+        if self._names is None or self._weighted_sum is None or self.rows <= 0:
+            raise ValueError("TRI60 deferred metric interval is empty")
+        # One transfer/synchronization per complete pass replaces one transfer
+        # per metric per optimizer update.
+        values = (self._weighted_sum / self.rows).detach().cpu().tolist()
+        return {
+            name: float(value) for name, value in zip(self._names, values, strict=True)
+        }
 
 
 @dataclass(frozen=True)
@@ -127,6 +285,25 @@ class Tri60RepresentationExecution:
         return ("jet", "set", "relation") if self.relation_enabled else ("jet", "set")
 
 
+def _device_condition_values(*conditions) -> tuple[bool, ...]:
+    """Resolve multiple scalar device predicates with one host synchronization."""
+
+    import torch
+
+    if not conditions:
+        raise ValueError("TRI60 device condition registry is empty")
+    values = tuple(torch.as_tensor(value) for value in conditions)
+    if any(value.ndim != 0 or value.dtype != torch.bool for value in values):
+        raise ValueError("TRI60 device conditions must be boolean scalars")
+    if len({value.device for value in values}) != 1:
+        raise ValueError("TRI60 device conditions span devices")
+    return tuple(bool(value) for value in torch.stack(values).cpu().tolist())
+
+
+def _device_conditions_hold(*conditions) -> bool:
+    return all(_device_condition_values(*conditions))
+
+
 def _peak_rss_bytes() -> int:
     try:
         import resource
@@ -172,20 +349,23 @@ def tri60_base_loss(
     if not np.isclose(ce_weight + kd_weight, 1.0, rtol=0, atol=1e-12):
         raise ValueError("TRI60 base-loss weights differ")
     ce_rows = functional.cross_entropy(student, labels, reduction="none")
+    conditions = []
+    target_condition_count = 0
     if kd_weight:
         if teacher_probabilities is None:
             raise ValueError("TRI60 KD target is absent")
         target = teacher_probabilities.float().detach()
-        if (
-            target.shape != student.shape
-            or not torch.isfinite(target).all()
-            or bool((target < 0).any())
-            or not torch.allclose(
+        if target.shape != student.shape:
+            raise ValueError("TRI60 probability target differs")
+        conditions.extend((
+            torch.isfinite(target).all(),
+            (target >= 0).all(),
+            torch.isclose(
                 target.sum(-1), torch.ones(len(target), device=target.device),
                 rtol=0, atol=2e-6,
-            )
-        ):
-            raise ValueError("TRI60 probability target differs")
+            ).all(),
+        ))
+        target_condition_count = len(conditions)
         kd_rows = functional.kl_div(
             functional.log_softmax(student / temperature, dim=-1),
             target, reduction="none",
@@ -203,7 +383,11 @@ def tri60_base_loss(
         "kd_rows": kd_rows,
         "total_rows": total_rows,
     }
-    if any(not torch.isfinite(value).all() for value in result.values()):
+    conditions.extend(torch.isfinite(value).all() for value in result.values())
+    resolved = _device_condition_values(*conditions)
+    if target_condition_count and not all(resolved[:target_condition_count]):
+        raise ValueError("TRI60 probability target differs")
+    if not all(resolved[target_condition_count:]):
         raise FloatingPointError("TRI60 base loss is nonfinite")
     return result
 
@@ -312,23 +496,24 @@ def _validation(model, batches, *, input_key: str, device, amp_dtype: str):
     model.eval()
     try:
         with torch.inference_mode():
-            for raw in batches:
-                _, features, vectors, mask, _, _, labels = _batch_tensors(
-                    _cache_batch(raw, input_key=input_key), device,
-                )
-                if parity_inputs is None:
-                    parity_inputs = (
-                        features.detach().clone(), vectors.detach().clone(),
-                        mask.detach().clone(),
+            with _BatchPrefetcher(batches) as prefetched:
+                for raw in prefetched:
+                    _, features, vectors, mask, _, _, labels = _batch_tensors(
+                        _cache_batch(raw, input_key=input_key), device,
                     )
-                with torch.autocast(
-                    device_type=device.type,
-                    dtype=torch.bfloat16,
-                    enabled=amp_dtype == "bfloat16" and device.type == "cuda",
-                ):
-                    logits = model(features, vectors, mask)
-                logits_parts.append(logits.float().cpu())
-                label_parts.append(labels.cpu())
+                    if parity_inputs is None:
+                        parity_inputs = (
+                            features.detach().clone(), vectors.detach().clone(),
+                            mask.detach().clone(),
+                        )
+                    with torch.autocast(
+                        device_type=device.type,
+                        dtype=torch.bfloat16,
+                        enabled=amp_dtype == "bfloat16" and device.type == "cuda",
+                    ):
+                        logits = model(features, vectors, mask)
+                    logits_parts.append(logits.float().cpu())
+                    label_parts.append(labels.cpu())
     finally:
         restore_model_runtime_state(model, runtime_state)
         restore_rng_state(rng)
@@ -600,8 +785,6 @@ def train_tri60_node(
     final_state = None
     final_runtime = None
     update = 0
-    interval: dict[str, float] = {}
-    interval_rows = 0
     calibration_scales: dict[str, float] = {}
     calibration_artifacts: dict[str, dict[str, Any]] = {}
     selection_artifact = None
@@ -628,141 +811,154 @@ def train_tri60_node(
     started = time.monotonic()
     try:
         for pass_index in range(runtime.passes):
+            pass_started = time.monotonic()
             model.train()
             pass_batches = 0
-            for raw in train_cache.iterate_batches(
-                epoch=pass_index,
-                sampler_seed=sampler_seed,
+            pass_metrics = _DeferredMetricAccumulator()
+            train_batches = train_cache.iterate_batches(
+                epoch=pass_index, sampler_seed=sampler_seed,
                 batch_size=runtime.batch_size,
-            ):
-                pass_batches += 1
-                for group in optimizer.param_groups:
-                    group["lr"] = _learning_rate(runtime, update, total_updates)
-                optimizer.zero_grad(set_to_none=True)
-                normalized, features, vectors, mask, visible, family, labels = _batch_tensors(
-                    _cache_batch(raw, input_key=input_key), target_device,
-                )
-                with torch.autocast(
-                    device_type=target_device.type,
-                    dtype=torch.bfloat16,
-                    enabled=runtime.amp_dtype == "bfloat16" and target_device.type == "cuda",
-                ):
-                    if node.auxiliary == "none":
-                        surfaces = None
-                        logits = model(features, vectors, mask)
-                    else:
-                        surfaces = model.forward_hcwdl_surfaces(
-                            features, vectors, mask, visible, family,
-                        )
-                        logits = surfaces.logits
-                teacher = (
-                    None if probability_targets is None else torch.as_tensor(
-                        probability_targets.join(normalized.identity_digests),
-                        dtype=torch.float32, device=target_device,
+            )
+            with _BatchPrefetcher(
+                train_batches, depth=TRI60_PREFETCH_DEPTH,
+            ) as prefetched:
+                for raw in prefetched:
+                    pass_batches += 1
+                    for group in optimizer.param_groups:
+                        group["lr"] = _learning_rate(runtime, update, total_updates)
+                    optimizer.zero_grad(set_to_none=True)
+                    normalized, features, vectors, mask, visible, family, labels = _batch_tensors(
+                        _cache_batch(raw, input_key=input_key), target_device,
                     )
-                )
-                with torch.autocast(device_type=target_device.type, enabled=False):
-                    base = tri60_base_loss(
-                        logits.float(), labels,
-                        teacher_probabilities=teacher,
-                        ce_weight=node.ce_weight,
-                        kd_weight=node.kd_weight,
-                        temperature=node.temperature,
-                    )
-                    total = base["total"]
-                    reported = {"ce": base["ce"], "kd": base["kd"]}
-                    effective_pass = effective_pass_for_update(update, updates_per_pass)
-                    if node.auxiliary != "none":
-                        execution = Tri60RepresentationExecution(node.track)
-                        required = []
-                        if jet_set_ramp(effective_pass) > 0:
-                            required.extend(("jet", "set"))
-                        if node.track == "RREL" and relation_ramp(effective_pass) > 0:
-                            required.append("relation")
-                        if required:
-                            for name in required:
-                                if name not in calibration_scales:
-                                    raise RuntimeError(
-                                        f"TRI60 representation component {name} was not calibrated"
-                                    )
-                            joined = representation_targets.join(normalized.identity_digests)
-                            targets = {
-                                name: torch.as_tensor(value, device=target_device)
-                                for name, value in joined.items()
-                            }
-                            targets = {
-                                name: value.float() if value.dtype.is_floating_point else value
-                                for name, value in targets.items()
-                            }
-                            raw_components = _raw_representation_components(
-                                execution=execution,
-                                model=model,
-                                surfaces=surfaces,
-                                targets=targets,
-                                labels=labels,
-                                class_weights=torch.ones(15, device=target_device),
-                                token_resources=token_resources,
-                                relation_resources=relation_resources,
-                                components=required,
-                            )
-                            scaled = {
-                                name: raw_components.losses[name] * calibration_scales[name]
-                                for name in required
-                            }
-                            scheduled = scheduled_representation_loss(
-                                strategy=node.track,
-                                effective_pass=effective_pass,
-                                scaled_jet=scaled["jet"],
-                                scaled_set=scaled["set"],
-                                scaled_relation=scaled.get("relation"),
-                                orthogonality=projection_orthogonality(
-                                    dict(model.representation_heads.projection_items())
-                                ),
-                            )
-                            total = total + scheduled.total
-                            reported.update({
-                                "representation": scheduled.total,
-                                **{
-                                    f"raw_{name}": raw_components.losses[name]
-                                    for name in required
-                                },
-                            })
+                    with torch.autocast(
+                        device_type=target_device.type,
+                        dtype=torch.bfloat16,
+                        enabled=runtime.amp_dtype == "bfloat16" and target_device.type == "cuda",
+                    ):
+                        if node.auxiliary == "none":
+                            surfaces = None
+                            logits = model(features, vectors, mask)
                         else:
-                            reported["representation"] = total * 0.0
-                if not torch.isfinite(total):
-                    raise FloatingPointError("TRI60 total loss is nonfinite")
-                total.backward()
-                optimizer.step()
-                batch_rows = len(labels)
-                update += 1
-                interval_rows += batch_rows
-                for name, value in {**reported, "total": total}.items():
-                    interval[name] = interval.get(name, 0.0) + float(value.detach().cpu()) * batch_rows
-                if monitor.requested:
-                    number = monitor.number if monitor.number is not None else int(signal.SIGTERM)
-                    interruption = artifact({
-                        "parents": normalized_parents,
-                        "campaign_spec_sha256": campaign_spec_sha256,
-                        "node_id": node_id,
-                        "last_completed_pass": pass_index,
-                        "last_completed_update": update,
-                        "signal_number": number,
-                        "signal_name": signal.Signals(number).name,
-                        "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
-                        "resume_checkpoint_published": False,
-                        "partial_checkpoint_reuse": False,
-                        "restart_policy": "restart_from_update_zero_v1",
-                        "final_test_accessed": False,
-                    }, contract=INTERRUPTION_ATTESTATION_CONTRACT)
-                    write_immutable_json(
-                        output / f"interruptions/update_{update:012d}.json",
-                        interruption,
+                            surfaces = model.forward_hcwdl_surfaces(
+                                features, vectors, mask, visible, family,
+                            )
+                            logits = surfaces.logits
+                    teacher = (
+                        None if probability_targets is None else torch.as_tensor(
+                            probability_targets.join(normalized.identity_digests),
+                            dtype=torch.float32, device=target_device,
+                        )
                     )
-                    raise Tri60TrainingInterrupted(
-                        f"TRI60 interrupted after update {update}; restart from zero"
-                    )
-            if pass_batches != updates_per_pass:
+                    with torch.autocast(device_type=target_device.type, enabled=False):
+                        base = tri60_base_loss(
+                            logits.float(), labels,
+                            teacher_probabilities=teacher,
+                            ce_weight=node.ce_weight,
+                            kd_weight=node.kd_weight,
+                            temperature=node.temperature,
+                        )
+                        total = base["total"]
+                        reported = {"ce": base["ce"], "kd": base["kd"]}
+                        effective_pass = effective_pass_for_update(update, updates_per_pass)
+                        if node.auxiliary != "none":
+                            execution = Tri60RepresentationExecution(node.track)
+                            required = []
+                            if jet_set_ramp(effective_pass) > 0:
+                                required.extend(("jet", "set"))
+                            if node.track == "RREL" and relation_ramp(effective_pass) > 0:
+                                required.append("relation")
+                            if required:
+                                for name in required:
+                                    if name not in calibration_scales:
+                                        raise RuntimeError(
+                                            f"TRI60 representation component {name} was not calibrated"
+                                        )
+                                joined = representation_targets.join(normalized.identity_digests)
+                                targets = {
+                                    name: torch.as_tensor(value, device=target_device)
+                                    for name, value in joined.items()
+                                }
+                                targets = {
+                                    name: value.float() if value.dtype.is_floating_point else value
+                                    for name, value in targets.items()
+                                }
+                                raw_components = _raw_representation_components(
+                                    execution=execution,
+                                    model=model,
+                                    surfaces=surfaces,
+                                    targets=targets,
+                                    labels=labels,
+                                    class_weights=torch.ones(15, device=target_device),
+                                    token_resources=token_resources,
+                                    relation_resources=relation_resources,
+                                    components=required,
+                                )
+                                scaled = {
+                                    name: raw_components.losses[name] * calibration_scales[name]
+                                    for name in required
+                                }
+                                scheduled = scheduled_representation_loss(
+                                    strategy=node.track,
+                                    effective_pass=effective_pass,
+                                    scaled_jet=scaled["jet"],
+                                    scaled_set=scaled["set"],
+                                    scaled_relation=scaled.get("relation"),
+                                    orthogonality=projection_orthogonality(
+                                        dict(model.representation_heads.projection_items())
+                                    ),
+                                )
+                                total = total + scheduled.total
+                                reported.update({
+                                    "representation": scheduled.total,
+                                    **{
+                                        f"raw_{name}": raw_components.losses[name]
+                                        for name in required
+                                    },
+                                })
+                            else:
+                                reported["representation"] = total * 0.0
+                    # The base loss has already performed its consolidated
+                    # finite check.  Representation arithmetic adds one more
+                    # value and therefore retains one explicit fail-closed
+                    # boundary without duplicating it for LOGIT/U000 nodes.
+                    if node.auxiliary != "none" and not _device_conditions_hold(
+                        torch.isfinite(total)
+                    ):
+                        raise FloatingPointError("TRI60 total loss is nonfinite")
+                    total.backward()
+                    optimizer.step()
+                    batch_rows = len(labels)
+                    update += 1
+                    pass_metrics.add({**reported, "total": total}, rows=batch_rows)
+                    if monitor.requested:
+                        number = monitor.number if monitor.number is not None else int(signal.SIGTERM)
+                        interruption = artifact({
+                            "parents": normalized_parents,
+                            "campaign_spec_sha256": campaign_spec_sha256,
+                            "node_id": node_id,
+                            "last_completed_pass": pass_index,
+                            "last_completed_update": update,
+                            "signal_number": number,
+                            "signal_name": signal.Signals(number).name,
+                            "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
+                            "resume_checkpoint_published": False,
+                            "partial_checkpoint_reuse": False,
+                            "restart_policy": "restart_from_update_zero_v1",
+                            "final_test_accessed": False,
+                        }, contract=INTERRUPTION_ATTESTATION_CONTRACT)
+                        write_immutable_json(
+                            output / f"interruptions/update_{update:012d}.json",
+                            interruption,
+                        )
+                        raise Tri60TrainingInterrupted(
+                            f"TRI60 interrupted after update {update}; restart from zero"
+                        )
+            if (
+                pass_batches != updates_per_pass
+                or pass_metrics.batches != updates_per_pass
+            ):
                 raise RuntimeError("TRI60 pass update count differs")
+            train_finished = time.monotonic()
             metrics, parity_inputs = _validation(
                 model,
                 validation_cache.iterate_batches(
@@ -786,13 +982,20 @@ def train_tri60_node(
             training_history.append({
                 "through_pass": pass_index + 1,
                 "through_update": update,
-                "rows": interval_rows,
-                "mean_losses": {
-                    name: value / interval_rows for name, value in sorted(interval.items())
-                },
+                "rows": pass_metrics.rows,
+                "mean_losses": pass_metrics.means(),
+                "training_seconds": train_finished - pass_started,
+                "validation_seconds": time.monotonic() - train_finished,
             })
-            interval = {}
-            interval_rows = 0
+            print(
+                "HCWDL-TRI60 "
+                f"node={node_id} pass={pass_index + 1}/{runtime.passes} "
+                f"update={update}/{total_updates} "
+                f"auc={float(metrics['macro_ovr_auc']):.8f} "
+                f"train_seconds={training_history[-1]['training_seconds']:.3f} "
+                f"validation_seconds={training_history[-1]['validation_seconds']:.3f}",
+                flush=True,
+            )
             if node.auxiliary != "none" and pass_index + 1 in {2, 4}:
                 names = ("jet", "set") if pass_index + 1 == 2 else (
                     ("relation",) if node.track == "RREL" else ()
@@ -939,6 +1142,14 @@ def train_tri60_node(
         "rolling_resume_published": False,
         "partial_checkpoint_reuse": False,
         "performance_early_termination": False,
+        "throughput_optimizations": {
+            "cpu_batch_prefetch_depth": TRI60_PREFETCH_DEPTH,
+            "prefetch_changes_batch_order": False,
+            "deferred_metric_accumulation": "device_float64_once_per_pass_v1",
+            "metric_accumulation_affects_gradients": False,
+            "global_batch_size_unchanged": True,
+            "optimizer_update_count_unchanged": True,
+        },
         "scientific_result_does_not_control_completion": True,
         "final_test_accessed": False,
     }, contract=TRAINING_REPORT_CONTRACT)

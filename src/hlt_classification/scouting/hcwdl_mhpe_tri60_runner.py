@@ -32,7 +32,8 @@ from .hcwdl_mhpe_tri60_probability import (
 )
 from .hcwdl_mhpe_tri60_recipe import validate_recipe
 from .hcwdl_mhpe_tri60_training import (
-    Tri60TrainingRuntime, load_tri60_model, train_tri60_node,
+    TRI60_PREFETCH_DEPTH, Tri60TrainingRuntime, _BatchPrefetcher,
+    load_tri60_model, train_tri60_node,
 )
 from .hcwdl_representation_data import (
     HCWDLParticleInputs, canonical_identity_digests,
@@ -256,7 +257,7 @@ def _carrier_targets(
         source_index = int(source["source_index"])
         partition = str(source["partition"])
 
-        def factory(
+        def unprefetched_factory(
             *, source_index=source_index, partition=partition,
             view_key=view_key,
         ):
@@ -273,6 +274,17 @@ def _carrier_targets(
                     batch, partition=partition, source_file_id=source_index,
                     view_key=view_key,
                 )
+
+        def factory(*, unprefetched_factory=unprefetched_factory):
+            # The target runtime already retains current/following batches to
+            # identify the final short batch.  This one additional bounded
+            # producer slot overlaps construction of the next ROOT/view batch
+            # with teacher inference and spectral sketching without changing
+            # any yielded bytes or order.
+            with _BatchPrefetcher(
+                unprefetched_factory(), depth=TRI60_PREFETCH_DEPTH,
+            ) as prefetched:
+                yield from prefetched
 
         factories[partition] = factory
         partition_specs[partition] = {
@@ -433,16 +445,24 @@ def _infer_cache(model, cache, *, input_key: str, sampler_seed: int, device: str
     labels = []
     model.eval()
     with torch.inference_mode():
-        for batch in cache.iterate_batches(epoch=0, sampler_seed=sampler_seed, batch_size=256):
-            view = batch[input_key]
-            value = model(
-                torch.as_tensor(view.features, device=device).float(),
-                torch.as_tensor(view.vectors, device=device).float(),
-                torch.as_tensor(view.mask, device=device).bool(),
-            ).float().cpu().numpy()
-            logits.append(np.ascontiguousarray(value, dtype=np.float32))
-            identities.append(np.ascontiguousarray(batch["identity_digests"], dtype=np.uint8))
-            labels.append(np.ascontiguousarray(batch["labels"], dtype=np.int64))
+        batches = cache.iterate_batches(
+            epoch=0, sampler_seed=sampler_seed, batch_size=256,
+        )
+        with _BatchPrefetcher(
+            batches, depth=TRI60_PREFETCH_DEPTH,
+        ) as prefetched:
+            for batch in prefetched:
+                view = batch[input_key]
+                value = model(
+                    torch.as_tensor(view.features, device=device).float(),
+                    torch.as_tensor(view.vectors, device=device).float(),
+                    torch.as_tensor(view.mask, device=device).bool(),
+                ).float().cpu().numpy()
+                logits.append(np.ascontiguousarray(value, dtype=np.float32))
+                identities.append(np.ascontiguousarray(
+                    batch["identity_digests"], dtype=np.uint8,
+                ))
+                labels.append(np.ascontiguousarray(batch["labels"], dtype=np.int64))
     return (
         np.concatenate(identities), np.concatenate(logits), np.concatenate(labels),
     )
@@ -573,6 +593,10 @@ def run_reducer(
             + manifests["validation"]["rows"] * 15 * 4
         ),
         "runtime_seconds": time.monotonic() - started,
+        "throughput_optimizations": {
+            "cpu_batch_prefetch_depth": TRI60_PREFETCH_DEPTH,
+            "prefetch_changes_batch_order": False,
+        },
         "poor_metrics_do_not_control_graph": True,
         "final_test_accessed": False,
     }, contract=STAGE_REPORT_CONTRACT)

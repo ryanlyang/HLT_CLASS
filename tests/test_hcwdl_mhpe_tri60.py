@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from types import MappingProxyType, SimpleNamespace
 from pathlib import Path
+import threading
+import time
 
 import numpy as np
 import pytest
@@ -796,6 +798,139 @@ def test_tri60_probability_base_loss_matches_manual_forward_kl():
     assert torch.allclose(result["total"], .25 * manual_ce + .75 * manual_kd)
 
 
+def test_tri60_base_loss_uses_one_consolidated_scalar_synchronization():
+    torch = pytest.importorskip("torch")
+    logits = torch.randn(4, 15, dtype=torch.float32)
+    labels = torch.arange(4, dtype=torch.long)
+    probability = torch.softmax(torch.randn(4, 15) / 2.0, dim=-1)
+
+    for target, ce_weight, kd_weight in (
+        (None, 1.0, 0.0), (probability, .25, .75),
+    ):
+        with torch.profiler.profile(
+            activities=[torch.profiler.ProfilerActivity.CPU],
+        ) as profile:
+            tri60_base_loss(
+                logits, labels, teacher_probabilities=target,
+                ce_weight=ce_weight, kd_weight=kd_weight, temperature=2.0,
+            )
+        synchronizations = sum(
+            event.count for event in profile.key_averages()
+            if event.key == "aten::_local_scalar_dense"
+        )
+        # CPU can materialize the consolidated boolean vector without an
+        # explicit local-scalar operator; CUDA performs one vector transfer.
+        # In either case the historical per-condition scalar loop is absent.
+        assert synchronizations <= 1
+
+
+def test_tri60_base_loss_consolidation_retains_fail_closed_target_checks():
+    torch = pytest.importorskip("torch")
+    logits = torch.randn(2, 15, dtype=torch.float32)
+    labels = torch.tensor([0, 1])
+    valid = torch.softmax(torch.randn(2, 15) / 2.0, dim=-1)
+    invalid = (
+        valid.clone().index_put_((torch.tensor([0]), torch.tensor([0])), torch.tensor([-1.0])),
+        valid.clone().index_put_((torch.tensor([0]), torch.tensor([0])), torch.tensor([float("nan")])),
+        valid * .5,
+    )
+    for target in invalid:
+        with pytest.raises(ValueError, match="probability target differs"):
+            tri60_base_loss(
+                logits, labels, teacher_probabilities=target,
+                ce_weight=.25, kd_weight=.75, temperature=2.0,
+            )
+
+
+def test_tri60_prefetch_is_order_exact_bounded_and_propagates_errors():
+    from hlt_classification.scouting.hcwdl_mhpe_tri60_training import (
+        _BatchPrefetcher,
+    )
+
+    produced = []
+    ready = [threading.Event() for _ in range(3)]
+
+    def source():
+        for value in range(3):
+            produced.append(value)
+            ready[value].set()
+            yield {"value": value}
+
+    with _BatchPrefetcher(source(), depth=1) as prefetched:
+        assert ready[0].wait(1.0)
+        time.sleep(.02)
+        assert produced == [0]
+        assert next(prefetched) == {"value": 0}
+        assert ready[1].wait(1.0)
+        time.sleep(.02)
+        assert produced == [0, 1]
+        assert [row["value"] for row in prefetched] == [1, 2]
+
+    def broken():
+        yield "first"
+        raise RuntimeError("prefetch-source-failure")
+
+    with _BatchPrefetcher(broken(), depth=1) as prefetched:
+        assert next(prefetched) == "first"
+        with pytest.raises(RuntimeError, match="prefetch-source-failure"):
+            next(prefetched)
+
+    finalized = threading.Event()
+
+    def close_early():
+        try:
+            yield "only-consumed-value"
+            yield "prefetched-but-not-consumed-value"
+        finally:
+            finalized.set()
+
+    with _BatchPrefetcher(close_early(), depth=1) as prefetched:
+        assert next(prefetched) == "only-consumed-value"
+    assert finalized.wait(1.0)
+
+    class FailingFinalizer:
+        def __init__(self):
+            self.done = False
+
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            if self.done:
+                raise StopIteration
+            self.done = True
+            return "value-before-finalizer"
+
+        def close(self):
+            raise OSError("prefetch-finalizer-failure")
+
+    with pytest.raises(OSError, match="prefetch-finalizer-failure"):
+        with _BatchPrefetcher(FailingFinalizer(), depth=1) as prefetched:
+            assert list(prefetched) == ["value-before-finalizer"]
+
+
+def test_tri60_deferred_metric_accumulation_matches_row_weighted_reference():
+    torch = pytest.importorskip("torch")
+    from hlt_classification.scouting.hcwdl_mhpe_tri60_training import (
+        _DeferredMetricAccumulator,
+    )
+
+    accumulator = _DeferredMetricAccumulator()
+    batches = (
+        ({"ce": torch.tensor(1.25), "total": torch.tensor(2.5)}, 7),
+        ({"ce": torch.tensor(.5), "total": torch.tensor(1.0)}, 3),
+    )
+    for values, rows in batches:
+        accumulator.add(values, rows=rows)
+    expected = {
+        name: sum(float(values[name]) * rows for values, rows in batches) / 10
+        for name in ("ce", "total")
+    }
+    assert accumulator.rows == 10
+    assert accumulator.batches == 2
+    assert accumulator.means() == expected
+
+
 class _SyntheticCache:
     def __init__(self, rows=30, tokens=3):
         labels = np.arange(rows, dtype=np.int64) % 15
@@ -941,6 +1076,76 @@ def test_no_resume_synthetic_fit_publishes_only_terminal_checkpoints(tmp_path):
     assert {parameter.dtype for parameter in loaded.parameters()} == {
         pytest.importorskip("torch").float32,
     }
+
+
+def test_prefetch_changes_neither_fit_updates_nor_selected_model(
+    tmp_path, monkeypatch,
+):
+    torch = pytest.importorskip("torch")
+    from hlt_classification.scouting import hcwdl_mhpe_tri60_training as module
+
+    cache = _SyntheticCache(rows=30)
+    common = {
+        "node_id": "U000", "train_cache": cache, "validation_cache": cache,
+        "input_key": "hlt", "parents": {"foundation": SHA},
+        "campaign_spec_sha256": "b" * 64, "recipe_sha256": "c" * 64,
+        "replicate_seed": 1337, "device": "cpu",
+        "runtime": Tri60TrainingRuntime(passes=2, batch_size=10),
+        "execution_mode": "synthetic_test", "model_factory": _tiny_model_factory,
+    }
+    prefetched = train_tri60_node(
+        **common, output_dir=tmp_path / "prefetched",
+    )
+
+    class SynchronousBatches:
+        def __init__(self, batches, *, depth=1):
+            assert depth == 1
+            self.iterator = iter(batches)
+
+        def __enter__(self):
+            return self
+
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            return next(self.iterator)
+
+        def __exit__(self, *_):
+            close = getattr(self.iterator, "close", None)
+            if callable(close):
+                close()
+
+    monkeypatch.setattr(module, "_BatchPrefetcher", SynchronousBatches)
+    synchronous = train_tri60_node(
+        **common, output_dir=tmp_path / "synchronous",
+    )
+
+    assert prefetched["validation_history"] == synchronous["validation_history"]
+    for left, right in zip(
+        prefetched["training_history"], synchronous["training_history"], strict=True,
+    ):
+        assert left["through_pass"] == right["through_pass"]
+        assert left["through_update"] == right["through_update"]
+        assert left["rows"] == right["rows"]
+        assert left["mean_losses"] == right["mean_losses"]
+    for checkpoint in ("selected_model.pt", "final_model.pt"):
+        left = torch.load(
+            tmp_path / "prefetched" / checkpoint,
+            map_location="cpu", weights_only=False,
+        )
+        right = torch.load(
+            tmp_path / "synchronous" / checkpoint,
+            map_location="cpu", weights_only=False,
+        )
+        assert left["selected_update" if checkpoint.startswith("selected") else "final_update"] == right[
+            "selected_update" if checkpoint.startswith("selected") else "final_update"
+        ]
+        assert set(left["model"]) == set(right["model"])
+        assert all(
+            torch.equal(left["model"][name], right["model"][name])
+            for name in left["model"]
+        )
 
 
 def test_interrupted_fit_publishes_only_small_restart_from_zero_attestation(

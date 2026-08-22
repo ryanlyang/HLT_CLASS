@@ -169,6 +169,55 @@ model is FP32 and in evaluation mode. This changes no checkpoint bytes,
 teacher outputs under the intended evaluation policy, graph, loss, seed,
 schedule, or population.
 
+The subsequent execution-only throughput pass adds bounded CPU/GPU overlap
+and removes avoidable per-update device synchronization for the remaining
+TRI60 work. A single producer thread now constructs at most one not-yet-
+consumed batch ahead of the GPU for training, validation, compact probability
+inference, and process-local representation-target generation. The producer
+alone advances and closes its source iterator; values retain exact source
+order, source/finalizer failures are delivered on the consumer thread, and a
+clean end-of-stream is published only after source cleanup succeeds. The
+depth-one bound adds only one batch of transient RAM and publishes no new
+particle view or representation-target artifact.
+
+Base-loss target validity and finite-value predicates are resolved in one
+consolidated device-to-host transfer per update instead of one scalar transfer
+per predicate. Report-only loss scalars accumulate as detached FP64 device
+values and transfer once per completed pass instead of once per metric per
+update. This accumulator is outside autograd. Every pass now emits its node,
+pass/update progress, validation AUC, training seconds, and validation seconds
+to the Slurm log, and terminal reports record the exact throughput mode.
+
+No scientific or resource semantic changed: the effective/global batch size
+remains 256, one GH200 remains requested, samples and batches retain their
+registered order, the optimizer/update count and LR schedule are unchanged,
+all fits still execute 60 passes, and selected/final checkpoint policy is
+unchanged. A seeded two-pass U000 parity regression proves the synchronous and
+prefetched paths have identical validation histories, mean loss reports,
+selected/final updates, and tensor-equal selected/final model states. Further
+tests prove depth-one lookahead, order preservation, early-close finalization,
+source and finalizer error propagation, and the consolidated fail-closed
+probability checks.
+
+Local evidence after this optimization:
+
+- focused TRI60 suite: 36 passed;
+- broader MHPE/representation/UB/homotopy suite: 272 passed;
+- complete repository suite: 660 passed in 313.04 seconds, with the existing
+  Matplotlib/Pyparsing deprecation warnings only;
+- TRI60 CLI help: 10/10;
+- changed Python/test surfaces compile;
+- `git diff --check` passes with line-ending notices only.
+
+No donor code was copied and no contract version changed because this is an
+execution-only implementation optimization. No Tigris job, cancellation,
+submission, or final-test access occurred locally. A new source-pinned
+recovery may use the changed runner/training files already permitted by the
+TRI60 source-repair allowlist. The actual GH200 walltime improvement remains
+external evidence: compare the new per-pass timing log against the existing
+jobs before changing any walltime request or making a quantitative speedup
+claim.
+
 ## Dense C25P75 validation ROC diagnostic (2026-08-20)
 
 An additive validation-only plotting command now produces the requested
