@@ -1108,3 +1108,27 @@ def test_recovery_preserves_active_parent_from_an_independent_track():
         [{"task_id": "train_M1_LOGIT", "job_id": "90699"}],
         ["90699", "${JOB_train_M1_RSET}", "${JOB_train_M1_RREL}"],
     )
+
+
+def test_subject_dependency_registry_accepts_legacy_missing_field(
+    tmp_path: Path,
+):
+    from hlt_classification.scouting import hcwdl_mhpe_tri60_recovery as recovery
+    from hlt_classification.scouting.hcwdl_mhpe_tri60_contracts import (
+        COMMAND_PLAN_CONTRACT, artifact,
+    )
+
+    plan = artifact({
+        "spec_sha256": SHA,
+        "commands": [{
+            "task_id": "train_U000", "dependencies": [],
+            "command": ["sbatch", "worker.sh"],
+        }],
+        "mutated": False, "recovery": False,
+        "final_test_accessed": False,
+    }, contract=COMMAND_PLAN_CONTRACT)
+    write_immutable_json(tmp_path / "command_plan.json", plan)
+
+    assert recovery._subject_dependency_rows(
+        tmp_path, allowed_tasks=("train_U000",),
+    ) == {"train_U000": {}}

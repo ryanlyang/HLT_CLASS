@@ -148,7 +148,10 @@ def _subject_dependency_rows(
         raise ValueError("TRI60 subject dependency plan coverage differs")
     result = {}
     for row in commands:
-        inherited = row.get("subject_dependencies", ())
+        # Campaign and pre-fix recovery command plans predate this additive
+        # field.  Their canonical meaning is an empty external-dependency
+        # registry, represented here in the same list form as new plans.
+        inherited = row.get("subject_dependencies", [])
         if (
             not isinstance(inherited, list)
             or any(
