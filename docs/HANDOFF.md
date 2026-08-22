@@ -1,5 +1,46 @@
 # Current Handoff
 
+## TRI60 full-data 60-pass exact-HLT CE control (2026-08-22)
+
+The additive `M0CE60` control anticipated by Section 17 of the three-track
+plan is implemented without changing the immutable TRI60 graph or any active
+recovery ledger. It is one fresh ordinary unified 21-channel HLT Particle
+Transformer trained on every authenticated mapped train row for 60 passes
+with unweighted CE only and validation every pass. It has exact `D000` HLT
+inputs, no teacher/KD/offline/representation target, no final-test capability,
+and the same initialization/training/sampler seed alias as `M2`. Thus the
+registered validation comparison is the paired `M2 - M0CE60`; imported
+20-pass `M0paired` remains contextual.
+
+The new seven-contract `/v1` family, one-node graph/spec/command plan,
+additive no-resume training authority, strict selected-checkpoint loader,
+worker, and create/run/submit CLIs are present. The live plan is exactly one
+dependency-free job named `hcwce60_train_M0CE60`, using 16 CPUs, 256 GiB RAM,
+one GH200, and a three-day walltime. It reads the source TRI60 campaign and
+foundation immutably, writes only beneath its own root, contains no source job
+IDs or cancellation operation, and journals its one submission. Train and
+validation views are built once in RAM; durable outputs are only selected and
+final model envelopes, reports, contracts, the ledger, and attestation.
+
+Final local evidence:
+
+- focused CE-control tests: 3 passed (39 deselected), including a synthetic
+  no-resume fit and authenticated custom-checkpoint reload;
+- complete repository suite: 667 passed in 320.12 seconds;
+- Python compilation: 7/7 changed Python entry points/modules;
+- CLI help: 3/3; contract inventory: 7/7;
+- `git diff --check`: clean (line-ending notices only).
+
+The implementation-authoritative
+[plan](plans/HCWDL_MHPE_TRI60_CE60_CONTROL_PLAN.md),
+[contract](contracts/HCWDL_MHPE_TRI60_CE60_CONTROL.md), and
+[runbook](HCWDL_MHPE_TRI60_CE60_CONTROL_RUNBOOK.md) are indexed. No job,
+checkpoint, source-campaign artifact, final-test row, or remote scheduler state
+was touched during local implementation. No donor files were copied. The
+control reuses the already accepted TRI60 production cache/training path;
+submission still requires an exact pushed source, canonical dry ledger, and
+the two explicit control authorization phrases.
+
 ## Dense C25P75 frozen-D100-on-HLT diagnostic (2026-08-20)
 
 An additive validation-only evaluator now answers the collaborator's clean

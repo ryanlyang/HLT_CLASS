@@ -12,6 +12,11 @@ Its reusable identities and operational handoff are in the
 [contract companion](../contracts/HCWDL_MHPE_THREE_TRACK_60E_FULL.md) and
 [source-pinned runbook](../HCWDL_MHPE_THREE_TRACK_60E_FULL_RUNBOOK.md).
 
+The additive
+[TRI60 full-data CE60 control plan](HCWDL_MHPE_TRI60_CE60_CONTROL_PLAN.md)
+registers the independent pass-matched exact-HLT CE-only comparator without
+changing the immutable three-track graph.
+
 The additive [HCWDL-MHPE refined continuation](HCWDL_MHPE_REFINED_CONTINUATION_300K60_PLAN.md)
 tests an ensemble-refine-project route from the completed uniform 300k MHPE
 campaign using seven new fits and three equal-component reducers.

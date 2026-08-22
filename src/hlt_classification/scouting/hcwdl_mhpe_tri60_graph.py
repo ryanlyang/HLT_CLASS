@@ -72,6 +72,7 @@ class Tri60Node:
     training_passes: int = 60
     batch_size: int = 256
     initialization: str = "fresh"
+    node_contract: str = NODE_CONTRACT
 
     @property
     def coordinate(self) -> HomotopyCoordinate:
@@ -83,7 +84,7 @@ class Tri60Node:
 
     def payload(self) -> dict[str, object]:
         return {
-            "contract": NODE_CONTRACT,
+            "contract": self.node_contract,
             "node_id": self.node_id,
             "track": self.track,
             "coordinate_name": self.coordinate_name,

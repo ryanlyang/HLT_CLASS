@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from types import MappingProxyType, SimpleNamespace
 from pathlib import Path
+import json
 import threading
 import time
 
@@ -1137,6 +1138,172 @@ def test_no_resume_synthetic_fit_publishes_only_terminal_checkpoints(tmp_path):
     assert {parameter.dtype for parameter in loaded.parameters()} == {
         pytest.importorskip("torch").float32,
     }
+
+
+def test_additive_ce60_control_is_exact_hlt_ce_only_and_m2_seed_paired():
+    from hlt_classification.scouting.hcwdl_mhpe_tri60_ce_control import (
+        control_node, graph_payload,
+    )
+    from hlt_classification.scouting.hcwdl_mhpe_tri60_ce_control_contracts import (
+        GRAPH_CONTRACT,
+    )
+    from hlt_classification.scouting.hcwdl_mhpe_tri60_graph import NODE_REGISTRY
+
+    node = control_node()
+    graph = graph_payload(SHA)
+    assert node.coordinate_name == "D000"
+    assert node.ce_weight == 1.0 and node.kd_weight == 0.0
+    assert node.distribution_teacher_id is None
+    assert node.auxiliary == "none" and node.deployable
+    assert node.seed_alias == NODE_REGISTRY["M2"].seed_alias
+    assert graph["contract"] == GRAPH_CONTRACT
+    assert graph["input_domain"] == "exact_hlt"
+    assert graph["fresh_fit_count"] == 1
+    assert graph["final_test_accessed"] is False
+
+
+def test_additive_ce60_uses_authorized_no_resume_engine(tmp_path):
+    import torch
+
+    from hlt_classification.scouting.hcwdl_mhpe_tri60_ce_control import (
+        graph_payload, load_control_model, training_authority,
+    )
+    from hlt_classification.scouting.hcwdl_mhpe_tri60_ce_control_contracts import (
+        FINAL_CHECKPOINT_CONTRACT, SELECTED_CHECKPOINT_CONTRACT,
+        TRAINING_REPORT_CONTRACT,
+    )
+
+    cache = _SyntheticCache()
+    graph = graph_payload(SHA)
+    report = train_tri60_node(
+        node_id="M0CE60", train_cache=cache, validation_cache=cache,
+        input_key="hlt", output_dir=tmp_path,
+        parents={"foundation": SHA}, campaign_spec_sha256="b" * 64,
+        recipe_sha256="c" * 64, replicate_seed=1337, device="cpu",
+        runtime=Tri60TrainingRuntime(passes=2, batch_size=30),
+        execution_mode="synthetic_test", model_factory=_tiny_model_factory,
+        authority=training_authority(graph["content_hash"]),
+    )
+    selected = torch.load(
+        tmp_path / "selected_model.pt", map_location="cpu", weights_only=False,
+    )
+    final = torch.load(
+        tmp_path / "final_model.pt", map_location="cpu", weights_only=False,
+    )
+    assert report["contract"] == TRAINING_REPORT_CONTRACT
+    assert report["graph_sha256"] == graph["content_hash"]
+    assert report["node_id"] == "M0CE60"
+    assert all(row["mean_losses"]["kd"] == 0.0 for row in report["training_history"])
+    assert selected["contract"] == SELECTED_CHECKPOINT_CONTRACT
+    assert final["contract"] == FINAL_CHECKPOINT_CONTRACT
+    assert not list(tmp_path.rglob("*resume*"))
+    loaded, loaded_report = load_control_model(
+        tmp_path / "training_report.json", device="cpu",
+        model_factory=_tiny_model_factory,
+    )
+    assert loaded_report == report
+    assert loaded.training is False
+    assert all(
+        torch.equal(value, loaded.state_dict()[name])
+        for name, value in selected["model"].items()
+    )
+
+
+def test_ce60_control_campaign_is_one_isolated_nondependent_job(
+    tmp_path, monkeypatch,
+):
+    from hlt_classification.scouting import hcwdl_mhpe_tri60_ce_control as control
+
+    foundation_path = tmp_path / "source/foundation.json"
+    recipe_path = tmp_path / "source/recipe.json"
+    foundation_path.parent.mkdir(parents=True)
+    foundation_path.write_text("{}")
+    recipe_path.write_text("{}")
+    source = {
+        "artifact_paths": {
+            "foundation_spec": str(foundation_path),
+            "recipe": str(recipe_path),
+        },
+        "parents": {"endpoint_resources": "e" * 64},
+        "replicate_seed": 1337,
+        "role_counts": {
+            "train": 2_777_855, "validation": 957_541,
+            "final_test": 899_779,
+        },
+    }
+    monkeypatch.setattr(control, "_source", lambda path: (source, "a" * 64))
+    monkeypatch.setattr(
+        control, "validate_foundation_campaign", lambda *args, **kwargs: "b" * 64,
+    )
+    monkeypatch.setattr(control, "validate_recipe", lambda value: "c" * 64)
+    root = tmp_path / "control"
+    spec = control.create_control(
+        source_campaign_spec=tmp_path / "source/campaign_spec.json",
+        campaign_root=root, project_dir=tmp_path,
+        source_commit="d" * 40, authorize_live_submission=True,
+        authorization_phrase=control.CREATION_PHRASE,
+    )
+    assert control.validate_control(spec, executable=True) == spec["content_hash"]
+    plan = json.loads((root / "command_plan.json").read_text())
+    assert len(plan["commands"]) == 1
+    row = plan["commands"][0]
+    assert row["task_id"] == "train_M0CE60"
+    assert row["dependencies"] == []
+    command = row["command"]
+    assert "--job-name=hcwce60_train_M0CE60" in command
+    assert "--mem=256G" in command and "--time=3-00:00:00" in command
+    assert all("hcwtri60" not in item for item in command if item.startswith("--job-name"))
+    assert spec["source_campaign_scheduler_dependency"] is False
+    assert spec["source_campaign_outputs_mutated"] is False
+
+
+def test_ce60_runtime_builds_only_exact_hlt_student_views(tmp_path, monkeypatch):
+    from hlt_classification.scouting import hcwdl_mhpe_tri60_ce_control as control
+
+    root = tmp_path / "control"
+    root.mkdir()
+    spec = {
+        "campaign_root": str(root), "minimum_free_disk_bytes": 1,
+        "artifact_paths": {"foundation_spec": str(tmp_path / "foundation.json")},
+        "replicate_seed": 1337, "source_commit": "d" * 40,
+        "content_hash": "a" * 64,
+        "parents": {
+            "source_campaign": "b" * 64, "foundation": "c" * 64,
+            "recipe": "e" * 64, "graph": "f" * 64,
+        },
+    }
+    observed = {}
+    monkeypatch.setattr(control, "validate_control", lambda value, executable: SHA)
+    monkeypatch.setattr(control, "load_json", lambda path: {"content_hash": "c" * 64})
+    monkeypatch.setattr(
+        control, "_load_common",
+        lambda foundation: ({}, SHA, SHA, {}, {}, {}),
+    )
+
+    train_cache = SimpleNamespace(header={"rows": 2, "array_bytes": 1})
+    validation_cache = SimpleNamespace(header={"rows": 1, "array_bytes": 1})
+
+    def fake_cache(**kwargs):
+        observed["cache"] = kwargs
+        return {"train": train_cache, "validation": validation_cache}, "hlt"
+
+    monkeypatch.setattr(control, "_cache_student_views", fake_cache)
+    monkeypatch.setattr(
+        control, "_runtime", lambda value: Tri60TrainingRuntime(passes=2, batch_size=1),
+    )
+
+    def fake_train(**kwargs):
+        observed["train"] = kwargs
+        return {"content_hash": SHA}
+
+    monkeypatch.setattr(control, "train_tri60_node", fake_train)
+    assert control.run_control(spec, device="cpu") == {"content_hash": SHA}
+    assert observed["cache"]["behavior"] == "hlt"
+    assert observed["cache"]["include_hcwdl_metadata"] is True
+    assert observed["cache"]["coordinate"] == COORDINATES["D000"]
+    assert observed["train"]["input_key"] == "hlt"
+    assert observed["train"]["probability_targets"] is None
+    assert observed["train"]["authority"].node.node_id == "M0CE60"
 
 
 def test_prefetch_changes_neither_fit_updates_nor_selected_model(

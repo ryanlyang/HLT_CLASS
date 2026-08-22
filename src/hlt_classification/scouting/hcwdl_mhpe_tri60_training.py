@@ -28,6 +28,7 @@ from hlt_classification.data.cache_contracts import (
     canonical_sha256,
     require_sha256,
     sha256_file,
+    with_content_hash,
     write_immutable_json,
 )
 from hlt_classification.models.hcwdl_representation import HCWDLRepresentationStudent
@@ -263,6 +264,60 @@ class Tri60TrainingRuntime:
             or self.amp_dtype != "bfloat16"
         ):
             raise ValueError("TRI60 optimization recipe differs")
+
+
+@dataclass(frozen=True)
+class Tri60TrainingAuthority:
+    """Bind an additive node to its own graph and artifact contracts."""
+
+    node: Tri60Node
+    graph_sha256: str
+    training_report_contract: str
+    selected_checkpoint_contract: str
+    final_checkpoint_contract: str
+
+    def validate(self) -> None:
+        require_sha256(self.graph_sha256, name="TRI60 authorized graph")
+        contracts = (
+            self.training_report_contract,
+            self.selected_checkpoint_contract,
+            self.final_checkpoint_contract,
+        )
+        if (
+            len(set(contracts)) != 3
+            or any(
+                re.fullmatch(r"[A-Z0-9_]+/v[1-9][0-9]*", value) is None
+                for value in contracts
+            )
+        ):
+            raise ValueError("TRI60 authorized artifact contracts differ")
+        if (
+            self.node.initialization != "fresh"
+            or self.node.training_passes != 60
+            or self.node.batch_size != 256
+        ):
+            raise ValueError("TRI60 authorized node budget differs")
+
+
+def _default_training_authority(node: Tri60Node) -> Tri60TrainingAuthority:
+    return Tri60TrainingAuthority(
+        node=node, graph_sha256=GRAPH_SHA256,
+        training_report_contract=TRAINING_REPORT_CONTRACT,
+        selected_checkpoint_contract=SELECTED_CHECKPOINT_CONTRACT,
+        final_checkpoint_contract=FINAL_CHECKPOINT_CONTRACT,
+    )
+
+
+def _training_report_artifact(
+    payload: Mapping[str, Any], *, authority: Tri60TrainingAuthority,
+) -> dict[str, Any]:
+    if authority.training_report_contract == TRAINING_REPORT_CONTRACT:
+        return artifact(payload, contract=TRAINING_REPORT_CONTRACT)
+    return with_content_hash({
+        **dict(payload),
+        "contract": authority.training_report_contract,
+        "schema_version": 1,
+    })
 
 
 @dataclass(frozen=True)
@@ -695,14 +750,23 @@ def train_tri60_node(
     execution_mode: str = "scientific",
     model_factory: Callable[[], Any] = build_scouting_particle_transformer,
     preparation_metrics: Mapping[str, float] | None = None,
+    authority: Tri60TrainingAuthority | None = None,
 ) -> dict[str, Any]:
     """Execute one registered cold fit without any reusable partial state."""
 
     import torch
 
-    if node_id not in NODE_REGISTRY:
-        raise KeyError("unknown TRI60 fit")
-    node = NODE_REGISTRY[node_id]
+    if authority is None:
+        if node_id not in NODE_REGISTRY:
+            raise KeyError("unknown TRI60 fit")
+        node = NODE_REGISTRY[node_id]
+        authority = _default_training_authority(node)
+    else:
+        authority.validate()
+        node = authority.node
+        if node.node_id != node_id or node_id in NODE_REGISTRY:
+            raise ValueError("TRI60 additive authority node identity differs")
+    graph_sha256 = authority.graph_sha256
     runtime.validate(execution_mode=execution_mode)
     preparation = {
         str(name): float(value)
@@ -1020,7 +1084,7 @@ def train_tri60_node(
                         result.contract,
                         parents={
                             "campaign": campaign_spec_sha256,
-                            "graph": GRAPH_SHA256,
+                            "graph": graph_sha256,
                             "recipe": recipe_hash,
                             "selection": selection_artifact["content_hash"],
                         },
@@ -1054,7 +1118,7 @@ def train_tri60_node(
     checkpoint_common = {
         "schema_version": 1,
         "node_id": node_id,
-        "graph_sha256": GRAPH_SHA256,
+        "graph_sha256": graph_sha256,
         "recipe_sha256": recipe_hash,
         "campaign_spec_sha256": require_sha256(
             campaign_spec_sha256, name="TRI60 campaign specification",
@@ -1067,7 +1131,7 @@ def train_tri60_node(
     }
     selected_payload = {
         **checkpoint_common,
-        "contract": SELECTED_CHECKPOINT_CONTRACT,
+        "contract": authority.selected_checkpoint_contract,
         "selected_pass": best_pass,
         "selected_update": best_update,
         "validation": best_metrics,
@@ -1076,7 +1140,7 @@ def train_tri60_node(
     }
     final_payload = {
         **checkpoint_common,
-        "contract": FINAL_CHECKPOINT_CONTRACT,
+        "contract": authority.final_checkpoint_contract,
         "final_pass": runtime.passes,
         "final_update": total_updates,
         "model": final_state,
@@ -1086,10 +1150,10 @@ def train_tri60_node(
     final_path = output / "final_model.pt"
     atomic_publish_bytes(selected_path, _torch_bytes(selected_payload))
     atomic_publish_bytes(final_path, _torch_bytes(final_payload))
-    report = artifact({
+    report = _training_report_artifact({
         "parents": normalized_parents,
         "campaign_spec_sha256": campaign_spec_sha256,
-        "graph_sha256": GRAPH_SHA256,
+        "graph_sha256": graph_sha256,
         "recipe_sha256": recipe_hash,
         "execution_source_commit": source_commit,
         "node_id": node_id,
@@ -1152,7 +1216,7 @@ def train_tri60_node(
         },
         "scientific_result_does_not_control_completion": True,
         "final_test_accessed": False,
-    }, contract=TRAINING_REPORT_CONTRACT)
+    }, authority=authority)
     write_immutable_json(output / "training_report.json", report)
     forbidden = tuple(output.rglob("*resume*"))
     if forbidden:
@@ -1165,20 +1229,45 @@ def load_tri60_model(
     *,
     device: str = "cpu",
     model_factory: Callable[[], Any] = build_scouting_particle_transformer,
+    authority: Tri60TrainingAuthority | None = None,
 ):
     import torch
 
     report = __import__(
         "hlt_classification.data.cache_contracts", fromlist=["load_json"]
     ).load_json(report_path)
-    if report.get("contract") != TRAINING_REPORT_CONTRACT or report.get("complete") is not True:
+    if authority is None:
+        expected_report_contract = TRAINING_REPORT_CONTRACT
+        expected_checkpoint_contract = SELECTED_CHECKPOINT_CONTRACT
+        if report.get("node_id") not in NODE_REGISTRY:
+            raise ValueError("TRI60 training report node differs")
+        node = NODE_REGISTRY[str(report["node_id"])]
+        expected_graph_sha256 = GRAPH_SHA256
+    else:
+        authority.validate()
+        expected_report_contract = authority.training_report_contract
+        expected_checkpoint_contract = authority.selected_checkpoint_contract
+        node = authority.node
+        expected_graph_sha256 = authority.graph_sha256
+    if (
+        report.get("contract") != expected_report_contract
+        or report.get("complete") is not True
+        or report.get("node_id") != node.node_id
+        or report.get("node_spec") != node.payload()
+        or report.get("graph_sha256") != expected_graph_sha256
+    ):
         raise ValueError("TRI60 training report differs")
-    node = NODE_REGISTRY[str(report["node_id"])]
     path = Path(report_path).parent / str(report["selected_checkpoint"])
     if sha256_file(path) != report["selected_checkpoint_sha256"]:
         raise ValueError("TRI60 selected checkpoint bytes differ")
     payload = torch.load(path, map_location="cpu", weights_only=False)
-    if payload.get("contract") != SELECTED_CHECKPOINT_CONTRACT or payload.get("node_id") != node.node_id:
+    if (
+        payload.get("contract") != expected_checkpoint_contract
+        or payload.get("node_id") != node.node_id
+        or payload.get("graph_sha256") != expected_graph_sha256
+        or payload.get("campaign_spec_sha256")
+        != report.get("campaign_spec_sha256")
+    ):
         raise ValueError("TRI60 selected checkpoint identity differs")
     model = _node_model(node, replicate_seed=int(report["rng_domains"]["replicate_seed"]), model_factory=model_factory)
     result = model.load_state_dict(payload["model"], strict=True)
@@ -1195,6 +1284,7 @@ def load_tri60_model(
 
 __all__ = [
     "Tri60RepresentationExecution", "Tri60TrainingInterrupted",
-    "Tri60TrainingRuntime", "load_tri60_model", "train_tri60_node",
+    "Tri60TrainingAuthority", "Tri60TrainingRuntime",
+    "load_tri60_model", "train_tri60_node",
     "tri60_base_loss",
 ]
