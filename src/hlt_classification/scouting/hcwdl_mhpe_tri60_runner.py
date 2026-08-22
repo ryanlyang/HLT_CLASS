@@ -142,10 +142,25 @@ def _target_batch(
     view = batch.get(view_key)
     if not isinstance(view, HCWDLParticleInputs):
         raise TypeError("TRI60 carrier stream lacks strict HCWDL metadata")
-    identities = np.ascontiguousarray(batch.get("identity_digests"))
+    if keys.ndim != 1 or not len(keys) or len(labels) != len(keys):
+        raise ValueError("TRI60 carrier identity/label rows differ")
     expected = canonical_identity_digests(tuple(map(str, keys.tolist())))
-    if not np.array_equal(identities, expected):
-        raise ValueError("TRI60 carrier identity digests differ")
+    provided = batch.get("identity_digests")
+    if provided is None:
+        # Direct balanced carrier streams publish canonical source/entry keys
+        # but, unlike materialized EphemeralPmardViewCache batches, do not
+        # duplicate their deterministic SHA-256 digests at the top level.
+        # The target boundary owns that projection.  If a caller does supply
+        # a digest array, retain the independent equality check below.
+        identities = expected
+    else:
+        identities = np.ascontiguousarray(provided)
+        if (
+            identities.dtype != np.uint8
+            or identities.shape != expected.shape
+            or not np.array_equal(identities, expected)
+        ):
+            raise ValueError("TRI60 carrier identity digests differ")
     try:
         entries = np.asarray(
             [int(str(value).rsplit("::tree::", 1)[1]) for value in keys],

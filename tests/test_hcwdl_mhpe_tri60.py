@@ -62,6 +62,56 @@ from hlt_classification.scouting.hcwdl_representation_targets import (
 SHA = "a" * 64
 
 
+def test_tri60_direct_carrier_derives_and_authenticates_identity_digests():
+    from hlt_classification.scouting.hcwdl_mhpe_tri60_runner import _target_batch
+    from hlt_classification.scouting.hcwdl_representation_data import (
+        canonical_identity_digests,
+    )
+
+    rows, tokens = 2, 3
+    keys = np.asarray([
+        "sample.root::tree::4", "sample.root::tree::9",
+    ], dtype=object)
+    view = HCWDLParticleInputs(
+        np.zeros((rows, 21, tokens), dtype=np.float32),
+        np.ones((rows, 4, tokens), dtype=np.float32),
+        np.ones((rows, 1, tokens), dtype=np.bool_),
+        np.full(rows, tokens, dtype=np.int32),
+        np.tile(np.arange(tokens, dtype=np.int64), (rows, 1)),
+        np.zeros((rows, tokens), dtype=np.int8),
+        np.zeros((rows, tokens), dtype=np.int8),
+    )
+    batch = {
+        "identity_keys": keys,
+        "labels": np.asarray([1, 2], dtype=np.int64),
+        "privileged": view,
+    }
+    expected = canonical_identity_digests(tuple(map(str, keys)))
+
+    # This is the real direct balanced-stream shape: canonical keys are
+    # present, while top-level digest duplication belongs only to RAM caches.
+    derived = _target_batch(
+        batch, partition="source_0007", source_file_id=7,
+        view_key="privileged",
+    )
+    assert np.array_equal(derived.identity_digest, expected)
+    assert np.array_equal(derived.source_entry, np.asarray([4, 9], dtype="<u8"))
+    assert np.array_equal(derived.source_file_id, np.asarray([7, 7], dtype="<u4"))
+
+    supplied = _target_batch(
+        {**batch, "identity_digests": expected.copy()},
+        partition="source_0007", source_file_id=7, view_key="privileged",
+    )
+    assert np.array_equal(supplied.identity_digest, expected)
+
+    corrupt = expected.copy(); corrupt[0, 0] ^= np.uint8(1)
+    with pytest.raises(ValueError, match="carrier identity digests differ"):
+        _target_batch(
+            {**batch, "identity_digests": corrupt},
+            partition="source_0007", source_file_id=7, view_key="privileged",
+        )
+
+
 def test_foundation_authentication_hashes_the_selection_artifact_not_a_missing_parent_key(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ):

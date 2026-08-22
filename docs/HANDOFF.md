@@ -218,6 +218,31 @@ external evidence: compare the new per-pass timing log against the existing
 jobs before changing any walltime request or making a quantitative speedup
 claim.
 
+The six post-eval-mode source-repair jobs at commit `921d66d9` (`90945`,
+`90947`, `90950`, `90954`, `90956`, and `90959`) all reached the first direct
+balanced carrier batch and then failed at the same identity boundary. Direct
+carrier streams publish their authoritative canonical
+`source_path::tree::entry` keys but do not duplicate SHA-256 identity digests
+at the top level; that duplication is added only when a complete student view
+is materialized in `EphemeralPmardViewCache`. `_target_batch` had incorrectly
+converted the absent optional value to an object array and compared it against
+the correctly derived digest, making every valid direct carrier fail.
+
+The target adapter now owns the deterministic key-to-digest projection for a
+direct stream. When a caller does provide a digest array, its uint8 dtype,
+shape, and exact equality to the canonical derivation remain mandatory. The
+adapter also checks one-dimensional nonempty identity coverage and label-row
+agreement before projection. A production-shaped regression covers the real
+no-duplicate stream, an exact supplied duplicate, and a corrupted duplicate.
+The fix neither changes identity bytes nor weakens a supplied-digest check; it
+aligns the target boundary with the actual authenticated balanced-stream
+contract. Focused TRI60 tests pass 37/37 and the broader
+MHPE/representation/UB/homotopy suite passes 273/273. The complete repository
+suite passes 661 tests in 319.80 seconds with only the existing
+Matplotlib/Pyparsing deprecation warnings. These jobs failed before teacher
+inference, target publication, student-cache construction, or any optimizer
+update, so no partial scientific output is reusable.
+
 ## Dense C25P75 validation ROC diagnostic (2026-08-20)
 
 An additive validation-only plotting command now produces the requested
