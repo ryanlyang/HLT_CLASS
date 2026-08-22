@@ -32,6 +32,7 @@ from .hcwdl_recovery import validate_submission_ledger, validate_task_attestatio
 
 SOURCE_REPAIR_PHRASE = "AUTHORIZE HCWDL MHPE TRI60 EXECUTION-ONLY SOURCE REPAIR"
 SOURCE_REPAIR_ALLOWLIST = frozenset({
+    "src/hlt_classification/scouting/hcwdl_homotopy_stream.py",
     "src/hlt_classification/scouting/hcwdl_mhpe_tri60_runner.py",
     "src/hlt_classification/scouting/hcwdl_mhpe_tri60_training.py",
     "src/hlt_classification/scouting/hcwdl_mhpe_tri60_workflow.py",

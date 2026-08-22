@@ -445,6 +445,17 @@ def test_contract_inventory_is_versioned_and_unique():
     assert all(value.endswith("/v1") for value in CONTRACTS)
 
 
+def test_source_repair_allowlist_covers_shared_balanced_stream_boundary():
+    from hlt_classification.scouting.hcwdl_mhpe_tri60_recovery import (
+        SOURCE_REPAIR_ALLOWLIST,
+    )
+
+    assert (
+        "src/hlt_classification/scouting/hcwdl_homotopy_stream.py"
+        in SOURCE_REPAIR_ALLOWLIST
+    )
+
+
 def test_campaign_publication_dry_shape_and_restart_zero_recovery(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ):

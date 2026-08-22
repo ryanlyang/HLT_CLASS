@@ -243,6 +243,35 @@ Matplotlib/Pyparsing deprecation warnings. These jobs failed before teacher
 inference, target publication, student-cache construction, or any optimizer
 update, so no partial scientific output is reusable.
 
+The next six source-repair jobs at commit `a9ace4b4` (`90970`, `90972`,
+`90975`, `90979`, `90981`, and `90984`) passed direct-carrier identity
+projection and consumed all `95,117` selected rows in their first source
+partition. They then failed at the shared unified-balanced stream's terminal
+coverage assertion: the observed count was correctly `95,117`, while the
+assertion compared it to the raw `RowSelection.source_rows == -1` sentinel.
+That sentinel means every authenticated mapped row, not negative-one rows.
+The common stream boundary now resolves `-1` through the split record's
+nonnegative `mapped_entries`, preserves explicit zero-row selections, rejects
+unknown negative sentinels, rejects selection beyond mapped coverage, and
+retains the exact whole-role coverage assertion when no source partition is
+requested. A production-shaped regression consumes a complete all-mapped
+per-source stream and reaches terminal coverage; it would fail with the exact
+production exception before this correction. The shared stream file is now
+explicitly permitted by the TRI60 execution-only source-repair allowlist.
+
+This is a fail-closed execution-boundary correction, not a selection or
+scientific change. The graph, all-mapped population, views, teachers, losses,
+seeds, schedules, and durable storage policy are unchanged. The six jobs did
+not publish a complete process-local carrier/target population, build a
+student cache, or execute an optimizer update. U000, its compact probability
+publication, and healthy LOGIT work remain reusable. Local evidence after the
+correction: affected homotopy/TRI60 suites pass 98/98; the complete repository
+suite passes 663 tests in 347.23 seconds with only existing
+Matplotlib/Pyparsing deprecation warnings; recovery CLI help, in-memory Python
+compilation, and `git diff --check` pass. The next action is a source-pinned
+failed/downstream recovery from the immutable ledger containing these six job
+IDs after this correction is committed and pushed.
+
 ## Dense C25P75 validation ROC diagnostic (2026-08-20)
 
 An additive validation-only plotting command now produces the requested

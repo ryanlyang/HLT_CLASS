@@ -23,6 +23,22 @@ from .splits import role_records
 from .streaming import iterate_projected_chunks
 
 
+def _selected_record_rows(row_selection: RowSelection, record: object) -> int:
+    """Resolve one source's selected population, including all-mapped ``-1``."""
+
+    selected = int(row_selection.source_rows(record.path))
+    mapped = int(record.mapped_entries)
+    if mapped < 0:
+        raise ValueError("HCWDL-UB mapped source rows are negative")
+    if selected == -1:
+        selected = mapped
+    elif selected < -1:
+        raise ValueError("HCWDL-UB row-selection sentinel differs")
+    if selected > mapped:
+        raise ValueError("HCWDL-UB selected source rows exceed mapped rows")
+    return selected
+
+
 def _slice(arrays: Mapping[str, object], indexes: np.ndarray) -> dict[str, object]:
     return {name: value[indexes] for name, value in arrays.items()}
 
@@ -232,7 +248,7 @@ def iterate_unified_balanced_batches(
         yield pending
     expected_rows = (
         row_selection.rows if source_index is None
-        else row_selection.source_rows(records[0].path)
+        else _selected_record_rows(row_selection, records[0])
     )
     if observed != expected_rows:
         raise ValueError(

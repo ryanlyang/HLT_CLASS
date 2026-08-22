@@ -476,6 +476,91 @@ def test_all_mapped_coupling_stream_uses_assignment_identity_population(
     assert [row[3]["value"].tolist() for row in selected] == [[10, 12], [15]]
 
 
+def test_all_mapped_balanced_source_stream_resolves_sentinel_to_mapped_rows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Per-source carrier streams count ``-1`` as every mapped assignment row."""
+
+    source_path = "sample/data.root"
+    record = SimpleNamespace(path=source_path, mapped_entries=5)
+    chunk = SimpleNamespace(
+        source_path=source_path, entry_start=0, entry_stop=5,
+        arrays={"value": np.arange(5, dtype=np.int64)},
+    )
+    monkeypatch.setattr(homotopy_stream, "role_records", lambda manifest, role: [record])
+    monkeypatch.setattr(
+        homotopy_stream, "iterate_projected_chunks",
+        lambda *args, **kwargs: iter((chunk,)),
+    )
+    monkeypatch.setattr(
+        homotopy_stream, "multiclass_labels",
+        lambda arrays: np.zeros(len(arrays["value"]), dtype=np.int64),
+    )
+    monkeypatch.setattr(
+        homotopy_stream, "baseline_mask",
+        lambda arrays: np.ones(len(arrays["value"]), dtype=np.bool_),
+    )
+
+    def fake_blocks(arguments, *, workers):
+        assert workers == 1
+        for item in arguments:
+            _, labels, identities, *_ = item
+            yield {
+                "labels": labels,
+                "identity_keys": identities,
+                "privileged": np.zeros((len(labels), 1), dtype=np.float32),
+            }
+
+    monkeypatch.setattr(homotopy_stream, "_ordered_balanced_blocks", fake_blocks)
+
+    class AllMappedSelection:
+        rows = 5
+
+        @staticmethod
+        def source_rows(path: str) -> int:
+            assert path == source_path
+            return -1
+
+        @staticmethod
+        def mask(path: str, entries: np.ndarray) -> np.ndarray:
+            assert path == source_path
+            return np.ones(len(entries), dtype=np.bool_)
+
+    class AssignmentStore:
+        @staticmethod
+        def join(path: str, entries: np.ndarray):
+            assert path == source_path
+            return np.zeros((len(entries), 1), np.int16), np.ones(len(entries))
+
+    class CouplingStore:
+        @staticmethod
+        def get(path: str, entry: int):
+            assert path == source_path and 0 <= entry < 5
+            return SimpleNamespace(edits=())
+
+    batches = list(homotopy_stream.iterate_unified_balanced_batches(
+        {}, data_root=tmp_path, role="train",
+        assignment_store=AssignmentStore(), coupling_store=CouplingStore(),
+        row_selection=AllMappedSelection(), coordinate=SimpleNamespace(),
+        repair_seed=1337, batch_size=10, workers=1, source_index=0,
+    ))
+    assert len(batches) == 1
+    assert len(batches[0]["labels"]) == 5
+
+    class InvalidSelection(AllMappedSelection):
+        @staticmethod
+        def source_rows(path: str) -> int:
+            return -2
+
+    with pytest.raises(ValueError, match="sentinel differs"):
+        homotopy_stream._selected_record_rows(InvalidSelection(), record)
+    with pytest.raises(ValueError, match="mapped source rows are negative"):
+        homotopy_stream._selected_record_rows(
+            AllMappedSelection(),
+            SimpleNamespace(path=source_path, mapped_entries=-1),
+        )
+
+
 def test_coupling_stream_rejects_assignment_outside_bounded_selection(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
