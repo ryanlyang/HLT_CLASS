@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from types import MappingProxyType
+from types import MappingProxyType, SimpleNamespace
 from pathlib import Path
 
 import numpy as np
@@ -336,6 +336,54 @@ def test_u000_production_cache_requests_strict_identity_metadata(monkeypatch):
     assert result[-1] == "privileged"
     assert observed["behavior"] == "p0"
     assert observed["include_hcwdl_metadata"] is True
+
+
+def test_carrier_partitions_resolve_all_rows_and_skip_empty_sources():
+    from hlt_classification.scouting import hcwdl_mhpe_tri60_runner as runner
+
+    records = (
+        SimpleNamespace(path="empty.root", mapped_entries=0),
+        SimpleNamespace(path="explicit.root", mapped_entries=9),
+        SimpleNamespace(path="all.root", mapped_entries=4),
+    )
+
+    class Selection:
+        rows = 7
+
+        @staticmethod
+        def source_rows(path):
+            return {"empty.root": 0, "explicit.root": 3, "all.root": -1}[path]
+
+    partitions = runner._carrier_source_partitions(
+        records, selection=Selection(),
+    )
+
+    assert partitions == (
+        {
+            "partition": "source_0001", "source_index": 1,
+            "source_file_id": 1, "source_path": "explicit.root", "rows": 3,
+        },
+        {
+            "partition": "source_0002", "source_index": 2,
+            "source_file_id": 2, "source_path": "all.root", "rows": 4,
+        },
+    )
+
+
+def test_carrier_partitions_fail_closed_on_population_mismatch():
+    from hlt_classification.scouting import hcwdl_mhpe_tri60_runner as runner
+
+    records = (SimpleNamespace(path="all.root", mapped_entries=4),)
+
+    class Selection:
+        rows = 5
+
+        @staticmethod
+        def source_rows(_path):
+            return -1
+
+    with pytest.raises(ValueError, match="partition coverage differs"):
+        runner._carrier_source_partitions(records, selection=Selection())
 
 
 def test_contract_inventory_is_versioned_and_unique():
@@ -1007,3 +1055,56 @@ def test_exact_monitor_cancellation_and_failed_downstream_closure(tmp_path):
     assert cancellation["job_ids"] == [jobs[task] for task in closure]
     assert cancellation["exact_ids_only"] is True
     assert cancellation["rows"][0]["state_category"] == "terminal"
+
+
+def test_recovery_preserves_active_parent_from_an_independent_track():
+    from hlt_classification.scouting import hcwdl_mhpe_tri60_recovery as recovery
+
+    task = {
+        "dependencies": [
+            "train_M1_LOGIT", "train_M1_RSET", "train_M1_RREL",
+        ],
+    }
+    monitor_rows = {
+        "train_M1_LOGIT": {"disposition": "active_or_unknown"},
+        "train_M1_RSET": {"disposition": "retryable_failure"},
+        "train_M1_RREL": {"disposition": "retryable_failure"},
+    }
+    dependencies, subject_dependencies, dependency_jobs = (
+        recovery._recovery_dependency_plan(
+            task=task,
+            closure={"train_M1_RSET", "train_M1_RREL"},
+            monitor_rows=monitor_rows,
+            subject_jobs={
+                "train_M1_LOGIT": "90699",
+                "train_M1_RSET": "90700",
+                "train_M1_RREL": "90701",
+            },
+        )
+    )
+
+    assert dependencies == ["train_M1_RSET", "train_M1_RREL"]
+    assert subject_dependencies == [
+        {"task_id": "train_M1_LOGIT", "job_id": "90699"},
+    ]
+    assert dependency_jobs == [
+        "90699", "${JOB_train_M1_RSET}", "${JOB_train_M1_RREL}",
+    ]
+
+    inherited = recovery._recovery_dependency_plan(
+        task=task,
+        closure={"train_M1_RSET", "train_M1_RREL"},
+        monitor_rows={
+            "train_M1_RSET": {"disposition": "retryable_failure"},
+            "train_M1_RREL": {"disposition": "retryable_failure"},
+        },
+        subject_jobs={
+            "train_M1_RSET": "90800", "train_M1_RREL": "90801",
+        },
+        inherited_subject_dependencies={"train_M1_LOGIT": "90699"},
+    )
+    assert inherited == (
+        ["train_M1_RSET", "train_M1_RREL"],
+        [{"task_id": "train_M1_LOGIT", "job_id": "90699"}],
+        ["90699", "${JOB_train_M1_RSET}", "${JOB_train_M1_RREL}"],
+    )

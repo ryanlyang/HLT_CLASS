@@ -191,6 +191,48 @@ def _teacher_forward(model, *, device: str):
     return forward
 
 
+def _carrier_source_partitions(
+    records: Iterable[Any], *, selection: Any,
+) -> tuple[dict[str, Any], ...]:
+    """Resolve the authenticated nonempty carrier partitions.
+
+    ``RowSelection.source_rows`` uses ``-1`` as the canonical sentinel for
+    "all mapped rows in this source". Full-population TRI60 campaigns use
+    that sentinel, while an explicit selection may legitimately contribute
+    zero rows from a source that remains present in the authenticated split.
+    Neither case is corruption: translate the sentinel through the split's
+    authenticated mapped-row count and omit only exact zero-row partitions.
+    """
+
+    partitions = []
+    for source_index, record in enumerate(records):
+        selected_rows = int(selection.source_rows(record.path))
+        mapped_rows = int(record.mapped_entries)
+        if selected_rows == -1:
+            selected_rows = mapped_rows
+        elif selected_rows < -1:
+            raise ValueError("TRI60 carrier source-row sentinel differs")
+        if selected_rows > mapped_rows:
+            raise ValueError("TRI60 carrier source selection exceeds mapped rows")
+        if selected_rows == 0:
+            continue
+        partitions.append({
+            "partition": f"source_{source_index:04d}",
+            "source_index": source_index,
+            "source_file_id": source_index,
+            "source_path": str(record.path),
+            "rows": selected_rows,
+        })
+    expected_rows = int(selection.rows)
+    observed_rows = sum(int(row["rows"]) for row in partitions)
+    if not partitions or observed_rows != expected_rows:
+        raise ValueError(
+            "TRI60 carrier partition coverage differs: "
+            f"expected {expected_rows}, observed {observed_rows}"
+        )
+    return tuple(partitions)
+
+
 def _carrier_targets(
     spec: Mapping[str, Any], *, node_id: str, foundation, split,
     selections, assignments, balanced, device: str,
@@ -207,11 +249,12 @@ def _carrier_targets(
     partition_specs: dict[str, dict[str, int]] = {}
     records = role_records(split, "train")
     view_key = "hlt" if _behavior(carrier_id) == "hlt" else "privileged"
-    for source_index, record in enumerate(records):
-        partition = f"source_{source_index:04d}"
-        selected_rows = selections["train"].source_rows(record.path)
-        if selected_rows <= 0:
-            raise ValueError("TRI60 carrier source has no selected rows")
+    partitions = _carrier_source_partitions(
+        records, selection=selections["train"],
+    )
+    for source in partitions:
+        source_index = int(source["source_index"])
+        partition = str(source["partition"])
 
         def factory(
             *, source_index=source_index, partition=partition,
@@ -233,7 +276,8 @@ def _carrier_targets(
 
         factories[partition] = factory
         partition_specs[partition] = {
-            "rows": int(selected_rows), "source_file_id": source_index,
+            "rows": int(source["rows"]),
+            "source_file_id": int(source["source_file_id"]),
         }
     bundle = generate_spectral_resource_bundle()
     endpoint = load_json(spec["artifact_paths"]["endpoint_resource_lock"])

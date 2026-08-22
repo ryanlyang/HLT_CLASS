@@ -120,6 +120,32 @@ view values, loss weights, seeds, schedule, or checkpoint policy. A new
 source-pinned failed/downstream recovery is required; U000 again has no valid
 partial state and restarts from update zero.
 
+That second source-repair recovery at pushed commit `5717a3ce` successfully
+completed the fresh full-data U000 fit (`90657`, 60 passes) and its compact
+probability publication (`90658`). The independent LOGIT specialists then
+entered training normally. The six first-generation RSET/RREL specialists
+failed before target construction or their first optimizer update because the
+carrier adapter treated `RowSelection.source_rows == -1` as an empty source.
+In the authenticated all-mapped full-population selection, `-1` is the
+canonical sentinel meaning every mapped row in that source; explicit
+selections may also legitimately contain an exact zero-row source. The
+carrier partition resolver now translates `-1` through each authenticated
+split record's `mapped_entries`, skips only exact zero-row partitions,
+preserves original source-file IDs, rejects per-source overcoverage, and fails
+closed unless the nonempty partitions sum to the exact authenticated train
+population. Regressions cover mixed all-row/explicit/empty sources and total
+coverage mismatch. This is an execution-only population-adapter correction:
+the graph, selected rows, views, targets, losses, seeds, schedule, and durable
+storage policy are unchanged. U000, its reduction, and the running LOGIT work
+must be preserved; source-pinned recovery is limited to the failed RSET/RREL
+downstream closure. Because that closure later rejoins a still-active LOGIT
+track at `M1E`, recovery command plans now also retain exact `afterok`
+dependencies on healthy active jobs in the immutable subject ledger. Completed
+external parents need no scheduler dependency because their task attestations
+are authenticated; failed/downstream jobs remain bound to new recovery IDs.
+This prevents recovery from either cancelling healthy LOGIT work or releasing
+the cross-track reducer before that work completes.
+
 ## Dense C25P75 validation ROC diagnostic (2026-08-20)
 
 An additive validation-only plotting command now produces the requested

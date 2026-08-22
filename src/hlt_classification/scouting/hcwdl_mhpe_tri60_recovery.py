@@ -102,6 +102,68 @@ def _subject(path: str | Path) -> tuple[dict[str, Any], dict[str, Any], tuple[st
     raise ValueError("TRI60 recovery subject contract differs")
 
 
+def _recovery_dependency_plan(
+    *, task: Mapping[str, Any], closure: set[str],
+    monitor_rows: Mapping[str, Mapping[str, Any]],
+    subject_jobs: Mapping[str, str],
+    inherited_subject_dependencies: Mapping[str, str] | None = None,
+) -> tuple[list[str], list[dict[str, str]], list[str]]:
+    """Preserve active, healthy parents that remain in the subject ledger."""
+
+    recovery_dependencies = []
+    subject_dependencies = []
+    dependency_jobs = []
+    for raw_parent in task["dependencies"]:
+        parent = str(raw_parent)
+        if parent in closure:
+            recovery_dependencies.append(parent)
+            dependency_jobs.append(f"${{JOB_{parent}}}")
+            continue
+        if parent not in monitor_rows:
+            inherited = dict(inherited_subject_dependencies or {})
+            if parent not in inherited:
+                raise ValueError("TRI60 external recovery dependency is unbound")
+            job_id = str(inherited[parent])
+            subject_dependencies.append({"task_id": parent, "job_id": job_id})
+            dependency_jobs.append(job_id)
+            continue
+        disposition = str(monitor_rows[parent]["disposition"])
+        if disposition == "complete":
+            continue
+        if disposition != "active_or_unknown":
+            raise ValueError("TRI60 external recovery dependency is not reusable")
+        job_id = str(subject_jobs[parent])
+        subject_dependencies.append({"task_id": parent, "job_id": job_id})
+        dependency_jobs.append(job_id)
+    return recovery_dependencies, subject_dependencies, dependency_jobs
+
+
+def _subject_dependency_rows(
+    subject_root: Path, *, allowed_tasks: Sequence[str],
+) -> dict[str, dict[str, str]]:
+    plan = load_json(subject_root / "command_plan.json")
+    validate_artifact(plan, contract=COMMAND_PLAN_CONTRACT)
+    commands = plan.get("commands", ())
+    if [row.get("task_id") for row in commands] != list(allowed_tasks):
+        raise ValueError("TRI60 subject dependency plan coverage differs")
+    result = {}
+    for row in commands:
+        inherited = row.get("subject_dependencies", ())
+        if (
+            not isinstance(inherited, list)
+            or any(
+                set(item) != {"task_id", "job_id"}
+                for item in inherited
+            )
+        ):
+            raise ValueError("TRI60 subject dependency registry differs")
+        mapping = {str(item["task_id"]): str(item["job_id"]) for item in inherited}
+        if len(mapping) != len(inherited):
+            raise ValueError("TRI60 subject dependency registry duplicates a task")
+        result[str(row["task_id"])] = mapping
+    return result
+
+
 def create_recovery(
     *, subject_spec: str | Path, subject_ledger: str | Path,
     monitor_report: str | Path, recovery_root: str | Path,
@@ -217,13 +279,20 @@ def create_recovery(
     }, contract=contract)
     commands = []
     closure_set = set(closure)
+    inherited_dependencies = _subject_dependency_rows(
+        attestation_root, allowed_tasks=allowed_tasks,
+    )
     worker = project / "sbatch/run_hcwdl_mhpe_tri60_recovery_task.sh"
     for task_id in closure:
         task = _task_map()[task_id]
         resource = resources[task["resource_class"]]
-        dependencies = [
-            parent for parent in task["dependencies"] if parent in closure_set
-        ]
+        dependencies, subject_dependencies, dependency_jobs = (
+            _recovery_dependency_plan(
+                task=task, closure=closure_set, monitor_rows=rows,
+                subject_jobs=ledger["jobs"],
+                inherited_subject_dependencies=inherited_dependencies[task_id],
+            )
+        )
         command = [
             "sbatch", "--parsable", f"--account={ACCOUNT}",
             f"--partition={PARTITION}", f"--cpus-per-task={resource['cpus']}",
@@ -232,10 +301,8 @@ def create_recovery(
         ]
         if resource.get("gpu"):
             command.extend((f"--gres={resource['gpu']}", "--signal=B:USR1@120"))
-        if dependencies:
-            command.append("--dependency=afterok:" + ":".join(
-                f"${{JOB_{parent}}}" for parent in dependencies
-            ))
+        if dependency_jobs:
+            command.append("--dependency=afterok:" + ":".join(dependency_jobs))
         command.extend((
             "--export=ALL," +
             f"PROJECT_DIR={project},HCWDL_TRI60_RECOVERY_SPEC={root / 'recovery_spec.json'}," +
@@ -245,6 +312,7 @@ def create_recovery(
         commands.append({
             "task_id": task_id,
             "dependencies": dependencies,
+            "subject_dependencies": subject_dependencies,
             "command": command,
         })
     plan = artifact({
@@ -276,7 +344,7 @@ def validate_recovery(value: Mapping[str, Any]) -> str:
         or campaign["parents"]["foundation"] != value.get("foundation_sha256")
     ):
         raise ValueError("TRI60 recovery scientific lineage differs")
-    subject, _, allowed_tasks, _ = _subject(value["subject_spec_path"])
+    subject, _, allowed_tasks, subject_root = _subject(value["subject_spec_path"])
     if subject["content_hash"] != value.get("subject_spec_sha256"):
         raise ValueError("TRI60 recovery subject changed")
     ledger = load_json(value["subject_ledger_path"])
@@ -351,13 +419,44 @@ def validate_recovery(value: Mapping[str, Any]) -> str:
     ):
         raise ValueError("TRI60 recovery semantics differ")
     plan = load_json(Path(value["recovery_root"]) / "command_plan.json")
+    plan_commands = plan.get("commands", ())
     if (
         validate_artifact(plan, contract=COMMAND_PLAN_CONTRACT) != plan["content_hash"]
         or plan.get("spec_sha256") != digest
-        or [row["task_id"] for row in plan.get("commands", ())]
+        or [row["task_id"] for row in plan_commands]
         != list(value["recovery_tasks"])
     ):
         raise ValueError("TRI60 recovery command plan differs")
+    monitor_rows = {row["task_id"]: row for row in monitor["rows"]}
+    closure = set(value["recovery_tasks"])
+    inherited_dependencies = _subject_dependency_rows(
+        subject_root, allowed_tasks=allowed_tasks,
+    )
+    for command_row in plan_commands:
+        task = _task_map()[command_row["task_id"]]
+        recovery_dependencies, subject_dependencies, dependency_jobs = (
+            _recovery_dependency_plan(
+                task=task, closure=closure, monitor_rows=monitor_rows,
+                subject_jobs=ledger["jobs"],
+                inherited_subject_dependencies=(
+                    inherited_dependencies[command_row["task_id"]]
+                ),
+            )
+        )
+        dependency_arguments = [
+            item for item in command_row.get("command", ())
+            if str(item).startswith("--dependency=")
+        ]
+        expected_argument = (
+            [] if not dependency_jobs else
+            ["--dependency=afterok:" + ":".join(dependency_jobs)]
+        )
+        if (
+            command_row.get("dependencies") != recovery_dependencies
+            or command_row.get("subject_dependencies", []) != subject_dependencies
+            or dependency_arguments != expected_argument
+        ):
+            raise ValueError("TRI60 recovery dependency plan differs")
     return digest
 
 
