@@ -556,7 +556,6 @@ def test_composite_recovery_preserves_running_representation_and_replaces_split_
     }
     completed_ancestry = {
         "authenticate", "preflight", "train_U000", "reduce_U000",
-        "train_RSET_D000_from_U000",
     }
     campaign = {
         "content_hash": "a" * 64,
@@ -601,6 +600,14 @@ def test_composite_recovery_preserves_running_representation_and_replaces_split_
             "monitor_path": tmp_path / f"{name}_monitor.json",
             "monitor": {}, "monitor_hash": (prefix * 63) + "b",
             "rows": rows, "completed_ancestry": set(completed_ancestry),
+            "subject_dependencies": {
+                task: (
+                    {"train_RSET_D000_from_U000": "91040"}
+                    if name == "representation" and task == "reduce_RSET_D000E"
+                    else {}
+                )
+                for task in owned
+            },
         }
 
     bundles = {name: make_bundle(name) for name in ("logit", "representation")}
@@ -627,8 +634,11 @@ def test_composite_recovery_preserves_running_representation_and_replaces_split_
     assert composite.validate_composite_recovery(value) == value["content_hash"]
     assert not active_representation.intersection(value["recovery_tasks"])
     assert value["active_parent_jobs"] == {
-        task: bundles["representation"]["ledger"]["jobs"][task]
-        for task in sorted(active_representation)
+        "train_RSET_D000_from_U000": "91040",
+        **{
+            task: bundles["representation"]["ledger"]["jobs"][task]
+            for task in sorted(active_representation)
+        },
     }
     assert value["recovery_tasks"][0] == "reduce_LOGIT_U050E"
     assert value["recovery_tasks"][-1] == "campaign_complete"
@@ -646,6 +656,9 @@ def test_composite_recovery_preserves_running_representation_and_replaces_split_
         "job_id": bundles["representation"]["ledger"]["jobs"][
             "train_RSET_U100_from_U000"
         ],
+    }]
+    assert commands["reduce_RSET_D000E"]["subject_dependencies"] == [{
+        "task_id": "train_RSET_D000_from_U000", "job_id": "91040",
     }]
     assert commands["reduce_M1E"]["dependencies"] == [
         "train_M1_LOGIT", "train_M1_RSET", "train_M1_RREL",

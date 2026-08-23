@@ -24,7 +24,7 @@ from .hcwdl_mhpe_tri60_contracts import (
 from .hcwdl_mhpe_tri60_operations import validate_monitor
 from .hcwdl_mhpe_tri60_recovery import (
     SOURCE_REPAIR_ALLOWLIST, SOURCE_REPAIR_PHRASE, _completed_dependency_tasks,
-    _subject,
+    _subject, _subject_dependency_rows,
 )
 from .hcwdl_recovery import validate_submission_ledger
 
@@ -80,6 +80,9 @@ def _bundle(
         "monitor_path": monitor_path, "monitor": monitor,
         "monitor_hash": monitor_hash, "rows": rows,
         "completed_ancestry": _completed_dependency_tasks(subject),
+        "subject_dependencies": _subject_dependency_rows(
+            root, allowed_tasks=allowed_tasks,
+        ),
     }
 
 
@@ -237,6 +240,15 @@ def create_composite_recovery(
         )
 
     active_parent_jobs: dict[str, str] = {}
+
+    def bind_parent(parent: str, job_id: str) -> None:
+        previous = active_parent_jobs.get(parent)
+        if previous is not None and previous != job_id:
+            raise ValueError(
+                f"TRI60 composite parent has conflicting exact job IDs: {parent}"
+            )
+        active_parent_jobs[parent] = job_id
+
     dependency_rows: dict[str, tuple[list[str], list[dict[str, str]], list[str]]] = {}
     for task_id in recovery_tasks:
         recovery_dependencies: list[str] = []
@@ -253,12 +265,25 @@ def create_composite_recovery(
                 continue
             if parent in completed:
                 continue
-            if row is None or row["disposition"] != "active_or_unknown":
+            if row is None:
+                inherited = bundle["subject_dependencies"].get(task_id, {})
+                job_id = inherited.get(parent)
+                if job_id is None:
+                    raise ValueError(
+                        f"TRI60 composite dependency is unbound: {parent}"
+                    )
+                bind_parent(parent, str(job_id))
+                subject_dependencies.append({
+                    "task_id": parent, "job_id": str(job_id),
+                })
+                dependency_jobs.append(str(job_id))
+                continue
+            if row["disposition"] != "active_or_unknown":
                 raise ValueError(
                     f"TRI60 composite dependency is neither complete nor active: {parent}"
                 )
             job_id = str(row["job_id"])
-            active_parent_jobs[parent] = job_id
+            bind_parent(parent, job_id)
             subject_dependencies.append({"task_id": parent, "job_id": job_id})
             dependency_jobs.append(job_id)
         dependency_rows[task_id] = (

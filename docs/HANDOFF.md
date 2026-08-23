@@ -1,5 +1,26 @@
 # Current Handoff
 
+## TRI60 completed inherited-parent race repair (2026-08-23)
+
+While the split-ledger composite recovery was being prepared, inherited
+representation parent job `91040` (`train_RSET_D000_from_U000`) completed
+successfully.  That exact job is bound in the representation recovery command
+plan but is not a row in its newer submission ledger.  Composite recovery now
+loads the authenticated inherited dependency registry and retains that exact
+job ID when the parent is absent from the newer ledger.  Consequently an
+already-successful `afterok:91040` resolves immediately, rather than causing
+the composite creator to reject the parent or redundantly retrain it.  The
+same rule also remains valid if an inherited parent is still running; no broad
+name-based scheduler discovery is introduced.
+
+The regression removes the synthetic parent from pre-recorded completed
+ancestry, binds it only through the prior command plan, and proves that the
+new reducer command preserves job `91040` while the other active
+representation fits remain outside the recovery closure.  The complete TRI60
+test file passes 46 tests in 7.99 seconds; Python compilation and
+`git diff --check` also pass with line-ending notices only.  No Tigris job was
+cancelled, submitted, held, or otherwise changed locally.
+
 ## TRI60 split-ledger composite recovery (2026-08-23)
 
 The active campaign has two legitimate execution generations: LOGIT tasks in
