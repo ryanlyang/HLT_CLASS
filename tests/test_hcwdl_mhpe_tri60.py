@@ -534,6 +534,79 @@ def test_parallel_source_streams_use_distinct_bounded_source_producers(monkeypat
     ]
 
 
+def test_process_source_backend_is_spawned_bounded_and_source_exact(monkeypatch):
+    from concurrent.futures import Future
+    from hlt_classification.scouting import hcwdl_unified_balanced_runner as runner
+
+    records = tuple(SimpleNamespace(path=f"source-{index}.root") for index in range(3))
+    submitted = []
+    wait_sizes = []
+    executor_state = {}
+
+    class ImmediateExecutor:
+        def __init__(
+            self, *, max_workers, mp_context, initializer, initargs,
+        ):
+            executor_state.update({
+                "max_workers": max_workers,
+                "start_method": mp_context.get_start_method(),
+                "initializer": initializer,
+                "initargs": initargs,
+            })
+
+        def submit(self, function, source):
+            submitted.append(source)
+            future = Future()
+            index, path = source
+            future.set_result((path, ({"labels": np.asarray([index])},)))
+            return future
+
+        def shutdown(self, *, wait, cancel_futures):
+            executor_state["shutdown"] = (wait, cancel_futures)
+
+    def first_completed(futures, *, return_when):
+        assert return_when is runner.FIRST_COMPLETED
+        futures = tuple(futures)
+        wait_sizes.append(len(futures))
+        return {futures[0]}, set(futures[1:])
+
+    monkeypatch.setattr(runner, "ProcessPoolExecutor", ImmediateExecutor)
+    monkeypatch.setattr(runner, "wait", first_completed)
+    observed = list(runner._parallel_source_streams(
+        foundation_spec={}, split={}, selections={"train": object()},
+        assignments={"train": object()}, balanced={"train": object()},
+        role="train", behavior="balanced_uniform", coordinate=None,
+        batch_size=1, sampler_seed=1, repair_seed=2,
+        include_hcwdl_metadata=False, records=records,
+        expected_source_rows={record.path: 1 for record in records},
+        source_workers=2, transform_workers=1, source_backend="process",
+    ))
+    assert executor_state["max_workers"] == 2
+    assert executor_state["start_method"] == "spawn"
+    assert executor_state["shutdown"] == (True, True)
+    assert submitted == [
+        (index, record.path) for index, record in enumerate(records)
+    ]
+    assert wait_sizes == [2, 2, 1]
+    assert [(path, int(batch["labels"][0])) for path, batch in observed] == [
+        (record.path, index) for index, record in enumerate(records)
+    ]
+
+
+def test_tri60_workers_cap_nested_numeric_threads():
+    root = Path(__file__).resolve().parents[1]
+    for relative in (
+        "sbatch/run_hcwdl_mhpe_tri60_task.sh",
+        "sbatch/run_hcwdl_mhpe_tri60_recovery_task.sh",
+    ):
+        text = (root / relative).read_text(encoding="utf-8")
+        for name in (
+            "NUMEXPR_MAX_THREADS", "NUMEXPR_NUM_THREADS", "OMP_NUM_THREADS",
+            "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS",
+        ):
+            assert f"export {name}=1" in text
+
+
 def test_composite_recovery_preserves_running_representation_and_replaces_split_closures(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ):

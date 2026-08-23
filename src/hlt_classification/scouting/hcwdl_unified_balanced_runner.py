@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import (
+    FIRST_COMPLETED, ProcessPoolExecutor, ThreadPoolExecutor, wait,
+)
 import gc
+import multiprocessing
 import os
 from pathlib import Path
 from queue import Empty, Full, Queue
@@ -204,12 +207,61 @@ def _stream(
     )
 
 
+_SOURCE_PROCESS_CONTEXT: dict[str, object] | None = None
+
+
+def _initialize_source_process(context: Mapping[str, object]) -> None:
+    """Install one immutable role context in a spawned source worker."""
+
+    global _SOURCE_PROCESS_CONTEXT
+    if _SOURCE_PROCESS_CONTEXT is not None:
+        raise RuntimeError("HCWDL-UB source worker context was initialized twice")
+    _SOURCE_PROCESS_CONTEXT = dict(context)
+
+
+def _materialize_source_process(
+    source: tuple[int, str],
+) -> tuple[str, tuple[Mapping[str, object], ...]]:
+    """Build one complete source in a separate process.
+
+    A source-sized result keeps IPC bounded by the number of source workers.
+    The parent cache writes the returned batches into authenticated fixed
+    source slices, so completion order cannot change sampler replay.
+    """
+
+    if _SOURCE_PROCESS_CONTEXT is None:
+        raise RuntimeError("HCWDL-UB source worker lacks its role context")
+    source_index, source_path = source
+    context = _SOURCE_PROCESS_CONTEXT
+    stream = _stream(
+        foundation_spec=context["foundation_spec"],
+        split=context["split"], selections=context["selections"],
+        assignments=context["assignments"], balanced=context["balanced"],
+        role=str(context["role"]), behavior=str(context["behavior"]),
+        coordinate=context["coordinate"], batch_size=int(context["batch_size"]),
+        sampler_seed=int(context["sampler_seed"]),
+        repair_seed=int(context["repair_seed"]), epoch=0,
+        legacy=bool(context["legacy"]),
+        include_hcwdl_metadata=bool(context["include_hcwdl_metadata"]),
+        source_index=int(source_index),
+        view_workers=int(context["transform_workers"]),
+    )
+    try:
+        batches = tuple(stream)
+    finally:
+        close = getattr(stream, "close", None)
+        if close is not None:
+            close()
+    return str(source_path), batches
+
+
 def _parallel_source_streams(
     *, foundation_spec, split, selections, assignments, balanced,
     role: str, behavior: str, coordinate, batch_size: int,
     sampler_seed: int, repair_seed: int, include_hcwdl_metadata: bool,
     records, expected_source_rows: Mapping[str, int],
     source_workers: int, transform_workers: int,
+    source_backend: str = "thread",
 ) -> Iterable[tuple[str, Mapping[str, object]]]:
     """Build independent source streams concurrently with bounded buffering."""
 
@@ -217,6 +269,8 @@ def _parallel_source_streams(
         (index, record) for index, record in enumerate(records)
         if int(expected_source_rows[record.path]) > 0
     ]
+    if source_backend not in {"thread", "process"}:
+        raise ValueError("HCWDL-UB source-parallel backend differs")
     if source_workers <= 1:
         for source_index, record in selected:
             yield from (
@@ -232,6 +286,57 @@ def _parallel_source_streams(
                     source_index=source_index, view_workers=transform_workers,
                 )
             )
+        return
+
+    if source_backend == "process":
+        context = {
+            "foundation_spec": foundation_spec, "split": split,
+            "selections": {role: selections[role]},
+            "assignments": {role: assignments[role]},
+            "balanced": {role: balanced[role]},
+            "role": role, "behavior": behavior, "coordinate": coordinate,
+            "batch_size": batch_size, "sampler_seed": sampler_seed,
+            "repair_seed": repair_seed,
+            "legacy": behavior in {"legacycdf_uniform", "balanced_legacywarp"},
+            "include_hcwdl_metadata": include_hcwdl_metadata,
+            "transform_workers": transform_workers,
+        }
+        source_iterator = iter(
+            (source_index, record.path) for source_index, record in selected
+        )
+        executor = ProcessPoolExecutor(
+            max_workers=source_workers,
+            mp_context=multiprocessing.get_context("spawn"),
+            initializer=_initialize_source_process,
+            initargs=(context,),
+        )
+        pending = {}
+
+        def submit_next() -> bool:
+            try:
+                source = next(source_iterator)
+            except StopIteration:
+                return False
+            pending[executor.submit(_materialize_source_process, source)] = source
+            return True
+
+        for _ in range(min(source_workers, len(selected))):
+            submit_next()
+        try:
+            while pending:
+                completed, _ = wait(tuple(pending), return_when=FIRST_COMPLETED)
+                for future in sorted(completed, key=lambda item: pending[item][0]):
+                    expected_index, expected_path = pending.pop(future)
+                    source_path, batches = future.result()
+                    if source_path != expected_path:
+                        raise ValueError("HCWDL-UB source process identity differs")
+                    for batch in batches:
+                        yield source_path, batch
+                    submit_next()
+        finally:
+            for future in pending:
+                future.cancel()
+            executor.shutdown(wait=True, cancel_futures=True)
         return
 
     messages: Queue[tuple[str, str, object]] = Queue(maxsize=2 * source_workers)
@@ -327,9 +432,19 @@ def _cache_student_views(
         total_workers, source_workers, transform_workers = _view_worker_plan(
             nonempty_sources,
         )
+        source_backend = os.environ.get(
+            "HCWDL_UB_VIEW_SOURCE_BACKEND", "process",
+        ).strip().lower()
+        if source_backend not in {"thread", "process"}:
+            raise ValueError("HCWDL-UB source-parallel backend differs")
         if behavior in {"legacycdf_uniform", "balanced_legacywarp"}:
             source_workers = 1
             transform_workers = total_workers
+            source_backend = "thread"
+        elif source_workers > 1 and source_backend == "process":
+            # The row-wise repair kernel is Python-heavy.  One transform lane
+            # per spawned source process avoids nested thread oversubscription.
+            transform_workers = 1
         partitioned = source_workers > 1
         stream = (
             _parallel_source_streams(
@@ -342,6 +457,7 @@ def _cache_student_views(
                 records=records, expected_source_rows=source_rows,
                 source_workers=source_workers,
                 transform_workers=transform_workers,
+                source_backend=source_backend,
             )
             if partitioned else _stream(
                 foundation_spec=foundation_spec, split=split,
@@ -369,6 +485,13 @@ def _cache_student_views(
                 "view_worker_budget": total_workers,
                 "source_workers": source_workers,
                 "transform_workers_per_source": transform_workers,
+                "source_parallel_backend": (
+                    source_backend if partitioned else "serial"
+                ),
+                "planned_concurrent_workers": (
+                    source_workers * transform_workers if partitioned
+                    else transform_workers
+                ),
             },
         )
         caches[role] = cache; remaining -= int(cache.header["array_bytes"])
@@ -378,6 +501,7 @@ def _cache_student_views(
             f"HCWDL-UB phase=student_view_cache role={role} behavior={behavior} "
             f"rows={selections[role].rows} workers={total_workers} "
             f"source_workers={source_workers} transform_workers={transform_workers} "
+            f"source_backend={source_backend if partitioned else 'serial'} "
             f"seconds={time.monotonic()-started:.3f}",
             flush=True,
         )

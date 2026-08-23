@@ -1,5 +1,39 @@
 # Current Handoff
 
+## TRI60 true process-parallel preprocessing repair (2026-08-23)
+
+The first 72-CPU composite reducer, Tigris job `91376`, proved that the prior
+source-parallel repair did not deliver CPU parallelism.  During active train
+cache construction it averaged 1.03 active cores out of 72 over a 30-second
+window, read only 0.137 GiB, and logged NumExpr's rejection of a requested
+thread count above its default 64-thread ceiling.  The allocation was correct;
+the implementation was not.  Both the outer source fan-out and inner repair
+fan-out used Python thread pools, while the row-wise repair kernel is
+Python-heavy and therefore remained constrained by the GIL.
+
+The balanced cache path now uses a bounded spawned `ProcessPoolExecutor` for
+production source partitioning.  The 72-CPU plan retains eighteen concurrent
+source producers, gives each producer one repair lane to prevent nested
+oversubscription, keeps at most one source-sized result per producer in IPC,
+and continues writing batches into authenticated fixed source slices.  Thus
+process completion order cannot change canonical identities or epoch sampler
+replay.  Spawn rather than fork prevents inherited CUDA state.  The original
+thread backend remains available explicitly for compatibility and focused
+tests, but production cache construction defaults to processes.  Both TRI60
+workers now set NumExpr, OpenMP, MKL, and OpenBLAS thread counts to one before
+the task Python process starts.
+
+Local evidence passes: 56 focused TRI60/view-cache tests, 190 broader
+homotopy/unified-balanced/MHPE tests, and the complete repository suite at
+676 passed with 340 pre-existing Matplotlib/Pyparsing warnings.  Regressions
+cover bounded spawned process scheduling, exact source identity, nested
+numeric-thread caps, out-of-order canonical cache reassembly, and unchanged
+epoch sampler replay.  No scheduler action was performed locally.  Live
+reducer `91376` still runs the ineffective thread implementation and should be
+replaced through an exact-ledger, source-pinned recovery after this repair is
+committed and pushed; the five independent running RSET/RREL parents remain
+out of scope.
+
 ## TRI60 completed inherited-parent race repair (2026-08-23)
 
 While the split-ledger composite recovery was being prepared, inherited

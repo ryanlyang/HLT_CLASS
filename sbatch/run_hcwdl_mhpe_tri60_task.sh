@@ -9,5 +9,10 @@ source "${PROJECT_DIR}/sbatch/common.sh"
 hlt_activate
 export LD_LIBRARY_PATH="${CONDA_PREFIX}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 export CUBLAS_WORKSPACE_CONFIG=:4096:8
+export NUMEXPR_MAX_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
 exec python -s "${PROJECT_DIR}/scripts/run_hcwdl_mhpe_tri60_task.py" \
   --spec "${HCWDL_TRI60_SPEC}" --task "${HCWDL_TRI60_TASK}" --device cuda
