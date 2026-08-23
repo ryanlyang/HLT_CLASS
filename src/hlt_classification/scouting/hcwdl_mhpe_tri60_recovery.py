@@ -20,6 +20,7 @@ from .hcwdl_mhpe_tri60_campaign import (
 )
 from .hcwdl_mhpe_tri60_contracts import (
     CAMPAIGN_SPEC_CONTRACT,
+    COMPOSITE_RECOVERY_SPEC_CONTRACT,
     COMMAND_PLAN_CONTRACT,
     RECOVERY_SPEC_CONTRACT,
     RESOURCE_RECOVERY_SPEC_CONTRACT,
@@ -33,15 +34,18 @@ from .hcwdl_recovery import validate_submission_ledger, validate_task_attestatio
 SOURCE_REPAIR_PHRASE = "AUTHORIZE HCWDL MHPE TRI60 EXECUTION-ONLY SOURCE REPAIR"
 SOURCE_REPAIR_ALLOWLIST = frozenset({
     "src/hlt_classification/scouting/hcwdl_homotopy_stream.py",
+    "src/hlt_classification/scouting/hcwdl_mhpe_tri60_contracts.py",
     "src/hlt_classification/scouting/hcwdl_unified_balanced_runner.py",
     "src/hlt_classification/scouting/view_cache.py",
     "src/hlt_classification/scouting/hcwdl_mhpe_tri60_runner.py",
     "src/hlt_classification/scouting/hcwdl_mhpe_tri60_training.py",
     "src/hlt_classification/scouting/hcwdl_mhpe_tri60_workflow.py",
     "src/hlt_classification/scouting/hcwdl_mhpe_tri60_probability.py",
+    "src/hlt_classification/scouting/hcwdl_mhpe_tri60_composite_recovery.py",
     "src/hlt_classification/scouting/hcwdl_mhpe_tri60_recovery.py",
     "scripts/run_hcwdl_mhpe_tri60_recovery_task.py",
     "scripts/create_hcwdl_mhpe_tri60_recovery.py",
+    "scripts/create_hcwdl_mhpe_tri60_composite_recovery.py",
     "scripts/submit_hcwdl_mhpe_tri60_recovery.py",
     "sbatch/run_hcwdl_mhpe_tri60_recovery_task.sh",
 })
@@ -98,7 +102,10 @@ def _subject(path: str | Path) -> tuple[dict[str, Any], dict[str, Any], tuple[st
     if contract == CAMPAIGN_SPEC_CONTRACT:
         validate_campaign(subject, executable=False, verify_source_tree=False)
         return subject, subject, tuple(_task_map()), Path(subject["campaign_root"])
-    if contract in {RECOVERY_SPEC_CONTRACT, RESOURCE_RECOVERY_SPEC_CONTRACT}:
+    if contract in {
+        RECOVERY_SPEC_CONTRACT, RESOURCE_RECOVERY_SPEC_CONTRACT,
+        COMPOSITE_RECOVERY_SPEC_CONTRACT,
+    }:
         validate_recovery(subject)
         campaign = load_json(subject["campaign_spec_path"])
         validate_campaign(campaign, executable=False, verify_source_tree=False)
@@ -368,6 +375,11 @@ def create_recovery(
 
 def validate_recovery(value: Mapping[str, Any]) -> str:
     contract = str(value.get("contract"))
+    if contract == COMPOSITE_RECOVERY_SPEC_CONTRACT:
+        from .hcwdl_mhpe_tri60_composite_recovery import (
+            validate_composite_recovery,
+        )
+        return validate_composite_recovery(value)
     if contract not in {RECOVERY_SPEC_CONTRACT, RESOURCE_RECOVERY_SPEC_CONTRACT}:
         raise ValueError("TRI60 recovery contract differs")
     digest = validate_artifact(value, contract=contract)

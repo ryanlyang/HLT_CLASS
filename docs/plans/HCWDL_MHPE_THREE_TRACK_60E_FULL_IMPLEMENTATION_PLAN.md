@@ -783,6 +783,29 @@ The speedup is accepted only after real-job phase timings and `sstat` prove
 CPU utilization and no regression in canonical cache hashes; no numerical
 speedup is promised in advance.
 
+### 12.2 Split-ledger composite recovery
+
+If independent source repairs leave LOGIT and representation work in separate
+immutable ledgers, recovery must not select one stale ledger and duplicate
+healthy work from the other. An
+`HCWDL_MHPE_THREE_TRACK_60E_COMPOSITE_RECOVERY_SPEC/v1` binds both recovery
+specifications, both exact live ledgers, and fresh immutable monitor reports.
+Task ownership is fixed: LOGIT tasks come from the LOGIT subject; RSET, RREL,
+and the shared tail come from the representation subject. Every task admitted
+to the new closure must be terminal or exactly cancelled in its owning
+ledger. Completed outputs remain immutable, and running upstream
+representation fits remain external exact-ID `afterok` parents.
+
+The composite closure is the full canonical downstream closure of all failed
+owned tasks across the original graph. Thus the new `reduce_M1E` depends on
+the newly registered `M1_LOGIT`, `M1_RSET`, and `M1_RREL`; no task may retain a
+dependency on a cancelled `906xx` job or duplicate a running `910xx` fit. The
+spec stores per-task source ownership, superseded exact job IDs, active parent
+IDs, and the complete dependency plan. Its command plan is recomputed during
+validation, and all recovered GPU tasks use the separately authenticated
+72-CPU execution envelope. This changes execution only, never graph, recipe,
+rows, seeds, losses, views, passes, or result interpretation.
+
 The memory profile must include simultaneous train and validation student
 caches, complete RAM representation targets, probability targets, model,
 optimizer, calibration workspace, prepared source chunks, and allocator

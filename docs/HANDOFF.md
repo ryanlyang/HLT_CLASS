@@ -1,5 +1,31 @@
 # Current Handoff
 
+## TRI60 split-ledger composite recovery (2026-08-23)
+
+The active campaign has two legitimate execution generations: LOGIT tasks in
+the `5717a3ce` recovery ledger and replacement representation tasks in the
+`cfc70607` recovery ledger. A normal recovery against either ledger cannot
+both repair cancelled LOGIT reducer `90660` and preserve running RSET/RREL
+jobs `91035`, `91037`, `91044`, `91046`, and `91049`. The versioned
+`HCWDL_MHPE_THREE_TRACK_60E_COMPOSITE_RECOVERY_SPEC/v1` now authenticates both
+subjects and monitors, assigns task ownership by track, preserves active
+exact-ID parents, replaces only terminal/cancelled descendants, and constructs
+one new cross-track tail. Every recovered GPU command requests 72 CPUs and is
+pinned to the repaired source. No cancellation or submission was performed
+locally.
+
+The synthetic split-ledger regression proves that active representation fits
+are absent from the recovery closure, their exact job IDs are retained as
+dependencies, stale LOGIT dependencies are replaced, all three new M1 tasks
+join at `reduce_M1E`, and command-plan validation is exact. The recovery
+submitter also accepts the composite per-task superseded-job registry instead
+of assuming every replacement belongs to the primary ledger.
+
+Local acceptance is complete: the focused TRI60/cache suite passes 54 tests;
+the complete repository suite passes 674 tests in 324.63 seconds with only
+the existing 340 Matplotlib/Pyparsing warnings; both composite/recovery CLIs
+compile and expose help; and `git diff --check` is clean.
+
 ## TRI60 full-population preprocessing parallelism repair (2026-08-23)
 
 Full-data reducer job `90660` established an execution bottleneck: after more
@@ -9,7 +35,7 @@ final balanced-view transform; ROOT projection, selection, assignment joins,
 and coupling lookup were produced by one serial generator upstream.
 
 The shared unified-balanced cache builder now has a bounded source-parallel
-mode. A 32-CPU recovery defaults to eight independent source producers with
+mode. A 72-CPU recovery defaults to eighteen independent source producers with
 three view-transform workers each. Produced batches may complete out of order,
 but the RAM cache assigns every source an authenticated fixed slice and
 restores exact split/source-entry order before sampler replay. Per-source

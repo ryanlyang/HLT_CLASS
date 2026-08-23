@@ -463,6 +463,14 @@ def test_source_repair_allowlist_covers_shared_balanced_stream_boundary():
         in SOURCE_REPAIR_ALLOWLIST
     )
     assert "src/hlt_classification/scouting/view_cache.py" in SOURCE_REPAIR_ALLOWLIST
+    assert (
+        "src/hlt_classification/scouting/hcwdl_mhpe_tri60_contracts.py"
+        in SOURCE_REPAIR_ALLOWLIST
+    )
+    assert (
+        "src/hlt_classification/scouting/hcwdl_mhpe_tri60_composite_recovery.py"
+        in SOURCE_REPAIR_ALLOWLIST
+    )
 
 
 def test_balanced_view_worker_plan_uses_bounded_cpu_partition():
@@ -523,6 +531,124 @@ def test_parallel_source_streams_use_distinct_bounded_source_producers(monkeypat
     assert sorted(worker_arguments) == [(0, 3), (1, 3), (2, 3)]
     assert sorted((source, int(batch["labels"][0])) for source, batch in observed) == [
         (record.path, index) for index, record in enumerate(records)
+    ]
+
+
+def test_composite_recovery_preserves_running_representation_and_replaces_split_closures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+):
+    from hlt_classification.scouting import hcwdl_mhpe_tri60_composite_recovery as composite
+    from hlt_classification.scouting.hcwdl_mhpe_tri60_recovery import (
+        SOURCE_REPAIR_PHRASE,
+    )
+
+    tasks = tuple(campaign_tasks())
+    task_ids = tuple(row["task_id"] for row in tasks)
+    completed_logit = {
+        "train_LOGIT_U050_from_U000", "train_LOGIT_U100_from_U000",
+        "train_LOGIT_D066_from_U000", "train_LOGIT_D033_from_U000",
+        "train_LOGIT_D000_from_U000",
+    }
+    active_representation = {
+        "train_RSET_U100_from_U000", "train_RSET_D050_from_U000",
+        "train_RREL_U100_from_U000", "train_RREL_D050_from_U000",
+        "train_RREL_D000_from_U000",
+    }
+    completed_ancestry = {
+        "authenticate", "preflight", "train_U000", "reduce_U000",
+        "train_RSET_D000_from_U000",
+    }
+    campaign = {
+        "content_hash": "a" * 64,
+        "spec_path": str(tmp_path / "campaign.json"),
+        "parents": {
+            "graph": "b" * 64, "recipe": "c" * 64,
+            "foundation": "d" * 64,
+        },
+    }
+
+    def make_bundle(name: str):
+        owned = tuple(task for task in task_ids if composite._owner(task) == name)
+        if name == "representation":
+            owned = tuple(
+                task for task in owned if task != "train_RSET_D000_from_U000"
+            )
+        jobs = {task: str(92000 + index) for index, task in enumerate(owned)}
+        rows = {}
+        for task in owned:
+            complete = name == "logit" and task in completed_logit
+            active = name == "representation" and task in active_representation
+            disposition = (
+                "complete" if complete else
+                "active_or_unknown" if active else "retryable_failure"
+            )
+            rows[task] = {
+                "task_id": task, "job_id": jobs[task],
+                "disposition": disposition,
+            }
+        prefix = "1" if name == "logit" else "2"
+        return {
+            "name": name,
+            "subject_path": tmp_path / f"{name}_spec.json",
+            "subject": {
+                "content_hash": prefix * 64,
+                "source_commit": prefix * 40,
+            },
+            "campaign": campaign, "allowed_tasks": owned,
+            "attestation_root": tmp_path / name,
+            "ledger_path": tmp_path / f"{name}_ledger.json",
+            "ledger": {"jobs": jobs}, "ledger_hash": (prefix * 63) + "a",
+            "monitor_path": tmp_path / f"{name}_monitor.json",
+            "monitor": {}, "monitor_hash": (prefix * 63) + "b",
+            "rows": rows, "completed_ancestry": set(completed_ancestry),
+        }
+
+    bundles = {name: make_bundle(name) for name in ("logit", "representation")}
+    monkeypatch.setattr(
+        composite, "_bundle", lambda *, name, **_kwargs: bundles[name],
+    )
+    monkeypatch.setattr(composite, "validate_campaign", lambda *_args, **_kwargs: SHA)
+
+    root = tmp_path / "composite"
+    value = composite.create_composite_recovery(
+        logit_subject_spec=tmp_path / "logit_spec.json",
+        logit_subject_ledger=tmp_path / "logit_ledger.json",
+        logit_monitor_report=tmp_path / "logit_monitor.json",
+        representation_subject_spec=tmp_path / "representation_spec.json",
+        representation_subject_ledger=tmp_path / "representation_ledger.json",
+        representation_monitor_report=tmp_path / "representation_monitor.json",
+        recovery_root=root, project_dir=tmp_path,
+        source_commit="f" * 40,
+        changed_files=[
+            "src/hlt_classification/scouting/hcwdl_unified_balanced_runner.py",
+        ],
+        source_repair_phrase=SOURCE_REPAIR_PHRASE,
+    )
+    assert composite.validate_composite_recovery(value) == value["content_hash"]
+    assert not active_representation.intersection(value["recovery_tasks"])
+    assert value["active_parent_jobs"] == {
+        task: bundles["representation"]["ledger"]["jobs"][task]
+        for task in sorted(active_representation)
+    }
+    assert value["recovery_tasks"][0] == "reduce_LOGIT_U050E"
+    assert value["recovery_tasks"][-1] == "campaign_complete"
+    assert "train_M1_LOGIT" in value["recovery_tasks"]
+    assert "train_M1_RSET" in value["recovery_tasks"]
+    assert "train_M1_RREL" in value["recovery_tasks"]
+    plan = json.loads((root / "command_plan.json").read_text())
+    commands = {row["task_id"]: row for row in plan["commands"]}
+    for row in commands.values():
+        task = next(item for item in tasks if item["task_id"] == row["task_id"])
+        if task["resource_class"].startswith("gpu_"):
+            assert "--cpus-per-task=72" in row["command"]
+    assert commands["reduce_RSET_U100E"]["subject_dependencies"] == [{
+        "task_id": "train_RSET_U100_from_U000",
+        "job_id": bundles["representation"]["ledger"]["jobs"][
+            "train_RSET_U100_from_U000"
+        ],
+    }]
+    assert commands["reduce_M1E"]["dependencies"] == [
+        "train_M1_LOGIT", "train_M1_RSET", "train_M1_RREL",
     ]
 
 
@@ -727,6 +853,44 @@ def test_live_submission_journal_replays_exact_dependency_commands(tmp_path):
     (journal / "0001_child.json").rename(journal / "0002_child.json")
     with pytest.raises(ValueError, match="journal differs"):
         module._load_journal(journal=journal, spec=campaign, plan=plan)
+
+
+def test_recovery_submitter_uses_composite_superseded_job_registry():
+    import importlib.util
+
+    script_path = (
+        Path(__file__).parents[1] / "scripts/submit_hcwdl_mhpe_tri60_recovery.py"
+    )
+    module_spec = importlib.util.spec_from_file_location(
+        "tri60_recovery_submitter_test", script_path,
+    )
+    assert module_spec is not None and module_spec.loader is not None
+    module = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(module)
+    subject = build_submission_ledger(
+        campaign_spec_sha256="a" * 64,
+        jobs={"representation_task": "91035"},
+        commands={"representation_task": ["sbatch", "representation.sh"]},
+        dry_run=False,
+    )
+    spec = {
+        "content_hash": "b" * 64,
+        "subject_ledger_sha256": subject["content_hash"],
+        "monitor_report_sha256": "c" * 64,
+        "superseded_jobs": {
+            "logit_task": "90660", "representation_task": "91036",
+        },
+    }
+    plan = {"commands": [
+        {"task_id": "logit_task", "command": ["sbatch", "logit.sh"]},
+        {
+            "task_id": "representation_task",
+            "command": ["sbatch", "representation.sh"],
+        },
+    ]}
+    ledger = module._dry_ledger(spec, plan, subject)
+    assert ledger["superseded_jobs"] == spec["superseded_jobs"]
+    assert set(ledger["jobs"]) == {"logit_task", "representation_task"}
 
 
 def _prepared_targets(rows=3):

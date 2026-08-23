@@ -39,6 +39,12 @@ def _commands(plan) -> dict[str, list[str]]:
 
 def _dry_ledger(spec, plan, subject_ledger) -> dict:
     commands = _commands(plan)
+    superseded = spec.get("superseded_jobs")
+    if superseded is None:
+        superseded = {
+            task_id: subject_ledger["jobs"][task_id]
+            for task_id in commands
+        }
     return build_submission_ledger(
         campaign_spec_sha256=spec["content_hash"],
         jobs={task_id: "1" for task_id in commands},
@@ -46,10 +52,7 @@ def _dry_ledger(spec, plan, subject_ledger) -> dict:
         dry_run=True,
         parent_ledger_sha256=spec["subject_ledger_sha256"],
         monitor_report_sha256=spec["monitor_report_sha256"],
-        superseded_jobs={
-            task_id: subject_ledger["jobs"][task_id]
-            for task_id in commands
-        },
+        superseded_jobs=superseded,
     )
 
 
@@ -94,6 +97,12 @@ def _live_ledger(spec, events, subject_ledger) -> dict:
     base = assemble_submission_ledger(
         events, campaign_spec_sha256=spec["content_hash"],
     )
+    superseded = spec.get("superseded_jobs")
+    if superseded is None:
+        superseded = {
+            task_id: subject_ledger["jobs"][task_id]
+            for task_id in base["jobs"]
+        }
     return build_submission_ledger(
         campaign_spec_sha256=spec["content_hash"],
         jobs=base["jobs"],
@@ -101,10 +110,7 @@ def _live_ledger(spec, events, subject_ledger) -> dict:
         dry_run=False,
         parent_ledger_sha256=spec["subject_ledger_sha256"],
         monitor_report_sha256=spec["monitor_report_sha256"],
-        superseded_jobs={
-            task_id: subject_ledger["jobs"][task_id]
-            for task_id in base["jobs"]
-        },
+        superseded_jobs=superseded,
     )
 
 
@@ -157,10 +163,12 @@ def main() -> int:
             row["task_id"]: _resolved_command(row, ledger.get("jobs", {}))
             for row in plan["commands"]
         }
-        expected_superseded = {
-            task_id: subject_ledger["jobs"][task_id]
-            for task_id in _commands(plan)
-        }
+        expected_superseded = spec.get("superseded_jobs")
+        if expected_superseded is None:
+            expected_superseded = {
+                task_id: subject_ledger["jobs"][task_id]
+                for task_id in _commands(plan)
+            }
         expected_live = build_submission_ledger(
             campaign_spec_sha256=spec["content_hash"],
             jobs=ledger.get("jobs", {}), commands=expected_commands,

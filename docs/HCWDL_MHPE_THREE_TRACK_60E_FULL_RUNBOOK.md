@@ -219,3 +219,15 @@ original campaign. The measured GH200 nodes expose 72 effective CPUs, so the
 deadline-oriented recovery requests all 72 for every GPU class. The repaired
 cache stage can consume that budget; the subsequent single-GPU optimization
 or inference stage is expected to leave most CPUs idle.
+
+When LOGIT and representation branches are owned by different recovery
+ledgers, do not run either ordinary recovery independently. First publish a
+fresh monitor for each exact ledger, cancel only the pending tasks selected by
+the composite procedure, and publish both monitors again. Then use
+`create_hcwdl_mhpe_tri60_composite_recovery.py` with both canonical subject
+specs, ledgers, and terminal-state monitors. The composite validator preserves
+running representation fits as exact external dependencies, replaces the
+cancelled LOGIT and representation descendants at 72 CPUs, and joins the
+three replacement M1 tasks at one fresh `reduce_M1E`. Review the complete dry
+run before phrase-authorized submission through the ordinary recovery
+submitter.
