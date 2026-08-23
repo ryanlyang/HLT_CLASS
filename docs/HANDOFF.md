@@ -1,5 +1,46 @@
 # Current Handoff
 
+## TRI60 full-population preprocessing parallelism repair (2026-08-23)
+
+Full-data reducer job `90660` established an execution bottleneck: after more
+than two hours it had read about 49 GiB with roughly one CPU of effective
+usage despite a 16-CPU reservation. The existing thread pool covered only the
+final balanced-view transform; ROOT projection, selection, assignment joins,
+and coupling lookup were produced by one serial generator upstream.
+
+The shared unified-balanced cache builder now has a bounded source-parallel
+mode. A 32-CPU recovery defaults to eight independent source producers with
+three view-transform workers each. Produced batches may complete out of order,
+but the RAM cache assigns every source an authenticated fixed slice and
+restores exact split/source-entry order before sampler replay. Per-source
+entries must increase strictly, source counts must equal the selection
+manifest, and all malformed, duplicate, cross-source, missing, or excess rows
+fail closed. The queue is bounded to two batches per source worker; only the
+coordinator writes the one final train/validation cache, and no repaired view
+is persisted.
+
+Recovery creation now accepts independently validated CPU overrides for
+LOGIT, reducer, and representation resource classes. The immutable original
+campaign remains at 16 CPUs; a deadline-oriented source/resource-pinned
+recovery requests all 72 effective GH200-node CPUs for fit, reducer, and
+representation classes without changing graph, rows, batch size, passes,
+losses, seeds, coordinates, or output ordering. Only cache construction is
+expected to use most of that allocation; the single-GPU phase remains
+GPU-bound. The execution-only source allowlist now includes the
+shared balanced runner, ephemeral cache, and recovery creator needed for this
+repair. No live job was cancelled, requeued, or submitted locally. Real Tigris
+speedup and utilization remain to be measured after the current reducer
+reaches a safe cutover point.
+
+Local evidence for the repair is complete: the cache/TRI60 focused suite
+passes 51 tests; the broader unified-balanced/TRI60 surface passes 85 tests;
+and the complete repository suite passes 672 tests in 358.00 seconds (only
+the existing 340 Matplotlib/Pyparsing warnings). Python compilation and the
+updated recovery CLI help pass, and `git diff --check` is clean. Tests cover
+bounded 72-CPU planning, concurrent source execution, out-of-order canonical
+reassembly including all TRI60 metadata fields, strict within-source order,
+and byte-identical HLT sampler replay across three epochs.
+
 ## TRI60 full-data 60-pass exact-HLT CE control (2026-08-22)
 
 The additive `M0CE60` control anticipated by Section 17 of the three-track

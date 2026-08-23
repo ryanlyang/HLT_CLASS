@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import gc
 import os
 from pathlib import Path
+from queue import Empty, Full, Queue
+import threading
 import time
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 import numpy as np
 
@@ -75,6 +78,28 @@ def _view_workers() -> int:
     return requested
 
 
+def _view_worker_plan(
+    source_count: int, *, environ: Mapping[str, str] | None = None,
+) -> tuple[int, int, int]:
+    """Partition the allocated CPU envelope across sources and transforms."""
+
+    env = os.environ if environ is None else environ
+    allocated = int(env.get("SLURM_CPUS_PER_TASK", "1"))
+    total = int(env.get("HCWDL_UB_VIEW_BUILD_WORKERS", str(allocated)))
+    if allocated <= 0 or total <= 0 or total > allocated or source_count < 0:
+        raise ValueError("HCWDL-UB view workers exceed the allocated CPUs")
+    if source_count == 0:
+        return total, 0, 0
+    default_sources = max(1, total // 4)
+    source_workers = int(env.get(
+        "HCWDL_UB_VIEW_SOURCE_WORKERS", str(min(source_count, default_sources)),
+    ))
+    if source_workers <= 0 or source_workers > source_count or source_workers > total:
+        raise ValueError("HCWDL-UB source workers exceed the worker/source budget")
+    transform_workers = max(1, (total - source_workers) // source_workers)
+    return total, source_workers, transform_workers
+
+
 def _memory_limit_bytes(configured_gib: float) -> int:
     configured = int(configured_gib * 1024**3)
     slurm = os.environ.get("SLURM_MEM_PER_NODE")
@@ -119,7 +144,11 @@ def _stream(
     legacy: bool = False, epoch: int = 0,
     include_hcwdl_metadata: bool = False,
     source_index: int | None = None,
+    view_workers: int | None = None,
 ):
+    workers = _view_workers() if view_workers is None else int(view_workers)
+    if workers <= 0:
+        raise ValueError("HCWDL-UB stream workers must be positive")
     if behavior == "hlt":
         records = role_records(split, role)
         if source_index is not None:
@@ -149,7 +178,7 @@ def _stream(
             assignment_store=assignments[role], coupling_store=balanced[role],
             row_selection=selections[role], coordinate=coordinate,
             repair_seed=repair_seed, batch_size=batch_size,
-            workers=_view_workers(), output_key="privileged",
+            workers=workers, output_key="privileged",
             include_training_metadata=include_hcwdl_metadata,
             source_index=source_index,
         )
@@ -162,17 +191,122 @@ def _stream(
             assignment_store=assignments[role], coupling_store=legacy_store,
             row_selection=selections[role], coordinate=coordinate,
             repair_seed=repair_seed, batch_size=batch_size,
-            workers=_view_workers(), output_key="privileged",
+            workers=workers, output_key="privileged",
         )
     return iterate_unified_balanced_batches(
         split, data_root=foundation_spec["data_root"], role=role,
         assignment_store=assignments[role], coupling_store=balanced[role],
         row_selection=selections[role], coordinate=coordinate,
         repair_seed=repair_seed, batch_size=batch_size,
-        workers=_view_workers(), output_key="privileged",
+        workers=workers, output_key="privileged",
         include_training_metadata=include_hcwdl_metadata,
         source_index=source_index,
     )
+
+
+def _parallel_source_streams(
+    *, foundation_spec, split, selections, assignments, balanced,
+    role: str, behavior: str, coordinate, batch_size: int,
+    sampler_seed: int, repair_seed: int, include_hcwdl_metadata: bool,
+    records, expected_source_rows: Mapping[str, int],
+    source_workers: int, transform_workers: int,
+) -> Iterable[tuple[str, Mapping[str, object]]]:
+    """Build independent source streams concurrently with bounded buffering."""
+
+    selected = [
+        (index, record) for index, record in enumerate(records)
+        if int(expected_source_rows[record.path]) > 0
+    ]
+    if source_workers <= 1:
+        for source_index, record in selected:
+            yield from (
+                (record.path, batch) for batch in _stream(
+                    foundation_spec=foundation_spec, split=split,
+                    selections=selections, assignments=assignments,
+                    balanced=balanced, role=role, behavior=behavior,
+                    coordinate=coordinate, batch_size=batch_size,
+                    sampler_seed=sampler_seed, repair_seed=repair_seed,
+                    epoch=0,
+                    legacy=behavior in {"legacycdf_uniform", "balanced_legacywarp"},
+                    include_hcwdl_metadata=include_hcwdl_metadata,
+                    source_index=source_index, view_workers=transform_workers,
+                )
+            )
+        return
+
+    messages: Queue[tuple[str, str, object]] = Queue(maxsize=2 * source_workers)
+    stop = threading.Event()
+
+    def publish(message: tuple[str, str, object]) -> bool:
+        while not stop.is_set():
+            try:
+                messages.put(message, timeout=0.2)
+                return True
+            except Full:
+                continue
+        return False
+
+    def produce(source_index: int, source_path: str) -> None:
+        stream = None
+        try:
+            stream = _stream(
+                foundation_spec=foundation_spec, split=split,
+                selections=selections, assignments=assignments,
+                balanced=balanced, role=role, behavior=behavior,
+                coordinate=coordinate, batch_size=batch_size,
+                sampler_seed=sampler_seed, repair_seed=repair_seed,
+                epoch=0,
+                legacy=behavior in {"legacycdf_uniform", "balanced_legacywarp"},
+                include_hcwdl_metadata=include_hcwdl_metadata,
+                source_index=source_index, view_workers=transform_workers,
+            )
+            for batch in stream:
+                if not publish(("batch", source_path, batch)):
+                    return
+        except BaseException as error:
+            publish(("error", source_path, error))
+        finally:
+            if stream is not None:
+                close = getattr(stream, "close", None)
+                if close is not None:
+                    close()
+            publish(("done", source_path, None))
+
+    executor = ThreadPoolExecutor(
+        max_workers=source_workers, thread_name_prefix="hcwdl-ub-source",
+    )
+    futures = [
+        executor.submit(produce, source_index, record.path)
+        for source_index, record in selected
+    ]
+    completed = 0
+    try:
+        while completed < len(selected):
+            try:
+                kind, source_path, payload = messages.get(timeout=0.5)
+            except Empty:
+                if all(future.done() for future in futures):
+                    for future in futures:
+                        future.result()
+                    raise RuntimeError("HCWDL-UB source workers ended without completion")
+                continue
+            if kind == "batch":
+                yield source_path, payload
+            elif kind == "error":
+                raise RuntimeError(
+                    f"HCWDL-UB source preprocessing failed for {source_path!r}"
+                ) from payload
+            elif kind == "done":
+                completed += 1
+            else:
+                raise RuntimeError("HCWDL-UB source worker emitted an invalid message")
+        for future in futures:
+            future.result()
+    finally:
+        stop.set()
+        for future in futures:
+            future.cancel()
+        executor.shutdown(wait=True, cancel_futures=True)
 
 
 def _cache_student_views(
@@ -185,28 +319,56 @@ def _cache_student_views(
     input_key = "hlt" if behavior == "hlt" else "privileged"
     for role in ("train", "validation"):
         started = time.monotonic()
-        stream = _stream(
-            foundation_spec=foundation_spec, split=split,
-            selections=selections, assignments=assignments, balanced=balanced,
-            role=role, behavior=behavior, coordinate=coordinate,
-            batch_size=batch_size, sampler_seed=sampler_seed,
-            repair_seed=repair_seed, epoch=0,
-            legacy=behavior in {"legacycdf_uniform", "balanced_legacywarp"},
-            include_hcwdl_metadata=include_hcwdl_metadata,
-        )
         records = role_records(split, role)
+        source_rows = expected_cache_source_rows(
+            records, row_selection=selections[role],
+        )
+        nonempty_sources = sum(count > 0 for count in source_rows.values())
+        total_workers, source_workers, transform_workers = _view_worker_plan(
+            nonempty_sources,
+        )
+        if behavior in {"legacycdf_uniform", "balanced_legacywarp"}:
+            source_workers = 1
+            transform_workers = total_workers
+        partitioned = source_workers > 1
+        stream = (
+            _parallel_source_streams(
+                foundation_spec=foundation_spec, split=split,
+                selections=selections, assignments=assignments,
+                balanced=balanced, role=role, behavior=behavior,
+                coordinate=coordinate, batch_size=batch_size,
+                sampler_seed=sampler_seed, repair_seed=repair_seed,
+                include_hcwdl_metadata=include_hcwdl_metadata,
+                records=records, expected_source_rows=source_rows,
+                source_workers=source_workers,
+                transform_workers=transform_workers,
+            )
+            if partitioned else _stream(
+                foundation_spec=foundation_spec, split=split,
+                selections=selections, assignments=assignments,
+                balanced=balanced, role=role, behavior=behavior,
+                coordinate=coordinate, batch_size=batch_size,
+                sampler_seed=sampler_seed, repair_seed=repair_seed, epoch=0,
+                legacy=behavior in {"legacycdf_uniform", "balanced_legacywarp"},
+                include_hcwdl_metadata=include_hcwdl_metadata,
+                view_workers=transform_workers,
+            )
+        )
         cache = EphemeralPmardViewCache.build(
             stream, expected_rows=selections[role].rows, records=records,
             role=role,
-            expected_source_rows=expected_cache_source_rows(
-                records, row_selection=selections[role],
-            ),
+            expected_source_rows=source_rows,
             view_keys=(input_key,), max_gib=remaining / 1024**3,
+            partitioned_sources=partitioned,
             lineage={
                 "foundation_spec_sha256": foundation_spec["content_hash"],
                 "behavior": behavior, "coordinate": coordinate.payload(),
                 "student_view_built_once": True,
                 "durable_repaired_dataset": False,
+                "source_partitioned_preprocessing": partitioned,
+                "view_worker_budget": total_workers,
+                "source_workers": source_workers,
+                "transform_workers_per_source": transform_workers,
             },
         )
         caches[role] = cache; remaining -= int(cache.header["array_bytes"])
@@ -214,7 +376,9 @@ def _cache_student_views(
             raise MemoryError("HCWDL-UB train/validation caches exceed the memory cap")
         print(
             f"HCWDL-UB phase=student_view_cache role={role} behavior={behavior} "
-            f"rows={selections[role].rows} seconds={time.monotonic()-started:.3f}",
+            f"rows={selections[role].rows} workers={total_workers} "
+            f"source_workers={source_workers} transform_workers={transform_workers} "
+            f"seconds={time.monotonic()-started:.3f}",
             flush=True,
         )
     return caches, input_key

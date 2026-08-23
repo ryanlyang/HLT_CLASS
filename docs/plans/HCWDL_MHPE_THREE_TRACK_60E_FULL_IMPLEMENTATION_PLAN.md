@@ -741,6 +741,48 @@ Initial Tigris envelopes are:
 | probability reducers | 16 | 192 GiB | 1-00:00:00 | `gpu:gh200:1` when inference is required |
 | locks, aggregate, completion | 4 | 32 GiB | 02:00:00 | none |
 
+### 12.1 Full-population preprocessing execution repair
+
+The immutable original campaign retains the 16-CPU envelopes above. Runtime
+evidence from full-data reducer job `90660` showed that the expensive ROOT,
+selection, assignment, and coupling stages were upstream of the existing
+view-transform pool: 16 CPUs were reserved while source ingestion was
+effectively serial. This is an execution defect, not a scientific result or a
+reason to change rows, views, ordering, seeds, losses, or batching.
+
+Source-repaired recoveries request all 72 effective CPUs measured on the
+GH200 nodes for GPU fit, probability-reducer, and representation classes.
+This is a deadline-oriented execution allocation: the repaired cache builder
+can consume the bounded allocation, while the subsequent single-GPU
+optimization or inference stage is expected to leave most CPUs idle. The
+cache builder partitions the bounded allocation between
+independent source producers and per-source view transforms. With at least
+eighteen nonempty sources, the default 72-CPU plan is eighteen source
+producers and three transform workers per producer. A bounded queue holds at most two
+batches per source worker. One coordinator alone writes the final RAM cache,
+using immutable source-specific slices derived from the authenticated split
+and row-selection counts.
+
+Source completion order is deliberately irrelevant. Within every source,
+entry identities must be strictly increasing; across sources, the coordinator
+restores exact split-record order. Balanced views therefore retain the serial
+builder's canonical identity order. The older HLT cache could be initially
+materialized in shuffled/interleaved order, so its storage-order digest may be
+canonicalized by this repair; its identity set, labels, all particle arrays,
+and every epoch's sampler replay must remain byte-identical. Missing,
+duplicate, cross-source, out-of-order, or excess rows fail closed.
+There is no durable repaired view dataset and no second full-size cache.
+
+The source-reader count may be reduced through the bounded
+`HCWDL_UB_VIEW_SOURCE_WORKERS` execution setting if real Tigris measurements
+show filesystem contention. It may never exceed the allocated CPU or source
+count, and it does not alter scientific artifacts. A source-pinned recovery
+must use the explicit `--logit-cpus 72`, `--reducer-cpus 72`, and, when it
+restarts representation fits, `--representation-cpus 72` resource overrides.
+The speedup is accepted only after real-job phase timings and `sstat` prove
+CPU utilization and no regression in canonical cache hashes; no numerical
+speedup is promised in advance.
+
 The memory profile must include simultaneous train and validation student
 caches, complete RAM representation targets, probability targets, model,
 optimizer, calibration workspace, prepared source chunks, and allocator

@@ -192,7 +192,10 @@ python -s "${PROJECT_DIR}/scripts/create_hcwdl_mhpe_tri60_recovery.py" \
   --monitor-report "${CAMPAIGN_ROOT}/monitor.json" \
   --recovery-root "${RECOVERY_ROOT}" \
   --project-dir "${PROJECT_DIR}" \
-  --source-commit "${TRI_COMMIT}"
+  --source-commit "${TRI_COMMIT}" \
+  --logit-cpus 72 \
+  --reducer-cpus 72 \
+  --representation-cpus 72
 
 python -s "${PROJECT_DIR}/scripts/submit_hcwdl_mhpe_tri60_recovery.py" \
   --spec "${RECOVERY_ROOT}/recovery_spec.json" \
@@ -202,3 +205,17 @@ python -s "${PROJECT_DIR}/scripts/submit_hcwdl_mhpe_tri60_recovery.py" \
 Live recovery is a separate phrase-bound action. Every failed fit is cleaned
 only inside its registered campaign subdirectory and restarts at update zero;
 completed siblings and compact probability banks remain immutable.
+
+For a source-pinned preprocessing repair, use a clean worktree at the reviewed
+repair commit, add the exact changed execution files with repeated
+`--changed-file`, and provide
+`AUTHORIZE HCWDL MHPE TRI60 EXECUTION-ONLY SOURCE REPAIR` through
+`--source-repair-phrase`. The repaired job log must report, for each train and
+validation cache, the total worker budget, bounded source-worker count,
+per-source transform count, rows, and elapsed seconds. The immutable original
+campaign remains a 16-CPU spec; the 32-CPU request belongs to the separately
+authenticated resource-recovery spec and therefore does not relabel the
+original campaign. The measured GH200 nodes expose 72 effective CPUs, so the
+deadline-oriented recovery requests all 72 for every GPU class. The repaired
+cache stage can consume that budget; the subsequent single-GPU optimization
+or inference stage is expected to leave most CPUs idle.

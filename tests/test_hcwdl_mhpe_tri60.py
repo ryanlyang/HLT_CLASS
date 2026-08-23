@@ -249,6 +249,9 @@ def test_campaign_dag_is_exact_parallel_and_resource_locked():
     assert RESOURCES["gpu_logit"].memory == "256G"
     assert RESOURCES["gpu_rset"].memory == RESOURCES["gpu_rrel"].memory == "384G"
     assert RESOURCES["gpu_rset"].walltime == RESOURCES["gpu_rrel"].walltime == "6-00:00:00"
+    assert all(RESOURCES[name].cpus == 16 for name in (
+        "gpu_logit", "gpu_rset", "gpu_rrel", "gpu_reducer",
+    ))
     assert all(row["resource_class"] != "gpu_reducer" or row["kind"] == "reducer" for row in tasks)
 
 
@@ -455,6 +458,72 @@ def test_source_repair_allowlist_covers_shared_balanced_stream_boundary():
         "src/hlt_classification/scouting/hcwdl_homotopy_stream.py"
         in SOURCE_REPAIR_ALLOWLIST
     )
+    assert (
+        "src/hlt_classification/scouting/hcwdl_unified_balanced_runner.py"
+        in SOURCE_REPAIR_ALLOWLIST
+    )
+    assert "src/hlt_classification/scouting/view_cache.py" in SOURCE_REPAIR_ALLOWLIST
+
+
+def test_balanced_view_worker_plan_uses_bounded_cpu_partition():
+    from hlt_classification.scouting import hcwdl_unified_balanced_runner as runner
+
+    assert runner._view_worker_plan(
+        50, environ={"SLURM_CPUS_PER_TASK": "32"},
+    ) == (32, 8, 3)
+    assert runner._view_worker_plan(
+        3, environ={"SLURM_CPUS_PER_TASK": "32"},
+    ) == (32, 3, 9)
+    assert runner._view_worker_plan(
+        50, environ={"SLURM_CPUS_PER_TASK": "72"},
+    ) == (72, 18, 3)
+    with pytest.raises(ValueError, match="source workers exceed"):
+        runner._view_worker_plan(4, environ={
+            "SLURM_CPUS_PER_TASK": "32",
+            "HCWDL_UB_VIEW_SOURCE_WORKERS": "5",
+        })
+
+
+def test_parallel_source_streams_use_distinct_bounded_source_producers(monkeypatch):
+    import threading
+    from hlt_classification.scouting import hcwdl_unified_balanced_runner as runner
+
+    records = tuple(SimpleNamespace(path=f"source-{index}.root") for index in range(3))
+    lock = threading.Lock()
+    ready = threading.Event()
+    active = 0
+    maximum = 0
+    worker_arguments = []
+
+    def fake_stream(*, source_index, view_workers, **_kwargs):
+        def generate():
+            nonlocal active, maximum
+            with lock:
+                active += 1
+                maximum = max(maximum, active)
+                worker_arguments.append((source_index, view_workers))
+                if active >= 2:
+                    ready.set()
+            assert ready.wait(timeout=2)
+            yield {"labels": np.asarray([source_index])}
+            with lock:
+                active -= 1
+        return generate()
+
+    monkeypatch.setattr(runner, "_stream", fake_stream)
+    observed = list(runner._parallel_source_streams(
+        foundation_spec={}, split={}, selections={}, assignments={}, balanced={},
+        role="train", behavior="balanced_uniform", coordinate=None,
+        batch_size=1, sampler_seed=1, repair_seed=2,
+        include_hcwdl_metadata=False, records=records,
+        expected_source_rows={record.path: 1 for record in records},
+        source_workers=2, transform_workers=3,
+    ))
+    assert maximum == 2
+    assert sorted(worker_arguments) == [(0, 3), (1, 3), (2, 3)]
+    assert sorted((source, int(batch["labels"][0])) for source, batch in observed) == [
+        (record.path, index) for index, record in enumerate(records)
+    ]
 
 
 def test_campaign_publication_dry_shape_and_restart_zero_recovery(
@@ -595,10 +664,28 @@ def test_campaign_publication_dry_shape_and_restart_zero_recovery(
         subject_ledger=ledger_path, monitor_report=monitor_path,
         recovery_root=tmp_path / "recovery", project_dir=tmp_path,
         source_commit=source_commit,
+        resource_overrides={
+            name: {"cpus": 72} for name in (
+                "gpu_logit", "gpu_rset", "gpu_rrel", "gpu_reducer",
+            )
+        },
     )
     assert validate_recovery(recovery) == recovery["content_hash"]
     assert recovery["recovery_tasks"] == [row["task_id"] for row in spec["tasks"]]
     assert recovery["resume_policy"] == "disabled_restart_from_zero_v1"
+    assert all(recovery["resources"][name]["cpus"] == 72 for name in (
+        "gpu_logit", "gpu_rset", "gpu_rrel", "gpu_reducer",
+    ))
+    recovery_plan = json.loads(
+        (Path(recovery["recovery_root"]) / "command_plan.json").read_text()
+    )
+    task_resources = {
+        row["task_id"]: row["resource_class"] for row in campaign_tasks()
+    }
+    for row in recovery_plan["commands"]:
+        resource_class = task_resources[row["task_id"]]
+        if resource_class.startswith("gpu_"):
+            assert "--cpus-per-task=72" in row["command"]
 
 
 def test_live_submission_journal_replays_exact_dependency_commands(tmp_path):

@@ -236,20 +236,51 @@ class EphemeralPmardViewCache:
 
     @classmethod
     def build(
-        cls, batches: Iterable[Mapping[str, object]], *, expected_rows: int,
+        cls, batches: Iterable[Mapping[str, object]] | Iterable[
+            tuple[str, Mapping[str, object]]
+        ], *, expected_rows: int,
         records: Sequence[SourceFileRecord], role: str,
         expected_source_rows: Mapping[str, int], view_keys: Sequence[str],
         lineage: Mapping[str, object], max_gib: float = 320.0,
         step_size: int = 4096, environ: Mapping[str, str] | None = None,
+        partitioned_sources: bool = False,
     ) -> "EphemeralPmardViewCache":
         if expected_rows <= 0:
             raise ValueError("view cache requires a positive expected row count")
         keys = tuple(dict.fromkeys(map(str, view_keys)))
         if not keys or any(key not in {"hlt", "privileged", "toff"} for key in keys):
             raise ValueError("view cache accepts only canonical particle views")
+        record_paths = tuple(record.path for record in records)
+        if len(record_paths) != len(set(record_paths)):
+            raise ValueError("view cache split records contain duplicate sources")
+        source_counts = {
+            path: int(expected_source_rows.get(path, -1)) for path in record_paths
+        }
+        if any(count < 0 for count in source_counts.values()):
+            raise ValueError("view cache expected source coverage is incomplete")
+        if sum(source_counts.values()) != expected_rows:
+            raise ValueError("view cache expected source coverage sum differs")
+        source_offsets: dict[str, int] = {}
+        offset = 0
+        for path in record_paths:
+            source_offsets[path] = offset
+            offset += source_counts[path]
+
+        def unpack(raw):
+            if not partitioned_sources:
+                if not isinstance(raw, Mapping):
+                    raise ValueError("view-cache source emitted an invalid batch")
+                return None, raw
+            if (
+                not isinstance(raw, tuple) or len(raw) != 2
+                or not isinstance(raw[0], str) or not isinstance(raw[1], Mapping)
+            ):
+                raise ValueError("partitioned view-cache source emitted an invalid batch")
+            return raw
+
         iterator = iter(batches)
         try:
-            first = next(iterator)
+            first_source, first = unpack(next(iterator))
         except StopIteration as error:
             raise ValueError("view-cache source stream is empty") from error
         for key in keys:
@@ -271,22 +302,71 @@ class EphemeralPmardViewCache:
         identities: list[str | None] = [None] * expected_rows
         views = {key: _allocate_view(first[key], expected_rows) for key in keys}
         cursor = 0
+        source_cursors = {path: 0 for path in record_paths}
+        source_last_entries = {path: -1 for path in record_paths}
 
-        def append(batch: Mapping[str, object]) -> None:
+        def append(batch: Mapping[str, object], source_path: str | None) -> None:
             nonlocal cursor
-            count = len(batch["labels"]); stop = cursor + count
+            count = len(batch["labels"])
+            if partitioned_sources:
+                if source_path not in source_offsets:
+                    raise ValueError("partitioned view-cache source is outside its split role")
+                start = source_offsets[source_path] + source_cursors[source_path]
+                stop = start + count
+                source_stop = source_offsets[source_path] + source_counts[source_path]
+                if stop > source_stop:
+                    raise ValueError("partitioned view-cache source row count exceeds its contract")
+            else:
+                start = cursor
+                stop = cursor + count
             if count <= 0 or stop > expected_rows or len(batch["identity_keys"]) != count:
                 raise ValueError("view-cache source emitted an invalid row block")
-            labels[cursor:stop] = np.asarray(batch["labels"])
-            identities[cursor:stop] = map(str, batch["identity_keys"])
+            identity_block = tuple(map(str, batch["identity_keys"]))
+            if partitioned_sources:
+                entries = []
+                for identity in identity_block:
+                    try:
+                        identity_source, raw_entry = identity.rsplit("::tree::", 1)
+                        entry = int(raw_entry)
+                    except (ValueError, TypeError) as error:
+                        raise ValueError("view cache contains a malformed identity") from error
+                    if identity_source != source_path:
+                        raise ValueError("partitioned view-cache batch contains another source")
+                    entries.append(entry)
+                if any(right <= left for left, right in zip(entries, entries[1:])):
+                    raise ValueError("partitioned view-cache source entries are not increasing")
+                if entries and entries[0] <= source_last_entries[source_path]:
+                    raise ValueError("partitioned view-cache source batches are out of order")
+                if entries:
+                    source_last_entries[source_path] = entries[-1]
+            labels[start:stop] = np.asarray(batch["labels"])
+            identities[start:stop] = identity_block
             for key in keys:
                 source = batch.get(key); target = views[key]
-                _append_view(target, source, cursor, stop)
-            cursor = stop
+                _append_view(target, source, start, stop)
+            if partitioned_sources:
+                source_cursors[source_path] += count
+                cursor += count
+            else:
+                cursor = stop
 
-        append(first)
-        for batch in iterator:
-            append(batch)
+        try:
+            append(first, first_source)
+            for raw in iterator:
+                source_path, batch = unpack(raw)
+                append(batch, source_path)
+        finally:
+            close = getattr(iterator, "close", None)
+            if close is not None:
+                close()
+        if partitioned_sources and source_cursors != source_counts:
+            differences = {
+                path: {"expected": source_counts[path], "observed": source_cursors[path]}
+                for path in record_paths if source_cursors[path] != source_counts[path]
+            }
+            raise ValueError(
+                f"partitioned view-cache source coverage differs: {differences}"
+            )
         if cursor != expected_rows or any(value is None for value in identities):
             raise ValueError(
                 f"view-cache row count differs: expected {expected_rows}, observed {cursor}"
