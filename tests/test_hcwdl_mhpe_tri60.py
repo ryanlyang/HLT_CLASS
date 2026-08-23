@@ -1923,6 +1923,48 @@ def test_completed_dependency_tasks_walks_recovery_ancestry(tmp_path: Path):
     }
 
 
+def test_completed_dependency_tasks_walks_composite_subjects(tmp_path: Path):
+    from hlt_classification.scouting import hcwdl_mhpe_tri60_recovery as recovery
+    from hlt_classification.scouting.hcwdl_mhpe_tri60_contracts import (
+        COMPOSITE_RECOVERY_SPEC_CONTRACT, RECOVERY_SPEC_CONTRACT, artifact,
+    )
+
+    subjects = {}
+    expected = set()
+    for name, ancestry_task, completed_task in (
+        ("logit", "train_U000", "train_LOGIT_U050_from_U000"),
+        ("representation", "reduce_U000", "train_RSET_D000_from_U000"),
+    ):
+        subject = artifact({
+            "completed_task_attestations": [{"task_id": ancestry_task}],
+            "parent_recovery_spec_path": None,
+        }, contract=RECOVERY_SPEC_CONTRACT)
+        subject_path = tmp_path / f"{name}_subject.json"
+        write_immutable_json(subject_path, subject)
+        monitor = with_content_hash({
+            "contract": "TEST_TRI60_COMPOSITE_MONITOR/v1",
+            "schema_version": 1,
+            "rows": [
+                {"task_id": completed_task, "disposition": "complete"},
+                {"task_id": f"active_{name}", "disposition": "active_or_unknown"},
+            ],
+        })
+        monitor_path = tmp_path / f"{name}_monitor.json"
+        write_immutable_json(monitor_path, monitor)
+        subjects[name] = {
+            "subject_spec_path": str(subject_path),
+            "subject_spec_sha256": subject["content_hash"],
+            "monitor_report_path": str(monitor_path),
+            "monitor_report_sha256": monitor["content_hash"],
+        }
+        expected.update((ancestry_task, completed_task))
+
+    composite = artifact({
+        "composite_subjects": subjects,
+    }, contract=COMPOSITE_RECOVERY_SPEC_CONTRACT)
+    assert recovery._completed_dependency_tasks(composite) == expected
+
+
 def test_subject_dependency_registry_accepts_legacy_missing_field(
     tmp_path: Path,
 ):

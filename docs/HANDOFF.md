@@ -1,5 +1,27 @@
 # Current Handoff
 
+## TRI60 composite-of-composite recovery ancestry repair (2026-08-23)
+
+The exact cancellation of composite ledger root job `91376` and its 34
+registered descendants succeeded without touching the five running RSET/RREL
+parents.  Subsequent recovery creation failed closed with `TRI60 external
+recovery dependency is unbound`.  The ordinary recovery ancestry walker knew
+only ordinary/resource recovery contracts and therefore forgot authenticated
+completed parents when its immediate subject was a composite recovery.
+
+Completed-dependency discovery now recognizes a composite subject, traverses
+both of its content-hash-bound subject specs, and imports only rows marked
+complete by each bound immutable monitor.  Subject and monitor content hashes
+are checked again before their tasks are admitted.  Active rows remain
+excluded and continue to be represented by exact external Slurm dependency
+IDs.  A focused regression covers completed parents from both composite arms.
+The cancelled jobs produced no reusable outputs and will be recreated through
+a new source-pinned recovery; already completed artifacts and the five running
+representation fits remain untouched.
+
+Local evidence passes: all 49 TRI60 tests and the broader HCWDL suite at 416
+passed with 340 pre-existing Matplotlib/Pyparsing warnings.
+
 ## TRI60 true process-parallel preprocessing repair (2026-08-23)
 
 The first 72-CPU composite reducer, Tigris job `91376`, proved that the prior

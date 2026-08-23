@@ -8,7 +8,9 @@ import re
 import shutil
 from typing import Any, Mapping, Sequence
 
-from hlt_classification.data.cache_contracts import load_json, write_immutable_json
+from hlt_classification.data.cache_contracts import (
+    load_json, validate_content_hash, write_immutable_json,
+)
 
 from .hcwdl_mhpe_tri60_campaign import (
     ACCOUNT,
@@ -160,11 +162,42 @@ def _completed_dependency_tasks(subject: Mapping[str, Any]) -> set[str]:
     seen = set()
     while current.get("contract") in {
         RECOVERY_SPEC_CONTRACT, RESOURCE_RECOVERY_SPEC_CONTRACT,
+        COMPOSITE_RECOVERY_SPEC_CONTRACT,
     }:
         identity = str(current.get("content_hash"))
         if identity in seen:
             raise ValueError("TRI60 recovery dependency ancestry cycles")
         seen.add(identity)
+        if current.get("contract") == COMPOSITE_RECOVERY_SPEC_CONTRACT:
+            subjects = current.get("composite_subjects")
+            if not isinstance(subjects, Mapping) or set(subjects) != {
+                "logit", "representation",
+            }:
+                raise ValueError("TRI60 composite completed ancestry differs")
+            for payload in subjects.values():
+                if not isinstance(payload, Mapping):
+                    raise ValueError("TRI60 composite completed subject differs")
+                parent = load_json(payload["subject_spec_path"])
+                parent_hash = validate_content_hash(
+                    parent, expected_contract=str(parent["contract"]),
+                    expected_schema_version=int(parent["schema_version"]),
+                )
+                if parent_hash != payload.get("subject_spec_sha256"):
+                    raise ValueError("TRI60 composite completed subject changed")
+                completed.update(_completed_dependency_tasks(parent))
+                monitor = load_json(payload["monitor_report_path"])
+                monitor_hash = validate_content_hash(
+                    monitor, expected_contract=str(monitor["contract"]),
+                    expected_schema_version=int(monitor["schema_version"]),
+                )
+                if monitor_hash != payload.get("monitor_report_sha256"):
+                    raise ValueError("TRI60 composite completed monitor changed")
+                completed.update(
+                    str(row["task_id"])
+                    for row in monitor.get("rows", ())
+                    if row.get("disposition") == "complete"
+                )
+            break
         completed.update(
             str(row["task_id"])
             for row in current.get("completed_task_attestations", ())
