@@ -213,7 +213,7 @@ repair commit, add the exact changed execution files with repeated
 `--source-repair-phrase`. The repaired job log must report, for each train and
 validation cache, the total worker budget, bounded source-worker count,
 per-source transform count, rows, and elapsed seconds. The immutable original
-campaign remains a 16-CPU spec; the 32-CPU request belongs to the separately
+campaign remains a 16-CPU spec; the 72-CPU request belongs to the separately
 authenticated resource-recovery spec and therefore does not relabel the
 original campaign. The measured GH200 nodes expose 72 effective CPUs, so the
 deadline-oriented recovery requests all 72 for every GPU class. The repaired
