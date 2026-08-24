@@ -1,5 +1,15 @@
 # Scientific Implementation Plans
 
+The additive
+[TRI60 dense-extension plan](HCWDL_MHPE_TRI60_DENSE_EXTENSION_PLAN.md)
+reuses exact completed specialists from the running full-data campaign while
+adding LOGIT D083/D050/D017 and RSET/RREL D075/D025 ensemble stages. It owns a
+separate immutable graph, root, job namespace, ledger, source-completion gate,
+and recovery path; it cannot mutate or control the running source campaign.
+Its contracts and queue procedure are in the
+[contract companion](../contracts/HCWDL_MHPE_TRI60_DENSE_EXTENSION.md) and
+[runbook](../HCWDL_MHPE_TRI60_DENSE_EXTENSION_RUNBOOK.md).
+
 The implementation-authoritative
 [full-data three-track 60-pass ensemble-compression plan](HCWDL_MHPE_THREE_TRACK_60E_FULL_IMPLEMENTATION_PLAN.md)
 defines one shared fresh U000 root, a full triangular LOGIT ladder, shorter

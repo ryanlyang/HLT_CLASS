@@ -1,5 +1,74 @@
 # Current Handoff
 
+## TRI60 isolated dense extension (2026-08-24)
+
+An additive full-population 60-pass campaign now densifies the running three
+tracks without changing them. LOGIT adds exact D083, D050, and D017 stages to
+the existing U000/U050/U100/D066/D033/D000 support; RSET and RREL add D075 and
+D025 around the existing U100/D050/D000 support. Exact unchanged source
+specialists are imported, while every changed edge, expanded uniform ensemble,
+and terminal M1/M1E/M2 artifact has a distinct `DX_` identity. The frozen graph
+contains 48 fresh fits, 15 reducers, and 23 read-only source-fit imports.
+
+Campaign creation authenticates the already-complete U-stage reports and
+probability banks, allowing new early stages to run immediately. One exact
+`afterok` source gate waits for the running campaign-complete job before
+authenticating lower reusable specialists. The command plan has zero source
+commands and cannot hold, cancel, or write source jobs/artifacts. The extension
+uses a separate worktree, `hcwtri60x_` job namespace, root, ledger, reports,
+locks, monitoring, and restart-from-zero recovery.
+
+Representation targets remain process-RAM-only and rolling resume remains
+disabled. GPU fits and reducers request 72 CPUs to use the established spawned
+full-population preprocessing path. Focused dense/original TRI60 tests pass at
+65 tests. The final complete local repository suite passes at 693 tests in
+316.93 seconds, with 340 pre-existing Matplotlib/Pyparsing deprecation warnings. CLI
+help passes for all seven new create/run/submit/monitor/recovery entry points;
+all fifteen new Python files compile. An exact pushed commit and Tigris
+submission remain to be recorded.
+The scientific specification and exact queue block are in
+[`HCWDL_MHPE_TRI60_DENSE_EXTENSION_PLAN.md`](plans/HCWDL_MHPE_TRI60_DENSE_EXTENSION_PLAN.md)
+and
+[`HCWDL_MHPE_TRI60_DENSE_EXTENSION_RUNBOOK.md`](HCWDL_MHPE_TRI60_DENSE_EXTENSION_RUNBOOK.md).
+
+## TRI60 fixed four-D000 cross-track ensemble diagnostic (2026-08-24)
+
+A separate validation-only diagnostic now evaluates the frozen completed set
+`LOGIT_D000_from_U000`, `LOGIT_D000_from_U050E`,
+`RSET_D000_from_U000`, and `RREL_D000_from_U000` on one authenticated shared
+exact-HLT validation stream. The primary result is a temperature-one FP32
+probability ensemble with exact uniform 1/4 weights and lexical FP64
+accumulation. Four fixed leave-one-out averages and component-diversity rows
+are diagnostic only. The report binds campaign, graph, recipe, split,
+selection, report, checkpoint, validation-identity, label, and transient-logit
+hashes under
+`HCWDL_MHPE_THREE_TRACK_60E_D000_CROSS_TRACK_ENSEMBLE_REPORT/v1`.
+
+The worker requires only the four completed reports/checkpoints—not campaign
+completion—and creates no fit, target bank, view cache, checkpoint, finalist,
+deployable model, final-test access, or active-DAG dependency. Focused local
+evidence: `53 passed` across the complete TRI60 test file plus the first four
+diagnostic tests, followed by `5 passed` for the diagnostic suite including a
+mocked end-to-end evaluator. The complete local repository suite then passed
+with `682 passed` in 325.80 seconds (warnings were pre-existing Matplotlib/
+Pyparsing deprecations). No Tigris diagnostic has yet been submitted.
+The exact independent submission and result commands are in
+[`HCWDL_MHPE_TRI60_D000_CROSS_TRACK_ENSEMBLE_RUNBOOK.md`](HCWDL_MHPE_TRI60_D000_CROSS_TRACK_ENSEMBLE_RUNBOOK.md).
+
+## TRI60 outside-lens strategy explainer (2026-08-23)
+
+[`HCWDL_MHPE_TRI60_STRATEGY_EXPLAINER.md`](HCWDL_MHPE_TRI60_STRATEGY_EXPLAINER.md)
+now gives a standalone scientific explanation of the running campaign. It
+defines U/D coordinates, source-qualified specialists, singleton and
+multi-member `E` artifacts, the `1+2+3+4+5` LOGIT triangle, the two `1+2+3`
+representation triangles, probability-teacher/carrier separation, exact
+losses, M1E-to-M2 compression, deployment boundaries, result interpretation,
+and claim limitations. It also records both completed 300k predecessor result
+families: C25P75 multi-horizon ensemble-versus-local-KD comparisons and the
+fixed LOGIT+RSET+RREL ensemble's 50.8% AUC/78.2% R50 recovery at exact HLT.
+The README links the explainer. This documentation does not alter the immutable
+graph, recipe, execution, or active jobs.
+
 ## TRI60 composite-of-composite recovery ancestry repair (2026-08-23)
 
 The exact cancellation of composite ledger root job `91376` and its 34
