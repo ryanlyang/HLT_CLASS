@@ -24,6 +24,18 @@ recovery, monitor, cancellation, and interruption-attestation contracts. The
 exact strings are exported by `hcwdl_mhpe_tri60_contracts.py`; duplicates or
 unversioned identities are forbidden.
 
+The additive
+`HCWDL_MHPE_THREE_TRACK_60E_D000_CROSS_TRACK_ENSEMBLE_REPORT/v1` contract is a
+validation-only post-hoc diagnostic, not a campaign graph node. It binds the
+fixed four-component registry `LOGIT_D000_from_U000`,
+`LOGIT_D000_from_U050E`, `RSET_D000_from_U000`, and
+`RREL_D000_from_U000`; applies FP32 softmax at temperature one; averages the
+four probability vectors in lexical FP64 order with exact weight 1/4; and
+records fixed leave-one-out diagnostics. It requires only those four completed
+training reports and checkpoints. It creates no fit, checkpoint, target bank,
+view cache, deployable artifact, finalist candidate, or campaign dependency,
+and it cannot access final test.
+
 The graph contains exactly 32 fresh 60-pass fits:
 
 - one shared CE-only `U000`;
