@@ -1,5 +1,29 @@
 # Current Handoff
 
+## TRI60 LOGIT/RSET D000 50/50 validation blend (2026-08-26)
+
+An additive post-hoc diagnostic now reads the completed `LOGIT_D000E` and
+`RSET_D000E` validation probability banks and evaluates their exact 50/50
+probability average. It authenticates each probability lock, validation
+manifest, stage report, campaign/graph/recipe lineage, and canonical identity
+coverage. The blend uses lexical FP64 accumulation and one FP32 cast. The
+report binds the completed `M0CE60` control as zero recovery and `U000` as one
+recovery; macro and per-class R50 recovery are calculated in linear rejection
+space.
+
+The diagnostic has its own
+`HCWDL_MHPE_THREE_TRACK_60E_D000_LOGIT_RSET_BLEND_REPORT/v1` contract,
+source-pinned CPU-only worker, CLI, tests, worktree, low-priority Slurm job
+name, and output root. It creates no fit, checkpoint, target, deployable model,
+persistent prediction array, scheduler dependency, source-campaign write, or
+final-test capability. The exact independent queue and result commands are in
+[`HCWDL_MHPE_TRI60_D000_LOGIT_RSET_BLEND_RUNBOOK.md`](HCWDL_MHPE_TRI60_D000_LOGIT_RSET_BLEND_RUNBOOK.md).
+Focused evidence is `60 passed` across the core TRI60, existing four-D000,
+and new LOGIT/RSET blend suites. The complete local repository suite is
+`699 passed` in 321.43 seconds, with 340 pre-existing Matplotlib/Pyparsing
+deprecation warnings. CLI help and `git diff --check` pass. The pushed source
+commit and Tigris execution remain to be recorded.
+
 ## TRI60 isolated dense extension (2026-08-24)
 
 An additive full-population 60-pass campaign now densifies the running three

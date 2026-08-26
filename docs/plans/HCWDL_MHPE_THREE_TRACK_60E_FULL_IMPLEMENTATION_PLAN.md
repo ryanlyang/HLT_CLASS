@@ -998,6 +998,18 @@ KD. Adding a fresh 60-pass CE-only HLT control would be a separately
 registered, nonblocking ablation rather than an undeclared 33rd fit. One seed
 remains exploratory.
 
+One additive post-hoc validation diagnostic is also predeclared after the
+LOGIT and RSET D000 reducers complete. It reads the immutable
+`LOGIT_D000E` and `RSET_D000E` validation probability banks, assigns each
+exact rational weight 1/2, accumulates in lexical order and FP64, casts the
+average once to FP32, and evaluates it on the authenticated validation rows.
+`M0CE60` is the zero-recovery reference and `U000` is the one-recovery
+reference; R50 recovery is calculated in linear rejection space. This
+diagnostic is exploratory and cannot select a campaign model, alter the graph,
+create a fit or deployable artifact, add a scheduler dependency, or access
+final test. Its result is scientifically distinct from either track's internal
+same-view ensembles.
+
 ## 18. Deployability and final evaluation
 
 All U nodes and nonzero-D nodes are privileged training-time models. Every

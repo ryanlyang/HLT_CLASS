@@ -36,6 +36,18 @@ training reports and checkpoints. It creates no fit, checkpoint, target bank,
 view cache, deployable artifact, finalist candidate, or campaign dependency,
 and it cannot access final test.
 
+The additive
+`HCWDL_MHPE_THREE_TRACK_60E_D000_LOGIT_RSET_BLEND_REPORT/v1` contract binds
+the completed `LOGIT_D000E` and `RSET_D000E` validation probability banks,
+their locks, manifests, and stage reports. It applies exact rational weight
+1/2 to each already-temperature-one probability vector using lexical FP64
+accumulation and one FP32 publication cast. It also binds the completed
+`M0CE60` report and `U000` probability bank so that AUC and linear-R50
+recovery use the fixed zero/one convention. It writes only a small report in
+a separate root, has no persistent prediction arrays, scheduler dependency,
+fit, checkpoint, target, deployable model, graph mutation, or final-test
+capability, and is never selection-eligible.
+
 The graph contains exactly 32 fresh 60-pass fits:
 
 - one shared CE-only `U000`;
