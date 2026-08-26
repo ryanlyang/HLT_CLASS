@@ -149,6 +149,13 @@ seeds, 300k/100k/100k population, and 60-pass schedule. Its only scientific
 change is specialist loss from C10P90 to C25P75; M1 remains C10P90/T1.
 
 The additive
+[TRI60 five-seed CE ensemble reviewer study](HCWDL_TRI60_CE5_SEED_ENSEMBLE_REVIEWER_PLAN.md)
+trains five independent full-data, 60-pass, exact-HLT CE models, averages all
+five class-probability outputs uniformly, and compares C10P90/T1 compression
+against an exactly seed-paired CE-only student. It has an isolated graph,
+root, job namespace, ledger, and restart-from-zero recovery path.
+
+The additive
 [D066 full-data optimization schedule screen](HCWDL_MHPE_D066_SCHEDULE_SCREEN_FULL_PLAN.md)
 is the immutable 60-fit predecessor study. The additive
 [D000 teacher-distance full-data screen](HCWDL_MHPE_D000_TEACHER_DISTANCE_SCHEDULE_SCREEN_FULL_PLAN.md)

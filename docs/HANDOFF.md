@@ -3338,3 +3338,43 @@ mixture targets completed successfully and are unrelated to this diagnostic
 validator failure. No training, target generation, or final-test access must
 be repeated; only the single validation diagnostic job needs a source-pinned
 resubmission after commit and push.
+
+## 2026-08-26: TRI60 five-seed CE ensemble reviewer control
+
+The additive full-data reviewer control in
+`docs/plans/HCWDL_TRI60_CE5_SEED_ENSEMBLE_REVIEWER_PLAN.md` is implemented.
+It contains five fresh exact-HLT, CE-only, 60-pass Particle Transformers; one
+fixed equal-probability reducer; one C10P90/T1 distilled student; and one
+CE-only student with the exact same initialization, sampler, and training seed
+alias as the distilled student. The graph therefore uses seven fresh fits and
+directly tests the alternative explanation "ordinary seed ensemble followed
+by KD" without changing or depending on scheduler state from the running
+TRI60/dense ladders.
+
+The implementation adds versioned graph, node, campaign, training,
+probability, aggregate, completion, monitor, and recovery contracts. Only
+canonical identity digests and 15 FP32 probabilities are durable teacher
+targets; raw component logits, particle views, hidden representations, and
+rolling-resume state are not persisted. Five CE teachers and the paired CE
+control launch in parallel; only `CE5_KD` waits for the five-teacher reducer.
+All models use exact HLT D000 inputs, the unified 21-channel ParT, the retained
+full mapped foundation, 60 passes, batch 256, and the established TRI60
+optimization/checkpoint semantics. Final test is absent.
+
+The campaign has its own `hcwce5_` job names, worktree, checkpoint root,
+command plan, exact dry/live journal, task attestations, and restart-from-zero
+failed/downstream recovery. It never holds, cancels, reprioritizes, or writes
+into another campaign. The queue procedure and result reader are in
+`docs/HCWDL_TRI60_CE5_SEED_ENSEMBLE_RUNBOOK.md`.
+
+Focused implementation evidence is 57 passing tests across the new CE5 suite
+and the unchanged TRI60 suite. The complete repository suite is 711 passed in
+325.28 seconds with 340 pre-existing Matplotlib/Pyparsing deprecation
+warnings. This includes exact graph/loss and paired-seed checks,
+hand-calculated probability averaging and identity joins, command-DAG
+isolation, aggregate semantics, recovery closure, and worker boundaries. All
+new Python/CLI surfaces compile; every create/run/submit/monitor/recovery CLI
+help surface passes; both worker scripts pass `bash -n`; and repository link
+validation passes in the complete suite. No donor file was copied, so
+`docs/LEGACY_SOURCE_MAP.md` does not require an entry. No SSH, push, Slurm
+submission, cancellation, or remote mutation occurred during implementation.
