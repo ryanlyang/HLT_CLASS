@@ -156,6 +156,15 @@ against an exactly seed-paired CE-only student. It has an isolated graph,
 root, job namespace, ledger, and restart-from-zero recovery path.
 
 The additive
+[TRI60 standalone M1 compression screen](HCWDL_TRI60_M1_COMPRESSION_SCREEN_PLAN.md)
+compares 20 exact-HLT LOGIT endpoint-compression conditions over cold, warm,
+and polish initialization; C10P90/C25P75/C50P50 plus one predeclared ramp;
+T=1/T=2; and three peak learning rates. It imports the completed source M1 as
+one control, runs 19 independent full-data/60-pass fits, requires only the
+already-complete LOGIT endpoint subset rather than source campaign completion,
+and uses a separate nice-5000 job namespace with no standalone smoke.
+
+The additive
 [D066 full-data optimization schedule screen](HCWDL_MHPE_D066_SCHEDULE_SCREEN_FULL_PLAN.md)
 is the immutable 60-fit predecessor study. The additive
 [D000 teacher-distance full-data screen](HCWDL_MHPE_D000_TEACHER_DISTANCE_SCHEDULE_SCREEN_FULL_PLAN.md)

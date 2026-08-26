@@ -247,7 +247,10 @@ class Tri60TrainingRuntime:
     minimum_lr_fraction: float = .05
     amp_dtype: str = "bfloat16"
 
-    def validate(self, *, execution_mode: str) -> None:
+    def validate(
+        self, *, execution_mode: str,
+        allowed_peak_learning_rates: Sequence[float] = (3.0e-4,),
+    ) -> None:
         if execution_mode not in {"scientific", "synthetic_test"}:
             raise ValueError("TRI60 execution mode differs")
         if execution_mode == "scientific" and (self.passes, self.batch_size) != (60, 256):
@@ -255,7 +258,7 @@ class Tri60TrainingRuntime:
         if self.passes <= 0 or self.batch_size <= 0:
             raise ValueError("TRI60 runtime budget must be positive")
         if (
-            self.peak_learning_rate != 3.0e-4
+            self.peak_learning_rate not in tuple(allowed_peak_learning_rates)
             or self.weight_decay != .01
             or self.adam_betas != (.9, .999)
             or self.adam_epsilon != 1.0e-8
@@ -275,6 +278,8 @@ class Tri60TrainingAuthority:
     training_report_contract: str
     selected_checkpoint_contract: str
     final_checkpoint_contract: str
+    allowed_initializations: tuple[str, ...] = ("fresh",)
+    allowed_peak_learning_rates: tuple[float, ...] = (3.0e-4,)
 
     def validate(self) -> None:
         require_sha256(self.graph_sha256, name="TRI60 authorized graph")
@@ -292,9 +297,22 @@ class Tri60TrainingAuthority:
         ):
             raise ValueError("TRI60 authorized artifact contracts differ")
         if (
-            self.node.initialization != "fresh"
+            self.node.initialization not in self.allowed_initializations
             or self.node.training_passes != 60
             or self.node.batch_size != 256
+            or not self.allowed_initializations
+            or len(set(self.allowed_initializations)) != len(self.allowed_initializations)
+            or any(
+                value not in {"fresh", "warm_selected_checkpoint", "polish_selected_checkpoint"}
+                for value in self.allowed_initializations
+            )
+            or not self.allowed_peak_learning_rates
+            or len(set(self.allowed_peak_learning_rates))
+            != len(self.allowed_peak_learning_rates)
+            or any(
+                not math.isfinite(float(value)) or float(value) <= 0
+                for value in self.allowed_peak_learning_rates
+            )
         ):
             raise ValueError("TRI60 authorized node budget differs")
 
@@ -445,6 +463,74 @@ def tri60_base_loss(
     if not all(resolved[target_condition_count:]):
         raise FloatingPointError("TRI60 base loss is nonfinite")
     return result
+
+
+def tri60_loss_schedule(
+    node: Tri60Node, schedule: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Validate and normalize an exact base-loss schedule.
+
+    Existing TRI60 nodes retain their constant registered weights.  Additive
+    diagnostic campaigns may predeclare the one supported CE-to-KD ramp;
+    accepting a data artifact here keeps the changing loss auditable instead
+    of hiding it inside a worker callback.
+    """
+
+    if schedule is None:
+        return {
+            "kind": "constant_v1", "ce_weight": float(node.ce_weight),
+            "kd_weight": float(node.kd_weight),
+        }
+    value = dict(schedule)
+    kind = value.get("kind")
+    if kind == "constant_v1":
+        expected = {
+            "kind": kind, "ce_weight": float(node.ce_weight),
+            "kd_weight": float(node.kd_weight),
+        }
+        if value != expected:
+            raise ValueError("TRI60 constant loss schedule differs")
+        return expected
+    expected = {
+        "kind": "linear_ce_to_kd_v1",
+        "initial_ce_weight": .75, "initial_kd_weight": .25,
+        "hold_through_pass": 5.0,
+        "target_ce_weight": .10, "target_kd_weight": .90,
+        "target_at_pass": 15.0,
+    }
+    if value != expected or (node.ce_weight, node.kd_weight) != (.10, .90):
+        raise ValueError("TRI60 ramp loss schedule differs")
+    return expected
+
+
+def tri60_loss_weights(
+    schedule: Mapping[str, Any], *, effective_pass: float,
+) -> tuple[float, float]:
+    """Return the exact CE/KD mixture at one optimizer update."""
+
+    if not math.isfinite(effective_pass) or effective_pass <= 0:
+        raise ValueError("TRI60 effective pass differs")
+    kind = schedule.get("kind")
+    if kind == "constant_v1":
+        ce = float(schedule["ce_weight"])
+        kd = float(schedule["kd_weight"])
+    elif kind == "linear_ce_to_kd_v1":
+        start = float(schedule["hold_through_pass"])
+        stop = float(schedule["target_at_pass"])
+        fraction = min(1.0, max(0.0, (effective_pass - start) / (stop - start)))
+        ce = float(schedule["initial_ce_weight"]) + fraction * (
+            float(schedule["target_ce_weight"])
+            - float(schedule["initial_ce_weight"])
+        )
+        kd = float(schedule["initial_kd_weight"]) + fraction * (
+            float(schedule["target_kd_weight"])
+            - float(schedule["initial_kd_weight"])
+        )
+    else:
+        raise ValueError("TRI60 loss schedule kind differs")
+    if not np.isclose(ce + kd, 1.0, rtol=0, atol=1e-12):
+        raise ValueError("TRI60 scheduled loss weights differ")
+    return ce, kd
 
 
 def _node_model(
@@ -751,8 +837,10 @@ def train_tri60_node(
     model_factory: Callable[[], Any] = build_scouting_particle_transformer,
     preparation_metrics: Mapping[str, float] | None = None,
     authority: Tri60TrainingAuthority | None = None,
+    loss_schedule: Mapping[str, Any] | None = None,
+    initialization_lineage: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
-    """Execute one registered cold fit without any reusable partial state."""
+    """Execute one registered fit without any reusable optimizer state."""
 
     import torch
 
@@ -767,7 +855,22 @@ def train_tri60_node(
         if node.node_id != node_id or node_id in NODE_REGISTRY:
             raise ValueError("TRI60 additive authority node identity differs")
     graph_sha256 = authority.graph_sha256
-    runtime.validate(execution_mode=execution_mode)
+    runtime.validate(
+        execution_mode=execution_mode,
+        allowed_peak_learning_rates=authority.allowed_peak_learning_rates,
+    )
+    normalized_loss_schedule = tri60_loss_schedule(node, loss_schedule)
+    normalized_initialization_lineage = {
+        str(name): require_sha256(value, name=f"TRI60 initialization {name}")
+        for name, value in sorted((initialization_lineage or {}).items())
+    }
+    if node.initialization == "fresh":
+        if normalized_initialization_lineage:
+            raise ValueError("TRI60 fresh initialization has parent state")
+    elif set(normalized_initialization_lineage) != {
+        "source_report", "source_checkpoint",
+    }:
+        raise ValueError("TRI60 warm initialization lineage differs")
     preparation = {
         str(name): float(value)
         for name, value in sorted((preparation_metrics or {}).items())
@@ -914,16 +1017,22 @@ def train_tri60_node(
                         )
                     )
                     with torch.autocast(device_type=target_device.type, enabled=False):
+                        effective_pass = effective_pass_for_update(
+                            update, updates_per_pass,
+                        )
+                        ce_weight, kd_weight = tri60_loss_weights(
+                            normalized_loss_schedule,
+                            effective_pass=effective_pass,
+                        )
                         base = tri60_base_loss(
                             logits.float(), labels,
                             teacher_probabilities=teacher,
-                            ce_weight=node.ce_weight,
-                            kd_weight=node.kd_weight,
+                            ce_weight=ce_weight,
+                            kd_weight=kd_weight,
                             temperature=node.temperature,
                         )
                         total = base["total"]
                         reported = {"ce": base["ce"], "kd": base["kd"]}
-                        effective_pass = effective_pass_for_update(update, updates_per_pass)
                         if node.auxiliary != "none":
                             execution = Tri60RepresentationExecution(node.track)
                             required = []
@@ -1126,6 +1235,8 @@ def train_tri60_node(
         "parents": normalized_parents,
         "node_spec": node.payload(),
         "runtime": asdict(runtime),
+        "loss_schedule": normalized_loss_schedule,
+        "initialization_lineage": normalized_initialization_lineage,
         "resume_policy": "disabled_restart_from_zero_v1",
         "execution_source_commit": source_commit,
     }
@@ -1158,6 +1269,9 @@ def train_tri60_node(
         "execution_source_commit": source_commit,
         "node_id": node_id,
         "node_spec": node.payload(),
+        "peak_learning_rate": runtime.peak_learning_rate,
+        "loss_schedule": normalized_loss_schedule,
+        "initialization_lineage": normalized_initialization_lineage,
         "complete": True,
         "updates": total_updates,
         "passes": runtime.passes,
@@ -1286,5 +1400,5 @@ __all__ = [
     "Tri60RepresentationExecution", "Tri60TrainingInterrupted",
     "Tri60TrainingAuthority", "Tri60TrainingRuntime",
     "load_tri60_model", "train_tri60_node",
-    "tri60_base_loss",
+    "tri60_base_loss", "tri60_loss_schedule", "tri60_loss_weights",
 ]

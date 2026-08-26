@@ -3378,3 +3378,51 @@ help surface passes; both worker scripts pass `bash -n`; and repository link
 validation passes in the complete suite. No donor file was copied, so
 `docs/LEGACY_SOURCE_MAP.md` does not require an entry. No SSH, push, Slurm
 submission, cancellation, or remote mutation occurred during implementation.
+
+## 2026-08-27: standalone TRI60 M1 compression screen
+
+The additive study in
+`docs/plans/HCWDL_TRI60_M1_COMPRESSION_SCREEN_PLAN.md` is implemented. It
+reports one imported `M1_LOGIT` control and runs 19 fresh exact-HLT,
+full-mapped, 60-pass fits spanning cold/warm/polish initialization,
+C10P90/C25P75/C50P50 plus one exact C75P25-to-C10P90 ramp, T=1/T=2, and peak
+learning rates `3e-4`, `1e-4`, and `5e-5`. Warm initialization inherits only
+the selected `LOGIT_D000_from_D033E` model state; polish inherits only the
+selected `M1_LOGIT` model state. All optimizer, schedule, RNG, and sampler
+state is fresh.
+
+The source lock authenticates only the completed source subset required by
+the screen: canonical campaign/foundation/recipe/endpoint evidence,
+`LOGIT_D000E` probability artifacts and stage report, selected `M1_LOGIT`, and
+selected `LOGIT_D000_from_D033E`. Source campaign aggregate/completion and
+source Slurm job IDs are not dependencies. Source artifacts are read-only.
+T=2 is the exact in-memory transformation
+`softmax(log(p_LOGIT_D000E)/2)`; no component logits, copied probability bank,
+particle views, hidden states, or representation targets are made durable.
+
+The independent 23-job DAG is authenticate, preflight, 19 sibling GH200
+fits, aggregate, and completion. It uses its own `hcwm1scr_` namespace, root,
+ledger, task attestations, monitor, and restart-from-zero recovery. Every job
+has Slurm nice 5000 so the opportunistic screen does not outrank the original
+TRI60 ladder. Final test is absent, poor metrics cannot fail completion, and
+no automatic top-three follow-up is launched. Per explicit user direction,
+there is no standalone smoke requirement; established TRI60 production
+evidence is carried forward.
+
+Implementation evidence:
+
+- the focused new/unchanged TRI60 suites pass 62 tests in 6.73 seconds;
+- the complete repository suite passes 717 tests in 326.95 seconds with the
+  existing 340 Matplotlib/Pyparsing deprecation warnings only;
+- all new Python surfaces compile and seven create/run/submit/monitor/recovery
+  CLIs pass their help/import checks;
+- a synthetic canonical publication validates the graph/spec/command plan and
+  a complete 23-task dry submission ledger;
+- `git diff --check` passes apart from existing Windows line-ending notices.
+
+The local Windows Bash executable could not be started, so both small worker
+scripts still require `bash -n` in the clean Tigris worktree before live
+submission. No donor file was copied, so `docs/LEGACY_SOURCE_MAP.md` is
+unchanged. No SSH, push, Slurm submission, cancellation, or remote mutation
+occurred. The queue procedure is in
+`docs/HCWDL_TRI60_M1_COMPRESSION_SCREEN_RUNBOOK.md`.
