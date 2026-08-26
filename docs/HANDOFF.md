@@ -1,5 +1,29 @@
 # Current Handoff
 
+## TRI60 flat-eight LOGIT/RSET D000 diagnostic (2026-08-26)
+
+An additive validation-only diagnostic now evaluates the eight underlying
+LOGIT/RSET D000 specialists with equal nominal weight. It authenticates the
+durable five-member `LOGIT_D000E` and three-member `RSET_D000E` banks and
+computes `5/8 LOGIT + 3/8 RSET`, while embedding the prior equal-family 50/50
+calculation as a direct comparator. The report records the exact frozen member
+registry and the negligible FP32 family-bank rounding boundary rather than
+claiming bitwise equivalence to fresh raw-specialist inference.
+
+The diagnostic has the new
+`HCWDL_MHPE_THREE_TRACK_60E_D000_LOGIT_RSET_FLAT8_REPORT/v1` contract and an
+independent source-pinned CPU worker, CLI, tests, low-priority Slurm job, and
+output root. It creates no training fit, checkpoint, target, prediction bank,
+deployable model, scheduler dependency, source-campaign mutation, or
+final-test access. Queue and result commands are in
+[`HCWDL_MHPE_TRI60_D000_LOGIT_RSET_FLAT8_RUNBOOK.md`](HCWDL_MHPE_TRI60_D000_LOGIT_RSET_FLAT8_RUNBOOK.md).
+Focused evidence is `65 passed` across the core TRI60, existing four-D000,
+existing 50/50, and new flat-eight suites. The complete local repository suite
+is `704 passed` in 322.81 seconds, with 340 pre-existing
+Matplotlib/Pyparsing deprecation warnings. CLI help, worker shell syntax, and
+`git diff --check` pass. The pushed source commit and Tigris execution remain
+to be recorded.
+
 ## TRI60 LOGIT/RSET D000 50/50 validation blend (2026-08-26)
 
 An additive post-hoc diagnostic now reads the completed `LOGIT_D000E` and

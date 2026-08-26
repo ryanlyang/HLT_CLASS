@@ -48,6 +48,19 @@ a separate root, has no persistent prediction arrays, scheduler dependency,
 fit, checkpoint, target, deployable model, graph mutation, or final-test
 capability, and is never selection-eligible.
 
+The additive
+`HCWDL_MHPE_THREE_TRACK_60E_D000_LOGIT_RSET_FLAT8_REPORT/v1` contract is the
+fixed member-count follow-up. It binds the graph's exact five-member
+`LOGIT_D000E` registry and exact three-member `RSET_D000E` registry, then
+assigns their durable family probability banks rational weights 5/8 and 3/8.
+Every underlying specialist therefore has nominal effective weight 1/8. The
+report embeds the authenticated equal-family 50/50 result as a comparator and
+records that the family banks underwent FP32 publication before the FP64
+cross-family accumulation; it may differ by negligible roundoff from direct
+raw-specialist accumulation. It inherits the same validation-only,
+non-selection, no-fit, no-dependency, no-source-write, and no-final-test
+boundaries as the 50/50 diagnostic.
+
 The graph contains exactly 32 fresh 60-pass fits:
 
 - one shared CE-only `U000`;

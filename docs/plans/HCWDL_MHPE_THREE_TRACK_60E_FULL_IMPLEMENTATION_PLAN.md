@@ -1010,6 +1010,18 @@ create a fit or deployable artifact, add a scheduler dependency, or access
 final test. Its result is scientifically distinct from either track's internal
 same-view ensembles.
 
+After observing the predeclared equal-family result, one fixed member-count
+follow-up is registered without changing the campaign graph. `LOGIT_D000E`
+contains five uniformly weighted specialists and `RSET_D000E` contains three.
+The follow-up therefore assigns the durable family banks weights 5/8 and 3/8,
+giving all eight underlying specialists nominal effective weight 1/8. The
+weights come only from the frozen member counts and are not selected using
+validation performance. The report embeds the 50/50 result as a comparator,
+uses the same `M0CE60`/`U000` recovery references, and explicitly records the
+small FP32 family-bank rounding boundary. It remains validation-only,
+post-hoc, non-selection-eligible, and isolated from all ladder scheduling and
+artifacts.
+
 ## 18. Deployability and final evaluation
 
 All U nodes and nonzero-D nodes are privileged training-time models. Every

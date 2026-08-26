@@ -1,4 +1,4 @@
-"""Validation-only 50/50 blend of completed LOGIT and RSET D000 ensembles.
+"""Validation-only fixed blends of completed LOGIT and RSET D000 ensembles.
 
 This is an additive post-hoc diagnostic, not a TRI60 graph node.  It consumes
 only authenticated durable validation probability banks plus validation labels
@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 import re
 import time
-from typing import Any, Final, Mapping
+from typing import Any, Callable, Final, Mapping
 
 import numpy as np
 
@@ -27,6 +27,7 @@ from .hcwdl_mhpe_tri60_ce_control_contracts import (
     validate_artifact as validate_ce_artifact,
 )
 from .hcwdl_mhpe_tri60_contracts import (
+    D000_LOGIT_RSET_FLAT8_REPORT_CONTRACT,
     D000_LOGIT_RSET_BLEND_REPORT_CONTRACT,
     PROBABILITY_LOCK_CONTRACT,
     STAGE_REPORT_CONTRACT,
@@ -34,7 +35,9 @@ from .hcwdl_mhpe_tri60_contracts import (
     hashes,
     validate_artifact,
 )
-from .hcwdl_mhpe_tri60_graph import COORDINATES, GRAPH_SHA256, NODE_REGISTRY
+from .hcwdl_mhpe_tri60_graph import (
+    COORDINATES, ENSEMBLE_COMPONENTS, GRAPH_SHA256, NODE_REGISTRY,
+)
 from .hcwdl_mhpe_tri60_probability import load_probability_role
 from .hcwdl_mhpe_tri60_recipe import validate_recipe
 from .hcwdl_mhpe_tri60_runner import _foundation
@@ -45,11 +48,21 @@ from .training import derive_seed
 
 
 REPORT_CONTRACT: Final = D000_LOGIT_RSET_BLEND_REPORT_CONTRACT
+FLAT8_REPORT_CONTRACT: Final = D000_LOGIT_RSET_FLAT8_REPORT_CONTRACT
 COMPONENTS: Final = ("LOGIT_D000E", "RSET_D000E")
 REFERENCE_DISTRIBUTION: Final = "U000"
 BASELINE_ID: Final = "M0CE60"
 PRIMARY_ENSEMBLE_ID: Final = "LOGIT_RSET_D000E_50_50"
+FLAT8_ENSEMBLE_ID: Final = "LOGIT_RSET_D000E_FLAT8"
 RATIONAL_WEIGHT: Final = [1, 2]
+FLAT8_FAMILY_NUMERATORS: Final = {
+    "LOGIT_D000E": 5,
+    "RSET_D000E": 3,
+}
+FLAT8_DENOMINATOR: Final = 8
+FLAT8_MEMBER_REGISTRY: Final = {
+    node_id: ENSEMBLE_COMPONENTS[node_id] for node_id in COMPONENTS
+}
 
 
 def _probability_array(value: np.ndarray, *, rows: int | None = None) -> np.ndarray:
@@ -75,15 +88,37 @@ def _probability_logits(probabilities: np.ndarray) -> np.ndarray:
 
 
 def _uniform_blend(component_probabilities: Mapping[str, np.ndarray]) -> np.ndarray:
+    return _weighted_blend(
+        component_probabilities,
+        numerators={node_id: 1 for node_id in COMPONENTS}, denominator=2,
+    )
+
+
+def _weighted_blend(
+    component_probabilities: Mapping[str, np.ndarray], *,
+    numerators: Mapping[str, int], denominator: int,
+) -> np.ndarray:
     if tuple(component_probabilities) != COMPONENTS:
         raise ValueError("TRI60 D000 LOGIT/RSET component registry/order differs")
+    if (
+        tuple(numerators) != COMPONENTS
+        or isinstance(denominator, bool)
+        or not isinstance(denominator, int)
+        or denominator <= 0
+        or any(
+            isinstance(value, bool) or not isinstance(value, int) or value <= 0
+            for value in numerators.values()
+        )
+        or sum(numerators.values()) != denominator
+    ):
+        raise ValueError("TRI60 D000 LOGIT/RSET rational weights differ")
     rows = len(component_probabilities[COMPONENTS[0]])
     total = np.zeros((rows, 15), dtype=np.float64)
     for node_id in sorted(COMPONENTS):
-        total += _probability_array(
+        total += numerators[node_id] * _probability_array(
             component_probabilities[node_id], rows=rows,
         ).astype(np.float64)
-    result = np.ascontiguousarray(total / len(COMPONENTS), dtype=np.float32)
+    result = np.ascontiguousarray(total / denominator, dtype=np.float32)
     return _probability_array(result, rows=rows)
 
 
@@ -433,6 +468,250 @@ def validate_d000_logit_rset_blend_report(value: Mapping[str, Any]) -> str:
     return digest
 
 
+def build_d000_logit_rset_flat8_report(
+    *,
+    component_probabilities: Mapping[str, np.ndarray],
+    u000_probabilities: np.ndarray,
+    m0ce60_metrics: Mapping[str, Any],
+    labels: np.ndarray,
+    identity_digests: np.ndarray,
+    component_lineage: Mapping[str, Mapping[str, str]],
+    u000_lineage: Mapping[str, str],
+    baseline_lineage: Mapping[str, str],
+    parents: Mapping[str, str],
+    source_campaign_spec_path: str | Path,
+    ce_control_spec_path: str | Path,
+    producer_commit: str,
+    runtime_seconds: float,
+) -> dict[str, Any]:
+    """Build the fixed flat-eight endpoint diagnostic and 50/50 comparator."""
+
+    if (
+        tuple(FLAT8_MEMBER_REGISTRY) != COMPONENTS
+        or [len(FLAT8_MEMBER_REGISTRY[name]) for name in COMPONENTS] != [5, 3]
+        or len({
+            member
+            for name in COMPONENTS
+            for member in FLAT8_MEMBER_REGISTRY[name]
+        }) != FLAT8_DENOMINATOR
+    ):
+        raise ValueError("TRI60 D000 flat-eight member registry differs")
+    equal_family = build_d000_logit_rset_blend_report(
+        component_probabilities=component_probabilities,
+        u000_probabilities=u000_probabilities,
+        m0ce60_metrics=m0ce60_metrics,
+        labels=labels,
+        identity_digests=identity_digests,
+        component_lineage=component_lineage,
+        u000_lineage=u000_lineage,
+        baseline_lineage=baseline_lineage,
+        parents=parents,
+        source_campaign_spec_path=source_campaign_spec_path,
+        ce_control_spec_path=ce_control_spec_path,
+        producer_commit=producer_commit,
+        runtime_seconds=runtime_seconds,
+    )
+    flat_probability = _weighted_blend(
+        component_probabilities,
+        numerators=FLAT8_FAMILY_NUMERATORS,
+        denominator=FLAT8_DENOMINATOR,
+    )
+    target = np.ascontiguousarray(labels, dtype=np.int64)
+    metrics = classification_metrics(_probability_logits(flat_probability), target)
+    baseline = equal_family["reference_rows"][0]["metrics"]
+    oracle = equal_family["reference_rows"][1]["metrics"]
+    equal_metrics = equal_family["primary_ensemble"]["metrics"]
+    component_metrics = {
+        row["row_id"]: row["metrics"] for row in equal_family["component_rows"]
+    }
+    primary_r50 = float(_macro_r50(metrics))
+    payload = artifact({
+        "parents": dict(equal_family["parents"]),
+        "source_campaign_spec_path": equal_family[
+            "source_campaign_spec_path"
+        ],
+        "ce_control_spec_path": equal_family["ce_control_spec_path"],
+        "source_campaign_spec_sha256": equal_family[
+            "source_campaign_spec_sha256"
+        ],
+        "graph_sha256": GRAPH_SHA256,
+        "evaluation_role": "validation",
+        "validation_rows": equal_family["validation_rows"],
+        "validation_identity_order_sha256": equal_family[
+            "validation_identity_order_sha256"
+        ],
+        "validation_labels_sha256": equal_family["validation_labels_sha256"],
+        "family_order": list(COMPONENTS),
+        "family_member_registry": {
+            name: list(FLAT8_MEMBER_REGISTRY[name]) for name in COMPONENTS
+        },
+        "underlying_member_order": [
+            member
+            for name in COMPONENTS
+            for member in FLAT8_MEMBER_REGISTRY[name]
+        ],
+        "equal_family_comparator": equal_family,
+        "primary_ensemble": {
+            "ensemble_id": FLAT8_ENSEMBLE_ID,
+            "space": "class_probability",
+            "input_probability_temperature": 1.0,
+            "composition_semantics": (
+                "uniform_within_family_then_member_count_weighted_"
+                "durable_family_probability_v1"
+            ),
+            "family_order": list(COMPONENTS),
+            "accumulation_order": sorted(COMPONENTS),
+            "family_member_counts": dict(FLAT8_FAMILY_NUMERATORS),
+            "effective_family_weights": {
+                name: [FLAT8_FAMILY_NUMERATORS[name], FLAT8_DENOMINATOR]
+                for name in COMPONENTS
+            },
+            "nominal_effective_underlying_member_weight": [
+                1, FLAT8_DENOMINATOR,
+            ],
+            "family_bank_fp32_rounding_precedes_cross_family_blend": True,
+            "bitwise_identical_to_direct_raw_specialist_average": False,
+            "accumulation_dtype": "float64",
+            "published_metric_dtype": "float32",
+            "raw_specialist_reinference": False,
+            "metrics": metrics,
+            "summary": _summary(metrics),
+            "recovery_m0ce60_to_u000": _recovery(
+                metrics, baseline=baseline, oracle=oracle,
+            ),
+            "probabilities_sha256": array_sha256(
+                "LOGIT_RSET_D000E_FLAT8/probabilities", flat_probability,
+            ),
+        },
+        "primary_delta": {
+            "equal_family_50_50": {
+                "macro_ovr_auc": (
+                    float(metrics["macro_ovr_auc"])
+                    - float(equal_metrics["macro_ovr_auc"])
+                ),
+                "macro_r50_linear": (
+                    primary_r50 - float(_macro_r50(equal_metrics))
+                ),
+            },
+            **{
+                name: {
+                    "macro_ovr_auc": (
+                        float(metrics["macro_ovr_auc"])
+                        - float(component_metrics[name]["macro_ovr_auc"])
+                    ),
+                    "macro_r50_linear": (
+                        primary_r50 - float(_macro_r50(component_metrics[name]))
+                    ),
+                }
+                for name in COMPONENTS
+            },
+        },
+        "weights_predeclared_from_member_counts": True,
+        "validation_metrics_did_not_select_weights": True,
+        "posthoc_exploratory": True,
+        "selection_eligible": False,
+        "campaign_graph_mutated": False,
+        "fresh_fit_count": 0,
+        "deployable_model_created": False,
+        "persistent_prediction_arrays": False,
+        "source_campaign_outputs_mutated": False,
+        "scheduler_dependencies_created": False,
+        "runtime_seconds": float(runtime_seconds),
+        "producer_commit": producer_commit,
+        "ordinary_access_roles": ["validation"],
+        "ordinary_final_test_capability": False,
+        "final_test_accessed": False,
+    }, contract=FLAT8_REPORT_CONTRACT)
+    validate_d000_logit_rset_flat8_report(payload)
+    return payload
+
+
+def validate_d000_logit_rset_flat8_report(value: Mapping[str, Any]) -> str:
+    digest = validate_artifact(value, contract=FLAT8_REPORT_CONTRACT)
+    equal_family = value.get("equal_family_comparator", {})
+    validate_d000_logit_rset_blend_report(equal_family)
+    primary = value.get("primary_ensemble", {})
+    expected_registry = {
+        name: list(FLAT8_MEMBER_REGISTRY[name]) for name in COMPONENTS
+    }
+    expected_members = [
+        member for name in COMPONENTS for member in FLAT8_MEMBER_REGISTRY[name]
+    ]
+    if (
+        value.get("parents") != equal_family.get("parents")
+        or value.get("source_campaign_spec_path")
+        != equal_family.get("source_campaign_spec_path")
+        or value.get("ce_control_spec_path")
+        != equal_family.get("ce_control_spec_path")
+        or value.get("source_campaign_spec_sha256")
+        != equal_family.get("source_campaign_spec_sha256")
+        or value.get("graph_sha256") != GRAPH_SHA256
+        or value.get("evaluation_role") != "validation"
+        or value.get("validation_rows") != equal_family.get("validation_rows")
+        or value.get("validation_identity_order_sha256")
+        != equal_family.get("validation_identity_order_sha256")
+        or value.get("validation_labels_sha256")
+        != equal_family.get("validation_labels_sha256")
+        or value.get("family_order") != list(COMPONENTS)
+        or value.get("family_member_registry") != expected_registry
+        or value.get("underlying_member_order") != expected_members
+        or len(set(expected_members)) != FLAT8_DENOMINATOR
+        or primary.get("ensemble_id") != FLAT8_ENSEMBLE_ID
+        or primary.get("space") != "class_probability"
+        or primary.get("input_probability_temperature") != 1.0
+        or primary.get("composition_semantics")
+        != (
+            "uniform_within_family_then_member_count_weighted_"
+            "durable_family_probability_v1"
+        )
+        or primary.get("family_order") != list(COMPONENTS)
+        or primary.get("accumulation_order") != sorted(COMPONENTS)
+        or primary.get("family_member_counts") != FLAT8_FAMILY_NUMERATORS
+        or primary.get("effective_family_weights") != {
+            name: [FLAT8_FAMILY_NUMERATORS[name], FLAT8_DENOMINATOR]
+            for name in COMPONENTS
+        }
+        or primary.get("nominal_effective_underlying_member_weight") != [1, 8]
+        or primary.get(
+            "family_bank_fp32_rounding_precedes_cross_family_blend"
+        ) is not True
+        or primary.get(
+            "bitwise_identical_to_direct_raw_specialist_average"
+        ) is not False
+        or primary.get("accumulation_dtype") != "float64"
+        or primary.get("published_metric_dtype") != "float32"
+        or primary.get("raw_specialist_reinference") is not False
+        or primary.get("metrics", {}).get("rows")
+        != int(value.get("validation_rows", 0))
+        or value.get("weights_predeclared_from_member_counts") is not True
+        or value.get("validation_metrics_did_not_select_weights") is not True
+        or value.get("posthoc_exploratory") is not True
+        or value.get("selection_eligible") is not False
+        or value.get("campaign_graph_mutated") is not False
+        or value.get("fresh_fit_count") != 0
+        or value.get("deployable_model_created") is not False
+        or value.get("persistent_prediction_arrays") is not False
+        or value.get("source_campaign_outputs_mutated") is not False
+        or value.get("scheduler_dependencies_created") is not False
+        or value.get("ordinary_access_roles") != ["validation"]
+        or value.get("ordinary_final_test_capability") is not False
+        or value.get("final_test_accessed") is not False
+        or value.get("producer_commit") != equal_family.get("producer_commit")
+        or not np.isfinite(value.get("runtime_seconds", -1))
+        or float(value.get("runtime_seconds", -1)) < 0
+    ):
+        raise ValueError("TRI60 D000 flat-eight report semantics differ")
+    hashes(value["parents"])
+    require_sha256(
+        primary.get("probabilities_sha256"), name="flat8 probabilities",
+    )
+    if set(value.get("primary_delta", {})) != {
+        "equal_family_50_50", *COMPONENTS,
+    }:
+        raise ValueError("TRI60 D000 flat-eight comparison registry differs")
+    return digest
+
+
 def _load_validation_bank(
     *, root: Path, distribution_id: str, spec: Mapping[str, Any],
 ) -> tuple[np.ndarray, np.ndarray, dict[str, str]]:
@@ -533,11 +812,12 @@ def _load_m0ce60_reference(
     }
 
 
-def evaluate_d000_logit_rset_blend(
+def _evaluate_d000_logit_rset(
     *, campaign_spec_path: str | Path, ce_control_spec_path: str | Path,
     output: str | Path, producer_commit: str,
+    report_builder: Callable[..., dict[str, Any]],
 ) -> dict[str, Any]:
-    """Evaluate the exact 50/50 bank blend on authenticated validation rows."""
+    """Load the authenticated banks once and build one isolated diagnostic."""
 
     if re.fullmatch(r"[0-9a-f]{40}", producer_commit) is None:
         raise ValueError("TRI60 D000 LOGIT/RSET producer commit differs")
@@ -647,7 +927,7 @@ def evaluate_d000_logit_rset_blend(
             distribution_id
         ]["stage_report_sha256"]
 
-    report = build_d000_logit_rset_blend_report(
+    report = report_builder(
         component_probabilities={name: aligned[name] for name in COMPONENTS},
         u000_probabilities=aligned[REFERENCE_DISTRIBUTION],
         m0ce60_metrics=baseline_metrics,
@@ -666,10 +946,45 @@ def evaluate_d000_logit_rset_blend(
     return report
 
 
+def evaluate_d000_logit_rset_blend(
+    *, campaign_spec_path: str | Path, ce_control_spec_path: str | Path,
+    output: str | Path, producer_commit: str,
+) -> dict[str, Any]:
+    """Evaluate the exact 50/50 bank blend on authenticated validation rows."""
+
+    return _evaluate_d000_logit_rset(
+        campaign_spec_path=campaign_spec_path,
+        ce_control_spec_path=ce_control_spec_path,
+        output=output,
+        producer_commit=producer_commit,
+        report_builder=build_d000_logit_rset_blend_report,
+    )
+
+
+def evaluate_d000_logit_rset_flat8(
+    *, campaign_spec_path: str | Path, ce_control_spec_path: str | Path,
+    output: str | Path, producer_commit: str,
+) -> dict[str, Any]:
+    """Evaluate eight equal effective specialist weights from durable banks."""
+
+    return _evaluate_d000_logit_rset(
+        campaign_spec_path=campaign_spec_path,
+        ce_control_spec_path=ce_control_spec_path,
+        output=output,
+        producer_commit=producer_commit,
+        report_builder=build_d000_logit_rset_flat8_report,
+    )
+
+
 __all__ = [
-    "BASELINE_ID", "COMPONENTS", "PRIMARY_ENSEMBLE_ID",
-    "REFERENCE_DISTRIBUTION", "REPORT_CONTRACT",
+    "BASELINE_ID", "COMPONENTS", "FLAT8_DENOMINATOR",
+    "FLAT8_ENSEMBLE_ID", "FLAT8_FAMILY_NUMERATORS",
+    "FLAT8_MEMBER_REGISTRY", "FLAT8_REPORT_CONTRACT",
+    "PRIMARY_ENSEMBLE_ID", "REFERENCE_DISTRIBUTION", "REPORT_CONTRACT",
     "build_d000_logit_rset_blend_report",
+    "build_d000_logit_rset_flat8_report",
     "evaluate_d000_logit_rset_blend",
+    "evaluate_d000_logit_rset_flat8",
     "validate_d000_logit_rset_blend_report",
+    "validate_d000_logit_rset_flat8_report",
 ]
