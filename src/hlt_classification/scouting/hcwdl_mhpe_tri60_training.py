@@ -505,6 +505,43 @@ def tri60_loss_schedule(
         if value != expected:
             raise ValueError("TRI60 constant loss schedule differs")
         return expected
+    if kind == "piecewise_constant_v1":
+        if set(value) != {"kind", "segments"}:
+            raise ValueError("TRI60 piecewise loss schedule fields differ")
+        segments = value.get("segments")
+        if not isinstance(segments, list) or not segments:
+            raise ValueError("TRI60 piecewise loss schedule is empty")
+        normalized_segments = []
+        previous = 0
+        for segment in segments:
+            if not isinstance(segment, Mapping) or set(segment) != {
+                "through_pass", "ce_weight", "kd_weight",
+            }:
+                raise ValueError("TRI60 piecewise loss segment differs")
+            through = int(segment["through_pass"])
+            ce = float(segment["ce_weight"])
+            kd = float(segment["kd_weight"])
+            if (
+                through != segment["through_pass"]
+                or through <= previous
+                or through > node.training_passes
+                or not math.isfinite(ce) or not math.isfinite(kd)
+                or ce < 0 or kd < 0
+                or not np.isclose(ce + kd, 1.0, rtol=0, atol=1e-12)
+            ):
+                raise ValueError("TRI60 piecewise loss segment differs")
+            normalized_segments.append({
+                "through_pass": through, "ce_weight": ce, "kd_weight": kd,
+            })
+            previous = through
+        final = normalized_segments[-1]
+        if (
+            final["through_pass"] != node.training_passes
+            or not np.isclose(final["ce_weight"], node.ce_weight, rtol=0, atol=1e-12)
+            or not np.isclose(final["kd_weight"], node.kd_weight, rtol=0, atol=1e-12)
+        ):
+            raise ValueError("TRI60 piecewise loss endpoint differs")
+        return {"kind": kind, "segments": normalized_segments}
     expected = {
         "kind": "linear_ce_to_kd_v1",
         "initial_ce_weight": .75, "initial_kd_weight": .25,
@@ -540,6 +577,16 @@ def tri60_loss_weights(
             float(schedule["target_kd_weight"])
             - float(schedule["initial_kd_weight"])
         )
+    elif kind == "piecewise_constant_v1":
+        try:
+            segment = next(
+                row for row in schedule["segments"]
+                if effective_pass <= float(row["through_pass"])
+            )
+        except StopIteration as error:
+            raise ValueError("TRI60 effective pass exceeds loss schedule") from error
+        ce = float(segment["ce_weight"])
+        kd = float(segment["kd_weight"])
     else:
         raise ValueError("TRI60 loss schedule kind differs")
     if not np.isclose(ce + kd, 1.0, rtol=0, atol=1e-12):
@@ -604,6 +651,91 @@ def _learning_rate(runtime: Tri60TrainingRuntime, update: int, total_updates: in
         runtime.minimum_lr_fraction
         + (1 - runtime.minimum_lr_fraction) * cosine
     )
+
+
+def tri60_learning_rate_schedule(
+    runtime: Tri60TrainingRuntime, schedule: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Validate an auditable learning-rate schedule without changing defaults."""
+
+    if schedule is None:
+        return {
+            "kind": "fractional_warmup_cosine_v1",
+            "warmup_fraction": float(runtime.warmup_fraction),
+            "minimum_lr_fraction": float(runtime.minimum_lr_fraction),
+        }
+    value = dict(schedule)
+    kind = value.get("kind")
+    if kind == "fractional_warmup_cosine_v1":
+        if set(value) != {
+            "kind", "warmup_fraction", "minimum_lr_fraction",
+        }:
+            raise ValueError("TRI60 fractional LR schedule fields differ")
+        warmup = float(value["warmup_fraction"])
+        floor = float(value["minimum_lr_fraction"])
+        if (
+            not math.isfinite(warmup) or not 0 < warmup < 1
+            or not math.isfinite(floor) or not 0 < floor <= 1
+        ):
+            raise ValueError("TRI60 fractional LR schedule differs")
+        return {
+            "kind": kind, "warmup_fraction": warmup,
+            "minimum_lr_fraction": floor,
+        }
+    if kind == "warmup_hold_cosine_v1":
+        if set(value) != {
+            "kind", "warmup_passes", "hold_through_pass",
+            "minimum_lr_fraction",
+        }:
+            raise ValueError("TRI60 hold LR schedule fields differ")
+        warmup_passes = int(value["warmup_passes"])
+        hold_through = int(value["hold_through_pass"])
+        floor = float(value["minimum_lr_fraction"])
+        if (
+            warmup_passes != value["warmup_passes"]
+            or hold_through != value["hold_through_pass"]
+            or not 0 < warmup_passes <= hold_through < runtime.passes
+            or not math.isfinite(floor) or not 0 < floor <= 1
+        ):
+            raise ValueError("TRI60 hold LR schedule differs")
+        return {
+            "kind": kind, "warmup_passes": warmup_passes,
+            "hold_through_pass": hold_through,
+            "minimum_lr_fraction": floor,
+        }
+    raise ValueError("TRI60 learning-rate schedule kind differs")
+
+
+def tri60_learning_rate(
+    runtime: Tri60TrainingRuntime, *, update: int, total_updates: int,
+    updates_per_pass: int, schedule: Mapping[str, Any],
+) -> float:
+    """Return the exact LR for one zero-indexed optimizer update."""
+
+    if not 0 <= update < total_updates or updates_per_pass <= 0:
+        raise ValueError("TRI60 learning-rate update differs")
+    kind = schedule.get("kind")
+    if kind == "fractional_warmup_cosine_v1":
+        warmup = max(1, round(total_updates * float(schedule["warmup_fraction"])))
+        floor = float(schedule["minimum_lr_fraction"])
+    elif kind == "warmup_hold_cosine_v1":
+        warmup = int(schedule["warmup_passes"]) * updates_per_pass
+        hold = int(schedule["hold_through_pass"]) * updates_per_pass
+        floor = float(schedule["minimum_lr_fraction"])
+        if update < warmup:
+            return runtime.peak_learning_rate * (update + 1) / warmup
+        if update < hold:
+            return runtime.peak_learning_rate
+        progress = (update - hold) / max(1, total_updates - hold - 1)
+        cosine = .5 * (1 + math.cos(math.pi * min(1.0, progress)))
+        return runtime.peak_learning_rate * (floor + (1 - floor) * cosine)
+    else:
+        raise ValueError("TRI60 learning-rate schedule kind differs")
+    if update < warmup:
+        return runtime.peak_learning_rate * (update + 1) / warmup
+    progress = (update - warmup) / max(1, total_updates - warmup - 1)
+    cosine = .5 * (1 + math.cos(math.pi * min(1.0, progress)))
+    return runtime.peak_learning_rate * (floor + (1 - floor) * cosine)
 
 
 def _cpu_state(model) -> dict[str, Any]:
@@ -852,6 +984,7 @@ def train_tri60_node(
     preparation_metrics: Mapping[str, float] | None = None,
     authority: Tri60TrainingAuthority | None = None,
     loss_schedule: Mapping[str, Any] | None = None,
+    learning_rate_schedule: Mapping[str, Any] | None = None,
     initialization_lineage: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Execute one registered fit without any reusable optimizer state."""
@@ -876,6 +1009,9 @@ def train_tri60_node(
         allowed_batch_sizes=authority.allowed_batch_sizes,
     )
     normalized_loss_schedule = tri60_loss_schedule(node, loss_schedule)
+    normalized_learning_rate_schedule = tri60_learning_rate_schedule(
+        runtime, learning_rate_schedule,
+    )
     normalized_initialization_lineage = {
         str(name): require_sha256(value, name=f"TRI60 initialization {name}")
         for name, value in sorted((initialization_lineage or {}).items())
@@ -1008,7 +1144,11 @@ def train_tri60_node(
                 for raw in prefetched:
                     pass_batches += 1
                     for group in optimizer.param_groups:
-                        group["lr"] = _learning_rate(runtime, update, total_updates)
+                        group["lr"] = tri60_learning_rate(
+                            runtime, update=update, total_updates=total_updates,
+                            updates_per_pass=updates_per_pass,
+                            schedule=normalized_learning_rate_schedule,
+                        )
                     optimizer.zero_grad(set_to_none=True)
                     normalized, features, vectors, mask, visible, family, labels = _batch_tensors(
                         _cache_batch(raw, input_key=input_key), target_device,
@@ -1252,6 +1392,7 @@ def train_tri60_node(
         "node_spec": node.payload(),
         "runtime": asdict(runtime),
         "loss_schedule": normalized_loss_schedule,
+        "learning_rate_schedule": normalized_learning_rate_schedule,
         "initialization_lineage": normalized_initialization_lineage,
         "resume_policy": "disabled_restart_from_zero_v1",
         "execution_source_commit": source_commit,
@@ -1287,6 +1428,7 @@ def train_tri60_node(
         "node_spec": node.payload(),
         "peak_learning_rate": runtime.peak_learning_rate,
         "loss_schedule": normalized_loss_schedule,
+        "learning_rate_schedule": normalized_learning_rate_schedule,
         "initialization_lineage": normalized_initialization_lineage,
         "complete": True,
         "updates": total_updates,
@@ -1416,5 +1558,6 @@ __all__ = [
     "Tri60RepresentationExecution", "Tri60TrainingInterrupted",
     "Tri60TrainingAuthority", "Tri60TrainingRuntime",
     "load_tri60_model", "train_tri60_node",
-    "tri60_base_loss", "tri60_loss_schedule", "tri60_loss_weights",
+    "tri60_base_loss", "tri60_learning_rate", "tri60_learning_rate_schedule",
+    "tri60_loss_schedule", "tri60_loss_weights",
 ]
