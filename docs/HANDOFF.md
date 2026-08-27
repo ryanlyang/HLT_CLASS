@@ -1,5 +1,34 @@
 # Current Handoff
 
+## TRI60 source/DX LOGIT ladder zoom curves (2026-08-27)
+
+An additive validation-only diagnostic now produces separate Hbb and Hcc and
+combined two-panel signal-efficiency versus QCD-rejection figures restricted
+to the requested `[0.30, 0.50]` signal-efficiency interval. The presentation
+aliases are `U000 -> Offline`, `LOGIT_U100E -> D100`,
+`DX_LOGIT_D083E -> D080`, `LOGIT_U100_from_U050E -> D060`,
+`DX_LOGIT_D033E -> D040`, `DX_LOGIT_D083_from_LOGIT_U100E -> D020`, and
+`LOGIT_D000E -> D000`. Every legend places Offline first and the D labels in
+the exact `D100, D080, D060, D040, D020, D000` order. The immutable report
+preserves the real artifact IDs beneath those intentionally simplified labels.
+
+Five curves consume authenticated durable validation probability banks. The
+two specialist checkpoints receive validation-only inference on their native
+authenticated rung views using source-process parallelism; predictions remain
+process-local. The job has its own source-pinned worker and output root and
+creates no fit, checkpoint, prediction bank, campaign mutation, scheduler
+dependency, selection role, deployable model, or final-test capability. Queue
+and inspection commands are in
+[`HCWDL_MHPE_TRI60_LOGIT_LADDER_ZOOM_ROC_RUNBOOK.md`](HCWDL_MHPE_TRI60_LOGIT_LADDER_ZOOM_ROC_RUNBOOK.md).
+
+Focused local evidence is `66 passed` across the core TRI60, dense-extension,
+existing original ROC, and new zoom-ROC suites. The new synthetic end-to-end
+test writes and validates all six PNG/PDF figures, compact curve NPZ, requested
+alias/order registry, working points, and content-hashed
+`HCWDL_MHPE_THREE_TRACK_60E_LOGIT_LADDER_ZOOM_ROC_REPORT/v1` report. The
+combined figure was also inspected visually. Tigris execution and
+installed-Weaver validation remain pending.
+
 ## Original TRI60 LOGIT D000E Hbb/Hcc rejection curves (2026-08-27)
 
 An additive validation-only diagnostic now computes exact tied-threshold Hbb
