@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from hlt_classification.data.cache_contracts import (
     array_sha256, atomic_publish_bytes, deterministic_npz_bytes, sha256_file,
@@ -11,7 +12,8 @@ from hlt_classification.data.cache_contracts import (
 from hlt_classification.scouting.hcwdl_mhpe_roc import _probability_metrics
 from hlt_classification.scouting.hcwdl_tri60_m1_greedy_ensemble import (
     CANDIDATE_ORDER, ENSEMBLE_POLICY, MAX_ENSEMBLE_SIZE, OBJECTIVE_ORDER,
-    SHARDS, greedy_paths, shard_paths, validate_prediction_shard,
+    SHARDS, _validate_foundation_boundary, greedy_paths, shard_paths,
+    validate_prediction_shard,
 )
 from hlt_classification.scouting.hcwdl_tri60_m1_greedy_ensemble_campaign import (
     RESOURCES, SCHEDULER_NICE, _command_plan, campaign_tasks,
@@ -38,6 +40,43 @@ def test_registry_is_exact_twenty_candidates_in_five_four_model_shards():
     assert all(len(shard) == 4 for shard in SHARDS)
     assert tuple(item for shard in SHARDS for item in shard) == CANDIDATE_ORDER
     assert ENSEMBLE_POLICY.endswith("fp64_accumulation_to_fp32_v1")
+
+
+def test_foundation_boundary_distinguishes_tri60_lock_from_foundation_spec(
+    tmp_path: Path,
+):
+    spec_path = (tmp_path / "foundation_spec.json").resolve()
+    spec_hash = "1" * 64
+    tri60_lock_hash = "2" * 64
+    source_hash = "3" * 64
+    screen = {
+        "parents": {
+            "foundation": tri60_lock_hash,
+            "source_campaign": source_hash,
+        },
+        "role_counts": {"validation": 957541},
+    }
+    source = {"content_hash": source_hash}
+    tri60_lock = {
+        "parents": {"foundation_spec": spec_hash},
+        "foundation_spec_path": str(spec_path),
+    }
+
+    _validate_foundation_boundary(
+        screen=screen, source_campaign=source,
+        foundation_path=spec_path, foundation_hash=spec_hash,
+        tri60_foundation=tri60_lock,
+        tri60_foundation_hash=tri60_lock_hash,
+    )
+
+    with pytest.raises(ValueError, match="foundation boundary differs"):
+        _validate_foundation_boundary(
+            screen=screen, source_campaign=source,
+            foundation_path=spec_path, foundation_hash=spec_hash,
+            tri60_foundation=tri60_lock,
+            # The production bug compared this spec hash to the lock parent.
+            tri60_foundation_hash=spec_hash,
+        )
 
 
 def test_greedy_paths_are_deterministic_equal_weight_and_stop_at_five():
@@ -188,8 +227,8 @@ def test_campaign_publication_has_exact_isolated_shape(tmp_path: Path, monkeypat
             "screen_campaign": "1" * 64, "screen_aggregate": "2" * 64,
             "screen_complete": "3" * 64, "screen_source_lock": "4" * 64,
             "source_campaign": "5" * 64, "foundation": "6" * 64,
-            "recipe": "7" * 64, "screen_graph": "8" * 64,
-            "teacher_stage": "9" * 64,
+            "foundation_spec": "7" * 64, "recipe": "8" * 64,
+            "screen_graph": "9" * 64, "teacher_stage": "a" * 64,
         },
         "artifact_paths": {"screen_campaign_spec": str(tmp_path / "screen.json")},
         "candidate_order": list(CANDIDATE_ORDER), "candidate_reports": {},

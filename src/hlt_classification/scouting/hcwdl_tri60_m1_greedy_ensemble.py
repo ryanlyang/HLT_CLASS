@@ -28,6 +28,7 @@ from .hcwdl_mhpe_tri60_contracts import (
     validate_artifact as validate_source_artifact,
 )
 from .hcwdl_mhpe_tri60_graph import COORDINATES
+from .hcwdl_mhpe_tri60_integration import validate_tri60_foundation_lock
 from .hcwdl_mhpe_tri60_training import load_tri60_model
 from .hcwdl_representation_data import canonical_identity_digests
 from .hcwdl_tri60_m1_screen_campaign import (
@@ -104,6 +105,26 @@ def _source_training_report(
     return path.resolve(), report
 
 
+def _validate_foundation_boundary(
+    *, screen: Mapping[str, Any], source_campaign: Mapping[str, Any],
+    foundation_path: Path, foundation_hash: str,
+    tri60_foundation: Mapping[str, Any], tri60_foundation_hash: str,
+) -> None:
+    """Bind the TRI60 foundation lock to its underlying foundation spec."""
+
+    if (
+        tri60_foundation_hash != screen["parents"]["foundation"]
+        or tri60_foundation.get("parents", {}).get("foundation_spec")
+        != foundation_hash
+        or Path(tri60_foundation.get("foundation_spec_path", "")).resolve()
+        != foundation_path.resolve()
+        or source_campaign.get("content_hash")
+        != screen["parents"]["source_campaign"]
+        or screen.get("role_counts", {}).get("validation") != 957541
+    ):
+        raise ValueError("TRI60 M1 greedy foundation boundary differs")
+
+
 def build_source_lock(screen_campaign_spec: str | Path) -> dict[str, Any]:
     """Authenticate the complete 20-condition screen without copying it."""
 
@@ -170,12 +191,17 @@ def build_source_lock(screen_campaign_spec: str | Path) -> dict[str, Any]:
     foundation_hash = validate_foundation_campaign(
         foundation, executable=False, verify_source_tree=False,
     )
-    if (
-        foundation_hash != screen["parents"]["foundation"]
-        or source_campaign.get("content_hash") != screen["parents"]["source_campaign"]
-        or screen.get("role_counts", {}).get("validation") != 957541
-    ):
-        raise ValueError("TRI60 M1 greedy foundation boundary differs")
+    tri60_foundation_path = Path(
+        source_campaign["artifact_paths"]["tri60_foundation_lock"]
+    ).resolve()
+    tri60_foundation = load_json(tri60_foundation_path)
+    tri60_foundation_hash = validate_tri60_foundation_lock(tri60_foundation)
+    _validate_foundation_boundary(
+        screen=screen, source_campaign=source_campaign,
+        foundation_path=foundation_path, foundation_hash=foundation_hash,
+        tri60_foundation=tri60_foundation,
+        tri60_foundation_hash=tri60_foundation_hash,
+    )
 
     return artifact({
         "parents": {
@@ -184,7 +210,8 @@ def build_source_lock(screen_campaign_spec: str | Path) -> dict[str, Any]:
             "screen_complete": complete_hash,
             "screen_source_lock": screen["parents"]["source_lock"],
             "source_campaign": screen["parents"]["source_campaign"],
-            "foundation": foundation_hash,
+            "foundation": tri60_foundation_hash,
+            "foundation_spec": foundation_hash,
             "recipe": screen["parents"]["recipe"],
             "screen_graph": screen["parents"]["graph"],
             "teacher_stage": aggregate["parents"]["teacher_stage"],
@@ -195,6 +222,7 @@ def build_source_lock(screen_campaign_spec: str | Path) -> dict[str, Any]:
             "screen_complete": str(complete_path.resolve()),
             "source_campaign_spec": screen["artifact_paths"]["source_campaign_spec"],
             "foundation_spec": str(foundation_path),
+            "tri60_foundation_lock": str(tri60_foundation_path),
         },
         "candidate_order": list(CANDIDATE_ORDER),
         "candidate_reports": reports,
