@@ -250,10 +250,15 @@ class Tri60TrainingRuntime:
     def validate(
         self, *, execution_mode: str,
         allowed_peak_learning_rates: Sequence[float] = (3.0e-4,),
+        allowed_training_passes: Sequence[int] = (60,),
+        allowed_batch_sizes: Sequence[int] = (256,),
     ) -> None:
         if execution_mode not in {"scientific", "synthetic_test"}:
             raise ValueError("TRI60 execution mode differs")
-        if execution_mode == "scientific" and (self.passes, self.batch_size) != (60, 256):
+        if execution_mode == "scientific" and (
+            self.passes not in tuple(allowed_training_passes)
+            or self.batch_size not in tuple(allowed_batch_sizes)
+        ):
             raise ValueError("TRI60 scientific pass/batch budget differs")
         if self.passes <= 0 or self.batch_size <= 0:
             raise ValueError("TRI60 runtime budget must be positive")
@@ -280,6 +285,8 @@ class Tri60TrainingAuthority:
     final_checkpoint_contract: str
     allowed_initializations: tuple[str, ...] = ("fresh",)
     allowed_peak_learning_rates: tuple[float, ...] = (3.0e-4,)
+    allowed_training_passes: tuple[int, ...] = (60,)
+    allowed_batch_sizes: tuple[int, ...] = (256,)
 
     def validate(self) -> None:
         require_sha256(self.graph_sha256, name="TRI60 authorized graph")
@@ -298,8 +305,8 @@ class Tri60TrainingAuthority:
             raise ValueError("TRI60 authorized artifact contracts differ")
         if (
             self.node.initialization not in self.allowed_initializations
-            or self.node.training_passes != 60
-            or self.node.batch_size != 256
+            or self.node.training_passes not in self.allowed_training_passes
+            or self.node.batch_size not in self.allowed_batch_sizes
             or not self.allowed_initializations
             or len(set(self.allowed_initializations)) != len(self.allowed_initializations)
             or any(
@@ -313,6 +320,13 @@ class Tri60TrainingAuthority:
                 not math.isfinite(float(value)) or float(value) <= 0
                 for value in self.allowed_peak_learning_rates
             )
+            or not self.allowed_training_passes
+            or len(set(self.allowed_training_passes))
+            != len(self.allowed_training_passes)
+            or any(int(value) <= 0 for value in self.allowed_training_passes)
+            or not self.allowed_batch_sizes
+            or len(set(self.allowed_batch_sizes)) != len(self.allowed_batch_sizes)
+            or any(int(value) <= 0 for value in self.allowed_batch_sizes)
         ):
             raise ValueError("TRI60 authorized node budget differs")
 
@@ -858,6 +872,8 @@ def train_tri60_node(
     runtime.validate(
         execution_mode=execution_mode,
         allowed_peak_learning_rates=authority.allowed_peak_learning_rates,
+        allowed_training_passes=authority.allowed_training_passes,
+        allowed_batch_sizes=authority.allowed_batch_sizes,
     )
     normalized_loss_schedule = tri60_loss_schedule(node, loss_schedule)
     normalized_initialization_lineage = {
