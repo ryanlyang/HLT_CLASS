@@ -62,7 +62,7 @@ def test_zoom_registry_preserves_requested_display_aliases_and_order():
         "D100": "LOGIT_U100E",
         "D080": "DX_LOGIT_D083E",
         "D060": "LOGIT_U100_from_U050E",
-        "D040": "DX_LOGIT_D033E",
+        "D040": "LOGIT_D033E",
         "D020": "DX_LOGIT_D083_from_LOGIT_U100E",
         "D000": "LOGIT_D000E",
     }

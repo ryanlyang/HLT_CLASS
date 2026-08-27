@@ -7,7 +7,7 @@ combined two-panel signal-efficiency versus QCD-rejection figures restricted
 to the requested `[0.30, 0.50]` signal-efficiency interval. The presentation
 aliases are `U000 -> Offline`, `LOGIT_U100E -> D100`,
 `DX_LOGIT_D083E -> D080`, `LOGIT_U100_from_U050E -> D060`,
-`DX_LOGIT_D033E -> D040`, `DX_LOGIT_D083_from_LOGIT_U100E -> D020`, and
+`LOGIT_D033E -> D040`, `DX_LOGIT_D083_from_LOGIT_U100E -> D020`, and
 `LOGIT_D000E -> D000`. Every legend places Offline first and the D labels in
 the exact `D100, D080, D060, D040, D020, D000` order. The immutable report
 preserves the real artifact IDs beneath those intentionally simplified labels.

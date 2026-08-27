@@ -11,7 +11,7 @@ retaining the exact artifact identity in its content-hashed report:
 | `D100` | `LOGIT_U100E` |
 | `D080` | `DX_LOGIT_D083E` |
 | `D060` | `LOGIT_U100_from_U050E` |
-| `D040` | `DX_LOGIT_D033E` |
+| `D040` | `LOGIT_D033E` |
 | `D020` | `DX_LOGIT_D083_from_LOGIT_U100E` |
 | `D000` | `LOGIT_D000E` |
 
@@ -71,14 +71,14 @@ fi
 SOURCE_ROOT="$(dirname "${SOURCE_SPEC}")"
 DENSE_ROOT="$(dirname "${DENSE_SPEC}")"
 
-for distribution in U000 LOGIT_U100E LOGIT_D000E; do
+for distribution in U000 LOGIT_U100E LOGIT_D033E LOGIT_D000E; do
   test -f "${SOURCE_ROOT}/probabilities/${distribution}/lock.json"
   test -f "${SOURCE_ROOT}/probabilities/${distribution}/validation_manifest.json"
   test -f "${SOURCE_ROOT}/reports/stages/${distribution}.json"
 done
 test -f "${SOURCE_ROOT}/training/LOGIT_U100_from_U050E/training_report.json"
 
-for distribution in DX_LOGIT_D083E DX_LOGIT_D033E; do
+for distribution in DX_LOGIT_D083E; do
   test -f "${DENSE_ROOT}/probabilities/${distribution}/lock.json"
   test -f "${DENSE_ROOT}/probabilities/${distribution}/validation_manifest.json"
   test -f "${DENSE_ROOT}/reports/stages/${distribution}.json"
@@ -135,4 +135,3 @@ The most convenient files for sharing are:
 - `logit_ladder_zoom_hbb_rejection.png`
 - `logit_ladder_zoom_hcc_rejection.png`
 - `logit_ladder_zoom_hbb_hcc_rejection.png`
-

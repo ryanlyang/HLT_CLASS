@@ -99,7 +99,7 @@ SOURCE_REGISTRY: Final = {
     "D100": {"artifact_id": "LOGIT_U100E", "origin": "source", "kind": "distribution"},
     "D080": {"artifact_id": "DX_LOGIT_D083E", "origin": "dense", "kind": "distribution"},
     "D060": {"artifact_id": "LOGIT_U100_from_U050E", "origin": "source", "kind": "checkpoint"},
-    "D040": {"artifact_id": "DX_LOGIT_D033E", "origin": "dense", "kind": "distribution"},
+    "D040": {"artifact_id": "LOGIT_D033E", "origin": "source", "kind": "distribution"},
     "D020": {"artifact_id": "DX_LOGIT_D083_from_LOGIT_U100E", "origin": "dense", "kind": "checkpoint"},
     "D000": {"artifact_id": "LOGIT_D000E", "origin": "source", "kind": "distribution"},
 }
