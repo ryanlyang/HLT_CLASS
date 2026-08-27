@@ -1,5 +1,35 @@
 # Current Handoff
 
+## Original TRI60 LOGIT D000E Hbb/Hcc rejection curves (2026-08-27)
+
+An additive validation-only diagnostic now computes exact tied-threshold Hbb
+and Hcc versus QCD rejection scans for the original, non-DX `LOGIT_D000E`,
+with source-matched `M0CE60` and projected-offline-input `U000` references.
+The score is `p_signal/(p_signal+p_QCD)`; the y-axis is logarithmic QCD
+background rejection, and zero observed QCD passes use the finite empirical
+ceiling `N_QCD`. The figure uses a deterministic bounded projection of each
+full upper envelope; the report records exact unthinned 30%, 50%, and 80%
+working points and unclipped linear-rejection recovery from M0CE60 to U000.
+
+`LOGIT_D000E` and `U000` use their authenticated durable validation banks.
+The selected M0CE60 checkpoint receives one validation-only GPU inference
+pass, whose predictions remain process-local. Durable outputs are limited to
+PNG/PDF figures, compact curve arrays, and the content-hashed
+`HCWDL_MHPE_THREE_TRACK_60E_ORIGINAL_LOGIT_D000E_ROC_REPORT/v1` lineage
+report. The job has a separate source-pinned worker/root and no scheduler
+dependency, source-campaign write, fit, target, prediction bank, deployable
+model, selection role, or final-test capability. Queue and result commands are
+in
+[`HCWDL_MHPE_TRI60_ORIGINAL_LOGIT_D000E_ROC_RUNBOOK.md`](HCWDL_MHPE_TRI60_ORIGINAL_LOGIT_D000E_ROC_RUNBOOK.md).
+
+Focused local evidence is `72 passed` across the core TRI60 campaign, new
+diagnostic, reusable ROC curve, original LOGIT/RSET blend, and flat-eight
+suites; the scaffold/link check also passes `7 tests`. The synthetic
+end-to-end test writes and validates both figure formats, curve NPZ, working
+points, recovery, and immutable report. The complete local repository suite is
+`720 passed` in 349.12 seconds, with 400 Matplotlib/Pyparsing deprecation
+warnings. Tigris execution and installed-Weaver validation remain pending.
+
 ## TRI60 flat-eight LOGIT/RSET D000 diagnostic (2026-08-26)
 
 An additive validation-only diagnostic now evaluates the eight underlying

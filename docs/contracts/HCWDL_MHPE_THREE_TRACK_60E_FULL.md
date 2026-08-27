@@ -61,6 +61,21 @@ raw-specialist accumulation. It inherits the same validation-only,
 non-selection, no-fit, no-dependency, no-source-write, and no-final-test
 boundaries as the 50/50 diagnostic.
 
+The additive
+`HCWDL_MHPE_THREE_TRACK_60E_ORIGINAL_LOGIT_D000E_ROC_REPORT/v1` contract is a
+validation-only visualization diagnostic for the original, non-DX
+`LOGIT_D000E`. It authenticates the durable `LOGIT_D000E` and `U000`
+validation probability banks and performs one process-local selected-
+checkpoint inference pass for the source-matched `M0CE60` control. Exact Hbb
+and Hcc tied-threshold curves use `p_signal/(p_signal+p_QCD)` and report
+`N_QCD/max(1,N_QCD_passing)` so zero observed background has the finite
+empirical ceiling `N_QCD`. Exact registered working points are computed before
+a deterministic bounded signal-efficiency-grid projection makes the figure
+and compact curve NPZ. Only those compact curve arrays, figures, hashes, and a
+small lineage report are durable. M0 probabilities remain ephemeral; the
+diagnostic cannot train, select, deploy, mutate either campaign, create a
+scheduler dependency, or access final test.
+
 The graph contains exactly 32 fresh 60-pass fits:
 
 - one shared CE-only `U000`;
