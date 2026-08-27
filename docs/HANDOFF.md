@@ -1,5 +1,33 @@
 # Current Handoff
 
+## TRI60 D000 matched-seed diversity ablation (2026-08-27)
+
+An additive full-data study now isolates whether stochastic diversity explains
+the gap between the five-seed CE ensemble and the original same-seed LOGIT
+D000 ensemble. It retrains the five original frozen-teacher D000 edges using
+the exact `CE5_S01` through `CE5_S05` initialization, training, and sampler
+seed domains in fixed teacher order, while preserving exact HLT inputs,
+C25P75/T2, 60 passes, batch size 256, optimizer/schedule, and checkpoint
+selection. The five fits launch in parallel and form the fixed uniform
+`SD5_LOGIT_D000E` validation ensemble.
+
+The campaign is source-pinned and isolated under the `hcwsd5_` namespace with
+positive nice value 10000. It has no scheduler dependency on or write path
+into TRI60, DX, or CE5. The reducer deliberately publishes no train or
+validation probability bank, logits, or particle views; it persists only
+compact validation reports and compares against original `LOGIT_D000E`,
+`CE5E`, and `U000`. The scientific plan, `/v1` contracts, and exact dry-run
+and launch audit are in
+[`HCWDL_TRI60_D000_SD5_ABLATION_RUNBOOK.md`](HCWDL_TRI60_D000_SD5_ABLATION_RUNBOOK.md).
+
+Focused evidence is `6 passed` for graph/seed identity, parallel isolation,
+campaign publication, uniform validation-only reduction, storage audit, and
+thin workers; the neighboring TRI60/CE5 batch is `68 passed`. The complete
+729-test repository inventory passes in bounded shards (`315 + 194 + 220`);
+the shards avoid the local wrapper's ten-minute limit without excluding any
+collected test. CLI compilation/help and `git diff --check` pass. Tigris
+execution and installed-Weaver validation remain pending.
+
 ## TRI60 source/DX LOGIT ladder zoom curves (2026-08-27)
 
 An additive validation-only diagnostic now produces separate Hbb and Hcc and

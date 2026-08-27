@@ -1,6 +1,16 @@
 # Scientific Implementation Plans
 
 The additive
+[TRI60 D000 matched-seed diversity ablation](HCWDL_TRI60_D000_SD5_ABLATION_PLAN.md)
+re-fits the five frozen LOGIT D000 teacher edges with the exact five distinct
+CE5 seed domains, then evaluates one fixed uniform validation-only ensemble.
+It changes only stochastic domains, launches all five fits in parallel, and
+cannot mutate or depend on the running TRI60, dense, or CE5 jobs. Its contract
+and launch procedure are in the
+[contract companion](../contracts/HCWDL_TRI60_D000_SD5_ABLATION.md) and
+[runbook](../HCWDL_TRI60_D000_SD5_ABLATION_RUNBOOK.md).
+
+The additive
 [TRI60 dense-extension plan](HCWDL_MHPE_TRI60_DENSE_EXTENSION_PLAN.md)
 reuses exact completed specialists from the running full-data campaign while
 adding LOGIT D083/D050/D017 and RSET/RREL D075/D025 ensemble stages. It owns a
