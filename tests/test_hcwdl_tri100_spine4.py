@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
-import socket
 
 import numpy as np
 import pytest
@@ -12,14 +10,12 @@ from hlt_classification.data.cache_contracts import (
 )
 from hlt_classification.scouting.hcwdl_representation_data import HCWDLParticleInputs
 from hlt_classification.scouting.hcwdl_mhpe_tri60_training import (
-    Tri60TrainingRuntime, destroy_tri60_distributed,
-    distributed_batch_bounds, initialize_tri60_distributed,
-    train_tri60_node, tri60_early_stopping, tri60_learning_rate,
+    Tri60TrainingRuntime, train_tri60_node, tri60_early_stopping, tri60_learning_rate,
     tri60_learning_rate_schedule,
 )
 from hlt_classification.scouting.hcwdl_tri100_spine4_graph import (
     BRANCH_NODES, BRANCH_ORDER, BRANCH_PATHS, EARLY_STOPPING, ENDPOINT_NODES,
-    DDP_EXECUTION, FIT_ORDER, LR_SCHEDULE, NODE_REGISTRY, PROBABILITY_COMPONENTS,
+    EXECUTION, FIT_ORDER, LR_SCHEDULE, NODE_REGISTRY, PROBABILITY_COMPONENTS,
     REDUCER_ORDER, distribution_consumers, recipe_payload, validate_graph,
 )
 
@@ -94,62 +90,35 @@ def test_recipe_and_floor_tail_learning_rate_are_exact():
     assert normalized["patience_accumulates_before_minimum"] is True
 
 
-def test_four_rank_global_batch_partition_is_exact_and_balanced():
-    regular = [
-        distributed_batch_bounds(256, rank=rank, world_size=4)
-        for rank in range(4)
-    ]
-    partial = [
-        distributed_batch_bounds(255, rank=rank, world_size=4)
-        for rank in range(4)
-    ]
-    assert regular == [(0, 64), (64, 128), (128, 192), (192, 256)]
-    assert partial == [(0, 64), (64, 128), (128, 192), (192, 255)]
-    for rows, bounds in ((256, regular), (255, partial)):
-        flattened = [index for start, stop in bounds for index in range(start, stop)]
-        assert flattened == list(range(rows))
-    with pytest.raises(ValueError, match="cannot cover every rank"):
-        distributed_batch_bounds(3, rank=0, world_size=4)
-
-
-def test_production_distributed_acceptance_is_fully_validated():
+def test_production_single_gpu_acceptance_is_fully_validated():
     from hlt_classification.scouting.hcwdl_tri100_spine4_contracts import (
-        DISTRIBUTED_ACCEPTANCE_CONTRACT, artifact,
+        EXECUTION_ACCEPTANCE_CONTRACT, artifact,
     )
-    from hlt_classification.scouting.hcwdl_tri100_spine4_distributed import (
-        validate_distributed_acceptance,
+    from hlt_classification.scouting.hcwdl_tri100_spine4_execution import (
+        validate_execution_acceptance,
     )
 
-    ranks = [
-        {
-            "rank": rank, "local_rank": 0, "hostname": f"gh-a-{rank}",
-            "pid": 1000 + rank, "visible_cuda_devices": 1,
-            "device_name": "NVIDIA GH200", "collective_sum": 10.0,
-            "ddp_gradient": 15.0,
-        }
-        for rank in range(4)
-    ]
     value = artifact({
         "parents": {"campaign_spec": "b" * 64, "recipe": "c" * 64},
-        "source_commit": "a" * 40, "execution": dict(DDP_EXECUTION),
-        "observed_backend": "nccl", "observed_world_size": 4,
-        "rank_registry": ranks, "collective_expected": 10.0,
-        "collective_observed": 10.0, "ddp_gradient_expected": 15.0,
-        "ddp_gradient_observed_by_rank": [15.0] * 4,
-        "one_visible_gpu_per_rank": True,
-        "rank_zero_only_publication": True, "passed": True,
+        "source_commit": "a" * 40, "execution": dict(EXECUTION),
+        "hostname": "gh-a-001", "pid": 1000,
+        "slurm_job_id": "12345", "slurm_nodes": "1", "slurm_tasks": "1",
+        "visible_cuda_devices": 1, "device_name": "NVIDIA GH200",
+        "backward_output_expected": 4.0, "backward_output_observed": 4.0,
+        "backward_gradient_expected": 8.0, "backward_gradient_observed": 8.0,
+        "genuine_tigris_single_gh200_worker": True, "passed": True,
         "final_test_accessed": False,
-    }, contract=DISTRIBUTED_ACCEPTANCE_CONTRACT)
-    assert validate_distributed_acceptance(
+    }, contract=EXECUTION_ACCEPTANCE_CONTRACT)
+    assert validate_execution_acceptance(
         value, campaign_spec_sha256="b" * 64, recipe_sha256="c" * 64,
     ) == value["content_hash"]
     bad_payload = {
         key: item for key, item in value.items() if key != "content_hash"
     }
-    bad_payload["ddp_gradient_observed_by_rank"] = [15.0, 15.0, 14.0, 15.0]
+    bad_payload["visible_cuda_devices"] = 2
     bad = with_content_hash(bad_payload)
-    with pytest.raises(ValueError, match="distributed acceptance differs"):
-        validate_distributed_acceptance(
+    with pytest.raises(ValueError, match="execution acceptance differs"):
+        validate_execution_acceptance(
             bad, campaign_spec_sha256="b" * 64, recipe_sha256="c" * 64,
         )
 
@@ -217,52 +186,6 @@ def _tiny_model_factory():
     return Tiny()
 
 
-def _distributed_training_worker(
-    rank: int, world_size: int, port: int, output_dir: str,
-) -> None:
-    os.environ.update({
-        "MASTER_ADDR": "127.0.0.1", "MASTER_PORT": str(port),
-        "RANK": str(rank), "WORLD_SIZE": str(world_size),
-        "LOCAL_RANK": str(rank), "USE_LIBUV": "0",
-    })
-    context = initialize_tri60_distributed(
-        expected_world_size=world_size, global_batch_size=30,
-        backend="gloo", timeout_seconds=120,
-    )
-    try:
-        from hlt_classification.scouting.hcwdl_tri100_spine4_distributed import (
-            run_distributed_acceptance,
-        )
-
-        acceptance = run_distributed_acceptance(
-            campaign_spec_sha256="b" * 64, recipe_sha256="c" * 64,
-            source_commit="a" * 40, context=context,
-            require_production=False,
-        )
-        assert acceptance["observed_world_size"] == world_size
-        assert acceptance["observed_backend"] == "gloo"
-        report = train_tri60_node(
-            node_id="U000", train_cache=_SyntheticCache(rows=59),
-            validation_cache=_SyntheticCache(rows=31), input_key="hlt",
-            output_dir=Path(output_dir), parents={"foundation": SHA},
-            campaign_spec_sha256="b" * 64, recipe_sha256="c" * 64,
-            replicate_seed=1337, device="cpu",
-            runtime=Tri60TrainingRuntime(passes=2, batch_size=30),
-            execution_mode="synthetic_test", model_factory=_tiny_model_factory,
-            distributed_context=context,
-        )
-        assert report["distributed_execution"]["world_size"] == world_size
-        context.barrier()
-    finally:
-        destroy_tri60_distributed(context)
-
-
-def _free_local_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as handle:
-        handle.bind(("127.0.0.1", 0))
-        return int(handle.getsockname()[1])
-
-
 def test_early_stop_completes_integral_budget_and_restores_best(tmp_path: Path):
     cache = _SyntheticCache()
     report = train_tri60_node(
@@ -307,54 +230,6 @@ def test_patience_exhaustion_at_maximum_pass_is_normal_completion(tmp_path: Path
     assert report["stopped_early"] is False
     assert report["performance_early_termination"] is False
     assert report["stop_reason"] == "maximum_passes_reached"
-
-
-def test_two_rank_gloo_matches_single_process_on_partial_global_batch(
-    tmp_path: Path,
-):
-    torch = pytest.importorskip("torch")
-    single_dir = tmp_path / "single"
-    distributed_dir = tmp_path / "distributed"
-    single = train_tri60_node(
-        node_id="U000", train_cache=_SyntheticCache(rows=59),
-        validation_cache=_SyntheticCache(rows=31), input_key="hlt",
-        output_dir=single_dir, parents={"foundation": SHA},
-        campaign_spec_sha256="b" * 64, recipe_sha256="c" * 64,
-        replicate_seed=1337, device="cpu",
-        runtime=Tri60TrainingRuntime(passes=2, batch_size=30),
-        execution_mode="synthetic_test", model_factory=_tiny_model_factory,
-    )
-    torch.multiprocessing.spawn(
-        _distributed_training_worker,
-        args=(2, _free_local_port(), str(distributed_dir)),
-        nprocs=2, join=True,
-    )
-    distributed = load_json(distributed_dir / "training_report.json")
-    assert distributed["updates"] == single["updates"] == 4
-    assert distributed["passes"] == single["passes"] == 2
-    assert distributed["training_history"][0]["rows"] == 59
-    assert distributed["distributed_execution"] == {
-        "kind": "synchronous_data_parallel_v1", "backend": "gloo",
-        "world_size": 2, "nodes": 2, "ranks_per_node": 1,
-        "global_batch_size": 30,
-        "nominal_local_batch_size": 15,
-        "partial_batch_policy": "exact_disjoint_row_weighted_v1",
-        "validation_policy": "rank_zero_full_canonical_broadcast_v1",
-        "publication_policy": "rank_zero_only_v1",
-    }
-    single_state = torch.load(
-        single_dir / "final_model.pt", map_location="cpu", weights_only=False,
-    )["model"]
-    distributed_state = torch.load(
-        distributed_dir / "final_model.pt", map_location="cpu",
-        weights_only=False,
-    )["model"]
-    assert single_state.keys() == distributed_state.keys()
-    for name in single_state:
-        assert torch.allclose(
-            single_state[name], distributed_state[name], rtol=1.0e-5,
-            atol=1.0e-6,
-        ), name
 
 
 def test_single_component_probability_bank_round_trip(tmp_path: Path):
@@ -448,9 +323,9 @@ def test_campaign_dag_has_four_parallel_heads_and_exact_isolation(
     assert spec["source_completion_required"] is False
     assert spec["source_campaign_outputs_mutated"] is False
     assert spec["ensembles"] is False and spec["weight_continuation"] is False
-    assert spec["distributed_execution"] == dict(DDP_EXECUTION)
-    assert spec["resources"]["gpu_fit"]["nodes"] == 4
-    assert spec["resources"]["gpu_fit"]["distributed_world_size"] == 4
+    assert spec["execution"] == dict(EXECUTION)
+    assert spec["resources"]["gpu_fit"]["nodes"] == 1
+    assert spec["resources"]["gpu_fit"]["execution_world_size"] == 1
     plan = load_json(root / "command_plan.json")
     assert len(plan["commands"]) == 58
     fit = next(
@@ -460,10 +335,10 @@ def test_campaign_dag_has_four_parallel_heads_and_exact_isolation(
     assert "--cpus-per-task=72" in fit
     assert "--mem=320G" in fit
     assert "--time=3-00:00:00" in fit
-    assert "--nodes=4" in fit
-    assert "--ntasks=4" in fit
+    assert "--nodes=1" in fit
+    assert "--ntasks=1" in fit
     assert "--ntasks-per-node=1" in fit
-    assert any("HCWDL_SPINE4_DDP_WORLD_SIZE=4" in item for item in fit)
+    assert any("HCWDL_SPINE4_EXECUTION_WORLD_SIZE=1" in item for item in fit)
     assert all("hcwtri60" not in item for item in fit)
     reducer = next(
         row["command"] for row in plan["commands"]
@@ -471,7 +346,7 @@ def test_campaign_dag_has_four_parallel_heads_and_exact_isolation(
     )
     assert "--nodes=1" in reducer
     assert "--ntasks=1" in reducer
-    assert any("HCWDL_SPINE4_DDP_WORLD_SIZE=1" in item for item in reducer)
+    assert any("HCWDL_SPINE4_EXECUTION_WORLD_SIZE=1" in item for item in reducer)
 
 
 def test_source_lock_authenticates_only_completed_u000_artifacts(
@@ -578,7 +453,7 @@ def test_recovery_inherits_completed_parent_and_retries_from_zero(
         {
             "task_id": "preflight", "kind": "preflight",
             "dependencies": ["authenticate"], "external_dependencies": [],
-            "resource": "ddp_acceptance", "node_id": None,
+            "resource": "gpu_acceptance", "node_id": None,
             "distribution_id": None,
         },
         {
@@ -594,17 +469,17 @@ def test_recovery_inherits_completed_parent_and_retries_from_zero(
             "cpu_lock": {
                 "cpus": 4, "memory": "32G", "walltime": "02:00:00",
                 "gpu": None, "nodes": 1, "tasks_per_node": 1,
-                "distributed_world_size": 1,
+                "execution_world_size": 1,
             },
-            "ddp_acceptance": {
+            "gpu_acceptance": {
                 "cpus": 4, "memory": "32G", "walltime": "00:30:00",
-                "gpu": "gpu:gh200:1", "nodes": 4, "tasks_per_node": 1,
-                "distributed_world_size": 4,
+                "gpu": "gpu:gh200:1", "nodes": 1, "tasks_per_node": 1,
+                "execution_world_size": 1,
             },
             "gpu_fit": {
                 "cpus": 72, "memory": "320G", "walltime": "3-00:00:00",
-                "gpu": "gpu:gh200:1", "nodes": 4, "tasks_per_node": 1,
-                "distributed_world_size": 4,
+                "gpu": "gpu:gh200:1", "nodes": 1, "tasks_per_node": 1,
+                "execution_world_size": 1,
             },
         },
     })
@@ -665,7 +540,7 @@ def test_recovery_inherits_completed_parent_and_retries_from_zero(
     assert plan["commands"][0]["task_id"] == "train_example"
     assert plan["commands"][0]["dependencies"] == []
     command = plan["commands"][0]["command"]
-    assert "--nodes=4" in command
-    assert "--ntasks=4" in command
+    assert "--nodes=1" in command
+    assert "--ntasks=1" in command
     assert "--ntasks-per-node=1" in command
-    assert any("HCWDL_SPINE4_DDP_WORLD_SIZE=4" in item for item in command)
+    assert any("HCWDL_SPINE4_EXECUTION_WORLD_SIZE=1" in item for item in command)

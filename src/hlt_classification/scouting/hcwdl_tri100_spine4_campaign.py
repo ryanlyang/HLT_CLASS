@@ -14,7 +14,7 @@ from .hcwdl_tri100_spine4_contracts import (
     PLAN_CONTRACT, SPEC_CONTRACT, artifact, validate_artifact,
 )
 from .hcwdl_tri100_spine4_graph import (
-    BRANCH_NODES, BRANCH_ORDER, DDP_EXECUTION, ENDPOINT_NODES, FIT_ORDER, GRAPH_SHA256,
+    BRANCH_NODES, BRANCH_ORDER, ENDPOINT_NODES, EXECUTION, FIT_ORDER, GRAPH_SHA256,
     NODE_REGISTRY, REDUCER_ORDER, graph_payload,
     recipe_payload, validate_graph,
 )
@@ -37,16 +37,16 @@ class ResourceRequest:
     gpu: str | None = None
     nodes: int = 1
     tasks_per_node: int = 1
-    distributed_world_size: int = 1
+    execution_world_size: int = 1
 
 
 RESOURCES: Final = {
     "cpu_lock": ResourceRequest(4, "32G", "02:00:00"),
-    "ddp_acceptance": ResourceRequest(
-        4, "32G", "00:30:00", "gpu:gh200:1", 4, 1, 4,
+    "gpu_acceptance": ResourceRequest(
+        4, "32G", "00:30:00", "gpu:gh200:1",
     ),
     "gpu_fit": ResourceRequest(
-        72, "320G", "3-00:00:00", "gpu:gh200:1", 4, 1, 4,
+        72, "320G", "3-00:00:00", "gpu:gh200:1",
     ),
     "gpu_reducer": ResourceRequest(72, "192G", "1-00:00:00", "gpu:gh200:1"),
 }
@@ -74,7 +74,7 @@ def campaign_tasks() -> list[dict[str, Any]]:
         })
 
     add("authenticate", "authenticate", (), "cpu_lock")
-    add("preflight", "preflight", ("authenticate",), "ddp_acceptance")
+    add("preflight", "preflight", ("authenticate",), "gpu_acceptance")
     for branch in BRANCH_ORDER:
         for node_id in BRANCH_NODES[branch]:
             node = NODE_REGISTRY[node_id]
@@ -124,7 +124,7 @@ def _command_plan(spec: Mapping[str, Any]) -> dict[str, Any]:
             "--export=ALL," +
             f"PROJECT_DIR={spec['project_dir']},HCWDL_SPINE4_SPEC={spec['spec_path']}," +
             f"HCWDL_SPINE4_TASK={task['task_id']}," +
-            f"HCWDL_SPINE4_DDP_WORLD_SIZE={resource['distributed_world_size']}",
+            f"HCWDL_SPINE4_EXECUTION_WORLD_SIZE={resource['execution_world_size']}",
             worker,
         ))
         commands.append({
@@ -182,8 +182,8 @@ def create_campaign(
             "foundation_spec": source_lock["foundation_spec_path"],
             "graph": str(root / "graph.json"),
             "recipe": str(root / "recipe.json"),
-            "distributed_acceptance": str(
-                root / "locks/distributed_acceptance.json"
+            "execution_acceptance": str(
+                root / "locks/execution_acceptance.json"
             ),
         },
         "replicate_seed": int(source_lock["replicate_seed"]),
@@ -206,7 +206,7 @@ def create_campaign(
         "ensembles": False,
         "weight_continuation": False,
         "immediate_parent_only": True,
-        "distributed_execution": dict(DDP_EXECUTION),
+        "execution": dict(EXECUTION),
         "rolling_resume": False,
         "partial_checkpoint_reuse": False,
         "minimum_free_disk_bytes": 20 * 1024**3,
@@ -253,7 +253,7 @@ def validate_campaign(value: Mapping[str, Any], *, executable: bool = False) -> 
         or value.get("ensembles") is not False
         or value.get("weight_continuation") is not False
         or value.get("immediate_parent_only") is not True
-        or value.get("distributed_execution") != dict(DDP_EXECUTION)
+        or value.get("execution") != dict(EXECUTION)
         or value.get("rolling_resume") is not False
         or value.get("partial_checkpoint_reuse") is not False
         or value.get("final_test_accessed") is not False

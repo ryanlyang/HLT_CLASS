@@ -1,8 +1,7 @@
 # HCWDL TRI100 Four-Spine Runbook
 
-This queues the isolated 29-fit full-data study. Every fit is one four-node,
-four-GH200 synchronous-DDP allocation while reducers remain single-GPU. It
-does not alter current TRI60 or DX jobs.
+This queues the isolated 29-fit full-data study. Every fit uses one GH200 and
+batch size 256. It does not alter current TRI60, DX, or cancelled v1 jobs.
 
 ## 1. Commit and push
 
@@ -28,8 +27,8 @@ export SOURCE_SPEC="${CHECKPOINTS}/hcwdl_mhpe_tri60_full_d218961c_r1/campaign_sp
 git -C "${MAIN_REPO}" fetch origin main
 export SP4_COMMIT="$(git -C "${MAIN_REPO}" rev-parse origin/main)"
 export SP4_SHORT="${SP4_COMMIT:0:8}"
-export PROJECT_DIR="/home/ryreu/atlas/HLT_Classification_tri100_spine4_${SP4_SHORT}"
-export CAMPAIGN_ROOT="${CHECKPOINTS}/hcwdl_tri100_spine4_${SP4_SHORT}_r1"
+export PROJECT_DIR="/home/ryreu/atlas/HLT_Classification_tri100_spine4_single_${SP4_SHORT}"
+export CAMPAIGN_ROOT="${CHECKPOINTS}/hcwdl_tri100_spine4_single_${SP4_SHORT}_r1"
 
 test -f "${SOURCE_SPEC}"
 test ! -e "${CAMPAIGN_ROOT}"
@@ -73,19 +72,19 @@ root = Path(sys.argv[1])
 spec = json.loads((root / "campaign_spec.json").read_text())
 plan = json.loads((root / "command_plan.json").read_text())
 
+assert spec["contract"] == "HCWDL_TRI100_FOUR_SPINE_LOGIT_CAMPAIGN_SPEC/v2"
 assert spec["fresh_fit_count"] == 29
 assert spec["reducer_count"] == 25
 assert spec["branch_fit_counts"] == {
     "DIRECT": 1, "COARSE": 5, "DENSE": 8, "ULTRADENSE": 15,
 }
-assert spec["distributed_execution"] == {
-    "kind": "synchronous_data_parallel_v1",
-    "backend": "nccl", "world_size": 4, "nodes": 4,
-    "ranks_per_node": 1, "global_batch_size": 256,
-    "nominal_local_batch_size": 64,
-    "partial_batch_policy": "exact_disjoint_row_weighted_v1",
-    "validation_policy": "rank_zero_full_canonical_broadcast_v1",
-    "publication_policy": "rank_zero_only_v1",
+assert spec["execution"] == {
+    "kind": "single_gpu_v1", "backend": "cuda",
+    "world_size": 1, "nodes": 1, "ranks_per_node": 1,
+    "global_batch_size": 256, "local_batch_size": 256,
+    "partial_batch_policy": "native_single_process_v1",
+    "validation_policy": "single_device_full_canonical_v1",
+    "publication_policy": "single_process_v1",
 }
 assert len(plan["commands"]) == 58
 assert not any(row["external_dependencies"] for row in plan["commands"])
@@ -93,28 +92,25 @@ assert not any(row["external_dependencies"] for row in plan["commands"])
 commands = {row["task_id"]: row["command"] for row in plan["commands"]}
 for task in spec["tasks"]:
     command = commands[task["task_id"]]
-    if task["kind"] in {"preflight", "train"}:
-        assert "--nodes=4" in command
-        assert "--ntasks=4" in command
-        assert "--ntasks-per-node=1" in command
-        assert any("HCWDL_SPINE4_DDP_WORLD_SIZE=4" in item for item in command)
-    else:
-        assert "--nodes=1" in command
-        assert "--ntasks=1" in command
-        assert any("HCWDL_SPINE4_DDP_WORLD_SIZE=1" in item for item in command)
+    assert "--nodes=1" in command, task["task_id"]
+    assert "--ntasks=1" in command, task["task_id"]
+    assert "--ntasks-per-node=1" in command, task["task_id"]
+    assert any(
+        "HCWDL_SPINE4_EXECUTION_WORLD_SIZE=1" in item
+        for item in command
+    ), task["task_id"]
+    if task["kind"] in {"preflight", "train", "reducer"}:
+        assert "--gres=gpu:gh200:1" in command, task["task_id"]
 
+print("TRI100 SINGLE-GPU AUDIT: PASS")
 print("Campaign:", root)
 print("Spec:", spec["content_hash"])
 print("Tasks:", len(plan["commands"]))
-print("First branch fits:")
-for row in spec["tasks"]:
-    if row["kind"] == "train" and row["dependencies"] == ["preflight"]:
-        print(" ", row["task_id"])
 PY
 ```
 
-Expected task count: 58 = source authentication + four-node NCCL acceptance
-+ 29 four-node fits + 25 single-GPU reducers + aggregate + completion.
+Expected task count: 58 = source authentication + one-GH200 acceptance + 29
+single-GH200 fits + 25 single-GH200 reducers + aggregate + completion.
 
 ## 4. Submit the exact ledger
 
@@ -129,14 +125,9 @@ python -s "${PROJECT_DIR}/scripts/submit_hcwdl_tri100_spine4_campaign.py" \
 squeue --me -o "%.18i %.58j %.2t %.10M %R" | grep -E 'JOBID|hcwsp4_'
 ```
 
-The submitter is journaled and idempotent.  Rerunning it after a connection
-loss resumes publication from the exact immutable submission events.
-
-The four branch heads cannot start until `hcwsp4_preflight` publishes the
-four-node NCCL acceptance lock. That job performs a real DDP backward pass,
-checks one visible GH200 on each of four distinct nodes, and proves collective
-rank topology. A failed acceptance job therefore prevents scientific fits
-from starting; it is not a weak-metric veto.
+The submitter is journaled and idempotent. The four branch heads cannot start
+until `hcwsp4_preflight` publishes the one-GH200 execution lock. A failed
+topology/backward check blocks fits; weak metrics never do.
 
 ## 5. Monitor
 
@@ -147,6 +138,5 @@ python -s "${PROJECT_DIR}/scripts/monitor_hcwdl_tri100_spine4_campaign.py" \
   --output "${CAMPAIGN_ROOT}/monitor.json"
 ```
 
-Do not create recovery while any exact ledger job is active.  Recovery uses
-the scripts documented by `--help` and the phrase
-`SUBMIT HCWDL TRI100 FOUR SPINE RECOVERY EXACT LEDGER`.
+Do not create recovery while any exact ledger job is active. Recovery uses
+the phrase `SUBMIT HCWDL TRI100 FOUR SPINE RECOVERY EXACT LEDGER`.

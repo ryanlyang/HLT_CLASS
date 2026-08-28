@@ -69,17 +69,17 @@ EARLY_STOPPING: Final = MappingProxyType({
     "patience_passes": 15,
     "minimum_auc_delta": 5.0e-5,
 })
-DDP_EXECUTION: Final = MappingProxyType({
-    "kind": "synchronous_data_parallel_v1",
-    "backend": "nccl",
-    "world_size": 4,
-    "nodes": 4,
+EXECUTION: Final = MappingProxyType({
+    "kind": "single_gpu_v1",
+    "backend": "cuda",
+    "world_size": 1,
+    "nodes": 1,
     "ranks_per_node": 1,
     "global_batch_size": 256,
-    "nominal_local_batch_size": 64,
-    "partial_batch_policy": "exact_disjoint_row_weighted_v1",
-    "validation_policy": "rank_zero_full_canonical_broadcast_v1",
-    "publication_policy": "rank_zero_only_v1",
+    "local_batch_size": 256,
+    "partial_batch_policy": "native_single_process_v1",
+    "validation_policy": "single_device_full_canonical_v1",
+    "publication_policy": "single_process_v1",
 })
 
 
@@ -235,7 +235,7 @@ def recipe_payload() -> dict[str, object]:
         },
         "initialization": "fresh_per_fit",
         "teacher_policy": "immediate_parent_only_selected_checkpoint_logits_v1",
-        "distributed_execution": dict(DDP_EXECUTION),
+        "execution": dict(EXECUTION),
         "same_coordinate_seed_policy": "matched_across_branches_v1",
         "rolling_resume": False,
         "final_test_accessed": False,
@@ -281,15 +281,15 @@ def validate_graph() -> str:
         raise ValueError("TRI100 four-spine graph counts differ")
     if tuple(map(len, (BRANCH_NODES[name] for name in BRANCH_ORDER))) != (1, 5, 8, 15):
         raise ValueError("TRI100 four-spine branch lengths differ")
-    if dict(DDP_EXECUTION) != {
-        "kind": "synchronous_data_parallel_v1", "backend": "nccl",
-        "world_size": 4, "nodes": 4, "ranks_per_node": 1,
-        "global_batch_size": 256, "nominal_local_batch_size": 64,
-        "partial_batch_policy": "exact_disjoint_row_weighted_v1",
-        "validation_policy": "rank_zero_full_canonical_broadcast_v1",
-        "publication_policy": "rank_zero_only_v1",
+    if dict(EXECUTION) != {
+        "kind": "single_gpu_v1", "backend": "cuda",
+        "world_size": 1, "nodes": 1, "ranks_per_node": 1,
+        "global_batch_size": 256, "local_batch_size": 256,
+        "partial_batch_policy": "native_single_process_v1",
+        "validation_policy": "single_device_full_canonical_v1",
+        "publication_policy": "single_process_v1",
     }:
-        raise ValueError("TRI100 four-spine DDP execution differs")
+        raise ValueError("TRI100 four-spine single-GPU execution differs")
     for branch in BRANCH_ORDER:
         previous = None
         for index, node_id in enumerate(BRANCH_NODES[branch]):
@@ -328,7 +328,7 @@ def validate_graph() -> str:
 
 __all__ = [
     "BRANCH_NODES", "BRANCH_ORDER", "BRANCH_PATHS", "CAMPAIGN_LABEL",
-    "COORDINATES", "DDP_EXECUTION", "EARLY_STOPPING", "ENDPOINT_NODES", "FIT_ORDER",
+    "COORDINATES", "EARLY_STOPPING", "ENDPOINT_NODES", "EXECUTION", "FIT_ORDER",
     "GRAPH_SHA256", "LR_SCHEDULE", "NODE_REGISTRY", "PROBABILITY_COMPONENTS",
     "REDUCER_ORDER", "SEED_DOMAIN", "SOURCE_DISTRIBUTION", "SpineNode",
     "distribution_consumers", "graph_payload", "recipe_payload", "validate_graph",

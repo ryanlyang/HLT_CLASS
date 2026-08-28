@@ -130,7 +130,7 @@ def _recovery_plan(
             f"PROJECT_DIR={recovery['project_dir']}," +
             f"HCWDL_SPINE4_RECOVERY={recovery['spec_path']}," +
             f"HCWDL_SPINE4_TASK={task['task_id']}," +
-            f"HCWDL_SPINE4_DDP_WORLD_SIZE={resource['distributed_world_size']}",
+            f"HCWDL_SPINE4_EXECUTION_WORLD_SIZE={resource['execution_world_size']}",
             worker,
         ))
         commands.append({
@@ -240,7 +240,7 @@ def clean_incomplete_task_outputs(spec: Mapping[str, Any], task_id: str) -> None
     root = Path(spec["campaign_root"]).resolve()
     targets: list[Path] = []
     if task["kind"] == "preflight":
-        targets = [Path(spec["artifact_paths"]["distributed_acceptance"])]
+        targets = [Path(spec["artifact_paths"]["execution_acceptance"])]
     elif task["kind"] == "train":
         targets = [root / "training" / task["node_id"]]
     elif task["kind"] == "reducer":

@@ -15,12 +15,11 @@ from .hcwdl_tri100_spine4_contracts import (
     AGGREGATE_CONTRACT, COMPLETE_CONTRACT, STAGE_REPORT_CONTRACT,
     TRAINING_REPORT_CONTRACT, artifact, validate_artifact,
 )
-from .hcwdl_mhpe_tri60_training import Tri60DistributedContext
-from .hcwdl_tri100_spine4_distributed import (
-    run_distributed_acceptance, validate_distributed_acceptance,
+from .hcwdl_tri100_spine4_execution import (
+    run_execution_acceptance, validate_execution_acceptance,
 )
 from .hcwdl_tri100_spine4_graph import (
-    BRANCH_NODES, BRANCH_ORDER, DDP_EXECUTION, ENDPOINT_NODES, FIT_ORDER, GRAPH_SHA256,
+    BRANCH_NODES, BRANCH_ORDER, ENDPOINT_NODES, EXECUTION, FIT_ORDER, GRAPH_SHA256,
     NODE_REGISTRY, PROBABILITY_COMPONENTS, REDUCER_ORDER,
 )
 from .hcwdl_tri100_spine4_runner import run_fit, run_reducer
@@ -38,8 +37,8 @@ def _training_report(spec: Mapping[str, Any], node_id: str) -> dict[str, Any]:
     final = path.parent / str(report.get("final_checkpoint", ""))
     completed_passes = int(report.get("passes", -1))
     stopped_early = completed_passes < 100
-    acceptance = load_json(spec["artifact_paths"]["distributed_acceptance"])
-    acceptance_hash = validate_distributed_acceptance(
+    acceptance = load_json(spec["artifact_paths"]["execution_acceptance"])
+    acceptance_hash = validate_execution_acceptance(
         acceptance, campaign_spec_sha256=spec["content_hash"],
         recipe_sha256=spec["parents"]["recipe"],
     )
@@ -62,9 +61,12 @@ def _training_report(spec: Mapping[str, Any], node_id: str) -> dict[str, Any]:
         or report.get("complete") is not True
         or report.get("rolling_resume_published") is not False
         or report.get("partial_checkpoint_reuse") is not False
-        or report.get("parents", {}).get("distributed_acceptance")
+        or report.get("parents", {}).get("execution_acceptance")
         != acceptance_hash
-        or report.get("distributed_execution") != dict(DDP_EXECUTION)
+        or report.get("distributed_execution") is not None
+        or report.get("throughput_optimizations", {}).get(
+            "synchronous_data_parallel_world_size"
+        ) != 1
         or report.get("final_test_accessed") is not False
         or not selected.is_file() or not final.is_file()
         or sha256_file(selected) != report.get("selected_checkpoint_sha256")
@@ -83,7 +85,7 @@ def task_outputs(spec: Mapping[str, Any], task_id: str) -> list[Path]:
     if task["kind"] == "authenticate":
         return [Path(spec["artifact_paths"]["source_lock"])]
     if task["kind"] == "preflight":
-        return [Path(spec["artifact_paths"]["distributed_acceptance"])]
+        return [Path(spec["artifact_paths"]["execution_acceptance"])]
     if task["kind"] == "train":
         report = _training_report(spec, task["node_id"])
         directory = root / "training" / task["node_id"]
@@ -115,11 +117,11 @@ def build_aggregate(spec: Mapping[str, Any]) -> dict[str, Any]:
     validate_campaign(spec)
     source = load_json(spec["artifact_paths"]["source_lock"])
     validate_source_lock(source)
-    distributed_acceptance = load_json(
-        spec["artifact_paths"]["distributed_acceptance"]
+    execution_acceptance = load_json(
+        spec["artifact_paths"]["execution_acceptance"]
     )
-    distributed_acceptance_hash = validate_distributed_acceptance(
-        distributed_acceptance, campaign_spec_sha256=spec["content_hash"],
+    execution_acceptance_hash = validate_execution_acceptance(
+        execution_acceptance, campaign_spec_sha256=spec["content_hash"],
         recipe_sha256=spec["parents"]["recipe"],
     )
     source_report = load_json(source["u000"]["report_path"])
@@ -128,7 +130,7 @@ def build_aggregate(spec: Mapping[str, Any]) -> dict[str, Any]:
         "graph": GRAPH_SHA256,
         "source_campaign": spec["parents"]["source_campaign"],
         "source_u000_report": source["u000"]["report_sha256"],
-        "distributed_acceptance": distributed_acceptance_hash,
+        "execution_acceptance": execution_acceptance_hash,
     }
     rows = [{
         "artifact_id": "U000",
@@ -202,7 +204,7 @@ def build_aggregate(spec: Mapping[str, Any]) -> dict[str, Any]:
         "source_fit_reuse_count": 1,
         "endpoint_seed_matched": True,
         "immediate_parent_only": True,
-        "distributed_execution": dict(DDP_EXECUTION),
+        "execution": dict(EXECUTION),
         "ensembles": False,
         "poor_metrics_do_not_control_completion": True,
         "source_campaign_outputs_mutated": False,
@@ -229,9 +231,7 @@ class Spine4Workflow:
             raise ValueError("TRI100 four-spine source lock changed")
         return source
 
-    def _preflight(
-        self, distributed_context: Tri60DistributedContext | None,
-    ) -> dict[str, Any]:
+    def _preflight(self, *, device: str) -> dict[str, Any]:
         source = self._authenticate()
         if shutil.disk_usage(self.root).free < int(
             self.spec["minimum_free_disk_bytes"]
@@ -241,24 +241,19 @@ class Spine4Workflow:
             raise PermissionError("TRI100 four-spine contains resume state")
         if self.spec.get("ordinary_final_test_capability") is not False:
             raise PermissionError("TRI100 four-spine has final-test capability")
-        if distributed_context is None:
-            raise RuntimeError("TRI100 four-spine preflight requires four-rank DDP")
-        acceptance = run_distributed_acceptance(
+        acceptance = run_execution_acceptance(
             campaign_spec_sha256=self.spec["content_hash"],
             recipe_sha256=self.spec["parents"]["recipe"],
             source_commit=(self.execution_source_commit or self.spec["source_commit"]),
-            context=distributed_context,
+            device=device,
         )
-        if distributed_context.is_primary:
-            write_immutable_json(
-                self.spec["artifact_paths"]["distributed_acceptance"],
-                acceptance,
-            )
+        write_immutable_json(
+            self.spec["artifact_paths"]["execution_acceptance"], acceptance,
+        )
         return acceptance
 
     def run(
         self, task_id: str, *, device: str = "cuda",
-        distributed_context: Tri60DistributedContext | None = None,
     ) -> dict[str, Any]:
         if task_id not in self.tasks:
             raise KeyError("unknown TRI100 four-spine task")
@@ -267,13 +262,12 @@ class Spine4Workflow:
         if kind == "authenticate":
             return self._authenticate()
         if kind == "preflight":
-            return self._preflight(distributed_context)
+            return self._preflight(device=device)
         if kind == "train":
             return run_fit(
                 spec=self.spec, node_id=task["node_id"], device=device,
                 recovery_spec_sha256=self.recovery_spec_sha256,
                 execution_source_commit=self.execution_source_commit,
-                distributed_context=distributed_context,
             )
         if kind == "reducer":
             return run_reducer(

@@ -20,8 +20,8 @@ from .hcwdl_mhpe_tri60_probability import (
 )
 from .hcwdl_mhpe_tri60_runner import _configure_deterministic_backend, _infer_cache
 from .hcwdl_mhpe_tri60_training import (
-    Tri60DistributedContext, Tri60TrainingAuthority, Tri60TrainingRuntime,
-    load_tri60_model, train_tri60_node,
+    Tri60TrainingAuthority, Tri60TrainingRuntime, load_tri60_model,
+    train_tri60_node,
 )
 from .hcwdl_tri100_spine4_campaign import validate_campaign
 from .hcwdl_tri100_spine4_contracts import (
@@ -38,7 +38,7 @@ from .hcwdl_tri100_spine4_probability import (
     publish_probability_role, validate_probability_lock,
 )
 from .hcwdl_tri100_spine4_source import validate_source_lock
-from .hcwdl_tri100_spine4_distributed import validate_distributed_acceptance
+from .hcwdl_tri100_spine4_execution import validate_execution_acceptance
 from .hcwdl_unified_balanced_full_campaign import validate_foundation_campaign
 from .hcwdl_unified_balanced_runner import _cache_student_views, _load_common
 from .training import derive_seed
@@ -160,18 +160,14 @@ def run_fit(
     *, spec: Mapping[str, Any], node_id: str, device: str = "cuda",
     recovery_spec_sha256: str | None = None,
     execution_source_commit: str | None = None,
-    distributed_context: Tri60DistributedContext | None = None,
 ) -> dict[str, Any]:
     validate_campaign(spec)
     _configure_deterministic_backend()
     if node_id not in NODE_REGISTRY:
         raise KeyError("unknown TRI100 four-spine fit")
     node = NODE_REGISTRY[node_id]
-    if distributed_context is None:
-        raise RuntimeError("TRI100 four-spine fit requires synchronous DDP")
-    distributed_context.validate()
-    acceptance = load_json(spec["artifact_paths"]["distributed_acceptance"])
-    acceptance_hash = validate_distributed_acceptance(
+    acceptance = load_json(spec["artifact_paths"]["execution_acceptance"])
+    acceptance_hash = validate_execution_acceptance(
         acceptance, campaign_spec_sha256=spec["content_hash"],
         recipe_sha256=spec["parents"]["recipe"],
     )
@@ -193,7 +189,7 @@ def run_fit(
         "split_manifest": split_hash,
         "selection_manifest": selection_hash,
         "probability_lock": target_lock["content_hash"],
-        "distributed_acceptance": acceptance_hash,
+        "execution_acceptance": acceptance_hash,
     }
     if node.parent_node_id is None:
         source = _source_lock(spec)
@@ -237,7 +233,6 @@ def run_fit(
             authority=training_authority(node_id),
             learning_rate_schedule=dict(LR_SCHEDULE),
             early_stopping=dict(EARLY_STOPPING),
-            distributed_context=distributed_context,
         )
     finally:
         caches.clear()

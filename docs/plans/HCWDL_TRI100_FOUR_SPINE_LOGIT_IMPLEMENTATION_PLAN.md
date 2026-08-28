@@ -1,8 +1,10 @@
 # HCWDL TRI100 Four-Spine LOGIT Implementation Plan
 
-Status: four-rank synchronous-DDP implementation is locally complete. The
-full-data execution is the next action only after an exact pushed commit, the
-canonical Tigris dry run, and the in-campaign NCCL acceptance lock pass.
+Status: the single-GH200 v2 implementation is locally complete. The cancelled
+four-node DDP execution is retained only as v1 provenance after production
+measurement showed no per-pass speedup. The replacement execution is the next
+action after an exact pushed commit, canonical Tigris dry run, and in-campaign
+single-GH200 acceptance lock pass.
 
 ## Scientific question
 
@@ -63,9 +65,7 @@ Every new fit uses:
 - immediate-parent selected-checkpoint logits only;
 - constant `25% CE + 75% KD`;
 - temperature `T=2`;
-- global batch size 256;
-- synchronous data parallelism over four GH200 ranks, with one rank per node
-  and a nominal rank-local batch of 64;
+- batch size 256 on one GH200 process;
 - unweighted CE and validation every pass;
 - exact macro-AUC checkpoint selection, then minimum CE, maximum logR50, and
   earliest update as deterministic tie breakers;
@@ -101,34 +101,26 @@ Early stopping is evaluated once per validation pass:
 Stopping at an authorized pass is a complete scientific row.  Weak metrics do
 not fail a task or prune a later registered rung.
 
-## Distributed execution semantics
+## Single-GPU execution semantics
 
-Every fit uses four synchronous DDP ranks on four one-GH200 Tigris nodes. This
-is an execution acceleration, not a larger-batch experiment:
+Every fit uses one process on one GH200. Batch 256, optimizer updates, seed
+domains, data order, loss, validation, early stopping, and checkpoint
+selection remain the registered scientific semantics. No DDP process group,
+batch partition, gradient synchronization, distributed validation, or
+multi-rank publication occurs.
 
-- the global batch remains exactly 256 and the optimizer still takes one
-  update per global batch;
-- full batches contribute 64 rows per rank;
-- the final 255-row training batch is partitioned as 64/64/64/63 and each
-  local mean loss is weighted by `world_size * local_rows / global_rows`
-  before DDP's gradient average, yielding the exact global row mean;
-- all ranks replay the same authenticated global batch schedule, then take a
-  deterministic disjoint contiguous slice;
-- initialization is synchronized from rank zero and stochastic training RNG
-  domains are deterministic and rank-specific;
-- rank zero evaluates the complete canonical validation population and
-  broadcasts the resulting metrics and stopping decision;
-- only rank zero may publish checkpoints, reports, interruption evidence, or
-  task attestations;
-- rank failures fail the whole Slurm step and recovery restarts all four ranks
-  from update zero.
+This v2 execution replaces the cancelled v1 four-node execution after the
+first production fits measured approximately 13.7--14.4 minutes per pass,
+which was not faster than the established single-GPU jobs. Keeping one full
+batch on one GH200 also avoids the observed rank-local batch of 64 and removes
+cross-node all-reduce latency. This is an execution-only revision; the graph
+and scientific comparison are unchanged but all artifact contracts are
+versioned so v1 and v2 cannot mix.
 
-The campaign first runs a short four-node NCCL/DDP acceptance task. It proves
-world/rank topology, one visible GH200 per rank, collective arithmetic, a real
-DDP backward synchronization, and rank-zero-only evidence publication. The
-four branch heads depend on that immutable acceptance lock. This is an
-execution gate inside the registered campaign, not a separate scientific
-smoke campaign.
+The campaign first runs a short one-node acceptance task. It proves a genuine
+Tigris Slurm job with one task, one visible GH200, and a real CUDA
+forward/backward pass. The four branch heads depend on that immutable lock.
+This is an execution gate inside the campaign, not a scientific smoke run.
 
 ## Teacher materialization
 
@@ -158,11 +150,10 @@ The four first fits all depend only on the new preflight job, so Slurm may run
 them simultaneously.  Later jobs depend only on the preceding reducer in the
 same branch.  Aggregate completion depends on all four terminal D000 fits.
 
-Fit request: four nodes, one task per node, 72 CPUs and 320 GiB per task/node,
-one GH200 per node, three days.
+Fit request: one node, one task, 72 CPUs, 320 GiB, one GH200, three days.
 
-Distributed acceptance request: four nodes, one task and one GH200 per node,
-4 CPUs and 32 GiB per task/node, 30 minutes.
+Execution acceptance request: one node, one task, 4 CPUs, 32 GiB, one GH200,
+30 minutes.
 
 Reducer request: 72 CPUs, 192 GiB, one GH200, one day.
 
@@ -177,15 +168,13 @@ evidence already bound to the authenticated source campaign.  Before live
 submission it still requires:
 
 1. focused local tests;
-2. local multiprocess Gloo parity for global-batch partitioning, partial-batch
-   gradient weighting, synchronized validation/stopping, and primary-only
-   publication;
+2. local single-process training, early-stopping, artifact, and recovery tests;
 3. full command-plan construction;
 4. canonical dry-run ledger materialization;
 5. exact pushed source commit and clean detached worktree;
 6. successful read-only authentication of U000, its selected checkpoint, its
    probability bank, the full foundation, and all role counts on Tigris;
-7. a successful in-campaign four-node NCCL acceptance lock;
+7. a successful in-campaign one-GH200 execution acceptance lock;
 8. explicit creation and submission authorization phrases.
 
 Recovery never resumes a partial optimizer.  A failed task is cleaned only
