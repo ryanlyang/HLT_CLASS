@@ -40,9 +40,14 @@ def task_outputs(spec: Mapping[str, Any], task_id: str) -> list[Path]:
 
 
 class M1GreedyEnsembleWorkflow:
-    def __init__(self, spec: Mapping[str, Any]) -> None:
+    def __init__(
+        self, spec: Mapping[str, Any], *, recovery_spec_sha256: str | None = None,
+        execution_source_commit: str | None = None,
+    ) -> None:
         self.spec = dict(spec)
         self.root = Path(spec["campaign_root"])
+        self.recovery_spec_sha256 = recovery_spec_sha256
+        self.execution_source_commit = execution_source_commit
 
     def run(self, task_id: str, *, device: str = "cuda") -> dict[str, Any]:
         validate_campaign(self.spec, executable=False)
@@ -59,7 +64,11 @@ class M1GreedyEnsembleWorkflow:
                 spec=self.spec, shard_index=int(task["shard_index"]), device=device,
             )
         if task["kind"] == "greedy_reduce":
-            result = build_result(self.spec)
+            result = build_result(
+                self.spec,
+                execution_source_commit=self.execution_source_commit,
+                recovery_spec_sha256=self.recovery_spec_sha256,
+            )
             validate_result(result, spec=self.spec)
             write_immutable_json(self.root / "reports/greedy_ensemble.json", result)
             return result

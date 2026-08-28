@@ -76,6 +76,16 @@ BALANCED_POLICY: Final = (
     "for_macro_auc_and_linear_macro_r50_v1"
 )
 MAX_DURABLE_PREDICTION_BYTES: Final = 2 * 1024**3
+SINGLETON_REPRODUCTION_POLICY: Final = (
+    "stored_bfloat16_validation_vs_common_fp32_probability_inference_"
+    "metric_specific_absolute_envelope_v1"
+)
+SINGLETON_REPRODUCTION_TOLERANCES: Final = {
+    "accuracy": 5e-4,
+    "cross_entropy": 1e-3,
+    "macro_ovr_auc": 1e-4,
+    "macro_mean_log_qcd_rejection_at_50pct_signal": 2e-2,
+}
 
 if len(CANDIDATE_ORDER) != 20 or len(SHARDS) != SHARD_COUNT or any(
     len(shard) != SHARD_SIZE for shard in SHARDS
@@ -591,22 +601,29 @@ def _metric_delta(left: Mapping[str, Any], right: Mapping[str, Any]) -> dict[str
     }
 
 
-def _metrics_match(left: Mapping[str, Any], right: Mapping[str, Any]) -> bool:
-    names = (
-        "accuracy", "cross_entropy", "macro_ovr_auc",
-        "macro_mean_log_qcd_rejection_at_50pct_signal",
-    )
-    return all(
-        np.isclose(float(left[name]), float(right[name]), rtol=0, atol=5e-6)
-        for name in names
-    )
+def _singleton_reproduction_row(
+    observed: Mapping[str, Any], expected: Mapping[str, Any],
+) -> dict[str, Any]:
+    deltas = {
+        name: float(observed[name]) - float(expected[name])
+        for name in SINGLETON_REPRODUCTION_TOLERANCES
+    }
+    within = {
+        name: abs(deltas[name]) <= tolerance
+        for name, tolerance in SINGLETON_REPRODUCTION_TOLERANCES.items()
+    }
+    return {
+        "signed_deltas_fp32_minus_stored_bfloat16": deltas,
+        "within_tolerance_by_metric": within,
+        "within_tolerance": all(within.values()),
+    }
 
 
 def greedy_paths(
     *, probabilities: Mapping[str, np.ndarray], labels: np.ndarray,
     expected_metrics: Mapping[str, Mapping[str, Any]],
     teacher_metrics: Mapping[str, Any], workers: int = 1,
-) -> tuple[dict[str, list[dict[str, Any]]], int]:
+) -> tuple[dict[str, list[dict[str, Any]]], int, dict[str, Any]]:
     """Return three deterministic forward-selection paths through size five."""
 
     global _EVAL_PROBABILITIES, _EVAL_LABELS
@@ -620,7 +637,8 @@ def greedy_paths(
         for name, value in probabilities.items()
     }
     _EVAL_LABELS = np.ascontiguousarray(labels, dtype=np.int64)
-    source_metrics = expected_metrics[IMPORTED_CONTROL_ID]
+    source_metrics = None
+    singleton_rows: dict[str, dict[str, Any]] = {}
     cache: dict[tuple[str, ...], dict[str, Any]] = {}
     selected = {objective: tuple() for objective in OBJECTIVE_ORDER}
     paths = {objective: [] for objective in OBJECTIVE_ORDER}
@@ -658,10 +676,29 @@ def greedy_paths(
             if size == 1:
                 for candidate in CANDIDATE_ORDER:
                     observed = cache[(candidate,)]
-                    if not _metrics_match(observed, expected_metrics[candidate]):
-                        raise ValueError(
-                            f"TRI60 M1 greedy singleton metrics differ: {candidate}"
+                    reproduction = _singleton_reproduction_row(
+                        observed, expected_metrics[candidate],
+                    )
+                    singleton_rows[candidate] = reproduction
+                    if not reproduction["within_tolerance"]:
+                        failures = ", ".join(
+                            f"{name}={delta:+.9g} "
+                            f"(limit {SINGLETON_REPRODUCTION_TOLERANCES[name]:.9g})"
+                            for name, delta in reproduction[
+                                "signed_deltas_fp32_minus_stored_bfloat16"
+                            ].items()
+                            if not reproduction[
+                                "within_tolerance_by_metric"
+                            ][name]
                         )
+                        raise ValueError(
+                            "TRI60 M1 greedy singleton metrics exceed the "
+                            f"BF16/FP32 reproduction envelope: {candidate}: {failures}"
+                        )
+                source_metrics = cache[(IMPORTED_CONTROL_ID,)]
+
+            if source_metrics is None:
+                raise RuntimeError("TRI60 M1 greedy FP32 source metrics are absent")
 
             for objective in OBJECTIVE_ORDER:
                 used = set(selected[objective])
@@ -703,10 +740,23 @@ def greedy_paths(
             executor.shutdown(wait=True, cancel_futures=True)
         _EVAL_PROBABILITIES = {}
         _EVAL_LABELS = None
-    return paths, len(cache)
+    return paths, len(cache), {
+        "policy": SINGLETON_REPRODUCTION_POLICY,
+        "stored_metric_regime": "training_validation_bfloat16_autocast_v1",
+        "recomputed_metric_regime": "common_probability_shard_fp32_v1",
+        "absolute_tolerances": dict(SINGLETON_REPRODUCTION_TOLERANCES),
+        "all_within_tolerance": all(
+            row["within_tolerance"] for row in singleton_rows.values()
+        ),
+        "candidate_rows": singleton_rows,
+        "recomputed_source_m1_metrics": source_metrics,
+    }
 
 
-def build_result(spec: Mapping[str, Any]) -> dict[str, Any]:
+def build_result(
+    spec: Mapping[str, Any], *, execution_source_commit: str | None = None,
+    recovery_spec_sha256: str | None = None,
+) -> dict[str, Any]:
     source = load_json(spec["artifact_paths"]["source_lock"])
     if (
         validate_artifact(source, contract=SOURCE_LOCK_CONTRACT)
@@ -742,7 +792,7 @@ def build_result(spec: Mapping[str, Any]) -> dict[str, Any]:
         os.environ.get("SLURM_CPUS_PER_TASK", "1"),
     ))
     started = time.monotonic()
-    paths, evaluated_count = greedy_paths(
+    paths, evaluated_count, singleton_reproduction = greedy_paths(
         probabilities=probabilities, labels=reference_labels,
         expected_metrics=expected, teacher_metrics=source["teacher"]["metrics"],
         workers=workers,
@@ -759,12 +809,26 @@ def build_result(spec: Mapping[str, Any]) -> dict[str, Any]:
             "objective_score": winner["objective_score"],
             "metrics": winner["metrics"],
         }
+    producer_commit = execution_source_commit or spec["source_commit"]
+    if re.fullmatch(r"[0-9a-f]{40}", producer_commit) is None:
+        raise ValueError("TRI60 M1 greedy reducer producer commit differs")
+    if (execution_source_commit is None) != (recovery_spec_sha256 is None):
+        raise ValueError("TRI60 M1 greedy reducer recovery lineage differs")
+    recovery_parents = (
+        {} if recovery_spec_sha256 is None
+        else {"reducer_recovery": require_sha256(
+            recovery_spec_sha256, name="reducer recovery SHA-256",
+        )}
+    )
     return artifact({
         "parents": {
             "campaign_spec": spec["content_hash"],
             "source_lock": source["content_hash"],
             **shard_hashes,
+            **recovery_parents,
         },
+        "execution_source_commit": producer_commit,
+        "recovery_spec_sha256": recovery_spec_sha256,
         "question": "can_validation_greedy_ensembling_improve_exact_HLT_M1_compression",
         "candidate_order": list(CANDIDATE_ORDER),
         "candidate_count": len(CANDIDATE_ORDER),
@@ -772,7 +836,12 @@ def build_result(spec: Mapping[str, Any]) -> dict[str, Any]:
         "maximum_ensemble_size": MAX_ENSEMBLE_SIZE,
         "ensemble_policy": ENSEMBLE_POLICY,
         "balanced_objective_policy": BALANCED_POLICY,
-        "source_m1_metrics": expected[IMPORTED_CONTROL_ID],
+        "source_m1_metrics": singleton_reproduction[
+            "recomputed_source_m1_metrics"
+        ],
+        "stored_source_m1_metrics": expected[IMPORTED_CONTROL_ID],
+        "source_m1_metric_regime": "common_probability_shard_fp32_v1",
+        "singleton_reproduction": singleton_reproduction,
         "teacher": dict(source["teacher"]),
         "paths": paths,
         "best_along_each_path": best,
@@ -798,6 +867,24 @@ def build_result(spec: Mapping[str, Any]) -> dict[str, Any]:
 
 def validate_result(value: Mapping[str, Any], *, spec: Mapping[str, Any]) -> str:
     digest = validate_artifact(value, contract=RESULT_REPORT_CONTRACT)
+    execution_source = value.get("execution_source_commit")
+    recovery_hash = value.get("recovery_spec_sha256")
+    direct_execution = (
+        execution_source == spec["source_commit"]
+        and recovery_hash is None
+        and "reducer_recovery" not in value.get("parents", {})
+    )
+    repaired_execution = (
+        isinstance(execution_source, str)
+        and re.fullmatch(r"[0-9a-f]{40}", execution_source) is not None
+        and execution_source != spec["source_commit"]
+        and isinstance(recovery_hash, str)
+        and re.fullmatch(r"[0-9a-f]{64}", recovery_hash) is not None
+        and value.get("parents", {}).get("reducer_recovery") == recovery_hash
+    )
+    reproduction_rows = value.get("singleton_reproduction", {}).get(
+        "candidate_rows", {},
+    )
     if (
         value.get("parents", {}).get("campaign_spec") != spec["content_hash"]
         or value.get("parents", {}).get("source_lock") != spec["parents"]["source_lock"]
@@ -807,6 +894,20 @@ def validate_result(value: Mapping[str, Any], *, spec: Mapping[str, Any]) -> str
         or value.get("maximum_ensemble_size") != MAX_ENSEMBLE_SIZE
         or value.get("ensemble_policy") != ENSEMBLE_POLICY
         or value.get("balanced_objective_policy") != BALANCED_POLICY
+        or value.get("source_m1_metric_regime")
+        != "common_probability_shard_fp32_v1"
+        or value.get("singleton_reproduction", {}).get("policy")
+        != SINGLETON_REPRODUCTION_POLICY
+        or value.get("singleton_reproduction", {}).get("absolute_tolerances")
+        != SINGLETON_REPRODUCTION_TOLERANCES
+        or value.get("singleton_reproduction", {}).get("all_within_tolerance")
+        is not True
+        or set(reproduction_rows) != set(CANDIDATE_ORDER)
+        or any(
+            row.get("within_tolerance") is not True
+            for row in reproduction_rows.values()
+        )
+        or not (direct_execution or repaired_execution)
         or set(value.get("paths", {})) != set(OBJECTIVE_ORDER)
         or any(len(rows) != MAX_ENSEMBLE_SIZE for rows in value["paths"].values())
         or value.get("durable_candidate_prediction_bytes", MAX_DURABLE_PREDICTION_BYTES + 1)
