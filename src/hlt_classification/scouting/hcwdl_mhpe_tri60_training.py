@@ -9,6 +9,7 @@ and records a small interruption attestation when Slurm asks it to stop.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from datetime import timedelta
 from io import BytesIO
 import math
 import os
@@ -43,6 +44,7 @@ from hlt_classification.training.checkpoints import (
 )
 
 from .evaluation import classification_metrics
+from .dataset import _slice_batch
 from .hcwdl_mhpe_tri60_contracts import (
     FINAL_CHECKPOINT_CONTRACT,
     INTERRUPTION_ATTESTATION_CONTRACT,
@@ -224,12 +226,28 @@ class _DeferredMetricAccumulator:
         self.rows += int(rows)
         self.batches += 1
 
-    def means(self) -> dict[str, float]:
+    def means(
+        self, distributed_context: "Tri60DistributedContext | None" = None,
+    ) -> dict[str, float]:
         if self._names is None or self._weighted_sum is None or self.rows <= 0:
             raise ValueError("TRI60 deferred metric interval is empty")
+        weighted_sum = self._weighted_sum
+        rows = self.rows
+        if distributed_context is not None:
+            import torch
+            import torch.distributed as dist
+
+            distributed_context.validate()
+            weighted_sum = weighted_sum.clone()
+            row_tensor = torch.tensor(
+                [rows], dtype=torch.int64, device=weighted_sum.device,
+            )
+            dist.all_reduce(weighted_sum, op=dist.ReduceOp.SUM)
+            dist.all_reduce(row_tensor, op=dist.ReduceOp.SUM)
+            rows = int(row_tensor.item())
         # One transfer/synchronization per complete pass replaces one transfer
         # per metric per optimizer update.
-        values = (self._weighted_sum / self.rows).detach().cpu().tolist()
+        values = (weighted_sum / rows).detach().cpu().tolist()
         return {
             name: float(value) for name, value in zip(self._names, values, strict=True)
         }
@@ -272,6 +290,119 @@ class Tri60TrainingRuntime:
             or self.amp_dtype != "bfloat16"
         ):
             raise ValueError("TRI60 optimization recipe differs")
+
+
+@dataclass(frozen=True)
+class Tri60DistributedContext:
+    """An already initialized synchronous process-group execution contract."""
+
+    rank: int
+    world_size: int
+    local_rank: int
+    backend: str
+    global_batch_size: int
+
+    @property
+    def is_primary(self) -> bool:
+        return self.rank == 0
+
+    @property
+    def nominal_local_batch_size(self) -> int:
+        return self.global_batch_size // self.world_size
+
+    def validate(self, *, require_initialized: bool = True) -> None:
+        import torch.distributed as dist
+
+        if (
+            self.world_size <= 1
+            or self.rank not in range(self.world_size)
+            or self.local_rank < 0
+            or self.global_batch_size <= 0
+            or self.global_batch_size % self.world_size
+            or self.backend not in {"gloo", "nccl"}
+        ):
+            raise ValueError("TRI60 distributed execution topology differs")
+        if require_initialized and (
+            not dist.is_available()
+            or not dist.is_initialized()
+            or dist.get_rank() != self.rank
+            or dist.get_world_size() != self.world_size
+            or str(dist.get_backend()) != self.backend
+        ):
+            raise RuntimeError("TRI60 distributed process group differs")
+
+    def barrier(self) -> None:
+        import torch.distributed as dist
+
+        self.validate()
+        dist.barrier()
+
+
+def initialize_tri60_distributed(
+    *, expected_world_size: int, global_batch_size: int,
+    backend: str | None = None, timeout_seconds: int = 1800,
+) -> Tri60DistributedContext:
+    """Initialize one environment-launched DDP rank and fail closed on drift."""
+
+    import torch
+    import torch.distributed as dist
+
+    if dist.is_initialized():
+        raise RuntimeError("TRI60 distributed process group is already initialized")
+    rank = int(os.environ.get("SLURM_PROCID", os.environ.get("RANK", "-1")))
+    world = int(
+        os.environ.get("SLURM_NTASKS", os.environ.get("WORLD_SIZE", "-1"))
+    )
+    local_rank = int(
+        os.environ.get("SLURM_LOCALID", os.environ.get("LOCAL_RANK", "-1"))
+    )
+    selected_backend = backend or ("nccl" if torch.cuda.is_available() else "gloo")
+    context = Tri60DistributedContext(
+        rank=rank, world_size=world, local_rank=local_rank,
+        backend=selected_backend, global_batch_size=int(global_batch_size),
+    )
+    context.validate(require_initialized=False)
+    if world != int(expected_world_size):
+        raise ValueError("TRI60 distributed world size differs")
+    if selected_backend == "nccl":
+        if not torch.cuda.is_available() or torch.cuda.device_count() != 1:
+            raise RuntimeError("TRI60 NCCL rank requires exactly one visible GPU")
+        if local_rank != 0:
+            raise RuntimeError("TRI60 one-rank-per-node local rank differs")
+        torch.cuda.set_device(0)
+    for name in ("MASTER_ADDR", "MASTER_PORT"):
+        if not os.environ.get(name):
+            raise RuntimeError(f"TRI60 distributed environment lacks {name}")
+    dist.init_process_group(
+        backend=selected_backend, rank=rank, world_size=world,
+        timeout=timedelta(seconds=int(timeout_seconds)),
+    )
+    context.validate()
+    return context
+
+
+def destroy_tri60_distributed(context: Tri60DistributedContext | None) -> None:
+    """Release a process group after the caller's explicit success barrier."""
+
+    if context is None:
+        return
+    import torch.distributed as dist
+
+    if dist.is_available() and dist.is_initialized():
+        dist.destroy_process_group()
+
+
+def distributed_batch_bounds(
+    global_rows: int, *, rank: int, world_size: int,
+) -> tuple[int, int]:
+    """Return an exact disjoint balanced slice for one global batch."""
+
+    if global_rows < world_size or rank not in range(world_size) or world_size <= 1:
+        raise ValueError("TRI60 distributed global batch cannot cover every rank")
+    quotient, remainder = divmod(int(global_rows), int(world_size))
+    start = rank * quotient + min(rank, remainder)
+    stop = start + quotient + int(rank < remainder)
+    return start, stop
 
 
 @dataclass(frozen=True)
@@ -703,6 +834,31 @@ def tri60_learning_rate_schedule(
             "hold_through_pass": hold_through,
             "minimum_lr_fraction": floor,
         }
+    if kind == "warmup_hold_cosine_floor_tail_v1":
+        if set(value) != {
+            "kind", "warmup_passes", "hold_through_pass",
+            "decay_through_pass", "minimum_lr_fraction",
+        }:
+            raise ValueError("TRI60 floor-tail LR schedule fields differ")
+        warmup_passes = int(value["warmup_passes"])
+        hold_through = int(value["hold_through_pass"])
+        decay_through = int(value["decay_through_pass"])
+        floor = float(value["minimum_lr_fraction"])
+        if (
+            warmup_passes != value["warmup_passes"]
+            or hold_through != value["hold_through_pass"]
+            or decay_through != value["decay_through_pass"]
+            or not 0 < warmup_passes <= hold_through < decay_through
+            or decay_through > runtime.passes
+            or not math.isfinite(floor) or not 0 < floor <= 1
+        ):
+            raise ValueError("TRI60 floor-tail LR schedule differs")
+        return {
+            "kind": kind, "warmup_passes": warmup_passes,
+            "hold_through_pass": hold_through,
+            "decay_through_pass": decay_through,
+            "minimum_lr_fraction": floor,
+        }
     raise ValueError("TRI60 learning-rate schedule kind differs")
 
 
@@ -729,6 +885,20 @@ def tri60_learning_rate(
         progress = (update - hold) / max(1, total_updates - hold - 1)
         cosine = .5 * (1 + math.cos(math.pi * min(1.0, progress)))
         return runtime.peak_learning_rate * (floor + (1 - floor) * cosine)
+    elif kind == "warmup_hold_cosine_floor_tail_v1":
+        warmup = int(schedule["warmup_passes"]) * updates_per_pass
+        hold = int(schedule["hold_through_pass"]) * updates_per_pass
+        decay = int(schedule["decay_through_pass"]) * updates_per_pass
+        floor = float(schedule["minimum_lr_fraction"])
+        if update < warmup:
+            return runtime.peak_learning_rate * (update + 1) / warmup
+        if update < hold:
+            return runtime.peak_learning_rate
+        if update >= decay:
+            return runtime.peak_learning_rate * floor
+        progress = (update - hold) / max(1, decay - hold - 1)
+        cosine = .5 * (1 + math.cos(math.pi * min(1.0, progress)))
+        return runtime.peak_learning_rate * (floor + (1 - floor) * cosine)
     else:
         raise ValueError("TRI60 learning-rate schedule kind differs")
     if update < warmup:
@@ -736,6 +906,46 @@ def tri60_learning_rate(
     progress = (update - warmup) / max(1, total_updates - warmup - 1)
     cosine = .5 * (1 + math.cos(math.pi * min(1.0, progress)))
     return runtime.peak_learning_rate * (floor + (1 - floor) * cosine)
+
+
+def tri60_early_stopping(
+    runtime: Tri60TrainingRuntime, policy: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Validate an optional validation-pass early-stopping policy.
+
+    Checkpoint selection continues to track every exact macro-AUC
+    improvement.  ``minimum_auc_delta`` affects only the patience clock, so
+    small real improvements remain eligible for restoration without
+    indefinitely extending a fit.
+    """
+
+    if policy is None:
+        return None
+    value = dict(policy)
+    if value.get("kind") != "macro_auc_patience_v1" or set(value) != {
+        "kind", "minimum_passes", "patience_passes", "minimum_auc_delta",
+    }:
+        raise ValueError("TRI60 early-stopping policy fields differ")
+    minimum = int(value["minimum_passes"])
+    patience = int(value["patience_passes"])
+    delta = float(value["minimum_auc_delta"])
+    if (
+        minimum != value["minimum_passes"]
+        or patience != value["patience_passes"]
+        or not 1 <= minimum <= runtime.passes
+        or patience <= 0
+        or not math.isfinite(delta)
+        or delta <= 0
+    ):
+        raise ValueError("TRI60 early-stopping policy differs")
+    return {
+        "kind": "macro_auc_patience_v1",
+        "minimum_passes": minimum,
+        "patience_passes": patience,
+        "minimum_auc_delta": delta,
+        "patience_accumulates_before_minimum": True,
+        "selected_checkpoint_uses_exact_metrics": True,
+    }
 
 
 def _cpu_state(model) -> dict[str, Any]:
@@ -819,6 +1029,43 @@ def _validation(model, batches, *, input_key: str, device, amp_dtype: str):
         if metrics.get(name) is None or not math.isfinite(float(metrics[name])):
             raise FloatingPointError(f"TRI60 validation metric is invalid: {name}")
     return metrics, parity_inputs
+
+
+def _distributed_local_batches(
+    batches: Iterable[Mapping[str, Any]], *, context: Tri60DistributedContext,
+) -> Iterable[tuple[dict[str, Any], int]]:
+    """Replay one global schedule and yield this rank's exact disjoint rows."""
+
+    for raw in batches:
+        global_rows = len(raw["labels"])
+        start, stop = distributed_batch_bounds(
+            global_rows, rank=context.rank, world_size=context.world_size,
+        )
+        yield _slice_batch(raw, start, stop), global_rows
+
+
+def _distributed_validation(
+    model, batches, *, input_key: str, device, amp_dtype: str,
+    context: Tri60DistributedContext,
+) -> tuple[dict[str, Any], Any]:
+    """Evaluate once in canonical order and broadcast the stopping metrics."""
+
+    import torch.distributed as dist
+
+    context.validate()
+    payload: list[Any] = [None]
+    parity_inputs = None
+    if context.is_primary:
+        metrics, parity_inputs = _validation(
+            model, batches, input_key=input_key, device=device,
+            amp_dtype=amp_dtype,
+        )
+        payload[0] = metrics
+    dist.broadcast_object_list(payload, src=0)
+    metrics = payload[0]
+    if not isinstance(metrics, Mapping):
+        raise RuntimeError("TRI60 distributed validation broadcast differs")
+    return dict(metrics), parity_inputs
 
 
 def _selection_key(metrics: Mapping[str, Any], update: int):
@@ -985,11 +1232,14 @@ def train_tri60_node(
     authority: Tri60TrainingAuthority | None = None,
     loss_schedule: Mapping[str, Any] | None = None,
     learning_rate_schedule: Mapping[str, Any] | None = None,
+    early_stopping: Mapping[str, Any] | None = None,
     initialization_lineage: Mapping[str, str] | None = None,
+    distributed_context: Tri60DistributedContext | None = None,
 ) -> dict[str, Any]:
     """Execute one registered fit without any reusable optimizer state."""
 
     import torch
+    import torch.distributed as dist
 
     if authority is None:
         if node_id not in NODE_REGISTRY:
@@ -1002,6 +1252,13 @@ def train_tri60_node(
         if node.node_id != node_id or node_id in NODE_REGISTRY:
             raise ValueError("TRI60 additive authority node identity differs")
     graph_sha256 = authority.graph_sha256
+    if distributed_context is not None:
+        distributed_context.validate()
+        if (
+            node.auxiliary != "none"
+            or distributed_context.global_batch_size != runtime.batch_size
+        ):
+            raise ValueError("TRI60 distributed execution authority differs")
     runtime.validate(
         execution_mode=execution_mode,
         allowed_peak_learning_rates=authority.allowed_peak_learning_rates,
@@ -1012,6 +1269,7 @@ def train_tri60_node(
     normalized_learning_rate_schedule = tri60_learning_rate_schedule(
         runtime, learning_rate_schedule,
     )
+    normalized_early_stopping = tri60_early_stopping(runtime, early_stopping)
     normalized_initialization_lineage = {
         str(name): require_sha256(value, name=f"TRI60 initialization {name}")
         for name, value in sorted((initialization_lineage or {}).items())
@@ -1085,6 +1343,42 @@ def train_tri60_node(
     model = _node_model(node, replicate_seed=replicate_seed, model_factory=model_factory)
     model.to(target_device)
     optimizer = _optimizer(model, runtime)
+    forward_model = model
+    rank_training_seed = training_seed
+    if distributed_context is not None:
+        cache_headers = [None] * distributed_context.world_size
+        dist.all_gather_object(
+            cache_headers,
+            {
+                "train": train_cache.header.get("content_hash"),
+                "validation": validation_cache.header.get("content_hash"),
+            },
+        )
+        if len({canonical_sha256(value) for value in cache_headers}) != 1:
+            raise ValueError("TRI60 distributed view-cache lineage differs")
+        forward_model = torch.nn.parallel.DistributedDataParallel(
+            model,
+            device_ids=(
+                [target_device.index or 0]
+                if target_device.type == "cuda" else None
+            ),
+            output_device=(
+                target_device.index or 0
+                if target_device.type == "cuda" else None
+            ),
+            broadcast_buffers=False,
+            find_unused_parameters=False,
+            gradient_as_bucket_view=True,
+        )
+        rank_training_seed = derive_seed(
+            replicate_seed,
+            f"{node.seed_alias}/training/ddp_rank_{distributed_context.rank}",
+        )
+        torch.manual_seed(rank_training_seed)
+        np.random.seed(rank_training_seed)
+        random.seed(rank_training_seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(rank_training_seed)
     train_rows = int(train_cache.header["rows"])
     updates_per_pass = math.ceil(train_rows / runtime.batch_size)
     total_updates = runtime.passes * updates_per_pass
@@ -1103,6 +1397,9 @@ def train_tri60_node(
     best_pass = None
     final_state = None
     final_runtime = None
+    patience_reference_auc = None
+    last_meaningful_improvement_pass = None
+    stop_reason = "maximum_passes_reached"
     update = 0
     calibration_scales: dict[str, float] = {}
     calibration_artifacts: dict[str, dict[str, Any]] = {}
@@ -1118,7 +1415,8 @@ def train_tri60_node(
             identity_sha256s=identity_hexes,
             limit=min(4096, len(identity_hexes)),
         )
-        write_immutable_json(output / "calibration/selection.json", selection_artifact)
+        if distributed_context is None or distributed_context.is_primary:
+            write_immutable_json(output / "calibration/selection.json", selection_artifact)
         calibration_batches = list(train_cache.iterate_identity_digest_batches(
             selection_artifact["ordered_identity_sha256s"],
             batch_size=runtime.batch_size,
@@ -1132,16 +1430,26 @@ def train_tri60_node(
         for pass_index in range(runtime.passes):
             pass_started = time.monotonic()
             model.train()
+            forward_model.train()
             pass_batches = 0
             pass_metrics = _DeferredMetricAccumulator()
-            train_batches = train_cache.iterate_batches(
+            global_train_batches = train_cache.iterate_batches(
                 epoch=pass_index, sampler_seed=sampler_seed,
                 batch_size=runtime.batch_size,
             )
+            train_batches: Iterable[tuple[Mapping[str, Any], int]]
+            if distributed_context is None:
+                train_batches = (
+                    (raw, len(raw["labels"])) for raw in global_train_batches
+                )
+            else:
+                train_batches = _distributed_local_batches(
+                    global_train_batches, context=distributed_context,
+                )
             with _BatchPrefetcher(
                 train_batches, depth=TRI60_PREFETCH_DEPTH,
             ) as prefetched:
-                for raw in prefetched:
+                for raw, global_batch_rows in prefetched:
                     pass_batches += 1
                     for group in optimizer.param_groups:
                         group["lr"] = tri60_learning_rate(
@@ -1160,7 +1468,7 @@ def train_tri60_node(
                     ):
                         if node.auxiliary == "none":
                             surfaces = None
-                            logits = model(features, vectors, mask)
+                            logits = forward_model(features, vectors, mask)
                         else:
                             surfaces = model.forward_hcwdl_surfaces(
                                 features, vectors, mask, visible, family,
@@ -1254,12 +1562,21 @@ def train_tri60_node(
                         torch.isfinite(total)
                     ):
                         raise FloatingPointError("TRI60 total loss is nonfinite")
-                    total.backward()
-                    optimizer.step()
                     batch_rows = len(labels)
+                    backward_total = total
+                    if distributed_context is not None:
+                        backward_total = total * (
+                            distributed_context.world_size
+                            * batch_rows / global_batch_rows
+                        )
+                    backward_total.backward()
+                    optimizer.step()
                     update += 1
                     pass_metrics.add({**reported, "total": total}, rows=batch_rows)
-                    if monitor.requested:
+                    if monitor.requested and (
+                        distributed_context is None
+                        or distributed_context.is_primary
+                    ):
                         number = monitor.number if monitor.number is not None else int(signal.SIGTERM)
                         interruption = artifact({
                             "parents": normalized_parents,
@@ -1287,44 +1604,74 @@ def train_tri60_node(
                 or pass_metrics.batches != updates_per_pass
             ):
                 raise RuntimeError("TRI60 pass update count differs")
+            pass_mean_losses = pass_metrics.means(distributed_context)
+            pass_rows = pass_metrics.rows
+            if distributed_context is not None:
+                row_tensor = torch.tensor(
+                    [pass_rows], dtype=torch.int64, device=target_device,
+                )
+                dist.all_reduce(row_tensor, op=dist.ReduceOp.SUM)
+                pass_rows = int(row_tensor.item())
+                if pass_rows != train_rows:
+                    raise RuntimeError("TRI60 distributed pass row coverage differs")
             train_finished = time.monotonic()
-            metrics, parity_inputs = _validation(
-                model,
-                validation_cache.iterate_batches(
-                    epoch=0, sampler_seed=sampler_seed,
-                    batch_size=runtime.batch_size,
-                ),
-                input_key=input_key,
-                device=target_device,
-                amp_dtype=runtime.amp_dtype,
+            validation_batches = validation_cache.iterate_batches(
+                epoch=0, sampler_seed=sampler_seed,
+                batch_size=runtime.batch_size,
             )
+            if distributed_context is None:
+                metrics, parity_inputs = _validation(
+                    model, validation_batches, input_key=input_key,
+                    device=target_device, amp_dtype=runtime.amp_dtype,
+                )
+            else:
+                metrics, parity_inputs = _distributed_validation(
+                    model, validation_batches, input_key=input_key,
+                    device=target_device, amp_dtype=runtime.amp_dtype,
+                    context=distributed_context,
+                )
             validation_row = {"pass": pass_index + 1, "update": update, **metrics}
             validation_history.append(validation_row)
-            if best_metrics is None or _selection_key(metrics, update) < _selection_key(
+            if (
+                (distributed_context is None or distributed_context.is_primary)
+                and (best_metrics is None or _selection_key(metrics, update) < _selection_key(
                 best_metrics, int(best_update),
+                ))
             ):
                 best_state = _cpu_state(model)
                 best_runtime = capture_model_runtime_state(model)
                 best_metrics = dict(metrics)
                 best_update = update
                 best_pass = pass_index + 1
+            if normalized_early_stopping is not None:
+                auc = float(metrics["macro_ovr_auc"])
+                minimum_delta = float(
+                    normalized_early_stopping["minimum_auc_delta"]
+                )
+                if (
+                    patience_reference_auc is None
+                    or auc > patience_reference_auc + minimum_delta
+                ):
+                    patience_reference_auc = auc
+                    last_meaningful_improvement_pass = pass_index + 1
             training_history.append({
                 "through_pass": pass_index + 1,
                 "through_update": update,
-                "rows": pass_metrics.rows,
-                "mean_losses": pass_metrics.means(),
+                "rows": pass_rows,
+                "mean_losses": pass_mean_losses,
                 "training_seconds": train_finished - pass_started,
                 "validation_seconds": time.monotonic() - train_finished,
             })
-            print(
-                "HCWDL-TRI60 "
-                f"node={node_id} pass={pass_index + 1}/{runtime.passes} "
-                f"update={update}/{total_updates} "
-                f"auc={float(metrics['macro_ovr_auc']):.8f} "
-                f"train_seconds={training_history[-1]['training_seconds']:.3f} "
-                f"validation_seconds={training_history[-1]['validation_seconds']:.3f}",
-                flush=True,
-            )
+            if distributed_context is None or distributed_context.is_primary:
+                print(
+                    "HCWDL-TRI60 "
+                    f"node={node_id} pass={pass_index + 1}/{runtime.passes} "
+                    f"update={update}/{total_updates} "
+                    f"auc={float(metrics['macro_ovr_auc']):.8f} "
+                    f"train_seconds={training_history[-1]['training_seconds']:.3f} "
+                    f"validation_seconds={training_history[-1]['validation_seconds']:.3f}",
+                    flush=True,
+                )
             if node.auxiliary != "none" and pass_index + 1 in {2, 4}:
                 names = ("jet", "set") if pass_index + 1 == 2 else (
                     ("relation",) if node.track == "RREL" else ()
@@ -1366,20 +1713,70 @@ def train_tri60_node(
                     calibration_artifacts[phase] = calibration_artifact
                     for name, component in result.components.items():
                         calibration_scales[name] = float(component.scale)
-        final_state = _cpu_state(model)
-        final_runtime = capture_model_runtime_state(model)
+            if normalized_early_stopping is not None:
+                completed_pass = pass_index + 1
+                if last_meaningful_improvement_pass is None:
+                    raise RuntimeError("TRI60 early-stopping clock is uninitialized")
+                if (
+                    completed_pass < runtime.passes
+                    and completed_pass >= normalized_early_stopping["minimum_passes"]
+                    and completed_pass - last_meaningful_improvement_pass
+                    >= normalized_early_stopping["patience_passes"]
+                ):
+                    stop_reason = "macro_auc_patience_exhausted"
+                    break
+        if distributed_context is None or distributed_context.is_primary:
+            final_state = _cpu_state(model)
+            final_runtime = capture_model_runtime_state(model)
     finally:
         monitor.restore()
+    if distributed_context is not None and not distributed_context.is_primary:
+        report_payload: list[Any] = [None]
+        dist.broadcast_object_list(report_payload, src=0)
+        if not isinstance(report_payload[0], Mapping):
+            raise RuntimeError("TRI60 distributed training report broadcast differs")
+        return dict(report_payload[0])
+    completed_passes = len(validation_history)
+    completed_updates = update
+    stopped_early = completed_passes < runtime.passes
     if (
-        update != total_updates
-        or len(validation_history) != runtime.passes
+        completed_updates != completed_passes * updates_per_pass
+        or completed_passes <= 0
         or best_state is None
         or best_metrics is None
         or best_update is None
         or best_pass is None
         or final_state is None
     ):
-        raise RuntimeError("TRI60 fit did not complete its exact budget")
+        raise RuntimeError("TRI60 fit did not complete an integral pass budget")
+    if normalized_early_stopping is None:
+        if stopped_early or completed_passes != runtime.passes:
+            raise RuntimeError("TRI60 fit did not complete its exact budget")
+    elif (
+        completed_passes < normalized_early_stopping["minimum_passes"]
+        or last_meaningful_improvement_pass is None
+        or (stopped_early and stop_reason != "macro_auc_patience_exhausted")
+        or (not stopped_early and stop_reason != "maximum_passes_reached")
+    ):
+        raise RuntimeError("TRI60 early-stopped fit completion differs")
+    distributed_execution = (
+        None
+        if distributed_context is None
+        else {
+            "kind": "synchronous_data_parallel_v1",
+            "backend": distributed_context.backend,
+            "world_size": distributed_context.world_size,
+            "nodes": distributed_context.world_size,
+            "ranks_per_node": 1,
+            "global_batch_size": distributed_context.global_batch_size,
+            "nominal_local_batch_size": (
+                distributed_context.nominal_local_batch_size
+            ),
+            "partial_batch_policy": "exact_disjoint_row_weighted_v1",
+            "validation_policy": "rank_zero_full_canonical_broadcast_v1",
+            "publication_policy": "rank_zero_only_v1",
+        }
+    )
     checkpoint_common = {
         "schema_version": 1,
         "node_id": node_id,
@@ -1393,9 +1790,17 @@ def train_tri60_node(
         "runtime": asdict(runtime),
         "loss_schedule": normalized_loss_schedule,
         "learning_rate_schedule": normalized_learning_rate_schedule,
+        **(
+            {} if normalized_early_stopping is None
+            else {"early_stopping": normalized_early_stopping}
+        ),
         "initialization_lineage": normalized_initialization_lineage,
         "resume_policy": "disabled_restart_from_zero_v1",
         "execution_source_commit": source_commit,
+        **(
+            {} if distributed_execution is None
+            else {"distributed_execution": distributed_execution}
+        ),
     }
     selected_payload = {
         **checkpoint_common,
@@ -1409,8 +1814,8 @@ def train_tri60_node(
     final_payload = {
         **checkpoint_common,
         "contract": authority.final_checkpoint_contract,
-        "final_pass": runtime.passes,
-        "final_update": total_updates,
+        "final_pass": completed_passes,
+        "final_update": completed_updates,
         "model": final_state,
         "model_runtime": final_runtime,
     }
@@ -1429,10 +1834,24 @@ def train_tri60_node(
         "peak_learning_rate": runtime.peak_learning_rate,
         "loss_schedule": normalized_loss_schedule,
         "learning_rate_schedule": normalized_learning_rate_schedule,
+        **(
+            {} if normalized_early_stopping is None
+            else {
+                "early_stopping": normalized_early_stopping,
+                "maximum_passes": runtime.passes,
+                "minimum_passes": normalized_early_stopping["minimum_passes"],
+                "stopped_early": stopped_early,
+                "stop_reason": stop_reason,
+                "last_meaningful_improvement_pass": (
+                    last_meaningful_improvement_pass
+                ),
+                "patience_reference_auc": patience_reference_auc,
+            }
+        ),
         "initialization_lineage": normalized_initialization_lineage,
         "complete": True,
-        "updates": total_updates,
-        "passes": runtime.passes,
+        "updates": completed_updates,
+        "passes": completed_passes,
         "validations": len(validation_history),
         "validation": best_metrics,
         "validation_history": validation_history,
@@ -1449,6 +1868,18 @@ def train_tri60_node(
         "rng_domains": {
             "replicate_seed": replicate_seed,
             "training": training_seed,
+            "rank_training": rank_training_seed,
+            "rank_training_by_rank": (
+                [training_seed]
+                if distributed_context is None
+                else [
+                    derive_seed(
+                        replicate_seed,
+                        f"{node.seed_alias}/training/ddp_rank_{rank}",
+                    )
+                    for rank in range(distributed_context.world_size)
+                ]
+            ),
             "sampler": sampler_seed,
             "node_seed_alias": node.seed_alias,
             "representation_seed_alias": node.representation_seed_alias,
@@ -1477,7 +1908,7 @@ def train_tri60_node(
         "resume_policy": "disabled_restart_from_zero_v1",
         "rolling_resume_published": False,
         "partial_checkpoint_reuse": False,
-        "performance_early_termination": False,
+        "performance_early_termination": stopped_early,
         "throughput_optimizations": {
             "cpu_batch_prefetch_depth": TRI60_PREFETCH_DEPTH,
             "prefetch_changes_batch_order": False,
@@ -1485,7 +1916,15 @@ def train_tri60_node(
             "metric_accumulation_affects_gradients": False,
             "global_batch_size_unchanged": True,
             "optimizer_update_count_unchanged": True,
+            "synchronous_data_parallel_world_size": (
+                1 if distributed_context is None
+                else distributed_context.world_size
+            ),
         },
+        **(
+            {} if distributed_execution is None
+            else {"distributed_execution": distributed_execution}
+        ),
         "scientific_result_does_not_control_completion": True,
         "final_test_accessed": False,
     }, authority=authority)
@@ -1493,6 +1932,9 @@ def train_tri60_node(
     forbidden = tuple(output.rglob("*resume*"))
     if forbidden:
         raise RuntimeError(f"TRI60 fit published forbidden resume paths: {forbidden}")
+    if distributed_context is not None:
+        report_payload = [report]
+        dist.broadcast_object_list(report_payload, src=0)
     return report
 
 
@@ -1555,9 +1997,13 @@ def load_tri60_model(
 
 
 __all__ = [
-    "Tri60RepresentationExecution", "Tri60TrainingInterrupted",
+    "Tri60DistributedContext", "Tri60RepresentationExecution",
+    "Tri60TrainingInterrupted",
     "Tri60TrainingAuthority", "Tri60TrainingRuntime",
+    "destroy_tri60_distributed", "distributed_batch_bounds",
+    "initialize_tri60_distributed",
     "load_tri60_model", "train_tri60_node",
-    "tri60_base_loss", "tri60_learning_rate", "tri60_learning_rate_schedule",
+    "tri60_base_loss", "tri60_early_stopping", "tri60_learning_rate",
+    "tri60_learning_rate_schedule",
     "tri60_loss_schedule", "tri60_loss_weights",
 ]
