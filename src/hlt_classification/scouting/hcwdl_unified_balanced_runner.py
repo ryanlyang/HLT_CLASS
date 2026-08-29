@@ -48,7 +48,7 @@ from .hcwdl_unified_balanced_targets import (
     publish_target_manifest, publish_target_shard,
 )
 from .hcwdl_upper_cache import ResidualCouplingStore
-from .highcov_cache import DenseAssignmentStore
+from .hcwdl_assignment_store import open_assignment_store
 from .loaders import load_pmard_model, scouting_model_factory_for_report
 from .selective_assignment import RowSelection
 from .splits import role_records
@@ -129,7 +129,7 @@ def _load_common(spec: Mapping[str, Any]):
         for role in ("train", "validation")
     }
     assignments = {
-        role: DenseAssignmentStore(paths[f"{role}_assignment_manifest"])
+        role: open_assignment_store(paths[f"{role}_assignment_manifest"])
         for role in ("train", "validation")
     }
     balanced = {

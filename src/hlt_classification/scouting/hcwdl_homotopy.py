@@ -534,9 +534,10 @@ def _attach_balanced_training_metadata(
     )
 
 
-def build_unified_balanced_inputs(
+def _build_unified_balanced_inputs(
     arrays: Mapping[str, object], *, assignments: np.ndarray,
-    confidence: np.ndarray, coupling_rows: Sequence[Sequence[ResidualEdit]],
+    pairing_provenance: np.ndarray, provenance_kind: str,
+    coupling_rows: Sequence[Sequence[ResidualEdit]],
     coordinate: HomotopyCoordinate, identity_keys: Sequence[str],
     discrete_seed: int, prepared_offline: PreparedOfflineEndpoints | None = None,
     prepared_hlt: PreparedHltEndpoints | None = None,
@@ -546,14 +547,21 @@ def build_unified_balanced_inputs(
 
     canonical = build_hlt_inputs(arrays)
     mapping = np.asarray(assignments)
-    provenance_confidence = np.asarray(confidence, np.float32)
+    provenance = np.asarray(pairing_provenance)
     rows = len(canonical.raw_lengths)
-    if mapping.shape != (rows, 200) or provenance_confidence.shape != mapping.shape:
-        raise ValueError("HCWDL-UB assignment/confidence shape differs")
-    if not np.isfinite(provenance_confidence).all() or np.any(
-        (provenance_confidence < 0) | (provenance_confidence > 1)
-    ):
-        raise ValueError("HCWDL-UB confidence provenance differs")
+    if mapping.shape != (rows, 200) or provenance.shape != mapping.shape:
+        raise ValueError(f"HCWDL-UB assignment/{provenance_kind} shape differs")
+    if provenance_kind == "correspondence_confidence":
+        numeric = np.asarray(provenance, np.float32)
+        if not np.isfinite(numeric).all() or np.any((numeric < 0) | (numeric > 1)):
+            raise ValueError("HCWDL-UB confidence provenance differs")
+    elif provenance_kind == "pairing_validity":
+        if provenance.dtype != np.bool_ and not np.all((provenance == 0) | (provenance == 1)):
+            raise ValueError("HCWDL-UB pairing validity must be boolean")
+        if not np.array_equal(provenance.astype(bool), mapping >= 0):
+            raise ValueError("HCWDL-UB pairing validity differs from assignment presence")
+    else:
+        raise ValueError("HCWDL-UB pairing provenance kind differs")
     if (
         len(coupling_rows) != rows or len(identity_keys) != rows
         or len(set(map(str, identity_keys))) != rows
@@ -623,6 +631,47 @@ def build_unified_balanced_inputs(
     ) if include_training_metadata else view
 
 
+def build_unified_balanced_inputs(
+    arrays: Mapping[str, object], *, assignments: np.ndarray,
+    confidence: np.ndarray, coupling_rows: Sequence[Sequence[ResidualEdit]],
+    coordinate: HomotopyCoordinate, identity_keys: Sequence[str],
+    discrete_seed: int, prepared_offline: PreparedOfflineEndpoints | None = None,
+    prepared_hlt: PreparedHltEndpoints | None = None,
+    include_training_metadata: bool = False,
+) -> ParticleInputs:
+    """Build HCWDL-UB using established calibrated-confidence provenance."""
+
+    return _build_unified_balanced_inputs(
+        arrays, assignments=assignments, pairing_provenance=confidence,
+        provenance_kind="correspondence_confidence", coupling_rows=coupling_rows,
+        coordinate=coordinate, identity_keys=identity_keys,
+        discrete_seed=discrete_seed, prepared_offline=prepared_offline,
+        prepared_hlt=prepared_hlt,
+        include_training_metadata=include_training_metadata,
+    )
+
+
+def build_unified_balanced_pairing_inputs(
+    arrays: Mapping[str, object], *, assignments: np.ndarray,
+    pairing_validity: np.ndarray,
+    coupling_rows: Sequence[Sequence[ResidualEdit]],
+    coordinate: HomotopyCoordinate, identity_keys: Sequence[str],
+    discrete_seed: int, prepared_offline: PreparedOfflineEndpoints | None = None,
+    prepared_hlt: PreparedHltEndpoints | None = None,
+    include_training_metadata: bool = False,
+) -> ParticleInputs:
+    """Build HCWDL-UB using neutral validity, never fake match confidence."""
+
+    return _build_unified_balanced_inputs(
+        arrays, assignments=assignments, pairing_provenance=pairing_validity,
+        provenance_kind="pairing_validity", coupling_rows=coupling_rows,
+        coordinate=coordinate, identity_keys=identity_keys,
+        discrete_seed=discrete_seed, prepared_offline=prepared_offline,
+        prepared_hlt=prepared_hlt,
+        include_training_metadata=include_training_metadata,
+    )
+
+
 def particle_inputs_sha256(view: ParticleInputs) -> str:
     digest = hashlib.sha256()
     for name in ("features", "vectors", "mask", "raw_lengths"):
@@ -642,6 +691,7 @@ def assert_particle_inputs_equal(left: ParticleInputs, right: ParticleInputs, *,
 __all__ = [
     "HOMOTOPY_VIEW_CONTRACT", "HomotopyCoordinate", "assert_particle_inputs_equal",
     "build_homotopy_inputs", "build_unified_balanced_inputs",
+    "build_unified_balanced_pairing_inputs",
     "build_p0_inputs", "build_partition_from_arrays",
     "particle_inputs_sha256", "PreparedHltEndpoints", "PreparedOfflineEndpoints",
     "prepare_hlt_endpoints", "prepare_offline_endpoints",

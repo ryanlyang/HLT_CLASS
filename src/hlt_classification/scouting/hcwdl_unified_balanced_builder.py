@@ -12,9 +12,14 @@ from .hcwdl_unified_balanced_cache import (
 from .hcwdl_upper_builder import _prepared_partitions, _selected_source_chunks
 from .hcwdl_upper_cache import load_base_shard
 from .hcwdl_upper_coupling import ResidualEdit
-from .highcov_cache import DenseAssignmentStore
+from .hcwdl_assignment_store import open_assignment_store
 from .selective_assignment import RowSelection
 from .splits import role_records
+
+# Historical injection seam retained for tests and old callers; the dispatch
+# now accepts both established confidence manifests and the new validity-only
+# full-cardinality contract.
+DenseAssignmentStore = open_assignment_store
 
 
 def _base_edit_row(arrays, row: int) -> tuple[ResidualEdit, ...]:

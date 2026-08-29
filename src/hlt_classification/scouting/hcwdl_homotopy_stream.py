@@ -11,6 +11,7 @@ import numpy as np
 from .dataset import _concat_batches, _slice_batch
 from .hcwdl_homotopy import (
     HomotopyCoordinate, build_homotopy_inputs, build_unified_balanced_inputs,
+    build_unified_balanced_pairing_inputs,
 )
 from .hcwdl_unified_balanced_cache import BalancedCouplingStore
 from .hcwdl_upper_cache import ResidualCouplingStore
@@ -86,13 +87,22 @@ def _build_balanced_block(arguments: tuple[object, ...]) -> dict[str, object]:
     (
         arrays, labels, identities, assignment, confidence, coupling_rows,
         coordinate, repair_seed, output_key, include_training_metadata,
+        provenance_kind,
     ) = arguments
-    view = build_unified_balanced_inputs(
-        arrays, assignments=assignment, confidence=confidence,
-        coupling_rows=coupling_rows, coordinate=coordinate,
-        identity_keys=identities, discrete_seed=repair_seed,
+    common = dict(
+        arrays=arrays, assignments=assignment, coupling_rows=coupling_rows,
+        coordinate=coordinate, identity_keys=identities,
+        discrete_seed=repair_seed,
         include_training_metadata=bool(include_training_metadata),
     )
+    if provenance_kind == "pairing_validity":
+        view = build_unified_balanced_pairing_inputs(
+            **common, pairing_validity=confidence,
+        )
+    elif provenance_kind == "correspondence_confidence":
+        view = build_unified_balanced_inputs(**common, confidence=confidence)
+    else:
+        raise ValueError("HCWDL-UB assignment-store provenance differs")
     return {"labels": labels, "identity_keys": identities, str(output_key): view}
 
 
@@ -235,6 +245,10 @@ def iterate_unified_balanced_batches(
                     arrays, labels[indexes], identities, assignment, confidence,
                     coupling_rows, coordinate, repair_seed, output_key,
                     include_training_metadata,
+                    getattr(
+                        assignment_store, "provenance_kind",
+                        "correspondence_confidence",
+                    ),
                 )
 
     pending = None; observed = 0

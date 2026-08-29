@@ -33,7 +33,7 @@ from .hcwdl_upper_coupling import (
     build_switch_calibration, couple_partition, edit_is_active, endpoint_cost,
     validate_scale_calibration, validate_switch_calibration,
 )
-from .highcov_cache import DenseAssignmentStore, load_assignment_shard
+from .hcwdl_assignment_store import load_assignment_shard, open_assignment_store
 from .repair import (
     FULL_VALIDITY_GROUPS, HIGHCOV_SHELL_EXACT_FAMILY, build_alpha_repaired_inputs,
     full_endpoint_required_branches,
@@ -84,7 +84,7 @@ def _prepared_partitions(
 
 def _selected_source_chunks(
     *, split_manifest: Mapping[str, Any], selection: RowSelection,
-    assignments: DenseAssignmentStore, data_root: str | Path, role: str,
+    assignments: object, data_root: str | Path, role: str,
     source_index: int, step_size: int,
 ):
     """Yield the assignment-locked selected population for one source.
@@ -171,7 +171,7 @@ def _calibrate_source_worker(
     selection = RowSelection(
         selection_manifest, role="train", split_manifest_sha256=split_hash,
     )
-    store = DenseAssignmentStore(assignment_manifest)
+    store = open_assignment_store(assignment_manifest)
     accumulator = ScaleAccumulator(); observed = 0; identity_digest = hashlib.sha256()
     source_path = role_records(split_manifest, "train")[source_index].path
     for _, actual_source, entries, arrays in _selected_source_chunks(
@@ -290,7 +290,7 @@ def build_coupling_source(
         raise ValueError("coupling source scale/config lineage differs")
     split_hash = str(split_manifest["content_hash"])
     selection = RowSelection(selection_manifest, role=role, split_manifest_sha256=split_hash)
-    store = DenseAssignmentStore(assignment_manifest)
+    store = open_assignment_store(assignment_manifest)
     records = role_records(split_manifest, role); record = records[source_index]
     entries_out: list[int] = []; edits_out: list[tuple[ResidualEdit, ...]] = []
     for _, source_path, entries, arrays in _selected_source_chunks(
@@ -663,7 +663,7 @@ def _audit_source_worker(arguments: tuple[Any, ...]) -> dict[str, Any]:
     selection = RowSelection(
         selection_manifest, role=role, split_manifest_sha256=split_hash,
     )
-    assignments = DenseAssignmentStore(assignment_manifest)
+    assignments = open_assignment_store(assignment_manifest)
     couplings = ResidualCouplingStore(coupling_manifest)
     record = role_records(split_manifest, role)[source_index]
     counters = {name: 0 for name in _AUDIT_COUNTER_NAMES}
@@ -944,7 +944,7 @@ def _audit_sample_source_worker(arguments: tuple[Any, ...]) -> dict[str, Any]:
     selection = RowSelection(
         selection_manifest, role=role, split_manifest_sha256=split_hash,
     )
-    assignments = DenseAssignmentStore(assignment_manifest)
+    assignments = open_assignment_store(assignment_manifest)
     couplings = ResidualCouplingStore(coupling_manifest)
     record = role_records(split_manifest, role)[source_index]
     sample_observed: dict[str, str] = {}
@@ -1111,7 +1111,7 @@ def _audit_full_roles_serial_reference(
     sample_heaps: dict[str, list[tuple[int, str, str]]] = {"train": [], "validation": []}
     for role in ("train", "validation"):
         selection = RowSelection(selection_manifest, role=role, split_manifest_sha256=split_hash)
-        assignments = DenseAssignmentStore(assignment_manifests[role])
+        assignments = open_assignment_store(assignment_manifests[role])
         couplings = ResidualCouplingStore(coupling_manifests[role])
         expected[role] = selection.rows; observed[role] = 0
         for source_index, _record in enumerate(role_records(split_manifest, role)):
@@ -1344,7 +1344,7 @@ def _audit_full_roles_serial_reference(
     }
     for role in ("train", "validation"):
         selection = RowSelection(selection_manifest, role=role, split_manifest_sha256=split_hash)
-        assignments = DenseAssignmentStore(assignment_manifests[role])
+        assignments = open_assignment_store(assignment_manifests[role])
         couplings = ResidualCouplingStore(coupling_manifests[role])
         wanted = sample_expected[role]
         for source_index, _record in enumerate(role_records(split_manifest, role)):

@@ -1,5 +1,98 @@
 # Current Handoff
 
+## TRI60 M1 greedy BF16/FP32 reducer repair (2026-08-28)
+
+Tigris inference jobs produced all five authenticated candidate-probability
+shards, but reducer job `93675` correctly stopped before selection because its
+singleton guard compared stored BF16-autocast training-validation metrics with
+the common FP32 shard-inference metrics using one inappropriate `5e-6`
+tolerance. For `SOURCE_M1_LOGIT`, the measured FP32-minus-BF16 differences were
+`-3.3419e-5` accuracy, `-8.2874e-5` cross entropy, `+5.163e-6` macro AUC, and
+`+0.002116070` mean log R50 (`+8.362` linear R50). Shard identities, labels,
+checkpoint hashes, and probability hashes all remained valid; peak reducer RSS
+was only about 22.99 GB.
+
+The result contract is now v2. The reducer retains exact lineage checks, uses
+metric-specific absolute BF16/FP32 reproduction envelopes, records every
+singleton's signed drift and pass/fail decision, and still fails closed outside
+that envelope. Once reproduction passes, all greedy objectives—including the
+source-M1 recovery origin—use the common recomputed FP32 probability regime.
+The five existing shards remain reusable. A source-pinned recovery now submits
+only `greedy_reduce -> campaign_complete`, records the repair commit in the v2
+result lineage, and never schedules inference. Focused greedy tests pass 12/12;
+the neighboring greedy/M1-screen/TRI60 set passes 66/66, Python compilation and
+diff checks pass, and no remote mutation occurred. Push and the exact two-job
+Tigris recovery remain.
+
+## TRI60 D000 optimization-budget screen (2026-08-27)
+
+An additive source-pinned screen now tests whether the original full-data
+`LOGIT_D000_from_D033E` edge can capture its apparent long-horizon benefit in
+60 or 90 passes. The imported original result is compared with 17 paired fresh
+fits: five delayed-decay/floor conditions, four additional peak-LR conditions,
+four early stronger-KD prefix conditions, and four 90-pass compromises. Every
+fit retains exact HLT D000 inputs, batch 256, temperature-2 D033E targets, the
+original seed alias, and a C25P75 endpoint. The 90-pass reports retain pass-60
+landmarks so schedule-shape and extra-horizon effects remain distinguishable.
+
+The two-gate plus 17-sibling-fit DAG is nice 10000 and has no scheduler
+dependency on or write path into the running TRI60/DX campaigns. Source
+probabilities are joined read-only, preprocessing remains RAM-resident, and
+only selected/final checkpoints, reports, ledgers, attestations, and logs are
+durable. Rolling resume, partial reuse, final-test access, result-controlled
+submission, and a standalone smoke campaign are disabled. Exact semantics and
+commands are in
+[`HCWDL_TRI60_D000_OPTIMIZATION_BUDGET_SCREEN_RUNBOOK.md`](HCWDL_TRI60_D000_OPTIMIZATION_BUDGET_SCREEN_RUNBOOK.md).
+
+The reusable training core gained additive, validated piecewise-constant loss
+and warmup/hold/cosine LR schedules while preserving the default TRI60 schedule
+when no override is supplied. Focused TRI60/budget/long180 tests pass 64/64;
+the complete repository passes 751 tests in 352.31 seconds with 580 existing
+Matplotlib/Pyparsing deprecation warnings. Three campaign CLI help surfaces,
+the result-printer help surface, Python compilation, diff checks, the worker's
+static shell contract test, and local Git-Bash `bash -n` pass. The runbook also
+repeats `bash -n` in the pinned Tigris worktree. No donor code, SSH action,
+push, Slurm submission, cancellation, or
+remote mutation occurred. Exact commit/push and Tigris execution remain.
+
+## TRI60 M1 greedy ensemble diagnostic (2026-08-27)
+
+An additive validation-only campaign now evaluates the completed 20-condition
+M1 compression screen with deterministic forward ensemble selection. The
+candidate set is exactly imported `SOURCE_M1_LOGIT` plus the 19 screen fits;
+`LOGIT_D000E` remains a reference and cannot enter an ensemble. Three paths
+grow from one through five distinct members by macro AUC, linear macro R50,
+and equal AUC/R50 recovery from source M1 to the D000E teacher. Every selected
+ensemble uses a uniform probability mean with FP64 accumulation and one FP32
+cast. The complete per-class metrics are retained at every path size.
+
+Inference is split across five independent GH200 jobs with four checkpoints
+per job. Each builds the exact-HLT 957,541-row validation view once in RAM,
+persists only identity digests, labels, and FP32 probabilities, and deletes
+the particle view at exit. Individual shards are capped at 320 MiB and the
+complete prediction set at 2 GiB. One 72-CPU reducer uses at most 32 forked
+workers over shared read-only arrays and deduplicates candidate sets shared
+between objectives. It also recomputes every singleton and fails closed if it
+does not reproduce the immutable training metrics.
+
+The eight-job `hcwm1ens_` DAG is authenticate, five sibling inference shards,
+greedy reduction, and completion. It is nice 10000, source pinned, and has no
+scheduler dependency on or write path into TRI60, DX, CE5, or the completed
+M1 screen. It has no fit, training target, persistent logits/particle views,
+automatic finalist selection, or final-test capability. Exact specification,
+contract, queue, audit, and result commands are in
+[`HCWDL_TRI60_M1_GREEDY_ENSEMBLE_RUNBOOK.md`](HCWDL_TRI60_M1_GREEDY_ENSEMBLE_RUNBOOK.md).
+
+Implementation evidence is 6 focused new tests and 60 passing neighboring
+TRI60/M1-screen tests. The complete repository suite passes 735 tests in
+354.06 seconds with 580 existing Matplotlib/Pyparsing deprecation warnings.
+All three new CLI help surfaces and Python compilation pass. The worker has a
+focused static contract test; the local Windows Bash executable could not
+start, so `bash -n` remains to be run in the clean Tigris worktree. No donor
+file was copied, no legacy map entry is required, and no SSH, push, Slurm
+submission, cancellation, or remote mutation occurred. Tigris execution is
+the remaining step.
+
 ## TRI60 D000 matched-seed diversity ablation (2026-08-27)
 
 An additive full-data study now isolates whether stochastic diversity explains
@@ -3513,3 +3606,136 @@ submission. No donor file was copied, so `docs/LEGACY_SOURCE_MAP.md` is
 unchanged. No SSH, push, Slurm submission, cancellation, or remote mutation
 occurred. The queue procedure is in
 `docs/HCWDL_TRI60_M1_COMPRESSION_SCREEN_RUNBOOK.md`.
+
+## 2026-08-28: full-data TRI100 four-spine LOGIT path-density campaign
+
+The implementation-authoritative plan in
+`docs/plans/HCWDL_TRI100_FOUR_SPINE_LOGIT_IMPLEMENTATION_PLAN.md` is now
+implemented locally. It registers four isolated immediate-parent-only paths
+from one authenticated, read-only full-data U000 anchor:
+
+```text
+DIRECT:     U000 -> D000
+COARSE:     U000 -> U050 -> U100 -> D066 -> D033 -> D000
+DENSE:      U000 -> U033 -> U066 -> U100 -> D080 -> D060 -> D040 -> D020 -> D000
+ULTRADENSE: U000 -> U020 -> U040 -> U060 -> U080 -> U100
+                  -> D090 -> D080 -> D070 -> D060 -> D050
+                  -> D040 -> D030 -> D020 -> D010 -> D000
+```
+
+The graph contains 29 fresh C25/P75, T=2 LOGIT-KD fits and 25
+single-selected-checkpoint probability reducers. It contains no ensemble,
+weight continuation, M1, final-test access, rolling resume, source completion
+dependency, or source mutation. Same-coordinate seed domains are matched
+across branches, including all four D000 endpoints.
+
+The core training engine gained additive, opt-in support for
+`warmup_hold_cosine_floor_tail_v1` and `macro_auc_patience_v1`. Existing
+fixed-budget TRI60 behavior remains the default. This campaign alone binds
+warmup passes 1--3, peak hold through pass 45, cosine decay through pass 60,
+a constant 1.5e-5 tail through at most pass 100, minimum 60 passes, patience
+15, patience delta 5e-5, and exact-best checkpoint restoration independent of
+the patience threshold.
+
+The campaign owns the `hcwsp4_` namespace, detached worktree, checkpoint root,
+graph, recipe, source lock, command plan, journal, exact ledger, attestations,
+monitor, and restart-from-zero recovery. Its four head fits depend only on its
+own four-node NCCL acceptance task and can run concurrently. Each fit is a
+four-node, one-GH200-per-node synchronous-DDP allocation; reducers remain
+single-GPU. The global batch remains 256, every global batch is partitioned
+without padding or duplication, and unequal final-rank row counts receive
+exact loss weighting before DDP's gradient average. Rank zero alone evaluates
+the complete canonical validation population and publishes artifacts. A
+failed fit is recovered from update zero on all four ranks.
+
+The campaign imports only the already complete U000 report/checkpoint/
+probability bank and has no Slurm dependency on the source campaign. Durable
+target banks contain identity digests and 15-class probabilities only;
+particle views and optimizer/resume state remain RAM-only or absent. The
+first registered GPU gate performs a real NCCL collective and DDP backward
+pass, checks four distinct hosts and one visible GH200 per rank, and publishes
+an immutable acceptance lock before any branch head may run.
+
+The DDP extension has focused evidence for exact branch/teacher chains,
+matched seeds, LR boundaries, minimum-pass early stopping, single-component
+target round trips, source authentication, the 58-task isolated command DAG,
+four-node resource projection, inherited-parent restart-zero recovery, exact
+256-row and 255-row four-rank partitions, and a real two-rank CPU/Gloo training
+comparison. The Gloo check exercises an uneven final global batch, rank-zero
+publication, synchronized full validation, and final-weight parity with the
+single-process global-batch reference. The final focused regression is 68
+passing tests across the four-spine, unchanged TRI60, and view-cache suites.
+The complete repository suite is 767 passed in 355.08 seconds with the 580
+existing Matplotlib/PyParsing deprecation warnings only. All 17 relevant
+Python surfaces parse through the AST, all seven create/run/submit/monitor/
+recovery CLIs pass `--help`, both DDP Slurm workers pass `bash -n`, and
+`git diff --check` passes with line-ending notices only. The queue procedure is in
+`docs/HCWDL_TRI100_FOUR_SPINE_RUNBOOK.md`. Per user direction there is no new
+standalone smoke campaign; live submission still requires canonical Tigris
+source authentication, a full dry-run ledger, a clean exact pushed commit,
+and success of the in-campaign NCCL acceptance gate. No remote job or artifact
+was changed during local implementation.
+
+## 2026-08-29: full-cardinality bottleneck-matching four-spine control
+
+The implementation-authoritative plan in
+`docs/plans/HCWDL_TRI100_FOUR_SPINE_FULL_CARDINALITY_BOTTLENECK_MATCHING_IMPLEMENTATION_PLAN.md`
+is implemented locally as a completely separate `hcwsp4b_` foundation and
+science campaign. The matcher selects exactly
+`min(n_hlt, n_offline)` one-to-one pairs. It lexicographically minimizes the
+descending vector of delta-R values after 1e-7 ties-to-even canonicalization,
+then applies the registered pT-response, category, charge, and native-index
+tie breakers. The production solver first finds the exact bottleneck threshold
+and prunes infeasible edges before its exact mixed-radix Hungarian solve; an
+independent exhaustive reference covers brute-forceable cases. Forced-pair
+validity is stored separately and is never represented as correspondence
+confidence.
+
+The new immutable foundation reuses only authenticated split, selection,
+recipe, and established-source parents. It rebuilds the train/validation
+assignment shards, diagnostics, audits, calibration/base coupling, balanced
+sidecars, and all assignment-dependent locks. Assignment construction uses
+bounded ordered process parallelism without persisting dense edge matrices.
+Durable diagnostics cover per-jet cardinality, exact smaller-side coverage,
+delta-R tails and ranked worst-pair profiles, multiplicity slices, old/new
+pair overlap, common-pair and worst-pair deltas, and established confidence as
+a separate historical quantity. A complete ordered train/validation P0 stream
+comparison must prove identical tensors, labels, identities, checkpoint, and
+probability-bank lineage before the established U000 anchor can be reused.
+
+After that lock exists, the science DAG reproduces the established single-GPU
+four-spine graph exactly: 29 fresh C25/P75, temperature-2 LOGIT fits and 25
+single-component reducers, global batch 256, 60--100-pass floor-tail schedule,
+early stopping, matched seeds, and immediate-parent-only teachers. The sole
+declared scientific change is the pairing foundation. There is no ensemble,
+M1, DDP, rolling resume, final-test access, dependency on running jobs, or
+write path into the established campaign. Its aggregate reports accuracy,
+macro AUC, macro R50, M0CE60-to-U000 recovery, complete per-class rejection,
+and authenticated established-campaign rows when available; missing historical
+rows remain pending rather than controlling completion.
+
+The foundation and science paths each use versioned, content-hashed artifacts,
+parent/source lineage, atomic publication, exact command plans, ledger
+journals, task attestations, and bounded output inventories. The science path
+also includes monitor and restart-from-zero recovery closure over exactly its
+58-task DAG. Foundation and completion locks reject resume/optimizer files,
+enforce projected durable-size and free-space reserves, and keep particle
+views and dense matching state transient. No donor file was copied, so
+`docs/LEGACY_SOURCE_MAP.md` is unchanged.
+
+Local evidence is 16/16 focused tests, 119/119 focused-plus-neighbor tests, and
+785/785 repository tests in 412.81 seconds; the only output was 580 existing
+Matplotlib/PyParsing deprecation warnings. Ten create/run/submit/monitor/
+recovery CLI help surfaces pass, and 29 new Python surfaces parse through the
+AST. A local worker import audit caught and corrected one wrong balanced-switch
+helper import. All three Slurm workers have a focused static environment/path
+contract test. The Windows Git-Bash executable could not reliably start, so
+the runbook requires authoritative `bash -n` in the clean detached Tigris
+worktree before submission. Installed-Weaver real-row matcher acceptance,
+measured production resources, all-row U000 equivalence, and the genuine
+single-GH200 forward/backward check are registered fail-closed production DAG
+gates and remain to run on Tigris. No push, SSH action, Slurm submission,
+cancellation, reprioritization, or remote artifact mutation occurred. Exact
+commit, foundation, audit, science submission, monitoring, recovery, and
+storage commands are in
+`docs/HCWDL_TRI100_FOUR_SPINE_FULLCARD_BOTTLENECK_RUNBOOK.md`.

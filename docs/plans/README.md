@@ -174,6 +174,15 @@ one control, runs 19 independent full-data/60-pass fits, requires only the
 already-complete LOGIT endpoint subset rather than source campaign completion,
 and uses a separate nice-5000 job namespace with no standalone smoke.
 
+The validation-only
+[TRI60 M1 greedy ensemble diagnostic](HCWDL_TRI60_M1_GREEDY_ENSEMBLE_PLAN.md)
+authenticates the completed 20-condition screen, evaluates its selected
+checkpoints in five parallel four-model GPU shards, and performs deterministic
+forward selection through five members for macro AUC, linear macro R50, and a
+balanced source-M1-to-teacher recovery objective. It persists at most 2 GiB of
+compact validation probabilities, never writes particle views or logits, and
+has no final-test, automatic-finalist, or source-campaign mutation capability.
+
 The additive
 [D066 full-data optimization schedule screen](HCWDL_MHPE_D066_SCHEDULE_SCREEN_FULL_PLAN.md)
 is the immutable 60-fit predecessor study. The additive
@@ -222,3 +231,8 @@ acceptance:
 ## HCWDL-MHPE endpoint teacher-mixture add-on
 
 - [Implementation-authoritative 300k/60-pass endpoint mixture plan](HCWDL_MHPE_ENDPOINT_MIX_300K60_PLAN.md)
+
+## TRI100 four-spine path-density study
+
+- [Implementation-authoritative full-data four-spine LOGIT plan](HCWDL_TRI100_FOUR_SPINE_LOGIT_IMPLEMENTATION_PLAN.md)
+- [Implementation-authoritative full-cardinality bottleneck-matching control](HCWDL_TRI100_FOUR_SPINE_FULL_CARDINALITY_BOTTLENECK_MATCHING_IMPLEMENTATION_PLAN.md)
