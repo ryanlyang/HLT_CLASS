@@ -29,6 +29,9 @@ from hlt_classification.scouting.hcwdl_fullcard_bottleneck_diagnostics import (
     PairingDiagnosticsAccumulator,
     merge_diagnostic_payloads,
 )
+from hlt_classification.scouting.hcwdl_fullcard_bottleneck_foundation_workflow import (
+    _extend_acceptance_candidates,
+)
 from hlt_classification.scouting.highcov_data import Particles
 
 
@@ -55,6 +58,27 @@ def _solve(
         native_offline_index=np.arange(no) if native is None else np.asarray(native),
     )
     return production_pairing_from_matrices(**kwargs), reference_pairing_from_matrices(**kwargs)
+
+
+def test_acceptance_candidate_discovery_is_bounded_before_exact_matching():
+    generic: list[tuple[str, int]] = []
+    reference: list[tuple[str, int]] = []
+    hlt = np.full(100, 80, np.int64)
+    offline = np.full(100, 90, np.int64)
+    hlt[:8] = np.arange(2, 10)
+
+    observed, complete = _extend_acceptance_candidates(
+        source_path="sample.root", entry_start=1000,
+        indexes=np.arange(100), hlt_counts=hlt, offline_counts=offline,
+        generic_candidates=generic, reference_candidates=reference,
+        generic_target=64, reference_target=8,
+    )
+
+    assert complete is True
+    assert observed == 64
+    assert generic == [("sample.root", 1000 + row) for row in range(64)]
+    assert reference == [("sample.root", 1000 + row) for row in range(8)]
+    assert len(set(generic + reference)) == 64
 
 
 def test_matcher_spec_is_frozen_and_forbids_confidence() -> None:

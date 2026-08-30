@@ -3739,3 +3739,32 @@ cancellation, reprioritization, or remote artifact mutation occurred. Exact
 commit, foundation, audit, science submission, monitoring, recovery, and
 storage commands are in
 `docs/HCWDL_TRI100_FOUR_SPINE_FULLCARD_BOTTLENECK_RUNBOOK.md`.
+
+## 2026-08-30: bounded full-cardinality matcher-acceptance repair
+
+The first production foundation matcher-acceptance job, `97292`, reached its
+eight-hour limit before publishing an acceptance lock. The failure occurred
+before assignment production or any scientific fit. Source review identified
+an operational bug in the acceptance miniature: while searching for eight
+rare brute-forceable low-multiplicity rows, it ran the exact production
+matcher on every selected row encountered. The final gate required only a
+bounded real-row sample, so this accidentally converted candidate discovery
+into an unbounded expensive matching scan.
+
+Candidate discovery now reads only scalar count, selection, baseline, and
+label branches. It deterministically stops after registering 64 ordinary real
+rows and eight real rows with smaller-side multiplicity at most nine, then
+performs targeted full-branch reads and exact matching only for the bounded
+unique union. Low-multiplicity rows that overlap the first 64 count toward both
+targets. The worker logs completed discovery and every eight matched rows and
+records scan rows/timing separately from exact-matching timing. Matching,
+cardinality, exhaustive-reference, provenance, and fail-closed scientific
+semantics are unchanged.
+
+The focused matcher/four-spine set passes 17/17, including a new regression
+that proves overlapping low-multiplicity candidates stop discovery after 64
+rows. The focused-plus-homotopy/unified-balanced/established-four-spine set
+passes 120/120 in 59.05 seconds, and `git diff --check` passes with line-ending
+notices only. No donor file was copied. The timed-out root must not be reused;
+after this repair is pushed, cancel only its exact still-pending ledger IDs and
+create a new source-pinned foundation root at the repair commit.

@@ -69,6 +69,7 @@ from .hcwdl_upper_cache import validate_base_manifest
 from .labels import baseline_mask, multiclass_labels
 from .particles import decode_particle_sets
 from .schema import BASELINE_BRANCHES, LABEL_BRANCHES, matching_required_branches
+from .selective_assignment import RowSelection
 from .splits import role_records
 from .streaming import iterate_projected_chunks
 from .training import derive_seed
@@ -98,6 +99,46 @@ def _hash_batch(digest: "hashlib._Hash", batch: Mapping[str, Any]) -> None:
         value = str(identity).encode("utf-8")
         digest.update(len(value).to_bytes(4, "little")); digest.update(value)
     digest.update(np.asarray(batch["labels"], dtype="<i8").tobytes())
+
+
+def _extend_acceptance_candidates(
+    *, source_path: str, entry_start: int, indexes: np.ndarray,
+    hlt_counts: np.ndarray, offline_counts: np.ndarray,
+    generic_candidates: list[tuple[str, int]],
+    reference_candidates: list[tuple[str, int]],
+    generic_target: int, reference_target: int,
+) -> tuple[int, bool]:
+    """Register a bounded deterministic real-row acceptance sample."""
+
+    selected = np.asarray(indexes, np.int64)
+    hlt = np.asarray(hlt_counts, np.int64)
+    offline = np.asarray(offline_counts, np.int64)
+    if hlt.ndim != 1 or offline.shape != hlt.shape:
+        raise ValueError("matcher acceptance multiplicity arrays differ")
+    if np.any(selected < 0) or np.any(selected >= len(hlt)):
+        raise ValueError("matcher acceptance selected index differs")
+    reference_seen = set(reference_candidates)
+    observed = 0
+    for row in selected:
+        row = int(row)
+        if hlt[row] < 0 or offline[row] < 0:
+            raise ValueError("matcher acceptance multiplicity is negative")
+        ref = (str(source_path), int(entry_start) + row)
+        observed += 1
+        if len(generic_candidates) < generic_target:
+            generic_candidates.append(ref)
+        if (
+            min(int(hlt[row]), int(offline[row])) <= 9
+            and ref not in reference_seen
+            and len(reference_candidates) < reference_target
+        ):
+            reference_candidates.append(ref); reference_seen.add(ref)
+        if (
+            len(generic_candidates) >= generic_target
+            and len(reference_candidates) >= reference_target
+        ):
+            return observed, True
+    return observed, False
     view = batch["privileged"]
     for name in ("features", "vectors", "mask", "raw_lengths"):
         value = np.ascontiguousarray(getattr(view, name))
@@ -130,65 +171,150 @@ class FullCardinalityFoundationWorkflow:
         started = time.monotonic()
         cpu_started = time.process_time()
         matcher = FullCardinalityBottleneckMatcher()
-        checked = 0
-        reference_checked = 0
-        max_hlt = 0
-        max_offline = 0
-        branches = set(BASELINE_BRANCHES) | set(LABEL_BRANCHES) | set(
-            matching_required_branches()
+        generic_target = 64
+        reference_target = 8
+        generic_candidates: list[tuple[str, int]] = []
+        reference_candidates: list[tuple[str, int]] = []
+        scan_rows = 0
+        selection = RowSelection(
+            self.selection, role="train",
+            split_manifest_sha256=self.split["content_hash"],
         )
+        count_branches = set(BASELINE_BRANCHES) | set(LABEL_BRANCHES) | {
+            "n_cpfcands", "n_lts", "n_npfcands",
+        }
+
+        # Candidate discovery deliberately reads scalar count/selection fields
+        # only.  The previous implementation ran the exact matcher on every
+        # selected row while searching for rare brute-forceable examples,
+        # turning a bounded acceptance miniature into a multi-hour scan.
+        scan_started = time.monotonic()
         for record in role_records(self.split, "train"):
+            source = Path(self.spec["data_root"]) / record.path
             for chunk in iterate_projected_chunks(
-                (Path(self.spec["data_root"]) / record.path,), branches,
-                data_root=self.spec["data_root"], role="train", step_size=256,
+                (source,), count_branches, data_root=self.spec["data_root"],
+                role="train", step_size=16_384,
             ):
                 labels = multiclass_labels(chunk.arrays)
                 indexes = np.flatnonzero(baseline_mask(chunk.arrays) & (labels >= 0))
                 absolute = chunk.entry_start + indexes
-                from .selective_assignment import RowSelection
-                selection = RowSelection(
-                    self.selection, role="train",
-                    split_manifest_sha256=self.split["content_hash"],
-                )
                 indexes = indexes[selection.mask(chunk.source_path, absolute)]
-                for row in indexes:
-                    hraw, oraw, _ = decode_particle_sets(chunk.arrays, int(row))
-                    hlt = from_scouting_particles(hraw, offline=False)
-                    offline = from_scouting_particles(oraw, offline=True)
-                    result = matcher.match(hlt, offline)
-                    max_hlt = max(max_hlt, len(hlt.p4)); max_offline = max(max_offline, len(offline.p4))
-                    if min(len(hlt.p4), len(offline.p4)) <= 9:
-                        from .highcov_features import edge_matrices
-                        from .hcwdl_fullcard_bottleneck_matcher import (
-                            canonical_qabs_log_pt_response, canonical_qdr,
-                        )
-                        matrices = edge_matrices(hlt, offline)
-                        native = (
-                            np.arange(len(offline.p4)) if offline.native_index is None
-                            else offline.native_index
-                        )
-                        kwargs = dict(
-                            qdr=canonical_qdr(matrices.dr),
-                            qresponse=canonical_qabs_log_pt_response(matrices.log_pt),
-                            hlt_category=hlt.category, offline_category=offline.category,
-                            hlt_charge=hlt.charge, offline_charge=offline.charge,
-                            native_offline_index=native,
-                        )
-                        expected = reference_pairing_from_matrices(**kwargs)
-                        actual = production_pairing_from_matrices(**kwargs)
-                        if not np.array_equal(expected, actual):
-                            raise ValueError("production/reference real-row pairing differs")
-                        reference_checked += 1
-                    if result.selected_count != min(len(hlt.p4), len(offline.p4)):
-                        raise ValueError("matcher acceptance cardinality differs")
-                    checked += 1
-                    if checked >= 64 and reference_checked >= 8:
-                        break
-                if checked >= 64 and reference_checked >= 8:
+                if not len(indexes):
+                    continue
+                hlt_counts = np.asarray(chunk.arrays["n_scoutpfcands"], np.int64)
+                offline_counts = (
+                    np.asarray(chunk.arrays["n_cpfcands"], np.int64)
+                    + np.asarray(chunk.arrays["n_lts"], np.int64)
+                    + np.asarray(chunk.arrays["n_npfcands"], np.int64)
+                )
+                observed, complete = _extend_acceptance_candidates(
+                    source_path=chunk.source_path, entry_start=chunk.entry_start,
+                    indexes=indexes, hlt_counts=hlt_counts,
+                    offline_counts=offline_counts,
+                    generic_candidates=generic_candidates,
+                    reference_candidates=reference_candidates,
+                    generic_target=generic_target,
+                    reference_target=reference_target,
+                )
+                scan_rows += observed
+                if complete:
                     break
-            if checked >= 64 and reference_checked >= 8:
+            if (
+                len(generic_candidates) >= generic_target
+                and len(reference_candidates) >= reference_target
+            ):
                 break
-        if checked < 1 or reference_checked < 1:
+        scan_seconds = time.monotonic() - scan_started
+        generic_seen = set(generic_candidates)
+        candidates = generic_candidates + [
+            ref for ref in reference_candidates if ref not in generic_seen
+        ]
+        if len(generic_candidates) < generic_target or not reference_candidates:
+            raise ValueError(
+                "matcher acceptance candidate discovery lacks required real rows: "
+                f"generic={len(generic_candidates)} reference={len(reference_candidates)}"
+            )
+        print(
+            "HCWDL-FULLCARD phase=matcher_acceptance_candidates "
+            f"scanned={scan_rows} generic={len(generic_candidates)} "
+            f"reference={len(reference_candidates)} seconds={scan_seconds:.3f}",
+            flush=True,
+        )
+
+        branches = set(BASELINE_BRANCHES) | set(LABEL_BRANCHES) | set(
+            matching_required_branches()
+        )
+        by_source: dict[str, list[int]] = {}
+        for source_path, entry in candidates:
+            by_source.setdefault(source_path, []).append(entry)
+        loaded: dict[tuple[str, int], Mapping[str, Any]] = {}
+        import uproot
+        data_root = Path(self.spec["data_root"]).expanduser().resolve()
+        for source_path, entries in by_source.items():
+            source = (data_root / source_path).resolve()
+            try:
+                source.relative_to(data_root)
+            except ValueError as error:
+                raise ValueError("matcher acceptance source escapes data root") from error
+            with uproot.open(source) as handle:
+                tree = handle["tree"]
+                missing = sorted(branches - set(tree.keys()))
+                if missing:
+                    raise KeyError(f"matcher acceptance source lacks branches: {missing}")
+                for entry in entries:
+                    arrays = tree.arrays(
+                        sorted(branches), entry_start=entry, entry_stop=entry + 1,
+                        library="ak", how=dict,
+                    )
+                    if len(next(iter(arrays.values()))) != 1:
+                        raise ValueError("matcher acceptance targeted read differs")
+                    loaded[(source_path, entry)] = arrays
+
+        checked = 0
+        reference_checked = 0
+        max_hlt = 0
+        max_offline = 0
+        matching_started = time.monotonic()
+        for source_path, entry in candidates:
+            arrays = loaded[(source_path, entry)]
+            hraw, oraw, _ = decode_particle_sets(arrays, 0)
+            hlt = from_scouting_particles(hraw, offline=False)
+            offline = from_scouting_particles(oraw, offline=True)
+            result = matcher.match(hlt, offline)
+            max_hlt = max(max_hlt, len(hlt.p4)); max_offline = max(max_offline, len(offline.p4))
+            if min(len(hlt.p4), len(offline.p4)) <= 9:
+                from .highcov_features import edge_matrices
+                from .hcwdl_fullcard_bottleneck_matcher import (
+                    canonical_qabs_log_pt_response, canonical_qdr,
+                )
+                matrices = edge_matrices(hlt, offline)
+                native = (
+                    np.arange(len(offline.p4)) if offline.native_index is None
+                    else offline.native_index
+                )
+                kwargs = dict(
+                    qdr=canonical_qdr(matrices.dr),
+                    qresponse=canonical_qabs_log_pt_response(matrices.log_pt),
+                    hlt_category=hlt.category, offline_category=offline.category,
+                    hlt_charge=hlt.charge, offline_charge=offline.charge,
+                    native_offline_index=native,
+                )
+                expected = reference_pairing_from_matrices(**kwargs)
+                actual = production_pairing_from_matrices(**kwargs)
+                if not np.array_equal(expected, actual):
+                    raise ValueError("production/reference real-row pairing differs")
+                reference_checked += 1
+            if result.selected_count != min(len(hlt.p4), len(offline.p4)):
+                raise ValueError("matcher acceptance cardinality differs")
+            checked += 1
+            if checked % 8 == 0 or checked == len(candidates):
+                print(
+                    "HCWDL-FULLCARD phase=matcher_acceptance_match "
+                    f"checked={checked}/{len(candidates)} reference={reference_checked}",
+                    flush=True,
+                )
+        matching_seconds = time.monotonic() - matching_started
+        if checked < generic_target or reference_checked < 1:
             raise ValueError("matcher acceptance did not inspect real low-multiplicity rows")
         try:
             import resource
@@ -207,6 +333,11 @@ class FullCardinalityFoundationWorkflow:
             "production_reference_exact": True,
             "maximum_hlt_multiplicity": max_hlt,
             "maximum_offline_multiplicity": max_offline,
+            "candidate_scan_rows": scan_rows,
+            "candidate_scan_seconds": scan_seconds,
+            "matching_seconds": matching_seconds,
+            "generic_candidate_target": generic_target,
+            "reference_candidate_target": reference_target,
             "runtime_seconds": time.monotonic() - started,
             "cpu_seconds": time.process_time() - cpu_started,
             "peak_rss_platform_units": peak_rss_platform_units,
