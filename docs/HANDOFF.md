@@ -3768,3 +3768,40 @@ passes 120/120 in 59.05 seconds, and `git diff --check` passes with line-ending
 notices only. No donor file was copied. The timed-out root must not be reused;
 after this repair is pushed, cancel only its exact still-pending ledger IDs and
 create a new source-pinned foundation root at the repair commit.
+
+## 2026-08-30: exhaustive-reference cardinality repair
+
+The second production foundation matcher-acceptance job, `97450`, completed
+candidate discovery in 0.823 seconds but timed out after eight hours inside
+the bounded matching loop. Its log reached 64/70 ordinary production checks
+but completed only three exhaustive-reference checks. The reference filter
+incorrectly admitted a row whenever the *smaller* side had at most nine
+particles, even though its enumerator has
+`P(max(n_hlt,n_offline), min(n_hlt,n_offline))` candidates. Consequently a
+highly rectangular real row could pass the gate while requiring an
+astronomical reference search.
+
+The exhaustive helper now fail-closes unless both particle sides contain at
+most eight particles, bounding a square comparison by 8! assignments. The 64
+ordinary acceptance rows remain deterministic selected TRAIN rows and still
+exercise the unrestricted production solver. The eight independent reference
+rows are now searched across all authenticated TRAIN rows because this is an
+integrity comparison rather than a scientific-population measurement; each
+is explicitly bound on both sides and only those registered rows invoke the
+exhaustive solver. The acceptance artifact records both populations and the
+reference ceiling. Matcher objectives, assignment semantics, selected
+training population, and the four-spine scientific comparison are unchanged.
+Review also found that the preceding candidate-discovery edit had displaced
+the tensor portion of the U000 stream-hash helper below an unreachable return.
+Direct tensor equality still failed closed, but the durable digest bound only
+identities and labels; the helper and regression now bind identities, labels,
+features, vectors, masks, and raw lengths as originally intended.
+
+Local evidence after the repair is 13/13 focused matcher tests, 130/130
+focused-plus-neighbor four-spine/homotopy/unified-balanced tests in 98.93
+seconds, and 789/789 repository tests in 558.98 seconds. The complete run
+reported only the 580 existing Matplotlib/PyParsing deprecation warnings plus
+the local read-only pytest-cache warning. A measured square 8-by-8 exhaustive
+reference takes about 3.6 seconds locally, so the eight registered reference
+rows have a deliberately bounded worst-case enumeration count. No donor file
+was copied and no remote job or artifact was changed by this repair.

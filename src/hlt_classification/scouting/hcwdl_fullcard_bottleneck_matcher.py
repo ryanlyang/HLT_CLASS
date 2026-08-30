@@ -21,6 +21,13 @@ from .highcov_data import Particles
 from .highcov_features import edge_matrices
 
 
+# Exhaustive enumeration has P(max(nh, no), min(nh, no)) candidates.  Its
+# safety bound therefore applies to both sides, not only to the matched side.
+# Eight keeps a worst-case square audit below 8! candidates while production
+# matching itself remains unrestricted.
+REFERENCE_ENUMERATOR_MAX_SIDE = 8
+
+
 @dataclass(frozen=True)
 class PairingResult:
     """HLT-oriented forced assignment and its exact canonical diagnostics."""
@@ -134,8 +141,11 @@ def reference_pairing_from_matrices(
     if qdr.ndim != 2 or qresponse.shape != qdr.shape:
         raise ValueError("canonical edge matrices differ")
     nh, no = qdr.shape
-    if min(nh, no) > 9:
-        raise ValueError("reference enumerator is restricted to min cardinality <= 9")
+    if max(nh, no) > REFERENCE_ENUMERATOR_MAX_SIDE:
+        raise ValueError(
+            "reference enumerator requires both cardinalities <= "
+            f"{REFERENCE_ENUMERATOR_MAX_SIDE}"
+        )
     if nh == 0 or no == 0:
         return np.full(nh, -1, np.int32)
     right_count = no if nh <= no else nh
@@ -424,5 +434,5 @@ __all__ = [
     "FullCardinalityBottleneckMatcher", "PairingResult", "assignment_signature",
     "canonical_qabs_log_pt_response", "canonical_qdr",
     "production_pairing_from_matrices", "reference_pairing_from_matrices",
-    "validate_pairing",
+    "REFERENCE_ENUMERATOR_MAX_SIDE", "validate_pairing",
 ]

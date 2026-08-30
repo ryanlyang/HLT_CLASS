@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 from itertools import product
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 from hlt_classification.scouting.hcwdl_fullcard_bottleneck_contracts import (
     matcher_spec,
@@ -12,6 +15,7 @@ from hlt_classification.scouting.hcwdl_fullcard_bottleneck_contracts import (
 from hlt_classification.scouting.hcwdl_fullcard_bottleneck_matcher import (
     FullCardinalityBottleneckMatcher,
     PairingResult,
+    REFERENCE_ENUMERATOR_MAX_SIDE,
     canonical_qdr,
     production_pairing_from_matrices,
     reference_pairing_from_matrices,
@@ -31,6 +35,7 @@ from hlt_classification.scouting.hcwdl_fullcard_bottleneck_diagnostics import (
 )
 from hlt_classification.scouting.hcwdl_fullcard_bottleneck_foundation_workflow import (
     _extend_acceptance_candidates,
+    _hash_batch,
 )
 from hlt_classification.scouting.highcov_data import Particles
 
@@ -65,7 +70,8 @@ def test_acceptance_candidate_discovery_is_bounded_before_exact_matching():
     reference: list[tuple[str, int]] = []
     hlt = np.full(100, 80, np.int64)
     offline = np.full(100, 90, np.int64)
-    hlt[:8] = np.arange(2, 10)
+    hlt[:8] = np.arange(1, 9)
+    offline[:8] = np.arange(8, 0, -1)
 
     observed, complete = _extend_acceptance_candidates(
         source_path="sample.root", entry_start=1000,
@@ -79,6 +85,61 @@ def test_acceptance_candidate_discovery_is_bounded_before_exact_matching():
     assert generic == [("sample.root", 1000 + row) for row in range(64)]
     assert reference == [("sample.root", 1000 + row) for row in range(8)]
     assert len(set(generic + reference)) == 64
+
+
+def test_acceptance_reference_search_uses_both_bounded_sides_and_all_rows():
+    generic: list[tuple[str, int]] = []
+    reference: list[tuple[str, int]] = []
+    hlt = np.full(80, 80, np.int64)
+    offline = np.full(80, 90, np.int64)
+    hlt[:8] = 3
+    offline[:8] = 5
+
+    observed, complete = _extend_acceptance_candidates(
+        source_path="sample.root", entry_start=2000,
+        indexes=np.arange(16, 80), reference_indexes=np.arange(80),
+        hlt_counts=hlt, offline_counts=offline,
+        generic_candidates=generic, reference_candidates=reference,
+        generic_target=64, reference_target=8,
+    )
+
+    assert complete is True
+    assert observed == 64
+    assert generic[0] == ("sample.root", 2016)
+    assert reference == [("sample.root", 2000 + row) for row in range(8)]
+
+
+def test_reference_enumerator_rejects_a_skewed_unbounded_side():
+    nh = 2
+    no = REFERENCE_ENUMERATOR_MAX_SIDE + 1
+    kwargs = dict(
+        qdr=np.zeros((nh, no), np.int64),
+        qresponse=np.zeros((nh, no), np.int64),
+        hlt_category=np.zeros(nh), offline_category=np.zeros(no),
+        hlt_charge=np.zeros(nh), offline_charge=np.zeros(no),
+        native_offline_index=np.arange(no),
+    )
+    with pytest.raises(ValueError, match="both cardinalities"):
+        reference_pairing_from_matrices(**kwargs)
+
+
+def test_u000_stream_digest_binds_particle_tensors():
+    def digest(feature_value: float) -> str:
+        value = hashlib.sha256()
+        view = SimpleNamespace(
+            features=np.asarray([[[feature_value]]], np.float32),
+            vectors=np.zeros((1, 4, 1), np.float32),
+            mask=np.ones((1, 1), bool),
+            raw_lengths=np.ones(1, np.int64),
+        )
+        _hash_batch(value, {
+            "identity_keys": np.asarray(["source.root::1"]),
+            "labels": np.asarray([2]),
+            "privileged": view,
+        })
+        return value.hexdigest()
+
+    assert digest(1.0) != digest(2.0)
 
 
 def test_matcher_spec_is_frozen_and_forbids_confidence() -> None:

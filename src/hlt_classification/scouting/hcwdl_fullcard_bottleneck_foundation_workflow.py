@@ -45,6 +45,7 @@ from .hcwdl_fullcard_bottleneck_foundation import (
 from .hcwdl_fullcard_bottleneck_foundation_campaign import validate_foundation
 from .hcwdl_fullcard_bottleneck_matcher import (
     FullCardinalityBottleneckMatcher,
+    REFERENCE_ENUMERATOR_MAX_SIDE,
     production_pairing_from_matrices,
     reference_pairing_from_matrices,
 )
@@ -99,10 +100,17 @@ def _hash_batch(digest: "hashlib._Hash", batch: Mapping[str, Any]) -> None:
         value = str(identity).encode("utf-8")
         digest.update(len(value).to_bytes(4, "little")); digest.update(value)
     digest.update(np.asarray(batch["labels"], dtype="<i8").tobytes())
+    view = batch["privileged"]
+    for name in ("features", "vectors", "mask", "raw_lengths"):
+        value = np.ascontiguousarray(getattr(view, name))
+        digest.update(name.encode("ascii")); digest.update(value.dtype.str.encode("ascii"))
+        digest.update(np.asarray(value.shape, dtype="<i8").tobytes())
+        digest.update(value.tobytes())
 
 
 def _extend_acceptance_candidates(
     *, source_path: str, entry_start: int, indexes: np.ndarray,
+    reference_indexes: np.ndarray | None = None,
     hlt_counts: np.ndarray, offline_counts: np.ndarray,
     generic_candidates: list[tuple[str, int]],
     reference_candidates: list[tuple[str, int]],
@@ -111,12 +119,17 @@ def _extend_acceptance_candidates(
     """Register a bounded deterministic real-row acceptance sample."""
 
     selected = np.asarray(indexes, np.int64)
+    reference_rows = np.asarray(
+        selected if reference_indexes is None else reference_indexes, np.int64,
+    )
     hlt = np.asarray(hlt_counts, np.int64)
     offline = np.asarray(offline_counts, np.int64)
     if hlt.ndim != 1 or offline.shape != hlt.shape:
         raise ValueError("matcher acceptance multiplicity arrays differ")
     if np.any(selected < 0) or np.any(selected >= len(hlt)):
         raise ValueError("matcher acceptance selected index differs")
+    if np.any(reference_rows < 0) or np.any(reference_rows >= len(hlt)):
+        raise ValueError("matcher acceptance reference index differs")
     reference_seen = set(reference_candidates)
     observed = 0
     for row in selected:
@@ -127,24 +140,28 @@ def _extend_acceptance_candidates(
         observed += 1
         if len(generic_candidates) < generic_target:
             generic_candidates.append(ref)
+        if len(generic_candidates) >= generic_target:
+            break
+    for row in reference_rows:
+        row = int(row)
+        if hlt[row] < 0 or offline[row] < 0:
+            raise ValueError("matcher acceptance multiplicity is negative")
+        ref = (str(source_path), int(entry_start) + row)
         if (
-            min(int(hlt[row]), int(offline[row])) <= 9
+            min(int(hlt[row]), int(offline[row])) > 0
+            and max(int(hlt[row]), int(offline[row]))
+            <= REFERENCE_ENUMERATOR_MAX_SIDE
             and ref not in reference_seen
             and len(reference_candidates) < reference_target
         ):
             reference_candidates.append(ref); reference_seen.add(ref)
-        if (
-            len(generic_candidates) >= generic_target
-            and len(reference_candidates) >= reference_target
-        ):
-            return observed, True
-    return observed, False
-    view = batch["privileged"]
-    for name in ("features", "vectors", "mask", "raw_lengths"):
-        value = np.ascontiguousarray(getattr(view, name))
-        digest.update(name.encode("ascii")); digest.update(value.dtype.str.encode("ascii"))
-        digest.update(np.asarray(value.shape, dtype="<i8").tobytes())
-        digest.update(value.tobytes())
+        if len(reference_candidates) >= reference_target:
+            break
+    complete = (
+        len(generic_candidates) >= generic_target
+        and len(reference_candidates) >= reference_target
+    )
+    return observed, complete
 
 
 class FullCardinalityFoundationWorkflow:
@@ -199,8 +216,6 @@ class FullCardinalityFoundationWorkflow:
                 indexes = np.flatnonzero(baseline_mask(chunk.arrays) & (labels >= 0))
                 absolute = chunk.entry_start + indexes
                 indexes = indexes[selection.mask(chunk.source_path, absolute)]
-                if not len(indexes):
-                    continue
                 hlt_counts = np.asarray(chunk.arrays["n_scoutpfcands"], np.int64)
                 offline_counts = (
                     np.asarray(chunk.arrays["n_cpfcands"], np.int64)
@@ -209,7 +224,13 @@ class FullCardinalityFoundationWorkflow:
                 )
                 observed, complete = _extend_acceptance_candidates(
                     source_path=chunk.source_path, entry_start=chunk.entry_start,
-                    indexes=indexes, hlt_counts=hlt_counts,
+                    indexes=indexes,
+                    # Exhaustive comparison is an integrity gate, not a
+                    # scientific-population measurement.  Search every
+                    # authenticated TRAIN row so truly bounded real examples
+                    # are not hidden by the analysis selection.
+                    reference_indexes=np.arange(len(hlt_counts), dtype=np.int64),
+                    hlt_counts=hlt_counts,
                     offline_counts=offline_counts,
                     generic_candidates=generic_candidates,
                     reference_candidates=reference_candidates,
@@ -229,7 +250,10 @@ class FullCardinalityFoundationWorkflow:
         candidates = generic_candidates + [
             ref for ref in reference_candidates if ref not in generic_seen
         ]
-        if len(generic_candidates) < generic_target or not reference_candidates:
+        if (
+            len(generic_candidates) < generic_target
+            or len(reference_candidates) < reference_target
+        ):
             raise ValueError(
                 "matcher acceptance candidate discovery lacks required real rows: "
                 f"generic={len(generic_candidates)} reference={len(reference_candidates)}"
@@ -275,6 +299,7 @@ class FullCardinalityFoundationWorkflow:
         max_hlt = 0
         max_offline = 0
         matching_started = time.monotonic()
+        reference_set = set(reference_candidates)
         for source_path, entry in candidates:
             arrays = loaded[(source_path, entry)]
             hraw, oraw, _ = decode_particle_sets(arrays, 0)
@@ -282,7 +307,14 @@ class FullCardinalityFoundationWorkflow:
             offline = from_scouting_particles(oraw, offline=True)
             result = matcher.match(hlt, offline)
             max_hlt = max(max_hlt, len(hlt.p4)); max_offline = max(max_offline, len(offline.p4))
-            if min(len(hlt.p4), len(offline.p4)) <= 9:
+            if (source_path, entry) in reference_set:
+                if (
+                    max(len(hlt.p4), len(offline.p4))
+                    > REFERENCE_ENUMERATOR_MAX_SIDE
+                ):
+                    raise ValueError(
+                        "matcher acceptance reference cardinality escaped its bound"
+                    )
                 from .highcov_features import edge_matrices
                 from .hcwdl_fullcard_bottleneck_matcher import (
                     canonical_qabs_log_pt_response, canonical_qdr,
@@ -314,7 +346,7 @@ class FullCardinalityFoundationWorkflow:
                     flush=True,
                 )
         matching_seconds = time.monotonic() - matching_started
-        if checked < generic_target or reference_checked < 1:
+        if checked < generic_target or reference_checked != reference_target:
             raise ValueError("matcher acceptance did not inspect real low-multiplicity rows")
         try:
             import resource
@@ -338,6 +370,9 @@ class FullCardinalityFoundationWorkflow:
             "matching_seconds": matching_seconds,
             "generic_candidate_target": generic_target,
             "reference_candidate_target": reference_target,
+            "reference_enumerator_max_side": REFERENCE_ENUMERATOR_MAX_SIDE,
+            "generic_population": "selected_authenticated_train_rows",
+            "reference_population": "all_authenticated_train_rows",
             "runtime_seconds": time.monotonic() - started,
             "cpu_seconds": time.process_time() - cpu_started,
             "peak_rss_platform_units": peak_rss_platform_units,
