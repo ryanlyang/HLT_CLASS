@@ -58,6 +58,18 @@ order.  Any malformed lineage requiring more than 200 tokens fails closed; it
 is never silently truncated.  This support policy is legal only with neutral
 pairing-validity provenance from the full-cardinality matcher.
 
+Full-cardinality assignments can select legitimate offline lost-track records
+from the native charged collection whose stored particle-type flags are finite
+binary but zero-hot. Under the versioned validity-only policy
+`native_collection_applicability_atomic_raw_endpoint_v1`, native collection
+membership determines charged/neutral field applicability, while the raw
+offline identity vector is copied unchanged when an endpoint switch fires.
+No particle category is invented. One-hot identities must agree with native
+collection membership, and nonfinite, nonbinary, incompatible, or
+non-discrete required values fail closed. Established confidence-backed paths
+remain strictly one-hot. This semantic boundary is part of the campaign,
+recipe, graph, and execution-acceptance identities.
+
 ## Anchor and training graph
 
 The pure-offline U000 checkpoint is an oracle/reporting reference, not the

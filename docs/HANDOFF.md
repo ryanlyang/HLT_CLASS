@@ -1,5 +1,32 @@
 # Current Handoff
 
+## TRI100 full-cardinality offline endpoint repair (2026-08-31)
+
+The v2 non-persistent full-cardinality campaign passed preflight, then its
+first COARSE, DENSE, and ULTRADENSE U jobs (`98181`, `98190`, `98205`) failed
+during train-view preprocessing at row 2991. The DIRECT D000 branch remained
+running because it never selects the offline feature endpoint. The common
+input is a legitimate offline lost-track record in the native charged
+`cpfcandlt` collection with finite-binary but zero-hot particle-type flags.
+
+The validity-only endpoint now binds
+`native_collection_applicability_atomic_raw_endpoint_v1`: authenticated native
+collection membership determines field applicability, and the raw offline
+identity vector is copied unchanged. No charged-hadron or other class is
+invented. Exclusive identities must agree with collection membership;
+nonfinite, nonbinary, incompatible, and non-discrete required values still
+fail closed. Established confidence-backed paths remain strict.
+
+The exact non-persistent repair is maintained on an isolated source-pinned
+`965bdad6` worktree with v3 contracts; its focused suite passes 74/74. Current
+persistent-HLT-support science binds the same raw-endpoint rule under its own
+v2 contracts. Its repair/campaign suite passes 66/66, the adjacent homotopy,
+unified-balanced, full-cardinality, and four-spine regression suite passes
+160/160, and the repository-wide suite passes 800/800. Matcher and foundation
+artifacts remain reusable because no assignment changed. Failed science roots
+are not reusable under the new contracts, and the still-running DIRECT job is
+not to be cancelled as part of recovery. Final test was not accessed.
+
 ## TRI100 persistent-HLT-support four-spine control (2026-08-31)
 
 An independent full-cardinality control now implements the requested monotone
@@ -14,7 +41,7 @@ the default, and the new policy is accepted only with neutral pairing-validity
 provenance.
 
 The source-pinned campaign has a distinct `hcwsp4p_` job namespace and
-`HCWDL_TRI100_FOUR_SPINE_FULLCARD_PERSISTENT_HLT_*/v1` artifacts. It trains a
+`HCWDL_TRI100_FOUR_SPINE_FULLCARD_PERSISTENT_HLT_*/v2` artifacts. It trains a
 fresh, seed-matched, 60-pass CE-only hybrid anchor and its own probability bank,
 then the unchanged four immediate-parent C25/P75 T=2 spines. The complete DAG
 contains 30 fits, 26 reducers, an all-row compact support audit, genuine-GH200
@@ -23,14 +50,15 @@ shared 100% recovery oracle; it is not a teacher. Existing campaigns have no
 Slurm dependency or mutable path in this DAG.
 
 Focused source tests for default/persistent endpoint behavior, metadata order,
-monotone cardinality, exact D000, confidence-provenance rejection, hidden-
+monotone cardinality, exact D000, confidence-provenance rejection, raw
+zero-hot/multi-hot offline endpoint preservation, nonfinite rejection, hidden-
 truncation rejection, graph shape, all-row count arithmetic, campaign DAG,
 probability isolation, recovery, and foundation authentication are present.
-The focused policy/campaign suite passes 41/41, the adjacent homotopy,
+The focused repair/campaign suite passes 66/66, the adjacent homotopy,
 unified-balanced, full-cardinality, and four-spine regression suite passes
-135/135, and the repository-wide suite passes 797/797 in the `tagging-hlt`
-environment. Python compilation and diff checks pass. Installed-Weaver parity
-and a genuine Tigris preflight/miniature remain required before full live
+160/160, and the repository-wide suite passes 800/800 in the `tagging-hlt`
+environment. Python compilation and diff checks pass. A fresh source-pinned v2
+genuine Tigris preflight/miniature remains required before full live
 submission. Final test was not accessed.
 
 ## TRI100 full-cardinality preflight repair (2026-08-31)

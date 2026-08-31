@@ -11,6 +11,7 @@ from hlt_classification.scouting.matching import (
 from hlt_classification.scouting.repair import (
     FULL_ENDPOINT_FIELDS, HIGHCOV_HC_EXACT_FAMILY, HIGHCOV_SHELL_EXACT_FAMILY,
     HIGHCOV_SHELL_SOFT_FAMILY, PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY,
+    PAIRING_VALIDITY_UNCLASSIFIED_OFFLINE_POLICY,
     SELECTIVE_FULL_REPAIR_FAMILY,
     build_alpha_repaired_inputs,
     build_full_offline_endpoint_inputs,
@@ -283,6 +284,73 @@ def test_pairing_validity_shell_still_fails_closed_on_nonfinite_identity():
             identity_keys=("file.root::tree::1305",), discrete_seed=91,
             matched_unclassified_hlt_policy=(
                 PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
+            ),
+        )
+
+
+@pytest.mark.parametrize("identity_pattern", ["zero_hot", "multiple_hot"])
+def test_pairing_validity_shell_uses_native_collection_for_unclassified_offline(
+    identity_pattern: str,
+):
+    arrays, offline_p4, assignment, charged, neutral = _full_endpoint_fixture()
+    if identity_pattern == "zero_hot":
+        for suffix in ("isEl", "isMu", "isChargedHad"):
+            arrays[f"cpfcandlt_{suffix}"][0][0] = 0.0
+    else:
+        arrays["cpfcandlt_isEl"][0][0] = 1.0
+        arrays["cpfcandlt_isMu"][0][0] = 1.0
+        arrays["cpfcandlt_isChargedHad"][0][0] = 0.0
+
+    with pytest.raises(ValueError, match="invalid offline endpoint particle identity"):
+        build_full_offline_endpoint_inputs(arrays, arrays, offline_p4, assignment)
+
+    endpoint = build_uniform_shell_exact_inputs(
+        arrays, offline_p4, assignment,
+        offline_numerator=1, offline_denominator=1,
+        offline_arrays=arrays,
+        identity_keys=("file.root::tree::2991",), discrete_seed=91,
+        matched_unclassified_hlt_policy=(
+            PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
+        ),
+        matched_unclassified_offline_policy=(
+            PAIRING_VALIDITY_UNCLASSIFIED_OFFLINE_POLICY
+        ),
+    )
+    expected_raw = {
+        name: [np.asarray(row).copy() for row in values]
+        for name, values in arrays.items()
+    }
+    for field in FULL_ENDPOINT_FIELDS:
+        charged_value = (
+            0 if field.charged_suffix is None
+            else arrays[f"cpfcandlt_{field.charged_suffix}"][0][0]
+        )
+        neutral_value = (
+            0 if field.neutral_suffix is None
+            else neutral[field.neutral_suffix]
+        )
+        expected_raw[field.hlt_branch][0][:2] = [neutral_value, charged_value]
+    for channel, branch in enumerate(HLT_VECTOR_BRANCHES):
+        expected_raw[branch][0][:2] = offline_p4[0][[1, 0], channel]
+    expected = build_hlt_inputs(expected_raw)
+    assert endpoint.features.tobytes() == expected.features.tobytes()
+    assert endpoint.vectors.tobytes() == expected.vectors.tobytes()
+
+
+def test_pairing_validity_shell_rejects_nonfinite_offline_identity():
+    arrays, offline_p4, assignment, _, _ = _full_endpoint_fixture()
+    arrays["cpfcandlt_isChargedHad"][0][0] = np.nan
+    with pytest.raises(ValueError, match="invalid offline endpoint particle identity"):
+        build_uniform_shell_exact_inputs(
+            arrays, offline_p4, assignment,
+            offline_numerator=1, offline_denominator=1,
+            offline_arrays=arrays,
+            identity_keys=("file.root::tree::2991",), discrete_seed=91,
+            matched_unclassified_hlt_policy=(
+                PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
+            ),
+            matched_unclassified_offline_policy=(
+                PAIRING_VALIDITY_UNCLASSIFIED_OFFLINE_POLICY
             ),
         )
 

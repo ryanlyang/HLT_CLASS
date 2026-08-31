@@ -48,7 +48,7 @@ Cleanup targets are resolved beneath the campaign root before removal.
 
 ## Persistent-HLT-support full-cardinality control
 
-`HCWDL_TRI100_FOUR_SPINE_FULLCARD_PERSISTENT_HLT_*/v1` is a distinct
+`HCWDL_TRI100_FOUR_SPINE_FULLCARD_PERSISTENT_HLT_*/v2` is a distinct
 scientific contract family.  It reuses the authenticated full-cardinality
 bottleneck assignments but does not reuse pure-offline U000 as a training
 anchor.  Its `SP4P_U000` anchor is trained fresh with CE only on the union of
@@ -65,3 +65,11 @@ audit must prove every train/validation union fits within 200 tokens before
 GPU preflight or training.  The control has 30 fresh fits and 26 reducers;
 the extra fit and bank are the hybrid anchor.  Shared pure-offline U000 remains
 the 100% recovery oracle and is never authorized as a training target.
+
+Version 2 additionally binds collection-aware raw offline endpoint identity.
+Full-cardinality lost-track records may be finite-binary zero-hot or multi-hot;
+their authenticated native charged/neutral collection controls field
+applicability and their raw identity flags are copied without relabeling.
+One-hot identity/collection disagreements and all nonfinite or nonbinary
+required values fail closed. Version-1 science artifacts are not reusable as
+version 2; the immutable matcher/foundation lineage remains reusable.

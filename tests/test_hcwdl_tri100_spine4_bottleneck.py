@@ -23,6 +23,7 @@ from hlt_classification.scouting.hcwdl_tri100_spine4_bottleneck_contracts import
 )
 from hlt_classification.scouting.repair import (
     PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY,
+    PAIRING_VALIDITY_UNCLASSIFIED_OFFLINE_POLICY,
 )
 from hlt_classification.scouting.splits import SourceFileRecord
 
@@ -75,6 +76,9 @@ def test_bottleneck_graph_is_persistent_support_control():
     assert recipe["schema_version"] == SCHEMA_VERSION == 1
     assert recipe["matched_unclassified_hlt_policy"] == (
         PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
+    )
+    assert recipe["matched_unclassified_offline_policy"] == (
+        PAIRING_VALIDITY_UNCLASSIFIED_OFFLINE_POLICY
     )
     for branch in BRANCH_ORDER:
         previous = ANCHOR_NODE_ID
@@ -197,8 +201,12 @@ def test_campaign_is_exact_isolated_61_task_dag(tmp_path: Path, monkeypatch: pyt
     assert spec["ensembles"] is False and spec["weight_continuation"] is False
     assert spec["rolling_resume"] is False and spec["partial_checkpoint_reuse"] is False
     assert spec["contract"] == SPEC_CONTRACT and spec["schema_version"] == 1
+    assert SPEC_CONTRACT.endswith("/v2")
     assert spec["matched_unclassified_hlt_policy"] == (
         PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
+    )
+    assert spec["matched_unclassified_offline_policy"] == (
+        PAIRING_VALIDITY_UNCLASSIFIED_OFFLINE_POLICY
     )
     assert spec["ordinary_final_test_capability"] is False
     tasks = {row["task_id"]: row for row in spec["tasks"]}

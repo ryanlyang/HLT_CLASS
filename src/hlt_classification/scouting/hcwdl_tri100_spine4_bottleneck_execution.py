@@ -25,7 +25,10 @@ from .hcwdl_tri100_spine4_bottleneck_contracts import (
 )
 from .hcwdl_tri100_spine4_bottleneck_graph import EXECUTION
 from .hcwdl_unified_balanced_runner import _load_common
-from .repair import PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
+from .repair import (
+    PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY,
+    PAIRING_VALIDITY_UNCLASSIFIED_OFFLINE_POLICY,
+)
 from .training import derive_seed
 from .hcwdl_tri100_spine4_persistent_support import validate_support_audit
 
@@ -115,6 +118,9 @@ def run_execution_acceptance(
         "matched_unclassified_hlt_policy": (
             PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
         ),
+        "matched_unclassified_offline_policy": (
+            PAIRING_VALIDITY_UNCLASSIFIED_OFFLINE_POLICY
+        ),
         "support_policy": PERSISTENT_HLT_SUPPORT_POLICY,
         "production_model_factory": "build_scouting_particle_transformer",
         "production_model_output_shape": [len(labels), 15],
@@ -145,6 +151,8 @@ def validate_execution_acceptance(
         or value.get("view_pairing_provenance") != "pairing_validity"
         or value.get("matched_unclassified_hlt_policy")
         != PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
+        or value.get("matched_unclassified_offline_policy")
+        != PAIRING_VALIDITY_UNCLASSIFIED_OFFLINE_POLICY
         or value.get("support_policy") != PERSISTENT_HLT_SUPPORT_POLICY
         or int(value.get("view_rows", 0)) < 1
         or value.get("production_model_factory") != "build_scouting_particle_transformer"
