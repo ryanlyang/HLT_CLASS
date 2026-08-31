@@ -24,7 +24,9 @@ from .hcwdl_representation_data import (
     derive_hcwdl_token_metadata,
 )
 from .repair import (
-    HIGHCOV_SHELL_EXACT_FAMILY, PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY,
+    HIGHCOV_SHELL_EXACT_FAMILY,
+    PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY,
+    PAIRING_VALIDITY_UNCLASSIFIED_OFFLINE_POLICY,
     _combined_endpoint_features,
     build_alpha_repaired_inputs, build_uniform_shell_exact_inputs,
     full_endpoint_required_branches,
@@ -610,6 +612,10 @@ def _build_unified_balanced_inputs(
         prepared_neutral_counts=prepared_offline.neutral_counts,
         matched_unclassified_hlt_policy=(
             PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
+            if provenance_kind == "pairing_validity" else None
+        ),
+        matched_unclassified_offline_policy=(
+            PAIRING_VALIDITY_UNCLASSIFIED_OFFLINE_POLICY
             if provenance_kind == "pairing_validity" else None
         ),
     )

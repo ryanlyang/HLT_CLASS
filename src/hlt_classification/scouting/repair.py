@@ -20,6 +20,9 @@ HCWDL_UNIFORM_SHELL_EXACT_FAMILY = "HCWDL_UNIFORM_SHELL_EXACT/v1"
 PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY = (
     "preserve_until_identity_switch_then_atomic_endpoint_v1"
 )
+PAIRING_VALIDITY_UNCLASSIFIED_OFFLINE_POLICY = (
+    "native_collection_applicability_atomic_raw_endpoint_v1"
+)
 HIGHCOV_SHELL_SOFT_FAMILY = "HIGHCOV_SHELL_SOFT/v1"
 HIGHCOV_HC_EXACT_FAMILY = "HIGHCOV_HC_EXACT/v1"
 HIGHCOV_HC_THRESHOLD = 0.958730161190033
@@ -307,13 +310,29 @@ def transform_endpoint_features(
 
 def _validate_full_endpoint_features(
     features: np.ndarray, validity: np.ndarray, *, row: int,
+    native_charged: np.ndarray | None = None, allow_unclassified: bool = False,
 ) -> np.ndarray:
     identity = features[:, 2:7]
     binary = (identity == 0) | (identity == 1)
-    if not validity[:, 1:7].all() or not binary.all() or not np.all(identity.sum(axis=1) == 1):
+    if not validity[:, 1:7].all() or not binary.all():
         raise ValueError(f"invalid offline endpoint particle identity in row {row}")
-    categories = np.argmax(identity, axis=1)
-    charged = categories < 3
+    exclusive = identity.sum(axis=1) == 1
+    if not allow_unclassified and not exclusive.all():
+        raise ValueError(f"invalid offline endpoint particle identity in row {row}")
+    if native_charged is None:
+        if not exclusive.all():
+            raise ValueError(f"invalid offline endpoint particle identity in row {row}")
+        charged = np.argmax(identity, axis=1) < 3
+    else:
+        charged = np.asarray(native_charged, dtype=np.bool_)
+        if charged.shape != (len(identity),):
+            raise ValueError(f"offline endpoint collection boundary differs in row {row}")
+        if np.any(exclusive):
+            identity_charged = np.argmax(identity[exclusive], axis=1) < 3
+            if not np.array_equal(identity_charged, charged[exclusive]):
+                raise ValueError(
+                    f"offline endpoint identity/collection incompatibility in row {row}"
+                )
     charge = features[:, 1]
     if np.any(charge[charged] == 0) or np.any(charge[~charged] != 0):
         raise ValueError(f"offline endpoint charge/category incompatibility in row {row}")
@@ -374,6 +393,7 @@ def _apply_full_endpoint_repair(
     prepared_charged_counts: Sequence[int] | None = None,
     prepared_neutral_counts: Sequence[int] | None = None,
     matched_unclassified_hlt_policy: str | None = None,
+    matched_unclassified_offline_policy: str | None = None,
 ) -> None:
     rows = canonical.features.shape[0]
     strengths = None if strength_by_token is None else np.asarray(strength_by_token, np.float64)
@@ -472,6 +492,16 @@ def _apply_full_endpoint_repair(
         endpoint_validity = all_endpoint_validity[matched_assignment]
         endpoint_charged = _validate_full_endpoint_features(
             endpoint_features, endpoint_validity, row=row,
+            native_charged=(
+                matched_assignment < charged_count
+                if matched_unclassified_offline_policy
+                == PAIRING_VALIDITY_UNCLASSIFIED_OFFLINE_POLICY
+                else None
+            ),
+            allow_unclassified=(
+                matched_unclassified_offline_policy
+                == PAIRING_VALIDITY_UNCLASSIFIED_OFFLINE_POLICY
+            ),
         )
         hlt_charged, hlt_identity_valid = _hlt_identity_applicability(
             raw, row=row, visible=visible, tokens=matched_tokens,
@@ -626,6 +656,7 @@ def build_alpha_repaired_inputs(
     prepared_charged_counts: Sequence[int] | None = None,
     prepared_neutral_counts: Sequence[int] | None = None,
     matched_unclassified_hlt_policy: str | None = None,
+    matched_unclassified_offline_policy: str | None = None,
 ) -> ParticleInputs:
     repair_family = runtime_repair_family(repair_family)
     try:
@@ -656,6 +687,12 @@ def build_alpha_repaired_inputs(
         != PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
     ):
         raise ValueError("matched unclassified HLT repair policy differs")
+    if matched_unclassified_offline_policy is not None and (
+        repair_family != "HCWDL_UNIFORM_SHELL_EXACT"
+        or matched_unclassified_offline_policy
+        != PAIRING_VALIDITY_UNCLASSIFIED_OFFLINE_POLICY
+    ):
+        raise ValueError("matched unclassified offline repair policy differs")
     if repair_family in {"TRACK_ONLY", "P4_PLUS_TRACK"}:
         raise PermissionError(
             "track repair is disabled until a locked branch-semantics compatibility audit exists"
@@ -765,6 +802,7 @@ def build_alpha_repaired_inputs(
             prepared_charged_counts=prepared_charged_counts,
             prepared_neutral_counts=prepared_neutral_counts,
             matched_unclassified_hlt_policy=matched_unclassified_hlt_policy,
+            matched_unclassified_offline_policy=matched_unclassified_offline_policy,
         )
         result = build_hlt_inputs(raw)
         if not np.array_equal(result.mask, canonical.mask) or not np.array_equal(
@@ -870,6 +908,7 @@ def build_uniform_shell_exact_inputs(
     prepared_charged_counts: Sequence[int] | None = None,
     prepared_neutral_counts: Sequence[int] | None = None,
     matched_unclassified_hlt_policy: str | None = None,
+    matched_unclassified_offline_policy: str | None = None,
 ) -> ParticleInputs:
     """Build HCWDL-UB's confidence-independent, exact-rational D endpoint."""
 
@@ -891,6 +930,7 @@ def build_uniform_shell_exact_inputs(
         prepared_charged_counts=prepared_charged_counts,
         prepared_neutral_counts=prepared_neutral_counts,
         matched_unclassified_hlt_policy=matched_unclassified_hlt_policy,
+        matched_unclassified_offline_policy=matched_unclassified_offline_policy,
     )
 
 
@@ -913,6 +953,7 @@ __all__ = [
     "HIGHCOV_HC_EXACT_FAMILY", "HIGHCOV_HC_THRESHOLD", "HIGHCOV_SHELL_EXACT_FAMILY",
     "HIGHCOV_SHELL_SOFT_FAMILY",
     "PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY",
+    "PAIRING_VALIDITY_UNCLASSIFIED_OFFLINE_POLICY",
     "RECOMPUTED_CHANNELS",
     "REPAIR_FAMILIES", "REPAIR_FAMILY", "RETAINED_CHANNELS",
     "build_alpha_repaired_inputs", "build_full_offline_endpoint_inputs",

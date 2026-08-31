@@ -285,6 +285,30 @@ acceptance identity. The failed v1 science specification is not reusable; the
 completed matcher/foundation assignment lineage is reusable because the
 pairing objective and every durable assignment remain unchanged.
 
+### 6.2 Matched unclassified offline identity policy
+
+The full-cardinality feasible set also exposes legitimate offline lost-track
+records from the native charged collection whose five stored particle-type
+flags can be finite binary but zero-hot (and, defensively, multi-hot). Native
+collection membership remains authoritative for charged/neutral field
+applicability; the raw particle-type flags remain authoritative data and are
+never rewritten into an invented category. The validity-only path therefore
+registers:
+
+```text
+native_collection_applicability_atomic_raw_endpoint_v1
+```
+
+When the existing deterministic identity switch selects an offline endpoint,
+the finite-binary raw identity vector is copied unchanged together with its
+charge and collection-applicable fields. A one-hot raw identity must agree
+with native collection membership. Nonfinite, nonbinary, collection-
+incompatible, or non-discrete required values fail closed. The established
+confidence-backed path remains strictly one-hot. This policy changes science
+artifact identity, so the failed v2 campaign is not reusable as v3; the
+completed matcher/foundation remains reusable because assignments did not
+change.
+
 ## 7. Foundation and reuse boundary
 
 ### 7.1 Reusable immutable parents

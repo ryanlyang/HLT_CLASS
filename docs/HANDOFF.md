@@ -1,5 +1,37 @@
 # Current Handoff
 
+## TRI100 full-cardinality offline lost-track repair (2026-08-31)
+
+The v2 full-cardinality campaign authenticated and passed genuine-GH200
+preflight. Its DIRECT D000 branch continued normally, while the first COARSE,
+DENSE, and ULTRADENSE U heads (`98181`, `98190`, `98205`) all failed during
+RAM-resident train-view preprocessing at source-local row 2991 with
+`invalid offline endpoint particle identity`. No failed fit entered its
+training loop, and the direct running job is not a cleanup target.
+
+The shared cause is a legitimate offline lost-track record in the native
+charged `cpfcandlt` collection with finite-binary but zero-hot particle-type
+flags. The complete matcher correctly retained it; the older endpoint decoder
+incorrectly demanded an exclusive one-hot category before using charged-field
+applicability. The v3 validity-only policy
+`native_collection_applicability_atomic_raw_endpoint_v1` now uses authenticated
+native collection membership solely for applicability, while copying the raw
+offline identity vector unchanged when the endpoint switch fires. It never
+invents a class. One-hot values must agree with collection membership;
+nonfinite, nonbinary, incompatible, and non-discrete required values still
+fail closed. Strict established-confidence behavior is unchanged.
+
+All full-cardinality science artifacts are versioned to v3. The completed
+matcher/foundation is reusable because its objective and assignments are
+unchanged; v2 science outputs cannot authenticate as v3. The exact repair is
+isolated on the `965bdad6` science lineage rather than current persistent-HLT
+modules. Focused matching and four-spine tests pass 74/74; the broader
+source-pinned matching, homotopy, unified-balanced, full-cardinality, TRI100,
+and recovery suite passes 159/159. Python compilation and diff checks pass. A
+fresh v3 campaign root and genuine-GH200
+preflight are required before exact live submission. Final test was not
+accessed.
+
 ## TRI100 full-cardinality preflight repair (2026-08-31)
 
 The completed `571c0966` full-cardinality matcher foundation remains valid:
