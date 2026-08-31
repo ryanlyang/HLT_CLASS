@@ -16,7 +16,7 @@ from hlt_classification.models.scouting_particle_transformer import (
 )
 
 from .hcwdl_fullcard_bottleneck_foundation_campaign import validate_foundation
-from .hcwdl_homotopy import HomotopyCoordinate
+from .hcwdl_homotopy import HomotopyCoordinate, PERSISTENT_HLT_SUPPORT_POLICY
 from .hcwdl_homotopy_stream import iterate_unified_balanced_batches
 from .hcwdl_tri100_spine4_bottleneck_contracts import (
     EXECUTION_ACCEPTANCE_CONTRACT,
@@ -27,6 +27,7 @@ from .hcwdl_tri100_spine4_bottleneck_graph import EXECUTION
 from .hcwdl_unified_balanced_runner import _load_common
 from .repair import PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
 from .training import derive_seed
+from .hcwdl_tri100_spine4_persistent_support import validate_support_audit
 
 
 def run_execution_acceptance(
@@ -37,6 +38,8 @@ def run_execution_acceptance(
 
     foundation = load_json(spec["artifact_paths"]["foundation_spec"])
     validate_foundation(foundation)
+    support = load_json(spec["artifact_paths"]["support_audit"])
+    support_hash = validate_support_audit(support, spec=spec)
     split, _, _, selections, assignments, balanced = _load_common(foundation)
     repair_seed = derive_seed(int(spec["replicate_seed"]), "tri60/repair/shared_v1")
     batch = next(iterate_unified_balanced_batches(
@@ -47,6 +50,7 @@ def run_execution_acceptance(
         coordinate=HomotopyCoordinate(1, 2, 0, 1), repair_seed=repair_seed,
         batch_size=2, workers=1, source_index=0,
         include_training_metadata=True,
+        support_policy=PERSISTENT_HLT_SUPPORT_POLICY,
     ))
     view = batch["privileged"]
     if len(batch["labels"]) < 1 or not np.isfinite(view.features).all():
@@ -97,6 +101,7 @@ def run_execution_acceptance(
             "recipe": spec["parents"]["recipe"],
             "foundation": spec["parents"]["foundation"],
             "assignment_lock": spec["parents"]["assignment_lock"],
+            "support_audit": support_hash,
         },
         "source_commit": source_commit, "execution": dict(EXECUTION),
         "hostname": socket.gethostname(), "pid": os.getpid(),
@@ -110,6 +115,7 @@ def run_execution_acceptance(
         "matched_unclassified_hlt_policy": (
             PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
         ),
+        "support_policy": PERSISTENT_HLT_SUPPORT_POLICY,
         "production_model_factory": "build_scouting_particle_transformer",
         "production_model_output_shape": [len(labels), 15],
         "view_forward_loss": observed, "view_backward_gradient_norm": gradient,
@@ -129,6 +135,9 @@ def validate_execution_acceptance(
             "recipe": spec["parents"]["recipe"],
             "foundation": spec["parents"]["foundation"],
             "assignment_lock": spec["parents"]["assignment_lock"],
+            "support_audit": validate_support_audit(
+                load_json(spec["artifact_paths"]["support_audit"]), spec=spec,
+            ),
         }
         or value.get("execution") != dict(EXECUTION)
         or value.get("view_role") != "validation"
@@ -136,6 +145,7 @@ def validate_execution_acceptance(
         or value.get("view_pairing_provenance") != "pairing_validity"
         or value.get("matched_unclassified_hlt_policy")
         != PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
+        or value.get("support_policy") != PERSISTENT_HLT_SUPPORT_POLICY
         or int(value.get("view_rows", 0)) < 1
         or value.get("production_model_factory") != "build_scouting_particle_transformer"
         or value.get("production_model_output_shape") != [int(value["view_rows"]), 15]

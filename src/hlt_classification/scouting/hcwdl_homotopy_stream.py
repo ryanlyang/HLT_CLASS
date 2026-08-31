@@ -10,8 +10,8 @@ import numpy as np
 
 from .dataset import _concat_batches, _slice_batch
 from .hcwdl_homotopy import (
-    HomotopyCoordinate, build_homotopy_inputs, build_unified_balanced_inputs,
-    build_unified_balanced_pairing_inputs,
+    DEFAULT_SUPPORT_POLICY, HomotopyCoordinate, build_homotopy_inputs,
+    build_unified_balanced_inputs, build_unified_balanced_pairing_inputs,
 )
 from .hcwdl_unified_balanced_cache import BalancedCouplingStore
 from .hcwdl_upper_cache import ResidualCouplingStore
@@ -87,13 +87,14 @@ def _build_balanced_block(arguments: tuple[object, ...]) -> dict[str, object]:
     (
         arrays, labels, identities, assignment, confidence, coupling_rows,
         coordinate, repair_seed, output_key, include_training_metadata,
-        provenance_kind,
+        provenance_kind, support_policy,
     ) = arguments
     common = dict(
         arrays=arrays, assignments=assignment, coupling_rows=coupling_rows,
         coordinate=coordinate, identity_keys=identities,
         discrete_seed=repair_seed,
         include_training_metadata=bool(include_training_metadata),
+        support_policy=str(support_policy),
     )
     if provenance_kind == "pairing_validity":
         view = build_unified_balanced_pairing_inputs(
@@ -201,6 +202,7 @@ def iterate_unified_balanced_batches(
     output_key: str = "privileged", workers: int = 1,
     include_training_metadata: bool = False,
     source_index: int | None = None,
+    support_policy: str = DEFAULT_SUPPORT_POLICY,
 ) -> Iterator[dict[str, object]]:
     """Stream HCWDL-UB V_UB(s,f) once in canonical source/entry order."""
 
@@ -249,6 +251,7 @@ def iterate_unified_balanced_batches(
                         assignment_store, "provenance_kind",
                         "correspondence_confidence",
                     ),
+                    support_policy,
                 )
 
     pending = None; observed = 0

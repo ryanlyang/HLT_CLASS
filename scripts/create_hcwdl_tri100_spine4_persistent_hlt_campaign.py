@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create the persistent-HLT-support four-spine campaign."""
+"""Create the independent persistent-HLT-support four-spine campaign."""
 from __future__ import annotations
 import argparse
 from pathlib import Path

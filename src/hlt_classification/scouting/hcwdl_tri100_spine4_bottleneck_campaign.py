@@ -19,7 +19,7 @@ from .hcwdl_tri100_spine4_bottleneck_contracts import (
     validate_artifact,
 )
 from .hcwdl_tri100_spine4_bottleneck_graph import (
-    BRANCH_NODES,
+    ANCHOR_NODE_ID, BRANCH_NODES,
     BRANCH_ORDER,
     ENDPOINT_NODES,
     EXECUTION,
@@ -36,6 +36,7 @@ from .hcwdl_tri100_spine4_bottleneck_source import (
     validate_source_lock,
 )
 from .repair import PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
+from .hcwdl_homotopy import PERSISTENT_HLT_SUPPORT_POLICY
 from .hcwdl_mhpe_tri60_ce_control_contracts import (
     TRAINING_REPORT_CONTRACT as CE60_TRAINING_REPORT_CONTRACT,
 )
@@ -44,12 +45,12 @@ from .hcwdl_tri100_spine4_campaign import (
 )
 
 
-CREATION_PHRASE: Final = "AUTHORIZE HCWDL TRI100 FOUR SPINE BOTTLENECK EXACT SPEC"
-SUBMISSION_PHRASE: Final = "SUBMIT HCWDL TRI100 FOUR SPINE BOTTLENECK EXACT LEDGER"
+CREATION_PHRASE: Final = "AUTHORIZE HCWDL TRI100 FOUR SPINE PERSISTENT HLT EXACT SPEC"
+SUBMISSION_PHRASE: Final = "SUBMIT HCWDL TRI100 FOUR SPINE PERSISTENT HLT EXACT LEDGER"
 RECOVERY_SUBMISSION_PHRASE: Final = (
-    "SUBMIT HCWDL TRI100 FOUR SPINE BOTTLENECK RECOVERY EXACT LEDGER"
+    "SUBMIT HCWDL TRI100 FOUR SPINE PERSISTENT HLT RECOVERY EXACT LEDGER"
 )
-JOB_PREFIX: Final = "hcwsp4b"
+JOB_PREFIX: Final = "hcwsp4p"
 
 
 @dataclass(frozen=True)
@@ -62,6 +63,7 @@ class ResourceRequest:
 
 RESOURCES: Final = {
     "cpu_lock": ResourceRequest(4, "32G", "02:00:00"),
+    "cpu_audit": ResourceRequest(4, "64G", "08:00:00"),
     "gpu_acceptance": ResourceRequest(72, "320G", "08:00:00", "gpu:gh200:1"),
     "gpu_fit": ResourceRequest(72, "320G", "3-00:00:00", "gpu:gh200:1"),
     "gpu_reducer": ResourceRequest(72, "192G", "1-00:00:00", "gpu:gh200:1"),
@@ -87,13 +89,22 @@ def campaign_tasks() -> list[dict[str, Any]]:
         })
 
     add("authenticate", "authenticate", (), "cpu_lock")
-    add("preflight", "preflight", ("authenticate",), "gpu_acceptance")
+    add("support_audit", "support_audit", ("authenticate",), "cpu_audit")
+    add("preflight", "preflight", ("support_audit",), "gpu_acceptance")
+    add(
+        f"train_{ANCHOR_NODE_ID}", "train", ("preflight",), "gpu_fit",
+        node_id=ANCHOR_NODE_ID,
+    )
+    add(
+        reduce_task(NODE_REGISTRY[ANCHOR_NODE_ID].output_distribution_id),
+        "reducer", (f"train_{ANCHOR_NODE_ID}",), "gpu_reducer",
+        distribution_id=NODE_REGISTRY[ANCHOR_NODE_ID].output_distribution_id,
+    )
     for branch in BRANCH_ORDER:
         for node_id in BRANCH_NODES[branch]:
             node = NODE_REGISTRY[node_id]
-            dependency = (
-                "preflight" if node.parent_node_id is None
-                else reduce_task(NODE_REGISTRY[node.parent_node_id].output_distribution_id)
+            dependency = reduce_task(
+                NODE_REGISTRY[node.parent_node_id].output_distribution_id
             )
             add(f"train_{node_id}", "train", (dependency,), "gpu_fit", node_id=node_id)
             if node.output_distribution_id is not None:
@@ -111,7 +122,10 @@ def campaign_tasks() -> list[dict[str, Any]]:
 
 
 def _command_plan(spec: Mapping[str, Any]) -> dict[str, Any]:
-    worker = str(Path(spec["project_dir"]) / "sbatch/run_hcwdl_tri100_spine4_bottleneck_task.sh")
+    worker = str(
+        Path(spec["project_dir"])
+        / "sbatch/run_hcwdl_tri100_spine4_persistent_hlt_task.sh"
+    )
     commands = []
     for task in spec["tasks"]:
         resource = spec["resources"][task["resource"]]
@@ -129,8 +143,8 @@ def _command_plan(spec: Mapping[str, Any]) -> dict[str, Any]:
             command.append("--dependency=afterok:" + ":".join(dependencies))
         command.extend((
             "--export=ALL," +
-            f"PROJECT_DIR={spec['project_dir']},HCWDL_SPINE4B_SPEC={spec['spec_path']}," +
-            f"HCWDL_SPINE4B_TASK={task['task_id']}",
+            f"PROJECT_DIR={spec['project_dir']},HCWDL_SPINE4P_SPEC={spec['spec_path']}," +
+            f"HCWDL_SPINE4P_TASK={task['task_id']}",
             worker,
         ))
         commands.append({
@@ -200,6 +214,7 @@ def create_campaign(
             "graph": str(root / "graph.json"),
             "recipe": str(root / "recipe.json"),
             "execution_acceptance": str(root / "locks/execution_acceptance.json"),
+            "support_audit": str(root / "locks/persistent_support_audit.json"),
             "established_campaign_spec": str(established_path),
             "m0ce60_report": str(baseline_path),
         },
@@ -212,8 +227,10 @@ def create_campaign(
         "tasks": campaign_tasks(), "branch_order": list(BRANCH_ORDER),
         "branch_fit_counts": {name: len(BRANCH_NODES[name]) for name in BRANCH_ORDER},
         "fresh_fit_count": len(FIT_ORDER), "reducer_count": len(REDUCER_ORDER),
-        "source_fit_reuse_count": 1,
-        "only_changed_variable": "particle_pairing_foundation_lineage",
+        "source_fit_reuse_count": 0,
+        "oracle_report_import_count": 1,
+        "only_changed_variable": "persistent_hlt_skeleton_across_u",
+        "support_policy": PERSISTENT_HLT_SUPPORT_POLICY,
         "matched_unclassified_hlt_policy": (
             PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
         ),
@@ -264,12 +281,14 @@ def validate_campaign(value: Mapping[str, Any], *, executable: bool = False) -> 
         or value.get("tasks") != campaign_tasks()
         or value.get("resources") != {name: asdict(item) for name, item in RESOURCES.items()}
         or value.get("branch_order") != list(BRANCH_ORDER)
-        or value.get("fresh_fit_count") != 29 or value.get("reducer_count") != 25
-        or value.get("source_fit_reuse_count") != 1
+        or value.get("fresh_fit_count") != 30 or value.get("reducer_count") != 26
+        or value.get("source_fit_reuse_count") != 0
+        or value.get("oracle_report_import_count") != 1
         or value.get("established_campaign_completion_required") is not False
         or value.get("established_rows_pending_when_absent") is not True
         or value.get("recovery_convention") != "M0CE60_zero_U000_one_v1"
-        or value.get("only_changed_variable") != "particle_pairing_foundation_lineage"
+        or value.get("only_changed_variable") != "persistent_hlt_skeleton_across_u"
+        or value.get("support_policy") != PERSISTENT_HLT_SUPPORT_POLICY
         or value.get("matched_unclassified_hlt_policy")
         != PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
         or value.get("ordinary_access_roles") != ["train", "validation"]

@@ -119,8 +119,8 @@ def _recovery_plan(
         command.extend((
             "--export=ALL," +
             f"PROJECT_DIR={recovery['project_dir']}," +
-            f"HCWDL_SPINE4B_RECOVERY={recovery['spec_path']}," +
-            f"HCWDL_SPINE4B_TASK={task['task_id']}", worker,
+            f"HCWDL_SPINE4P_RECOVERY={recovery['spec_path']}," +
+            f"HCWDL_SPINE4P_TASK={task['task_id']}", worker,
         ))
         commands.append({
             "task_id": task["task_id"], "dependencies": dependencies,

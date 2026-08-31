@@ -34,6 +34,10 @@ from .schema import HLT_FEATURE_SPECS, HLT_VECTOR_BRANCHES
 
 
 HOMOTOPY_VIEW_CONTRACT: Final = "HCWDL_STRUCTURAL_FEATURE_VIEW/v1"
+DEFAULT_SUPPORT_POLICY: Final = "replace_source_with_target_v1"
+PERSISTENT_HLT_SUPPORT_POLICY: Final = (
+    "persistent_hlt_skeleton_remove_offline_tail_v1"
+)
 
 
 @dataclass(frozen=True)
@@ -305,8 +309,12 @@ def _assemble_support_view(
     mapping: np.ndarray, coupling_rows: Sequence[Sequence[ResidualEdit]],
     prepared_offline: PreparedOfflineEndpoints,
     prepared_hlt: PreparedHltEndpoints, active_edit: Callable[[ResidualEdit], bool],
-    contract_label: str,
+    contract_label: str, support_policy: str = DEFAULT_SUPPORT_POLICY,
 ) -> ParticleInputs:
+    if support_policy not in {
+        DEFAULT_SUPPORT_POLICY, PERSISTENT_HLT_SUPPORT_POLICY,
+    }:
+        raise ValueError(f"{contract_label} support policy differs")
     features = np.zeros_like(canonical.features)
     vectors = np.zeros_like(canonical.vectors)
     mask = np.zeros_like(canonical.mask)
@@ -326,6 +334,24 @@ def _assemble_support_view(
             active.append((0, slot, shell.features[row, :, slot], shell.vectors[row, :, slot]))
         for edit in edits:
             switched = active_edit(edit)
+            if support_policy == PERSISTENT_HLT_SUPPORT_POLICY:
+                # The complete HLT skeleton is present throughout U.  Matched
+                # slots carry their shell endpoint (offline at f=0); unmatched
+                # slots carry native HLT.  U can therefore only remove the
+                # source-only offline tail.
+                if edit.edit_kind != EDIT_REMOVAL:
+                    slot = edit.target_hlt_slot
+                    active.append((
+                        0, slot, shell.features[row, :, slot],
+                        shell.vectors[row, :, slot],
+                    ))
+                if edit.edit_kind == EDIT_REMOVAL and not switched:
+                    native = edit.source_native_index
+                    active.append((
+                        1, native, projected[native],
+                        projected_p4[native].astype(np.float32),
+                    ))
+                continue
             if edit.edit_kind == EDIT_SUBSTITUTION:
                 if switched:
                     slot = edit.target_hlt_slot
@@ -427,6 +453,7 @@ def _attach_balanced_training_metadata(
     coordinate: HomotopyCoordinate,
     prepared_offline: PreparedOfflineEndpoints,
     prepared_hlt: PreparedHltEndpoints | None,
+    support_policy: str = DEFAULT_SUPPORT_POLICY,
 ) -> HCWDLParticleInputs:
     """Attach nondeployable token IDs/families in the exact carrier order."""
 
@@ -434,7 +461,15 @@ def _attach_balanced_training_metadata(
     visible_ids = np.full((rows, tokens), -1, np.int64)
     families = np.full((rows, tokens), PADDED_FAMILY, np.int8)
     reasons = np.full((rows, tokens), PADDED_REASON, np.int8)
-    if coordinate.structural_numerator == 0 and coordinate.feature_numerator == 0:
+    if support_policy not in {
+        DEFAULT_SUPPORT_POLICY, PERSISTENT_HLT_SUPPORT_POLICY,
+    }:
+        raise ValueError("HCWDL-UB training metadata support policy differs")
+    if (
+        support_policy == DEFAULT_SUPPORT_POLICY
+        and coordinate.structural_numerator == 0
+        and coordinate.feature_numerator == 0
+    ):
         for row in range(rows):
             charged = int(prepared_offline.charged_counts[row])
             neutral = int(prepared_offline.neutral_counts[row])
@@ -500,6 +535,19 @@ def _attach_balanced_training_metadata(
                 edit, numerator=coordinate.structural_numerator,
                 denominator=coordinate.structural_denominator,
             )
+            if support_policy == PERSISTENT_HLT_SUPPORT_POLICY:
+                if edit.edit_kind != EDIT_REMOVAL:
+                    family, reason = target_metadata(edit.target_hlt_slot)
+                    active.append((0, edit.target_hlt_slot, family, reason))
+                if edit.edit_kind == EDIT_REMOVAL and not switched:
+                    native = edit.source_native_index
+                    is_charged = native < charged
+                    active.append((
+                        1, native,
+                        int(CHARGED_FAMILY if is_charged else NEUTRAL_FAMILY),
+                        int(DIRECT_CHARGED_REASON if is_charged else DIRECT_NEUTRAL_REASON),
+                    ))
+                continue
             if edit.edit_kind == EDIT_SUBSTITUTION:
                 if switched:
                     family, reason = target_metadata(edit.target_hlt_slot)
@@ -543,6 +591,7 @@ def _build_unified_balanced_inputs(
     discrete_seed: int, prepared_offline: PreparedOfflineEndpoints | None = None,
     prepared_hlt: PreparedHltEndpoints | None = None,
     include_training_metadata: bool = False,
+    support_policy: str = DEFAULT_SUPPORT_POLICY,
 ) -> ParticleInputs:
     """Build HCWDL-UB V_UB(s,f) with balanced U and uniform rational D."""
 
@@ -563,12 +612,27 @@ def _build_unified_balanced_inputs(
             raise ValueError("HCWDL-UB pairing validity differs from assignment presence")
     else:
         raise ValueError("HCWDL-UB pairing provenance kind differs")
+    if support_policy not in {
+        DEFAULT_SUPPORT_POLICY, PERSISTENT_HLT_SUPPORT_POLICY,
+    }:
+        raise ValueError("HCWDL-UB support policy differs")
+    if (
+        support_policy == PERSISTENT_HLT_SUPPORT_POLICY
+        and provenance_kind != "pairing_validity"
+    ):
+        raise PermissionError(
+            "persistent HLT support requires neutral pairing-validity provenance"
+        )
     if (
         len(coupling_rows) != rows or len(identity_keys) != rows
         or len(set(map(str, identity_keys))) != rows
     ):
         raise ValueError("HCWDL-UB coupling/identity rows differ")
-    if coordinate.structural_numerator == 0 and coordinate.feature_numerator == 0:
+    if (
+        support_policy == DEFAULT_SUPPORT_POLICY
+        and coordinate.structural_numerator == 0
+        and coordinate.feature_numerator == 0
+    ):
         prepared_offline = (
             prepare_offline_endpoints(arrays) if prepared_offline is None else prepared_offline
         )
@@ -576,7 +640,7 @@ def _build_unified_balanced_inputs(
         return _attach_balanced_training_metadata(
             view, arrays=arrays, mapping=mapping, coupling_rows=coupling_rows,
             coordinate=coordinate, prepared_offline=prepared_offline,
-            prepared_hlt=prepared_hlt,
+            prepared_hlt=prepared_hlt, support_policy=support_policy,
         ) if include_training_metadata else view
     if (
         coordinate.structural_numerator == coordinate.structural_denominator
@@ -617,7 +681,7 @@ def _build_unified_balanced_inputs(
         return _attach_balanced_training_metadata(
             shell, arrays=arrays, mapping=mapping, coupling_rows=coupling_rows,
             coordinate=coordinate, prepared_offline=prepared_offline,
-            prepared_hlt=prepared_hlt,
+            prepared_hlt=prepared_hlt, support_policy=support_policy,
         ) if include_training_metadata else shell
     view = _assemble_support_view(
         canonical=canonical, shell=shell, mapping=mapping,
@@ -627,12 +691,12 @@ def _build_unified_balanced_inputs(
             edit, numerator=coordinate.structural_numerator,
             denominator=coordinate.structural_denominator,
         ),
-        contract_label="HCWDL-UB",
+        contract_label="HCWDL-UB", support_policy=support_policy,
     )
     return _attach_balanced_training_metadata(
         view, arrays=arrays, mapping=mapping, coupling_rows=coupling_rows,
         coordinate=coordinate, prepared_offline=prepared_offline,
-        prepared_hlt=prepared_hlt,
+        prepared_hlt=prepared_hlt, support_policy=support_policy,
     ) if include_training_metadata else view
 
 
@@ -643,6 +707,7 @@ def build_unified_balanced_inputs(
     discrete_seed: int, prepared_offline: PreparedOfflineEndpoints | None = None,
     prepared_hlt: PreparedHltEndpoints | None = None,
     include_training_metadata: bool = False,
+    support_policy: str = DEFAULT_SUPPORT_POLICY,
 ) -> ParticleInputs:
     """Build HCWDL-UB using established calibrated-confidence provenance."""
 
@@ -653,6 +718,7 @@ def build_unified_balanced_inputs(
         discrete_seed=discrete_seed, prepared_offline=prepared_offline,
         prepared_hlt=prepared_hlt,
         include_training_metadata=include_training_metadata,
+        support_policy=support_policy,
     )
 
 
@@ -664,6 +730,7 @@ def build_unified_balanced_pairing_inputs(
     discrete_seed: int, prepared_offline: PreparedOfflineEndpoints | None = None,
     prepared_hlt: PreparedHltEndpoints | None = None,
     include_training_metadata: bool = False,
+    support_policy: str = DEFAULT_SUPPORT_POLICY,
 ) -> ParticleInputs:
     """Build HCWDL-UB using neutral validity, never fake match confidence."""
 
@@ -674,6 +741,7 @@ def build_unified_balanced_pairing_inputs(
         discrete_seed=discrete_seed, prepared_offline=prepared_offline,
         prepared_hlt=prepared_hlt,
         include_training_metadata=include_training_metadata,
+        support_policy=support_policy,
     )
 
 
@@ -694,7 +762,8 @@ def assert_particle_inputs_equal(left: ParticleInputs, right: ParticleInputs, *,
 
 
 __all__ = [
-    "HOMOTOPY_VIEW_CONTRACT", "HomotopyCoordinate", "assert_particle_inputs_equal",
+    "DEFAULT_SUPPORT_POLICY", "HOMOTOPY_VIEW_CONTRACT", "HomotopyCoordinate",
+    "PERSISTENT_HLT_SUPPORT_POLICY", "assert_particle_inputs_equal",
     "build_homotopy_inputs", "build_unified_balanced_inputs",
     "build_unified_balanced_pairing_inputs",
     "build_p0_inputs", "build_partition_from_arrays",

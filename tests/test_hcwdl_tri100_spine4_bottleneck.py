@@ -11,9 +11,12 @@ from hlt_classification.data.cache_contracts import (
 )
 from hlt_classification.scouting.hcwdl_recovery import build_submission_ledger
 from hlt_classification.scouting.hcwdl_tri100_spine4_bottleneck_graph import (
-    BRANCH_NODES, BRANCH_ORDER, BRANCH_PATHS, EXECUTION, FIT_ORDER,
-    NODE_REGISTRY, PROBABILITY_COMPONENTS, REDUCER_ORDER, recipe_payload,
-    validate_graph,
+    ANCHOR_NODE_ID, BRANCH_NODES, BRANCH_ORDER, BRANCH_PATHS, EXECUTION,
+    FIT_ORDER, NODE_REGISTRY, PROBABILITY_COMPONENTS, REDUCER_ORDER,
+    SOURCE_DISTRIBUTION, recipe_payload, validate_graph,
+)
+from hlt_classification.scouting.hcwdl_homotopy import (
+    PERSISTENT_HLT_SUPPORT_POLICY,
 )
 from hlt_classification.scouting.hcwdl_tri100_spine4_bottleneck_contracts import (
     SCHEMA_VERSION, SPEC_CONTRACT,
@@ -27,11 +30,35 @@ from hlt_classification.scouting.splits import SourceFileRecord
 H = "a" * 64
 
 
-def test_bottleneck_graph_is_exact_controlled_clone():
+def test_persistent_support_compact_audit_counts_union_exactly() -> None:
+    from hlt_classification.scouting.hcwdl_tri100_spine4_persistent_support import (
+        persistent_support_counts,
+    )
+    from hlt_classification.scouting.hcwdl_homotopy_contracts import (
+        EDIT_INSERTION, EDIT_REMOVAL, EDIT_SUBSTITUTION,
+    )
+
+    hlt, tail, union = persistent_support_counts(
+        assignment_offsets=np.asarray([0, 3, 5]),
+        pairing_validity_u8=np.asarray([1, 1, 0, 1, 1], np.uint8),
+        coupling_offsets=np.asarray([0, 3, 5]),
+        edit_kind=np.asarray([
+            EDIT_SUBSTITUTION, EDIT_INSERTION, EDIT_REMOVAL,
+            EDIT_SUBSTITUTION, EDIT_INSERTION,
+        ]),
+    )
+    assert hlt.tolist() == [3, 2]
+    assert tail.tolist() == [1, 0]
+    assert union.tolist() == [4, 2]
+
+
+def test_bottleneck_graph_is_persistent_support_control():
     assert validate_graph()
     assert tuple(len(BRANCH_NODES[name]) for name in BRANCH_ORDER) == (1, 5, 8, 15)
     assert BRANCH_PATHS["COARSE"] == ("U050", "U100", "D066", "D033", "D000")
-    assert len(FIT_ORDER) == 29 and len(REDUCER_ORDER) == 25
+    assert len(FIT_ORDER) == 30 and len(REDUCER_ORDER) == 26
+    assert FIT_ORDER[0] == ANCHOR_NODE_ID
+    assert PROBABILITY_COMPONENTS[SOURCE_DISTRIBUTION] == (ANCHOR_NODE_ID,)
     assert all(len(value) == 1 for value in PROBABILITY_COMPONENTS.values())
     assert dict(EXECUTION)["world_size"] == 1
     recipe = recipe_payload()
@@ -42,13 +69,15 @@ def test_bottleneck_graph_is_exact_controlled_clone():
     assert recipe["training"]["effective_batch_size"] == 256
     assert recipe["training"]["maximum_passes"] == 100
     assert recipe["training"]["minimum_passes"] == 60
-    assert recipe["only_changed_variable"] == "particle_pairing_foundation_lineage"
+    assert recipe["anchor_training"]["passes"] == 60
+    assert recipe["only_changed_variable"] == "persistent_hlt_skeleton_across_u"
+    assert recipe["support_policy"] == PERSISTENT_HLT_SUPPORT_POLICY
     assert recipe["schema_version"] == SCHEMA_VERSION == 1
     assert recipe["matched_unclassified_hlt_policy"] == (
         PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
     )
     for branch in BRANCH_ORDER:
-        previous = None
+        previous = ANCHOR_NODE_ID
         for node_id in BRANCH_NODES[branch]:
             node = NODE_REGISTRY[node_id]
             assert node.parent_node_id == previous
@@ -65,7 +94,7 @@ def test_bottleneck_probability_contract_cannot_authenticate_established_bank(tm
         publish_probability_role as publish_old_role,
     )
 
-    distribution = REDUCER_ORDER[0]
+    distribution = REDUCER_ORDER[1]
     component = PROBABILITY_COMPONENTS[distribution][0]
     identities = np.zeros((4, 32), np.uint8); identities[:, 0] = np.arange(4)
     logits = np.arange(60, dtype=np.float32).reshape(4, 15) / 30
@@ -155,11 +184,13 @@ def _fake_science_creation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     return campaign, spec, root
 
 
-def test_campaign_is_exact_isolated_58_task_dag(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_campaign_is_exact_isolated_61_task_dag(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     campaign, spec, root = _fake_science_creation(tmp_path, monkeypatch)
     assert campaign.validate_campaign(spec, executable=True) == spec["content_hash"]
-    assert len(spec["tasks"]) == 58
-    assert spec["fresh_fit_count"] == 29 and spec["reducer_count"] == 25
+    assert len(spec["tasks"]) == 61
+    assert spec["fresh_fit_count"] == 30 and spec["reducer_count"] == 26
+    assert spec["source_fit_reuse_count"] == 0
+    assert spec["support_policy"] == PERSISTENT_HLT_SUPPORT_POLICY
     assert spec["established_campaign_completion_required"] is False
     assert spec["existing_campaign_dependencies"] == []
     assert spec["existing_campaign_outputs_mutated"] is False
@@ -171,15 +202,20 @@ def test_campaign_is_exact_isolated_58_task_dag(tmp_path: Path, monkeypatch: pyt
     )
     assert spec["ordinary_final_test_capability"] is False
     tasks = {row["task_id"]: row for row in spec["tasks"]}
+    assert tasks["support_audit"]["dependencies"] == ["authenticate"]
+    assert tasks["preflight"]["dependencies"] == ["support_audit"]
+    anchor_reducer = f"reduce_{SOURCE_DISTRIBUTION}"
+    assert tasks[f"train_{ANCHOR_NODE_ID}"]["dependencies"] == ["preflight"]
+    assert tasks[anchor_reducer]["dependencies"] == [f"train_{ANCHOR_NODE_ID}"]
     for branch in BRANCH_ORDER:
-        assert tasks[f"train_{BRANCH_NODES[branch][0]}"]["dependencies"] == ["preflight"]
+        assert tasks[f"train_{BRANCH_NODES[branch][0]}"]["dependencies"] == [anchor_reducer]
     plan = load_json(root / "command_plan.json")
-    assert len(plan["commands"]) == 58
+    assert len(plan["commands"]) == 61
     assert all(not row["external_dependencies"] for row in plan["commands"])
     fit = next(row["command"] for row in plan["commands"] if row["task_id"].startswith("train_"))
     assert "--cpus-per-task=72" in fit and "--mem=320G" in fit
     assert "--time=3-00:00:00" in fit and "--gres=gpu:gh200:1" in fit
-    assert all("HCWDL_SPINE4B_" in item or "HCWDL" not in item for item in fit)
+    assert all("HCWDL_SPINE4P_" in item or "HCWDL" not in item for item in fit)
 
 
 def test_campaign_recovery_closes_over_exact_failed_dag(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -204,9 +240,9 @@ def test_campaign_recovery_closes_over_exact_failed_dag(tmp_path: Path, monkeypa
         project_dir=tmp_path, source_commit="b" * 40,
     )
     assert recovery.validate_recovery(value) == value["content_hash"]
-    assert len(value["retry_tasks"]) == 58
+    assert len(value["retry_tasks"]) == 61
     recovery_plan = load_json(tmp_path / "recovery/command_plan.json")
-    assert len(recovery_plan["commands"]) == 58
+    assert len(recovery_plan["commands"]) == 61
 
 
 def test_foundation_dag_rebuilds_every_assignment_dependent_descendant(
@@ -388,6 +424,7 @@ def test_bottleneck_worker_shell_contracts() -> None:
         "sbatch/run_hcwdl_fullcard_bottleneck_foundation_task.sh",
         "sbatch/run_hcwdl_tri100_spine4_bottleneck_task.sh",
         "sbatch/run_hcwdl_tri100_spine4_bottleneck_recovery_task.sh",
+        "sbatch/run_hcwdl_tri100_spine4_persistent_hlt_task.sh",
     )
     for worker in workers:
         text = Path(worker).read_text(encoding="utf-8")

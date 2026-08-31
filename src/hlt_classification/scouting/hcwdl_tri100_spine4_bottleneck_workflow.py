@@ -23,11 +23,15 @@ from .hcwdl_tri100_spine4_bottleneck_execution import (
     run_execution_acceptance, validate_execution_acceptance,
 )
 from .hcwdl_tri100_spine4_bottleneck_graph import (
-    BRANCH_NODES, BRANCH_ORDER, ENDPOINT_NODES, EXECUTION, FIT_ORDER,
-    GRAPH_SHA256, NODE_REGISTRY, PROBABILITY_COMPONENTS, REDUCER_ORDER,
+    ANCHOR_NODE_ID, BRANCH_NODES, BRANCH_ORDER, DOWNSTREAM_FIT_ORDER,
+    ENDPOINT_NODES, EXECUTION, FIT_ORDER, GRAPH_SHA256, NODE_REGISTRY,
+    PROBABILITY_COMPONENTS, REDUCER_ORDER,
 )
 from .hcwdl_tri100_spine4_bottleneck_runner import run_fit, run_reducer
 from .hcwdl_tri100_spine4_bottleneck_source import validate_source_lock
+from .hcwdl_tri100_spine4_persistent_support import (
+    build_support_audit, validate_support_audit,
+)
 from .hcwdl_tri100_spine4_workflow import _training_report as _established_report
 
 
@@ -40,26 +44,44 @@ def _training_report(spec: Mapping[str, Any], node_id: str) -> dict[str, Any]:
     )
     selected = path.parent / str(report.get("selected_checkpoint", ""))
     final = path.parent / str(report.get("final_checkpoint", ""))
+    node = NODE_REGISTRY[node_id]
+    maximum_passes = int(node.training_passes)
+    minimum_passes = 60
     completed_passes = int(report.get("passes", -1))
-    stopped_early = completed_passes < 100
+    stopped_early = node_id != ANCHOR_NODE_ID and completed_passes < maximum_passes
     acceptance = load_json(spec["artifact_paths"]["execution_acceptance"])
     acceptance_hash = validate_execution_acceptance(acceptance, spec=spec)
     parents = report.get("parents", {})
     if (
         report.get("node_id") != node_id
-        or report.get("node_spec") != NODE_REGISTRY[node_id].payload()
+        or report.get("node_spec") != node.payload()
         or report.get("campaign_spec_sha256") != spec["content_hash"]
         or report.get("graph_sha256") != GRAPH_SHA256
         or report.get("recipe_sha256") != spec["parents"]["recipe"]
-        or not 60 <= completed_passes <= 100
+        or not minimum_passes <= completed_passes <= maximum_passes
         or report.get("validations") != completed_passes
-        or report.get("maximum_passes") != 100
-        or report.get("minimum_passes") != 60
-        or report.get("stopped_early") is not stopped_early
-        or report.get("performance_early_termination") is not stopped_early
-        or report.get("stop_reason") != (
-            "macro_auc_patience_exhausted" if stopped_early
-            else "maximum_passes_reached"
+        or (
+            node_id == ANCHOR_NODE_ID
+            and (
+                completed_passes != 60
+                or report.get("maximum_passes") is not None
+                or report.get("minimum_passes") is not None
+                or report.get("stopped_early") is not None
+                or report.get("early_stopping") is not None
+            )
+        )
+        or (
+            node_id != ANCHOR_NODE_ID
+            and (
+                report.get("maximum_passes") != maximum_passes
+                or report.get("minimum_passes") != minimum_passes
+                or report.get("stopped_early") is not stopped_early
+                or report.get("performance_early_termination") is not stopped_early
+                or report.get("stop_reason") != (
+                    "macro_auc_patience_exhausted" if stopped_early
+                    else "maximum_passes_reached"
+                )
+            )
         )
         or report.get("complete") is not True
         or report.get("rolling_resume_published") is not False
@@ -89,6 +111,8 @@ def task_outputs(spec: Mapping[str, Any], task_id: str) -> list[Path]:
     root = Path(spec["campaign_root"])
     if task["kind"] == "authenticate":
         return [Path(spec["artifact_paths"]["source_lock"])]
+    if task["kind"] == "support_audit":
+        return [Path(spec["artifact_paths"]["support_audit"])]
     if task["kind"] == "preflight":
         return [Path(spec["artifact_paths"]["execution_acceptance"])]
     if task["kind"] == "train":
@@ -199,6 +223,8 @@ def build_aggregate(spec: Mapping[str, Any]) -> dict[str, Any]:
     validate_source_lock(source)
     acceptance = load_json(spec["artifact_paths"]["execution_acceptance"])
     acceptance_hash = validate_execution_acceptance(acceptance, spec=spec)
+    support_audit = load_json(spec["artifact_paths"]["support_audit"])
+    support_audit_hash = validate_support_audit(support_audit, spec=spec)
     source_report = load_json(source["u000"]["report_path"])
     baseline_report = load_json(spec["artifact_paths"]["m0ce60_report"])
     baseline = baseline_report["validation"]
@@ -210,6 +236,7 @@ def build_aggregate(spec: Mapping[str, Any]) -> dict[str, Any]:
         "m0ce60_report": spec["parents"]["m0ce60_report"],
         "established_campaign": spec["parents"]["established_campaign"],
         "execution_acceptance": acceptance_hash,
+        "support_audit": support_audit_hash,
     }
     rows = [{
         "artifact_id": "M0CE60", "matcher": "shared", "kind": "baseline",
@@ -217,7 +244,7 @@ def build_aggregate(spec: Mapping[str, Any]) -> dict[str, Any]:
         "recovery": _recovery(baseline, baseline, oracle),
         "report_sha256": baseline_report["content_hash"],
     }, {
-        "artifact_id": "U000", "matcher": "shared", "kind": "source_anchor",
+        "artifact_id": "U000", "matcher": "shared", "kind": "pure_offline_oracle",
         "state": "complete", "metrics": oracle,
         "recovery": _recovery(oracle, baseline, oracle),
         "report_sha256": source_report["content_hash"],
@@ -233,8 +260,12 @@ def build_aggregate(spec: Mapping[str, Any]) -> dict[str, Any]:
             node.parent_node_id
         ]["metrics"]
         row = {
-            "artifact_id": node_id, "matcher": "fullcard_bottleneck",
-            "kind": "fit", "state": "complete", "branch": node.branch,
+            "artifact_id": node_id, "matcher": "fullcard_persistent_hlt_support",
+            "kind": (
+                "persistent_hlt_hybrid_anchor"
+                if node_id == ANCHOR_NODE_ID else "fit"
+            ),
+            "state": "complete", "branch": node.branch,
             "path_index": node.path_index, "coordinate": node.coordinate_name,
             "parent_node_id": node.parent_node_id,
             "metrics": report["validation"],
@@ -264,7 +295,7 @@ def build_aggregate(spec: Mapping[str, Any]) -> dict[str, Any]:
     established = load_json(spec["artifact_paths"]["established_campaign_spec"])
     established_rows = []
     matched_differences = []
-    for node_id in FIT_ORDER:
+    for node_id in DOWNSTREAM_FIT_ORDER:
         path = Path(established["campaign_root"]) / "training" / node_id / "training_report.json"
         if not path.is_file():
             established_rows.append({
@@ -295,7 +326,10 @@ def build_aggregate(spec: Mapping[str, Any]) -> dict[str, Any]:
         parents[f"matching_diagnostics/{role}"] = report["report_sha256"]
     endpoints = [{
         "branch": branch, "node_id": node_id,
-        "path": ["U000", *(NODE_REGISTRY[name].coordinate_name for name in BRANCH_NODES[branch])],
+        "path": [
+            ANCHOR_NODE_ID,
+            *(NODE_REGISTRY[name].coordinate_name for name in BRANCH_NODES[branch]),
+        ],
         "metrics": new_by_id[node_id]["metrics"],
         "recovery": new_by_id[node_id]["recovery"],
         "selected_pass": new_by_id[node_id]["selected_pass"],
@@ -307,6 +341,8 @@ def build_aggregate(spec: Mapping[str, Any]) -> dict[str, Any]:
         "endpoints": endpoints, "matched_rung_differences": matched_differences,
         "matching_diagnostics": diagnostics,
         "matching_diagnostic_lock_sha256": assignment_hash,
+        "support_audit_sha256": support_audit_hash,
+        "support_policy": spec["support_policy"],
         "established_rows_complete": sum(
             row["state"] == "complete" for row in established_rows
         ),
@@ -316,7 +352,8 @@ def build_aggregate(spec: Mapping[str, Any]) -> dict[str, Any]:
         "established_rows_do_not_block": True,
         "recovery_convention": "M0CE60_zero_U000_one_v1",
         "fresh_fit_count": len(FIT_ORDER), "reducer_count": len(REDUCER_ORDER),
-        "source_fit_reuse_count": 1, "endpoint_seed_matched": True,
+        "source_fit_reuse_count": 0, "oracle_report_import_count": 1,
+        "endpoint_seed_matched": True,
         "immediate_parent_only": True, "execution": dict(EXECUTION),
         "ensembles": False, "poor_metrics_do_not_control_completion": True,
         "source_campaign_outputs_mutated": False,
@@ -343,6 +380,9 @@ class BottleneckSpine4Workflow:
 
     def _preflight(self, *, device: str) -> dict[str, Any]:
         self._authenticate()
+        validate_support_audit(
+            load_json(self.spec["artifact_paths"]["support_audit"]), spec=self.spec,
+        )
         required = int(self.spec["minimum_free_disk_bytes"]) + int(
             self.spec["projected_durable_bytes"]
         )
@@ -366,6 +406,10 @@ class BottleneckSpine4Workflow:
         task = self.tasks[task_id]; kind = task["kind"]
         if kind == "authenticate":
             return self._authenticate()
+        if kind == "support_audit":
+            value = build_support_audit(self.spec)
+            write_immutable_json(self.spec["artifact_paths"]["support_audit"], value)
+            return value
         if kind == "preflight":
             return self._preflight(device=device)
         if kind == "train":
@@ -409,7 +453,8 @@ class BottleneckSpine4Workflow:
                     "aggregate": validate_artifact(aggregate, contract=AGGREGATE_CONTRACT),
                 },
                 "fresh_fit_count": len(FIT_ORDER), "reducer_count": len(REDUCER_ORDER),
-                "source_fit_reuse_count": 1, "branch_order": list(BRANCH_ORDER),
+                "source_fit_reuse_count": 0, "oracle_report_import_count": 1,
+                "branch_order": list(BRANCH_ORDER),
                 "endpoint_nodes": list(ENDPOINT_NODES),
                 "rolling_resume_durable_bytes": 0,
                 "optimizer_state_durable_bytes": 0,

@@ -13,7 +13,8 @@ import torch
 
 from hlt_classification.scouting.hcwdl_homotopy import (
     HomotopyCoordinate, build_partition_from_arrays,
-    build_unified_balanced_inputs, prepare_hlt_endpoints,
+    PERSISTENT_HLT_SUPPORT_POLICY, build_unified_balanced_inputs,
+    build_unified_balanced_pairing_inputs, prepare_hlt_endpoints,
     prepare_offline_endpoints,
 )
 from hlt_classification.scouting.hcwdl_homotopy_contracts import (
@@ -251,6 +252,149 @@ def test_uniform_shell_is_confidence_independent_and_has_exact_endpoints() -> No
     assert all(np.array_equal(getattr(no_confidence, name), getattr(all_confidence, name)) for name in (
         "features", "vectors", "mask", "raw_lengths",
     ))
+
+
+def _persistent_support_fixture(*, endpoint_with_excess: str):
+    arrays = _raw_arrays()
+    if endpoint_with_excess == "hlt":
+        for name, value in tuple(arrays.items()):
+            if name.startswith("npfcand_"):
+                arrays[name] = [np.asarray(value[0])[:0]]
+        arrays["n_npfcands"] = np.asarray([0], np.int32)
+    elif endpoint_with_excess == "offline":
+        for name, value in tuple(arrays.items()):
+            if name.startswith("scoutpfcand_"):
+                arrays[name] = [np.asarray(value[0])[:1]]
+        arrays["n_scoutpfcands"] = np.asarray([1], np.int32)
+    else:
+        raise ValueError("test endpoint selector differs")
+    assignment = np.full((1, 200), -1, np.int16)
+    assignment[0, 0] = 0
+    partition = build_partition_from_arrays(
+        arrays, row=0, assignment=assignment[0],
+    )
+    edits = attach_balanced_switches(
+        assign_edit_masses(couple_partition(partition, _scale()), partition),
+        partition=partition, identity_key="jet:persistent",
+        switch_config_sha256=H,
+    )
+    validity = assignment >= 0
+    return arrays, assignment, validity, [edits]
+
+
+def test_persistent_hlt_support_is_union_then_monotone_removal() -> None:
+    arrays, assignment, validity, coupling = _persistent_support_fixture(
+        endpoint_with_excess="offline",
+    )
+    coordinates = (
+        HomotopyCoordinate(0, 2, 0, 1),
+        HomotopyCoordinate(1, 2, 0, 1),
+        HomotopyCoordinate(2, 2, 0, 1),
+    )
+    views = [
+        build_unified_balanced_pairing_inputs(
+            arrays, assignments=assignment, pairing_validity=validity,
+            coupling_rows=coupling, coordinate=coordinate,
+            identity_keys=["jet:persistent"], discrete_seed=19,
+            include_training_metadata=True,
+            support_policy=PERSISTENT_HLT_SUPPORT_POLICY,
+        )
+        for coordinate in coordinates
+    ]
+    lengths = [int(view.raw_lengths[0]) for view in views]
+    assert lengths[0] == 2
+    assert lengths == sorted(lengths, reverse=True)
+    assert lengths[-1] == 1
+
+    # The matched offline endpoint occupies its HLT skeleton slot exactly
+    # once; only the genuinely unmatched offline particle is a tail token.
+    assert views[0].visible_indices[0, :2].tolist() == [0, 201]
+    assert views[-1].visible_indices[0, :1].tolist() == [0]
+
+    hlt_arrays, hlt_assignment, hlt_validity, hlt_coupling = (
+        _persistent_support_fixture(endpoint_with_excess="hlt")
+    )
+    hlt_views = [
+        build_unified_balanced_pairing_inputs(
+            hlt_arrays, assignments=hlt_assignment,
+            pairing_validity=hlt_validity, coupling_rows=hlt_coupling,
+            coordinate=coordinate, identity_keys=["jet:persistent"],
+            discrete_seed=19, include_training_metadata=True,
+            support_policy=PERSISTENT_HLT_SUPPORT_POLICY,
+        )
+        for coordinate in coordinates
+    ]
+    assert [int(view.raw_lengths[0]) for view in hlt_views] == [2, 2, 2]
+    assert hlt_views[0].visible_indices[0, :2].tolist() == [0, 1]
+    np.testing.assert_array_equal(
+        hlt_views[0].features[0, :, 1],
+        build_hlt_inputs(hlt_arrays).features[0, :, 1],
+    )
+
+
+def test_persistent_support_preserves_default_and_exact_d000() -> None:
+    arrays, assignment, validity, coupling = _persistent_support_fixture(
+        endpoint_with_excess="hlt",
+    )
+    u000 = HomotopyCoordinate(0, 1, 0, 1)
+    default = build_unified_balanced_pairing_inputs(
+        arrays, assignments=assignment, pairing_validity=validity,
+        coupling_rows=coupling, coordinate=u000,
+        identity_keys=["jet:persistent"], discrete_seed=19,
+    )
+    persistent = build_unified_balanced_pairing_inputs(
+        arrays, assignments=assignment, pairing_validity=validity,
+        coupling_rows=coupling, coordinate=u000,
+        identity_keys=["jet:persistent"], discrete_seed=19,
+        support_policy=PERSISTENT_HLT_SUPPORT_POLICY,
+    )
+    assert int(default.raw_lengths[0]) == 1
+    assert int(persistent.raw_lengths[0]) == 2
+
+    d000 = build_unified_balanced_pairing_inputs(
+        arrays, assignments=assignment, pairing_validity=validity,
+        coupling_rows=coupling, coordinate=HomotopyCoordinate(1, 1, 1, 1),
+        identity_keys=["jet:persistent"], discrete_seed=19,
+        support_policy=PERSISTENT_HLT_SUPPORT_POLICY,
+    )
+    canonical = build_hlt_inputs(arrays)
+    assert all(np.array_equal(getattr(d000, name), getattr(canonical, name)) for name in (
+        "features", "vectors", "mask", "raw_lengths",
+    ))
+
+
+def test_persistent_support_rejects_confidence_provenance() -> None:
+    arrays, assignment, _, coupling = _persistent_support_fixture(
+        endpoint_with_excess="hlt",
+    )
+    with pytest.raises(PermissionError, match="pairing-validity"):
+        build_unified_balanced_inputs(
+            arrays, assignments=assignment,
+            confidence=np.ones((1, 200), np.float32),
+            coupling_rows=coupling, coordinate=HomotopyCoordinate(0, 1, 0, 1),
+            identity_keys=["jet:persistent"], discrete_seed=19,
+            support_policy=PERSISTENT_HLT_SUPPORT_POLICY,
+        )
+
+
+def test_persistent_support_fails_closed_instead_of_truncating_union() -> None:
+    arrays, assignment, validity, coupling = _persistent_support_fixture(
+        endpoint_with_excess="offline",
+    )
+    removal = next(
+        edit for edit in coupling[0] if edit.edit_kind == EDIT_REMOVAL
+    )
+    # Corrupt coupling lineage that repeats a tail token must fail before the
+    # fixed model width can silently discard anything.
+    edits = tuple(removal for _ in range(201))
+    with pytest.raises(ValueError, match="conservation|hidden truncation"):
+        build_unified_balanced_pairing_inputs(
+            arrays, assignments=assignment,
+            pairing_validity=validity, coupling_rows=[edits],
+            coordinate=HomotopyCoordinate(0, 1, 0, 1),
+            identity_keys=["jet:overflow"], discrete_seed=19,
+            support_policy=PERSISTENT_HLT_SUPPORT_POLICY,
+        )
 
 
 def test_prepared_uniform_builder_is_reference_byte_exact() -> None:

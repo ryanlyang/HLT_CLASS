@@ -15,10 +15,6 @@ from hlt_classification.data.cache_contracts import (
 
 from .evaluation import classification_metrics
 from .hcwdl_fullcard_bottleneck_foundation_campaign import validate_foundation
-from .hcwdl_mhpe_tri60_probability import (
-    Tri60ProbabilityTargets,
-    validate_probability_lock as validate_source_probability_lock,
-)
 from .hcwdl_mhpe_tri60_runner import _configure_deterministic_backend, _infer_cache
 from .hcwdl_mhpe_tri60_training import (
     Tri60TrainingAuthority, Tri60TrainingRuntime, load_tri60_model,
@@ -34,7 +30,7 @@ from .hcwdl_tri100_spine4_bottleneck_execution import (
     validate_execution_acceptance,
 )
 from .hcwdl_tri100_spine4_bottleneck_graph import (
-    EARLY_STOPPING, GRAPH_SHA256, LR_SCHEDULE, NODE_REGISTRY,
+    ANCHOR_NODE_ID, EARLY_STOPPING, GRAPH_SHA256, LR_SCHEDULE, NODE_REGISTRY,
     PROBABILITY_COMPONENTS, SOURCE_DISTRIBUTION,
 )
 from .hcwdl_tri100_spine4_bottleneck_probability import (
@@ -44,7 +40,9 @@ from .hcwdl_tri100_spine4_bottleneck_probability import (
 )
 from .hcwdl_tri100_spine4_bottleneck_source import validate_source_lock
 from .hcwdl_unified_balanced_runner import _cache_student_views, _load_common
+from .hcwdl_homotopy import PERSISTENT_HLT_SUPPORT_POLICY
 from .training import derive_seed
+from .hcwdl_tri100_spine4_persistent_support import validate_support_audit
 
 
 def node_output_dir(root: str | Path, node_id: str) -> Path:
@@ -61,7 +59,7 @@ def training_authority(node_id: str) -> Tri60TrainingAuthority:
         training_report_contract=TRAINING_REPORT_CONTRACT,
         selected_checkpoint_contract=SELECTED_CHECKPOINT_CONTRACT,
         final_checkpoint_contract=FINAL_CHECKPOINT_CONTRACT,
-        allowed_training_passes=(100,),
+        allowed_training_passes=(NODE_REGISTRY[node_id].training_passes,),
     )
     authority.validate()
     return authority
@@ -79,17 +77,23 @@ def _foundation(spec: Mapping[str, Any]) -> dict[str, Any]:
     return value
 
 
-def _runtime(spec: Mapping[str, Any]) -> Tri60TrainingRuntime:
+def _runtime(spec: Mapping[str, Any], *, node_id: str) -> Tri60TrainingRuntime:
     recipe = load_json(spec["artifact_paths"]["recipe"])
     validate_artifact(recipe, contract=RECIPE_CONTRACT)
-    training = recipe["training"]
+    training = recipe[
+        "anchor_training" if node_id == ANCHOR_NODE_ID else "training"
+    ]
+    passes = int(training.get("maximum_passes", training.get("passes")))
     return Tri60TrainingRuntime(
-        passes=int(training["maximum_passes"]),
+        passes=passes,
         batch_size=int(training["effective_batch_size"]),
         peak_learning_rate=float(training["peak_learning_rate"]),
         weight_decay=float(training["weight_decay"]), warmup_fraction=.05,
         minimum_lr_fraction=float(
-            training["learning_rate_schedule"]["minimum_lr_fraction"]
+            training.get("learning_rate_schedule", {}).get(
+                "minimum_lr_fraction",
+                training.get("learning_rate_floor_fraction", .05),
+            )
         ),
         amp_dtype=str(training["forward_precision"]),
     )
@@ -116,6 +120,7 @@ def _student_caches(spec: Mapping[str, Any], *, node) -> tuple[Any, ...]:
         behavior=_behavior(node.coordinate_name), coordinate=node.coordinate,
         batch_size=256, sampler_seed=sampler_seed, repair_seed=repair_seed,
         memory_gib=240.0, include_hcwdl_metadata=True,
+        support_policy=PERSISTENT_HLT_SUPPORT_POLICY,
     )
     return foundation, split_hash, selection_hash, caches, input_key
 
@@ -123,19 +128,6 @@ def _student_caches(spec: Mapping[str, Any], *, node) -> tuple[Any, ...]:
 def _probability_targets(
     spec: Mapping[str, Any], distribution_id: str, *, consumer_id: str,
 ):
-    if distribution_id == SOURCE_DISTRIBUTION:
-        source = _source_lock(spec)
-        if consumer_id not in source["authorized_probability_consumers"]:
-            raise PermissionError("bottleneck U000 probability consumer is unauthorized")
-        row = source["u000_probability"]
-        lock, _ = validate_source_probability_lock(
-            row["lock_path"], distribution_id=SOURCE_DISTRIBUTION,
-        )
-        if lock["content_hash"] != row["lock_sha256"]:
-            raise ValueError("bottleneck imported U000 bank changed")
-        return Tri60ProbabilityTargets.load(
-            row["train_manifest_path"], distribution_id=SOURCE_DISTRIBUTION,
-        ), lock
     directory = distribution_output_dir(spec["campaign_root"], distribution_id)
     lock, _ = validate_probability_lock(
         directory / "lock.json", distribution_id=distribution_id,
@@ -162,9 +154,11 @@ def _model(spec: Mapping[str, Any], node_id: str, *, device: str):
 
 def _common_parents(
     spec: Mapping[str, Any], *, split_hash: str, selection_hash: str,
-    probability_lock: str, execution_acceptance: str,
+    probability_lock: str | None, execution_acceptance: str,
 ) -> dict[str, str]:
-    return {
+    support = load_json(spec["artifact_paths"]["support_audit"])
+    support_hash = validate_support_audit(support, spec=spec)
+    result = {
         "campaign_spec": spec["content_hash"],
         "source_campaign": spec["parents"]["source_campaign"],
         "source_lock": spec["parents"]["source_lock"],
@@ -173,9 +167,12 @@ def _common_parents(
         "matcher_spec": spec["parents"]["matcher_spec"],
         "graph": GRAPH_SHA256, "recipe": spec["parents"]["recipe"],
         "split_manifest": split_hash, "selection_manifest": selection_hash,
-        "probability_lock": probability_lock,
         "execution_acceptance": execution_acceptance,
+        "support_audit": support_hash,
     }
+    if probability_lock is not None:
+        result["probability_lock"] = probability_lock
+    return result
 
 
 def run_fit(
@@ -190,9 +187,13 @@ def run_fit(
     node = NODE_REGISTRY[node_id]
     acceptance = load_json(spec["artifact_paths"]["execution_acceptance"])
     acceptance_hash = validate_execution_acceptance(acceptance, spec=spec)
-    targets, target_lock = _probability_targets(
-        spec, node.distribution_teacher_id, consumer_id=node_id,
-    )
+    if node_id == ANCHOR_NODE_ID:
+        targets = None
+        target_lock = None
+    else:
+        targets, target_lock = _probability_targets(
+            spec, node.distribution_teacher_id, consumer_id=node_id,
+        )
     started = time.monotonic()
     _, split_hash, selection_hash, caches, input_key = _student_caches(
         spec, node=node,
@@ -200,13 +201,15 @@ def run_fit(
     cache_seconds = time.monotonic() - started
     parents = _common_parents(
         spec, split_hash=split_hash, selection_hash=selection_hash,
-        probability_lock=target_lock["content_hash"],
+        probability_lock=(
+            None if target_lock is None else target_lock["content_hash"]
+        ),
         execution_acceptance=acceptance_hash,
     )
-    if node.parent_node_id is None:
+    if node_id == ANCHOR_NODE_ID:
         source = _source_lock(spec)
-        parents["teacher_report"] = source["u000"]["report_sha256"]
-        parents["teacher_checkpoint"] = source["u000"][
+        parents["pure_offline_oracle_report"] = source["u000"]["report_sha256"]
+        parents["pure_offline_oracle_checkpoint"] = source["u000"][
             "selected_checkpoint_sha256"
         ]
     else:
@@ -230,14 +233,18 @@ def run_fit(
             recipe_sha256=spec["parents"]["recipe"],
             execution_source_commit=(execution_source_commit or spec["source_commit"]),
             replicate_seed=int(spec["replicate_seed"]), device=device,
-            runtime=_runtime(spec), execution_mode="scientific",
+            runtime=_runtime(spec, node_id=node_id), execution_mode="scientific",
             preparation_metrics={
                 "student_view_cache_seconds": cache_seconds,
                 "pre_training_total_seconds": time.monotonic() - started,
             },
             authority=training_authority(node_id),
-            learning_rate_schedule=dict(LR_SCHEDULE),
-            early_stopping=dict(EARLY_STOPPING),
+            learning_rate_schedule=(
+                None if node_id == ANCHOR_NODE_ID else dict(LR_SCHEDULE)
+            ),
+            early_stopping=(
+                None if node_id == ANCHOR_NODE_ID else dict(EARLY_STOPPING)
+            ),
         )
     finally:
         caches.clear()
@@ -292,6 +299,9 @@ def run_reducer(
             "split_manifest": split_hash, "selection_manifest": selection_hash,
             "component_report": report["content_hash"],
             "component_checkpoint": report["selected_checkpoint_sha256"],
+            "support_audit": validate_support_audit(
+                load_json(spec["artifact_paths"]["support_audit"]), spec=spec,
+            ),
         }
         if recovery_spec_sha256 is not None:
             parents["recovery_spec"] = recovery_spec_sha256

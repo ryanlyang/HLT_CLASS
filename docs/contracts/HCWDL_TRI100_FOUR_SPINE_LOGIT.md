@@ -45,3 +45,23 @@ Only exact ledger IDs may be monitored. Recovery is created only after all
 subject jobs are terminal. A valid completed task is inherited; every other
 task is retried from update zero in a new pinned worktree on one GH200.
 Cleanup targets are resolved beneath the campaign root before removal.
+
+## Persistent-HLT-support full-cardinality control
+
+`HCWDL_TRI100_FOUR_SPINE_FULLCARD_PERSISTENT_HLT_*/v1` is a distinct
+scientific contract family.  It reuses the authenticated full-cardinality
+bottleneck assignments but does not reuse pure-offline U000 as a training
+anchor.  Its `SP4P_U000` anchor is trained fresh with CE only on the union of
+the HLT skeleton and pure-offline support: matched skeleton slots carry their
+offline endpoints, unmatched HLT slots are native HLT, and offline-only tails
+are present until their balanced structural removal switch. Matched
+substitutions occur once on the skeleton and are never duplicated as tails.
+Hence `U000` cardinality is `max(n_offline, n_HLT)`, U support is
+non-increasing, U100 has exact HLT cardinality while matched slots remain
+offline, and D000 remains exact HLT.
+
+The policy is legal only for pairing-validity provenance.  An all-row compact
+audit must prove every train/validation union fits within 200 tokens before
+GPU preflight or training.  The control has 30 fresh fits and 26 reducers;
+the extra fit and bank are the hybrid anchor.  Shared pure-offline U000 remains
+the 100% recovery oracle and is never authorized as a training target.

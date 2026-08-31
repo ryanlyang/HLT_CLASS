@@ -30,6 +30,7 @@ from .hcwdl_recovery import task_attestation_path, validate_task_attestation
 from .hcwdl_homotopy_stream import (
     iterate_homotopy_batches, iterate_unified_balanced_batches,
 )
+from .hcwdl_homotopy import DEFAULT_SUPPORT_POLICY
 from .hcwdl_training import train_hcwdl_node
 from .hcwdl_unified_balanced_cache import BalancedCouplingStore
 from .hcwdl_unified_balanced_contracts import (
@@ -148,6 +149,7 @@ def _stream(
     include_hcwdl_metadata: bool = False,
     source_index: int | None = None,
     view_workers: int | None = None,
+    support_policy: str = DEFAULT_SUPPORT_POLICY,
 ):
     workers = _view_workers() if view_workers is None else int(view_workers)
     if workers <= 0:
@@ -184,6 +186,7 @@ def _stream(
             workers=workers, output_key="privileged",
             include_training_metadata=include_hcwdl_metadata,
             source_index=source_index,
+            support_policy=support_policy,
         )
     if legacy:
         legacy_store = ResidualCouplingStore(
@@ -204,6 +207,7 @@ def _stream(
         workers=workers, output_key="privileged",
         include_training_metadata=include_hcwdl_metadata,
         source_index=source_index,
+        support_policy=support_policy,
     )
 
 
@@ -245,6 +249,7 @@ def _materialize_source_process(
         include_hcwdl_metadata=bool(context["include_hcwdl_metadata"]),
         source_index=int(source_index),
         view_workers=int(context["transform_workers"]),
+        support_policy=str(context["support_policy"]),
     )
     try:
         batches = tuple(stream)
@@ -262,6 +267,7 @@ def _parallel_source_streams(
     records, expected_source_rows: Mapping[str, int],
     source_workers: int, transform_workers: int,
     source_backend: str = "thread",
+    support_policy: str = DEFAULT_SUPPORT_POLICY,
 ) -> Iterable[tuple[str, Mapping[str, object]]]:
     """Build independent source streams concurrently with bounded buffering."""
 
@@ -284,6 +290,7 @@ def _parallel_source_streams(
                     legacy=behavior in {"legacycdf_uniform", "balanced_legacywarp"},
                     include_hcwdl_metadata=include_hcwdl_metadata,
                     source_index=source_index, view_workers=transform_workers,
+                    support_policy=support_policy,
                 )
             )
         return
@@ -300,6 +307,7 @@ def _parallel_source_streams(
             "legacy": behavior in {"legacycdf_uniform", "balanced_legacywarp"},
             "include_hcwdl_metadata": include_hcwdl_metadata,
             "transform_workers": transform_workers,
+            "support_policy": support_policy,
         }
         source_iterator = iter(
             (source_index, record.path) for source_index, record in selected
@@ -364,6 +372,7 @@ def _parallel_source_streams(
                 legacy=behavior in {"legacycdf_uniform", "balanced_legacywarp"},
                 include_hcwdl_metadata=include_hcwdl_metadata,
                 source_index=source_index, view_workers=transform_workers,
+                support_policy=support_policy,
             )
             for batch in stream:
                 if not publish(("batch", source_path, batch)):
@@ -419,6 +428,7 @@ def _cache_student_views(
     behavior: str, coordinate, batch_size: int, sampler_seed: int,
     repair_seed: int, memory_gib: float,
     include_hcwdl_metadata: bool = False,
+    support_policy: str = DEFAULT_SUPPORT_POLICY,
 ):
     caches = {}; remaining = _memory_limit_bytes(memory_gib)
     input_key = "hlt" if behavior == "hlt" else "privileged"
@@ -458,6 +468,7 @@ def _cache_student_views(
                 source_workers=source_workers,
                 transform_workers=transform_workers,
                 source_backend=source_backend,
+                support_policy=support_policy,
             )
             if partitioned else _stream(
                 foundation_spec=foundation_spec, split=split,
@@ -468,6 +479,7 @@ def _cache_student_views(
                 legacy=behavior in {"legacycdf_uniform", "balanced_legacywarp"},
                 include_hcwdl_metadata=include_hcwdl_metadata,
                 view_workers=transform_workers,
+                support_policy=support_policy,
             )
         )
         cache = EphemeralPmardViewCache.build(
@@ -479,6 +491,7 @@ def _cache_student_views(
             lineage={
                 "foundation_spec_sha256": foundation_spec["content_hash"],
                 "behavior": behavior, "coordinate": coordinate.payload(),
+                "support_policy": support_policy,
                 "student_view_built_once": True,
                 "durable_repaired_dataset": False,
                 "source_partitioned_preprocessing": partitioned,

@@ -1,5 +1,38 @@
 # Current Handoff
 
+## TRI100 persistent-HLT-support four-spine control (2026-08-31)
+
+An independent full-cardinality control now implements the requested monotone
+U-support semantics. Every HLT skeleton slot is present from `SP4P_U000`:
+matched slots carry their offline endpoints, unavoidable unmatched HLT slots
+carry native HLT, and source-only offline tails disappear at the existing
+balanced structural switches. U therefore only removes support or leaves it
+unchanged; matched substitutions occur once rather than being duplicated as
+tails, so U000 has `max(n_offline, n_HLT)` particles. U100 has the HLT count
+with matched offline features, while the D path and exact-HLT D000 endpoint are unchanged. The established builder remains
+the default, and the new policy is accepted only with neutral pairing-validity
+provenance.
+
+The source-pinned campaign has a distinct `hcwsp4p_` job namespace and
+`HCWDL_TRI100_FOUR_SPINE_FULLCARD_PERSISTENT_HLT_*/v1` artifacts. It trains a
+fresh, seed-matched, 60-pass CE-only hybrid anchor and its own probability bank,
+then the unchanged four immediate-parent C25/P75 T=2 spines. The complete DAG
+contains 30 fits, 26 reducers, an all-row compact support audit, genuine-GH200
+preflight, aggregate, and completion. Pure-offline U000 is retained only as the
+shared 100% recovery oracle; it is not a teacher. Existing campaigns have no
+Slurm dependency or mutable path in this DAG.
+
+Focused source tests for default/persistent endpoint behavior, metadata order,
+monotone cardinality, exact D000, confidence-provenance rejection, hidden-
+truncation rejection, graph shape, all-row count arithmetic, campaign DAG,
+probability isolation, recovery, and foundation authentication are present.
+The focused policy/campaign suite passes 41/41, the adjacent homotopy,
+unified-balanced, full-cardinality, and four-spine regression suite passes
+135/135, and the repository-wide suite passes 797/797 in the `tagging-hlt`
+environment. Python compilation and diff checks pass. Installed-Weaver parity
+and a genuine Tigris preflight/miniature remain required before full live
+submission. Final test was not accessed.
+
 ## TRI100 full-cardinality preflight repair (2026-08-31)
 
 The completed `571c0966` full-cardinality matcher foundation remains valid:

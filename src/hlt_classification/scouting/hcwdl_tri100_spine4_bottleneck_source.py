@@ -1,4 +1,4 @@
-"""Read-only U000 plus new full-cardinality foundation authentication."""
+"""Full-cardinality assignments plus read-only pure-offline oracle."""
 
 from __future__ import annotations
 
@@ -33,10 +33,9 @@ from .hcwdl_tri100_spine4_source import validate_source_lock as validate_establi
 
 
 def source_consumers() -> tuple[str, ...]:
-    return tuple(
-        node_id for node_id, node in NODE_REGISTRY.items()
-        if node.distribution_teacher_id == SOURCE_DISTRIBUTION
-    )
+    # The pure-offline U000 artifacts are reporting references only.  The new
+    # anchor is fitted inside this campaign and owns its own probability bank.
+    return ()
 
 
 def build_source_lock(foundation_spec_path: str | Path) -> dict[str, Any]:
@@ -127,12 +126,14 @@ def build_source_lock(foundation_spec_path: str | Path) -> dict[str, Any]:
         "foundation_root": str(Path(foundation["campaign_root"]).resolve()),
         "u000": established["u000"],
         "u000_probability": established["u000_probability"],
-        "authorized_probability_consumers": list(source_consumers()),
-        "u000_reuse_authority": equivalence_hash,
+        "authorized_probability_consumers": [],
+        "u000_reuse_authority": "oracle_reporting_only_not_training_v1",
         "replicate_seed": int(foundation["replicate_seed"]),
         "role_counts": dict(foundation["role_counts"]),
         "population_policy": "all_authenticated_mapped_rows_v1",
         "read_only_u000_import": True,
+        "pure_offline_u000_role": "oracle_reporting_reference_only",
+        "persistent_anchor_retrained": True,
         "source_completion_not_required": True,
         "existing_campaign_dependencies": [],
         "source_outputs_mutated": False,

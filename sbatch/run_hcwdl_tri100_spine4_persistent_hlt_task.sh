@@ -16,5 +16,5 @@ export MKL_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 test "${SLURM_NNODES}" -eq 1
 test "${SLURM_NTASKS}" -eq 1
-exec python -s "${PROJECT_DIR}/scripts/run_hcwdl_tri100_spine4_bottleneck_task.py" \
+exec python -s "${PROJECT_DIR}/scripts/run_hcwdl_tri100_spine4_persistent_hlt_task.py" \
   --spec "${HCWDL_SPINE4P_SPEC}" --task "${HCWDL_SPINE4P_TASK}" --device cuda
