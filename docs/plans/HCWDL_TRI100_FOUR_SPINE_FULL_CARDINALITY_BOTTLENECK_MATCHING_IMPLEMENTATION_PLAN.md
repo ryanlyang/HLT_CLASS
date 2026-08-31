@@ -91,6 +91,13 @@ The complete bipartite graph over the valid particles is the feasible edge
 set. This guarantees that a cardinality-`k` assignment exists for every
 finite paired jet.
 
+Here, `valid` means a visible, non-padded particle with a finite physical
+four-vector in the authenticated collection. An HLT particle whose five raw
+identity flags are nonexclusive is still in this population: category and
+charge are secondary tie information, never eligibility gates. This detail is
+important because forced full cardinality can select particles on which the
+established abstaining matcher had no feasible category-compatible edge.
+
 The durable orientation remains HLT-to-offline: each valid HLT particle stores
 one native offline index or `-1`. When `n_h <= n_o`, no valid HLT index may be
 `-1`. When `n_h > n_o`, exactly `n_h - n_o` valid HLT indices must be `-1`.
@@ -250,6 +257,33 @@ pair was forced. The implementation must either:
 The preferred implementation is a new pairing-validity path. Existing
 high-coverage cache and confidence semantics remain byte- and
 contract-compatible for old campaigns. No fake confidence is authorized.
+
+### 6.1 Matched unclassified HLT identity policy
+
+The established uniform-shell repair fails closed when a *matched* HLT token
+has nonexclusive raw identity flags. That was unreachable for the established
+category-gated matcher but is reachable under this control's complete
+bipartite feasible set. The full-cardinality campaign therefore registers the
+following versioned extension for validity-only assignments:
+
+```text
+preserve_until_identity_switch_then_atomic_endpoint_v1
+```
+
+For an unclassified matched HLT token with finite binary but zero-hot or
+multi-hot flags, no charged/neutral identity is inferred or invented. Until
+the deterministic identity switch fires, its original HLT identity, charge,
+and charged-applicability fields remain together. When that switch fires, the
+valid offline identity, charge, and charged-applicability fields move to the
+endpoint together. Nonfinite or nonbinary identity values still fail closed.
+P4 interpolation, exact rational switch hashes, already-classified tokens,
+unmatched tokens, support construction, and every established-confidence
+campaign retain their prior semantics.
+
+This policy is part of the full-cardinality campaign recipe and execution
+acceptance identity. The failed v1 science specification is not reusable; the
+completed matcher/foundation assignment lineage is reusable because the
+pairing objective and every durable assignment remain unchanged.
 
 ## 7. Foundation and reuse boundary
 

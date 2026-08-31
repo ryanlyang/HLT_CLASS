@@ -17,6 +17,9 @@ FULL_REPAIR_FAMILY = "FULL_PARTICLE_ENDPOINT/v1"
 SELECTIVE_FULL_REPAIR_FAMILY = "SELECTIVE_FULL_PARTICLE_ENDPOINT/v1"
 HIGHCOV_SHELL_EXACT_FAMILY = "HIGHCOV_SHELL_EXACT/v1"
 HCWDL_UNIFORM_SHELL_EXACT_FAMILY = "HCWDL_UNIFORM_SHELL_EXACT/v1"
+PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY = (
+    "preserve_until_identity_switch_then_atomic_endpoint_v1"
+)
 HIGHCOV_SHELL_SOFT_FAMILY = "HIGHCOV_SHELL_SOFT/v1"
 HIGHCOV_HC_EXACT_FAMILY = "HIGHCOV_HC_EXACT/v1"
 HIGHCOV_HC_THRESHOLD = 0.958730161190033
@@ -321,17 +324,40 @@ def _validate_full_endpoint_features(
     return charged
 
 
-def _hlt_charged_mask(
+def _hlt_identity_applicability(
     raw: Mapping[str, Sequence[np.ndarray]], *, row: int, visible: int,
-    tokens: np.ndarray,
-) -> np.ndarray:
+    tokens: np.ndarray, allow_unclassified: bool,
+) -> tuple[np.ndarray, np.ndarray]:
     flags = np.stack([
         np.asarray(raw[HLT_FEATURE_SPECS[channel].branch][row][:visible], np.float64)
         for channel in range(2, 7)
     ], axis=1)[tokens]
-    if not (((flags == 0) | (flags == 1)).all() and np.all(flags.sum(axis=1) == 1)):
+    finite_binary = (
+        np.isfinite(flags).all(axis=1)
+        & np.all((flags == 0) | (flags == 1), axis=1)
+    )
+    if not finite_binary.all():
         raise ValueError(f"invalid matched HLT particle identity in row {row}")
-    return np.argmax(flags, axis=1) < 3
+    valid = flags.sum(axis=1) == 1
+    if not allow_unclassified and not valid.all():
+        raise ValueError(f"invalid matched HLT particle identity in row {row}")
+    charged = np.zeros(len(flags), np.bool_)
+    if np.any(valid):
+        charged[valid] = np.argmax(flags[valid], axis=1) < 3
+    return charged, valid
+
+
+def _hlt_charged_mask(
+    raw: Mapping[str, Sequence[np.ndarray]], *, row: int, visible: int,
+    tokens: np.ndarray,
+) -> np.ndarray:
+    """Strict legacy chargedness decoder for already-classified matches."""
+
+    charged, _ = _hlt_identity_applicability(
+        raw, row=row, visible=visible, tokens=tokens,
+        allow_unclassified=False,
+    )
+    return charged
 
 
 def _apply_full_endpoint_repair(
@@ -347,6 +373,7 @@ def _apply_full_endpoint_repair(
     prepared_offline_validity: Sequence[np.ndarray] | None = None,
     prepared_charged_counts: Sequence[int] | None = None,
     prepared_neutral_counts: Sequence[int] | None = None,
+    matched_unclassified_hlt_policy: str | None = None,
 ) -> None:
     rows = canonical.features.shape[0]
     strengths = None if strength_by_token is None else np.asarray(strength_by_token, np.float64)
@@ -446,10 +473,22 @@ def _apply_full_endpoint_repair(
         endpoint_charged = _validate_full_endpoint_features(
             endpoint_features, endpoint_validity, row=row,
         )
-        hlt_charged = _hlt_charged_mask(
+        hlt_charged, hlt_identity_valid = _hlt_identity_applicability(
             raw, row=row, visible=visible, tokens=matched_tokens,
+            allow_unclassified=(
+                matched_unclassified_hlt_policy
+                == PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
+            ),
         )
-        applicability_changes = hlt_charged != endpoint_charged
+        # An unclassified HLT identity has no defensible charged/neutral
+        # applicability state.  Under the validity-only pairing control, keep
+        # its original identity/charge/track record together until the
+        # deterministic identity switch fires, then move that complete group
+        # to the valid offline endpoint together.  This neither invents an HLT
+        # category nor changes any already-classified match.
+        applicability_changes = (
+            ~hlt_identity_valid | (hlt_charged != endpoint_charged)
+        )
 
         hlt_features = np.stack([
             np.asarray(raw[field.hlt_branch][row][:visible], np.float64)
@@ -552,6 +591,13 @@ def _apply_full_endpoint_repair(
                 if field.channel in {0, 20}:
                     use_endpoint = np.where(applicability_changes, choices["identity"], use_endpoint)
                 use_endpoint = np.where(group_validity_changes, validity_choice, use_endpoint)
+                if matched_unclassified_hlt_policy is not None and (
+                    field.channel in FULL_IDENTITY_CHANNELS
+                    or field.channel in {0, 20}
+                ):
+                    use_endpoint = np.where(
+                        ~hlt_identity_valid, choices["identity"], use_endpoint,
+                    )
                 repaired_value = np.where(use_endpoint, endpoint_value, hlt_value)
             else:
                 raise RuntimeError(f"unknown endpoint interpolation {field.interpolation!r}")
@@ -579,6 +625,7 @@ def build_alpha_repaired_inputs(
     prepared_offline_validity: Sequence[np.ndarray] | None = None,
     prepared_charged_counts: Sequence[int] | None = None,
     prepared_neutral_counts: Sequence[int] | None = None,
+    matched_unclassified_hlt_policy: str | None = None,
 ) -> ParticleInputs:
     repair_family = runtime_repair_family(repair_family)
     try:
@@ -603,6 +650,12 @@ def build_alpha_repaired_inputs(
             raise ValueError("uniform Shell Exact alpha differs from its rational fraction")
     elif uniform_fraction is not None:
         raise ValueError("an exact uniform fraction is valid only for uniform Shell Exact")
+    if matched_unclassified_hlt_policy is not None and (
+        repair_family != "HCWDL_UNIFORM_SHELL_EXACT"
+        or matched_unclassified_hlt_policy
+        != PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
+    ):
+        raise ValueError("matched unclassified HLT repair policy differs")
     if repair_family in {"TRACK_ONLY", "P4_PLUS_TRACK"}:
         raise PermissionError(
             "track repair is disabled until a locked branch-semantics compatibility audit exists"
@@ -711,6 +764,7 @@ def build_alpha_repaired_inputs(
             prepared_offline_validity=prepared_offline_validity,
             prepared_charged_counts=prepared_charged_counts,
             prepared_neutral_counts=prepared_neutral_counts,
+            matched_unclassified_hlt_policy=matched_unclassified_hlt_policy,
         )
         result = build_hlt_inputs(raw)
         if not np.array_equal(result.mask, canonical.mask) or not np.array_equal(
@@ -815,6 +869,7 @@ def build_uniform_shell_exact_inputs(
     prepared_offline_validity: Sequence[np.ndarray] | None = None,
     prepared_charged_counts: Sequence[int] | None = None,
     prepared_neutral_counts: Sequence[int] | None = None,
+    matched_unclassified_hlt_policy: str | None = None,
 ) -> ParticleInputs:
     """Build HCWDL-UB's confidence-independent, exact-rational D endpoint."""
 
@@ -835,6 +890,7 @@ def build_uniform_shell_exact_inputs(
         prepared_offline_validity=prepared_offline_validity,
         prepared_charged_counts=prepared_charged_counts,
         prepared_neutral_counts=prepared_neutral_counts,
+        matched_unclassified_hlt_policy=matched_unclassified_hlt_policy,
     )
 
 
@@ -856,6 +912,7 @@ __all__ = [
     "HCWDL_UNIFORM_SHELL_EXACT_FAMILY",
     "HIGHCOV_HC_EXACT_FAMILY", "HIGHCOV_HC_THRESHOLD", "HIGHCOV_SHELL_EXACT_FAMILY",
     "HIGHCOV_SHELL_SOFT_FAMILY",
+    "PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY",
     "RECOMPUTED_CHANNELS",
     "REPAIR_FAMILIES", "REPAIR_FAMILY", "RETAINED_CHANNELS",
     "build_alpha_repaired_inputs", "build_full_offline_endpoint_inputs",

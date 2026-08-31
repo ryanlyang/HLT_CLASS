@@ -1,5 +1,42 @@
 # Current Handoff
 
+## TRI100 full-cardinality preflight repair (2026-08-31)
+
+The completed `571c0966` full-cardinality matcher foundation remains valid:
+its exact assignment objective, compact assignments, diagnostics, coupling,
+balanced sidecars, and U000-equivalence lock all completed on Tigris. The
+first science campaign authenticated as job `97924`, but genuine-GH200
+preflight job `97925` failed before publishing an execution lock at validation
+row 1305 with `invalid matched HLT particle identity`. All 56 downstream
+science jobs remained dependency-blocked and no fit or target bank started.
+
+The cause was a real boundary mismatch. The complete-bipartite matcher
+correctly admits visible particles with nonexclusive raw HLT identity flags;
+category is only secondary tie information. The established repair path had
+only ever seen category-gated matches and therefore required every matched
+HLT identity to be one-hot before deciding charged-field applicability.
+
+The validity-only path now uses the versioned policy
+`preserve_until_identity_switch_then_atomic_endpoint_v1`. It never invents a
+charged/neutral label: a finite-binary zero-hot or multi-hot matched token
+keeps its HLT identity, charge, quality, and track-applicability fields
+together until the existing deterministic identity switch fires, then moves
+that group to the valid offline endpoint together. Nonfinite and nonbinary
+identity values still fail closed. Established confidence-backed paths remain
+strict, and valid-token outputs and exact rational switch hashes are unchanged. The
+TRI100 full-cardinality science contracts are v2; the failed v1 campaign spec
+cannot authenticate as v2, while the completed matcher/foundation v1 lineage
+is deliberately reusable because no pairing artifact changed.
+
+Focused matching/repair/full-cardinality tests pass 42/42. The broader
+homotopy, unified-balanced, TRI100, and PMARD-recovery regression set passes
+121/121 in 152.13 seconds. The repository-wide suite passes 791/791; the final
+nonfinite fail-closed boundary was then rechecked in the focused 42-test set.
+CLI import/help and diff checks pass. A fresh v2 science root, genuine Tigris
+preflight, and exact downstream submission remain; the old pending v1 job IDs
+must be cancelled exactly, never by job-name pattern. Final test was not
+accessed.
+
 ## TRI60 M1 greedy BF16/FP32 reducer repair (2026-08-28)
 
 Tigris inference jobs produced all five authenticated candidate-probability

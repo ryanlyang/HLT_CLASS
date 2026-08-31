@@ -9,8 +9,10 @@ from hlt_classification.data.cache_contracts import canonical_sha256, with_conte
 from .hcwdl_tri100_spine4_bottleneck_contracts import (
     GRAPH_CONTRACT,
     RECIPE_CONTRACT,
+    SCHEMA_VERSION,
     artifact,
 )
+from .repair import PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
 from .hcwdl_tri100_spine4_graph import (
     BRANCH_NODES,
     BRANCH_ORDER,
@@ -35,10 +37,11 @@ from .hcwdl_tri100_spine4_graph import (
 CAMPAIGN_LABEL: Final = "HCWDL-TRI100-FOUR-SPINE-FULLCARD-BOTTLENECK"
 _GRAPH_BODY: Final = {
     "contract": GRAPH_CONTRACT,
-    "schema_version": 1,
+    "schema_version": SCHEMA_VERSION,
     "campaign_label": CAMPAIGN_LABEL,
     "established_graph_sha256": ESTABLISHED_GRAPH_SHA256,
     "pairing_control": "full_cardinality_lexicographic_bottleneck_delta_r_v1",
+    "matched_unclassified_hlt_policy": PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY,
     "branch_order": list(BRANCH_ORDER),
     "branch_paths": {name: list(BRANCH_PATHS[name]) for name in BRANCH_ORDER},
     "branch_nodes": {name: list(BRANCH_NODES[name]) for name in BRANCH_ORDER},
@@ -78,6 +81,9 @@ def recipe_payload() -> dict[str, object]:
         "teacher_policy": established["teacher_policy"],
         "execution": established["execution"],
         "same_coordinate_seed_policy": established["same_coordinate_seed_policy"],
+        "matched_unclassified_hlt_policy": (
+            PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
+        ),
         "only_changed_variable": "particle_pairing_foundation_lineage",
         "rolling_resume": False,
         "final_test_accessed": False,

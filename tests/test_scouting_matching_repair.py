@@ -10,10 +10,12 @@ from hlt_classification.scouting.matching import (
 )
 from hlt_classification.scouting.repair import (
     FULL_ENDPOINT_FIELDS, HIGHCOV_HC_EXACT_FAMILY, HIGHCOV_SHELL_EXACT_FAMILY,
-    HIGHCOV_SHELL_SOFT_FAMILY, SELECTIVE_FULL_REPAIR_FAMILY,
+    HIGHCOV_SHELL_SOFT_FAMILY, PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY,
+    SELECTIVE_FULL_REPAIR_FAMILY,
     build_alpha_repaired_inputs,
     build_full_offline_endpoint_inputs,
     build_selective_matched_offline_endpoint_inputs,
+    build_uniform_shell_exact_inputs,
 )
 from hlt_classification.scouting.matcher_validation import synthetic_particle_pair, wilson_interval
 from hlt_classification.scouting.matcher_training import (
@@ -209,6 +211,79 @@ def test_selective_endpoint_ignores_invalid_identity_on_unmatched_hlt_token():
         build_alpha_repaired_inputs(
             arrays, offline_p4, complete, alpha=1.0,
             repair_family="FULL_PARTICLE_ENDPOINT", offline_arrays=arrays,
+        )
+
+
+@pytest.mark.parametrize("identity_pattern", ["multiple_hot", "zero_hot"])
+def test_pairing_validity_shell_moves_unclassified_identity_and_tracks_atomically(
+    identity_pattern: str,
+):
+    arrays, offline_p4, assignment, _, _ = _full_endpoint_fixture()
+    valid_hlt = {
+        name: [np.asarray(row).copy() for row in values]
+        for name, values in arrays.items()
+    }
+    identity_branches = [
+        HLT_FEATURE_SPECS[channel].branch for channel in range(2, 7)
+    ]
+    if identity_pattern == "multiple_hot":
+        arrays["scoutpfcand_isGamma"][0][0] = 1.0
+    else:
+        for branch in identity_branches:
+            arrays[branch][0][0] = 0.0
+    canonical = build_hlt_inputs(arrays)
+
+    endpoint = build_full_offline_endpoint_inputs(
+        valid_hlt, valid_hlt, offline_p4, assignment,
+    )
+    repaired = build_uniform_shell_exact_inputs(
+        arrays, offline_p4, assignment,
+        offline_numerator=1, offline_denominator=2,
+        offline_arrays=arrays,
+        identity_keys=("file.root::tree::1305",), discrete_seed=91,
+        matched_unclassified_hlt_policy=(
+            PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
+        ),
+    )
+
+    original_identity = canonical.features[0, 1:7, 0]
+    endpoint_identity = endpoint.features[0, 1:7, 0]
+    chose_endpoint = np.array_equal(
+        repaired.features[0, 1:7, 0], endpoint_identity,
+    )
+    assert chose_endpoint or np.array_equal(
+        repaired.features[0, 1:7, 0], original_identity,
+    )
+    np.testing.assert_array_equal(
+        repaired.features[0, 11:19, 0],
+        endpoint.features[0, 11:19, 0]
+        if chose_endpoint else canonical.features[0, 11:19, 0],
+    )
+    repeated = build_uniform_shell_exact_inputs(
+        arrays, offline_p4, assignment,
+        offline_numerator=1, offline_denominator=2,
+        offline_arrays=arrays,
+        identity_keys=("file.root::tree::1305",), discrete_seed=91,
+        matched_unclassified_hlt_policy=(
+            PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
+        ),
+    )
+    assert repaired.features.tobytes() == repeated.features.tobytes()
+    assert repaired.vectors.tobytes() == repeated.vectors.tobytes()
+
+
+def test_pairing_validity_shell_still_fails_closed_on_nonfinite_identity():
+    arrays, offline_p4, assignment, _, _ = _full_endpoint_fixture()
+    arrays["scoutpfcand_isGamma"][0][0] = np.nan
+    with pytest.raises(ValueError, match="invalid matched HLT particle identity"):
+        build_uniform_shell_exact_inputs(
+            arrays, offline_p4, assignment,
+            offline_numerator=1, offline_denominator=2,
+            offline_arrays=arrays,
+            identity_keys=("file.root::tree::1305",), discrete_seed=91,
+            matched_unclassified_hlt_policy=(
+                PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
+            ),
         )
 
 

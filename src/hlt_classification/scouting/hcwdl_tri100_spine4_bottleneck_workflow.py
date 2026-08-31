@@ -17,7 +17,7 @@ from .hcwdl_fullcard_bottleneck_contracts import (
 from .hcwdl_tri100_spine4_bottleneck_campaign import validate_campaign
 from .hcwdl_tri100_spine4_bottleneck_contracts import (
     AGGREGATE_CONTRACT, COMPLETE_CONTRACT, STAGE_REPORT_CONTRACT,
-    TRAINING_REPORT_CONTRACT, artifact, validate_artifact,
+    SCHEMA_VERSION, TRAINING_REPORT_CONTRACT, artifact, validate_artifact,
 )
 from .hcwdl_tri100_spine4_bottleneck_execution import (
     run_execution_acceptance, validate_execution_acceptance,
@@ -36,7 +36,7 @@ def _training_report(spec: Mapping[str, Any], node_id: str) -> dict[str, Any]:
     report = load_json(path)
     validate_content_hash(
         report, expected_contract=TRAINING_REPORT_CONTRACT,
-        expected_schema_version=1,
+        expected_schema_version=SCHEMA_VERSION,
     )
     selected = path.parent / str(report.get("selected_checkpoint", ""))
     final = path.parent / str(report.get("final_checkpoint", ""))

@@ -25,6 +25,7 @@ from .hcwdl_tri100_spine4_bottleneck_contracts import (
 )
 from .hcwdl_tri100_spine4_bottleneck_graph import EXECUTION
 from .hcwdl_unified_balanced_runner import _load_common
+from .repair import PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
 from .training import derive_seed
 
 
@@ -106,6 +107,9 @@ def run_execution_acceptance(
         "view_role": "validation", "view_coordinate": "U050",
         "view_rows": len(batch["labels"]),
         "view_pairing_provenance": "pairing_validity",
+        "matched_unclassified_hlt_policy": (
+            PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
+        ),
         "production_model_factory": "build_scouting_particle_transformer",
         "production_model_output_shape": [len(labels), 15],
         "view_forward_loss": observed, "view_backward_gradient_norm": gradient,
@@ -130,6 +134,8 @@ def validate_execution_acceptance(
         or value.get("view_role") != "validation"
         or value.get("view_coordinate") != "U050"
         or value.get("view_pairing_provenance") != "pairing_validity"
+        or value.get("matched_unclassified_hlt_policy")
+        != PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
         or int(value.get("view_rows", 0)) < 1
         or value.get("production_model_factory") != "build_scouting_particle_transformer"
         or value.get("production_model_output_shape") != [int(value["view_rows"]), 15]

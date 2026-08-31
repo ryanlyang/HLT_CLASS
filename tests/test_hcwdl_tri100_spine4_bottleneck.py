@@ -15,6 +15,12 @@ from hlt_classification.scouting.hcwdl_tri100_spine4_bottleneck_graph import (
     NODE_REGISTRY, PROBABILITY_COMPONENTS, REDUCER_ORDER, recipe_payload,
     validate_graph,
 )
+from hlt_classification.scouting.hcwdl_tri100_spine4_bottleneck_contracts import (
+    SCHEMA_VERSION, SPEC_CONTRACT,
+)
+from hlt_classification.scouting.repair import (
+    PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY,
+)
 from hlt_classification.scouting.splits import SourceFileRecord
 
 
@@ -37,6 +43,10 @@ def test_bottleneck_graph_is_exact_controlled_clone():
     assert recipe["training"]["maximum_passes"] == 100
     assert recipe["training"]["minimum_passes"] == 60
     assert recipe["only_changed_variable"] == "particle_pairing_foundation_lineage"
+    assert recipe["schema_version"] == SCHEMA_VERSION == 1
+    assert recipe["matched_unclassified_hlt_policy"] == (
+        PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
+    )
     for branch in BRANCH_ORDER:
         previous = None
         for node_id in BRANCH_NODES[branch]:
@@ -155,6 +165,10 @@ def test_campaign_is_exact_isolated_58_task_dag(tmp_path: Path, monkeypatch: pyt
     assert spec["existing_campaign_outputs_mutated"] is False
     assert spec["ensembles"] is False and spec["weight_continuation"] is False
     assert spec["rolling_resume"] is False and spec["partial_checkpoint_reuse"] is False
+    assert spec["contract"] == SPEC_CONTRACT and spec["schema_version"] == 1
+    assert spec["matched_unclassified_hlt_policy"] == (
+        PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
+    )
     assert spec["ordinary_final_test_capability"] is False
     tasks = {row["task_id"]: row for row in spec["tasks"]}
     for branch in BRANCH_ORDER:

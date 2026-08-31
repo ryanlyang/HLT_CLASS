@@ -35,6 +35,7 @@ from .hcwdl_tri100_spine4_bottleneck_source import (
     build_source_lock,
     validate_source_lock,
 )
+from .repair import PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
 from .hcwdl_mhpe_tri60_ce_control_contracts import (
     TRAINING_REPORT_CONTRACT as CE60_TRAINING_REPORT_CONTRACT,
 )
@@ -213,6 +214,9 @@ def create_campaign(
         "fresh_fit_count": len(FIT_ORDER), "reducer_count": len(REDUCER_ORDER),
         "source_fit_reuse_count": 1,
         "only_changed_variable": "particle_pairing_foundation_lineage",
+        "matched_unclassified_hlt_policy": (
+            PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
+        ),
         "source_completion_required": False,
         "established_campaign_completion_required": False,
         "established_rows_pending_when_absent": True,
@@ -266,6 +270,8 @@ def validate_campaign(value: Mapping[str, Any], *, executable: bool = False) -> 
         or value.get("established_rows_pending_when_absent") is not True
         or value.get("recovery_convention") != "M0CE60_zero_U000_one_v1"
         or value.get("only_changed_variable") != "particle_pairing_foundation_lineage"
+        or value.get("matched_unclassified_hlt_policy")
+        != PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
         or value.get("ordinary_access_roles") != ["train", "validation"]
         or value.get("ordinary_final_test_capability") is not False
         or value.get("existing_campaign_dependencies") != []
