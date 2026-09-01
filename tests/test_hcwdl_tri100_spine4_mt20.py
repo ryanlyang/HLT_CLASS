@@ -53,6 +53,24 @@ def test_mt20_teacher_weights_match_frozen_examples() -> None:
     )
 
 
+def test_mt20_preflight_derives_cache_identities_from_stream_keys() -> None:
+    from hlt_classification.scouting.hcwdl_representation_data import (
+        canonical_identity_digests,
+    )
+    from hlt_classification.scouting.hcwdl_tri100_spine4_mt20_execution import (
+        _batch_identity_digests,
+    )
+
+    keys = np.asarray(["source-a::tree::12", "source-b::tree::7"])
+    observed = _batch_identity_digests({"identity_keys": keys})
+    expected = canonical_identity_digests(tuple(map(str, keys)))
+    assert observed.dtype == np.uint8
+    assert observed.shape == (2, 32)
+    assert np.array_equal(observed, expected)
+    with pytest.raises(ValueError, match="identity keys"):
+        _batch_identity_digests({})
+
+
 def test_ram_mixture_is_exact_ordered_and_not_published(tmp_path: Path) -> None:
     from hlt_classification.scouting.hcwdl_tri100_spine4_mt20_probability import (
         materialize_ram_mixture, validate_mixture_registry,
