@@ -72,6 +72,17 @@ class HCWDLScoutingSurfaces:
 
 
 @dataclass(frozen=True)
+class HCWDLAttentionReoptimizationSurfaces:
+    """Training-only particle-block deltas with authenticated token identity."""
+
+    logits: torch.Tensor
+    block_residual_deltas: tuple[torch.Tensor, ...]
+    particle_mask: torch.Tensor
+    visible_indices: torch.Tensor
+    family_codes: torch.Tensor
+
+
+@dataclass(frozen=True)
 class HCWDLNativeOfflineSurfaces:
     """Single-forward native-offline surfaces with separate latent families."""
 
@@ -96,6 +107,7 @@ class _WeaverHCWDLSurfaces:
     vectors: torch.Tensor
     visible_indices: torch.Tensor
     family_codes: torch.Tensor | None
+    block_residual_deltas: tuple[torch.Tensor, ...]
 
 
 def _validate_surface_inputs(
@@ -163,6 +175,7 @@ def _forward_hcwdl_weaver_surfaces(
     *,
     input_dim: int,
     output_dim: int,
+    capture_block_residual_deltas: bool = False,
 ) -> _WeaverHCWDLSurfaces:
     """Execute one authenticated Weaver path and retain the block-two state.
 
@@ -223,7 +236,9 @@ def _forward_hcwdl_weaver_surfaces(
         raise TypeError("installed Weaver pair-bias layout differs from HCWDL")
     attention_blocks = _attention_mask_blocks(mod)
     block_two = None
+    block_residual_deltas: list[torch.Tensor] = []
     for index, block in enumerate(mod.blocks):
+        before = hidden
         hidden = block(
             hidden,
             x_cls=None,
@@ -232,6 +247,10 @@ def _forward_hcwdl_weaver_surfaces(
         )
         if hidden.shape != expected_hidden:
             raise TypeError("installed Weaver particle-block layout differs")
+        if capture_block_residual_deltas:
+            block_residual_deltas.append(
+                (hidden - before).masked_fill(~particle_mask[..., None], 0)
+            )
         if index == 1:
             block_two = hidden
     if block_two is None:
@@ -250,6 +269,7 @@ def _forward_hcwdl_weaver_surfaces(
         vectors=vectors,
         visible_indices=transported_ids,
         family_codes=transported_family,
+        block_residual_deltas=tuple(block_residual_deltas),
     )
 
 
@@ -301,6 +321,42 @@ class ScoutingParticleTransformer(nn.Module):
             jet_penultimate=output.penultimate,
             particle_mask=output.particle_mask,
             vectors=output.vectors,
+            visible_indices=output.visible_indices,
+            family_codes=output.family_codes,
+        )
+
+    def forward_attention_reoptimization_surfaces(
+        self,
+        features: torch.Tensor,
+        vectors: torch.Tensor,
+        mask: torch.Tensor,
+        visible_indices: torch.Tensor,
+        family_codes: torch.Tensor,
+    ) -> HCWDLAttentionReoptimizationSurfaces:
+        """Expose complete particle-block residual updates for training only.
+
+        The ordinary ``forward`` path is untouched.  These are deliberately
+        named complete-block deltas: Weaver does not expose a stable public
+        hook for a pre-output-projection attention message.
+        """
+
+        output = _forward_hcwdl_weaver_surfaces(
+            self.mod,
+            features,
+            vectors,
+            mask,
+            visible_indices,
+            family_codes,
+            input_dim=21,
+            output_dim=15,
+            capture_block_residual_deltas=True,
+        )
+        if output.family_codes is None or len(output.block_residual_deltas) != 8:
+            raise RuntimeError("HCWDL attention-reoptimization surfaces differ")
+        return HCWDLAttentionReoptimizationSurfaces(
+            logits=output.output,
+            block_residual_deltas=output.block_residual_deltas,
+            particle_mask=output.particle_mask,
             visible_indices=output.visible_indices,
             family_codes=output.family_codes,
         )

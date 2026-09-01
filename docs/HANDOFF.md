@@ -3903,3 +3903,81 @@ the local read-only pytest-cache warning. A measured square 8-by-8 exhaustive
 reference takes about 3.6 seconds locally, so the eight registered reference
 rows have a deliberately bounded worst-case enumeration count. No donor file
 was copied and no remote job or artifact was changed by this repair.
+
+## 2026-09-01: persistent-HLT all-prior MT20 four-spine campaign
+
+The implementation-authoritative plan in
+`docs/plans/HCWDL_TRI100_FOUR_SPINE_PERSISTENT_HLT_MT20_IMPLEMENTATION_PLAN.md`
+is implemented as an isolated `hcwmt20_` campaign. It uses the authenticated
+full-cardinality bottleneck foundation, persistent-HLT support semantics, and
+the same DIRECT, COARSE, DENSE, and ULTRADENSE path geometry as the current
+persistent-HLT four-spine experiment. It retrains its own 60-pass CE-only
+persistent-HLT U000 anchor and registers 29 downstream fresh fits.
+
+Every downstream fit is MT20: 20% CE plus 80% temperature-2 probability KD
+from every earlier node on the same spine. The immediate teacher receives 50
+loss points; the older-teacher pool receives 30 points with an exact
+nearest-first geometric ratio of one half. A one-teacher edge assigns all 80
+KD points to that teacher. Teacher order and rational weights are graph-bound,
+and every required ancestor reducer is an explicit Slurm dependency.
+
+The 26 durable teacher banks contain only identity digests and 15-class
+probabilities. Each fit constructs its weighted target once in float64 RAM,
+converts it to float32, and persists only a small lineage registry—not the
+mixture array, particle views, hidden states, optimizer state, or rolling
+resume. The campaign has 61 tasks, its own roots/contracts/job namespace,
+single-GH200 execution, exact-ledger monitoring, and restart-from-zero
+recovery. It has no scheduler dependency on, cancellation/reprioritization
+authority over, or write path into any existing campaign. Existing
+immediate-parent reports are validation-only controls and may remain pending.
+
+Local evidence is 47/47 focused-plus-neighbor tests, covering exact weight
+examples, all-prior same-spine closure, RAM mixture order and normalization,
+non-publication, the isolated 61-task DAG, restart-zero recovery, unchanged
+full-cardinality persistent-HLT behavior, and matching repair. Python syntax
+compilation passes for the new production surfaces. No donor file was copied,
+so `docs/LEGACY_SOURCE_MAP.md` is unchanged. No SSH, Slurm submission, remote
+artifact mutation, job cancellation, hold, or reprioritization occurred.
+Authoritative installed-Weaver/Tigris preflight and measured production
+resource evidence remain required in the campaign DAG before scientific fits.
+
+## 2026-09-01: Phase-I persistent-HLT attention-reoptimized four spines
+
+The Phase-I design in
+`docs/plans/HCWDL_DISTILLATION_GUIDED_ATTENTION_REOPTIMIZATION_PLAN.md` is now
+implemented as a separate `hcwsp4a_` full-four-spine campaign. It retrains the
+corrected full-cardinality persistent-HLT `SP4P_U000` anchor, then executes all
+29 downstream DIRECT, COARSE, DENSE, and ULTRADENSE fits. The existing
+persistent-HLT campaign is read-only matched comparison lineage and does not
+need to finish before this campaign is created.
+
+Each downstream fit runs 60 ordinary fresh C25/P75 temperature-2 passes,
+restores its Stage-0 selected checkpoint, runs 15 passes with only the
+installed Weaver pair embedding and eight particle-attention modules
+trainable, then runs 25 all-parameter joint-refinement passes. Stage A and B
+add an all-eight-block, transported-token-aligned residual-delta Gram loss
+from the immediate-parent selected model plus a trust region. The teacher is
+live, frozen, evaluation-only, and batch-local. No dense attention target,
+hidden-state bank, optimizer state, or rolling resume is durable; only compact
+15-class probability banks are persisted.
+
+The implementation adds versioned graph/recipe/specification, parameter-lock,
+execution-acceptance, training/checkpoint, stage, aggregate/completion,
+monitor, and recovery artifacts; a structural installed-Weaver parameter
+compiler; training-only complete-block delta surfaces that leave ordinary
+forward unchanged; exact freeze/unfreeze optimizer rebuilding; full reporting;
+and restart-from-zero recovery. Fit jobs request one GH200, 72 CPUs, 500 GiB
+RAM, and five days because the child train/validation caches and immediate-
+parent train cache coexist in memory.
+
+Submission is deliberately split. A three-task authenticate/support/preflight
+gate must publish valid genuine-GH200 and exact-gradient acceptance locks
+before the 58-task science plan can be released. Gate and science ledgers are
+then merged into the exact 61-task monitoring/recovery ledger. Python syntax
+compilation passes across the production surface. Local evidence is 12/12
+new attention tests, 29/29 attention-plus-four-spine tests, and 122/122
+TRI60/homotopy/full-cardinality neighbor tests. The full local suite is
+817/817 passing (one unrelated existing PyTorch scalar-conversion warning).
+Installed-Weaver parity and the genuine Tigris gate remain required before
+science submission. No donor file was copied, so `docs/LEGACY_SOURCE_MAP.md`
+is unchanged. No remote job or artifact was changed.

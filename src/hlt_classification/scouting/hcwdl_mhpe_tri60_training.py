@@ -21,6 +21,7 @@ import signal
 import threading
 import time
 from typing import Any, Callable, Iterable, Mapping, Sequence
+from itertools import zip_longest
 
 import numpy as np
 
@@ -74,6 +75,18 @@ from .hcwdl_representation_training import (
     normalize_hlt_batch,
 )
 from .training import LossConfiguration, derive_seed
+from .hcwdl_attention_reoptimization import (
+    assert_frozen_attention_teacher,
+    attention_kernel_context,
+    attention_parameter_snapshot,
+    attention_stage,
+    attention_trust_region,
+    configure_attention_stage,
+    freeze_attention_teacher,
+    normalize_attention_recipe,
+    support_aligned_block_delta_gram_loss,
+    validate_attention_parameter_registry,
+)
 
 
 TRI60_PREFETCH_DEPTH = 1
@@ -1235,6 +1248,11 @@ def train_tri60_node(
     early_stopping: Mapping[str, Any] | None = None,
     initialization_lineage: Mapping[str, str] | None = None,
     distributed_context: Tri60DistributedContext | None = None,
+    attention_reoptimization: Mapping[str, Any] | None = None,
+    attention_parameter_registry: Mapping[str, Any] | None = None,
+    relational_teacher_model=None,
+    relational_train_cache=None,
+    relational_input_key: str | None = None,
 ) -> dict[str, Any]:
     """Execute one registered fit without any reusable optimizer state."""
 
@@ -1270,6 +1288,35 @@ def train_tri60_node(
         runtime, learning_rate_schedule,
     )
     normalized_early_stopping = tri60_early_stopping(runtime, early_stopping)
+    attention_recipe = (
+        None
+        if attention_reoptimization is None
+        else normalize_attention_recipe(attention_reoptimization)
+    )
+    attention_inputs = (
+        attention_parameter_registry,
+        relational_teacher_model,
+        relational_train_cache,
+        relational_input_key,
+    )
+    if attention_recipe is None:
+        if any(value is not None for value in attention_inputs):
+            raise ValueError("TRI60 attention inputs lack an attention recipe")
+    else:
+        if (
+            node.auxiliary != "none"
+            or node.kd_weight <= 0
+            or runtime.passes != attention_recipe.total_passes
+            or normalized_early_stopping is not None
+            or distributed_context is not None
+            or any(value is None for value in attention_inputs)
+            or int(relational_train_cache.header["rows"])
+            != int(train_cache.header["rows"])
+        ):
+            raise ValueError("TRI60 attention execution authority differs")
+        validate_attention_parameter_registry(attention_parameter_registry)
+        if relational_input_key not in {"hlt", "privileged"}:
+            raise ValueError("TRI60 relational input key differs")
     normalized_initialization_lineage = {
         str(name): require_sha256(value, name=f"TRI60 initialization {name}")
         for name, value in sorted((initialization_lineage or {}).items())
@@ -1342,6 +1389,11 @@ def train_tri60_node(
         torch.cuda.manual_seed_all(training_seed)
     model = _node_model(node, replicate_seed=replicate_seed, model_factory=model_factory)
     model.to(target_device)
+    if attention_recipe is not None:
+        configure_attention_stage(model, attention_parameter_registry, "stage0")
+        relational_teacher_model.to(target_device)
+        freeze_attention_teacher(relational_teacher_model)
+        assert_frozen_attention_teacher(relational_teacher_model)
     optimizer = _optimizer(model, runtime)
     forward_model = model
     rank_training_seed = training_seed
@@ -1405,6 +1457,17 @@ def train_tri60_node(
     calibration_artifacts: dict[str, dict[str, Any]] = {}
     selection_artifact = None
     calibration_batches: list[Mapping[str, Any]] = []
+    attention_snapshot = None
+    stage0_best_state = None
+    stage0_best_runtime = None
+    stage0_best_metrics = None
+    stage0_best_pass = None
+    stage0_best_update = None
+    stage_history: list[dict[str, Any]] = [{
+        "stage": "stage0", "starts_at_pass": 1,
+        "starts_at_update": 1, "optimizer_rebuilt": False,
+    }] if attention_recipe is not None else []
+    active_attention_stage = "stage0"
     if node.auxiliary != "none":
         if train_cache.identity_digests is None:
             raise ValueError("TRI60 representation cache lacks identity digests")
@@ -1428,20 +1491,84 @@ def train_tri60_node(
     started = time.monotonic()
     try:
         for pass_index in range(runtime.passes):
+            if attention_recipe is not None:
+                requested_stage = attention_stage(attention_recipe, pass_index)
+                if requested_stage != active_attention_stage:
+                    if requested_stage == "stage_a":
+                        if best_state is None or best_runtime is None:
+                            raise RuntimeError("attention Stage 0 has no selected checkpoint")
+                        model.load_state_dict(best_state, strict=True)
+                        restore_model_runtime_state(model, best_runtime)
+                        stage0_best_state = best_state
+                        stage0_best_runtime = best_runtime
+                        stage0_best_metrics = dict(best_metrics)
+                        stage0_best_pass = int(best_pass)
+                        stage0_best_update = int(best_update)
+                        configure_attention_stage(
+                            model, attention_parameter_registry, "stage_a",
+                        )
+                        attention_snapshot = attention_parameter_snapshot(
+                            model, attention_parameter_registry,
+                        )
+                    elif requested_stage == "stage_b":
+                        configure_attention_stage(
+                            model, attention_parameter_registry, "stage_b",
+                        )
+                    else:
+                        raise RuntimeError("attention stage transition differs")
+                    optimizer = _optimizer(model, runtime)
+                    active_attention_stage = requested_stage
+                    stage_history.append({
+                        "stage": requested_stage,
+                        "starts_at_pass": pass_index + 1,
+                        "starts_at_update": update + 1,
+                        "optimizer_rebuilt": True,
+                    })
             pass_started = time.monotonic()
             model.train()
             forward_model.train()
+            if attention_recipe is not None:
+                relational_teacher_model.eval()
+                assert_frozen_attention_teacher(relational_teacher_model)
             pass_batches = 0
             pass_metrics = _DeferredMetricAccumulator()
             global_train_batches = train_cache.iterate_batches(
                 epoch=pass_index, sampler_seed=sampler_seed,
                 batch_size=runtime.batch_size,
             )
-            train_batches: Iterable[tuple[Mapping[str, Any], int]]
+            train_batches: Iterable[tuple[Mapping[str, Any], int, Mapping[str, Any] | None]]
             if distributed_context is None:
-                train_batches = (
-                    (raw, len(raw["labels"])) for raw in global_train_batches
-                )
+                if attention_recipe is None or active_attention_stage == "stage0":
+                    train_batches = (
+                        (raw, len(raw["labels"]), None)
+                        for raw in global_train_batches
+                    )
+                else:
+                    teacher_batches = relational_train_cache.iterate_batches(
+                        epoch=pass_index, sampler_seed=sampler_seed,
+                        batch_size=runtime.batch_size,
+                    )
+
+                    def paired_attention_batches():
+                        sentinel = object()
+                        for raw, teacher_raw in zip_longest(
+                            global_train_batches, teacher_batches,
+                            fillvalue=sentinel,
+                        ):
+                            if raw is sentinel or teacher_raw is sentinel:
+                                raise RuntimeError("attention parent/student batch counts differ")
+                            if (
+                                len(raw["labels"]) != len(teacher_raw["labels"])
+                                or not np.array_equal(
+                                    raw["identity_digests"],
+                                    teacher_raw["identity_digests"],
+                                )
+                                or not np.array_equal(raw["labels"], teacher_raw["labels"])
+                            ):
+                                raise ValueError("attention parent/student batch identity differs")
+                            yield raw, len(raw["labels"]), teacher_raw
+
+                    train_batches = paired_attention_batches()
             else:
                 train_batches = _distributed_local_batches(
                     global_train_batches, context=distributed_context,
@@ -1449,31 +1576,65 @@ def train_tri60_node(
             with _BatchPrefetcher(
                 train_batches, depth=TRI60_PREFETCH_DEPTH,
             ) as prefetched:
-                for raw, global_batch_rows in prefetched:
+                for batch_item in prefetched:
+                    if distributed_context is None:
+                        raw, global_batch_rows, teacher_raw = batch_item
+                    else:
+                        raw, global_batch_rows = batch_item
+                        teacher_raw = None
                     pass_batches += 1
                     for group in optimizer.param_groups:
-                        group["lr"] = tri60_learning_rate(
-                            runtime, update=update, total_updates=total_updates,
-                            updates_per_pass=updates_per_pass,
-                            schedule=normalized_learning_rate_schedule,
-                        )
+                        if attention_recipe is None or active_attention_stage == "stage0":
+                            group["lr"] = tri60_learning_rate(
+                                runtime, update=update, total_updates=total_updates,
+                                updates_per_pass=updates_per_pass,
+                                schedule=normalized_learning_rate_schedule,
+                            )
+                        elif active_attention_stage == "stage_a":
+                            group["lr"] = attention_recipe.attention_learning_rate
+                        else:
+                            group["lr"] = attention_recipe.joint_learning_rate
                     optimizer.zero_grad(set_to_none=True)
                     normalized, features, vectors, mask, visible, family, labels = _batch_tensors(
                         _cache_batch(raw, input_key=input_key), target_device,
                     )
-                    with torch.autocast(
-                        device_type=target_device.type,
-                        dtype=torch.bfloat16,
-                        enabled=runtime.amp_dtype == "bfloat16" and target_device.type == "cuda",
-                    ):
-                        if node.auxiliary == "none":
-                            surfaces = None
-                            logits = forward_model(features, vectors, mask)
-                        else:
-                            surfaces = model.forward_hcwdl_surfaces(
-                                features, vectors, mask, visible, family,
-                            )
-                            logits = surfaces.logits
+                    with attention_kernel_context(active_attention_stage, target_device):
+                        with torch.autocast(
+                            device_type=target_device.type,
+                            dtype=torch.bfloat16,
+                            enabled=runtime.amp_dtype == "bfloat16" and target_device.type == "cuda",
+                        ):
+                            if attention_recipe is not None and active_attention_stage != "stage0":
+                                surfaces = model.forward_attention_reoptimization_surfaces(
+                                    features, vectors, mask, visible, family,
+                                )
+                                logits = surfaces.logits
+                                teacher_batch = _cache_batch(
+                                    teacher_raw, input_key=relational_input_key,
+                                )
+                                (
+                                    _, teacher_features, teacher_vectors, teacher_mask,
+                                    teacher_visible, teacher_family, _,
+                                ) = _batch_tensors(teacher_batch, target_device)
+                                with torch.no_grad():
+                                    teacher_surfaces = (
+                                        relational_teacher_model
+                                        .forward_attention_reoptimization_surfaces(
+                                            teacher_features, teacher_vectors,
+                                            teacher_mask, teacher_visible,
+                                            teacher_family,
+                                        )
+                                    )
+                            elif node.auxiliary == "none":
+                                surfaces = None
+                                teacher_surfaces = None
+                                logits = forward_model(features, vectors, mask)
+                            else:
+                                teacher_surfaces = None
+                                surfaces = model.forward_hcwdl_surfaces(
+                                    features, vectors, mask, visible, family,
+                                )
+                                logits = surfaces.logits
                     teacher = (
                         None if probability_targets is None else torch.as_tensor(
                             probability_targets.join(normalized.identity_digests),
@@ -1497,6 +1658,29 @@ def train_tri60_node(
                         )
                         total = base["total"]
                         reported = {"ce": base["ce"], "kd": base["kd"]}
+                        if attention_recipe is not None and active_attention_stage != "stage0":
+                            relational, relational_diagnostics = (
+                                support_aligned_block_delta_gram_loss(
+                                    surfaces, teacher_surfaces,
+                                    block_indices=attention_recipe.block_indices,
+                                )
+                            )
+                            trust = attention_trust_region(model, attention_snapshot)
+                            total = (
+                                total
+                                + attention_recipe.relational_weight * relational
+                                + attention_recipe.trust_weight * trust
+                            )
+                            reported.update({
+                                "attention_relational": relational,
+                                "attention_trust": trust,
+                                "attention_common_tokens": relational_diagnostics[
+                                    "common_tokens"
+                                ].to(torch.float32),
+                                "attention_common_ordered_pairs": relational_diagnostics[
+                                    "common_ordered_pairs"
+                                ].to(torch.float32),
+                            })
                         if node.auxiliary != "none":
                             execution = Tri60RepresentationExecution(node.track)
                             required = []
@@ -1558,7 +1742,9 @@ def train_tri60_node(
                     # finite check.  Representation arithmetic adds one more
                     # value and therefore retains one explicit fail-closed
                     # boundary without duplicating it for LOGIT/U000 nodes.
-                    if node.auxiliary != "none" and not _device_conditions_hold(
+                    if (
+                        node.auxiliary != "none" or attention_recipe is not None
+                    ) and not _device_conditions_hold(
                         torch.isfinite(total)
                     ):
                         raise FloatingPointError("TRI60 total loss is nonfinite")
@@ -1569,8 +1755,11 @@ def train_tri60_node(
                             distributed_context.world_size
                             * batch_rows / global_batch_rows
                         )
-                    backward_total.backward()
+                    with attention_kernel_context(active_attention_stage, target_device):
+                        backward_total.backward()
                     optimizer.step()
+                    if attention_recipe is not None:
+                        assert_frozen_attention_teacher(relational_teacher_model)
                     update += 1
                     pass_metrics.add({**reported, "total": total}, rows=batch_rows)
                     if monitor.requested and (
@@ -1630,7 +1819,11 @@ def train_tri60_node(
                     device=target_device, amp_dtype=runtime.amp_dtype,
                     context=distributed_context,
                 )
-            validation_row = {"pass": pass_index + 1, "update": update, **metrics}
+            validation_row = {
+                "pass": pass_index + 1, "update": update,
+                **({} if attention_recipe is None else {"attention_stage": active_attention_stage}),
+                **metrics,
+            }
             validation_history.append(validation_row)
             if (
                 (distributed_context is None or distributed_context.is_primary)
@@ -1657,6 +1850,7 @@ def train_tri60_node(
             training_history.append({
                 "through_pass": pass_index + 1,
                 "through_update": update,
+                **({} if attention_recipe is None else {"attention_stage": active_attention_stage}),
                 "rows": pass_rows,
                 "mean_losses": pass_mean_losses,
                 "training_seconds": train_finished - pass_started,
@@ -1759,6 +1953,24 @@ def train_tri60_node(
         or (not stopped_early and stop_reason != "maximum_passes_reached")
     ):
         raise RuntimeError("TRI60 early-stopped fit completion differs")
+    if attention_recipe is not None and (
+        completed_passes != attention_recipe.total_passes
+        or stage0_best_state is None
+        or stage0_best_runtime is None
+        or stage0_best_metrics is None
+        or stage0_best_pass is None
+        or stage0_best_update is None
+        or attention_snapshot is None
+        or [row["stage"] for row in stage_history]
+        != ["stage0", "stage_a", "stage_b"]
+    ):
+        raise RuntimeError("TRI60 attention stage completion differs")
+    selected_attention_stage = None
+    if attention_recipe is not None:
+        selected_attention_stage = next(
+            row["attention_stage"] for row in validation_history
+            if int(row["update"]) == int(best_update)
+        )
     distributed_execution = (
         None
         if distributed_context is None
@@ -1795,6 +2007,14 @@ def train_tri60_node(
             else {"early_stopping": normalized_early_stopping}
         ),
         "initialization_lineage": normalized_initialization_lineage,
+        **(
+            {} if attention_recipe is None else {
+                "attention_reoptimization": attention_recipe.payload(),
+                "attention_parameter_registry_sha256": (
+                    attention_parameter_registry["content_hash"]
+                ),
+            }
+        ),
         "resume_policy": "disabled_restart_from_zero_v1",
         "execution_source_commit": source_commit,
         **(
@@ -1856,6 +2076,26 @@ def train_tri60_node(
         "validation": best_metrics,
         "validation_history": validation_history,
         "training_history": training_history,
+        **(
+            {} if attention_recipe is None else {
+                "attention_reoptimization": attention_recipe.payload(),
+                "attention_parameter_registry_sha256": (
+                    attention_parameter_registry["content_hash"]
+                ),
+                "attention_stage_history": stage_history,
+                "attention_stage0_selected_pass": stage0_best_pass,
+                "attention_stage0_selected_update": stage0_best_update,
+                "attention_stage0_validation": stage0_best_metrics,
+                "selected_attention_stage": selected_attention_stage,
+                "dense_attention_target_durable_bytes": 0,
+                "relational_parent_view_cache_bytes": int(
+                    relational_train_cache.header["array_bytes"]
+                ),
+                "relational_target_generation": (
+                    "same_job_per_batch_eval_no_grad_v1"
+                ),
+            }
+        ),
         "selected_pass": best_pass,
         "selected_update": best_update,
         "checkpoint_selector": (

@@ -429,10 +429,15 @@ def _cache_student_views(
     repair_seed: int, memory_gib: float,
     include_hcwdl_metadata: bool = False,
     support_policy: str = DEFAULT_SUPPORT_POLICY,
+    roles: tuple[str, ...] = ("train", "validation"),
 ):
+    if not roles or len(set(roles)) != len(roles) or any(
+        role not in {"train", "validation"} for role in roles
+    ):
+        raise ValueError("HCWDL-UB cache role registry differs")
     caches = {}; remaining = _memory_limit_bytes(memory_gib)
     input_key = "hlt" if behavior == "hlt" else "privileged"
-    for role in ("train", "validation"):
+    for role in roles:
         started = time.monotonic()
         records = role_records(split, role)
         source_rows = expected_cache_source_rows(
