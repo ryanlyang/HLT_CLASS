@@ -30,11 +30,24 @@ from .hcwdl_tri100_spine4_mt20_graph import (
 from .hcwdl_tri100_spine4_mt20_probability import materialize_ram_mixture
 from .hcwdl_tri100_spine4_mt20_support import validate_support_audit
 from .hcwdl_unified_balanced_runner import _load_common
+from .hcwdl_representation_data import canonical_identity_digests
 from .repair import (
     PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY,
     PAIRING_VALIDITY_UNCLASSIFIED_OFFLINE_POLICY,
 )
 from .training import derive_seed
+
+
+def _batch_identity_digests(batch: Mapping[str, Any]) -> np.ndarray:
+    """Derive cache-compatible identities from ordinary stream row keys."""
+
+    keys = batch.get("identity_keys")
+    if keys is None:
+        raise ValueError("MT20 preflight batch lacks authenticated identity keys")
+    result = canonical_identity_digests(tuple(map(str, keys)))
+    if result.shape != (len(keys), 32) or result.dtype != np.uint8:
+        raise ValueError("MT20 preflight identity digest shape differs")
+    return np.ascontiguousarray(result)
 
 
 def _mixture_acceptance(
@@ -136,9 +149,7 @@ def run_execution_acceptance(
     if not math.isfinite(observed) or not math.isfinite(gradient) or gradient <= 0:
         raise RuntimeError("MT20 view-source backward pass is nonfinite")
 
-    identities = np.ascontiguousarray(
-        np.asarray(batch["identity_digests"], dtype=np.uint8)
-    )
+    identities = _batch_identity_digests(batch)
     teacher_probabilities = torch.softmax(logits.detach().float() / 2.0, dim=1)
     teacher_probabilities = np.ascontiguousarray(
         teacher_probabilities.cpu().numpy().astype("<f4")
