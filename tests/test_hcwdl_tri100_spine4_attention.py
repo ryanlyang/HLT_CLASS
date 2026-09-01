@@ -13,6 +13,41 @@ from hlt_classification.data.cache_contracts import (
 from hlt_classification.scouting.hcwdl_recovery import build_submission_ledger
 
 
+def test_attention_preflight_derives_and_authenticates_identity_digests():
+    from hlt_classification.scouting.hcwdl_representation_data import (
+        canonical_identity_digests,
+    )
+    from hlt_classification.scouting.hcwdl_tri100_spine4_attention_execution import (
+        _batch_identity_digests,
+    )
+
+    keys = np.asarray([
+        "source.root::tree::11",
+        "source.root::tree::19",
+    ])
+    expected = canonical_identity_digests(tuple(map(str, keys)))
+    assert np.array_equal(
+        _batch_identity_digests({"identity_keys": keys}), expected,
+    )
+    assert np.array_equal(
+        _batch_identity_digests({
+            "identity_keys": keys,
+            "identity_digests": expected.copy(),
+        }),
+        expected,
+    )
+
+    corrupt = expected.copy()
+    corrupt[0, 0] ^= np.uint8(1)
+    with pytest.raises(ValueError, match="identity digests differ"):
+        _batch_identity_digests({
+            "identity_keys": keys,
+            "identity_digests": corrupt,
+        })
+    with pytest.raises(ValueError, match="lacks authenticated identity keys"):
+        _batch_identity_digests({})
+
+
 def test_attention_recipe_and_full_four_spine_graph_are_frozen():
     from hlt_classification.scouting.hcwdl_attention_reoptimization import (
         DEFAULT_ATTENTION_RECIPE, attention_stage, normalize_attention_recipe,

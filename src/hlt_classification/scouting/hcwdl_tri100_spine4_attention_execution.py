@@ -32,7 +32,32 @@ from .hcwdl_tri100_spine4_bottleneck_execution import (
 )
 from .hcwdl_tri100_spine4_persistent_support import validate_support_audit
 from .hcwdl_unified_balanced_runner import _load_common
+from .hcwdl_representation_data import canonical_identity_digests
 from .training import derive_seed
+
+
+def _batch_identity_digests(batch: Mapping[str, Any]) -> np.ndarray:
+    """Project ordinary stream keys into the canonical cache identity domain."""
+
+    keys = batch.get("identity_keys")
+    if keys is None:
+        raise ValueError("attention preflight batch lacks authenticated identity keys")
+    key_rows = np.asarray(keys)
+    if key_rows.ndim != 1 or not len(key_rows):
+        raise ValueError("attention preflight identity-key rows differ")
+    expected = canonical_identity_digests(tuple(map(str, key_rows.tolist())))
+    provided = batch.get("identity_digests")
+    if provided is not None:
+        observed = np.asarray(provided)
+        if (
+            observed.dtype != np.uint8
+            or observed.shape != expected.shape
+            or not np.array_equal(observed, expected)
+        ):
+            raise ValueError("attention preflight identity digests differ")
+    if expected.shape != (len(key_rows), 32) or expected.dtype != np.uint8:
+        raise ValueError("attention preflight canonical identity shape differs")
+    return np.ascontiguousarray(expected)
 
 
 def _batch(spec: Mapping[str, Any], coordinate: HomotopyCoordinate):
@@ -102,7 +127,9 @@ def run_attention_execution_acceptance(
     configure_attention_stage(student, registry, "stage_a")
     parent = _batch(spec, HomotopyCoordinate(0, 1, 0, 1))
     child = _batch(spec, HomotopyCoordinate(1, 2, 0, 1))
-    if not np.array_equal(parent["identity_digests"], child["identity_digests"]):
+    parent_identities = _batch_identity_digests(parent)
+    child_identities = _batch_identity_digests(child)
+    if not np.array_equal(parent_identities, child_identities):
         raise ValueError("attention acceptance parent/student identities differ")
     sf, sv, sm, si, sc, labels = _tensors(child, target)
     tf, tv, tm, ti, tc, teacher_labels = _tensors(parent, target)
