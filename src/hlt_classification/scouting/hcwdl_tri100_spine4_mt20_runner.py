@@ -98,6 +98,17 @@ def _behavior(coordinate_name: str) -> str:
     return "hlt" if coordinate_name == "D000" else "balanced_uniform"
 
 
+def _preparation_metrics(
+    *, student_view_cache_seconds: float, pre_training_total_seconds: float,
+) -> dict[str, float]:
+    """Return the timing-only registry accepted by the shared TRI60 trainer."""
+
+    return {
+        "student_view_cache_seconds": float(student_view_cache_seconds),
+        "pre_training_total_seconds": float(pre_training_total_seconds),
+    }
+
+
 def _student_caches(spec: Mapping[str, Any], *, node) -> tuple[Any, ...]:
     foundation = _foundation(spec)
     split, split_hash, selection_hash, selections, assignments, balanced = _load_common(
@@ -237,11 +248,10 @@ def run_fit(
             execution_source_commit=execution_source_commit or spec["source_commit"],
             replicate_seed=int(spec["replicate_seed"]), device=device,
             runtime=_runtime(spec, node_id=node_id), execution_mode="scientific",
-            preparation_metrics={
-                "student_view_cache_seconds": cache_seconds,
-                "pre_training_total_seconds": time.monotonic() - started,
-                "ram_teacher_count": len(TEACHER_NODES.get(node_id, ())),
-            },
+            preparation_metrics=_preparation_metrics(
+                student_view_cache_seconds=cache_seconds,
+                pre_training_total_seconds=time.monotonic() - started,
+            ),
             authority=training_authority(node_id),
             learning_rate_schedule=None if node_id == ANCHOR_NODE_ID else dict(LR_SCHEDULE),
             early_stopping=None if node_id == ANCHOR_NODE_ID else dict(EARLY_STOPPING),

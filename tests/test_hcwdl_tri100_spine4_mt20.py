@@ -71,6 +71,22 @@ def test_mt20_preflight_derives_cache_identities_from_stream_keys() -> None:
         _batch_identity_digests({})
 
 
+def test_mt20_preparation_registry_contains_only_timings() -> None:
+    from hlt_classification.scouting.hcwdl_tri100_spine4_mt20_runner import (
+        _preparation_metrics,
+    )
+
+    observed = _preparation_metrics(
+        student_view_cache_seconds=12.5,
+        pre_training_total_seconds=14.0,
+    )
+    assert observed == {
+        "student_view_cache_seconds": 12.5,
+        "pre_training_total_seconds": 14.0,
+    }
+    assert all(name.endswith("_seconds") for name in observed)
+
+
 def test_ram_mixture_is_exact_ordered_and_not_published(tmp_path: Path) -> None:
     from hlt_classification.scouting.hcwdl_tri100_spine4_mt20_probability import (
         materialize_ram_mixture, validate_mixture_registry,
