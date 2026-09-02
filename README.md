@@ -118,6 +118,8 @@ JetClass data on Tigris:
 - [HCWDL TRI100 four-spine LOGIT contract](docs/contracts/HCWDL_TRI100_FOUR_SPINE_LOGIT.md)
 - [HCWDL TRI100 four-spine LOGIT runbook](docs/HCWDL_TRI100_FOUR_SPINE_RUNBOOK.md)
 - [HCWDL TRI100 full-cardinality bottleneck-matching plan](docs/plans/HCWDL_TRI100_FOUR_SPINE_FULL_CARDINALITY_BOTTLENECK_MATCHING_IMPLEMENTATION_PLAN.md)
+- [HCWDL adjacent-view fusion-handoff ladder plan](docs/plans/HCWDL_ADJACENT_VIEW_FUSION_HANDOFF_LADDERS_PLAN.md)
+- [HCWDL adjacent output-fusion handoff contract](docs/contracts/HCWDL_ADJACENT_OUTPUT_FUSION_HANDOFF.md)
 - [HCWDL TRI100 full-cardinality bottleneck-matching runbook](docs/HCWDL_TRI100_FOUR_SPINE_FULLCARD_BOTTLENECK_RUNBOOK.md)
 - [HCWDL TRI60 M1 greedy-ensemble diagnostic plan](docs/plans/HCWDL_TRI60_M1_GREEDY_ENSEMBLE_PLAN.md)
 - [HCWDL TRI60 M1 greedy-ensemble contracts](docs/contracts/HCWDL_TRI60_M1_GREEDY_ENSEMBLE.md)

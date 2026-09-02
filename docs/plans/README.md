@@ -239,3 +239,7 @@ acceptance:
 - [Implementation-authoritative persistent-HLT all-prior MT20 four-spine campaign](HCWDL_TRI100_FOUR_SPINE_PERSISTENT_HLT_MT20_IMPLEMENTATION_PLAN.md)
 - [Implementation-authoritative full-four-spine Phase-I attention re-optimization and deferred privileged-attention-oracle design](HCWDL_DISTILLATION_GUIDED_ATTENTION_REOPTIMIZATION_PLAN.md)
 - [Implementation-authoritative offline+HLT concatenation, unrestricted fusion, and HLT-only withdrawal plan](HCWDL_OFFLINE_HLT_CONCATENATION_FUSION_WITHDRAWAL_IMPLEMENTATION_PLAN.md)
+- [Implementation-authoritative adjacent-view output-fusion and learned-fusion handoff ladders](HCWDL_ADJACENT_VIEW_FUSION_HANDOFF_LADDERS_PLAN.md)
+  Strategy A is implemented under the separate
+  [adjacent output-fusion handoff contract](../contracts/HCWDL_ADJACENT_OUTPUT_FUSION_HANDOFF.md);
+  Strategy B remains planning only.

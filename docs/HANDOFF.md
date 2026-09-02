@@ -1,5 +1,76 @@
 # Current Handoff
 
+## 2026-09-02: adjacent output-fusion handoff implementation
+
+Strategy A of
+`docs/plans/HCWDL_ADJACENT_VIEW_FUSION_HANDOFF_LADDERS_PLAN.md` is now
+implemented as the isolated
+`HCWDL_ADJACENT_OUTPUT_FUSION_HANDOFF_*/v1` family. The immutable 85-task DAG
+owns 26 fresh fits, 9 performance-constrained mixture selections, 15 fixed
+lexical prefix ensembles, compact source/model reducers, an untouched-report
+aggregate, exact-ID submission/monitoring, and restart-zero failed-closure
+recovery. It imports one explicit completed full-cardinality U100 report and
+checkpoint without depending on or mutating its source campaign.
+
+Validation is deterministically class-stratified into disjoint checkpoint,
+blend, and report roles. The selector evaluates all 82 combinations of two
+registered fusion families and 41 alpha values, uses 2,000 paired
+class-stratified Gaussian-multiplier AUC-influence bootstrap replicates,
+enforces macro-AUC and Xbb/Xcc/Xqq R50
+noninferiority, and retains alpha zero as a graph-preserving fallback. Train
+banks persist one canonical T=1 model-probability table per role and derive
+the registered T=2 or T=1 teacher probabilities only in RAM at identity join,
+preventing accidental double softening while nearly halving storage. All particle
+views remain RAM-only; no hidden states, optimizer states, rolling resumes, or
+final-test artifacts are written.
+
+The focused implementation suite passes 8/8 locally; the campaign plus
+established TRI100, endpoint-mix, and TRI60 blend regressions pass 35/35. The
+complete repository suite passes 833/833 with only the pre-existing PRAD
+tensor-conversion warning and the local pytest-cache permission warning. A
+genuine Tigris execution acceptance remains required before live science
+submission; the preflight executes the exact authenticated U100 stream,
+installed production ParT, and C25/P75 T=2 backward path. No Tigris job was
+submitted and final test was
+not accessed in this implementation turn. No donor file was copied.
+
+Two read-only control reducers reevaluate the imported `M0CE60` and
+pure-offline `U000` selected checkpoints on the same untouched `V_report`
+identities as every new model. Recovery percentages therefore never mix the
+source reports' full-validation population with the campaign's report split.
+
+## 2026-09-02: adjacent-view fusion-handoff ladder design
+
+The implementation-authoritative planning document
+`docs/plans/HCWDL_ADJACENT_VIEW_FUSION_HANDOFF_LADDERS_PLAN.md` now freezes two
+separate ways to bridge the canonical `U100 -> D080 -> D060 -> D040 -> D020
+-> D000` path. The output-fusion strategy trains an adjacent poorer-view
+bridge, selects the greatest validation-supported poorer-view weight from
+arithmetic-probability and calibrated-centered-logit mixtures, and compresses
+that temporary teacher into a fresh single-view carrier. The learned-fusion
+strategy makes the poorer view the primary ParT branch, injects one-way
+removable richer-view context, withdraws it to exact zero, and extracts a
+single-view carrier before the next rung.
+
+The plan freezes a disjoint checkpoint/blend/report validation partition,
+paired non-inferiority selection, cold inter-rung initialization, unique seeds
+between rungs, paired direct/compression seeds within a rung, RAM-only
+particle/hidden state, compact probability persistence, and a final ordinary
+D000 endpoint. Strategy A is now the first implementation target: its 26 fits
+include the ten-fit main output-handoff chain, four additional terminal
+direct/compression pairs, five seed-matched CE D000 controls, and three
+identically initialized final students distilled from five-member CE, direct-
+KD, and handoff ensembles. Prefix ensembles `E1..E5` use a fixed seed order,
+not favorable subset selection. Full multi-seed ladder replication remains a
+later confirmation. `D100` is explicitly corrected to the established
+coordinate name `U100`.
+
+This entry records the design freeze. The newer implementation entry above
+supersedes its former implementation-status sentence; Strategy B remains
+planning only. The existing tagged concatenation pilot focused suite still
+passes 6/6 locally (one pytest cache-permission warning); final test was not
+accessed and no donor file was copied.
+
 ## 2026-09-02: tagged offline+HLT concatenation feasibility pilot
 
 Study A now has an isolated one-fit implementation for the requested first
@@ -11,10 +82,16 @@ no source identity. This is a privileged oracle and cannot be deployed.
 
 The campaign is CE-only, matched to the established `U000` initialization,
 60 passes, global batch 256, one GH200, and reports against `M0CE60`, pure-
-offline `U000`, and `SP4P_U000` with the established recovery convention. Its
-all-row audit fails on any combined length above 400; train and validation
-views are RAM-only, and durable output is bounded to compact evidence and
-model artifacts. The six-task `hcwcat1_` DAG has capacity and genuine-Weaver
+offline `U000`, and `SP4P_U000` with the established recovery convention.
+Genuine Tigris gate job `99565` correctly rejected the original `/v1`
+400-slot assumption. The exhaustive follow-up measured train/validation
+combined maxima of 493/459, 23/14 rows above 400, and a train HLT maximum of
+214. The corrected `/v2` identity uses the smallest aligned safe capacity,
+496, and explicitly retains raw HLT tokens beyond the ordinary deployable
+200-token cap. The failed `/v1` campaign remains immutable historical
+evidence. Train and validation views are RAM-only, and durable output is
+bounded to compact evidence and model artifacts. The six-task `hcwcat1_` DAG
+has capacity and genuine-Weaver
 forward/backward gates before its sole fit, exact source/worktree binding,
 atomic artifacts, task inventories, exact-ID monitoring, and restart-from-
 zero recovery. Submission is split into a three-task gate ledger and a
@@ -22,8 +99,9 @@ three-task science ledger; the science submitter requires the validated real
 preflight artifact and attestation. It has no dependency on or mutation
 authority over any running campaign.
 
-The focused tagged-concatenation, full-cardinality, persistent-support, and
-view-cache suite passes 28/28 locally. The repository-wide suite passes
+Before the `/v2` correction, the focused tagged-concatenation,
+full-cardinality, persistent-support, and view-cache suite passed 28/28
+locally. The repository-wide suite passed
 825/825 (one unrelated existing PyTorch warning). The genuine Tigris preflight
 remains an execution gate and has not been run in this local implementation
 turn. No donor file was copied and final test was not accessed.
