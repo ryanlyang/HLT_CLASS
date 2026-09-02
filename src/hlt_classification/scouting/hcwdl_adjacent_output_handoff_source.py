@@ -113,7 +113,7 @@ def _historical_recipe_payload() -> dict[str, Any]:
 
 def _validate_fullcard_campaign(
     path: Path, value: Mapping[str, Any],
-) -> tuple[str, dict[str, Any], str, Path, str]:
+) -> tuple[str, dict[str, Any], str, str, Path, str]:
     """Authenticate the retired, immutable non-persistent `/v2` source.
 
     The original module name was later versioned for persistent-HLT support,
@@ -211,7 +211,10 @@ def _validate_fullcard_campaign(
         or value.get("final_test_accessed") is not False
     ):
         raise ValueError("output-handoff non-persistent fullcard source differs")
-    return digest, foundation, foundation_lock_hash, foundation_lock_path, graph_hash
+    return (
+        digest, foundation, foundation_hash, foundation_lock_hash,
+        foundation_lock_path, graph_hash,
+    )
 
 
 def _report(path: str | Path, *, contract: str) -> tuple[Path, dict[str, Any], str]:
@@ -233,7 +236,7 @@ def build_source_lock(
     spec_path = Path(source_campaign_spec).resolve()
     spec = load_json(spec_path)
     (
-        spec_hash, foundation, foundation_lock_hash,
+        spec_hash, foundation, foundation_hash, foundation_lock_hash,
         foundation_lock_path, source_graph_hash,
     ) = _validate_fullcard_campaign(spec_path, spec)
     report_path, report, report_hash = _report(
@@ -268,7 +271,7 @@ def build_source_lock(
             "source_graph": spec["parents"]["graph"],
             "source_recipe": spec["parents"]["recipe"],
             "foundation": foundation_lock_hash,
-            "foundation_spec": validate_content_hash(foundation),
+            "foundation_spec": foundation_hash,
             "assignment_lock": spec["parents"]["assignment_lock"],
             "u100_report": report_hash,
             "u100_checkpoint": report["selected_checkpoint_sha256"],
