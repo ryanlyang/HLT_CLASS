@@ -37,6 +37,10 @@ from hlt_classification.scouting.hcwdl_fullcard_bottleneck_contracts import (
     FOUNDATION_LOCK_CONTRACT,
 )
 from hlt_classification.scouting.hcwdl_homotopy import DEFAULT_SUPPORT_POLICY
+from hlt_classification.scouting.repair import (
+    PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY,
+    PAIRING_VALIDITY_UNCLASSIFIED_OFFLINE_POLICY,
+)
 from hlt_classification.scouting.hcwdl_mhpe_tri60_ce_control_contracts import (
     TRAINING_REPORT_CONTRACT as CE60_REPORT_CONTRACT,
 )
@@ -247,6 +251,12 @@ def test_source_is_completed_nonpersistent_coarse_u100(tmp_path: Path, monkeypat
         "role_counts": {"train": 30, "validation": 30, "final_test": 30},
         "fresh_fit_count": 29, "reducer_count": 25,
         "only_changed_variable": "particle_pairing_foundation_lineage",
+        "matched_unclassified_hlt_policy": (
+            PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
+        ),
+        "matched_unclassified_offline_policy": (
+            PAIRING_VALIDITY_UNCLASSIFIED_OFFLINE_POLICY
+        ),
         "population_policy": "all_authenticated_mapped_rows_v1",
         "ordinary_access_roles": ["train", "validation"],
         "ordinary_final_test_capability": False,
@@ -279,6 +289,10 @@ def test_source_is_completed_nonpersistent_coarse_u100(tmp_path: Path, monkeypat
         u100_selected_checkpoint=checkpoint,
     )
     assert lock["u100_node_id"] == SOURCE_U100_NODE_ID
+    assert FULLCARD_SPEC_CONTRACT.endswith("/v3")
+    assert FULLCARD_GRAPH_CONTRACT.endswith("/v3")
+    assert FULLCARD_RECIPE_CONTRACT.endswith("/v3")
+    assert FULLCARD_TRAINING_REPORT_CONTRACT.endswith("/v3")
     assert lock["source_campaign_family"] == SOURCE_CAMPAIGN_FAMILY
     assert lock["support_policy"] == DEFAULT_SUPPORT_POLICY
     assert lock["operational_source_job_id"] == "98318"

@@ -36,24 +36,27 @@ from .hcwdl_tri100_spine4_graph import (
     SOURCE_DISTRIBUTION as FULLCARD_SOURCE_DISTRIBUTION,
     recipe_payload as established_recipe_payload,
 )
-from .repair import PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
+from .repair import (
+    PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY,
+    PAIRING_VALIDITY_UNCLASSIFIED_OFFLINE_POLICY,
+)
 
 
 FULLCARD_PREFIX = "HCWDL_TRI100_FOUR_SPINE_FULLCARD_BOTTLENECK"
-FULLCARD_SPEC_CONTRACT = f"{FULLCARD_PREFIX}_CAMPAIGN_SPEC/v2"
-FULLCARD_GRAPH_CONTRACT = f"{FULLCARD_PREFIX}_GRAPH/v2"
-FULLCARD_RECIPE_CONTRACT = f"{FULLCARD_PREFIX}_RECIPE/v2"
-FULLCARD_TRAINING_REPORT_CONTRACT = f"{FULLCARD_PREFIX}_TRAINING_REPORT/v2"
+FULLCARD_SPEC_CONTRACT = f"{FULLCARD_PREFIX}_CAMPAIGN_SPEC/v3"
+FULLCARD_GRAPH_CONTRACT = f"{FULLCARD_PREFIX}_GRAPH/v3"
+FULLCARD_RECIPE_CONTRACT = f"{FULLCARD_PREFIX}_RECIPE/v3"
+FULLCARD_TRAINING_REPORT_CONTRACT = f"{FULLCARD_PREFIX}_TRAINING_REPORT/v3"
 FULLCARD_SELECTED_CHECKPOINT_CONTRACT = (
-    f"{FULLCARD_PREFIX}_SELECTED_CHECKPOINT/v2"
+    f"{FULLCARD_PREFIX}_SELECTED_CHECKPOINT/v3"
 )
-FULLCARD_FINAL_CHECKPOINT_CONTRACT = f"{FULLCARD_PREFIX}_FINAL_CHECKPOINT/v2"
+FULLCARD_FINAL_CHECKPOINT_CONTRACT = f"{FULLCARD_PREFIX}_FINAL_CHECKPOINT/v3"
 SOURCE_U100_NODE_ID = "SP4_COARSE_U100_from_U050"
-SOURCE_CAMPAIGN_FAMILY = "fullcard_bottleneck_nonpersistent_v2"
+SOURCE_CAMPAIGN_FAMILY = "fullcard_bottleneck_nonpersistent_v3"
 
 
 def _historical_graph_payload() -> dict[str, Any]:
-    """Reconstruct the exact graph published by clean commit ``965bdad6``."""
+    """Reconstruct the exact graph published by clean commit ``175cbcd6``."""
 
     return with_content_hash({
         "contract": FULLCARD_GRAPH_CONTRACT, "schema_version": 1,
@@ -62,6 +65,9 @@ def _historical_graph_payload() -> dict[str, Any]:
         "pairing_control": "full_cardinality_lexicographic_bottleneck_delta_r_v1",
         "matched_unclassified_hlt_policy": (
             PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
+        ),
+        "matched_unclassified_offline_policy": (
+            PAIRING_VALIDITY_UNCLASSIFIED_OFFLINE_POLICY
         ),
         "branch_order": list(FULLCARD_BRANCH_ORDER),
         "branch_paths": {
@@ -105,6 +111,9 @@ def _historical_recipe_payload() -> dict[str, Any]:
         "matched_unclassified_hlt_policy": (
             PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
         ),
+        "matched_unclassified_offline_policy": (
+            PAIRING_VALIDITY_UNCLASSIFIED_OFFLINE_POLICY
+        ),
         "only_changed_variable": "particle_pairing_foundation_lineage",
         "rolling_resume": False, "final_test_accessed": False,
         "contract": FULLCARD_RECIPE_CONTRACT, "schema_version": 1,
@@ -114,7 +123,7 @@ def _historical_recipe_payload() -> dict[str, Any]:
 def _validate_fullcard_campaign(
     path: Path, value: Mapping[str, Any],
 ) -> tuple[str, dict[str, Any], str, str, Path, str]:
-    """Authenticate the retired, immutable non-persistent `/v2` source.
+    """Authenticate the retired, immutable non-persistent `/v3` source.
 
     The original module name was later versioned for persistent-HLT support,
     so importing its current validator would silently assign the wrong view
@@ -170,6 +179,10 @@ def _validate_fullcard_campaign(
         != "HCWDL-TRI100-FOUR-SPINE-FULLCARD-BOTTLENECK"
         or graph.get("pairing_control")
         != "full_cardinality_lexicographic_bottleneck_delta_r_v1"
+        or graph.get("matched_unclassified_hlt_policy")
+        != PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
+        or graph.get("matched_unclassified_offline_policy")
+        != PAIRING_VALIDITY_UNCLASSIFIED_OFFLINE_POLICY
         or graph.get("fresh_fit_count") != 29
         or graph.get("immediate_parent_only") is not True
         or graph.get("ensembles") is not False
@@ -180,6 +193,10 @@ def _validate_fullcard_campaign(
         != "HCWDL-TRI100-FOUR-SPINE-FULLCARD-BOTTLENECK"
         or recipe.get("only_changed_variable")
         != "particle_pairing_foundation_lineage"
+        or recipe.get("matched_unclassified_hlt_policy")
+        != PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
+        or recipe.get("matched_unclassified_offline_policy")
+        != PAIRING_VALIDITY_UNCLASSIFIED_OFFLINE_POLICY
         or training.get("maximum_passes") != 100
         or training.get("effective_batch_size") != 256
         or loss != {
@@ -198,6 +215,10 @@ def _validate_fullcard_campaign(
         or value.get("reducer_count") != 25
         or value.get("only_changed_variable")
         != "particle_pairing_foundation_lineage"
+        or value.get("matched_unclassified_hlt_policy")
+        != PAIRING_VALIDITY_UNCLASSIFIED_HLT_POLICY
+        or value.get("matched_unclassified_offline_policy")
+        != PAIRING_VALIDITY_UNCLASSIFIED_OFFLINE_POLICY
         or value.get("population_policy") != "all_authenticated_mapped_rows_v1"
         or value.get("ordinary_access_roles") != ["train", "validation"]
         or value.get("ordinary_final_test_capability") is not False

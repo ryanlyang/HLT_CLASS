@@ -5,12 +5,18 @@
 Strategy A of
 `docs/plans/HCWDL_ADJACENT_VIEW_FUSION_HANDOFF_LADDERS_PLAN.md` is now
 implemented as the isolated
-`HCWDL_ADJACENT_OUTPUT_FUSION_HANDOFF_*/v1` family. The immutable 85-task DAG
+`HCWDL_ADJACENT_OUTPUT_FUSION_HANDOFF_*/v2` family. The immutable 85-task DAG
 owns 26 fresh fits, 9 performance-constrained mixture selections, 15 fixed
 lexical prefix ensembles, compact source/model reducers, an untouched-report
 aggregate, exact-ID submission/monitoring, and restart-zero failed-closure
 recovery. It imports one explicit completed full-cardinality U100 report and
-checkpoint without depending on or mutating its source campaign.
+checkpoint without depending on or mutating its source campaign. The source is
+now explicitly the completed non-persistent full-cardinality
+`SP4_COARSE_U100_from_U050` from Tigris job `98318`, using
+`replace_source_with_target_v1`. The initially pushed `/v1` adapter incorrectly
+bound the unfinished persistent-HLT `SP4P` family; no `/v1` campaign root or
+science job was created, and `/v2` makes the corrected meaning
+non-interchangeable.
 
 Validation is deterministically class-stratified into disjoint checkpoint,
 blend, and report roles. The selector evaluates all 82 combinations of two
@@ -24,15 +30,23 @@ preventing accidental double softening while nearly halving storage. All particl
 views remain RAM-only; no hidden states, optimizer states, rolling resumes, or
 final-test artifacts are written.
 
-The focused implementation suite passes 8/8 locally; the campaign plus
-established TRI100, endpoint-mix, and TRI60 blend regressions pass 35/35. The
-complete repository suite passes 833/833 with only the pre-existing PRAD
-tensor-conversion warning and the local pytest-cache permission warning. A
-genuine Tigris execution acceptance remains required before live science
-submission; the preflight executes the exact authenticated U100 stream,
-installed production ParT, and C25/P75 T=2 backward path. No Tigris job was
-submitted and final test was
-not accessed in this implementation turn. No donor file was copied.
+Before the source-identity correction, the focused implementation suite passed
+8/8 locally; the campaign plus established TRI100, endpoint-mix, and TRI60
+blend regressions passed 35/35, and the complete repository suite passed
+833/833 with only the pre-existing PRAD tensor-conversion warning and the
+local pytest-cache permission warning. The first corrected source gate passed
+9/9 on Tigris and then safely stopped before campaign creation because the
+completed job-98318 artifact is the upstream full-cardinality `/v3` family,
+not its earlier `/v2` predecessor. The compatibility adapter now reconstructs
+and authenticates the exact `/v3` graph, recipe, report, checkpoint, and both
+unclassified-particle endpoint policies. Its focused suite passes 9/9 locally;
+exact real-artifact authentication must be rerun in the new pinned Tigris
+worktree before campaign creation. A genuine Tigris execution acceptance remains required
+before live science submission; the preflight executes the exact authenticated
+U100 stream, installed production ParT, and C25/P75 T=2 backward path. No
+Tigris job was submitted and final test was not accessed in this implementation
+turn. Historical same-repository semantics migrated from commit `175cbcd6` are
+recorded in `docs/LEGACY_SOURCE_MAP.md`; no external donor runtime import exists.
 
 Two read-only control reducers reevaluate the imported `M0CE60` and
 pure-offline `U000` selected checkpoints on the same untouched `V_report`
@@ -90,7 +104,7 @@ combined maxima of 493/459, 23/14 rows above 400, and a train HLT maximum of
 496, and explicitly retains raw HLT tokens beyond the ordinary deployable
 200-token cap. The failed `/v1` campaign remains immutable historical
 evidence. Train and validation views are RAM-only, and durable output is
-bounded to compact evidence and model artifacts. The six-task `hcwcat1_` DAG
+bounded to compact evidence and model artifacts. The six-task `hcwcat2_` DAG
 has capacity and genuine-Weaver
 forward/backward gates before its sole fit, exact source/worktree binding,
 atomic artifacts, task inventories, exact-ID monitoring, and restart-from-
@@ -99,12 +113,14 @@ three-task science ledger; the science submitter requires the validated real
 preflight artifact and attestation. It has no dependency on or mutation
 authority over any running campaign.
 
-Before the `/v2` correction, the focused tagged-concatenation,
-full-cardinality, persistent-support, and view-cache suite passed 28/28
-locally. The repository-wide suite passed
-825/825 (one unrelated existing PyTorch warning). The genuine Tigris preflight
-remains an execution gate and has not been run in this local implementation
-turn. No donor file was copied and final test was not accessed.
+After the `/v2` correction, the focused tagged-concatenation,
+full-cardinality, persistent-support, and view-cache suite passes 29/29; the
+broader tagged/TRI60/representation/input compatibility suite passes 123/123.
+The repository-wide suite passes 834/834 with only the unrelated existing
+PyTorch warning and a local pytest-cache permission warning. Genuine Tigris
+capacity characterization is complete; the corrected `/v2` capacity gate and
+installed-Weaver GPU preflight remain to be executed. No donor file was copied
+and final test was not accessed.
 
 ## 2026-09-02: offline+HLT oracle and privilege-withdrawal plan
 

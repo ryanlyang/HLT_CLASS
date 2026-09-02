@@ -24,12 +24,24 @@ exact donor path and source content hash used.
 
 The adjacent output-handoff `/v2` family consumes the immutable
 non-persistent full-cardinality `SP4_COARSE_U100_from_U050` artifact produced
-by Tigris job `98318`. The source family was implemented at clean
-same-repository commit `965bdad6aea2fdf81356275dfcdca698717a471f` and its
+by Tigris job `98318`. The exact completed source family was implemented at
+clean same-repository commit
+`175cbcd6bf749f0014486a59a8c103802708abd1`; the earlier `/v2` snapshot at
+`965bdad6aea2fdf81356275dfcdca698717a471f` lacked the corrected offline
+lost-track endpoint identity semantics. Its
 module names were later reused by a separately versioned persistent-HLT
 experiment. The adapter therefore preserves the historical contract and view
 construction locally instead of importing the current persistent-HLT module.
 The source checkpoint and report remain read-only artifact parents.
+
+The following `/v3` donor blobs supersede the three `/v2` contract, graph, and
+campaign rows retained below as historical implementation context:
+
+| Historical path and Git blob | Current destination | Retained semantics |
+|---|---|---|
+| `src/hlt_classification/scouting/hcwdl_tri100_spine4_bottleneck_contracts.py` -- `dd0109ab40bf2b1f89717afab952aa7d129f927d` | `hcwdl_adjacent_output_handoff_source.py` | Exact non-persistent full-cardinality `/v3` source contract identities. |
+| `src/hlt_classification/scouting/hcwdl_tri100_spine4_bottleneck_graph.py` -- `a2ad38187006e43e6aa28c19386fd56f5b4115f9` | `hcwdl_adjacent_output_handoff_source.py` | Exact graph and recipe including both unclassified-particle endpoint policies. |
+| `src/hlt_classification/scouting/hcwdl_tri100_spine4_bottleneck_campaign.py` -- `751d02b0b40f24358e86e3acd3704cac2bb90961` | `hcwdl_adjacent_output_handoff_source.py` | Immutable `/v3` campaign-parent, endpoint-policy, and population checks. |
 
 | Historical path and Git blob | Current destination | Retained semantics |
 |---|---|---|

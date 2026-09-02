@@ -9,7 +9,8 @@ planned follow-up and is not executable in this artifact family.
 
 The executable Strategy-A source is frozen to the completed non-persistent
 full-cardinality `SP4_COARSE_U100_from_U050` artifact produced by Tigris job
-`98318`. It uses `replace_source_with_target_v1`; neither a persistent-HLT
+`98318` in the corrected upstream full-cardinality `/v3` artifact family. It
+uses `replace_source_with_target_v1`; neither a persistent-HLT
 `SP4P` U100 nor another branch's U100 is interchangeable. This correction is
 encoded by the `/v2` output-handoff contract family. Job `98318` is recorded
 only as an operational locator; immutable artifact hashes define the source.
@@ -868,7 +869,8 @@ highest-scoring or newest directory:
 
 The imported `T_U100` is exactly the completed non-persistent full-cardinality
 `SP4_COARSE_U100_from_U050` produced by job `98318`. It must authenticate its
-exact `U100` coordinate, `replace_source_with_target_v1`, train/validation
+exact upstream `/v3` lineage, `U100` coordinate,
+`replace_source_with_target_v1`, train/validation
 population, selected checkpoint, training recipe, seed, and final-test
 boundary. Overall source-campaign completion is not required when those exact
 parents are independently complete and reusable. A persistent-HLT `SP4P`

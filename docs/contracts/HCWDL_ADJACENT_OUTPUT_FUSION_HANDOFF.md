@@ -8,7 +8,8 @@ adjacent-view handoff plan. Its artifact family is
 
 The read-only source carrier is the explicitly selected, authenticated
 non-persistent full-cardinality `SP4_COARSE_U100_from_U050` model (production
-job `98318`). It uses the established `replace_source_with_target_v1` support
+job `98318`) from the corrected upstream full-cardinality `/v3` artifact
+family. It uses the established `replace_source_with_target_v1` support
 semantics; the later persistent-HLT `SP4P` lineage is a distinct experiment
 and is forbidden as a substitute. The scheduler ID is an operational locator;
 the source spec, report, checkpoint, graph, recipe, foundation, and assignment
