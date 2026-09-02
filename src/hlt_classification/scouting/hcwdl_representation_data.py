@@ -56,6 +56,17 @@ class HCWDLParticleInputs(ParticleInputs):
 
 
 @dataclass(frozen=True)
+class HCWDLTaggedParticleInputs(HCWDLParticleInputs):
+    """Training-only particle tensors with an explicit content-source tag.
+
+    ``content_source_codes`` is bookkeeping transported through the token
+    trimmer.  It is never one of the 21 normalized physics features.
+    """
+
+    content_source_codes: np.ndarray
+
+
+@dataclass(frozen=True)
 class HCWDLTokenMetadata:
     visible_indices: np.ndarray
     family_codes: np.ndarray
@@ -277,7 +288,8 @@ __all__ = [
     "CHARGED_FAMILY", "CHARGE_ONLY_CHARGED_REASON",
     "CHARGE_ONLY_NEUTRAL_REASON", "CONTRADICTION_FAMILY",
     "CONTRADICTION_REASON", "DIRECT_CHARGED_REASON", "DIRECT_NEUTRAL_REASON",
-    "HCWDLParticleInputs", "HCWDLTokenMetadata", "MALFORMED_FAMILY",
+    "HCWDLParticleInputs", "HCWDLTaggedParticleInputs", "HCWDLTokenMetadata",
+    "MALFORMED_FAMILY",
     "MALFORMED_REASON", "NEUTRAL_FAMILY", "PADDED_FAMILY", "PADDED_REASON",
     "RAW_CHARGE_BRANCH", "RAW_PID_BRANCHES", "attach_hcwdl_token_metadata",
     "build_hcwdl_hlt_inputs", "canonical_identity_digest",

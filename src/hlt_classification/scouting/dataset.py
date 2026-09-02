@@ -43,7 +43,10 @@ def _slice_particle_view(view, start: int, stop: int):
         view.features[start:stop], view.vectors[start:stop],
         view.mask[start:stop], view.raw_lengths[start:stop],
     ]
-    for name in ("visible_indices", "family_codes", "family_reason_codes"):
+    for name in (
+        "visible_indices", "family_codes", "family_reason_codes",
+        "content_source_codes",
+    ):
         if hasattr(view, name):
             values.append(getattr(view, name)[start:stop])
     return type(view)(*values)
@@ -54,7 +57,10 @@ def _take_particle_view(view, indexes: np.ndarray):
         view.features[indexes], view.vectors[indexes],
         view.mask[indexes], view.raw_lengths[indexes],
     ]
-    for name in ("visible_indices", "family_codes", "family_reason_codes"):
+    for name in (
+        "visible_indices", "family_codes", "family_reason_codes",
+        "content_source_codes",
+    ):
         if hasattr(view, name):
             values.append(getattr(view, name)[indexes])
     return type(view)(*values)
@@ -67,7 +73,10 @@ def _concat_particle_views(views):
         np.concatenate([view.mask for view in views]),
         np.concatenate([view.raw_lengths for view in views]),
     ]
-    for name in ("visible_indices", "family_codes", "family_reason_codes"):
+    for name in (
+        "visible_indices", "family_codes", "family_reason_codes",
+        "content_source_codes",
+    ):
         if hasattr(views[0], name):
             if not all(hasattr(view, name) for view in views):
                 raise ValueError("particle-view metadata topology differs")

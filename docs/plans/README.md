@@ -238,3 +238,4 @@ acceptance:
 - [Implementation-authoritative full-cardinality bottleneck-matching control](HCWDL_TRI100_FOUR_SPINE_FULL_CARDINALITY_BOTTLENECK_MATCHING_IMPLEMENTATION_PLAN.md)
 - [Implementation-authoritative persistent-HLT all-prior MT20 four-spine campaign](HCWDL_TRI100_FOUR_SPINE_PERSISTENT_HLT_MT20_IMPLEMENTATION_PLAN.md)
 - [Implementation-authoritative full-four-spine Phase-I attention re-optimization and deferred privileged-attention-oracle design](HCWDL_DISTILLATION_GUIDED_ATTENTION_REOPTIMIZATION_PLAN.md)
+- [Implementation-authoritative offline+HLT concatenation, unrestricted fusion, and HLT-only withdrawal plan](HCWDL_OFFLINE_HLT_CONCATENATION_FUSION_WITHDRAWAL_IMPLEMENTATION_PLAN.md)

@@ -651,6 +651,7 @@ class HLTBatch:
     labels: Any
     identity_digests: np.ndarray
     family_reason_codes: Any | None = None
+    content_source_codes: Any | None = None
 
 
 def _field(container: Any, name: str) -> Any:
@@ -680,7 +681,9 @@ def normalize_hlt_batch(batch: Mapping[str, Any]) -> HLTBatch:
         required_view = {
             "features", "vectors", "mask", "visible_indices", "family_codes",
         }
-        allowed_view = required_view | {"family_reason_codes"}
+        allowed_view = required_view | {
+            "family_reason_codes", "content_source_codes",
+        }
         if isinstance(view, Mapping) and (
             not required_view <= set(view) or set(view) - allowed_view
         ):
@@ -694,7 +697,9 @@ def normalize_hlt_batch(batch: Mapping[str, Any]) -> HLTBatch:
             "features", "vectors", "mask", "visible_indices", "family_codes",
             "labels", "identity_digests",
         }
-        allowed_batch = required_batch | {"family_reason_codes"}
+        allowed_batch = required_batch | {
+            "family_reason_codes", "content_source_codes",
+        }
         if not required_batch <= set(batch) or set(batch) - allowed_batch:
             raise ValueError(
                 "HCWDL-RKD batch fields differ: "
@@ -711,6 +716,11 @@ def normalize_hlt_batch(batch: Mapping[str, Any]) -> HLTBatch:
         view.get("family_reason_codes")
         if isinstance(view, Mapping)
         else getattr(view, "family_reason_codes", None)
+    )
+    content_source_codes = (
+        view.get("content_source_codes")
+        if isinstance(view, Mapping)
+        else getattr(view, "content_source_codes", None)
     )
     labels = batch.get("labels")
     identities = np.asarray(batch.get("identity_digests"))
@@ -735,11 +745,19 @@ def normalize_hlt_batch(batch: Mapping[str, Any]) -> HLTBatch:
         shape[0], shape[2]
     ):
         raise ValueError("HCWDL-RKD family-reason-code shape differs")
+    if content_source_codes is not None:
+        codes = np.asarray(content_source_codes)
+        if codes.shape != (shape[0], shape[2]) or codes.dtype != np.int8:
+            raise ValueError("HCWDL content-source-code shape or dtype differs")
+        visible = np.asarray(mask).reshape(shape[0], -1).astype(bool)
+        if np.any(~np.isin(codes[visible], (0, 1))) or np.any(codes[~visible] != -1):
+            raise ValueError("HCWDL content-source-code values differ")
     if np.shape(labels) != (shape[0],):
         raise ValueError("HCWDL-RKD label shape differs")
     return HLTBatch(
         features, vectors, mask, visible_indices, family_codes, labels,
         np.ascontiguousarray(identities), family_reason_codes,
+        content_source_codes,
     )
 
 

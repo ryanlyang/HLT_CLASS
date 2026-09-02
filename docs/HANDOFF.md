@@ -1,5 +1,67 @@
 # Current Handoff
 
+## 2026-09-02: tagged offline+HLT concatenation feasibility pilot
+
+Study A now has an isolated one-fit implementation for the requested first
+measurement. `CONCAT_TAGGED` consumes every native-order offline particle
+followed by every canonical HLT particle, deliberately retains matched
+duplicates, and injects a separate learned offline/HLT content-source
+embedding after the 21-channel numerical embedding. Padding is masked and has
+no source identity. This is a privileged oracle and cannot be deployed.
+
+The campaign is CE-only, matched to the established `U000` initialization,
+60 passes, global batch 256, one GH200, and reports against `M0CE60`, pure-
+offline `U000`, and `SP4P_U000` with the established recovery convention. Its
+all-row audit fails on any combined length above 400; train and validation
+views are RAM-only, and durable output is bounded to compact evidence and
+model artifacts. The six-task `hcwcat1_` DAG has capacity and genuine-Weaver
+forward/backward gates before its sole fit, exact source/worktree binding,
+atomic artifacts, task inventories, exact-ID monitoring, and restart-from-
+zero recovery. Submission is split into a three-task gate ledger and a
+three-task science ledger; the science submitter requires the validated real
+preflight artifact and attestation. It has no dependency on or mutation
+authority over any running campaign.
+
+The focused tagged-concatenation, full-cardinality, persistent-support, and
+view-cache suite passes 28/28 locally. The repository-wide suite passes
+825/825 (one unrelated existing PyTorch warning). The genuine Tigris preflight
+remains an execution gate and has not been run in this local implementation
+turn. No donor file was copied and final test was not accessed.
+
+## 2026-09-02: offline+HLT oracle and privilege-withdrawal plan
+
+The implementation-authoritative plan in
+`docs/plans/HCWDL_OFFLINE_HLT_CONCATENATION_FUSION_WITHDRAWAL_IMPLEMENTATION_PLAN.md`
+now separates three questions. Study A compares tagged and untagged
+single-stream `offline + HLT` concatenation. Study B now freezes two
+unrestricted oracle topologies: a symmetric concatenate-after-local-processing
+ceiling, and the primary HLT-anchored model in which an eight-block offline
+context encoder supplies one-way cross-attention residuals after HLT blocks 2,
+4, 6, and 8. The HLT branch alone owns the class head. The complete first
+screen contains eight fresh fits, including same-domain, warm-continuation,
+and parameter controls; it contains no dropout, withdrawal, KD, or invariance
+objective.
+
+Study C is separately authorized only after the oracle screen. It supersedes
+the earlier `F(H,H)` endpoint with an exact removable-residual endpoint:
+`alpha=1` is unrestricted `O -> H` fusion, while `alpha=0` skips and extracts
+away the offline encoder, cross-pair features, and cross-attention modules so
+one ordinary HLT ParT remains. The primary curriculum trains frozen-teacher,
+cosine-gated, and exact-zero paths together, uses direct HLT KD and step
+withdrawal as mandatory controls, and selects checkpoints only on the
+extracted HLT path.
+
+The plan freezes full-cardinality source lineage, all-row no-truncation and
+resource audits, explicit initialization maps, zero-residual parity,
+source-versus-branch-role embeddings, matched-seed and paired-seed reporting,
+sealed final test, RAM-only particle/activation state, compact teacher
+probabilities, and restart-from-zero recovery. At the time this planning entry
+was written, no implementation existed; the tagged one-fit Study A pilot is
+now implemented as recorded in the newer entry above. The paired Study A
+screen and all Study B/C fusion and withdrawal work remain planning only.
+Focused persistent-support and MT20 tests passed 14/14 before this planning
+revision. No donor file was copied.
+
 ## TRI100 full-cardinality offline endpoint repair (2026-08-31)
 
 The v2 non-persistent full-cardinality campaign passed preflight, then its
@@ -3931,7 +3993,7 @@ recovery. It has no scheduler dependency on, cancellation/reprioritization
 authority over, or write path into any existing campaign. Existing
 immediate-parent reports are validation-only controls and may remain pending.
 
-Local evidence is 47/47 focused-plus-neighbor tests, covering exact weight
+Local evidence is 48/48 focused-plus-neighbor tests, covering exact weight
 examples, all-prior same-spine closure, RAM mixture order and normalization,
 non-publication, the isolated 61-task DAG, restart-zero recovery, unchanged
 full-cardinality persistent-HLT behavior, and matching repair. Python syntax
@@ -3940,6 +4002,27 @@ so `docs/LEGACY_SOURCE_MAP.md` is unchanged. No SSH, Slurm submission, remote
 artifact mutation, job cancellation, hold, or reprioritization occurred.
 Authoritative installed-Weaver/Tigris preflight and measured production
 resource evidence remain required in the campaign DAG before scientific fits.
+
+The first production preflight, job `98595`, failed before any fit because
+the ordinary unified-balanced stream exposes authenticated `identity_keys`,
+not precomputed `identity_digests`. The gate now derives the exact canonical
+cache-compatible uint8 `[rows,32]` digests from those keys before exercising
+the multi-teacher RAM mixture. A focused regression binds this ordinary stream
+shape. No scientific output was produced, and the original pending DAG remains
+dependency-blocked; recovery must be source-pinned and restart the preflight
+from zero.
+
+Source-pinned recovery commit `865fa09b4155eeee1974d91e631375728cb2a74f`
+then passed production preflight as Tigris job `98738`. Its first U000 fit,
+job `98739`, completed the 2,777,855-row train cache in 950.456 seconds and the
+957,541-row validation cache in 479.990 seconds, then failed before pass one.
+The cause was a non-timing `ram_teacher_count` entry incorrectly placed in the
+shared trainer's timing-only `preparation_metrics` registry. MT20 now supplies
+only `student_view_cache_seconds` and `pre_training_total_seconds`; teacher
+cardinality remains graph- and mixture-registry-bound. The focused
+source-pinned MT20 suite passes 7/7 after adding a regression for the exact
+timing registry. No model checkpoint or scientific result was produced by the
+failed fit, so the next exact-ledger recovery restarts U000 from zero.
 
 ## 2026-09-01: Phase-I persistent-HLT attention-reoptimized four spines
 
@@ -3981,3 +4064,20 @@ TRI60/homotopy/full-cardinality neighbor tests. The full local suite is
 Installed-Weaver parity and the genuine Tigris gate remain required before
 science submission. No donor file was copied, so `docs/LEGACY_SOURCE_MAP.md`
 is unchanged. No remote job or artifact was changed.
+
+The first genuine-GH200 attention gate authenticated and completed its full
+support audit as jobs `98852` and `98853`, then preflight job `98854` failed
+before publishing either the parameter lock or execution-acceptance lock. The
+ordinary unified-balanced parent and child streams expose authenticated
+`identity_keys`, while the new attention acceptance boundary incorrectly
+required an optional top-level `identity_digests` array. The boundary now
+derives the exact canonical cache-compatible uint8 `[rows,32]` digests from
+the keys and independently authenticates any supplied digest array. A focused
+regression covers the ordinary missing-digest shape and corrupt supplied
+digests. No fit, probability bank, checkpoint, or scientific result was
+produced. Because the source pin changes before any science submission, the
+failed root and ledger remain immutable and a fresh source-pinned three-task
+gate reruns authentication, support audit, and preflight before science is
+released. Local verification is 13/13 attention tests, 133/133 affected and
+neighboring persistent-HLT tests, and 819/819 repository-wide tests; only
+pre-existing third-party plotting deprecation warnings remain.

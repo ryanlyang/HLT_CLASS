@@ -995,7 +995,37 @@ def _batch_tensors(batch, device):
     return normalized, features, vectors, mask, visible, family, labels
 
 
-def _validation(model, batches, *, input_key: str, device, amp_dtype: str):
+def _student_logits(
+    model, normalized, features, vectors, mask, *, input_protocol: str,
+):
+    """Dispatch an explicitly registered model-input protocol.
+
+    The established protocol remains byte-for-byte the ordinary three-tensor
+    ParT call.  The tagged concatenation protocol transports its integer
+    source identity separately from the 21 physics channels.
+    """
+
+    import torch
+
+    if input_protocol == "standard_hlt_v1":
+        if normalized.content_source_codes is not None:
+            raise ValueError("standard HLT model received content-source metadata")
+        return model(features, vectors, mask)
+    if input_protocol == "tagged_offline_hlt_concat_v1":
+        if normalized.content_source_codes is None:
+            raise ValueError("tagged concatenation model lacks source metadata")
+        source = torch.as_tensor(
+            normalized.content_source_codes, dtype=torch.int8,
+            device=features.device,
+        )
+        return model(features, vectors, mask, source)
+    raise ValueError("TRI60 model-input protocol differs")
+
+
+def _validation(
+    model, batches, *, input_key: str, device, amp_dtype: str,
+    input_protocol: str = "standard_hlt_v1",
+):
     import torch
 
     prior_mode = model.training
@@ -1008,7 +1038,7 @@ def _validation(model, batches, *, input_key: str, device, amp_dtype: str):
         with torch.inference_mode():
             with _BatchPrefetcher(batches) as prefetched:
                 for raw in prefetched:
-                    _, features, vectors, mask, _, _, labels = _batch_tensors(
+                    normalized, features, vectors, mask, _, _, labels = _batch_tensors(
                         _cache_batch(raw, input_key=input_key), device,
                     )
                     if parity_inputs is None:
@@ -1021,7 +1051,10 @@ def _validation(model, batches, *, input_key: str, device, amp_dtype: str):
                         dtype=torch.bfloat16,
                         enabled=amp_dtype == "bfloat16" and device.type == "cuda",
                     ):
-                        logits = model(features, vectors, mask)
+                        logits = _student_logits(
+                            model, normalized, features, vectors, mask,
+                            input_protocol=input_protocol,
+                        )
                     logits_parts.append(logits.float().cpu())
                     label_parts.append(labels.cpu())
     finally:
@@ -1060,6 +1093,7 @@ def _distributed_local_batches(
 def _distributed_validation(
     model, batches, *, input_key: str, device, amp_dtype: str,
     context: Tri60DistributedContext,
+    input_protocol: str = "standard_hlt_v1",
 ) -> tuple[dict[str, Any], Any]:
     """Evaluate once in canonical order and broadcast the stopping metrics."""
 
@@ -1071,7 +1105,7 @@ def _distributed_validation(
     if context.is_primary:
         metrics, parity_inputs = _validation(
             model, batches, input_key=input_key, device=device,
-            amp_dtype=amp_dtype,
+            amp_dtype=amp_dtype, input_protocol=input_protocol,
         )
         payload[0] = metrics
     dist.broadcast_object_list(payload, src=0)
@@ -1253,6 +1287,7 @@ def train_tri60_node(
     relational_teacher_model=None,
     relational_train_cache=None,
     relational_input_key: str | None = None,
+    model_input_protocol: str = "standard_hlt_v1",
 ) -> dict[str, Any]:
     """Execute one registered fit without any reusable optimizer state."""
 
@@ -1269,6 +1304,15 @@ def train_tri60_node(
         node = authority.node
         if node.node_id != node_id or node_id in NODE_REGISTRY:
             raise ValueError("TRI60 additive authority node identity differs")
+    if model_input_protocol not in {
+        "standard_hlt_v1", "tagged_offline_hlt_concat_v1",
+    }:
+        raise ValueError("TRI60 model-input protocol differs")
+    if model_input_protocol != "standard_hlt_v1" and (
+        node.auxiliary != "none" or distributed_context is not None
+        or attention_reoptimization is not None
+    ):
+        raise ValueError("TRI60 tagged input protocol exceeds its authority")
     graph_sha256 = authority.graph_sha256
     if distributed_context is not None:
         distributed_context.validate()
@@ -1628,7 +1672,10 @@ def train_tri60_node(
                             elif node.auxiliary == "none":
                                 surfaces = None
                                 teacher_surfaces = None
-                                logits = forward_model(features, vectors, mask)
+                                logits = _student_logits(
+                                    forward_model, normalized, features, vectors,
+                                    mask, input_protocol=model_input_protocol,
+                                )
                             else:
                                 teacher_surfaces = None
                                 surfaces = model.forward_hcwdl_surfaces(
@@ -1812,12 +1859,14 @@ def train_tri60_node(
                 metrics, parity_inputs = _validation(
                     model, validation_batches, input_key=input_key,
                     device=target_device, amp_dtype=runtime.amp_dtype,
+                    input_protocol=model_input_protocol,
                 )
             else:
                 metrics, parity_inputs = _distributed_validation(
                     model, validation_batches, input_key=input_key,
                     device=target_device, amp_dtype=runtime.amp_dtype,
                     context=distributed_context,
+                    input_protocol=model_input_protocol,
                 )
             validation_row = {
                 "pass": pass_index + 1, "update": update,
@@ -2008,6 +2057,11 @@ def train_tri60_node(
         ),
         "initialization_lineage": normalized_initialization_lineage,
         **(
+            {}
+            if model_input_protocol == "standard_hlt_v1"
+            else {"model_input_protocol": model_input_protocol}
+        ),
+        **(
             {} if attention_recipe is None else {
                 "attention_reoptimization": attention_recipe.payload(),
                 "attention_parameter_registry_sha256": (
@@ -2069,6 +2123,11 @@ def train_tri60_node(
             }
         ),
         "initialization_lineage": normalized_initialization_lineage,
+        **(
+            {}
+            if model_input_protocol == "standard_hlt_v1"
+            else {"model_input_protocol": model_input_protocol}
+        ),
         "complete": True,
         "updates": completed_updates,
         "passes": completed_passes,
