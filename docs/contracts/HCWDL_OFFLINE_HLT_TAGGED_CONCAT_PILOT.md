@@ -15,7 +15,12 @@ all native-order offline particles followed by all native-order canonical HLT
 particles. Matched reconstructions are deliberately retained twice. Matching,
 assignment, construction, file-order, and degradation indices are not model
 inputs. No token may be truncated: the all-row audit must prove that the
-fixed 400-slot capacity covers every selected row before training.
+fixed 496-slot capacity covers every selected row before training. This value
+is the smallest 16-token-aligned capacity above the authenticated all-row
+maximum of 493 observed on 2026-09-02; the corresponding validation maximum
+is 459. The ordinary deployable HLT cap remains 200, but this explicitly
+privileged view retains raw HLT endpoints beyond 200 (the observed train
+maximum is 214) rather than silently truncating them.
 
 The numerical particle representation remains the established 21-channel
 HLT-compatible schema. A separate two-value learned content-source embedding
@@ -33,7 +38,7 @@ limited to locks, reports, task evidence, and selected/final model states.
 ## Artifact family
 
 `hcwdl_offline_hlt_concat_contracts.py` exports the versioned
-`HCWDL_OFFLINE_HLT_TAGGED_CONCAT_PILOT_*/v1` graph, recipe, source-lock,
+`HCWDL_OFFLINE_HLT_TAGGED_CONCAT_PILOT_*/v2` graph, recipe, source-lock,
 capacity-audit, execution-acceptance, campaign-spec, command-plan, node,
 training-report, selected-checkpoint, final-checkpoint, aggregate,
 campaign-complete, monitor, and recovery contracts. Every artifact has a
@@ -63,11 +68,17 @@ stage plans are exact projections of it, and the science projection records
 The capacity audit scans every selected train and validation row and fails on
 any hidden truncation. The genuine-Tigris preflight exercises installed Weaver
 with a complete real 256-row production batch containing the all-row audit's
-maximum-length identity, the full 400-slot tensor shape, BF16 forward and
+maximum-length identity, the full 496-slot tensor shape, BF16 forward and
 backward, and a finite nonzero source-embedding gradient. The science fit is
 dependency-gated on that acceptance. Final test is inaccessible.
 
-The campaign has its own root, source-pinned worktree, `hcwcat1_` job names,
+The corrected campaign has its own root, source-pinned worktree, `hcwcat2_`
+job names,
 ledger, output inventories, exact-ID monitor, and restart-from-zero recovery.
 It has no scheduler dependency on, write path into, or authority to cancel,
 hold, or reprioritize an existing campaign.
+
+The failed `/v1` gate at source `ef0225d4` is historical evidence only. Job
+`99565` correctly rejected its 400-slot assumption: 23 train and 14 validation
+rows exceeded 400. The `/v2` family is a new scientific identity and does not
+relabel or reuse that failed campaign.

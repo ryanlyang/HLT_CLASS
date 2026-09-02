@@ -38,6 +38,12 @@ remove offline information. The third question is a distinct training-time
 privilege-withdrawal study. Scientific performance in one study never causes
 an already registered row to fail or disappear.
 
+The later
+[`HCWDL_ADJACENT_VIEW_FUSION_HANDOFF_LADDERS_PLAN.md`](HCWDL_ADJACENT_VIEW_FUSION_HANDOFF_LADDERS_PLAN.md)
+reuses the removable-context idea for adjacent `U100 -> Dxxx` coordinates and
+adds a separate output-mixture handoff strategy. That plan is not Study B or
+Study C here: it has different inputs, graphs, controls, and endpoint claims.
+
 ### 1.1 Selected best-version design
 
 The primary implementation decision is frozen as follows:
@@ -144,10 +150,13 @@ The all-row capacity audit records, separately for train and validation:
 - the number of rows that would exceed each candidate capacity;
 - confirmation that the selected capacity loses zero authenticated tokens.
 
-The present endpoint cap of 200 does not imply that a concatenated cap of 200
-is valid. If each source can reach 200, the concatenated implementation must
-support up to 400 tokens or fail before training. It may not keep the first
-200 tokens, select by transverse momentum, or otherwise hide truncation.
+The ordinary endpoint cap of 200 does not imply that a concatenated cap of
+200 or 400 is valid. The 2026-09-02 all-row pilot audit measured a maximum
+combined length of 493 in train and 459 in validation, including a train HLT
+endpoint of length 214. The registered pilot therefore uses 496 slots and
+retains raw HLT endpoints beyond the ordinary deployable 200-token cap. It may
+not keep only the first 200 or 400 tokens, select by transverse momentum, or
+otherwise hide truncation.
 
 ## 5. Study A: single-stream concatenation oracle
 
@@ -196,7 +205,7 @@ embedding.
 
 The first screen uses one matched seed and the same CE-only 60-pass recipe as
 the persistent-support anchor. Global batch size remains 256. Any change
-required solely because a 400-token sequence exceeds measured memory must be
+required solely because the registered 496-token sequence exceeds measured memory must be
 registered as an operational batch-accumulation transformation that preserves
 the same global batch and update sequence; it cannot silently change the
 scientific batch.

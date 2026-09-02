@@ -137,14 +137,23 @@ def build_capacity_audit(spec: Mapping[str, Any]) -> dict[str, Any]:
             "combined": _distribution(total),
             "rows_over_capacity": int(np.count_nonzero(total > CONCAT_CAPACITY)),
             "maximum_identity": maximum_identity,
-            "exact_smaller_capacity_candidates": [200, 300, 350, 400],
+            "exact_smaller_capacity_candidates": [
+                200, 300, 350, 400, 416, 432, 448, 464, 480, 496,
+            ],
             "rows_over_candidate_capacity": {
                 str(cap): int(np.count_nonzero(total > cap))
-                for cap in (200, 300, 350, 400)
+                for cap in (200, 300, 350, 400, 416, 432, 448, 464, 480, 496)
             },
         }
     if any(row["rows_over_capacity"] for row in roles.values()):
-        raise ValueError("tagged concatenation capacity would truncate tokens")
+        details = ", ".join(
+            f"{role}: maximum={row['combined']['maximum']}, "
+            f"rows_over_{CONCAT_CAPACITY}={row['rows_over_capacity']}"
+            for role, row in roles.items()
+        )
+        raise ValueError(
+            f"tagged concatenation capacity would truncate tokens ({details})"
+        )
     view_row_bytes = CONCAT_CAPACITY * (21 * 4 + 4 * 4 + 1 + 8 + 1 + 1 + 1)
     # The cache also materializes one int64 label and one canonical SHA-256
     # identity digest per row. Python identity strings are tracked separately
@@ -278,7 +287,7 @@ def run_execution_acceptance(
     if target.type == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("tagged concatenation preflight requires CUDA")
     # Exercise the exact production global/physical batch. A smaller smoke
-    # batch would not establish that the 400-token attention path fits GH200.
+    # batch would not establish that the 496-token attention path fits GH200.
     batch, maximum_identity, maximum_length = _acceptance_batch(
         spec, audit, batch_size=int(spec["batch_size"]),
     )
@@ -365,7 +374,7 @@ def _caches(spec: Mapping[str, Any]):
             lineage={
                 "campaign_spec": spec["content_hash"],
                 "source_lock": spec["parents"]["source_lock"],
-                "view_contract": "HCWDL_OFFLINE_HLT_TAGGED_CONCAT_VIEW/v1",
+                "view_contract": "HCWDL_OFFLINE_HLT_TAGGED_CONCAT_VIEW/v2",
                 "sequence_order": "offline_then_hlt_v1",
                 "capacity": CONCAT_CAPACITY,
                 "source_workers": source_workers,

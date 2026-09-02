@@ -1011,7 +1011,7 @@ def _student_logits(
         if normalized.content_source_codes is not None:
             raise ValueError("standard HLT model received content-source metadata")
         return model(features, vectors, mask)
-    if input_protocol == "tagged_offline_hlt_concat_v1":
+    if input_protocol == "tagged_offline_hlt_concat_v2":
         if normalized.content_source_codes is None:
             raise ValueError("tagged concatenation model lacks source metadata")
         source = torch.as_tensor(
@@ -1305,7 +1305,7 @@ def train_tri60_node(
         if node.node_id != node_id or node_id in NODE_REGISTRY:
             raise ValueError("TRI60 additive authority node identity differs")
     if model_input_protocol not in {
-        "standard_hlt_v1", "tagged_offline_hlt_concat_v1",
+        "standard_hlt_v1", "tagged_offline_hlt_concat_v2",
     }:
         raise ValueError("TRI60 model-input protocol differs")
     if model_input_protocol != "standard_hlt_v1" and (

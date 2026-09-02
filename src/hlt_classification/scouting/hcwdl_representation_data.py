@@ -86,8 +86,8 @@ def _rows(value: object) -> list[np.ndarray]:
     return [np.asarray(row) for row in value]  # type: ignore[arg-type]
 
 
-def derive_hcwdl_token_metadata(
-    arrays: Mapping[str, object], *, max_length: int = HLT_MAX_LENGTH,
+def _derive_hcwdl_token_metadata(
+    arrays: Mapping[str, object], *, max_length: int,
 ) -> HCWDLTokenMetadata:
     """Classify raw HLT tokens exactly as Section 9.4 requires.
 
@@ -96,8 +96,8 @@ def derive_hcwdl_token_metadata(
     would otherwise hide it.
     """
 
-    if max_length <= 0 or max_length > HLT_MAX_LENGTH:
-        raise ValueError(f"HCWDL HLT max_length must lie in [1,{HLT_MAX_LENGTH}]")
+    if max_length <= 0:
+        raise ValueError("HCWDL HLT metadata length must be positive")
     missing = [name for name in (RAW_CHARGE_BRANCH, *RAW_PID_BRANCHES) if name not in arrays]
     if missing:
         raise KeyError(f"HCWDL raw token metadata branches are absent: {missing}")
@@ -163,6 +163,34 @@ def derive_hcwdl_token_metadata(
         np.ascontiguousarray(family),
         np.ascontiguousarray(reason),
     )
+
+
+def derive_hcwdl_token_metadata(
+    arrays: Mapping[str, object], *, max_length: int = HLT_MAX_LENGTH,
+) -> HCWDLTokenMetadata:
+    """Derive ordinary HLT metadata under the deployable 200-token bound."""
+
+    if max_length <= 0 or max_length > HLT_MAX_LENGTH:
+        raise ValueError(f"HCWDL HLT max_length must lie in [1,{HLT_MAX_LENGTH}]")
+    return _derive_hcwdl_token_metadata(arrays, max_length=max_length)
+
+
+def derive_extended_training_hlt_token_metadata(
+    arrays: Mapping[str, object], *, max_length: int,
+) -> HCWDLTokenMetadata:
+    """Derive metadata beyond 200 only for an explicit privileged view.
+
+    The ordinary public helper remains capped by ``HLT_MAX_LENGTH``.  This
+    adapter reuses its exact classification semantics while authorizing a
+    larger transport tensor for nondeployable training/oracle inputs.
+    """
+
+    if max_length <= HLT_MAX_LENGTH:
+        raise ValueError("extended HLT metadata requires a length above 200")
+    # The classification implementation is length-agnostic. Temporarily use
+    # the requested transport length through the private shared body rather
+    # than weakening the deployable helper's public bound.
+    return _derive_hcwdl_token_metadata(arrays, max_length=max_length)
 
 
 def attach_hcwdl_token_metadata(
@@ -294,6 +322,7 @@ __all__ = [
     "RAW_CHARGE_BRANCH", "RAW_PID_BRANCHES", "attach_hcwdl_token_metadata",
     "build_hcwdl_hlt_inputs", "canonical_identity_digest",
     "canonical_identity_digests", "derive_hcwdl_token_metadata",
+    "derive_extended_training_hlt_token_metadata",
     "iterate_hcwdl_model_batches", "iterate_hcwdl_pmard_batches",
     "training_batch_from_parent",
 ]

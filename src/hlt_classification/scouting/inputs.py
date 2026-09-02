@@ -96,6 +96,40 @@ def build_hlt_inputs(
     return ParticleInputs(features, vectors, mask, lengths)
 
 
+def transform_hlt_endpoint_features(raw_features: np.ndarray) -> np.ndarray:
+    """Apply the canonical 21-channel HLT transform without a length cap.
+
+    This helper only transforms an already authenticated raw endpoint matrix.
+    It does not change the ordinary deployable 200-token ``build_hlt_inputs``
+    contract; privileged training-only views can use it when they must retain
+    every raw HLT particle.
+    """
+
+    raw = np.asarray(raw_features)
+    if raw.ndim != 2 or raw.shape[1] != len(HLT_FEATURE_SPECS):
+        raise ValueError("raw HLT endpoint features must be [tokens,21]")
+    transformed = np.empty(raw.shape, dtype=np.float32)
+    for channel, spec in enumerate(HLT_FEATURE_SPECS):
+        transformed[:, channel] = _sanitize_transform(
+            raw[:, channel], spec.median, spec.factor, spec.lower, spec.upper,
+        )
+    return np.ascontiguousarray(transformed)
+
+
+def transform_hlt_endpoint_vectors(raw_vectors: np.ndarray) -> np.ndarray:
+    """Apply the canonical finite-value sanitation to an unbounded HLT p4."""
+
+    raw = np.asarray(raw_vectors)
+    if raw.ndim != 2 or raw.shape[1] != len(HLT_VECTOR_BRANCHES):
+        raise ValueError("raw HLT endpoint vectors must be [tokens,4]")
+    transformed = np.empty(raw.shape, dtype=np.float32)
+    for channel in range(raw.shape[1]):
+        transformed[:, channel] = _sanitize_transform(
+            raw[:, channel], 0, 1, -1.0e32, 1.0e32,
+        )
+    return np.ascontiguousarray(transformed)
+
+
 def _build_native_group(
     arrays: Mapping[str, object], *, prefix: str, feature_names: Sequence[str],
     max_length: int,
@@ -153,4 +187,6 @@ def deployment_length(raw_length: int) -> int:
 __all__ = [
     "NativeOfflineInputs", "ParticleInputs", "build_hlt_inputs",
     "build_native_offline_inputs", "deployment_length",
+    "transform_hlt_endpoint_features",
+    "transform_hlt_endpoint_vectors",
 ]

@@ -16,9 +16,11 @@ from .hcwdl_homotopy_stream import _selected_record_rows
 from .hcwdl_representation_data import (
     CHARGED_FAMILY, DIRECT_CHARGED_REASON, DIRECT_NEUTRAL_REASON,
     HCWDLTaggedParticleInputs, NEUTRAL_FAMILY, PADDED_FAMILY, PADDED_REASON,
-    derive_hcwdl_token_metadata,
+    derive_extended_training_hlt_token_metadata,
 )
-from .inputs import build_hlt_inputs
+from .inputs import (
+    transform_hlt_endpoint_features, transform_hlt_endpoint_vectors,
+)
 from .labels import baseline_mask, multiclass_labels
 from .repair import full_endpoint_required_branches, transform_endpoint_features
 from .schema import BASELINE_BRANCHES, LABEL_BRANCHES, hlt_required_branches
@@ -27,11 +29,11 @@ from .splits import role_records
 from .streaming import iterate_projected_chunks
 
 
-TAGGED_CONCAT_VIEW_CONTRACT: Final = "HCWDL_OFFLINE_HLT_TAGGED_CONCAT_VIEW/v1"
+TAGGED_CONCAT_VIEW_CONTRACT: Final = "HCWDL_OFFLINE_HLT_TAGGED_CONCAT_VIEW/v2"
 OFFLINE_CONTENT: Final = np.int8(0)
 HLT_CONTENT: Final = np.int8(1)
 PADDED_CONTENT: Final = np.int8(-1)
-CONCAT_CAPACITY: Final = 400
+CONCAT_CAPACITY: Final = 496
 
 
 def tagged_concat_required_branches() -> set[str]:
@@ -53,10 +55,9 @@ def build_tagged_concat_inputs(
     hlt = prepare_hlt_endpoints(arrays)
     if offline.rows != hlt.rows:
         raise ValueError("concatenation endpoint row counts differ")
-    if np.any(hlt.raw_lengths > 200):
-        raise ValueError("concatenation HLT endpoint exceeds authenticated capacity")
-    hlt_inputs = build_hlt_inputs(arrays, max_length=200)
-    hlt_metadata = derive_hcwdl_token_metadata(arrays, max_length=200)
+    hlt_metadata = derive_extended_training_hlt_token_metadata(
+        arrays, max_length=capacity,
+    )
     rows = offline.rows
     features = np.zeros((rows, 21, capacity), np.float32)
     vectors = np.zeros((rows, 4, capacity), np.float32)
@@ -92,8 +93,13 @@ def build_tagged_concat_inputs(
         if hlt_count:
             start = offline_count
             stop = total
-            features[row, :, start:stop] = hlt_inputs.features[row, :, :hlt_count]
-            vectors[row, :, start:stop] = hlt_inputs.vectors[row, :, :hlt_count]
+            projected_hlt = transform_hlt_endpoint_features(hlt.raw_features[row])
+            if projected_hlt.shape != (hlt_count, 21):
+                raise ValueError("HLT projected endpoint shape differs")
+            features[row, :, start:stop] = projected_hlt.T
+            vectors[row, :, start:stop] = transform_hlt_endpoint_vectors(
+                hlt.p4[row],
+            ).T
             family[row, start:stop] = hlt_metadata.family_codes[row, :hlt_count]
             reason[row, start:stop] = hlt_metadata.family_reason_codes[row, :hlt_count]
             sources[row, start:stop] = HLT_CONTENT

@@ -31,12 +31,12 @@ from .hcwdl_tri100_spine4_bottleneck_source import (
 )
 
 
-CREATION_PHRASE: Final = "AUTHORIZE HCWDL TAGGED CONCAT PILOT EXACT SPEC"
-SUBMISSION_PHRASE: Final = "SUBMIT HCWDL TAGGED CONCAT PILOT EXACT LEDGER"
+CREATION_PHRASE: Final = "AUTHORIZE HCWDL TAGGED CONCAT PILOT V2 EXACT SPEC"
+SUBMISSION_PHRASE: Final = "SUBMIT HCWDL TAGGED CONCAT PILOT V2 EXACT LEDGER"
 RECOVERY_SUBMISSION_PHRASE: Final = (
-    "SUBMIT HCWDL TAGGED CONCAT PILOT RECOVERY EXACT LEDGER"
+    "SUBMIT HCWDL TAGGED CONCAT PILOT V2 RECOVERY EXACT LEDGER"
 )
-JOB_PREFIX: Final = "hcwcat1"
+JOB_PREFIX: Final = "hcwcat2"
 
 
 @dataclass(frozen=True)
@@ -225,7 +225,9 @@ def create_campaign(
         "tasks": tasks(),
         "resources": {name: asdict(value) for name, value in RESOURCES.items()},
         "fresh_fit_count": 1, "science_node": NODE_ID,
-        "input_sequence": "offline_then_hlt_v1", "capacity": 400,
+        "input_sequence": "offline_then_hlt_v1", "capacity": 496,
+        "ordinary_hlt_200_token_cap_applies": False,
+        "all_raw_hlt_particles_retained": True,
         "ce_weight": 1.0, "kd_weight": 0.0, "passes": 60,
         "batch_size": 256, "single_gpu": True,
         "ram_only_particle_views": True, "durable_particle_views": False,
@@ -287,7 +289,9 @@ def validate_campaign(value: Mapping[str, Any], *, executable: bool = False) -> 
         or value.get("fresh_fit_count") != 1
         or value.get("science_node") != NODE_ID
         or value.get("input_sequence") != "offline_then_hlt_v1"
-        or value.get("capacity") != 400
+        or value.get("capacity") != 496
+        or value.get("ordinary_hlt_200_token_cap_applies") is not False
+        or value.get("all_raw_hlt_particles_retained") is not True
         or value.get("passes") != 60 or value.get("batch_size") != 256
         or value.get("ram_only_particle_views") is not True
         or value.get("durable_particle_views") is not False

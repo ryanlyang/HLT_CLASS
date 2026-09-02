@@ -79,11 +79,29 @@ def test_tagged_concat_fails_instead_of_truncating():
         if name.startswith("scoutpfcand_"):
             arrays[name] = [np.resize(np.asarray(rows[0]), 200)]
         elif name.startswith("cpfcandlt_"):
-            arrays[name] = [np.resize(np.asarray(rows[0]), 201)]
+            arrays[name] = [np.resize(np.asarray(rows[0]), 297)]
     arrays["n_scoutpfcands"] = np.asarray([200], np.int32)
-    arrays["n_cpfcands"] = np.asarray([201], np.int32)
+    arrays["n_cpfcands"] = np.asarray([297], np.int32)
     with pytest.raises(ValueError, match="hidden truncation"):
         build_tagged_concat_inputs(arrays)
+
+
+def test_tagged_concat_retains_raw_hlt_particles_beyond_deployable_cap():
+    arrays = _raw_arrays()
+    for name, rows in list(arrays.items()):
+        if name.startswith("scoutpfcand_"):
+            arrays[name] = [np.resize(np.asarray(rows[0]), 214)]
+        elif name.startswith("cpfcandlt_"):
+            arrays[name] = [np.resize(np.asarray(rows[0]), 278)]
+    arrays["n_scoutpfcands"] = np.asarray([214], np.int32)
+    arrays["n_cpfcands"] = np.asarray([278], np.int32)
+    view = build_tagged_concat_inputs(arrays)
+    assert view.features.shape == (1, 21, 496)
+    assert view.raw_lengths.tolist() == [493]
+    assert view.mask[0, 0, :493].all()
+    assert not view.mask[0, 0, 493:].any()
+    assert np.all(view.content_source_codes[0, :279] == OFFLINE_CONTENT)
+    assert np.all(view.content_source_codes[0, 279:493] == HLT_CONTENT)
 
 
 def test_normalized_batch_keeps_source_codes_outside_physics_features():
@@ -191,11 +209,11 @@ def test_tri60_engine_tagged_protocol_is_opt_in_and_persisted(tmp_path):
         runtime=Tri60TrainingRuntime(passes=2,batch_size=30),
         execution_mode="synthetic_test",model_factory=Tiny,
         authority=training_authority(),
-        model_input_protocol="tagged_offline_hlt_concat_v1",
+        model_input_protocol="tagged_offline_hlt_concat_v2",
     )
-    assert report["model_input_protocol"] == "tagged_offline_hlt_concat_v1"
+    assert report["model_input_protocol"] == "tagged_offline_hlt_concat_v2"
     checkpoint=torch.load(tmp_path/"selected_model.pt",map_location="cpu",weights_only=False)
-    assert checkpoint["model_input_protocol"] == "tagged_offline_hlt_concat_v1"
+    assert checkpoint["model_input_protocol"] == "tagged_offline_hlt_concat_v2"
 
 
 def test_campaign_is_one_isolated_fit_with_required_gates(tmp_path, monkeypatch):
@@ -225,6 +243,8 @@ def test_campaign_is_one_isolated_fit_with_required_gates(tmp_path, monkeypatch)
     task_ids = [row["task_id"] for row in spec["tasks"]]
     assert spec["existing_campaign_dependencies"] == []
     assert spec["ram_only_particle_views"] is True
+    assert spec["capacity"] == 496
+    assert spec["all_raw_hlt_particles_retained"] is True
     plan=__import__("json").loads((tmp_path/"campaign/command_plan.json").read_text())
     assert len(plan["commands"]) == 6
     gate_plan=__import__("json").loads((tmp_path/"campaign/gate_command_plan.json").read_text())

@@ -13,7 +13,7 @@ from .hcwdl_offline_hlt_concat_contracts import (
 
 
 NODE_ID: Final = "CONCAT_TAGGED"
-MODEL_INPUT_PROTOCOL: Final = "tagged_offline_hlt_concat_v1"
+MODEL_INPUT_PROTOCOL: Final = "tagged_offline_hlt_concat_v2"
 
 
 def node() -> Tri60Node:
@@ -30,7 +30,7 @@ def node() -> Tri60Node:
 
 
 _GRAPH_BODY: Final = {
-    "contract": GRAPH_CONTRACT, "schema_version": 1,
+    "contract": GRAPH_CONTRACT, "schema_version": 2,
     "campaign_label": "HCWDL-OFFLINE-HLT-TAGGED-CONCAT-PILOT",
     "node": node().payload(), "fit_order": [NODE_ID],
     "fresh_fit_count": 1, "input_sequence": "offline_then_hlt_v1",
@@ -77,7 +77,9 @@ def recipe_payload() -> dict[str, object]:
         },
         "loss": {"ce_weight": 1.0, "kd_weight": 0.0, "temperature": 1.0},
         "view": {
-            "capacity": 400, "order": "offline_then_hlt_v1",
+            "capacity": 496, "order": "offline_then_hlt_v1",
+            "ordinary_hlt_200_token_cap_applies": False,
+            "all_raw_hlt_particles_retained": True,
             "zero_truncation_required": True, "deduplicate_matches": False,
             "content_source_codes": {"offline": 0, "hlt": 1, "padding": -1},
         },
