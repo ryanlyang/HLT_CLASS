@@ -2,12 +2,17 @@
 
 This contract governs Strategy A of the implementation-authoritative
 adjacent-view handoff plan. Its artifact family is
-`HCWDL_ADJACENT_OUTPUT_FUSION_HANDOFF_*/v1`.
+`HCWDL_ADJACENT_OUTPUT_FUSION_HANDOFF_*/v2`.
 
 ## Scientific graph
 
-The read-only source carrier is one explicitly selected, authenticated
-full-cardinality `U100` model. The sequential path is
+The read-only source carrier is the explicitly selected, authenticated
+non-persistent full-cardinality `SP4_COARSE_U100_from_U050` model (production
+job `98318`). It uses the established `replace_source_with_target_v1` support
+semantics; the later persistent-HLT `SP4P` lineage is a distinct experiment
+and is forbidden as a substitute. The scheduler ID is an operational locator;
+the source spec, report, checkpoint, graph, recipe, foundation, and assignment
+content hashes form the scientific identity. The sequential path is
 `U100 -> D080 -> D060 -> D040 -> D020 -> D000`. At each transition a cold
 lower-view direct model is trained with C25/P75, T=2 LOGIT KD. Two output
 mixture families then combine the richer carrier and lower model over the
@@ -70,7 +75,7 @@ join time. This halves train-bank storage and prevents mixing already softened
 targets as if they were model outputs.
 
 The gate preflight reads a genuine validation row through the authenticated
-full-cardinality U100 stream and executes the installed production Scouting
+non-persistent full-cardinality U100 stream and executes the installed production Scouting
 Particle Transformer through a C25/P75, T=2 forward/backward update on one
 Tigris GH200. Full science submission requires that immutable acceptance lock.
 

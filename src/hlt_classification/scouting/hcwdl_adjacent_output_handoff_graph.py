@@ -10,12 +10,12 @@ from hlt_classification.data.cache_contracts import canonical_sha256, with_conte
 
 from .hcwdl_homotopy import HomotopyCoordinate
 from .hcwdl_adjacent_output_handoff_contracts import (
-    GRAPH_CONTRACT, RECIPE_CONTRACT, artifact,
+    GRAPH_CONTRACT, RECIPE_CONTRACT, SCHEMA_VERSION, artifact,
 )
 
 
 CAMPAIGN_LABEL: Final = "HCWDL-ADJACENT-OUTPUT-FUSION-HANDOFF"
-SEED_DOMAIN: Final = f"{CAMPAIGN_LABEL}/v1"
+SEED_DOMAIN: Final = f"{CAMPAIGN_LABEL}/v2"
 COORDINATE_ORDER: Final = ("U100", "D080", "D060", "D040", "D020", "D000")
 LOWER_COORDINATES: Final = COORDINATE_ORDER[1:]
 TERMINAL_SEEDS: Final = ("S1", "S2", "S3", "S4", "S5")
@@ -227,6 +227,11 @@ def recipe_payload() -> dict[str, object]:
             "consumer_temperature_derived_in_ram_at_identity_join": True,
             "duplicate_softened_train_bank": False,
         },
+        "source_view": {
+            "campaign_family": "fullcard_bottleneck_nonpersistent_v2",
+            "node_id": "SP4_COARSE_U100_from_U050",
+            "support_policy": "replace_source_with_target_v1",
+        },
         "report_role": "V_report", "checkpoint_role": "V_checkpoint",
         "initialization": "cold_start_all_fits", "rolling_resume": False,
         "durable_particle_views": False, "durable_hidden_states": False,
@@ -235,14 +240,17 @@ def recipe_payload() -> dict[str, object]:
 
 
 _GRAPH_BODY: Final = {
-    "contract": GRAPH_CONTRACT, "schema_version": 1,
+    "contract": GRAPH_CONTRACT, "schema_version": SCHEMA_VERSION,
     "campaign_label": CAMPAIGN_LABEL, "coordinate_order": list(COORDINATE_ORDER),
     "coordinates": {k: v.payload() for k, v in COORDINATES.items()},
     "nodes": [NODE_REGISTRY[n].payload() for n in FIT_ORDER],
     "fit_order": list(FIT_ORDER), "terminal_seeds": list(TERMINAL_SEEDS),
     "selection_ids": list(SELECTION_IDS), "ensemble_ids": list(ENSEMBLE_IDS),
     "fresh_fit_count": len(FIT_ORDER), "source_anchor": "SOURCE_U100",
-    "strategy": "performance_constrained_output_fusion_handoff_v1",
+    "strategy": "performance_constrained_output_fusion_handoff_v2",
+    "source_campaign_family": "fullcard_bottleneck_nonpersistent_v2",
+    "source_node_id": "SP4_COARSE_U100_from_U050",
+    "source_support_policy": "replace_source_with_target_v1",
     "final_test_accessed": False,
 }
 GRAPH_SHA256: Final = canonical_sha256(_GRAPH_BODY)

@@ -215,7 +215,7 @@ def create_campaign(
             "population_lock": str(root / "locks/population.json"),
             "seed_lock": str(root / "locks/seeds.json"),
             "foundation_spec": source["foundation_spec_path"],
-            "support_audit": source["support_audit_path"],
+            "foundation_lock": source["foundation_lock_path"],
             "graph": str(root / "graph.json"), "recipe": str(root / "recipe.json"),
             "validation_partition": str(root / "locks/validation_partition.json"),
             "execution_acceptance": str(root / "locks/execution_acceptance.json"),

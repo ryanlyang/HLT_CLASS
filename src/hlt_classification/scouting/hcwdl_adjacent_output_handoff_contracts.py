@@ -10,7 +10,7 @@ from hlt_classification.data.cache_contracts import (
 
 
 PREFIX: Final = "HCWDL_ADJACENT_OUTPUT_FUSION_HANDOFF"
-SCHEMA_VERSION: Final = 1
+SCHEMA_VERSION: Final = 2
 
 _NAMES: Final = (
     "GRAPH", "RECIPE", "SOURCE_LOCK", "POPULATION_LOCK",
@@ -24,7 +24,7 @@ _NAMES: Final = (
     "SUBMISSION_LEDGER", "MONITOR", "RECOVERY_SPEC",
     "RECOVERY_COMMAND_PLAN",
 )
-CONTRACTS: Final = tuple(f"{PREFIX}_{name}/v1" for name in _NAMES)
+CONTRACTS: Final = tuple(f"{PREFIX}_{name}/v2" for name in _NAMES)
 
 (
     GRAPH_CONTRACT, RECIPE_CONTRACT, SOURCE_LOCK_CONTRACT,

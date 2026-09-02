@@ -37,6 +37,12 @@ from .hcwdl_adjacent_output_handoff_probability import (
     publish_probability_lock, publish_probability_role, validate_probability_lock,
 )
 from .hcwdl_adjacent_output_handoff_source import validate_source_lock
+from .hcwdl_adjacent_output_handoff_source import (
+    FULLCARD_FINAL_CHECKPOINT_CONTRACT,
+    FULLCARD_SELECTED_CHECKPOINT_CONTRACT,
+    FULLCARD_TRAINING_REPORT_CONTRACT,
+)
+from .hcwdl_fullcard_bottleneck_foundation_campaign import validate_foundation
 from .hcwdl_mhpe_tri60_runner import _configure_deterministic_backend, _infer_cache
 from .hcwdl_mhpe_tri60_runner import _student_caches as tri60_student_caches
 from .hcwdl_mhpe_tri60_ce_control import load_control_model
@@ -44,11 +50,8 @@ from .hcwdl_mhpe_tri60_training import (
     Tri60TrainingAuthority, Tri60TrainingRuntime, load_tri60_model,
     train_tri60_node,
 )
-from .hcwdl_tri100_spine4_bottleneck_graph import NODE_REGISTRY as SOURCE_NODES
-from .hcwdl_tri100_spine4_bottleneck_runner import (
-    _student_caches as fullcard_student_caches,
-    training_authority as source_training_authority,
-)
+from .hcwdl_tri100_spine4_graph import NODE_REGISTRY as SOURCE_NODES
+from .hcwdl_unified_balanced_runner import _cache_student_views, _load_common
 from .training import derive_seed
 
 
@@ -111,9 +114,46 @@ def _source_spec(spec: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _caches(spec: Mapping[str, Any], node):
-    # The established full-cardinality runner is the sole view constructor.
-    # It reads only the new spec's authenticated foundation and support policy.
-    return fullcard_student_caches(spec, node=node)
+    return _fullcard_student_caches(spec, node=node)
+
+
+def _fullcard_student_caches(spec: Mapping[str, Any], *, node):
+    """Construct the historical non-persistent full-cardinality view exactly."""
+
+    foundation = load_json(spec["artifact_paths"]["foundation_spec"])
+    validate_foundation(foundation)
+    split, split_hash, selection_hash, selections, assignments, balanced = _load_common(
+        foundation,
+    )
+    sampler_seed = derive_seed(
+        int(spec["replicate_seed"]), node.seed_alias + "/sampler",
+    )
+    repair_seed = derive_seed(
+        int(spec["replicate_seed"]), "tri60/repair/shared_v1",
+    )
+    behavior = "hlt" if node.coordinate_name == "D000" else "balanced_uniform"
+    caches, input_key = _cache_student_views(
+        foundation_spec=foundation, split=split, selections=selections,
+        assignments=assignments, balanced=balanced, behavior=behavior,
+        coordinate=node.coordinate, batch_size=256, sampler_seed=sampler_seed,
+        repair_seed=repair_seed, memory_gib=240.0,
+        include_hcwdl_metadata=True,
+    )
+    return foundation, split_hash, selection_hash, caches, input_key
+
+
+def _source_training_authority(source: Mapping[str, Any]) -> Tri60TrainingAuthority:
+    node_id = str(source["u100_node_id"])
+    authority = Tri60TrainingAuthority(
+        node=SOURCE_NODES[node_id],
+        graph_sha256=str(source["parents"]["source_graph"]),
+        training_report_contract=FULLCARD_TRAINING_REPORT_CONTRACT,
+        selected_checkpoint_contract=FULLCARD_SELECTED_CHECKPOINT_CONTRACT,
+        final_checkpoint_contract=FULLCARD_FINAL_CHECKPOINT_CONTRACT,
+        allowed_training_passes=(100,),
+    )
+    authority.validate()
+    return authority
 
 
 def _partition_lookup(spec: Mapping[str, Any]):
@@ -145,7 +185,7 @@ def _split_validation(
 def run_partition(spec: Mapping[str, Any]) -> dict[str, Any]:
     validate_campaign(spec); source = _source(spec); source_spec = _source_spec(spec)
     node = SOURCE_NODES[source["u100_node_id"]]
-    _, split_hash, selection_hash, caches, _ = fullcard_student_caches(source_spec, node=node)
+    _, split_hash, selection_hash, caches, _ = _fullcard_student_caches(source_spec, node=node)
     try:
         cache = caches["validation"]
         if cache.identity_digests is None:
@@ -177,7 +217,7 @@ def _load_source_model(spec: Mapping[str, Any], *, device: str):
     source = _source(spec); source_spec = _source_spec(spec)
     return load_tri60_model(
         source["u100_report_path"], device=device,
-        authority=source_training_authority(source["u100_node_id"]),
+        authority=_source_training_authority(source),
     ), source_spec, SOURCE_NODES[source["u100_node_id"]]
 
 
@@ -290,7 +330,7 @@ def run_model_reducer(
         node = NODE_REGISTRY[node_id]; cache_spec = spec
         distribution_id = node_distribution(node_id)
         report_hash = report["content_hash"]; checkpoint_hash = report["selected_checkpoint_sha256"]
-    _, split_hash, selection_hash, caches, input_key = fullcard_student_caches(cache_spec, node=node)
+    _, split_hash, selection_hash, caches, input_key = _fullcard_student_caches(cache_spec, node=node)
     sampler_seed = derive_seed(int(spec["replicate_seed"]), node.seed_alias + "/sampler")
     started = time.monotonic()
     try:

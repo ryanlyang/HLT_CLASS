@@ -28,8 +28,15 @@ from hlt_classification.scouting.hcwdl_adjacent_output_handoff_probability impor
 )
 from hlt_classification.scouting.evaluation import classification_metrics
 from hlt_classification.scouting.hcwdl_adjacent_output_handoff_source import (
-    build_control_lock, validate_control_lock,
+    FULLCARD_GRAPH_CONTRACT, FULLCARD_RECIPE_CONTRACT,
+    FULLCARD_SPEC_CONTRACT, FULLCARD_TRAINING_REPORT_CONTRACT,
+    SOURCE_CAMPAIGN_FAMILY, SOURCE_U100_NODE_ID,
+    build_control_lock, build_source_lock, validate_control_lock,
 )
+from hlt_classification.scouting.hcwdl_fullcard_bottleneck_contracts import (
+    FOUNDATION_LOCK_CONTRACT,
+)
+from hlt_classification.scouting.hcwdl_homotopy import DEFAULT_SUPPORT_POLICY
 from hlt_classification.scouting.hcwdl_mhpe_tri60_ce_control_contracts import (
     TRAINING_REPORT_CONTRACT as CE60_REPORT_CONTRACT,
 )
@@ -192,6 +199,93 @@ def test_probability_bundle_round_trip_is_compact_and_identity_joined(tmp_path: 
     assert not list(tmp_path.glob("*particle*"))
 
 
+def test_source_is_completed_nonpersistent_coarse_u100(tmp_path: Path, monkeypatch):
+    from hlt_classification.scouting import hcwdl_adjacent_output_handoff_source as source
+
+    foundation_root = tmp_path / "foundation"
+    foundation_root.mkdir()
+    assignment_hash = "d" * 64
+    foundation_lock = with_content_hash({
+        "contract": FOUNDATION_LOCK_CONTRACT, "schema_version": 1,
+        "parents": {"assignment_lock": assignment_hash},
+        "final_test_accessed": False,
+    })
+    foundation_lock_path = foundation_root / "foundation-lock.json"
+    write_immutable_json(foundation_lock_path, foundation_lock)
+    foundation = with_content_hash({
+        "contract": "TEST_FULLCARD_FOUNDATION/v1", "schema_version": 1,
+        "artifact_paths": {"foundation_lock": str(foundation_lock_path)},
+        "final_test_accessed": False,
+    })
+    foundation_path = foundation_root / "foundation_spec.json"
+    write_immutable_json(foundation_path, foundation)
+    monkeypatch.setattr(
+        source, "validate_foundation", lambda value: value["content_hash"],
+    )
+
+    root = tmp_path / "source"
+    node_root = root / "training" / SOURCE_U100_NODE_ID
+    node_root.mkdir(parents=True)
+    graph = source._historical_graph_payload()
+    recipe = source._historical_recipe_payload()
+    graph_path = root / "graph.json"; recipe_path = root / "recipe.json"
+    write_immutable_json(graph_path, graph); write_immutable_json(recipe_path, recipe)
+    spec = with_content_hash({
+        "contract": FULLCARD_SPEC_CONTRACT, "schema_version": 1,
+        "campaign_root": str(root.resolve()),
+        "artifact_paths": {
+            "graph": str(graph_path), "recipe": str(recipe_path),
+            "foundation_spec": str(foundation_path),
+        },
+        "parents": {
+            "graph": graph["content_hash"], "recipe": recipe["content_hash"],
+            "foundation_spec": foundation["content_hash"],
+            "foundation": foundation_lock["content_hash"],
+            "assignment_lock": assignment_hash,
+        },
+        "replicate_seed": 17,
+        "role_counts": {"train": 30, "validation": 30, "final_test": 30},
+        "fresh_fit_count": 29, "reducer_count": 25,
+        "only_changed_variable": "particle_pairing_foundation_lineage",
+        "population_policy": "all_authenticated_mapped_rows_v1",
+        "ordinary_access_roles": ["train", "validation"],
+        "ordinary_final_test_capability": False,
+        "existing_campaign_dependencies": [],
+        "existing_campaign_outputs_mutated": False,
+        "ensembles": False, "weight_continuation": False,
+        "immediate_parent_only": True, "rolling_resume": False,
+        "partial_checkpoint_reuse": False, "final_test_accessed": False,
+    })
+    spec_path = root / "campaign_spec.json"
+    write_immutable_json(spec_path, spec)
+    checkpoint = node_root / "selected.pt"; checkpoint.write_bytes(b"u100")
+    report = with_content_hash({
+        "contract": FULLCARD_TRAINING_REPORT_CONTRACT, "schema_version": 1,
+        "node_id": SOURCE_U100_NODE_ID,
+        "node_spec": source.FULLCARD_NODES[SOURCE_U100_NODE_ID].payload(),
+        "complete": True,
+        "campaign_spec_sha256": spec["content_hash"],
+        "graph_sha256": graph["content_hash"],
+        "recipe_sha256": recipe["content_hash"],
+        "selected_checkpoint": checkpoint.name,
+        "selected_checkpoint_sha256": sha256_file(checkpoint),
+        "resume_policy": "disabled_restart_from_zero_v1",
+        "rolling_resume_published": False, "final_test_accessed": False,
+    })
+    report_path = node_root / "training_report.json"
+    write_immutable_json(report_path, report)
+    lock = build_source_lock(
+        source_campaign_spec=spec_path, u100_training_report=report_path,
+        u100_selected_checkpoint=checkpoint,
+    )
+    assert lock["u100_node_id"] == SOURCE_U100_NODE_ID
+    assert lock["source_campaign_family"] == SOURCE_CAMPAIGN_FAMILY
+    assert lock["support_policy"] == DEFAULT_SUPPORT_POLICY
+    assert lock["operational_source_job_id"] == "98318"
+    assert lock["scientific_identity_uses_artifact_hashes_not_scheduler_id"] is True
+    assert lock["foundation_lock_path"] == str(foundation_lock_path.resolve())
+
+
 def test_reporting_control_lock_binds_selected_checkpoints_and_u000_campaign(tmp_path: Path):
     m0_dir = tmp_path / "m0" / "training" / "M0CE60"
     u000_root = tmp_path / "u000"
@@ -234,7 +328,7 @@ def test_campaign_dag_is_isolated_and_uses_exact_resources(tmp_path: Path, monke
     source = artifact({
         "parents": {"foundation": SHA, "assignment_lock": "c" * 64},
         "foundation_spec_path": str(tmp_path / "foundation.json"),
-        "support_audit_path": str(tmp_path / "support.json"),
+        "foundation_lock_path": str(tmp_path / "foundation-lock.json"),
         "replicate_seed": 17, "role_counts": {"train": 30, "validation": 30},
         "final_test_accessed": False,
     }, contract=SOURCE_LOCK_CONTRACT)

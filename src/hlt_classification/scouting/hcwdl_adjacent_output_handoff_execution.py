@@ -19,9 +19,9 @@ from .hcwdl_adjacent_output_handoff_contracts import (
     EXECUTION_ACCEPTANCE_CONTRACT, artifact, validate_artifact,
 )
 from .hcwdl_adjacent_output_handoff_source import validate_source_lock
-from .hcwdl_homotopy import PERSISTENT_HLT_SUPPORT_POLICY
+from .hcwdl_homotopy import DEFAULT_SUPPORT_POLICY
 from .hcwdl_homotopy_stream import iterate_unified_balanced_batches
-from .hcwdl_tri100_spine4_bottleneck_graph import NODE_REGISTRY as SOURCE_NODES
+from .hcwdl_tri100_spine4_graph import NODE_REGISTRY as SOURCE_NODES
 from .hcwdl_unified_balanced_runner import _load_common
 from .training import derive_seed
 
@@ -48,7 +48,7 @@ def run_execution_acceptance(
         row_selection=selections["validation"], coordinate=node.coordinate,
         repair_seed=repair_seed, batch_size=2, workers=1,
         include_training_metadata=True,
-        support_policy=PERSISTENT_HLT_SUPPORT_POLICY,
+        support_policy=DEFAULT_SUPPORT_POLICY,
     )
     try:
         batch = next(stream)
@@ -117,7 +117,7 @@ def run_execution_acceptance(
         "slurm_tasks": os.environ.get("SLURM_NTASKS"),
         "visible_cuda_devices": visible, "device_name": name,
         "view_role": "validation", "view_coordinate": "U100",
-        "view_rows": len(labels), "support_policy": PERSISTENT_HLT_SUPPORT_POLICY,
+        "view_rows": len(labels), "support_policy": DEFAULT_SUPPORT_POLICY,
         "production_model_factory": "build_scouting_particle_transformer",
         "production_model_output_shape": [len(labels), 15],
         "loss_semantics": "C25P75_T2",
@@ -145,7 +145,7 @@ def validate_execution_acceptance(
         or value.get("view_role") != "validation"
         or value.get("source_campaign_spec_sha256") != source_spec["content_hash"]
         or value.get("view_coordinate") != "U100"
-        or value.get("support_policy") != PERSISTENT_HLT_SUPPORT_POLICY
+        or value.get("support_policy") != DEFAULT_SUPPORT_POLICY
         or int(value.get("view_rows", 0)) < 1
         or value.get("production_model_factory") != "build_scouting_particle_transformer"
         or value.get("production_model_output_shape") != [int(value["view_rows"]), 15]

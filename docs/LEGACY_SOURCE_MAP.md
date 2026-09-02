@@ -20,6 +20,27 @@ Because the donor worktree was dirty, the commit alone is insufficient for
 uncommitted donor files. Each migration block must additionally record the
 exact donor path and source content hash used.
 
+## Historical full-cardinality U100 compatibility adapter
+
+The adjacent output-handoff `/v2` family consumes the immutable
+non-persistent full-cardinality `SP4_COARSE_U100_from_U050` artifact produced
+by Tigris job `98318`. The source family was implemented at clean
+same-repository commit `965bdad6aea2fdf81356275dfcdca698717a471f` and its
+module names were later reused by a separately versioned persistent-HLT
+experiment. The adapter therefore preserves the historical contract and view
+construction locally instead of importing the current persistent-HLT module.
+The source checkpoint and report remain read-only artifact parents.
+
+| Historical path and Git blob | Current destination | Retained semantics |
+|---|---|---|
+| `src/hlt_classification/scouting/hcwdl_tri100_spine4_bottleneck_contracts.py` — `6e218fecb50c54b2a2f718e958e456eb206d55c7` | `hcwdl_adjacent_output_handoff_source.py` | Exact non-persistent full-cardinality `/v2` source contract identities. |
+| `src/hlt_classification/scouting/hcwdl_tri100_spine4_bottleneck_graph.py` — `058f0a4729137f9e0973b43e68e20769e921e297` | `hcwdl_adjacent_output_handoff_source.py` | Campaign, recipe, pairing, and exact coarse-U100 graph authentication. |
+| `src/hlt_classification/scouting/hcwdl_tri100_spine4_bottleneck_campaign.py` — `0602fc5bfbfff0e3bbbc5d74bfc8390f53cdb598` | `hcwdl_adjacent_output_handoff_source.py` | Immutable campaign-parent and all-mapped-population checks. |
+| `src/hlt_classification/scouting/hcwdl_tri100_spine4_bottleneck_runner.py` — `4002c92c62e4d7ed02ad370db0dfa7fcb3124dac` | `hcwdl_adjacent_output_handoff_runner.py` | Exact `replace_source_with_target_v1` RAM-only student-view reconstruction and historical training authority. |
+| `src/hlt_classification/scouting/hcwdl_tri100_spine4_graph.py` — `3de1bbe6886ac98df76fea9db6d6adc21856bc7e` | reused current module (byte-identical at the compatibility boundary) | Exact `SP4_COARSE_U100_from_U050` node payload and seed alias. |
+
+No runtime import from a detached historical worktree is used.
+
 ## HCWDL representation-KD source integration
 
 The full-data three-track 60-pass campaign integrates the reviewed

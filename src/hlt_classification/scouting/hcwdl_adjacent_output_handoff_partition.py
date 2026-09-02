@@ -19,7 +19,7 @@ from .hcwdl_adjacent_output_handoff_contracts import (
 
 
 PARTITION_NAMES = ("V_checkpoint", "V_blend", "V_report")
-PARTITION_SEED_DOMAIN = "HCWDL-ADJACENT-OUTPUT-FUSION-HANDOFF/v1/validation-partition"
+PARTITION_SEED_DOMAIN = "HCWDL-ADJACENT-OUTPUT-FUSION-HANDOFF/v2/validation-partition"
 
 
 def partition_codes(identity_digests: np.ndarray, labels: np.ndarray) -> np.ndarray:

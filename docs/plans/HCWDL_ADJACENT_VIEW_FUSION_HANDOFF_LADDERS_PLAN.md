@@ -7,6 +7,13 @@ Its normative contract companion is
 `docs/contracts/HCWDL_ADJACENT_OUTPUT_FUSION_HANDOFF.md`. Strategy B remains a
 planned follow-up and is not executable in this artifact family.
 
+The executable Strategy-A source is frozen to the completed non-persistent
+full-cardinality `SP4_COARSE_U100_from_U050` artifact produced by Tigris job
+`98318`. It uses `replace_source_with_target_v1`; neither a persistent-HLT
+`SP4P` U100 nor another branch's U100 is interchangeable. This correction is
+encoded by the `/v2` output-handoff contract family. Job `98318` is recorded
+only as an operational locator; immutable artifact hashes define the source.
+
 Status: implementation-authoritative scientific design. This document freezes
 the best current versions of two proposed adjacent-view transfer strategies.
 It does not authorize implementation, live submission, final-test access, or
@@ -750,7 +757,7 @@ especially the final ordinary `D000` model.
 ### 13.1 Contract and module family
 
 The first campaign introduces a new
-`HCWDL_ADJACENT_OUTPUT_FUSION_HANDOFF_*/v1` artifact family. It must not reuse
+`HCWDL_ADJACENT_OUTPUT_FUSION_HANDOFF_*/v2` artifact family. It must not reuse
 the identity of TRI60 probability ensembles, TRI100 single-component
 reducers, endpoint-mixture diagnostics, or the planned learned-fusion
 campaign.
@@ -859,12 +866,13 @@ highest-scoring or newest directory:
 --source-commit
 ```
 
-The imported `T_U100` must come from the intended completed full-cardinality
-lineage and authenticate its exact `U100` coordinate, train/validation
+The imported `T_U100` is exactly the completed non-persistent full-cardinality
+`SP4_COARSE_U100_from_U050` produced by job `98318`. It must authenticate its
+exact `U100` coordinate, `replace_source_with_target_v1`, train/validation
 population, selected checkpoint, training recipe, seed, and final-test
 boundary. Overall source-campaign completion is not required when those exact
-parents are independently complete and reusable. A different `U100` cannot be
-chosen after looking at this campaign's results.
+parents are independently complete and reusable. A persistent-HLT `SP4P`
+source or a different branch's `U100` cannot be substituted.
 
 If the source does not already expose compatible compact train and validation
 probability locks, the new DAG registers source-pinned inference reducers
