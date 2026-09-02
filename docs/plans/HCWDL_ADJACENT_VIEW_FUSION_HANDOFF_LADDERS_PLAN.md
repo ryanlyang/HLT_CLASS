@@ -4,8 +4,11 @@ Implementation status (2026-09-02): Strategy A is implemented under
 `src/hlt_classification/scouting/hcwdl_adjacent_output_handoff_*.py`, with thin
 create/run/submit/monitor/recovery/print CLIs and source-pinned Slurm workers.
 Its normative contract companion is
-`docs/contracts/HCWDL_ADJACENT_OUTPUT_FUSION_HANDOFF.md`. Strategy B remains a
-planned follow-up and is not executable in this artifact family.
+`docs/contracts/HCWDL_ADJACENT_OUTPUT_FUSION_HANDOFF.md`. Strategy B is now
+implemented as the separate `HCWDL_ADJACENT_LEARNED_FUSION_HANDOFF_*/v1`
+family, whose normative companion is
+`docs/contracts/HCWDL_ADJACENT_LEARNED_FUSION_HANDOFF.md`. The two strategies
+remain non-interchangeable artifact families and neither mutates the other.
 
 The executable Strategy-A source is frozen to the completed non-persistent
 full-cardinality `SP4_COARSE_U100_from_U050` artifact produced by Tigris job
@@ -186,8 +189,9 @@ T_U100
 
 There are ten fresh fits after `T_U100`: one bridge and one compression fit per
 transition. Output mixture construction is evaluation, not training. This
-ten-fit chain is the first implementation target; Strategy B remains deferred
-until the complete output-handoff result exists.
+ten-fit chain was the first implementation target. Strategy B is implemented
+in its own `/v1` artifact family and remains scientifically independent of the
+complete output-handoff result.
 
 ### 5.3 Registered output fusion families
 
@@ -482,6 +486,27 @@ T_U100
 Every arrow ends in a real single-view carrier. A two-view network is never
 silently relabeled as a lower-view model.
 
+#### What "withdrawal" means
+
+The principal learned ladder does **not** morph the richer coordinate into the
+lower coordinate. At the first rung, for example, its training-time inputs
+remain `(context=U100, primary=D080)` throughout both phases. What changes in
+Phase B is the context contribution:
+
+```text
+(U100, D080, alpha=1)
+    -> (U100, D080, 0 < alpha < 1)
+    -> (context not loaded, D080, alpha=0)
+    -> extracted ordinary D080 Particle Transformer
+```
+
+At exact alpha zero, dispatch never constructs or reads `U100`; extraction
+then deletes the context encoder, cross-attention, pair-bias, residual-gate,
+and context-adapter parameters. Thus `T_D080` is genuinely single-view. The
+same invariant applies to every later rung. A different experiment in Section
+7.3 explicitly tests the alternative intuition
+`(U100,D000) -> ... -> (D000,D000)` by changing the context data itself.
+
 ### 6.4 Mandatory within-rung diagnostics
 
 Each unrestricted and withdrawal checkpoint is evaluated as:
@@ -495,24 +520,24 @@ lower primary only, using exact alpha=0 dispatch
 
 The report records the gain supplied by richer context, the gap already
 present at alpha zero before withdrawal, and the recovered fraction after
-withdrawal. Learned residual gates and alpha-dependent validation curves are
-diagnostic only; only lower-only metrics can select the extracted carrier.
+withdrawal. Every selected two-view checkpoint is evaluated at the fixed
+diagnostic alpha grid `[0, 0.25, 0.5, 0.75, 1]` on the same `V_report`
+identities. The interior passes retain metrics only, never logits, particle
+views, or hidden states. Learned residual gates and these alpha-dependent
+validation curves are diagnostic only; only lower-only metrics can select the
+extracted carrier.
 
-## 7. Matched controls and the D000+D000 question
+## 7. Matched controls and terminal continuous-view ablation
 
-At terminal `D000`, the first output campaign registers the five matched
-cold CE-only controls from Section 5.7:
+The learned-fusion campaign must distinguish ordinary KD, additional training,
+parameter count, two-branch capacity, richer-view access, input morphing, and
+successful extraction. These effects are not inferred from contextual results;
+they receive predeclared matched rows.
 
-```text
-CE_D000_Sr = D000 student, C100P0, seed Sr, matched optimization recipe
-```
+### 7.1 Direct-KD control at every rung
 
-Nonterminal CE-only views may be reported from exact authenticated artifacts,
-but the first output campaign does not add four more CE fits merely to populate
-those contextual rows. Such artifacts cannot replace the terminal controls.
-
-At every transition each strategy also includes its own cold direct-KD
-control because its incoming carrier can differ after the first rung:
+At every transition each strategy includes its own cold direct-KD control
+because its incoming carrier can differ after the first rung:
 
 ```text
 OUTPUT_DIRECT_i  = v_i student, C25P75/T2 KD from OUTPUT_T_(i-1)
@@ -523,33 +548,212 @@ Strategy A's `B_i` is `OUTPUT_DIRECT_i`; it is not duplicated. Strategy B
 must train or exactly authenticate `LEARNED_DIRECT_i` against its own parent.
 At the first transition the two direct controls may share one artifact only
 if their `U100` teacher, recipe, seed, and probability lineage are identical.
+At the terminal transition, `DIRECT_KD_D000` is an explicit reporting alias
+for `LEARNED_DIRECT_D000`; it is one fit, not a duplicated row.
 
-The first and final learned-fusion transitions additionally include:
+### 7.2 Matched lower-view and capacity controls
+
+The first and final learned-fusion transitions include the coordinate-generic
+controls below. At terminal `D000`, the more explicit names in parentheses are
+canonical reporting aliases:
 
 ```text
-FUSION_LOW_LOW
-    identical two-branch architecture, both branches receive the lower view
+FUSION_LOW_LOW_i  (terminal: CE_FUSION_D000_D000)
+    identical two-branch learned-fusion architecture
+    primary and context branches both receive v_i
+    alpha fixed to 1; CE only; no teacher KD or withdrawal loss
 
-LOW_WARM_CONTINUE
-    ordinary lower-view carrier continued for the same updates with CE
+LOW_WARM_CONTINUE_i
+    initialize from the selected LEARNED_DIRECT_i single-view checkpoint
+    continue on v_i for the same withdrawal-phase update budget
+    CE only; fresh optimizer and scheduler state
 
-LOW_PARAMETER_MATCHED
-    lower-view-only network with comparable trainable parameter count
+LOW_PARAMETER_MATCHED_i  (terminal: PARAMETER_MATCHED_SINGLE_D000)
+    single-view v_i network with approximately the same trainable parameter
+    count as the two-branch architecture; CE only; architecture frozen before
+    execution and exact parameter counts reported
 ```
 
-`Fusion(D000,D000)` is a useful control but is not the primary endpoint. Three
-different experiments must not be conflated:
+The terminal study also registers:
+
+```text
+CE_SINGLE_D000
+    cold ordinary D000 Particle Transformer
+    CE only, with the matched seed, population, sampler, optimization schedule,
+    early stopping, checkpoint role, and maximum update budget
+```
+
+`CE_SINGLE_D000` is the ordinary from-scratch baseline;
+`LOW_WARM_CONTINUE_D000` is an additional-training control and is not its
+substitute. `PARAMETER_MATCHED_SINGLE_D000` is a capacity diagnostic, not a
+candidate canonical deployment architecture. The terminal
+`CE_FUSION_D000_D000` and `CE_SINGLE_D000` share the same outer seed and data
+order; parameters that exist only in the fusion architecture use separately
+named graph-bound seed domains. All fresh CE controls use the shared
+100-pass optimization budget in Section 3; warm continuation receives a new
+100-pass budget after its imported selected checkpoint so that it matches the
+withdrawal fit rather than the direct fit's already-consumed updates.
+
+`Fusion(D000,D000)` is useful but is not evidence of privilege transfer. Four
+experiments must not be conflated:
 
 1. averaging the same D000 checkpoint with itself is an identity test and
    must produce identical predictions;
-2. averaging two independently trained D000 checkpoints measures ordinary
-   seed ensembling;
-3. a two-branch trainable network that consumes D000 twice measures extra
-   architecture/capacity and must be labeled `FUSION_LOW_LOW`.
+2. averaging independently trained D000 checkpoints measures seed ensembling;
+3. `CE_FUSION_D000_D000` measures a trainable duplicated-view architecture;
+4. the extracted `LEARNED_T_D000` measures whether the ordinary primary branch
+   retained privileged information after every context module was removed.
 
-Both principal ladders end in a single extracted or compressed `D000` model.
-The optional `FUSION_LOW_LOW` row may outperform it, but that does not make the
-two-branch model evidence of successful privilege transfer.
+### 7.3 Direct U100-to-D000 context controls
+
+Two CE-only acquisition arms test whether a direct rich-to-HLT fusion and a
+continuous change in its rich input can replace the adjacent learned ladder.
+Both use the same asymmetric fusion architecture, initialization registry,
+optimizer, schedule, data order, and maximum 100-pass budget. Their primary
+branch is fixed at `D000`, their external residual gate is fixed at `alpha=1`,
+and they use no teacher KD, directed consistency, representation loss, or gate
+annealing.
+
+```text
+STATIC_U100_D000
+    primary view: D000 for every pass
+    context view: U100 for every pass
+
+DIRECT_VIEW_MORPH_U100_TO_D000
+    primary view: D000 for every pass
+    context view: U100 at pass 1, then two degradation percentage points
+                  poorer per pass until D000, then D000 for the remainder
+```
+
+`VIEW_MORPH_U100_TO_D000` is retained only as a human-readable shorthand for
+`DIRECT_VIEW_MORPH_U100_TO_D000`; it is not a second fit or artifact identity.
+In ordered-pair notation the actual input path is:
+
+```text
+(context=U100, primary=D000)
+    -> (D098, D000)
+    -> (D096, D000)
+    -> ...
+    -> (D002, D000)
+    -> (D000, D000)
+```
+
+With one-indexed training passes, the morph schedule is exactly:
+
+```text
+context(1) = U100
+context(p) = D(100 - 2 * (p - 1))    for 2 <= p <= 51
+context(p) = D000                    for 52 <= p <= 100
+
+therefore:
+pass 1  U100
+pass 2  D098
+pass 3  D096
+...
+pass 50 D002
+pass 51 D000
+passes 52-100 D000
+```
+
+Passes before 51 are ineligible for checkpoint selection and do not initialize
+the patience clock. Pass 51 is therefore the first eligible endpoint
+checkpoint: the control may learn along the complete morph, but it cannot
+report or warm start its companion withdrawal from an earlier privileged
+coordinate.
+
+Every strength is represented as an exact rational numerator over 50; binary
+floating-point values never define view identity. Before campaign publication,
+the implementation must compare the existing `U100` constructor with a
+hypothetical full-strength `D100` constructor over the authenticated
+population. If they are byte-identical, the parity hash is recorded. If they
+are not byte-identical, `D100` is not invented as an alias: the registered
+first transition remains explicitly `U100 -> D098`, and its measured
+discontinuity is reported.
+
+`STATIC_U100_D000` is the privileged ceiling for the direct two-view topology.
+`DIRECT_VIEW_MORPH_U100_TO_D000` tests the history supplied by gradual input
+degradation. Its selected alpha-one checkpoint ends at `(D000,D000)`, but that
+is still a two-encoder, cross-attending model. Identical input values do not
+make two branches into one branch. Its alpha-zero evaluation is a genuine
+single-view dispatch, but because alpha zero was not its selection route, that
+diagnostic is not silently promoted to the primary morph result.
+
+The campaign therefore registers one companion extraction fit:
+
+```text
+DIRECT_VIEW_MORPH_WITHDRAW_D000
+    initialize from the selected DIRECT_VIEW_MORPH_U100_TO_D000 checkpoint
+    freeze that alpha-one checkpoint as Q_MORPH
+    keep both supplied views fixed at D000
+    reset optimizer and scheduler state
+    apply the exact Phase-B alpha schedule and withdrawal loss from Section 6.3
+    select alpha-zero validation only
+    extract one ordinary D000 primary Particle Transformer
+```
+
+This companion deliberately combines input morphing with explicit residual
+withdrawal and is labeled accordingly; it is not evidence for morphing alone.
+It answers whether the direct global path can ultimately yield a performant
+single-view artifact. `STATIC_U100_D000` and the morph checkpoint are also
+evaluated through exact `alpha=0` dispatch, with the context input unavailable,
+but only `DIRECT_VIEW_MORPH_WITHDRAW_D000` receives a training phase whose
+selection target is that route.
+
+### 7.4 Required causal comparisons
+
+The aggregate reports at least:
+
+```text
+CE_FUSION_D000_D000 - CE_SINGLE_D000
+    duplicated-view architecture gain
+
+CE_FUSION_D000_D000 - PARAMETER_MATCHED_SINGLE_D000
+    fusion topology gain beyond approximate parameter count
+
+DIRECT_VIEW_MORPH_U100_TO_D000 - CE_FUSION_D000_D000
+    gain due to the rich-to-poor input history
+
+STATIC_U100_D000 - DIRECT_VIEW_MORPH_U100_TO_D000
+    privileged performance surrendered by input morphing
+
+alpha0(DIRECT_VIEW_MORPH_U100_TO_D000) - CE_SINGLE_D000
+    spontaneous retention in the primary branch without explicit withdrawal
+
+DIRECT_VIEW_MORPH_WITHDRAW_D000 - alpha0(DIRECT_VIEW_MORPH_U100_TO_D000)
+    benefit of an explicit extraction phase after the same morph history
+
+DIRECT_VIEW_MORPH_WITHDRAW_D000 - LEARNED_T_D000
+    direct global morph-plus-withdrawal versus the adjacent learned ladder
+
+LEARNED_T_D000 - DIRECT_KD_D000
+    benefit of learned fusion plus exact withdrawal over ordinary direct KD
+```
+
+All point differences receive the same paired reporting treatment as the main
+ladder. Poor or negative results are completed scientific rows and cannot alter
+the graph. Both principal ladders still end in a single extracted or compressed
+`D000` model; no two-branch control may be substituted for that endpoint.
+
+### 7.5 Provisional Strategy-B fit count
+
+The complete first learned-fusion campaign predeclares 25 fresh fits:
+
+```text
+five unrestricted fusion acquisitions                     5
+five exact-withdrawal students                             5
+five matched direct-KD controls                            5
+low-low, warm-continue, parameter-matched at first rung    3
+the same three controls at terminal D000                   3
+terminal CE_SINGLE_D000                                    1
+STATIC_U100_D000 and DIRECT_VIEW_MORPH_U100_TO_D000        2
+DIRECT_VIEW_MORPH_WITHDRAW_D000                            1
+                                                          --
+total                                                     25
+```
+
+Reporting aliases never increase this count. Any future removal, duplication,
+or change in one of these fits changes the graph contract rather than being
+treated as an operational retry.
 
 ## 8. Seed design and the reviewer-facing ensemble decomposition
 
@@ -612,7 +816,14 @@ carriers, and terminal models are reported on untouched `V_report` with:
 - Strategy A mixture curves, selected family and alpha, ensemble gain,
   compression gap, and net handoff change;
 - Strategy B both/rich-only/lower-only metrics, alpha trajectory, withdrawal
-  gap, extracted parity, and residual-gate diagnostics;
+  gap, extracted parity, residual-gate diagnostics, and correct/zero/permuted
+  context ablations;
+- Strategy B matched `CE_SINGLE`, `FUSION_LOW_LOW`, `LOW_WARM_CONTINUE`, and
+  `LOW_PARAMETER_MATCHED` rows at their registered rungs;
+- terminal `STATIC_U100_D000`, `DIRECT_VIEW_MORPH_U100_TO_D000`, and
+  `DIRECT_VIEW_MORPH_WITHDRAW_D000` histories, context strengths, alpha-zero
+  evaluations, extracted-model metrics, and exact `U100`/hypothetical `D100`
+  parity or discontinuity evidence;
 - `final_test_accessed: false`.
 
 The primary comparisons are:
@@ -623,7 +834,23 @@ LEARNED_T_i - LEARNED_DIRECT_i
 LEARNED_T_i - OUTPUT_T_i
 terminal T_D000 - M0CE60
 terminal T_D000 - established single-view ladder D000
+CE_FUSION_D000_D000 - CE_SINGLE_D000
+CE_FUSION_D000_D000 - PARAMETER_MATCHED_SINGLE_D000
+DIRECT_VIEW_MORPH_U100_TO_D000 - CE_FUSION_D000_D000
+STATIC_U100_D000 - DIRECT_VIEW_MORPH_U100_TO_D000
+alpha0(DIRECT_VIEW_MORPH_U100_TO_D000) - CE_SINGLE_D000
+DIRECT_VIEW_MORPH_WITHDRAW_D000 - alpha0(DIRECT_VIEW_MORPH_U100_TO_D000)
+DIRECT_VIEW_MORPH_WITHDRAW_D000 - LEARNED_T_D000
 ```
+
+The isolated Strategy-B aggregate owns every comparison above whose two
+operands are available inside Strategy B, including all five
+`LEARNED_T_i - LEARNED_DIRECT_i` contrasts and the eight controls in Section
+7.4. `LEARNED_T_i - OUTPUT_T_i` and the terminal comparison with the
+established Strategy-A single-view ladder are produced by a downstream joint
+comparison only after both immutable campaigns exist. They are not fabricated
+from incomplete rows and do not create a scheduler dependency between the two
+campaigns. `OUTPUT_T_i - OUTPUT_DIRECT_i` remains owned by Strategy A.
 
 No metric threshold controls campaign completion. Non-inferiority controls
 only Strategy A's already-registered teacher mixture choice.
@@ -713,12 +940,41 @@ Before Strategy A queue readiness, implementation must prove:
   genuine Tigris miniature, measured resources, exact dry runs, and exact
   pushed source all pass before live science submission.
 
-Before later Strategy B queue readiness, implementation must additionally
+Before Strategy B live science queue readiness, its execution gate must additionally
 prove lower-view ownership of the learned-fusion class head, one-way
 rich-to-lower information flow, fully masked padding, exact zero-residual
 initialization, exact alpha-zero dispatch, absence of rich-view reads and
 context allocation in the extracted route, and wrapper/extracted checkpoint
-reproduction under registered FP32 and BF16 tolerances.
+reproduction under registered FP32 and BF16 tolerances. It must also prove:
+
+- all 25 fresh fits from Section 7.5 and no fit for a reporting alias;
+- `DIRECT_KD_D000` is exactly the terminal `LEARNED_DIRECT_D000` artifact;
+- `CE_FUSION_D000_D000`, `CE_SINGLE_D000`,
+  `LOW_WARM_CONTINUE_D000`, and `PARAMETER_MATCHED_SINGLE_D000` have the
+  declared matched and deliberately different factors;
+- the parameter-matched architecture is frozen before execution and its exact
+  trainable-count difference from the fusion architecture is recorded rather
+  than inferred from a model label;
+- both `FUSION_LOW_LOW` branches receive identity-equal lower-view tensors,
+  while same-checkpoint self-averaging remains prediction-identical;
+- `STATIC_U100_D000` keeps a fixed `D000` primary, fixed `U100` context,
+  fixed alpha one, and CE-only objective for every pass;
+- `DIRECT_VIEW_MORPH_U100_TO_D000` uses the exact integer-numerator schedule
+  `U100, D098, ..., D002, D000`, retains `D000` through pass 100, and never
+  derives view identity from binary floating point;
+- the source-population `U100`/hypothetical-`D100` comparison is exhaustive,
+  hash-bound, and either proves byte parity or records the explicit
+  `U100 -> D098` first-step discontinuity;
+- the static and morph controls contain no KD, directed consistency,
+  representation target, or gate-annealing contribution;
+- alpha-zero evaluation of the morph arm performs no context reads, while its
+  selected alpha-one two-branch checkpoint is never labeled deployable;
+- `DIRECT_VIEW_MORPH_WITHDRAW_D000` alone imports the selected morph
+  checkpoint, binds it as the frozen teacher, follows the exact Phase-B alpha
+  and loss schedule, selects alpha zero, and extracts a physically single-view
+  D000 checkpoint with registered prediction parity;
+- every required causal difference in Section 7.4 is reported even when
+  negative, and no result changes DAG completion.
 
 ## 12. Implementation and decision order
 
@@ -742,9 +998,19 @@ deployable architecture.
    campaign.
 6. Report the complete output result on untouched `V_report`, including every
    failed or unfavorable row.
-7. Only after that review, implement the matched learned-fusion pilot and
-   decide whether full learned-fusion or full-ladder multi-seed confirmation
-   is justified.
+7. Only after that review, implement the versioned 25-fit learned-fusion graph
+   from Sections 6 and 7, including the direct-KD, CE-only, capacity, static
+   context, exact U100-to-D000 morph, and morph-plus-withdrawal controls. Prove
+   the learned topology and all control-specific invariants locally before any
+   miniature.
+8. Run installed-Weaver parity and a genuine Tigris miniature that exercises
+   unrestricted acquisition, checkpoint-to-withdrawal transfer, exact
+   alpha-zero extraction, `CE_FUSION_D000_D000`, at least the boundary passes
+   of the integer morph schedule, and morph-checkpoint-to-extracted-D000
+   transfer. Measure resources and materialize the complete nonmutating dry
+   run before requesting live authorization.
+9. Report every learned-fusion and control row on untouched `V_report`, then
+   decide whether full-ladder multi-seed confirmation is justified.
 
 This order preserves the causal story. Strategy A first asks whether
 function-space mixtures enable a safe handoff and whether that survives both

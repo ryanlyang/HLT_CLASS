@@ -232,6 +232,27 @@ def test_patience_exhaustion_at_maximum_pass_is_normal_completion(tmp_path: Path
     assert report["stop_reason"] == "maximum_passes_reached"
 
 
+def test_checkpoint_selection_can_be_deferred_to_endpoint_phase(tmp_path: Path):
+    cache = _SyntheticCache()
+    report = train_tri60_node(
+        node_id="U000", train_cache=cache, validation_cache=cache,
+        input_key="hlt", output_dir=tmp_path,
+        parents={"foundation": SHA}, campaign_spec_sha256="b" * 64,
+        recipe_sha256="c" * 64, replicate_seed=1337, device="cpu",
+        runtime=Tri60TrainingRuntime(passes=3, batch_size=30),
+        execution_mode="synthetic_test", model_factory=_tiny_model_factory,
+        checkpoint_selection_minimum_pass=3,
+        early_stopping={
+            "kind": "macro_auc_patience_v1", "minimum_passes": 2,
+            "patience_passes": 1, "minimum_auc_delta": 1.0,
+        },
+    )
+    assert report["checkpoint_selection_minimum_pass"] == 3
+    assert report["selected_pass"] == 3
+    assert report["last_meaningful_improvement_pass"] == 3
+    assert report["passes"] == 3
+
+
 def test_single_component_probability_bank_round_trip(tmp_path: Path):
     from hlt_classification.scouting.hcwdl_tri100_spine4_probability import (
         SpineProbabilityTargets, publish_probability_lock,

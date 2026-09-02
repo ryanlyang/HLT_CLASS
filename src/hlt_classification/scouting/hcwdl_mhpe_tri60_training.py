@@ -1013,6 +1013,7 @@ def _student_logits(
         return model(features, vectors, mask)
     if input_protocol in {
         "tagged_offline_hlt_concat_v2", "offline_hlt_fusion_v1",
+        "adjacent_fusion_v1",
     }:
         if normalized.content_source_codes is None:
             raise ValueError("tagged concatenation model lacks source metadata")
@@ -1021,7 +1022,7 @@ def _student_logits(
             device=features.device,
         )
         return model(features, vectors, mask, source)
-    if input_protocol == "anchored_withdrawal_v1":
+    if input_protocol in {"anchored_withdrawal_v1", "adjacent_withdrawal_v1"}:
         if normalized.content_source_codes is None:
             raise ValueError("anchored withdrawal model lacks source metadata")
         source = torch.as_tensor(
@@ -1290,6 +1291,7 @@ def train_tri60_node(
     loss_schedule: Mapping[str, Any] | None = None,
     learning_rate_schedule: Mapping[str, Any] | None = None,
     early_stopping: Mapping[str, Any] | None = None,
+    checkpoint_selection_minimum_pass: int = 1,
     initialization_lineage: Mapping[str, str] | None = None,
     distributed_context: Tri60DistributedContext | None = None,
     attention_reoptimization: Mapping[str, Any] | None = None,
@@ -1318,6 +1320,7 @@ def train_tri60_node(
     if model_input_protocol not in {
         "standard_hlt_v1", "tagged_offline_hlt_concat_v2",
         "offline_hlt_fusion_v1", "anchored_withdrawal_v1",
+        "adjacent_fusion_v1", "adjacent_withdrawal_v1",
     }:
         raise ValueError("TRI60 model-input protocol differs")
     if model_input_protocol != "standard_hlt_v1" and (
@@ -1327,18 +1330,27 @@ def train_tri60_node(
         raise ValueError("TRI60 tagged input protocol exceeds its authority")
     normalized_withdrawal_schedule = None
     if withdrawal_schedule is not None:
-        from .hcwdl_offline_hlt_withdrawal import validate_alpha_schedule
+        if model_input_protocol == "adjacent_withdrawal_v1":
+            from .hcwdl_adjacent_learned_withdrawal import (
+                validate_alpha_schedule,
+            )
+        else:
+            from .hcwdl_offline_hlt_withdrawal import validate_alpha_schedule
         normalized_withdrawal_schedule = validate_alpha_schedule(
             withdrawal_schedule,
         )
         if (
-            model_input_protocol != "anchored_withdrawal_v1"
+            model_input_protocol not in {
+                "anchored_withdrawal_v1", "adjacent_withdrawal_v1",
+            }
             or node.auxiliary != "none" or distributed_context is not None
             or attention_reoptimization is not None
             or node.kd_weight <= 0 or runtime.passes != 100
         ):
             raise ValueError("TRI60 withdrawal execution authority differs")
-    elif model_input_protocol == "anchored_withdrawal_v1":
+    elif model_input_protocol in {
+        "anchored_withdrawal_v1", "adjacent_withdrawal_v1",
+    }:
         raise ValueError("TRI60 withdrawal protocol lacks its alpha schedule")
     graph_sha256 = authority.graph_sha256
     if distributed_context is not None:
@@ -1359,6 +1371,14 @@ def train_tri60_node(
         runtime, learning_rate_schedule,
     )
     normalized_early_stopping = tri60_early_stopping(runtime, early_stopping)
+    if (
+        isinstance(checkpoint_selection_minimum_pass, bool)
+        or int(checkpoint_selection_minimum_pass)
+        != checkpoint_selection_minimum_pass
+        or not 1 <= int(checkpoint_selection_minimum_pass) <= runtime.passes
+    ):
+        raise ValueError("TRI60 checkpoint-selection minimum pass differs")
+    selection_minimum_pass = int(checkpoint_selection_minimum_pass)
     attention_recipe = (
         None
         if attention_reoptimization is None
@@ -1712,9 +1732,14 @@ def train_tri60_node(
                                     raise ValueError(
                                         "withdrawal batch lacks content-source metadata"
                                     )
-                                from .hcwdl_offline_hlt_withdrawal import (
-                                    alpha_for_effective_pass,
-                                )
+                                if model_input_protocol == "adjacent_withdrawal_v1":
+                                    from .hcwdl_adjacent_learned_withdrawal import (
+                                        alpha_for_effective_pass,
+                                    )
+                                else:
+                                    from .hcwdl_offline_hlt_withdrawal import (
+                                        alpha_for_effective_pass,
+                                    )
                                 source = torch.as_tensor(
                                     normalized.content_source_codes,
                                     dtype=torch.int8, device=target_device,
@@ -1752,7 +1777,14 @@ def train_tri60_node(
                         if normalized_withdrawal_schedule is not None:
                             if withdrawal_output is None or teacher is None:
                                 raise RuntimeError("withdrawal loss inputs differ")
-                            from .hcwdl_offline_hlt_withdrawal import withdrawal_loss
+                            if model_input_protocol == "adjacent_withdrawal_v1":
+                                from .hcwdl_adjacent_learned_withdrawal import (
+                                    withdrawal_loss,
+                                )
+                            else:
+                                from .hcwdl_offline_hlt_withdrawal import (
+                                    withdrawal_loss,
+                                )
                             withdrawal = withdrawal_loss(
                                 withdrawal_output, labels, teacher,
                                 temperature=node.temperature,
@@ -1945,6 +1977,7 @@ def train_tri60_node(
             validation_history.append(validation_row)
             if (
                 (distributed_context is None or distributed_context.is_primary)
+                and pass_index + 1 >= selection_minimum_pass
                 and (best_metrics is None or _selection_key(metrics, update) < _selection_key(
                 best_metrics, int(best_update),
                 ))
@@ -1954,7 +1987,10 @@ def train_tri60_node(
                 best_metrics = dict(metrics)
                 best_update = update
                 best_pass = pass_index + 1
-            if normalized_early_stopping is not None:
+            if (
+                normalized_early_stopping is not None
+                and pass_index + 1 >= selection_minimum_pass
+            ):
                 auc = float(metrics["macro_ovr_auc"])
                 minimum_delta = float(
                     normalized_early_stopping["minimum_auc_delta"]
@@ -2027,6 +2063,8 @@ def train_tri60_node(
                         calibration_scales[name] = float(component.scale)
             if normalized_early_stopping is not None:
                 completed_pass = pass_index + 1
+                if completed_pass < selection_minimum_pass:
+                    continue
                 if last_meaningful_improvement_pass is None:
                     raise RuntimeError("TRI60 early-stopping clock is uninitialized")
                 if (
@@ -2121,6 +2159,11 @@ def train_tri60_node(
         "loss_schedule": normalized_loss_schedule,
         "learning_rate_schedule": normalized_learning_rate_schedule,
         **(
+            {} if selection_minimum_pass == 1 else {
+                "checkpoint_selection_minimum_pass": selection_minimum_pass,
+            }
+        ),
+        **(
             {} if normalized_early_stopping is None
             else {"early_stopping": normalized_early_stopping}
         ),
@@ -2184,6 +2227,11 @@ def train_tri60_node(
         "loss_schedule": normalized_loss_schedule,
         "learning_rate_schedule": normalized_learning_rate_schedule,
         **(
+            {} if selection_minimum_pass == 1 else {
+                "checkpoint_selection_minimum_pass": selection_minimum_pass,
+            }
+        ),
+        **(
             {} if normalized_early_stopping is None
             else {
                 "early_stopping": normalized_early_stopping,
@@ -2235,7 +2283,13 @@ def train_tri60_node(
                 "withdrawal_schedule": normalized_withdrawal_schedule,
                 "checkpoint_selection_route": "alpha_zero_macro_auc_v1",
                 "validation_route": "exact_alpha_zero_v1",
-                "offline_context_skipped_during_validation": True,
+                "context_skipped_during_validation": True,
+                "offline_context_skipped_during_validation": (
+                    model_input_protocol == "anchored_withdrawal_v1"
+                ),
+                "adjacent_richer_context_skipped_during_validation": (
+                    model_input_protocol == "adjacent_withdrawal_v1"
+                ),
             }
         ),
         "selected_pass": best_pass,

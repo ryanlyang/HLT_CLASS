@@ -241,18 +241,37 @@ class _CrossInjection(nn.Module):
 class AnchoredFusionParticleTransformer(nn.Module):
     """Canonical HLT ParT with one-way, exactly removable context residuals."""
 
-    def __init__(self, context_domain: Literal["O", "H"] = "O") -> None:
+    def __init__(
+        self, context_domain: Literal["O", "H"] = "O", *,
+        context_initialization_seed: int | None = None,
+    ) -> None:
         super().__init__()
         if context_domain not in {"O", "H"}:
             raise ValueError("anchored fusion context domain differs")
         self.context_domain = context_domain
         cls = _weaver_class()
         self.hlt_mod = cls(**scouting_particle_transformer_config())
-        self.context_mod = cls(**scouting_particle_transformer_config())
-        self.cross_pair_mod = cls(**scouting_particle_transformer_config())
-        self.context_content_embedding = nn.Embedding(2, 128)
-        nn.init.trunc_normal_(self.context_content_embedding.weight, std=.02)
-        self.injections = nn.ModuleList(_CrossInjection() for _ in INJECTION_BLOCKS)
+
+        def initialize_context_path() -> None:
+            self.context_mod = cls(**scouting_particle_transformer_config())
+            self.cross_pair_mod = cls(**scouting_particle_transformer_config())
+            self.context_content_embedding = nn.Embedding(2, 128)
+            nn.init.trunc_normal_(self.context_content_embedding.weight, std=.02)
+            self.injections = nn.ModuleList(
+                _CrossInjection() for _ in INJECTION_BLOCKS
+            )
+
+        if context_initialization_seed is None:
+            initialize_context_path()
+        else:
+            if int(context_initialization_seed) < 0:
+                raise ValueError("anchored fusion context seed differs")
+            # The deployable primary has already consumed the ordinary matched
+            # seed.  Forking here gives every context-only parameter a named,
+            # independent domain without perturbing the caller's RNG stream.
+            with torch.random.fork_rng(devices=[]):
+                torch.manual_seed(int(context_initialization_seed))
+                initialize_context_path()
 
     def no_weight_decay(self) -> set[str]:
         return {

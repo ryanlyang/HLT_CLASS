@@ -1,5 +1,66 @@
 # Current Handoff
 
+## 2026-09-02: Strategy-B adjacent learned-fusion handoff implementation
+
+Strategy B in
+`docs/plans/HCWDL_ADJACENT_VIEW_FUSION_HANDOFF_LADDERS_PLAN.md` is implemented
+as the isolated `HCWDL_ADJACENT_LEARNED_FUSION_HANDOFF_*/v1` family. Its graph
+owns exactly 25 fresh fits: five matched direct-KD controls, five cold
+two-view acquisitions, five exact-withdrawal students, first-rung and terminal
+low/low fusion, warm-continuation, and parameter-matched controls, a cold
+terminal CE model, static and dynamic U100-to-D000 fusion controls, and one
+companion morph-withdrawal fit. Every learned rung ends in a physically
+extracted ordinary single-view checkpoint before the next cold rung begins.
+The dynamic morph can select only from pass 51 onward, after its context has
+reached D000, so an earlier privileged-view checkpoint cannot be restored.
+
+The implementation provides immutable source/control adapters, explicit
+population and seed locks, graph and recipe artifacts, deterministic three-way
+validation partitioning, RAM-only
+paired-view and one-coordinate-at-a-time morph caches, compact probability
+banks, mandatory both/zero/permuted/alpha-zero diagnostics, exact task
+attestations, staged exact-ID submission, ledger monitoring, and restart-zero
+source-pinned recovery. Particle views, hidden states, and optimizer state are
+not durable; rolling resume and final-test access are disabled. The source is
+the same completed non-persistent full-cardinality U100 artifact authenticated
+by Strategy A, and no running or existing campaign is mutated.
+
+The science submitter fails closed unless the output bytes and immutable task
+attestations of authentication, validation partitioning, capacity/storage
+audit, and installed-Weaver GH200 preflight all revalidate. A lone preflight
+file cannot authorize the dependency-free science stage.
+
+The lower primary and direct control reuse Strategy A's exact rung seed aliases
+(terminal `S1` at D000), while context/cross-attention parameters use a
+separate graph-bound seed domain. The 100-pass schedule and early-stopping
+minimum AUC delta are likewise identical to Strategy A.
+Only the 11 distributions with downstream training consumers retain all four
+probability roles; 15 nonteachers retain `V_report` only, giving a conservative
+16-GiB total durable-output bound. The untouched-report aggregate includes
+2,000-replicate paired macro-AUC intervals for all five adjacent carrier
+transitions, all five learned-carrier-minus-direct controls, and all eight
+preregistered causal contrasts, plus per-rung context/withdrawal decomposition.
+
+Sixteen focused Strategy-B tests cover the graph, exact imported-U100 seed
+lineage, independent architecture seed
+domain, exact morph schedule, paired-view identity, low/low equality,
+the shared assignment under a distinct Strategy-B partition contract,
+consumer-bound and report-only probability retention, complete recovery
+reporting, the fixed five-point fusion-strength diagnostic, staged publication,
+restart-zero recovery. Stored validation-partition semantics, assignments,
+counts, and exact dtypes are all revalidated before reuse. All new Python
+surfaces pass `compileall`, and both Slurm workers pass `bash -n`. The local
+`tagging-hlt` environment passes 36/37 focused regressions across Strategy B,
+the reusable fusion implementation, and the established TRI100 trainer. The
+sole remaining case is the intentional installed-Weaver model-construction
+test; local Weaver is absent, so it must pass in `atlas_kd_tigris` as part of
+the production gate. The complete local repository suite likewise passes
+862 tests and reaches only that same remote-only Weaver case; no other
+regression fails. Before science can be submitted, pin and push the exact
+source, execute the gate through its real installed-Weaver GH200 preflight,
+inspect measured RAM/GPU headroom, and materialize the science dry run. No
+Tigris task has been submitted and final test was not accessed.
+
 ## 2026-09-02: unified offline/HLT fusion and withdrawal campaign
 
 The remaining experiments in

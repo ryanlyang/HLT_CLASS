@@ -257,6 +257,22 @@ Shell Exact/Soft/HC Exact integration is repository-local work in
 `scouting/repair.py`; no donor `repair.py` runtime was copied. The port adds no
 new third-party dependency or license obligation.
 
+## Strategy-B adjacent learned-fusion composition
+
+The `HCWDL_ADJACENT_LEARNED_FUSION_HANDOFF_*/v1` implementation is original
+repository-local work; no external or legacy source file was copied. It
+composes the already versioned adjacent-output source adapter and
+full-cardinality cache construction at commit
+`7acc62313c5cd47dc0902d025a31716448e7daf1` with the repository-local anchored
+fusion/exact-withdrawal primitives. The latter primitives were developed in
+this repository for the immediately preceding offline/HLT fusion campaign and
+are imported as reusable package APIs, not migrated donor files. Strategy B
+changes their content semantics from offline/HLT to adjacent richer/lower
+views, freezes unused cross-pair parameters, adds the exact rational morph
+schedule and physical primary extraction, and tests these changes in
+`tests/test_hcwdl_adjacent_learned_handoff.py`. There is no new third-party
+code, dependency, or attribution obligation.
+
 ## Approved transfer surfaces
 
 | Transfer block | Donor surface | Intended retained meaning | Migration policy |

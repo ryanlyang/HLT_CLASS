@@ -1,0 +1,60 @@
+"""Versioned artifacts for Strategy-B adjacent learned fusion handoff."""
+
+from __future__ import annotations
+
+from typing import Any, Final, Mapping
+
+from hlt_classification.data.cache_contracts import (
+    validate_content_hash, with_content_hash,
+)
+
+
+PREFIX: Final = "HCWDL_ADJACENT_LEARNED_FUSION_HANDOFF"
+SCHEMA_VERSION: Final = 1
+_NAMES: Final = (
+    "GRAPH", "NODE_SPEC", "RECIPE", "SOURCE_LOCK", "CONTROL_LOCK",
+    "POPULATION_LOCK", "SEED_LOCK",
+    "VALIDATION_PARTITION", "CAPACITY_AUDIT", "EXECUTION_ACCEPTANCE",
+    "CAMPAIGN_SPEC", "COMMAND_PLAN", "TRAINING_REPORT",
+    "SELECTED_CHECKPOINT", "FINAL_CHECKPOINT", "EXTRACTED_CHECKPOINT",
+    "PROBABILITY_SHARD", "PROBABILITY_MANIFEST", "PROBABILITY_LOCK",
+    "STAGE_REPORT", "DIAGNOSTIC_REPORT", "AGGREGATE", "CAMPAIGN_COMPLETE",
+    "TASK_ATTESTATION", "SUBMISSION_LEDGER", "MONITOR", "RECOVERY_SPEC",
+    "RECOVERY_COMMAND_PLAN",
+)
+CONTRACTS: Final = tuple(f"{PREFIX}_{name}/v1" for name in _NAMES)
+(
+    GRAPH_CONTRACT, NODE_CONTRACT, RECIPE_CONTRACT, SOURCE_LOCK_CONTRACT,
+    CONTROL_LOCK_CONTRACT, POPULATION_LOCK_CONTRACT, SEED_LOCK_CONTRACT,
+    VALIDATION_PARTITION_CONTRACT,
+    CAPACITY_AUDIT_CONTRACT, EXECUTION_ACCEPTANCE_CONTRACT, SPEC_CONTRACT,
+    PLAN_CONTRACT, TRAINING_REPORT_CONTRACT, SELECTED_CHECKPOINT_CONTRACT,
+    FINAL_CHECKPOINT_CONTRACT, EXTRACTED_CHECKPOINT_CONTRACT,
+    PROBABILITY_SHARD_CONTRACT, PROBABILITY_MANIFEST_CONTRACT,
+    PROBABILITY_LOCK_CONTRACT, STAGE_REPORT_CONTRACT,
+    DIAGNOSTIC_REPORT_CONTRACT, AGGREGATE_CONTRACT, COMPLETE_CONTRACT,
+    TASK_ATTESTATION_CONTRACT, SUBMISSION_LEDGER_CONTRACT, MONITOR_CONTRACT,
+    RECOVERY_SPEC_CONTRACT, RECOVERY_PLAN_CONTRACT,
+) = CONTRACTS
+
+
+def artifact(payload: Mapping[str, Any], *, contract: str) -> dict[str, Any]:
+    if contract not in CONTRACTS:
+        raise ValueError("unknown adjacent learned-handoff contract")
+    return with_content_hash({
+        **dict(payload), "contract": contract, "schema_version": SCHEMA_VERSION,
+    })
+
+
+def validate_artifact(value: Mapping[str, Any], *, contract: str) -> str:
+    if contract not in CONTRACTS:
+        raise ValueError("unknown adjacent learned-handoff contract")
+    return validate_content_hash(
+        value, expected_contract=contract,
+        expected_schema_version=SCHEMA_VERSION,
+    )
+
+
+__all__ = [name for name in globals() if name.endswith("_CONTRACT")] + [
+    "CONTRACTS", "PREFIX", "SCHEMA_VERSION", "artifact", "validate_artifact",
+]
