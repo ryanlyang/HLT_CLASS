@@ -1,5 +1,50 @@
 # Current Handoff
 
+## 2026-09-02: unified offline/HLT fusion and withdrawal campaign
+
+The remaining experiments in
+`docs/plans/HCWDL_OFFLINE_HLT_CONCATENATION_FUSION_WITHDRAWAL_IMPLEMENTATION_PLAN.md`
+are implemented as one isolated eleven-fit campaign. The eight 60-pass
+oracle/control rows are `CONCAT_UNTAGGED`, `CONCAT_TAGGED`, the matched
+symmetric `OO`/`HH`/`OH` fusion controls, `HLT_WARM_CONTINUE`, and the matched
+anchored `HH`/`OH` controls. `ANCHORED_FUSION_OH` is the fixed teacher
+regardless of its validation score. Its compact identity-keyed probability
+bank feeds a matched warm HLT-only direct-KD row and two 100-pass anchored
+withdrawal rows (cosine and step). Both withdrawal rows validate and select
+only at exact alpha zero and publish ordinary three-input HLT checkpoints
+after extraction parity and offline-perturbation audits.
+
+The campaign contains 19 exact tasks: three gates followed by sixteen science
+tasks. All particle views, cross-attention states, and withdrawal
+representations are regenerated in RAM/device memory and are never durable;
+only compact 15-class teacher probabilities and ordinary reports/checkpoints
+persist. Rolling resume and optimizer-state publication are disabled, and
+recovery restarts incomplete tasks from update zero in a new source-pinned
+worktree. Scientific metrics do not gate registered rows or completion, final
+test is inaccessible, and the campaign has no scheduler or artifact
+dependency on any running campaign.
+
+Focused local coverage currently passes 67/67 across the new campaign,
+tagged-concatenation neighbor, and established TRI60 trainer. This includes a
+complete synthetic 100-pass withdrawal execution through the alpha-zero tail,
+architecture/gradient controls, teacher-bank identity joins, exact endpoint
+extraction, staged DAG publication, and restart-zero recovery. The only local
+warnings are the pre-existing PRAD tensor-conversion warning and pytest-cache
+permission warning. The complete repository suite passes 846/846. No legacy
+donor file was copied. Remaining production requirements are exact pushed-source
+pinning, the three-task Tigris gate (all-row capacity audit plus installed-
+Weaver GH200 production-batch preflight), inspection of measured RAM/GPU
+headroom, and a full nonmutating science dry run before live submission. No
+Tigris job has been submitted for this campaign and final test was not
+accessed.
+
+The all-row capacity audit records separate offline, raw-HLT, and combined
+maximum identities for both train and validation. The GH200 gate assembles a
+single production-size batch containing every distinct extremum, so the
+internal `2*O`, `2*H`, and `O+H` attention widths are all exercised before
+science submission. The final focused capacity/fusion regression passes
+18/18 after this hardening.
+
 ## 2026-09-02: adjacent output-fusion handoff implementation
 
 Strategy A of

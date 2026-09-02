@@ -1011,7 +1011,9 @@ def _student_logits(
         if normalized.content_source_codes is not None:
             raise ValueError("standard HLT model received content-source metadata")
         return model(features, vectors, mask)
-    if input_protocol == "tagged_offline_hlt_concat_v2":
+    if input_protocol in {
+        "tagged_offline_hlt_concat_v2", "offline_hlt_fusion_v1",
+    }:
         if normalized.content_source_codes is None:
             raise ValueError("tagged concatenation model lacks source metadata")
         source = torch.as_tensor(
@@ -1019,6 +1021,14 @@ def _student_logits(
             device=features.device,
         )
         return model(features, vectors, mask, source)
+    if input_protocol == "anchored_withdrawal_v1":
+        if normalized.content_source_codes is None:
+            raise ValueError("anchored withdrawal model lacks source metadata")
+        source = torch.as_tensor(
+            normalized.content_source_codes, dtype=torch.int8,
+            device=features.device,
+        )
+        return model.forward_zero(features, vectors, mask, source).logits
     raise ValueError("TRI60 model-input protocol differs")
 
 
@@ -1288,6 +1298,7 @@ def train_tri60_node(
     relational_train_cache=None,
     relational_input_key: str | None = None,
     model_input_protocol: str = "standard_hlt_v1",
+    withdrawal_schedule: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Execute one registered fit without any reusable optimizer state."""
 
@@ -1306,6 +1317,7 @@ def train_tri60_node(
             raise ValueError("TRI60 additive authority node identity differs")
     if model_input_protocol not in {
         "standard_hlt_v1", "tagged_offline_hlt_concat_v2",
+        "offline_hlt_fusion_v1", "anchored_withdrawal_v1",
     }:
         raise ValueError("TRI60 model-input protocol differs")
     if model_input_protocol != "standard_hlt_v1" and (
@@ -1313,6 +1325,21 @@ def train_tri60_node(
         or attention_reoptimization is not None
     ):
         raise ValueError("TRI60 tagged input protocol exceeds its authority")
+    normalized_withdrawal_schedule = None
+    if withdrawal_schedule is not None:
+        from .hcwdl_offline_hlt_withdrawal import validate_alpha_schedule
+        normalized_withdrawal_schedule = validate_alpha_schedule(
+            withdrawal_schedule,
+        )
+        if (
+            model_input_protocol != "anchored_withdrawal_v1"
+            or node.auxiliary != "none" or distributed_context is not None
+            or attention_reoptimization is not None
+            or node.kd_weight <= 0 or runtime.passes != 100
+        ):
+            raise ValueError("TRI60 withdrawal execution authority differs")
+    elif model_input_protocol == "anchored_withdrawal_v1":
+        raise ValueError("TRI60 withdrawal protocol lacks its alpha schedule")
     graph_sha256 = authority.graph_sha256
     if distributed_context is not None:
         distributed_context.validate()
@@ -1432,6 +1459,13 @@ def train_tri60_node(
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(training_seed)
     model = _node_model(node, replicate_seed=replicate_seed, model_factory=model_factory)
+    parameter_scalar_count = sum(
+        int(parameter.numel()) for parameter in model.parameters()
+    )
+    trainable_parameter_scalar_count = sum(
+        int(parameter.numel()) for parameter in model.parameters()
+        if parameter.requires_grad
+    )
     model.to(target_device)
     if attention_recipe is not None:
         configure_attention_stage(model, attention_parameter_registry, "stage0")
@@ -1627,6 +1661,9 @@ def train_tri60_node(
                         raw, global_batch_rows = batch_item
                         teacher_raw = None
                     pass_batches += 1
+                    effective_pass = effective_pass_for_update(
+                        update, updates_per_pass,
+                    )
                     for group in optimizer.param_groups:
                         if attention_recipe is None or active_attention_stage == "stage0":
                             group["lr"] = tri60_learning_rate(
@@ -1642,6 +1679,7 @@ def train_tri60_node(
                     normalized, features, vectors, mask, visible, family, labels = _batch_tensors(
                         _cache_batch(raw, input_key=input_key), target_device,
                     )
+                    withdrawal_output = None
                     with attention_kernel_context(active_attention_stage, target_device):
                         with torch.autocast(
                             device_type=target_device.type,
@@ -1669,6 +1707,28 @@ def train_tri60_node(
                                             teacher_family,
                                         )
                                     )
+                            elif normalized_withdrawal_schedule is not None:
+                                if normalized.content_source_codes is None:
+                                    raise ValueError(
+                                        "withdrawal batch lacks content-source metadata"
+                                    )
+                                from .hcwdl_offline_hlt_withdrawal import (
+                                    alpha_for_effective_pass,
+                                )
+                                source = torch.as_tensor(
+                                    normalized.content_source_codes,
+                                    dtype=torch.int8, device=target_device,
+                                )
+                                withdrawal_output = model.forward_withdrawal(
+                                    features, vectors, mask, source,
+                                    alpha=alpha_for_effective_pass(
+                                        normalized_withdrawal_schedule,
+                                        effective_pass=effective_pass,
+                                    ),
+                                )
+                                logits = withdrawal_output.zero.logits
+                                surfaces = None
+                                teacher_surfaces = None
                             elif node.auxiliary == "none":
                                 surfaces = None
                                 teacher_surfaces = None
@@ -1689,22 +1749,30 @@ def train_tri60_node(
                         )
                     )
                     with torch.autocast(device_type=target_device.type, enabled=False):
-                        effective_pass = effective_pass_for_update(
-                            update, updates_per_pass,
-                        )
-                        ce_weight, kd_weight = tri60_loss_weights(
-                            normalized_loss_schedule,
-                            effective_pass=effective_pass,
-                        )
-                        base = tri60_base_loss(
-                            logits.float(), labels,
-                            teacher_probabilities=teacher,
-                            ce_weight=ce_weight,
-                            kd_weight=kd_weight,
-                            temperature=node.temperature,
-                        )
-                        total = base["total"]
-                        reported = {"ce": base["ce"], "kd": base["kd"]}
+                        if normalized_withdrawal_schedule is not None:
+                            if withdrawal_output is None or teacher is None:
+                                raise RuntimeError("withdrawal loss inputs differ")
+                            from .hcwdl_offline_hlt_withdrawal import withdrawal_loss
+                            withdrawal = withdrawal_loss(
+                                withdrawal_output, labels, teacher,
+                                temperature=node.temperature,
+                            )
+                            total = withdrawal.pop("total")
+                            reported = withdrawal
+                        else:
+                            ce_weight, kd_weight = tri60_loss_weights(
+                                normalized_loss_schedule,
+                                effective_pass=effective_pass,
+                            )
+                            base = tri60_base_loss(
+                                logits.float(), labels,
+                                teacher_probabilities=teacher,
+                                ce_weight=ce_weight,
+                                kd_weight=kd_weight,
+                                temperature=node.temperature,
+                            )
+                            total = base["total"]
+                            reported = {"ce": base["ce"], "kd": base["kd"]}
                         if attention_recipe is not None and active_attention_stage != "stage0":
                             relational, relational_diagnostics = (
                                 support_aligned_block_delta_gram_loss(
@@ -1791,6 +1859,7 @@ def train_tri60_node(
                     # boundary without duplicating it for LOGIT/U000 nodes.
                     if (
                         node.auxiliary != "none" or attention_recipe is not None
+                        or normalized_withdrawal_schedule is not None
                     ) and not _device_conditions_hold(
                         torch.isfinite(total)
                     ):
@@ -2069,6 +2138,12 @@ def train_tri60_node(
                 ),
             }
         ),
+        **(
+            {} if normalized_withdrawal_schedule is None else {
+                "withdrawal_schedule": normalized_withdrawal_schedule,
+                "checkpoint_selection_route": "alpha_zero_macro_auc_v1",
+            }
+        ),
         "resume_policy": "disabled_restart_from_zero_v1",
         "execution_source_commit": source_commit,
         **(
@@ -2155,6 +2230,14 @@ def train_tri60_node(
                 ),
             }
         ),
+        **(
+            {} if normalized_withdrawal_schedule is None else {
+                "withdrawal_schedule": normalized_withdrawal_schedule,
+                "checkpoint_selection_route": "alpha_zero_macro_auc_v1",
+                "validation_route": "exact_alpha_zero_v1",
+                "offline_context_skipped_during_validation": True,
+            }
+        ),
         "selected_pass": best_pass,
         "selected_update": best_update,
         "checkpoint_selector": (
@@ -2197,6 +2280,8 @@ def train_tri60_node(
             "train": int(train_cache.header["array_bytes"]),
             "validation": int(validation_cache.header["array_bytes"]),
         },
+        "parameter_scalar_count": parameter_scalar_count,
+        "trainable_parameter_scalar_count": trainable_parameter_scalar_count,
         "ephemeral_representation_target_bytes": (
             0 if representation_targets is None else representation_targets.nbytes
         ),

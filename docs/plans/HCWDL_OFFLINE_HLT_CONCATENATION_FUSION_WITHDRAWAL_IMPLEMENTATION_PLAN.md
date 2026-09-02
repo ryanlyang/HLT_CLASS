@@ -175,15 +175,10 @@ CONCAT_UNTAGGED    one ParT over O + H, no source-domain embedding
 CONCAT_TAGGED      one ParT over O + H, with a learned source-domain embedding
 ```
 
-Before that paired screen, one explicitly authorized feasibility pilot may run
-`CONCAT_TAGGED` alone.  The pilot is a single fresh fit with the exact frozen
-60-pass, global-batch-256, matched-seed recipe below.  It exists to answer the
-first-order question requested by the campaign owner: whether tagged `O + H`
-is competitive with `M0CE60`, pure-offline `U000`, and persistent-support
-`SP4P_U000`.  It does not replace the later tagged-versus-untagged comparison,
-does not establish an architectural advantage from one seed, and cannot be
-used as a deployable endpoint.  Its source locks, jobs, reports, checkpoints,
-monitoring, and restart-zero recovery are isolated from every running ladder.
+The already-authorized `CONCAT_TAGGED` feasibility pilot remains historical
+evidence only. The unified campaign always executes both arms; it does not
+reuse the pilot checkpoint or let the pilot result suppress any later row.
+Neither arm is a deployable endpoint.
 
 The tagged model uses two learned content-source embeddings:
 
@@ -203,7 +198,7 @@ embedding.
 
 ### 5.3 Frozen training comparison
 
-The first screen uses one matched seed and the same CE-only 60-pass recipe as
+The unified screen uses one matched seed and the same CE-only 60-pass recipe as
 the persistent-support anchor. Global batch size remains 256. Any change
 required solely because the registered 496-token sequence exceeds measured memory must be
 registered as an operational batch-accumulation transformation that preserves
@@ -403,8 +398,11 @@ metric.
 
 ## 7. Oracle-screen campaign and reporting
 
-Studies A and B share one authenticated oracle-screen campaign. Its eight
-fresh fits are independent siblings after the common gates:
+Studies A, B, and C now share one authenticated, end-to-end campaign. This
+supersedes the earlier two-submission staging after the owner explicitly
+authorized running every registered stage and fit together on 2026-09-02.
+The eight oracle fits remain independent siblings after the common gates;
+their metrics never control whether the fixed teacher bank and Study C run:
 
 ```text
 authenticate
@@ -417,7 +415,11 @@ authenticate
        HLT_WARM_CONTINUE,
        ANCHORED_FUSION_HH, ANCHORED_FUSION_OH
      }
-  -> validation aggregate
+  -> ANCHORED_FUSION_OH fixed teacher-probability bank
+  -> { FUSION_DIRECT_KD_WARM,
+       FUSION_WITHDRAW_COS, FUSION_WITHDRAW_STEP }
+  -> exact alpha-zero extraction audits for both withdrawal rows
+  -> combined validation aggregate
   -> completion
 ```
 
@@ -436,8 +438,8 @@ The aggregate reports:
 - Hbb, Hcc, Hqq, Hgg, top, and every remaining available per-class rejection;
 - recovery from `M0CE60` to pure-offline `U000` in AUC and linear R50 space;
 - all registered paired differences above;
-- parameter count, active parameters, tokens, attention elements, peak CPU
-  RAM, peak GPU memory, rows/second, and wall time;
+- total/trainable parameter count, peak CPU RAM, peak GPU memory, preparation
+  time, and training wall time;
 - selected pass and complete validation history;
 - matching diagnostics only as non-input explanatory metadata;
 - `final_test_accessed: false`.
@@ -450,15 +452,17 @@ to decide whether further study is worth the compute, but not to establish a
 new production method.
 
 The primary withdrawal teacher is `ANCHORED_FUSION_OH`, not whichever row
-happens to rank first by one noisy validation metric. It proceeds only if it
-beats `HLT_WARM_CONTINUE` and shows useful absolute or per-class improvement.
+happens to rank first by one noisy validation metric. It proceeds regardless
+of whether it beats `HLT_WARM_CONTINUE`; that comparison remains a scientific
+result rather than an execution gate.
 `SYMMETRIC_FUSION_OH` remains the joint-input ceiling. If only the symmetric
 model improves, its frozen probabilities may inform the direct-KD control,
 but the anchored withdrawal curriculum is not claimed to have a strong
 starting oracle. Failure to improve is a valid completed result.
 
-Study C requires separate human authorization after the complete oracle
-screen is reviewed.
+The owner's 2026-09-02 request to implement and run all stages is the explicit
+Study C authorization. Capability, lineage, capacity, finite-value, and
+source-pinning failures still fail closed.
 
 ## 8. Study C: gated offline-residual withdrawal
 
@@ -601,12 +605,14 @@ Validation reporting includes:
 - `M0CE60`, pure-offline `U000`, `SP4P_U000`, concatenation, the symmetric
   ceiling, and the strongest authenticated HLT-only ladder endpoints.
 
-Every withdrawal pass records `a_p`, privileged and HLT-only validation
-metrics, teacher KL, endpoint gap, the six loss components, and all four
-learned residual gates. The aggregate reports AUC/R50 recovery, complete
-per-class rejection and calibration, selected pass, wall time, and peak
-resources. It also plots privileged and deployable trajectories against
-offline-residual strength.
+Every withdrawal pass records `a_p`, HLT-only validation metrics, and the six
+training-loss components (including the privileged-route terms and endpoint
+consistency terms). Checkpoint selection never consults a privileged metric.
+The aggregate reports AUC/R50 recovery, the per-class metrics carried by the
+validated metric payload, selected pass, wall time, peak resources, and model
+parameter counts. Privileged-route trajectories or gate-value plots may be
+added as a later diagnostic, but are not required by this fixed campaign and
+cannot change its selected checkpoints.
 
 A successful result requires improvement of the extracted HLT-only endpoint.
 A strong `alpha=1` teacher, a small within-wrapper gap, or a favorable
@@ -647,7 +653,8 @@ Each study versions and authenticates:
 - source and comparison locks;
 - genuine installed-Weaver execution acceptance;
 - training, checkpoint, probability, and endpoint-capability reports;
-- validation aggregate and bootstrap report;
+- validation aggregate; paired bootstrap intervals belong to any later
+  multi-seed confirmation rather than this single-seed screen;
 - exact Slurm command plan and submission ledger;
 - task attestations, monitor, restart-zero recovery, and completion marker.
 
@@ -729,16 +736,15 @@ anchored wrapper to `A_0(H)`. Path existence alone never authorizes reuse.
    exact `OO`, `HH`, and `OH` controls.
 4. Implement the HLT-anchored one-way cross-attention model, warm-start maps,
    zero-residual parity, `HH`/`OH` controls, and exact `A_0(H)` extractor.
-5. Build the independent eight-fit oracle-screen campaign, aggregate,
+5. Build the unified eleven-fit campaign, combined aggregate, exact-ID
    monitoring, and restart-zero recovery.
 6. Run local tests, installed-Weaver parity, a genuine Tigris miniature, and a
    nonmutating dry run.
-7. Execute and review the complete oracle screen; obtain separate human
-   authorization before starting withdrawal work.
-8. Freeze the anchored teacher and implement the identity-joined probability
+7. Execute all eight oracle rows; their metrics do not suppress Study C.
+8. Freeze the predetermined anchored teacher and implement the identity-joined probability
    bank, matched warm direct-KD control, cosine withdrawal, and step control.
-9. Prove exact HLT-only extraction, run the Study C miniature, and then submit
-   its independent full campaign.
+9. Prove exact HLT-only extraction in the common miniature, then submit the
+   sixteen-task science stage after the three-task gate passes.
 
 This order preserves the core causal story: first establish whether joint
 information exists, then whether explicit fusion extracts it, and only then

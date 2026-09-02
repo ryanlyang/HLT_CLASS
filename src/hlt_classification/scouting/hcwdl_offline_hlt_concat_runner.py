@@ -65,15 +65,15 @@ def _foundation(spec: Mapping[str, Any]) -> dict[str, Any]:
 
 def _selected_counts(
     foundation: Mapping[str, Any], split: Mapping[str, Any], selection, role: str,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, str]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, str]]:
     records = role_records(split, role)
     branches = set(BASELINE_BRANCHES) | set(LABEL_BRANCHES) | {
         "n_scoutpfcands", "n_cpfcands", "n_lts", "n_npfcands",
     }
     offline_parts = []
     hlt_parts = []
-    maximum_identity = ""
-    maximum = -1
+    maximum_identities = {"offline": "", "hlt": "", "combined": ""}
+    maxima = {"offline": -1, "hlt": -1, "combined": -1}
     observed = 0
     for record in records:
         for chunk in iterate_projected_chunks(
@@ -96,12 +96,15 @@ def _selected_counts(
             if np.any(hlt < 0) or np.any(offline < 0):
                 raise ValueError("concatenation audit observed a negative cardinality")
             total = offline + hlt
-            local = int(np.argmax(total))
-            if int(total[local]) > maximum:
-                maximum = int(total[local])
-                maximum_identity = (
-                    f"{chunk.source_path}::tree::{int(entries[local])}"
-                )
+            for name, values in (
+                ("offline", offline), ("hlt", hlt), ("combined", total),
+            ):
+                local = int(np.argmax(values))
+                if int(values[local]) > maxima[name]:
+                    maxima[name] = int(values[local])
+                    maximum_identities[name] = (
+                        f"{chunk.source_path}::tree::{int(entries[local])}"
+                    )
             offline_parts.append(offline.astype(np.int16))
             hlt_parts.append(hlt.astype(np.int16))
             observed += len(indexes)
@@ -109,7 +112,7 @@ def _selected_counts(
         raise ValueError("concatenation capacity-audit row coverage differs")
     offline = np.concatenate(offline_parts)
     hlt = np.concatenate(hlt_parts)
-    return offline, hlt, offline + hlt, maximum_identity
+    return offline, hlt, offline + hlt, maximum_identities
 
 
 def _distribution(values: np.ndarray) -> dict[str, Any]:
@@ -129,14 +132,14 @@ def build_capacity_audit(spec: Mapping[str, Any]) -> dict[str, Any]:
     split, split_hash, selection_hash, selections, _, _ = _load_common(foundation)
     roles = {}
     for role in ("train", "validation"):
-        offline, hlt, total, maximum_identity = _selected_counts(
+        offline, hlt, total, maximum_identities = _selected_counts(
             foundation, split, selections[role], role,
         )
         roles[role] = {
             "offline": _distribution(offline), "hlt": _distribution(hlt),
             "combined": _distribution(total),
             "rows_over_capacity": int(np.count_nonzero(total > CONCAT_CAPACITY)),
-            "maximum_identity": maximum_identity,
+            "maximum_identity": maximum_identities["combined"],
             "exact_smaller_capacity_candidates": [
                 200, 300, 350, 400, 416, 432, 448, 464, 480, 496,
             ],
