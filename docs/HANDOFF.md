@@ -1,5 +1,277 @@
 # Current Handoff
 
+## 2026-09-12: SPORC A100 migration readiness implemented locally
+
+The user moved the new Delphes benchmark to SPORC `tier3`, account
+`reu-aisocial`, QoS `qos_tier3`, one A100, and the isolated x86-64 prefix
+`/home/ryreu/miniconda3/envs/atlas_kd_sporc`. The supplied installation log
+passed dependency/import/CPU checks with Torch 2.5.1+cu118, NumPy 2.2.6 and
+Weaver 0.5.3. It is NOT real GPU acceptance. The active migration plan explicitly
+substitutes a genuine A100 gate for historical Tigris/GH200 requirements in
+this new namespace only. Existing jobs and old worker defaults are unchanged.
+
+Added `execution.py` and `readiness.py`, thin
+`prepare_jetclass2_delphes_sporc.py`, an isolated Conda helper and scoped
+PowerShell staging helper. Production profile/creator/submitter/workers now
+bind the site, real allocation, exact measured GPU, Python/Weaver/numerical
+environment, CPU/RAM and workers. New contracts: EXECUTION_SITE/v1,
+READINESS_SPEC/v1, RESOURCE_MEASUREMENTS/v1; updated INSTALLED_ENVIRONMENT/v2,
+RUNTIME_PROFILE/v2 and CAMPAIGN_SPEC/v3. Older runtime/spec identities are not
+silently reinterpreted. No loss, feature, batch, schedule, view or split change.
+
+Cache budgets now divide 75% of host RAM in proportion to each selected role's
+conservative resident/worker/IPC bound, keeping 25% reserved. The old 53% train /
+22% validation allocation was inappropriate for 500k train / 1M validation.
+Native profile metadata at capacity 240 and eight workers yields upper bounds
+12.48 GiB train and 34.78 GiB validation, requiring at least 63.01 GiB total
+allocation under this rule. The readiness job starts at 80 GiB, 8 CPUs/workers,
+one A100 and four hours; these remain UNMEASURED starting requests. It performs
+real Weaver parity, bounded CE/offline/KD checks, a full selected-population
+training/validation pass, capacity-240/batch-256 backward, reducer inference and
+U000/U050/D050 full cache timings. Failed time estimates leave diagnostics, not
+a usable profile. Production walltimes are computed with explicit headroom and
+an initial 48-hour ceiling, never silently clamped. Reducer minimum is 30 minutes.
+
+The readiness-only queue has sample -> assignment array -> lock -> profile,
+not 31 scientific fits. Assignments request one CPU/4 GiB/two hours per element,
+at most 16 concurrently; sample/lock use one CPU/4 GiB/30 minutes. Canonical dry
+run, a separate readiness authorization phrase, raw checksum/storage checks,
+exact-ID receipts, ambiguous-acknowledgement refusal and `--no-requeue` are
+included. There is no auto-launch, cancellation, hold or reprioritization.
+The subsequent 59-job scientific queue still requires the real profile and
+its separate dry run/authorization. Durable artifacts remain compact assignments,
+probabilities, selected weights and reports; all views/optimizer state stay in
+RAM and rolling resumes remain disabled.
+
+The frozen split registry and all four profiles re-authenticated locally with
+unchanged hash `72e8b76555e3707e90aa7ea46d521c93a2b801e46ee94c35ecee978e324d7d01`;
+their five-file total remains 15,124,579 bytes. All data memberships are
+unchanged. The producer's unchanged-label reply is recorded as additional
+supporting evidence in the plan without editing old immutable provisional
+policies. Charged zero-error interpretation remains provisional and unchanged.
+
+Local evidence: pre-change Delphes suites 36/36 in 769.73 s; focused SPORC plus
+production suites 19/19 in 540.88 s (scheduler/CUDA mocks explicitly synthetic).
+A clean-HEAD-plus-Delphes validation snapshot passed all 50 Delphes tests and
+three scaffold checks in a 959.04-second run. The remaining scaffold link test
+found two pre-existing HEAD references (README and HANDOFF) to the untracked
+`docs/HCWDL_MHPE_TRI60_STRATEGY_EXPLAINER.md`; this unrelated unpublished file
+is deliberately not swept into the deployment. The final 80-GiB default also
+passed its focused submission/RAM regressions (2/2 in 60.82 s).
+Three Bash files pass syntax checks. The staging helper excludes pre-existing
+dirty Scouting/salience files, the salience HANDOFF section, and mixed
+README/plan-index changes while preserving all working copies. No remote
+acceptance is claimed.
+Donor helper reuse remains at `fd1ed1d01d54bf2ad4d42ffa6311432263a14770`, as
+recorded in LEGACY_SOURCE_MAP; no old scientific donor was edited.
+
+Next external gate: transfer only the compact profile bundle, create a clean
+pushed-source SPORC worktree, inspect and submit the readiness-only plan, then
+return actual assignment/Weaver/GPU/runtime evidence. Raw data are already on
+shared RC storage; no raw reupload is needed. No SSH, SCP, Slurm submission or
+remote job mutation was performed during local implementation. Commands are
+also preserved in `docs/JETCLASS2_DELPHES_SPORC_READINESS.md`.
+
+## 2026-09-11: fixed-evaluation, nested training-size registry implemented
+
+The user replaced the initial full-data migration run with TRAIN_500K and
+requested reusable TRAIN_500K / TRAIN_1M / TRAIN_1P5M / TRAIN_2M profiles.
+All four have identical 1,000,000 validation and 1,000,000 sealed test jets;
+training populations are exactly 500,000 / 1,000,000 / 1,500,000 / 2,000,000
+and nested. The active migration plan section 6 supersedes earlier full-data
+defaults. Whole-file reservoir roles, raw source selection, features, matcher,
+optimizer and no-resume semantics are unchanged. Each size trains its own
+fresh HLT baseline/offline teacher; no full-data teacher is imported.
+
+Added `src/hlt_classification/jetclass2_delphes/split_registry.py`,
+`scripts/create_jetclass2_delphes_split_registry.py` (build/inspect/verify),
+and `tests/test_jetclass2_delphes_split_registry.py`. Updated contracts,
+splits/reader, foundation, acceptance sampling, campaign/production, both
+foundation/result CLIs, production tests and migration documentation. Masks
+select exact latest-cycle entry indices, stored as compact base64 packed bits
+inside immutable JSON. SHA256 classwise ordering and incremental integer
+Hamilton quotas give reproducible class-stratified nested populations.
+No particle arrays or test predictions are needed to compile membership.
+
+New contracts: SPLIT_DESIGN/ROLE_MEMBERSHIP/SPLIT_REGISTRY/SPLIT_PROFILE v1;
+subset FOUNDATION_SPEC/CAMPAIGN_PLAN/CAMPAIGN_SPEC v2. The old SPLITS/v1 and
+FOUNDATION_SPEC/v1 retain their original meaning. New production creation
+refuses legacy full-population foundations instead of silently falling back.
+Every matching task, RAM reader/cache, bank and resource estimate uses the
+selected profile, including ordinary-role files with zero selected rows.
+The graph is still 31 fresh fits and 26 teacher publications per profile;
+no ensemble, optimization or deployment-input change was introduced.
+
+Actual local bundle:
+`artifacts/jetclass2_delphes_scaling_splits_20260911_v1/registry.json` plus
+four self-contained files under its `profiles/` directory. Total persisted
+size: 15,124,579 bytes (about 14.42 MiB), not dense data or copied ROOT files.
+Registry content hash:
+`72e8b76555e3707e90aa7ea46d521c93a2b801e46ee94c35ecee978e324d7d01`.
+Shared validation membership:
+`8f04f54797f7cd181812815eb409b90cb1cf7e503c322061e4718d23f06060b5`.
+Shared final-test membership:
+`995f747b09a47c2e7cbdc996ba552542562ef0e074b3cb7a9de2b87f7438106e`.
+Compilation checked checksum/cycle/schema and label/matched scalar counts
+against the immutable 333-file snapshot. Exported profiles validate against
+the registry and exact nesting/evaluation identity checks pass. The original
+100,000-row-chunk compilation was independently replayed with 32,768-row
+chunks over every source file: **METADATA REPLAY: PASS**, with identical
+design and all six memberships. All 32 Delphes Python/CLI/test files pass AST
+parsing; tracked and new-file whitespace checks pass.
+The original
+inventory and reservoir manifests retain their uploaded byte SHA256 values
+`0425f355ba020eb49b4179a0110cd6ff644030a1c7640cf34cbc98aa10979adf` and
+`4b184543d34620e28e6d884fa054d7c53f560b69131e65e8cd435ef696e1d41c`.
+
+Evidence: baseline Delphes suites 28/28 before edits; updated four-file suites
+35/35 in 224.46 s; an additional reader capability/ineligible-row regression
+plus the four scaffold/link tests passed 5/5 in 16.26 s (40 distinct tests in
+total). Coverage includes exact/nested quotas, shared evaluation identities,
+relocation/chunk invariance, metadata-only test handling, invalid membership,
+capacity failure, canonical mask padding, corruption/role escape, ordinary
+reader counts, two-process RAM caching, assignment cross-profile rejection,
+versioned graph/production gates and synthetic full-DAG publication/recovery.
+Remote/source gates are mocked ONLY in disposable orchestration tests; these
+are not real Weaver/GH200 evidence. Donor hash/publication helper reuse and
+the preceding uncommitted local migration are recorded in LEGACY_SOURCE_MAP.
+
+The raw dataset is already uploaded and checksum-verified on RC according to
+the user's supplied output. Only the new profile metadata needs transferring.
+Explicitly deferred: commit/push, clean pinned RC worktree, chosen-profile
+matching foundation, genuine Weaver/GH200 acceptance/resources and any live
+submission. Nothing was committed, pushed, uploaded, queued, cancelled or
+changed remotely in this step. No real matching foundation or fit was run;
+final-test particle/model access remains sealed. Unrelated dirty work remains.
+
+## 2026-09-11: Delphes migration and gated production workflow implemented
+
+Implemented the isolated `jetclass2_delphes` package and six thin commands:
+inventory/remote verification, foundation-spec creation, sample/assignment/lock
+execution, genuine-Weaver acceptance, non-executable four-spine preview, and
+source-pinned production preparation/profile/create/run/submit/monitor/recover/
+results. Two absolute-path Slurm workers cover preparation and campaign jobs.
+The [v1 contract](contracts/JETCLASS2_DELPHES.md) and updated
+[active plan](plans/JETCLASS2_DELPHES_DATASET_MIGRATION_IMPLEMENTATION_PLAN.md)
+record the concrete 11-class selection, provisional labels/zero-error handling,
+whole-file splits, 17-feature inputs and exact full-cardinality U/D semantics.
+Other modules supply ragged RAM-only process preparation, class-aware metrics,
+immutable identity-joined probability shards, a new 17/11 model wrapper and
+CE/KD training kernel. Production binds 31 fresh fits, 26 teacher publications,
+aggregate and completion into 59 exact jobs. It authenticates installed model
+source/numerical versions, publishes only selected weights, checks real runtime
+evidence, requires an exact dry run and explicit live authorization, and refuses
+overlapping/ambiguous recovery submissions. `pyproject.toml` declares a separate
+Delphes optional dependency extra. No existing campaign source, data, jobs or weights were
+modified. The pre-existing dirty worktree was preserved; nothing was committed,
+pushed, uploaded or submitted by this task.
+
+Authoritative local inventory:
+`artifacts/jetclass2_delphes_20260910_provenance_v1/inventory.json`, hash
+`91b8a67191eb8f5f3d833bd3347211eafd12f9939263c7dabf89c8159b02603a`.
+All 333 files were hashed and their latest ROOT cycles audited: 25,430,379,343
+bytes, 12,216,863 stored rows, 8,996,860 selected rows under default source policy.
+Frozen split counts: train 5,376,107; validation 1,810,176; final test 1,810,577.
+Every class occurs in every role. File/content disjointness is checked;
+generator-event independence across files remains explicitly provisional.
+
+Foundation intent:
+`artifacts/jetclass2_delphes_foundation_provenance_v1/foundation_spec.json`, hash
+`e77536097223d9fc1e4796064a5a6e9c04c286f1bf76bfed1639379cb6f53eee`.
+It registers 259 train/validation file tasks, capacity 240 without truncation,
+and no final-test particle access. A bounded native audit checked 2,064 selected
+jets from those files (one file has no selected rows), 50,682 HLT and 87,956
+offline particles, and 50,513 exact smaller-side pairs. Both endpoint equalities
+and intermediate finite inputs passed; eight exhaustive references use native
+prefixes capped at four per side, not an unbounded permutation audit. The
+sample report hash is
+`fc9e30ff554db66c36dc078ea62540a0a0fded7f5fe8cc624ecb4295c2f6ee54`.
+Nonzero displacements with zero error are retained (four HLT and eight offline
+individual value/error cases in this sample). Initial provenance-free local
+preview artifacts were retained but are not eligible for current validation.
+
+Local focused suite: **53 tests passed in 122.42 seconds**, across the three new
+test files, scaffold, original input tests and exact bottleneck solver regressions.
+The production suite was subsequently expanded to traverse all 59 tasks and
+rerun after final source-snapshot verification wiring: **5 passed in 98.82 seconds**.
+All 29 new Python files parse; both Slurm wrappers pass Bash syntax checking.
+Tracked whitespace checks pass (only normal Windows CRLF warnings). Coverage includes
+synthetic ROOT cycles, relocation/corruption, split leakage, dummy rows, jagged
+mismatches, zero errors, endpoint isolation, rectangular exhaustive parity,
+one-/two-process cache equality, compact publication, KD equation, probability
+joins, metric censoring, selected-weight restoration without resume files,
+source/allocation gates, exact dry/live dependency plans, full synthetic DAG
+publication, completed-task reuse, live/unknown-job recovery refusal, and a lost
+sbatch-acknowledgement failure that cannot trigger blind duplicate submission.
+Scheduler calls and external execution gates are mocked in tests. Kernel and
+full-DAG tests use an explicitly labelled tiny model, not Weaver. The local
+scientific Python has PyTorch/CUDA but no installed Weaver; no genuine Weaver
+or Tigris acceptance has been claimed. Donors and dirty transitive dependency
+hashes are recorded in `LEGACY_SOURCE_MAP.md`.
+
+Next deployment stage: commit/push the isolated changes, transfer the frozen raw
+snapshot and manifests to a NEW RC location, verify all remote files, execute
+source-pinned compact preparation, and run the provided genuine Weaver/GH200
+acceptance plus full-population resource probe. Then create/audit the exact
+production dry run and obtain live submission authorization. The preview CLI
+remains non-executable; the separate production wrapper enforces these gates.
+Same-source recovery is implemented; code-changing recoveries deliberately need
+a new explicit lineage transition, not a source hot-patch. Real final-test
+evaluation is not provided by this validation-only campaign.
+
+The authoritative local inventory/split and foundation/sample/preview files
+total about 1.52 MB. No full-size particle cache, representation target or
+rolling resume was created. Full production is not zero-storage: projected
+probability payload is approximately 13.2 GiB, plus compact matching arrays,
+selected checkpoints and reports. Failed compact attempts are retained for
+inspection; no automatic broad cleanup exists. Label IDs, zero-error semantics
+and cross-file generator independence remain explicitly provisional as authorized.
+
+## 2026-09-11: provisional Delphes label and zero-error policies accepted
+
+The user authorized proceeding while Luka's confirmation is pending. Section
+3.1 of the [migration plan](plans/JETCLASS2_DELPHES_DATASET_MIGRATION_IMPLEMENTATION_PLAN.md)
+now records unchanged upstream JetClass2 numeric labels and zero impact-parameter
+errors as unavailable uncertainties, including for charged particles. Finite
+raw displacement values are preserved; no division by zero, epsilon-derived
+significance, or particle deletion is authorized. Unknown labels, negative
+errors, and nonfinite required data still fail validation.
+
+Whole-file split groups carry an explicit cross-file event-independence
+assumption, reduced input fields are accepted, and exact producer cards/revision
+can be gathered alongside implementation. Any later correction requires new
+affected artifacts and reassessment rather than editing existing results.
+Provisional and producer-confirmed evidence remain distinct. No adapter code,
+contract implementation, training, remote submission, or donor-code migration
+occurred in this documentation update. Scaffold/link checks pass 4/4 both
+before and after the change; the tracked documentation whitespace check passes.
+
+## 2026-09-11: JetClass2 Delphes migration plan and initial local audit
+
+The [migration plan](plans/JETCLASS2_DELPHES_DATASET_MIGRATION_IMPLEMENTATION_PLAN.md)
+documents the downloaded September 10 paired Delphes production: 333 ROOT files,
+25,430,379,343 bytes, 12,216,863 latest-tree rows, and 11,443,876 matched HLT rows.
+All files opened with one branch/type schema; checked matched-row scalar fields
+were finite. A 20-file/4,836-matched-row constituent sample had consistent
+lengths and finite exclusive particle identities. This is preliminary local QA,
+not remote checksum verification or an exhaustive constituent validation.
+
+The plan records multiple saved ROOT tree cycles, zero impact-parameter errors,
+absent event identifiers, and unavailable legacy detector-quality inputs. The
+old minimum-16 setting is correctly identified as a padding floor, not a
+selection cut. Producer code/cards, integer-label mapping, units/sentinels,
+selection/weight semantics, and generation-group provenance remain to be pinned.
+Proposed choices include 11 classes, a common JetClass-style feature family,
+grouped splits, and fresh HLT/offline references. None is represented as an
+already frozen executable campaign. Existing FullSim artifacts and unrelated
+salience/fusion work are not modified by this migration design.
+
+This step changes documentation only; no donor code or contract implementation
+was copied, no training or Tigris action occurred, and no final-test model output
+was produced. The pre- and post-edit scaffold/link suites pass 4/4 with the repository
+`src` on `PYTHONPATH`. Stage A's reproducible inventory/audit and synthetic ROOT
+fixtures are the next implementation task; production readiness remains pending.
+
 ## 2026-09-02: Strategy-B adjacent learned-fusion handoff implementation
 
 Strategy B in

@@ -1,5 +1,82 @@
 # Legacy Donor-Source Map
 
+## 2026-09-12: site-bound Delphes SPORC readiness
+
+New execution/readiness modules and thin CLI/shell helper extend the preceding
+uncommitted Delphes migration. No external donor was copied. Hash/immutable
+publication and exact-DAG receipt helpers still come from repository baseline
+`fd1ed1d01d54bf2ad4d42ffa6311432263a14770`, specifically
+`data/cache_contracts.py`, `scouting/hcwdl_authorization.py`,
+`scouting/hcwdl_exact_dag_submission.py` and `scouting/hcwdl_recovery.py`.
+The new readiness submitter reuses Delphes `submission.py`'s guarded exact
+submission, with an independent identity, roots and authorization phrase.
+`sbatch/jetclass2_delphes_common.sh` explicitly sets the selected isolated
+environment before calling the unchanged `sbatch/common.sh` activation helper.
+
+RUNTIME_PROFILE and INSTALLED_ENVIRONMENT are v2; CAMPAIGN_SPEC is v3.
+EXECUTION_SITE, READINESS_SPEC and RESOURCE_MEASUREMENTS are new v1 contracts.
+The cache budget calculation is shared with the existing Delphes preparation
+bound; science, membership, field policy and model/loss/schedule are unchanged.
+No pre-existing dirty Scouting donor file was edited or staged by this task.
+
+## 2026-09-11: reusable Delphes training-size split registry
+
+New `jetclass2_delphes/split_registry.py` and
+`scripts/create_jetclass2_delphes_split_registry.py` implement metadata-only,
+class-stratified nested selection and compact per-file entry masks. No donor
+split algorithm was copied. Runtime hash/immutable-JSON helpers are reused from
+`data/cache_contracts.py` at repository donor baseline
+`fd1ed1d01d54bf2ad4d42ffa6311432263a14770`; inventory/selection/schema/reader and
+foundation/production integration extend the preceding uncommitted local
+Delphes migration, not an invented published donor commit. Registry artifacts
+record the actual implementation-file hashes separately from Git HEAD.
+No raw ROOT files, legacy campaign source, checkpoints or remote jobs were
+modified. New families are SPLIT_DESIGN/ROLE_MEMBERSHIP/SPLIT_REGISTRY/
+SPLIT_PROFILE v1 and subset FOUNDATION_SPEC/CAMPAIGN_PLAN/CAMPAIGN_SPEC v2.
+
+## 2026-09-11: isolated JetClass2 Delphes local migration foundation
+
+New implementation lives under `src/hlt_classification/jetclass2_delphes/`.
+Repository donor baseline: `fd1ed1d01d54bf2ad4d42ffa6311432263a14770`.
+No `Fresh_check` imports, sibling-worktree imports, FullSim weights, old dataset
+artifacts, or previous runtime evidence are reused.
+
+| Donor file | Use and explicit adaptation |
+| --- | --- |
+| `data/cache_contracts.py` | Runtime reuse of hashing, deterministic NPZ and atomic publication |
+| `data/part_inputs.py` | Adapted analytic 17-feature mathematics; new p4 reader, class map, capacity and contracts |
+| `models/particle_transformer.py` | Runtime Weaver factory/config reuse; new 17/11 wrapper, sequence trimming disabled |
+| `scouting/hcwdl_fullcard_bottleneck_matcher.py`, `hcwdl_fullcard_bottleneck_contracts.py` | Runtime matrix-level exact solver and quantization; no old schema projection |
+| `scouting/hcwdl_homotopy.py`, `repair.py` | Adapted exact endpoint/support and atomic applicability principles into new raw-field layout |
+| `scouting/hcwdl_upper_coupling.py`, `hcwdl_unified_balanced.py` | Adapted mass-normalized insertion/removal and balanced circular switch mathematics; no residual substitutions under full cardinality |
+| `scouting/hcwdl_tri100_spine4_graph.py` | Copied branch/rational-coordinate/schedule definitions into independently versioned fresh-reference graph |
+| `scouting/hcwdl_mhpe_tri60_training.py` | Adapted CE+forward-KL/T², schedule, patience/selection and no-resume principles; not a runtime import of its 15-class trainer |
+| `scouting/hcwdl_authorization.py` | Runtime exact-clean-pushed-checkout validation |
+| `scouting/hcwdl_exact_dag_submission.py`, `hcwdl_recovery.py` | Runtime canonical dry-ledger validation, dependency resolution and submission receipts; new wrapper adds a campaign-wide submitter claim, pre-sbatch durable intent and cross-recovery active-job checks |
+| `sbatch/common.sh` | Existing absolute-path Conda/Tigris activation helper; new worker scripts supply explicit new data/spec paths |
+
+The matrix solver's inspected SHA256 was
+`9c92616446e77c27a00e1871dfdbdb2d46b2634665b80a79c68fe25365d5f190`.
+Its module-level transitive data imports include pre-existing dirty work:
+`highcov_data.py` SHA256
+`0803a1a813d043ebb30581ecaa622dd7d60bdb65cdbd09ae59895f15badd90c5`,
+`particles.py` SHA256
+`73d5890a2a5f4b35e0f2fd7e0fe7cd232a7b5afc9e2ea4dd4814e232435e4f38`,
+and `highcov_features.py` SHA256
+`1190f99e917e186a16e66dea5a865f41616cbc6255595dd623e3194015ef376b`.
+Those files were not edited or migrated in this task. The new adapter passes
+numeric matrices directly and does not use their old raw-particle adapters.
+
+The provisional label table references upstream
+`jet-universe/jetclass2_generation`, commit
+`3a7a1355f4230b5790669286466080d7fa3b6794`,
+`delphes_analyzers/FatJetMatching.h`. This is a code reference, **not** a claim
+that it is Luka's exact producer revision. Source inventory records actual
+implementation bytes as well as Git HEAD because new local code is uncommitted.
+
+This block also implements source-pinned production orchestration and synthetic
+end-to-end tests. It is not a claim of genuine Weaver/Tigris acceptance.
+
 The new repository is standalone. Donor code may be migrated only through an
 explicit entry here and may never become a runtime import from `Fresh_check`.
 
