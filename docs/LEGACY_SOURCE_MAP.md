@@ -1,5 +1,40 @@
 # Legacy Donor-Source Map
 
+## 2026-09-12: isolated Delphes offline auxiliary-supervision study
+
+New code lives exclusively under `jetclass2_delphes/offline_aux/`, with its own
+CLI, worker and tests. No external source or sibling-worktree code was copied.
+Reusable in-repository donors inspected and unchanged relative to
+`82032e35177f83436741d7fa1b9d38fbc4b3efc7`:
+
+- `jetclass2_delphes/contracts.py`, `schema.py`, `selection.py`, `inventory.py`,
+  `split_registry.py`, `reader.py`: identities, selection, file verification,
+  exact Hamilton allocation and native particle decoding. The auxiliary reader
+  adds explicit TRAIN/SELECT/REPORT capabilities; no generic validation bypass.
+- `jetclass2_delphes/inputs.py`, `model.py`: unchanged native HLT transform and
+  installed Weaver factory/configuration. The new wrapper taps the final class
+  vector without copying or replacing Weaver's forward implementation.
+- `jetclass2_delphes/cache.py`: RamBlock, the pure array batching operation and
+  process-thread limiter only. New cache construction does not call constituent
+  matching, view construction or require a matching-foundation artifact.
+- `jetclass2_delphes/reporting.py`, `execution.py`: native eleven-class metrics
+  and exact SPORC site/allocation checks. New weighted cluster-bootstrap code is
+  tested against the existing metric evaluator on explicitly repeated rows.
+- `data/cache_contracts.py`, `scouting/hcwdl_authorization.py`: canonical hashes,
+  deterministic compact NPZ, immutable publication and exact clean/pushed source.
+- `sbatch/jetclass2_delphes_common.sh` (and its unchanged `sbatch/common.sh`
+  helper): isolated SPORC activation and thread/import-path hygiene.
+
+New submission/recovery code follows the repository's exact-ID intent/receipt
+pattern but owns a separate namespace and never calls cancellation/priority APIs.
+New artifact families are all `JETCLASS2_DELPHES_OFFLINE_AUX_*/v1`; no existing
+dataset, split, matching, scientific recipe or runtime-profile family was
+silently redefined. The donor paths above have no dirty semantic-byte delta
+against the cited HEAD. Unrelated dirty Scouting files were not modified.
+
+Actual production artifacts require their own later clean pushed source pin;
+this donor baseline is not an assertion that the working tree is clean.
+
 ## 2026-09-12: site-bound Delphes SPORC readiness
 
 New execution/readiness modules and thin CLI/shell helper extend the preceding
