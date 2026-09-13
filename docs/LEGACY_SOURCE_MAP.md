@@ -397,6 +397,19 @@ schedule and physical primary extraction, and tests these changes in
 `tests/test_hcwdl_adjacent_learned_handoff.py`. There is no new third-party
 code, dependency, or attribution obligation.
 
+## JetClass2 salience Strategy-B composition
+
+The `JETCLASS2_DELPHES_SALIENCE_LEARNED_HANDOFF_*/v1` implementation is
+repository-local composition rather than an external migration. It reuses the
+versioned Strategy-B withdrawal loss from
+`src/hlt_classification/scouting/hcwdl_offline_hlt_withdrawal.py` and the
+JetClass2 salience foundation/view APIs already recorded by their own plans and
+contracts. The new 17-input/11-output asymmetric fusion model, three-spine
+54-fit graph, U000-to-D000 morph control, RAM cache adapters, staged SPORC DAG,
+and tests were authored in this repository. No historical checkpoint, target
+bank, dataset, generated campaign result, or external source file was copied,
+and runtime imports do not reach an old worktree or repository.
+
 ## Approved transfer surfaces
 
 | Transfer block | Donor surface | Intended retained meaning | Migration policy |
