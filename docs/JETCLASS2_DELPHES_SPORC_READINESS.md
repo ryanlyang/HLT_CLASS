@@ -136,3 +136,105 @@ U000/U050/D050 preprocessing measurements. Scientific results never control
 acceptance. The production campaign still needs its separate creation, full
 59-task dry run and explicit authorization after we review this evidence.
 Nothing in this procedure launches it automatically.
+
+## Completed preparation: profile only on debug
+
+Use this alternative only after the source readiness foundation lock exists.
+It re-authenticates every existing assignment; it does not repeat sample,
+matching or lock jobs. The new profile is measured on debug but explicitly
+targets tier3 for subsequent scientific jobs on the same GPU/environment and
+CPU/RAM settings. Both original site definitions and readiness artifacts remain
+unchanged. The source checkout must include the debug-profile implementation.
+
+On Windows, the existing scoped staging helper also includes the new Delphes
+profile files and preserves the unrelated salience/HANDOFF edits:
+
+```powershell
+& .\scripts\stage_jetclass2_delphes_sporc.ps1
+git diff --cached --check
+git diff --cached --stat
+git commit -m "Allow debug-only JetClass2 profiling with completed foundation reuse"
+git push origin HEAD:main
+git rev-parse HEAD
+```
+
+Run the following on SPORC after pushing. The original readiness path is the
+user's existing TRAIN_500K execution. A fresh debug attempt requests one A100,
+8 CPUs/workers, 72 GiB and four hours. `--profile-minutes 120` is an optional,
+more aggressive unmeasured cap, not required by the debug partition.
+
+```bash
+(
+set -euo pipefail
+MAIN_REPO=/home/ryreu/atlas/HLT_Classification
+git -C "${MAIN_REPO}" fetch origin main
+JC2_FIX="$(git -C "${MAIN_REPO}" rev-parse origin/main)"
+export PROJECT_DIR="/home/ryreu/atlas/HLT_Classification_jc2_debug_${JC2_FIX:0:8}"
+READY_ROOT="${MAIN_REPO}/checkpoints/jc2_sporc_ready_500k_275b984d_r1"
+DEBUG_ROOT="${MAIN_REPO}/checkpoints/jc2_debug_profile_${JC2_FIX:0:8}_r1"
+
+git -C "${MAIN_REPO}" cat-file -e "${JC2_FIX}:scripts/prepare_jetclass2_delphes_debug_profile.py"
+if [ -e "${PROJECT_DIR}" ]; then
+  test "$(git -C "${PROJECT_DIR}" rev-parse HEAD)" = "${JC2_FIX}"
+  test -z "$(git -C "${PROJECT_DIR}" status --porcelain)"
+else
+  git -C "${MAIN_REPO}" worktree add --detach "${PROJECT_DIR}" "${JC2_FIX}"
+fi
+export JC2_SITE=sporc_a100_debug
+source "${PROJECT_DIR}/sbatch/jetclass2_delphes_common.sh"
+
+python -s "${PROJECT_DIR}/scripts/prepare_jetclass2_delphes_debug_profile.py" create \
+  --readiness-spec "${READY_ROOT}/readiness_spec.json" \
+  --output-root "${DEBUG_ROOT}" --source-commit "${JC2_FIX}"
+
+# Creation has validated reuse and printed the single-job dry command.
+# Resolve only the original profile ID from its authenticated live ledger.
+OLD_PROFILE="$(python -s - "${READY_ROOT}" <<'PY'
+import sys
+from pathlib import Path
+from hlt_classification.data.cache_contracts import load_json
+from hlt_classification.scouting.hcwdl_recovery import validate_submission_ledger
+root = Path(sys.argv[1])
+spec = load_json(root / "readiness_spec.json")
+ledger = load_json(root / "submission_ledger.json")
+validate_submission_ledger(ledger)
+assert ledger["campaign_spec_sha256"] == spec["content_hash"] and not ledger["dry_run"]
+print(ledger["jobs"]["profile"])
+PY
+)"
+OLD_STATE="$(squeue --me -h -o '%i %T' | awk -v job="${OLD_PROFILE}" '$1 == job {print $2}')"
+if [ "${OLD_STATE}" = "PENDING" ]; then
+  scancel --ctld --state=PENDING --name=jc2gate_profile "${OLD_PROFILE}"
+else
+  echo "Old profile ${OLD_PROFILE} is no longer pending. Inspect it before replacing it."
+  exit 1
+fi
+OLD_STATE="$(squeue --me -h -o '%i %T' | awk -v job="${OLD_PROFILE}" '$1 == job {print $2}')"
+if [ -n "${OLD_STATE}" ]; then
+  echo "Old profile is still ${OLD_STATE}; stop and inspect before submitting a replacement."
+  exit 1
+fi
+
+python -s "${PROJECT_DIR}/scripts/prepare_jetclass2_delphes_debug_profile.py" submit \
+  --spec "${DEBUG_ROOT}/profile_attempt_spec.json" --execute \
+  --authorization-phrase 'AUTHORIZE JETCLASS2 DELPHES DEBUG PROFILE ONLY'
+echo "Debug evidence: ${DEBUG_ROOT}/evidence"
+squeue --me -o '%.18i %.14P %.32j %.2t %.10M %R'
+)
+```
+
+The optional replacement block above cancels only the old pending profile,
+not its completed predecessors or any other project. There is no cancellation
+in either Python submitter. The [Slurm state filter](https://slurm.schedmd.com/scancel.html)
+also protects a job that starts between the check and cancellation request.
+If the old job is already running/completed, inspect
+it; there may be no reason to replace it. If an error occurs after creation,
+keep the new root and resume with **submit only**, not create again. Never
+re-submit an ambiguous sbatch acknowledgement without exact-job reconciliation.
+
+After success return `profile_result.json`, `evidence/resource_measurements.json`
+and `evidence/runtime_profile.json` from the debug root. Science creation uses
+the unchanged `${READY_ROOT}/foundation`, the new profile and the SAME new
+commit/worktree; all 59 scientific commands must still say `--partition=tier3`.
+No source hot-patching or full-readiness resubmission is needed. Timing remains
+an estimate; actual A100 acceptance is established only when this job passes.

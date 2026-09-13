@@ -28,7 +28,10 @@ from .model import DelphesParticleTransformer, model_contract, installed_environ
 from .reporting import recovery
 from .runner import train_kernel, predict
 from .splits import is_subset_profile
-from .execution import allocation, gpu_identity, validate_site, validate_resources
+from .execution import (
+    DEBUG_PROFILE_TRANSFER, allocation, execution_site, gpu_identity,
+    production_site, validate_site, validate_resources,
+)
 
 AUTHORIZE = "AUTHORIZE EXACT JETCLASS2 DELPHES FOUR SPINE CAMPAIGN"
 
@@ -169,19 +172,22 @@ def measure_runtime(foundation: dict, *, foundation_root: Path, data_root: Path,
         max_train_minutes=max_train_minutes, final_test_accessed=False))
     if train_minutes > max_train_minutes or reduce_minutes > max_train_minutes:
         raise ValueError("Measured walltime exceeds the explicit planning envelope; inspect resource_measurements.json and revise resources explicitly")
+    transfer = (dict(measurement_site=site, site_transfer_policy=DEBUG_PROFILE_TRANSFER)
+                if site["name"] == "sporc_a100_debug" else {})
     result = artifact(
-        "RUNTIME_PROFILE", version=2, foundation_sha256=foundation["content_hash"], source_commit=source_commit,
+        "RUNTIME_PROFILE", version=3 if transfer else 2,
+        foundation_sha256=foundation["content_hash"], source_commit=source_commit,
         miniature_sha256=mini["content_hash"], model=model_contract(), passed=True,
         installed_environment=environment,
         miniature=mini, resource_training_report=report,
-        measured_full_population=True, slurm_job_id=job_id, execution_site=site, gpu=gpu_identity(),
+        measured_full_population=True, slurm_job_id=job_id, execution_site=production_site(site), gpu=gpu_identity(),
         cpus=cpus, memory_mb=mem_mb, workers=workers, train_minutes=train_minutes,
         reduce_minutes=reduce_minutes, max_train_minutes=max_train_minutes, cache_budgets=budgets,
         cache_seconds=worst_cache_seconds, cache_seconds_by_coordinate=cache_timings,
         one_pass_seconds=report["runtime_seconds"], inference_seconds=inference_seconds,
         cache_bytes=peak_cache_bytes, gpu_peak_bytes=gpu_peak,
         selected_state_bytes=selected_state_bytes,
-        ram_only_views=True, rolling_resume=False, final_test_accessed=False,
+        ram_only_views=True, rolling_resume=False, final_test_accessed=False, **transfer,
     )
     validate_profile(result, foundation, source_commit)
     write_immutable_json(output_root / "runtime_profile.json", result)
@@ -189,7 +195,19 @@ def measure_runtime(foundation: dict, *, foundation_root: Path, data_root: Path,
 
 
 def validate_profile(profile: dict, foundation: dict, commit: str):
-    validate(profile, "RUNTIME_PROFILE", version=2)
+    version = profile.get("schema_version")
+    if version not in (2, 3):
+        raise ValueError("Unsupported runtime profile version")
+    validate(profile, "RUNTIME_PROFILE", version=version)
+    if version == 3:
+        if (profile.get("measurement_site") != execution_site("sporc_a100_debug")
+                or profile["execution_site"] != execution_site("sporc_a100")
+                or profile.get("site_transfer_policy") != DEBUG_PROFILE_TRANSFER):
+            raise ValueError("Only the explicit debug-to-tier3 profile transfer is permitted")
+    elif "measurement_site" in profile or "site_transfer_policy" in profile:
+        raise ValueError("Runtime profile v2 cannot contain a site transfer")
+    if profile["execution_site"]["name"] == "sporc_a100_debug":
+        raise ValueError("Debug is profiling-only, never a scientific execution site")
     validate(profile["installed_environment"], "INSTALLED_ENVIRONMENT", version=2)
     validate_site(profile["execution_site"])
     validate_resources(profile["execution_site"], profile["cpus"], profile["memory_mb"], profile["workers"])

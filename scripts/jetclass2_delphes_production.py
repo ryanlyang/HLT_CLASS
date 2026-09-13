@@ -29,7 +29,7 @@ def main():
         q.add_argument("--source-commit", required=True)
         if mode == "profile":
             q.add_argument("--workers", type=int, default=4)
-            q.add_argument("--site", choices=["sporc_a100", "tigris_gh200"], required=True)
+            q.add_argument("--site", choices=["sporc_a100", "sporc_a100_debug", "tigris_gh200"], required=True)
             q.add_argument("--max-train-minutes", type=int, default=2880)
         else:
             q.add_argument("--runtime-profile", type=Path, required=True)

@@ -1,5 +1,55 @@
 # Current Handoff
 
+## 2026-09-12: profile-only debug continuation for completed Delphes preparation
+
+The user supplied completion/queue evidence for the TRAIN_500K readiness
+preparation at `jc2_sporc_ready_500k_275b984d_r1`; profile job 21612446 remained
+pending on tier3. The supplied debug partition has A100 resources, permits the
+same account/QoS and allows a 24-hour walltime. This is scheduler evidence,
+not real model acceptance. The user requested a fix that profiles on debug
+without rerunning sample, matching arrays or the completed foundation lock.
+
+Added the isolated `profile_attempt.py`, create/submit/run CLI and thin debug
+worker. A fresh PROFILE_ATTEMPT_SPEC/v1 and exact one-job dry ledger reference
+the canonical old readiness/hash and completed foundation/lock hashes. Reuse
+rechecks array checksums, coverage, semantic producer bytes and the full lock
+read-only. The assignment-producing source files are unchanged from 275b984d;
+no raw data, matching outputs or old artifacts are copied, edited or deleted.
+Default request: one A100, 8 CPUs/workers, 72 GiB, four hours, no requeue.
+The separate live authorization phrase is
+`AUTHORIZE JETCLASS2 DELPHES DEBUG PROFILE ONLY`. Submission retains exact-ID
+dry/intent/receipt protection and never cancels jobs or auto-launches science.
+
+The added `sporc_a100_debug` execution site does not change either original
+site object. RUNTIME_PROFILE/v3 explicitly binds debug as measurement site
+and tier3 as production site, with only the named same-A100/environment/
+CPU/RAM transfer permitted. All original real-Weaver, full-population,
+capacity/batch, no-resume and sealed-test checks still run. Scientific commands
+remain on tier3 and enforce the actual measured GPU/environment/resources.
+Old v2 profiles remain same-site only. PROFILE_ATTEMPT_RESULT/v1 links the
+completed profile to its attempt, foundation lock and actual Slurm job.
+No new donor code was copied; existing repository helper attribution remains
+unchanged. The active plan and reusable contract document this narrow exception.
+
+Local pre-change SPORC tests passed 14/14 in 54.42 seconds. Initial debug
+tests exposed a test-only scheduler mock intercepting Git provenance calls;
+the fixture now captures real local producer hashes before replacing the
+scheduler. The first corrected debug suite passed 11/11 in 137.62 seconds.
+The clean-HEAD snapshot with only the scoped Delphes code/test changes passed
+all six Delphes suites: 63/63 in 446.39 seconds, including the additional
+missing-dry-ledger/post-creation-corruption regression. The new worker, shared
+helper and documented RC queue block pass Bash syntax checks; all 39 Delphes
+Python surfaces parse via AST. Both original site objects/hashes are unchanged.
+No installed-Weaver/A100 acceptance is claimed locally.
+
+Next: commit/push only the scoped Delphes changes, create a new clean RC
+worktree, create the profile-only dry run against the existing foundation,
+and separately submit its single debug job. If replacing the old pending job,
+cancel only the original profile ID verified from its live ledger; leave all
+completed predecessors and unrelated project jobs untouched. The copy/paste
+procedure is in `docs/JETCLASS2_DELPHES_SPORC_READINESS.md`. No remote job or
+artifact was changed during implementation.
+
 ## 2026-09-12: SPORC A100 migration readiness implemented locally
 
 The user moved the new Delphes benchmark to SPORC `tier3`, account

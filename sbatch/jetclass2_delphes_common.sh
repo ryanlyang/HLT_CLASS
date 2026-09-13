@@ -3,7 +3,7 @@
 set -euo pipefail
 
 case "${JC2_SITE:?explicit Delphes execution site required}" in
-  sporc_a100)
+  sporc_a100|sporc_a100_debug)
     export CONDA_BASE=/home/ryreu/miniconda3
     export CONDA_ENV=atlas_kd_sporc
     ;;

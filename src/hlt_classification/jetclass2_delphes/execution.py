@@ -9,9 +9,16 @@ import sys
 
 from .contracts import artifact, validate
 
+DEBUG_PROFILE_TRANSFER = "sporc_debug_to_tier3_same_a100_environment_resources_v1"
+
 
 def execution_site(name: str) -> dict:
     sites = {
+        # Profiling only. Scientific jobs still use the sporc_a100 site below.
+        "sporc_a100_debug": dict(cluster="sporc", partition="debug", qos="qos_tier3",
+                                 gres="gpu:a100:1", gpu_family="A100", architecture="x86_64",
+                                 conda_base="/home/ryreu/miniconda3", conda_env="atlas_kd_sporc",
+                                 max_cpus=36, max_memory_mb=340000),
         "sporc_a100": dict(cluster="sporc", partition="tier3", qos="qos_tier3",
                            gres="gpu:a100:1", gpu_family="A100", architecture="x86_64",
                            conda_base="/home/ryreu/miniconda3", conda_env="atlas_kd_sporc",
@@ -32,6 +39,14 @@ def validate_site(site: dict) -> str:
     if site != execution_site(site["name"]):
         raise ValueError("Execution site differs from the registered profile")
     return digest
+
+
+def production_site(measurement_site: dict) -> dict:
+    """One explicit profiling exception, not arbitrary cross-site portability."""
+    validate_site(measurement_site)
+    if measurement_site["name"] == "sporc_a100_debug":
+        return execution_site("sporc_a100")
+    return measurement_site
 
 
 def validate_resources(site: dict, cpus: int, memory_mb: int, workers: int):

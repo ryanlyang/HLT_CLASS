@@ -28,6 +28,7 @@ foundation is retained as `/v1` but is not the selected production population.
 | `PROBABILITY_BANK` | Parent/role/temperature/class/ordered-identity-bound KD probabilities |
 | `KERNEL_TRAINING_REPORT`, `WEAVER_PARITY`, `LOCAL_OR_REMOTE_ACCEPTANCE` | Training-component evidence; not a production execution authorization |
 | `EXECUTION_SITE`, `READINESS_SPEC`, `RESOURCE_MEASUREMENTS` | Explicit site, readiness-only dependency chain, diagnostic measurements (not execution authorization) |
+| `PROFILE_ATTEMPT_SPEC`, `PROFILE_ATTEMPT_RESULT`, `RUNTIME_PROFILE/v3` | Profile-only reuse of completed preparation, source/job/result lineage, explicit debug A100 measurement to tier3 production transfer |
 | `INSTALLED_ENVIRONMENT/v2`, `RUNTIME_PROFILE/v2`, `CAMPAIGN_SPEC/v3` | Installed Weaver source bytes/numerical versions, genuine site-bound measured execution evidence, exact pinned production graph |
 | `TASK_REPORT`, `AGGREGATE`, `COMMAND_PLAN`, `MONITOR`, `RECOVERY`, `SUBMISSION_INTENT` | Verified selected outputs, validation results, exact Slurm dependencies, terminal-state recovery and ambiguous-submission protection |
 
@@ -284,6 +285,38 @@ pre-sbatch intent/receipt journals. Lost acknowledgements require reconciliation
 no broad cancellation, holding, reprioritization or changes to other projects
 are part of either submitter. Initial raw-file verification reads checksums,
 not final-test particle arrays or predictions.
+
+### Debug profiling exception (no preparation rerun)
+
+EXECUTION_SITE/v1 adds `sporc_a100_debug` without changing either existing site
+object. It differs from `sporc_a100` only in name and partition (`debug`);
+the same account, QoS, A100, Conda prefix and conservative resource envelope
+apply. Debug is a measurement site only. RUNTIME_PROFILE/v2 cannot carry this
+transfer. RUNTIME_PROFILE/v3 requires the exact debug measurement site, tier3
+execution site and `sporc_debug_to_tier3_same_a100_environment_resources_v1`
+policy. No arbitrary site transfer or debug scientific execution is accepted.
+The existing CAMPAIGN_SPEC/v3 can embed either validated runtime version;
+new profile hashes distinguish these executions. Its science plan always uses
+the runtime's production site. GPU identity, host environment, CPU/RAM, workers
+and all ordinary gates are unchanged; cross-partition timing is only an estimate.
+
+PROFILE_ATTEMPT_SPEC/v1 binds a canonical old readiness spec/hash, its exact
+foundation/hash and completed lock/hash, new pushed source/worktree, disjoint
+attempt/evidence paths, resources, measurement/production sites, zero scientific
+fits and no preparation/existing-campaign mutation. Reuse authenticates array
+checksums, coverage and the unchanged assignment semantic source bytes, then
+compares the complete existing lock to those reports without republishing it.
+Missing/stale/corrupt preparation fails before submission; old Git HEAD alone
+does not force recomputation of semantically identical assignments.
+
+The attempt has exactly one profile task, no array or scheduler dependencies,
+its own dry ledger and guarded submission journal, and a separate authorization
+phrase. No old job is cancelled or moved automatically. Outputs are small
+specifications, logs, acceptance reports, the tiny acceptance bank and a runtime
+profile; no dense views, training checkpoints or matching copies are written.
+PROFILE_ATTEMPT_RESULT/v1 binds successful runtime evidence to the attempt,
+original lock and actual job. Timeout recovery uses a fresh directory, while
+the original foundation remains read-only and reusable.
 
 ## Metrics
 

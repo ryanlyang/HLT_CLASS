@@ -164,7 +164,8 @@ def test_workers_use_explicit_isolated_conda_and_no_global_default_edits():
     assert "${CONDA_BASE:=/home/ryreu/miniforge3-aarch64}" in (root / "sbatch/common.sh").read_text()
 
 
-def test_profile_pipeline_records_all_cache_paths_and_fails_closed_on_walltime(campaign, tmp_path, monkeypatch):
+@pytest.mark.parametrize("measurement_site", ["sporc_a100", "sporc_a100_debug"])
+def test_profile_pipeline_records_all_cache_paths_and_fails_closed_on_walltime(campaign, tmp_path, monkeypatch, measurement_site):
     """Mock CUDA/volume only; exercise actual profile assembly and validation."""
     profile = campaign["runtime_profile"]
     seen = []
@@ -194,8 +195,15 @@ def test_profile_pipeline_records_all_cache_paths_and_fails_closed_on_walltime(c
                         SimpleNamespace(total_memory=40*2**30))
     kwargs = dict(foundation_root=Path(campaign["foundation_root"]), data_root=Path(campaign["data_root"]),
                   project=Path(campaign["project_dir"]), source_commit=campaign["source_commit"],
-                  site=profile["execution_site"], workers=1)
+                  site=execution.execution_site(measurement_site), workers=1)
     result = production.measure_runtime(campaign["foundation"], output_root=tmp_path / "profile", **kwargs)
+    assert result["execution_site"] == execution.execution_site("sporc_a100")
+    if measurement_site == "sporc_a100_debug":
+        assert result["schema_version"] == 3
+        assert result["measurement_site"] == kwargs["site"]
+        assert result["site_transfer_policy"] == execution.DEBUG_PROFILE_TRANSFER
+    else:
+        assert result["schema_version"] == 2 and "measurement_site" not in result
     assert result["train_minutes"] == 60 and result["reduce_minutes"] == 30
     assert set(result["cache_seconds_by_coordinate"]) == {"U000", "U050", "D050"}
     assert [(r, c) for r, c, _ in seen] == [(r, c) for c in ("U000", "U050", "D050") for r in ("train", "validation")]

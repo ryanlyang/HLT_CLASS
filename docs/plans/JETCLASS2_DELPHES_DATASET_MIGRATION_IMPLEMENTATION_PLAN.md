@@ -26,6 +26,23 @@ miniature. Old campaigns and `sbatch/common.sh` defaults are unchanged. The
 user authorized local preparation up to this gate, not live job submission.
 The initial population remains TRAIN_500K / 1M validation / 1M sealed test.
 
+**Profiling-only exception, 2026-09-12:** the user authorizes implementing a
+standalone SPORC `debug` A100 profiling attempt which reuses the completed
+TRAIN_500K foundation. Do not rebuild sample checks, assignments or the lock.
+Authenticate their original identities, semantic source hashes and array
+checksums read-only. Retain the old readiness spec, ledger and evidence;
+publish a fresh source-pinned attempt/dry ledger/evidence root. The supplied
+debug configuration permits the same account/QoS, an A100, and up to 24 hours.
+This exception does not move scientific jobs to debug or weaken GPU,
+environment, resource, parity, full-population, no-resume or final-test gates.
+RUNTIME_PROFILE/v3 explicitly records measurement site `sporc_a100_debug` and
+production site `sporc_a100` (tier3); v2 remains same-site evidence only.
+The only permitted transfer is debug-to-tier3 with the same actual A100 GPU
+identity, installed numerical environment, CPU/RAM allocation and workers.
+Timing headroom remains an estimate, not a guarantee across partitions.
+Only the separate one-job profile attempt may be submitted by this path;
+there is no cancellation, preparation rerun or automatic science submission.
+
 Luka has now confirmed that the numeric labels were not changed from upstream
 JetClass2. His supplied `offline-and-hlt/FatJetMatching.h` at inspected reference
 commit `69c58b243476412b7489ddd80fd7d1897ec27b8a` agrees with the existing table.
@@ -858,3 +875,30 @@ workers, Python/Weaver/numerical versions and installed Weaver source hashes.
 The explicit legacy Tigris site remains selectable for future fresh profiling;
 SPORC is the selected site here. Full scientific submission still requires
 the real profile, a separate 59-job dry run and its own explicit authorization.
+
+### 15.2 Profile-only debug continuation
+
+`scripts/prepare_jetclass2_delphes_debug_profile.py create` takes the canonical
+completed `readiness_spec.json`, a clean new pushed worktree/commit and a fresh
+output root disjoint from the old readiness, raw data and source worktree.
+It publishes PROFILE_ATTEMPT_SPEC/v1 plus a one-command dry ledger. The command
+requests debug, `qos_tier3`, `reu-aisocial`, one A100, 8 CPUs/workers, 72 GiB
+and 240 minutes by default; walltime is explicitly selectable up to 1440
+minutes. These remain unmeasured starting requests. Only existing compact
+assignment arrays/metadata are read, never copied or recomputed.
+
+Live `submit` requires `AUTHORIZE JETCLASS2 DELPHES DEBUG PROFILE ONLY` and the
+canonical dry ledger, rechecks the foundation and uploaded bytes, and uses the
+same exact-ID intent/receipt and duplicate-submission protection as readiness.
+It has no scheduler dependency on the obsolete profiling job or unrelated
+projects, and does not cancel anything. If replacing a pending old profile,
+the operator cancels only its authenticated exact job ID separately.
+
+The worker checks its exact declared allocation, reauthenticates source and
+foundation, then runs the existing complete profiling routine without removing
+any checks. It records PROFILE_ATTEMPT_RESULT/v1 linking the attempt, original
+foundation lock, actual job and runtime profile. A failed/timed-out attempt
+uses another fresh attempt directory. Successful RUNTIME_PROFILE/v3 evidence
+can feed the normal scientific creator at the same new commit; all 59 science
+commands and production allocation checks still target tier3. Old v2 profiles
+and immutable site definitions keep their original meanings.
