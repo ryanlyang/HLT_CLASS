@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import hashlib
 import math
+import re
+import stat
 from pathlib import Path
 
 from hlt_classification.data.cache_contracts import (
@@ -22,6 +24,8 @@ ROLES = ("TRAIN", "VAL_SELECT", "VAL_REPORT")
 ROWS = dict(TRAIN=500_000, VAL_SELECT=200_000, VAL_REPORT=800_000)
 MAX_FILE = 64 * 2**20
 MAX_TOTAL = 4 * 2**30
+# Same naming convention as cache_contracts.atomic_publish_bytes/mkstemp.
+_PUBLICATION_TEMP = re.compile(r"\.(?P<destination>.+)\.[a-z0-9_]{8}\.tmp")
 
 
 def artifact(kind, **fields):
@@ -103,10 +107,42 @@ def publish_arrays(root, name, arrays):
 
 
 def storage_audit(root):
-    files = [p for p in Path(root).rglob("*") if p.is_file()]
-    if any(p.is_symlink() for p in Path(root).rglob("*")):
-        raise ValueError("Symlinks forbidden in study outputs")
-    sizes = [p.stat().st_size for p in files]
+    """Observe bounded outputs without racing sibling atomic publications.
+
+    This is a live inventory, not a transactional filesystem quota. Count live
+    temporary files too; tolerate disappearance only for publisher temporaries
+    and the stage submitter's transient claim. Durable output validation remains
+    receipt- and checksum-based, separately from this storage observation.
+    """
+    files = {}
+    for path in Path(root).rglob("*"):
+        try:
+            metadata = path.lstat()
+        except FileNotFoundError:
+            if (path.name == "submission_in_progress.claim"
+                    and path.parent.parent.name == "attempts"
+                    and path.parent.parent.parent.parent.name == "stages"):
+                # The submitter removes this zero-byte claim in finally; a
+                # worker may finish before all sibling sbatch calls return.
+                continue
+            temporary = _PUBLICATION_TEMP.fullmatch(path.name)
+            if temporary is None:
+                raise
+            # Publication links the finished payload and unlinks its temporary.
+            # The final name may not have appeared in this directory listing.
+            path = path.with_name(temporary["destination"])
+            try:
+                metadata = path.lstat()
+            except FileNotFoundError:
+                # The writer can also remove its temp after an aborted write.
+                continue
+        if stat.S_ISLNK(metadata.st_mode):
+            raise ValueError("Symlinks forbidden in study outputs")
+        if stat.S_ISREG(metadata.st_mode):
+            # Use the same metadata for type and size (no is_file/stat race).
+            # A recovered final name also enumerated normally is counted once.
+            files[path] = metadata.st_size
+    sizes = list(files.values())
     if max(sizes, default=0) > MAX_FILE or sum(sizes) > MAX_TOTAL:
         raise ValueError("Auxiliary output storage envelope exceeded")
     return dict(files=len(files), bytes=sum(sizes), largest_bytes=max(sizes, default=0))

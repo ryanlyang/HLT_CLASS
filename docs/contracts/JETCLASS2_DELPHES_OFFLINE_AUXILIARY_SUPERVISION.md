@@ -218,6 +218,17 @@ plus one GiB (conservative four-GiB projection before real measurement). The
 profile records the actual selected payload size and projected total. Failed
 attempts remain visible; there is no automatic deletion or spill-to-disk fallback.
 
+The post-task storage audit observes a live directory tree, not a transactional
+filesystem quota. File type and size come from one non-following stat. Live
+publication temporaries remain counted; if a publisher removes its temporary
+between listing and stat, the audit counts the published destination when
+present (once even if also listed). An aborted temporary can disappear without
+a destination. The exact attempt-local `submission_in_progress.claim` can also
+disappear normally when submission ends. Other missing entries, permission
+errors, symlinks and envelope violations still fail. This does not relax any
+payload checksum, parent identity or completion-receipt validation, nor certify
+partial outputs from a failed task as reusable.
+
 ## Recovery
 
 All output directories are attempt-local and created fresh. Successful tasks
