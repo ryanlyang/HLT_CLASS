@@ -8,8 +8,9 @@ import subprocess
 import sys
 
 from ..execution import slurm_options, allocation
-from .contracts import artifact, validate, load_json, write_immutable_json, storage_audit
-from .campaign import validate_stage, validate_study, completed, prior, task_result
+from .contracts import artifact, validate, load_json, write_immutable_json
+from .campaign import validate_stage, validate_study, completed, prior, task_result, task_site
+from .preparation_import import audit_study_storage
 
 TERMINAL = {"COMPLETED", "FAILED", "CANCELLED", "TIMEOUT", "OUT_OF_MEMORY", "NODE_FAIL", "PREEMPTED", "BOOT_FAIL", "DEADLINE", "REVOKED"}
 
@@ -45,11 +46,12 @@ def command_plan(stage, study, attempt_root, *, selected=None):
                 result, _ = task_result(stage, d)
                 reused[d] = result["content_hash"]
         r = resources(stage, task)
-        command = slurm_options(study["site"]) + [f"--cpus-per-task={r['cpus']}", f"--mem={r['memory_mb']}M",
+        site = task_site(study, task)
+        command = slurm_options(site) + [f"--cpus-per-task={r['cpus']}", f"--mem={r['memory_mb']}M",
             f"--time={r['minutes']}", "--job-name=jc2aux_"+task["task_id"], "--chdir="+study["project_dir"],
             "--output="+str(root / "slurm-%j.out")]
         if r["gpu"]:
-            command.append("--gres="+study["site"]["gres"])
+            command.append("--gres="+site["gres"])
         if dependencies:
             command.append("--dependency=afterok:"+":".join("${JOB_"+d+"}" for d in dependencies))
         command += [str(Path(study["project_dir"]) / "sbatch/run_jetclass2_delphes_offline_aux.sh"),
@@ -125,12 +127,15 @@ def submit(stage, study, attempt_root, *, execute=False, phrase=None):
         raise PermissionError("Explicit authorization for this concrete stage is required")
     if load_json(root / "dry_run_submission_ledger.json") != dry:
         raise ValueError("Full canonical dry run is absent or changed")
+    if "preparation_import" in study:
+        from .preparation_import import validate_import
+        validate_import(study, authenticate=True)
     if stage["name"] in {"DISCOVERY", "CONFIRMATION"}:
         profile, _ = prior(study, "PREPARE", "profile")
         projected = profile["projected_bytes"]
     else:
         projected = 4*2**30  # conservative until the genuine measurement
-    storage_audit(study["root"])
+    audit_study_storage(study)
     if shutil.disk_usage(root).free < 2*projected + 2**30:
         raise OSError("Insufficient free space for twice projected artifacts plus one GiB")
     claim = root / "submission_in_progress.claim"
@@ -180,7 +185,7 @@ def submit(stage, study, attempt_root, *, execute=False, phrase=None):
 def verify_allocation(study, stage, task):
     r = resources(stage, task)
     if r["gpu"]:
-        _, cpus, memory = allocation(study["site"])
+        _, cpus, memory = allocation(task_site(study, task))
         if (cpus, memory) != (r["cpus"], r["memory_mb"]):
             raise PermissionError("GPU resource request differs from pinned stage")
         return

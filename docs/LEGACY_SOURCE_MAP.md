@@ -1,5 +1,17 @@
 # Legacy Donor-Source Map
 
+## 2026-09-13: auxiliary debug profile continuation
+
+No external or sibling-worktree donor code was copied. Reused unchanged native
+`jetclass2_delphes/execution.py` site/allocation helpers from
+`bee8bc48a1e634d0858f689b6b733ee3b2232265` to authenticate debug and tier3
+separately. The matching campaign's `profile_attempt.py` was inspected as an
+operational reference, not imported as auxiliary acceptance or migrated source.
+The new `offline_aux/preparation_import.py` binds original auxiliary CPU task
+receipts and compares the registered preparation-kernel Git blobs between
+producer/execution commits. Scientific targets/model/training kernels and the
+existing source/Slurm journal primitives are reused, not rewritten.
+
 ## 2026-09-12: isolated Delphes offline auxiliary-supervision study
 
 New code lives exclusively under `jetclass2_delphes/offline_aux/`, with its own

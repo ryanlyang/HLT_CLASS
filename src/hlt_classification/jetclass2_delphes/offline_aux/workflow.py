@@ -11,13 +11,14 @@ import torch
 from ..model import installed_environment
 from ..reporting import evaluate_probabilities
 from .contracts import (artifact, validate, load_json, write_immutable_json, atomic_publish_bytes,
-                        sha256_file, checked_payload, publish_arrays, load_npz_arrays, storage_audit)
+                        sha256_file, checked_payload, publish_arrays, load_npz_arrays)
 from .campaign import (validate_study, validate_stage, task_result, prior, stage_path, completed,
                        configuration_lock, reporting_lock)
 from .roles import build_roles, load_role, read_rows
 from .targets import summarize
 from . import banks, cache, normalization, execution, training, reporting
 from .model import create_model, state_hash
+from .preparation_import import imported_stage, audit_study_storage
 
 
 def context(study):
@@ -114,7 +115,10 @@ def dispatch(study, stage, task, output_root):
         return artifact("PREPARATION_LOCK", study_sha256=study["content_hash"], role_split_sha256=split["content_hash"],
                         train_bank=bank, selection_bank=select_bank, normalizer=normalizer)
     if kind in {"profile", "train"}:
-        preparation_stage = stage if kind == "profile" else load_json(stage_path(study, "PREPARE") / "stage_spec.json")
+        if "preparation_import" in study:
+            preparation_stage = imported_stage(study, "PREPARE", authenticate=True)
+        else:
+            preparation_stage = stage if kind == "profile" else load_json(stage_path(study, "PREPARE") / "stage_spec.json")
         prepared, _ = task_result(preparation_stage, "normalize")
         validate(prepared, "PREPARATION_LOCK")
         bank, values, mask, _ = target_collection(preparation_stage, split, load_role(roles_root, split, "TRAIN"), "TRAIN")
@@ -228,7 +232,7 @@ def dispatch(study, stage, task, output_root):
     if kind == "complete":
         aggregate, _ = task_result(stage, "aggregate")
         return artifact("COMPLETION", aggregate_sha256=aggregate["content_hash"], fresh_fit_count=22,
-                        output_inventory=storage_audit(study["root"]), scientific_result_does_not_control_completion=True)
+                        output_inventory=audit_study_storage(study), scientific_result_does_not_control_completion=True)
     raise ValueError("Unknown registered task kind")
 
 
@@ -265,7 +269,7 @@ def run_task(stage, task_id, attempt_root):
     output_root.mkdir(parents=True)
     result = dispatch(study, stage, task, output_root)
     write_immutable_json(output_root / "result.json", result)
-    storage_audit(study["root"])
+    audit_study_storage(study)
     outputs = [dict(path=p.relative_to(stage_root).as_posix(), bytes=p.stat().st_size, sha256=sha256_file(p))
                for p in sorted(output_root.rglob("*")) if p.is_file()]
     receipt = artifact("TASK_RECEIPT", stage_sha256=stage["content_hash"], task_id=task_id,

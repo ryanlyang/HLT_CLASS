@@ -253,6 +253,48 @@ blind retry and needs operator reconciliation; the code will not guess.
 
 ## Local versus real readiness
 
+### Source-pinned debug profile continuation
+
+The active plan's section 12.1 registers a narrow exception for this auxiliary
+study, independent of the matching campaign's debug acceptance. Use the CLI's
+`continue-debug --source-study ... --root ... --project-dir ... --source-commit ...`
+to create a fresh study pinned to the new execution source, then create/dry-run/
+submit PREPARE normally. Its graph is exactly one debug profile job. No GATE,
+target construction or normalization reruns are needed, and no existing files
+or jobs are modified. The generic same-source recovery interface is unchanged.
+
+`JETCLASS2_DELPHES_OFFLINE_AUX_PREPARATION_IMPORT/v1` binds the original ordinary
+study, both original stages, nine CPU completion receipts, and identical
+preparation-code Git-blob SHA256 hashes. It records all referenced payload bytes.
+Inputs, profile membership, targets, model, losses, seeds, metrics and schedule
+must match. Imported tasks keep their original receipt/result identities and
+physical locations. Payloads are reauthenticated before submission and reads;
+receiptless partial outputs cannot be imported. Keep the source study directory.
+An imported GPU profile, scientific fit or reporting capability is forbidden.
+
+The continuation adds `preparation_import` and `profile_measurement_site` to its
+content-hashed STUDY_SPEC; ordinary studies without those fields keep their
+existing behavior. The profile-only stage has no outstanding old-job dependency:
+all CPU dependencies are checksum-authenticated completed imports. Subsequent
+science still requires its own new profile receipt and installed-environment
+match, not the old campaign's unfinished GPU job.
+
+`JETCLASS2_DELPHES_OFFLINE_AUX_EXECUTION_ACCEPTANCE_DEBUG/v1` is distinct from
+ordinary EXECUTION_ACCEPTANCE. It records actual `measurement_site=debug`,
+`production_site=tier3` (`site` likewise means production), and transfer policy
+`aux_debug_to_tier3_same_a100_environment_resources_v1`. All original parity,
+finite backward, full-population timing and storage/resource checks remain.
+Allocation is eight CPUs/workers and 72 GiB on one A100, with a four-hour request.
+Scientific and evaluation command plans always use tier3. Changing only Slurm's
+partition on an old pinned job remains invalid.
+
+The new namespace references existing compact targets without copying them.
+Their byte counts remain in the total budget, alongside new outputs. This is
+an operational continuation only: 10 discovery and 12 confirmation fits, their
+separate authorizations, and sealed final test are unchanged.
+
+### Evidence boundary
+
 Local tests exercise native synthetic ROOT reads, worker-byte invariance,
 mathematics, seed pairing, scalar buffers, toy-model training/restore, staged
 locks, weighted bootstrap and exact submission/recovery failure paths. A bounded

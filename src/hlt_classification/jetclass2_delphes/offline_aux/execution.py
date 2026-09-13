@@ -16,6 +16,8 @@ from .training import train, predict, tensor_batch, seed_pass
 from .losses import objectives
 from .normalization import standardize
 from .reporting import WeightedMetrics
+from .campaign import task_site
+from .preparation_import import TRANSFER
 
 
 def parity(cache, values, pair_valid, normalizer, *, device="cuda"):
@@ -72,7 +74,8 @@ def parity(cache, values, pair_valid, normalizer, *, device="cuda"):
 
 def measure(study, split, train_cache, select_cache, values, pair_valid, normalizer, *, cache_seconds, target_minutes):
     import resource  # Linux production allocation only; local Windows imports remain usable.
-    job, cpus, memory_mb = allocation(study["site"])
+    measurement_site = task_site(study, {"kind": "profile"})
+    job, cpus, memory_mb = allocation(measurement_site)
     environment = installed_environment()
     torch.set_num_threads(1)
     torch.backends.cuda.matmul.allow_tf32 = False
@@ -147,7 +150,11 @@ def measure(study, split, train_cache, select_cache, values, pair_valid, normali
     projected = 22*selected_bytes + 217500000 + 729600000 + 150000000 + 256*2**20
     if projected > MAX_TOTAL:
         raise ValueError("Projected storage exceeds four GiB")
-    return artifact("EXECUTION_ACCEPTANCE", study_sha256=study["content_hash"], role_split_sha256=split["content_hash"],
+    debug = measurement_site != study["site"]
+    transfer = dict(measurement_site=measurement_site, production_site=study["site"],
+                    transfer_policy=TRANSFER) if debug else {}
+    return artifact("EXECUTION_ACCEPTANCE_DEBUG" if debug else "EXECUTION_ACCEPTANCE",
+        **transfer, study_sha256=study["content_hash"], role_split_sha256=split["content_hash"],
         source_commit=study["source_commit"], installed_environment=environment, site=study["site"],
         slurm_job_id=job, gpu=gpu, passed=True, fp32_parity=evidence, bf16_probes=probes,
         miniature_report=report, full_train_rows=len(train_cache), full_select_rows=len(select_cache),
@@ -162,7 +169,16 @@ def measure(study, split, train_cache, select_cache, values, pair_valid, normali
 
 
 def validate_acceptance(value, study):
-    validate(value, "EXECUTION_ACCEPTANCE")
+    measurement_site = task_site(study, {"kind": "profile"})
+    debug = measurement_site != study["site"]
+    validate(value, "EXECUTION_ACCEPTANCE_DEBUG" if debug else "EXECUTION_ACCEPTANCE")
+    if debug and (value.get("measurement_site") != measurement_site
+                  or value.get("production_site") != study["site"]
+                  or value.get("transfer_policy") != TRANSFER):
+        raise ValueError("Debug-to-tier3 auxiliary acceptance binding differs")
+    if debug and any(value["resources"].get(k) != study["initial_resources"][k]
+                     for k in ("cpus", "workers", "memory_mb")):
+        raise ValueError("Debug profile and tier3 production resources differ")
     if (value["study_sha256"] != study["content_hash"] or value["source_commit"] != study["source_commit"]
             or value["site"] != study["site"] or value["model"] != model_contract()
             or value["recipe_sha256"] != recipe()["content_hash"]

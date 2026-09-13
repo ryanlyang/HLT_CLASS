@@ -70,6 +70,11 @@ def validate_study(spec, *, source=False):
                     no_matching_foundation=True, deployment="HLT_only", rolling_resume=False)
     if any(spec.get(k) != v for k, v in expected.items()):
         raise ValueError("Study registered semantics differ")
+    if "preparation_import" in spec:
+        from .preparation_import import validate_import
+        validate_import(spec)
+    elif "profile_measurement_site" in spec:
+        raise ValueError("Debug measurement requires an explicit preparation-import continuation")
     if source:
         _source(Path(spec["project_dir"]), spec["source_commit"])
     return digest
@@ -103,6 +108,10 @@ def completed(stage, task):
 
 
 def prior(study, stage_name, task):
+    if "preparation_import" in study:
+        from .preparation_import import IMPORTED, imported_stage
+        if task in IMPORTED.get(stage_name, ()):
+            return task_result(imported_stage(study, stage_name), task)
     stage = load_json(stage_path(study, stage_name) / "stage_spec.json")
     validate(stage, "STAGE_SPEC")
     if stage["study_sha256"] != study["content_hash"]:
@@ -137,6 +146,21 @@ def task_graph(name, *, configuration=None):
     raise ValueError("Unknown stage")
 
 
+def study_task_graph(study, name, *, configuration=None):
+    if "preparation_import" in study:
+        if name == "GATE":
+            raise ValueError("GATE is already imported; create PREPARE for the profile only")
+        if name == "PREPARE":
+            return [dict(task_id="profile", kind="profile", dependencies=[])]
+    return task_graph(name, configuration=configuration)
+
+
+def task_site(study, task):
+    if task["kind"] == "profile":
+        return study.get("profile_measurement_site", study["site"])
+    return study["site"]
+
+
 def create_stage(study, name):
     validate_study(study, source=True)
     root = stage_path(study, name)
@@ -162,7 +186,7 @@ def create_stage(study, name):
     stage = artifact("STAGE_SPEC", name=name, root=str(root), study_sha256=study["content_hash"],
                      study_spec_path=str(Path(study["root"]) / "study_spec.json"), parents=parents,
                      source_commit=study["source_commit"], resources=resources,
-                     tasks=task_graph(name, configuration=configuration))
+                     tasks=study_task_graph(study, name, configuration=configuration))
     write_immutable_json(root / "stage_spec.json", stage)
     return stage
 
@@ -178,8 +202,14 @@ def validate_stage(stage, study):
         configuration, _ = prior(study, "DISCOVERY", "configuration_lock")
         if stage["parents"]["configuration"] != configuration["content_hash"]:
             raise ValueError("Configuration lock changed")
-    if stage["tasks"] != task_graph(stage["name"], configuration=configuration):
+    if stage["tasks"] != study_task_graph(study, stage["name"], configuration=configuration):
         raise ValueError("Stage task graph differs")
+    if "preparation_import" in study and stage["name"] == "PREPARE":
+        sample, _ = prior(study, "GATE", "sample")
+        expected_resources = dict(study["initial_resources"], target_minutes=sample["target_minutes"])
+        if (stage["resources"] != expected_resources
+                or stage["parents"] != {"sample": sample["content_hash"]}):
+            raise ValueError("Debug profile preparation/resources differ from the imported gate")
     if stage["name"] in {"DISCOVERY", "CONFIRMATION"}:
         from .execution import validate_acceptance
         profile, _ = prior(study, "PREPARE", "profile")

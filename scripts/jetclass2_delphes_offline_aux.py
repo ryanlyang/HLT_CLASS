@@ -19,6 +19,10 @@ def main():
     for name in ("data-root", "inventory", "profile", "readiness-spec"):
         init.add_argument("--"+name, type=Path)
     init.add_argument("--source-commit", required=True)
+    continuation = sub.add_parser("continue-debug", help="Reuse completed CPU preparation; profile only on debug")
+    for name in ("source-study", "root", "project-dir"):
+        continuation.add_argument("--"+name, type=Path, required=True)
+    continuation.add_argument("--source-commit", required=True)
     stage = sub.add_parser("stage")
     stage.add_argument("--study", type=Path, required=True)
     stage.add_argument("--name", choices=campaign.STAGES, required=True)
@@ -47,6 +51,10 @@ def main():
             inventory, profile, data_root = load_json(a.inventory), load_json(a.profile), a.data_root
         result = campaign.create_study(root=a.root, data_root=data_root, inventory=inventory,
             profile=profile, project_dir=a.project_dir, source_commit=a.source_commit)
+    elif a.action == "continue-debug":
+        from hlt_classification.jetclass2_delphes.offline_aux.preparation_import import create_debug_continuation
+        result = create_debug_continuation(source_study=a.source_study, root=a.root,
+            project_dir=a.project_dir, source_commit=a.source_commit)
     elif a.action == "stage":
         result = campaign.create_stage(load_json(a.study), a.name)
     else:

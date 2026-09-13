@@ -1,6 +1,7 @@
 # JetClass2 Delphes Offline Auxiliary Supervision: 500k Four-Arm Study
 
-Date: 2026-09-12. Plan revision: 1.
+Date: 2026-09-12. Scientific plan revision: 1.
+Operational debug-profile continuation addendum: 2026-09-13, section 12.1.
 
 Status: **scientific specification with an isolated implementation and staged
 queue tooling**. See the [executable v1 contract](../contracts/JETCLASS2_DELPHES_OFFLINE_AUXILIARY_SUPERVISION.md)
@@ -89,8 +90,9 @@ campaign or its environment. Other scientific campaigns need not finish first.
 
 The selected execution site is SPORC tier3/A100, not historical Tigris/GH200.
 Genuine installed-Weaver and selected-site GPU acceptance remain mandatory.
-The current migration's debug-to-tier3 profiling exception is narrowly scoped;
-it does not automatically authorize an auxiliary-study profile or fits on debug.
+The migration's debug-to-tier3 profiling exception does not automatically
+authorize this study. The user-requested auxiliary-specific exception is now
+registered separately in section 12.1; scientific fits remain on tier3.
 
 ## 3. Dataset, selection, and fixed roles
 
@@ -879,6 +881,52 @@ block blind retry. Recovery reuses only authenticated completed tasks and starts
 unfinished fits at zero after their exact old attempts are terminal; never
 cancel/release other jobs by name. No scientific-score threshold can fail a
 gate, prevent confirmation, or suppress a registered report.
+
+### 12.1 Auxiliary-only debug profile continuation (2026-09-13)
+
+The user requested moving only the pending auxiliary GPU profile to SPORC's
+debug partition to reduce scheduling delay. Do not modify its existing pinned
+worker, stage spec, command ledger, partition or acceptance record in place.
+Instead, create an explicit new-source continuation in a fresh, disjoint study
+root. This adds no scientific fits and changes no target, data membership,
+seed, model, loss, metric, optimizer or training schedule.
+
+Reuse only the original study's completed CPU preparation: GATE/sample, five
+TRAIN target shards, two VAL_SELECT target shards, and PREPARE/normalize. Bind
+the original study, stage and completion-receipt hashes and revalidate payload
+sizes/checksums before live submission and production use. Preserve original
+producer identities and paths; do not copy payloads or manufacture replacement
+completion receipts. Direct import from a normal study is supported, not
+arbitrary continuation chains, profile reuse, scientific checkpoint reuse or
+report/test access. Missing/corrupt receipts fail closed.
+
+The preparation kernels and their native reader/identity/schema/split helpers
+must have identical Git-blob SHA256 hashes between the original and execution
+commits. The exact file register lives in `offline_aux/preparation_import.py`.
+All declared scientific study fields and the original raw location must also
+match. Every new worker uses the new clean/pushed source pin; old specs are
+read-only. The original study root must remain available through completion.
+
+The continuation skips GATE and its PREPARE graph contains exactly one profile
+job: debug, reu-aisocial, qos_tier3, one A100, eight CPUs/workers, 72 GiB, four
+hours. The full original auxiliary parity, BF16/worst-capacity, restore, full
+500k TRAIN plus 200k VAL_SELECT pass and resource checks still run. There is no
+acceptance waiver or substitution of the matching campaign's profile.
+
+Publish a distinct `EXECUTION_ACCEPTANCE_DEBUG/v1` artifact, recording both
+the actual debug measurement site and tier3 production site and the explicit
+`aux_debug_to_tier3_same_a100_environment_resources_v1` transfer policy. Require
+the same CPU/worker/RAM allocation, A100 environment and scientific configuration.
+Only this profile task may request debug. Discovery, confirmation, evaluation
+and other work remain on tier3 and keep their separate dry-run/authorization
+requirements. No stage automatically submits science.
+
+The import binding uses `PREPARATION_IMPORT/v1`. Referenced original payloads
+still count toward the four-GiB study envelope, without duplicating their
+storage; compact new specs/evidence/logs belong only to the new root. Existing
+jobs are not changed by creation/submission tools. Any decision to cancel the
+superseded pending profile must use its exact original study-bound ID and a
+fresh scheduler-state check; no broad name-based cancellation is permitted.
 
 ## 13. Implementation map and provenance
 
