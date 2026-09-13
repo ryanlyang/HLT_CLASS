@@ -77,6 +77,8 @@ def selection_indices(labels, identities, outer_hash, size):
 
 
 def build_roles(data_root, inventory, profile, output_root, *, production=True, select_rows=200000):
+    # Study specs serialize paths as strings; the native verifier takes Path.
+    data_root = Path(data_root)
     authenticate_profile(inventory, profile, production=production)
     if production and select_rows != 200000:
         raise ValueError("Production VAL_SELECT must have 200000 rows")
@@ -143,6 +145,8 @@ def read_rows(data_root, inventory, split, metadata, *, role, include_offline,
     The caller must load metadata through load_role, not a generic val reader.
     """
     authorize_role(role, split, reporting_lock)
+    # Also covers independently spawned target and HLT-cache workers.
+    data_root = Path(data_root)
     if {k: array_sha256(k, v) for k, v in metadata.items()} != split["roles"][role]["array_sha256"]:
         raise PermissionError("Reader metadata is not the authorized row capability")
     row_end = len(metadata["labels"]) if row_end is None else row_end

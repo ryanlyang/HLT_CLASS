@@ -1,6 +1,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 import copy
+import json
 import numpy as np
 import pytest
 import torch
@@ -85,6 +86,52 @@ def test_role_replay_metadata_only(prepared, monkeypatch):
     assert replay == split
     with pytest.raises(ValueError, match="exact frozen"):
         roles.authenticate_profile(inventory, profile)
+
+
+def test_json_loaded_root_role_replay(prepared, tmp_path):
+    _, data, inventory, profile, split = prepared
+    # Slurm loads these values from study_spec.json, not from Path fixtures.
+    spec = json.loads(json.dumps(dict(data_root=str(data), inventory=inventory, profile=profile)))
+    assert isinstance(spec["data_root"], str)
+    replay = roles.build_roles(spec["data_root"], spec["inventory"], spec["profile"],
+                               tmp_path / "roles", production=False, select_rows=11)
+    assert replay == split
+
+
+@pytest.mark.parametrize("workers", [1, 2])
+def test_json_loaded_root_reader_targets_and_cache(prepared, tmp_path, workers):
+    root, data, inventory, _, split = prepared
+    spec = json.loads(json.dumps(dict(data_root=str(data), inventory=inventory, split=split)))
+    metadata = roles.load_role(root / "roles", spec["split"], "TRAIN")
+    kwargs = dict(role="TRAIN", include_offline=True)
+    reference = list(roles.read_rows(data, inventory, split, metadata, **kwargs))
+    observed = list(roles.read_rows(spec["data_root"], spec["inventory"], spec["split"], metadata, **kwargs))
+    assert len(observed) == len(reference) == 33
+    for (i, expected), (j, actual) in zip(reference, observed):
+        assert i == j and expected.identity == actual.identity and expected.label == actual.label
+        np.testing.assert_array_equal(actual.hlt.values, expected.hlt.values)
+        np.testing.assert_array_equal(actual.offline.values, expected.offline.values)
+    for role in ("VAL_REPORT", "FINAL_TEST"):
+        with pytest.raises(PermissionError):
+            list(roles.read_rows(spec["data_root"], spec["inventory"], spec["split"], metadata,
+                                 role=role, include_offline=True))
+
+    expected_bank = banks.build_shard(data, inventory, split, metadata, root=tmp_path / "path_targets",
+                                      role="TRAIN", shard=0, workers=1)
+    actual_bank = banks.build_shard(spec["data_root"], spec["inventory"], spec["split"], metadata,
+                                    root=tmp_path / "json_targets", role="TRAIN", shard=0, workers=workers)
+    assert actual_bank == expected_bank  # Includes exact payload checksums.
+
+    expected_cache = cache.prepare(data, inventory, split, metadata, role="TRAIN", workers=1, budget_bytes=2**30)
+    actual_cache = cache.prepare(spec["data_root"], spec["inventory"], spec["split"], metadata,
+                                 role="TRAIN", workers=workers, budget_bytes=2**30)
+    assert actual_cache.nbytes == expected_cache.nbytes
+    np.testing.assert_array_equal(actual_cache.identities, expected_cache.identities)
+    np.testing.assert_array_equal(actual_cache.labels, expected_cache.labels)
+    assert len(actual_cache.blocks) == len(expected_cache.blocks)
+    for actual, expected in zip(actual_cache.blocks, expected_cache.blocks):
+        for field in ("offsets", "features", "vectors", "identities", "labels"):
+            np.testing.assert_array_equal(getattr(actual, field), getattr(expected, field))
 
 
 def test_weighted_metrics_exact_repetition():
