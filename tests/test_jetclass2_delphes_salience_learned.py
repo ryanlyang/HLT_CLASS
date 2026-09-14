@@ -288,6 +288,7 @@ def test_deferred_launcher_binds_exact_screen_complete_job(monkeypatch, tmp_path
     }
     screen_path = screen_root / "screen_spec.json"
     screen_path.write_text(__import__("json").dumps(screen))
+    (screen_root / "screen_complete.json").write_text("{}")
     jobs = {row["task_id"]: str(21651014 + index)
             for index, row in enumerate(auto.screen_tasks())}
     jobs["complete"] = "21651021"
@@ -300,6 +301,7 @@ def test_deferred_launcher_binds_exact_screen_complete_job(monkeypatch, tmp_path
     monkeypatch.setattr(auto, "_source", lambda *args: None)
     monkeypatch.setattr(auto, "validate_screen", lambda *args, **kwargs: screen["content_hash"])
     monkeypatch.setattr(auto, "validate_submission_ledger", lambda value: value["content_hash"])
+    monkeypatch.setattr(auto, "_screen_artifacts", lambda *args, **kwargs: ({}, {}, {}))
     monkeypatch.setattr(auto, "schedule", lambda *args, **kwargs: {"content_hash": "d" * 64})
     spec = auto.create_autolaunch(
         screen_spec_path=screen_path, screen_ledger_path=ledger_path,
@@ -308,6 +310,7 @@ def test_deferred_launcher_binds_exact_screen_complete_job(monkeypatch, tmp_path
         project=project, source_commit="c" * 40,
     )
     assert spec["screen_complete_job_id"] == "21651021"
+    assert spec["screen_wait_mode"] == "authenticated_completion"
     assert spec["expected_science_task_count"] == 87
     assert spec["old_or_parallel_screen_jobs_mutated"] is False
     with pytest.raises(FileExistsError):
@@ -328,6 +331,7 @@ def test_deferred_launcher_is_cpu_only_afterok_not_polling(monkeypatch, tmp_path
         "launch_root": str(tmp_path / "launch"),
         "project_dir": str(tmp_path / "project"),
         "screen_complete_job_id": "21651021",
+        "screen_wait_mode": "active_afterok",
     }
     monkeypatch.setattr(auto, "validate_autolaunch", lambda *args, **kwargs: "a" * 64)
     plan = auto.command_plan(spec, phase="after_screen")
@@ -341,6 +345,26 @@ def test_deferred_launcher_is_cpu_only_afterok_not_polling(monkeypatch, tmp_path
     assert not any(value.startswith("--gres=") for value in command)
     assert plan["cpu_only"] is True
     assert plan["polling"] is False
+
+
+def test_completed_screen_launcher_has_no_stale_slurm_dependency(
+    monkeypatch, tmp_path: Path,
+):
+    from hlt_classification.jetclass2_delphes import salience_learned_autolaunch as auto
+
+    spec = {
+        "content_hash": "a" * 64,
+        "launch_root": str(tmp_path / "launch"),
+        "project_dir": str(tmp_path / "project"),
+        "screen_complete_job_id": "21651021",
+        "screen_wait_mode": "authenticated_completion",
+    }
+    monkeypatch.setattr(auto, "validate_autolaunch", lambda *args, **kwargs: "a" * 64)
+    plan = auto.command_plan(spec, phase="after_screen")
+    command = plan["commands"][0]["command"]
+    assert plan["dependencies"] == []
+    assert not any(value.startswith("--dependency=") for value in command)
+    assert plan["cpu_only"] is True
 
 
 def test_deferred_after_gate_requires_all_four_exact_gate_jobs(monkeypatch, tmp_path: Path):

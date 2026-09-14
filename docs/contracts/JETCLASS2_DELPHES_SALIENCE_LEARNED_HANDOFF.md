@@ -48,7 +48,7 @@ existence or Slurm state alone never authorizes reuse.
 
 ## Deferred pipeline launch
 
-The optional `SALIENCE_LEARNED_HANDOFF_AUTOLAUNCH_*/v1` artifacts may queue
+The optional `SALIENCE_LEARNED_HANDOFF_AUTOLAUNCH_*/v2` artifacts may queue
 this campaign before its salience screen has finished. They bind one exact
 live screen ledger and its exact `complete` Slurm job. An `afterok` CPU-only
 launcher creates and submits only the four campaign gates after that job
@@ -59,4 +59,8 @@ materializing its canonical dry run, and verifying the fixed task census.
 Both launchers authenticate their source-pinned checkout, exact Slurm receipt,
 SPORC account/partition/QoS, and allocation. They never poll, never hold a GPU,
 never alter either screen DAG, and never submit science after a failed screen
-or gate. Their receipts retain `final_test_accessed: false`.
+or gate. If the screen is already durably complete when the launcher spec is
+created, `/v2` authenticates its completion and selection artifacts and queues
+the first launcher immediately instead of asking Slurm to resolve an expired
+job dependency. It still binds the original exact screen ledger and complete
+job ID. Their receipts retain `final_test_accessed: false`.

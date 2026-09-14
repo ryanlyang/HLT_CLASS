@@ -17,6 +17,7 @@ from .salience_learned_campaign import (
 )
 from .salience_learned_contracts import artifact, validate
 from .salience_learned_production import submit, validate_science_gate
+from .salience_production import _screen_artifacts
 from .salience_screen import task_graph as screen_tasks, validate_screen
 
 
@@ -25,6 +26,7 @@ AUTHORIZE_DEFERRED = (
 )
 _JOB_ID = re.compile(r"^[1-9][0-9]*$")
 _PHASES = ("after_screen", "after_gate")
+_DEPENDENCY_POLICY = "active_afterok_or_authenticated_completion_v2"
 
 
 def _screen_parent(spec: dict) -> tuple[dict, dict]:
@@ -68,12 +70,18 @@ def create_autolaunch(
         raise ValueError("Exact completed-screen dependency is not authenticated")
     if Path(screen["data_root"]).resolve() != Path(data_root).resolve():
         raise ValueError("Deferred campaign data root differs from screen")
+    complete_path = Path(screen["screen_root"]) / "screen_complete.json"
+    if complete_path.is_file():
+        _screen_artifacts(Path(screen_spec_path), deep=False)
+        screen_wait_mode = "authenticated_completion"
+    else:
+        screen_wait_mode = "active_afterok"
     root = Path(launch_root).resolve()
     campaign = Path(campaign_root).resolve()
     if root.exists() or campaign.exists() or root == campaign:
         raise FileExistsError("Deferred launch and campaign roots must be fresh")
     value = artifact(
-        "AUTOLAUNCH_SPEC", source_commit=source_commit,
+        "AUTOLAUNCH_SPEC", version=2, source_commit=source_commit,
         project_dir=str(Path(project).resolve()),
         data_root=str(Path(data_root).resolve()),
         launch_root=str(root), campaign_root=str(campaign),
@@ -82,9 +90,10 @@ def create_autolaunch(
         screen_ledger_path=str(Path(screen_ledger_path).resolve()),
         screen_ledger_sha256=ledger_hash,
         screen_complete_job_id=screen_complete_job_id,
+        screen_wait_mode=screen_wait_mode,
         expected_gate_task_count=4, expected_science_task_count=87,
         expected_total_task_count=91, expected_fit_count=54,
-        dependency_policy="afterok_exact_screen_then_afterok_all_gate_jobs_v1",
+        dependency_policy=_DEPENDENCY_POLICY,
         old_or_parallel_screen_jobs_mutated=False,
         final_test_accessed=False,
     )
@@ -95,20 +104,28 @@ def create_autolaunch(
 
 
 def validate_autolaunch(spec: dict, *, check_source=True) -> str:
-    digest = validate(spec, "AUTOLAUNCH_SPEC")
+    digest = validate(spec, "AUTOLAUNCH_SPEC", version=2)
     if (
         spec["expected_gate_task_count"] != 4
         or spec["expected_science_task_count"] != 87
         or spec["expected_total_task_count"] != 91
         or spec["expected_fit_count"] != 54
-        or spec["dependency_policy"]
-        != "afterok_exact_screen_then_afterok_all_gate_jobs_v1"
+        or spec["dependency_policy"] != _DEPENDENCY_POLICY
+        or spec["screen_wait_mode"] not in {
+            "active_afterok", "authenticated_completion",
+        }
         or spec["old_or_parallel_screen_jobs_mutated"] is not False
         or spec["final_test_accessed"] is not False
         or Path(spec["launch_root"]).resolve() == Path(spec["campaign_root"]).resolve()
     ):
         raise ValueError("Deferred learned-handoff launch semantics differ")
-    _screen_parent(spec)
+    screen, _ = _screen_parent(spec)
+    if spec["screen_wait_mode"] == "authenticated_completion":
+        _screen_artifacts(Path(spec["screen_spec_path"]), deep=False)
+    elif (Path(screen["screen_root"]) / "screen_complete.json").is_file():
+        raise ValueError(
+            "Active-afterok launcher cannot silently change to completed mode"
+        )
     if check_source:
         _source(Path(spec["project_dir"]), spec["source_commit"])
     return digest
@@ -116,7 +133,10 @@ def validate_autolaunch(spec: dict, *, check_source=True) -> str:
 
 def _dependencies(spec: dict, phase: str) -> list[str]:
     if phase == "after_screen":
-        return [spec["screen_complete_job_id"]]
+        return (
+            [] if spec["screen_wait_mode"] == "authenticated_completion"
+            else [spec["screen_complete_job_id"]]
+        )
     campaign = load_json(Path(spec["campaign_root"]) / "campaign_spec.json")
     validate_campaign(campaign)
     ledger = load_json(
@@ -146,13 +166,17 @@ def command_plan(spec: dict, *, phase: str) -> dict:
         "--job-name=jc2slfh_" + phase,
         "--chdir=" + spec["project_dir"],
         "--output=" + str(root / "slurm-%j.out"),
-        "--dependency=afterok:" + ":".join(dependencies),
+    ]
+    if dependencies:
+        command.append("--dependency=afterok:" + ":".join(dependencies))
+    command += [
         str(Path(spec["project_dir"])
             / "sbatch/run_jetclass2_delphes_salience_learned_autolaunch.sh"),
         spec["project_dir"], str(root / "autolaunch_spec.json"), phase,
     ]
     return artifact(
-        "AUTOLAUNCH_PLAN", autolaunch_sha256=spec["content_hash"],
+        "AUTOLAUNCH_PLAN", version=2,
+        autolaunch_sha256=spec["content_hash"],
         phase=phase, dependencies=dependencies,
         commands=[{"task_id": phase, "dependencies": [], "command": command}],
         cpu_only=True, polling=False, final_test_accessed=False,
@@ -195,7 +219,8 @@ def schedule(
 
 def _receipt(spec: dict, phase: str, **fields) -> dict:
     value = artifact(
-        "AUTOLAUNCH_RECEIPT", autolaunch_sha256=spec["content_hash"],
+        "AUTOLAUNCH_RECEIPT", version=2,
+        autolaunch_sha256=spec["content_hash"],
         source_commit=spec["source_commit"], phase=phase,
         old_or_parallel_screen_jobs_mutated=False,
         final_test_accessed=False, **fields,

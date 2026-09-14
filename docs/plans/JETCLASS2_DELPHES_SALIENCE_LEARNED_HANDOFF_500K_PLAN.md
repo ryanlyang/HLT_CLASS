@@ -191,6 +191,9 @@ exact salience-screen complete job
 Scheduling that pipeline requires its own exact authorization phrase and a
 fresh launcher root. It binds the screen's live submission ledger rather than
 a job name, so an older or parallel screen cannot satisfy it accidentally.
+When the screen has already published authenticated completion, the first
+launcher is immediately eligible and relies on that durable evidence rather
+than a Slurm dependency that may have expired from the controller.
 The launch workers are source-pinned, validate their exact Slurm receipts, do
 not poll, and make no mutation to either screen. A screen or gate failure
 therefore leaves the downstream launcher unsatisfied instead of starting any

@@ -18,16 +18,16 @@ KINDS: Final = (
 )
 
 
-def artifact(kind: str, **fields) -> dict:
+def artifact(kind: str, *, version: int = 1, **fields) -> dict:
     if kind not in KINDS:
         raise ValueError(f"Unknown salience learned-handoff artifact: {kind}")
-    return _artifact(PREFIX + kind, **fields)
+    return _artifact(PREFIX + kind, version=version, **fields)
 
 
-def validate(value: Mapping, kind: str) -> str:
+def validate(value: Mapping, kind: str, *, version: int = 1) -> str:
     if kind not in KINDS:
         raise ValueError(f"Unknown salience learned-handoff artifact: {kind}")
-    return _validate(value, PREFIX + kind)
+    return _validate(value, PREFIX + kind, version=version)
 
 
 __all__ = ["KINDS", "PREFIX", "artifact", "validate"]
