@@ -241,6 +241,38 @@ def test_submission_is_staged_and_live_full_dag_is_forbidden(monkeypatch, tmp_pa
         )
 
 
+def test_authentication_gate_publishes_diagnostic_without_kind_collision(
+    monkeypatch, tmp_path: Path,
+):
+    from hlt_classification.data.cache_contracts import load_json
+    from hlt_classification.jetclass2_delphes import salience_learned_production as production
+    from hlt_classification.jetclass2_delphes.salience_learned_contracts import validate
+
+    root = tmp_path / "campaign"
+    root.mkdir()
+    spec = {
+        "content_hash": "c" * 64,
+        "campaign_root": str(root),
+        "tasks": [{
+            "task_id": "authenticate", "kind": "authenticate",
+            "dependencies": [],
+        }],
+    }
+    monkeypatch.setattr(production, "validate_campaign", lambda value: value["content_hash"])
+    monkeypatch.setattr(production, "completed_task", lambda *args: None)
+    monkeypatch.setattr(
+        production, "_publish_task",
+        lambda spec, task_id, attempt_root, payload: payload,
+    )
+    result = production.run_task(spec, "authenticate", attempt="test")
+    report = load_json(result["outputs"][0])
+    validate(report, "DIAGNOSTIC")
+    assert report["diagnostic_kind"] == "authentication"
+    assert report["campaign_sha256"] == spec["content_hash"]
+    assert report["passed"] is True
+    assert report["final_test_accessed"] is False
+
+
 def test_deferred_launcher_binds_exact_screen_complete_job(monkeypatch, tmp_path: Path):
     from hlt_classification.jetclass2_delphes import salience_learned_autolaunch as auto
 

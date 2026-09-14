@@ -798,7 +798,7 @@ def run_task(spec, task_id, *, attempt, device="cuda"):
     kind = task["kind"]
     if kind == "authenticate":
         validate_campaign(spec)
-        report = artifact("DIAGNOSTIC", kind="authentication",
+        report = artifact("DIAGNOSTIC", diagnostic_kind="authentication",
                           campaign_sha256=spec["content_hash"], passed=True,
                           final_test_accessed=False)
         path = attempt_root / "authentication.json"; write_immutable_json(path, report)
