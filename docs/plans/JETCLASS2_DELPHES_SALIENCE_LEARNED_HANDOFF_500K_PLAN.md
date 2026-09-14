@@ -178,6 +178,24 @@ Queue readiness requires:
 6. measured host/GPU memory and walltime with sufficient headroom;
 7. a separate exact science dry run and explicit live authorization.
 
+The screen and gate waits may be automated without weakening this sequence.
+The registered deferred pipeline is:
+
+```text
+exact salience-screen complete job
+  --afterok--> CPU-only campaign creator + four-gate submission
+  --afterok on all four gate jobs--> gate authentication + science dry run
+                                  + 87-task science submission
+```
+
+Scheduling that pipeline requires its own exact authorization phrase and a
+fresh launcher root. It binds the screen's live submission ledger rather than
+a job name, so an older or parallel screen cannot satisfy it accidentally.
+The launch workers are source-pinned, validate their exact Slurm receipts, do
+not poll, and make no mutation to either screen. A screen or gate failure
+therefore leaves the downstream launcher unsatisfied instead of starting any
+science work.
+
 Recovery is restart-from-zero under a new source-pinned attempt. It may reuse
 only content-valid completed parents, refuses ambiguous active jobs, never
 modifies source campaigns or raw data, and never changes the scientific graph.

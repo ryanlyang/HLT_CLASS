@@ -45,3 +45,18 @@ plans, submission journals and ledgers; monitors; and restart-zero recovery.
 Every reusable artifact carries a content hash, exact parent identities,
 source commit, population identity, and `final_test_accessed: false`. Path
 existence or Slurm state alone never authorizes reuse.
+
+## Deferred pipeline launch
+
+The optional `SALIENCE_LEARNED_HANDOFF_AUTOLAUNCH_*/v1` artifacts may queue
+this campaign before its salience screen has finished. They bind one exact
+live screen ledger and its exact `complete` Slurm job. An `afterok` CPU-only
+launcher creates and submits only the four campaign gates after that job
+succeeds. A second CPU-only launcher depends on all four exact gate jobs and
+may submit the 87-task science stage only after authenticating the gate,
+materializing its canonical dry run, and verifying the fixed task census.
+
+Both launchers authenticate their source-pinned checkout, exact Slurm receipt,
+SPORC account/partition/QoS, and allocation. They never poll, never hold a GPU,
+never alter either screen DAG, and never submit science after a failed screen
+or gate. Their receipts retain `final_test_accessed: false`.

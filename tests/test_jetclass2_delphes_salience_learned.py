@@ -241,6 +241,105 @@ def test_submission_is_staged_and_live_full_dag_is_forbidden(monkeypatch, tmp_pa
         )
 
 
+def test_deferred_launcher_binds_exact_screen_complete_job(monkeypatch, tmp_path: Path):
+    from hlt_classification.jetclass2_delphes import salience_learned_autolaunch as auto
+
+    project = tmp_path / "project"
+    project.mkdir()
+    data = tmp_path / "data"
+    data.mkdir()
+    screen_root = tmp_path / "screen"
+    screen_root.mkdir()
+    screen = {
+        "content_hash": "a" * 64, "screen_root": str(screen_root),
+        "data_root": str(data), "final_test_accessed": False,
+    }
+    screen_path = screen_root / "screen_spec.json"
+    screen_path.write_text(__import__("json").dumps(screen))
+    jobs = {row["task_id"]: str(21651014 + index)
+            for index, row in enumerate(auto.screen_tasks())}
+    jobs["complete"] = "21651021"
+    ledger = {
+        "content_hash": "b" * 64, "dry_run": False,
+        "campaign_spec_sha256": screen["content_hash"], "jobs": jobs,
+    }
+    ledger_path = screen_root / "submission_ledger.json"
+    ledger_path.write_text(__import__("json").dumps(ledger))
+    monkeypatch.setattr(auto, "_source", lambda *args: None)
+    monkeypatch.setattr(auto, "validate_screen", lambda *args, **kwargs: screen["content_hash"])
+    monkeypatch.setattr(auto, "validate_submission_ledger", lambda value: value["content_hash"])
+    monkeypatch.setattr(auto, "schedule", lambda *args, **kwargs: {"content_hash": "d" * 64})
+    spec = auto.create_autolaunch(
+        screen_spec_path=screen_path, screen_ledger_path=ledger_path,
+        screen_complete_job_id="21651021", data_root=data,
+        campaign_root=tmp_path / "campaign", launch_root=tmp_path / "launch",
+        project=project, source_commit="c" * 40,
+    )
+    assert spec["screen_complete_job_id"] == "21651021"
+    assert spec["expected_science_task_count"] == 87
+    assert spec["old_or_parallel_screen_jobs_mutated"] is False
+    with pytest.raises(FileExistsError):
+        auto.create_autolaunch(
+            screen_spec_path=screen_path, screen_ledger_path=ledger_path,
+            screen_complete_job_id="21651021", data_root=data,
+            campaign_root=tmp_path / "other-campaign",
+            launch_root=tmp_path / "launch", project=project,
+            source_commit="c" * 40,
+        )
+
+
+def test_deferred_launcher_is_cpu_only_afterok_not_polling(monkeypatch, tmp_path: Path):
+    from hlt_classification.jetclass2_delphes import salience_learned_autolaunch as auto
+
+    spec = {
+        "content_hash": "a" * 64,
+        "launch_root": str(tmp_path / "launch"),
+        "project_dir": str(tmp_path / "project"),
+        "screen_complete_job_id": "21651021",
+    }
+    monkeypatch.setattr(auto, "validate_autolaunch", lambda *args, **kwargs: "a" * 64)
+    plan = auto.command_plan(spec, phase="after_screen")
+    command = plan["commands"][0]["command"]
+    assert plan["dependencies"] == ["21651021"]
+    assert "--dependency=afterok:21651021" in command
+    assert "--partition=tier3" in command
+    assert "--qos=qos_tier3" in command
+    assert "--cpus-per-task=1" in command
+    assert "--mem=8192M" in command
+    assert not any(value.startswith("--gres=") for value in command)
+    assert plan["cpu_only"] is True
+    assert plan["polling"] is False
+
+
+def test_deferred_after_gate_requires_all_four_exact_gate_jobs(monkeypatch, tmp_path: Path):
+    from hlt_classification.jetclass2_delphes import salience_learned_autolaunch as auto
+
+    campaign_root = tmp_path / "campaign"
+    gate_root = campaign_root / "submissions_gate"
+    gate_root.mkdir(parents=True)
+    campaign = {"content_hash": "c" * 64, "campaign_root": str(campaign_root)}
+    (campaign_root / "campaign_spec.json").write_text(__import__("json").dumps(campaign))
+    jobs = {task: str(30000 + index) for index, task in enumerate(GATE_TASKS)}
+    ledger = {
+        "content_hash": "d" * 64, "dry_run": False,
+        "campaign_spec_sha256": campaign["content_hash"], "jobs": jobs,
+    }
+    (gate_root / "submission_ledger.json").write_text(__import__("json").dumps(ledger))
+    monkeypatch.setattr(auto, "validate_autolaunch", lambda *args, **kwargs: "a" * 64)
+    monkeypatch.setattr(auto, "validate_campaign", lambda *args, **kwargs: "c" * 64)
+    monkeypatch.setattr(auto, "validate_submission_ledger", lambda value: value["content_hash"])
+    spec = {
+        "content_hash": "a" * 64,
+        "launch_root": str(tmp_path / "launch"),
+        "project_dir": str(tmp_path / "project"),
+        "campaign_root": str(campaign_root),
+    }
+    plan = auto.command_plan(spec, phase="after_gate")
+    expected = [jobs[task] for task in GATE_TASKS]
+    assert plan["dependencies"] == expected
+    assert "--dependency=afterok:" + ":".join(expected) in plan["commands"][0]["command"]
+
+
 def test_installed_weaver_fusion_has_exact_zero_residual_and_extracts_primary():
     pytest.importorskip("torch")
     pytest.importorskip("weaver")

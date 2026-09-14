@@ -14,6 +14,7 @@ KINDS: Final = (
     "TRAINING_REPORT", "CHECKPOINT", "EXTRACTION", "PROBABILITY_BANK",
     "DIAGNOSTIC", "AGGREGATE", "CAMPAIGN_COMPLETE", "TASK_REPORT",
     "SUBMISSION_LEDGER", "MONITOR", "RECOVERY",
+    "AUTOLAUNCH_SPEC", "AUTOLAUNCH_PLAN", "AUTOLAUNCH_RECEIPT",
 )
 
 
@@ -30,4 +31,3 @@ def validate(value: Mapping, kind: str) -> str:
 
 
 __all__ = ["KINDS", "PREFIX", "artifact", "validate"]
-
