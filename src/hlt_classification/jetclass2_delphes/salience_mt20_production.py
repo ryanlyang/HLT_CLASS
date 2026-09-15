@@ -457,12 +457,18 @@ def _run_preflight(spec, attempt_root, device):
     indexes = np.arange(min(256, len(train)))
     raw = train.batch(indexes)
     labels = torch.from_numpy(raw["labels"]).to(device)
+    # Construct these outside inference_mode.  Tensors created by a device
+    # transfer inside inference_mode retain PyTorch's inference-only marker;
+    # reusing them for the train-mode student then prevents BatchNorm from
+    # saving its input for backward.
+    inputs = {
+        name: torch.from_numpy(raw[name]).to(device)
+        for name in ("features", "vectors", "mask")
+    }
     torch.manual_seed(44001); teacher_a = DelphesParticleTransformer().to(device).eval()
     torch.manual_seed(44002); teacher_b = DelphesParticleTransformer().to(device).eval()
     torch.manual_seed(44003); student = DelphesParticleTransformer().to(device).train()
     with torch.inference_mode():
-        inputs = {name: torch.from_numpy(raw[name]).to(device)
-                  for name in ("features", "vectors", "mask")}
         q1 = torch.softmax(teacher_a(**inputs).float() / 2., dim=-1).cpu().numpy().astype(np.float32)
         q2 = torch.softmax(teacher_b(**inputs).float() / 2., dim=-1).cpu().numpy().astype(np.float32)
     registry = [

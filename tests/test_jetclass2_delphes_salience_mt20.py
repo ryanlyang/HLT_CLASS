@@ -332,3 +332,46 @@ def test_campaign_creation_is_fresh_500k_and_round_trip_validates(tmp_path, monk
     assert spec["projected_durable_bytes_upper_bound"] == 4 * 1024**3
     assert spec["rolling_resume"] is False
     assert production.validate_campaign(spec) == spec["content_hash"]
+
+
+def test_preflight_reuses_normal_inputs_after_teacher_inference_for_backward(
+    tmp_path, monkeypatch,
+):
+    torch = pytest.importorskip("torch")
+    from hlt_classification.jetclass2_delphes import salience_mt20_production as production
+
+    class Cache:
+        def __len__(self):
+            return 4
+
+        def batch(self, indexes):
+            count = len(indexes)
+            return {
+                "features": np.ones((count, 17, 3), np.float32),
+                "vectors": np.ones((count, 4, 3), np.float32),
+                "mask": np.ones((count, 1, 3), np.bool_),
+                "labels": np.arange(count, dtype=np.int64) % 11,
+            }
+
+    class BatchNormStudent(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.normalization = torch.nn.BatchNorm1d(17)
+            self.output = torch.nn.Linear(17, 11)
+
+        def forward(self, features, vectors, mask):
+            del vectors, mask
+            return self.output(self.normalization(features).mean(dim=-1))
+
+    monkeypatch.setattr(production, "_execution_gate", lambda spec, device: None)
+    monkeypatch.setattr(production, "_cache", lambda spec, role, coordinate: Cache())
+    monkeypatch.setattr(production, "DelphesParticleTransformer", BatchNormStudent)
+    spec = {
+        "content_hash": "1" * 64,
+        "source_commit": "2" * 40,
+    }
+
+    result = production._run_preflight(spec, tmp_path, "cpu")
+
+    assert result["result"]["preflight_sha256"]
+    assert (tmp_path / "preflight.json").is_file()
