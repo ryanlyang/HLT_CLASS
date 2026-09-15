@@ -12,6 +12,8 @@ import time
 import numpy as np
 import torch
 
+from hlt_classification.data.cache_contracts import validate_content_hash
+
 from .cache import RamCache
 from .campaign import learning_rate, recipe
 from .contracts import artifact
@@ -50,13 +52,31 @@ def selection_key(metrics: dict, update: int):
 
 def train_kernel(model, train: RamCache, validation: RamCache, *, node: dict, device,
                  teacher_probabilities: np.ndarray | None = None, teacher_identities: np.ndarray | None = None,
-                 acceptance_passes: int | None = None) -> tuple[dict, dict]:
+                 acceptance_passes: int | None = None,
+                 training_recipe: dict | None = None) -> tuple[dict, dict]:
     """Return immutable-report payload + selected weights, with no rolling files.
 
     A short acceptance run is always marked NONSCIENTIFIC and cannot stand in
     for any full graph node's terminal report. Production uses the fixed recipe.
     """
-    config = recipe()
+    base = recipe()
+    config = base if training_recipe is None else training_recipe
+    if not isinstance(config, dict) or "content_hash" not in config:
+        raise ValueError("Training recipe is not an authenticated artifact")
+    validate_content_hash(
+        config, expected_contract=base["contract"],
+        expected_schema_version=base["schema_version"],
+    )
+    invariant_fields = set(base) - {"content_hash", "ce_weight", "kd_weight"}
+    if any(config.get(name) != base[name] for name in invariant_fields):
+        raise ValueError("Training recipe changes the registered kernel schedule")
+    weights = (config.get("ce_weight"), config.get("kd_weight"))
+    if (
+        any(type(value) not in {int, float} or not math.isfinite(value) or value < 0
+            for value in weights)
+        or not math.isclose(sum(weights), 1., rel_tol=0., abs_tol=1e-12)
+    ):
+        raise ValueError("Training recipe CE/KD weights differ")
     if (train.role != "train" or validation.role != "validation" or len(train) == 0 or len(validation) == 0
             or train.foundation_sha256 != validation.foundation_sha256
             or train.coordinate_name != node["coordinate"] or validation.coordinate_name != node["coordinate"]):
@@ -98,7 +118,11 @@ def train_kernel(model, train: RamCache, validation: RamCache, *, node: dict, de
             q = None if teacher_probabilities is None else torch.from_numpy(teacher_probabilities[indices]).to(device)
             optimizer.zero_grad(set_to_none=True)
             logits = _forward(model, raw, device, bf16=str(device).startswith("cuda"))
-            loss = distillation_loss(logits, labels, teacher_probabilities=q)
+            loss = distillation_loss(
+                logits, labels, teacher_probabilities=q,
+                ce_weight=config["ce_weight"], kd_weight=config["kd_weight"],
+                temperature=config["temperature"],
+            )
             if not torch.isfinite(loss):
                 raise ValueError("Nonfinite training loss")
             loss.backward()

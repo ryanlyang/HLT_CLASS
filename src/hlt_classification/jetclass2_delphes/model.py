@@ -5,6 +5,7 @@ import torch
 from torch import nn
 import importlib
 import importlib.metadata
+import math
 import platform
 from pathlib import Path
 
@@ -60,7 +61,11 @@ class DelphesParticleTransformer(nn.Module):
         return {"mod.cls_token"}
 
 
-def distillation_loss(logits, labels, *, teacher_probabilities=None):
+def distillation_loss(
+    logits, labels, *, teacher_probabilities=None,
+    ce_weight: float = .25, kd_weight: float = .75,
+    temperature: float = 2.,
+):
     import torch.nn.functional as F
     if logits.ndim != 2 or logits.shape[1] != len(CLASS_NAMES) or labels.shape != (len(logits),):
         raise ValueError("Delphes logits/label shape differs")
@@ -69,9 +74,20 @@ def distillation_loss(logits, labels, *, teacher_probabilities=None):
     ce = F.cross_entropy(logits.float(), labels.long())
     if teacher_probabilities is None:
         return ce
+    weights = (float(ce_weight), float(kd_weight))
+    if (
+        not all(math.isfinite(value) for value in (*weights, temperature))
+        or any(value < 0 for value in weights)
+        or not math.isclose(sum(weights), 1., rel_tol=0., abs_tol=1e-12)
+        or temperature <= 0
+    ):
+        raise ValueError("Invalid CE/KD loss weights or temperature")
     q = teacher_probabilities.float().detach()
     if (q.shape != logits.shape or not torch.isfinite(q).all() or (q < 0).any()
             or not torch.allclose(q.sum(-1), torch.ones(len(q), device=q.device), atol=2e-6, rtol=0)):
         raise ValueError("Invalid teacher probability bank")
-    kd = F.kl_div(F.log_softmax(logits.float() / 2., dim=-1), q, reduction="batchmean") * 4.
-    return .25 * ce + .75 * kd
+    kd = F.kl_div(
+        F.log_softmax(logits.float() / temperature, dim=-1), q,
+        reduction="batchmean",
+    ) * temperature**2
+    return ce_weight * ce + kd_weight * kd
