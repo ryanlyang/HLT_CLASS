@@ -62,7 +62,7 @@ from .hcwdl_mhpe_tri60_runner import _student_caches as tri60_student_caches
 from .hcwdl_mhpe_tri60_training import (
     Tri60TrainingAuthority, Tri60TrainingRuntime, _BatchPrefetcher,
     _peak_cuda_bytes, _peak_rss_bytes, _torch_bytes, load_tri60_model,
-    train_tri60_node,
+    train_tri60_node, tri60_early_stopping, tri60_learning_rate_schedule,
 )
 from .hcwdl_tri100_spine4_graph import NODE_REGISTRY as SOURCE_NODES
 from .training import derive_seed
@@ -110,11 +110,18 @@ def training_authority(node_id: str) -> Tri60TrainingAuthority:
 
 
 def _runtime() -> Tri60TrainingRuntime:
-    return Tri60TrainingRuntime(
+    # Keep the shared trainer's legacy fractional-schedule field at its
+    # validated default. LR_SCHEDULE, passed explicitly to every fit, owns
+    # the actual three-pass warmup, H45 decay and pass-60 floor tail.
+    runtime = Tri60TrainingRuntime(
         passes=100, batch_size=256, peak_learning_rate=3e-4,
-        weight_decay=.01, warmup_fraction=.03,
+        weight_decay=.01, warmup_fraction=.05,
         minimum_lr_fraction=.05, amp_dtype="bfloat16",
     )
+    runtime.validate(execution_mode="scientific", allowed_training_passes=(100,))
+    tri60_learning_rate_schedule(runtime, LR_SCHEDULE)
+    tri60_early_stopping(runtime, EARLY_STOPPING)
+    return runtime
 
 
 def _source(spec):
@@ -313,6 +320,7 @@ def run_execution_acceptance(spec, *, device="cuda"):
     import torch
     acceptance_started = time.monotonic()
     validate_campaign(spec)
+    _runtime()
     target = torch.device(device)
     visible_cuda_devices = (
         torch.cuda.device_count() if torch.cuda.is_available() else 0
@@ -877,6 +885,7 @@ def validate_execution_acceptance(spec, value):
 
 def run_fit(spec, node_id: str, *, device="cuda", recovery_spec_sha256=None, execution_source_commit=None):
     validate_campaign(spec); _configure_deterministic_backend(); node = NODE_REGISTRY[node_id]
+    runtime = _runtime()
     acceptance = load_json(spec["artifact_paths"]["execution_acceptance"])
     acceptance_hash = validate_execution_acceptance(spec, acceptance)
     targets = lock = None
@@ -930,7 +939,7 @@ def run_fit(spec, node_id: str, *, device="cuda", recovery_spec_sha256=None, exe
             campaign_spec_sha256=spec["content_hash"], recipe_sha256=spec["parents"]["recipe"],
             execution_source_commit=execution_source_commit or spec["source_commit"],
             replicate_seed=int(spec["replicate_seed"]), device=device,
-            runtime=_runtime(), execution_mode="scientific",
+            runtime=runtime, execution_mode="scientific",
             model_factory=_model_factory(spec, node_id),
             preparation_metrics={"student_view_cache_seconds": time.monotonic() - started, "pre_training_total_seconds": time.monotonic() - started},
             authority=training_authority(node_id), learning_rate_schedule=LR_SCHEDULE,

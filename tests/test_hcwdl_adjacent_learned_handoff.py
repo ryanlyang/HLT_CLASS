@@ -81,6 +81,155 @@ def test_strategy_b_exact_25_fit_registry_and_controls():
     ]
 
 
+@pytest.mark.parametrize("node_id", FIT_ORDER)
+def test_strategy_b_scientific_runtime_accepts_every_registered_fit(node_id):
+    from hlt_classification.scouting.hcwdl_adjacent_learned_handoff_runner import (
+        _runtime, training_authority,
+    )
+
+    authority = training_authority(node_id)
+    runtime = _runtime()
+    runtime.validate(
+        execution_mode="scientific",
+        allowed_training_passes=authority.allowed_training_passes,
+        allowed_peak_learning_rates=authority.allowed_peak_learning_rates,
+        allowed_batch_sizes=authority.allowed_batch_sizes,
+    )
+    assert runtime.passes == TRAINING["maximum_passes"] == 100
+    assert runtime.batch_size == NODE_REGISTRY[node_id].batch_size == 256
+    assert NODE_REGISTRY[node_id].representation_seed_alias is None
+    assert NODE_REGISTRY[node_id].payload()["representation_seed_alias"] is None
+
+
+def test_strategy_b_explicit_schedule_keeps_three_pass_warmup_and_floor_tail():
+    from hlt_classification.scouting.hcwdl_adjacent_learned_handoff_runner import (
+        EARLY_STOPPING, LR_SCHEDULE, _runtime,
+    )
+    from hlt_classification.scouting.hcwdl_mhpe_tri60_training import (
+        tri60_early_stopping, tri60_learning_rate, tri60_learning_rate_schedule,
+    )
+    from hlt_classification.scouting.hcwdl_adjacent_output_handoff_graph import (
+        LR_SCHEDULE as OUTPUT_LR_SCHEDULE,
+    )
+
+    runtime = _runtime()
+    schedule = tri60_learning_rate_schedule(runtime, LR_SCHEDULE)
+    assert schedule == dict(OUTPUT_LR_SCHEDULE)
+    assert schedule["warmup_passes"] == 3
+    rates = [
+        tri60_learning_rate(
+            runtime, update=update, total_updates=1000,
+            updates_per_pass=10, schedule=schedule,
+        )
+        for update in range(1000)
+    ]
+    np.testing.assert_allclose(rates[:30], 3e-4 * np.arange(1, 31) / 30)
+    np.testing.assert_allclose(rates[30:450], 3e-4)
+    assert rates[450] == pytest.approx(3e-4)
+    assert np.all(np.diff(rates[450:600]) <= 0)
+    np.testing.assert_allclose(rates[599:], 1.5e-5)
+    policy = tri60_early_stopping(runtime, EARLY_STOPPING)
+    assert policy == tri60_early_stopping(runtime, OUTPUT_EARLY_STOPPING)
+    assert policy["minimum_passes"] == 60
+    assert policy["patience_passes"] == 15
+
+
+@pytest.mark.parametrize("entrypoint", ("run_fit", "run_execution_acceptance"))
+def test_strategy_b_bad_runtime_fails_before_any_data_loading(monkeypatch, entrypoint):
+    from dataclasses import replace
+    from hlt_classification.scouting import hcwdl_adjacent_learned_handoff_runner as runner
+    from hlt_classification.scouting.hcwdl_mhpe_tri60_training import Tri60TrainingRuntime
+
+    monkeypatch.setattr(runner, "validate_campaign", lambda spec: None)
+    monkeypatch.setattr(runner, "_configure_deterministic_backend", lambda: None)
+    monkeypatch.setattr(
+        runner, "Tri60TrainingRuntime",
+        lambda **kwargs: replace(Tri60TrainingRuntime(**kwargs), warmup_fraction=.03),
+    )
+    monkeypatch.setattr(
+        runner, "load_json",
+        lambda path: pytest.fail("invalid runtime reached artifact/data loading"),
+    )
+    with pytest.raises(ValueError, match="TRI60 optimization recipe differs"):
+        if entrypoint == "run_fit":
+            runner.run_fit({}, "CE_SINGLE_D000", device="cpu")
+        else:
+            runner.run_execution_acceptance({}, device="cpu")
+
+
+def test_strategy_b_production_ce_fit_traverses_real_scientific_trainer(tmp_path, monkeypatch):
+    import torch
+    from hlt_classification.scouting import hcwdl_adjacent_learned_handoff_runner as runner
+    from test_hcwdl_tri100_spine4 import _SyntheticCache, _tiny_model_factory
+
+    # Stub only external data/lineage and Weaver construction. Use the real
+    # run_fit -> train_tri60_node path with unmodified scientific runtime,
+    # batch 256, 100-pass authority, LR schedule and early stopping.
+    digest = "a" * 64
+    spec = {
+        "campaign_root": str(tmp_path), "content_hash": digest,
+        "source_commit": "b" * 40, "replicate_seed": 1337,
+        "parents": dict.fromkeys(
+            ("source_lock", "recipe", "population_lock", "seed_lock"), digest,
+        ),
+        "artifact_paths": {
+            "execution_acceptance": "acceptance.json",
+            "validation_partition": "partition.json",
+        },
+    }
+    train = _SyntheticCache()
+    validation = _SyntheticCache()
+    caches = {"train": train, "validation": validation}
+    monkeypatch.setattr(runner, "validate_campaign", lambda spec: None)
+    monkeypatch.setattr(runner, "_configure_deterministic_backend", lambda: None)
+    monkeypatch.setattr(runner, "load_json", lambda path: {"content_hash": digest})
+    monkeypatch.setattr(runner, "validate_execution_acceptance", lambda *args: digest)
+    monkeypatch.setattr(
+        runner, "_standard_caches",
+        lambda *args: (None, digest, digest, caches, "hlt"),
+    )
+    monkeypatch.setattr(runner, "load_partition", lambda path: (
+        {"content_hash": digest}, {
+            "identity_digest": validation.identity_digests,
+            "partition": np.zeros(30, dtype=np.uint8),
+        },
+    ))
+    monkeypatch.setattr(runner, "_ValidationSubset", lambda cache, *args, **kwargs: cache)
+    monkeypatch.setattr(runner, "_model_factory", lambda *args: _tiny_model_factory)
+    real_trainer = runner.train_tri60_node
+
+    def scientific_trainer(**kwargs):
+        assert kwargs["execution_mode"] == "scientific"
+        return real_trainer(**kwargs)
+
+    monkeypatch.setattr(runner, "train_tri60_node", scientific_trainer)
+    threads = torch.get_num_threads()
+    try:
+        torch.set_num_threads(1)
+        report = runner.run_fit(spec, "CE_SINGLE_D000", device="cpu")
+    finally:
+        torch.set_num_threads(threads)
+    assert report["maximum_passes"] == 100
+    assert 60 <= report["passes"] <= 100
+    assert report["learning_rate_schedule"] == runner.LR_SCHEDULE
+    assert 1 <= report["selected_pass"] <= report["passes"]
+    assert report["final_test_accessed"] is False
+    assert report["rng_domains"]["representation_seed_alias"] is None
+    output = tmp_path / "training" / "CE_SINGLE_D000"
+    assert (output / "training_report.json").is_file()
+    assert (output / "selected_model.pt").is_file()
+    assert (output / "final_model.pt").is_file()
+    assert not list(output.rglob("*resume*"))
+    assert caches == {}
+    model, restored_report = runner.load_tri60_model(
+        output / "training_report.json", device="cpu",
+        model_factory=_tiny_model_factory,
+        authority=runner.training_authority("CE_SINGLE_D000"),
+    )
+    assert restored_report == report
+    assert not model.training
+
+
 def test_fusion_primary_uses_matched_seed_but_context_has_separate_seed():
     import torch
 

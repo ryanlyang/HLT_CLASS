@@ -81,6 +81,12 @@ class LearnedNode:
         return None
 
     @property
+    def representation_seed_alias(self):
+        # The shared trainer records this field even for logit/CE-only fits.
+        # Match the already-registered null value in the node payload.
+        return None
+
+    @property
     def training_passes(self) -> int:
         return 100
 
