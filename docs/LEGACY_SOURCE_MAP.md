@@ -1,5 +1,15 @@
 # Legacy Donor-Source Map
 
+## 2026-09-15: CMS learned-dense synthetic four-vector parity repair
+
+Test-only reuse of the positive-energy unit-mass construction already in
+`models/scouting_particle_transformer.py::validate_scouting_weaver_fp32_parity`,
+inspected at `f33b8bff611786129ff941aa09aeca2d9856af37`, for
+`tests/test_cms_salience_learned.py::make_cache`. No production kernel or
+scientific contract changed; no external Weaver source was copied into the
+repository. The mock-independent fixture invariant and real-Weaver privileged
+path checks are new tests.
+
 ## 2026-09-15: native-CMS learned dense ladder, 500k/250k/250k
 
 New isolated family: `src/hlt_classification/cms_salience_learned/`.

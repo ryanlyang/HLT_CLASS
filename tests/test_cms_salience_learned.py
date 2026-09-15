@@ -60,8 +60,29 @@ def make_cache(role="train", paired=True):
     views = {name: (rng.normal(size=(count, 21, 4)).astype(np.float32),
                    rng.normal(size=(count, 4, 4)).astype(np.float32),
                    np.ones((count, 1, 4), bool)) for name in ("D080", "U100")}
+    for _, vectors, _ in views.values():
+        # Weaver consumes (px, py, pz, E), not four independent features.
+        # Give every synthetic particle positive energy and unit mass, as in
+        # validate_scouting_weaver_fp32_parity. Random E can make rapidity NaN;
+        # the fake Weaver pair module cannot expose that fixture error.
+        vectors[:, 3] = np.sqrt(np.square(vectors[:, :3]).sum(axis=1) + 1.)
     ids = np.arange(count * 32, dtype=np.uint8).reshape(count, 32)
     return data.Cache(views, np.arange(count) % 15, ids, role, "f" * 64, "D080", "U100" if paired else None)
+
+
+def test_synthetic_cache_has_physical_four_vectors_without_weaver():
+    cache = make_cache("validation")
+    for features, vectors, mask in cache.views.values():
+        active = mask[:, 0]
+        momentum = vectors[:, :3].astype(np.float64)
+        energy = vectors[:, 3].astype(np.float64)
+        mass_squared = energy**2 - np.square(momentum).sum(axis=1)
+        assert np.isfinite(features).all() and np.isfinite(vectors).all()
+        assert np.all(energy[active] > 0)
+        assert np.all(energy[active] > np.abs(momentum[:, 2][active]))
+        np.testing.assert_allclose(mass_squared[active], 1., atol=5e-6, rtol=0)
+        rapidity = .5 * np.log((energy + momentum[:, 2]) / (energy - momentum[:, 2]))
+        assert np.isfinite(rapidity[active]).all()
 
 
 @pytest.mark.parametrize("alpha", [1., .5, 0.])
@@ -306,6 +327,12 @@ def test_installed_weaver_native_wrapper_contract():
     n = contracts.node("parity", "fusion_withdrawal", "D080", "U100", "teacher")
     model = build_model(n).eval()
     cache = make_cache("validation")
+    # Exercise real pair geometry on the privileged paths as well as the
+    # exactly extractable alpha-zero path. Do not relax finiteness or parity.
+    for alpha in (1., .5):
+        probabilities = training.predict(model, cache, node=n, device="cpu", alpha=alpha)
+        assert probabilities.shape == (len(cache), 15)
+        assert np.isfinite(probabilities).all()
     zero = training.predict(model, cache, node=n, device="cpu")
     single_cache = data.Cache(cache.views, cache.labels, cache.identities, cache.role,
                              cache.foundation_sha256, cache.primary)
