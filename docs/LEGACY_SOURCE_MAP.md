@@ -1,5 +1,33 @@
 # Legacy Donor-Source Map
 
+## 2026-09-15: native-CMS learned dense ladder, 500k/250k/250k
+
+New isolated family: `src/hlt_classification/cms_salience_learned/`.
+In-repository donor baseline inspected at
+`d878beec498bba1f089f4ea1041ed17794e8bf68`; no external donor checkout,
+`Fresh_check`, sibling worktree, old checkpoint, or old execution artifact is
+imported at runtime.
+
+- Native inputs/labels/splits: `scouting/{schema,labels,identity,splits,
+  selective_assignment,inputs,particles,highcov_matcher,highcov_data,matching}.py`.
+  The last four already had user-owned uncommitted category-count additions;
+  they were not changed or staged by this implementation.
+- Exact matcher: `scouting/hcwdl_fullcard_salience_{matcher,contracts}.py`.
+- View/coupling kernels: `scouting/hcwdl_{homotopy,upper_coupling,
+  unified_balanced}.py` and `repair.py`. These are reused, not replaced with
+  Delphes preprocessing. New preparation fits bounded train-only scales.
+- Architecture/loss: `models/{scouting_particle_transformer,
+  hcwdl_adjacent_fusion_transformer,hcwdl_offline_hlt_fusion_transformer}.py`
+  and `scouting/hcwdl_offline_hlt_withdrawal.py`, unchanged. A native wrapper
+  supplies the separate-view call interface and exact extraction.
+- Training-loop design donor: `jetclass2_delphes/salience_learned_training.py`
+  and `salience_learned_graph.py`. The new kernel has native CMS metrics,
+  fifteen-class probabilities and its own recipe/artifact family; it does not
+  import their eleven-class trainer, graph, models, data or artifacts.
+- Shared operational helpers: `data/cache_contracts.py`,
+  `scouting/hcwdl_{authorization,exact_dag_submission,recovery}.py`, and only
+  site/allocation authentication from `jetclass2_delphes/execution.py`.
+
 ## 2026-09-13: auxiliary debug profile continuation
 
 No external or sibling-worktree donor code was copied. Reused unchanged native

@@ -1,0 +1,107 @@
+# CMS/Scouting salience learned dense ladder (CMS-LFH v1)
+
+## Authority and scope
+
+This is a new, isolated CMS/Scouting study requested on 2026-09-15. It does
+not resume, rewrite, or submit jobs in any JetClass2 or historical CMS campaign.
+It transfers the Strategy-B method, not a claim that its performance is proven.
+It supersedes the older three-spine/54-fit panel **for this family only**.
+
+Run on SPORC `tier3`, account `reu-aisocial`, QOS `qos_tier3`, one A100 and
+`atlas_kd_sporc`. Do not transfer GH200 or JetClass2 resource acceptance.
+
+## Population and matching
+
+Use original native CMS Scouting ROOT `tree` data (21 features, 15 classes),
+not the 17-feature/11-class Delphes adapter. Require the authenticated original
+file-disjoint split manifest. Select 500,000 train and 250,000 validation jets
+by the existing proportional per-class smallest-identity-hash rule, seed 1337,
+within their original roles. Reserve 250,000 final-test jets using the same
+rule within the original final-test role; do not materialize that selection or
+read its branches in this campaign. A separately authorized finalist/execution
+lock and evaluation operation are required to open final test.
+
+Freeze `SALIENCE_PT_LINEAR` as a transferred prior chosen on JetClass2, not a
+CMS-tuned winner. Recompute assignments on this CMS subset. Use the existing
+exact full-cardinality salience Hungarian solver and native-index orientation;
+do not import JetClass2 assignment rows. Follow the native decoder's 200 HLT
+cap, regular-offline matcher population (lost tracks excluded from matching),
+and projected pure-offline reference's 90 charged / 60 neutral limits.
+Keep the existing CMS balanced persistent-support homotopy: HLT slots persist,
+matched slots carry offline content at U100, and D000 is byte-exact native HLT.
+Residual coupling scales are fitted on at most 4096 selected training jets:
+equal per-file allocations, evenly spaced in canonical selected-entry order.
+No validation jets contribute. Reuse the
+existing endpoint partition/coupling and mass-balanced switches, including its
+bounded carrier policy; never silently truncate a carrier that exceeds 200.
+Identity, pairing, switch indices and labels are never model input features.
+
+Validation is deterministically class-stratified into disjoint 50% checkpoint,
+25% diagnostic and 25% reporting subsets. Only checkpoint validation selects
+weights/early stopping. Report recovery on the reporting subset, not mixed
+with historical full-population numbers. Use all 250k only for non-selecting
+parity checks. Final test stays sealed.
+
+## Registered graph
+
+`U000 -> U033 -> U066 -> U100 -> D080 -> D060 -> D040 -> D020 -> D000`
+
+U033/U066 are exact thirds. D080/D060/D040/D020 are exact fifths of offline
+content. Fresh references are native-HLT CE (`M0HLT`), persistent U000 CE
+(`U000`) and projected pure-offline CE (`OFFLINE`). The one global ordinary
+logit-KD control is `DIRECT_D000` taught by this U000. No imported trained
+anchor, no per-rung direct-control panel, no random-seed ensemble panel.
+
+Each of the eight arrows has:
+
+1. A cold-start acquisition: lower view is primary, previous higher view is
+   context. C25P75, T=2 KD comes from the previous extracted single carrier.
+2. A reducer saving selected acquisition probabilities (T=2 train, T=1 validation).
+3. Withdrawal initialized from the selected acquisition weights, fresh optimizer,
+   with that frozen acquisition probability bank as teacher. Validate/select
+   only the alpha-zero route, including before the training gate reaches zero.
+4. Exact extraction of the ordinary primary ParT. This is the sole teacher for
+   the next arrow. Never carry context weights to the next cold acquisition.
+
+There are 20 fits, 8 extractions, 16 probability reducers, aggregate and
+completion: 46 science tasks. Preparation and genuine A100 acceptance are
+separate stages. The primary owns the sole head. Context injects one-way,
+zero-initialized gated attention residuals after blocks 2/4/6/8, with native
+pair geometry. At alpha zero no context encoder or cross-attention executes.
+
+## Frozen optimization
+
+Batch 256, one GPU, AdamW (3e-4, betas .9/.999, epsilon 1e-8, weight decay .01),
+BF16 forward and FP32 loss. Warmup passes 1–3; hold through 45; cosine decay
+through 60 to 1.5e-5; constant floor through 100. Minimum 60 passes, patience
+15 after pass 60, significant AUC improvement 5e-5. Select lexically by AUC,
+negative CE, macro log R50, then earliest update. Restore best weights.
+All reference/control fits use this same schedule. Distinct deterministic
+per-rung seed aliases; acquisition and withdrawal at a rung share the alias.
+
+Withdrawal alpha: 1 through pass 10, cosine to zero at 60, exactly zero
+thereafter. Loss: .25 zero CE + .30 zero KD + .15 privileged CE + .20 privileged
+KD + .05 directed logit consistency + .05 masked normalized representation
+consistency at blocks 2/4/6/8. The existing zero-gate objective is reused.
+
+## Storage, authorization, and acceptance
+
+Immutable content/parent hashes bind source commit, native split, selection,
+matcher, scales, assignments, view identities and all selected artifacts.
+Compact maps/probabilities and selected weights may be durable. Dense particle
+views, hidden states, optimizer and rolling best state remain process RAM.
+Preprocessing uses bounded spawned processes, not a Python thread-only pool.
+
+Require a clean exact pushed source checkout, canonical dry-run plan, completed
+preparation and genuine installed-Weaver/A100 production-worker acceptance
+before science submission. Acceptance builds the full worst-case paired cache,
+runs real CE/KD/acquisition/withdrawal updates, proves alpha-zero/extraction
+parity, and records CPU/CUDA peaks and elapsed time. No scientific accuracy
+threshold gates the graph. Poor performance is a result; invalid data, stale
+source, mismatched lineage and nonfinite computations fail closed.
+
+Report validation accuracy, macro AUC, geometric macro R50 and each class's
+QCD rejection. Recovery = (model − native-HLT CE)/(pure-offline CE − native-HLT
+CE), with R50 in linear rejection space. Also report persistent-anchor
+recovery separately; undefined denominators produce null, never fabricated 0.
+No local test result is genuine SPORC acceptance.
