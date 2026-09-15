@@ -61,6 +61,18 @@ class FusionOutput:
     primary_states: tuple[torch.Tensor, ...]
     primary_mask: torch.Tensor
 
+    # The shared withdrawal objective uses historical offline/HLT names.
+    # Here they mean the lower/primary branch, including on U-side arrows;
+    # they do not imply native-HLT content at intermediate coordinates.
+    # Return the original tensors so masking and autograd remain unchanged.
+    @property
+    def hlt_states(self) -> tuple[torch.Tensor, ...]:
+        return self.primary_states
+
+    @property
+    def hlt_mask(self) -> torch.Tensor:
+        return self.primary_mask
+
 
 @dataclass(frozen=True)
 class WithdrawalOutput:
@@ -279,4 +291,3 @@ __all__ = [
     "DelphesParameterMatchedSingleViewParticleTransformer", "FusionOutput",
     "INJECTION_BLOCKS", "WithdrawalOutput",
 ]
-

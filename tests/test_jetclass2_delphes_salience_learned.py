@@ -423,3 +423,45 @@ def test_installed_weaver_fusion_has_exact_zero_residual_and_extracts_primary():
         extracted = fusion.extract_primary().eval()(features, vectors, mask)
     assert torch.equal(baseline, acquired)
     assert torch.equal(zero, extracted)
+
+    # Exercise the real dual-route loss as well as inference/extraction. The
+    # old test never crossed this boundary and missed the production failure.
+    from hlt_classification.jetclass2_delphes.salience_learned_training import (
+        _train_batch,
+    )
+    raw = {
+        "features": features.numpy(), "vectors": vectors.numpy(),
+        "mask": mask.numpy(), "labels": np.asarray([1, 4], np.int64),
+    }
+    teacher = torch.softmax(baseline.detach() / 2., dim=1)
+    fusion.train()
+    optimizer = torch.optim.AdamW(
+        [p for p in fusion.parameters() if p.requires_grad], lr=3e-4,
+    )
+    acquired_loss = torch.nn.functional.cross_entropy(
+        fusion.forward_fused(features, vectors, mask, features, vectors, mask).logits,
+        torch.from_numpy(raw["labels"]),
+    )
+    acquired_loss.backward()
+    optimizer.step()
+    for alpha in (.5, 0.):
+        optimizer.zero_grad(set_to_none=True)
+        batch = ({"primary": raw, "context": raw, "labels": raw["labels"]}
+                 if alpha else raw)
+        loss, terms = _train_batch(
+            fusion, batch, node={"role": "fusion_withdrawal"}, device="cpu",
+            teacher=teacher, alpha=alpha,
+        )
+        assert torch.isfinite(loss)
+        loss.backward()
+        if alpha:
+            assert all(
+                injection.residual_projection.weight.grad is not None
+                and torch.isfinite(injection.residual_projection.weight.grad).all()
+                for injection in fusion.injections
+            )
+        else:
+            assert terms["representation_consistency"] == 0.
+            assert terms["logit_consistency"] == 0.
+            assert all(p.grad is None for p in fusion.context_mod.parameters())
+            assert all(p.grad is None for p in fusion.injections.parameters())

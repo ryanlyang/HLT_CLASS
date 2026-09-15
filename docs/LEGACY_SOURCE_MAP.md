@@ -410,6 +410,17 @@ and tests were authored in this repository. No historical checkpoint, target
 bank, dataset, generated campaign result, or external source file was copied,
 and runtime imports do not reach an old worktree or repository.
 
+The 2026-09-14 loss-interface repair adds read-only `hlt_states` / `hlt_mask`
+aliases to the JetClass2 `FusionOutput` for compatibility with that shared
+withdrawal objective. Both names refer to the original lower/primary tensors,
+not necessarily native-HLT content on intermediate U/D coordinates. The
+reference API is the unchanged repository-local
+`scouting/hcwdl_offline_hlt_withdrawal.py` at failed-execution commit
+`15094633f9aa3a0e3f9e418704ac3c0a46dac11d`. No donor file or loss implementation
+was copied; the coefficients, masks, directed gradients and exact-zero route
+are unchanged. Tensor-level regression tests now exercise the interface even
+when installed Weaver is unavailable.
+
 ## Approved transfer surfaces
 
 | Transfer block | Donor surface | Intended retained meaning | Migration policy |
