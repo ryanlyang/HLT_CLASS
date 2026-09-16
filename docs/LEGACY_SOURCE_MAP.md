@@ -1,5 +1,32 @@
 # Legacy Donor-Source Map
 
+## 2026-09-16: JetClass2 native concatenation, one-job oracle
+
+Internal donor snapshot: `f2e8a374f522a39c7f3a6331f0ec77ae12cabaea`.
+New adapters are `jetclass2_delphes/native_concat{,_data,_model}.py`.
+
+- `jetclass2_delphes/{reader,inputs,cache}.py`: native paired reads, canonical
+  per-reconstruction 17-feature transforms, packed blocks and bounded ordered
+  process preprocessing. New batches add a discrete source transport channel
+  and retain the sum of both native particle counts, without any matcher.
+- `jetclass2_delphes/model.py` and installed Weaver: unchanged canonical
+  backbone; only the numerical embedding is wrapped to add a learned source
+  embedding. No Weaver source is copied. The earlier conceptual donor
+  `models/hcwdl_tagged_concat_transformer.py` is not imported (wrong dataset).
+- `jetclass2_delphes/salience_learned_{graph,training,data,production}.py`:
+  unchanged CE schedule, matched control seeds, checkpoint selection, held-out
+  validation partition and immutable completed-reference authentication.
+- `jetclass2_delphes/{execution,submission}.py` and
+  `scouting/{hcwdl_exact_dag_submission,hcwdl_recovery}.py`: explicit SPORC
+  site, guarded exact-ID intent/receipt ledger and canonical dry-run behavior.
+
+New scientific exception is scoped to `JETCLASS2_DELPHES_NATIVE_CONCAT_*/v1`:
+native offline+HLT source tags are authorized only for this privileged oracle.
+No existing campaign, matching strategy, input schema, or training kernel was
+edited. Real installed-Weaver 0.5.3 CPU parity used an existing isolated Temp
+installation; no Conda environment was modified. Actual SPORC/A100 acceptance
+is required inside the new single job before its full scientific fit.
+
 ## 2026-09-15: CMS learned-dense synthetic four-vector parity repair
 
 Test-only reuse of the positive-energy unit-mass construction already in
