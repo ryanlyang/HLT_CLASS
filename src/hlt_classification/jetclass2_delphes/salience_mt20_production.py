@@ -235,12 +235,9 @@ def create_campaign(*, foundation_root: Path, screen_root: Path, data_root: Path
     return spec
 
 
-def validate_campaign(spec: dict, *, check_source=True) -> str:
-    digest = validate(spec, "SALIENCE_MT20_CAMPAIGN_SPEC")
-    source, foundation, profile = source_lock(
-        Path(spec["foundation_root"]), Path(spec["screen_root"]),
-    )
-    plan = build_campaign_plan(foundation)
+def _validate_campaign_fields(
+    spec: dict, *, source: dict, foundation: dict, profile: dict, plan: dict,
+) -> None:
     if (
         spec["source_lock"] != source or spec["foundation"] != foundation
         or spec["runtime_profile"] != profile or spec["scientific_plan"] != plan
@@ -271,6 +268,63 @@ def validate_campaign(spec: dict, *, check_source=True) -> str:
         or spec["final_test_accessed"] is not False
     ):
         raise ValueError("Salience MT20 campaign contract differs")
+
+
+def _recorded_assignment_source_lock(current: dict, recorded: dict) -> dict:
+    """Authenticate an old source lock when only its producer HEAD differs.
+
+    The assignment producer records both the relevant file hashes and the Git
+    HEAD.  A downstream study at a newer commit must not rewrite that immutable
+    historical HEAD.  Foundation authentication independently checks every
+    assignment shard against the current producer *file hashes*, so replacing
+    only the current producer identity with the recorded one is both necessary
+    and fail-closed.
+    """
+    validate(current, "SALIENCE_MT20_SOURCE_LOCK")
+    validate(recorded, "SALIENCE_MT20_SOURCE_LOCK")
+    fields = {
+        key: value for key, value in current.items()
+        if key not in {"contract", "schema_version", "content_hash"}
+    }
+    fields["assignment_producer_sha256"] = recorded["assignment_producer_sha256"]
+    normalized = artifact("SALIENCE_MT20_SOURCE_LOCK", **fields)
+    if normalized != recorded:
+        raise ValueError("Historical salience MT20 source lock semantics differ")
+    return recorded
+
+
+def validate_campaign_snapshot(spec: dict) -> str:
+    """Validate a completed campaign from a later byte-compatible commit.
+
+    Unlike executable validation, this preserves the recorded producer HEAD.
+    Every scientific field, immutable child, foundation artifact, and current
+    producer file hash is still authenticated.
+    """
+    digest = validate(spec, "SALIENCE_MT20_CAMPAIGN_SPEC")
+    current, foundation, profile = source_lock(
+        Path(spec["foundation_root"]), Path(spec["screen_root"]),
+    )
+    recorded = _recorded_assignment_source_lock(current, spec["source_lock"])
+    plan = build_campaign_plan(foundation)
+    _validate_campaign_fields(
+        spec, source=recorded, foundation=foundation, profile=profile, plan=plan,
+    )
+    root = Path(spec["campaign_root"])
+    for name, expected in (("source_lock.json", recorded), ("scientific_plan.json", plan)):
+        if load_json(root / name) != expected:
+            raise ValueError("Salience MT20 immutable child differs")
+    return digest
+
+
+def validate_campaign(spec: dict, *, check_source=True) -> str:
+    digest = validate(spec, "SALIENCE_MT20_CAMPAIGN_SPEC")
+    source, foundation, profile = source_lock(
+        Path(spec["foundation_root"]), Path(spec["screen_root"]),
+    )
+    plan = build_campaign_plan(foundation)
+    _validate_campaign_fields(
+        spec, source=source, foundation=foundation, profile=profile, plan=plan,
+    )
     root = Path(spec["campaign_root"])
     for name, expected in (("source_lock.json", source), ("scientific_plan.json", plan)):
         if load_json(root / name) != expected:
@@ -796,5 +850,5 @@ __all__ = [
     "AUTHORIZE", "GATE_TASKS", "JOB_PREFIX", "RESOURCES", "command_plan",
     "completed_task", "create_campaign", "monitor", "prepare_recovery",
     "result_rows", "run_task", "source_lock", "submit", "task_graph",
-    "validate_campaign", "validate_science_gate",
+    "validate_campaign", "validate_campaign_snapshot", "validate_science_gate",
 ]

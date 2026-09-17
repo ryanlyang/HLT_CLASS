@@ -199,7 +199,9 @@ def test_source_evidence_requires_exact_d033_bank_and_all_comparators(tmp_path, 
         ordinary_final_test_capability=False, final_test_accessed=False,
     )
     monkeypatch.setattr(study, "load_json", lambda path: source)
-    monkeypatch.setattr(study, "validate_campaign", lambda value, check_source=False: value["content_hash"])
+    monkeypatch.setattr(
+        study, "validate_campaign_snapshot", lambda value: value["content_hash"],
+    )
     reports = {}
     for index, node_id in enumerate(study.REFERENCE_IDS):
         metrics = _metrics(index + 1)

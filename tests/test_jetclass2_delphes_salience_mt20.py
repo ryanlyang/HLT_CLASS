@@ -15,7 +15,7 @@ from hlt_classification.jetclass2_delphes.salience_mt20_probability import (
     mix_probabilities,
 )
 from hlt_classification.jetclass2_delphes.salience_mt20_production import (
-    GATE_TASKS, command_plan, task_graph,
+    GATE_TASKS, _recorded_assignment_source_lock, command_plan, task_graph,
 )
 from hlt_classification.jetclass2_delphes.execution import execution_site
 
@@ -211,6 +211,31 @@ def test_source_lock_reuses_only_selected_linear_foundation(tmp_path, monkeypatc
     assert source["assignment_producer_sha256"] == producer["content_hash"]
     assert source["matching_recomputed"] is False
     assert source["matcher_selection_repeated"] is False
+
+
+def test_historical_source_lock_allows_only_recorded_producer_identity():
+    current = artifact(
+        "SALIENCE_MT20_SOURCE_LOCK",
+        assignment_producer_sha256="1" * 64,
+        foundation_sha256="2" * 64,
+        final_test_accessed=False,
+    )
+    recorded = artifact(
+        "SALIENCE_MT20_SOURCE_LOCK",
+        assignment_producer_sha256="3" * 64,
+        foundation_sha256="2" * 64,
+        final_test_accessed=False,
+    )
+    assert _recorded_assignment_source_lock(current, recorded) == recorded
+
+    changed = artifact(
+        "SALIENCE_MT20_SOURCE_LOCK",
+        assignment_producer_sha256="3" * 64,
+        foundation_sha256="4" * 64,
+        final_test_accessed=False,
+    )
+    with pytest.raises(ValueError, match="semantics differ"):
+        _recorded_assignment_source_lock(current, changed)
 
 
 def test_gate_command_plan_is_exact_sporc_and_science_is_separately_guarded(monkeypatch):

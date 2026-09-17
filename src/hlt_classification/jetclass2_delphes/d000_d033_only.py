@@ -26,7 +26,7 @@ from .production import _source
 from .reporting import recovery
 from .runner import train_kernel
 from .salience_mt20_production import (
-    _cache, _execution_gate, completed_task, validate_campaign,
+    _cache, _execution_gate, completed_task, validate_campaign_snapshot,
 )
 from .submission import _guarded_exact_submission
 
@@ -74,7 +74,7 @@ def _training_report(source: dict, node_id: str) -> tuple[dict, dict]:
 
 def source_evidence(path: Path) -> tuple[dict, dict]:
     source = load_json(path)
-    validate_campaign(source, check_source=False)
+    validate_campaign_snapshot(source)
     if (
         source["scientific_plan"]["split_profile"] != "TRAIN_500K"
         or source["scientific_plan"]["role_counts"] != {
