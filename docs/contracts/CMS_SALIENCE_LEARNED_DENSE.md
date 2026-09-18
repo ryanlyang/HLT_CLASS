@@ -25,6 +25,14 @@ Science publishes 20 training reports, 8 exact extractions, 16 probability
 banks and an aggregate. Per-task completion receipts bind every output file;
 an output's existence is never sufficient to skip or reuse a task.
 
+Inference selects the batch layout from the registered model route, not from
+whether the RAM cache happens to retain a context view. Ordinary single-view
+and alpha-zero fusion predictions request only primary inputs; privileged
+fusion predictions still request both views. Preflight compares the zero-route
+fusion and extracted ordinary model on the same paired validation cache with
+byte-exact probability equality. This enforces the existing extraction contract,
+not a new scientific protocol or a relaxed parity threshold.
+
 ## Operator surface
 
 `scripts/cms_salience_learned.py create` requires `--split-manifest`,

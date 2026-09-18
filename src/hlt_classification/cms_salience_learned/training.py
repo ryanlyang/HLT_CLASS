@@ -37,10 +37,14 @@ def predict(model, cache, *, node, device, temperature=1., alpha=None, batch_siz
     model.eval()
     output = np.empty((len(cache), 15), np.float32)
     zero = node["selection_route"] == "alpha_zero" if alpha is None else alpha == 0.
+    # The model's route determines its inputs, not the cache's stored views.
+    # Preflight retains a paired cache when checking the extracted ordinary
+    # primary model; that model must neither read nor receive context inputs.
+    primary_only = zero or node["context_coordinate"] is None
     with torch.inference_mode():
         for start in range(0, len(cache), batch_size):
             indices = np.arange(start, min(start + batch_size, len(cache)))
-            raw = cache.batch_primary(indices) if zero else cache.batch(indices)
+            raw = cache.batch_primary(indices) if primary_only else cache.batch(indices)
             with autocast(device):
                 if zero:
                     logits = model.forward_fused(*tensors(raw, device), alpha=0.).logits

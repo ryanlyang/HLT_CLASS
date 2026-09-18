@@ -104,10 +104,47 @@ def test_real_cms_wrapper_forward_backward_extract_and_context_skip(fake_weaver,
     model.eval()
     zero = training.predict(model, cache, node=n, device="cpu")
     cn = dict(n, role="extracted", context_coordinate=None, selection_route="ordinary")
-    single = training.predict(model.extract_primary().eval(), cache, node=cn, device="cpu") if cache.context is None else training.predict(
-        model.extract_primary().eval(), data.Cache(cache.views, cache.labels, cache.identities, cache.role,
-        cache.foundation_sha256, cache.primary), node=cn, device="cpu")
+    # Preflight deliberately retains the paired cache for both predictions.
+    single = training.predict(model.extract_primary().eval(), cache, node=cn, device="cpu")
     np.testing.assert_array_equal(zero, single)
+
+
+@pytest.mark.parametrize("role", ["reference_ce", "direct_kd", "extracted"])
+@pytest.mark.parametrize("temperature", [1., 2.])
+def test_single_view_predict_ignores_paired_context(fake_weaver, monkeypatch, role, temperature):
+    torch.set_num_threads(1)
+    n = contracts.node("single", role, "D080")
+    model = build_model(n).eval()
+    cache = make_cache("validation")
+    single = data.Cache(cache.views, cache.labels, cache.identities, cache.role,
+                        cache.foundation_sha256, cache.primary)
+    expected = training.predict(model, single, node=n, device="cpu", temperature=temperature, batch_size=7)
+    def forbidden_batch(indices):
+        pytest.fail("Single-view inference must not request a paired batch")
+    monkeypatch.setattr(cache, "batch", forbidden_batch)
+    # Not even the stored context arrays may be inspected on this route.
+    cache.views[cache.context] = None
+    actual = training.predict(model, cache, node=n, device="cpu", temperature=temperature, batch_size=7)
+    np.testing.assert_array_equal(actual, expected)
+    assert actual.shape == (30, 15)
+
+
+@pytest.mark.parametrize("alpha", [.5, 1.])
+def test_privileged_predict_still_requests_both_views(fake_weaver, monkeypatch, alpha):
+    torch.set_num_threads(1)
+    n = contracts.node("paired", "fusion_acquisition", "D080", "U100", "teacher")
+    model = build_model(n).eval()
+    cache = make_cache("validation")
+    batches = []
+    original = cache.batch
+    def paired_batch(indices):
+        batches.append(indices.copy())
+        return original(indices)
+    monkeypatch.setattr(cache, "batch", paired_batch)
+    result = training.predict(model, cache, node=n, device="cpu", alpha=alpha, batch_size=7)
+    np.testing.assert_array_equal(np.concatenate(batches), np.arange(len(cache)))
+    assert len(batches) == 5 and result.shape == (30, 15)
+    assert np.isfinite(result).all()
 
 
 @pytest.mark.parametrize("role", ["reference_ce", "direct_kd", "fusion_acquisition", "fusion_withdrawal"])
@@ -318,6 +355,45 @@ def test_selected_teacher_bank_fit_withdraw_extract_chain(tiny_campaign, fake_we
 def test_gpu_worker_rejects_local_execution_before_reading_data(tiny_campaign):
     with pytest.raises(PermissionError, match="A100"):
         production.run_task(tiny_campaign, "train_U000", device="cpu")
+
+
+def test_preflight_exercises_all_four_routes_with_paired_extraction(tiny_campaign, fake_weaver, monkeypatch):
+    """Real preflight orchestration on tiny ROOT data; mocked GPU is not acceptance."""
+    import sys
+    from types import SimpleNamespace
+    from hlt_classification.jetclass2_delphes import execution
+
+    torch.set_num_threads(1)
+    spec = tiny_campaign
+    for task in campaign.tasks(spec)["prepare"]:
+        production.run_task(spec, task["task_id"], device="cpu")
+    monkeypatch.setattr(execution, "allocation", lambda site: (
+        "123", spec["resources"]["cpus"], spec["resources"]["memory_mb"]))
+    monkeypatch.setattr(execution, "gpu_identity", lambda: dict(name="MOCK A100", total_memory_bytes=1024**3))
+    monkeypatch.setattr(torch.cuda, "reset_peak_memory_stats", lambda: None)
+    monkeypatch.setattr(torch.cuda, "max_memory_allocated", lambda: 1024)
+    monkeypatch.setattr(torch.cuda, "empty_cache", lambda: None)
+    monkeypatch.setitem(sys.modules, "resource", SimpleNamespace(
+        RUSAGE_SELF=0, getrusage=lambda who: SimpleNamespace(ru_maxrss=1024)))
+    extracted_checks = []
+    predictor = production.predict
+    def track_extraction(model, cache, *, node, **kwargs):
+        if node["role"] == "extracted":
+            assert cache.context == "CONTEXT_U000"
+            extracted_checks.append(node["node_id"])
+        return predictor(model, cache, node=node, **kwargs)
+    monkeypatch.setattr(production, "predict", track_extraction)
+
+    outputs = production.preflight(spec, "cpu")
+    assert extracted_checks == ["ACCEPTANCE_EXTRACTED"] * 2
+    report = load_json(outputs[0])
+    assert report["exact_extraction"] is True and report["endpoint_parity"] is True
+    assert report["final_test_accessed"] is False
+    assert report["full_population_cache_rows"] == {r: contracts.BUDGETS[r] for r in ("train", "validation")}
+    assert [p["node"]["role"] for p in report["miniature_reports"]] == [
+        "reference_ce", "direct_kd", "fusion_acquisition", "fusion_withdrawal"]
+    publish_receipt(spec, "preflight", outputs)
+    assert campaign.gate_check(spec) == report
 
 
 def create_from(spec, name, **kwargs):
@@ -537,3 +613,6 @@ def test_installed_weaver_native_wrapper_contract():
     n = dict(n, context_coordinate=None, selection_route="ordinary")
     expected = training.predict(model.extract_primary().eval(), single_cache, node=n, device="cpu")
     np.testing.assert_array_equal(zero, expected)
+    # Also cover the production preflight call, which keeps the paired cache.
+    actual = training.predict(model.extract_primary().eval(), cache, node=n, device="cpu")
+    np.testing.assert_array_equal(expected, actual)
