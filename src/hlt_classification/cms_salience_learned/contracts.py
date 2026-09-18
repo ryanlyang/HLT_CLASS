@@ -25,12 +25,34 @@ TRAINING = dict(maximum_passes=100, minimum_passes=60, patience=15,
 
 
 def artifact(artifact_type: str, **fields):
-    return with_content_hash(dict(fields, contract=f"{FAMILY}_{artifact_type}/v1", schema_version=1))
+    version = 2 if artifact_type == "CAMPAIGN_SPEC" else 1
+    return with_content_hash(dict(fields, contract=f"{FAMILY}_{artifact_type}/v{version}", schema_version=version))
 
 
 def validate(value, artifact_type):
-    return validate_content_hash(value, expected_contract=f"{FAMILY}_{artifact_type}/v1",
-                                 expected_schema_version=1)
+    version = value.get("schema_version") if artifact_type == "CAMPAIGN_SPEC" else 1
+    if type(version) is not int or version not in (1, 2) or (artifact_type != "CAMPAIGN_SPEC" and version != 1):
+        raise ValueError("Unsupported CMS contract version")
+    return validate_content_hash(value, expected_contract=f"{FAMILY}_{artifact_type}/v{version}",
+                                 expected_schema_version=version)
+
+
+def site_for_partition(partition="tier3"):
+    if partition not in ("tier3", "debug"):
+        raise ValueError("CMS partition must be tier3 or debug")
+    return dict(SITE, partition=partition)
+
+
+def allocation_site(spec):
+    # Reuse scheduler/environment authentication only, not Delphes science or
+    # its debug-to-tier3 profiling transfer. CMS science stays on its own site.
+    from hlt_classification.jetclass2_delphes.execution import execution_site
+    site = spec["site"]
+    if site != site_for_partition(site["partition"]):
+        raise ValueError("CMS execution site differs")
+    if spec["schema_version"] == 1 and site != SITE:
+        raise ValueError("Legacy CMS campaigns require tier3")
+    return execution_site("sporc_a100_debug" if site["partition"] == "debug" else "sporc_a100")
 
 
 def coordinate(name):

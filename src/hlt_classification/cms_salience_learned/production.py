@@ -12,10 +12,11 @@ import torch
 
 from hlt_classification.data.cache_contracts import atomic_publish_bytes, load_json, write_immutable_json
 from .campaign import gate_check, tasks, validate_campaign
-from .contracts import SITE, artifact, node, validate
+from .contracts import allocation_site, artifact, node, validate
 from .data import (
-    Cache, build_cache, calibrate, couple_source, lock_foundation, match_source, select_population,
+    Cache, build_cache as build_native_cache, calibrate, couple_source, lock_foundation, match_source, select_population,
 )
+from .preparation_import import preparation_spec, publish_import
 from .model import build_model
 from .storage import arrays_from, checked_file, fingerprint, load_receipt, publish_npz, publish_receipt, receipt_path
 from .training import batch_loss, evaluate, optimizer_for, predict, tensors, train
@@ -23,6 +24,15 @@ from .training import batch_loss, evaluate, optimizer_for, predict, tensors, tra
 
 def root(spec):
     return Path(spec["campaign_root"])
+
+
+def build_cache(spec, *args, **kwargs):
+    source = preparation_spec(spec)
+    # Only the runtime worker count comes from the consumer allocation. All
+    # scientific inputs and the foundation identity remain the authenticated
+    # producer's; this local execution adapter is never serialized as a spec.
+    source = dict(source, resources=dict(source["resources"], workers=spec["resources"]["workers"]))
+    return build_native_cache(source, *args, **kwargs)
 
 
 def registered_node(spec, name):
@@ -67,7 +77,7 @@ def publish_model(spec, name, state, **fields):
 
 
 def partitions(spec, cache):
-    lock = load_json(root(spec) / "foundation/foundation_lock.json")
+    lock = load_json(root(preparation_spec(spec)) / "foundation/foundation_lock.json")
     validate(lock, "FOUNDATION")
     arrays = arrays_from(lock["validation_partition"])
     if (cache.role != "validation" or cache.foundation_sha256 != lock["content_hash"]
@@ -224,6 +234,7 @@ def aggregate(spec):
 def endpoint_audit(spec):
     from .data import load_assignment, raw_chunks, source_rows, _match_chunk, _view_chunk, shard_path
     from hlt_classification.scouting.inputs import build_hlt_inputs
+    spec = preparation_spec(spec)
     checked = 0
     for i, source in enumerate(source_rows(spec)):
         _, data = load_assignment(spec, i)
@@ -249,10 +260,10 @@ def endpoint_audit(spec):
 
 def preflight(spec, device):
     # Shared scheduler authentication only; all data/model semantics above are CMS.
-    from hlt_classification.jetclass2_delphes.execution import allocation, execution_site, gpu_identity
+    from hlt_classification.jetclass2_delphes.execution import allocation, gpu_identity
     import resource
     started = time.monotonic()
-    job_id, cpus, memory = allocation(execution_site("sporc_a100"))
+    job_id, cpus, memory = allocation(allocation_site(spec))
     if cpus != spec["resources"]["cpus"] or memory != spec["resources"]["memory_mb"]:
         raise PermissionError("Acceptance resources differ from science request")
     torch.cuda.reset_peak_memory_stats()
@@ -307,7 +318,7 @@ def preflight(spec, device):
         gc.collect(); torch.cuda.empty_cache()
     gpu = gpu_identity()
     value = artifact("EXECUTION_ACCEPTANCE", campaign_spec_sha256=spec["content_hash"],
-        source_commit=spec["source_commit"], site=SITE, slurm_job_id=job_id, genuine_allocation=True,
+        source_commit=spec["source_commit"], site=spec["site"], slurm_job_id=job_id, genuine_allocation=True,
         installed_weaver_forward_backward=True, endpoint_parity=True, recomputed_rows=checked,
         exact_extraction=True, miniature_reports=proofs, full_population_cache_rows={r: len(c) for r, c in caches.items()},
         elapsed_seconds=time.monotonic() - started, peak_rss_bytes=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024,
@@ -351,6 +362,8 @@ def run_task(spec, task_id, *, device="cuda"):
             outputs = couple_source(spec, task["index"])
         elif kind == "foundation":
             outputs = lock_foundation(spec)
+        elif kind == "import_foundation":
+            outputs = publish_import(spec)
         elif kind == "preflight":
             load_receipt(spec, "foundation")
             outputs = preflight(spec, device)
@@ -372,9 +385,9 @@ def run_task(spec, task_id, *, device="cuda"):
 
 
 def validate_gpu_allocation(spec, device):
-    from hlt_classification.jetclass2_delphes.execution import allocation, execution_site
+    from hlt_classification.jetclass2_delphes.execution import allocation
     if torch.device(device).type != "cuda":
         raise PermissionError("Scientific workers require the registered A100 allocation")
-    _, cpus, memory = allocation(execution_site("sporc_a100"))
+    _, cpus, memory = allocation(allocation_site(spec))
     if cpus != spec["resources"]["cpus"] or memory != spec["resources"]["memory_mb"]:
         raise PermissionError("GPU worker resources differ from the measured spec")

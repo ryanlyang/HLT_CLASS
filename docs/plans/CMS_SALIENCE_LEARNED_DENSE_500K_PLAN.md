@@ -1,4 +1,4 @@
-# CMS/Scouting salience learned dense ladder (CMS-LFH v1)
+# CMS/Scouting salience learned dense ladder (science v1, execution v2)
 
 ## Authority and scope
 
@@ -7,8 +7,24 @@ not resume, rewrite, or submit jobs in any JetClass2 or historical CMS campaign.
 It transfers the Strategy-B method, not a claim that its performance is proven.
 It supersedes the older three-spine/54-fit panel **for this family only**.
 
-Run on SPORC `tier3`, account `reu-aisocial`, QOS `qos_tier3`, one A100 and
-`atlas_kd_sporc`. Do not transfer GH200 or JetClass2 resource acceptance.
+Run on SPORC, account `reu-aisocial`, QOS `qos_tier3`, one A100 and
+`atlas_kd_sporc`. New campaign specs explicitly select `tier3` (default) or
+`debug` for all stages. The latter is an operator choice subject to RC usage
+policy, not a claim of permission or faster scheduling. Both routes retain the
+same resource limits and maximum 24-hour training request. The genuine gate
+must run on the selected partition with the registered science resources.
+Do not transfer GH200, JetClass2, or another campaign's execution acceptance.
+
+Execution-spec v2 adds this choice without changing scientific v1 artifacts.
+Existing v1 specs remain tier3-only and immutable. A fresh v2 root may import
+completed native-CMS preparation read-only from an explicitly named source
+campaign. Require identical scientific graph, population, split, raw-data
+root, view configuration and preparation code lineage, plus authenticated
+preparation receipts and payloads. Import only selection, matching, coupling,
+scales and validation partitions; never import trained models or a GPU gate.
+The new preparation stage verifies those artifacts and publishes its own
+import receipt; gate and science then run normally. Do not cancel, edit, or
+resubmit jobs in the source campaign as a side effect.
 
 ## Population and matching
 

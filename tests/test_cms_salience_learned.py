@@ -320,6 +320,204 @@ def test_gpu_worker_rejects_local_execution_before_reading_data(tiny_campaign):
         production.run_task(tiny_campaign, "train_U000", device="cpu")
 
 
+def create_from(spec, name, **kwargs):
+    return campaign.create(split_manifest=spec["split_manifest"]["path"], data_root=spec["data_root"],
+        campaign_root=Path(spec["campaign_root"]).parent / name, project_dir=spec["project_dir"],
+        source_commit=spec["source_commit"], cpus=spec["resources"]["cpus"],
+        workers=spec["resources"]["workers"], memory_mb=spec["resources"]["memory_mb"], **kwargs)
+
+
+def rehash(value, **changes):
+    return with_content_hash({k: v for k, v in dict(value, **changes).items() if k != "content_hash"})
+
+
+def test_debug_is_pinned_across_all_stages_without_changing_science(tiny_campaign):
+    old = tiny_campaign
+    debug = create_from(old, "debug", partition="debug")
+    assert debug["schema_version"] == 2
+    assert debug["graph"] == old["graph"]
+    assert debug["budgets"] == old["budgets"]
+    assert debug["view_config_sha256"] == old["view_config_sha256"]
+    assert debug["site"] == dict(contracts.SITE, partition="debug")
+    for stage in ("prepare", "gate", "science"):
+        for row in campaign.command_plan(debug, stage)["commands"]:
+            command = row["command"]
+            assert "--partition=debug" in command
+            assert "--partition=tier3" not in command
+            assert "--account=reu-aisocial" in command and "--qos=qos_tier3" in command
+            assert "--no-requeue" in command
+            assert int(next(c.split("=", 1)[1] for c in command if c.startswith("--time="))) <= 1440
+        assert campaign.submit(debug, stage)["dry_run"] is True
+    assert contracts.allocation_site(debug)["name"] == "sporc_a100_debug"
+    assert contracts.allocation_site(old)["name"] == "sporc_a100"
+    # A mutation cannot reuse the dry plan even if someone rehashes the spec.
+    with pytest.raises(ValueError, match="command plan"):
+        campaign.submit(rehash(old, site=debug["site"]), "science")
+    for field, bad in (("partition", "tigris"), ("qos", "other"), ("account", "other"), ("gres", "gpu:h100:1")):
+        with pytest.raises(ValueError):
+            campaign.validate_campaign(rehash(debug, site=dict(debug["site"], **{field: bad})))
+
+
+def test_legacy_v1_remains_readable_but_tier3_only(tiny_campaign):
+    fields = {k: v for k, v in tiny_campaign.items() if k not in {"content_hash", "preparation_import"}}
+    legacy = rehash(fields, contract=f"{contracts.FAMILY}_CAMPAIGN_SPEC/v1", schema_version=1)
+    campaign.validate_campaign(legacy)
+    assert "--partition=tier3" in campaign.command_plan(legacy, "gate")["commands"][0]["command"]
+    with pytest.raises(ValueError, match="Legacy"):
+        campaign.validate_campaign(rehash(legacy, site=contracts.site_for_partition("debug")))
+    with pytest.raises(ValueError, match="Legacy"):
+        campaign.validate_campaign(rehash(legacy, preparation_import=None))
+    with pytest.raises(ValueError, match="version"):
+        campaign.validate_campaign(rehash(legacy, schema_version=3))
+
+
+def test_worker_authenticates_selected_partition_and_exact_resources(tiny_campaign, monkeypatch):
+    from hlt_classification.jetclass2_delphes import execution
+    spec = create_from(tiny_campaign, "debug_worker", partition="debug")
+    calls = []
+    def allocation(site):
+        calls.append(site)
+        return "123", spec["resources"]["cpus"], spec["resources"]["memory_mb"]
+    monkeypatch.setattr(execution, "allocation", allocation)
+    production.validate_gpu_allocation(spec, "cuda")
+    assert calls[0] == execution.execution_site("sporc_a100_debug")
+    monkeypatch.setattr(execution, "allocation", lambda site: ("123", 1, 192000))
+    with pytest.raises(PermissionError, match="resources"):
+        production.validate_gpu_allocation(spec, "cuda")
+
+
+@pytest.mark.parametrize("measured_partition", ["tier3", "debug"])
+def test_gate_requires_own_partition_acceptance(tiny_campaign, measured_partition):
+    spec = create_from(tiny_campaign, "debug_gate", partition="debug")
+    path = Path(spec["campaign_root"]) / "execution_acceptance.json"
+    proofs = [contracts.artifact("TRAINING_REPORT", node={"role": r}, scientific_fit=False, passes=1)
+              for r in ("reference_ce", "direct_kd", "fusion_acquisition", "fusion_withdrawal")]
+    acceptance = contracts.artifact("EXECUTION_ACCEPTANCE", campaign_spec_sha256=spec["content_hash"],
+        site=contracts.site_for_partition(measured_partition), source_commit=spec["source_commit"], genuine_allocation=True,
+        installed_weaver_forward_backward=True, exact_extraction=True, endpoint_parity=True,
+        full_population_cache_rows={r: contracts.BUDGETS[r] for r in ("train", "validation")},
+        final_test_accessed=False, peak_rss_bytes=1, peak_cuda_bytes=1, total_cuda_bytes=100,
+        miniature_reports=proofs)
+    write_immutable_json(path, acceptance)
+    publish_receipt(spec, "foundation", [])
+    publish_receipt(spec, "preflight", [path])
+    if measured_partition == "debug":
+        assert campaign.gate_check(spec) == acceptance
+    else:
+        with pytest.raises(ValueError, match="acceptance"):
+            campaign.gate_check(spec)
+
+
+def test_preparation_import_reuses_exact_views_read_only_and_requires_new_gate(tiny_campaign, monkeypatch):
+    from hlt_classification.cms_salience_learned import preparation_import as reuse
+    source = tiny_campaign
+    for task in campaign.tasks(source)["prepare"]:
+        production.run_task(source, task["task_id"], device="cpu")
+    original = {p: sha256_file(p) for p in Path(source["campaign_root"]).rglob("*") if p.is_file()}
+    # The synthetic fixture has no source checkout; real Git compatibility is
+    # tested separately below. Production never skips this proof.
+    monkeypatch.setattr(reuse, "preparation_code", lambda project, commit: {"fixture": "same"})
+    consumer = create_from(source, "imported_debug", partition="debug",
+        reuse_preparation_spec=Path(source["campaign_root"]) / "campaign_spec.json")
+    assert campaign.tasks(consumer)["prepare"] == [dict(task_id="foundation", kind="import_foundation", dependencies=[])]
+    assert len(campaign.command_plan(consumer, "science")["commands"]) == 46
+    with pytest.raises(FileNotFoundError):
+        production.build_cache(consumer, "train", "D000")
+    production.run_task(consumer, "foundation", device="cpu")
+    load_receipt(consumer, "foundation")
+    for role in ("train", "validation"):
+        before = data.build_cache(source, role, "D000", "U000")
+        after = production.build_cache(consumer, role, "D000", "U000")
+        assert after.foundation_sha256 == before.foundation_sha256
+        np.testing.assert_array_equal(after.identities, before.identities)
+        np.testing.assert_array_equal(after.labels, before.labels)
+        for name in before.views:
+            for a, b in zip(after.views[name], before.views[name]):
+                np.testing.assert_array_equal(a, b)
+        if role == "validation":
+            np.testing.assert_array_equal(production.partitions(consumer, after), production.partitions(source, before))
+    assert production.endpoint_audit(consumer) == 8
+    with pytest.raises(PermissionError):
+        production.build_cache(consumer, "final_test", "D000")
+    with pytest.raises(FileNotFoundError):
+        campaign.submit(consumer, "science", execute=True, authorization_phrase=contracts.AUTHORIZATION)
+    assert original == {p: sha256_file(p) for p in original}
+    assert not (Path(consumer["campaign_root"]) / "foundation/assignment_0000.npz").exists()
+    with pytest.raises(ValueError, match="Chained"):
+        create_from(source, "chained", partition="debug",
+            reuse_preparation_spec=Path(consumer["campaign_root"]) / "campaign_spec.json")
+    with pytest.raises(ValueError, match="identity"):
+        reuse.validate_import(dict(consumer, view_config_sha256="f" * 64))
+    with pytest.raises(ValueError, match="coverage"):
+        reuse.validate_import(dict(consumer, preparation_import=rehash(consumer["preparation_import"], receipts={})))
+    payload = Path(source["campaign_root"]) / "foundation/coupling_0000.npz"
+    with payload.open("ab") as handle:
+        handle.write(b"corrupt")
+    with pytest.raises(ValueError, match="payload changed"):
+        reuse.validate_import(consumer, deep=True)
+    with pytest.raises(ValueError, match="payload changed"):
+        production.build_cache(consumer, "train", "D000")
+
+
+def test_import_rejects_incomplete_and_changed_code(tiny_campaign, monkeypatch):
+    from hlt_classification.cms_salience_learned import preparation_import as reuse
+    monkeypatch.setattr(reuse, "preparation_code", lambda project, commit: {"fixture": commit})
+    source = tiny_campaign
+    path = Path(source["campaign_root"]) / "campaign_spec.json"
+    with pytest.raises(FileNotFoundError):
+        create_from(source, "incomplete", reuse_preparation_spec=path)
+    with pytest.raises(ValueError, match="code changed"):
+        reuse.build_import(dict(source, source_commit="c" * 40,
+                                campaign_root=str(Path(source["campaign_root"]).parent / "changed")), path)
+
+
+def test_completed_legacy_preparation_import_and_consumer_worker_count(tiny_campaign, monkeypatch):
+    from hlt_classification.cms_salience_learned import preparation_import as reuse
+    original_artifact = campaign.artifact
+    def legacy_artifact(kind, **fields):
+        value = original_artifact(kind, **fields)
+        if kind == "CAMPAIGN_SPEC":
+            value.pop("preparation_import")
+            value = rehash(value, schema_version=1, contract=f"{contracts.FAMILY}_CAMPAIGN_SPEC/v1")
+        return value
+    monkeypatch.setattr(campaign, "artifact", legacy_artifact)
+    source = create_from(tiny_campaign, "legacy_producer")
+    monkeypatch.setattr(campaign, "artifact", original_artifact)
+    assert source["schema_version"] == 1
+    for task in campaign.tasks(source)["prepare"]:
+        production.run_task(source, task["task_id"], device="cpu")
+    monkeypatch.setattr(reuse, "preparation_code", lambda project, commit: {"fixture": "same"})
+    consumer = create_from(source, "legacy_consumer", partition="debug",
+        reuse_preparation_spec=Path(source["campaign_root"]) / "campaign_spec.json")
+    production.run_task(consumer, "foundation", device="cpu")
+    assert reuse.preparation_spec(consumer) == source
+    # The adapter must not launch the producer's larger process pool if the
+    # consumer requests fewer CPUs. No on-disk producer spec is rewritten.
+    seen = []
+    def cache(spec, *args, **kwargs):
+        seen.append(spec)
+        return "cache"
+    monkeypatch.setattr(production, "build_native_cache", cache)
+    assert production.build_cache(dict(consumer, resources=dict(consumer["resources"], workers=2)), "train", "D000") == "cache"
+    assert seen[0]["resources"]["workers"] == 2
+    assert source["resources"]["workers"] == 1
+    assert load_json(Path(source["campaign_root"]) / "campaign_spec.json") == source
+
+
+def test_preparation_code_fingerprints_real_git_and_coordinate():
+    import subprocess
+    from hlt_classification.cms_salience_learned.preparation_import import preparation_code, PREPARATION_CODE
+    project = Path(__file__).resolve().parents[1]
+    commit = subprocess.run(["git", "-C", str(project), "rev-parse", "HEAD"], check=True,
+                            text=True, capture_output=True).stdout.strip()
+    value = preparation_code(project, commit)
+    assert set(value) == {*PREPARATION_CODE, "coordinate_ast_sha256"}
+    assert len(value["coordinate_ast_sha256"]) == 64
+    assert all(len(value[path]) == 40 for path in PREPARATION_CODE)
+    with pytest.raises(ValueError, match="exact"):
+        preparation_code(project, "HEAD")
+
+
 def test_installed_weaver_native_wrapper_contract():
     pytest.importorskip("weaver")
     # Supplemental local parity when Weaver is installed; not a SPORC gate.

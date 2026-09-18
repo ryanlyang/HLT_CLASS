@@ -25,6 +25,9 @@ def main():
     c.add_argument("--cpus", type=int, default=16)
     c.add_argument("--workers", type=int, default=16)
     c.add_argument("--memory-mb", type=int, default=192000)
+    c.add_argument("--partition", choices=("tier3", "debug"), default="tier3",
+                   help="Pinned partition for all stages; debug use is subject to RC policy")
+    c.add_argument("--reuse-preparation-spec", help="Read-only completed native CMS preparation; never reuses its GPU gate")
     for mode in ("submit", "run", "gate", "results", "status"):
         p = modes.add_parser(mode)
         p.add_argument("--spec", required=True)
@@ -38,7 +41,8 @@ def main():
     if args.mode == "create":
         result = create(split_manifest=args.split_manifest, data_root=args.data_root,
             campaign_root=args.campaign_root, project_dir=ROOT, source_commit=args.source_commit,
-            cpus=args.cpus, workers=args.workers, memory_mb=args.memory_mb)
+            cpus=args.cpus, workers=args.workers, memory_mb=args.memory_mb,
+            partition=args.partition, reuse_preparation_spec=args.reuse_preparation_spec)
     else:
         spec = load_json(args.spec)
         if Path(args.spec).resolve() != (Path(spec["campaign_root"]) / "campaign_spec.json").resolve():

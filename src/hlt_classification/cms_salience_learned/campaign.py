@@ -8,7 +8,7 @@ from hlt_classification.data.cache_contracts import canonical_sha256, load_json,
 from hlt_classification.scouting.hcwdl_authorization import validate_source_checkout
 from hlt_classification.scouting.hcwdl_exact_dag_submission import submit_exact_dag
 from hlt_classification.scouting.splits import validate_split_manifest
-from .contracts import AUTHORIZATION, BUDGETS, SITE, artifact, graph, validate
+from .contracts import AUTHORIZATION, BUDGETS, allocation_site, artifact, graph, site_for_partition, validate
 from .storage import checked_file, fingerprint, load_receipt
 
 
@@ -19,6 +19,8 @@ def tasks(spec):
     preparation += [dict(task_id="calibrate", kind="calibrate", dependencies=[f"match_{i:04d}" for i in range(count)])]
     preparation += [dict(task_id=f"couple_{i:04d}", kind="couple", dependencies=["calibrate", f"match_{i:04d}"], index=i) for i in range(count)]
     preparation += [dict(task_id="foundation", kind="foundation", dependencies=[f"couple_{i:04d}" for i in range(count)])]
+    if spec.get("preparation_import") is not None:
+        preparation = [dict(task_id="foundation", kind="import_foundation", dependencies=[])]
     return dict(prepare=preparation, gate=[dict(task_id="preflight", kind="preflight", dependencies=[])],
                 science=spec["graph"]["tasks"])
 
@@ -41,7 +43,8 @@ def command_plan(spec, stage):
         cpus = spec["resources"]["cpus"] if kind in {"match", "couple", "preflight", "train", "reduce", "extract"} else 4
         memory = spec["resources"]["memory_mb"] if gpu else (32000 if kind in {"match", "couple"} else 16000)
         minutes = 1440 if kind == "train" else 720 if kind in {"preflight", "match", "couple", "calibrate"} else 480
-        command = ["sbatch", "--parsable", "--account=reu-aisocial", "--partition=tier3", "--qos=qos_tier3",
+        site = spec["site"]
+        command = ["sbatch", "--parsable", f"--account={site['account']}", f"--partition={site['partition']}", f"--qos={site['qos']}",
             "--nodes=1", "--ntasks=1", "--export=ALL", "--no-requeue",
             f"--cpus-per-task={cpus}", f"--mem={memory}M", f"--time={minutes}",
             f"--job-name=cmslfh_{task['task_id']}", f"--chdir={spec['project_dir']}",
@@ -58,8 +61,13 @@ def command_plan(spec, stage):
 
 def validate_campaign(spec, *, check_source=False):
     digest = validate(spec, "CAMPAIGN_SPEC")
-    if spec["graph"] != graph() or spec["site"] != SITE or spec["budgets"] != BUDGETS:
+    if spec["graph"] != graph() or spec["budgets"] != BUDGETS:
         raise ValueError("Registered CMS scientific graph differs")
+    allocation_site(spec)
+    if spec["schema_version"] == 1 and "preparation_import" in spec:
+        raise ValueError("Legacy CMS specs cannot import preparation")
+    if spec["schema_version"] == 2 and "preparation_import" not in spec:
+        raise ValueError("CMS v2 preparation mode is required")
     validate_resources(spec["resources"])
     if not re.fullmatch(r"[0-9a-f]{40}", spec["source_commit"]):
         raise ValueError("Exact source commit required")
@@ -79,6 +87,9 @@ def validate_campaign(spec, *, check_source=False):
             raise ValueError("New campaign overlaps a read-only input root")
     if check_source:
         validate_source_checkout(spec["project_dir"], expected_commit=spec["source_commit"])
+    if spec.get("preparation_import") is not None:
+        from .preparation_import import validate_import
+        validate_import(spec)
     return digest
 
 
@@ -89,7 +100,7 @@ def view_config_hash(registered_graph):
 
 
 def create(*, split_manifest, data_root, campaign_root, project_dir, source_commit,
-           cpus=16, workers=16, memory_mb=192000):
+           cpus=16, workers=16, memory_mb=192000, partition="tier3", reuse_preparation_spec=None):
     root = Path(campaign_root).resolve()
     if root.exists():
         raise FileExistsError("Use a fresh isolated campaign root; existing roots are never overwritten")
@@ -100,11 +111,17 @@ def create(*, split_manifest, data_root, campaign_root, project_dir, source_comm
             raise ValueError(f"Insufficient {role} population")
     registered = graph()
     spec = artifact("CAMPAIGN_SPEC", project_dir=str(Path(project_dir).resolve()), source_commit=source_commit,
-        campaign_root=str(root), data_root=str(Path(data_root).resolve()), site=SITE,
+        campaign_root=str(root), data_root=str(Path(data_root).resolve()), site=site_for_partition(partition),
         split_manifest=dict(fingerprint(split_manifest), content_hash=split["content_hash"]),
         split_roles={role: split["roles"][role]["files"] for role in BUDGETS}, graph=registered,
         budgets=BUDGETS, resources=dict(cpus=cpus, workers=workers, memory_mb=memory_mb),
-        view_config_sha256=view_config_hash(registered), final_test_accessed=False)
+        view_config_sha256=view_config_hash(registered), preparation_import=None, final_test_accessed=False)
+    if reuse_preparation_spec is not None:
+        from .preparation_import import build_import
+        value = dict(spec)
+        value.pop("content_hash")
+        value["preparation_import"] = build_import(spec, reuse_preparation_spec)
+        spec = artifact("CAMPAIGN_SPEC", **value)
     validate_campaign(spec, check_source=True)
     write_immutable_json(root / "campaign_spec.json", spec)
     for stage in ("prepare", "gate", "science"):
@@ -122,7 +139,7 @@ def gate_check(spec):
     load_receipt(spec, "preflight")
     value = load_json(Path(spec["campaign_root"]) / "execution_acceptance.json")
     validate(value, "EXECUTION_ACCEPTANCE")
-    if (value["campaign_spec_sha256"] != spec["content_hash"] or value["site"] != SITE
+    if (value["campaign_spec_sha256"] != spec["content_hash"] or value["site"] != spec["site"]
         or value["source_commit"] != spec["source_commit"] or value["genuine_allocation"] is not True
         or value["installed_weaver_forward_backward"] is not True
         or value["exact_extraction"] is not True or value["endpoint_parity"] is not True
