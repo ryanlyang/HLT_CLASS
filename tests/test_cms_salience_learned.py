@@ -378,7 +378,8 @@ def test_preflight_exercises_all_four_routes_with_paired_extraction(
     gpu_total = 1024**3
     request_bytes = spec["resources"]["memory_mb"] * 1024**2
     cpu_peak_kib = math.ceil(.85 * request_bytes / 1024) if "CPU_RAM" in (headroom_failure or "") else 1024
-    cuda_peak = math.ceil(.85 * gpu_total) if "CUDA" in (headroom_failure or "") else 1024
+    # The previously rejected 88.3% peak is now admissible, but 90% is not.
+    cuda_peak = math.ceil(.90 * gpu_total) if "CUDA" in (headroom_failure or "") else int(.883 * gpu_total)
     monkeypatch.setattr(execution, "gpu_identity", lambda: dict(name="MOCK A100", total_memory_bytes=gpu_total))
     resets = []
     monkeypatch.setattr(torch.cuda, "reset_peak_memory_stats", lambda: resets.append(True))
@@ -431,10 +432,13 @@ def test_preflight_exercises_all_four_routes_with_paired_extraction(
         assert f"stage={kind}:fit " in log
         assert f"stage={kind}:released " in log
     for kind in ("fusion_acquisition", "fusion_withdrawal"):
-        for regime in ("alpha_1", "alpha_0.5", "alpha_0", "extraction"):
-            assert f"stage={kind}:{regime} " in log
+        for regime in ("alpha_1", "alpha_0.5", "alpha_0"):
+            for step in range(1, 6):
+                assert f"stage={kind}:{regime}:step_{step} " in log
+        assert f"stage={kind}:extraction " in log
     assert f"peak_cuda_bytes={cuda_peak}" in log
-    assert "cuda_allocated_bytes=0" in log and "headroom_limit_fraction=0.85" in log
+    assert "cuda_allocated_bytes=0" in log
+    assert "cpu_peak_fraction_limit=0.85" in log and "cuda_peak_fraction_limit=0.9" in log
     if headroom_failure is not None:
         assert not (Path(spec["campaign_root"]) / "execution_acceptance.json").exists()
         with pytest.raises(FileNotFoundError):
@@ -447,6 +451,10 @@ def test_preflight_exercises_all_four_routes_with_paired_extraction(
     assert report["peak_rss_bytes"] == cpu_peak_kib * 1024
     assert report["exact_extraction"] is True and report["endpoint_parity"] is True
     assert report["final_test_accessed"] is False
+    assert report["schema_version"] == 2
+    assert report["acceptance_policy"] == contracts.ACCEPTANCE_POLICY
+    assert len(report["withdrawal_probe"]) == 30
+    assert {row["batch_size"] for row in report["withdrawal_probe"]} == {90}
     assert report["full_population_cache_rows"] == {r: contracts.BUDGETS[r] for r in ("train", "validation")}
     assert [p["node"]["role"] for p in report["miniature_reports"]] == [
         "reference_ce", "direct_kd", "fusion_acquisition", "fusion_withdrawal"]
@@ -465,10 +473,144 @@ def rehash(value, **changes):
     return with_content_hash({k: v for k, v in dict(value, **changes).items() if k != "content_hash"})
 
 
+def acceptance_resource_evidence(spec, *, cpu_peak=1, cuda_peak=1):
+    policy = contracts.acceptance_policy(spec)
+    return dict(acceptance_policy=policy, withdrawal_probe=[
+        dict(route=role, alpha=alpha, step=step,
+             batch_size=min(256, contracts.BUDGETS["train"]),
+             peak_rss_bytes=cpu_peak, peak_cuda_bytes=cuda_peak)
+        for role in ("fusion_acquisition", "fusion_withdrawal")
+        for alpha in (1., .5, 0.) for step in range(1, 6)])
+
+
+def test_gpu90_policy_is_explicit_and_legacy_specs_keep_gpu85(tiny_campaign):
+    spec = tiny_campaign
+    assert spec["schema_version"] == 3
+    assert spec["acceptance_policy"] == contracts.ACCEPTANCE_POLICY
+    assert spec["graph"]["training"]["batch_size"] == 256
+    assert len(spec["graph"]["tasks"]) == 46
+    fields = {k: v for k, v in spec.items() if k != "acceptance_policy"}
+    legacy = rehash(fields, schema_version=2, contract=f"{contracts.FAMILY}_CAMPAIGN_SPEC/v2")
+    campaign.validate_campaign(legacy)
+    assert contracts.acceptance_policy(legacy)["cuda_peak_fraction_limit"] == .85
+    assert contracts.acceptance_policy(legacy)["withdrawal_probe_steps_per_alpha"] == 1
+    assert legacy["graph"] == spec["graph"]
+    for bad in (None, dict(contracts.ACCEPTANCE_POLICY, cuda_peak_fraction_limit=.95),
+                dict(contracts.ACCEPTANCE_POLICY, withdrawal_probe_steps_per_alpha=1)):
+        with pytest.raises(ValueError, match="policy"):
+            campaign.validate_campaign(rehash(spec, acceptance_policy=bad))
+    with pytest.raises(ValueError, match="Legacy"):
+        campaign.validate_campaign(rehash(legacy, acceptance_policy=contracts.ACCEPTANCE_POLICY))
+    spec["acceptance_policy"]["withdrawal_probe_alphas"][0] = .75
+    assert contracts.ACCEPTANCE_POLICY["withdrawal_probe_alphas"][0] == 1.
+    with pytest.raises(ValueError, match="policy"):
+        campaign.validate_campaign(rehash(spec))
+
+
+@pytest.mark.parametrize("version,cuda_peak,cpu_fraction,passes", [
+    (2, 84, .10, True), (2, 85, .10, False), (2, 89, .10, False),
+    (3, 89, .10, True), (3, 90, .10, False), (3, 89, .85, False),
+])
+def test_acceptance_memory_boundaries_are_versioned(tiny_campaign, version, cuda_peak, cpu_fraction, passes):
+    import math
+    spec = tiny_campaign
+    if version == 2:
+        spec = rehash({k: v for k, v in spec.items() if k != "acceptance_policy"},
+            schema_version=2, contract=f"{contracts.FAMILY}_CAMPAIGN_SPEC/v2")
+    cpu = math.ceil(cpu_fraction * spec["resources"]["memory_mb"] * 1024**2)
+    evidence = acceptance_resource_evidence(spec, cpu_peak=cpu, cuda_peak=cuda_peak) if version == 3 else {}
+    value = contracts.artifact("EXECUTION_ACCEPTANCE", contract_version=2 if version == 3 else 1,
+        peak_rss_bytes=cpu, peak_cuda_bytes=cuda_peak, total_cuda_bytes=100, **evidence)
+    if passes:
+        campaign.validate_acceptance_resources(spec, value)
+    else:
+        with pytest.raises(ValueError, match="headroom"):
+            campaign.validate_acceptance_resources(spec, value)
+
+
+@pytest.mark.parametrize("damage", ["missing", "short", "batch", "order", "peak", "policy", "version", "nonfinite"])
+def test_gate_rejects_incomplete_or_mismatched_repeated_probe(tiny_campaign, damage):
+    value = contracts.artifact("EXECUTION_ACCEPTANCE", peak_rss_bytes=1, peak_cuda_bytes=1,
+        total_cuda_bytes=100, **acceptance_resource_evidence(tiny_campaign))
+    if damage == "missing":
+        value.pop("withdrawal_probe")
+    elif damage == "short":
+        value["withdrawal_probe"].pop()
+    elif damage == "batch":
+        value["withdrawal_probe"][0]["batch_size"] -= 1
+    elif damage == "order":
+        value["withdrawal_probe"].reverse()
+    elif damage == "peak":
+        value["withdrawal_probe"][0]["peak_cuda_bytes"] = 2
+    elif damage == "policy":
+        value["acceptance_policy"]["cuda_peak_fraction_limit"] = .95
+    elif damage == "version":
+        value.update(schema_version=1, contract=f"{contracts.FAMILY}_EXECUTION_ACCEPTANCE/v1")
+    else:
+        value["peak_cuda_bytes"] = None
+    with pytest.raises(ValueError, match="CMS"):
+        campaign.validate_acceptance_resources(tiny_campaign, rehash(value))
+
+
+def test_withdrawal_probe_executes_five_full_longest_batches_per_regime(fake_weaver, monkeypatch):
+    torch.set_num_threads(1)
+    base = make_cache()
+    # Include more than 256 rows so first-256 and worst-length selection differ.
+    views = {name: tuple(np.tile(a, (10, 1, 1)) for a in base.views[base.primary])
+             for name in ("U000", "CONTEXT_U000")}
+    for _, _, mask in views.values():
+        mask[:44, :, 1:] = False
+    count = len(views["U000"][0])
+    cache = data.Cache(views, np.arange(count) % 15,
+        np.arange(count * 32, dtype=np.uint8).reshape(count, 32),
+        "train", "f" * 64, "U000", "CONTEXT_U000")
+    policy = dict(contracts.ACCEPTANCE_POLICY)
+    np.testing.assert_array_equal(production._withdrawal_probe_indices(cache, policy), np.arange(44, 300))
+    legacy_policy = dict(policy, withdrawal_probe_batch_selection="legacy_first")
+    np.testing.assert_array_equal(production._withdrawal_probe_indices(cache, legacy_policy), np.arange(256))
+    seen = []
+    loss_fn = production.batch_loss
+    def track_loss(model, batch, **kwargs):
+        alpha = kwargs["alpha"]
+        primary = batch if alpha == 0. else batch["primary"]
+        assert len(primary["labels"]) == 256
+        assert primary["mask"].all()
+        seen.append(alpha)
+        return loss_fn(model, batch, **kwargs)
+    monkeypatch.setattr(production, "batch_loss", track_loss)
+    optimizer_calls, step_calls = [], []
+    optimizer_fn = production.optimizer_for
+    def track_optimizer(model):
+        optimizer = optimizer_fn(model)
+        optimizer_calls.append(id(optimizer))
+        real_step = optimizer.step
+        def step(*args, **kwargs):
+            step_calls.append(id(optimizer))
+            return real_step(*args, **kwargs)
+        optimizer.step = step
+        return optimizer
+    monkeypatch.setattr(production, "optimizer_for", track_optimizer)
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Repeated probe must not reset peaks or clear CUDA cache")
+    monkeypatch.setattr(torch.cuda, "empty_cache", forbidden)
+    monkeypatch.setattr(torch.cuda, "reset_peak_memory_stats", forbidden)
+    observed = []
+    def observe(stage):
+        observed.append(stage)
+        return dict(peak_cuda_bytes=1, peak_rss_bytes=1)
+    report, probes = production._preflight_route("fusion_withdrawal",
+        {"train": cache, "validation": cache}, "cpu", observe, policy)
+    assert report["scientific_fit"] is False
+    assert seen == [1.] * 5 + [.5] * 5 + [0.] * 5
+    assert len(optimizer_calls) == 1 and step_calls == optimizer_calls * 15
+    assert len(probes) == 15 and {r["batch_size"] for r in probes} == {256}
+    assert observed[-1] == "fusion_withdrawal:extraction"
+
+
 def test_debug_is_pinned_across_all_stages_without_changing_science(tiny_campaign):
     old = tiny_campaign
     debug = create_from(old, "debug", partition="debug")
-    assert debug["schema_version"] == 2
+    assert debug["schema_version"] == 3
     assert debug["graph"] == old["graph"]
     assert debug["budgets"] == old["budgets"]
     assert debug["view_config_sha256"] == old["view_config_sha256"]
@@ -493,7 +635,8 @@ def test_debug_is_pinned_across_all_stages_without_changing_science(tiny_campaig
 
 
 def test_legacy_v1_remains_readable_but_tier3_only(tiny_campaign):
-    fields = {k: v for k, v in tiny_campaign.items() if k not in {"content_hash", "preparation_import"}}
+    fields = {k: v for k, v in tiny_campaign.items() if k not in {
+        "content_hash", "preparation_import", "acceptance_policy"}}
     legacy = rehash(fields, contract=f"{contracts.FAMILY}_CAMPAIGN_SPEC/v1", schema_version=1)
     campaign.validate_campaign(legacy)
     assert "--partition=tier3" in campaign.command_plan(legacy, "gate")["commands"][0]["command"]
@@ -502,7 +645,7 @@ def test_legacy_v1_remains_readable_but_tier3_only(tiny_campaign):
     with pytest.raises(ValueError, match="Legacy"):
         campaign.validate_campaign(rehash(legacy, preparation_import=None))
     with pytest.raises(ValueError, match="version"):
-        campaign.validate_campaign(rehash(legacy, schema_version=3))
+        campaign.validate_campaign(rehash(legacy, schema_version=4))
 
 
 def test_worker_authenticates_selected_partition_and_exact_resources(tiny_campaign, monkeypatch):
@@ -521,17 +664,23 @@ def test_worker_authenticates_selected_partition_and_exact_resources(tiny_campai
 
 
 @pytest.mark.parametrize("measured_partition", ["tier3", "debug"])
-def test_gate_requires_own_partition_acceptance(tiny_campaign, measured_partition):
+@pytest.mark.parametrize("version", [2, 3])
+def test_gate_requires_own_partition_acceptance(tiny_campaign, measured_partition, version):
     spec = create_from(tiny_campaign, "debug_gate", partition="debug")
+    if version == 2:
+        spec = rehash({k: v for k, v in spec.items() if k != "acceptance_policy"},
+            schema_version=2, contract=f"{contracts.FAMILY}_CAMPAIGN_SPEC/v2")
     path = Path(spec["campaign_root"]) / "execution_acceptance.json"
     proofs = [contracts.artifact("TRAINING_REPORT", node={"role": r}, scientific_fit=False, passes=1)
               for r in ("reference_ce", "direct_kd", "fusion_acquisition", "fusion_withdrawal")]
-    acceptance = contracts.artifact("EXECUTION_ACCEPTANCE", campaign_spec_sha256=spec["content_hash"],
+    evidence = acceptance_resource_evidence(spec) if version == 3 else {}
+    acceptance = contracts.artifact("EXECUTION_ACCEPTANCE", contract_version=2 if version == 3 else 1,
+        campaign_spec_sha256=spec["content_hash"],
         site=contracts.site_for_partition(measured_partition), source_commit=spec["source_commit"], genuine_allocation=True,
         installed_weaver_forward_backward=True, exact_extraction=True, endpoint_parity=True,
         full_population_cache_rows={r: contracts.BUDGETS[r] for r in ("train", "validation")},
         final_test_accessed=False, peak_rss_bytes=1, peak_cuda_bytes=1, total_cuda_bytes=100,
-        miniature_reports=proofs)
+        miniature_reports=proofs, **evidence)
     write_immutable_json(path, acceptance)
     publish_receipt(spec, "foundation", [])
     publish_receipt(spec, "preflight", [path])
@@ -605,19 +754,22 @@ def test_import_rejects_incomplete_and_changed_code(tiny_campaign, monkeypatch):
                                 campaign_root=str(Path(source["campaign_root"]).parent / "changed")), path)
 
 
-def test_completed_legacy_preparation_import_and_consumer_worker_count(tiny_campaign, monkeypatch):
+@pytest.mark.parametrize("version", [1, 2])
+def test_completed_legacy_preparation_import_and_consumer_worker_count(tiny_campaign, monkeypatch, version):
     from hlt_classification.cms_salience_learned import preparation_import as reuse
     original_artifact = campaign.artifact
     def legacy_artifact(kind, **fields):
         value = original_artifact(kind, **fields)
         if kind == "CAMPAIGN_SPEC":
-            value.pop("preparation_import")
-            value = rehash(value, schema_version=1, contract=f"{contracts.FAMILY}_CAMPAIGN_SPEC/v1")
+            if version == 1:
+                value.pop("preparation_import")
+            value.pop("acceptance_policy")
+            value = rehash(value, schema_version=version, contract=f"{contracts.FAMILY}_CAMPAIGN_SPEC/v{version}")
         return value
     monkeypatch.setattr(campaign, "artifact", legacy_artifact)
     source = create_from(tiny_campaign, "legacy_producer")
     monkeypatch.setattr(campaign, "artifact", original_artifact)
-    assert source["schema_version"] == 1
+    assert source["schema_version"] == version
     for task in campaign.tasks(source)["prepare"]:
         production.run_task(source, task["task_id"], device="cpu")
     monkeypatch.setattr(reuse, "preparation_code", lambda project, commit: {"fixture": "same"})

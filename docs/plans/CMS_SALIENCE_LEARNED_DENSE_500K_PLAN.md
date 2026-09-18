@@ -1,4 +1,4 @@
-# CMS/Scouting salience learned dense ladder (science v1, execution v2)
+# CMS/Scouting salience learned dense ladder (science v1, execution v3)
 
 ## Authority and scope
 
@@ -15,8 +15,8 @@ same resource limits and maximum 24-hour training request. The genuine gate
 must run on the selected partition with the registered science resources.
 Do not transfer GH200, JetClass2, or another campaign's execution acceptance.
 
-Execution-spec v2 adds this choice without changing scientific v1 artifacts.
-Existing v1 specs remain tier3-only and immutable. A fresh v2 root may import
+Execution-spec v2 added this choice without changing scientific v1 artifacts.
+Existing v1 specs remain tier3-only and immutable. A fresh v2/v3 root may import
 completed native-CMS preparation read-only from an explicitly named source
 campaign. Require identical scientific graph, population, split, raw-data
 root, view configuration and preparation code lineage, plus authenticated
@@ -115,6 +115,36 @@ runs real CE/KD/acquisition/withdrawal updates, proves alpha-zero/extraction
 parity, and records CPU/CUDA peaks and elapsed time. No scientific accuracy
 threshold gates the graph. Poor performance is a result; invalid data, stale
 source, mismatched lineage and nonfinite computations fail closed.
+
+### Execution v3: explicit GPU headroom policy
+
+Authorized on 2026-09-18 after debug preflight 21719837 measured
+37,448,891,392 bytes peak live CUDA allocation on a 42,430,300,160-byte
+A100 (88.26%). All four miniature routes and exact extraction completed;
+the run failed the registered 85% CUDA threshold, not a reported CUDA OOM.
+This is evidence for trying a new gate, not proof that production will fit.
+
+New v3 campaign specs freeze `acceptance_policy`: CPU RSS must remain
+strictly below 85% of requested RAM; peak live CUDA allocation must remain
+strictly below 90% of the measured device capacity. CUDA reservation is logged
+separately because it includes the allocator cache. Do not use current live
+allocation after cleanup in place of the run's high-water mark.
+
+In each paired miniature route, run five consecutive withdrawal-objective
+optimizer updates at each of alpha=1, 0.5 and 0. Use the 256 longest U000
+training jets from the population-backed cache, the same optimizer throughout
+the probe, and no between-step cache clearing or peak reset. Record each
+step's actual batch size and CPU/CUDA high-water measurements. Then verify
+byte-exact alpha-zero extraction. Require all 30 step records across acquisition
+and withdrawal in the new `EXECUTION_ACCEPTANCE/v2` artifact, bound to the
+campaign policy. These are execution probes, not additional scientific fits.
+
+The scientific batch remains 256. No microbatching, gradient accumulation,
+activation checkpointing, model/loss change or schedule change is introduced.
+Legacy campaign v1/v2 gates retain 85% CPU and 85% GPU limits with acceptance
+v1; they cannot be silently relaxed or reused as v3 acceptance. A fresh root,
+exact pushed source and genuine preflight are required before any science.
+Completed original preparation may still be imported read-only as above.
 
 Report validation accuracy, macro AUC, geometric macro R50 and each class's
 QCD rejection. Recovery = (model − native-HLT CE)/(pure-offline CE − native-HLT

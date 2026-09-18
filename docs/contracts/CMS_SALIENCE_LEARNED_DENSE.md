@@ -10,7 +10,7 @@ The graph, 500k/250k/250k budgets, PT_LINEAR matcher, native schema, persistent
 support, optimization recipe and SPORC site are registered, not free-form
 overrides. Requested CPU count/preprocessing workers/memory may be set
 within the site envelope at creation, then measured by this campaign's gate.
-New `CAMPAIGN_SPEC/v2` also freezes `site.partition` to `tier3` (default) or
+`CAMPAIGN_SPEC/v2` and `/v3` freeze `site.partition` to `tier3` (default) or
 `debug`. Account, QOS, environment, cluster and A100 type stay fixed. Legacy
 `CAMPAIGN_SPEC/v1` validates only with the original tier3 site. An acceptance
 artifact must match its own campaign's exact selected site; changing a queued
@@ -38,10 +38,29 @@ lifetimes. Memory telemetry prints CPU RSS high-water, current/peak CUDA
 allocation, CUDA reservation, the CPU request and GPU capacity after cache
 construction, each fit, explicit alpha regime, extraction and route cleanup.
 CUDA peak statistics are reset only once at preflight entry; cleanup cannot
-erase an earlier route's high-water mark. The unchanged safety gate requires
-both CPU RSS and peak CUDA allocation strictly below 85% of their respective
-limits. A refusal identifies CPU RAM, CUDA, or both and prints the measured
-bytes; it never publishes execution acceptance or authorizes science.
+erase an earlier route's high-water mark. Legacy campaign v1/v2 requires both
+CPU RSS and peak CUDA allocation strictly below 85% of their respective limits.
+A refusal identifies CPU RAM, CUDA, or both and prints the measured bytes;
+it never publishes execution acceptance or authorizes science.
+
+Newly created `CAMPAIGN_SPEC/v3` binds an explicit `acceptance_policy`:
+CPU limit 0.85, CUDA limit 0.90, five consecutive withdrawal updates per
+alpha (1, 0.5, 0), batch 256, longest-U000-jet selection. Both paired routes
+execute these probes using one optimizer per route, without clearing the
+allocator or resetting high-water statistics between steps. The 256 longest
+training jets are selected explicitly; additional class-coverage rows in the
+miniature cannot displace them. Model, losses, scientific batch and schedule
+are unchanged.
+
+`EXECUTION_ACCEPTANCE/v2` is required for campaign v3. It records the exact
+policy and all 30 ordered `withdrawal_probe` rows, each binding route, alpha,
+step, actual batch size, peak RSS and peak CUDA allocation. Science checks
+complete coverage, memory measurements and the strict 85%/90% limits again.
+Missing/shortened probes, reduced batches, stale versions and altered policies
+fail closed. Campaign v1/v2 continues to require acceptance v1 and cannot carry
+the relaxed policy. Local tiny fixtures reduce population budgets only for
+tests; genuine 500k acceptance requires full batches of 256. Only a fresh
+source-pinned campaign/gate may use v3; old failed gates do not become valid.
 
 ## Operator surface
 

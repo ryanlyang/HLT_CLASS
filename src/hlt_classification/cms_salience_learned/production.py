@@ -11,8 +11,8 @@ import numpy as np
 import torch
 
 from hlt_classification.data.cache_contracts import atomic_publish_bytes, load_json, write_immutable_json
-from .campaign import gate_check, tasks, validate_campaign
-from .contracts import allocation_site, artifact, node, validate
+from .campaign import gate_check, tasks, validate_acceptance_resources, validate_campaign
+from .contracts import acceptance_policy, allocation_site, artifact, node, validate
 from .data import (
     Cache, build_cache as build_native_cache, calibrate, couple_source, lock_foundation, match_source, select_population,
 )
@@ -258,7 +258,7 @@ def endpoint_audit(spec):
     return checked
 
 
-def _preflight_memory(stage, memory_mb, gpu):
+def _preflight_memory(stage, memory_mb, gpu, policy):
     """Log measurements even when the final safety gate refuses publication."""
     import resource
     value = dict(
@@ -272,13 +272,25 @@ def _preflight_memory(stage, memory_mb, gpu):
         f"CMS-LFH phase=preflight_memory stage={stage} "
         + " ".join(f"{key}={amount}" for key, amount in value.items())
         + f" cpu_request_bytes={memory_mb * 1024**2}"
-          f" total_cuda_bytes={gpu['total_memory_bytes']} headroom_limit_fraction=0.85",
+          f" total_cuda_bytes={gpu['total_memory_bytes']}"
+          f" cpu_peak_fraction_limit={policy['cpu_peak_fraction_limit']}"
+          f" cuda_peak_fraction_limit={policy['cuda_peak_fraction_limit']}",
         flush=True,
     )
     return value
 
 
-def _preflight_route(kind, sample, device, observe):
+def _withdrawal_probe_indices(cache, policy):
+    size = min(policy["withdrawal_probe_batch_size"], len(cache))
+    if policy["withdrawal_probe_batch_selection"] == "legacy_first":
+        return np.arange(size)
+    # The miniature also contains class-coverage rows. Taking its first 256
+    # could displace the longest jets; explicitly select the longest batch.
+    lengths = cache.views["U000"][2].sum((1, 2))
+    return np.argsort(lengths, kind="stable")[-size:]
+
+
+def _preflight_route(kind, sample, device, observe, policy):
     # Function scope owns every model/optimizer/loss tensor for one route.
     # Returning only the CPU/scalar report avoids an earlier route's optimizer
     # retaining parameters while the next production route is measured.
@@ -294,23 +306,34 @@ def _preflight_route(kind, sample, device, observe):
         acceptance_passes=1)
     del state
     observe(kind + ":fit")
+    probes = []
     if paired:
         # Test every gate regime through actual backwards, not just an eval stub.
         opt = optimizer_for(model)
-        for alpha in (1., .5, 0.):
-            indices = np.arange(min(256, len(mini["train"])))
+        indices = _withdrawal_probe_indices(mini["train"], policy)
+        for alpha in policy["withdrawal_probe_alphas"]:
             batch = mini["train"].batch_primary(indices) if alpha == 0. else mini["train"].batch(indices)
             n_withdraw = dict(n, role="fusion_withdrawal", selection_route="alpha_zero")
-            opt.zero_grad(set_to_none=True)
-            model.train()
-            loss, terms = batch_loss(model, batch, node=n_withdraw, device=device,
-                teacher=torch.from_numpy(teacher[indices]).to(device), alpha=alpha)
-            loss.backward()
-            if not all(torch.isfinite(p.grad).all() for p in model.parameters() if p.grad is not None):
-                raise ValueError("Acceptance withdrawal gradients differ")
-            opt.step()
-            observe(f"{kind}:alpha_{alpha:g}")
-            del loss, terms
+            # Keep the same optimizer and allocator between consecutive steps.
+            # In particular, do not empty the CUDA cache or reset peak counters.
+            for step in range(1, policy["withdrawal_probe_steps_per_alpha"] + 1):
+                opt.zero_grad(set_to_none=True)
+                model.train()
+                loss, terms = batch_loss(model, batch, node=n_withdraw, device=device,
+                    teacher=torch.from_numpy(teacher[indices]).to(device), alpha=alpha)
+                if not torch.isfinite(loss):
+                    raise ValueError("Acceptance withdrawal loss is nonfinite")
+                loss.backward()
+                if not all(torch.isfinite(p.grad).all() for p in model.parameters() if p.grad is not None):
+                    raise ValueError("Acceptance withdrawal gradients differ")
+                opt.step()
+                stage = f"{kind}:alpha_{alpha:g}"
+                if policy["withdrawal_probe_steps_per_alpha"] > 1:
+                    stage += f":step_{step}"
+                measured = observe(stage)
+                probes.append(dict(route=kind, alpha=alpha, step=step, batch_size=len(indices),
+                    peak_cuda_bytes=measured["peak_cuda_bytes"], peak_rss_bytes=measured["peak_rss_bytes"]))
+                del loss, terms
         model.eval()
         cn = node("ACCEPTANCE_EXTRACTED", "extracted", "U000")
         before = predict(model, mini["validation"], node=n_withdraw, device=device)
@@ -318,13 +341,14 @@ def _preflight_route(kind, sample, device, observe):
         if not np.array_equal(before, after):
             raise ValueError("Installed-Weaver zero/extraction parity failed")
         observe(kind + ":extraction")
-    return fit
+    return fit, probes
 
 
 def preflight(spec, device):
     # Shared scheduler authentication only; all data/model semantics above are CMS.
     from hlt_classification.jetclass2_delphes.execution import allocation, gpu_identity
     started = time.monotonic()
+    policy = acceptance_policy(spec)
     job_id, cpus, memory = allocation(allocation_site(spec))
     if cpus != spec["resources"]["cpus"] or memory != spec["resources"]["memory_mb"]:
         raise PermissionError("Acceptance resources differ from science request")
@@ -335,7 +359,7 @@ def preflight(spec, device):
     # earlier route, even when a later route needs much less memory.
     torch.cuda.reset_peak_memory_stats()
     def observe(stage):
-        return _preflight_memory(stage, memory, gpu)
+        return _preflight_memory(stage, memory, gpu, policy)
     observe("start")
     checked = endpoint_audit(spec)
     # U000/U000 deliberately bounds both branch lengths, including U-side support.
@@ -354,13 +378,18 @@ def preflight(spec, device):
         ix = np.unique(np.concatenate([np.argsort(lengths)[-256:],
             *[np.flatnonzero(cache.labels == c)[:2] for c in range(15)]]))
         sample[role] = cache.subset(ix)
-    proofs = []
+    proofs, probes = [], []
     for kind in ("reference_ce", "direct_kd", "fusion_acquisition", "fusion_withdrawal"):
-        proofs.append(_preflight_route(kind, sample, device, observe))
+        fit, route_probes = _preflight_route(kind, sample, device, observe, policy)
+        proofs.append(fit)
+        probes.extend(route_probes)
         gc.collect(); torch.cuda.empty_cache()
         observe(kind + ":released")
     measured = observe("final")
-    value = artifact("EXECUTION_ACCEPTANCE", campaign_spec_sha256=spec["content_hash"],
+    version = 2 if spec["schema_version"] == 3 else 1
+    policy_evidence = dict(acceptance_policy=policy, withdrawal_probe=probes) if version == 2 else {}
+    value = artifact("EXECUTION_ACCEPTANCE", contract_version=version, **policy_evidence,
+        campaign_spec_sha256=spec["content_hash"],
         source_commit=spec["source_commit"], site=spec["site"], slurm_job_id=job_id, genuine_allocation=True,
         installed_weaver_forward_backward=True, endpoint_parity=True, recomputed_rows=checked,
         exact_extraction=True, miniature_reports=proofs, full_population_cache_rows={r: len(c) for r, c in caches.items()},
@@ -368,9 +397,9 @@ def preflight(spec, device):
         peak_cuda_bytes=measured["peak_cuda_bytes"], total_cuda_bytes=gpu["total_memory_bytes"],
         device_name=gpu["name"], final_test_accessed=False)
     exceeded = []
-    if value["peak_rss_bytes"] >= .85 * memory * 1024**2:
+    if value["peak_rss_bytes"] >= policy["cpu_peak_fraction_limit"] * memory * 1024**2:
         exceeded.append("CPU_RAM")
-    if value["peak_cuda_bytes"] >= .85 * gpu["total_memory_bytes"]:
+    if value["peak_cuda_bytes"] >= policy["cuda_peak_fraction_limit"] * gpu["total_memory_bytes"]:
         exceeded.append("CUDA")
     if exceeded:
         raise MemoryError(
@@ -378,8 +407,11 @@ def preflight(spec, device):
             f"failed={','.join(exceeded)} "
             f"peak_rss_bytes={value['peak_rss_bytes']} cpu_request_bytes={memory * 1024**2} "
             f"peak_cuda_bytes={value['peak_cuda_bytes']} total_cuda_bytes={gpu['total_memory_bytes']} "
-            "required_peak_fraction<0.85; no execution acceptance published"
+            f"required_cpu_peak_fraction<{policy['cpu_peak_fraction_limit']} "
+            f"required_cuda_peak_fraction<{policy['cuda_peak_fraction_limit']}; "
+            "no execution acceptance published"
         )
+    validate_acceptance_resources(spec, value)
     path = root(spec) / "execution_acceptance.json"
     write_immutable_json(path, value)
     return [path]

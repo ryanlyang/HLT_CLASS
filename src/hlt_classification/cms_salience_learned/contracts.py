@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+from copy import deepcopy
 from fractions import Fraction
 
 from hlt_classification.data.cache_contracts import (
@@ -22,19 +23,40 @@ TRAINING = dict(maximum_passes=100, minimum_passes=60, patience=15,
                 peak_lr=3e-4, floor_lr=1.5e-5, warmup_passes=3,
                 hold_through_pass=45, decay_through_pass=60,
                 precision="bf16_forward_fp32_loss", restore_best=True)
+ACCEPTANCE_POLICY = dict(cpu_peak_fraction_limit=.85, cuda_peak_fraction_limit=.90,
+    withdrawal_probe_steps_per_alpha=5, withdrawal_probe_alphas=[1., .5, 0.],
+    withdrawal_probe_batch_size=256, withdrawal_probe_batch_selection="longest_u000")
+CONTRACT_VERSIONS = {"CAMPAIGN_SPEC": (1, 2, 3), "EXECUTION_ACCEPTANCE": (1, 2)}
 
 
-def artifact(artifact_type: str, **fields):
-    version = 2 if artifact_type == "CAMPAIGN_SPEC" else 1
+def artifact(artifact_type: str, *, contract_version=None, **fields):
+    supported = CONTRACT_VERSIONS.get(artifact_type, (1,))
+    version = supported[-1] if contract_version is None else contract_version
+    if type(version) is not int or version not in supported:
+        raise ValueError("Unsupported CMS contract version")
     return with_content_hash(dict(fields, contract=f"{FAMILY}_{artifact_type}/v{version}", schema_version=version))
 
 
 def validate(value, artifact_type):
-    version = value.get("schema_version") if artifact_type == "CAMPAIGN_SPEC" else 1
-    if type(version) is not int or version not in (1, 2) or (artifact_type != "CAMPAIGN_SPEC" and version != 1):
+    version = value.get("schema_version")
+    if type(version) is not int or version not in CONTRACT_VERSIONS.get(artifact_type, (1,)):
         raise ValueError("Unsupported CMS contract version")
     return validate_content_hash(value, expected_contract=f"{FAMILY}_{artifact_type}/v{version}",
                                  expected_schema_version=version)
+
+
+def acceptance_policy(spec):
+    """Old specs retain their 85% gate; only new v3 specs opt into 90%."""
+    version = spec["schema_version"]
+    if version == 3:
+        if spec.get("acceptance_policy") != ACCEPTANCE_POLICY:
+            raise ValueError("CMS v3 acceptance policy differs")
+        return deepcopy(ACCEPTANCE_POLICY)
+    if version not in (1, 2) or "acceptance_policy" in spec:
+        raise ValueError("Legacy CMS acceptance policy cannot be overridden")
+    return dict(deepcopy(ACCEPTANCE_POLICY), cuda_peak_fraction_limit=.85,
+                withdrawal_probe_steps_per_alpha=1,
+                withdrawal_probe_batch_selection="legacy_first")
 
 
 def site_for_partition(partition="tier3"):

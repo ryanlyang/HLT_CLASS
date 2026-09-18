@@ -1,6 +1,7 @@
 """Source-pinned, staged SPORC submission; never touches another campaign."""
 from __future__ import annotations
 
+from copy import deepcopy
 from pathlib import Path
 import re
 
@@ -8,7 +9,10 @@ from hlt_classification.data.cache_contracts import canonical_sha256, load_json,
 from hlt_classification.scouting.hcwdl_authorization import validate_source_checkout
 from hlt_classification.scouting.hcwdl_exact_dag_submission import submit_exact_dag
 from hlt_classification.scouting.splits import validate_split_manifest
-from .contracts import AUTHORIZATION, BUDGETS, allocation_site, artifact, graph, site_for_partition, validate
+from .contracts import (
+    ACCEPTANCE_POLICY, AUTHORIZATION, BUDGETS, acceptance_policy, allocation_site,
+    artifact, graph, site_for_partition, validate,
+)
 from .storage import checked_file, fingerprint, load_receipt
 
 
@@ -64,10 +68,11 @@ def validate_campaign(spec, *, check_source=False):
     if spec["graph"] != graph() or spec["budgets"] != BUDGETS:
         raise ValueError("Registered CMS scientific graph differs")
     allocation_site(spec)
+    acceptance_policy(spec)
     if spec["schema_version"] == 1 and "preparation_import" in spec:
         raise ValueError("Legacy CMS specs cannot import preparation")
-    if spec["schema_version"] == 2 and "preparation_import" not in spec:
-        raise ValueError("CMS v2 preparation mode is required")
+    if spec["schema_version"] >= 2 and "preparation_import" not in spec:
+        raise ValueError("CMS preparation mode is required")
     validate_resources(spec["resources"])
     if not re.fullmatch(r"[0-9a-f]{40}", spec["source_commit"]):
         raise ValueError("Exact source commit required")
@@ -115,7 +120,8 @@ def create(*, split_manifest, data_root, campaign_root, project_dir, source_comm
         split_manifest=dict(fingerprint(split_manifest), content_hash=split["content_hash"]),
         split_roles={role: split["roles"][role]["files"] for role in BUDGETS}, graph=registered,
         budgets=BUDGETS, resources=dict(cpus=cpus, workers=workers, memory_mb=memory_mb),
-        view_config_sha256=view_config_hash(registered), preparation_import=None, final_test_accessed=False)
+        view_config_sha256=view_config_hash(registered), preparation_import=None,
+        acceptance_policy=deepcopy(ACCEPTANCE_POLICY), final_test_accessed=False)
     if reuse_preparation_spec is not None:
         from .preparation_import import build_import
         value = dict(spec)
@@ -133,20 +139,57 @@ def create(*, split_manifest, data_root, campaign_root, project_dir, source_comm
     return spec
 
 
+def validate_acceptance_resources(spec, value):
+    """Check the version-bound limits and complete repeated-update evidence."""
+    validate(value, "EXECUTION_ACCEPTANCE")
+    policy = acceptance_policy(spec)
+    expected_version = 2 if spec["schema_version"] == 3 else 1
+    if value["schema_version"] != expected_version:
+        raise ValueError("CMS acceptance version differs from campaign policy")
+    for key in ("peak_rss_bytes", "peak_cuda_bytes", "total_cuda_bytes"):
+        if type(value.get(key)) is not int or value[key] <= 0:
+            raise ValueError("CMS acceptance memory measurement is invalid")
+    if (value["peak_rss_bytes"] >= policy["cpu_peak_fraction_limit"] * spec["resources"]["memory_mb"] * 1024**2
+        or value["peak_cuda_bytes"] >= policy["cuda_peak_fraction_limit"] * value["total_cuda_bytes"]):
+        raise ValueError("CMS acceptance memory headroom is insufficient")
+    if expected_version == 1:
+        if "acceptance_policy" in value or "withdrawal_probe" in value:
+            raise ValueError("Legacy CMS acceptance cannot claim the new policy")
+        return
+    if value.get("acceptance_policy") != policy:
+        raise ValueError("CMS acceptance policy differs from campaign")
+    expected = [(role, alpha, step)
+        for role in ("fusion_acquisition", "fusion_withdrawal")
+        for alpha in policy["withdrawal_probe_alphas"]
+        for step in range(1, policy["withdrawal_probe_steps_per_alpha"] + 1)]
+    rows = value.get("withdrawal_probe")
+    if (not isinstance(rows, list) or len(rows) != len(expected)
+        or any(not isinstance(row, dict) for row in rows)):
+        raise ValueError("CMS consecutive withdrawal probe is incomplete")
+    # Tiny local fixtures reduce BUDGETS; the registered 500k gate requires 256.
+    batch_size = min(policy["withdrawal_probe_batch_size"], BUDGETS["train"])
+    for row, (role, alpha, step) in zip(rows, expected):
+        if (row.get("route") != role or row.get("alpha") != alpha
+            or type(row.get("step")) is not int or row["step"] != step
+            or type(row.get("batch_size")) is not int or row["batch_size"] != batch_size):
+            raise ValueError("CMS consecutive withdrawal probe coverage differs")
+        for key in ("peak_cuda_bytes", "peak_rss_bytes"):
+            if type(row.get(key)) is not int or not 0 < row[key] <= value[key]:
+                raise ValueError("CMS withdrawal probe memory evidence differs")
+
+
 def gate_check(spec):
     validate_campaign(spec)
     load_receipt(spec, "foundation")
     load_receipt(spec, "preflight")
     value = load_json(Path(spec["campaign_root"]) / "execution_acceptance.json")
-    validate(value, "EXECUTION_ACCEPTANCE")
+    validate_acceptance_resources(spec, value)
     if (value["campaign_spec_sha256"] != spec["content_hash"] or value["site"] != spec["site"]
         or value["source_commit"] != spec["source_commit"] or value["genuine_allocation"] is not True
         or value["installed_weaver_forward_backward"] is not True
         or value["exact_extraction"] is not True or value["endpoint_parity"] is not True
         or value["full_population_cache_rows"] != {r: BUDGETS[r] for r in ("train", "validation")}
-        or value["final_test_accessed"] is not False
-        or value["peak_rss_bytes"] >= .85 * spec["resources"]["memory_mb"] * 1024**2
-        or value["peak_cuda_bytes"] >= .85 * value["total_cuda_bytes"]):
+        or value["final_test_accessed"] is not False):
         raise ValueError("CMS SPORC execution acceptance is absent or insufficient")
     proofs = value["miniature_reports"]
     if len(proofs) != 4 or {p["node"]["role"] for p in proofs} != {"reference_ce", "direct_kd", "fusion_acquisition", "fusion_withdrawal"}:
