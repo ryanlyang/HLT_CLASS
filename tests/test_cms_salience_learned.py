@@ -357,9 +357,15 @@ def test_gpu_worker_rejects_local_execution_before_reading_data(tiny_campaign):
         production.run_task(tiny_campaign, "train_U000", device="cpu")
 
 
-def test_preflight_exercises_all_four_routes_with_paired_extraction(tiny_campaign, fake_weaver, monkeypatch):
+@pytest.mark.parametrize("headroom_failure", [None, "CPU_RAM", "CUDA", "CPU_RAM,CUDA"])
+def test_preflight_exercises_all_four_routes_with_paired_extraction(
+    tiny_campaign, fake_weaver, monkeypatch, capsys, headroom_failure,
+):
     """Real preflight orchestration on tiny ROOT data; mocked GPU is not acceptance."""
     import sys
+    import gc
+    import math
+    import weakref
     from types import SimpleNamespace
     from hlt_classification.jetclass2_delphes import execution
 
@@ -369,12 +375,29 @@ def test_preflight_exercises_all_four_routes_with_paired_extraction(tiny_campaig
         production.run_task(spec, task["task_id"], device="cpu")
     monkeypatch.setattr(execution, "allocation", lambda site: (
         "123", spec["resources"]["cpus"], spec["resources"]["memory_mb"]))
-    monkeypatch.setattr(execution, "gpu_identity", lambda: dict(name="MOCK A100", total_memory_bytes=1024**3))
-    monkeypatch.setattr(torch.cuda, "reset_peak_memory_stats", lambda: None)
-    monkeypatch.setattr(torch.cuda, "max_memory_allocated", lambda: 1024)
+    gpu_total = 1024**3
+    request_bytes = spec["resources"]["memory_mb"] * 1024**2
+    cpu_peak_kib = math.ceil(.85 * request_bytes / 1024) if "CPU_RAM" in (headroom_failure or "") else 1024
+    cuda_peak = math.ceil(.85 * gpu_total) if "CUDA" in (headroom_failure or "") else 1024
+    monkeypatch.setattr(execution, "gpu_identity", lambda: dict(name="MOCK A100", total_memory_bytes=gpu_total))
+    resets = []
+    monkeypatch.setattr(torch.cuda, "reset_peak_memory_stats", lambda: resets.append(True))
+    monkeypatch.setattr(torch.cuda, "max_memory_allocated", lambda: cuda_peak)
+    monkeypatch.setattr(torch.cuda, "memory_allocated", lambda: 0)
+    monkeypatch.setattr(torch.cuda, "memory_reserved", lambda: 0)
+    monkeypatch.setattr(torch.cuda, "max_memory_reserved", lambda: cuda_peak)
     monkeypatch.setattr(torch.cuda, "empty_cache", lambda: None)
     monkeypatch.setitem(sys.modules, "resource", SimpleNamespace(
-        RUSAGE_SELF=0, getrusage=lambda who: SimpleNamespace(ru_maxrss=1024)))
+        RUSAGE_SELF=0, getrusage=lambda who: SimpleNamespace(ru_maxrss=cpu_peak_kib)))
+    parameter_refs = []
+    builder = production.build_model
+    def track_model(node):
+        gc.collect()
+        assert not any(ref() is not None for ref in parameter_refs), "Previous route still owns parameters"
+        model = builder(node)
+        parameter_refs.extend(weakref.ref(p) for p in model.parameters())
+        return model
+    monkeypatch.setattr(production, "build_model", track_model)
     extracted_checks = []
     predictor = production.predict
     def track_extraction(model, cache, *, node, **kwargs):
@@ -384,9 +407,44 @@ def test_preflight_exercises_all_four_routes_with_paired_extraction(tiny_campaig
         return predictor(model, cache, node=node, **kwargs)
     monkeypatch.setattr(production, "predict", track_extraction)
 
-    outputs = production.preflight(spec, "cpu")
+    if headroom_failure is None:
+        outputs = production.preflight(spec, "cpu")
+    else:
+        with pytest.raises(MemoryError, match="insufficient production headroom") as raised:
+            production.preflight(spec, "cpu")
+        message = str(raised.value)
+        assert f"failed={headroom_failure} " in message
+        assert f"peak_rss_bytes={cpu_peak_kib * 1024}" in message
+        assert f"cpu_request_bytes={request_bytes}" in message
+        assert f"peak_cuda_bytes={cuda_peak}" in message
+        assert f"total_cuda_bytes={gpu_total}" in message
+    gc.collect()
+    assert not any(ref() is not None for ref in parameter_refs)
     assert extracted_checks == ["ACCEPTANCE_EXTRACTED"] * 2
+    # No inter-route reset may erase an earlier high-water mark. The final
+    # check uses the peak even though current allocated/reserved memory is zero.
+    assert resets == [True]
+    log = capsys.readouterr().out
+    for stage in ("start", "cache_train", "cache_validation", "paired_cache", "final"):
+        assert f"phase=preflight_memory stage={stage} " in log
+    for kind in ("reference_ce", "direct_kd", "fusion_acquisition", "fusion_withdrawal"):
+        assert f"stage={kind}:fit " in log
+        assert f"stage={kind}:released " in log
+    for kind in ("fusion_acquisition", "fusion_withdrawal"):
+        for regime in ("alpha_1", "alpha_0.5", "alpha_0", "extraction"):
+            assert f"stage={kind}:{regime} " in log
+    assert f"peak_cuda_bytes={cuda_peak}" in log
+    assert "cuda_allocated_bytes=0" in log and "headroom_limit_fraction=0.85" in log
+    if headroom_failure is not None:
+        assert not (Path(spec["campaign_root"]) / "execution_acceptance.json").exists()
+        with pytest.raises(FileNotFoundError):
+            load_receipt(spec, "preflight")
+        with pytest.raises(FileNotFoundError):
+            campaign.gate_check(spec)
+        return
     report = load_json(outputs[0])
+    assert report["peak_cuda_bytes"] == cuda_peak
+    assert report["peak_rss_bytes"] == cpu_peak_kib * 1024
     assert report["exact_extraction"] is True and report["endpoint_parity"] is True
     assert report["final_test_accessed"] is False
     assert report["full_population_cache_rows"] == {r: contracts.BUDGETS[r] for r in ("train", "validation")}

@@ -258,21 +258,95 @@ def endpoint_audit(spec):
     return checked
 
 
+def _preflight_memory(stage, memory_mb, gpu):
+    """Log measurements even when the final safety gate refuses publication."""
+    import resource
+    value = dict(
+        peak_rss_bytes=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024,
+        peak_cuda_bytes=torch.cuda.max_memory_allocated(),
+        cuda_allocated_bytes=torch.cuda.memory_allocated(),
+        cuda_reserved_bytes=torch.cuda.memory_reserved(),
+        peak_cuda_reserved_bytes=torch.cuda.max_memory_reserved(),
+    )
+    print(
+        f"CMS-LFH phase=preflight_memory stage={stage} "
+        + " ".join(f"{key}={amount}" for key, amount in value.items())
+        + f" cpu_request_bytes={memory_mb * 1024**2}"
+          f" total_cuda_bytes={gpu['total_memory_bytes']} headroom_limit_fraction=0.85",
+        flush=True,
+    )
+    return value
+
+
+def _preflight_route(kind, sample, device, observe):
+    # Function scope owns every model/optimizer/loss tensor for one route.
+    # Returning only the CPU/scalar report avoids an earlier route's optimizer
+    # retaining parameters while the next production route is measured.
+    paired = kind.startswith("fusion")
+    n = node("ACCEPTANCE_" + kind, kind, "U000", "U000" if paired else None,
+             None if kind == "reference_ce" else "ACCEPTANCE_TEACHER")
+    mini = {r: Cache(c.views, c.labels, c.identities, r, c.foundation_sha256, "U000", "CONTEXT_U000" if paired else None)
+            for r, c in sample.items()}
+    model = build_model(n).to(device)
+    teacher = None if kind == "reference_ce" else np.full((len(mini["train"]), 15), 1 / 15, np.float32)
+    fit, state = train(model, mini["train"], mini["validation"], node=n, device=device,
+        teacher_probabilities=teacher, teacher_identities=None if teacher is None else mini["train"].identities,
+        acceptance_passes=1)
+    del state
+    observe(kind + ":fit")
+    if paired:
+        # Test every gate regime through actual backwards, not just an eval stub.
+        opt = optimizer_for(model)
+        for alpha in (1., .5, 0.):
+            indices = np.arange(min(256, len(mini["train"])))
+            batch = mini["train"].batch_primary(indices) if alpha == 0. else mini["train"].batch(indices)
+            n_withdraw = dict(n, role="fusion_withdrawal", selection_route="alpha_zero")
+            opt.zero_grad(set_to_none=True)
+            model.train()
+            loss, terms = batch_loss(model, batch, node=n_withdraw, device=device,
+                teacher=torch.from_numpy(teacher[indices]).to(device), alpha=alpha)
+            loss.backward()
+            if not all(torch.isfinite(p.grad).all() for p in model.parameters() if p.grad is not None):
+                raise ValueError("Acceptance withdrawal gradients differ")
+            opt.step()
+            observe(f"{kind}:alpha_{alpha:g}")
+            del loss, terms
+        model.eval()
+        cn = node("ACCEPTANCE_EXTRACTED", "extracted", "U000")
+        before = predict(model, mini["validation"], node=n_withdraw, device=device)
+        after = predict(model.extract_primary().to(device).eval(), mini["validation"], node=cn, device=device)
+        if not np.array_equal(before, after):
+            raise ValueError("Installed-Weaver zero/extraction parity failed")
+        observe(kind + ":extraction")
+    return fit
+
+
 def preflight(spec, device):
     # Shared scheduler authentication only; all data/model semantics above are CMS.
     from hlt_classification.jetclass2_delphes.execution import allocation, gpu_identity
-    import resource
     started = time.monotonic()
     job_id, cpus, memory = allocation(allocation_site(spec))
     if cpus != spec["resources"]["cpus"] or memory != spec["resources"]["memory_mb"]:
         raise PermissionError("Acceptance resources differ from science request")
+    gpu = gpu_identity()
+    print(f"CMS-LFH phase=preflight_device device={gpu['name']!r} "
+          f"total_cuda_bytes={gpu['total_memory_bytes']}", flush=True)
+    # Reset once only: cleanup must never hide the high-water mark of an
+    # earlier route, even when a later route needs much less memory.
     torch.cuda.reset_peak_memory_stats()
+    def observe(stage):
+        return _preflight_memory(stage, memory, gpu)
+    observe("start")
     checked = endpoint_audit(spec)
     # U000/U000 deliberately bounds both branch lengths, including U-side support.
-    caches = {r: build_cache(spec, r, "U000", "U000") for r in ("train", "validation")}
+    caches = {}
+    for role in ("train", "validation"):
+        caches[role] = build_cache(spec, role, "U000", "U000")
+        observe("cache_" + role)
     for cache in caches.values():
         cache.views["CONTEXT_U000"] = tuple(value.copy() for value in cache.views["U000"])
         cache.context = "CONTEXT_U000"
+    observe("paired_cache")
     # Ensure a full-size worst-length batch, plus every class in the miniature.
     sample = {}
     for role, cache in caches.items():
@@ -282,50 +356,30 @@ def preflight(spec, device):
         sample[role] = cache.subset(ix)
     proofs = []
     for kind in ("reference_ce", "direct_kd", "fusion_acquisition", "fusion_withdrawal"):
-        paired = kind.startswith("fusion")
-        n = node("ACCEPTANCE_" + kind, kind, "U000", "U000" if paired else None,
-                 None if kind == "reference_ce" else "ACCEPTANCE_TEACHER")
-        mini = {r: Cache(c.views, c.labels, c.identities, r, c.foundation_sha256, "U000", "CONTEXT_U000" if paired else None)
-                for r, c in sample.items()}
-        model = build_model(n).to(device)
-        teacher = None if kind == "reference_ce" else np.full((len(mini["train"]), 15), 1 / 15, np.float32)
-        fit, _ = train(model, mini["train"], mini["validation"], node=n, device=device,
-            teacher_probabilities=teacher, teacher_identities=None if teacher is None else mini["train"].identities,
-            acceptance_passes=1)
-        if paired:
-            # Test every gate regime through actual backwards, not just an eval stub.
-            opt = optimizer_for(model)
-            for alpha in (1., .5, 0.):
-                indices = np.arange(min(256, len(mini["train"])))
-                batch = mini["train"].batch_primary(indices) if alpha == 0. else mini["train"].batch(indices)
-                n_withdraw = dict(n, role="fusion_withdrawal", selection_route="alpha_zero")
-                opt.zero_grad(set_to_none=True)
-                model.train()
-                loss, _ = batch_loss(model, batch, node=n_withdraw, device=device,
-                    teacher=torch.from_numpy(teacher[indices]).to(device), alpha=alpha)
-                loss.backward()
-                if not all(torch.isfinite(p.grad).all() for p in model.parameters() if p.grad is not None):
-                    raise ValueError("Acceptance withdrawal gradients differ")
-                opt.step()
-            model.eval()
-            cn = node("ACCEPTANCE_EXTRACTED", "extracted", "U000")
-            before = predict(model, mini["validation"], node=n_withdraw, device=device)
-            after = predict(model.extract_primary().to(device).eval(), mini["validation"], node=cn, device=device)
-            if not np.array_equal(before, after):
-                raise ValueError("Installed-Weaver zero/extraction parity failed")
-        proofs.append(fit)
-        del model, fit, teacher
+        proofs.append(_preflight_route(kind, sample, device, observe))
         gc.collect(); torch.cuda.empty_cache()
-    gpu = gpu_identity()
+        observe(kind + ":released")
+    measured = observe("final")
     value = artifact("EXECUTION_ACCEPTANCE", campaign_spec_sha256=spec["content_hash"],
         source_commit=spec["source_commit"], site=spec["site"], slurm_job_id=job_id, genuine_allocation=True,
         installed_weaver_forward_backward=True, endpoint_parity=True, recomputed_rows=checked,
         exact_extraction=True, miniature_reports=proofs, full_population_cache_rows={r: len(c) for r, c in caches.items()},
-        elapsed_seconds=time.monotonic() - started, peak_rss_bytes=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024,
-        peak_cuda_bytes=torch.cuda.max_memory_allocated(), total_cuda_bytes=gpu["total_memory_bytes"],
+        elapsed_seconds=time.monotonic() - started, peak_rss_bytes=measured["peak_rss_bytes"],
+        peak_cuda_bytes=measured["peak_cuda_bytes"], total_cuda_bytes=gpu["total_memory_bytes"],
         device_name=gpu["name"], final_test_accessed=False)
-    if value["peak_rss_bytes"] >= .85 * memory * 1024**2 or value["peak_cuda_bytes"] >= .85 * gpu["total_memory_bytes"]:
-        raise MemoryError("Acceptance leaves insufficient production headroom")
+    exceeded = []
+    if value["peak_rss_bytes"] >= .85 * memory * 1024**2:
+        exceeded.append("CPU_RAM")
+    if value["peak_cuda_bytes"] >= .85 * gpu["total_memory_bytes"]:
+        exceeded.append("CUDA")
+    if exceeded:
+        raise MemoryError(
+            "Acceptance leaves insufficient production headroom: "
+            f"failed={','.join(exceeded)} "
+            f"peak_rss_bytes={value['peak_rss_bytes']} cpu_request_bytes={memory * 1024**2} "
+            f"peak_cuda_bytes={value['peak_cuda_bytes']} total_cuda_bytes={gpu['total_memory_bytes']} "
+            "required_peak_fraction<0.85; no execution acceptance published"
+        )
     path = root(spec) / "execution_acceptance.json"
     write_immutable_json(path, value)
     return [path]

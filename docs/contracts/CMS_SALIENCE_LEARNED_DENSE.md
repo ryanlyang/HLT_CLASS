@@ -33,6 +33,16 @@ fusion and extracted ordinary model on the same paired validation cache with
 byte-exact probability equality. This enforces the existing extraction contract,
 not a new scientific protocol or a relaxed parity threshold.
 
+Preflight runs its four miniature routes with separate model/optimizer/loss
+lifetimes. Memory telemetry prints CPU RSS high-water, current/peak CUDA
+allocation, CUDA reservation, the CPU request and GPU capacity after cache
+construction, each fit, explicit alpha regime, extraction and route cleanup.
+CUDA peak statistics are reset only once at preflight entry; cleanup cannot
+erase an earlier route's high-water mark. The unchanged safety gate requires
+both CPU RSS and peak CUDA allocation strictly below 85% of their respective
+limits. A refusal identifies CPU RAM, CUDA, or both and prints the measured
+bytes; it never publishes execution acceptance or authorizes science.
+
 ## Operator surface
 
 `scripts/cms_salience_learned.py create` requires `--split-manifest`,
