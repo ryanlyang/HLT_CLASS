@@ -1,6 +1,7 @@
 # JetClass2 Delphes migration contracts
 
-Authority: [active migration plan](../plans/JETCLASS2_DELPHES_DATASET_MIGRATION_IMPLEMENTATION_PLAN.md).
+Authority: [active migration plan](../plans/JETCLASS2_DELPHES_DATASET_MIGRATION_IMPLEMENTATION_PLAN.md)
+and its [20260918 dz-fix snapshot transition](../plans/JETCLASS2_DELPHES_DZFIX_500K_MIGRATION_PLAN.md).
 Implementation: `src/hlt_classification/jetclass2_delphes/`. This is a new
 benchmark, not a compatibility mode for the FullSim campaign.
 
@@ -31,6 +32,33 @@ foundation is retained as `/v1` but is not the selected production population.
 | `PROFILE_ATTEMPT_SPEC`, `PROFILE_ATTEMPT_RESULT`, `RUNTIME_PROFILE/v3` | Profile-only reuse of completed preparation, source/job/result lineage, explicit debug A100 measurement to tier3 production transfer |
 | `INSTALLED_ENVIRONMENT/v2`, `RUNTIME_PROFILE/v2`, `CAMPAIGN_SPEC/v3` | Installed Weaver source bytes/numerical versions, genuine site-bound measured execution evidence, exact pinned production graph |
 | `TASK_REPORT`, `AGGREGATE`, `COMMAND_PLAN`, `MONITOR`, `RECOVERY`, `SUBMISSION_INTENT` | Verified selected outputs, validation results, exact Slurm dependencies, terminal-state recovery and ambiguous-submission protection |
+| `PARTIAL_SNAPSHOT_PLAN`, `PARTIAL_SNAPSHOT_TRANSFER`, `PARTIAL_SNAPSHOT_EXTRACTION` | Capacity-proved partial file selection, deterministic archive bytes, safe verified extraction and mandatory destination re-inventory |
+| `SALIENCE_DATASET_TRANSITION_PLAN`, `SALIENCE_DATASET_TRANSITION_RECEIPT` | Old-live/new-dry lineage proof, exact active old job IDs, and all-old-jobs-terminal evidence before new submission |
+
+### Dz-fix partial snapshot and transition contracts
+
+The September 18 dz-fix producer directory is live input, not an identity. A
+candidate local inventory first authenticates every currently copied stable
+file. `PARTIAL_SNAPSHOT_PLAN/v1` binds that parent inventory and takes the first
+source-proportional deterministic file prefix whose actual seed-20260910
+whole-file split has every class and at least the registered train/evaluation
+capacities plus the declared headroom. Its projected inventory and split hashes
+must be reproduced at the destination.
+
+`PARTIAL_SNAPSHOT_TRANSFER/v1` binds a normalized USTAR archive to that exact
+plan and inventory. `PARTIAL_SNAPSHOT_EXTRACTION/v1` proves exact archive bytes,
+member coverage/order/metadata and extracted file hashes. Neither contract is a
+destination inventory: ROOT cycles, schema, paths and hashes must still pass a
+fresh inventory and split replay on SPORC.
+
+`SALIENCE_DATASET_TRANSITION_PLAN/v1` is valid only after both old and new
+production specs validate, the old ledger is a complete live ledger, the new
+ledger is the canonical complete dry ledger, inventories and roots differ, and
+the scientific graph/role counts agree exactly. It records current states and
+only exact active old-ledger IDs. It performs no cancellation or submission.
+After the user executes the printed exact-ID cancellation, the corresponding
+receipt requires every old-ledger job to be terminal. Unknown or absent states
+fail closed. The new live submit remains a separate explicit authorization.
 
 ## Selection and splitting
 
