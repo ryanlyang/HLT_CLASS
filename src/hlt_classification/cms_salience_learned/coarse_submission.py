@@ -144,7 +144,8 @@ def submit_shared_dag(spec, plan, *, execute):
             job_id=job, command=command, sequence=index)
         write_immutable_json(directory / f"{index:04d}_{task}.json", event)
         events.append(event); jobs[task] = job
-        print(f"CMS-COARSE submitted task={task} job={job} source_dependency={external or 'none'}", flush=True)
+        label = "CMS-DIRECT-FUSION" if spec.get("ladder") == "direct_fusion" else "CMS-COARSE"
+        print(f"{label} submitted task={task} job={job} source_dependency={external or 'none'}", flush=True)
     ledger = assemble_submission_ledger(events, campaign_spec_sha256=spec["content_hash"])
     if ledger_path.exists():
         stored = load_json(ledger_path); validate_submission_ledger(stored)
@@ -157,6 +158,8 @@ def submit_shared_dag(spec, plan, *, execute):
 
 def retire_dense(spec, *, execute=False, authorization_phrase=None):
     from .campaign import gate_check, validate_campaign
+    if spec.get("ladder") != "coarse":
+        raise PermissionError("Only coarse replacements may retire dense jobs; parallel studies never cancel sources")
     validate_campaign(spec, check_source=True)
     if spec.get("shared_source") is None:
         raise ValueError("Retirement requires an explicit shared dense source")

@@ -1,5 +1,44 @@
 # CMS_SALIENCE_LEARNED_DENSE contracts
 
+## Standalone direct fusion comparison (2026-09-19)
+
+Scientific authority: `docs/plans/CMS_SALIENCE_DIRECT_FUSION_500K_PLAN.md`.
+CAMPAIGN_SPEC/v6 requires `ladder=direct_fusion`, SPORC/debug, GRAPH/v3,
+original dense preparation, shared references and accepted GPU evidence.
+The single arrow is persistent U000 -> D000. Its new `ACQUIRE_D000` sees
+primary D000 plus privileged U000 and learns from U000 logits. `WITHDRAW_D000`
+starts from acquisition with a fresh optimizer, learns from its frozen bank,
+and selects the alpha-zero route under the unchanged withdrawal loss/schedule.
+`CARRIER_D000` removes context parameters with exact prediction parity.
+Ordinary `DIRECT_D000` remains imported single-view KD, not this fusion route.
+This two-fit method is not compute matched to the one-fit KD control.
+
+There are eleven science tasks: five CPU shared imports, two fresh GPU fits,
+one new GPU reducer, one GPU extraction, aggregate and complete. GRAPH/v3 has
+six logical fits (four imported), one extraction and two logical reducers
+(one imported). Old dense/coarse hashes and v1-v5 campaign semantics stay
+unchanged. Existing native scientific kernels, seeds, dataset/split/matching,
+batch, resources and final-test seal are unchanged. Historical family naming
+is retained only for compatibility and the seed namespace.
+
+PREPARATION_IMPORT/v3 uses the existing exact reviewed preparation-code
+equivalence, but binds a direct-fusion consumer instead of a coarse consumer.
+SHARED_SOURCE/v2 authenticates the same five original dense reference tasks.
+ACCEPTANCE_IMPORT/v2 and ACCEPTANCE_REUSE/v2 bind the new consumer to the
+original accepted dense-v3 U000/U000 GPU envelope. No new GPU measurement is
+claimed and no threshold is relaxed. These versions cannot be relabelled as
+coarse import evidence. Consumer receipts and source hashes are mandatory.
+
+All new jobs use `cmsdf_`, with explicit `import_` labels for reused tasks.
+`create-direct-fusion` is dry by default; `queue_cms_direct_fusion.sh prepare`
+additionally verifies/imports CPU evidence, without submitting jobs. Its
+`submit` mode uses `AUTHORIZE CMS DIRECT FUSION 500K EXACT SPEC`. The normal
+source-pinned gate/dry-run/live journal checks apply. Completed references
+need valid output receipts, not old Slurm dependencies. The separate coarse
+campaign is neither a source nor a dependency. `retire-dense` rejects direct
+campaigns before any scheduler query or mutation, including with a retirement
+authorization phrase. No cancellation or source output rewriting is permitted.
+
 ## Opt-in accepted dense preflight reuse (2026-09-19)
 
 Following explicit user authorization to skip the duplicate GPU preflight,

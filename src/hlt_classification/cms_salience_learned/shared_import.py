@@ -70,8 +70,8 @@ def _compatible_source(consumer, source_path):
     old, new = source_path.parent, Path(consumer["campaign_root"]).resolve()
     if old == new or old.is_relative_to(new) or new.is_relative_to(old):
         raise ValueError("Shared source and consumer roots overlap")
-    if consumer.get("ladder") != "coarse" or consumer.get("preparation_import") is None:
-        raise ValueError("Shared coarse references require the same imported preparation")
+    if consumer.get("ladder") not in {"coarse", "direct_fusion"} or consumer.get("preparation_import") is None:
+        raise ValueError("Shared references require a registered consumer and the same imported preparation")
     producer = preparation_spec(source)
     if checked_file(consumer["preparation_import"]["source_spec"]).resolve() != Path(producer["campaign_root"]) / "campaign_spec.json":
         raise ValueError("Shared reference preparation identity differs")
@@ -93,7 +93,8 @@ def _compatible_source(consumer, source_path):
 def build_shared_source(consumer, source_path):
     source = _compatible_source(consumer, source_path)
     ledger = dense_ledger(source)
-    return artifact("SHARED_SOURCE", source_spec=fingerprint(source_path),
+    return artifact("SHARED_SOURCE", contract_version=2 if consumer.get("ladder") == "direct_fusion" else 1,
+        source_spec=fingerprint(source_path),
         source_campaign_sha256=source["content_hash"], source_commit=source["source_commit"],
         ledger=fingerprint(Path(source["campaign_root"]) / "science_submission_ledger.json"),
         jobs={task: ledger["jobs"][task] for task in SHARED_TASKS},
@@ -103,6 +104,8 @@ def build_shared_source(consumer, source_path):
 def validate_shared_source(consumer):
     value = consumer["shared_source"]
     validate(value, "SHARED_SOURCE")
+    if value["schema_version"] != (2 if consumer.get("ladder") == "direct_fusion" else 1):
+        raise ValueError("Shared-source version differs from consumer")
     source = _compatible_source(consumer, checked_file(value["source_spec"]))
     ledger_path = checked_file(value["ledger"])
     if ledger_path.resolve() != Path(source["campaign_root"]) / "science_submission_ledger.json":

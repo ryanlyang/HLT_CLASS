@@ -69,10 +69,10 @@ def _source(consumer, path):
         raise ValueError("Preparation source spec is not canonical")
     if old == new or old.is_relative_to(new) or new.is_relative_to(old):
         raise ValueError("Preparation import roots must be disjoint")
-    if consumer.get("ladder") == "coarse":
+    if consumer.get("ladder") in {"coarse", "direct_fusion"}:
         from .contracts import graph
-        if consumer["graph"] != graph("coarse"):
-            raise ValueError("Unregistered coarse preparation consumer")
+        if consumer["graph"] != graph(consumer["ladder"]):
+            raise ValueError("Unregistered preparation consumer")
         for key in ("training", "matcher"):
             if source["graph"][key] != consumer["graph"][key]:
                 raise ValueError("Preparation recipe differs")
@@ -89,12 +89,13 @@ def build_import(consumer, source_path):
     source = _source(consumer, source_path)
     code = preparation_code(consumer["project_dir"], source["source_commit"])
     new_code = preparation_code(consumer["project_dir"], consumer["source_commit"])
-    coarse = consumer.get("ladder") == "coarse"
-    if not (compatible_preparation_code(code, new_code) if coarse else code == new_code):
+    migrated = consumer.get("ladder") in {"coarse", "direct_fusion"}
+    if not (compatible_preparation_code(code, new_code) if migrated else code == new_code):
         raise ValueError("Preparation code changed; recompute or implement a reviewed migration")
     root = Path(source["campaign_root"])
-    extra = dict(source_preparation_code=code, coordinate_migration="add_coarse_coordinates_v1") if coarse else {}
-    result = artifact("PREPARATION_IMPORT", contract_version=2 if coarse else 1, source_spec=fingerprint(source_path),
+    extra = dict(source_preparation_code=code, coordinate_migration="add_coarse_coordinates_v1") if migrated else {}
+    version = {"coarse": 2, "direct_fusion": 3}.get(consumer.get("ladder"), 1)
+    result = artifact("PREPARATION_IMPORT", contract_version=version, source_spec=fingerprint(source_path),
         source_campaign_sha256=source["content_hash"], source_commit=source["source_commit"],
         foundation=fingerprint(root / "foundation/foundation_lock.json"), preparation_code=new_code,
         receipts={t["task_id"]: fingerprint(receipt_path(source, t["task_id"])) for t in tasks(source)["prepare"]},
@@ -111,13 +112,13 @@ def validate_import(consumer, *, deep=False):
     root = Path(source["campaign_root"]).resolve()
     expected_code = preparation_code(consumer["project_dir"], consumer["source_commit"])
     source_code = preparation_code(consumer["project_dir"], source["source_commit"])
-    if value["schema_version"] == 2:
-        code_ok = (consumer.get("ladder") == "coarse"
+    if value["schema_version"] in (2, 3):
+        code_ok = (consumer.get("ladder") == {2: "coarse", 3: "direct_fusion"}[value["schema_version"]]
             and value.get("coordinate_migration") == "add_coarse_coordinates_v1"
             and value.get("source_preparation_code") == source_code
             and compatible_preparation_code(source_code, expected_code))
     else:
-        code_ok = source_code == expected_code
+        code_ok = consumer.get("ladder") != "direct_fusion" and source_code == expected_code
     if (value["source_campaign_sha256"] != source["content_hash"]
         or value["source_commit"] != source["source_commit"]
         or value["final_test_accessed"] is not False

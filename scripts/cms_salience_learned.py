@@ -11,7 +11,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from hlt_classification.data.cache_contracts import load_json
-from hlt_classification.cms_salience_learned.campaign import create, create_coarse_from_dense, gate_check, submit
+from hlt_classification.cms_salience_learned.campaign import (
+    create, create_coarse_from_dense, create_direct_fusion_from_dense, gate_check, submit,
+)
 
 
 def main():
@@ -36,6 +38,10 @@ def main():
     replacement.add_argument("--campaign-root", required=True)
     replacement.add_argument("--source-commit", required=True)
     replacement.add_argument("--reuse-dense-preflight", action="store_true")
+    direct = modes.add_parser("create-direct-fusion", help="Parallel debug study: two fresh fits, accepted dense references, no cancellation")
+    direct.add_argument("--source-spec", required=True)
+    direct.add_argument("--campaign-root", required=True)
+    direct.add_argument("--source-commit", required=True)
     for mode in ("submit", "run", "gate", "results", "status", "retire-dense"):
         p = modes.add_parser(mode)
         p.add_argument("--spec", required=True)
@@ -59,6 +65,9 @@ def main():
     elif args.mode == "create-coarse":
         result = create_coarse_from_dense(source_spec=args.source_spec, campaign_root=args.campaign_root,
             project_dir=ROOT, source_commit=args.source_commit, reuse_dense_preflight=args.reuse_dense_preflight)
+    elif args.mode == "create-direct-fusion":
+        result = create_direct_fusion_from_dense(source_spec=args.source_spec, campaign_root=args.campaign_root,
+            project_dir=ROOT, source_commit=args.source_commit)
     else:
         spec = load_json(args.spec)
         if Path(args.spec).resolve() != (Path(spec["campaign_root"]) / "campaign_spec.json").resolve():
@@ -94,6 +103,10 @@ def main():
                     load_receipt(spec, model_task(name))
                     reports[name] = load_json(campaign_root / "training" / name / "report.json")
             print("Validation REPORT subset only; final test not accessed.")
+            if spec.get("ladder") == "direct_fusion":
+                print("DIRECT_D000 = imported ordinary KD; CARRIER_D000 = new direct fusion/withdrawal, extracted HLT only.")
+                print("Recovery: M0HLT = 0%, pure OFFLINE = 100%; R50 recovery uses linear rejection.")
+                print("Two fresh fusion phases versus one ordinary KD fit; this is not compute matched.")
             print(f"{'model':<20} {'pick':>6} {'accuracy':>10} {'AUC':>10} {'R50':>10} {'AUC rec.':>10} {'R50 rec.':>10}")
             for name in names:
                 if name not in reports:
@@ -108,10 +121,20 @@ def main():
                 rejection = "n/a" if r50 is None else f"{math.exp(r50):.1f}"
                 print(f"{name:<20} {pick:>6} {m['accuracy']:>10.6f} {m['macro_ovr_auc']:>10.6f} {rejection:>10} "
                       f"{fmt(rec.get('macro_ovr_auc')):>10} {fmt(rec.get('macro_r50_linear')):>10}")
+            if spec.get("ladder") == "direct_fusion" and {"CARRIER_D000", "DIRECT_D000"} <= reports.keys():
+                direct = reports["DIRECT_D000"]["report_metrics"]
+                carrier = reports["CARRIER_D000"]["report_metrics"]
+                key = "macro_mean_log_qcd_rejection_at_50pct_signal"
+                delta_r50 = ("n/a" if direct[key] is None or carrier[key] is None else
+                             f"{math.exp(carrier[key]) - math.exp(direct[key]):+.1f}")
+                print(f"Fusion minus ordinary KD: dAccuracy={carrier['accuracy']-direct['accuracy']:+.6f} "
+                      f"dAUC={carrier['macro_ovr_auc']-direct['macro_ovr_auc']:+.6f} dR50={delta_r50}")
             return 0
-    if args.mode in {"create", "create-coarse"}:
+    if args.mode in {"create", "create-coarse", "create-direct-fusion"}:
+        from hlt_classification.cms_salience_learned.campaign import tasks
         print(json.dumps(dict(campaign_root=result["campaign_root"], content_hash=result["content_hash"],
                               fits=result["graph"]["fit_count"], science_tasks=len(result["graph"]["tasks"]),
+                              fresh_fits=sum(t["kind"] == "train" for t in tasks(result)["science"]),
                               shared_tasks=5 if result.get("shared_source") else 0, submitted=False), sort_keys=True))
     elif args.mode == "run":
         print(json.dumps(dict(task=result["task"], receipt=result["content_hash"]), sort_keys=True))

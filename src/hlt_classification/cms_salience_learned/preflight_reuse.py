@@ -54,8 +54,9 @@ def execution_code(project, commit):
 
 def _source(spec):
     from .campaign import gate_check, validate_acceptance_resources
-    if spec["schema_version"] != 5 or spec.get("ladder") != "coarse" or spec.get("shared_source") is None:
-        raise ValueError("Accepted preflight reuse is restricted to explicit v5 coarse replacements")
+    if ((spec["schema_version"], spec.get("ladder")) not in {(5, "coarse"), (6, "direct_fusion")}
+        or spec.get("shared_source") is None):
+        raise ValueError("Accepted preflight reuse requires an explicit v5 coarse or v6 direct-fusion study")
     source = validate_shared_source(spec)
     if source["schema_version"] != 3:
         raise ValueError("Preflight donor must be an original accepted dense v3 campaign")
@@ -77,7 +78,7 @@ def _source(spec):
 
 def build_acceptance_import(spec):
     source, measured, code = _source(spec)
-    return artifact("ACCEPTANCE_IMPORT",
+    return artifact("ACCEPTANCE_IMPORT", contract_version=2 if spec["schema_version"] == 6 else 1,
         source_spec=spec["shared_source"]["source_spec"], source_campaign_sha256=source["content_hash"],
         source_commit=source["source_commit"], source_slurm_job_id=str(measured["slurm_job_id"]),
         source_acceptance=fingerprint(Path(source["campaign_root"]) / "execution_acceptance.json"),
@@ -98,7 +99,8 @@ def validate_acceptance_import(spec):
 
 
 def _reuse_record(spec, measured):
-    return artifact("ACCEPTANCE_REUSE", campaign_spec_sha256=spec["content_hash"],
+    return artifact("ACCEPTANCE_REUSE", contract_version=2 if spec["schema_version"] == 6 else 1,
+        campaign_spec_sha256=spec["content_hash"],
         source_commit=spec["source_commit"], acceptance_import=spec["acceptance_import"],
         source_measurements={key: measured[key] for key in ("peak_rss_bytes", "peak_cuda_bytes", "total_cuda_bytes")},
         mode="accepted_dense_preflight_reuse", fresh_gpu_measurement=False, final_test_accessed=False)

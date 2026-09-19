@@ -10,7 +10,7 @@ from hlt_classification.scouting.hcwdl_authorization import validate_source_chec
 from hlt_classification.scouting.hcwdl_exact_dag_submission import submit_exact_dag
 from hlt_classification.scouting.splits import validate_split_manifest
 from .contracts import (
-    ACCEPTANCE_POLICY, AUTHORIZATION, COARSE_AUTHORIZATION, BUDGETS, acceptance_policy, allocation_site,
+    ACCEPTANCE_POLICY, AUTHORIZATION, COARSE_AUTHORIZATION, DIRECT_FUSION_AUTHORIZATION, BUDGETS, acceptance_policy, allocation_site,
     artifact, graph, site_for_partition, validate, SHARED_TASKS,
 )
 from .storage import checked_file, fingerprint, load_receipt
@@ -53,10 +53,14 @@ def command_plan(spec, stage):
         memory = spec["resources"]["memory_mb"] if gpu else (32000 if kind in {"match", "couple"} else 16000)
         minutes = 1440 if kind == "train" else 720 if kind in {"preflight", "match", "couple", "calibrate"} else 480
         site = spec["site"]
+        job_name = "cmslfh_" + task["task_id"]
+        if spec.get("ladder") == "direct_fusion":
+            label = "import_" + task["task_id"] if kind.startswith("import_") else task["task_id"]
+            job_name = "cmsdf_" + label
         command = ["sbatch", "--parsable", f"--account={site['account']}", f"--partition={site['partition']}", f"--qos={site['qos']}",
             "--nodes=1", "--ntasks=1", "--export=ALL", "--no-requeue",
             f"--cpus-per-task={cpus}", f"--mem={memory}M", f"--time={minutes}",
-            f"--job-name=cmslfh_{task['task_id']}", f"--chdir={spec['project_dir']}",
+            f"--job-name={job_name}", f"--chdir={spec['project_dir']}",
             f"--output={spec['campaign_root']}/slurm-%j.out"]
         if gpu:
             command.append("--gres=gpu:a100:1")
@@ -77,12 +81,17 @@ def command_plan(spec, stage):
 
 def validate_campaign(spec, *, check_source=False):
     digest = validate(spec, "CAMPAIGN_SPEC")
-    if spec["schema_version"] in (4, 5):
+    if spec["schema_version"] == 6:
+        if (spec.get("ladder") != "direct_fusion" or spec.get("preparation_import") is None
+            or spec.get("shared_source") is None or spec.get("acceptance_import") is None
+            or spec.get("site") != site_for_partition("debug")):
+            raise ValueError("CMS v6 requires an isolated direct-fusion debug study with accepted source imports")
+    elif spec["schema_version"] in (4, 5):
         if spec.get("ladder") != "coarse" or "shared_source" not in spec:
             raise ValueError("CMS versions 4/5 require the registered coarse ladder")
     elif "ladder" in spec or "shared_source" in spec:
         raise ValueError("Legacy CMS specs remain dense")
-    if spec["schema_version"] == 5:
+    if spec["schema_version"] in (5, 6):
         if spec.get("acceptance_import") is None or spec.get("shared_source") is None:
             raise ValueError("CMS v5 requires explicit accepted dense preflight reuse")
     elif "acceptance_import" in spec:
@@ -144,14 +153,17 @@ def create(*, split_manifest, data_root, campaign_root, project_dir, source_comm
         if split["roles"][role]["mapped_entries"] < budget:
             raise ValueError(f"Insufficient {role} population")
     registered = graph(ladder)
-    if reuse_shared_spec is not None and ladder != "coarse":
-        raise ValueError("Shared-source reuse is only registered for the coarse replacement")
-    if reuse_dense_preflight and (ladder != "coarse" or reuse_shared_spec is None):
-        raise ValueError("Preflight reuse requires a coarse shared-source replacement")
-    extra = dict(ladder="coarse", shared_source=None) if ladder == "coarse" else {}
+    if reuse_shared_spec is not None and ladder not in {"coarse", "direct_fusion"}:
+        raise ValueError("Shared-source reuse is only registered for coarse/direct-fusion studies")
+    if reuse_dense_preflight and (ladder not in {"coarse", "direct_fusion"} or reuse_shared_spec is None):
+        raise ValueError("Preflight reuse requires a coarse shared-source replacement or registered direct-fusion study")
+    if ladder == "direct_fusion" and (partition != "debug" or reuse_preparation_spec is None
+                                     or reuse_shared_spec is None or not reuse_dense_preflight):
+        raise ValueError("Direct fusion requires debug and all accepted source imports")
+    extra = dict(ladder=ladder, shared_source=None) if ladder != "dense" else {}
     if reuse_dense_preflight:
         extra["acceptance_import"] = None
-    version = 5 if reuse_dense_preflight else 4 if ladder == "coarse" else 3
+    version = 6 if ladder == "direct_fusion" else 5 if reuse_dense_preflight else 4 if ladder == "coarse" else 3
     spec = artifact("CAMPAIGN_SPEC", contract_version=version,
         project_dir=str(Path(project_dir).resolve()), source_commit=source_commit,
         campaign_root=str(root), data_root=str(Path(data_root).resolve()), site=site_for_partition(partition),
@@ -201,6 +213,24 @@ def create_coarse_from_dense(*, source_spec, campaign_root, project_dir, source_
         **source["resources"], partition=source["site"]["partition"], ladder="coarse",
         reuse_preparation_spec=Path(producer["campaign_root"]) / "campaign_spec.json", reuse_shared_spec=path,
         reuse_dense_preflight=reuse_dense_preflight)
+
+
+def create_direct_fusion_from_dense(*, source_spec, campaign_root, project_dir, source_commit):
+    """New parallel study; import shared evidence, never retire a source job."""
+    from .preparation_import import preparation_spec
+    path = Path(source_spec).resolve()
+    source = load_json(path)
+    validate_campaign(source)
+    if (path != Path(source["campaign_root"]) / "campaign_spec.json"
+        or source["schema_version"] != 3 or source["graph"] != graph()
+        or source["site"] != site_for_partition("debug")):
+        raise ValueError("Direct fusion needs the original accepted dense-v3 debug source")
+    producer = preparation_spec(source)
+    return create(split_manifest=source["split_manifest"]["path"], data_root=source["data_root"],
+        campaign_root=campaign_root, project_dir=project_dir, source_commit=source_commit,
+        **source["resources"], partition="debug", ladder="direct_fusion",
+        reuse_preparation_spec=Path(producer["campaign_root"]) / "campaign_spec.json",
+        reuse_shared_spec=path, reuse_dense_preflight=True)
 
 
 def validate_acceptance_resources(spec, value):
@@ -275,7 +305,8 @@ def submit(spec, stage, *, execute=False, authorization_phrase=None):
     if load_json(root / f"{stage}_command_plan.json") != plan:
         raise ValueError("Stored command plan changed")
     if execute:
-        expected_authorization = COARSE_AUTHORIZATION if spec.get("ladder") == "coarse" else AUTHORIZATION
+        expected_authorization = {"coarse": COARSE_AUTHORIZATION,
+            "direct_fusion": DIRECT_FUSION_AUTHORIZATION}.get(spec.get("ladder"), AUTHORIZATION)
         if authorization_phrase != expected_authorization:
             raise PermissionError("Explicit exact-campaign authorization is required")
         if stage == "gate":
