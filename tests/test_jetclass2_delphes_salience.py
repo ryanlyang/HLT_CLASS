@@ -110,6 +110,32 @@ def test_candidate_readiness_is_non_scientific_and_dry_by_default(
     assert not any("--gres" in token for row in plan["commands"] for token in row["command"])
 
 
+def test_candidate_readiness_supports_bounded_recovery_walltime(
+    registered, tmp_path, monkeypatch,
+):
+    from hlt_classification.jetclass2_delphes import salience_readiness
+
+    data, inventory, splits = registered
+    monkeypatch.setattr(salience_readiness, "_source", lambda *args: None)
+    spec = salience_readiness.create_readiness(
+        inventory=inventory, split_profile=splits, candidate=REGISTRY[0],
+        data_root=data, output_root=tmp_path / "readiness_480", project=tmp_path,
+        source_commit="a" * 40, assignment_minutes=480,
+    )
+    plan = load_json(tmp_path / "readiness_480/command_plan.json")
+    assign = next(row for row in plan["commands"] if row["task_id"] == "assign")
+    assert spec["contract"] == "JETCLASS2_DELPHES_SALIENCE_READINESS_SPEC/v2"
+    assert spec["assignment_minutes"] == 480
+    assert "--time=480" in assign["command"]
+    salience_readiness.validate_readiness(spec)
+    with pytest.raises(ValueError, match="walltime"):
+        salience_readiness.create_readiness(
+            inventory=inventory, split_profile=splits, candidate=REGISTRY[0],
+            data_root=data, output_root=tmp_path / "readiness_bad", project=tmp_path,
+            source_commit="a" * 40, assignment_minutes=481,
+        )
+
+
 def test_staged_specs_and_production_dry_shape(registered, tmp_path, monkeypatch):
     from hlt_classification.data.cache_contracts import write_immutable_json
     from hlt_classification.jetclass2_delphes.cache import cache_budgets

@@ -22,21 +22,29 @@ AUTHORIZE = "AUTHORIZE JETCLASS2 500K SALIENCE FOUNDATION ONLY"
 
 def create_readiness(*, inventory: dict, split_profile: dict, candidate: str,
                      data_root: Path, output_root: Path, project: Path,
-                     source_commit: str, array_concurrency: int = 16) -> dict:
+                     source_commit: str, array_concurrency: int = 16,
+                     assignment_minutes: int = 240) -> dict:
     _source(project, source_commit)
     if type(array_concurrency) is not int or not 1 <= array_concurrency <= 32:
         raise ValueError("Invalid assignment-array concurrency")
+    if type(assignment_minutes) is not int or not 60 <= assignment_minutes <= 480:
+        raise ValueError("Invalid salience assignment walltime")
     foundation = build_foundation_spec(inventory, split_profile, candidate)
     root, data, project = map(Path.resolve, map(Path, (output_root, data_root, project)))
     if root.exists() or root.is_relative_to(data) or data.is_relative_to(root):
         raise FileExistsError("Salience readiness requires a fresh isolated root")
+    version = 1 if assignment_minutes == 240 else 2
+    resource_fields = {} if version == 1 else {
+        "assignment_minutes": assignment_minutes,
+    }
     spec = artifact(
-        "SALIENCE_READINESS_SPEC", source_commit=source_commit,
+        "SALIENCE_READINESS_SPEC", version=version, source_commit=source_commit,
         project_dir=str(project), readiness_root=str(root),
         foundation_root=str(root / "foundation"), data_root=str(data),
         foundation=foundation, execution_site=execution_site("sporc_a100"),
         array_concurrency=array_concurrency, scientific_fits=0,
         final_test_accessed=False, existing_campaign_mutations=False,
+        **resource_fields,
     )
     write_immutable_json(root / "foundation/foundation_spec.json", foundation)
     write_immutable_json(root / "readiness_spec.json", spec)
@@ -45,7 +53,10 @@ def create_readiness(*, inventory: dict, split_profile: dict, candidate: str,
 
 
 def validate_readiness(spec: dict, *, check_source: bool = True) -> str:
-    digest = validate(spec, "SALIENCE_READINESS_SPEC")
+    version = spec.get("schema_version")
+    if version not in (1, 2):
+        raise ValueError("Unsupported salience readiness version")
+    digest = validate(spec, "SALIENCE_READINESS_SPEC", version=version)
     validate_foundation_spec(spec["foundation"])
     root, data = Path(spec["readiness_root"]).resolve(), Path(spec["data_root"]).resolve()
     if (spec["execution_site"] != execution_site("sporc_a100")
@@ -55,6 +66,12 @@ def validate_readiness(spec: dict, *, check_source: bool = True) -> str:
             or spec["existing_campaign_mutations"] is not False
             or load_json(root / "foundation/foundation_spec.json") != spec["foundation"]):
         raise ValueError("Salience readiness scope or lineage differs")
+    if version == 1:
+        if "assignment_minutes" in spec:
+            raise ValueError("Legacy salience readiness has new resource fields")
+    elif (type(spec.get("assignment_minutes")) is not int
+          or not 60 <= spec["assignment_minutes"] <= 480):
+        raise ValueError("Salience readiness assignment walltime differs")
     if check_source:
         _source(Path(spec["project_dir"]), spec["source_commit"])
     return digest
@@ -65,11 +82,12 @@ def command_plan(spec: dict) -> dict:
     root, project = Path(spec["readiness_root"]), Path(spec["project_dir"])
     count = len(spec["foundation"]["assignment_tasks"])
     rows = []
+    assignment_minutes = spec.get("assignment_minutes", 240)
     for task, dependencies in (("sample", []), ("assign", ["sample"]),
                                ("lock", ["assign"])):
         command = slurm_options(spec["execution_site"]) + [
             "--cpus-per-task=1", "--mem=8G",
-            "--time=" + ("04:00:00" if task == "assign" else "01:00:00"),
+            "--time=" + (str(assignment_minutes) if task == "assign" else "01:00:00"),
             "--job-name=jc2sal_" + task, "--chdir=" + str(project),
             "--output=" + str(root / ("slurm-%A_%a.out" if task == "assign" else "slurm-%j.out")),
         ]

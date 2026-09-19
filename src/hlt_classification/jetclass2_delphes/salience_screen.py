@@ -23,7 +23,7 @@ from .contracts import artifact, relative_file, validate
 from .execution import allocation, execution_site, gpu_identity, slurm_options
 from .foundation import validate_foundation_spec as validate_bottleneck_foundation
 from .model import DelphesParticleTransformer, installed_environment, model_contract
-from .production import _source
+from .production import _source, validate_profile
 from .reporting import evaluate_probabilities
 from .runner import predict, train_kernel
 from .salience_cache import prepare_cache as prepare_salience_cache
@@ -96,18 +96,30 @@ def _load_foundations(spec: dict, *, deep: bool = False) -> dict[str, tuple[dict
     return result
 
 
-def _template(path: Path) -> dict:
+def _template(path: Path, bottleneck_foundation: dict | None = None) -> dict:
     value = load_json(path)
     validate(value, "RUNTIME_PROFILE", version=value["schema_version"])
-    if (value["execution_site"] != execution_site("sporc_a100")
+    common_invalid = (value["execution_site"] != execution_site("sporc_a100")
             or value["ram_only_views"] is not True or value["rolling_resume"] is not False
             or value["final_test_accessed"] is not False
             or value.get("passed") is not True
             or value.get("measured_full_population") is not True
-            or (value["cpus"], value["memory_mb"], value["workers"]) != (8, 73728, 8)
-            or (value["train_minutes"], value["reduce_minutes"]) != (808, 43)
-            or value.get("selected_state_bytes", 0) <= 0):
+            or value.get("selected_state_bytes", 0) <= 0)
+    if common_invalid:
         raise ValueError("Screen resource template is not the measured SPORC A100 profile")
+    # Historical screens are immutable and retain their exact established
+    # resource tuple.  A newer dataset may instead supply a complete,
+    # foundation-bound runtime profile produced by the ordinary readiness
+    # gate.  That route is validated deeply rather than accepted by looser
+    # numeric bounds.
+    legacy = (
+        (value["cpus"], value["memory_mb"], value["workers"]) == (8, 73728, 8)
+        and (value["train_minutes"], value["reduce_minutes"]) == (808, 43)
+    )
+    if not legacy:
+        if bottleneck_foundation is None:
+            raise ValueError("A nonlegacy screen profile requires its bottleneck foundation")
+        validate_profile(value, bottleneck_foundation, value.get("source_commit"))
     return value
 
 
@@ -129,7 +141,7 @@ def create_screen(*, bottleneck_root: Path, candidate_roots: list[Path],
         raise ValueError("Candidate roots must be supplied in registered order")
     bottleneck = load_json(Path(bottleneck_root) / "foundation_spec.json")
     validate_bottleneck_foundation(bottleneck)
-    template = _template(resource_template)
+    template = _template(resource_template, bottleneck)
     reference = candidates[0]
     first = load_json(Path(reference["foundation_root"]) / "foundation_spec.json")
     if any(load_json(Path(r["foundation_root"]) / "foundation_spec.json")["splits"] != first["splits"] for r in candidates[1:]):
@@ -166,8 +178,10 @@ def validate_screen(spec: dict, *, check_source=True, deep=False) -> str:
             or spec["final_test_accessed"] is not False
             or spec["existing_campaign_mutations"] is not False):
         raise ValueError("Salience screen scientific scope differs")
-    _load_foundations(spec, deep=deep)
-    template = _template(Path(spec["resource_template_path"]))
+    foundations = _load_foundations(spec, deep=deep)
+    template = _template(
+        Path(spec["resource_template_path"]), foundations[CONTEXT][0],
+    )
     if template["content_hash"] != spec["resource_template_sha256"]:
         raise ValueError("Screen resource template changed")
     if check_source:
@@ -221,7 +235,8 @@ def _cache(spec, name, role, coordinate_name="U100"):
         row = next(row for row in spec["candidates"] if row["candidate"] == name)
         root = Path(row["foundation_root"])
     foundation = load_json(root / "foundation_spec.json")
-    profile = _template(Path(spec["resource_template_path"]))
+    bottleneck = load_json(Path(spec["bottleneck_root"]) / "foundation_spec.json")
+    profile = _template(Path(spec["resource_template_path"]), bottleneck)
     kwargs = dict(spec=foundation, data_root=Path(spec["data_root"]), foundation_root=root,
                   role=role, coordinate_name=coordinate_name, workers=profile["workers"],
                   max_ram_bytes=profile["cache_budgets"][role])
@@ -266,7 +281,8 @@ def run_task(spec: dict, task_id: str, *, attempt: str, device="cuda") -> dict:
                           passed=True, final_test_accessed=False)
         path = attempt_root / "authentication.json"; write_immutable_json(path, result); outputs.append(path)
     elif task["kind"] == "preflight":
-        template = _template(Path(spec["resource_template_path"]))
+        bottleneck = load_json(Path(spec["bottleneck_root"]) / "foundation_spec.json")
+        template = _template(Path(spec["resource_template_path"]), bottleneck)
         job, cpus, memory = allocation(template["execution_site"])
         if (cpus, memory) != (template["cpus"], template["memory_mb"]):
             raise ValueError("Screen allocation differs from measured template")
@@ -371,7 +387,9 @@ def run_task(spec: dict, task_id: str, *, attempt: str, device="cuda") -> dict:
 
 def command_plan(spec: dict) -> dict:
     validate_screen(spec)
-    profile = _template(Path(spec["resource_template_path"])); site = profile["execution_site"]
+    bottleneck = load_json(Path(spec["bottleneck_root"]) / "foundation_spec.json")
+    profile = _template(Path(spec["resource_template_path"]), bottleneck)
+    site = profile["execution_site"]
     rows = []
     for task in task_graph():
         gpu = task["kind"] in {"preflight", "fit"}

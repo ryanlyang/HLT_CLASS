@@ -23,6 +23,7 @@ def main():
     create.add_argument("--output-root", type=Path, required=True)
     create.add_argument("--source-commit", required=True)
     create.add_argument("--array-concurrency", type=int, default=16)
+    create.add_argument("--assignment-minutes", type=int, default=240)
     run = sub.add_parser("run")
     run.add_argument("--spec", type=Path, required=True)
     run.add_argument("--task", choices=["sample", "assign", "lock"], required=True)
@@ -38,6 +39,7 @@ def main():
             candidate=a.candidate, data_root=a.data_root, output_root=a.output_root,
             project=ROOT, source_commit=a.source_commit,
             array_concurrency=a.array_concurrency,
+            assignment_minutes=a.assignment_minutes,
         )
     else:
         spec = load_json(a.spec)
@@ -51,4 +53,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
