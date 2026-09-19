@@ -51,7 +51,7 @@ def test_schedule_matches_registered_floor_tail_and_zero_gate():
     assert contracts.alpha_for_pass(60) == 0
     assert contracts.alpha_for_pass(61) == 0
     with pytest.raises(ValueError):
-        contracts.coordinate("U050")
+        contracts.coordinate("U051")
 
 
 def make_cache(role="train", paired=True):
@@ -645,7 +645,7 @@ def test_legacy_v1_remains_readable_but_tier3_only(tiny_campaign):
     with pytest.raises(ValueError, match="Legacy"):
         campaign.validate_campaign(rehash(legacy, preparation_import=None))
     with pytest.raises(ValueError, match="version"):
-        campaign.validate_campaign(rehash(legacy, schema_version=4))
+        campaign.validate_campaign(rehash(legacy, schema_version=5))
 
 
 def test_worker_authenticates_selected_partition_and_exact_resources(tiny_campaign, monkeypatch):

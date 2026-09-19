@@ -1,5 +1,57 @@
 # CMS_SALIENCE_LEARNED_DENSE contracts
 
+## Coarse replacement extension (2026-09-19)
+
+`docs/plans/CMS_SALIENCE_LEARNED_COARSE_500K_PLAN.md` authorizes the coarse
+variant. CAMPAIGN_SPEC/v4 requires `ladder=coarse`, GRAPH/v2 and an explicit
+`shared_source` (null for a fresh campaign, SHARED_SOURCE/v1 for reuse).
+Its five arrows are U000/U050/U100/D066/D033/D000, with exact half/third
+coordinates. Legacy v1-v3 specs keep GRAPH/v1 and its exact content hash.
+The historical family namespace is retained to preserve common-node seeds;
+it does not mean that a v4 graph is dense. Execution acceptance v2 and the
+strict 85% CPU / 90% CUDA policy are unchanged.
+
+PREPARATION_IMPORT/v2 binds both preparation-code identities and the reviewed
+coordinate-AST migration `add_coarse_coordinates_v1`. Only that exact pair
+of AST hashes (or identical code) is accepted; all preparation modules/trees,
+split, budgets, view semantics and foundation lineage still have to agree.
+New names do not change old coordinate values. Original foundation payloads
+are not rewritten. Existing PREPARATION_IMPORT/v1 stays strict and unchanged.
+
+SHARED_SOURCE/v1 authenticates one original accepted dense campaign and its
+full exact live science ledger. Only M0HLT, OFFLINE, U000, reduce_U000 and
+DIRECT_D000 may be imported. Full model/training file/tree Git identities and
+reference-worker/seed/schedule AST identities must agree. Source gate, shared
+node identities, resources and original preparation producer must agree.
+Each completed source output needs its exact task receipt, report/checkpoint
+hashes and teacher-bank lineage. Copies go into the new root; imported reports
+retain explicit original artifact/receipt identity and banks bind the imported
+U000 report. Parent data are read-only. No dense fusion carrier is imported.
+
+The coarse science DAG has 31 tasks, 14 logical fits, five extractions and ten
+reducers. With shared reuse, five tasks are CPU imports and only ten fits are
+new. Source dependencies remain symbolic in the canonical dry ledger. Live
+submission resolves pending/running jobs from exact authenticated ledger IDs;
+authenticated completed outputs remove the external scheduler dependency.
+Internal dependencies are always preserved. Every actual command/job is
+journaled before the next submission, and replay validates exact commands
+before resuming. Missing/corrupt outputs, absent failed sources and changed
+ledgers fail closed. Only a dependency rejection with newly authenticated
+completion may retry without the old external job ID.
+
+`create-coarse --source-spec DENSE_SPEC --campaign-root NEW_ROOT
+--source-commit COMMIT` infers original preparation and resources. Creation
+is dry and never cancels. Run/import `foundation`, submit a fresh gate, then
+validate that gate. Coarse live submission uses
+`AUTHORIZE CMS SALIENCE LEARNED COARSE 500K EXACT SPEC`.
+`retire-dense --spec COARSE_SPEC` previews only the 41 dense-specific tasks.
+Execution additionally requires the new gate and the separate phrase
+`CANCEL CMS DENSE LADDER KEEP SHARED`. It checks live owner/name/account
+against the source ledger, cancels exact IDs, preserves all five shared tasks,
+and never deletes source artifacts or touches another campaign.
+
+## Original dense contract (unchanged)
+
 Scientific authority: `docs/plans/CMS_SALIENCE_LEARNED_DENSE_500K_PLAN.md`.
 This family is not interchangeable with either historical CMS Strategy B or
 JetClass2 learned-handoff artifacts. Scientific artifacts use schema version 1 and

@@ -386,7 +386,7 @@ def preflight(spec, device):
         gc.collect(); torch.cuda.empty_cache()
         observe(kind + ":released")
     measured = observe("final")
-    version = 2 if spec["schema_version"] == 3 else 1
+    version = 2 if spec["schema_version"] >= 3 else 1
     policy_evidence = dict(acceptance_policy=policy, withdrawal_probe=probes) if version == 2 else {}
     value = artifact("EXECUTION_ACCEPTANCE", contract_version=version, **policy_evidence,
         campaign_spec_sha256=spec["content_hash"],
@@ -450,6 +450,9 @@ def run_task(spec, task_id, *, device="cuda"):
             outputs = lock_foundation(spec)
         elif kind == "import_foundation":
             outputs = publish_import(spec)
+        elif kind == "import_shared":
+            from .shared_import import import_shared_task
+            outputs = import_shared_task(spec, task_id)
         elif kind == "preflight":
             load_receipt(spec, "foundation")
             outputs = preflight(spec, device)

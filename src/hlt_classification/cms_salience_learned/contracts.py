@@ -13,7 +13,10 @@ from hlt_classification.scouting.hcwdl_fullcard_salience_contracts import matche
 
 FAMILY = "CMS_SALIENCE_LEARNED_DENSE"
 AUTHORIZATION = "AUTHORIZE CMS SALIENCE LEARNED DENSE 500K EXACT SPEC"
+COARSE_AUTHORIZATION = "AUTHORIZE CMS SALIENCE LEARNED COARSE 500K EXACT SPEC"
 RUNG_ORDER = ("U000", "U033", "U066", "U100", "D080", "D060", "D040", "D020", "D000")
+COARSE_RUNG_ORDER = ("U000", "U050", "U100", "D066", "D033", "D000")
+SHARED_TASKS = ("train_M0HLT", "train_OFFLINE", "train_U000", "reduce_U000", "train_DIRECT_D000")
 BUDGETS = {"train": 500_000, "validation": 250_000, "final_test": 250_000}
 SITE = dict(account="reu-aisocial", partition="tier3", qos="qos_tier3",
             cluster="sporc", gres="gpu:a100:1", conda_env="atlas_kd_sporc")
@@ -26,7 +29,8 @@ TRAINING = dict(maximum_passes=100, minimum_passes=60, patience=15,
 ACCEPTANCE_POLICY = dict(cpu_peak_fraction_limit=.85, cuda_peak_fraction_limit=.90,
     withdrawal_probe_steps_per_alpha=5, withdrawal_probe_alphas=[1., .5, 0.],
     withdrawal_probe_batch_size=256, withdrawal_probe_batch_selection="longest_u000")
-CONTRACT_VERSIONS = {"CAMPAIGN_SPEC": (1, 2, 3), "EXECUTION_ACCEPTANCE": (1, 2)}
+CONTRACT_VERSIONS = {"CAMPAIGN_SPEC": (1, 2, 3, 4), "EXECUTION_ACCEPTANCE": (1, 2),
+                     "GRAPH": (1, 2), "PREPARATION_IMPORT": (1, 2)}
 
 
 def artifact(artifact_type: str, *, contract_version=None, **fields):
@@ -46,9 +50,9 @@ def validate(value, artifact_type):
 
 
 def acceptance_policy(spec):
-    """Old specs retain their 85% gate; only new v3 specs opt into 90%."""
+    """Old specs retain their 85% gate; v3/v4 specs explicitly opt into 90%."""
     version = spec["schema_version"]
-    if version == 3:
+    if version in (3, 4):
         if spec.get("acceptance_policy") != ACCEPTANCE_POLICY:
             raise ValueError("CMS v3 acceptance policy differs")
         return deepcopy(ACCEPTANCE_POLICY)
@@ -78,14 +82,15 @@ def allocation_site(spec):
 
 
 def coordinate(name):
-    if name not in (*RUNG_ORDER, "D100"):
+    if name not in (*RUNG_ORDER, *COARSE_RUNG_ORDER, "D100"):
         raise ValueError("Unregistered CMS coordinate")
     if name[0] == "U":
         u = {"U000": Fraction(0), "U033": Fraction(1, 3),
-             "U066": Fraction(2, 3), "U100": Fraction(1)}[name]
+             "U050": Fraction(1, 2), "U066": Fraction(2, 3), "U100": Fraction(1)}[name]
         f = Fraction(0)
     else:
-        u, f = Fraction(1), 1 - Fraction(int(name[1:]), 100)
+        retained = {"D066": Fraction(2, 3), "D033": Fraction(1, 3)}.get(name, Fraction(int(name[1:]), 100))
+        u, f = Fraction(1), 1 - retained
     return HomotopyCoordinate(u.numerator, u.denominator, f.numerator, f.denominator)
 
 
@@ -122,7 +127,10 @@ def node(name, role, primary, context=None, teacher=None, parent=None, alias=Non
                 context_architecture_seed=seed("context"), seed_alias=alias)
 
 
-def graph():
+def graph(ladder="dense"):
+    if ladder not in {"dense", "coarse"}:
+        raise ValueError("Unregistered CMS ladder")
+    rungs = RUNG_ORDER if ladder == "dense" else COARSE_RUNG_ORDER
     nodes = [node("M0HLT", "reference_ce", "D000", alias="D000"), node("OFFLINE", "reference_ce", "OFFLINE"),
              node("U000", "reference_ce", "U000"),
              node("DIRECT_D000", "direct_kd", "D000", teacher="U000", alias="D000")]
@@ -134,7 +142,7 @@ def graph():
     task("reduce_U000", "reduce", ["train_U000"], "U000")
     task("train_DIRECT_D000", "train", ["reduce_U000"], "DIRECT_D000")
     carrier = "U000"
-    for higher, lower in zip(RUNG_ORDER, RUNG_ORDER[1:]):
+    for higher, lower in zip(rungs, rungs[1:]):
         acq, withdrawal, extracted = f"ACQUIRE_{lower}", f"WITHDRAW_{lower}", f"CARRIER_{lower}"
         nodes += [node(acq, "fusion_acquisition", lower, higher, carrier, alias=lower),
                   node(withdrawal, "fusion_withdrawal", lower, higher, acq, acq, alias=lower)]
@@ -147,7 +155,9 @@ def graph():
         carrier = extracted
     task("aggregate", "aggregate", [t["task_id"] for t in tasks])
     task("complete", "complete", ["aggregate"])
-    assert len(nodes) == 20 and len(tasks) == 46
-    return artifact("GRAPH", nodes=nodes, tasks=tasks, rung_order=list(RUNG_ORDER),
+    steps = len(rungs) - 1
+    assert len(nodes) == 4 + 2 * steps and len(tasks) == 6 + 5 * steps
+    return artifact("GRAPH", contract_version=1 if ladder == "dense" else 2,
+                    nodes=nodes, tasks=tasks, rung_order=list(rungs),
                     training=TRAINING, budgets=BUDGETS, matcher=matcher_spec("SALIENCE_PT_LINEAR"),
-                    fit_count=20, extraction_count=8, reducer_count=16, final_test_accessed=False)
+                    fit_count=len(nodes), extraction_count=steps, reducer_count=2 * steps, final_test_accessed=False)

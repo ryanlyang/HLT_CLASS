@@ -1,4 +1,4 @@
-"""Create, submit, execute and inspect the native-CMS dense learned ladder."""
+"""Create, submit, execute and inspect native-CMS learned ladders."""
 from __future__ import annotations
 
 import argparse
@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from hlt_classification.data.cache_contracts import load_json
-from hlt_classification.cms_salience_learned.campaign import create, gate_check, submit
+from hlt_classification.cms_salience_learned.campaign import create, create_coarse_from_dense, gate_check, submit
 
 
 def main():
@@ -28,7 +28,13 @@ def main():
     c.add_argument("--partition", choices=("tier3", "debug"), default="tier3",
                    help="Pinned partition for all stages; debug use is subject to RC policy")
     c.add_argument("--reuse-preparation-spec", help="Read-only completed native CMS preparation; never reuses its GPU gate")
-    for mode in ("submit", "run", "gate", "results", "status"):
+    c.add_argument("--ladder", choices=("dense", "coarse"), default="dense")
+    c.add_argument("--reuse-shared-spec", help="Coarse only: reuse the dense references/control without cancelling them")
+    replacement = modes.add_parser("create-coarse", help="Infer matching preparation/resources from an explicit dense source")
+    replacement.add_argument("--source-spec", required=True)
+    replacement.add_argument("--campaign-root", required=True)
+    replacement.add_argument("--source-commit", required=True)
+    for mode in ("submit", "run", "gate", "results", "status", "retire-dense"):
         p = modes.add_parser(mode)
         p.add_argument("--spec", required=True)
         if mode == "submit":
@@ -37,12 +43,19 @@ def main():
             p.add_argument("--authorization-phrase")
         if mode == "run":
             p.add_argument("--task", required=True)
+        if mode == "retire-dense":
+            p.add_argument("--execute", action="store_true")
+            p.add_argument("--authorization-phrase")
     args = parser.parse_args()
     if args.mode == "create":
         result = create(split_manifest=args.split_manifest, data_root=args.data_root,
             campaign_root=args.campaign_root, project_dir=ROOT, source_commit=args.source_commit,
             cpus=args.cpus, workers=args.workers, memory_mb=args.memory_mb,
-            partition=args.partition, reuse_preparation_spec=args.reuse_preparation_spec)
+            partition=args.partition, reuse_preparation_spec=args.reuse_preparation_spec,
+            ladder=args.ladder, reuse_shared_spec=args.reuse_shared_spec)
+    elif args.mode == "create-coarse":
+        result = create_coarse_from_dense(source_spec=args.source_spec, campaign_root=args.campaign_root,
+            project_dir=ROOT, source_commit=args.source_commit)
     else:
         spec = load_json(args.spec)
         if Path(args.spec).resolve() != (Path(spec["campaign_root"]) / "campaign_spec.json").resolve():
@@ -54,6 +67,9 @@ def main():
             result = run_task(spec, args.task)
         elif args.mode == "gate":
             result = gate_check(spec)
+        elif args.mode == "retire-dense":
+            from hlt_classification.cms_salience_learned.coarse_submission import retire_dense
+            result = retire_dense(spec, execute=args.execute, authorization_phrase=args.authorization_phrase)
         elif args.mode == "status":
             from hlt_classification.cms_salience_learned.campaign import tasks
             from hlt_classification.cms_salience_learned.storage import load_receipt, receipt_path
@@ -90,9 +106,10 @@ def main():
                 print(f"{name:<20} {pick:>6} {m['accuracy']:>10.6f} {m['macro_ovr_auc']:>10.6f} {rejection:>10} "
                       f"{fmt(rec.get('macro_ovr_auc')):>10} {fmt(rec.get('macro_r50_linear')):>10}")
             return 0
-    if args.mode == "create":
+    if args.mode in {"create", "create-coarse"}:
         print(json.dumps(dict(campaign_root=result["campaign_root"], content_hash=result["content_hash"],
-                              fits=result["graph"]["fit_count"], science_tasks=46, submitted=False), sort_keys=True))
+                              fits=result["graph"]["fit_count"], science_tasks=len(result["graph"]["tasks"]),
+                              shared_tasks=5 if result.get("shared_source") else 0, submitted=False), sort_keys=True))
     elif args.mode == "run":
         print(json.dumps(dict(task=result["task"], receipt=result["content_hash"]), sort_keys=True))
     else:

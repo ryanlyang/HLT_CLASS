@@ -10,8 +10,8 @@ from hlt_classification.scouting.hcwdl_authorization import validate_source_chec
 from hlt_classification.scouting.hcwdl_exact_dag_submission import submit_exact_dag
 from hlt_classification.scouting.splits import validate_split_manifest
 from .contracts import (
-    ACCEPTANCE_POLICY, AUTHORIZATION, BUDGETS, acceptance_policy, allocation_site,
-    artifact, graph, site_for_partition, validate,
+    ACCEPTANCE_POLICY, AUTHORIZATION, COARSE_AUTHORIZATION, BUDGETS, acceptance_policy, allocation_site,
+    artifact, graph, site_for_partition, validate, SHARED_TASKS,
 )
 from .storage import checked_file, fingerprint, load_receipt
 
@@ -25,8 +25,12 @@ def tasks(spec):
     preparation += [dict(task_id="foundation", kind="foundation", dependencies=[f"couple_{i:04d}" for i in range(count)])]
     if spec.get("preparation_import") is not None:
         preparation = [dict(task_id="foundation", kind="import_foundation", dependencies=[])]
-    return dict(prepare=preparation, gate=[dict(task_id="preflight", kind="preflight", dependencies=[])],
-                science=spec["graph"]["tasks"])
+    science = deepcopy(spec["graph"]["tasks"])
+    if spec.get("shared_source") is not None:
+        for row in science:
+            if row["task_id"] in SHARED_TASKS:
+                row["kind"] = "import_shared"
+    return dict(prepare=preparation, gate=[dict(task_id="preflight", kind="preflight", dependencies=[])], science=science)
 
 
 def validate_resources(resources):
@@ -57,6 +61,13 @@ def command_plan(spec, stage):
             command.append("--gres=gpu:a100:1")
         if task["dependencies"]:
             command.append("--dependency=afterok:" + ":".join("${JOB_" + p + "}" for p in task["dependencies"]))
+        if kind == "import_shared":
+            token = "${SOURCE_JOB_" + task["task_id"] + "}"
+            dependency = next((i for i, arg in enumerate(command) if arg.startswith("--dependency=")), None)
+            if dependency is None:
+                command.append("--dependency=afterok:" + token)
+            else:
+                command[dependency] += ":" + token
         command += [f"{spec['project_dir']}/sbatch/run_cms_salience_learned.sh", spec["project_dir"],
                     f"{spec['campaign_root']}/campaign_spec.json", task["task_id"]]
         commands.append(dict(task_id=task["task_id"], dependencies=task["dependencies"], command=command))
@@ -65,7 +76,12 @@ def command_plan(spec, stage):
 
 def validate_campaign(spec, *, check_source=False):
     digest = validate(spec, "CAMPAIGN_SPEC")
-    if spec["graph"] != graph() or spec["budgets"] != BUDGETS:
+    if spec["schema_version"] == 4:
+        if spec.get("ladder") != "coarse" or "shared_source" not in spec:
+            raise ValueError("CMS version 4 requires the registered coarse ladder")
+    elif "ladder" in spec or "shared_source" in spec:
+        raise ValueError("Legacy CMS specs remain dense")
+    if spec["graph"] != graph(spec.get("ladder", "dense")) or spec["budgets"] != BUDGETS:
         raise ValueError("Registered CMS scientific graph differs")
     allocation_site(spec)
     acceptance_policy(spec)
@@ -95,6 +111,9 @@ def validate_campaign(spec, *, check_source=False):
     if spec.get("preparation_import") is not None:
         from .preparation_import import validate_import
         validate_import(spec)
+    if spec.get("shared_source") is not None:
+        from .shared_import import validate_shared_source
+        validate_shared_source(spec)
     return digest
 
 
@@ -105,7 +124,8 @@ def view_config_hash(registered_graph):
 
 
 def create(*, split_manifest, data_root, campaign_root, project_dir, source_commit,
-           cpus=16, workers=16, memory_mb=192000, partition="tier3", reuse_preparation_spec=None):
+           cpus=16, workers=16, memory_mb=192000, partition="tier3", reuse_preparation_spec=None,
+           ladder="dense", reuse_shared_spec=None):
     root = Path(campaign_root).resolve()
     if root.exists():
         raise FileExistsError("Use a fresh isolated campaign root; existing roots are never overwritten")
@@ -114,20 +134,29 @@ def create(*, split_manifest, data_root, campaign_root, project_dir, source_comm
     for role, budget in BUDGETS.items():
         if split["roles"][role]["mapped_entries"] < budget:
             raise ValueError(f"Insufficient {role} population")
-    registered = graph()
-    spec = artifact("CAMPAIGN_SPEC", project_dir=str(Path(project_dir).resolve()), source_commit=source_commit,
+    registered = graph(ladder)
+    if reuse_shared_spec is not None and ladder != "coarse":
+        raise ValueError("Shared-source reuse is only registered for the coarse replacement")
+    extra = dict(ladder="coarse", shared_source=None) if ladder == "coarse" else {}
+    spec = artifact("CAMPAIGN_SPEC", contract_version=4 if ladder == "coarse" else 3,
+        project_dir=str(Path(project_dir).resolve()), source_commit=source_commit,
         campaign_root=str(root), data_root=str(Path(data_root).resolve()), site=site_for_partition(partition),
         split_manifest=dict(fingerprint(split_manifest), content_hash=split["content_hash"]),
         split_roles={role: split["roles"][role]["files"] for role in BUDGETS}, graph=registered,
         budgets=BUDGETS, resources=dict(cpus=cpus, workers=workers, memory_mb=memory_mb),
         view_config_sha256=view_config_hash(registered), preparation_import=None,
-        acceptance_policy=deepcopy(ACCEPTANCE_POLICY), final_test_accessed=False)
+        acceptance_policy=deepcopy(ACCEPTANCE_POLICY), final_test_accessed=False, **extra)
     if reuse_preparation_spec is not None:
         from .preparation_import import build_import
         value = dict(spec)
         value.pop("content_hash")
         value["preparation_import"] = build_import(spec, reuse_preparation_spec)
-        spec = artifact("CAMPAIGN_SPEC", **value)
+        spec = artifact("CAMPAIGN_SPEC", contract_version=spec["schema_version"], **value)
+    if reuse_shared_spec is not None:
+        from .shared_import import build_shared_source
+        value = {k: v for k, v in spec.items() if k != "content_hash"}
+        value["shared_source"] = build_shared_source(spec, reuse_shared_spec)
+        spec = artifact("CAMPAIGN_SPEC", contract_version=4, **value)
     validate_campaign(spec, check_source=True)
     write_immutable_json(root / "campaign_spec.json", spec)
     for stage in ("prepare", "gate", "science"):
@@ -139,11 +168,26 @@ def create(*, split_manifest, data_root, campaign_root, project_dir, source_comm
     return spec
 
 
+def create_coarse_from_dense(*, source_spec, campaign_root, project_dir, source_commit):
+    """Infer immutable inputs/resources from the explicitly named dense source."""
+    from .preparation_import import preparation_spec
+    path = Path(source_spec).resolve()
+    source = load_json(path)
+    validate_campaign(source)
+    if path != Path(source["campaign_root"]) / "campaign_spec.json" or source["graph"] != graph():
+        raise ValueError("Use the canonical dense source spec")
+    producer = preparation_spec(source)
+    return create(split_manifest=source["split_manifest"]["path"], data_root=source["data_root"],
+        campaign_root=campaign_root, project_dir=project_dir, source_commit=source_commit,
+        **source["resources"], partition=source["site"]["partition"], ladder="coarse",
+        reuse_preparation_spec=Path(producer["campaign_root"]) / "campaign_spec.json", reuse_shared_spec=path)
+
+
 def validate_acceptance_resources(spec, value):
     """Check the version-bound limits and complete repeated-update evidence."""
     validate(value, "EXECUTION_ACCEPTANCE")
     policy = acceptance_policy(spec)
-    expected_version = 2 if spec["schema_version"] == 3 else 1
+    expected_version = 2 if spec["schema_version"] >= 3 else 1
     if value["schema_version"] != expected_version:
         raise ValueError("CMS acceptance version differs from campaign policy")
     for key in ("peak_rss_bytes", "peak_cuda_bytes", "total_cuda_bytes"):
@@ -208,12 +252,16 @@ def submit(spec, stage, *, execute=False, authorization_phrase=None):
     if load_json(root / f"{stage}_command_plan.json") != plan:
         raise ValueError("Stored command plan changed")
     if execute:
-        if authorization_phrase != AUTHORIZATION:
+        expected_authorization = COARSE_AUTHORIZATION if spec.get("ladder") == "coarse" else AUTHORIZATION
+        if authorization_phrase != expected_authorization:
             raise PermissionError("Explicit exact-campaign authorization is required")
         if stage == "gate":
             load_receipt(spec, "foundation")
         if stage == "science":
             gate_check(spec)
+    if stage == "science" and spec.get("shared_source") is not None:
+        from .coarse_submission import submit_shared_dag
+        return submit_shared_dag(spec, plan, execute=execute)
     return submit_exact_dag(identity=spec["content_hash"], plan=plan,
         output=root / f"{stage}_{'' if execute else 'dry_run_'}submission_ledger.json",
         canonical_dry_run=root / f"{stage}_dry_run_submission_ledger.json", execute=execute)
