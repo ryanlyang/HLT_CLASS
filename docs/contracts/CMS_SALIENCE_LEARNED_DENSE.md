@@ -21,6 +21,13 @@ Any other runtime change requires fresh measurement. The declared conda
 environment must match; unchanged installed software is an explicit assumption,
 not a newly measured claim.
 
+The exact reviewed coordinate/preflight AST pairs include both Python 3.10
+and Python 3.13 `ast.dump` encodings of those same source functions. The latter
+omits empty-list fields. Existing fingerprint serialization is unchanged, so
+old imported preparation descriptors remain verifiable. This correction does
+not accept arbitrary AST edits, cross-encoding coordinate pairs, or changed
+preparation/model/runtime files. No schema or scientific semantics change.
+
 The consumer publishes `execution_acceptance_import.json` as
 ACCEPTANCE_REUSE/v1, with `fresh_gpu_measurement=False` and original measurements
 labelled as source evidence. It never synthesizes `execution_acceptance.json`

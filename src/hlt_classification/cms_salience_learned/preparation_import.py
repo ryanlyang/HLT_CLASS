@@ -23,6 +23,14 @@ PREPARATION_CODE = (
 # ASTs do not inherit this exception.
 _DENSE_COORDINATE_AST = "50f6b29e6b2af44b85a03bbbb41fa0f7e079efbf9007e3f0afb8a6713ef2049c"
 _COARSE_COORDINATE_AST = "ff091af4c897832d984f45cd4b7689ad8927f3768b7359611d66031478684972"
+# Python 3.13 omits empty lists in ast.dump; Python 3.10 on SPORC emits them.
+# Keep the original fingerprint encoding (including existing v1 imports), and
+# admit only these exact reviewed old/new pairs, never arbitrary AST changes.
+_REVIEWED_COORDINATE_AST_PAIRS = frozenset({
+    (_DENSE_COORDINATE_AST, _COARSE_COORDINATE_AST),
+    ("16ffc7be63a7d47d9f2a561f9680c750ffae48c4eabb6e72edd5ec6c182badad",
+     "9e9ff3dfdf9048454a08a6e5597b4e9a84c6579f655474c6fa8255ce81867a8a"),
+})
 
 
 def compatible_preparation_code(source, consumer):
@@ -31,7 +39,7 @@ def compatible_preparation_code(source, consumer):
     key = "coordinate_ast_sha256"
     return (set(source) == set(consumer) == {*PREPARATION_CODE, key}
         and all(source[p] == consumer[p] for p in PREPARATION_CODE)
-        and source[key] == _DENSE_COORDINATE_AST and consumer[key] == _COARSE_COORDINATE_AST)
+        and (source[key], consumer[key]) in _REVIEWED_COORDINATE_AST_PAIRS)
 
 
 def preparation_code(project, commit):

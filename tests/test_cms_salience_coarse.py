@@ -78,22 +78,32 @@ def test_graph_versions_counts_exact_fractions_and_legacy_hash():
         contracts.graph("arbitrary")
 
 
-def test_reviewed_preparation_ast_migration_is_closed():
+@pytest.mark.parametrize("old_hash,new_hash", sorted(preparation._REVIEWED_COORDINATE_AST_PAIRS))
+def test_reviewed_preparation_ast_migration_is_closed(old_hash, new_hash):
     old = {p: "a" * 40 for p in preparation.PREPARATION_CODE}
-    old["coordinate_ast_sha256"] = preparation._DENSE_COORDINATE_AST
-    new = dict(old, coordinate_ast_sha256=preparation._COARSE_COORDINATE_AST)
+    old["coordinate_ast_sha256"] = old_hash
+    new = dict(old, coordinate_ast_sha256=new_hash)
     assert preparation.compatible_preparation_code(old, new)
     assert preparation.compatible_preparation_code(old, old)
     assert not preparation.compatible_preparation_code(new, old)
     assert not preparation.compatible_preparation_code(old, dict(new, coordinate_ast_sha256="f" * 64))
     assert not preparation.compatible_preparation_code(old, dict(new, **{preparation.PREPARATION_CODE[0]: "c" * 40}))
+    other_new = next(b for a, b in preparation._REVIEWED_COORDINATE_AST_PAIRS if a != old_hash)
+    assert not preparation.compatible_preparation_code(old, dict(new, coordinate_ast_sha256=other_new))
+
+
+def test_real_git_preparation_migration_on_running_python():
     tree = ast.parse(Path(contracts.__file__).read_text())
     fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "coordinate")
-    assert canonical_sha256(ast.dump(fn, include_attributes=False)) == preparation._COARSE_COORDINATE_AST
     root = Path(__file__).resolve().parents[1]
     donor = "7bb171382b7206013bc5d9308a4c22b2929bc7f4"
     previous = preparation.preparation_code(root, donor)
-    assert previous["coordinate_ast_sha256"] == preparation._DENSE_COORDINATE_AST
+    consumer = preparation.preparation_code(root, "4f862c11045943f1237d1cef166d32a85c341ed3")
+    assert consumer["coordinate_ast_sha256"] == canonical_sha256(ast.dump(fn, include_attributes=False))
+    assert (previous["coordinate_ast_sha256"], consumer["coordinate_ast_sha256"]) in preparation._REVIEWED_COORDINATE_AST_PAIRS
+    assert preparation.compatible_preparation_code(previous, consumer)
+    producer = preparation.preparation_code(root, "f2e8a374f522a39c7f3a6331f0ec77ae12cabaea")
+    assert preparation.compatible_preparation_code(producer, consumer)
     fingerprints = shared.reference_code(root, donor)
     assert "production.run_fit:ast" in fingerprints and "contracts.node:ast" in fingerprints
 

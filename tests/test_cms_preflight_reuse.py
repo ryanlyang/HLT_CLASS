@@ -131,10 +131,21 @@ def test_unchanged_real_git_runtime_and_closed_preflight_equivalence():
     old = reuse.execution_code(root, "7bb171382b7206013bc5d9308a4c22b2929bc7f4")
     coarse = reuse.execution_code(root, "48ab8609ee87ba72ab9868dfc951a36a1c9d851e")
     assert old == coarse
+    assert old == reuse.execution_code(root, "4f862c11045943f1237d1cef166d32a85c341ed3")
     node = next(n for n in ast.parse(Path(production.__file__).read_text()).body
                 if isinstance(n, ast.FunctionDef) and n.name == "preflight")
-    assert canonical_sha256(ast.dump(node, include_attributes=False)) == reuse._PREFLIGHT_CURRENT
+    digest = canonical_sha256(ast.dump(node, include_attributes=False))
+    assert digest in {current for _, current in reuse._REVIEWED_PREFLIGHT_AST_PAIRS}
+    assert coarse["production.preflight:ast"] == digest
     assert all(f"production.{name}:ast" in coarse for name in reuse._PROBE_FUNCTIONS)
+
+
+@pytest.mark.parametrize("old,current", reuse._REVIEWED_PREFLIGHT_AST_PAIRS)
+def test_reviewed_preflight_encodings_remain_closed(old, current):
+    assert reuse.reviewed_preflight_digest(old) == current
+    assert reuse.reviewed_preflight_digest(current) == current
+    with pytest.raises(ValueError, match="reviewed equivalence"):
+        reuse.reviewed_preflight_digest("f" * 64)
 
 
 def test_direct_dense_create_rejects_preflight_reuse(tiny_campaign):

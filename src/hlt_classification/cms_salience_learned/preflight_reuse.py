@@ -15,10 +15,24 @@ from .storage import checked_file, fingerprint, load_receipt, receipt_path
 # The U000/U000 cache, route probes and memory measurements are unchanged.
 _PREFLIGHT_OLD = "7cf15c505f3a58ffea184beea602165c60adbf8cc31bbdea9cb0496fb12899e3"
 _PREFLIGHT_CURRENT = "64877e53469aa919373e849f9dd9f713af62f2c84fc1c51d81b8cb2db6d7010b"
+# Exact same reviewed functions under the two ast.dump encodings used by local
+# Python 3.13 and SPORC Python 3.10. Do not change previously stored encodings.
+_REVIEWED_PREFLIGHT_AST_PAIRS = (
+    (_PREFLIGHT_OLD, _PREFLIGHT_CURRENT),
+    ("6030fbda02992022f31408c6b8879d9362416326226ae08005b23b0d2b4d83b8",
+     "1460470f04534e8c557ccdfac86fac03d7cb1bf6494fb6c9f34e84f79299f8f7"),
+)
 _PROBE_FUNCTIONS = ("endpoint_audit", "_preflight_memory", "_withdrawal_probe_indices",
                     "_preflight_route", "extract", "validate_gpu_allocation")
 _RUNTIME_FILES = ("sbatch/run_cms_salience_learned.sh",
                   "src/hlt_classification/jetclass2_delphes/execution.py")
+
+
+def reviewed_preflight_digest(digest):
+    for old, current in _REVIEWED_PREFLIGHT_AST_PAIRS:
+        if digest in (old, current):
+            return current
+    raise ValueError("Preflight implementation is not in the reviewed equivalence pair")
 
 
 def execution_code(project, commit):
@@ -33,9 +47,7 @@ def execution_code(project, commit):
     for name in (*_PROBE_FUNCTIONS, "preflight"):
         digest = canonical_sha256(ast.dump(functions[name], include_attributes=False))
         if name == "preflight":
-            if digest not in {_PREFLIGHT_OLD, _PREFLIGHT_CURRENT}:
-                raise ValueError("Preflight implementation is not in the reviewed equivalence pair")
-            digest = _PREFLIGHT_CURRENT
+            digest = reviewed_preflight_digest(digest)
         code[f"production.{name}:ast"] = digest
     return code
 

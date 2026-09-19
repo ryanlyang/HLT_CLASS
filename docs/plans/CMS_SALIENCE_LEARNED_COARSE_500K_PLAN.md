@@ -34,6 +34,21 @@ before cancellation, submission and every scientific task. All other source,
 dry-run, shared-job-preservation, retirement and final-test restrictions remain.
 The explicit operator mode is `reuse-and-switch DENSE_SPEC NEW_ROOT`.
 
+Compatibility correction (2026-09-19): the fixed coordinate/preflight AST
+allowlists must recognize the exact reviewed functions under both SPORC Python
+3.10 (empty-list fields included) and local Python 3.13 (empty-list fields
+omitted). Both encodings are verified against the same immutable Git sources.
+Do not change `preparation_code` or shared-reference fingerprint serialization:
+existing imported preparation descriptors must keep their original hashes.
+Only same-encoding old/new coordinate pairs are accepted; unknown function
+changes still fail. This is a compatibility bug fix, not a new scientific
+protocol, different resource measurement, or permission to bypass source checks.
+Verification: reproduced two failures on Python 3.10.19 before the correction;
+afterward 104 native/coarse/reuse/temporary-memory tests passed (five skipped
+for absent Weaver). All 37 coarse/reuse tests also passed on Python 3.13.12.
+Original producer-to-consumer preparation and accepted-runtime Git proofs pass
+under both actual interpreters. No new GPU measurement is claimed.
+
 ## Registered science
 
 `U000 -> U050 -> U100 -> D066 -> D033 -> D000`
