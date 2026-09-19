@@ -30,7 +30,8 @@ def tasks(spec):
         for row in science:
             if row["task_id"] in SHARED_TASKS:
                 row["kind"] = "import_shared"
-    return dict(prepare=preparation, gate=[dict(task_id="preflight", kind="preflight", dependencies=[])], science=science)
+    gate_kind = "import_preflight" if spec.get("acceptance_import") is not None else "preflight"
+    return dict(prepare=preparation, gate=[dict(task_id="preflight", kind=gate_kind, dependencies=[])], science=science)
 
 
 def validate_resources(resources):
@@ -76,11 +77,16 @@ def command_plan(spec, stage):
 
 def validate_campaign(spec, *, check_source=False):
     digest = validate(spec, "CAMPAIGN_SPEC")
-    if spec["schema_version"] == 4:
+    if spec["schema_version"] in (4, 5):
         if spec.get("ladder") != "coarse" or "shared_source" not in spec:
-            raise ValueError("CMS version 4 requires the registered coarse ladder")
+            raise ValueError("CMS versions 4/5 require the registered coarse ladder")
     elif "ladder" in spec or "shared_source" in spec:
         raise ValueError("Legacy CMS specs remain dense")
+    if spec["schema_version"] == 5:
+        if spec.get("acceptance_import") is None or spec.get("shared_source") is None:
+            raise ValueError("CMS v5 requires explicit accepted dense preflight reuse")
+    elif "acceptance_import" in spec:
+        raise ValueError("Legacy campaigns cannot bypass their own preflight")
     if spec["graph"] != graph(spec.get("ladder", "dense")) or spec["budgets"] != BUDGETS:
         raise ValueError("Registered CMS scientific graph differs")
     allocation_site(spec)
@@ -114,6 +120,9 @@ def validate_campaign(spec, *, check_source=False):
     if spec.get("shared_source") is not None:
         from .shared_import import validate_shared_source
         validate_shared_source(spec)
+    if spec.get("acceptance_import") is not None:
+        from .preflight_reuse import validate_acceptance_import
+        validate_acceptance_import(spec)
     return digest
 
 
@@ -125,7 +134,7 @@ def view_config_hash(registered_graph):
 
 def create(*, split_manifest, data_root, campaign_root, project_dir, source_commit,
            cpus=16, workers=16, memory_mb=192000, partition="tier3", reuse_preparation_spec=None,
-           ladder="dense", reuse_shared_spec=None):
+           ladder="dense", reuse_shared_spec=None, reuse_dense_preflight=False):
     root = Path(campaign_root).resolve()
     if root.exists():
         raise FileExistsError("Use a fresh isolated campaign root; existing roots are never overwritten")
@@ -137,8 +146,13 @@ def create(*, split_manifest, data_root, campaign_root, project_dir, source_comm
     registered = graph(ladder)
     if reuse_shared_spec is not None and ladder != "coarse":
         raise ValueError("Shared-source reuse is only registered for the coarse replacement")
+    if reuse_dense_preflight and (ladder != "coarse" or reuse_shared_spec is None):
+        raise ValueError("Preflight reuse requires a coarse shared-source replacement")
     extra = dict(ladder="coarse", shared_source=None) if ladder == "coarse" else {}
-    spec = artifact("CAMPAIGN_SPEC", contract_version=4 if ladder == "coarse" else 3,
+    if reuse_dense_preflight:
+        extra["acceptance_import"] = None
+    version = 5 if reuse_dense_preflight else 4 if ladder == "coarse" else 3
+    spec = artifact("CAMPAIGN_SPEC", contract_version=version,
         project_dir=str(Path(project_dir).resolve()), source_commit=source_commit,
         campaign_root=str(root), data_root=str(Path(data_root).resolve()), site=site_for_partition(partition),
         split_manifest=dict(fingerprint(split_manifest), content_hash=split["content_hash"]),
@@ -156,7 +170,12 @@ def create(*, split_manifest, data_root, campaign_root, project_dir, source_comm
         from .shared_import import build_shared_source
         value = {k: v for k, v in spec.items() if k != "content_hash"}
         value["shared_source"] = build_shared_source(spec, reuse_shared_spec)
-        spec = artifact("CAMPAIGN_SPEC", contract_version=4, **value)
+        spec = artifact("CAMPAIGN_SPEC", contract_version=version, **value)
+    if reuse_dense_preflight:
+        from .preflight_reuse import build_acceptance_import
+        value = {k: v for k, v in spec.items() if k != "content_hash"}
+        value["acceptance_import"] = build_acceptance_import(spec)
+        spec = artifact("CAMPAIGN_SPEC", contract_version=version, **value)
     validate_campaign(spec, check_source=True)
     write_immutable_json(root / "campaign_spec.json", spec)
     for stage in ("prepare", "gate", "science"):
@@ -168,7 +187,7 @@ def create(*, split_manifest, data_root, campaign_root, project_dir, source_comm
     return spec
 
 
-def create_coarse_from_dense(*, source_spec, campaign_root, project_dir, source_commit):
+def create_coarse_from_dense(*, source_spec, campaign_root, project_dir, source_commit, reuse_dense_preflight=False):
     """Infer immutable inputs/resources from the explicitly named dense source."""
     from .preparation_import import preparation_spec
     path = Path(source_spec).resolve()
@@ -180,7 +199,8 @@ def create_coarse_from_dense(*, source_spec, campaign_root, project_dir, source_
     return create(split_manifest=source["split_manifest"]["path"], data_root=source["data_root"],
         campaign_root=campaign_root, project_dir=project_dir, source_commit=source_commit,
         **source["resources"], partition=source["site"]["partition"], ladder="coarse",
-        reuse_preparation_spec=Path(producer["campaign_root"]) / "campaign_spec.json", reuse_shared_spec=path)
+        reuse_preparation_spec=Path(producer["campaign_root"]) / "campaign_spec.json", reuse_shared_spec=path,
+        reuse_dense_preflight=reuse_dense_preflight)
 
 
 def validate_acceptance_resources(spec, value):
@@ -226,6 +246,9 @@ def gate_check(spec):
     validate_campaign(spec)
     load_receipt(spec, "foundation")
     load_receipt(spec, "preflight")
+    if spec.get("acceptance_import") is not None:
+        from .preflight_reuse import reused_gate_check
+        return reused_gate_check(spec)
     value = load_json(Path(spec["campaign_root"]) / "execution_acceptance.json")
     validate_acceptance_resources(spec, value)
     if (value["campaign_spec_sha256"] != spec["content_hash"] or value["site"] != spec["site"]

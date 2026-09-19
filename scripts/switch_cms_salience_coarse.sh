@@ -1,7 +1,7 @@
 #!/bin/bash
 # Explicit, staged dense-to-coarse replacement. Run with bash, never source.
 set -euo pipefail
-MODE="${1:?use prepare DENSE_SPEC NEW_ROOT or preview/finish COARSE_SPEC}"
+MODE="${1:?use prepare/reuse-and-switch DENSE_SPEC NEW_ROOT or preview/finish COARSE_SPEC}"
 PROJECT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 source /home/ryreu/miniconda3/etc/profile.d/conda.sh
 conda activate atlas_kd_sporc
@@ -16,20 +16,30 @@ CLI="${PROJECT_DIR}/scripts/cms_salience_learned.py"
 AUTH="AUTHORIZE CMS SALIENCE LEARNED COARSE 500K EXACT SPEC"
 
 case "${MODE}" in
-  prepare)
+  prepare|reuse-and-switch)
     DENSE_SPEC="${2:?explicit dense source spec required}"
     COARSE_ROOT="${3:?fresh coarse root required}"
     COMMIT="$(git -C "${PROJECT_DIR}" rev-parse HEAD)"
-    CMS_TEST_TMP="$(mktemp -d /tmp/cms-coarse-tests.XXXXXXXX)"
-    python -s -m pytest -q -p no:cacheprovider --basetemp="${CMS_TEST_TMP}/pytest" \
-      "${PROJECT_DIR}/tests/test_cms_salience_learned.py" \
-      "${PROJECT_DIR}/tests/test_cms_salience_coarse.py" \
-      "${PROJECT_DIR}/tests/test_cms_fusion_temporary_memory.py"
+    REUSE_ARGS=()
+    if [ "${MODE}" = reuse-and-switch ]; then
+      REUSE_ARGS=(--reuse-dense-preflight)
+    else
+      CMS_TEST_TMP="$(mktemp -d /tmp/cms-coarse-tests.XXXXXXXX)"
+      python -s -m pytest -q -p no:cacheprovider --basetemp="${CMS_TEST_TMP}/pytest" \
+        "${PROJECT_DIR}/tests/test_cms_salience_learned.py" \
+        "${PROJECT_DIR}/tests/test_cms_salience_coarse.py" \
+        "${PROJECT_DIR}/tests/test_cms_fusion_temporary_memory.py"
+    fi
     python -s "${CLI}" create-coarse --source-spec "${DENSE_SPEC}" \
-      --campaign-root "${COARSE_ROOT}" --source-commit "${COMMIT}"
+      --campaign-root "${COARSE_ROOT}" --source-commit "${COMMIT}" "${REUSE_ARGS[@]}"
     COARSE_SPEC="${COARSE_ROOT}/campaign_spec.json"
     # Hash verification only: no raw-data preprocessing or GPU fit on login.
     python -s "${CLI}" run --spec "${COARSE_SPEC}" --task foundation
+    if [ "${MODE}" = reuse-and-switch ]; then
+      python -s "${CLI}" run --spec "${COARSE_SPEC}" --task preflight
+      echo "Compatible accepted dense GPU evidence imported; no new GPU preflight submitted."
+      exec bash "${PROJECT_DIR}/scripts/switch_cms_salience_coarse.sh" finish "${COARSE_SPEC}"
+    fi
     python -s "${CLI}" submit --spec "${COARSE_SPEC}" --stage gate \
       --execute --authorization-phrase "${AUTH}"
     echo "Fresh coarse preflight submitted. No existing job was cancelled."
@@ -51,7 +61,7 @@ case "${MODE}" in
     echo "Coarse science submitted. Shared dense reference/control jobs and all files were preserved."
     ;;
   *)
-    echo "Unknown mode. Use prepare, preview, or finish." >&2
+    echo "Unknown mode. Use prepare, reuse-and-switch, preview, or finish." >&2
     exit 2
     ;;
 esac

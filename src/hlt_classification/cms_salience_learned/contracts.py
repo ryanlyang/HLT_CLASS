@@ -29,7 +29,7 @@ TRAINING = dict(maximum_passes=100, minimum_passes=60, patience=15,
 ACCEPTANCE_POLICY = dict(cpu_peak_fraction_limit=.85, cuda_peak_fraction_limit=.90,
     withdrawal_probe_steps_per_alpha=5, withdrawal_probe_alphas=[1., .5, 0.],
     withdrawal_probe_batch_size=256, withdrawal_probe_batch_selection="longest_u000")
-CONTRACT_VERSIONS = {"CAMPAIGN_SPEC": (1, 2, 3, 4), "EXECUTION_ACCEPTANCE": (1, 2),
+CONTRACT_VERSIONS = {"CAMPAIGN_SPEC": (1, 2, 3, 4, 5), "EXECUTION_ACCEPTANCE": (1, 2),
                      "GRAPH": (1, 2), "PREPARATION_IMPORT": (1, 2)}
 
 
@@ -50,9 +50,9 @@ def validate(value, artifact_type):
 
 
 def acceptance_policy(spec):
-    """Old specs retain their 85% gate; v3/v4 specs explicitly opt into 90%."""
+    """Old specs retain their 85% gate; v3-v5 specs explicitly opt into 90%."""
     version = spec["schema_version"]
-    if version in (3, 4):
+    if version in (3, 4, 5):
         if spec.get("acceptance_policy") != ACCEPTANCE_POLICY:
             raise ValueError("CMS v3 acceptance policy differs")
         return deepcopy(ACCEPTANCE_POLICY)

@@ -5,6 +5,35 @@ ladder. This plan supersedes only the graph of the native CMS dense plan;
 its data, matching, model, optimization, validation and sealed-test rules
 remain unchanged. Do not edit an existing dense spec or source worktree.
 
+## Explicit accepted-gate reuse (user authorization, 2026-09-19)
+
+The user subsequently requested skipping the duplicate GPU preflight and
+queuing the replacement directly. This overrides the fresh-gate requirement
+below only for a new opt-in CAMPAIGN_SPEC/v5. Existing v4 roots still require
+their own gate and are not edited. V5 must already import the accepted dense
+source's shared references and original preparation; it cannot waive an absent,
+failed, or incompatible gate.
+
+Authenticate the source's real execution acceptance, preflight receipt, all
+30 full-batch probes and unchanged 85% CPU / 90% CUDA limits. Require identical
+data, preparation, resources, partition, environment declaration, training and
+model implementations, scientific worker functions and resource-probe code.
+Permit only the previously reviewed preflight version-predicate extension
+(`==3` to `>=3`), identified by an exact AST pair. The measured paired U000/U000
+cache and longest-U000 full batch remain the registered length envelope for
+every coarse U/D pair; new coordinate names change neither the model nor this
+envelope. This is evidence transfer, not a fresh GPU or environment measurement.
+It assumes the named SPORC software environment remains unchanged.
+
+Publish ACCEPTANCE_IMPORT/v1 and a consumer-bound ACCEPTANCE_REUSE/v1 receipt,
+explicitly recording `fresh_gpu_measurement=False`, donor campaign/commit/job
+and immutable evidence hashes. Never rewrite or synthesize EXECUTION_ACCEPTANCE
+to make the consumer appear measured. The lightweight import runs on CPU and
+does not submit a GPU gate. Source evidence and compatibility are rechecked
+before cancellation, submission and every scientific task. All other source,
+dry-run, shared-job-preservation, retirement and final-test restrictions remain.
+The explicit operator mode is `reuse-and-switch DENSE_SPEC NEW_ROOT`.
+
 ## Registered science
 
 `U000 -> U050 -> U100 -> D066 -> D033 -> D000`
@@ -84,6 +113,15 @@ Local verification (2026-09-19): 88 passed, 5 installed-Weaver-dependent skips
 across native, coarse and temporary-memory regression tests. Shell syntax and
 scoped whitespace checks pass. The miniature spans all five coarse transitions
 through final single-view D000 extraction; it is not GPU acceptance evidence.
-The staged helper reruns focused tests on SPORC before creation and requires a
-fresh genuine gate before retirement/science. No remote action was performed
-by the implementation agent.
+The default `prepare` helper reruns focused tests on SPORC before creation and
+requires a fresh genuine gate before retirement/science. No remote action was
+performed by the implementation agent.
+
+Opt-in v5 reuse verification (2026-09-19): 100 passed, 5 installed-Weaver-dependent
+skips in 211.30 s across native, coarse, preflight-reuse and temporary-memory
+tests. The 12 new tests cover CPU-only import, preserved donor artifacts,
+unversioned bypass rejection, missing/corrupt/incompatible evidence, exact
+consumer receipts, explicit submission authorization and the real Git-code
+equivalence of accepted 7bb17138 and coarse 48ab8609. Shell syntax, CLI discovery
+and scoped whitespace checks pass. No fresh installed-Weaver/GPU measurement is
+claimed; `reuse-and-switch` retains the donor's genuine evidence explicitly.

@@ -1,5 +1,41 @@
 # CMS_SALIENCE_LEARNED_DENSE contracts
 
+## Opt-in accepted dense preflight reuse (2026-09-19)
+
+Following explicit user authorization to skip the duplicate GPU preflight,
+new CAMPAIGN_SPEC/v5 extends the coarse replacement with a required
+`acceptance_import`. It must also have a compatible `shared_source` and
+original preparation import. V1-v4 semantics are unchanged: old roots cannot
+acquire this option by adding a field, editing a file or relabelling evidence.
+
+ACCEPTANCE_IMPORT/v1 binds the genuine dense-v3 execution acceptance and
+preflight receipt, source campaign/commit/job, resource-probe implementation
+and scientific runtime code. It reuses the exact accepted full-population
+U000/U000 paired-cache / longest-jet batch-256 envelope. All 30 probes and
+85% CPU / 90% GPU limits must still validate against both source and consumer.
+Data, preparation, batch, model, training, partition and requested resources
+remain identical. Native kernels, shared model/data trees, probe functions,
+worker shell and allocation adapter are source-fingerprinted. The preflight
+driver allows only the exact reviewed `==3` to `>=3` schema-predicate AST pair.
+Any other runtime change requires fresh measurement. The declared conda
+environment must match; unchanged installed software is an explicit assumption,
+not a newly measured claim.
+
+The consumer publishes `execution_acceptance_import.json` as
+ACCEPTANCE_REUSE/v1, with `fresh_gpu_measurement=False` and original measurements
+labelled as source evidence. It never synthesizes `execution_acceptance.json`
+or an EXECUTION_ACCEPTANCE claiming a new GPU run. Its preflight task becomes
+a CPU evidence import, followed by the normal authenticated task receipt.
+The gate rechecks original evidence and compatibility on every use. Creation,
+import or a passing gate still does not itself submit/cancel science.
+
+Use `create-coarse --reuse-dense-preflight` to opt in. The explicit helper mode
+`reuse-and-switch DENSE_SPEC NEW_ROOT` creates a fresh v5 root, verifies/imports
+foundation and acceptance on CPU, then performs the normal exact-ID retirement
+and full science submission. It submits no new GPU preflight. Existing `prepare`
+remains the v4 fresh-preflight path. No source root, job or file outside the
+authorized dense-specific retirement set is changed.
+
 ## Coarse replacement extension (2026-09-19)
 
 `docs/plans/CMS_SALIENCE_LEARNED_COARSE_500K_PLAN.md` authorizes the coarse

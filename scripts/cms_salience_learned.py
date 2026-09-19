@@ -30,10 +30,12 @@ def main():
     c.add_argument("--reuse-preparation-spec", help="Read-only completed native CMS preparation; never reuses its GPU gate")
     c.add_argument("--ladder", choices=("dense", "coarse"), default="dense")
     c.add_argument("--reuse-shared-spec", help="Coarse only: reuse the dense references/control without cancelling them")
+    c.add_argument("--reuse-dense-preflight", action="store_true", help="Opt-in v5: authenticate compatible accepted dense GPU evidence instead of rerunning it")
     replacement = modes.add_parser("create-coarse", help="Infer matching preparation/resources from an explicit dense source")
     replacement.add_argument("--source-spec", required=True)
     replacement.add_argument("--campaign-root", required=True)
     replacement.add_argument("--source-commit", required=True)
+    replacement.add_argument("--reuse-dense-preflight", action="store_true")
     for mode in ("submit", "run", "gate", "results", "status", "retire-dense"):
         p = modes.add_parser(mode)
         p.add_argument("--spec", required=True)
@@ -52,10 +54,11 @@ def main():
             campaign_root=args.campaign_root, project_dir=ROOT, source_commit=args.source_commit,
             cpus=args.cpus, workers=args.workers, memory_mb=args.memory_mb,
             partition=args.partition, reuse_preparation_spec=args.reuse_preparation_spec,
-            ladder=args.ladder, reuse_shared_spec=args.reuse_shared_spec)
+            ladder=args.ladder, reuse_shared_spec=args.reuse_shared_spec,
+            reuse_dense_preflight=args.reuse_dense_preflight)
     elif args.mode == "create-coarse":
         result = create_coarse_from_dense(source_spec=args.source_spec, campaign_root=args.campaign_root,
-            project_dir=ROOT, source_commit=args.source_commit)
+            project_dir=ROOT, source_commit=args.source_commit, reuse_dense_preflight=args.reuse_dense_preflight)
     else:
         spec = load_json(args.spec)
         if Path(args.spec).resolve() != (Path(spec["campaign_root"]) / "campaign_spec.json").resolve():

@@ -30,7 +30,7 @@ def gate_fixture(spec):
               for r in ("reference_ce", "direct_kd", "fusion_acquisition", "fusion_withdrawal")]
     evidence = contracts.artifact("EXECUTION_ACCEPTANCE", contract_version=2,
         campaign_spec_sha256=spec["content_hash"], site=spec["site"], source_commit=spec["source_commit"],
-        genuine_allocation=True, installed_weaver_forward_backward=True, exact_extraction=True,
+        genuine_allocation=True, installed_weaver_forward_backward=True, exact_extraction=True, slurm_job_id="21720795",
         endpoint_parity=True, full_population_cache_rows={r: contracts.BUDGETS[r] for r in ("train", "validation")},
         final_test_accessed=False, peak_rss_bytes=1, peak_cuda_bytes=1, total_cuda_bytes=100,
         miniature_reports=proofs, **acceptance_resource_evidence(spec))

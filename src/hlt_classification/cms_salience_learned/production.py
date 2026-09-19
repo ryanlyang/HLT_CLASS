@@ -453,6 +453,10 @@ def run_task(spec, task_id, *, device="cuda"):
         elif kind == "import_shared":
             from .shared_import import import_shared_task
             outputs = import_shared_task(spec, task_id)
+        elif kind == "import_preflight":
+            from .preflight_reuse import publish_acceptance_reuse
+            load_receipt(spec, "foundation")
+            outputs = publish_acceptance_reuse(spec)
         elif kind == "preflight":
             load_receipt(spec, "foundation")
             outputs = preflight(spec, device)

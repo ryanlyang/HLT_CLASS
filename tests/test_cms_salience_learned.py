@@ -645,7 +645,7 @@ def test_legacy_v1_remains_readable_but_tier3_only(tiny_campaign):
     with pytest.raises(ValueError, match="Legacy"):
         campaign.validate_campaign(rehash(legacy, preparation_import=None))
     with pytest.raises(ValueError, match="version"):
-        campaign.validate_campaign(rehash(legacy, schema_version=5))
+        campaign.validate_campaign(rehash(legacy, schema_version=6))
 
 
 def test_worker_authenticates_selected_partition_and_exact_resources(tiny_campaign, monkeypatch):
