@@ -8,6 +8,19 @@ from hlt_classification.models.scouting_particle_transformer import ScoutingPart
 
 
 class CMSFusion(AdjacentFusionParticleTransformer):
+    def _prepare_injection_bias(self, pair_bias, context_padding):
+        # MHA normally adds the same padding mask separately at each of four
+        # injections. Merge it once instead. Out-of-place addition also lets
+        # the slice's full (primary+context)^2 backing tensor be released after
+        # the caller rebinds it. Do not detach: all injections train pair_embed.
+        # Compute the full Weaver pair embedding first: cropping its inputs
+        # would change its BatchNorm population and therefore the model.
+        padding = torch.zeros(
+            context_padding.shape, dtype=pair_bias.dtype,
+            device=pair_bias.device,
+        ).masked_fill(context_padding, float("-inf"))
+        return (pair_bias + padding[:, None, None, :]).contiguous(), None
+
     @staticmethod
     def _tag(primary, context=None):
         features, vectors, mask = primary

@@ -146,6 +146,27 @@ v1; they cannot be silently relaxed or reused as v3 acceptance. A fresh root,
 exact pushed source and genuine preflight are required before any science.
 Completed original preparation may still be imported read-only as above.
 
+### CMS-only temporary cross-attention memory reduction
+
+After source `77c9d2b1` exceeded the v3 CUDA limit at 92.57%, the native CMS
+adapter may premerge context padding into the rectangular cross-attention bias
+once and share that tensor across injections 2/4/6/8. The shared fusion base
+keeps its legacy allocation path for other adapters. Compute the same full
+Weaver pair embedding before slicing: computing only cross pairs would change
+its BatchNorm population. Materialize only the resulting rectangle, so the
+slice need not retain the larger square output storage. Do not detach the
+bias, omit either prediction route, reorder stochastic layers, or recompute
+activations. State-dictionary keys and model parameters stay unchanged.
+
+This is an execution optimization, not a new scientific arm. Require legacy-
+versus-optimized tests of outputs, all withdrawal loss terms, gradients,
+optimizer updates, buffers and RNG consumption, plus installed-Weaver parity
+and a fresh measured A100 gate. Floating gradient accumulation order may
+differ within numerical tolerances; whole-training bitwise identity is not
+claimed. Keep batch 256, the registered losses/schedule and the strict 90%
+CUDA / 85% CPU limits. An allocation-level saving does not prove that the
+whole training peak is low enough; no previous failed gate is reusable.
+
 Report validation accuracy, macro AUC, geometric macro R50 and each class's
 QCD rejection. Recovery = (model − native-HLT CE)/(pure-offline CE − native-HLT
 CE), with R50 in linear rejection space. Also report persistent-anchor

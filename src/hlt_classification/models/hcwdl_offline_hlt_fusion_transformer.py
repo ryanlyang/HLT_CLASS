@@ -224,7 +224,9 @@ class _CrossInjection(nn.Module):
         batch, hlt_tokens, _ = hlt.shape
         context_tokens = context.shape[1]
         bias = pair_bias.reshape(batch * 8, hlt_tokens, context_tokens)
-        padding = torch.zeros(
+        # None means the caller has already merged padding into the pair bias.
+        # In that case MHA can reuse one rectangular mask across injections.
+        padding = None if context_padding is None else torch.zeros(
             context_padding.shape, dtype=bias.dtype,
             device=context_padding.device,
         ).masked_fill(context_padding, float("-inf"))
@@ -319,6 +321,10 @@ class AnchoredFusionParticleTransformer(nn.Module):
     def forward_hlt(self, features, vectors, mask) -> torch.Tensor:
         return self.hlt_mod(features, v=vectors, mask=mask)
 
+    def _prepare_injection_bias(self, pair_bias, context_padding):
+        """Legacy allocation path; execution adapters may share a merged mask."""
+        return pair_bias, context_padding
+
     def forward_fused(
         self, features, vectors, mask, content_source_codes, *, alpha: float,
     ) -> AnchoredFusionOutput:
@@ -355,6 +361,9 @@ class AnchoredFusionParticleTransformer(nn.Module):
         cross_pair = self.cross_pair_mod.pair_embed(
             combined_vectors, uu=None, mask=combined_mask,
         )[:, :, :hlt_hidden.shape[1], hlt_hidden.shape[1]:]
+        cross_pair, context_padding = self._prepare_injection_bias(
+            cross_pair, ~context_mask[:, 0],
+        )
         hlt_padding = ~hlt_mask[:, 0]
         hlt_attention = set(_attention_mask_blocks(self.hlt_mod))
         captures = []
@@ -367,7 +376,7 @@ class AnchoredFusionParticleTransformer(nn.Module):
             if block_index in INJECTION_BLOCKS:
                 hlt_hidden = self.injections[injection_index](
                     hlt_hidden, context_states[injection_index],
-                    context_padding=~context_mask[:, 0],
+                    context_padding=context_padding,
                     pair_bias=cross_pair, alpha=float(alpha),
                 )
                 captures.append(hlt_hidden)
@@ -420,6 +429,9 @@ class AnchoredFusionParticleTransformer(nn.Module):
         cross_pair = self.cross_pair_mod.pair_embed(
             combined_vectors, uu=None, mask=combined_mask,
         )[:, :, :initial.shape[1], initial.shape[1]:]
+        cross_pair, context_padding = self._prepare_injection_bias(
+            cross_pair, ~context_mask[:, 0],
+        )
         padding = ~hlt_mask[:, 0]
         attention = set(_attention_mask_blocks(self.hlt_mod))
         zero_hidden = initial
@@ -441,7 +453,7 @@ class AnchoredFusionParticleTransformer(nn.Module):
                 zero_states.append(zero_hidden)
                 privileged_hidden = self.injections[injection_index](
                     privileged_hidden, context_states[injection_index],
-                    context_padding=~context_mask[:, 0], pair_bias=cross_pair,
+                    context_padding=context_padding, pair_bias=cross_pair,
                     alpha=float(alpha),
                 )
                 privileged_states.append(privileged_hidden)

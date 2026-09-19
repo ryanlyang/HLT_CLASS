@@ -62,6 +62,16 @@ the relaxed policy. Local tiny fixtures reduce population budgets only for
 tests; genuine 500k acceptance requires full batches of 256. Only a fresh
 source-pinned campaign/gate may use v3; old failed gates do not become valid.
 
+The CMS fusion adapter shares one compact, padding-merged cross-attention
+bias across its four residual injections. Full Weaver pair construction,
+BatchNorm inputs, stochastic call order, trainable gradients, both withdrawal
+routes and exact alpha-zero extraction are preserved. No state-dictionary
+keys, scientific semantics, batch size or acceptance thresholds change, so
+existing scientific v1 / campaign v3 / acceptance v2 schemas remain unchanged.
+This allocation-only implementation still needs a fresh source-bound A100
+preflight; legacy acceptance or an estimated saving cannot authorize science.
+Non-CMS fusion adapters keep the prior mask-allocation path.
+
 ## Operator surface
 
 `scripts/cms_salience_learned.py create` requires `--split-manifest`,
