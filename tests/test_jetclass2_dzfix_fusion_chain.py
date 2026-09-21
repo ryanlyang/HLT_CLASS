@@ -16,6 +16,7 @@ from hlt_classification.jetclass2_delphes import (
 )
 from hlt_classification.jetclass2_delphes.cache import RamBlock, RamCache
 from hlt_classification.jetclass2_delphes.contracts import artifact as parent_artifact
+from hlt_classification.jetclass2_delphes.inputs import input_contract
 from hlt_classification.scouting.hcwdl_recovery import build_submission_ledger
 from test_hcwdl_offline_hlt_fusion import _FakeWeaver
 
@@ -111,11 +112,12 @@ def test_partition_is_stratified_50_25_25_and_tamper_closed(tmp_path):
         data.partition_indices(spec, cache)
 
 
-def test_native_offline_adapter_does_not_call_matching_and_d000_does_not_load_maps(monkeypatch, tmp_path):
+@pytest.mark.parametrize("nh,no,capacity", [(4, 2, 16), (319, 310, 320)])
+def test_native_offline_adapter_does_not_call_matching_and_d000_does_not_load_maps(monkeypatch, tmp_path, nh, no, capacity):
     from test_jetclass2_delphes import particle_values
     from hlt_classification.jetclass2_delphes.reader import Jet, Particles
     from hlt_classification.jetclass2_delphes import cache, salience_learned_cache as learned
-    jet = Jet("1"*64, 1, Particles(particle_values(4)), Particles(particle_values(2)))
+    jet = Jet("1"*64, 1, Particles(particle_values(nh)), Particles(particle_values(no)))
     calls = []
     def reader(*a, **kw):
         calls.append(kw["include_offline"])
@@ -124,12 +126,12 @@ def test_native_offline_adapter_does_not_call_matching_and_d000_does_not_load_ma
     monkeypatch.setattr(learned, "DatasetReader", reader)
     monkeypatch.setattr(cache, "load_assignments", lambda *a, **k: pytest.fail("native OFFLINE touched matching"))
     monkeypatch.setattr(learned, "load_assignments", lambda *a, **k: pytest.fail("D000 touched offline assignment"))
-    tiny = {"inventory": {}, "splits": {}, "inputs": {"capacity": 16}, "candidate": "SALIENCE_PT_LINEAR"}
+    tiny = {"inventory": {}, "splits": {}, "inputs": {"capacity": capacity}, "candidate": "SALIENCE_PT_LINEAR"}
     row = {"file_index": 0, "path": "f.root", "role": "train", "rows": 1}
     off = cache._prepare_file((tiny, str(tmp_path), "", row, "U000"))
     hlt = learned._prepare_file((tiny, str(tmp_path), "", row, "D000"))
-    assert off.offsets.tolist() == [0, 2]
-    assert hlt.offsets.tolist() == [0, 4]
+    assert off.offsets.tolist() == [0, no]
+    assert hlt.offsets.tolist() == [0, nh]
     assert calls == [True, False]
 
 
@@ -323,13 +325,16 @@ def imported_source(tmp_path, monkeypatch):
     """Exercise actual v2 screen/ledger/receipt validators with synthetic payloads."""
     from hlt_classification.jetclass2_delphes import salience_screen as screen_module
     root = tmp_path / "debug_screen"
-    inventory = parent_artifact("INVENTORY", test_fixture=True)
+    inventory = parent_artifact("INVENTORY", test_fixture=True, files=[
+        {"max_selected_particles": {"hlt": 311, "offline": 319}},
+        {"max_selected_particles": {"hlt": 200, "offline": 220}},
+    ])
     splits = {"profile": "TRAIN_500K", "role_counts": chain.COUNTS}
     candidates, foundations, locks = [], {}, {}
     for name in source.REGISTRY:
         foundation_root = tmp_path / "shared_maps" / name
         value = parent_artifact("SALIENCE_FOUNDATION_SPEC", inventory=inventory,
-            splits=splits, inputs={"capacity": 240}, candidate=name)
+            splits=splits, inputs=input_contract(capacity=320), candidate=name)
         lock = parent_artifact("SALIENCE_FOUNDATION_LOCK", foundation_sha256=value["content_hash"])
         write_immutable_json(foundation_root / "foundation_spec.json", value)
         write_immutable_json(foundation_root / "foundation_lock.json", lock)
@@ -340,7 +345,7 @@ def imported_source(tmp_path, monkeypatch):
     foundation, foundation_root = foundations[source.REGISTRY[0]]
     bottleneck_root = tmp_path / "bottleneck"
     bottleneck = parent_artifact("FOUNDATION_SPEC", inventory=inventory,
-                                splits=splits, inputs={"capacity": 240})
+                                splits=splits, inputs=input_contract(capacity=320))
     write_immutable_json(bottleneck_root / "foundation_spec.json", bottleneck)
     foundations[screen_module.CONTEXT] = (bottleneck, bottleneck_root)
     template = parent_artifact("RUNTIME_PROFILE", execution_site=source.execution_site("sporc_a100"),
@@ -418,6 +423,7 @@ def test_completed_source_import_reuses_only_matching_and_authenticates_all_byte
     launch, foundation, root = imported_source
     record, actual = source.build_import(launch)
     assert actual == foundation and record["models_imported"] == []
+    assert actual["inputs"]["capacity"] == 320
     assert record["consumer_commit"] != record["producer_commit"]
     assert record["selected_candidate"] == "SALIENCE_PT_LINEAR"
     assert source.validate_import(record, deep=True) == record["content_hash"]
@@ -437,6 +443,48 @@ def test_old_inventory_cannot_be_relabelled_as_dzfix(imported_source):
     wrong = rehash(launch, inventory_path=str(root / "old_inventory.json"), inventory_sha256=inventory["content_hash"])
     with pytest.raises(ValueError, match="snapshot"):
         source.build_import(wrong)
+
+
+@pytest.mark.parametrize("maximum,capacity", [(3, 16), (225, 240), (311, 320), (320, 320), (321, 336)])
+def test_population_capacity_uses_inventory_round_up_not_a_fixed_snapshot(imported_source, maximum, capacity):
+    _, _, root = imported_source
+    screen = load_json(root / "screen_spec.json")
+    inventory = rehash(load_json(root / "inventory.json"), files=[
+        {"max_selected_particles": {"hlt": maximum, "offline": maximum - 1}},
+    ])
+    rows = screen["candidates"] + [{"foundation_root": screen["bottleneck_root"]}]
+    for row in rows:
+        path = Path(row["foundation_root"]) / "foundation_spec.json"
+        foundation = rehash(load_json(path), inventory=inventory, inputs=input_contract(capacity=capacity))
+        path.unlink()
+        write_immutable_json(path, foundation)
+        row["foundation_sha256"] = foundation["content_hash"]
+    screen["bottleneck_sha256"] = rows[-1]["foundation_sha256"]
+    source._population(screen, inventory)
+
+
+@pytest.mark.parametrize("index", range(4))
+@pytest.mark.parametrize("change", [
+    {"capacity": 240}, {"capacity": 304}, {"capacity": 336},
+    {"truncation": "allowed"}, {"class_count": 15},
+])
+def test_all_foundations_reject_wrong_capacity_or_input_semantics(imported_source, index, change):
+    _, _, root = imported_source
+    screen = load_json(root / "screen_spec.json")
+    inventory = load_json(root / "inventory.json")
+    rows = screen["candidates"] + [{"foundation_root": screen["bottleneck_root"]}]
+    path = Path(rows[index]["foundation_root"]) / "foundation_spec.json"
+    foundation = load_json(path)
+    foundation = rehash(foundation, inputs=rehash(foundation["inputs"], **change))
+    path.unlink()
+    write_immutable_json(path, foundation)
+    if index < 3:
+        rows[index]["foundation_sha256"] = foundation["content_hash"]
+    else:
+        screen["bottleneck_sha256"] = foundation["content_hash"]
+    with pytest.raises(ValueError, match="inventory-derived capacity=320") as error:
+        source._population(screen, inventory)
+    assert str(path) in str(error.value)
 
 
 def test_partial_completion_is_not_a_ready_dependency(imported_source):
@@ -503,14 +551,15 @@ def test_cli_and_helper_expose_direct_screen_boundary(imported_source, monkeypat
     assert "CONT_SPEC" not in helper and "21741416" not in helper
 
 
-def test_old_continuation_launch_schema_is_not_reinterpreted(imported_source):
+@pytest.mark.parametrize("version", [1, 2])
+def test_old_launch_schema_is_not_reinterpreted(imported_source, version):
     launch, _, _ = imported_source
-    old = rehash(launch, schema_version=1,
-                 contract="JETCLASS2_DELPHES_DZFIX_FUSION_CHAIN_LAUNCH_SPEC/v1")
+    old = rehash(launch, schema_version=version,
+                 contract=f"JETCLASS2_DELPHES_DZFIX_FUSION_CHAIN_LAUNCH_SPEC/v{version}")
     with pytest.raises(ValueError, match="contract"):
         source.validate_launch(old)
-    assert chain.artifact("SOURCE_IMPORT")["schema_version"] == 2
-    assert chain.artifact("CAMPAIGN_SPEC")["schema_version"] == 2
+    assert chain.artifact("SOURCE_IMPORT")["schema_version"] == 3
+    assert chain.artifact("CAMPAIGN_SPEC")["schema_version"] == 3
     assert chain.artifact("TRAINING_REPORT")["schema_version"] == 1
 
 
@@ -629,9 +678,53 @@ def test_native_parity_helper_executes_real_forward_backward_adapter(fake_native
 def test_longest_population_stress_finds_rare_jets_not_just_padding():
     cache = make_cache("train")
     lengths = np.full(len(cache), 4, np.int64)
-    lengths[7], lengths[81] = 240, 239
+    lengths[7], lengths[81] = 320, 319
     cache.blocks[0].offsets = np.r_[0, np.cumsum(lengths)]
     assert runtime.longest_indices(cache, 2).tolist() == [81, 7]
+
+
+@pytest.mark.parametrize("paired", [False, True])
+def test_preflight_stress_preserves_inputs_and_pads_to_foundation_capacity(monkeypatch, paired):
+    model = nn.Linear(1, 1)
+    raw = make_cache("train").batch(np.arange(2))
+    expected = {k: raw[k].copy() for k in ("features", "vectors", "mask")}
+    node = next(n for n in chain.nodes() if n["node_id"] == ("FUSION_U050" if paired else "U000"))
+    payload = {**raw, "primary": raw, "context": raw} if paired else raw
+    calls = []
+
+    def batch_step(model, batch, **kwargs):
+        views = [batch["primary"], batch["context"]] if paired else [batch]
+        for view in views:
+            for key, old in expected.items():
+                assert view[key].shape[-1] == 320
+                np.testing.assert_array_equal(view[key][..., :old.shape[-1]], old)
+                assert not np.any(view[key][..., old.shape[-1]:])
+        calls.append(True)
+        return model.weight.sum(), {}
+
+    monkeypatch.setattr(runtime, "_train_batch", batch_step)
+    runtime._stress(model, payload, node, "cpu", 320)
+    assert len(calls) == 3
+    with pytest.raises(ValueError, match="exceeds registered capacity"):
+        runtime._stress(model, payload, node, "cpu", 3)
+
+
+def test_cache_bounds_use_foundation_capacity_without_changing_memory_request(tmp_path):
+    spec = spec_at(tmp_path)
+    spec["foundation"]["assignment_tasks"] = [
+        {"role": role, "rows": count // 40}
+        for role, count in chain.COUNTS.items() if role != "final_test"
+        for _ in range(40)
+    ]
+    spec["foundation"]["inputs"] = input_contract(capacity=240)
+    previous = data.cache_bounds(spec)
+    spec["foundation"]["inputs"] = input_contract(capacity=320)
+    actual = data.cache_bounds(spec)
+    assert all(actual[role] > previous[role] for role in actual)
+    assert spec["resources"]["train"]["memory_mb"] == 320000
+    spec["resources"]["train"]["memory_mb"] = 1
+    with pytest.raises(MemoryError, match="preparation bound"):
+        data.cache_bounds(spec)
 
 
 def test_science_gate_rechecks_memory_and_real_execution_fields(monkeypatch, tmp_path):

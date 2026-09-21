@@ -236,8 +236,15 @@ Consequences that future ladders must preserve:
 - Only `D000` is the exact HLT endpoint and can be built without offline input.
 - D is allowed only after U support removal is complete.
 
-The model interface remains 17 inputs, 11 output classes, capacity 240,
-`trim=False`. Intermediate views use offline information only as declared
+The model interface remains 17 inputs and 11 output classes. The authenticated
+dzfix foundations have capacity **320**, not the previous snapshot's 240.
+SPORC inspection confirmed this for all three salience candidates and the
+bottleneck control, with identical inventory hash
+`10d41d10cf509e11db432c80ecd844bfdac2d5392ffee93a370e6638d9e57435`
+and identical TRAIN_500K membership. Capacity is the inventory's maximum selected
+particle count rounded up to a multiple of 16 (minimum 16); consumers must
+authenticate that input contract, never hardcode 240 or truncate to fit it.
+The interface retains `trim=False`. Intermediate views use offline information only as declared
 training-time supervision. A deployable model consumes HLT inputs only.
 
 ## Candidate screen and selection

@@ -14,7 +14,14 @@ early, reuse September-10 artifacts, or import any CMS checkpoint or metric.
 Views retain the persistent HLT skeleton. U removes unused offline tails;
 matched U100 slots still have offline features. D transitions those matched
 features to HLT. D000 is the native HLT endpoint. The input contract remains
-17 features, 11 classes, capacity 240, and no source/matching metadata inputs.
+17 features, 11 classes, and no source/matching metadata inputs. Capacity is
+derived from authenticated inventory count metadata using the foundation
+builder's round-up-to-16 rule (minimum 16), never a historical snapshot constant.
+All three salience candidates and the bottleneck control must carry that exact
+input contract, including forbidden truncation. The current dzfix foundations
+have capacity **320**, as verified on SPORC; the previous 240 statement was a
+stale assumption and is superseded. This does not rebuild matching or read test
+particles. Cache bounds and real GPU stress use the selected foundation's capacity.
 
 In the following notation, Fusion(context, primary) uses independent encoders
 with one-way gated residual cross-attention into the primary encoder at blocks
@@ -132,9 +139,11 @@ unchanged dz-fix inventory. `SCREEN_SPEC`, `INVENTORY`, `LAUNCH_ROOT`,
 locations. Their content and lineage are validated, not trusted by existence.
 It never fetches into, updates, cancels or writes an existing campaign.
 
-LAUNCH_SPEC, SOURCE_IMPORT and CAMPAIGN_SPEC advance to v2 to distinguish this
-direct-screen provenance from the canceled continuation route. Old v1 roots
-must not be edited or reused; a fresh pinned commit creates fresh output roots.
+LAUNCH_SPEC, SOURCE_IMPORT and CAMPAIGN_SPEC advance to v3 to lock the
+inventory-derived, no-truncation capacity policy. v2 introduced direct-screen
+provenance but incorrectly required capacity 240; v1 used the canceled
+continuation route. Old v1/v2 roots must not be edited or reused; a fresh pinned
+commit creates fresh output roots. The producer's screen schema remains v2.
 Model, seed, split, training and output-artifact semantics are unchanged.
 
 The initial queued job is `jc2fc_after_matching`; the full science DAG is

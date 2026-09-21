@@ -9,6 +9,7 @@ from hlt_classification.scouting.hcwdl_recovery import validate_submission_ledge
 from .contracts import validate as validate_parent
 from .dzfix_fusion_chain import COUNTS, artifact, registration, validate
 from .execution import execution_site
+from .inputs import input_contract
 from .inventory import validate_inventory
 from .production import _source
 from .salience_foundation import authenticate_preparation, assignment_source, validate_foundation_spec
@@ -54,15 +55,34 @@ def _population(screen, inventory):
     rows = screen["candidates"] + [dict(foundation_root=screen["bottleneck_root"],
                                        foundation_sha256=screen["bottleneck_sha256"])]
     splits = None
+    expected_inputs = None
     for row in rows:
-        foundation = load_json(Path(row["foundation_root"]) / "foundation_spec.json")
-        if (foundation["content_hash"] != row["foundation_sha256"]
-                or foundation["inventory"] != inventory
-                or foundation["splits"]["profile"] != "TRAIN_500K"
-                or foundation["splits"]["role_counts"] != COUNTS
-                or foundation["inputs"]["capacity"] != 240
-                or (splits is not None and foundation["splits"] != splits)):
-            raise ValueError("Screen snapshot/population/foundation identity differs")
+        path = Path(row["foundation_root"]) / "foundation_spec.json"
+        foundation = load_json(path)
+        checks = {
+            "foundation hash": foundation["content_hash"] == row["foundation_sha256"],
+            "inventory": foundation["inventory"] == inventory,
+            "split profile": foundation["splits"]["profile"] == "TRAIN_500K",
+            "role counts": foundation["splits"]["role_counts"] == COUNTS,
+            "split membership": splits is None or foundation["splits"] == splits,
+        }
+        failed = [name for name, passed in checks.items() if not passed]
+        if failed:
+            raise ValueError(f"Screen snapshot/population/foundation identity differs at {path}: {', '.join(failed)}")
+        if expected_inputs is None:
+            # Same metadata-only, round-UP rule as both foundation builders.
+            # Never import the previous snapshot's fixed 240-token assumption,
+            # change the published foundation, or truncate a longer real jet.
+            maximum = max(max(r["max_selected_particles"].values()) for r in inventory["files"])
+            capacity = max(16, ((maximum + 15) // 16) * 16)
+            expected_inputs = input_contract(capacity=capacity)
+        if foundation["inputs"] != expected_inputs:
+            raise ValueError(
+                f"Screen foundation input contract differs at {path}: "
+                f"inventory-derived capacity={expected_inputs['capacity']}, "
+                f"foundation capacity={foundation['inputs'].get('capacity')}; "
+                "exact 17-feature/11-class no-truncation contract required"
+            )
         splits = foundation["splits"]
 
 

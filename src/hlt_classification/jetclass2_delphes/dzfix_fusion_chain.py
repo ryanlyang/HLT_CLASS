@@ -26,12 +26,12 @@ RESOURCES = {
 
 
 def artifact(kind, **fields):
-    version = 2 if kind in {"LAUNCH_SPEC", "SOURCE_IMPORT", "CAMPAIGN_SPEC"} else 1
+    version = 3 if kind in {"LAUNCH_SPEC", "SOURCE_IMPORT", "CAMPAIGN_SPEC"} else 1
     return _artifact("DZFIX_FUSION_CHAIN_" + kind, version=version, **fields)
 
 
 def validate(value, kind):
-    version = 2 if kind in {"LAUNCH_SPEC", "SOURCE_IMPORT", "CAMPAIGN_SPEC"} else 1
+    version = 3 if kind in {"LAUNCH_SPEC", "SOURCE_IMPORT", "CAMPAIGN_SPEC"} else 1
     return _validate(value, "DZFIX_FUSION_CHAIN_" + kind, version=version)
 
 
@@ -100,6 +100,7 @@ def registration():
         loss={"ce": .25, "kd": .75, "temperature": 2., "alpha": 1.},
         execution_site=execution_site("sporc_a100_debug"), resources=deepcopy(RESOURCES),
         model=model_contract(), role_counts=dict(COUNTS), split_profile="TRAIN_500K",
+        input_capacity_policy="inventory_max_selected_round_up_16_no_truncation_v1",
         fusion={"injection_blocks": [2, 4, 6, 8], "direction": "context_to_primary",
                 "pair_population": "full_combined_weaver", "mask_execution": "compact_rectangle_padding_once_v1"},
         validation_partition={"fractions": [2, 1, 1], "names": ["checkpoint", "diagnostic", "report"],

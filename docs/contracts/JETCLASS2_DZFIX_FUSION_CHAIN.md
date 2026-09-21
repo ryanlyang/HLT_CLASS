@@ -3,20 +3,30 @@
 Authority: `plans/JETCLASS2_DZFIX_FUSION_CHAIN_500K_PLAN.md`.
 
 Artifacts use `JETCLASS2_DELPHES_DZFIX_FUSION_CHAIN_*` and canonical content
-hashes. LAUNCH_SPEC, SOURCE_IMPORT and CAMPAIGN_SPEC are now **v2**; all other
-artifact kinds retain v1. The v1 continuation-bound input route is obsolete
-and is not silently interpreted as direct-screen provenance.
+hashes. LAUNCH_SPEC, SOURCE_IMPORT and CAMPAIGN_SPEC are now **v3**; all other
+artifact kinds retain v1. The v1 continuation-bound route and v2's fixed-240
+capacity assumption are obsolete and are not silently upgraded.
 
-LAUNCH_SPEC/v2 binds the explicit producer SALIENCE_SCREEN_SPEC/v2, its exact
+LAUNCH_SPEC/v3 binds the explicit producer SALIENCE_SCREEN_SPEC/v2, its exact
 eight-task live ledger and `complete` job, new source checkout, independent
 launch/campaign roots, debug resources, graph and population. Parent commands
 and dependency closure must equal the source screen plan after exact-ID
 resolution. Dry, incomplete, foreign, or duplicated-job ledgers fail closed.
-SOURCE_IMPORT/v2 additionally binds screen/selection/completion/profile and
+SOURCE_IMPORT/v3 additionally binds screen/selection/completion/profile and
 all eight task receipts, selected foundation spec/lock, and current semantic
 preparation file hashes. Foundation location and hash must match the screen's
 candidate registry as well as selection. No continuation/production preview is
 required. All compact payloads are authenticated before reuse.
+
+Registration locks `inventory_max_selected_round_up_16_no_truncation_v1`:
+capacity is `max(16, ceil(max_selected_particle_count / 16) * 16)`, using
+authenticated inventory metadata exactly as both foundation builders do.
+All four screen foundations must match the canonical 17-feature/11-class
+input contract at that capacity, not merely an arbitrary larger allocation.
+The current dzfix foundations are capacity 320. No particle truncation,
+foundation rewriting, raw final-test access, or GPU-gate bypass is permitted.
+The embedded foundation hash binds capacity through cache sizing and real
+longest-batch stress; CPU/GPU headroom, batch size and resources are unchanged.
 
 The producer's debug-screen/tier3-production separation remains intact. The
 consumer does not inherit that production resource profile: it registers its
