@@ -95,7 +95,7 @@ def launcher_plan(launch, phase):
     dependencies = []
     if phase == "after_matching":
         parent, _ = _parent(launch)
-        if (Path(parent["continuation_root"]) / "continuation_complete.json").is_file():
+        if (Path(parent["screen_root"]) / "screen_complete.json").is_file():
             # A durable lock is accepted only after authenticating all sources.
             # No stale scheduler dependency on an already-purged job ID.
             build_import(launch)

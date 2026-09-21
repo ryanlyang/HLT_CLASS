@@ -19,7 +19,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     modes = parser.add_subparsers(dest="mode", required=True)
     command = modes.add_parser("create-launch")
-    for flag in ("continuation-spec", "inventory", "launch-root", "campaign-root"):
+    for flag in ("screen-spec", "inventory", "launch-root", "campaign-root"):
         command.add_argument("--" + flag, type=Path, required=True)
     command.add_argument("--source-commit", required=True)
     for name in ("schedule", "launch-run", "materialize", "submit", "run", "gate", "results"):
@@ -38,7 +38,7 @@ def main():
             command.add_argument("--per-class", action="store_true")
     a = parser.parse_args()
     if a.mode == "create-launch":
-        result = create_launch(continuation_spec=a.continuation_spec, inventory_path=a.inventory,
+        result = create_launch(screen_spec=a.screen_spec, inventory_path=a.inventory,
             launch_root=a.launch_root, campaign_root=a.campaign_root, project=ROOT, source_commit=a.source_commit)
         schedule(result)
     else:
@@ -90,6 +90,13 @@ def main():
                           f"{by_name[left]['macro_ovr_auc']-by_name[right]['macro_ovr_auc']:+.6f}")
             return 0
     print(result["content_hash"])
+    if a.mode == "schedule":
+        print("Matching screen:", spec["screen_spec_path"])
+        print("Authenticated matching completion job:", spec["parent_job_id"])
+        print("New campaign partition:", spec["registration"]["execution_site"]["partition"])
+        dependency = [token for token in result["commands"][a.phase]
+                      if token.startswith("--dependency=")]
+        print("Launcher dependency:", ", ".join(dependency) or "none (completed artifacts authenticated)")
     if "jobs" in result:
         for name, job in result["jobs"].items():
             print(f"{job} {name}")

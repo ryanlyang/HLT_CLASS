@@ -26,11 +26,13 @@ RESOURCES = {
 
 
 def artifact(kind, **fields):
-    return _artifact("DZFIX_FUSION_CHAIN_" + kind, **fields)
+    version = 2 if kind in {"LAUNCH_SPEC", "SOURCE_IMPORT", "CAMPAIGN_SPEC"} else 1
+    return _artifact("DZFIX_FUSION_CHAIN_" + kind, version=version, **fields)
 
 
 def validate(value, kind):
-    return _validate(value, "DZFIX_FUSION_CHAIN_" + kind)
+    version = 2 if kind in {"LAUNCH_SPEC", "SOURCE_IMPORT", "CAMPAIGN_SPEC"} else 1
+    return _validate(value, "DZFIX_FUSION_CHAIN_" + kind, version=version)
 
 
 def seed(alias, domain):

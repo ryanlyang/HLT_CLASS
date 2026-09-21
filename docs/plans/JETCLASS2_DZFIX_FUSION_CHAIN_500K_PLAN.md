@@ -7,8 +7,8 @@ science submission. This is a new isolated experiment, not a recovery of CMS.
 
 Use the authenticated `20260918_dzfix` partial snapshot and exact TRAIN_500K
 membership: 500,000 training, 1,000,000 validation, and 1,000,000 sealed test
-jets. Import the winner of the existing three-candidate salience screen through
-the completed dz-fix continuation. Do not rerun matching, choose a candidate
+jets. Import the winner directly from the completed source-pinned v2 debug
+salience screen. The old tier3 continuation was canceled. Do not rerun matching, choose a candidate
 early, reuse September-10 artifacts, or import any CMS checkpoint or metric.
 
 Views retain the persistent HLT skeleton. U removes unused offline tails;
@@ -77,14 +77,21 @@ from the old CMS or single-view screen. RAM-only native/paired caches have
 explicit population bounds; durable artifacts are weights, reports, compact
 probability banks and hashes only. No particle/hidden-state cache is persisted.
 
-Creation locks an explicit source continuation and exact after_screen ledger.
-The queue launcher depends on that ledger's after_screen job (documented as
-21741416), never on one fit or `afterany`. When the durable continuation is
-already complete, authenticate it and omit the expired Slurm dependency.
+Creation locks the active `screen_spec.json` and its exact eight-task live
+ledger. The queue launcher depends on that ledger's `complete` job (currently
+21748725), never on one fit, the canceled 21741416, or `afterany`. When the
+durable screen is already complete, authenticate it and omit the expired Slurm
+dependency. Foundation paths and identities come from the screen's candidate
+registry and selection lock, never a guessed continuation subtree. No old
+continuation receipt or 30-task production preview is required or reused.
 After completion, authenticate screen selection and compact foundation; do a
 full campaign dry run; submit authenticate/partition/preflight gates. A separate
 success-dependent launcher validates their artifacts and submits science.
 No parent jobs, roots, ledgers, matching outputs or CMS artifacts are modified.
+The source screen deliberately records debug measurement and tier3 production;
+that tier3 setting applies to its separate three-spine production consumer.
+This independent fusion experiment keeps its own explicitly registered debug
+site/resources and must pass its own real gate before scientific submission.
 
 New execution evidence includes full-population paired cache construction,
 native installed-Weaver single and paired optimizer steps, worst-length batch
@@ -95,7 +102,7 @@ batch size, precision, schedule or population. An explicit new specification
 is required if resources/science need to change.
 
 Cross-commit preparation reuse has its own versioned source-import contract.
-It authenticates producer continuation, completed screen, selector, foundation
+It authenticates the producer screen, exact ledger, completed screen, selector, foundation
 and source files; it does not relax the old same-commit campaign validators.
 Only preparation is reused. All scientific fits and GPU acceptance are fresh.
 
@@ -117,10 +124,18 @@ bash scripts/queue_jetclass2_dzfix_fusion_chain.sh --execute
 ```
 
 The first call is dry; the second explicitly authorizes the registered pipeline.
-The helper defaults to the handoff's exact dz-fix continuation and inventory;
-`CONT_SPEC`, `INVENTORY`, `LAUNCH_ROOT`, `CAMPAIGN_ROOT` can explicitly override
+The helper defaults to the active screen
+`checkpoints/jc2_dzfix_salience_debug_0d25a4a5_r1/screen_spec.json`
+from producer commit `0d25a4a53aafb1348c8279d86bac7dbac82c8841` and the
+unchanged dz-fix inventory. `SCREEN_SPEC`, `INVENTORY`, `LAUNCH_ROOT`,
+`CAMPAIGN_ROOT` can explicitly override
 locations. Their content and lineage are validated, not trusted by existence.
 It never fetches into, updates, cancels or writes an existing campaign.
+
+LAUNCH_SPEC, SOURCE_IMPORT and CAMPAIGN_SPEC advance to v2 to distinguish this
+direct-screen provenance from the canceled continuation route. Old v1 roots
+must not be edited or reused; a fresh pinned commit creates fresh output roots.
+Model, seed, split, training and output-artifact semantics are unchanged.
 
 The initial queued job is `jc2fc_after_matching`; the full science DAG is
 submitted automatically after matching and this campaign's fresh gate succeed.

@@ -8,7 +8,7 @@ import pytest
 import torch
 from torch import nn
 
-from hlt_classification.data.cache_contracts import load_json, write_immutable_json, with_content_hash
+from hlt_classification.data.cache_contracts import load_json, sha256_file, write_immutable_json, with_content_hash
 from hlt_classification.jetclass2_delphes import (
     dzfix_fusion_chain as chain, dzfix_fusion_data as data,
     dzfix_fusion_runtime as runtime, dzfix_fusion_source as source,
@@ -248,19 +248,19 @@ def test_ambiguous_sbatch_acknowledgement_cannot_duplicate(monkeypatch, tmp_path
 
 def test_deferred_launcher_uses_exact_postscreen_boundary_and_no_expired_id(monkeypatch, tmp_path):
     spec = dict(content_hash="a"*64, project_dir=str(tmp_path / "project"), launch_root=str(tmp_path / "launch"),
-                campaign_root=str(tmp_path / "campaign"), parent_job_id="21741416", registration=chain.registration())
-    parent = {"continuation_root": str(tmp_path / "parent")}
+                campaign_root=str(tmp_path / "campaign"), parent_job_id="21748725", registration=chain.registration())
+    parent = {"screen_root": str(tmp_path / "parent")}
     monkeypatch.setattr(scheduler, "validate_launch", lambda s: s["content_hash"])
     monkeypatch.setattr(scheduler, "_parent", lambda s: (parent, {}))
     pending = scheduler.launcher_plan(spec, "after_matching")["commands"][0]["command"]
-    assert "--dependency=afterok:21741416" in pending and "--partition=debug" in pending
+    assert "--dependency=afterok:21748725" in pending and "--partition=debug" in pending
     calls = []
     def sbatch(c, **kw):
         calls.append(c)
         return SimpleNamespace(stdout="12345")
     monkeypatch.setattr(scheduler.subprocess, "run", sbatch)
     first = scheduler.schedule(spec, execute=True, authorization=chain.AUTHORIZE)
-    write_immutable_json(tmp_path / "parent/continuation_complete.json", {})
+    write_immutable_json(tmp_path / "parent/screen_complete.json", {})
     validated = []
     monkeypatch.setattr(scheduler, "build_import", lambda s: validated.append(True))
     done = scheduler.launcher_plan(spec, "after_matching")["commands"][0]["command"]
@@ -274,15 +274,28 @@ def test_deferred_launcher_uses_exact_postscreen_boundary_and_no_expired_id(monk
         scheduler.launcher_plan(spec, "after_matching")
 
 
-def test_source_parent_does_not_accept_individual_fit_or_dry_run(monkeypatch, tmp_path):
-    parent = dict(content_hash="a"*64, continuation_root=str(tmp_path))
-    monkeypatch.setattr(source, "validate_continuation", lambda *a, **k: "a"*64)
-    write_immutable_json(tmp_path / "continuation_spec.json", parent)
-    live = build_submission_ledger(campaign_spec_sha256="a"*64,
-        jobs={"fit_LINEAR": "21741411"}, commands={"fit_LINEAR": ["sbatch", "a"]}, dry_run=False)
-    write_immutable_json(tmp_path / "launchers/after_screen/submission_ledger.json", live)
-    with pytest.raises(ValueError, match="after_screen"):
-        source._parent({"continuation_spec_path": str(tmp_path / "continuation_spec.json")})
+@pytest.mark.parametrize("fault", ["individual_fit", "dry", "wrong_screen", "duplicate_job", "wrong_dependency"])
+def test_source_parent_rejects_inexact_screen_ledgers(imported_source, fault):
+    launch, _, root = imported_source
+    path = root / "submission_ledger.json"
+    value = load_json(path)
+    if fault == "individual_fit":
+        value["jobs"] = {"fit_LINEAR": "21748721"}
+        value["commands"] = {"fit_LINEAR": ["sbatch", "a"]}
+    elif fault == "dry":
+        value["dry_run"] = True
+    elif fault == "wrong_screen":
+        value["campaign_spec_sha256"] = "f" * 64
+    elif fault == "duplicate_job":
+        value["jobs"]["complete"] = value["jobs"]["select"]
+    else:
+        value["commands"]["complete"] = [
+            x.replace("afterok:21748724", "afterok:21741414")
+            for x in value["commands"]["complete"]]
+    path.unlink()
+    write_immutable_json(path, rehash(value))
+    with pytest.raises(ValueError, match="ledger"):
+        source._parent(launch)
 
 
 def test_preflight_cannot_be_claimed_from_local_cpu(tmp_path):
@@ -307,64 +320,99 @@ def test_installed_weaver_compact_parity():
 
 @pytest.fixture
 def imported_source(tmp_path, monkeypatch):
-    """Synthetic producer protocol fixtures; actual ROOT decoding tested separately."""
-    root = tmp_path / "producer"
-    foundation_root = root / "foundation"
+    """Exercise actual v2 screen/ledger/receipt validators with synthetic payloads."""
+    from hlt_classification.jetclass2_delphes import salience_screen as screen_module
+    root = tmp_path / "debug_screen"
     inventory = parent_artifact("INVENTORY", test_fixture=True)
-    foundation = parent_artifact("SALIENCE_FOUNDATION_SPEC", inventory=inventory,
-        splits={"profile": "TRAIN_500K", "role_counts": chain.COUNTS}, inputs={"capacity": 240},
-        candidate="SALIENCE_PT_LINEAR")
-    lock = parent_artifact("SALIENCE_FOUNDATION_LOCK", foundation_sha256=foundation["content_hash"])
-    parent = parent_artifact("DZFIX_SALIENCE_CONTINUATION_SPEC", continuation_root=str(root),
-        data_root=str(tmp_path / "jetclass2_20260918_dzfix"), source_commit="b"*40, project_dir=str(tmp_path / "producer_project"))
-    screen = parent_artifact("SALIENCE_SCREEN_SPEC", screen_root=str(root / "screen"),
-        source_commit="b"*40, data_root=parent["data_root"])
+    splits = {"profile": "TRAIN_500K", "role_counts": chain.COUNTS}
+    candidates, foundations, locks = [], {}, {}
+    for name in source.REGISTRY:
+        foundation_root = tmp_path / "shared_maps" / name
+        value = parent_artifact("SALIENCE_FOUNDATION_SPEC", inventory=inventory,
+            splits=splits, inputs={"capacity": 240}, candidate=name)
+        lock = parent_artifact("SALIENCE_FOUNDATION_LOCK", foundation_sha256=value["content_hash"])
+        write_immutable_json(foundation_root / "foundation_spec.json", value)
+        write_immutable_json(foundation_root / "foundation_lock.json", lock)
+        candidates.append(dict(candidate=name, foundation_root=str(foundation_root),
+                               foundation_sha256=value["content_hash"]))
+        foundations[name] = (value, foundation_root)
+        locks[str(foundation_root)] = lock
+    foundation, foundation_root = foundations[source.REGISTRY[0]]
+    bottleneck_root = tmp_path / "bottleneck"
+    bottleneck = parent_artifact("FOUNDATION_SPEC", inventory=inventory,
+                                splits=splits, inputs={"capacity": 240})
+    write_immutable_json(bottleneck_root / "foundation_spec.json", bottleneck)
+    foundations[screen_module.CONTEXT] = (bottleneck, bottleneck_root)
+    template = parent_artifact("RUNTIME_PROFILE", execution_site=source.execution_site("sporc_a100"),
+                              cpus=8, memory_mb=73728, workers=8, train_minutes=808)
+    screen = parent_artifact("SALIENCE_SCREEN_SPEC", version=2, screen_root=str(root),
+        source_commit="b"*40, project_dir=str(tmp_path / "producer_project"),
+        data_root=str(tmp_path / "jetclass2_20260918_dzfix"),
+        screen_execution_site=source.execution_site("sporc_a100_debug"),
+        production_execution_site=source.execution_site("sporc_a100"),
+        execution_policy=screen_module.DEBUG_SCREEN_POLICY, scientific_configuration_unchanged=True,
+        execution_changes=["partition_tier3_to_debug", "bounded_debug_walltime"],
+        debug_walltime_minutes=480, candidate_registry=source.REGISTRY,
+        contextual_control=screen_module.CONTEXT, scientific_fit_count=4,
+        coordinate="U100", final_test_accessed=False, existing_campaign_mutations=False,
+        split_profile="TRAIN_500K", role_counts=chain.COUNTS, candidates=candidates,
+        bottleneck_root=str(bottleneck_root), bottleneck_sha256=bottleneck["content_hash"],
+        resource_template_path=str(tmp_path / "resource_template.json"),
+        resource_template_sha256=template["content_hash"])
     selection = parent_artifact("SALIENCE_SELECTION_LOCK", winner=foundation["candidate"],
         winner_foundation_root=str(foundation_root), winner_foundation_sha256=foundation["content_hash"],
         screen_sha256=screen["content_hash"], final_test_accessed=False)
-    profile = parent_artifact("SALIENCE_RUNTIME_PROFILE", screen_sha256=screen["content_hash"], final_test_accessed=False)
+    profile = parent_artifact("SALIENCE_RUNTIME_PROFILE", version=2,
+        screen_sha256=screen["content_hash"], source_commit=screen["source_commit"],
+        execution_site=screen["production_execution_site"], screen_execution_site=screen["screen_execution_site"],
+        execution_policy=screen["execution_policy"], passed=True, final_test_accessed=False)
     done = parent_artifact("SALIENCE_SCREEN_COMPLETE", screen_sha256=screen["content_hash"],
-        selection_lock_sha256=selection["content_hash"], final_test_accessed=False)
-    campaign = parent_artifact("SALIENCE_CAMPAIGN_SPEC", foundation=foundation,
-        source_commit=parent["source_commit"], data_root=parent["data_root"])
-    dry = build_submission_ledger(campaign_spec_sha256=campaign["content_hash"], dry_run=True,
-        jobs={f"task_{i}": "1" for i in range(30)}, commands={f"task_{i}": ["sbatch", str(i)] for i in range(30)})
-    receipt = parent_artifact("DZFIX_SALIENCE_CONTINUATION_RECEIPT", continuation_sha256=parent["content_hash"],
-        source_commit=parent["source_commit"], phase="after_screen", campaign_sha256=campaign["content_hash"],
-        production_dry_ledger_sha256=dry["content_hash"], screen_complete_sha256=done["content_hash"],
-        live_production=False, final_test_accessed=False)
-    complete = parent_artifact("DZFIX_SALIENCE_CONTINUATION_COMPLETE", continuation_sha256=parent["content_hash"],
-        after_screen_receipt_sha256=receipt["content_hash"], campaign_sha256=campaign["content_hash"],
-        live_production=False, production_dry_run=True, final_test_accessed=False)
-    ledger = build_submission_ledger(campaign_spec_sha256=parent["content_hash"], dry_run=False,
-        jobs={"after_screen": "21741416"}, commands={"after_screen": ["sbatch", "continuation"]})
+        selection_lock_sha256=selection["content_hash"], scientific_fit_count=4, final_test_accessed=False)
     for name, value in {
-        "continuation_spec.json": parent, "continuation_complete.json": complete,
-        "after_screen_receipt.json": receipt, "production/campaign_spec.json": campaign,
-        "production/dry_run_submission_ledger.json": dry,
-        "launchers/after_screen/submission_ledger.json": ledger,
-        "screen/screen_spec.json": screen, "screen/selection_lock.json": selection,
-        "screen/screen_complete.json": done, "screen/runtime_profile.json": profile,
-        "foundation/foundation_spec.json": foundation, "foundation/foundation_lock.json": lock,
-        "inventory.json": inventory,
+        "screen_spec.json": screen, "selection_lock.json": selection,
+        "screen_complete.json": done, "runtime_profile.json": profile,
+        "screen_split.json": {"test_fixture": True}, "inventory.json": inventory,
     }.items():
         write_immutable_json(root / name, value)
     monkeypatch.setattr(source, "_source", lambda *a: None)
-    monkeypatch.setattr(source, "validate_continuation", lambda *a, **k: parent["content_hash"])
+    monkeypatch.setattr(screen_module, "_source", lambda *a: None)
+    monkeypatch.setattr(screen_module, "_load_foundations", lambda *a, **k: foundations)
+    monkeypatch.setattr(screen_module, "_template", lambda *a, **k: template)
     monkeypatch.setattr(source, "validate_inventory", lambda v: v["content_hash"])
     monkeypatch.setattr(source, "validate_foundation_spec", lambda v: v["content_hash"])
-    monkeypatch.setattr(source, "authenticate_preparation", lambda *a: lock)
-    monkeypatch.setattr(source, "_screen_artifacts", lambda *a, **k: (screen, selection, profile))
-    def screen_report(_screen, name):
-        value = {"result": selection if name == "select" else profile if name == "preflight" else {}}
-        write_immutable_json(root / "screen/tasks" / (name + ".json"), value)
-        return value
-    monkeypatch.setattr(source, "screen_task_report", screen_report)
-    launch = source.create_launch(continuation_spec=root / "continuation_spec.json",
+    monkeypatch.setattr(source, "authenticate_preparation", lambda f, p: locks[str(p)])
+    plan = screen_module.command_plan(screen)
+    jobs = {r["task_id"]: str(21748718+i) for i, r in enumerate(source.screen_task_graph())}
+    commands = {}
+    for row in plan["commands"]:
+        command = list(row["command"])
+        for name, job in jobs.items():
+            command = [x.replace("${JOB_" + name + "}", job) for x in command]
+        commands[row["task_id"]] = command
+    ledger = build_submission_ledger(campaign_spec_sha256=screen["content_hash"], dry_run=False,
+                                     jobs=jobs, commands=commands)
+    write_immutable_json(root / "submission_ledger.json", ledger)
+    for row in source.screen_task_graph():
+        name = row["task_id"]
+        if name == "select":
+            value, paths = selection, ["selection_lock.json"]
+        elif name == "preflight":
+            value, paths = profile, ["runtime_profile.json", "screen_split.json"]
+        elif name == "complete":
+            value, paths = done, ["screen_complete.json"]
+        else:
+            path = name + "/payload.json"
+            write_immutable_json(root / path, {"test_fixture": name})
+            value, paths = {"checkpoint": path}, [path]
+        report = parent_artifact("SALIENCE_SCREEN_TASK", task_id=name,
+            screen_sha256=screen["content_hash"], source_commit=screen["source_commit"],
+            result=value, outputs=[dict(path=p, sha256=sha256_file(root / p)) for p in paths],
+            final_test_accessed=False)
+        write_immutable_json(root / "tasks" / (name + ".json"), report)
+    launch = source.create_launch(screen_spec=root / "screen_spec.json",
         inventory_path=root / "inventory.json", launch_root=tmp_path / "launch",
         campaign_root=tmp_path / "campaign", project=tmp_path / "new_project", source_commit="a"*40)
     return launch, foundation, root
-
 
 def test_completed_source_import_reuses_only_matching_and_authenticates_all_bytes(imported_source):
     launch, foundation, root = imported_source
@@ -373,7 +421,11 @@ def test_completed_source_import_reuses_only_matching_and_authenticates_all_byte
     assert record["consumer_commit"] != record["producer_commit"]
     assert record["selected_candidate"] == "SALIENCE_PT_LINEAR"
     assert source.validate_import(record, deep=True) == record["content_hash"]
-    (root / "screen/selection_lock.json").write_bytes(b"changed")
+    assert record["parent_job_id"] == "21748725"
+    assert Path(record["foundation_root"]).parent == root.parent / "shared_maps"
+    assert not (root / "production").exists()
+    assert not any("continuation" in name for name in record)
+    (root / "selection_lock.json").write_bytes(b"changed")
     with pytest.raises(ValueError, match="bytes"):
         source.validate_import(record)
 
@@ -389,8 +441,149 @@ def test_old_inventory_cannot_be_relabelled_as_dzfix(imported_source):
 
 def test_partial_completion_is_not_a_ready_dependency(imported_source):
     launch, _, root = imported_source
-    (root / "continuation_complete.json").unlink()
+    (root / "screen_complete.json").unlink()
     with pytest.raises(FileNotFoundError):
+        source.build_import(launch)
+
+
+def test_pending_screen_can_be_queued_without_any_completion_or_production_preview(imported_source):
+    launch, _, root = imported_source
+    (root / "screen_complete.json").unlink()
+    (root / "tasks/complete.json").unlink()
+    pending = source.create_launch(screen_spec=root / "screen_spec.json",
+        inventory_path=root / "inventory.json", launch_root=root.parent / "pending_launch",
+        campaign_root=root.parent / "pending_campaign", project=Path(launch["project_dir"]),
+        source_commit=launch["source_commit"])
+    assert pending["parent_task_id"] == "complete" and pending["parent_job_id"] == "21748725"
+    command = scheduler.launcher_plan(pending, "after_matching")["commands"][0]["command"]
+    assert "--dependency=afterok:21748725" in command
+    assert not (root / "production").exists()
+    assert not Path(pending["campaign_root"]).exists()
+    assert not (root.parent / "pending_launch/submissions_after_matching").exists()
+
+
+def test_parent_job_is_read_from_ledger_not_hardcoded(imported_source):
+    launch, _, root = imported_source
+    path = root / "submission_ledger.json"
+    ledger = load_json(path)
+    ledger["jobs"]["complete"] = "98765432"
+    path.unlink()
+    write_immutable_json(path, rehash(ledger))
+    second = source.create_launch(screen_spec=root / "screen_spec.json",
+        inventory_path=root / "inventory.json", launch_root=root.parent / "another_launch",
+        campaign_root=root.parent / "another_campaign", project=Path(launch["project_dir"]),
+        source_commit=launch["source_commit"])
+    (root / "screen_complete.json").unlink()
+    command = scheduler.launcher_plan(second, "after_matching")["commands"][0]["command"]
+    assert "--dependency=afterok:98765432" in command
+    with pytest.raises(ValueError, match="lineage"):
+        source.validate_launch(launch)  # An existing launch may not silently retarget.
+
+
+def test_cli_and_helper_expose_direct_screen_boundary(imported_source, monkeypatch, capsys):
+    import runpy
+    import sys
+    launch, _, root = imported_source
+    (root / "screen_complete.json").unlink()
+    repo = Path(__file__).resolve().parents[1]
+    cli = repo / "scripts/jetclass2_dzfix_fusion_chain.py"
+    monkeypatch.setattr(sys, "argv", [str(cli), "schedule", "--spec",
+                                     str(Path(launch["launch_root"]) / "launch_spec.json")])
+    with pytest.raises(SystemExit) as result:
+        runpy.run_path(str(cli), run_name="__main__")
+    assert result.value.code == 0
+    printed = capsys.readouterr().out
+    assert "--dependency=afterok:21748725" in printed
+    assert "New campaign partition: debug" in printed
+    assert str(root / "screen_spec.json") in printed
+    assert not (Path(launch["launch_root"]) / "submissions_after_matching/submission_ledger.json").exists()
+    helper = (repo / "scripts/queue_jetclass2_dzfix_fusion_chain.sh").read_text()
+    assert "jc2_dzfix_salience_debug_0d25a4a5_r1/screen_spec.json" in helper
+    assert '--screen-spec "${SCREEN_SPEC}"' in helper
+    assert "CONT_SPEC" not in helper and "21741416" not in helper
+
+
+def test_old_continuation_launch_schema_is_not_reinterpreted(imported_source):
+    launch, _, _ = imported_source
+    old = rehash(launch, schema_version=1,
+                 contract="JETCLASS2_DELPHES_DZFIX_FUSION_CHAIN_LAUNCH_SPEC/v1")
+    with pytest.raises(ValueError, match="contract"):
+        source.validate_launch(old)
+    assert chain.artifact("SOURCE_IMPORT")["schema_version"] == 2
+    assert chain.artifact("CAMPAIGN_SPEC")["schema_version"] == 2
+    assert chain.artifact("TRAINING_REPORT")["schema_version"] == 1
+
+
+def test_old_tier3_screen_is_not_accepted_as_replacement(imported_source):
+    launch, _, root = imported_source
+    path = root / "screen_spec.json"
+    value = rehash(load_json(path), schema_version=1,
+                   contract="JETCLASS2_DELPHES_SALIENCE_SCREEN_SPEC/v1")
+    path.unlink()
+    write_immutable_json(path, value)
+    with pytest.raises(ValueError, match="debug screen v2"):
+        source._parent(launch)
+
+
+def republish_screen_result(root, task, filename, value):
+    """Make internally hashed synthetic evidence, to test semantic checks too."""
+    path = root / filename
+    path.unlink()
+    write_immutable_json(path, value)
+    report_path = root / "tasks" / (task + ".json")
+    report = load_json(report_path)
+    report["result"] = value
+    for output in report["outputs"]:
+        if output["path"] == filename:
+            output["sha256"] = sha256_file(path)
+    report_path.unlink()
+    write_immutable_json(report_path, rehash(report))
+
+
+@pytest.mark.parametrize("fault", ["unregistered_root", "context_control", "wrong_hash"])
+def test_selection_must_name_registered_candidate_foundation(imported_source, fault):
+    launch, _, root = imported_source
+    selection = load_json(root / "selection_lock.json")
+    if fault == "unregistered_root":
+        selection["winner_foundation_root"] = str(root / "guessed_continuation/foundation")
+    elif fault == "context_control":
+        selection["winner"] = "BOTTLENECK_CONTEXT"
+    else:
+        selection["winner_foundation_sha256"] = "f" * 64
+    selection = rehash(selection)
+    republish_screen_result(root, "select", "selection_lock.json", selection)
+    complete = rehash(load_json(root / "screen_complete.json"), selection_lock_sha256=selection["content_hash"])
+    republish_screen_result(root, "complete", "screen_complete.json", complete)
+    with pytest.raises(ValueError, match="registered"):
+        source.build_import(launch)
+
+
+def test_completion_file_without_task_attestation_is_not_ready(imported_source):
+    launch, _, root = imported_source
+    (root / "tasks/complete.json").unlink()
+    with pytest.raises(ValueError, match="receipts"):
+        source.build_import(launch)
+
+
+def test_wrong_screen_completion_is_not_reusable(imported_source):
+    launch, _, root = imported_source
+    complete = rehash(load_json(root / "screen_complete.json"), screen_sha256="f" * 64)
+    republish_screen_result(root, "complete", "screen_complete.json", complete)
+    with pytest.raises(ValueError, match="completion"):
+        source.build_import(launch)
+
+
+def test_debug_screen_profile_cannot_redirect_consumer_or_change_producer_site(imported_source, monkeypatch):
+    launch, _, root = imported_source
+    monkeypatch.setattr(chain, "_source", lambda *a: None)
+    spec = chain.create(launch=launch)
+    assert load_json(root / "runtime_profile.json")["execution_site"]["partition"] == "tier3"
+    assert spec["execution_site"]["partition"] == "debug"
+    assert all("--partition=debug" in r["command"] for r in scheduler.plan(spec, "full")["commands"])
+    profile = rehash(load_json(root / "runtime_profile.json"),
+                     execution_site=source.execution_site("sporc_a100_debug"))
+    republish_screen_result(root, "preflight", "runtime_profile.json", profile)
+    with pytest.raises(ValueError, match="runtime/production site"):
         source.build_import(launch)
 
 
