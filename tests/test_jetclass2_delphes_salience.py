@@ -193,6 +193,27 @@ def test_staged_specs_and_production_dry_shape(registered, tmp_path, monkeypatch
         resource_template=template_path, data_root=data, output_root=screen_root,
         project=tmp_path, source_commit="a" * 40,
     )
+    debug_root = tmp_path / "screen_debug"
+    debug_screen = salience_screen.create_screen(
+        bottleneck_root=bottleneck_root, candidate_roots=candidate_roots,
+        resource_template=template_path, data_root=data, output_root=debug_root,
+        project=tmp_path, source_commit="a" * 40,
+        screen_execution_site_name="sporc_a100_debug",
+    )
+    debug_plan = load_json(debug_root / "command_plan.json")
+    assert debug_screen["contract"] == "JETCLASS2_DELPHES_SALIENCE_SCREEN_SPEC/v2"
+    assert debug_screen["production_execution_site"] == execution_site("sporc_a100")
+    assert debug_screen["screen_execution_site"] == execution_site("sporc_a100_debug")
+    assert len(debug_plan["commands"]) == 8
+    for row in debug_plan["commands"]:
+        assert "--partition=debug" in row["command"]
+        assert row["command"][-1] == "sporc_a100_debug"
+        if row["task_id"] == "preflight" or row["task_id"].startswith("fit_"):
+            assert "--time=480" in row["command"]
+            assert "--gres=gpu:a100:1" in row["command"]
+        else:
+            assert "--time=60" in row["command"]
+            assert not any(token.startswith("--gres=") for token in row["command"])
     with pytest.raises(PermissionError, match="authorization"):
         salience_screen.submit_screen(screen, execute=True,
                                       authorization_phrase="not authorized")
@@ -232,6 +253,44 @@ def test_staged_specs_and_production_dry_shape(registered, tmp_path, monkeypatch
     assert campaign["reducer_count"] == 12
     assert campaign["task_count"] == 30
     assert len(load_json(tmp_path / "campaign/command_plan.json")["commands"]) == 30
+
+    debug_profile = artifact(
+        "SALIENCE_RUNTIME_PROFILE", version=2,
+        screen_sha256=debug_screen["content_hash"], source_commit="a" * 40,
+        execution_site=execution_site("sporc_a100"),
+        screen_execution_site=execution_site("sporc_a100_debug"),
+        execution_policy=debug_screen["execution_policy"],
+        slurm_job_id="2", cpus=8, memory_mb=73728, workers=8,
+        train_minutes=808, reduce_minutes=43, max_train_minutes=2880,
+        cache_budgets=template["cache_budgets"], gpu={}, installed_environment={},
+        selected_state_bytes=20_000_000, cache_seconds_by_candidate={},
+        peak_train_plus_validation_cache_bytes=1, probe_coordinates={}, model={},
+        passed=True, ram_only_views=True, rolling_resume=False,
+        final_test_accessed=False,
+    )
+    write_immutable_json(debug_root / "runtime_profile.json", debug_profile)
+    debug_selection = artifact(
+        "SALIENCE_SELECTION_LOCK", screen_sha256=debug_screen["content_hash"],
+        winner=REGISTRY[0], winner_foundation_root=str(candidate_roots[0].resolve()),
+        winner_foundation_sha256=winner["content_hash"], candidates=REGISTRY,
+        contextual_control="BOTTLENECK_CONTEXT", auc_tolerance=5e-5,
+        fit_reports={}, final_test_accessed=False,
+    )
+    write_immutable_json(debug_root / "selection_lock.json", debug_selection)
+    write_immutable_json(debug_root / "screen_complete.json", artifact(
+        "SALIENCE_SCREEN_COMPLETE", screen_sha256=debug_screen["content_hash"],
+        selection_lock_sha256=debug_selection["content_hash"], scientific_fit_count=4,
+        final_test_accessed=False,
+    ))
+    debug_campaign = salience_production.create_campaign(
+        screen_spec_path=debug_root / "screen_spec.json", data_root=data,
+        campaign_root=tmp_path / "campaign_debug", project=tmp_path,
+        source_commit="a" * 40,
+    )
+    assert debug_campaign["runtime_profile"]["execution_site"] == execution_site("sporc_a100")
+    debug_production_plan = load_json(tmp_path / "campaign_debug/command_plan.json")
+    assert all("--partition=tier3" in row["command"]
+               for row in debug_production_plan["commands"])
     with pytest.raises(PermissionError, match="authorization"):
         salience_production.submit_campaign(
             campaign, bookkeeping_root=tmp_path / "campaign", execute=True,

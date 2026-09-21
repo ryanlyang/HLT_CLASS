@@ -56,7 +56,18 @@ def _screen_artifacts(screen_spec_path: Path, *, deep: bool = False) -> tuple[di
     root = Path(screen["screen_root"])
     selection = load_json(root / "selection_lock.json"); validate(selection, "SALIENCE_SELECTION_LOCK")
     complete = load_json(root / "screen_complete.json"); validate(complete, "SALIENCE_SCREEN_COMPLETE")
-    profile = load_json(root / "runtime_profile.json"); validate(profile, "SALIENCE_RUNTIME_PROFILE")
+    profile = load_json(root / "runtime_profile.json")
+    profile_version = profile.get("schema_version")
+    if profile_version not in {1, 2}:
+        raise ValueError("Unsupported salience runtime profile schema")
+    validate(profile, "SALIENCE_RUNTIME_PROFILE", version=profile_version)
+    if screen.get("schema_version") == 2 and (
+        profile_version != 2
+        or profile.get("execution_site") != screen.get("production_execution_site")
+        or profile.get("screen_execution_site") != screen.get("screen_execution_site")
+        or profile.get("execution_policy") != screen.get("execution_policy")
+    ):
+        raise ValueError("Debug screen runtime/production site lineage differs")
     if (selection["screen_sha256"] != screen["content_hash"]
             or complete["selection_lock_sha256"] != selection["content_hash"]
             or profile["screen_sha256"] != screen["content_hash"]

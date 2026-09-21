@@ -33,6 +33,7 @@ from .submission import _guarded_exact_submission
 AUTHORIZE = "AUTHORIZE JETCLASS2 500K SALIENCE U100 SCREEN"
 REGISTRY = ["SALIENCE_PT_LINEAR", "SALIENCE_PT_QUADRATIC", "SALIENCE_PT_QUADRATIC_CORE25"]
 CONTEXT = "BOTTLENECK_CONTEXT"
+DEBUG_SCREEN_POLICY = "sporc_debug_same_a100_screen_only_production_tier3_v1"
 
 
 @dataclass
@@ -125,7 +126,9 @@ def _template(path: Path, bottleneck_foundation: dict | None = None) -> dict:
 
 def create_screen(*, bottleneck_root: Path, candidate_roots: list[Path],
                   resource_template: Path, data_root: Path, output_root: Path,
-                  project: Path, source_commit: str) -> dict:
+                  project: Path, source_commit: str,
+                  screen_execution_site_name: str = "sporc_a100",
+                  debug_walltime_minutes: int = 480) -> dict:
     _source(project, source_commit)
     if len(candidate_roots) != 3:
         raise ValueError("Exactly three registered salience candidates are required")
@@ -151,8 +154,24 @@ def create_screen(*, bottleneck_root: Path, candidate_roots: list[Path],
     root = Path(output_root).resolve()
     if root.exists() or root.is_relative_to(Path(data_root).resolve()):
         raise FileExistsError("Screen requires a fresh isolated root")
+    if screen_execution_site_name not in {"sporc_a100", "sporc_a100_debug"}:
+        raise ValueError("Screen execution site is not an authorized SPORC A100 site")
+    debug = screen_execution_site_name == "sporc_a100_debug"
+    if type(debug_walltime_minutes) is not int or not 60 <= debug_walltime_minutes <= 480:
+        raise ValueError("Debug screen walltime must be between 60 and 480 minutes")
+    site_fields = {}
+    if debug:
+        site_fields = dict(
+            screen_execution_site=execution_site("sporc_a100_debug"),
+            production_execution_site=execution_site("sporc_a100"),
+            execution_policy=DEBUG_SCREEN_POLICY,
+            scientific_configuration_unchanged=True,
+            execution_changes=["partition_tier3_to_debug", "bounded_debug_walltime"],
+            debug_walltime_minutes=debug_walltime_minutes,
+        )
     spec = artifact(
-        "SALIENCE_SCREEN_SPEC", source_commit=source_commit,
+        "SALIENCE_SCREEN_SPEC", version=2 if debug else 1,
+        source_commit=source_commit,
         project_dir=str(Path(project).resolve()), screen_root=str(root),
         data_root=str(Path(data_root).resolve()), bottleneck_root=str(Path(bottleneck_root).resolve()),
         bottleneck_sha256=bottleneck["content_hash"], candidates=candidates,
@@ -165,6 +184,7 @@ def create_screen(*, bottleneck_root: Path, candidate_roots: list[Path],
                               "stratified": True, "identity_hash_bound": True},
         scientific_fit_count=4, final_test_accessed=False,
         existing_campaign_mutations=False,
+        **site_fields,
     )
     write_immutable_json(root / "screen_spec.json", spec)
     submit_screen(spec, execute=False)
@@ -172,12 +192,27 @@ def create_screen(*, bottleneck_root: Path, candidate_roots: list[Path],
 
 
 def validate_screen(spec: dict, *, check_source=True, deep=False) -> str:
-    digest = validate(spec, "SALIENCE_SCREEN_SPEC")
+    version = spec.get("schema_version")
+    if version not in {1, 2}:
+        raise ValueError("Unsupported salience screen schema")
+    digest = validate(spec, "SALIENCE_SCREEN_SPEC", version=version)
     if (spec["candidate_registry"] != REGISTRY or spec["contextual_control"] != CONTEXT
             or spec["scientific_fit_count"] != 4 or spec["coordinate"] != "U100"
             or spec["final_test_accessed"] is not False
             or spec["existing_campaign_mutations"] is not False):
         raise ValueError("Salience screen scientific scope differs")
+    if version == 2 and (
+        spec.get("screen_execution_site") != execution_site("sporc_a100_debug")
+        or spec.get("production_execution_site") != execution_site("sporc_a100")
+        or spec.get("execution_policy") != DEBUG_SCREEN_POLICY
+        or spec.get("scientific_configuration_unchanged") is not True
+        or spec.get("execution_changes") != [
+            "partition_tier3_to_debug", "bounded_debug_walltime"
+        ]
+        or type(spec.get("debug_walltime_minutes")) is not int
+        or not 60 <= spec["debug_walltime_minutes"] <= 480
+    ):
+        raise ValueError("Debug salience screen execution policy differs")
     foundations = _load_foundations(spec, deep=deep)
     template = _template(
         Path(spec["resource_template_path"]), foundations[CONTEXT][0],
@@ -253,10 +288,28 @@ def _node(name: str) -> dict:
 
 def _profile(spec: dict) -> dict:
     value = load_json(Path(spec["screen_root"]) / "runtime_profile.json")
-    validate(value, "SALIENCE_RUNTIME_PROFILE")
+    version = value.get("schema_version")
+    if version not in {1, 2}:
+        raise ValueError("Unsupported salience runtime profile schema")
+    validate(value, "SALIENCE_RUNTIME_PROFILE", version=version)
     if value["screen_sha256"] != spec["content_hash"] or value["passed"] is not True:
         raise ValueError("Salience runtime profile differs")
+    if spec.get("schema_version") == 2 and (
+        version != 2
+        or value.get("screen_execution_site") != spec["screen_execution_site"]
+        or value.get("execution_site") != spec["production_execution_site"]
+        or value.get("execution_policy") != DEBUG_SCREEN_POLICY
+    ):
+        raise ValueError("Debug salience runtime profile differs")
     return value
+
+
+def _screen_execution_site(spec: dict, template: dict) -> dict:
+    if spec.get("schema_version") == 2:
+        if template["execution_site"] != spec["production_execution_site"]:
+            raise ValueError("Debug screen production site differs from its measured template")
+        return spec["screen_execution_site"]
+    return template["execution_site"]
 
 
 def run_task(spec: dict, task_id: str, *, attempt: str, device="cuda") -> dict:
@@ -283,7 +336,8 @@ def run_task(spec: dict, task_id: str, *, attempt: str, device="cuda") -> dict:
     elif task["kind"] == "preflight":
         bottleneck = load_json(Path(spec["bottleneck_root"]) / "foundation_spec.json")
         template = _template(Path(spec["resource_template_path"]), bottleneck)
-        job, cpus, memory = allocation(template["execution_site"])
+        screen_site = _screen_execution_site(spec, template)
+        job, cpus, memory = allocation(screen_site)
         if (cpus, memory) != (template["cpus"], template["memory_mb"]):
             raise ValueError("Screen allocation differs from measured template")
         identities = labels = None; cache_bytes = 0; timings = {}
@@ -311,7 +365,13 @@ def run_task(spec: dict, task_id: str, *, attempt: str, device="cuda") -> dict:
                          checkpoint_indices=checkpoint.tolist(), selection_indices=selection.tolist(),
                          final_test_accessed=False)
         split_path = root / "screen_split.json"; write_immutable_json(split_path, split); outputs.append(split_path)
-        result = artifact("SALIENCE_RUNTIME_PROFILE", screen_sha256=spec["content_hash"],
+        debug = spec.get("schema_version") == 2
+        execution_fields = ({
+            "screen_execution_site": screen_site,
+            "execution_policy": DEBUG_SCREEN_POLICY,
+        } if debug else {})
+        result = artifact("SALIENCE_RUNTIME_PROFILE", version=2 if debug else 1,
+                          screen_sha256=spec["content_hash"],
                           source_commit=spec["source_commit"], execution_site=template["execution_site"],
                           slurm_job_id=job, cpus=cpus, memory_mb=memory, workers=template["workers"],
                           train_minutes=template["train_minutes"], reduce_minutes=template["reduce_minutes"],
@@ -322,11 +382,12 @@ def run_task(spec: dict, task_id: str, *, attempt: str, device="cuda") -> dict:
                           probe_coordinates={name: ("U100" if name == CONTEXT else "U000")
                                              for name in [CONTEXT] + REGISTRY},
                           peak_train_plus_validation_cache_bytes=cache_bytes, model=model_contract(), passed=True,
-                          ram_only_views=True, rolling_resume=False, final_test_accessed=False)
+                          ram_only_views=True, rolling_resume=False, final_test_accessed=False,
+                          **execution_fields)
         path = root / "runtime_profile.json"; write_immutable_json(path, result); outputs.append(path)
     elif task["kind"] == "fit":
         profile = _profile(spec)
-        _, cpus, memory = allocation(profile["execution_site"])
+        _, cpus, memory = allocation(profile.get("screen_execution_site", profile["execution_site"]))
         if ((cpus, memory) != (profile["cpus"], profile["memory_mb"])
                 or gpu_identity() != profile["gpu"]
                 or installed_environment() != profile["installed_environment"]):
@@ -389,14 +450,17 @@ def command_plan(spec: dict) -> dict:
     validate_screen(spec)
     bottleneck = load_json(Path(spec["bottleneck_root"]) / "foundation_spec.json")
     profile = _template(Path(spec["resource_template_path"]), bottleneck)
-    site = profile["execution_site"]
+    site = _screen_execution_site(spec, profile)
     rows = []
     for task in task_graph():
         gpu = task["kind"] in {"preflight", "fit"}
+        walltime = (spec["debug_walltime_minutes"]
+                    if gpu and spec.get("schema_version") == 2
+                    else profile["train_minutes"] if gpu else 60)
         command = slurm_options(site) + [
             f"--cpus-per-task={profile['cpus'] if gpu else 1}",
             f"--mem={profile['memory_mb'] if gpu else 8192}M",
-            f"--time={profile['train_minutes'] if gpu else 60}",
+            f"--time={walltime}",
             "--job-name=jc2sals_" + task["task_id"], "--chdir=" + spec["project_dir"],
             "--output=" + str(Path(spec["screen_root"]) / "slurm-%j.out"),
         ]
@@ -404,7 +468,8 @@ def command_plan(spec: dict) -> dict:
         if task["dependencies"]:
             command += ["--dependency=afterok:" + ":".join("${JOB_" + p + "}" for p in task["dependencies"])]
         command += [str(Path(spec["project_dir"]) / "sbatch/run_jetclass2_delphes_salience_screen.sh"),
-                    spec["project_dir"], str(Path(spec["screen_root"]) / "screen_spec.json"), task["task_id"]]
+                    spec["project_dir"], str(Path(spec["screen_root"]) / "screen_spec.json"),
+                    task["task_id"], site["name"]]
         rows.append(dict(task_id=task["task_id"], dependencies=task["dependencies"], command=command))
     return artifact("COMMAND_PLAN", screen_sha256=spec["content_hash"], commands=rows,
                     scientific_fits=4, final_test_accessed=False)

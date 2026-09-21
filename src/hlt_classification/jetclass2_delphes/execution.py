@@ -14,7 +14,8 @@ DEBUG_PROFILE_TRANSFER = "sporc_debug_to_tier3_same_a100_environment_resources_v
 
 def execution_site(name: str) -> dict:
     sites = {
-        # Profiling only. Scientific jobs still use the sporc_a100 site below.
+        # Debug is opt-in and must be recorded by a versioned campaign/spec.
+        # It is never inferred from a resource profile or used as the default.
         "sporc_a100_debug": dict(cluster="sporc", partition="debug", qos="qos_tier3",
                                  gres="gpu:a100:1", gpu_family="A100", architecture="x86_64",
                                  conda_base="/home/ryreu/miniconda3", conda_env="atlas_kd_sporc",
