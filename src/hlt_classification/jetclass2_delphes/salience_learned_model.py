@@ -163,6 +163,10 @@ class DelphesAdjacentFusionParticleTransformer(nn.Module):
         del hidden
         return states, vectors, mask
 
+    def _prepare_injection_bias(self, pair_bias, context_padding):
+        """Default preserves historical execution; new adapters may compact it."""
+        return pair_bias, context_padding
+
     def _paths(
         self, primary_features, primary_vectors, primary_mask,
         context_features, context_vectors, context_mask, *, alpha: float,
@@ -181,6 +185,9 @@ class DelphesAdjacentFusionParticleTransformer(nn.Module):
         cross_pair = self.cross_pair_mod.pair_embed(
             combined_vectors, uu=None, mask=combined_mask,
         )[:, :, :initial.shape[1], initial.shape[1]:]
+        cross_pair, context_padding = self._prepare_injection_bias(
+            cross_pair, ~context_mask[:, 0],
+        )
         padding = ~primary_mask[:, 0]
         attention = set(_attention_mask_blocks(self.primary_mod))
         privileged = initial
@@ -203,7 +210,7 @@ class DelphesAdjacentFusionParticleTransformer(nn.Module):
                     zero_states.append(zero)
                 privileged = self.injections[injection](
                     privileged, context_states[injection],
-                    context_padding=~context_mask[:, 0],
+                    context_padding=context_padding,
                     pair_bias=cross_pair, alpha=float(alpha),
                 )
                 privileged_states.append(privileged)
