@@ -93,7 +93,8 @@ def _protected(screen, project):
 
 
 def create_launch(*, screen_spec: Path, inventory_path: Path, launch_root: Path,
-                  campaign_root: Path, project: Path, source_commit: str, partition="tier3"):
+                  campaign_root: Path, project: Path, source_commit: str, partition="tier3",
+                  reuse_preparation_spec: Path | None = None):
     registered = registration(partition)
     _source(project, source_commit)
     screen, ledger = _parent({"screen_spec_path": str(screen_spec)})
@@ -107,13 +108,18 @@ def create_launch(*, screen_spec: Path, inventory_path: Path, launch_root: Path,
             raise FileExistsError("New launch/campaign roots must be fresh and outside all source trees")
     if root.is_relative_to(campaign) or campaign.is_relative_to(root):
         raise ValueError("Launch and campaign roots must be separate")
-    value = artifact("LAUNCH_SPEC", source_commit=source_commit,
+    from .concat_k2_preparation_import import describe_reuse, validate_reuse
+    reuse = describe_reuse(reuse_preparation_spec) if reuse_preparation_spec is not None else None
+    value = artifact("LAUNCH_SPEC", source_commit=source_commit, preparation_import=reuse,
         project_dir=str(Path(project).resolve()), launch_root=str(root), campaign_root=str(campaign),
         screen_spec_path=str(Path(screen_spec).resolve()), screen_sha256=screen["content_hash"],
         parent_task_id="complete", parent_ledger_sha256=ledger["content_hash"],
         parent_job_id=ledger["jobs"]["complete"],
         inventory_path=str(Path(inventory_path).resolve()), inventory_sha256=inventory["content_hash"],
         registration=registered, final_test_accessed=False)
+    if reuse is not None:
+        validate_reuse(reuse, launch=value, destination=campaign)
+        validate_reuse(reuse, launch=value, destination=root)
     root.mkdir(parents=True, exist_ok=False)
     write_immutable_json(root / "launch_spec.json", value)
     return value
@@ -139,12 +145,16 @@ def validate_launch(spec, *, check_source=True):
         raise ValueError("Output roots overlap protected source trees")
     if check_source:
         _source(Path(spec["project_dir"]), spec["source_commit"])
+    if spec.get("preparation_import") is not None:
+        from .concat_k2_preparation_import import validate_reuse
+        for destination in (spec["campaign_root"], spec["launch_root"]):
+            validate_reuse(spec["preparation_import"], launch=spec, destination=destination)
     return digest
 
 
 def build_import(launch):
     print("JC2-K2 authenticating completed matching screen and selected formula; "
-          "source checks can take several minutes. No trained model or old map is imported.",flush=True)
+          "source checks can take several minutes. No trained model or one-to-one map is imported.",flush=True)
     validate_launch(launch)
     parent, ledger = _parent(launch)
     screen_path = Path(launch["screen_spec_path"])

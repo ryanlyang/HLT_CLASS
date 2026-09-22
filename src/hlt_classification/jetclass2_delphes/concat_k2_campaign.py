@@ -28,15 +28,15 @@ RESOURCES = {
 }
 
 
-EXECUTION_V3 = {"LAUNCH_SPEC", "CAMPAIGN_SPEC", "ACCEPTANCE"}
+VERSIONS = {"LAUNCH_SPEC": 4, "CAMPAIGN_SPEC": 4, "ACCEPTANCE": 3}
 
 
 def artifact(kind, **fields):
-    return base_artifact("CONCAT_K2_" + kind, version=3 if kind in EXECUTION_V3 else 1, **fields)
+    return base_artifact("CONCAT_K2_" + kind, version=VERSIONS.get(kind, 1), **fields)
 
 
 def validate(value, kind):
-    return base_validate(value, "CONCAT_K2_" + kind, version=3 if kind in EXECUTION_V3 else 1)
+    return base_validate(value, "CONCAT_K2_" + kind, version=VERSIONS.get(kind, 1))
 
 
 def seed(domain):
@@ -62,14 +62,18 @@ def nodes():
             for name, view, teacher in rows]
 
 
-def task_graph(foundation):
+def task_graph(foundation, *, reuse=False):
     rows = [dict(task_id="authenticate", kind="authenticate", dependencies=[], resource="metadata"),
             dict(task_id="matcher_acceptance", kind="matcher_acceptance", dependencies=["authenticate"], resource="assignment")]
     for file in foundation["assignment_tasks"]:
         rows.append(dict(task_id=f"assign_{file['file_index']:04d}", kind="assign",
                          file_index=file["file_index"], dependencies=["matcher_acceptance"], resource="assignment"))
+    if reuse:
+        rows = [rows[0], dict(task_id="import_preparation", kind="import_preparation",
+                             dependencies=["authenticate"], resource="metadata")]
     rows.extend([
-        dict(task_id="foundation_lock", kind="foundation", dependencies=[r["task_id"] for r in rows if r["kind"] == "assign"], resource="metadata"),
+        dict(task_id="foundation_lock", kind="foundation", dependencies=(["import_preparation"] if reuse else
+             [r["task_id"] for r in rows if r["kind"] == "assign"]), resource="metadata"),
         dict(task_id="partition_validation", kind="partition", dependencies=["foundation_lock"], resource="partition"),
         dict(task_id="audit_storage", kind="storage", dependencies=["foundation_lock"], resource="metadata"),
         dict(task_id="preflight", kind="preflight", dependencies=["partition_validation", "audit_storage"], resource="preflight"),
@@ -108,7 +112,7 @@ def registration(partition="tier3"):
         final_test_accessed=False, existing_campaign_mutations=False)
 
 
-def foundation_spec(parent, source_hash):
+def foundation_spec(parent, source_hash, *, reuse=False):
     files = parent["inventory"]["files"]
     native = max(max(r["max_selected_particles"].values()) for r in files)
     expanded = 3*max(r["max_selected_particles"]["hlt"] for r in files)
@@ -119,7 +123,7 @@ def foundation_spec(parent, source_hash):
         inputs=input_contract(capacity=max(16, ((max(native, expanded)+15)//16)*16)),
         capacity_policy="max_native_or_three_hlt_inventory_counts_round_up_16_no_truncation",
         assignment_orientation="per_native_hlt_two_native_offline_indices_or_minus_one",
-        reused_assignments=False, final_test_accessed=False)
+        reused_assignments=reuse, final_test_accessed=False)
 
 
 def validate_campaign(spec, *, check_source=True):
@@ -128,9 +132,13 @@ def validate_campaign(spec, *, check_source=True):
         raise ValueError("K2 scientific/resource registration differs")
     from .concat_k2_source import validate_import
     validate_import(spec["source_import"])
+    from .concat_k2_preparation_import import validate_reuse
+    reuse = spec.get("preparation_import")
+    if reuse is not None:
+        validate_reuse(reuse, source=spec["source_import"], destination=spec["campaign_root"])
     parent = load_json(spec["source_import"]["foundation_spec_path"])
-    if (spec["foundation"] != foundation_spec(parent, spec["source_import"]["content_hash"])
-            or spec["tasks"] != task_graph(spec["foundation"])
+    if (spec["foundation"] != foundation_spec(parent, spec["source_import"]["content_hash"], reuse=reuse is not None)
+            or spec["tasks"] != task_graph(spec["foundation"], reuse=reuse is not None)
             or spec["data_root"] != spec["source_import"]["data_root"]
             or spec["source_commit"] != spec["source_import"]["consumer_commit"]):
         raise ValueError("K2 foundation/graph/source differs")
@@ -143,9 +151,14 @@ def create(*, launch):
     from .concat_k2_source import build_import, validate_launch
     validate_launch(launch)
     source, parent = build_import(launch)
-    foundation = foundation_spec(parent, source["content_hash"])
+    from .concat_k2_preparation_import import validate_reuse
+    reuse = launch.get("preparation_import")
+    if reuse is not None:
+        validate_reuse(reuse, source=source, destination=launch["campaign_root"])
+    foundation = foundation_spec(parent, source["content_hash"], reuse=reuse is not None)
     root = Path(launch["campaign_root"])
-    spec = artifact("CAMPAIGN_SPEC", **launch["registration"], foundation=foundation, tasks=task_graph(foundation),
+    spec = artifact("CAMPAIGN_SPEC", **launch["registration"], foundation=foundation,
+        preparation_import=reuse, tasks=task_graph(foundation, reuse=reuse is not None),
         source_commit=launch["source_commit"], project_dir=launch["project_dir"], campaign_root=str(root),
         data_root=source["data_root"], launch_sha256=launch["content_hash"], source_import=source)
     if root.exists():

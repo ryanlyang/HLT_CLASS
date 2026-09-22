@@ -24,9 +24,10 @@ def test_partition_is_not_a_scientific_choice_and_old_versions_fail_closed(tmp_p
     assert max(r["minutes"] for r in tier3["resources"].values()) <= 1440
     for kind in ("LAUNCH_SPEC", "CAMPAIGN_SPEC", "ACCEPTANCE"):
         value = campaign.artifact(kind, test_only=True)
-        assert value["schema_version"] == 3
-        for version in (1, 2):
-            old = rehash(value, contract=value["contract"].replace("/v3", f"/v{version}"), schema_version=version)
+        current = 3 if kind == "ACCEPTANCE" else 4
+        assert value["schema_version"] == current
+        for version in range(1, current):
+            old = rehash(value, contract=value["contract"].replace(f"/v{current}", f"/v{version}"), schema_version=version)
             with pytest.raises(ValueError, match="contract mismatch"):
                 campaign.validate(old, kind)
     # Matching and view formats/seed domains did not change.

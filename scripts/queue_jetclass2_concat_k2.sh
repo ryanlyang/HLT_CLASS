@@ -23,22 +23,34 @@ case "${1:-}" in
 esac
 test -f "${SCREEN_SPEC}"
 test -f "${INVENTORY}"
+REUSE_ARGS=()
+if [ -n "${K2_REUSE_SPEC:-}" ]; then
+  test -f "${K2_REUSE_SPEC}"
+  REUSE_ARGS+=(--reuse-preparation-spec "${K2_REUSE_SPEC}")
+fi
 if [ ! -f "${LAUNCH_ROOT}/launch_spec.json" ]; then
   python -s "${PROJECT_DIR}/scripts/jetclass2_concat_k2.py" create-launch \
     --screen-spec "${SCREEN_SPEC}" --inventory "${INVENTORY}" \
     --launch-root "${LAUNCH_ROOT}" --campaign-root "${CAMPAIGN_ROOT}" \
-    --source-commit "${CONCAT_COMMIT}" --partition "${K2_PARTITION}"
+    --source-commit "${CONCAT_COMMIT}" --partition "${K2_PARTITION}" "${REUSE_ARGS[@]}"
 fi
 # Do not silently retarget an existing immutable launch when an environment
 # variable changes. Moving an individual pending job is a separate operation.
-python -s - "${LAUNCH_ROOT}/launch_spec.json" "${K2_PARTITION}" <<'PY'
+python -s - "${LAUNCH_ROOT}/launch_spec.json" "${K2_PARTITION}" "${K2_REUSE_SPEC:-}" <<'PY'
 import sys
+from pathlib import Path
 from hlt_classification.data.cache_contracts import load_json
 from hlt_classification.jetclass2_delphes.concat_k2_source import validate_launch
 spec = load_json(sys.argv[1])
 validate_launch(spec)
 if spec["registration"]["execution_site"]["partition"] != sys.argv[2]:
     raise SystemExit("Existing launch has a different submission partition; use its original setting or a fresh root.")
+expected = str(Path(sys.argv[3]).resolve()) if sys.argv[3] else None
+actual = (spec.get("preparation_import") or {}).get("donor_spec_path")
+if actual != expected:
+    raise SystemExit("Existing launch has a different K2 donor; restore K2_REUSE_SPEC or use a fresh root.")
+print("K2 matching: verified import from " + actual if actual else "K2 matching: fresh assignment jobs")
+print("Fresh memory preflight remains mandatory before science.")
 PY
 CONCAT_ARGS=()
 if [ "${1:-}" = --execute ]; then

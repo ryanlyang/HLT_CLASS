@@ -1,12 +1,69 @@
 # JetClass2 dzfix fixed-slot K=2 concatenation campaign
 
 Scientific authority: [the active implementation plan](../plans/JETCLASS2_DZFIX_FIXED_SLOT_CONCAT_K2_LADDER_PLAN.md).
-Family: `JETCLASS2_DELPHES_CONCAT_K2_*`. Launch spec, campaign spec and GPU
-acceptance are `/v3` for the 2026-09-22 pair-storage repair and ordered batch
-probes, retaining the v2 portable scheduling policy. Matching,
+Family: `JETCLASS2_DELPHES_CONCAT_K2_*`. Launch and campaign specs are `/v4`
+for explicit preparation reuse. GPU acceptance remains `/v3` for the
+2026-09-22 pair-storage repair and ordered batch probes, retaining the v2
+portable scheduling policy. Matching,
 views, seeds and remaining scientific artifacts keep `/v1`. New
 `EXECUTION_POLICY/v1` and `EXECUTION_RECORD/v1` bind allowed and actual sites.
 Historical v1 debug-only executions and other campaigns are not modified.
+
+## v4 optional verified K2 preparation import
+
+Set `K2_REUSE_SPEC` to an explicit completed K2 `campaign_spec.json`, or pass
+`--reuse-preparation-spec` to `create-launch`. Omit it to compute fresh matches.
+The donor must be an original freshly computed K2 campaign (v1/v2/v3 or a fresh
+v4), never a nested import or the one-to-one salience foundation. A failed GPU
+preflight does not invalidate a completed, authenticated matching foundation.
+
+`PREPARATION_IMPORT/v1` pins the donor spec content/file hashes, foundation and
+lock hashes, complete preparation receipt closure and matching producer file
+hashes. Require identical selected salience source (ignoring only the new
+consumer commit), data root, inventory, split membership/counts, capacities,
+view contract, K=2 orientation and all-row invariants. Missing receipts,
+producer changes, stale sources, conflicting selection, corrupt arrays or
+incomplete lock fail closed. No acceptance threshold is weakened.
+
+The CPU importer authenticates every closure payload and rebuilds the donor
+lock from validated arrays. It independently copies exact NPZ bytes (no links),
+publishes new assignment reports referencing the donor report/foundation and
+import hashes, and inventories **every copied file** in its task receipt.
+Report `elapsed_seconds` remains the original matching measurement, not import
+time; `matching_recomputed=False` makes this explicit. The destination has
+`reused_assignments=True` and its own rebuilt lock. Source files are read-only;
+keep the pinned donor available for subsequent lineage authentication. Imported
+maps still undergo the normal identity join against ROOT jets when views load.
+
+The reuse gate is exactly:
+
+```
+authenticate -> import_preparation -> foundation_lock
+  -> partition_validation + audit_storage -> preflight
+```
+
+There are six gate tasks and the same 17 science tasks (23 in the full dry
+run), with no matcher-acceptance or assignment jobs. The import job uses the
+CPU-only metadata resource request; it never builds expanded particle caches.
+Validation partitioning is rebuilt, not imported. Models, optimizer state,
+teacher banks, cached views and GPU acceptance are never imported. The fresh
+campaign-bound GPU gate must run the ordered 128/256 probes before automatic
+science submission. A CPU import pass is not GPU execution acceptance.
+
+Example opt-in for the completed original donor, in a **new pushed checkout**
+and with fresh launch/campaign roots:
+
+```bash
+export K2_PARTITION=debug
+export K2_REUSE_SPEC=/home/ryreu/atlas/HLT_Classification/checkpoints/jc2_dzfix_concat_k2_1f930650_r1/campaign_spec.json
+bash "${PROJECT_DIR}/scripts/queue_jetclass2_concat_k2.sh"
+# Inspect the dry run, then use the same command with --execute.
+```
+
+Existing launches cannot be retargeted by changing the donor environment
+variable. This implementation neither cancels nor changes the already queued
+`df29abcc` assignment jobs; any cutover requires separately verified exact IDs.
+Partition-only pending-job moves between debug and tier3 remain permitted.
 
 ## v3 K2 memory repair and ordered probes
 

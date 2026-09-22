@@ -62,7 +62,7 @@ def completed(spec, name):
 def science_gate(spec):
     reports = {name: completed(spec, name) for name in gates(spec)}
     if not all(reports.values()):
-        raise PermissionError("Fresh K2 preparation and GPU acceptance must complete before science")
+        raise PermissionError("Fresh K2 preparation (or verified import) and GPU acceptance must complete before science")
     acceptance = load_json(relative_file(Path(spec["campaign_root"]), reports["preflight"]["result"]["acceptance"]))
     validate(acceptance, "ACCEPTANCE")
     validate_acceptance_site(spec, acceptance)
@@ -429,7 +429,7 @@ def run_task(spec,name,*,device="cuda"):
     from .concat_k2_submit import authenticate_job
     job_id=authenticate_job(spec,name)
     root=Path(spec["campaign_root"]); directory=root/"outputs"/name
-    directory.mkdir(parents=True,exist_ok=False); kind=row["kind"]
+    directory.mkdir(parents=True,exist_ok=False); kind=row["kind"]; imported_paths=[]
     try:
         if kind in {"train","reduce"}:
             execution_gate(spec,science=True)
@@ -439,6 +439,9 @@ def run_task(spec,name,*,device="cuda"):
             from .inventory import verify_snapshot
             verify_snapshot(Path(spec["data_root"]),spec["foundation"]["inventory"])
             result=dict(source_import_sha256=spec["source_import"]["content_hash"])
+        elif kind=="import_preparation":
+            from .concat_k2_preparation_import import import_preparation
+            result,imported_paths=import_preparation(spec,directory)
         elif kind=="matcher_acceptance":
             report=matcher_acceptance(spec)
             write_immutable_json(directory/"matcher_acceptance.json",report)
@@ -469,6 +472,7 @@ def run_task(spec,name,*,device="cuda"):
         result={k:v.relative_to(root).as_posix() if isinstance(v,Path) else v for k,v in result.items()}
         write_immutable_json(directory/"result.json",artifact("RESULT",result=result,campaign_sha256=spec["content_hash"],task_id=name,final_test_accessed=False))
         paths=sorted(p for p in directory.rglob("*") if p.is_file())
+        paths += imported_paths
         paths += [root/"execution"/name/(job_id+".json")]
         if kind=="partition": paths += [root/"validation_partition.json",root/"validation_partition.npz"]
         value=artifact("TASK_REPORT",campaign_sha256=spec["content_hash"],task_id=name,source_commit=spec["source_commit"],

@@ -13,6 +13,23 @@ Implementing this plan does not itself submit jobs.
 This is a separate study and must not change any existing matching foundation,
 fusion campaign, checkpoint, job, or immutable specification.
 
+### 2026-09-22 authorized K2 preparation-reuse amendment
+
+An explicit completed **K2** donor may supply the compact assignment arrays and
+their matching evidence to a fresh campaign. Authenticate its full preparation
+closure, source bytes, population, selected salience formula, capacities and
+K=2 semantics. Copy arrays byte-for-byte into independently owned outputs;
+rebind reports with explicit donor lineage and rebuild the destination lock.
+Never substitute the earlier one-to-one salience maps, use hardlinks, silently
+find a donor, or reuse GPU acceptance, models, banks or particle caches.
+
+This opt-in path replaces matcher/assignment jobs with one CPU import task.
+Validation partitioning, storage audit and the new memory preflight remain
+mandatory. Version launch/campaign to v4 and add PREPARATION_IMPORT/v1;
+GPU acceptance stays v3 and must bind the new campaign. No queued jobs are
+changed by implementing this path. This supersedes fresh-matching-only wording
+below, without changing scientific views or allowing unverified reuse.
+
 ### 2026-09-22 authorized memory-repair amendment
 
 After preflight 21757208 OOMed inside native pair embedding, the user authorized

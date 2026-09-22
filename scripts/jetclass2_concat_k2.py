@@ -22,6 +22,8 @@ def main():
     for flag in ("screen-spec", "inventory", "launch-root", "campaign-root"):
         command.add_argument("--" + flag, type=Path, required=True)
     command.add_argument("--source-commit", required=True)
+    command.add_argument("--reuse-preparation-spec", type=Path,
+                         help="Explicit completed K2 donor; never imports GPU acceptance or models.")
     command.add_argument("--partition", choices=("tier3", "debug"), default="tier3",
                          help="Initial partition; pending jobs may move between both.")
     for name in ("schedule", "launch-run", "materialize", "submit", "run", "gate", "results", "monitor", "audit"):
@@ -42,7 +44,8 @@ def main():
     if a.mode == "create-launch":
         result = create_launch(screen_spec=a.screen_spec, inventory_path=a.inventory,
             launch_root=a.launch_root, campaign_root=a.campaign_root, project=ROOT,
-            source_commit=a.source_commit, partition=a.partition)
+            source_commit=a.source_commit, partition=a.partition,
+            reuse_preparation_spec=a.reuse_preparation_spec)
         schedule(result)
     else:
         spec = load_json(a.spec)
