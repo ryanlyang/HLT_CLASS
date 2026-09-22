@@ -1,11 +1,8 @@
 """Bounded native/paired caches and the shared 50/25/25 validation firewall."""
 from __future__ import annotations
 
-from concurrent.futures import ProcessPoolExecutor
 import hashlib
-import multiprocessing
 from pathlib import Path
-import time
 
 import numpy as np
 
@@ -13,12 +10,12 @@ from hlt_classification.data.cache_contracts import (
     atomic_publish_bytes, deterministic_npz_bytes, load_json, load_npz_arrays,
     sha256_file, write_immutable_json,
 )
-from .cache import RamCache, _prepare_file as _native_file, _limit_worker_threads, preparation_bound
+from .cache import preparation_bound
 from .contracts import relative_file
 from .dzfix_fusion_chain import artifact, registration, validate
-from .salience_foundation import validate_foundation_spec
 from .salience_learned_cache import prepare_cache
 from .salience_learned_data import IndexedRamCache, PairedRamCache
+from .native_offline import prepare_native_offline_cache
 
 
 def cache_bounds(spec):
@@ -40,41 +37,10 @@ def prepare(spec, role, coordinate):
         return prepare_cache(foundation, data_root=Path(spec["data_root"]),
             foundation_root=Path(spec["source_import"]["foundation_root"]),
             role=role, coordinate_name=coordinate, workers=workers, max_ram_bytes=budget)
-    parent = validate_foundation_spec(foundation)
-    # The native bottleneck U000 adapter is exactly jet.offline; unlike the
-    # persistent salience U000 it never requests assignment maps.
-    arguments = [(foundation, spec["data_root"], "", task, "U000")
-                 for task in foundation["assignment_tasks"] if task["role"] == role]
-    blocks, resident = [], 0
-    started = time.monotonic()
-
-    def accept(block):
-        nonlocal resident
-        resident += block.nbytes + len(block.labels) * 40
-        if resident > budget:
-            raise MemoryError("OFFLINE cache exceeded the registered bound")
-        blocks.append(block)
-        print(f"JC2-FC phase=cache role={role} coordinate=OFFLINE files={len(blocks)}/{len(arguments)} "
-              f"seconds={time.monotonic()-started:.1f}", flush=True)
-
-    if workers == 1:
-        for argument in arguments:
-            accept(_native_file(argument))
-    else:
-        with ProcessPoolExecutor(max_workers=workers,
-                mp_context=multiprocessing.get_context("spawn"), initializer=_limit_worker_threads) as pool:
-            iterator = iter(arguments)
-            pending = [pool.submit(_native_file, arg) for arg in
-                       (next(iterator, None) for _ in range(workers)) if arg is not None]
-            while pending:
-                accept(pending.pop(0).result())
-                argument = next(iterator, None)
-                if argument is not None:
-                    pending.append(pool.submit(_native_file, argument))
-    result = RamCache(blocks, role=role, foundation_sha256=parent, coordinate_name="OFFLINE")
-    if len(result) != foundation["splits"]["role_counts"][role]:
-        raise ValueError("OFFLINE cache population differs")
-    return result
+    return prepare_native_offline_cache(
+        foundation, data_root=Path(spec["data_root"]), role=role,
+        workers=workers, max_ram_bytes=budget,
+    )
 
 
 def partition_codes(identities, labels):
