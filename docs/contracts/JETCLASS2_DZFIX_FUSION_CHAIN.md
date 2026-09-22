@@ -3,11 +3,11 @@
 Authority: `plans/JETCLASS2_DZFIX_FUSION_CHAIN_500K_PLAN.md`.
 
 Artifacts use `JETCLASS2_DELPHES_DZFIX_FUSION_CHAIN_*` and canonical content
-hashes. LAUNCH_SPEC, SOURCE_IMPORT and CAMPAIGN_SPEC are now **v3**; all other
-artifact kinds retain v1. The v1 continuation-bound route and v2's fixed-240
-capacity assumption are obsolete and are not silently upgraded.
+hashes. LAUNCH_SPEC and CAMPAIGN_SPEC are **v4**, SOURCE_IMPORT stays **v3**,
+and ACCEPTANCE is **v2**; other artifact kinds retain v1. Old execution roots
+are not silently upgraded, including the capacity-correct v3 run that OOMed.
 
-LAUNCH_SPEC/v3 binds the explicit producer SALIENCE_SCREEN_SPEC/v2, its exact
+LAUNCH_SPEC/v4 binds the explicit producer SALIENCE_SCREEN_SPEC/v2, its exact
 eight-task live ledger and `complete` job, new source checkout, independent
 launch/campaign roots, debug resources, graph and population. Parent commands
 and dependency closure must equal the source screen plan after exact-ID
@@ -46,6 +46,24 @@ VALIDATION_PARTITION binds ordered identities/labels and deterministic stratifie
 actual single/paired execution, bank/weight round trips, memory and time evidence.
 No acceptance-only weights count as scientific fits. All ordinary artifacts
 record `final_test_accessed=false`; ordinary tasks have no test capability.
+
+CAMPAIGN_SPEC/v4 additionally freezes `fusion.saved_tensor_storage` as
+`pair_saved_tensors_cpu_v1`: full native pair populations at context, primary
+and cross sites; lossless pinned CPU storage only for CUDA training autograd
+saves; no recomputation or scientific changes. The existing batch 256,
+320-capacity foundation, BF16 training and compact-mask transformation remain.
+CPU tensors are transient, never persisted. Offload is bypassed for inference.
+Counter data hold no tensor references and do not enter model state dictionaries.
+
+ACCEPTANCE/v2 requires installed-Weaver CUDA FP32/BF16 storage on/off parity
+over three optimizer updates, including parameter gradients, BN running state
+and AdamW state. Each paired three-step longest-population batch-256 stress
+must record actual saved AND restored CUDA tensors at all three pair sites.
+The science gate rejects absent, CPU-only, no-op, wrong-policy or incomplete
+parity/stress evidence; the old v1 gate cannot authorize this execution.
+Native-mask parity, unchanged measured resource thresholds and runtime limits
+also remain mandatory. Scientific fit reports record the storage policy and
+transfer counters; their sum is not an estimate of unique/live memory savings.
 
 Publication is immutable/atomic; existing roots are not overwritten. Exact DAG
 submission uses canonical dry runs, exclusive submission claims, journalled IDs

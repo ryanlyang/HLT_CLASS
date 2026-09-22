@@ -31,6 +31,32 @@ pair embedding (including its full BatchNorm population), then materialize the
 rectangular cross-bias and merge padding once. No feature, loss, batch-size or
 attention change; native forward/backward parity is acceptance evidence.
 
+### GPU-memory repair after preflight 21757056
+
+The capacity-320 preflight reached an actual CUDA OOM in the full cross-pair
+embedding on its longest-jet batch, after the short single/fusion miniature
+fits succeeded. Raising the 90% gate or CPU RAM request cannot repair that.
+The new registered storage policy is `pair_saved_tensors_cpu_v1`: during CUDA
+training with gradients enabled, autograd-saved tensors inside the context,
+primary and cross pair embeddings are stored losslessly in pinned CPU RAM
+using PyTorch `save_on_cpu`, and copied back when backward needs them. Pair
+outputs, attention and the rest of the model remain on GPU. Evaluation bypasses
+offload. Nothing is written to disk. There is no pair-population chunking,
+recomputation, reduced precision, truncation, smaller batch, or changed BN update.
+The shared historical model's default path remains unchanged.
+
+This is an execution change, not a claimed successful A100 fix. The fresh gate
+must compare storage on/off for three training updates using installed Weaver
+in CUDA FP32 and BF16: logits, loss, parameter gradients, all BN buffers,
+updated weights, AdamW state and subsequent eval logits. Identical RNG draws
+and nonzero fusion projections exercise context gradients; the existing
+native-mask comparison remains a separate check. Each paired longest-jet
+stress step must prove actual packing and retrieval at all three pair sites.
+Counters are cumulative tensor-save bytes, NOT distinct/live CPU memory or
+claimed GPU savings. Actual process RSS, allocated/reserved GPU memory and
+step timing are recorded. The unchanged 90% GPU/80% CPU and <=23h projected-fit
+gates determine whether transfer overhead/headroom are acceptable on SPORC.
+
 ```
 fresh U000 CE
   -> Fusion(U000,U050)             fresh; NOT the old CMS ACQUIRE_U050
@@ -139,12 +165,23 @@ unchanged dz-fix inventory. `SCREEN_SPEC`, `INVENTORY`, `LAUNCH_ROOT`,
 locations. Their content and lineage are validated, not trusted by existence.
 It never fetches into, updates, cancels or writes an existing campaign.
 
-LAUNCH_SPEC, SOURCE_IMPORT and CAMPAIGN_SPEC advance to v3 to lock the
-inventory-derived, no-truncation capacity policy. v2 introduced direct-screen
-provenance but incorrectly required capacity 240; v1 used the canceled
-continuation route. Old v1/v2 roots must not be edited or reused; a fresh pinned
+LAUNCH_SPEC and CAMPAIGN_SPEC advance to v4 for the saved-tensor storage policy;
+ACCEPTANCE advances to v2 for mandatory training parity and real offload stress
+evidence. SOURCE_IMPORT stays v3: matching/capacity/source reuse is unchanged.
+The previous v3 consumer fixed inventory-derived capacity, v2 introduced
+direct-screen provenance but incorrectly required 240, and v1 used the canceled
+continuation route. Old roots must not be edited or reused; a fresh pinned
 commit creates fresh output roots. The producer's screen schema remains v2.
-Model, seed, split, training and output-artifact semantics are unchanged.
+Model, seed, split, training and scientific output meanings are unchanged.
+
+For this retry, use the same completed debug screen through the queue helper;
+its authenticated durable completion removes the need for a purged Slurm job
+dependency. Do not rebuild matching or overwrite the failed campaign at
+`2f0afe5c`. The old `jc2fc_after_gate` job 21757081 remains blocked behind the
+failed 21757056 preflight; an operator may cancel that exact pending job only
+after checking its original launch ledger. The helper does not cancel it or
+touch any `jc2k2`/`jc2salp` jobs. Only the new, source-pinned acceptance may
+release this new campaign's science DAG.
 
 The initial queued job is `jc2fc_after_matching`; the full science DAG is
 submitted automatically after matching and this campaign's fresh gate succeed.

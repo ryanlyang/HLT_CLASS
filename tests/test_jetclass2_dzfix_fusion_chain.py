@@ -28,7 +28,7 @@ def rehash(value, **updates):
 def spec_at(tmp_path):
     return chain.artifact("CAMPAIGN_SPEC", **chain.registration(),
         source_commit="a"*40, campaign_root=str(tmp_path / "campaign"), project_dir=str(tmp_path / "project"),
-        data_root=str(tmp_path / "data"), foundation={"content_hash": "f"*64},
+        data_root=str(tmp_path / "data"), foundation={"content_hash": "f"*64, "inputs": {"capacity": 320}},
         source_import={"content_hash": "b"*64}, launch_sha256="l"*64)
 
 
@@ -551,7 +551,7 @@ def test_cli_and_helper_expose_direct_screen_boundary(imported_source, monkeypat
     assert "CONT_SPEC" not in helper and "21741416" not in helper
 
 
-@pytest.mark.parametrize("version", [1, 2])
+@pytest.mark.parametrize("version", [1, 2, 3])
 def test_old_launch_schema_is_not_reinterpreted(imported_source, version):
     launch, _, _ = imported_source
     old = rehash(launch, schema_version=version,
@@ -559,7 +559,8 @@ def test_old_launch_schema_is_not_reinterpreted(imported_source, version):
     with pytest.raises(ValueError, match="contract"):
         source.validate_launch(old)
     assert chain.artifact("SOURCE_IMPORT")["schema_version"] == 3
-    assert chain.artifact("CAMPAIGN_SPEC")["schema_version"] == 3
+    assert chain.artifact("CAMPAIGN_SPEC")["schema_version"] == 4
+    assert chain.artifact("ACCEPTANCE")["schema_version"] == 2
     assert chain.artifact("TRAINING_REPORT")["schema_version"] == 1
 
 
@@ -730,16 +731,28 @@ def test_cache_bounds_use_foundation_capacity_without_changing_memory_request(tm
 def test_science_gate_rechecks_memory_and_real_execution_fields(monkeypatch, tmp_path):
     spec = spec_at(tmp_path)
     root = Path(spec["campaign_root"])
+    stats = {name: dict(calls=3, saved_cuda_tensors=9, saved_cuda_bytes=4096,
+                       restored_cuda_tensors=9) for name in ("context", "primary", "cross")}
+    parity = [dict(passed=True, device_type="cuda", precision=precision, steps=3,
+        checks=["logits", "loss", "parameter_gradients", "batchnorm_buffers",
+                "updated_weights", "optimizer_state", "eval_logits"],
+        tolerance=dict(rtol=.01, atol=5e-4) if precision == "bf16" else dict(rtol=2e-5, atol=2e-6),
+        offload_stats=stats) for precision in ("fp32", "bf16")]
+    stress = dict(steps=3, batch_size=256, capacity=320, measurements=[{"seconds": 1.}]*3, offload_stats=stats)
     evidence = dict(campaign_sha256=spec["content_hash"], passed=True, final_test_accessed=False,
         site=spec["execution_site"], resource=spec["resources"]["preflight"], acceptance_only=True,
         full_population_rows=spec["role_counts"], batch_size=256, checkpoint_round_trip=True,
         bank_round_trip=True, compact_mask_native_parity=True, installed_weaver_fp32_parity=True,
         worst_population_batch_stress=True, peak_cuda_bytes=800, gpu={"total_memory_bytes": 1000},
         peak_rss_bytes=1000, projected_max_fit_seconds=100,
-        native_execution=[{"kernel_report": {"acceptance_only": True, "scientific_fit": False}}]*4)
+        saved_tensor_storage=spec["fusion"]["saved_tensor_storage"], saved_tensor_training_parity=parity,
+        native_execution=[{"node": {"context_coordinate": "U000"}, "stress": stress,
+                           "kernel_report": {"acceptance_only": True, "scientific_fit": False}}]*4)
     for name, changes in (("good", {}), ("memory", {"peak_cuda_bytes": 901}),
                           ("batch", {"batch_size": 128}), ("test", {"final_test_accessed": True}),
-                          ("time", {"projected_max_fit_seconds": 24*3600})):
+                          ("time", {"projected_max_fit_seconds": 24*3600}),
+                          ("offload", {"saved_tensor_storage": {}}),
+                          ("parity", {"saved_tensor_training_parity": []})):
         value = chain.artifact("ACCEPTANCE", **{**evidence, **changes})
         write_immutable_json(root / (name + ".json"), value)
         monkeypatch.setattr(runtime, "completed", lambda *a: {"result": {"acceptance": name + ".json"}})
@@ -748,3 +761,30 @@ def test_science_gate_rechecks_memory_and_real_execution_fields(monkeypatch, tmp
         else:
             with pytest.raises(ValueError, match="acceptance"):
                 runtime.science_gate(spec)
+
+
+def test_noop_offload_cannot_be_claimed_as_new_acceptance():
+    from hlt_classification.jetclass2_delphes.dzfix_fusion_model import validate_offload_stats
+    good = {name: dict(calls=3, saved_cuda_tensors=12, saved_cuda_bytes=100,
+                      restored_cuda_tensors=12) for name in ("context", "primary", "cross")}
+    validate_offload_stats(good, calls=3)
+    for key in ("calls", "saved_cuda_tensors", "saved_cuda_bytes", "restored_cuda_tensors"):
+        wrong = deepcopy(good)
+        wrong["cross"][key] = 0
+        with pytest.raises(ValueError, match="not exercised"):
+            validate_offload_stats(wrong, calls=3)
+    with pytest.raises(ValueError, match="sites"):
+        validate_offload_stats(None, calls=3)
+
+
+def test_new_storage_policy_is_locked_without_science_resource_changes():
+    from hlt_classification.jetclass2_delphes.dzfix_fusion_model import PAIR_OFFLOAD_POLICY
+    spec = chain.registration()
+    assert spec["fusion"]["saved_tensor_storage"] == PAIR_OFFLOAD_POLICY
+    assert spec["training"]["batch_size"] == 256
+    assert spec["gpu_peak_fraction_limit"] == .90
+    assert spec["fusion"]["pair_population"] == "full_combined_weaver"
+    assert spec["resources"]["train"]["memory_mb"] == 320000
+    assert spec["execution_site"]["partition"] == "debug"
+    spec["fusion"]["saved_tensor_storage"]["scope"].clear()
+    assert PAIR_OFFLOAD_POLICY["scope"] == ["context", "primary", "cross"]

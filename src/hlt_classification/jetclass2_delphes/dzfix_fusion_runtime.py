@@ -22,7 +22,10 @@ from .execution import allocation, gpu_identity
 from .model import DelphesParticleTransformer, installed_environment
 from .reporting import evaluate_probabilities, recovery
 from .salience_learned_data import IndexedRamCache
-from .dzfix_fusion_model import DzfixFusionParticleTransformer
+from .dzfix_fusion_model import (
+    DzfixFusionParticleTransformer, PAIR_OFFLOAD_POLICY,
+    native_offload_parity, validate_offload_stats,
+)
 from .salience_learned_training import predict, train_kernel, _optimizer, _train_batch
 
 
@@ -79,7 +82,33 @@ def science_gate(spec):
             or any(not row["kernel_report"]["acceptance_only"] or row["kernel_report"]["scientific_fit"]
                    for row in acceptance["native_execution"])):
         raise ValueError("Fresh debug GPU acceptance differs")
+    validate_offload_acceptance(acceptance, spec)
     return acceptance
+
+
+def validate_offload_acceptance(acceptance, spec):
+    if acceptance.get("saved_tensor_storage") != spec["fusion"]["saved_tensor_storage"]:
+        raise ValueError("GPU acceptance offload policy differs")
+    parity = acceptance.get("saved_tensor_training_parity", [])
+    expected_checks = {"logits", "loss", "parameter_gradients", "batchnorm_buffers",
+                       "updated_weights", "optimizer_state", "eval_logits"}
+    if len(parity) != 2 or {r.get("precision") for r in parity} != {"fp32", "bf16"}:
+        raise ValueError("GPU acceptance lacks FP32/BF16 offload parity")
+    for row in parity:
+        expected_tolerance = dict(rtol=.01, atol=5e-4) if row["precision"] == "bf16" else dict(rtol=2e-5, atol=2e-6)
+        if (row.get("passed") is not True or row.get("device_type") != "cuda"
+                or row.get("steps") != 3 or set(row.get("checks", [])) != expected_checks
+                or row.get("tolerance") != expected_tolerance):
+            raise ValueError("GPU acceptance offload training parity differs")
+        validate_offload_stats(row.get("offload_stats"), calls=3)
+    for row in acceptance["native_execution"]:
+        stress = row.get("stress", {})
+        if (stress.get("steps") != 3 or stress.get("batch_size") != 256
+                or stress.get("capacity") != spec["foundation"]["inputs"]["capacity"]
+                or len(stress.get("measurements", [])) != 3):
+            raise ValueError("GPU acceptance lacks registered repeated stress")
+        if row["node"]["context_coordinate"] is not None:
+            validate_offload_stats(stress.get("offload_stats"), calls=3)
 
 
 def execution_gate(spec, *, science):
@@ -131,11 +160,15 @@ def fit(spec, row, directory, device):
         node=node, device=device, teacher_probabilities=q,
         teacher_identities=None if q is None else values["train"].identities)
     probabilities = predict(model, values["report"], node=node, device=device)
+    offload_stats = model.pair_offload_stats() if isinstance(model, DzfixFusionParticleTransformer) else None
+    if offload_stats is not None and torch.device(device).type == "cuda":
+        validate_offload_stats(offload_stats, calls=report["validation_history"][-1]["update"])
     path = directory / "selected.pt"
     save_state(path, state)
     outer = artifact("TRAINING_REPORT", campaign_sha256=spec["content_hash"], node=node,
         kernel_report=report, teacher_lineage=lineage, selected_checkpoint_sha256=sha256_file(path),
         checkpoint_validation=report["validation"], report_validation=evaluate_probabilities(values["report"].labels, probabilities),
+        saved_tensor_storage=spec["fusion"]["saved_tensor_storage"], pair_offload_stats=offload_stats,
         validation_partition_sha256=load_json(Path(spec["campaign_root"]) / "validation_partition.json")["content_hash"],
         validation_report_not_final_test=True, matching_selection_used_validation=True,
         final_test_accessed=False)
@@ -216,6 +249,21 @@ def _cuda_clear():
         torch.cuda.empty_cache()
 
 
+def _memory_sample(stage, device):
+    if torch.device(device).type != "cuda":
+        return {}
+    import resource
+    torch.cuda.synchronize(device)
+    result = dict(allocated_cuda_bytes=torch.cuda.memory_allocated(device),
+                  peak_cuda_bytes=torch.cuda.max_memory_allocated(device),
+                  reserved_cuda_bytes=torch.cuda.memory_reserved(device),
+                  peak_reserved_cuda_bytes=torch.cuda.max_memory_reserved(device),
+                  peak_rss_bytes=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024)
+    print("JC2-FUSION memory stage=" + stage + " " +
+          " ".join(f"{k}={v}" for k, v in result.items()), flush=True)
+    return result
+
+
 def _stress(model, raw, node, device, capacity):
     # Stress both sequences at the registered padded upper bound, retaining
     # actual masks/vectors. This catches longer rare jets absent from the mini.
@@ -234,15 +282,32 @@ def _stress(model, raw, node, device, capacity):
     optimizer = _optimizer(model)
     q = torch.full((len(raw["labels"]), 11), 1/11, device=device)
     model.train()
-    for _ in range(3):
+    offload = isinstance(model, DzfixFusionParticleTransformer)
+    if offload:
+        model.reset_pair_offload_stats()
+    measurements = []
+    for step in range(3):
         optimizer.zero_grad(set_to_none=True)
+        _memory_sample(f"{node['node_id']}:stress_{step+1}:before", device)
+        started = time.monotonic()
         loss, _ = _train_batch(model, raw, node=node, device=device,
                                teacher=None if node["teacher_distribution"] is None else q, alpha=1.)
         loss.backward()
         if any(p.grad is not None and not torch.isfinite(p.grad).all() for p in model.parameters()):
             raise ValueError("Nonfinite stress gradient")
         optimizer.step()
+        sample = _memory_sample(f"{node['node_id']}:stress_{step+1}:after", device)
+        sample["seconds"] = time.monotonic() - started
+        measurements.append(sample)
+        if offload and torch.device(device).type == "cuda":
+            validate_offload_stats(model.pair_offload_stats(), calls=step+1)
+        del loss
     optimizer.zero_grad(set_to_none=True)
+    stats = model.pair_offload_stats() if offload else None
+    if stats is not None:
+        print(f"JC2-FUSION offload node={node['node_id']} stats={stats}", flush=True)
+    return dict(steps=3, batch_size=len(raw["labels"]), capacity=capacity,
+                measurements=measurements, offload_stats=stats)
 
 
 def preflight(spec, directory, device):
@@ -304,11 +369,11 @@ def preflight(spec, directory, device):
         stress_train = train if node["context_coordinate"] is None else pair(train, train2)
         stress_validation = (IndexedRamCache(validation, stress_val_indices, role="validation")
             if node["context_coordinate"] is None else pair(validation, validation2, stress_val_indices))
-        _stress(model, stress_train.batch(stress_train_indices), node, device,
-                spec["foundation"]["inputs"]["capacity"])
+        stress = _stress(model, stress_train.batch(stress_train_indices), node, device,
+                         spec["foundation"]["inputs"]["capacity"])
         predict(model, stress_validation, node=node, device=device)
         epoch = report["validation_history"][-1]
-        evidence.append(dict(node=node, kernel_report=report, bank_sha256=manifest["content_hash"],
+        evidence.append(dict(node=node, kernel_report=report, bank_sha256=manifest["content_hash"], stress=stress,
             train_seconds_per_row=epoch["train_seconds"]/len(t), validation_seconds_per_row=epoch["validation_seconds"]/len(v)))
         del model, state, buffer, report, readback
         _cuda_clear()
@@ -318,6 +383,17 @@ def preflight(spec, directory, device):
     from .dzfix_fusion_model import native_mask_parity
     native_mask_parity(st.batch(np.arange(4)), device="cpu")
     native_mask_parity(st.batch(np.arange(16)), device=device)
+    _cuda_clear()
+    # Distinct primary/context jets exercise both masks and full pair-BN
+    # populations; their dynamically padded lengths may differ. No scientific
+    # input construction is changed for this acceptance-only comparison.
+    parity_primary = st.batch(np.arange(4))
+    parity_context = st.batch(np.arange(4, 8))
+    training_parity = []
+    for bf16 in (False, True):
+        training_parity.append(native_offload_parity(
+            parity_primary, parity_context, device=device, bf16=bf16))
+        _cuda_clear()
     peak_gpu = max(peak_gpu, torch.cuda.max_memory_allocated())
     peak_reserved = max(peak_reserved, torch.cuda.max_memory_reserved())
     peak_cpu = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
@@ -329,7 +405,7 @@ def preflight(spec, directory, device):
         raise MemoryError("Fusion CPU peak exceeds registered headroom")
     if projected > 23 * 3600:
         raise RuntimeError(f"Projected max-budget runtime {projected/3600:.2f}h does not fit debug safely")
-    return artifact("ACCEPTANCE", campaign_sha256=spec["content_hash"], passed=True,
+    acceptance = artifact("ACCEPTANCE", campaign_sha256=spec["content_hash"], passed=True,
         acceptance_only=True, job_id=job, site=spec["execution_site"], resource=spec["resources"]["preflight"],
         gpu=identity, environment=environment, elapsed_seconds=time.monotonic()-started,
         peak_cuda_bytes=peak_gpu, peak_reserved_cuda_bytes=peak_reserved, peak_rss_bytes=peak_cpu,
@@ -337,9 +413,13 @@ def preflight(spec, directory, device):
         projected_max_fit_seconds=projected, native_execution=evidence,
         checkpoint_round_trip=True, bank_round_trip=True, batch_size=256,
         compact_mask_native_parity=True,
+        saved_tensor_storage=PAIR_OFFLOAD_POLICY,
+        saved_tensor_training_parity=training_parity,
         installed_weaver_fp32_parity=True,
         worst_population_batch_stress=True,
         final_test_accessed=False)
+    validate_offload_acceptance(acceptance, spec)
+    return acceptance
 
 
 def run_task(spec, name, *, device="cuda"):

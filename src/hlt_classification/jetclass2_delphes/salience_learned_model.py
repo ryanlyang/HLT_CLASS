@@ -31,13 +31,14 @@ def _validate(features, vectors, mask) -> None:
         raise ValueError("Nonfinite fusion input")
 
 
-def _trim_embed(mod, features, vectors, mask):
+def _trim_embed(mod, features, vectors, mask, *, pair_embedding=None):
     _validate(features, vectors, mask)
     features, vectors, mask, extra = mod.trimmer(features, vectors, mask, None)
     if extra is not None:
         raise TypeError("Installed Weaver trimmer returned pair payload")
     hidden = mod.embed(features).masked_fill(~mask.transpose(1, 2), 0)
-    pair = mod.pair_embed(vectors, uu=None, mask=mask)
+    pair = (mod.pair_embed(vectors, uu=None, mask=mask) if pair_embedding is None
+            else pair_embedding(mod, vectors, mask))
     return hidden, vectors, mask, pair
 
 
@@ -156,12 +157,17 @@ class DelphesAdjacentFusionParticleTransformer(nn.Module):
     def _context(self, features, vectors, mask):
         hidden, vectors, mask, pair = _trim_embed(
             self.context_mod, features, vectors, mask,
+            pair_embedding=self._pair_embedding,
         )
         hidden, states = _run_blocks(
             self.context_mod, hidden, mask, pair, captures=INJECTION_BLOCKS,
         )
         del hidden
         return states, vectors, mask
+
+    def _pair_embedding(self, mod, vectors, mask):
+        """Native default; campaign adapters may change saved-tensor storage."""
+        return mod.pair_embed(vectors, uu=None, mask=mask)
 
     def _prepare_injection_bias(self, pair_bias, context_padding):
         """Default preserves historical execution; new adapters may compact it."""
@@ -179,11 +185,12 @@ class DelphesAdjacentFusionParticleTransformer(nn.Module):
         )
         initial, primary_vectors, primary_mask, primary_pair = _trim_embed(
             self.primary_mod, primary_features, primary_vectors, primary_mask,
+            pair_embedding=self._pair_embedding,
         )
         combined_vectors = torch.cat((primary_vectors, context_vectors), dim=2)
         combined_mask = torch.cat((primary_mask, context_mask), dim=2)
-        cross_pair = self.cross_pair_mod.pair_embed(
-            combined_vectors, uu=None, mask=combined_mask,
+        cross_pair = self._pair_embedding(
+            self.cross_pair_mod, combined_vectors, combined_mask,
         )[:, :, :initial.shape[1], initial.shape[1]:]
         cross_pair, context_padding = self._prepare_injection_bias(
             cross_pair, ~context_mask[:, 0],

@@ -9,6 +9,7 @@ from hlt_classification.data.cache_contracts import load_json, write_immutable_j
 from .contracts import artifact as _artifact, validate as _validate
 from .execution import execution_site
 from .model import model_contract
+from .dzfix_fusion_model import PAIR_OFFLOAD_POLICY
 from .production import _source
 from .salience_learned_graph import TRAINING
 
@@ -26,12 +27,12 @@ RESOURCES = {
 
 
 def artifact(kind, **fields):
-    version = 3 if kind in {"LAUNCH_SPEC", "SOURCE_IMPORT", "CAMPAIGN_SPEC"} else 1
+    version = {"LAUNCH_SPEC": 4, "CAMPAIGN_SPEC": 4, "SOURCE_IMPORT": 3, "ACCEPTANCE": 2}.get(kind, 1)
     return _artifact("DZFIX_FUSION_CHAIN_" + kind, version=version, **fields)
 
 
 def validate(value, kind):
-    version = 3 if kind in {"LAUNCH_SPEC", "SOURCE_IMPORT", "CAMPAIGN_SPEC"} else 1
+    version = {"LAUNCH_SPEC": 4, "CAMPAIGN_SPEC": 4, "SOURCE_IMPORT": 3, "ACCEPTANCE": 2}.get(kind, 1)
     return _validate(value, "DZFIX_FUSION_CHAIN_" + kind, version=version)
 
 
@@ -102,7 +103,8 @@ def registration():
         model=model_contract(), role_counts=dict(COUNTS), split_profile="TRAIN_500K",
         input_capacity_policy="inventory_max_selected_round_up_16_no_truncation_v1",
         fusion={"injection_blocks": [2, 4, 6, 8], "direction": "context_to_primary",
-                "pair_population": "full_combined_weaver", "mask_execution": "compact_rectangle_padding_once_v1"},
+                "pair_population": "full_combined_weaver", "mask_execution": "compact_rectangle_padding_once_v1",
+                "saved_tensor_storage": deepcopy(PAIR_OFFLOAD_POLICY)},
         validation_partition={"fractions": [2, 1, 1], "names": ["checkpoint", "diagnostic", "report"],
                               "domain": "JC2/DZFIX/FUSION_CHAIN/v1/validation"},
         gpu_peak_fraction_limit=.90, cpu_peak_fraction_limit=.80,
