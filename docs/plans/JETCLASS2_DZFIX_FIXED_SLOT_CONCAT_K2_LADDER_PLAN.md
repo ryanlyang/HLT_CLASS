@@ -1,13 +1,43 @@
 # JetClass2 dz-fix fixed-slot concatenation ladder: K=2, HLT x3 -> HLT x1
 
-Status: staged implementation added on 2026-09-21 after the user selected K=2
-and requested implementation with every job in debug. See the versioned
+Status: staged implementation added on 2026-09-21 after the user selected K=2.
+On 2026-09-22 the user superseded the debug-only scheduling requirement:
+new campaigns default to tier3 and permit pending-job partition-only moves
+between SPORC tier3 and debug. This is an execution-policy change, not a
+scientific or source-matching change. Old immutable executions stay unchanged.
+See the versioned
 [campaign contract](../contracts/JETCLASS2_DZFIX_CONCAT_K2.md) for frozen
 choices, tests and queue interface. Queue tooling must run fresh expanded-input
 SPORC acceptance before releasing science; no real GPU acceptance is claimed.
 Implementing this plan does not itself submit jobs.
 This is a separate study and must not change any existing matching foundation,
 fusion campaign, checkpoint, job, or immutable specification.
+
+### 2026-09-22 authorized memory-repair amendment
+
+After preflight 21757208 OOMed inside native pair embedding, the user authorized
+a memory optimization followed by batch-128 then batch-256 diagnostic probes.
+Store only autograd tensors saved inside native pair embedding on pinned CPU
+memory, in their original dtype. Restore them for backward without recomputing
+layers or changing the full pair/BatchNorm population. Keep all particles,
+native state keys, model, seeds, loss, LR and scientific population unchanged.
+No global/native-class patch or other campaign modification is authorized.
+
+Require installed-Weaver FP32/BF16 parity for three optimizer updates and real
+CUDA save/retrieval counters. For D100/D075/D000/HLT-x1 execution cases, probe
+128 first, then 256 only if 128 finishes; use fresh models and the longest real
+rows for three optimizer steps and validation. Save individual probe artifacts
+before stopping on an OOM. Batch 128 is diagnostic evidence for a possible
+follow-up, **not** automatic permission to change science batch size. The current
+registered production batch remains 256. No accumulation or clipping fallback.
+
+Retain the 90% GPU and 80% CPU headroom gates and the measured 23-hour projected
+fit ceiling. Measure timings rather than promise that transfers are free.
+Version launch/campaign/acceptance to v3; matching/views and seed domains stay
+v1. Old acceptance cannot certify this path. The requested replacement launches
+in debug explicitly (`K2_PARTITION=debug`); retain tier3/debug pending-job
+portability. This amendment supersedes the earlier execution wording below,
+not the scientific ladder. See the contract for exact evidence requirements.
 
 ## 1. Scientific question
 
@@ -400,9 +430,27 @@ do not change K, remove jets, or suppress poor diagnostics automatically.
 
 ## 10. Resources, artifact isolation, and queue prerequisites
 
-Target SPORC/debug for this separate experiment, subject to its own measured
-acceptance and exact pushed source. Existing debug/tier3 jobs stay untouched.
-Debug's current 24-hour limit must be checked against measured training cost.
+Target SPORC/tier3 by default; allow an explicit debug initial submission.
+Both partitions belong to one registered K2-only A100 execution policy.
+Operators may use `scontrol update JobId=<exact-pending-ID> Partition=debug`
+or `Partition=tier3` without altering data, recipe, dependency IDs, or the
+original submission ledger. This does not migrate a running process; Slurm
+must accept the pending-job update under the site's limits and permissions.
+Keep identical account/QoS, A100 request, CPU/RAM, software and time limits.
+All jobs retain the portable <=24-hour request and <=23-hour measured fit
+projection. GPU/software acceptance remains exact, including A100 model and
+memory capacity; a partition switch is not permission to change GPU type.
+
+Only the submission partition is frozen as the requested site. Workers
+authenticate and record the actual allowed site; preflight evidence may be
+consumed on the other allowed site with identical accepted hardware/software.
+Moving a launcher does not change the requested partition of descendants:
+they use the campaign's original choice and can be moved individually later.
+Version launch/campaign/acceptance as v3 and execution policy/records as v1;
+keep scientific view/matcher/seed contracts unchanged. Existing v1 jobs and
+roots cannot acquire this policy by editing JSON, moving their Slurm partition,
+or updating their pinned worktree. Use a new pushed checkout and new roots.
+Existing debug/tier3 jobs stay untouched by implementation and submission.
 
 Three times as many tokens means roughly nine times as many dense attention
 pairs as native HLT at the same jet length, not a guaranteed ninefold wall-time
@@ -484,7 +532,9 @@ Implementation decisions frozen for this first campaign:
 - Derive expanded capacity from inventory, not 320. The archived SPORC
   inventory implies 832 tokens; workers authenticate/rederive it.
 - All new launchers, preparation, acceptance, science and reporting jobs
-  request debug. New acceptance must measure memory and runtime before science.
+  request tier3 by default (debug explicitly selectable) and allow manual
+  pending-job tier3/debug moves. New acceptance measures memory and runtime
+  before science; its actual execution site is recorded.
 
 Remaining external requirement: exact pushed checkout and genuine installed-
 Weaver/SPORC expanded-input acceptance. The queue workflow runs this gate

@@ -3,7 +3,12 @@
 # Default is a dry run. Pass --execute to authorize this registered full chain.
 set -euo pipefail
 export PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-export JC2_SITE=sporc_a100_debug
+K2_PARTITION="${K2_PARTITION:-tier3}"
+case "${K2_PARTITION}" in
+  tier3) export JC2_SITE=sporc_a100 ;;
+  debug) export JC2_SITE=sporc_a100_debug ;;
+  *) echo "K2_PARTITION must be tier3 or debug" >&2; exit 2 ;;
+esac
 source "${PROJECT_DIR}/sbatch/jetclass2_delphes_common.sh"
 CONCAT_COMMIT="$(git -C "${PROJECT_DIR}" rev-parse HEAD)"
 CONCAT_SHORT="${CONCAT_COMMIT:0:8}"
@@ -22,11 +27,22 @@ if [ ! -f "${LAUNCH_ROOT}/launch_spec.json" ]; then
   python -s "${PROJECT_DIR}/scripts/jetclass2_concat_k2.py" create-launch \
     --screen-spec "${SCREEN_SPEC}" --inventory "${INVENTORY}" \
     --launch-root "${LAUNCH_ROOT}" --campaign-root "${CAMPAIGN_ROOT}" \
-    --source-commit "${CONCAT_COMMIT}"
+    --source-commit "${CONCAT_COMMIT}" --partition "${K2_PARTITION}"
 fi
+# Do not silently retarget an existing immutable launch when an environment
+# variable changes. Moving an individual pending job is a separate operation.
+python -s - "${LAUNCH_ROOT}/launch_spec.json" "${K2_PARTITION}" <<'PY'
+import sys
+from hlt_classification.data.cache_contracts import load_json
+from hlt_classification.jetclass2_delphes.concat_k2_source import validate_launch
+spec = load_json(sys.argv[1])
+validate_launch(spec)
+if spec["registration"]["execution_site"]["partition"] != sys.argv[2]:
+    raise SystemExit("Existing launch has a different submission partition; use its original setting or a fresh root.")
+PY
 CONCAT_ARGS=()
 if [ "${1:-}" = --execute ]; then
-  CONCAT_ARGS+=(--execute --authorization-phrase "AUTHORIZE JETCLASS2 DZFIX CONCAT K2 DEBUG 500K EXACT SPEC")
+  CONCAT_ARGS+=(--execute --authorization-phrase "AUTHORIZE JETCLASS2 DZFIX CONCAT K2 PORTABLE 500K EXACT SPEC")
 fi
 python -s "${PROJECT_DIR}/scripts/jetclass2_concat_k2.py" schedule \
   --spec "${LAUNCH_ROOT}/launch_spec.json" "${CONCAT_ARGS[@]}"

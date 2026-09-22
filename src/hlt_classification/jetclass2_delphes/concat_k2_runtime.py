@@ -1,8 +1,9 @@
-"""One-encoder K2 training and actual expanded-input debug acceptance."""
+"""One-encoder K2 training and expanded-input SPORC A100 acceptance."""
 from __future__ import annotations
 
 from io import BytesIO
 import gc
+import math
 from pathlib import Path
 import shutil
 import time
@@ -19,7 +20,10 @@ from .concat_k2_campaign import gates, artifact, nodes, validate, validate_campa
 from .concat_k2_data import caches, cache_bounds, prepare, publish_partition, assignment, foundation_lock, matcher_acceptance
 from .concat_k2_source import validate_import
 from .execution import allocation, gpu_identity
-from .model import DelphesParticleTransformer, installed_environment
+from .concat_k2_execution import runtime_site, validate_acceptance_site
+from .model import installed_environment
+from .concat_k2_model import (K2ParticleTransformer, storage_parity, synchronize,
+    validate_storage_stats, PAIR_STORAGE, BATCH_PROBE_POLICY, PARITY_CHECKS)
 from .reporting import evaluate_probabilities, recovery
 from .salience_learned_data import IndexedRamCache
 from .salience_learned_training import predict, train_kernel, _optimizer, _train_batch
@@ -58,11 +62,13 @@ def completed(spec, name):
 def science_gate(spec):
     reports = {name: completed(spec, name) for name in gates(spec)}
     if not all(reports.values()):
-        raise PermissionError("Fresh K2 preparation and debug GPU acceptance must complete before science")
+        raise PermissionError("Fresh K2 preparation and GPU acceptance must complete before science")
     acceptance = load_json(relative_file(Path(spec["campaign_root"]), reports["preflight"]["result"]["acceptance"]))
     validate(acceptance, "ACCEPTANCE")
+    validate_acceptance_site(spec, acceptance)
+    validate_memory_evidence(spec, acceptance)
     if (acceptance["campaign_sha256"] != spec["content_hash"] or acceptance["passed"] is not True
-            or acceptance["final_test_accessed"] is not False or acceptance["site"] != spec["execution_site"]
+            or acceptance["final_test_accessed"] is not False
             or acceptance["resource"] != spec["resources"]["preflight"] or acceptance["acceptance_only"] is not True
             or acceptance["ordinary_rows"] != {r: spec["role_counts"][r] for r in ("train", "validation")}
             or acceptance["batch_size"] != spec["training"]["batch_size"]
@@ -76,12 +82,12 @@ def science_gate(spec):
             or len(acceptance["native_execution"]) != 4
             or any(not row["kernel_report"]["acceptance_only"] or row["kernel_report"]["scientific_fit"]
                    for row in acceptance["native_execution"])):
-        raise ValueError("Fresh K2 debug execution acceptance differs")
+        raise ValueError("Fresh K2 execution acceptance differs")
     return acceptance
 
 
 def execution_gate(spec, *, science):
-    job, cpus, memory = allocation(spec["execution_site"])
+    job, cpus, memory = allocation(runtime_site(spec))
     resource = spec["resources"]["train"]
     if cpus != resource["cpus"] or memory != resource["memory_mb"]:
         raise ValueError("Worker CPU/RAM allocation differs")
@@ -94,7 +100,7 @@ def execution_gate(spec, *, science):
 
 def new_model(node):
     torch.manual_seed(node["initialization_seed"])
-    return DelphesParticleTransformer()
+    return K2ParticleTransformer()
 
 
 def save_state(path, state):
@@ -231,14 +237,102 @@ def _stress(model, raw, node, device, capacity):
         raw[key]=np.pad(value,((0,0),(0,0),(0,capacity-value.shape[-1])))
     optimizer=_optimizer(model); model.train()
     q=None if node["teacher_distribution"] is None else torch.full((len(raw["labels"]),11),1/11,device=device)
-    for _ in range(3):
+    timings=[]
+    for step in range(3):
+        synchronize(device); started=time.monotonic()
         optimizer.zero_grad(set_to_none=True)
         loss,_=_train_batch(model,raw,node=node,device=device,teacher=q,alpha=1.)
         loss.backward()
         if any(p.grad is not None and not torch.isfinite(p.grad).all() for p in model.parameters()):
             raise ValueError("Nonfinite longest-batch gradient")
         optimizer.step()
+        synchronize(device); timings.append(time.monotonic()-started)
+        print(f"JC2-K2 phase=batch_probe view={node['primary_coordinate']} batch={len(raw['labels'])} step={step+1}/3 seconds={timings[-1]:.3f}",flush=True)
     optimizer.zero_grad(set_to_none=True)
+    stats=model.pair_storage_stats() if hasattr(model,"pair_storage_stats") else None
+    if torch.device(device).type=="cuda": validate_storage_stats(stats)
+    return dict(step_seconds=timings,storage_stats=stats)
+
+
+PROBE_CASES=("CONCAT_K2_D100","CONCAT_K2_D075","CONCAT_K2_D000","HLT_X1_COMPRESSED")
+
+
+def _exercise_probe(spec,node,train,validation,device,batch_size):
+    # A new optimizer/BN state for each probe; these weights never become teachers.
+    model=new_model(node).to(device)
+    ti=longest_indices(train,batch_size); vi=longest_indices(validation,batch_size)
+    if len(ti)!=batch_size or len(vi)!=batch_size:
+        raise ValueError("Batch probe needs the requested number of distinct real rows")
+    result=_stress(model,train.batch(ti),node,device,spec["foundation"]["inputs"]["capacity"])
+    synchronize(device); started=time.monotonic()
+    predict(model,IndexedRamCache(validation,vi,role="validation"),node=node,device=device,batch_size=batch_size)
+    synchronize(device)
+    return dict(**result,validation_seconds=time.monotonic()-started,
+        train_rows=len(ti),validation_rows=len(vi),
+        steady_train_jets_per_second=2*batch_size/sum(result["step_seconds"][1:]))
+
+
+def _probe_attempt(spec,node,train,validation,device,batch_size):
+    _cuda_clear(); torch.cuda.reset_peak_memory_stats()
+    started=time.monotonic()
+    try:
+        result=dict(status="COMPLETED",**_exercise_probe(spec,node,train,validation,device,batch_size))
+    except torch.OutOfMemoryError as error:
+        # Exit the except block before cleanup: do not retain its CUDA traceback.
+        result=dict(status="CUDA_OOM",error=str(error),error_type=type(error).__name__)
+    result.update(elapsed_seconds=time.monotonic()-started,
+        peak_cuda_bytes=torch.cuda.max_memory_allocated(),
+        peak_reserved_cuda_bytes=torch.cuda.max_memory_reserved())
+    _cuda_clear()
+    return result
+
+
+def batch_probes(spec,directory,node,train,validation,device):
+    records=[]
+    for size in BATCH_PROBE_POLICY["order"]:
+        result=_probe_attempt(spec,node,train,validation,device,size)
+        record=artifact("BATCH_PROBE",**result,node_id=node["node_id"],
+            campaign_sha256=spec["content_hash"],device_type=torch.device(device).type,
+            batch_size=size,capacity=spec["foundation"]["inputs"]["capacity"],
+            pair_storage=PAIR_STORAGE,policy=BATCH_PROBE_POLICY,acceptance_only=True,final_test_accessed=False)
+        write_immutable_json(directory/f"batch_probe_{node['node_id']}_{size}.json",record)
+        records.append(record)
+        print(f"JC2-K2 phase=batch_probe_result view={node['primary_coordinate']} batch={size} status={record['status']} peak_cuda_GiB={record['peak_cuda_bytes']/2**30:.3f}",flush=True)
+        if record["status"]!="COMPLETED":
+            raise MemoryError(f"K2 batch {size} CUDA OOM. Probe evidence saved; no acceptance or science submission. "
+                              "Batch 128 is diagnostic only; production remains 256 until explicitly re-registered.")
+    return records
+
+
+def validate_memory_evidence(spec,value):
+    if (value.get("pair_storage")!=PAIR_STORAGE or value.get("batch_probe_policy")!=BATCH_PROBE_POLICY
+            or spec.get("pair_storage")!=PAIR_STORAGE or spec.get("batch_probe_policy")!=BATCH_PROBE_POLICY):
+        raise ValueError("K2 memory acceptance policy differs")
+    reports=value.get("storage_parity_reports",[])
+    expected=[(name,precision) for name in ("CONCAT_K2_D100","CONCAT_K2_D000") for precision in ("fp32","bf16")]
+    if [(r.get("node_id"),r.get("precision")) for r in reports]!=expected:
+        raise ValueError("K2 memory acceptance parity coverage differs")
+    for row in reports:
+        if (row.get("passed") is not True or row.get("device_type")!="cuda"
+                or row.get("steps")!=3 or row.get("checks")!=PARITY_CHECKS):
+            raise ValueError("K2 memory acceptance needs real native training parity")
+        validate_storage_stats(row.get("storage_stats"))
+    probes=value.get("batch_probes",[])
+    if [(r.get("node_id"),r.get("batch_size")) for r in probes]!=[
+            ("ACCEPTANCE_"+name,size) for name in PROBE_CASES for size in (128,256)]:
+        raise ValueError("K2 memory acceptance batch coverage/order differs")
+    for row in probes:
+        validate(row,"BATCH_PROBE")
+        if (row.get("campaign_sha256")!=spec["content_hash"] or row.get("status")!="COMPLETED"
+                or row.get("device_type")!="cuda" or row.get("capacity")!=value["capacity"]
+                or row.get("pair_storage")!=PAIR_STORAGE or row.get("policy")!=BATCH_PROBE_POLICY
+                or row.get("acceptance_only") is not True or row.get("final_test_accessed") is not False
+                or row.get("train_rows")!=row["batch_size"] or row.get("validation_rows")!=row["batch_size"]
+                or not 0<row.get("peak_cuda_bytes",0)<=value["peak_cuda_bytes"]
+                or len(row.get("step_seconds",[]))!=3
+                or any(not math.isfinite(t) or t<=0 for t in row["step_seconds"]+[row.get("validation_seconds",0)])):
+            raise ValueError("K2 memory acceptance batch execution differs")
+        validate_storage_stats(row.get("storage_stats"))
 
 
 def preflight(spec,directory,device):
@@ -248,9 +342,9 @@ def preflight(spec,directory,device):
     from .acceptance import installed_parity
     job=execution_gate(spec,science=False); environment=installed_environment(); started=time.monotonic()
     torch.cuda.reset_peak_memory_stats()
-    cases=("CONCAT_K2_D100","CONCAT_K2_D075","CONCAT_K2_D000","HLT_X1_COMPRESSED")
-    evidence=[]; q=None; cache_seconds=0.; prior_ids=None; parity=[]
-    for name in cases:
+    evidence=[]; q=None; cache_seconds=0.; prior_ids=None; parity=[]; storage_reports=[]; probes=[]
+    peak=reserved=0
+    for name in PROBE_CASES:
         node=dict(next(n for n in nodes() if n["node_id"]==name)); node["node_id"]="ACCEPTANCE_"+name
         cached=time.monotonic()
         train=prepare(spec,"train",node["primary_coordinate"])
@@ -265,6 +359,15 @@ def preflight(spec,directory,device):
             # including duplicate-p4 pairs on the x3 endpoint.
             parity.append(installed_parity(t,device=device))
             _cuda_clear()
+            for bf16 in (False,True):
+                storage_reports.append(dict(node_id=name,**storage_parity(t.batch(np.arange(4)),device=device,bf16=bf16)))
+                _cuda_clear()
+        peak=max(peak,torch.cuda.max_memory_allocated()); reserved=max(reserved,torch.cuda.max_memory_reserved())
+        # Try 128 before the first 256 mini-fit/stress. A failure preserves the
+        # successful smaller probe, but cannot release any scientific jobs.
+        probes.extend(batch_probes(spec,directory,node,train,validation,device))
+        peak=max(peak,*(r["peak_cuda_bytes"] for r in probes))
+        reserved=max(reserved,*(r["peak_reserved_cuda_bytes"] for r in probes))
         model=new_model(node)
         report,state=train_kernel(model,lambda _:t,lambda _:v,node=node,device=device,
             teacher_probabilities=q,teacher_identities=None if q is None else t.identities,acceptance_passes=2)
@@ -280,16 +383,13 @@ def preflight(spec,directory,device):
         manifest=publish_bank(bank,identities=t.identities,probabilities=q,**kwargs)
         if not np.array_equal(q,load_bank(bank,expected_identities=t.identities,**kwargs)):
             raise ValueError("Probability bank round trip differs")
-        stress=train.batch(longest_indices(train))
-        _stress(model,stress,node,device,spec["foundation"]["inputs"]["capacity"])
-        predict(model,IndexedRamCache(validation,longest_indices(validation),role="validation"),node=node,device=device)
         epoch=report["validation_history"][-1]
         evidence.append(dict(node=node,kernel_report=report,bank_sha256=manifest["content_hash"],
             train_seconds_per_row=epoch["train_seconds"]/len(t),validation_seconds_per_row=epoch["validation_seconds"]/len(v)))
         print(f"JC2-K2 phase=stress view={node['primary_coordinate']} peak_cuda_GiB={torch.cuda.max_memory_allocated()/2**30:.3f}",flush=True)
-        del train,validation,t,v,model,state,buffer,stress,expected,report
+        del train,validation,t,v,model,state,buffer,expected,report
         _cuda_clear()
-    gpu=gpu_identity(); peak=torch.cuda.max_memory_allocated(); reserved=torch.cuda.max_memory_reserved()
+    gpu=gpu_identity(); peak=max(peak,torch.cuda.max_memory_allocated()); reserved=max(reserved,torch.cuda.max_memory_reserved())
     rss=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss*1024
     checkpoint_rows=load_json(Path(spec["campaign_root"])/"validation_partition.json")["counts"][0]
     projected=max(100*(spec["role_counts"]["train"]*e["train_seconds_per_row"]+checkpoint_rows*e["validation_seconds_per_row"])
@@ -303,15 +403,21 @@ def preflight(spec,directory,device):
     if rss>spec["resources"]["train"]["memory_mb"]*1024**2*spec["cpu_peak_fraction_limit"]:
         raise MemoryError("K2 CPU peak exceeds registered headroom")
     if projected>23*3600:
-        raise RuntimeError(f"Projected K2 100-pass fit {projected/3600:.2f}h does not fit debug safely")
-    return artifact("ACCEPTANCE",campaign_sha256=spec["content_hash"],passed=True,acceptance_only=True,
-        job_id=job,site=spec["execution_site"],resource=spec["resources"]["preflight"],environment=environment,
+        raise RuntimeError(f"Projected K2 100-pass fit {projected/3600:.2f}h exceeds the portable 23h bound")
+    value=artifact("ACCEPTANCE",campaign_sha256=spec["content_hash"],passed=True,acceptance_only=True,
+        job_id=job,site=runtime_site(spec),requested_site=spec["execution_site"],
+        execution_policy_sha256=spec["execution_policy"]["content_hash"],
+        resource=spec["resources"]["preflight"],environment=environment,
         elapsed_seconds=time.monotonic()-started,**measured,cache_bounds=cache_bounds(spec),
         ordinary_rows={r:spec["role_counts"][r] for r in ("train","validation")},
         capacity=spec["foundation"]["inputs"]["capacity"],batch_size=256,native_execution=evidence,
+        pair_storage=PAIR_STORAGE,batch_probe_policy=BATCH_PROBE_POLICY,
+        storage_parity_reports=storage_reports,batch_probes=probes,
         checkpoint_round_trip=True,bank_round_trip=True,installed_weaver_fp32_parity=True,
         parity_reports=parity,worst_population_batch_stress=True,duplicate_pair_finiteness=True,
         hlt_only_endpoint=True,final_test_accessed=False)
+    validate_memory_evidence(spec,value)
+    return value
 
 
 def run_task(spec,name,*,device="cuda"):
@@ -321,7 +427,7 @@ def run_task(spec,name,*,device="cuda"):
     parents={p:completed(spec,p) for p in row["dependencies"]}
     if not all(parents.values()): raise PermissionError("Required parent artifacts are incomplete")
     from .concat_k2_submit import authenticate_job
-    authenticate_job(spec,name)
+    job_id=authenticate_job(spec,name)
     root=Path(spec["campaign_root"]); directory=root/"outputs"/name
     directory.mkdir(parents=True,exist_ok=False); kind=row["kind"]
     try:
@@ -363,6 +469,7 @@ def run_task(spec,name,*,device="cuda"):
         result={k:v.relative_to(root).as_posix() if isinstance(v,Path) else v for k,v in result.items()}
         write_immutable_json(directory/"result.json",artifact("RESULT",result=result,campaign_sha256=spec["content_hash"],task_id=name,final_test_accessed=False))
         paths=sorted(p for p in directory.rglob("*") if p.is_file())
+        paths += [root/"execution"/name/(job_id+".json")]
         if kind=="partition": paths += [root/"validation_partition.json",root/"validation_partition.npz"]
         value=artifact("TASK_REPORT",campaign_sha256=spec["content_hash"],task_id=name,source_commit=spec["source_commit"],
             parents={p:r["content_hash"] for p,r in parents.items()},result=result,

@@ -20,7 +20,7 @@ def test_deferred_launcher_uses_exact_postscreen_boundary_and_no_expired_id(monk
     monkeypatch.setattr(scheduler, "validate_launch", lambda s: s["content_hash"])
     monkeypatch.setattr(scheduler, "_parent", lambda s: (parent, {}))
     pending = scheduler.launcher_plan(spec, "after_matching")["commands"][0]["command"]
-    assert "--dependency=afterok:21748725" in pending and "--partition=debug" in pending
+    assert "--dependency=afterok:21748725" in pending and "--partition=tier3" in pending
     calls = []
     def sbatch(c, **kw):
         calls.append(c)
@@ -289,7 +289,8 @@ def test_cli_and_helper_expose_direct_screen_boundary(imported_source, monkeypat
     assert result.value.code == 0
     printed = capsys.readouterr().out
     assert "--dependency=afterok:21748725" in printed
-    assert "New campaign partition: debug" in printed
+    assert "New campaign partition: tier3" in printed
+    assert "tier3 <-> debug" in printed
     assert str(root / "screen_spec.json") in printed
     assert not (Path(launch["launch_root"]) / "submissions_after_matching/submission_ledger.json").exists()
     helper = (repo / "scripts/queue_jetclass2_concat_k2.sh").read_text()
@@ -363,8 +364,8 @@ def test_debug_screen_profile_cannot_redirect_consumer_or_change_producer_site(i
     monkeypatch.setattr(chain, "_source", lambda *a: None)
     spec = chain.create(launch=launch)
     assert load_json(root / "runtime_profile.json")["execution_site"]["partition"] == "tier3"
-    assert spec["execution_site"]["partition"] == "debug"
-    assert all("--partition=debug" in r["command"] for r in scheduler.plan(spec, "full")["commands"])
+    assert spec["execution_site"]["partition"] == "tier3"
+    assert all("--partition=tier3" in r["command"] for r in scheduler.plan(spec, "full")["commands"])
     profile = rehash(load_json(root / "runtime_profile.json"),
                      execution_site=source.execution_site("sporc_a100_debug"))
     republish_screen_result(root, "preflight", "runtime_profile.json", profile)
@@ -387,7 +388,11 @@ def test_registration_change_cannot_reuse_acceptance(imported_source, monkeypatc
 def test_launcher_automates_gate_then_science_without_resubmitting_parent(imported_source, monkeypatch):
     launch, _, _ = imported_source
     monkeypatch.setattr(chain, "_source", lambda *a: None)
-    monkeypatch.setattr(scheduler, "authenticate_job", lambda *a, **k: "300")
+    def authenticate(s, name, **kw):
+        write_immutable_json(Path(s["launch_root"])/"execution"/name/"300.json",
+                             chain.artifact("EXECUTION_RECORD", test_only=True))
+        return "300"
+    monkeypatch.setattr(scheduler, "authenticate_job", authenticate)
     original_source = source.assignment_source()
     calls = []
     def sbatch(c, **kw):
@@ -403,6 +408,4 @@ def test_launcher_automates_gate_then_science_without_resubmitting_parent(import
     monkeypatch.setattr(runtime, "science_gate", lambda s: {"passed": True})
     result = scheduler.run_launcher(launch, "after_gate")
     assert result["result"]["science_tasks"] == 17 and len(calls) == 25
-    assert all("--partition=debug" in c for c in calls)
-
-
+    assert all("--partition=tier3" in c for c in calls)

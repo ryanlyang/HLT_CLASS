@@ -1,8 +1,56 @@
 # JetClass2 dzfix fixed-slot K=2 concatenation campaign
 
 Scientific authority: [the active implementation plan](../plans/JETCLASS2_DZFIX_FIXED_SLOT_CONCAT_K2_LADDER_PLAN.md).
-Family: `JETCLASS2_DELPHES_CONCAT_K2_*/v1`. Historical U/D, full-cardinality
-and fusion-chain artifacts retain their old meaning; none is modified.
+Family: `JETCLASS2_DELPHES_CONCAT_K2_*`. Launch spec, campaign spec and GPU
+acceptance are `/v3` for the 2026-09-22 pair-storage repair and ordered batch
+probes, retaining the v2 portable scheduling policy. Matching,
+views, seeds and remaining scientific artifacts keep `/v1`. New
+`EXECUTION_POLICY/v1` and `EXECUTION_RECORD/v1` bind allowed and actual sites.
+Historical v1 debug-only executions and other campaigns are not modified.
+
+## v3 K2 memory repair and ordered probes
+
+Remote preflight 21757208 failed with a real CUDA OOM in native Weaver
+pair embedding (8.22 GiB next allocation, 1.77 GiB free on the 39.52 GiB A100).
+This is not resolved by weakening the 90% headroom gate.
+
+`concat_k2_model.K2ParticleTransformer` uses instance-local saved-tensor hooks
+inside native `pair_embed` only. Autograd's saved CUDA tensors go to pinned CPU
+memory in their original dtype and are restored for backward. Native pair
+computations, full BatchNorm population, running buffers, inputs and checkpoint
+keys are unchanged. There is no pair chunking, recomputation, gradient
+accumulation, precision change or trimming. Eval/no-grad bypasses offload.
+The adapter is used only by K2 fits, reducers and K2 acceptance; other campaigns
+and the shared native model are unchanged. Policy is hashed into registration.
+
+Fresh acceptance first checks installed-Weaver wrapper parity and storage-only
+training parity in FP32 and BF16, on D100 and duplicate-input D000. Three AdamW
+updates compare logits/loss, feature and parameter gradients, BatchNorm buffers,
+updated weights and optimizer state. Counters must prove real CUDA saves AND
+backward retrieval; CPU doubles and no-op hooks are not valid acceptance.
+
+For each D100/D075/D000/HLT-x1 acceptance case, test physical batch **128 first,
+then 256**, with a fresh model/optimizer for each batch. Use the longest distinct
+real training and validation rows, with train padding to the full registered
+capacity; perform three full optimizer updates and validation. Publish each
+hashed `batch_probe_ACCEPTANCE_<node>_<size>.json` immediately with status,
+allocated/reserved GPU peaks, step/validation timings, throughput and storage
+counters. Counters sum saved bytes, not unique live-memory savings.
+
+An OOM at 128 prevents the 256 attempt. An OOM at 256 leaves the successful
+128 evidence available and stops before publishing acceptance or releasing
+science. Other errors propagate normally. **128 is diagnostic, not an automatic
+production fallback.** All science still uses physical batch 256. A production
+change to 128 needs an explicit new registration; accumulation is not silently
+substituted for the BatchNorm population of 256.
+
+The existing full-cache RAM, 90% GPU/80% CPU headroom, 23-hour projected-fit,
+round-trip, source, real-Weaver and sealed-test gates remain. Mini-fit timing
+uses the optimized production path. Transfers may slow training; only the real
+A100 gate can quantify this. Small parity-fixture timings include diagnostic
+copies and are not a throughput benchmark. Historical v1/v2 acceptance cannot
+authorize v3 science. Use fresh roots and `K2_PARTITION=debug` for the requested
+replacement launch; pending partition-only moves to/from tier3 remain allowed.
 
 ## Population, source and isolation
 
@@ -16,8 +64,10 @@ models, probability banks or GPU acceptance as new K2 evidence.
 The contextual bottleneck control is not a salience candidate. The consumer
 must never choose a different formula after viewing its own report results.
 No job reads final-test particle arrays. Inventory byte authentication is not
-test inference. Existing production remains on its registered site; every new
-`jc2k2_*` job, including launchers and CPU preparation, requests SPORC `debug`.
+test inference. Existing production remains on its registered site. New
+`jc2k2_*` jobs default to SPORC `tier3`, with an explicit `debug` option.
+Every stage, including launchers and CPU preparation, allows pending-job
+partition-only moves between these two registered sites.
 
 New launch/campaign roots must be separate and outside protected source roots.
 Source checkout must be clean, exact-commit and known on an origin ref. No
@@ -140,7 +190,7 @@ Dense costs and materialized particle views are never persisted. Store only
 compact maps, diagnostics, selected weights, reports and class-probability
 banks. RAM cache construction has bounded process and pending-result counts.
 
-## Debug-only workflow and genuine acceptance
+## Portable SPORC workflow and genuine acceptance
 
 ```text
 authenticated parent screen complete
@@ -158,7 +208,9 @@ edges are permitted. Manual live submission of `stage=full` is forbidden.
 Resources: metadata 1 CPU/8192 MiB/4h; assignment 1 CPU/8192 MiB/12h;
 partition 4 CPUs/320000 MiB/6h; preflight and fits 4 CPUs/320000 MiB/24h/one
 A100; reducers 4 CPUs/320000 MiB/6h/one A100. All request account reu-aisocial,
-partition debug and qos_tier3, with no requeue. CPU workers limit nested
+the campaign's initial tier3/debug partition and qos_tier3, with no requeue.
+Requests keep the <=24-hour common envelope even when submitted to tier3.
+CPU workers limit nested
 numerical threads. The existing absolute-path SPORC helper sets the conda
 environment, PYTHONNOUSERSITE and LD_LIBRARY_PATH.
 
@@ -177,6 +229,10 @@ actual A100 capacity, and conservative 100-pass runtime projection below 23h
 RAM, leaving worker/optimizer headroom; at least 32 GiB durable space is
 required. Genuine acceptance is bound to campaign, environment, hardware,
 batch, expanded capacity and exact resources, then rechecked by science workers.
+The acceptance records both requested and actual execution sites and the
+execution-policy hash. It remains valid across allowed partition-only moves;
+accepted GPU name, memory, compute capability and installed environment must
+still match exactly. Shared execution checks for other campaigns are unchanged.
 OOM/time failures stop release; no automatic smaller batch or clipping is
 allowed. A hardware failure requires a reviewed new resource/recipe decision.
 
@@ -187,17 +243,54 @@ checkpoint resume. Failed execution outputs are retained for diagnosis;
 do not delete partial directories or blindly requeue against them. A reviewed
 restart-zero attempt must use exact old IDs and a fresh isolated root.
 
+### Manual pending-job moves
+
+On v2/v3 portable executions, the scheduler may change `Partition` between `tier3`
+and `debug`. The canonical submission commands/ledger remain unchanged as
+historical intent. Workers use the actual Slurm partition to activate the
+same SPORC environment, independently authenticate it against `scontrol`,
+and write a hashed `execution/<task>/<job-id>.json` with requested/actual sites,
+policy hash, exact subject/job, node and resources. They reject other
+partitions, incorrect job IDs, changed account/QoS, CPUs/RAM/time limits or
+inconsistent environment. GPU workers additionally enforce actual A100 and
+the exact accepted hardware/software. Monitoring shows both requested and
+actual partitions without interpreting the move as source/ledger corruption.
+
+For a **verified pending portable K2 job**, normal Slurm commands are:
+
+```bash
+scontrol update JobId=EXACT_PENDING_K2_JOB_ID Partition=debug
+# Or, to move it back:
+scontrol update JobId=EXACT_PENDING_K2_JOB_ID Partition=tier3
+```
+
+These are manual operator actions, not automatic migration or live process
+movement. Slurm may reject an update due to site permissions/limits. Do not
+change QoS, GRES, memory, CPUs or time as part of the move. Moving a launcher
+does not change descendants' initial submission partition; they still use
+the immutable campaign choice. Never edit a spec or ledger to match a move.
+
+The previously queued v1 preflight 21757208 and after-gate 21757209 point at
+old debug-only source. This patch does not retrofit those jobs. A reviewed
+cutover needs a new clean pushed checkout/root and exact old-job accounting;
+no cancellation, update, new submission or preparation reuse is performed by
+this code change. The unrelated jc2fc/jc2salp campaigns remain out of scope.
+
 ## Queue interface and current evidence boundary
 
 From a clean, pushed, pinned checkout on sporcsubmit:
 
 ```bash
+export K2_PARTITION=debug  # requested replacement; tier3 also supported
 bash scripts/queue_jetclass2_concat_k2.sh
 bash scripts/queue_jetclass2_concat_k2.sh --execute
 ```
 
 First call is dry only. Second explicitly authorizes the whole registered
-staged workflow using `AUTHORIZE JETCLASS2 DZFIX CONCAT K2 DEBUG 500K EXACT SPEC`.
+staged workflow using `AUTHORIZE JETCLASS2 DZFIX CONCAT K2 PORTABLE 500K EXACT SPEC`.
+`K2_PARTITION=tier3` is the default; `K2_PARTITION=debug` selects debug at
+creation. An existing launch refuses a different requested partition on retry;
+use its original setting (individual jobs can still be moved with scontrol).
 `SCREEN_SPEC`, `INVENTORY`, `LAUNCH_ROOT`, `CAMPAIGN_ROOT` can select explicit
 paths; source/parent/root checks remain mandatory. Inspect with the thin
 `scripts/jetclass2_concat_k2.py` CLI (`gate`, `results --per-class`, read-only

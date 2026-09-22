@@ -1,4 +1,4 @@
-"""Create/queue the isolated debug K=2 concatenation ladder, inspect gates and print results."""
+"""Create/queue the isolated SPORC K=2 ladder, inspect gates and print results."""
 from __future__ import annotations
 
 import argparse
@@ -22,6 +22,8 @@ def main():
     for flag in ("screen-spec", "inventory", "launch-root", "campaign-root"):
         command.add_argument("--" + flag, type=Path, required=True)
     command.add_argument("--source-commit", required=True)
+    command.add_argument("--partition", choices=("tier3", "debug"), default="tier3",
+                         help="Initial partition; pending jobs may move between both.")
     for name in ("schedule", "launch-run", "materialize", "submit", "run", "gate", "results", "monitor", "audit"):
         command = modes.add_parser(name)
         command.add_argument("--spec", type=Path, required=True)
@@ -39,7 +41,8 @@ def main():
     a = parser.parse_args()
     if a.mode == "create-launch":
         result = create_launch(screen_spec=a.screen_spec, inventory_path=a.inventory,
-            launch_root=a.launch_root, campaign_root=a.campaign_root, project=ROOT, source_commit=a.source_commit)
+            launch_root=a.launch_root, campaign_root=a.campaign_root, project=ROOT,
+            source_commit=a.source_commit, partition=a.partition)
         schedule(result)
     else:
         spec = load_json(a.spec)
@@ -57,11 +60,13 @@ def main():
         elif a.mode == "gate":
             validate_campaign(spec)
             result = science_gate(spec)
-            print("DZFIX CONCAT K2 DEBUG GATE: PASS")
+            print("DZFIX CONCAT K2 SPORC GATE: PASS")
         elif a.mode=="monitor":
             result=monitor(spec)
             for row in result["rows"]:
-                print(f"{str(row['job_id']):<14} {row['state']:<24} {row.get('elapsed',''):<12} {row['task_id']}")
+                print(f"{str(row['job_id']):<14} {row['state']:<24} {row.get('elapsed',''):<12} "
+                      f"requested={row.get('requested_partition', '?')} "
+                      f"actual={row.get('actual_partition') or '?'} {row['task_id']}")
         elif a.mode=="audit":
             validate_campaign(spec)
             from hlt_classification.jetclass2_delphes.concat_k2_runtime import completed
@@ -116,6 +121,7 @@ def main():
         print("Matching screen:", spec["screen_spec_path"])
         print("Authenticated matching completion job:", spec["parent_job_id"])
         print("New campaign partition:", spec["registration"]["execution_site"]["partition"])
+        print("Allowed pending-job partition changes: tier3 <-> debug (same resources)")
         dependency = [token for token in result["commands"][a.phase]
                       if token.startswith("--dependency=")]
         print("Launcher dependency:", ", ".join(dependency) or "none (completed artifacts authenticated)")

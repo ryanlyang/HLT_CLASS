@@ -1,4 +1,4 @@
-"""Success-gated, exact-ID debug launchers; no mutations to parent campaigns."""
+"""Success-gated K2 launchers with tier3/debug scheduling-only portability."""
 from __future__ import annotations
 
 import os
@@ -8,12 +8,13 @@ import subprocess
 import sys
 import time
 
-from hlt_classification.data.cache_contracts import load_json, write_immutable_json
+from hlt_classification.data.cache_contracts import load_json, sha256_file, write_immutable_json
 from hlt_classification.scouting.hcwdl_exact_dag_submission import submit_exact_dag
 from hlt_classification.scouting.hcwdl_recovery import validate_submission_ledger, build_submission_event
 from .concat_k2_campaign import AUTHORIZE, gates, PREFIX, artifact, create, validate_campaign
 from .concat_k2_source import _parent, build_import, validate_launch
 from .execution import slurm_options
+from .concat_k2_execution import admit_site
 from .submission import _guarded_exact_submission
 
 
@@ -53,7 +54,7 @@ def plan(spec, stage):
 
 def _submit(spec, commands, directory, execute, authorization):
     if execute and authorization != AUTHORIZE:
-        raise PermissionError("Exact dzfix K2 concatenation debug authorization required")
+        raise PermissionError("Exact dzfix K2 portable authorization required")
     write_immutable_json(directory / "command_plan.json", commands)
     dry = directory / "dry_run_submission_ledger.json"
     submit_exact_dag(identity=spec["content_hash"], plan=commands, output=dry,
@@ -75,9 +76,9 @@ def _submit(spec, commands, directory, execute, authorization):
 def submit(spec, *, stage, execute=False, authorization=None):
     validate_campaign(spec)
     if execute and stage == "full":
-        raise PermissionError("Full-DAG execution is forbidden; fresh debug gates must finish first")
+        raise PermissionError("Full-DAG execution is forbidden; fresh K2 gates must finish first")
     if execute and authorization != AUTHORIZE:
-        raise PermissionError("Exact dzfix K2 concatenation debug authorization required")
+        raise PermissionError("Exact dzfix K2 portable authorization required")
     if execute and stage == "science":
         from .concat_k2_runtime import science_gate
         science_gate(spec)
@@ -150,6 +151,15 @@ def schedule(launch, *, phase="after_matching", execute=False, authorization=Non
     return _submit(launch, commands, directory, execute, authorization)
 
 
+def _time_seconds(value):
+    """Parse Slurm's concrete scheduler TimeLimit, never an unlimited bound."""
+    match = re.fullmatch(r"(?:(\d+)-)?(\d+):(\d{2}):(\d{2})", value)
+    if match is None:
+        raise PermissionError("Scheduler must report a finite registered TimeLimit")
+    days, hours, minutes, seconds = match.groups()
+    return int(days or 0)*86400 + int(hours)*3600 + int(minutes)*60 + int(seconds)
+
+
 def authenticate_job(spec, name, *, launch=False):
     """Accept a receipt even when this job starts before the last DAG sbatch."""
     job = os.environ.get("SLURM_JOB_ID", "")
@@ -185,14 +195,23 @@ def authenticate_job(spec, name, *, launch=False):
         next(r["resource"] for r in spec["tasks"] if r["task_id"] == name)])
     raw = subprocess.run(["scontrol", "show", "job", "-o", job], capture_output=True, text=True, check=True).stdout
     fields = dict(token.split("=", 1) for token in raw.split() if "=" in token)
-    if (fields.get("Account") != site["account"] or fields.get("Partition") != "debug"
+    actual = admit_site(spec, fields.get("Partition"))
+    if (fields.get("Account") != site["account"]
             or fields.get("QOS") != site["qos"] or fields.get("NumNodes") != "1"
             or fields.get("NumTasks") != "1" or fields.get("NumCPUs") != str(resource["cpus"])
             or os.environ.get("SLURM_CLUSTER_NAME") != "sporc"
+            or os.environ.get("SLURM_JOB_PARTITION") != actual["partition"]
             or int(os.environ.get("SLURM_MEM_PER_NODE", "0")) != resource["memory_mb"]
+            or _time_seconds(fields.get("TimeLimit", "")) != resource["minutes"]*60
             or os.environ.get("PYTHONNOUSERSITE") != "1"
             or sys.prefix != site["conda_base"] + "/envs/" + site["conda_env"]):
-        raise PermissionError("Worker scheduler/environment differs from registered debug allocation")
+        raise PermissionError("Worker scheduler/environment differs from registered K2 allocation")
+    registered = spec.get("registration", spec)
+    record = artifact("EXECUTION_RECORD", subject_sha256=spec["content_hash"],
+        task_id=name, job_id=job, requested_site=site, actual_site=actual,
+        execution_policy_sha256=registered["execution_policy"]["content_hash"],
+        resource=resource, nodes=fields.get("NodeList"), final_test_accessed=False)
+    write_immutable_json(root / "execution" / name / (job + ".json"), record)
     return job
 
 
@@ -218,20 +237,21 @@ def monitor(spec):
                 command=[token.replace("${JOB_"+name+"}",job) for token in command]
             if ledger["commands"][row["task_id"]]!=command: raise ValueError("Live commands differ")
         raw=subprocess.run(["sacct","-X","-n","-P","-j",",".join(ledger["jobs"].values()),
-            "--format=JobID,State%40,Elapsed"],text=True,capture_output=True,check=True).stdout
+            "--format=JobID,State%40,Elapsed,Partition"],text=True,capture_output=True,check=True).stdout
         states={}
         for line in raw.splitlines():
             p=line.split("|")
-            if len(p)>=3: states[p[0].strip()]=(p[1].strip(),p[2].strip())
+            if len(p)>=3: states[p[0].strip()]=(p[1].strip(),p[2].strip(),p[3].strip() if len(p)>3 else "")
         for name,job in ledger["jobs"].items():
-            state,elapsed=states.get(job,("UNKNOWN",""))
-            rows.append(dict(stage=stage,task_id=name,job_id=job,state=state,elapsed=elapsed))
+            state,elapsed,partition=states.get(job,("UNKNOWN","",""))
+            rows.append(dict(stage=stage,task_id=name,job_id=job,state=state,elapsed=elapsed,
+                requested_partition=spec["execution_site"]["partition"],actual_partition=partition or None))
     return artifact("MONITOR",campaign_sha256=spec["content_hash"],rows=rows,remote_mutations=False)
 
 
 def run_launcher(launch, phase):
     validate_launch(launch)
-    authenticate_job(launch, phase, launch=True)
+    job_id = authenticate_job(launch, phase, launch=True)
     if phase == "after_matching":
         spec = create(launch=launch)
         submit(spec, stage="full", execute=False)
@@ -247,6 +267,9 @@ def run_launcher(launch, phase):
     else:
         raise ValueError("Unknown launcher phase")
     report = artifact("LAUNCH_RECEIPT", launch_sha256=launch["content_hash"],
-        campaign_sha256=spec["content_hash"], phase=phase, result=result, final_test_accessed=False)
+        campaign_sha256=spec["content_hash"], phase=phase, result=result,
+        execution_record=dict(path=f"execution/{phase}/{job_id}.json", sha256=sha256_file(
+            Path(launch["launch_root"]) / "execution" / phase / (job_id + ".json"))),
+        final_test_accessed=False)
     write_immutable_json(Path(launch["launch_root"]) / (phase + "_receipt.json"), report)
     return report

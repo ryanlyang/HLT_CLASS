@@ -1,4 +1,4 @@
-"""Isolated fixed-slot K=2 registration. Every stage is SPORC/debug-only."""
+"""Isolated K=2 registration with explicit SPORC tier3/debug portability."""
 from __future__ import annotations
 
 from copy import deepcopy
@@ -7,14 +7,15 @@ from pathlib import Path
 
 from hlt_classification.data.cache_contracts import load_json, write_immutable_json
 from .contracts import artifact as base_artifact, validate as base_validate
-from .execution import execution_site
+from .concat_k2_execution import execution_policy, site_for_partition
+from .concat_k2_model import PAIR_STORAGE, BATCH_PROBE_POLICY
 from .inputs import input_contract
 from .model import model_contract
 from .production import _source
 from .salience_learned_graph import TRAINING
 from .concat_k2_views import view_contract
 
-AUTHORIZE = "AUTHORIZE JETCLASS2 DZFIX CONCAT K2 DEBUG 500K EXACT SPEC"
+AUTHORIZE = "AUTHORIZE JETCLASS2 DZFIX CONCAT K2 PORTABLE 500K EXACT SPEC"
 PREFIX = "jc2k2"
 COUNTS = dict(train=500_000, validation=1_000_000, final_test=1_000_000)
 RESOURCES = {
@@ -27,12 +28,15 @@ RESOURCES = {
 }
 
 
+EXECUTION_V3 = {"LAUNCH_SPEC", "CAMPAIGN_SPEC", "ACCEPTANCE"}
+
+
 def artifact(kind, **fields):
-    return base_artifact("CONCAT_K2_" + kind, **fields)
+    return base_artifact("CONCAT_K2_" + kind, version=3 if kind in EXECUTION_V3 else 1, **fields)
 
 
 def validate(value, kind):
-    return base_validate(value, "CONCAT_K2_" + kind)
+    return base_validate(value, "CONCAT_K2_" + kind, version=3 if kind in EXECUTION_V3 else 1)
 
 
 def seed(domain):
@@ -87,8 +91,10 @@ def gates(spec):
     return tuple(r["task_id"] for r in spec["tasks"] if r["kind"] not in {"train", "reduce", "aggregate", "complete"})
 
 
-def registration():
-    return dict(nodes=nodes(), training=deepcopy(TRAINING), execution_site=execution_site("sporc_a100_debug"),
+def registration(partition="tier3"):
+    return dict(nodes=nodes(), training=deepcopy(TRAINING), execution_site=site_for_partition(partition),
+        execution_policy=execution_policy(),
+        pair_storage=deepcopy(PAIR_STORAGE), batch_probe_policy=deepcopy(BATCH_PROBE_POLICY),
         resources=deepcopy(RESOURCES), model=model_contract(), role_counts=dict(COUNTS), split_profile="TRAIN_500K",
         k=2, copies=3, loss=dict(ce=.25, kd=.75, temperature=2.),
         salience_source="authenticated_existing_dzfix_screen_winner_formula_only",
@@ -118,7 +124,7 @@ def foundation_spec(parent, source_hash):
 
 def validate_campaign(spec, *, check_source=True):
     digest = validate(spec, "CAMPAIGN_SPEC")
-    if any(spec.get(k) != v for k,v in registration().items()):
+    if any(spec.get(k) != v for k,v in registration(spec["execution_site"]["partition"]).items()):
         raise ValueError("K2 scientific/resource registration differs")
     from .concat_k2_source import validate_import
     validate_import(spec["source_import"])
@@ -139,7 +145,7 @@ def create(*, launch):
     source, parent = build_import(launch)
     foundation = foundation_spec(parent, source["content_hash"])
     root = Path(launch["campaign_root"])
-    spec = artifact("CAMPAIGN_SPEC", **registration(), foundation=foundation, tasks=task_graph(foundation),
+    spec = artifact("CAMPAIGN_SPEC", **launch["registration"], foundation=foundation, tasks=task_graph(foundation),
         source_commit=launch["source_commit"], project_dir=launch["project_dir"], campaign_root=str(root),
         data_root=source["data_root"], launch_sha256=launch["content_hash"], source_import=source)
     if root.exists():

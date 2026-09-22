@@ -117,8 +117,10 @@ def test_invalid_maps_fail_closed():
         with pytest.raises(ValueError): views.validate_mapping(m,nh=1,no=2)
 
 
-def test_requested_graph_controls_seed_pairing_and_debug_dry_run(tmp_path,monkeypatch):
+@pytest.mark.parametrize("partition", ["tier3", "debug"])
+def test_requested_graph_controls_seed_pairing_and_portable_dry_run(tmp_path,monkeypatch,partition):
     spec=spec_at(tmp_path); nodes=spec["nodes"]
+    spec=rehash(spec,**chain.registration(partition))
     assert len(nodes)==10 and len({n["initialization_seed"] for n in nodes})==1
     assert all(n["initialization"]=="fresh" and n["context_coordinate"] is None for n in nodes)
     assert [(n["node_id"],n["teacher_distribution"]) for n in nodes[5:]]==[
@@ -130,7 +132,7 @@ def test_requested_graph_controls_seed_pairing_and_debug_dry_run(tmp_path,monkey
     for row in scheduler.plan(spec,"full")["commands"]:
         assert set(row["dependencies"])<=seen; seen.add(row["task_id"])
         command=row["command"]
-        assert "--partition=debug" in command and "--no-requeue" in command
+        assert "--partition="+partition in command and "--no-requeue" in command
         assert int(next(t.split("=")[1] for t in command if t.startswith("--time=")))<=1440
     monkeypatch.setattr(scheduler,"validate_campaign",lambda s:s["content_hash"])
     ledger=scheduler.submit(spec,stage="full")
@@ -208,7 +210,10 @@ def test_full_cpu_test_double_dispatch_teacher_banks_and_endpoint_compression(fa
     spec=spec_at(tmp_path); root=Path(spec["campaign_root"]); root.mkdir()
     monkeypatch.setattr(runtime,"validate_campaign",lambda s:s["content_hash"])
     monkeypatch.setattr(runtime,"validate_import",lambda *a,**k:None)
-    monkeypatch.setattr(scheduler,"authenticate_job",lambda *a,**k:"123")
+    def authenticate(s,name):
+        write_immutable_json(root/"execution"/name/"123.json",chain.artifact("EXECUTION_RECORD",test_only=True))
+        return "123"
+    monkeypatch.setattr(scheduler,"authenticate_job",authenticate)
     monkeypatch.setattr(runtime,"execution_gate",lambda *a,**k:"123")
     monkeypatch.setattr(runtime,"cache_bounds",lambda s:{"train":1,"validation":1})
     monkeypatch.setattr(data,"prepare",lambda s,role,coordinate:make_cache(role,coordinate))
@@ -278,16 +283,21 @@ def test_unmatched_endpoint_readers_do_not_open_assignment_files(coordinate,tmp_
     assert block.offsets.tolist()==[0,{"HLT_X1":3,"HLT_X3":9,"D000":9,"OFFLINE":8}[coordinate]]
 
 
-def test_memory_batch_capacity_execution_attestations_cannot_be_bypassed(tmp_path,monkeypatch):
+@pytest.mark.parametrize("accepted_partition", ["tier3", "debug"])
+def test_memory_batch_capacity_execution_attestations_cannot_be_bypassed(tmp_path,monkeypatch,accepted_partition):
+    from test_jetclass2_concat_k2_memory import memory_evidence
+    from hlt_classification.jetclass2_delphes.concat_k2_execution import site_for_partition
     spec=spec_at(tmp_path); root=Path(spec["campaign_root"])
     evidence=dict(campaign_sha256=spec["content_hash"],passed=True,final_test_accessed=False,
-        site=spec["execution_site"],resource=spec["resources"]["preflight"],acceptance_only=True,
+        site=site_for_partition(accepted_partition),resource=spec["resources"]["preflight"],acceptance_only=True,
+        requested_site=spec["execution_site"],execution_policy_sha256=spec["execution_policy"]["content_hash"],
         ordinary_rows={r:spec["role_counts"][r] for r in ("train","validation")},
         batch_size=256,capacity=32,checkpoint_round_trip=True,bank_round_trip=True,
         installed_weaver_fp32_parity=True,worst_population_batch_stress=True,
         hlt_only_endpoint=True,duplicate_pair_finiteness=True,peak_cuda_bytes=800,
         gpu={"total_memory_bytes":1000},peak_rss_bytes=1000,projected_max_fit_seconds=100,
-        native_execution=[{"kernel_report":{"acceptance_only":True,"scientific_fit":False}}]*4)
+        native_execution=[{"kernel_report":{"acceptance_only":True,"scientific_fit":False}}]*4,
+        **memory_evidence(spec))
     for name,changes in (("good",{}),("memory",{"peak_cuda_bytes":901}),("batch",{"batch_size":128}),
             ("test",{"final_test_accessed":True}),("time",{"projected_max_fit_seconds":24*3600}),
             ("shape",{"capacity":16}),("duplicates",{"duplicate_pair_finiteness":False})):
@@ -333,17 +343,21 @@ def test_monitor_reads_only_authenticated_own_job_ids(tmp_path,monkeypatch):
     ledger=scheduler.submit(spec,stage="gate",execute=True,authorization=chain.AUTHORIZE)
     def sacct(c,**kw):
         assert c[0]=="sacct" and set(c[c.index('-j')+1].split(','))==set(ledger["jobs"].values())
-        return SimpleNamespace(stdout="101|COMPLETED|00:01:00|\n")
+        return SimpleNamespace(stdout="101|COMPLETED|00:01:00|debug|\n")
     monkeypatch.setattr(scheduler.subprocess,"run",sacct)
     rows=scheduler.monitor(spec)["rows"]
     assert next(r for r in rows if r["job_id"]=="101")["state"]=="COMPLETED"
+    observed=next(r for r in rows if r["job_id"]=="101")
+    assert observed["requested_partition"]=="tier3" and observed["actual_partition"]=="debug"
     assert next(r for r in rows if r["job_id"]=="102")["state"]=="UNKNOWN"
 
 
 def test_preflight_dispatch_cpu_double_exercises_every_stage_not_remote_acceptance(fake_native,tmp_path,monkeypatch):
     import sys
     from hlt_classification.jetclass2_delphes import acceptance, model as model_module
+    from test_jetclass2_concat_k2_memory import memory_evidence
     spec=spec_at(tmp_path); root=Path(spec["campaign_root"]); root.mkdir()
+    monkeypatch.setenv("SLURM_JOB_PARTITION", "debug")  # Actual site may differ from tier3 submission.
     directory=root/"local_double"; directory.mkdir()
     data.publish_partition(spec,make_cache("validation"))
     monkeypatch.setitem(sys.modules,"resource",SimpleNamespace(RUSAGE_SELF=0,
@@ -359,13 +373,23 @@ def test_preflight_dispatch_cpu_double_exercises_every_stage_not_remote_acceptan
     parity=acceptance.installed_parity
     monkeypatch.setattr(acceptance,"load_weaver_particle_transformer_class",model_module.load_weaver_particle_transformer_class)
     monkeypatch.setattr(acceptance,"installed_parity",lambda c,**kw:parity(c,device="cpu"))
-    original_train=runtime.train_kernel; original_predict=runtime.predict; original_stress=runtime._stress
-    def train(*a,**kw): kw["device"]="cpu"; return original_train(*a,**kw)
+    original_train=runtime.train_kernel; original_predict=runtime.predict
+    def train(*a,**kw):
+        kw["device"]="cpu"
+        report,state=original_train(*a,**kw)
+        # Test orchestration, not wall-clock extrapolation from a CPU double.
+        report["validation_history"][-1].update(train_seconds=.01,validation_seconds=.01)
+        return rehash(report),state
     def predict(*a,**kw): kw["device"]="cpu"; return original_predict(*a,**kw)
     monkeypatch.setattr(runtime,"train_kernel",train)
     monkeypatch.setattr(runtime,"predict",predict)
-    monkeypatch.setattr(runtime,"_stress",lambda m,r,n,d,c:original_stress(m,r,n,"cpu",c))
+    fabricated=memory_evidence(spec)
+    monkeypatch.setattr(runtime,"storage_parity",lambda *a,**kw: {
+        k:v for k,v in fabricated["storage_parity_reports"][int(kw["bf16"])].items() if k!="node_id"})
+    monkeypatch.setattr(runtime,"batch_probes",lambda s,d,n,*a:[
+        r for r in fabricated["batch_probes"] if r["node_id"]==n["node_id"]])
     value=runtime.preflight(spec,directory,"cuda")
+    assert value["site"]["partition"] == "debug" and value["requested_site"]["partition"] == "tier3"
     assert value["environment"]["test_only"] and len(value["native_execution"])==4
     assert value["bank_round_trip"] and value["checkpoint_round_trip"]
     assert (directory/"resource_measurements.json").is_file()

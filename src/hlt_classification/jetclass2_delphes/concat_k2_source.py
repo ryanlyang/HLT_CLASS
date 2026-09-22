@@ -93,7 +93,8 @@ def _protected(screen, project):
 
 
 def create_launch(*, screen_spec: Path, inventory_path: Path, launch_root: Path,
-                  campaign_root: Path, project: Path, source_commit: str):
+                  campaign_root: Path, project: Path, source_commit: str, partition="tier3"):
+    registered = registration(partition)
     _source(project, source_commit)
     screen, ledger = _parent({"screen_spec_path": str(screen_spec)})
     inventory = load_json(inventory_path)
@@ -112,7 +113,7 @@ def create_launch(*, screen_spec: Path, inventory_path: Path, launch_root: Path,
         parent_task_id="complete", parent_ledger_sha256=ledger["content_hash"],
         parent_job_id=ledger["jobs"]["complete"],
         inventory_path=str(Path(inventory_path).resolve()), inventory_sha256=inventory["content_hash"],
-        registration=registration(), final_test_accessed=False)
+        registration=registered, final_test_accessed=False)
     root.mkdir(parents=True, exist_ok=False)
     write_immutable_json(root / "launch_spec.json", value)
     return value
@@ -124,7 +125,8 @@ def validate_launch(spec, *, check_source=True):
     inventory = load_json(spec["inventory_path"])
     validate_inventory(inventory)
     _population(screen, inventory)
-    if (spec["registration"] != registration() or spec["final_test_accessed"] is not False
+    if (spec["registration"] != registration(spec["registration"]["execution_site"]["partition"])
+            or spec["final_test_accessed"] is not False
             or spec["screen_sha256"] != screen["content_hash"] or spec["parent_task_id"] != "complete"
             or spec["parent_ledger_sha256"] != ledger["content_hash"]
             or spec["parent_job_id"] != ledger["jobs"]["complete"]
