@@ -18,7 +18,9 @@ from .banks import load_bank, publish_bank
 from .contracts import relative_file, validate as base_validate
 from .concat_k2_campaign import (gates, artifact, nodes, validate, validate_campaign,
                                  TRAINING, INFERENCE_BATCH_SIZE)
-from .concat_k2_data import caches, cache_bounds, prepare, publish_partition, assignment, foundation_lock, matcher_acceptance
+from .concat_k2_data import (caches as full_caches, cache_bounds as full_bounds,
+    prepare as full_prepare, publish_partition, partition_indices, assignment, foundation_lock, matcher_acceptance)
+from .concat_k2_pilot import is_pilot, kernel_options, training_recipe, PROFILE
 from .concat_k2_source import validate_import
 from .execution import allocation, gpu_identity
 from .concat_k2_execution import (runtime_site, validate_acceptance_site,
@@ -30,6 +32,35 @@ from .concat_k2_model import (K2ParticleTransformer, storage_parity, synchronize
 from .reporting import evaluate_probabilities, recovery
 from .salience_learned_data import IndexedRamCache
 from .salience_learned_training import predict, train_kernel, _optimizer, _train_batch
+
+
+def prepare(spec, role, coordinate):
+    if is_pilot(spec):
+        from .concat_k2_pilot_data import prepare as pilot_prepare
+        return pilot_prepare(spec, role, coordinate)
+    return full_prepare(spec, role, coordinate)
+
+
+def cache_bounds(spec):
+    if is_pilot(spec):
+        from .concat_k2_pilot_data import cache_bounds as pilot_bounds
+        return pilot_bounds(spec)
+    return full_bounds(spec)
+
+
+def caches(spec, node, *, train_only=False):
+    if not is_pilot(spec):
+        return full_caches(spec, node, train_only=train_only)
+    result = {"train":prepare(spec,"train",node["primary_coordinate"])}
+    if not train_only:
+        validation = prepare(spec,"validation",node["primary_coordinate"])
+        result.update({name:IndexedRamCache(validation,index,role="validation")
+                       for name,index in partition_indices(spec,validation).items()})
+    return result
+
+
+def profile_fields(spec):
+    return {"experiment_profile":PROFILE} if is_pilot(spec) else {}
 
 
 def task(spec, name):
@@ -72,6 +103,7 @@ def science_gate(spec):
     validate_memory_evidence(spec, acceptance)
     validate_runtime_projection(spec, acceptance["projected_max_fit_seconds"])
     if (acceptance["campaign_sha256"] != spec["content_hash"] or acceptance["passed"] is not True
+            or acceptance.get("experiment_profile") != spec.get("experiment_profile")
             or acceptance["final_test_accessed"] is not False
             or acceptance["resource"] != spec["resources"]["preflight"] or acceptance["acceptance_only"] is not True
             or acceptance["ordinary_rows"] != {r: spec["role_counts"][r] for r in ("train", "validation")}
@@ -99,6 +131,8 @@ def validate_kernel_batching(spec, report):
                     gradient_accumulation_steps=1)
     if report.get("batching") != expected:
         raise ValueError("K2 kernel batch acceptance differs from registration")
+    if is_pilot(spec) and report.get("training_recipe") != spec["training"]:
+        raise ValueError("Pilot kernel recipe evidence differs from registration")
 
 
 def execution_gate(spec, *, science):
@@ -148,13 +182,14 @@ def fit(spec, row, directory, device):
     report, state = train_kernel(model, lambda _: values["train"], lambda _: values["checkpoint"],
         node=node, device=device, teacher_probabilities=q,
         teacher_identities=None if q is None else values["train"].identities,
-        batch_size=spec["training"]["batch_size"], inference_batch_size=spec["inference_batch_size"])
+        batch_size=spec["training"]["batch_size"], inference_batch_size=spec["inference_batch_size"],
+        **kernel_options(spec))
     validate_kernel_batching(spec, report)
     probabilities = predict(model, values["report"], node=node, device=device,
                             batch_size=spec["inference_batch_size"])
     path = directory / "selected.pt"
     save_state(path, state)
-    outer = artifact("TRAINING_REPORT", campaign_sha256=spec["content_hash"], node=node,
+    outer = artifact("TRAINING_REPORT", **profile_fields(spec), campaign_sha256=spec["content_hash"], node=node,
         training=spec["training"], inference_batch_size=spec["inference_batch_size"],
         kernel_report=report, teacher_lineage=lineage, selected_checkpoint_sha256=sha256_file(path),
         checkpoint_validation=report["validation"], report_validation=evaluate_probabilities(values["report"].labels, probabilities),
@@ -279,6 +314,17 @@ def _stress(model, raw, node, device, capacity):
 PROBE_CASES=("CONCAT_K2_D100","CONCAT_K2_D075","CONCAT_K2_D000","HLT_X1_COMPRESSED")
 
 
+def probe_cases(spec):
+    return ("CONCAT_K2_D100", "CONCAT_K2_D050", "CONCAT_K2_D000", "HLT_X1_COMPRESSED") if is_pilot(spec) else PROBE_CASES
+
+
+def projected_fit_seconds(spec, evidence, checkpoint_rows, cache_seconds):
+    return max(spec["training"]["maximum_passes"] * (
+        spec["role_counts"]["train"] * e["train_seconds_per_row"]
+        + checkpoint_rows * e["validation_seconds_per_row"])
+        for e in evidence) * spec["runtime_projection_margin"] + cache_seconds
+
+
 def _exercise_probe(spec,node,train,validation,device,batch_size):
     # A new optimizer/BN state for each probe; these weights never become teachers.
     model=new_model(node).to(device)
@@ -330,7 +376,8 @@ def validate_memory_evidence(spec,value):
     if (value.get("pair_storage")!=PAIR_STORAGE or value.get("batch_probe_policy")!=BATCH_PROBE_POLICY
             or spec.get("pair_storage")!=PAIR_STORAGE or spec.get("batch_probe_policy")!=BATCH_PROBE_POLICY
             or spec.get("parity_backend")!=PARITY_BACKEND or spec.get("parity_tolerances")!=PARITY_TOLERANCES
-            or spec.get("training")!=TRAINING or spec.get("inference_batch_size")!=INFERENCE_BATCH_SIZE):
+            or spec.get("training")!=(training_recipe() if is_pilot(spec) else TRAINING)
+            or spec.get("inference_batch_size")!=INFERENCE_BATCH_SIZE):
         raise ValueError("K2 memory acceptance policy differs")
     reports=value.get("storage_parity_reports",[])
     expected=[(name,precision) for name in ("CONCAT_K2_D100","CONCAT_K2_D000") for precision in ("fp32","bf16")]
@@ -369,7 +416,7 @@ def validate_memory_evidence(spec,value):
         validate_storage_stats(storage.get("storage_stats"))
     probes=value.get("batch_probes",[])
     if [(r.get("node_id"),r.get("batch_size")) for r in probes]!=[
-            ("ACCEPTANCE_"+name,size) for name in PROBE_CASES for size in BATCH_PROBE_POLICY["order"]]:
+            ("ACCEPTANCE_"+name,size) for name in probe_cases(spec) for size in BATCH_PROBE_POLICY["order"]]:
         raise ValueError("K2 memory acceptance batch coverage/order differs")
     for row in probes:
         validate(row,"BATCH_PROBE")
@@ -396,8 +443,8 @@ def preflight(spec,directory,device):
     early_reports = early_parity(spec, directory, device)
     evidence=[]; q=None; cache_seconds=0.; prior_ids=None; parity=[]; storage_reports=[]; probes=[]
     peak=reserved=0
-    for name in PROBE_CASES:
-        node=dict(next(n for n in nodes() if n["node_id"]==name)); node["node_id"]="ACCEPTANCE_"+name
+    for name in probe_cases(spec):
+        node=dict(next(n for n in spec["nodes"] if n["node_id"]==name)); node["node_id"]="ACCEPTANCE_"+name
         cached=time.monotonic()
         train=prepare(spec,"train",node["primary_coordinate"])
         validation=prepare(spec,"validation",node["primary_coordinate"])
@@ -425,7 +472,8 @@ def preflight(spec,directory,device):
         model=new_model(node)
         report,state=train_kernel(model,lambda _:t,lambda _:v,node=node,device=device,
             teacher_probabilities=q,teacher_identities=None if q is None else t.identities,acceptance_passes=2,
-            batch_size=spec["training"]["batch_size"],inference_batch_size=spec["inference_batch_size"])
+            batch_size=spec["training"]["batch_size"],inference_batch_size=spec["inference_batch_size"],
+            **kernel_options(spec))
         validate_kernel_batching(spec,report)
         expected=predict(model,v,node=node,device=device,batch_size=spec["inference_batch_size"])
         buffer=BytesIO(); torch.save(state,buffer); buffer.seek(0)
@@ -448,8 +496,7 @@ def preflight(spec,directory,device):
     gpu=gpu_identity(); peak=max(peak,torch.cuda.max_memory_allocated()); reserved=max(reserved,torch.cuda.max_memory_reserved())
     rss=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss*1024
     checkpoint_rows=load_json(Path(spec["campaign_root"])/"validation_partition.json")["counts"][0]
-    projected=max(100*(spec["role_counts"]["train"]*e["train_seconds_per_row"]+checkpoint_rows*e["validation_seconds_per_row"])
-                  for e in evidence)*spec["runtime_projection_margin"]+cache_seconds
+    projected=projected_fit_seconds(spec,evidence,checkpoint_rows,cache_seconds)
     measured=dict(peak_cuda_bytes=peak,peak_reserved_cuda_bytes=reserved,peak_rss_bytes=rss,gpu=gpu,
                   projected_max_fit_seconds=projected,cache_seconds=cache_seconds,
                   runtime_projection_limit_seconds=runtime_projection_limit_seconds(spec))
@@ -460,7 +507,7 @@ def preflight(spec,directory,device):
     if rss>spec["resources"]["train"]["memory_mb"]*1024**2*spec["cpu_peak_fraction_limit"]:
         raise MemoryError("K2 CPU peak exceeds registered headroom")
     validate_runtime_projection(spec, projected)
-    value=artifact("ACCEPTANCE",campaign_sha256=spec["content_hash"],passed=True,acceptance_only=True,
+    value=artifact("ACCEPTANCE",**profile_fields(spec),campaign_sha256=spec["content_hash"],passed=True,acceptance_only=True,
         job_id=job,site=runtime_site(spec),requested_site=spec["execution_site"],
         execution_policy_sha256=spec["execution_policy"]["content_hash"],
         resource=spec["resources"]["preflight"],environment=environment,
@@ -508,9 +555,16 @@ def run_task(spec,name,*,device="cuda"):
             report=assignment(spec,row["file_index"],directory)
             result=dict(assignment_sha256=report["content_hash"])
         elif kind=="foundation":
-            report=foundation_lock(spec)
+            # Imported matching evidence describes the full parent reservoir;
+            # pilot scoring membership is separately frozen in select_population.
+            subject = {**spec,"role_counts":spec["foundation"]["splits"]["role_counts"]} if is_pilot(spec) else spec
+            report=foundation_lock(subject)
             write_immutable_json(directory/"foundation_lock.json",report)
             result=dict(foundation_lock_sha256=report["content_hash"])
+        elif kind=="population":
+            from .concat_k2_pilot_data import build_population
+            report=build_population(spec,directory)
+            result=dict(population_sha256=report["content_hash"],role_counts=spec["role_counts"])
         elif kind=="partition":
             report=publish_partition(spec,prepare(spec,"validation","HLT_X1"))
             result=dict(partition_sha256=report["content_hash"])
@@ -525,7 +579,7 @@ def run_task(spec,name,*,device="cuda"):
         elif kind=="aggregate":
             result=dict(rows=result_rows(spec),recovery_reference="HLT_X1_CE=0%, OFFLINE_CE=100%")
         elif kind=="complete":
-            result=dict(scientific_fits=10,reducers=5,sealed_test=True)
+            result=dict(scientific_fits=spec["fresh_fit_count"],reducers=spec["reducer_count"],sealed_test=True)
         else: raise ValueError("Unknown K2 task kind")
         result={k:v.relative_to(root).as_posix() if isinstance(v,Path) else v for k,v in result.items()}
         write_immutable_json(directory/"result.json",artifact("RESULT",result=result,campaign_sha256=spec["content_hash"],task_id=name,final_test_accessed=False))

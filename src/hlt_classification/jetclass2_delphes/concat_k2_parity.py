@@ -22,17 +22,26 @@ from .reader import DatasetReader, Jet
 def parity_sample(spec):
     """First four registered train rows, with authenticated original K2 maps."""
     foundation = spec["foundation"]
+    from .concat_k2_pilot import is_pilot
+    splits = foundation.get("splits")
+    tasks = foundation["assignment_tasks"]
+    if is_pilot(spec):
+        from .concat_k2_pilot_data import population, selected_tasks, map_rows
+        splits = population(spec)
+        tasks = selected_tasks(spec, splits)
     columns = {c: dict(features=[], vectors=[], offsets=[0]) for c in ("D100", "D000")}
     identities, labels, files = [], [], []
-    for task in foundation["assignment_tasks"]:
+    for task in tasks:
         if task["role"] != "train" or task["rows"] == 0:
             continue
         _, arrays = load_assignment(spec, task["file_index"])
+        lookup = map_rows(foundation,splits,task) if is_pilot(spec) else np.arange(task["rows"])
         reader = iter(DatasetReader(Path(spec["data_root"]), foundation["inventory"],
-            foundation["splits"], role="train", include_offline=True,
+            splits, role="train", include_offline=True,
             file_paths=(task["path"],), step_size=64))
         try:
             for row, jet in enumerate(islice(reader, 4-len(labels))):
+                row = lookup[row]
                 identity = np.frombuffer(bytes.fromhex(jet.identity), np.uint8)
                 start, end = arrays["offsets"][row:row+2]
                 if (not np.array_equal(identity, arrays["identities"][row])

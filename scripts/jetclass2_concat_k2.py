@@ -25,7 +25,9 @@ def main():
     command.add_argument("--reuse-preparation-spec", type=Path,
                          help="Explicit completed K2 donor; never imports GPU acceptance or models.")
     command.add_argument("--partition", choices=("tier3", "debug"), default="tier3",
-                         help="Initial short-job partition; all 96h training jobs use tier3.")
+                         help="Initial partition; the pilot uses it for all jobs. Full-size 96h fits use tier3.")
+    command.add_argument("--profile", choices=("pilot_100k_50k_60",),
+                         help="Separate 100k/50k, 60-pass, three-rung pilot with 24h training requests.")
     for name in ("schedule", "launch-run", "materialize", "submit", "run", "gate", "results", "monitor", "audit"):
         command = modes.add_parser(name)
         command.add_argument("--spec", type=Path, required=True)
@@ -45,7 +47,7 @@ def main():
         result = create_launch(screen_spec=a.screen_spec, inventory_path=a.inventory,
             launch_root=a.launch_root, campaign_root=a.campaign_root, project=ROOT,
             source_commit=a.source_commit, partition=a.partition,
-            reuse_preparation_spec=a.reuse_preparation_spec)
+            reuse_preparation_spec=a.reuse_preparation_spec, profile=a.profile)
         schedule(result)
     else:
         spec = load_json(a.spec)
@@ -86,6 +88,9 @@ def main():
             print("Lost offline scalar pT:",100*result["cropped_scalar_pt"]/result["offline_scalar_pt"],"%")
             print("Lost offline salience:",100*result["cropped_salience"]/result["offline_salience"],"%")
             print("Maximum particle counts:",result["maximum_particles"])
+            if spec.get("experiment_profile"):
+                print("Matching diagnostics above cover the parent preparation, not just the pilot subset.")
+                print("Registered pilot counts:",spec["role_counts"])
             print("Final test accessed: False")
         else:
             validate_campaign(spec)
@@ -123,9 +128,15 @@ def main():
     if a.mode == "schedule":
         print("Matching screen:", spec["screen_spec_path"])
         print("Authenticated matching completion job:", spec["parent_job_id"])
-        print("Initial short-job partition:", spec["registration"]["execution_site"]["partition"])
-        print("Training: tier3 only, 96h requested, 95h maximum projected fit")
-        print("Pending short jobs only: tier3 <-> debug (same resources); 96h fits cannot move to debug")
+        from hlt_classification.jetclass2_delphes.concat_k2_pilot import is_pilot
+        if is_pilot(spec):
+            print("Initial partition (all pilot jobs):", spec["registration"]["execution_site"]["partition"])
+            print("Pilot: 100k train / 50k total validation; D100 -> D050 -> D000 -> HLT-x1")
+            print("Training: 24h requested; 23h projected-fit ceiling; all pending jobs debug/tier3 portable")
+        else:
+            print("Initial short-job partition:", spec["registration"]["execution_site"]["partition"])
+            print("Training: tier3 only, 96h requested, 95h maximum projected fit")
+            print("Pending short jobs only: tier3 <-> debug (same resources); 96h fits cannot move to debug")
         dependency = [token for token in result["commands"][a.phase]
                       if token.startswith("--dependency=")]
         print("Launcher dependency:", ", ".join(dependency) or "none (completed artifacts authenticated)")

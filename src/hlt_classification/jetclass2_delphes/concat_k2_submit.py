@@ -16,6 +16,11 @@ from .concat_k2_source import _parent, build_import, validate_launch
 from .execution import slurm_options
 from .concat_k2_execution import admit_site, submission_site
 from .submission import _guarded_exact_submission
+from .concat_k2_pilot import is_pilot, AUTHORIZE as PILOT_AUTHORIZE
+
+
+def authorization_for(spec):
+    return PILOT_AUTHORIZE if is_pilot(spec) else AUTHORIZE
 
 
 def command(spec, name, resource, *, launch=False, dependencies=()):
@@ -24,7 +29,7 @@ def command(spec, name, resource, *, launch=False, dependencies=()):
     site = submission_site(spec, resource)
     result = slurm_options(site) + [f"--cpus-per-task={resource['cpus']}",
         f"--mem={resource['memory_mb']}M", f"--time={resource['minutes']}",
-        "--job-name=" + PREFIX + "_" + name, "--chdir=" + str(project),
+        "--job-name=" + ("jc2k2p" if is_pilot(spec) else PREFIX) + "_" + name, "--chdir=" + str(project),
         "--output=" + str(root / "slurm-%j.out")]
     if resource["gpu"]:
         result.append("--gres=" + site["gres"])
@@ -53,7 +58,7 @@ def plan(spec, stage):
 
 
 def _submit(spec, commands, directory, execute, authorization):
-    if execute and authorization != AUTHORIZE:
+    if execute and authorization != authorization_for(spec):
         raise PermissionError("Exact dzfix K2 portable authorization required")
     write_immutable_json(directory / "command_plan.json", commands)
     dry = directory / "dry_run_submission_ledger.json"
@@ -77,7 +82,7 @@ def submit(spec, *, stage, execute=False, authorization=None):
     validate_campaign(spec)
     if execute and stage == "full":
         raise PermissionError("Full-DAG execution is forbidden; fresh K2 gates must finish first")
-    if execute and authorization != AUTHORIZE:
+    if execute and authorization != authorization_for(spec):
         raise PermissionError("Exact dzfix K2 portable authorization required")
     if execute and stage == "science":
         from .concat_k2_runtime import science_gate
@@ -257,14 +262,14 @@ def run_launcher(launch, phase):
     if phase == "after_matching":
         spec = create(launch=launch)
         submit(spec, stage="full", execute=False)
-        gate = submit(spec, stage="gate", execute=True, authorization=AUTHORIZE)
-        next_ledger = schedule(launch, phase="after_gate", execute=True, authorization=AUTHORIZE)
+        gate = submit(spec, stage="gate", execute=True, authorization=authorization_for(spec))
+        next_ledger = schedule(launch, phase="after_gate", execute=True, authorization=authorization_for(launch))
         result = dict(gate_ledger_sha256=gate["content_hash"], after_gate_ledger_sha256=next_ledger["content_hash"])
     elif phase == "after_gate":
         spec = load_json(Path(launch["campaign_root"]) / "campaign_spec.json")
         if spec["launch_sha256"] != launch["content_hash"]:
             raise ValueError("After-gate campaign differs")
-        science = submit(spec, stage="science", execute=True, authorization=AUTHORIZE)
+        science = submit(spec, stage="science", execute=True, authorization=authorization_for(spec))
         result = dict(science_ledger_sha256=science["content_hash"], science_tasks=len(science["jobs"]))
     else:
         raise ValueError("Unknown launcher phase")

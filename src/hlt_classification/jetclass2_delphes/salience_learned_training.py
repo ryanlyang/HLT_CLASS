@@ -151,6 +151,7 @@ def train_kernel(
     model, train_provider, validation_provider, *, node, device,
     teacher_probabilities=None, teacher_identities=None,
     acceptance_passes=None, batch_size=None, inference_batch_size=None,
+    training_recipe=None,
 ):
     """Train with optional campaign-registered batching; legacy defaults stay fixed."""
     explicit_batching = batch_size is not None or inference_batch_size is not None
@@ -158,6 +159,15 @@ def train_kernel(
     inference_batch_size = 256 if inference_batch_size is None else inference_batch_size
     if any(type(size) is not int or size <= 0 for size in (batch_size, inference_batch_size)):
         raise ValueError("Training/inference batch sizes must be positive integers")
+    recipe = TRAINING
+    lr_at = learning_rate
+    if training_recipe is not None:
+        from .concat_k2_pilot import training_recipe as pilot_recipe, learning_rate as pilot_lr
+        if (training_recipe != pilot_recipe() or node["role"] not in {"reference_ce", "direct_kd"}
+                or batch_size != training_recipe["batch_size"] or inference_batch_size != 128):
+            raise ValueError("Explicit small-pilot training recipe differs")
+        recipe = training_recipe
+        lr_at = pilot_lr
     if acceptance_passes is not None and (
         type(acceptance_passes) is not int or not 1 <= acceptance_passes <= 3
     ):
@@ -187,7 +197,7 @@ def train_kernel(
             or not np.array_equal(teacher_identities, train_identities)
         ):
             raise ValueError("Teacher probability identity join differs")
-    maximum = TRAINING["maximum_passes"] if acceptance_passes is None else acceptance_passes
+    maximum = recipe["maximum_passes"] if acceptance_passes is None else acceptance_passes
     del initial_train, initial_validation
     model.to(device)
     optimizer = _optimizer(model)
@@ -214,7 +224,7 @@ def train_kernel(
             indices = order[start:start + batch_size]
             update += 1
             position = (pass_number - 1) + min(1., (start + len(indices)) / len(train))
-            lr = learning_rate(position)
+            lr = lr_at(position)
             for group in optimizer.param_groups:
                 group["lr"] = lr
             alpha = alpha_for_pass(position) if node["role"] in WITHDRAWAL_ROLES else 1.
@@ -253,7 +263,7 @@ def train_kernel(
                 for name, value in model.state_dict().items()
             }
             selected_pass = pass_number
-        if eligible and metrics["macro_ovr_auc"] > significant_auc + TRAINING["minimum_auc_delta"]:
+        if eligible and metrics["macro_ovr_auc"] > significant_auc + recipe["minimum_auc_delta"]:
             significant_auc, significant_pass = metrics["macro_ovr_auc"], pass_number
         mean_terms = {
             name: float(np.mean([row[name] for row in totals]))
@@ -276,10 +286,10 @@ def train_kernel(
         )
         if (
             acceptance_passes is None and eligible
-            and pass_number >= TRAINING["minimum_passes"]
+            and pass_number >= recipe["minimum_passes"]
             and pass_number - max(
-                significant_pass, TRAINING["patience_clock_start_pass"],
-            ) >= TRAINING["patience"]
+                significant_pass, recipe["patience_clock_start_pass"],
+            ) >= recipe["patience"]
         ):
             break
     if best_state is None:
@@ -288,6 +298,7 @@ def train_kernel(
     model.eval()
     report = artifact(
         "TRAINING_REPORT", foundation_sha256=foundation_sha256,
+        **({"training_recipe": dict(recipe)} if training_recipe is not None else {}),
         **({"batching": dict(training_batch_size=batch_size,
                             inference_batch_size=inference_batch_size,
                             gradient_accumulation_steps=1)} if explicit_batching else {}),

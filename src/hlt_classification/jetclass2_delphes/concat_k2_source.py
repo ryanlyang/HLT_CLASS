@@ -94,8 +94,10 @@ def _protected(screen, project):
 
 def create_launch(*, screen_spec: Path, inventory_path: Path, launch_root: Path,
                   campaign_root: Path, project: Path, source_commit: str, partition="tier3",
-                  reuse_preparation_spec: Path | None = None):
-    registered = registration(partition)
+                  reuse_preparation_spec: Path | None = None, profile=None):
+    registered = registration(partition, profile)
+    if profile is not None and reuse_preparation_spec is None:
+        raise ValueError("The small K2 pilot requires an explicit completed K2 preparation donor")
     _source(project, source_commit)
     screen, ledger = _parent({"screen_spec_path": str(screen_spec)})
     inventory = load_json(inventory_path)
@@ -131,7 +133,8 @@ def validate_launch(spec, *, check_source=True):
     inventory = load_json(spec["inventory_path"])
     validate_inventory(inventory)
     _population(screen, inventory)
-    if (spec["registration"] != registration(spec["registration"]["execution_site"]["partition"])
+    if (spec["registration"] != registration(spec["registration"]["execution_site"]["partition"],
+                                            spec["registration"].get("experiment_profile"))
             or spec["final_test_accessed"] is not False
             or spec["screen_sha256"] != screen["content_hash"] or spec["parent_task_id"] != "complete"
             or spec["parent_ledger_sha256"] != ledger["content_hash"]
@@ -145,6 +148,8 @@ def validate_launch(spec, *, check_source=True):
         raise ValueError("Output roots overlap protected source trees")
     if check_source:
         _source(Path(spec["project_dir"]), spec["source_commit"])
+    if spec["registration"].get("experiment_profile") and spec.get("preparation_import") is None:
+        raise ValueError("Pilot requires an authenticated preparation donor")
     if spec.get("preparation_import") is not None:
         from .concat_k2_preparation_import import validate_reuse
         for destination in (spec["campaign_root"], spec["launch_root"]):

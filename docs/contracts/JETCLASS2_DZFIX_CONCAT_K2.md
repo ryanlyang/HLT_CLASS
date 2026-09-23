@@ -1,5 +1,84 @@
 # JetClass2 dzfix fixed-slot K=2 concatenation campaign
 
+## Separate 100k/50k pilot, opt-in v8 (2026-09-23)
+
+The active plan additionally authorizes `pilot_100k_50k_60`. Its launch and
+campaign use v8, training reports v3, acceptance v7 and `PILOT_POPULATION/v1`.
+The default full-size v7 registration and old pinned executions are unchanged.
+New pilot fields and hashes cannot masquerade as the full-size experiment.
+
+The pilot registers 100,000 train / 50,000 total validation / unchanged sealed
+1,000,000 test. Scalar-only parent metadata yields class-stratified,
+identity-hash-ranked subsets of the authenticated 500k/1M populations. Natural
+class quotas use the existing reservoir Hamilton/minimum-one rule. Rank domain
+is `JC2/CONCAT_K2/PILOT100K/v1/<role>/`; ties use identity. Iterate selected rows
+in file/entry order. The `PILOT_POPULATION` envelope binds campaign, parent
+foundation/splits, rank policy and source bytes. Its embedded split registry
+is a reader-compatible quota/mask container, not an independent rerun of the
+outer reservoir selection: the pilot envelope and its parent-subset policy
+are mandatory. Rebind sealed membership metadata without opening test files;
+final-test file masks and counts must be identical to the parent.
+
+Keep class-stratified 50/25/25 checkpoint/diagnostic/report roles on the 50k
+validation population (approximately 25k/12.5k/12.5k). Parent matching selection
+used validation, so neither diagnostic nor report is a sealed final test.
+Small-report R50 estimates need cautious interpretation. All controls use the
+same membership, roles, seeds, schedule, batch and model as the ladder.
+
+Eight fits: HLT_X1_CE, HLT_X3_CE, OFFLINE_CE, CONCAT_K2_D100,
+DIRECT_HLT_X3_KD, CONCAT_K2_D050, CONCAT_K2_D000, HLT_X1_COMPRESSED.
+Main KD edges: D100 -> D050 -> D000 -> HLT-x1. Three banks: D100/D050/D000.
+There are 13 science tasks including aggregate/complete; no D075/D025 fits.
+Fresh initialization and paired seeds remain unchanged; no ensemble or fusion.
+
+Training: physical/inference batch 128, no accumulation, CE controls or
+C25P75/T2 students, AdamW as before. Maximum 60, minimum 30, patience clock 30,
+patience 15, significant AUC delta 5e-5; earliest stop 45. LR warms up through
+3 to 3e-4, holds through 20, cosine decays through 30 to 1.5e-5, stays at floor
+through 60. Restore best weights across all epochs. The shared trainer accepts
+only this exact optional pilot recipe for CE/direct-KD roles, records the
+actual recipe and batching, and leaves legacy callers/globals unchanged.
+
+Require an explicit original K2 preparation donor. Import its complete compact
+maps and matching reports, retaining source hashes and independent byte copies.
+No matching/data/view producer bytes changed. Full foundation diagnostics still
+describe the parent 1.5M ordinary rows. The extra `select_population` CPU task
+follows foundation lock and precedes partition/storage/preflight. All RAM
+builders use only pilot row masks, join back to full maps by identities, and
+preserve no-truncation capacity. HLT x3/x1 readers omit offline and map access.
+The early four-row parity sample is also inside the pilot training subset.
+
+Seven gate tasks + thirteen science tasks = twenty-task canonical dry run.
+Default `jc2k2p_` jobs all use debug, including both launchers and all fits.
+Training requests 1440 min with a finite <=23h projection bound. All pilot
+jobs permit pending Partition-only debug/tier3 moves at identical resources,
+GPU/software and time limits. No 96h request or forced-tier3 fit is inherited.
+New gate stresses D100/D050/D000/x1 at batch 128, preserves strict parity,
+90% CUDA/80% RSS headroom, round trips and 1.30 projection margin. Projection
+uses 60 passes, 100k training and actual checkpoint-role counts, plus cache
+time. Old acceptance is not reused. This is not a 12h campaign guarantee.
+
+Queue from a clean pushed checkout with
+`bash scripts/queue_jetclass2_concat_k2_pilot.sh` (dry), then `--execute`.
+The helper defaults to the original `1f930650` preparation donor and distinct
+commit-qualified pilot roots, ignoring stale full-campaign root/partition
+variables. Explicit overrides are `K2_PILOT_PARTITION`, `K2_PILOT_REUSE_SPEC`,
+`K2_PILOT_LAUNCH_ROOT`, `K2_PILOT_CAMPAIGN_ROOT`. Screen/inventory remain explicit
+authenticated parent inputs. Authorization phrase is
+`AUTHORIZE JETCLASS2 DZFIX CONCAT K2 PILOT 100K EXACT SPEC`. The launcher
+authenticates completed matching artifacts instead of depending on an expired
+job ID, imports maps, runs fresh gates, then automatically releases science.
+No existing jobs are canceled, updated, or resubmitted.
+
+Local tests are not real SPORC execution. Exact pushed source and fresh
+installed-Weaver/A100 acceptance remain required by the staged queue workflow.
+Pilot implementation donor is repository commit
+`c891da0d45dd3251dea9ea72df975bb96bae3570`, reusing the K2 runtime and matching
+import machinery without changing matching-producer bytes. Local verification:
+382 tests passed across pilot, reuse, K2 and related trainer/fusion regressions;
+nine installed-Weaver tests skipped locally. No remote submission or passing
+SPORC GPU acceptance is claimed by this implementation record.
+
 Scientific authority: [the active implementation plan](../plans/JETCLASS2_DZFIX_FIXED_SLOT_CONCAT_K2_LADDER_PLAN.md).
 Family: `JETCLASS2_DELPHES_CONCAT_K2_*`. Launch and campaign specs are `/v7`,
 GPU acceptance `/v6`, execution policy `/v2`; training reports and batch probes

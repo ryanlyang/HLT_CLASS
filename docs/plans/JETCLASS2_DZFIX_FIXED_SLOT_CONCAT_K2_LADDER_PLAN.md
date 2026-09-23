@@ -1,5 +1,45 @@
 # JetClass2 dz-fix fixed-slot concatenation ladder: K=2, HLT x3 -> HLT x1
 
+## 2026-09-23 separate 100k/50k debug pilot (user authorized)
+
+Add an opt-in `pilot_100k_50k_60` execution; do not replace the 500k study or
+change any existing jobs. Its main ladder is D100 -> D050 -> D000 (HLT x3)
+-> HLT_X1_COMPRESSED. Retain the four matched controls HLT_X1_CE, HLT_X3_CE,
+OFFLINE_CE and DIRECT_HLT_X3_KD: eight fresh fits, three teacher reducers,
+aggregate and complete (13 science tasks). All are cold, single encoder,
+paired seeds, batch/inference 128, CE controls or C25P75/T2 students.
+
+Select exactly 100,000 training and 50,000 total validation rows as frozen,
+class-stratified hash-ranked subsets of the existing authenticated 500k/1M
+ordinary populations. Use natural class proportions, deterministic integer
+quotas and no performance-dependent selection. Keep the original 1M final-test
+membership sealed and unchanged, without opening final-test files to construct
+the pilot. Validation remains class-stratified 50/25/25 checkpoint/diagnostic/
+report (approximately 25k/12.5k/12.5k). Report-tail rejection is less precise
+at this size. Matching selection already used the validation reservoir.
+
+Train for at most 60 passes: warmup 1-3 to 3e-4, hold through 20, cosine decay
+through 30 to 1.5e-5, then constant floor through 60. Minimum passes and
+patience-clock start are both 30; patience remains 15 with AUC delta 5e-5,
+so the earliest early stop is 45. Restore the best checkpoint from all passes.
+No global trainer mutation, accumulation, automatic fallback or LR scaling.
+
+Default every pilot job, including training and launchers, to debug; all
+requests are at most 24h. Fits request 24h with a 23h finite projected-fit
+ceiling. Preserve pending-job partition-only debug/tier3 portability. This
+per-job budget is not a promise that the whole sequential ladder finishes
+within 24h or 12h. Fresh installed-Weaver/SPORC acceptance must measure the
+pilot populations, schedule and actual batch before releasing science.
+
+Reuse only the explicitly named, authenticated original K2 assignment donor.
+Import full compact maps and foundation evidence unchanged, then publish a
+separate pilot subset registry. Build RAM views only for the selected rows,
+joining to original maps by authenticated identities; never rematch or shrink
+the particle capacity. Foundation diagnostics describe the parent population,
+not the smaller scored pilot. No old weights, banks or GPU acceptance are used.
+Use distinct launch/campaign v8 and pilot acceptance v7 identities and fresh
+roots with a `jc2k2p_` namespace. Existing v7 96h tier3 behavior stays unchanged.
+
 ### 2026-09-23 authorized tier3 long-walltime amendment
 
 This amendment supersedes the common 24-hour envelope / 23-hour projection

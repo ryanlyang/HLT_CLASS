@@ -60,11 +60,13 @@ def submission_site(spec, resource):
 
 
 def runtime_projection_limit_seconds(spec):
+    from .concat_k2_pilot import is_pilot
     registered = spec.get("registration", spec)
-    if (registered["resources"]["train"]["minutes"] != TRAINING_MINUTES
+    minutes = PORTABLE_MINUTES if is_pilot(spec) else TRAINING_MINUTES
+    if (registered["resources"]["train"]["minutes"] != minutes
             or registered.get("runtime_walltime_reserve_minutes") != WALLTIME_RESERVE_MINUTES):
         raise ValueError("K2 runtime acceptance budget differs from registration")
-    return (TRAINING_MINUTES - WALLTIME_RESERVE_MINUTES) * 60
+    return (minutes - WALLTIME_RESERVE_MINUTES) * 60
 
 
 def validate_runtime_projection(spec, seconds):

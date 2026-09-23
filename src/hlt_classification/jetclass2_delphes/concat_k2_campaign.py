@@ -36,23 +36,32 @@ VERSIONS = {"LAUNCH_SPEC": 7, "CAMPAIGN_SPEC": 7, "ACCEPTANCE": 6,
 
 
 def artifact(kind, **fields):
-    return base_artifact("CONCAT_K2_" + kind, version=VERSIONS.get(kind, 1), **fields)
+    from .concat_k2_pilot import is_pilot
+    version = ({"LAUNCH_SPEC": 8, "CAMPAIGN_SPEC": 8, "ACCEPTANCE": 7,
+                "TRAINING_REPORT": 3}.get(kind, VERSIONS.get(kind, 1))
+               if is_pilot(fields) else VERSIONS.get(kind, 1))
+    return base_artifact("CONCAT_K2_" + kind, version=version, **fields)
 
 
 def validate(value, kind):
-    return base_validate(value, "CONCAT_K2_" + kind, version=VERSIONS.get(kind, 1))
+    from .concat_k2_pilot import is_pilot
+    version = ({"LAUNCH_SPEC": 8, "CAMPAIGN_SPEC": 8, "ACCEPTANCE": 7,
+                "TRAINING_REPORT": 3}.get(kind, VERSIONS.get(kind, 1))
+               if is_pilot(value) else VERSIONS.get(kind, 1))
+    return base_validate(value, "CONCAT_K2_" + kind, version=version)
 
 
 def seed(domain):
     return int.from_bytes(hashlib.sha256(("JC2/CONCAT_K2/v1/" + domain).encode()).digest()[:4], "big")
 
 
-def nodes():
+def nodes(profile=None):
     rows = [("HLT_X1_CE", "HLT_X1", None), ("HLT_X3_CE", "HLT_X3", None),
             ("OFFLINE_CE", "OFFLINE", None), ("CONCAT_K2_D100", "D100", None),
             ("DIRECT_HLT_X3_KD", "HLT_X3", "CONCAT_K2_D100")]
     previous = "CONCAT_K2_D100"
-    for view in ("D075", "D050", "D025", "D000"):
+    from .concat_k2_pilot import PROFILE
+    for view in (("D050", "D000") if profile == PROFILE else ("D075", "D050", "D025", "D000")):
         name = "CONCAT_K2_" + view
         rows.append((name, view, previous))
         previous = name
@@ -66,7 +75,7 @@ def nodes():
             for name, view, teacher in rows]
 
 
-def task_graph(foundation, *, reuse=False):
+def task_graph(foundation, *, reuse=False, profile=None):
     rows = [dict(task_id="authenticate", kind="authenticate", dependencies=[], resource="metadata"),
             dict(task_id="matcher_acceptance", kind="matcher_acceptance", dependencies=["authenticate"], resource="assignment")]
     for file in foundation["assignment_tasks"]:
@@ -82,8 +91,15 @@ def task_graph(foundation, *, reuse=False):
         dict(task_id="audit_storage", kind="storage", dependencies=["foundation_lock"], resource="metadata"),
         dict(task_id="preflight", kind="preflight", dependencies=["partition_validation", "audit_storage"], resource="preflight"),
     ])
-    teachers = {n["teacher_distribution"] for n in nodes()} - {None}
-    for node in nodes():
+    if profile is not None:
+        index = next(i for i,r in enumerate(rows) if r["task_id"] == "partition_validation")
+        rows.insert(index, dict(task_id="select_population", kind="population",
+            dependencies=["foundation_lock"], resource="partition"))
+        for row in rows:
+            if row["kind"] in {"partition", "storage"}:
+                row["dependencies"] = ["select_population"]
+    teachers = {n["teacher_distribution"] for n in nodes(profile)} - {None}
+    for node in nodes(profile):
         name, teacher = node["node_id"], node["teacher_distribution"]
         rows.append(dict(task_id="train_"+name, node_id=name, kind="train", resource="train",
                          dependencies=["reduce_"+teacher] if teacher else ["preflight"]))
@@ -99,8 +115,11 @@ def gates(spec):
     return tuple(r["task_id"] for r in spec["tasks"] if r["kind"] not in {"train", "reduce", "aggregate", "complete"})
 
 
-def registration(partition="tier3"):
-    return dict(nodes=nodes(), training=deepcopy(TRAINING), execution_site=site_for_partition(partition),
+def registration(partition="tier3", profile=None):
+    from .concat_k2_pilot import PROFILE, COUNTS as PILOT_COUNTS, training_recipe
+    if profile not in (None, PROFILE):
+        raise ValueError("Unknown K2 experiment profile")
+    result = dict(nodes=nodes(profile), training=deepcopy(TRAINING), execution_site=site_for_partition(partition),
         inference_batch_size=INFERENCE_BATCH_SIZE,
         execution_policy=execution_policy(),
         pair_storage=deepcopy(PAIR_STORAGE), batch_probe_policy=deepcopy(BATCH_PROBE_POLICY),
@@ -117,6 +136,13 @@ def registration(partition="tier3"):
         matching_selection_used_validation=True, ram_only_particle_views=True, rolling_resume=False,
         ordinary_roles=["train","validation"], ordinary_final_test_capability=False,
         final_test_accessed=False, existing_campaign_mutations=False)
+    if profile == PROFILE:
+        result.update(experiment_profile=PROFILE, training=training_recipe(),
+            role_counts=dict(PILOT_COUNTS), split_profile="PILOT_100K_FROM_TRAIN_500K",
+            fresh_fit_count=8, reducer_count=3, science_task_count=13,
+            population_policy="parent_subset_class_hash_rank_v1")
+        result["resources"]["train"]["minutes"] = 1440
+    return result
 
 
 def foundation_spec(parent, source_hash, *, reuse=False):
@@ -135,17 +161,20 @@ def foundation_spec(parent, source_hash, *, reuse=False):
 
 def validate_campaign(spec, *, check_source=True):
     digest = validate(spec, "CAMPAIGN_SPEC")
-    if any(spec.get(k) != v for k,v in registration(spec["execution_site"]["partition"]).items()):
+    profile = spec.get("experiment_profile")
+    if any(spec.get(k) != v for k,v in registration(spec["execution_site"]["partition"], profile).items()):
         raise ValueError("K2 scientific/resource registration differs")
     from .concat_k2_source import validate_import
     validate_import(spec["source_import"])
     from .concat_k2_preparation_import import validate_reuse
     reuse = spec.get("preparation_import")
+    if profile is not None and reuse is None:
+        raise ValueError("Pilot requires an authenticated preparation donor")
     if reuse is not None:
         validate_reuse(reuse, source=spec["source_import"], destination=spec["campaign_root"])
     parent = load_json(spec["source_import"]["foundation_spec_path"])
     if (spec["foundation"] != foundation_spec(parent, spec["source_import"]["content_hash"], reuse=reuse is not None)
-            or spec["tasks"] != task_graph(spec["foundation"], reuse=reuse is not None)
+            or spec["tasks"] != task_graph(spec["foundation"], reuse=reuse is not None, profile=profile)
             or spec["data_root"] != spec["source_import"]["data_root"]
             or spec["source_commit"] != spec["source_import"]["consumer_commit"]):
         raise ValueError("K2 foundation/graph/source differs")
@@ -165,7 +194,8 @@ def create(*, launch):
     foundation = foundation_spec(parent, source["content_hash"], reuse=reuse is not None)
     root = Path(launch["campaign_root"])
     spec = artifact("CAMPAIGN_SPEC", **launch["registration"], foundation=foundation,
-        preparation_import=reuse, tasks=task_graph(foundation, reuse=reuse is not None),
+        preparation_import=reuse, tasks=task_graph(foundation, reuse=reuse is not None,
+            profile=launch["registration"].get("experiment_profile")),
         source_commit=launch["source_commit"], project_dir=launch["project_dir"], campaign_root=str(root),
         data_root=source["data_root"], launch_sha256=launch["content_hash"], source_import=source)
     if root.exists():
