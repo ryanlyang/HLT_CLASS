@@ -1,5 +1,39 @@
 # JetClass2 dz-fix fixed-slot concatenation ladder: K=2, HLT x3 -> HLT x1
 
+### 2026-09-23 authorized tier3 long-walltime amendment
+
+This amendment supersedes the common 24-hour envelope / 23-hour projection
+bound below, not the physical batch-128 recipe. SPORC preflight 21770762 at
+`11ff05dff72224ff365e3873c2731d79a802780d` completed all four batch-128 probes
+and reached the runtime check. Its conservative maximum-fit estimate was
+72.91 hours, above the old 23-hour bound; this was not an OOM. That estimate
+is a projection, not measured full-fit duration or a passing acceptance.
+
+The user authorized tier3 long jobs. Their site checks reported tier3 MaxTime
+20 days, no displayed qos_tier3 MaxWall, and a successful four-day `sbatch
+--test-only` request with the registered A100/4 CPU/320000 MiB resources.
+The test-only response numbered 21775265 did not submit a job.
+
+Register **96-hour training jobs on tier3**, with a **95-hour maximum projected
+fit** (one hour reserved inside the request). Keep the existing 1.30 projection
+multiplier and cache-time accounting. Both preflight and science release must
+enforce this same finite, positive bound. Do not simply remove runtime checks.
+All ten fits, including CE controls and x1 compression, use the same request.
+
+Short jobs retain their current resources and pending-job partition-only
+tier3/debug portability: preflight 24h, assignment 12h, partition/reducer 6h,
+metadata/launchers 4h. Initial `--partition` selects these short jobs only;
+training always targets tier3, even if a launcher runs on debug. A 96-hour
+training job cannot move to debug; authentication must reject that combination
+and any altered TimeLimit. No live job is retargeted by the code change.
+
+Version launch/campaign specs to v7, GPU acceptance to v6, execution policy
+to v2. Keep matching/views/seeds, batch/inference 128, C25P75/T2, pass-based LR,
+early stopping, data membership and model unchanged. Continue authenticated
+reuse of the original completed K2 assignments, without importing a failed
+preflight or models. Fresh source-pinned roots and fresh GPU acceptance remain
+mandatory before automatic release of the 17 science tasks.
+
 Status: staged implementation added on 2026-09-21 after the user selected K=2.
 On 2026-09-22 the user superseded the debug-only scheduling requirement:
 new campaigns default to tier3 and permit pending-job partition-only moves
@@ -510,23 +544,24 @@ do not change K, remove jets, or suppress poor diagnostics automatically.
 
 ## 10. Resources, artifact isolation, and queue prerequisites
 
-Target SPORC/tier3 by default; allow an explicit debug initial submission.
+Target SPORC/tier3 by default; allow an explicit debug initial submission for short jobs.
 Both partitions belong to one registered K2-only A100 execution policy.
-Operators may use `scontrol update JobId=<exact-pending-ID> Partition=debug`
+For <=24h short jobs, operators may use `scontrol update JobId=<exact-pending-ID> Partition=debug`
 or `Partition=tier3` without altering data, recipe, dependency IDs, or the
 original submission ledger. This does not migrate a running process; Slurm
 must accept the pending-job update under the site's limits and permissions.
 Keep identical account/QoS, A100 request, CPU/RAM, software and time limits.
-All jobs retain the portable <=24-hour request and <=23-hour measured fit
-projection. GPU/software acceptance remains exact, including A100 model and
+All ten fits request 96 hours on tier3 and require a <=95-hour projected fit;
+they cannot move to debug. Short jobs retain <=24-hour requests.
+GPU/software acceptance remains exact, including A100 model and
 memory capacity; a partition switch is not permission to change GPU type.
 
 Only the submission partition is frozen as the requested site. Workers
 authenticate and record the actual allowed site; preflight evidence may be
 consumed on the other allowed site with identical accepted hardware/software.
 Moving a launcher does not change the requested partition of descendants:
-they use the campaign's original choice and can be moved individually later.
-Version launch/campaign/acceptance as v3 and execution policy/records as v1;
+short jobs use the campaign's original choice; all fits use tier3.
+Version launch/campaign as v7, acceptance v6, execution policy v2 and records v1;
 keep scientific view/matcher/seed contracts unchanged. Existing v1 jobs and
 roots cannot acquire this policy by editing JSON, moving their Slurm partition,
 or updating their pinned worktree. Use a new pushed checkout and new roots.
@@ -606,14 +641,14 @@ Implementation decisions frozen for this first campaign:
   utility/tie objectives specified in the new contract.
 - Ten fits: the six-model D ladder/compression, HLT x1 CE, HLT x3 CE,
   pure offline CE and direct D100-to-HLT-x3 KD. All cold, paired seeds,
-  C25P75/T2 students, batch 256, the existing 100-pass hold/floor-tail recipe.
+  C25P75/T2 students, batch 128, the existing 100-pass hold/floor-tail recipe.
 - Separate class-stratified 50/25/25 checkpoint/diagnostic/report validation;
   sealed final test. Parent matching selection used the validation reservoir.
 - Derive expanded capacity from inventory, not 320. The archived SPORC
   inventory implies 832 tokens; workers authenticate/rederive it.
-- All new launchers, preparation, acceptance, science and reporting jobs
-  request tier3 by default (debug explicitly selectable) and allow manual
-  pending-job tier3/debug moves. New acceptance measures memory and runtime
+- All new jobs request tier3 by default; only short jobs (<=24h) allow debug
+  at submission or manual pending-job tier3/debug moves. All ten fits use
+  96h tier3 requests. New acceptance measures memory and runtime
   before science; its actual execution site is recorded.
 
 Remaining external requirement: exact pushed checkout and genuine installed-

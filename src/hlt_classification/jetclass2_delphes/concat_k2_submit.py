@@ -14,14 +14,14 @@ from hlt_classification.scouting.hcwdl_recovery import validate_submission_ledge
 from .concat_k2_campaign import AUTHORIZE, gates, PREFIX, artifact, create, validate_campaign
 from .concat_k2_source import _parent, build_import, validate_launch
 from .execution import slurm_options
-from .concat_k2_execution import admit_site
+from .concat_k2_execution import admit_site, submission_site
 from .submission import _guarded_exact_submission
 
 
 def command(spec, name, resource, *, launch=False, dependencies=()):
     project = Path(spec["project_dir"])
     root = Path(spec["launch_root"] if launch else spec["campaign_root"])
-    site = spec["registration"]["execution_site"] if launch else spec["execution_site"]
+    site = submission_site(spec, resource)
     result = slurm_options(site) + [f"--cpus-per-task={resource['cpus']}",
         f"--mem={resource['memory_mb']}M", f"--time={resource['minutes']}",
         "--job-name=" + PREFIX + "_" + name, "--chdir=" + str(project),
@@ -190,12 +190,12 @@ def authenticate_job(spec, name, *, launch=False):
             job_id=job, command=event["command"], sequence=event["sequence"])
         if event != expected:
             raise PermissionError("Worker submission receipt differs")
-    site = spec["registration"]["execution_site"] if launch else spec["execution_site"]
     resource = (spec["registration"]["resources"]["metadata"] if launch else spec["resources"][
         next(r["resource"] for r in spec["tasks"] if r["task_id"] == name)])
+    site = submission_site(spec, resource)
     raw = subprocess.run(["scontrol", "show", "job", "-o", job], capture_output=True, text=True, check=True).stdout
     fields = dict(token.split("=", 1) for token in raw.split() if "=" in token)
-    actual = admit_site(spec, fields.get("Partition"))
+    actual = admit_site(spec, fields.get("Partition"), resource=resource)
     if (fields.get("Account") != site["account"]
             or fields.get("QOS") != site["qos"] or fields.get("NumNodes") != "1"
             or fields.get("NumTasks") != "1" or fields.get("NumCPUs") != str(resource["cpus"])
@@ -244,8 +244,10 @@ def monitor(spec):
             if len(p)>=3: states[p[0].strip()]=(p[1].strip(),p[2].strip(),p[3].strip() if len(p)>3 else "")
         for name,job in ledger["jobs"].items():
             state,elapsed,partition=states.get(job,("UNKNOWN","",""))
+            command = ledger["commands"][name]
+            requested = next(token.split("=", 1)[1] for token in command if token.startswith("--partition="))
             rows.append(dict(stage=stage,task_id=name,job_id=job,state=state,elapsed=elapsed,
-                requested_partition=spec["execution_site"]["partition"],actual_partition=partition or None))
+                requested_partition=requested,actual_partition=partition or None))
     return artifact("MONITOR",campaign_sha256=spec["content_hash"],rows=rows,remote_mutations=False)
 
 

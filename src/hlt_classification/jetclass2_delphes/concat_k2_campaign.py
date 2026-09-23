@@ -7,7 +7,8 @@ from pathlib import Path
 
 from hlt_classification.data.cache_contracts import load_json, write_immutable_json
 from .contracts import artifact as base_artifact, validate as base_validate
-from .concat_k2_execution import execution_policy, site_for_partition
+from .concat_k2_execution import (execution_policy, site_for_partition,
+                                  TRAINING_MINUTES, WALLTIME_RESERVE_MINUTES)
 from .concat_k2_model import PAIR_STORAGE, BATCH_PROBE_POLICY, PARITY_BACKEND, PARITY_TOLERANCES
 from .inputs import input_contract
 from .model import model_contract
@@ -25,12 +26,12 @@ RESOURCES = {
     "assignment": dict(cpus=1, memory_mb=8192, minutes=720, gpu=False),
     "partition": dict(cpus=4, memory_mb=320000, minutes=360, gpu=False),
     "preflight": dict(cpus=4, memory_mb=320000, minutes=1440, gpu=True),
-    "train": dict(cpus=4, memory_mb=320000, minutes=1440, gpu=True),
+    "train": dict(cpus=4, memory_mb=320000, minutes=TRAINING_MINUTES, gpu=True),
     "reduce": dict(cpus=4, memory_mb=320000, minutes=360, gpu=True),
 }
 
 
-VERSIONS = {"LAUNCH_SPEC": 6, "CAMPAIGN_SPEC": 6, "ACCEPTANCE": 5,
+VERSIONS = {"LAUNCH_SPEC": 7, "CAMPAIGN_SPEC": 7, "ACCEPTANCE": 6,
             "TRAINING_REPORT": 2, "BATCH_PROBE": 2}
 
 
@@ -111,6 +112,7 @@ def registration(partition="tier3"):
                                   domain="JC2/CONCAT_K2/v1/validation"),
         gpu_peak_fraction_limit=.90, cpu_peak_fraction_limit=.80, cache_fraction_limit=.65,
         runtime_projection_margin=1.30, minimum_free_disk_bytes=32*1024**3,
+        runtime_walltime_reserve_minutes=WALLTIME_RESERVE_MINUTES,
         fresh_fit_count=10, reducer_count=5, science_task_count=17,
         matching_selection_used_validation=True, ram_only_particle_views=True, rolling_resume=False,
         ordinary_roles=["train","validation"], ordinary_final_test_capability=False,

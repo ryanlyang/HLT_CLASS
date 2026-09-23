@@ -289,7 +289,8 @@ def test_cli_and_helper_expose_direct_screen_boundary(imported_source, monkeypat
     assert result.value.code == 0
     printed = capsys.readouterr().out
     assert "--dependency=afterok:21748725" in printed
-    assert "New campaign partition: tier3" in printed
+    assert "Initial short-job partition: tier3" in printed
+    assert "Training: tier3 only, 96h requested, 95h maximum projected fit" in printed
     assert "tier3 <-> debug" in printed
     assert str(root / "screen_spec.json") in printed
     assert not (Path(launch["launch_root"]) / "submissions_after_matching/submission_ledger.json").exists()

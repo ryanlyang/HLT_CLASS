@@ -132,8 +132,9 @@ def test_requested_graph_controls_seed_pairing_and_portable_dry_run(tmp_path,mon
     for row in scheduler.plan(spec,"full")["commands"]:
         assert set(row["dependencies"])<=seen; seen.add(row["task_id"])
         command=row["command"]
-        assert "--partition="+partition in command and "--no-requeue" in command
-        assert int(next(t.split("=")[1] for t in command if t.startswith("--time=")))<=1440
+        requested = "tier3" if row["task_id"].startswith("train_") else partition
+        assert "--partition="+requested in command and "--no-requeue" in command
+        assert int(next(t.split("=")[1] for t in command if t.startswith("--time=")))<=5760
     monkeypatch.setattr(scheduler,"validate_campaign",lambda s:s["content_hash"])
     ledger=scheduler.submit(spec,stage="full")
     assert ledger["dry_run"] and len(ledger["jobs"])==len(spec["tasks"])
@@ -302,14 +303,16 @@ def test_memory_batch_capacity_execution_attestations_cannot_be_bypassed(tmp_pat
         batch_size=128,inference_batch_size=128,capacity=32,checkpoint_round_trip=True,bank_round_trip=True,
         installed_weaver_fp32_parity=True,worst_population_batch_stress=True,
         hlt_only_endpoint=True,duplicate_pair_finiteness=True,peak_cuda_bytes=800,
-        gpu={"total_memory_bytes":1000},peak_rss_bytes=1000,projected_max_fit_seconds=100,
+        gpu={"total_memory_bytes":1000},peak_rss_bytes=1000,projected_max_fit_seconds=262478.2203352421,
+        runtime_projection_limit_seconds=95*3600,
         native_execution=[{"kernel_report":{"acceptance_only":True,"scientific_fit":False,
             "batching":{"training_batch_size":128,"inference_batch_size":128,"gradient_accumulation_steps":1}}}]*4,
         **memory_evidence(spec))
     for name,changes in (("good",{}),("memory",{"peak_cuda_bytes":901}),("batch",{"batch_size":256}),
             ("inference_batch",{"inference_batch_size":256}),
             ("kernel_batch",{"native_execution":[{"kernel_report":{"acceptance_only":True,"scientific_fit":False}}]*4}),
-            ("test",{"final_test_accessed":True}),("time",{"projected_max_fit_seconds":24*3600}),
+            ("test",{"final_test_accessed":True}),("time",{"projected_max_fit_seconds":96*3600}),
+            ("time_limit",{"runtime_projection_limit_seconds":96*3600}),
             ("shape",{"capacity":16}),("duplicates",{"duplicate_pair_finiteness":False})):
         v=chain.artifact("ACCEPTANCE",**{**evidence,**changes}); write_immutable_json(root/(name+".json"),v)
         monkeypatch.setattr(runtime,"completed",lambda *a:{"result":{"acceptance":name+".json"}})
@@ -362,7 +365,8 @@ def test_monitor_reads_only_authenticated_own_job_ids(tmp_path,monkeypatch):
     assert next(r for r in rows if r["job_id"]=="102")["state"]=="UNKNOWN"
 
 
-def test_preflight_dispatch_cpu_double_exercises_every_stage_not_remote_acceptance(fake_native,tmp_path,monkeypatch):
+@pytest.mark.parametrize("projected_hours", [1, 73, 96])
+def test_preflight_dispatch_cpu_double_exercises_every_stage_not_remote_acceptance(fake_native,tmp_path,monkeypatch,projected_hours):
     import sys
     from hlt_classification.jetclass2_delphes import acceptance, concat_k2_parity, model as model_module
     from test_jetclass2_concat_k2_memory import memory_evidence
@@ -390,7 +394,8 @@ def test_preflight_dispatch_cpu_double_exercises_every_stage_not_remote_acceptan
         kw["device"]="cpu"
         report,state=original_train(*a,**kw)
         # Test orchestration, not wall-clock extrapolation from a CPU double.
-        report["validation_history"][-1].update(train_seconds=.01,validation_seconds=.01)
+        seconds = projected_hours*3600*len(a[1](1))/(100*spec["role_counts"]["train"]*spec["runtime_projection_margin"])
+        report["validation_history"][-1].update(train_seconds=seconds,validation_seconds=0.)
         return rehash(report),state
     def predict(*a,**kw):
         assert kw["batch_size"] == 128
@@ -404,10 +409,20 @@ def test_preflight_dispatch_cpu_double_exercises_every_stage_not_remote_acceptan
         k:v for k,v in fabricated["storage_parity_reports"][int(kw["bf16"])].items() if k!="node_id"})
     monkeypatch.setattr(runtime,"batch_probes",lambda s,d,n,*a:[
         r for r in fabricated["batch_probes"] if r["node_id"]==n["node_id"]])
+    if projected_hours > 95:
+        with pytest.raises(ValueError, match="runtime acceptance.*95h"):
+            runtime.preflight(spec,directory,"cuda")
+        measured = load_json(directory/"resource_measurements.json")
+        assert measured["projected_max_fit_seconds"] > 95*3600
+        assert measured["runtime_projection_limit_seconds"] == 95*3600
+        assert not (directory/"acceptance.json").exists()
+        return
     value=runtime.preflight(spec,directory,"cuda")
     assert value["site"]["partition"] == "debug" and value["requested_site"]["partition"] == "tier3"
     assert value["environment"]["test_only"] and len(value["native_execution"])==4
     assert value["bank_round_trip"] and value["checkpoint_round_trip"]
+    assert value["runtime_projection_limit_seconds"] == 95*3600
+    assert projected_hours*3600 <= value["projected_max_fit_seconds"] < 95*3600
     assert value["batch_size"] == value["inference_batch_size"] == 128
     assert len(value["batch_probes"]) == 4 and {r["batch_size"] for r in value["batch_probes"]} == {128}
     assert (directory/"resource_measurements.json").is_file()

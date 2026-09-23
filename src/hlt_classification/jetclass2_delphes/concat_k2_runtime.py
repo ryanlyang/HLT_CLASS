@@ -21,7 +21,8 @@ from .concat_k2_campaign import (gates, artifact, nodes, validate, validate_camp
 from .concat_k2_data import caches, cache_bounds, prepare, publish_partition, assignment, foundation_lock, matcher_acceptance
 from .concat_k2_source import validate_import
 from .execution import allocation, gpu_identity
-from .concat_k2_execution import runtime_site, validate_acceptance_site
+from .concat_k2_execution import (runtime_site, validate_acceptance_site,
+                                  validate_runtime_projection, runtime_projection_limit_seconds)
 from .model import installed_environment
 from .concat_k2_model import (K2ParticleTransformer, storage_parity, synchronize,
     validate_storage_stats, parity_backend, PAIR_STORAGE, BATCH_PROBE_POLICY,
@@ -69,19 +70,20 @@ def science_gate(spec):
     validate(acceptance, "ACCEPTANCE")
     validate_acceptance_site(spec, acceptance)
     validate_memory_evidence(spec, acceptance)
+    validate_runtime_projection(spec, acceptance["projected_max_fit_seconds"])
     if (acceptance["campaign_sha256"] != spec["content_hash"] or acceptance["passed"] is not True
             or acceptance["final_test_accessed"] is not False
             or acceptance["resource"] != spec["resources"]["preflight"] or acceptance["acceptance_only"] is not True
             or acceptance["ordinary_rows"] != {r: spec["role_counts"][r] for r in ("train", "validation")}
             or acceptance["batch_size"] != spec["training"]["batch_size"]
             or acceptance.get("inference_batch_size") != spec["inference_batch_size"]
+            or acceptance.get("runtime_projection_limit_seconds") != runtime_projection_limit_seconds(spec)
             or acceptance["capacity"] != spec["foundation"]["inputs"]["capacity"]
             or not acceptance["checkpoint_round_trip"] or not acceptance["bank_round_trip"]
             or not acceptance["installed_weaver_fp32_parity"] or not acceptance["worst_population_batch_stress"]
             or not acceptance["hlt_only_endpoint"] or not acceptance["duplicate_pair_finiteness"]
             or not 0 < acceptance["peak_cuda_bytes"] <= acceptance["gpu"]["total_memory_bytes"] * spec["gpu_peak_fraction_limit"]
             or not 0 < acceptance["peak_rss_bytes"] <= spec["resources"]["train"]["memory_mb"] * 1024**2 * spec["cpu_peak_fraction_limit"]
-            or not 0 < acceptance["projected_max_fit_seconds"] <= 23 * 3600
             or len(acceptance["native_execution"]) != 4
             or any(not row["kernel_report"]["acceptance_only"] or row["kernel_report"]["scientific_fit"]
                    for row in acceptance["native_execution"])):
@@ -449,15 +451,15 @@ def preflight(spec,directory,device):
     projected=max(100*(spec["role_counts"]["train"]*e["train_seconds_per_row"]+checkpoint_rows*e["validation_seconds_per_row"])
                   for e in evidence)*spec["runtime_projection_margin"]+cache_seconds
     measured=dict(peak_cuda_bytes=peak,peak_reserved_cuda_bytes=reserved,peak_rss_bytes=rss,gpu=gpu,
-                  projected_max_fit_seconds=projected,cache_seconds=cache_seconds)
+                  projected_max_fit_seconds=projected,cache_seconds=cache_seconds,
+                  runtime_projection_limit_seconds=runtime_projection_limit_seconds(spec))
     write_immutable_json(directory/"resource_measurements.json",artifact("RESOURCE_MEASUREMENTS",**measured,
         campaign_sha256=spec["content_hash"],final_test_accessed=False))
     if peak>gpu["total_memory_bytes"]*spec["gpu_peak_fraction_limit"]:
         raise MemoryError(f"K2 GPU peak {peak/2**30:.2f} GiB exceeds registered 90% headroom; no automatic batch changes")
     if rss>spec["resources"]["train"]["memory_mb"]*1024**2*spec["cpu_peak_fraction_limit"]:
         raise MemoryError("K2 CPU peak exceeds registered headroom")
-    if projected>23*3600:
-        raise RuntimeError(f"Projected K2 100-pass fit {projected/3600:.2f}h exceeds the portable 23h bound")
+    validate_runtime_projection(spec, projected)
     value=artifact("ACCEPTANCE",campaign_sha256=spec["content_hash"],passed=True,acceptance_only=True,
         job_id=job,site=runtime_site(spec),requested_site=spec["execution_site"],
         execution_policy_sha256=spec["execution_policy"]["content_hash"],

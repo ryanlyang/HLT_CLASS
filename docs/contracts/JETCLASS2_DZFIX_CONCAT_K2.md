@@ -1,13 +1,41 @@
 # JetClass2 dzfix fixed-slot K=2 concatenation campaign
 
 Scientific authority: [the active implementation plan](../plans/JETCLASS2_DZFIX_FIXED_SLOT_CONCAT_K2_LADDER_PLAN.md).
-Family: `JETCLASS2_DELPHES_CONCAT_K2_*`. Launch and campaign specs are `/v6`,
-GPU acceptance `/v5`, training reports and batch probes `/v2` for the
-2026-09-23 explicitly authorized batch-128 recipe. These retain v5 strict
-parity, v4 preparation reuse and v2 portable scheduling. Matching,
+Family: `JETCLASS2_DELPHES_CONCAT_K2_*`. Launch and campaign specs are `/v7`,
+GPU acceptance `/v6`, execution policy `/v2`; training reports and batch probes
+remain `/v2`. The 2026-09-23 long-walltime amendment retains the batch-128
+recipe, strict parity and preparation reuse. Matching,
 views, seeds and remaining artifacts keep `/v1`. New
-`EXECUTION_POLICY/v1` and `EXECUTION_RECORD/v1` bind allowed and actual sites.
+`EXECUTION_POLICY/v2` and `EXECUTION_RECORD/v1` bind allowed and actual sites.
 Historical v1 debug-only executions and other campaigns are not modified.
+
+## v7 tier3 96-hour training profile
+
+SPORC preflight 21770762 at `11ff05dff72224ff365e3873c2731d79a802780d`
+passed all four physical batch-128 probes, reaching 21.16 GiB allocated CUDA
+memory. It failed only at the old runtime projection guard: 262478.22 seconds
+(72.91 hours), including the existing 1.30 multiplier and cache preparation.
+This is not actual full-training duration and is not passing GPU acceptance.
+The user's tier3 checks showed a 20-day partition maximum, no displayed
+qos_tier3 MaxWall and successful `sbatch --test-only` admission for 96h with
+the registered resources. Test-only response 21775265 was not a queued job.
+
+All ten training jobs request 5760 minutes on tier3. The spec registers
+`runtime_walltime_reserve_minutes=60`; both preflight and science release use
+the same positive finite **95-hour** projection ceiling. Invalid/nonfinite
+projections and altered budgets fail closed. The projection formula, CPU/GPU
+headroom checks, batch 128, model/data/matching and optimization are unchanged.
+
+Policy v2 allows <=24h short jobs on either tier3 or debug, but jobs over 24h
+only on tier3. `--partition` / `K2_PARTITION` selects the initial short-job
+partition; canonical training commands always use tier3 regardless of the
+launcher's partition. Runtime authentication rejects long jobs on debug and
+changed time limits. Exact accounting records the actual requested partition
+per task, including tier3 training inside a debug-short-job campaign.
+Fresh immutable roots and acceptance v6 are required; assignment-only reuse
+still accepts the original authenticated K2 donor without importing GPU
+acceptance or models. No existing jobs are moved or resubmitted by this patch.
+This section supersedes historical 23h/24h envelope claims below.
 
 ## v6 physical batch 128 after measured batch-256 OOM
 
@@ -37,7 +65,7 @@ instead of accepting a spec-only batch-size change.
 Probe policy `k2_registered_batch_128_v1` requires exactly four batch-128
 longest-population probes (D100/D075/D000/HLT-x1), three optimizer steps and
 validation each. Never retry 256 in this new gate. All early/native/population
-parity, CE/KD mini-fits, round trips, 90% GPU / 80% CPU headroom and 23-hour
+parity, CE/KD mini-fits, round trips, 90% GPU / 80% CPU headroom and the registered
 runtime checks remain mandatory. Partial D100 evidence from 21768860 does not
 authorize the other views or science. Historical acceptance is rejected.
 
@@ -97,7 +125,7 @@ No old jobs or immutable roots are modified. Scientific batch stays 256;
 
 Set `K2_REUSE_SPEC` to an explicit completed K2 `campaign_spec.json`, or pass
 `--reuse-preparation-spec` to `create-launch`. Omit it to compute fresh matches.
-The donor must be an original freshly computed K2 campaign (v1 through v6),
+The donor must be an original freshly computed K2 campaign (v1 through v7),
 never a nested import or the one-to-one salience foundation. A failed GPU
 preflight does not invalidate a completed, authenticated matching foundation.
 
@@ -347,10 +375,10 @@ authenticate it instead of requiring an expired scheduler job. Only `afterok`
 edges are permitted. Manual live submission of `stage=full` is forbidden.
 
 Resources: metadata 1 CPU/8192 MiB/4h; assignment 1 CPU/8192 MiB/12h;
-partition 4 CPUs/320000 MiB/6h; preflight and fits 4 CPUs/320000 MiB/24h/one
-A100; reducers 4 CPUs/320000 MiB/6h/one A100. All request account reu-aisocial,
-the campaign's initial tier3/debug partition and qos_tier3, with no requeue.
-Requests keep the <=24-hour common envelope even when submitted to tier3.
+partition 4 CPUs/320000 MiB/6h; preflight 4 CPUs/320000 MiB/24h/one A100;
+fits 4 CPUs/320000 MiB/**96h/one A100 on tier3**; reducers
+4 CPUs/320000 MiB/6h/one A100. All request account reu-aisocial and qos_tier3,
+with no requeue. Short jobs use the campaign's initial tier3/debug choice.
 CPU workers limit nested
 numerical threads. The existing absolute-path SPORC helper sets the conda
 environment, PYTHONNOUSERSITE and LD_LIBRARY_PATH.
@@ -365,7 +393,7 @@ It also checks validation inference and records peak allocated/reserved CUDA
 and CPU RSS. Technical acceptance fits cannot be used as science teachers.
 
 CPU RSS must stay below 80% of the request, CUDA allocation below 90% of the
-actual A100 capacity, and conservative 100-pass runtime projection below 23h
+actual A100 capacity, and conservative 100-pass runtime projection at most 95h
 (1.30 margin plus preparation). Full cache bounds must fit 65% of requested
 RAM, leaving worker/optimizer headroom; at least 32 GiB durable space is
 required. Genuine acceptance is bound to campaign, environment, hardware,
@@ -386,8 +414,8 @@ restart-zero attempt must use exact old IDs and a fresh isolated root.
 
 ### Manual pending-job moves
 
-On v2-v6 portable executions, the scheduler may change `Partition` between `tier3`
-and `debug`. The canonical submission commands/ledger remain unchanged as
+On v7 short jobs (<=24h), the scheduler may change `Partition` between `tier3`
+and `debug`; 96h training must remain on tier3. The canonical submission commands/ledger remain unchanged as
 historical intent. Workers use the actual Slurm partition to activate the
 same SPORC environment, independently authenticate it against `scontrol`,
 and write a hashed `execution/<task>/<job-id>.json` with requested/actual sites,
@@ -397,7 +425,7 @@ inconsistent environment. GPU workers additionally enforce actual A100 and
 the exact accepted hardware/software. Monitoring shows both requested and
 actual partitions without interpreting the move as source/ledger corruption.
 
-For a **verified pending portable K2 job**, normal Slurm commands are:
+For a **verified pending short K2 job, not a 96h training job**, normal Slurm commands are:
 
 ```bash
 scontrol update JobId=EXACT_PENDING_K2_JOB_ID Partition=debug
@@ -408,8 +436,9 @@ scontrol update JobId=EXACT_PENDING_K2_JOB_ID Partition=tier3
 These are manual operator actions, not automatic migration or live process
 movement. Slurm may reject an update due to site permissions/limits. Do not
 change QoS, GRES, memory, CPUs or time as part of the move. Moving a launcher
-does not change descendants' initial submission partition; they still use
-the immutable campaign choice. Never edit a spec or ledger to match a move.
+does not change descendants' initial submission partition: training uses
+tier3 and short jobs use the immutable campaign choice. Never edit a spec or
+ledger to match a move, or shorten a training request to force it into debug.
 
 The previously queued v1 preflight 21757208 and after-gate 21757209 point at
 old debug-only source. This patch does not retrofit those jobs. A reviewed
@@ -422,15 +451,15 @@ this code change. The unrelated jc2fc/jc2salp campaigns remain out of scope.
 From a clean, pushed, pinned checkout on sporcsubmit:
 
 ```bash
-export K2_PARTITION=debug  # requested replacement; tier3 also supported
+export K2_PARTITION=tier3  # all jobs on tier3; short jobs remain debug-portable
 bash scripts/queue_jetclass2_concat_k2.sh
 bash scripts/queue_jetclass2_concat_k2.sh --execute
 ```
 
 First call is dry only. Second explicitly authorizes the whole registered
 staged workflow using `AUTHORIZE JETCLASS2 DZFIX CONCAT K2 PORTABLE 500K EXACT SPEC`.
-`K2_PARTITION=tier3` is the default; `K2_PARTITION=debug` selects debug at
-creation. An existing launch refuses a different requested partition on retry;
+`K2_PARTITION=tier3` is the default; `K2_PARTITION=debug` selects debug only for
+short jobs at creation. All fits remain tier3. An existing launch refuses a different requested partition on retry;
 use its original setting (individual jobs can still be moved with scontrol).
 `SCREEN_SPEC`, `INVENTORY`, `LAUNCH_ROOT`, `CAMPAIGN_ROOT` can select explicit
 paths; source/parent/root checks remain mandatory. Inspect with the thin

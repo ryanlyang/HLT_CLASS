@@ -103,7 +103,7 @@ def test_k2_registration_is_independent_and_versions_old_acceptance():
     registration["training"]["betas"][0] = 0.
     assert graph.TRAINING == original
     assert campaign.registration()["training"]["betas"] == original["betas"]
-    assert campaign.VERSIONS == dict(LAUNCH_SPEC=6, CAMPAIGN_SPEC=6, ACCEPTANCE=5,
+    assert campaign.VERSIONS == dict(LAUNCH_SPEC=7, CAMPAIGN_SPEC=7, ACCEPTANCE=6,
                                       TRAINING_REPORT=2, BATCH_PROBE=2)
     for kind, version in (("LAUNCH_SPEC",5), ("CAMPAIGN_SPEC",5), ("ACCEPTANCE",4),
                           ("TRAINING_REPORT",1), ("BATCH_PROBE",1)):
@@ -123,7 +123,7 @@ def test_kernel_evidence_rejects_wrong_batching(tmp_path, field):
 
 
 @pytest.mark.parametrize("field", ["training", "inference", "probes"])
-def test_rehashed_old_batch_policy_cannot_be_registered_as_v6(tmp_path, field):
+def test_rehashed_old_batch_policy_cannot_be_registered_as_current_version(tmp_path, field):
     spec = spec_at(tmp_path)
     if field == "training":
         spec["training"]["batch_size"] = 256

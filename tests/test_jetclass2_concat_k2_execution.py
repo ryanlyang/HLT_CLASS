@@ -21,10 +21,12 @@ def test_partition_is_not_a_scientific_choice_and_old_versions_fail_closed(tmp_p
     assert {k: v for k, v in tier3.items() if k != "execution_site"} == {
         k: v for k, v in debug.items() if k != "execution_site"}
     assert tier3["execution_policy"]["mutable_scheduler_fields"] == ["Partition"]
-    assert max(r["minutes"] for r in tier3["resources"].values()) <= 1440
+    assert tier3["resources"]["train"]["minutes"] == 5760
+    assert all(r["minutes"] <= 1440 for name, r in tier3["resources"].items() if name != "train")
+    assert tier3["execution_policy"]["schema_version"] == 2
     for kind in ("LAUNCH_SPEC", "CAMPAIGN_SPEC", "ACCEPTANCE"):
         value = campaign.artifact(kind, test_only=True)
-        current = 5 if kind == "ACCEPTANCE" else 6
+        current = 6 if kind == "ACCEPTANCE" else 7
         assert value["schema_version"] == current
         for version in range(1, current):
             old = rehash(value, contract=value["contract"].replace(f"/v{current}", f"/v{version}"), schema_version=version)
@@ -61,8 +63,11 @@ def test_explicit_launch_partition_survives_materialization(imported_source, mon
     spec = campaign.create(launch=changed)
     campaign.validate_campaign(spec)
     assert spec["execution_site"]["partition"] == partition
-    assert all("--partition=" + partition in r["command"]
-               for r in scheduler.plan(spec, "full")["commands"])
+    for row in scheduler.plan(spec, "full")["commands"]:
+        is_fit = row["task_id"].startswith("train_")
+        assert "--partition=" + ("tier3" if is_fit else partition) in row["command"]
+        if is_fit:
+            assert "--time=5760" in row["command"]
 
 
 def worker(tmp_path, monkeypatch, requested, actual, name):
@@ -103,15 +108,22 @@ def worker(tmp_path, monkeypatch, requested, actual, name):
 def test_workers_allow_partition_only_move_and_record_actual_site(tmp_path, monkeypatch, requested, actual, name):
     spec, fields, path, root, launch = worker(tmp_path, monkeypatch, requested, actual, name)
     original = path.read_bytes()
+    if name.startswith("train_") and actual == "debug":
+        with pytest.raises(ValueError, match="long-walltime jobs require tier3"):
+            scheduler.authenticate_job(spec, name, launch=launch)
+        assert path.read_bytes() == original
+        assert not (root / "execution").exists()
+        return
     assert scheduler.authenticate_job(spec, name, launch=launch) == "456"
     assert scheduler.authenticate_job(spec, name, launch=launch) == "456"
     assert path.read_bytes() == original  # Original command remains the submission intent.
     record = load_json(root / "execution" / name / "456.json")
     assert record["actual_site"]["partition"] == actual
-    assert record["requested_site"]["partition"] == requested
+    submitted = "tier3" if name.startswith("train_") else requested
+    assert record["requested_site"]["partition"] == submitted
     assert record["subject_sha256"] == spec["content_hash"] and record["job_id"] == "456"
-    if requested != actual:
-        assert "--partition=" + requested in load_json(path)["commands"][name]
+    if submitted != actual:
+        assert "--partition=" + submitted in load_json(path)["commands"][name]
 
 
 @pytest.mark.parametrize("field,value", [("Account", "wrong"), ("QOS", "different"),

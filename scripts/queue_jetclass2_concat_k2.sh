@@ -52,6 +52,8 @@ if actual != expected:
 print("K2 matching: verified import from " + actual if actual else "K2 matching: fresh assignment jobs")
 print("K2 physical training batch: " + str(spec["registration"]["training"]["batch_size"]))
 print("K2 inference batch: " + str(spec["registration"]["inference_batch_size"]))
+print("Training: tier3 only, 96h requested, 95h maximum projected fit")
+print("Only short pending jobs retain tier3/debug partition-only portability.")
 print("Fresh memory preflight remains mandatory before science.")
 PY
 CONCAT_ARGS=()

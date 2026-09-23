@@ -158,7 +158,10 @@ def test_import_dry_plan_keeps_science_and_portability(completed_donor, tmp_path
     spec = target_spec(completed_donor, tmp_path, partition)
     plan = scheduler.plan(spec, "full")
     assert len(plan["commands"]) == 23
-    assert all("--partition="+partition in row["command"] for row in plan["commands"])
+    for row in plan["commands"]:
+        requested = "tier3" if row["task_id"].startswith("train_") else partition
+        assert "--partition="+requested in row["command"]
+    assert not any(row["task_id"].startswith("assign_") for row in plan["commands"])
     assert spec["training"]["batch_size"] == 128
     assert spec["batch_probe_policy"]["order"] == [128]
     assert spec["execution_policy"]["mutable_scheduler_fields"] == ["Partition"]
@@ -244,7 +247,7 @@ def test_materialize_is_idempotent_and_does_not_import_preflight(completed_donor
     assert len(chain.gates(created)) == 6
 
 
-@pytest.mark.parametrize("version", [2, 3, 4, 5, 6])
+@pytest.mark.parametrize("version", [2, 3, 4, 5, 6, 7])
 def test_portable_and_memory_fixed_fresh_donors_supported(completed_donor, version):
     donor = completed_donor
     root = Path(donor["campaign_root"])

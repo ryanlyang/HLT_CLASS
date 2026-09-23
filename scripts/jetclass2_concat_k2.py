@@ -25,7 +25,7 @@ def main():
     command.add_argument("--reuse-preparation-spec", type=Path,
                          help="Explicit completed K2 donor; never imports GPU acceptance or models.")
     command.add_argument("--partition", choices=("tier3", "debug"), default="tier3",
-                         help="Initial partition; pending jobs may move between both.")
+                         help="Initial short-job partition; all 96h training jobs use tier3.")
     for name in ("schedule", "launch-run", "materialize", "submit", "run", "gate", "results", "monitor", "audit"):
         command = modes.add_parser(name)
         command.add_argument("--spec", type=Path, required=True)
@@ -123,8 +123,9 @@ def main():
     if a.mode == "schedule":
         print("Matching screen:", spec["screen_spec_path"])
         print("Authenticated matching completion job:", spec["parent_job_id"])
-        print("New campaign partition:", spec["registration"]["execution_site"]["partition"])
-        print("Allowed pending-job partition changes: tier3 <-> debug (same resources)")
+        print("Initial short-job partition:", spec["registration"]["execution_site"]["partition"])
+        print("Training: tier3 only, 96h requested, 95h maximum projected fit")
+        print("Pending short jobs only: tier3 <-> debug (same resources); 96h fits cannot move to debug")
         dependency = [token for token in result["commands"][a.phase]
                       if token.startswith("--dependency=")]
         print("Launcher dependency:", ", ".join(dependency) or "none (completed artifacts authenticated)")
