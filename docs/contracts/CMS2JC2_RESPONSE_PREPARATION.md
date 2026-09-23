@@ -9,6 +9,10 @@ not establish those facts or authorize a reduced campaign.
 
 ## Implemented surface
 
+The additive [CPU development contract](CMS2JC2_RESPONSE_CPU_DEVELOPMENT.md)
+registers a separate response_fit-only exploratory study. Its outputs are not
+production acceptance, selection or transfer artifacts; original gates remain.
+
 The new `src/hlt_classification/cms2jc2_response/` namespace contains:
 
 | Modules | Implemented responsibility |

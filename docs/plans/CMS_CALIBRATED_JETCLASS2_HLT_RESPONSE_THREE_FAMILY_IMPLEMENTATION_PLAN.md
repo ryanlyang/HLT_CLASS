@@ -11,6 +11,15 @@ remote access, deletion, changes to current jobs, or final-test access.
 
 ## 1. Scientific objective and exact scope
 
+### 2026-09-23 CPU development extension
+
+The separately authorized [CPU development study](CMS2JC2_RESPONSE_CPU_DEVELOPMENT_PLAN.md)
+uses only response_fit for a 2k association pilot, 20k association resource
+check, and file-disjoint 16k/4k/10k three-family development comparison.
+Its new DEV_* artifacts and dedicated root do not satisfy or weaken the
+full-science/selection/confirmation/transfer gates below. The old JC2 release
+is not imported; the intended subsequent transfer release is September-18 dzfix.
+
 ### 2026-09-17 user amendment: explicit provisional continuation
 
 The user authorized continuing implementation and the registered full-size
