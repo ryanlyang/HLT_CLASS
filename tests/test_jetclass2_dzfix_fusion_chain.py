@@ -75,7 +75,7 @@ def test_graph_is_requested_coarse_fusion_chain_not_withdrawal_or_cms_import():
     assert chain.registration()["role_counts"] == {"train": 500000, "validation": 1000000, "final_test": 1000000}
 
 
-def test_task_counts_debug_resources_and_exact_afterok_edges(tmp_path):
+def test_task_counts_tier3_resources_and_exact_afterok_edges(tmp_path):
     spec = spec_at(tmp_path)
     plan = scheduler.plan(spec, "full")
     assert len(plan["commands"]) == 25
@@ -87,9 +87,12 @@ def test_task_counts_debug_resources_and_exact_afterok_edges(tmp_path):
         assert set(row["dependencies"]) <= seen
         seen.add(row["task_id"])
         c = row["command"]
-        assert "--partition=debug" in c and "--qos=qos_tier3" in c and "--no-requeue" in c
-        assert int(next(x.split("=")[1] for x in c if x.startswith("--time="))) <= 1440
-        assert not any("afterany" in x or "tier3" == x.split("=")[-1] for x in c)
+        assert "--partition=tier3" in c and "--qos=qos_tier3" in c and "--no-requeue" in c
+        minutes = int(next(x.split("=")[1] for x in c if x.startswith("--time=")))
+        assert minutes == (4320 if row["task_id"].startswith("train_") else
+                           spec["resources"][next(t["resource"] for t in spec["tasks"]
+                                                  if t["task_id"] == row["task_id"])]["minutes"])
+        assert not any("afterany" in x or "--partition=debug" == x for x in c)
     rows = {r["task_id"]: r for r in spec["tasks"]}
     assert rows["train_FUSION_U050"]["dependencies"] == ["reduce_U000"]
     assert rows["train_FINAL_DIRECT_D000"]["dependencies"] == ["reduce_FUSION_D000"]
@@ -255,7 +258,7 @@ def test_deferred_launcher_uses_exact_postscreen_boundary_and_no_expired_id(monk
     monkeypatch.setattr(scheduler, "validate_launch", lambda s: s["content_hash"])
     monkeypatch.setattr(scheduler, "_parent", lambda s: (parent, {}))
     pending = scheduler.launcher_plan(spec, "after_matching")["commands"][0]["command"]
-    assert "--dependency=afterok:21748725" in pending and "--partition=debug" in pending
+    assert "--dependency=afterok:21748725" in pending and "--partition=tier3" in pending
     calls = []
     def sbatch(c, **kw):
         calls.append(c)
@@ -542,7 +545,7 @@ def test_cli_and_helper_expose_direct_screen_boundary(imported_source, monkeypat
     assert result.value.code == 0
     printed = capsys.readouterr().out
     assert "--dependency=afterok:21748725" in printed
-    assert "New campaign partition: debug" in printed
+    assert "New campaign partition: tier3" in printed
     assert str(root / "screen_spec.json") in printed
     assert not (Path(launch["launch_root"]) / "submissions_after_matching/submission_ledger.json").exists()
     helper = (repo / "scripts/queue_jetclass2_dzfix_fusion_chain.sh").read_text()
@@ -551,7 +554,7 @@ def test_cli_and_helper_expose_direct_screen_boundary(imported_source, monkeypat
     assert "CONT_SPEC" not in helper and "21741416" not in helper
 
 
-@pytest.mark.parametrize("version", [1, 2, 3, 4])
+@pytest.mark.parametrize("version", [1, 2, 3, 4, 5])
 def test_old_launch_schema_is_not_reinterpreted(imported_source, version):
     launch, _, _ = imported_source
     old = rehash(launch, schema_version=version,
@@ -559,8 +562,8 @@ def test_old_launch_schema_is_not_reinterpreted(imported_source, version):
     with pytest.raises(ValueError, match="contract"):
         source.validate_launch(old)
     assert chain.artifact("SOURCE_IMPORT")["schema_version"] == 3
-    assert chain.artifact("CAMPAIGN_SPEC")["schema_version"] == 5
-    assert chain.artifact("ACCEPTANCE")["schema_version"] == 3
+    assert chain.artifact("CAMPAIGN_SPEC")["schema_version"] == 6
+    assert chain.artifact("ACCEPTANCE")["schema_version"] == 4
     assert chain.artifact("TRAINING_REPORT")["schema_version"] == 1
 
 
@@ -628,8 +631,8 @@ def test_debug_screen_profile_cannot_redirect_consumer_or_change_producer_site(i
     monkeypatch.setattr(chain, "_source", lambda *a: None)
     spec = chain.create(launch=launch)
     assert load_json(root / "runtime_profile.json")["execution_site"]["partition"] == "tier3"
-    assert spec["execution_site"]["partition"] == "debug"
-    assert all("--partition=debug" in r["command"] for r in scheduler.plan(spec, "full")["commands"])
+    assert spec["execution_site"]["partition"] == "tier3"
+    assert all("--partition=tier3" in r["command"] for r in scheduler.plan(spec, "full")["commands"])
     profile = rehash(load_json(root / "runtime_profile.json"),
                      execution_site=source.execution_site("sporc_a100_debug"))
     republish_screen_result(root, "preflight", "runtime_profile.json", profile)
@@ -668,7 +671,7 @@ def test_launcher_automates_gate_then_science_without_resubmitting_parent(import
     monkeypatch.setattr(runtime, "science_gate", lambda s: {"passed": True})
     result = scheduler.run_launcher(launch, "after_gate")
     assert result["result"]["science_tasks"] == 21 and len(calls) == 26
-    assert all("--partition=debug" in c for c in calls)
+    assert all("--partition=tier3" in c for c in calls)
 
 
 def test_native_parity_helper_executes_real_forward_backward_adapter(fake_native):
@@ -750,14 +753,17 @@ def test_science_gate_rechecks_memory_and_real_execution_fields(monkeypatch, tmp
         full_population_rows=spec["role_counts"], batch_size=256, checkpoint_round_trip=True,
         bank_round_trip=True, compact_mask_native_parity=True, installed_weaver_fp32_parity=True,
         worst_population_batch_stress=True, peak_cuda_bytes=800, gpu={"total_memory_bytes": 1000},
-        peak_rss_bytes=1000, projected_max_fit_seconds=100,
+        peak_rss_bytes=1000, projected_max_fit_seconds=48.50*3600,
+        fit_runtime_budget=chain.fit_runtime_budget(spec),
         saved_tensor_storage=spec["fusion"]["saved_tensor_storage"], saved_tensor_training_parity=parity,
         early_parity_reports=early,
         native_execution=[{"node": {"context_coordinate": "U000"}, "stress": stress,
                            "kernel_report": {"acceptance_only": True, "scientific_fit": False}}]*4)
     for name, changes in (("good", {}), ("memory", {"peak_cuda_bytes": 901}),
                           ("batch", {"batch_size": 128}), ("test", {"final_test_accessed": True}),
-                          ("time", {"projected_max_fit_seconds": 24*3600}),
+                          ("time", {"projected_max_fit_seconds": 71*3600+1}),
+                          ("time_budget", {"fit_runtime_budget": {}}),
+                          ("old_site", {"site": source.execution_site("sporc_a100_debug")}),
                           ("offload", {"saved_tensor_storage": {}}),
                           ("parity", {"saved_tensor_training_parity": []}),
                           ("early", {"early_parity_reports": []}),
@@ -794,6 +800,6 @@ def test_new_storage_policy_is_locked_without_science_resource_changes():
     assert spec["gpu_peak_fraction_limit"] == .90
     assert spec["fusion"]["pair_population"] == "full_combined_weaver"
     assert spec["resources"]["train"]["memory_mb"] == 320000
-    assert spec["execution_site"]["partition"] == "debug"
+    assert spec["execution_site"]["partition"] == "tier3"
     spec["fusion"]["saved_tensor_storage"]["scope"].clear()
     assert PAIR_OFFLOAD_POLICY["scope"] == ["context", "primary", "cross"]

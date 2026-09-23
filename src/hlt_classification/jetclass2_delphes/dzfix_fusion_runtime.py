@@ -15,7 +15,7 @@ from hlt_classification.data.cache_contracts import (
 )
 from .banks import load_bank, publish_bank
 from .contracts import relative_file
-from .dzfix_fusion_chain import GATES, artifact, nodes, validate, validate_campaign
+from .dzfix_fusion_chain import GATES, artifact, fit_runtime_budget, nodes, validate, validate_campaign
 from .dzfix_fusion_data import caches, cache_bounds, pair, prepare, publish_partition
 from .dzfix_fusion_source import validate_import
 from .execution import allocation, gpu_identity
@@ -62,7 +62,7 @@ def completed(spec, name):
 def science_gate(spec):
     reports = {name: completed(spec, name) for name in GATES}
     if not all(reports.values()):
-        raise PermissionError("All four fresh debug gates must complete before science")
+        raise PermissionError("All four fresh tier3 gates must complete before science")
     acceptance = load_json(relative_file(Path(spec["campaign_root"]), reports["preflight"]["result"]["acceptance"]))
     validate(acceptance, "ACCEPTANCE")
     if (acceptance["campaign_sha256"] != spec["content_hash"] or not acceptance["passed"]
@@ -77,13 +77,27 @@ def science_gate(spec):
             or not acceptance["worst_population_batch_stress"]
             or not 0 < acceptance["peak_cuda_bytes"] <= acceptance["gpu"]["total_memory_bytes"] * spec["gpu_peak_fraction_limit"]
             or not 0 < acceptance["peak_rss_bytes"] <= spec["resources"]["train"]["memory_mb"] * 1024**2 * spec["cpu_peak_fraction_limit"]
-            or not 0 < acceptance["projected_max_fit_seconds"] <= 23 * 3600
+            or acceptance.get("fit_runtime_budget") != fit_runtime_budget(spec)
+            or not 0 < acceptance["projected_max_fit_seconds"] <= fit_runtime_budget(spec)["projected_fit_limit_seconds"]
             or len(acceptance["native_execution"]) != 4
             or any(not row["kernel_report"]["acceptance_only"] or row["kernel_report"]["scientific_fit"]
                    for row in acceptance["native_execution"])):
-        raise ValueError("Fresh debug GPU acceptance differs")
+        raise ValueError("Fresh tier3 GPU acceptance differs")
     validate_offload_acceptance(acceptance, spec)
     return acceptance
+
+
+def require_fit_runtime(spec, projected):
+    budget = fit_runtime_budget(spec)
+    if not 0 < projected <= budget["projected_fit_limit_seconds"]:
+        raise RuntimeError(
+            f"Projected max-budget runtime {projected/3600:.2f}h exceeds "
+            f"{budget['partition']} acceptance ceiling "
+            f"{budget['projected_fit_limit_seconds']/3600:.2f}h "
+            f"(request={budget['requested_fit_seconds']/3600:.2f}h, "
+            f"reserve={budget['shutdown_reserve_seconds']/3600:.2f}h)"
+        )
+    return budget
 
 
 def validate_offload_acceptance(acceptance, spec):
@@ -426,14 +440,13 @@ def preflight(spec, directory, device):
         raise MemoryError(f"Fusion GPU peak {peak_gpu/2**30:.2f} GiB exceeds registered headroom")
     if peak_cpu > spec["resources"]["train"]["memory_mb"] * 1024**2 * spec["cpu_peak_fraction_limit"]:
         raise MemoryError("Fusion CPU peak exceeds registered headroom")
-    if projected > 23 * 3600:
-        raise RuntimeError(f"Projected max-budget runtime {projected/3600:.2f}h does not fit debug safely")
+    budget = require_fit_runtime(spec, projected)
     acceptance = artifact("ACCEPTANCE", campaign_sha256=spec["content_hash"], passed=True,
         acceptance_only=True, job_id=job, site=spec["execution_site"], resource=spec["resources"]["preflight"],
         gpu=identity, environment=environment, elapsed_seconds=time.monotonic()-started,
         peak_cuda_bytes=peak_gpu, peak_reserved_cuda_bytes=peak_reserved, peak_rss_bytes=peak_cpu,
         cache_seconds=cache_seconds, cache_bounds=cache_bounds(spec), full_population_rows=spec["role_counts"],
-        projected_max_fit_seconds=projected, native_execution=evidence,
+        projected_max_fit_seconds=projected, fit_runtime_budget=budget, native_execution=evidence,
         checkpoint_round_trip=True, bank_round_trip=True, batch_size=256,
         compact_mask_native_parity=True,
         saved_tensor_storage=PAIR_OFFLOAD_POLICY,

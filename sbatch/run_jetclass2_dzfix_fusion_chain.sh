@@ -4,7 +4,7 @@ export PROJECT_DIR="${1:?absolute project}"
 SPEC="${2:?immutable spec}"
 MODE="${3:?run or launch-run}"
 TASK="${4:?task or phase}"
-export JC2_SITE=sporc_a100_debug
+export JC2_SITE=sporc_a100
 source "${PROJECT_DIR}/sbatch/jetclass2_delphes_common.sh"
 # Must precede Python/CUDA initialization. Strict comparison flags are scoped
 # inside parity and restored before resource stress; science jobs are unchanged.

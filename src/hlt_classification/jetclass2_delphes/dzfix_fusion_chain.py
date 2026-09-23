@@ -1,4 +1,4 @@
-"""Immutable, debug-only dz-fix fusion-to-fusion campaign registration."""
+"""Immutable, tier3 dz-fix fusion-to-fusion campaign registration."""
 from __future__ import annotations
 
 import hashlib
@@ -13,7 +13,7 @@ from .dzfix_fusion_model import PAIR_OFFLOAD_POLICY, PARITY_BACKEND
 from .production import _source
 from .salience_learned_graph import TRAINING
 
-AUTHORIZE = "AUTHORIZE JETCLASS2 DZFIX FUSION CHAIN DEBUG 500K EXACT SPEC"
+AUTHORIZE = "AUTHORIZE JETCLASS2 DZFIX FUSION CHAIN TIER3 500K EXACT SPEC"
 PREFIX = "jc2fc"
 COUNTS = {"train": 500_000, "validation": 1_000_000, "final_test": 1_000_000}
 GATES = ("authenticate", "partition_validation", "audit_storage", "preflight")
@@ -21,18 +21,18 @@ RESOURCES = {
     "metadata": {"cpus": 1, "memory_mb": 8192, "minutes": 240, "gpu": False},
     "partition": {"cpus": 8, "memory_mb": 320000, "minutes": 360, "gpu": False},
     "preflight": {"cpus": 8, "memory_mb": 320000, "minutes": 720, "gpu": True},
-    "train": {"cpus": 8, "memory_mb": 320000, "minutes": 1440, "gpu": True},
+    "train": {"cpus": 8, "memory_mb": 320000, "minutes": 4320, "gpu": True},
     "reduce": {"cpus": 8, "memory_mb": 320000, "minutes": 360, "gpu": True},
 }
 
 
 def artifact(kind, **fields):
-    version = {"LAUNCH_SPEC": 5, "CAMPAIGN_SPEC": 5, "SOURCE_IMPORT": 3, "ACCEPTANCE": 3}.get(kind, 1)
+    version = {"LAUNCH_SPEC": 6, "CAMPAIGN_SPEC": 6, "SOURCE_IMPORT": 3, "ACCEPTANCE": 4}.get(kind, 1)
     return _artifact("DZFIX_FUSION_CHAIN_" + kind, version=version, **fields)
 
 
 def validate(value, kind):
-    version = {"LAUNCH_SPEC": 5, "CAMPAIGN_SPEC": 5, "SOURCE_IMPORT": 3, "ACCEPTANCE": 3}.get(kind, 1)
+    version = {"LAUNCH_SPEC": 6, "CAMPAIGN_SPEC": 6, "SOURCE_IMPORT": 3, "ACCEPTANCE": 4}.get(kind, 1)
     return _validate(value, "DZFIX_FUSION_CHAIN_" + kind, version=version)
 
 
@@ -99,7 +99,7 @@ def registration():
     return dict(
         nodes=nodes(), tasks=task_graph(), training=deepcopy(TRAINING),
         loss={"ce": .25, "kd": .75, "temperature": 2., "alpha": 1.},
-        execution_site=execution_site("sporc_a100_debug"), resources=deepcopy(RESOURCES),
+        execution_site=execution_site("sporc_a100"), resources=deepcopy(RESOURCES),
         model=model_contract(), role_counts=dict(COUNTS), split_profile="TRAIN_500K",
         input_capacity_policy="inventory_max_selected_round_up_16_no_truncation_v1",
         fusion={"injection_blocks": [2, 4, 6, 8], "direction": "context_to_primary",
@@ -110,6 +110,7 @@ def registration():
                               "domain": "JC2/DZFIX/FUSION_CHAIN/v1/validation"},
         gpu_peak_fraction_limit=.90, cpu_peak_fraction_limit=.80,
         cache_fraction_limit=.65, runtime_projection_margin=1.30,
+        runtime_shutdown_reserve_seconds=3600,
         minimum_free_disk_bytes=32 * 1024**3,
         fresh_fit_count=12, reducer_count=7, science_task_count=21,
         all_scientific_models_fresh=True, matching_selection_used_validation=True,
@@ -117,6 +118,19 @@ def registration():
         ram_only_particle_views=True, rolling_resume=False,
         final_test_accessed=False, existing_campaign_mutations=False,
     )
+
+
+def fit_runtime_budget(spec):
+    """Bind the projection ceiling to the actual registered Slurm fit request."""
+    minutes = spec["resources"]["train"]["minutes"]
+    reserve = spec["runtime_shutdown_reserve_seconds"]
+    if (type(minutes) is not int or type(reserve) is not int
+            or not 0 < reserve < minutes * 60):
+        raise ValueError("Invalid registered fit runtime budget")
+    return dict(partition=spec["execution_site"]["partition"],
+                requested_fit_seconds=minutes * 60, shutdown_reserve_seconds=reserve,
+                projected_fit_limit_seconds=minutes * 60 - reserve,
+                projection_margin=spec["runtime_projection_margin"])
 
 
 def validate_campaign(spec, *, check_source=True):

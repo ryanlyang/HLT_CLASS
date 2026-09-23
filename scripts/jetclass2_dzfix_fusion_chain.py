@@ -1,4 +1,4 @@
-"""Create/queue the isolated debug fusion chain, inspect gates and print results."""
+"""Create/queue the isolated tier3 fusion chain, inspect gates and print results."""
 from __future__ import annotations
 
 import argparse
@@ -57,7 +57,7 @@ def main():
         elif a.mode == "gate":
             validate_campaign(spec)
             result = science_gate(spec)
-            print("DZFIX FUSION CHAIN DEBUG GATE: PASS")
+            print("DZFIX FUSION CHAIN TIER3 GATE: PASS")
         else:
             validate_campaign(spec)
             print("Validation REPORT subset; matching selection used the same validation reservoir. Final test sealed.")

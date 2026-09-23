@@ -1,6 +1,6 @@
 # JetClass2 dz-fix coarse fusion-to-fusion KD chain
 
-Status: implementation plan; real SPORC/debug acceptance is required before
+Status: implementation plan; real SPORC/tier3 acceptance is required before
 science submission. This is a new isolated experiment, not a recovery of CMS.
 
 ## Scientific registration
@@ -54,8 +54,9 @@ native-mask comparison remains a separate check. Each paired longest-jet
 stress step must prove actual packing and retrieval at all three pair sites.
 Counters are cumulative tensor-save bytes, NOT distinct/live CPU memory or
 claimed GPU savings. Actual process RSS, allocated/reserved GPU memory and
-step timing are recorded. The unchanged 90% GPU/80% CPU and <=23h projected-fit
-gates determine whether transfer overhead/headroom are acceptable on SPORC.
+step timing are recorded. The unchanged 90% GPU/80% CPU gates and the registered
+walltime-derived projected-fit ceiling determine whether transfer overhead and
+headroom are acceptable on SPORC (see the tier3 revision below).
 
 ### Strict parity repair after preflight 21765886
 
@@ -93,6 +94,36 @@ or recomputes matching. A failure stops before the long cache build. Successful
 early evidence does not replace the subsequent full-population cache, parity,
 batch-256 stress, memory/time, bank and checkpoint acceptance. Those mandatory
 later checks still run under this campaign's production resource constraints.
+
+### Tier3 long-fit execution after preflight 21770778
+
+At source `20358f5568a2a5d42c8849ca99439bc435122f26`, debug preflight
+21770778 passed early and population FP32/BF16 parity, all four batch-256
+stress paths and the memory checks. It then failed the 23-hour debug runtime
+ceiling with a **48.50-hour** maximum-budget projection. This was not OOM,
+numerical failure or a Slurm timeout, and no passing acceptance was published.
+The separate K2 projection of 72.91 hours is not evidence for this campaign.
+
+The user authorized tier3 execution. Supplied SPORC scheduler output reports
+tier3 MaxTime=20 days and no explicit qos_tier3 MaxWall value. Those checks do
+not certify account/association limits or guarantee queue/start times.
+This revision registers all new launchers, gates and science on tier3, with
+**72 hours (4320 minutes) for each fit**. The existing 30% projection margin
+and cache-time allowance are retained. A separate one-hour shutdown reserve
+sets the acceptance ceiling to **71 hours**, derived from the fit request,
+not a hardcoded debug bound. Over-budget/nonfinite projections still fail.
+Preflight remains 12 hours; partition/reducers six hours; metadata four hours.
+Workers authenticate both the exact registered partition and actual Slurm
+time limit; moving a pending job to debug or shortening its time is not a
+supported override of this specification.
+
+Only execution registration changes: LAUNCH_SPEC/CAMPAIGN_SPEC v6 and
+ACCEPTANCE v4. Matching SOURCE_IMPORT v3, EARLY_PARITY v1, model/storage policy,
+batch 256, capacity 320, counts/splits, graph, seeds, C25P75/T2, schedules,
+selection and no-resume behavior stay unchanged. The failed debug acceptance
+cannot be relabelled or reused. New pinned roots require fresh tier3 acceptance
+before the same 21 science tasks are automatically released. No K2, salience,
+producer or existing campaign job/artifact is modified by this change.
 
 ```
 fresh U000 CE
@@ -139,9 +170,10 @@ not fail or prune a fit. Corruption, invalid inputs or lineage fail closed.
 
 ## Execution and isolation
 
-All new launchers, gates and science jobs target SPORC `debug`, one A100 per
-GPU task, account reu-aisocial, qos_tier3, no requeue. No job exceeds debug's
-24-hour limit. The campaign requests 8 CPUs/320000 MiB for GPU jobs; its own
+All new launchers, gates and science jobs target SPORC `tier3`, one A100 per
+GPU task, account reu-aisocial, qos_tier3, no requeue. Fit jobs request 72 hours;
+their measured full-budget projection must fit 71 hours including the existing
+30% projection margin and cache allowance. The campaign requests 8 CPUs/320000 MiB for GPU jobs; its own
 real paired-view acceptance must demonstrate this is sufficient, not infer it
 from the old CMS or single-view screen. RAM-only native/paired caches have
 explicit population bounds; durable artifacts are weights, reports, compact
@@ -160,14 +192,14 @@ success-dependent launcher validates their artifacts and submits science.
 No parent jobs, roots, ledgers, matching outputs or CMS artifacts are modified.
 The source screen deliberately records debug measurement and tier3 production;
 that tier3 setting applies to its separate three-spine production consumer.
-This independent fusion experiment keeps its own explicitly registered debug
+This independent fusion experiment keeps its own explicitly registered tier3
 site/resources and must pass its own real gate before scientific submission.
 
 New execution evidence includes full-population paired cache construction,
 native installed-Weaver single and paired optimizer steps, worst-length batch
 stress at batch 256, train-bank publication/readback, finite inference and
 checkpoint round trip. CPU/GPU peak headroom and epoch-runtime projection must
-fit the registered debug resources. Failure stops science without changing
+fit the registered tier3 resources. Failure stops science without changing
 batch size, precision, schedule or population. An explicit new specification
 is required if resources/science need to change.
 
@@ -180,7 +212,7 @@ Only preparation is reused. All scientific fits and GPU acceptance are fresh.
 
 Local tests and source packaging establish queue tooling readiness, not measured
 GPU science readiness. A live submission requires an exact pushed clean checkout,
-explicit authorization and canonical dry-run ledgers. Real debug acceptance
+explicit authorization and canonical dry-run ledgers. Real tier3 acceptance
 is the automatic prerequisite to science, not a claim made by local tests.
 
 ## Queue entry point
@@ -201,11 +233,16 @@ unchanged dz-fix inventory. `SCREEN_SPEC`, `INVENTORY`, `LAUNCH_ROOT`,
 `CAMPAIGN_ROOT` can explicitly override
 locations. Their content and lineage are validated, not trusted by existence.
 It never fetches into, updates, cancels or writes an existing campaign.
+New default roots are `jc2_dzfix_fusion_tier3_launch_<commit8>_r1` and
+`jc2_dzfix_fusion_tier3_coarse_<commit8>_r1`. Clear stale exported root overrides
+before using defaults. Live authorization is
+`AUTHORIZE JETCLASS2 DZFIX FUSION CHAIN TIER3 500K EXACT SPEC`.
 
-LAUNCH_SPEC and CAMPAIGN_SPEC advance to v5 for layout-preserving storage and
-the scoped parity protocol; ACCEPTANCE advances to v3 and also requires four
-campaign-bound EARLY_PARITY/v1 diagnostics. The prior v4/v2 execution is not
-silently accepted. SOURCE_IMPORT stays v3: matching/capacity/source reuse is unchanged.
+LAUNCH_SPEC and CAMPAIGN_SPEC advance to v6 for tier3 long-fit execution;
+ACCEPTANCE advances to v4 and binds the walltime-derived budget as well as the
+four campaign-bound EARLY_PARITY/v1 diagnostics. The prior v5/v3 debug execution
+is not silently accepted. Those versions introduced layout-preserving storage
+and scoped parity after v4/v2. SOURCE_IMPORT stays v3: matching/capacity/source reuse is unchanged.
 The previous v3 consumer fixed inventory-derived capacity, v2 introduced
 direct-screen provenance but incorrectly required 240, and v1 used the canceled
 continuation route. Old roots must not be edited or reused; a fresh pinned
@@ -215,7 +252,7 @@ Model, seed, split, training and scientific output meanings are unchanged.
 For this retry, use the same completed debug screen through the queue helper;
 its authenticated durable completion removes the need for a purged Slurm job
 dependency. Do not rebuild matching or overwrite the failed campaign at
-`2f0afe5c` or `b35fbda6`. The user previously canceled old after-gate job
+`2f0afe5c`, `b35fbda6` or `20358f55`. The user previously canceled old after-gate job
 21757081; do not reuse that historical ID as current cleanup guidance.
 Any cleanup of a newly blocked after-gate requires its exact current ledger.
 The helper does not cancel jobs or
