@@ -241,7 +241,7 @@ def test_materialize_is_idempotent_and_does_not_import_preflight(completed_donor
     assert len(chain.gates(created)) == 6
 
 
-@pytest.mark.parametrize("version", [2, 3, 4])
+@pytest.mark.parametrize("version", [2, 3, 4, 5])
 def test_portable_and_memory_fixed_fresh_donors_supported(completed_donor, version):
     donor = completed_donor
     root = Path(donor["campaign_root"])

@@ -30,7 +30,7 @@ def _donor(path):
     path = Path(path).resolve()
     spec = load_json(path)
     version = spec.get("schema_version")
-    if version not in (1, 2, 3, 4):
+    if version not in (1, 2, 3, 4, 5):
         raise ValueError("Only versioned K2 campaign donors are supported")
     base_validate(spec, "CONCAT_K2_CAMPAIGN_SPEC", version=version)
     root = Path(spec["campaign_root"]).resolve()

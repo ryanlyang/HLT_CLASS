@@ -1,20 +1,66 @@
 # JetClass2 dzfix fixed-slot K=2 concatenation campaign
 
 Scientific authority: [the active implementation plan](../plans/JETCLASS2_DZFIX_FIXED_SLOT_CONCAT_K2_LADDER_PLAN.md).
-Family: `JETCLASS2_DELPHES_CONCAT_K2_*`. Launch and campaign specs are `/v4`
-for explicit preparation reuse. GPU acceptance remains `/v3` for the
-2026-09-22 pair-storage repair and ordered batch probes, retaining the v2
-portable scheduling policy. Matching,
+Family: `JETCLASS2_DELPHES_CONCAT_K2_*`. Launch and campaign specs are `/v5`
+and GPU acceptance is `/v4` for the 2026-09-22 strict-parity repair. These retain
+v4 preparation reuse, v3 ordered memory probes and v2 portable scheduling. Matching,
 views, seeds and remaining scientific artifacts keep `/v1`. New
 `EXECUTION_POLICY/v1` and `EXECUTION_RECORD/v1` bind allowed and actual sites.
 Historical v1 debug-only executions and other campaigns are not modified.
+
+## v5 strict parity and early failure detection
+
+Remote 21767292 failed FP32 parameter-gradient comparison, with max absolute
+difference `1.5348196e-5` in `pair_embed.embed.0.weight`, after full D100 caching.
+CUDA peak was about 0.65 GiB at failure; neither batch probe ran. Equal seeds
+are insufficient: local Weaver 0.5.3 / PyTorch 2.5.1 CUDA experiments also
+reproduced a native-versus-native strict-gradient mismatch without offloading.
+
+`concat_k2_model.parity_backend` requires deterministic algorithms with
+`warn_only=False`, deterministic cuDNN, no cuDNN benchmark and no cuDNN/matmul
+TF32. All flags are restored in `finally`; production training is unchanged.
+Only the preflight worker exports `CUBLAS_WORKSPACE_CONFIG=:4096:8` before
+Python starts. The helper rejects missing/incorrect cuBLAS setup, rather than
+claiming a late edit can configure existing CUDA handles. The workspace setting
+lasts for that preflight process; strict PyTorch flags are scoped to parity.
+
+Pair-storage policy `k2_pair_saved_tensors_cpu_v2` preserves shape, strides and
+dtype. Pinned buffers hold the physical storage span, including gaps, and
+backward recreates the original view with a rebased zero storage offset.
+This handles transposed, gapped, expanded, overlapping, empty and scalar views
+without writing through overlapping destinations. Packed CUDA values retain
+no CUDA tensor reference. Native computation and checkpoint keys stay intact.
+
+New `concat_k2_parity.py` reads four distinct registered **training** jets via
+bounded ROOT iteration and authenticates their existing K2 assignments and
+identity/count joins. No matching is rerun and no final-test rows are opened.
+Before any full expanded cache is built, run native-wrapper parity and
+FP32/BF16 three-update storage parity on D100 and D000. D000 view construction
+receives an offline-free jet. Publish four `EARLY_PARITY/v1` artifacts with
+campaign lineage, sample identities/file indices, native report and storage
+evidence. Failure leaves prior completed reports but cannot publish acceptance.
+
+The gate requires all four early records plus the existing population-derived
+parity and eight ordered probes. Backend policy, pair-storage policy and the
+original tolerances are checked exactly, not trusted as unchecked report text:
+FP32 `rtol=2e-5, atol=2e-6`; BF16 `rtol=.01, atol=5e-4`. Comparisons still include
+all gradients, optimizer state, BatchNorm buffers and three updated checkpoints.
+Corrupt/missing/CPU-only records, non-restoring hooks, policy drift and sample
+role/identity mismatches fail closed. Real SPORC A100 acceptance is still needed.
+
+Use a new pushed checkout and fresh launch/campaign roots, with
+`K2_PARTITION=debug` and the original completed `1f930650` preparation donor.
+Do not reuse the failed nested-import `49516092` campaign as the donor.
+No old jobs or immutable roots are modified. Scientific batch stays 256;
+128 remains a diagnostic, not an automatic fallback. Resource limits remain
+90% GPU / 80% CPU / 23-hour projected fit, with measured full-cache execution.
 
 ## v4 optional verified K2 preparation import
 
 Set `K2_REUSE_SPEC` to an explicit completed K2 `campaign_spec.json`, or pass
 `--reuse-preparation-spec` to `create-launch`. Omit it to compute fresh matches.
-The donor must be an original freshly computed K2 campaign (v1/v2/v3 or a fresh
-v4), never a nested import or the one-to-one salience foundation. A failed GPU
+The donor must be an original freshly computed K2 campaign (v1 through v5),
+never a nested import or the one-to-one salience foundation. A failed GPU
 preflight does not invalidate a completed, authenticated matching foundation.
 
 `PREPARATION_IMPORT/v1` pins the donor spec content/file hashes, foundation and

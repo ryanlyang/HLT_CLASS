@@ -12,6 +12,12 @@ case "${SLURM_JOB_PARTITION:?Slurm execution partition required}" in
   *) echo "K2 permits only SPORC tier3/debug" >&2; exit 2 ;;
 esac
 source "${PROJECT_DIR}/sbatch/jetclass2_delphes_common.sh"
+# Configure deterministic cuBLAS before CUDA is initialized, for parity only.
+# PyTorch deterministic/TF32 flags are scoped and restored by the parity helper.
+# Production train/reduce workers do not set this variable here.
+if [[ "${MODE}" == run && "${TASK}" == preflight ]]; then
+  export CUBLAS_WORKSPACE_CONFIG=:4096:8
+fi
 case "${MODE}" in
   run) exec python -s "${PROJECT_DIR}/scripts/jetclass2_concat_k2.py" run --spec "${SPEC}" --task "${TASK}" ;;
   launch-run) exec python -s "${PROJECT_DIR}/scripts/jetclass2_concat_k2.py" launch-run --spec "${SPEC}" --phase "${TASK}" ;;

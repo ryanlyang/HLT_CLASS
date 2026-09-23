@@ -8,7 +8,7 @@ from pathlib import Path
 from hlt_classification.data.cache_contracts import load_json, write_immutable_json
 from .contracts import artifact as base_artifact, validate as base_validate
 from .concat_k2_execution import execution_policy, site_for_partition
-from .concat_k2_model import PAIR_STORAGE, BATCH_PROBE_POLICY
+from .concat_k2_model import PAIR_STORAGE, BATCH_PROBE_POLICY, PARITY_BACKEND, PARITY_TOLERANCES
 from .inputs import input_contract
 from .model import model_contract
 from .production import _source
@@ -28,7 +28,7 @@ RESOURCES = {
 }
 
 
-VERSIONS = {"LAUNCH_SPEC": 4, "CAMPAIGN_SPEC": 4, "ACCEPTANCE": 3}
+VERSIONS = {"LAUNCH_SPEC": 5, "CAMPAIGN_SPEC": 5, "ACCEPTANCE": 4}
 
 
 def artifact(kind, **fields):
@@ -99,6 +99,7 @@ def registration(partition="tier3"):
     return dict(nodes=nodes(), training=deepcopy(TRAINING), execution_site=site_for_partition(partition),
         execution_policy=execution_policy(),
         pair_storage=deepcopy(PAIR_STORAGE), batch_probe_policy=deepcopy(BATCH_PROBE_POLICY),
+        parity_backend=deepcopy(PARITY_BACKEND), parity_tolerances=deepcopy(PARITY_TOLERANCES),
         resources=deepcopy(RESOURCES), model=model_contract(), role_counts=dict(COUNTS), split_profile="TRAIN_500K",
         k=2, copies=3, loss=dict(ce=.25, kd=.75, temperature=2.),
         salience_source="authenticated_existing_dzfix_screen_winner_formula_only",

@@ -1,5 +1,6 @@
 """Storage-only K2 tests; local CUDA doubles are not SPORC acceptance."""
 from copy import deepcopy
+import os
 
 import numpy as np
 import pytest
@@ -7,6 +8,7 @@ import torch
 from torch import nn
 
 from hlt_classification.data.cache_contracts import load_json
+from hlt_classification.jetclass2_delphes.contracts import artifact as base_artifact
 from hlt_classification.jetclass2_delphes import (
     concat_k2_model as memory, concat_k2_campaign as campaign,
     concat_k2_runtime as runtime, model as native,
@@ -15,6 +17,13 @@ from test_jetclass2_concat_k2 import spec_at
 from test_jetclass2_dzfix_fusion_chain import fake_native, make_cache, rehash
 # Reuse the committed synthetic BN pair population, not any fusion runtime.
 from test_jetclass2_dzfix_fusion_offload import PairBN, inputs
+
+
+@pytest.fixture(autouse=True)
+def parity_cublas_config(monkeypatch):
+    # The real worker sets this before Python starts. Tests should likewise be
+    # launched with this environment setting before any CUDA handles exist.
+    monkeypatch.setenv("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
 
 
 @pytest.fixture
@@ -49,8 +58,17 @@ def successful_probe():
 def memory_evidence(spec):
     """Explicit test-only fabrication for isolated gate validation tests."""
     reports = [dict(node_id=name, precision=precision, steps=3, checks=memory.PARITY_CHECKS,
-        passed=True, device_type="cuda", storage_stats=stats())
+        passed=True, device_type="cuda", storage_stats=stats(),
+        tolerance=memory.PARITY_TOLERANCES[precision], parity_backend=memory.PARITY_BACKEND,
+        pair_storage=memory.PAIR_STORAGE)
         for name in ("CONCAT_K2_D100", "CONCAT_K2_D000") for precision in ("fp32", "bf16")]
+    early = [campaign.artifact("EARLY_PARITY", campaign_sha256=spec["content_hash"],
+        node_id=r["node_id"], sample=dict(role="train", rows=4, file_indices=[0]*4,
+            identities=[f"{i:064x}" for i in range(4)], final_test_accessed=False),
+        native_parity=base_artifact("WEAVER_PARITY", model=spec["model"], device="cuda", passed=True,
+            forward_and_feature_and_parameter_gradients=True, final_test_accessed=False),
+        storage_parity={k:v for k,v in r.items() if k!="node_id"},
+        acceptance_only=True, final_test_accessed=False) for r in reports]
     probes = [campaign.artifact("BATCH_PROBE", **successful_probe(),
         campaign_sha256=spec["content_hash"], node_id="ACCEPTANCE_"+name,
         batch_size=size, train_rows=size, validation_rows=size, device_type="cuda",
@@ -58,7 +76,7 @@ def memory_evidence(spec):
         policy=memory.BATCH_PROBE_POLICY, acceptance_only=True, final_test_accessed=False)
         for name in runtime.PROBE_CASES for size in (128, 256)]
     return dict(pair_storage=memory.PAIR_STORAGE, batch_probe_policy=memory.BATCH_PROBE_POLICY,
-        storage_parity_reports=reports, batch_probes=probes)
+        storage_parity_reports=reports, batch_probes=probes, early_parity_reports=early)
 
 
 def test_cpu_optimizer_parity_and_checkpoint_namespace(pair_native):
@@ -78,32 +96,25 @@ def test_cpu_optimizer_parity_and_checkpoint_namespace(pair_native):
 def test_cuda_actual_pinned_storage_and_three_update_parity(pair_native, monkeypatch, bf16):
     if bf16 and not torch.cuda.is_bf16_supported():
         pytest.skip("BF16 unavailable")
-    original = torch.autograd.graph.save_on_cpu
+    pack, unpack = memory._pack_pair_tensor, memory._unpack_pair_tensor
     counts = [0, 0]
+    def save(tensor):
+        saved = pack(tensor)
+        assert saved[1].device.type == "cpu" and saved[1].dtype == tensor.dtype
+        assert saved[2:] == (tuple(tensor.shape), tuple(tensor.stride()))
+        assert tensor.numel() == 0 or saved[1].is_pinned()
+        counts[0] += 1
+        return saved
 
-    def storage(*, pin_memory):
-        assert pin_memory
-        context = original(pin_memory=pin_memory)
-        pack, unpack = context.pack_hook, context.unpack_hook
+    def restore(saved):
+        restored = unpack(saved)
+        assert restored.device == saved[0]
+        assert (tuple(restored.shape), tuple(restored.stride())) == saved[2:]
+        counts[1] += 1
+        return restored
 
-        def save(tensor):
-            saved = pack(tensor)
-            assert saved[1].device.type == "cpu" and saved[1].dtype == tensor.dtype
-            assert saved[1].shape == tensor.shape
-            assert tensor.numel() == 0 or saved[1].is_pinned()
-            counts[0] += 1
-            return saved
-
-        def restore(saved):
-            restored = unpack(saved)
-            assert restored.device == saved[0]
-            counts[1] += 1
-            return restored
-
-        context.pack_hook, context.unpack_hook = save, restore
-        return context
-
-    monkeypatch.setattr(torch.autograd.graph, "save_on_cpu", storage)
+    monkeypatch.setattr(memory, "_pack_pair_tensor", save)
+    monkeypatch.setattr(memory, "_unpack_pair_tensor", restore)
     result = memory.storage_parity(inputs()[0], device="cuda", bf16=bf16)
     assert result["passed"] and min(counts) > 0
     memory.validate_storage_stats(result["storage_stats"])
@@ -232,7 +243,7 @@ def test_real_probe_requires_distinct_rows_and_uses_full_batch(tmp_path, pair_na
         runtime._exercise_probe(spec, node, small, small, "cpu", 128)
 
 
-@pytest.mark.parametrize("fault", ["missing", "order", "cpu", "no_restore", "batch", "capacity", "nan", "parent", "oom", "parity"])
+@pytest.mark.parametrize("fault", ["missing", "order", "cpu", "no_restore", "batch", "capacity", "nan", "parent", "oom", "parity", "tolerance", "backend"])
 def test_memory_acceptance_rejects_incomplete_or_noop_evidence(tmp_path, fault):
     spec = spec_at(tmp_path)
     evidence = dict(**memory_evidence(spec), capacity=32, peak_cuda_bytes=800)
@@ -248,15 +259,97 @@ def test_memory_acceptance_rejects_incomplete_or_noop_evidence(tmp_path, fault):
     elif fault == "nan": row["step_seconds"][1] = -1.
     elif fault == "parent": row["campaign_sha256"] = "f"*64
     elif fault == "oom": row["status"] = "CUDA_OOM"
+    elif fault == "tolerance": bad["storage_parity_reports"][0]["tolerance"] = dict(rtol=.1,atol=.1)
+    elif fault == "backend": bad["storage_parity_reports"][0]["parity_backend"] = {}
     else: bad["storage_parity_reports"][0]["checks"] = ["logits"]
     if fault not in {"missing", "order"}:
         bad["batch_probes"][0] = rehash(row)
     with pytest.raises(ValueError): runtime.validate_memory_evidence(spec, bad)
 
 
-def test_installed_weaver_optional_training_parity():
+@pytest.mark.parametrize("length", [4, 96, 192])
+@pytest.mark.parametrize("duplicates", [False, True])
+def test_installed_weaver_optional_training_parity(length, duplicates):
     pytest.importorskip("weaver")
     torch.set_num_threads(1)
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    rng = np.random.default_rng(83)
+    p = rng.normal(size=(4, 3, length)).astype(np.float32)
+    raw = dict(features=rng.normal(size=(4,17,length)).astype(np.float32),
+        vectors=np.concatenate((p,np.sqrt((p*p).sum(1,keepdims=True)+.25)),axis=1),
+        mask=np.ones((4,1,length),bool), labels=np.arange(4,dtype=np.int64))
+    raw["mask"][0,:,-max(1,length//8):] = False
+    if duplicates:
+        for key in ("features", "vectors", "mask"):
+            raw[key] = np.repeat(raw[key], 3, axis=-1)
     for bf16 in ([False, True] if device == "cuda" and torch.cuda.is_bf16_supported() else [False]):
-        assert memory.storage_parity(inputs()[0], device=device, bf16=bf16)["passed"]
+        assert memory.storage_parity(raw, device=device, bf16=bf16)["passed"]
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA unavailable")
+@pytest.mark.parametrize("layout", ["contiguous", "transposed", "gapped", "expanded", "overlap", "empty", "scalar"])
+def test_saved_tensor_restores_bitwise_values_dtype_and_strides(layout):
+    x = torch.arange(80, device="cuda", dtype=torch.float32).reshape(8,10)
+    value = {"contiguous":x, "transposed":x.T.unsqueeze(0), "gapped":x[1::2,2::3],
+             "expanded":x[1:2,:].expand(3,-1), "overlap":x.as_strided((4,3),(1,1),5),
+             "empty":x[:0], "scalar":x[1,2]}[layout]
+    saved = memory._pack_pair_tensor(value)
+    assert saved[1].device.type == "cpu" and not saved[1].requires_grad
+    assert value.numel() == 0 or saved[1].is_pinned()
+    restored = memory._unpack_pair_tensor(saved)
+    torch.testing.assert_close(restored, value, rtol=0, atol=0)
+    assert restored.shape == value.shape and restored.stride() == value.stride()
+    assert restored.dtype == value.dtype and restored.storage_offset() == 0
+
+
+@pytest.mark.parametrize("fail", [False, True])
+@pytest.mark.parametrize("precision", ["highest", "high", "medium"])
+def test_parity_restores_backend_flags_even_on_failure(fail, precision):
+    def flags():
+        return (torch.are_deterministic_algorithms_enabled(),
+            torch.is_deterministic_algorithms_warn_only_enabled(),
+            torch.backends.cudnn.benchmark, torch.backends.cudnn.deterministic,
+            torch.backends.cudnn.allow_tf32, torch.backends.cuda.matmul.allow_tf32,
+            torch.get_float32_matmul_precision())
+    original_precision = torch.get_float32_matmul_precision()
+    torch.set_float32_matmul_precision(precision)
+    before = flags()
+    try:
+        try:
+            with memory.parity_backend("cpu"):
+                assert flags() == (True,False,False,True,False,False,"highest")
+                if fail:
+                    raise RuntimeError("injected")
+        except RuntimeError:
+            assert fail
+        assert flags() == before
+    finally:
+        torch.set_float32_matmul_precision(original_precision)
+
+
+def test_parity_requires_cublas_configuration_without_late_environment_mutation(monkeypatch):
+    monkeypatch.delenv("CUBLAS_WORKSPACE_CONFIG", raising=False)
+    with pytest.raises(ValueError, match="before starting Python"):
+        with memory.parity_backend("cuda"):
+            pytest.fail("Must fail before touching CUDA")
+    assert "CUBLAS_WORKSPACE_CONFIG" not in os.environ
+
+
+@pytest.mark.parametrize("fault", ["missing", "hash", "tolerance", "backend", "storage", "test", "identity", "files", "native"])
+def test_early_gate_requires_exact_sample_policy_and_native_evidence(tmp_path, fault):
+    spec = spec_at(tmp_path)
+    evidence = dict(**memory_evidence(spec), capacity=32, peak_cuda_bytes=800)
+    runtime.validate_memory_evidence(spec,evidence)
+    row = evidence["early_parity_reports"][0]
+    if fault == "missing": evidence.pop("early_parity_reports")
+    elif fault == "tolerance": row["storage_parity"]["tolerance"] = dict(rtol=.1,atol=.1)
+    elif fault == "backend": row["storage_parity"]["parity_backend"] = {}
+    elif fault == "storage": row["storage_parity"]["pair_storage"] = {}
+    elif fault == "test": row["sample"]["role"] = "final_test"
+    elif fault == "identity": row["sample"]["identities"][0] = row["sample"]["identities"][1]
+    elif fault == "files": row["sample"]["file_indices"] = [1]*4
+    elif fault == "native": row["native_parity"] = rehash(row["native_parity"],device="cpu")
+    else: row["content_hash"] = "f"*64
+    if fault not in {"missing", "hash"}:
+        evidence["early_parity_reports"][0] = rehash(row)
+    with pytest.raises(ValueError): runtime.validate_memory_evidence(spec,evidence)

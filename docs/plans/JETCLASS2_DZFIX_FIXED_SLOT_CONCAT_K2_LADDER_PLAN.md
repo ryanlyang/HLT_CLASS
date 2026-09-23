@@ -13,6 +13,41 @@ Implementing this plan does not itself submit jobs.
 This is a separate study and must not change any existing matching foundation,
 fusion campaign, checkpoint, job, or immutable specification.
 
+### 2026-09-22 authorized strict-parity repair and early-check amendment
+
+Preflight 21767292 at `49516092` failed FP32 pair-embedding gradient parity,
+not a CUDA OOM. Neither batch probe was reached. Local installed-Weaver
+experiments also reproduced a strict-gradient mismatch between two native
+models with equal seeds under nondeterministic CUDA execution. Do not loosen
+the FP32 `rtol=2e-5, atol=2e-6` or BF16 `rtol=.01, atol=5e-4` tolerances.
+
+Use deterministic algorithms (errors, not warnings), disable cuDNN benchmark
+and TF32, and enable deterministic cuDNN inside parity comparisons only.
+Restore all PyTorch flags even on failure. The preflight worker sets
+`CUBLAS_WORKSPACE_CONFIG=:4096:8` before Python/CUDA starts; production workers
+do not add that setting. Batch probes and mini-fits use restored PyTorch
+flags, not the parity-only settings. Their timings remain the resource evidence.
+
+The K2 pinned-CPU hooks must preserve saved tensor shape, stride and dtype,
+including transposed sparse-pair inputs, instead of making saved views
+contiguous. Copy the physical storage span and reconstruct the same layout;
+no recomputation or altered BatchNorm population. This does not establish an
+A100 memory or throughput result by itself.
+
+Before building expanded train/validation RAM caches, authenticate existing K2
+maps and read just four distinct registered training jets. Exercise D100 and
+offline-free D000 through native-wrapper and three-update FP32/BF16 storage
+parity. Publish each successful `EARLY_PARITY/v1` report immediately. Retain the
+later population-derived parity, every 128/256 probe and all existing gates.
+Early checks are supplemental technical evidence, never scored training.
+
+Launch/campaign become v5 and acceptance v4; storage policy becomes v2. Bind
+backend policy and unchanged tolerances in registration and evidence. Older
+GPU acceptance is not interchangeable. Matching/views/seeds remain v1, and
+the original completed K2 maps can still be imported without new assignments.
+Keep the selected debug launch and pending-job debug/tier3 portability. This
+amendment supersedes earlier execution versions below, not scientific meaning.
+
 ### 2026-09-22 authorized K2 preparation-reuse amendment
 
 An explicit completed **K2** donor may supply the compact assignment arrays and

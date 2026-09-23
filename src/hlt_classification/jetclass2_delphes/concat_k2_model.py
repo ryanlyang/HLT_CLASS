@@ -4,8 +4,9 @@ The native pair forward and its full BatchNorm population are unchanged.
 Only tensors retained by autograd inside that forward are stored on pinned
 CPU memory; no recomputation, microbatching, casting or input trimming occurs.
 """
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from copy import deepcopy
+import os
 import time
 
 import torch
@@ -14,9 +15,11 @@ from .model import DelphesParticleTransformer, distillation_loss
 
 
 PAIR_STORAGE = dict(
-    version="k2_pair_saved_tensors_cpu_v1", scope="native_pair_embed_only",
+    version="k2_pair_saved_tensors_cpu_v2", scope="native_pair_embed_only",
     when="training_grad_enabled_cuda", pin_memory=True, recompute=False,
     dtype="unchanged", batchnorm_population="unchanged", inference_offload=False,
+    layout="original_shape_and_strides", storage_offset="rebased_zero",
+    copy="physical_storage_span_including_gaps",
 )
 BATCH_PROBE_POLICY = dict(
     order=[128, 256], steps=3, rows="longest_real_train_and_validation",
@@ -25,6 +28,77 @@ BATCH_PROBE_POLICY = dict(
 )
 PARITY_CHECKS = ["logits", "loss", "feature_gradients", "parameter_gradients",
                  "batchnorm_buffers", "updated_weights", "optimizer_state", "eval_logits"]
+PARITY_TOLERANCES = {"fp32": dict(rtol=2e-5, atol=2e-6),
+                     "bf16": dict(rtol=.01, atol=5e-4)}
+PARITY_BACKEND = dict(version="k2_strict_parity_backend_v1",
+    scope="parity_only_restore_before_batch_probes_and_training",
+    deterministic_algorithms=True, warn_only=False, cudnn_benchmark=False,
+    cudnn_deterministic=True, cudnn_tf32=False, matmul_tf32=False,
+    cublas_workspace_config=":4096:8", cublas_workspace_scope="preflight_process_only")
+
+
+@contextmanager
+def parity_backend(device):
+    """Strict reproducibility for comparisons, never the production recipe.
+
+    Equal RNG seeds alone do not make native CUDA backward deterministic.
+    Configure cuBLAS in the preflight worker before Python/CUDA starts; do not
+    pretend a late environment edit can reconfigure existing CUDA handles.
+    Restore every PyTorch flag even if comparison or initialization fails.
+    """
+    if (torch.device(device).type == "cuda"
+            and os.environ.get("CUBLAS_WORKSPACE_CONFIG") != PARITY_BACKEND["cublas_workspace_config"]):
+        raise ValueError("K2 parity requires CUBLAS_WORKSPACE_CONFIG=:4096:8 before starting Python")
+    saved = (torch.are_deterministic_algorithms_enabled(),
+             torch.is_deterministic_algorithms_warn_only_enabled(),
+             torch.backends.cudnn.benchmark, torch.backends.cudnn.deterministic,
+             torch.backends.cudnn.allow_tf32, torch.backends.cuda.matmul.allow_tf32,
+             torch.get_float32_matmul_precision())
+    try:
+        torch.use_deterministic_algorithms(True, warn_only=False)
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.allow_tf32 = False
+        torch.backends.cuda.matmul.allow_tf32 = False
+        yield
+    finally:
+        torch.use_deterministic_algorithms(saved[0], warn_only=saved[1])
+        torch.backends.cudnn.benchmark, torch.backends.cudnn.deterministic = saved[2:4]
+        torch.backends.cudnn.allow_tf32, torch.backends.cuda.matmul.allow_tf32 = saved[4:6]
+        # Restoring allow_tf32=True alone would turn a prior "medium" into
+        # "high". Preserve the complete matmul policy, not just its Boolean.
+        torch.set_float32_matmul_precision(saved[6])
+
+
+def _pack_pair_tensor(tensor):
+    """Copy values AND strides, unlike save_on_cpu(pin_memory=True).
+
+    Native sparse pair inputs can be transposed views. Making their saved
+    copies contiguous can select different backward reduction kernels. Copy
+    their physical span instead, including gaps, and reconstruct the same
+    shape/strides. Expanded/overlapping views are copied once per stored
+    element, not written through an overlapping destination. No CUDA tensor
+    is retained in the returned pack. Storage offsets are rebased to zero.
+    """
+    if tensor.device.type != "cuda":
+        return tensor.device, tensor.detach(), None, None
+    if tensor.layout != torch.strided or tensor.is_conj() or tensor.is_neg():
+        raise ValueError("Unsupported K2 saved-tensor layout")
+    shape, strides = tuple(tensor.shape), tuple(tensor.stride())
+    if any(s < 0 for s in strides):
+        raise ValueError("Negative K2 saved-tensor stride")
+    span = 0 if tensor.numel() == 0 else 1 + sum((n-1)*s for n, s in zip(shape, strides))
+    packed = torch.empty(span, dtype=tensor.dtype, device="cpu", pin_memory=True)
+    # Synchronous D2H completes before the source can be mutated/released.
+    packed.copy_(tensor.detach().as_strided((span,), (1,)))
+    return tensor.device, packed, shape, strides
+
+
+def _unpack_pair_tensor(packed):
+    device, values, shape, strides = packed
+    if shape is None:
+        return values
+    return values.to(device, non_blocking=True).as_strided(shape, strides)
 
 
 class K2ParticleTransformer(DelphesParticleTransformer):
@@ -54,17 +128,15 @@ class K2ParticleTransformer(DelphesParticleTransformer):
             return self._native_pair_forward(vectors, *args, **kwargs)
         stats = self._pair_storage_stats
         stats["calls"] += 1
-        storage = torch.autograd.graph.save_on_cpu(pin_memory=True)
-
         def pack(tensor):
-            packed = storage.pack_hook(tensor)
+            packed = _pack_pair_tensor(tensor)
             if tensor.device.type == "cuda":
                 stats["saved_cuda_tensors"] += 1
                 stats["saved_cuda_bytes"] += tensor.numel() * tensor.element_size()
             return packed
 
         def unpack(packed):
-            tensor = storage.unpack_hook(packed)
+            tensor = _unpack_pair_tensor(packed)
             if tensor.device.type == "cuda":
                 stats["restored_cuda_tensors"] += 1
             return tensor
@@ -93,7 +165,7 @@ def storage_parity(raw, *, device, bf16=False):
     cuda = torch.device(device).type == "cuda"
     if bf16 and not cuda:
         raise ValueError("BF16 storage parity requires CUDA")
-    tolerance = dict(rtol=.01, atol=5e-4) if bf16 else dict(rtol=2e-5, atol=2e-6)
+    tolerance = dict(PARITY_TOLERANCES["bf16" if bf16 else "fp32"])
 
     def compare(left, right):
         if left.keys() != right.keys():
@@ -104,7 +176,7 @@ def storage_parity(raw, *, device, bf16=False):
             torch.testing.assert_close(left[name], right[name], **tolerance,
                 msg=lambda message: f"K2 storage parity {name}: {message}")
 
-    with torch.random.fork_rng(devices=[torch.device(device).index or 0] if cuda else []):
+    with parity_backend(device), torch.random.fork_rng(devices=[torch.device(device).index or 0] if cuda else []):
         torch.manual_seed(4711)
         native = DelphesParticleTransformer()
         optimized = K2ParticleTransformer()
@@ -153,5 +225,6 @@ def storage_parity(raw, *, device, bf16=False):
             raise ValueError("Inference must not offload pair tensors")
     return dict(passed=True, device_type="cuda" if cuda else "cpu", steps=3,
         precision="bf16" if bf16 else "fp32", checks=list(PARITY_CHECKS), tolerance=tolerance,
+        parity_backend=dict(PARITY_BACKEND), pair_storage=dict(PAIR_STORAGE),
         storage_stats=stats, native_step_seconds=timings[0], optimized_step_seconds=timings[1],
         timing_scope="small_parity_fixture_including_diagnostic_copies_not_production_throughput")

@@ -354,9 +354,10 @@ def test_monitor_reads_only_authenticated_own_job_ids(tmp_path,monkeypatch):
 
 def test_preflight_dispatch_cpu_double_exercises_every_stage_not_remote_acceptance(fake_native,tmp_path,monkeypatch):
     import sys
-    from hlt_classification.jetclass2_delphes import acceptance, model as model_module
+    from hlt_classification.jetclass2_delphes import acceptance, concat_k2_parity, model as model_module
     from test_jetclass2_concat_k2_memory import memory_evidence
     spec=spec_at(tmp_path); root=Path(spec["campaign_root"]); root.mkdir()
+    monkeypatch.setenv("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
     monkeypatch.setenv("SLURM_JOB_PARTITION", "debug")  # Actual site may differ from tier3 submission.
     directory=root/"local_double"; directory.mkdir()
     data.publish_partition(spec,make_cache("validation"))
@@ -384,6 +385,7 @@ def test_preflight_dispatch_cpu_double_exercises_every_stage_not_remote_acceptan
     monkeypatch.setattr(runtime,"train_kernel",train)
     monkeypatch.setattr(runtime,"predict",predict)
     fabricated=memory_evidence(spec)
+    monkeypatch.setattr(concat_k2_parity,"early_parity",lambda *a:fabricated["early_parity_reports"])
     monkeypatch.setattr(runtime,"storage_parity",lambda *a,**kw: {
         k:v for k,v in fabricated["storage_parity_reports"][int(kw["bf16"])].items() if k!="node_id"})
     monkeypatch.setattr(runtime,"batch_probes",lambda s,d,n,*a:[

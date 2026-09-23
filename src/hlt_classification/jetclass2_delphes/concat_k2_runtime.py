@@ -15,7 +15,7 @@ from hlt_classification.data.cache_contracts import (
     atomic_publish_bytes, load_json, sha256_file, write_immutable_json,
 )
 from .banks import load_bank, publish_bank
-from .contracts import relative_file
+from .contracts import relative_file, validate as base_validate
 from .concat_k2_campaign import gates, artifact, nodes, validate, validate_campaign
 from .concat_k2_data import caches, cache_bounds, prepare, publish_partition, assignment, foundation_lock, matcher_acceptance
 from .concat_k2_source import validate_import
@@ -23,7 +23,8 @@ from .execution import allocation, gpu_identity
 from .concat_k2_execution import runtime_site, validate_acceptance_site
 from .model import installed_environment
 from .concat_k2_model import (K2ParticleTransformer, storage_parity, synchronize,
-    validate_storage_stats, PAIR_STORAGE, BATCH_PROBE_POLICY, PARITY_CHECKS)
+    validate_storage_stats, parity_backend, PAIR_STORAGE, BATCH_PROBE_POLICY,
+    PARITY_CHECKS, PARITY_TOLERANCES, PARITY_BACKEND)
 from .reporting import evaluate_probabilities, recovery
 from .salience_learned_data import IndexedRamCache
 from .salience_learned_training import predict, train_kernel, _optimizer, _train_batch
@@ -306,7 +307,8 @@ def batch_probes(spec,directory,node,train,validation,device):
 
 def validate_memory_evidence(spec,value):
     if (value.get("pair_storage")!=PAIR_STORAGE or value.get("batch_probe_policy")!=BATCH_PROBE_POLICY
-            or spec.get("pair_storage")!=PAIR_STORAGE or spec.get("batch_probe_policy")!=BATCH_PROBE_POLICY):
+            or spec.get("pair_storage")!=PAIR_STORAGE or spec.get("batch_probe_policy")!=BATCH_PROBE_POLICY
+            or spec.get("parity_backend")!=PARITY_BACKEND or spec.get("parity_tolerances")!=PARITY_TOLERANCES):
         raise ValueError("K2 memory acceptance policy differs")
     reports=value.get("storage_parity_reports",[])
     expected=[(name,precision) for name in ("CONCAT_K2_D100","CONCAT_K2_D000") for precision in ("fp32","bf16")]
@@ -314,9 +316,35 @@ def validate_memory_evidence(spec,value):
         raise ValueError("K2 memory acceptance parity coverage differs")
     for row in reports:
         if (row.get("passed") is not True or row.get("device_type")!="cuda"
-                or row.get("steps")!=3 or row.get("checks")!=PARITY_CHECKS):
+                or row.get("steps")!=3 or row.get("checks")!=PARITY_CHECKS
+                or row.get("tolerance")!=PARITY_TOLERANCES[row["precision"]]
+                or row.get("parity_backend")!=PARITY_BACKEND or row.get("pair_storage")!=PAIR_STORAGE):
             raise ValueError("K2 memory acceptance needs real native training parity")
         validate_storage_stats(row.get("storage_stats"))
+    early = value.get("early_parity_reports", [])
+    if [(r.get("node_id"), r.get("storage_parity", {}).get("precision")) for r in early] != expected:
+        raise ValueError("K2 early parity coverage differs")
+    for row in early:
+        validate(row, "EARLY_PARITY")
+        sample, native, storage = row["sample"], row["native_parity"], row["storage_parity"]
+        base_validate(native, "WEAVER_PARITY")
+        train_files = {t["file_index"] for t in spec["foundation"]["assignment_tasks"] if t["role"] == "train"}
+        if (row["campaign_sha256"] != spec["content_hash"] or row["acceptance_only"] is not True
+                or row["final_test_accessed"] is not False or sample["role"] != "train"
+                or sample["rows"] != 4 or len(sample["identities"]) != 4 or len(set(sample["identities"])) != 4
+                or any(len(s) != 64 or any(c not in "0123456789abcdef" for c in s) for s in sample["identities"])
+                or len(sample["file_indices"]) != 4 or not set(sample["file_indices"]) <= train_files
+                or sample != early[0]["sample"] or sample["final_test_accessed"] is not False
+                or native.get("passed") is not True or native.get("device") not in {"cuda", "cuda:0"}
+                or native.get("final_test_accessed") is not False
+                or native.get("forward_and_feature_and_parameter_gradients") is not True
+                or native.get("model") != spec["model"]
+                or storage.get("passed") is not True or storage.get("device_type") != "cuda"
+                or storage.get("steps") != 3 or storage.get("checks") != PARITY_CHECKS
+                or storage.get("tolerance") != PARITY_TOLERANCES[storage["precision"]]
+                or storage.get("parity_backend") != PARITY_BACKEND or storage.get("pair_storage") != PAIR_STORAGE):
+            raise ValueError("K2 early real-training parity differs")
+        validate_storage_stats(storage.get("storage_stats"))
     probes=value.get("batch_probes",[])
     if [(r.get("node_id"),r.get("batch_size")) for r in probes]!=[
             ("ACCEPTANCE_"+name,size) for name in PROBE_CASES for size in (128,256)]:
@@ -340,8 +368,10 @@ def preflight(spec,directory,device):
         raise PermissionError("Real installed-Weaver A100 acceptance is mandatory")
     import resource
     from .acceptance import installed_parity
+    from .concat_k2_parity import early_parity
     job=execution_gate(spec,science=False); environment=installed_environment(); started=time.monotonic()
     torch.cuda.reset_peak_memory_stats()
+    early_reports = early_parity(spec, directory, device)
     evidence=[]; q=None; cache_seconds=0.; prior_ids=None; parity=[]; storage_reports=[]; probes=[]
     peak=reserved=0
     for name in PROBE_CASES:
@@ -357,9 +387,11 @@ def preflight(spec,directory,device):
         if name in {"CONCAT_K2_D100","CONCAT_K2_D000"}:
             # FP32, eval mode: actual native factory versus repository wrapper,
             # including duplicate-p4 pairs on the x3 endpoint.
-            parity.append(installed_parity(t,device=device))
+            with parity_backend(device):
+                parity.append(installed_parity(t,device=device))
             _cuda_clear()
             for bf16 in (False,True):
+                print(f"JC2-K2 phase=population_storage_parity view={node['primary_coordinate']} precision={'bf16' if bf16 else 'fp32'}", flush=True)
                 storage_reports.append(dict(node_id=name,**storage_parity(t.batch(np.arange(4)),device=device,bf16=bf16)))
                 _cuda_clear()
         peak=max(peak,torch.cuda.max_memory_allocated()); reserved=max(reserved,torch.cuda.max_memory_reserved())
@@ -413,6 +445,7 @@ def preflight(spec,directory,device):
         capacity=spec["foundation"]["inputs"]["capacity"],batch_size=256,native_execution=evidence,
         pair_storage=PAIR_STORAGE,batch_probe_policy=BATCH_PROBE_POLICY,
         storage_parity_reports=storage_reports,batch_probes=probes,
+        early_parity_reports=early_reports,
         checkpoint_round_trip=True,bank_round_trip=True,installed_weaver_fp32_parity=True,
         parity_reports=parity,worst_population_batch_stress=True,duplicate_pair_finiteness=True,
         hlt_only_endpoint=True,final_test_accessed=False)

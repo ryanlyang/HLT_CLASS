@@ -24,7 +24,7 @@ def test_partition_is_not_a_scientific_choice_and_old_versions_fail_closed(tmp_p
     assert max(r["minutes"] for r in tier3["resources"].values()) <= 1440
     for kind in ("LAUNCH_SPEC", "CAMPAIGN_SPEC", "ACCEPTANCE"):
         value = campaign.artifact(kind, test_only=True)
-        current = 3 if kind == "ACCEPTANCE" else 4
+        current = 4 if kind == "ACCEPTANCE" else 5
         assert value["schema_version"] == current
         for version in range(1, current):
             old = rehash(value, contract=value["contract"].replace(f"/v{current}", f"/v{version}"), schema_version=version)
@@ -185,4 +185,7 @@ def test_worker_and_queue_shell_expose_portability_without_mutating_jobs():
     assert 'SLURM_JOB_PARTITION' in shell
     assert 'tier3) export JC2_SITE=sporc_a100' in shell
     assert 'debug) export JC2_SITE=sporc_a100_debug' in shell
+    assert 'if [[ "${MODE}" == run && "${TASK}" == preflight ]]; then' in shell
+    assert shell.count('export CUBLAS_WORKSPACE_CONFIG=:4096:8') == 1
+    assert shell.index('export CUBLAS_WORKSPACE_CONFIG') < shell.index('exec python')
     assert "scontrol update" not in shell + helper and "scancel" not in shell + helper
