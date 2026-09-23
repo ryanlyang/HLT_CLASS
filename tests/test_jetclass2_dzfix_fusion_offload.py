@@ -10,6 +10,12 @@ from hlt_classification.jetclass2_delphes import dzfix_fusion_model as fusion
 from test_jetclass2_dzfix_fusion_chain import fake_native, make_cache
 
 
+@pytest.fixture(autouse=True)
+def parity_environment(monkeypatch):
+    # Test invocation must set this before CUDA initialization too.
+    monkeypatch.setenv("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+
+
 class PairBN(nn.Module):
     """Trainable masked full-pair population with actual BatchNorm buffers."""
     def __init__(self):
@@ -88,33 +94,26 @@ def test_cpu_training_storage_parity_and_checkpoint_transparency(pair_native):
 def test_cuda_lossless_pinned_storage_training_updates(pair_native, monkeypatch, bf16):
     if bf16 and not torch.cuda.is_bf16_supported():
         pytest.skip("BF16 unavailable")
-    original = torch.autograd.graph.save_on_cpu
+    native_pack, native_unpack = fusion._pack_pair_tensor, fusion._unpack_pair_tensor
     packed, restored = [], []
 
-    def storage(*, pin_memory):
-        assert pin_memory is True
-        manager = original(pin_memory=pin_memory)
-        native_pack, native_unpack = manager.pack_hook, manager.unpack_hook
+    def pack(value):
+        result = native_pack(value)
+        assert result[1].device.type == "cpu"
+        assert value.numel() == 0 or result[1].is_pinned()
+        assert result[1].dtype == value.dtype
+        assert result[2:] == (tuple(value.shape), tuple(value.stride()))
+        packed.append(value.numel() * value.element_size())
+        return result
 
-        def pack(value):
-            result = native_pack(value)
-            assert result[1].device.type == "cpu"
-            # cuDNN may save an empty reserve-space tensor, which has no storage.
-            assert value.numel() == 0 or result[1].is_pinned()
-            assert result[1].dtype == value.dtype and result[1].shape == value.shape
-            packed.append(value.numel() * value.element_size())
-            return result
+    def unpack(value):
+        result = native_unpack(value)
+        assert result.device == value[0]
+        restored.append(result.numel() * result.element_size())
+        return result
 
-        def unpack(value):
-            result = native_unpack(value)
-            assert result.device == value[0]
-            restored.append(result.numel() * result.element_size())
-            return result
-
-        manager.pack_hook, manager.unpack_hook = pack, unpack
-        return manager
-
-    monkeypatch.setattr(torch.autograd.graph, "save_on_cpu", storage)
+    monkeypatch.setattr(fusion, "_pack_pair_tensor", pack)
+    monkeypatch.setattr(fusion, "_unpack_pair_tensor", unpack)
     report = fusion.native_offload_parity(*inputs(), device="cuda", bf16=bf16)
     assert report["passed"] and sum(packed) > 0 and sum(restored) > 0
     fusion.validate_offload_stats(report["offload_stats"], calls=3)
@@ -125,17 +124,17 @@ def test_eval_and_no_grad_bypass_offload_and_error_restores_hooks(pair_native, m
     model = fusion.DzfixFusionParticleTransformer().cuda()
     raw, _ = inputs()
     values = tuple(torch.from_numpy(raw[k]).cuda() for k in ("features", "vectors", "mask"))
-    native = torch.autograd.graph.save_on_cpu
+    native = fusion._pack_pair_tensor
 
-    def forbidden(**kwargs):
+    def forbidden(*args, **kwargs):
         pytest.fail("Inference must not offload saved tensors")
 
-    monkeypatch.setattr(torch.autograd.graph, "save_on_cpu", forbidden)
+    monkeypatch.setattr(fusion, "_pack_pair_tensor", forbidden)
     model.eval().forward_fused(*values, *values)
     model.train()
     with torch.no_grad():
         model.forward_fused(*values, *values)
-    monkeypatch.setattr(torch.autograd.graph, "save_on_cpu", native)
+    monkeypatch.setattr(fusion, "_pack_pair_tensor", native)
     calls = []
 
     def broken(*args, **kwargs):
@@ -191,3 +190,79 @@ def test_installed_weaver_training_parity():
     if torch.cuda.is_available():
         for bf16 in (False, True):
             assert fusion.native_offload_parity(*inputs(), device="cuda", bf16=bf16)["passed"]
+
+
+def backend_flags():
+    return (torch.are_deterministic_algorithms_enabled(),
+            torch.is_deterministic_algorithms_warn_only_enabled(),
+            torch.backends.cudnn.benchmark, torch.backends.cudnn.deterministic,
+            torch.backends.cudnn.allow_tf32, torch.backends.cuda.matmul.allow_tf32,
+            torch.get_float32_matmul_precision())
+
+
+@pytest.mark.parametrize("error", [False, True])
+@pytest.mark.parametrize("precision", ["highest", "high", "medium"])
+def test_strict_parity_restores_backend_even_on_failure(error, precision):
+    original = torch.get_float32_matmul_precision()
+    try:
+        torch.set_float32_matmul_precision(precision)
+        before = backend_flags()
+        try:
+            with fusion.parity_backend("cpu"):
+                assert backend_flags()[:6] == (True, False, False, True, False, False)
+                if error:
+                    raise RuntimeError("injected parity failure")
+        except RuntimeError as exc:
+            assert str(exc) == "injected parity failure"
+        assert backend_flags() == before
+    finally:
+        torch.set_float32_matmul_precision(original)
+
+
+def test_cuda_parity_requires_preconfigured_cublas(monkeypatch):
+    monkeypatch.delenv("CUBLAS_WORKSPACE_CONFIG", raising=False)
+    before = backend_flags()
+    with pytest.raises(ValueError, match="before starting Python"):
+        with fusion.parity_backend("cuda"):
+            pytest.fail("Must not enter parity with unconfigured CUDA")
+    assert backend_flags() == before
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA unavailable")
+@pytest.mark.parametrize("layout", ["transpose", "gapped", "expanded", "overlap", "empty", "scalar"])
+def test_cuda_pack_retains_layout_values_and_no_cuda_reference(layout):
+    base = torch.arange(120., device="cuda").reshape(10, 12)
+    value = {"transpose": base[1:8].T, "gapped": base[2::2, 1::3],
+             "expanded": base[2:3, 1:5].expand(7, 4),
+             "overlap": base.flatten()[3:].as_strided((5, 4), (2, 1)),
+             "empty": base[:0, 1::2], "scalar": base[3, 4]}[layout]
+    packed = fusion._pack_pair_tensor(value)
+    assert not any(isinstance(x, torch.Tensor) and x.is_cuda for x in packed)
+    result = fusion._unpack_pair_tensor(packed)
+    assert result.dtype == value.dtype and result.stride() == value.stride()
+    assert result.storage_offset() == 0
+    torch.testing.assert_close(result, value, rtol=0, atol=0)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA unavailable")
+@pytest.mark.parametrize("bf16", [False, True])
+@pytest.mark.parametrize("same_view", [False, True])
+@pytest.mark.parametrize("lengths", [(96, 113), (320, 320)])
+def test_installed_weaver_long_masked_training_parity(bf16, same_view, lengths):
+    pytest.importorskip("weaver")
+    torch.set_num_threads(1)
+    rng = np.random.default_rng(204)
+    primary, context = inputs()
+    for raw, length in zip((primary, context), lengths):
+        raw["features"] = rng.normal(size=(4, 17, length)).astype(np.float32)
+        momentum = rng.normal(size=(4, 3, length)).astype(np.float32)
+        raw["vectors"] = np.concatenate((momentum, np.sqrt((momentum**2).sum(axis=1, keepdims=True)+.25)), axis=1)
+        raw["mask"] = np.ones((4, 1, length), bool)
+        raw["mask"][0, 0, -17:] = False
+    before = backend_flags()
+    result = fusion.native_offload_parity(primary, primary if same_view else context, device="cuda", bf16=bf16)
+    assert result["checks"] == fusion.PARITY_CHECKS
+    assert result["parity_backend"] == fusion.PARITY_BACKEND
+    assert result["saved_tensor_storage"] == fusion.PAIR_OFFLOAD_POLICY
+    assert result["tolerance"] == fusion.PARITY_TOLERANCES["bf16" if bf16 else "fp32"]
+    assert backend_flags() == before

@@ -1,6 +1,7 @@
 """Native fusion with compact masks and lossless pair-activation CPU storage."""
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from copy import deepcopy
+import os
 
 import torch
 
@@ -8,13 +9,80 @@ from .salience_learned_model import DelphesAdjacentFusionParticleTransformer
 
 
 PAIR_OFFLOAD_POLICY = {
-    "version": "pair_saved_tensors_cpu_v1",
+    "version": "pair_saved_tensors_cpu_v2",
     "scope": ["context", "primary", "cross"],
     "when": "training_grad_enabled_cuda",
     "pin_memory": True,
     "recompute": False,
     "pair_population": "full_combined_weaver",
+    "layout": "original_shape_and_strides",
+    "storage_offset": "rebased_zero",
+    "copy": "physical_storage_span_including_gaps",
 }
+PARITY_BACKEND = dict(version="fusion_strict_parity_backend_v1",
+    scope="parity_only_restore_before_stress_and_training",
+    deterministic_algorithms=True, warn_only=False, cudnn_benchmark=False,
+    cudnn_deterministic=True, cudnn_tf32=False, matmul_tf32=False,
+    cublas_workspace_config=":4096:8", cublas_workspace_scope="preflight_process_only")
+PARITY_CHECKS = ["logits", "loss", "feature_gradients", "parameter_gradients",
+                 "batchnorm_buffers", "updated_weights", "optimizer_state", "eval_logits"]
+PARITY_TOLERANCES = {"fp32": dict(rtol=2e-5, atol=2e-6),
+                     "bf16": dict(rtol=.01, atol=5e-4)}
+
+
+# Adapted from concat_k2_model at 91be019; deliberately local so neither
+# campaign's source authentication or execution policy changes the other.
+@contextmanager
+def parity_backend(device):
+    """Deterministic comparison only; restore the production backend on exit."""
+    if (torch.device(device).type == "cuda"
+            and os.environ.get("CUBLAS_WORKSPACE_CONFIG") != PARITY_BACKEND["cublas_workspace_config"]):
+        raise ValueError("Fusion parity requires CUBLAS_WORKSPACE_CONFIG=:4096:8 before starting Python")
+    saved = (torch.are_deterministic_algorithms_enabled(),
+             torch.is_deterministic_algorithms_warn_only_enabled(),
+             torch.backends.cudnn.benchmark, torch.backends.cudnn.deterministic,
+             torch.backends.cudnn.allow_tf32, torch.backends.cuda.matmul.allow_tf32,
+             torch.get_float32_matmul_precision())
+    try:
+        torch.use_deterministic_algorithms(True, warn_only=False)
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.allow_tf32 = False
+        torch.backends.cuda.matmul.allow_tf32 = False
+        yield
+    finally:
+        torch.use_deterministic_algorithms(saved[0], warn_only=saved[1])
+        torch.backends.cudnn.benchmark, torch.backends.cudnn.deterministic = saved[2:4]
+        torch.backends.cudnn.allow_tf32, torch.backends.cuda.matmul.allow_tf32 = saved[4:6]
+        torch.set_float32_matmul_precision(saved[6])
+
+
+def _pack_pair_tensor(tensor):
+    """Offload the physical span, preserving transposed/gapped/expanded views.
+
+    save_on_cpu(pin_memory=True) makes a contiguous copy. Changed strides can
+    select different backward reduction kernels. Retain shape/strides and
+    dtype, without retaining a CUDA reference or writing through overlap.
+    """
+    if tensor.device.type != "cuda":
+        return tensor.device, tensor.detach(), None, None
+    if tensor.layout != torch.strided or tensor.is_conj() or tensor.is_neg():
+        raise ValueError("Unsupported fusion saved-tensor layout")
+    shape, strides = tuple(tensor.shape), tuple(tensor.stride())
+    if any(s < 0 for s in strides):
+        raise ValueError("Negative fusion saved-tensor stride")
+    span = 0 if tensor.numel() == 0 else 1 + sum((n-1)*s for n, s in zip(shape, strides))
+    packed = torch.empty(span, dtype=tensor.dtype, device="cpu", pin_memory=True)
+    # Synchronous D2H before the source may be mutated or released.
+    packed.copy_(tensor.detach().as_strided((span,), (1,)))
+    return tensor.device, packed, shape, strides
+
+
+def _unpack_pair_tensor(packed):
+    device, values, shape, strides = packed
+    if shape is None:
+        return values
+    return values.to(device, non_blocking=True).as_strided(shape, strides)
 
 
 class DzfixFusionParticleTransformer(DelphesAdjacentFusionParticleTransformer):
@@ -46,17 +114,15 @@ class DzfixFusionParticleTransformer(DelphesAdjacentFusionParticleTransformer):
             ("cross", self.cross_pair_mod)) if candidate is mod)
         stats = self._pair_offload_stats[name]
         stats["calls"] += 1
-        storage = torch.autograd.graph.save_on_cpu(pin_memory=True)
-
         def pack(tensor):
-            packed = storage.pack_hook(tensor)
+            packed = _pack_pair_tensor(tensor)
             if tensor.device.type == "cuda":
                 stats["saved_cuda_tensors"] += 1
                 stats["saved_cuda_bytes"] += tensor.numel() * tensor.element_size()
             return packed
 
         def unpack(packed):
-            value = storage.unpack_hook(packed)
+            value = _unpack_pair_tensor(packed)
             if value.device.type == "cuda":
                 stats["restored_cuda_tensors"] += 1
             return value
@@ -80,7 +146,7 @@ def native_mask_parity(raw, *, device):
     """Nonzero residual forward/backward parity using actual installed Weaver."""
     from .salience_learned_training import _autocast
     inputs = tuple(torch.from_numpy(raw[k]).to(device) for k in ("features", "vectors", "mask"))
-    with torch.random.fork_rng(devices=[0] if str(device).startswith("cuda") else []):
+    with parity_backend(device), torch.random.fork_rng(devices=[0] if str(device).startswith("cuda") else []):
         torch.manual_seed(3701)
         old = DelphesAdjacentFusionParticleTransformer(context_initialization_seed=3702).to(device).eval()
         for injection in old.injections:
@@ -137,7 +203,7 @@ def native_offload_parity(primary_raw, context_raw, *, device, bf16=False):
                     for k in ("features", "vectors", "mask"))
               for raw in (primary_raw, context_raw)]
     labels = torch.from_numpy(primary_raw["labels"]).to(device).long()
-    tolerance = dict(rtol=.01, atol=5e-4) if bf16 else dict(rtol=2e-5, atol=2e-6)
+    tolerance = dict(PARITY_TOLERANCES["bf16" if bf16 else "fp32"])
 
     def compare(left, right):
         if left.keys() != right.keys():
@@ -146,9 +212,9 @@ def native_offload_parity(primary_raw, context_raw, *, device, bf16=False):
             if not torch.isfinite(left[name]).all() or not torch.isfinite(right[name]).all():
                 raise ValueError(f"Nonfinite offload parity tensor: {name}")
             torch.testing.assert_close(left[name], right[name], **tolerance,
-                                       msg=lambda message: f"Offload parity {name}: {message}")
+                                       msg=lambda message: f"Offload parity precision={'bf16' if bf16 else 'fp32'} step={step+1} {name}: {message}")
 
-    with torch.random.fork_rng(devices=[torch.device(device).index or 0] if cuda else []):
+    with parity_backend(device), torch.random.fork_rng(devices=[torch.device(device).index or 0] if cuda else []):
         torch.manual_seed(3811)
         original = DzfixFusionParticleTransformer(context_initialization_seed=3812, pair_offload=False)
         # Exercise the full context/cross gradient path from the first update.
@@ -157,21 +223,25 @@ def native_offload_parity(primary_raw, context_raw, *, device, bf16=False):
         offloaded = DzfixFusionParticleTransformer(context_initialization_seed=3812)
         offloaded.load_state_dict(original.state_dict(), strict=True)
         models = [original.to(device).train(), offloaded.to(device).train()]
+        features = [[value[0].detach().clone().requires_grad_(True) for value in inputs] for _ in models]
         optimizers = [_optimizer(model) for model in models]
         teacher = torch.softmax(torch.randn(len(labels), 11, device=device), dim=-1)
         for step in range(3):
             snapshots = []
-            for model, optimizer in zip(models, optimizers):
+            for model, optimizer, xs in zip(models, optimizers, features):
                 optimizer.zero_grad(set_to_none=True)
+                for x in xs:
+                    x.grad = None
                 torch.manual_seed(3813 + step)  # Identical training dropout draws.
                 # FP32 on CUDA explicitly disables any enclosing autocast too.
                 precision = torch.autocast("cuda", dtype=torch.bfloat16, enabled=bf16) if cuda else nullcontext()
                 with precision:
-                    logits = model.forward_fused(*inputs[0], *inputs[1], alpha=1.).logits
+                    logits = model.forward_fused(xs[0], *inputs[0][1:], xs[1], *inputs[1][1:], alpha=1.).logits
                     loss = distillation_loss(logits, labels, teacher_probabilities=teacher)
                 loss.backward()
                 snapshot = {"logits": logits.detach().float().cpu(),
                             "loss": loss.detach().float().cpu()}
+                snapshot.update({f"feature_grad/{i}": x.grad.detach().cpu().clone() for i, x in enumerate(xs)})
                 snapshot.update({"grad/" + k: p.grad.detach().cpu().clone()
                                  for k, p in model.named_parameters() if p.grad is not None})
                 optimizer.step()
@@ -199,6 +269,6 @@ def native_offload_parity(primary_raw, context_raw, *, device, bf16=False):
             raise ValueError("Inference unexpectedly offloaded tensors")
     return dict(passed=True, device_type="cuda" if cuda else "cpu",
                 precision="bf16" if bf16 else "fp32", steps=3,
-                checks=["logits", "loss", "parameter_gradients", "batchnorm_buffers",
-                        "updated_weights", "optimizer_state", "eval_logits"],
+                checks=list(PARITY_CHECKS), parity_backend=dict(PARITY_BACKEND),
+                saved_tensor_storage=deepcopy(PAIR_OFFLOAD_POLICY),
                 tolerance=tolerance, offload_stats=stats)

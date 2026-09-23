@@ -551,7 +551,7 @@ def test_cli_and_helper_expose_direct_screen_boundary(imported_source, monkeypat
     assert "CONT_SPEC" not in helper and "21741416" not in helper
 
 
-@pytest.mark.parametrize("version", [1, 2, 3])
+@pytest.mark.parametrize("version", [1, 2, 3, 4])
 def test_old_launch_schema_is_not_reinterpreted(imported_source, version):
     launch, _, _ = imported_source
     old = rehash(launch, schema_version=version,
@@ -559,8 +559,8 @@ def test_old_launch_schema_is_not_reinterpreted(imported_source, version):
     with pytest.raises(ValueError, match="contract"):
         source.validate_launch(old)
     assert chain.artifact("SOURCE_IMPORT")["schema_version"] == 3
-    assert chain.artifact("CAMPAIGN_SPEC")["schema_version"] == 4
-    assert chain.artifact("ACCEPTANCE")["schema_version"] == 2
+    assert chain.artifact("CAMPAIGN_SPEC")["schema_version"] == 5
+    assert chain.artifact("ACCEPTANCE")["schema_version"] == 3
     assert chain.artifact("TRAINING_REPORT")["schema_version"] == 1
 
 
@@ -729,16 +729,22 @@ def test_cache_bounds_use_foundation_capacity_without_changing_memory_request(tm
 
 
 def test_science_gate_rechecks_memory_and_real_execution_fields(monkeypatch, tmp_path):
+    from hlt_classification.jetclass2_delphes.dzfix_fusion_model import PARITY_CHECKS, PARITY_BACKEND, PAIR_OFFLOAD_POLICY
+    from hlt_classification.jetclass2_delphes.dzfix_fusion_parity import EARLY_PAIRS
     spec = spec_at(tmp_path)
     root = Path(spec["campaign_root"])
     stats = {name: dict(calls=3, saved_cuda_tensors=9, saved_cuda_bytes=4096,
                        restored_cuda_tensors=9) for name in ("context", "primary", "cross")}
     parity = [dict(passed=True, device_type="cuda", precision=precision, steps=3,
-        checks=["logits", "loss", "parameter_gradients", "batchnorm_buffers",
-                "updated_weights", "optimizer_state", "eval_logits"],
+        checks=list(PARITY_CHECKS), parity_backend=PARITY_BACKEND, saved_tensor_storage=PAIR_OFFLOAD_POLICY,
         tolerance=dict(rtol=.01, atol=5e-4) if precision == "bf16" else dict(rtol=2e-5, atol=2e-6),
         offload_stats=stats) for precision in ("fp32", "bf16")]
     stress = dict(steps=3, batch_size=256, capacity=320, measurements=[{"seconds": 1.}]*3, offload_stats=stats)
+    early = [chain.artifact("EARLY_PARITY", campaign_sha256=spec["content_hash"],
+        primary=p, context=c, sample=dict(role="train", rows=4, file_indices=[0]*4,
+            identities=[f"{i:064x}" for i in range(4)], final_test_accessed=False),
+        compact_mask_native_parity=True, storage_parity=row, acceptance_only=True, final_test_accessed=False)
+        for p, c in EARLY_PAIRS for row in parity]
     evidence = dict(campaign_sha256=spec["content_hash"], passed=True, final_test_accessed=False,
         site=spec["execution_site"], resource=spec["resources"]["preflight"], acceptance_only=True,
         full_population_rows=spec["role_counts"], batch_size=256, checkpoint_round_trip=True,
@@ -746,13 +752,16 @@ def test_science_gate_rechecks_memory_and_real_execution_fields(monkeypatch, tmp
         worst_population_batch_stress=True, peak_cuda_bytes=800, gpu={"total_memory_bytes": 1000},
         peak_rss_bytes=1000, projected_max_fit_seconds=100,
         saved_tensor_storage=spec["fusion"]["saved_tensor_storage"], saved_tensor_training_parity=parity,
+        early_parity_reports=early,
         native_execution=[{"node": {"context_coordinate": "U000"}, "stress": stress,
                            "kernel_report": {"acceptance_only": True, "scientific_fit": False}}]*4)
     for name, changes in (("good", {}), ("memory", {"peak_cuda_bytes": 901}),
                           ("batch", {"batch_size": 128}), ("test", {"final_test_accessed": True}),
                           ("time", {"projected_max_fit_seconds": 24*3600}),
                           ("offload", {"saved_tensor_storage": {}}),
-                          ("parity", {"saved_tensor_training_parity": []})):
+                          ("parity", {"saved_tensor_training_parity": []}),
+                          ("early", {"early_parity_reports": []}),
+                          ("backend", {"saved_tensor_training_parity": [{**r, "parity_backend": {}} for r in parity]})):
         value = chain.artifact("ACCEPTANCE", **{**evidence, **changes})
         write_immutable_json(root / (name + ".json"), value)
         monkeypatch.setattr(runtime, "completed", lambda *a: {"result": {"acceptance": name + ".json"}})

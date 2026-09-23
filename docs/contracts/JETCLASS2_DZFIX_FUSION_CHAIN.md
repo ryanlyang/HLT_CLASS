@@ -3,11 +3,11 @@
 Authority: `plans/JETCLASS2_DZFIX_FUSION_CHAIN_500K_PLAN.md`.
 
 Artifacts use `JETCLASS2_DELPHES_DZFIX_FUSION_CHAIN_*` and canonical content
-hashes. LAUNCH_SPEC and CAMPAIGN_SPEC are **v4**, SOURCE_IMPORT stays **v3**,
-and ACCEPTANCE is **v2**; other artifact kinds retain v1. Old execution roots
+hashes. LAUNCH_SPEC and CAMPAIGN_SPEC are **v5**, SOURCE_IMPORT stays **v3**,
+and ACCEPTANCE is **v3**; EARLY_PARITY and other artifact kinds are v1. Old execution roots
 are not silently upgraded, including the capacity-correct v3 run that OOMed.
 
-LAUNCH_SPEC/v4 binds the explicit producer SALIENCE_SCREEN_SPEC/v2, its exact
+LAUNCH_SPEC/v5 binds the explicit producer SALIENCE_SCREEN_SPEC/v2, its exact
 eight-task live ledger and `complete` job, new source checkout, independent
 launch/campaign roots, debug resources, graph and population. Parent commands
 and dependency closure must equal the source screen plan after exact-ID
@@ -47,23 +47,41 @@ actual single/paired execution, bank/weight round trips, memory and time evidenc
 No acceptance-only weights count as scientific fits. All ordinary artifacts
 record `final_test_accessed=false`; ordinary tasks have no test capability.
 
-CAMPAIGN_SPEC/v4 additionally freezes `fusion.saved_tensor_storage` as
-`pair_saved_tensors_cpu_v1`: full native pair populations at context, primary
+CAMPAIGN_SPEC/v5 additionally freezes `fusion.saved_tensor_storage` as
+`pair_saved_tensors_cpu_v2`: full native pair populations at context, primary
 and cross sites; lossless pinned CPU storage only for CUDA training autograd
 saves; no recomputation or scientific changes. The existing batch 256,
 320-capacity foundation, BF16 training and compact-mask transformation remain.
 CPU tensors are transient, never persisted. Offload is bypassed for inference.
 Counter data hold no tensor references and do not enter model state dictionaries.
+Copies preserve dtype, shape and strides, including gaps/overlap, with storage
+offset rebased to zero. The physical storage span is copied synchronously to
+pinned CPU memory, then restored when backward needs it.
 
-ACCEPTANCE/v2 requires installed-Weaver CUDA FP32/BF16 storage on/off parity
-over three optimizer updates, including parameter gradients, BN running state
+ACCEPTANCE/v3 requires installed-Weaver CUDA FP32/BF16 storage on/off parity
+over three optimizer updates, including both feature gradients, parameter gradients, BN running state
 and AdamW state. Each paired three-step longest-population batch-256 stress
 must record actual saved AND restored CUDA tensors at all three pair sites.
 The science gate rejects absent, CPU-only, no-op, wrong-policy or incomplete
-parity/stress evidence; the old v1 gate cannot authorize this execution.
+parity/stress evidence; old v1/v2 gates cannot authorize this execution.
 Native-mask parity, unchanged measured resource thresholds and runtime limits
 also remain mandatory. Scientific fit reports record the storage policy and
 transfer counters; their sum is not an estimate of unique/live memory savings.
+
+`fusion.parity_backend` locks deterministic comparison settings, including
+TF32 disabled and cuDNN benchmarking disabled. cuBLAS workspace configuration
+is set before Python only in preflight workers. All PyTorch flags, including
+the full float32 matmul precision policy, are restored on success or exception
+before resource stress and training. Tolerances are unchanged:
+FP32 (rtol=2e-5, atol=2e-6), BF16 (rtol=.01, atol=5e-4).
+
+Four EARLY_PARITY/v1 reports bind the campaign, the same four unique registered
+train identities/file indices, acceptance-only scope, compact-mask parity and
+three-step storage comparison for U050/U000 and D000/D000 in both precisions.
+They are written before the full-population caches; a failed comparison cannot
+publish a passing report. ACCEPTANCE/v3 embeds and validates their hashes,
+precision/coordinate coverage, provenance, storage policy and backend policy.
+Early reports alone never authorize scientific work or replace full-data stress.
 
 Publication is immutable/atomic; existing roots are not overwritten. Exact DAG
 submission uses canonical dry runs, exclusive submission claims, journalled IDs

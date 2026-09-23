@@ -23,7 +23,7 @@ from .model import DelphesParticleTransformer, installed_environment
 from .reporting import evaluate_probabilities, recovery
 from .salience_learned_data import IndexedRamCache
 from .dzfix_fusion_model import (
-    DzfixFusionParticleTransformer, PAIR_OFFLOAD_POLICY,
+    DzfixFusionParticleTransformer, PAIR_OFFLOAD_POLICY, PARITY_BACKEND, PARITY_CHECKS, PARITY_TOLERANCES,
     native_offload_parity, validate_offload_stats,
 )
 from .salience_learned_training import predict, train_kernel, _optimizer, _train_batch
@@ -90,15 +90,32 @@ def validate_offload_acceptance(acceptance, spec):
     if acceptance.get("saved_tensor_storage") != spec["fusion"]["saved_tensor_storage"]:
         raise ValueError("GPU acceptance offload policy differs")
     parity = acceptance.get("saved_tensor_training_parity", [])
-    expected_checks = {"logits", "loss", "parameter_gradients", "batchnorm_buffers",
-                       "updated_weights", "optimizer_state", "eval_logits"}
     if len(parity) != 2 or {r.get("precision") for r in parity} != {"fp32", "bf16"}:
         raise ValueError("GPU acceptance lacks FP32/BF16 offload parity")
-    for row in parity:
-        expected_tolerance = dict(rtol=.01, atol=5e-4) if row["precision"] == "bf16" else dict(rtol=2e-5, atol=2e-6)
+    from .dzfix_fusion_parity import EARLY_PAIRS
+    early = acceptance.get("early_parity_reports", [])
+    expected = {(p, c, precision) for p, c in EARLY_PAIRS for precision in ("fp32", "bf16")}
+    if len(early) != 4 or {(r.get("primary"), r.get("context"), r.get("storage_parity", {}).get("precision")) for r in early} != expected:
+        raise ValueError("GPU acceptance lacks bounded early real-train parity")
+    for report in early:
+        validate(report, "EARLY_PARITY")
+        sample = report.get("sample", {})
+        if (report.get("campaign_sha256") != spec["content_hash"]
+                or report.get("acceptance_only") is not True or report.get("final_test_accessed") is not False
+                or report.get("compact_mask_native_parity") is not True
+                or sample.get("role") != "train" or sample.get("rows") != 4
+                or sample.get("final_test_accessed") is not False
+                or len(set(sample.get("identities", []))) != 4
+                or len(sample.get("file_indices", [])) != 4
+                or sample != early[0]["sample"]):
+            raise ValueError("GPU acceptance early parity provenance differs")
+    for row in parity + [r["storage_parity"] for r in early]:
+        expected_tolerance = PARITY_TOLERANCES[row["precision"]]
         if (row.get("passed") is not True or row.get("device_type") != "cuda"
-                or row.get("steps") != 3 or set(row.get("checks", [])) != expected_checks
-                or row.get("tolerance") != expected_tolerance):
+                or row.get("steps") != 3 or set(row.get("checks", [])) != set(PARITY_CHECKS)
+                or row.get("tolerance") != expected_tolerance
+                or row.get("parity_backend") != PARITY_BACKEND
+                or row.get("saved_tensor_storage") != PAIR_OFFLOAD_POLICY):
             raise ValueError("GPU acceptance offload training parity differs")
         validate_offload_stats(row.get("offload_stats"), calls=3)
     for row in acceptance["native_execution"]:
@@ -317,6 +334,11 @@ def preflight(spec, directory, device):
     job = execution_gate(spec, science=False)
     environment = installed_environment()
     started = time.monotonic()
+    from .dzfix_fusion_parity import early_parity
+    early_reports = early_parity(spec, directory, device)
+    # Do not include diagnostic copies in the full-cache preparation time or
+    # extrapolate them into production throughput. Full stress still follows.
+    cache_started = time.monotonic()
     torch.cuda.reset_peak_memory_stats()
     # Two separately materialized U000 caches bound the paired population,
     # including retained HLT particles. Every other rung has <= this support.
@@ -324,7 +346,7 @@ def preflight(spec, directory, device):
     validation = prepare(spec, "validation", "U000")
     train2 = prepare(spec, "train", "U000")
     validation2 = prepare(spec, "validation", "U000")
-    cache_seconds = time.monotonic() - started
+    cache_seconds = time.monotonic() - cache_started
     train_indices = representative(train, 2048)
     val_indices = representative(validation, 1024)
     stress_train_indices = longest_indices(train)
@@ -391,6 +413,7 @@ def preflight(spec, directory, device):
     parity_context = st.batch(np.arange(4, 8))
     training_parity = []
     for bf16 in (False, True):
+        print(f"JC2-FUSION phase=population_storage_parity precision={'bf16' if bf16 else 'fp32'}", flush=True)
         training_parity.append(native_offload_parity(
             parity_primary, parity_context, device=device, bf16=bf16))
         _cuda_clear()
@@ -415,6 +438,7 @@ def preflight(spec, directory, device):
         compact_mask_native_parity=True,
         saved_tensor_storage=PAIR_OFFLOAD_POLICY,
         saved_tensor_training_parity=training_parity,
+        early_parity_reports=early_reports,
         installed_weaver_fp32_parity=True,
         worst_population_batch_stress=True,
         final_test_accessed=False)

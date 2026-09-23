@@ -36,16 +36,16 @@ attention change; native forward/backward parity is acceptance evidence.
 The capacity-320 preflight reached an actual CUDA OOM in the full cross-pair
 embedding on its longest-jet batch, after the short single/fusion miniature
 fits succeeded. Raising the 90% gate or CPU RAM request cannot repair that.
-The new registered storage policy is `pair_saved_tensors_cpu_v1`: during CUDA
+The new registered storage policy is `pair_saved_tensors_cpu_v2`: during CUDA
 training with gradients enabled, autograd-saved tensors inside the context,
 primary and cross pair embeddings are stored losslessly in pinned CPU RAM
-using PyTorch `save_on_cpu`, and copied back when backward needs them. Pair
+using layout-preserving saved-tensor hooks, and copied back when backward needs them. Pair
 outputs, attention and the rest of the model remain on GPU. Evaluation bypasses
 offload. Nothing is written to disk. There is no pair-population chunking,
 recomputation, reduced precision, truncation, smaller batch, or changed BN update.
 The shared historical model's default path remains unchanged.
 
-This is an execution change, not a claimed successful A100 fix. The fresh gate
+This is an execution change, not a completed A100 acceptance. The fresh gate
 must compare storage on/off for three training updates using installed Weaver
 in CUDA FP32 and BF16: logits, loss, parameter gradients, all BN buffers,
 updated weights, AdamW state and subsequent eval logits. Identical RNG draws
@@ -56,6 +56,43 @@ Counters are cumulative tensor-save bytes, NOT distinct/live CPU memory or
 claimed GPU savings. Actual process RSS, allocated/reserved GPU memory and
 step timing are recorded. The unchanged 90% GPU/80% CPU and <=23h projected-fit
 gates determine whether transfer overhead/headroom are acceptable on SPORC.
+
+### Strict parity repair after preflight 21765886
+
+At source `b35fbda64d2d823a9eb9c5592017074db58d6ac8`, all four batch-256
+stress paths completed, including the two fusion paths with actual saves and
+retrievals at all three pair sites. The logged allocated GPU peak was
+20,816,062,976 bytes (19.39 GiB), versus 41,731,227,648 reserved bytes (38.87 GiB).
+The run failed later on strict FP32 pair-BN parameter-gradient parity, not OOM;
+it did not publish acceptance or release science.
+
+The old failure is reproducible with installed Weaver 0.5.3 / PyTorch 2.5.1
+on a local CUDA device. Even native-versus-native with identical seeds can fail
+that comparison under unconstrained CUDA reductions. Parity comparisons now
+enable deterministic algorithms and disable TF32 and cuDNN benchmarking in a
+scoped context, restoring all flags on success or error. Only the preflight
+worker sets `CUBLAS_WORKSPACE_CONFIG=:4096:8` before Python starts. These are
+diagnostic controls, not a new production training recipe. The old tolerances
+remain FP32 rtol=2e-5/atol=2e-6 and BF16 rtol=.01/atol=5e-4.
+
+Storage v2 preserves saved tensors' dtype, shape and strides (including
+transposed, gapped and overlapping views) by copying their physical storage
+span to pinned RAM and rebasing the offset. The original `save_on_cpu` pinned
+path made contiguous copies, which can change backward reduction selection.
+No GPU tensor references are retained in a packed record; inference and model
+state keys are unchanged. Feature gradients for both branches join the parity
+checks. Matching, loss, seeds, batch 256, capacity 320 and resource ceilings
+are unchanged. The K2 campaign and its separately chosen batch size are not
+modified or inherited.
+
+A bounded diagnostic now runs **before** full population caches: authenticate
+existing assignments for four distinct registered train jets, build the exact
+U050/U000 and D000/D000 views, run native-mask plus FP32/BF16 storage parity,
+and publish each successful diagnostic atomically. It never reads final test
+or recomputes matching. A failure stops before the long cache build. Successful
+early evidence does not replace the subsequent full-population cache, parity,
+batch-256 stress, memory/time, bank and checkpoint acceptance. Those mandatory
+later checks still run under this campaign's production resource constraints.
 
 ```
 fresh U000 CE
@@ -165,9 +202,10 @@ unchanged dz-fix inventory. `SCREEN_SPEC`, `INVENTORY`, `LAUNCH_ROOT`,
 locations. Their content and lineage are validated, not trusted by existence.
 It never fetches into, updates, cancels or writes an existing campaign.
 
-LAUNCH_SPEC and CAMPAIGN_SPEC advance to v4 for the saved-tensor storage policy;
-ACCEPTANCE advances to v2 for mandatory training parity and real offload stress
-evidence. SOURCE_IMPORT stays v3: matching/capacity/source reuse is unchanged.
+LAUNCH_SPEC and CAMPAIGN_SPEC advance to v5 for layout-preserving storage and
+the scoped parity protocol; ACCEPTANCE advances to v3 and also requires four
+campaign-bound EARLY_PARITY/v1 diagnostics. The prior v4/v2 execution is not
+silently accepted. SOURCE_IMPORT stays v3: matching/capacity/source reuse is unchanged.
 The previous v3 consumer fixed inventory-derived capacity, v2 introduced
 direct-screen provenance but incorrectly required 240, and v1 used the canceled
 continuation route. Old roots must not be edited or reused; a fresh pinned
@@ -177,9 +215,10 @@ Model, seed, split, training and scientific output meanings are unchanged.
 For this retry, use the same completed debug screen through the queue helper;
 its authenticated durable completion removes the need for a purged Slurm job
 dependency. Do not rebuild matching or overwrite the failed campaign at
-`2f0afe5c`. The old `jc2fc_after_gate` job 21757081 remains blocked behind the
-failed 21757056 preflight; an operator may cancel that exact pending job only
-after checking its original launch ledger. The helper does not cancel it or
+`2f0afe5c` or `b35fbda6`. The user previously canceled old after-gate job
+21757081; do not reuse that historical ID as current cleanup guidance.
+Any cleanup of a newly blocked after-gate requires its exact current ledger.
+The helper does not cancel jobs or
 touch any `jc2k2`/`jc2salp` jobs. Only the new, source-pinned acceptance may
 release this new campaign's science DAG.
 
