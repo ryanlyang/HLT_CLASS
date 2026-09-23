@@ -16,7 +16,8 @@ from hlt_classification.data.cache_contracts import (
 )
 from .banks import load_bank, publish_bank
 from .contracts import relative_file, validate as base_validate
-from .concat_k2_campaign import gates, artifact, nodes, validate, validate_campaign
+from .concat_k2_campaign import (gates, artifact, nodes, validate, validate_campaign,
+                                 TRAINING, INFERENCE_BATCH_SIZE)
 from .concat_k2_data import caches, cache_bounds, prepare, publish_partition, assignment, foundation_lock, matcher_acceptance
 from .concat_k2_source import validate_import
 from .execution import allocation, gpu_identity
@@ -73,6 +74,7 @@ def science_gate(spec):
             or acceptance["resource"] != spec["resources"]["preflight"] or acceptance["acceptance_only"] is not True
             or acceptance["ordinary_rows"] != {r: spec["role_counts"][r] for r in ("train", "validation")}
             or acceptance["batch_size"] != spec["training"]["batch_size"]
+            or acceptance.get("inference_batch_size") != spec["inference_batch_size"]
             or acceptance["capacity"] != spec["foundation"]["inputs"]["capacity"]
             or not acceptance["checkpoint_round_trip"] or not acceptance["bank_round_trip"]
             or not acceptance["installed_weaver_fp32_parity"] or not acceptance["worst_population_batch_stress"]
@@ -84,7 +86,17 @@ def science_gate(spec):
             or any(not row["kernel_report"]["acceptance_only"] or row["kernel_report"]["scientific_fit"]
                    for row in acceptance["native_execution"])):
         raise ValueError("Fresh K2 execution acceptance differs")
+    for row in acceptance["native_execution"]:
+        validate_kernel_batching(spec, row["kernel_report"])
     return acceptance
+
+
+def validate_kernel_batching(spec, report):
+    expected = dict(training_batch_size=spec["training"]["batch_size"],
+                    inference_batch_size=spec["inference_batch_size"],
+                    gradient_accumulation_steps=1)
+    if report.get("batching") != expected:
+        raise ValueError("K2 kernel batch acceptance differs from registration")
 
 
 def execution_gate(spec, *, science):
@@ -133,11 +145,15 @@ def fit(spec, row, directory, device):
     q, lineage = teacher(spec, node, values["train"].identities)
     report, state = train_kernel(model, lambda _: values["train"], lambda _: values["checkpoint"],
         node=node, device=device, teacher_probabilities=q,
-        teacher_identities=None if q is None else values["train"].identities)
-    probabilities = predict(model, values["report"], node=node, device=device)
+        teacher_identities=None if q is None else values["train"].identities,
+        batch_size=spec["training"]["batch_size"], inference_batch_size=spec["inference_batch_size"])
+    validate_kernel_batching(spec, report)
+    probabilities = predict(model, values["report"], node=node, device=device,
+                            batch_size=spec["inference_batch_size"])
     path = directory / "selected.pt"
     save_state(path, state)
     outer = artifact("TRAINING_REPORT", campaign_sha256=spec["content_hash"], node=node,
+        training=spec["training"], inference_batch_size=spec["inference_batch_size"],
         kernel_report=report, teacher_lineage=lineage, selected_checkpoint_sha256=sha256_file(path),
         checkpoint_validation=report["validation"], report_validation=evaluate_probabilities(values["report"].labels, probabilities),
         validation_partition_sha256=load_json(Path(spec["campaign_root"]) / "validation_partition.json")["content_hash"],
@@ -164,6 +180,7 @@ def reduce(spec, row, directory, device):
     root = Path(spec["campaign_root"])
     report = load_json(relative_file(root, parent["result"]["training_report"]))
     validate(report, "TRAINING_REPORT")
+    validate_kernel_batching(spec, report["kernel_report"])
     if not report["kernel_report"]["scientific_fit"] or report["kernel_report"]["acceptance_only"]:
         raise ValueError("Acceptance weights cannot be a science teacher")
     model = new_model(node)
@@ -171,7 +188,8 @@ def reduce(spec, row, directory, device):
                          map_location="cpu", weights_only=True), strict=True)
     model.to(device).eval()
     values = caches(spec, node, train_only=True)["train"]
-    probabilities = predict(model, values, node=node, device=device, temperature=2.)
+    probabilities = predict(model, values, node=node, device=device, temperature=2.,
+                            batch_size=spec["inference_batch_size"])
     bank = directory / "train_bank"
     manifest = publish_bank(bank, foundation_sha256=spec["foundation"]["content_hash"],
         teacher_report_sha256=report["content_hash"], teacher_node=node["node_id"],
@@ -186,6 +204,7 @@ def result_rows(spec):
         if done:
             value = load_json(relative_file(Path(spec["campaign_root"]), done["result"]["training_report"]))
             validate(value, "TRAINING_REPORT")
+            validate_kernel_batching(spec, value["kernel_report"])
             reports[node["node_id"]] = value
     rows = []
     for node in spec["nodes"]:
@@ -216,7 +235,7 @@ def representative(cache, size):
     return np.asarray(selected[:size], np.int64)
 
 
-def longest_indices(cache, size=256):
+def longest_indices(cache, size=128):
     lengths = np.concatenate([np.diff(block.offsets) for block in cache.blocks])
     if len(lengths) != len(cache) or np.any(lengths < 1):
         raise ValueError("Invalid ragged cache lengths")
@@ -300,15 +319,16 @@ def batch_probes(spec,directory,node,train,validation,device):
         records.append(record)
         print(f"JC2-K2 phase=batch_probe_result view={node['primary_coordinate']} batch={size} status={record['status']} peak_cuda_GiB={record['peak_cuda_bytes']/2**30:.3f}",flush=True)
         if record["status"]!="COMPLETED":
-            raise MemoryError(f"K2 batch {size} CUDA OOM. Probe evidence saved; no acceptance or science submission. "
-                              "Batch 128 is diagnostic only; production remains 256 until explicitly re-registered.")
+            raise MemoryError(f"K2 registered batch {size} CUDA OOM. Probe evidence saved; "
+                              "no acceptance, automatic batch fallback or science submission.")
     return records
 
 
 def validate_memory_evidence(spec,value):
     if (value.get("pair_storage")!=PAIR_STORAGE or value.get("batch_probe_policy")!=BATCH_PROBE_POLICY
             or spec.get("pair_storage")!=PAIR_STORAGE or spec.get("batch_probe_policy")!=BATCH_PROBE_POLICY
-            or spec.get("parity_backend")!=PARITY_BACKEND or spec.get("parity_tolerances")!=PARITY_TOLERANCES):
+            or spec.get("parity_backend")!=PARITY_BACKEND or spec.get("parity_tolerances")!=PARITY_TOLERANCES
+            or spec.get("training")!=TRAINING or spec.get("inference_batch_size")!=INFERENCE_BATCH_SIZE):
         raise ValueError("K2 memory acceptance policy differs")
     reports=value.get("storage_parity_reports",[])
     expected=[(name,precision) for name in ("CONCAT_K2_D100","CONCAT_K2_D000") for precision in ("fp32","bf16")]
@@ -347,7 +367,7 @@ def validate_memory_evidence(spec,value):
         validate_storage_stats(storage.get("storage_stats"))
     probes=value.get("batch_probes",[])
     if [(r.get("node_id"),r.get("batch_size")) for r in probes]!=[
-            ("ACCEPTANCE_"+name,size) for name in PROBE_CASES for size in (128,256)]:
+            ("ACCEPTANCE_"+name,size) for name in PROBE_CASES for size in BATCH_PROBE_POLICY["order"]]:
         raise ValueError("K2 memory acceptance batch coverage/order differs")
     for row in probes:
         validate(row,"BATCH_PROBE")
@@ -395,20 +415,22 @@ def preflight(spec,directory,device):
                 storage_reports.append(dict(node_id=name,**storage_parity(t.batch(np.arange(4)),device=device,bf16=bf16)))
                 _cuda_clear()
         peak=max(peak,torch.cuda.max_memory_allocated()); reserved=max(reserved,torch.cuda.max_memory_reserved())
-        # Try 128 before the first 256 mini-fit/stress. A failure preserves the
-        # successful smaller probe, but cannot release any scientific jobs.
+        # The authorized production recipe is now physical batch 128. Stress
+        # it at every execution case; never retry the known-failing 256 path.
         probes.extend(batch_probes(spec,directory,node,train,validation,device))
         peak=max(peak,*(r["peak_cuda_bytes"] for r in probes))
         reserved=max(reserved,*(r["peak_reserved_cuda_bytes"] for r in probes))
         model=new_model(node)
         report,state=train_kernel(model,lambda _:t,lambda _:v,node=node,device=device,
-            teacher_probabilities=q,teacher_identities=None if q is None else t.identities,acceptance_passes=2)
-        expected=predict(model,v,node=node,device=device)
+            teacher_probabilities=q,teacher_identities=None if q is None else t.identities,acceptance_passes=2,
+            batch_size=spec["training"]["batch_size"],inference_batch_size=spec["inference_batch_size"])
+        validate_kernel_batching(spec,report)
+        expected=predict(model,v,node=node,device=device,batch_size=spec["inference_batch_size"])
         buffer=BytesIO(); torch.save(state,buffer); buffer.seek(0)
         model.load_state_dict(torch.load(buffer,map_location="cpu",weights_only=True),strict=True)
-        if not np.array_equal(expected,predict(model,v,node=node,device=device)):
+        if not np.array_equal(expected,predict(model,v,node=node,device=device,batch_size=spec["inference_batch_size"])):
             raise ValueError("Checkpoint round trip differs")
-        q=predict(model,t,node=node,device=device,temperature=2.); prior_ids=t.identities.copy()
+        q=predict(model,t,node=node,device=device,temperature=2.,batch_size=spec["inference_batch_size"]); prior_ids=t.identities.copy()
         bank=directory/(name+"_acceptance_bank")
         kwargs=dict(foundation_sha256=t.foundation_sha256,teacher_report_sha256=report["content_hash"],
                     teacher_node=node["node_id"],role="train")
@@ -442,7 +464,8 @@ def preflight(spec,directory,device):
         resource=spec["resources"]["preflight"],environment=environment,
         elapsed_seconds=time.monotonic()-started,**measured,cache_bounds=cache_bounds(spec),
         ordinary_rows={r:spec["role_counts"][r] for r in ("train","validation")},
-        capacity=spec["foundation"]["inputs"]["capacity"],batch_size=256,native_execution=evidence,
+        capacity=spec["foundation"]["inputs"]["capacity"],batch_size=spec["training"]["batch_size"],
+        inference_batch_size=spec["inference_batch_size"],native_execution=evidence,
         pair_storage=PAIR_STORAGE,batch_probe_policy=BATCH_PROBE_POLICY,
         storage_parity_reports=storage_reports,batch_probes=probes,
         early_parity_reports=early_reports,

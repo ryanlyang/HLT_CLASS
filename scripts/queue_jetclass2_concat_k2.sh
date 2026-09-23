@@ -50,6 +50,8 @@ actual = (spec.get("preparation_import") or {}).get("donor_spec_path")
 if actual != expected:
     raise SystemExit("Existing launch has a different K2 donor; restore K2_REUSE_SPEC or use a fresh root.")
 print("K2 matching: verified import from " + actual if actual else "K2 matching: fresh assignment jobs")
+print("K2 physical training batch: " + str(spec["registration"]["training"]["batch_size"]))
+print("K2 inference batch: " + str(spec["registration"]["inference_batch_size"]))
 print("Fresh memory preflight remains mandatory before science.")
 PY
 CONCAT_ARGS=()

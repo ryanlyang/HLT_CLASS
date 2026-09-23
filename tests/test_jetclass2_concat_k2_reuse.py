@@ -49,6 +49,9 @@ def completed_donor(snapshot, tmp_path, monkeypatch):
     foundation = chain.foundation_spec(parent, source_import["content_hash"])
     root = tmp_path / "old_k2"
     registered = dict(chain.registration(), split_profile="TRAIN_11")
+    # Historical matching donor really used 256; training is NOT imported.
+    registered["training"]["batch_size"] = 256
+    registered.pop("inference_batch_size")
     donor = base_artifact("CONCAT_K2_CAMPAIGN_SPEC", version=1, **registered,
         source_commit="a"*40, project_dir=str(tmp_path / "old_project"), campaign_root=str(root),
         data_root=str(raw), source_import=source_import, foundation=foundation,
@@ -156,8 +159,8 @@ def test_import_dry_plan_keeps_science_and_portability(completed_donor, tmp_path
     plan = scheduler.plan(spec, "full")
     assert len(plan["commands"]) == 23
     assert all("--partition="+partition in row["command"] for row in plan["commands"])
-    assert spec["training"]["batch_size"] == 256
-    assert spec["batch_probe_policy"]["order"] == [128, 256]
+    assert spec["training"]["batch_size"] == 128
+    assert spec["batch_probe_policy"]["order"] == [128]
     assert spec["execution_policy"]["mutable_scheduler_fields"] == ["Partition"]
 
 
@@ -241,7 +244,7 @@ def test_materialize_is_idempotent_and_does_not_import_preflight(completed_donor
     assert len(chain.gates(created)) == 6
 
 
-@pytest.mark.parametrize("version", [2, 3, 4, 5])
+@pytest.mark.parametrize("version", [2, 3, 4, 5, 6])
 def test_portable_and_memory_fixed_fresh_donors_supported(completed_donor, version):
     donor = completed_donor
     root = Path(donor["campaign_root"])

@@ -22,8 +22,9 @@ PAIR_STORAGE = dict(
     copy="physical_storage_span_including_gaps",
 )
 BATCH_PROBE_POLICY = dict(
-    order=[128, 256], steps=3, rows="longest_real_train_and_validation",
-    fresh_model_per_batch=True, production_batch_size=256,
+    version="k2_registered_batch_128_v1",
+    order=[128], steps=3, rows="longest_real_train_and_validation",
+    fresh_model_per_batch=True, production_batch_size=128,
     automatic_batch_fallback=False, stop_on_oom=True,
 )
 PARITY_CHECKS = ["logits", "loss", "feature_gradients", "parameter_gradients",

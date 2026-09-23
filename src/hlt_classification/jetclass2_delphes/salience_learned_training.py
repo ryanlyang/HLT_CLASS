@@ -150,9 +150,14 @@ def _train_batch(model, raw, *, node, device, teacher, alpha):
 def train_kernel(
     model, train_provider, validation_provider, *, node, device,
     teacher_probabilities=None, teacher_identities=None,
-    acceptance_passes=None,
+    acceptance_passes=None, batch_size=None, inference_batch_size=None,
 ):
-    """Train without durable rolling state and return report plus best weights."""
+    """Train with optional campaign-registered batching; legacy defaults stay fixed."""
+    explicit_batching = batch_size is not None or inference_batch_size is not None
+    batch_size = TRAINING["batch_size"] if batch_size is None else batch_size
+    inference_batch_size = 256 if inference_batch_size is None else inference_batch_size
+    if any(type(size) is not int or size <= 0 for size in (batch_size, inference_batch_size)):
+        raise ValueError("Training/inference batch sizes must be positive integers")
     if acceptance_passes is not None and (
         type(acceptance_passes) is not int or not 1 <= acceptance_passes <= 3
     ):
@@ -205,8 +210,8 @@ def train_kernel(
         model.train()
         train_started = time.monotonic()
         totals = []
-        for start in range(0, len(train), TRAINING["batch_size"]):
-            indices = order[start:start + TRAINING["batch_size"]]
+        for start in range(0, len(train), batch_size):
+            indices = order[start:start + batch_size]
             update += 1
             position = (pass_number - 1) + min(1., (start + len(indices)) / len(train))
             lr = learning_rate(position)
@@ -236,7 +241,8 @@ def train_kernel(
             totals.append(terms)
         train_seconds = time.monotonic() - train_started
         validation_started = time.monotonic()
-        probabilities = predict(model, validation, node=node, device=device)
+        probabilities = predict(model, validation, node=node, device=device,
+                                batch_size=inference_batch_size)
         metrics = evaluate_probabilities(validation.labels, probabilities)
         eligible = node["role"] != "dynamic_view_morph_ce" or pass_number >= 51
         key = _selection_key(metrics, update)
@@ -282,6 +288,9 @@ def train_kernel(
     model.eval()
     report = artifact(
         "TRAINING_REPORT", foundation_sha256=foundation_sha256,
+        **({"batching": dict(training_batch_size=batch_size,
+                            inference_batch_size=inference_batch_size,
+                            gradient_accumulation_steps=1)} if explicit_batching else {}),
         node=node, passes=len(history), selected_pass=selected_pass,
         validation=best_metrics, validation_history=history,
         runtime_seconds=time.monotonic() - started,

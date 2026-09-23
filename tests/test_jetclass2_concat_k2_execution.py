@@ -24,7 +24,7 @@ def test_partition_is_not_a_scientific_choice_and_old_versions_fail_closed(tmp_p
     assert max(r["minutes"] for r in tier3["resources"].values()) <= 1440
     for kind in ("LAUNCH_SPEC", "CAMPAIGN_SPEC", "ACCEPTANCE"):
         value = campaign.artifact(kind, test_only=True)
-        current = 4 if kind == "ACCEPTANCE" else 5
+        current = 5 if kind == "ACCEPTANCE" else 6
         assert value["schema_version"] == current
         for version in range(1, current):
             old = rehash(value, contract=value["contract"].replace(f"/v{current}", f"/v{version}"), schema_version=version)

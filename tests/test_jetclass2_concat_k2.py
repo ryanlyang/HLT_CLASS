@@ -226,9 +226,15 @@ def test_full_cpu_test_double_dispatch_teacher_banks_and_endpoint_compression(fa
     monkeypatch.setattr(runtime,"preflight",lambda *a:chain.artifact("ACCEPTANCE",test_only=True))
     original=runtime.train_kernel
     def miniature(*a,**kw):
+        assert kw["batch_size"] == kw["inference_batch_size"] == 128
         r,s=original(*a,**kw,acceptance_passes=1)
         return rehash(r,scientific_fit=True,acceptance_only=False),s
     monkeypatch.setattr(runtime,"train_kernel",miniature)
+    original_predict = runtime.predict
+    def predict(*a, **kw):
+        assert kw["batch_size"] == 128
+        return original_predict(*a, **kw)
+    monkeypatch.setattr(runtime, "predict", predict)
     for row in spec["tasks"]:
         done=runtime.run_task(spec,row["task_id"],device="cpu")
         assert runtime.completed(spec,row["task_id"])==done
@@ -238,6 +244,7 @@ def test_full_cpu_test_double_dispatch_teacher_banks_and_endpoint_compression(fa
     done=runtime.completed(spec,"train_HLT_X1_COMPRESSED")
     r=load_json(root/done["result"]["training_report"])
     assert r["teacher_lineage"]["teacher_node"]=="CONCAT_K2_D000"
+    assert r["schema_version"] == 2 and r["training"]["batch_size"] == r["inference_batch_size"] == 128
     assert r["checkpoint_validation"]["rows"]==44
     (root/done["result"]["checkpoint"]).write_bytes(b"tampered")
     with pytest.raises(ValueError,match="bytes changed"): runtime.completed(spec,"train_HLT_X1_COMPRESSED")
@@ -292,13 +299,16 @@ def test_memory_batch_capacity_execution_attestations_cannot_be_bypassed(tmp_pat
         site=site_for_partition(accepted_partition),resource=spec["resources"]["preflight"],acceptance_only=True,
         requested_site=spec["execution_site"],execution_policy_sha256=spec["execution_policy"]["content_hash"],
         ordinary_rows={r:spec["role_counts"][r] for r in ("train","validation")},
-        batch_size=256,capacity=32,checkpoint_round_trip=True,bank_round_trip=True,
+        batch_size=128,inference_batch_size=128,capacity=32,checkpoint_round_trip=True,bank_round_trip=True,
         installed_weaver_fp32_parity=True,worst_population_batch_stress=True,
         hlt_only_endpoint=True,duplicate_pair_finiteness=True,peak_cuda_bytes=800,
         gpu={"total_memory_bytes":1000},peak_rss_bytes=1000,projected_max_fit_seconds=100,
-        native_execution=[{"kernel_report":{"acceptance_only":True,"scientific_fit":False}}]*4,
+        native_execution=[{"kernel_report":{"acceptance_only":True,"scientific_fit":False,
+            "batching":{"training_batch_size":128,"inference_batch_size":128,"gradient_accumulation_steps":1}}}]*4,
         **memory_evidence(spec))
-    for name,changes in (("good",{}),("memory",{"peak_cuda_bytes":901}),("batch",{"batch_size":128}),
+    for name,changes in (("good",{}),("memory",{"peak_cuda_bytes":901}),("batch",{"batch_size":256}),
+            ("inference_batch",{"inference_batch_size":256}),
+            ("kernel_batch",{"native_execution":[{"kernel_report":{"acceptance_only":True,"scientific_fit":False}}]*4}),
             ("test",{"final_test_accessed":True}),("time",{"projected_max_fit_seconds":24*3600}),
             ("shape",{"capacity":16}),("duplicates",{"duplicate_pair_finiteness":False})):
         v=chain.artifact("ACCEPTANCE",**{**evidence,**changes}); write_immutable_json(root/(name+".json"),v)
@@ -376,12 +386,16 @@ def test_preflight_dispatch_cpu_double_exercises_every_stage_not_remote_acceptan
     monkeypatch.setattr(acceptance,"installed_parity",lambda c,**kw:parity(c,device="cpu"))
     original_train=runtime.train_kernel; original_predict=runtime.predict
     def train(*a,**kw):
+        assert kw["batch_size"] == kw["inference_batch_size"] == 128
         kw["device"]="cpu"
         report,state=original_train(*a,**kw)
         # Test orchestration, not wall-clock extrapolation from a CPU double.
         report["validation_history"][-1].update(train_seconds=.01,validation_seconds=.01)
         return rehash(report),state
-    def predict(*a,**kw): kw["device"]="cpu"; return original_predict(*a,**kw)
+    def predict(*a,**kw):
+        assert kw["batch_size"] == 128
+        kw["device"]="cpu"
+        return original_predict(*a,**kw)
     monkeypatch.setattr(runtime,"train_kernel",train)
     monkeypatch.setattr(runtime,"predict",predict)
     fabricated=memory_evidence(spec)
@@ -394,5 +408,7 @@ def test_preflight_dispatch_cpu_double_exercises_every_stage_not_remote_acceptan
     assert value["site"]["partition"] == "debug" and value["requested_site"]["partition"] == "tier3"
     assert value["environment"]["test_only"] and len(value["native_execution"])==4
     assert value["bank_round_trip"] and value["checkpoint_round_trip"]
+    assert value["batch_size"] == value["inference_batch_size"] == 128
+    assert len(value["batch_probes"]) == 4 and {r["batch_size"] for r in value["batch_probes"]} == {128}
     assert (directory/"resource_measurements.json").is_file()
     assert all(r["kernel_report"]["acceptance_only"] for r in value["native_execution"])

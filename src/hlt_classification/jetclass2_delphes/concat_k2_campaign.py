@@ -12,12 +12,14 @@ from .concat_k2_model import PAIR_STORAGE, BATCH_PROBE_POLICY, PARITY_BACKEND, P
 from .inputs import input_contract
 from .model import model_contract
 from .production import _source
-from .salience_learned_graph import TRAINING
+from .salience_learned_graph import TRAINING as SHARED_TRAINING
 from .concat_k2_views import view_contract
 
 AUTHORIZE = "AUTHORIZE JETCLASS2 DZFIX CONCAT K2 PORTABLE 500K EXACT SPEC"
 PREFIX = "jc2k2"
 COUNTS = dict(train=500_000, validation=1_000_000, final_test=1_000_000)
+TRAINING = {**deepcopy(SHARED_TRAINING), "batch_size": 128}
+INFERENCE_BATCH_SIZE = 128
 RESOURCES = {
     "metadata": dict(cpus=1, memory_mb=8192, minutes=240, gpu=False),
     "assignment": dict(cpus=1, memory_mb=8192, minutes=720, gpu=False),
@@ -28,7 +30,8 @@ RESOURCES = {
 }
 
 
-VERSIONS = {"LAUNCH_SPEC": 5, "CAMPAIGN_SPEC": 5, "ACCEPTANCE": 4}
+VERSIONS = {"LAUNCH_SPEC": 6, "CAMPAIGN_SPEC": 6, "ACCEPTANCE": 5,
+            "TRAINING_REPORT": 2, "BATCH_PROBE": 2}
 
 
 def artifact(kind, **fields):
@@ -97,6 +100,7 @@ def gates(spec):
 
 def registration(partition="tier3"):
     return dict(nodes=nodes(), training=deepcopy(TRAINING), execution_site=site_for_partition(partition),
+        inference_batch_size=INFERENCE_BATCH_SIZE,
         execution_policy=execution_policy(),
         pair_storage=deepcopy(PAIR_STORAGE), batch_probe_policy=deepcopy(BATCH_PROBE_POLICY),
         parity_backend=deepcopy(PARITY_BACKEND), parity_tolerances=deepcopy(PARITY_TOLERANCES),

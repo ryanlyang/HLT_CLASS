@@ -1,12 +1,50 @@
 # JetClass2 dzfix fixed-slot K=2 concatenation campaign
 
 Scientific authority: [the active implementation plan](../plans/JETCLASS2_DZFIX_FIXED_SLOT_CONCAT_K2_LADDER_PLAN.md).
-Family: `JETCLASS2_DELPHES_CONCAT_K2_*`. Launch and campaign specs are `/v5`
-and GPU acceptance is `/v4` for the 2026-09-22 strict-parity repair. These retain
-v4 preparation reuse, v3 ordered memory probes and v2 portable scheduling. Matching,
-views, seeds and remaining scientific artifacts keep `/v1`. New
+Family: `JETCLASS2_DELPHES_CONCAT_K2_*`. Launch and campaign specs are `/v6`,
+GPU acceptance `/v5`, training reports and batch probes `/v2` for the
+2026-09-23 explicitly authorized batch-128 recipe. These retain v5 strict
+parity, v4 preparation reuse and v2 portable scheduling. Matching,
+views, seeds and remaining artifacts keep `/v1`. New
 `EXECUTION_POLICY/v1` and `EXECUTION_RECORD/v1` bind allowed and actual sites.
 Historical v1 debug-only executions and other campaigns are not modified.
+
+## v6 physical batch 128 after measured batch-256 OOM
+
+This section supersedes historical 256-only / 128-before-256 wording in the
+v3-v5 sections below. Source `91be01940f814e1ea7a8a460b9694f0148f0d024`,
+job 21768860: early D100/D000 and population D100 parity passed. D100 batch
+128 completed three training steps plus validation at 21.16 GiB peak tensor
+allocation (about 33.57 GiB reserved). Batch 256 OOMed requesting 2.64 GiB
+with 2.37 GiB free on the 39.52 GiB A100. No science acceptance was published.
+
+Every new K2 fit uses physical batch **128**, including all controls and x1
+compression. Inference batch is also 128 for checkpoint/report validation,
+teacher-bank generation and checkpoint/bank round trips. No accumulation,
+LR rescaling, particle clipping, row loss or automatic fallback. Last partial
+batches run normally. Model, seeds, matching, dataset and pass-based LR/early
+stopping stay fixed. Update counts and BatchNorm populations change with the
+physical batch; this is not an assertion of identical optimization/results.
+
+`salience_learned_training.train_kernel` accepts explicit positive-integer
+training/inference batch overrides without mutating shared globals. Unchanged
+callers keep their historical 256 defaults and report layout. K2 opts in on
+every fit/preflight call and checks the kernel's reported `batching` record
+(training 128, inference 128, accumulation 1). K2 training reports bind the
+full registered recipe and inference batch; acceptance checks kernel evidence
+instead of accepting a spec-only batch-size change.
+
+Probe policy `k2_registered_batch_128_v1` requires exactly four batch-128
+longest-population probes (D100/D075/D000/HLT-x1), three optimizer steps and
+validation each. Never retry 256 in this new gate. All early/native/population
+parity, CE/KD mini-fits, round trips, 90% GPU / 80% CPU headroom and 23-hour
+runtime checks remain mandatory. Partial D100 evidence from 21768860 does not
+authorize the other views or science. Historical acceptance is rejected.
+
+Use new source-pinned launch/campaign roots and the original authenticated
+`1f930650` K2 preparation donor. No assignment jobs on the verified-import
+path. Existing artifacts/jobs are unchanged; pending-job partition-only
+debug/tier3 moves remain allowed. Fresh SPORC batch-128 acceptance is required.
 
 ## v5 strict parity and early failure detection
 
@@ -59,7 +97,7 @@ No old jobs or immutable roots are modified. Scientific batch stays 256;
 
 Set `K2_REUSE_SPEC` to an explicit completed K2 `campaign_spec.json`, or pass
 `--reuse-preparation-spec` to `create-launch`. Omit it to compute fresh matches.
-The donor must be an original freshly computed K2 campaign (v1 through v5),
+The donor must be an original freshly computed K2 campaign (v1 through v6),
 never a nested import or the one-to-one salience foundation. A failed GPU
 preflight does not invalidate a completed, authenticated matching foundation.
 
@@ -259,8 +297,8 @@ reducers, aggregate and complete = 17 science tasks. No implicit ensemble,
 warm start, K=3 run or extra seed sweep is included.
 
 Pair initialization and sampler seeds across all fits using separate
-`JC2/CONCAT_K2/v1` domains. Reuse the registered training kernel:
-batch 256, AdamW, peak 3e-4, floor 1.5e-5; three-pass warmup, hold through
+`JC2/CONCAT_K2/v1` domains. Reuse the registered training kernel with explicit
+physical batch 128 and inference batch 128, AdamW, peak 3e-4, floor 1.5e-5; three-pass warmup, hold through
 45, cosine to floor at 60, then constant floor through maximum 100.
 Minimum 60, patience clock begins at 60, patience 15, significant AUC delta
 5e-5: earliest early stop 75; restore best checkpoint using the existing
@@ -321,7 +359,7 @@ These are **requested bounds, not measured acceptance**. New preflight builds
 full ordinary-population caches, exercises CE and KD kernels at expanded
 coordinates and both HLT endpoints, performs actual installed-Weaver FP32
 forward/input/parameter-gradient parity including duplicate-p4 cases, tests
-selected-state and T=2 bank round trips, and stresses full batch 256 with
+selected-state and T=2 bank round trips, and stresses full batch 128 with
 the longest real rows padded to registered capacity and three optimizer steps.
 It also checks validation inference and records peak allocated/reserved CUDA
 and CPU RSS. Technical acceptance fits cannot be used as science teachers.
@@ -348,7 +386,7 @@ restart-zero attempt must use exact old IDs and a fresh isolated root.
 
 ### Manual pending-job moves
 
-On v2/v3 portable executions, the scheduler may change `Partition` between `tier3`
+On v2-v6 portable executions, the scheduler may change `Partition` between `tier3`
 and `debug`. The canonical submission commands/ledger remain unchanged as
 historical intent. Workers use the actual Slurm partition to activate the
 same SPORC environment, independently authenticate it against `scontrol`,

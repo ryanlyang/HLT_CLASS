@@ -13,6 +13,34 @@ Implementing this plan does not itself submit jobs.
 This is a separate study and must not change any existing matching foundation,
 fusion campaign, checkpoint, job, or immutable specification.
 
+### 2026-09-23 authorized physical batch-128 registration
+
+This amendment supersedes the historical batch-256 requirements below for
+new executions only. User-supplied A100 preflight 21768860 at `91be0194`
+passed early D100/D000 and population D100 parity. D100's physical batch-128
+probe completed three updates and validation (21.16 GiB peak allocated);
+batch 256 genuinely OOMed. That partial evidence is not full acceptance.
+
+Register **physical batch 128 for every K2 fit**, including all CE controls,
+ladder students and x1 compression. Use inference batches of at most 128 for
+checkpoint/report validation and teacher-bank generation too. No accumulation,
+automatic batch fallback, LR scaling, dropped rows or particle truncation.
+Keep the same per-pass LR schedule, maximum/minimum passes, patience, seeds,
+loss and data. More optimizer updates per pass and different BatchNorm batch
+populations are explicit consequences; this is not numerically batch 256.
+Other campaigns retain their existing trainer defaults and registrations.
+
+New launch/campaign v6, acceptance v5, training report v2 and batch probe v2
+bind the explicit batching. Fresh acceptance requires batch 128 only (not a
+known-failing 256 attempt) at D100/D075/D000/HLT-x1, all prior parity checks,
+native CE/KD execution, round trips, memory headroom and runtime projection.
+The gate verifies actual kernel-reported batching as well as specification.
+
+Reuse the original authenticated `1f930650` preparation donor; matching and
+views are unchanged. No assignment jobs or old GPU acceptance are imported.
+Use fresh source-pinned roots; keep debug/tier3 partition-only portability.
+Do not mutate or resubmit the failed immutable execution in place.
+
 ### 2026-09-22 authorized strict-parity repair and early-check amendment
 
 Preflight 21767292 at `49516092` failed FP32 pair-embedding gradient parity,
@@ -364,7 +392,7 @@ controls are additional fits. Recording the graph is not live authorization.
 
 Each arrow is ordinary logit KD from the selected immediate-parent model on
 the same training rows. Recommended inherited recipe: fresh initialization,
-25% CE / 75% temperature-2 KD, batch 256, the established H45/decay60/floor100
+25% CE / 75% temperature-2 KD, physical batch 128 (2026-09-23 amendment), the established H45/decay60/floor100
 schedule with early stopping and best-checkpoint restoration. The KD kernel,
 seed registry, optimizer, checkpoint tie rules, and
 early-stopping semantics must be frozen in the new implementation contract.

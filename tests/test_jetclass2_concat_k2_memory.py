@@ -74,7 +74,7 @@ def memory_evidence(spec):
         batch_size=size, train_rows=size, validation_rows=size, device_type="cuda",
         capacity=spec["foundation"]["inputs"]["capacity"], pair_storage=memory.PAIR_STORAGE,
         policy=memory.BATCH_PROBE_POLICY, acceptance_only=True, final_test_accessed=False)
-        for name in runtime.PROBE_CASES for size in (128, 256)]
+        for name in runtime.PROBE_CASES for size in (128,)]
     return dict(pair_storage=memory.PAIR_STORAGE, batch_probe_policy=memory.BATCH_PROBE_POLICY,
         storage_parity_reports=reports, batch_probes=probes, early_parity_reports=early)
 
@@ -175,8 +175,8 @@ def test_training_parity_detects_bn_state_change(pair_native, monkeypatch):
     with pytest.raises(AssertionError): memory.storage_parity(inputs()[0], device="cpu")
 
 
-@pytest.mark.parametrize("failure", [128, 256, None])
-def test_ordered_probes_keep_partial_results_and_never_fallback(tmp_path, monkeypatch, failure):
+@pytest.mark.parametrize("failure", [128, None])
+def test_registered_128_probe_keeps_results_and_never_attempts_256(tmp_path, monkeypatch, failure):
     spec = spec_at(tmp_path); node = dict(campaign.nodes()[3], node_id="ACCEPTANCE_CONCAT_K2_D100")
     seen = []
     def attempt(s, n, t, v, d, size):
@@ -186,15 +186,15 @@ def test_ordered_probes_keep_partial_results_and_never_fallback(tmp_path, monkey
         return dict(**successful_probe(), train_rows=size, validation_rows=size)
     monkeypatch.setattr(runtime, "_probe_attempt", attempt)
     if failure:
-        with pytest.raises(MemoryError, match="production remains 256"):
+        with pytest.raises(MemoryError, match="registered batch 128 CUDA OOM"):
             runtime.batch_probes(spec, tmp_path, node, None, None, "cuda")
     else:
-        assert len(runtime.batch_probes(spec, tmp_path, node, None, None, "cuda")) == 2
-    assert seen == ([128] if failure == 128 else [128, 256])
+        assert len(runtime.batch_probes(spec, tmp_path, node, None, None, "cuda")) == 1
+    assert seen == [128]
     records = [load_json(p) for p in sorted(tmp_path.glob("batch_probe_*.json"))]
     assert len(records) == len(seen)
     assert records[-1]["status"] == ("CUDA_OOM" if failure else "COMPLETED")
-    assert spec["training"]["batch_size"] == 256
+    assert spec["training"]["batch_size"] == 128
     assert not (tmp_path / "acceptance.json").exists()
 
 
