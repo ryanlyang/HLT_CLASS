@@ -4,6 +4,84 @@ Date: 2026-09-23. Implementation-authoritative, separately authorized developmen
 extension to the three-family response plan. This is not its full science,
 selection, confirmation, classifier, or JetClass2 transfer stage.
 
+## 2026-09-24: authorized CPU64 execution extension
+
+The user requested 64-CPU preparation after the 16-CPU A/C and B jobs showed
+only roughly 9 and 7 active cores in a short sample. This section supersedes
+the resource/file-scheduling defaults below **only for new DEV_STAGE64/v1
+comparisons**. Existing DEV_STAGE/v1 artifacts, workers pinned to old commits,
+and all scientific definitions remain unchanged.
+
+The new `create-compare64` CLI creates a fresh, disjoint study/comparison root
+at a clean pushed commit. It imports authenticated samples, histogram ranges,
+and the completed 20k association-confirmation report from the previous study.
+It verifies byte-identical scientific source, CMS inputs, compatibility,
+numerical environment and canonical memberships. Only the explicit development
+execution/CLI/documentation source allowlist may differ. It does not import
+old models, claims, pending jobs or acceptance; it neither cancels jobs nor
+changes the old roots. The original preparation, pilot and 20k confirmation
+are **not rerun**. All original held-out access boundaries remain sealed.
+
+Both fit allocations request **64 CPUs, 128 GiB, 24h, no GPUs**, debug by
+default. The comparison still has 17 tasks with the same independent family
+evaluation/report dependencies. The conservative sum-of-requests CPU upper
+bound is 143, replacing 47 for this execution only; scheduler admission is
+checked before submission. No speedup or full-time CPU utilization is promised
+without a genuine SPORC measurement.
+
+Each fit allocation loads the same 16k location and 4k residual pairs once per
+source file, using the existing authenticated read capability. Files are read
+in parallel, not reopened and rehashed for every small chunk. Selected pairs
+exist only in RAM; the registered array/key payload guard is 8 GiB (not a claim
+about total process RSS). The reader stage remains file-parallel and is not
+claimed to occupy all 64 cores. No raw or calibration data are spilled to disk.
+
+After reads finish, both roles share a 64-process association/record pool with
+eight jets per work item and at most 128 outstanding items. Any completed chunk
+releases another work item: slow files no longer hold whole CPU lanes. Native
+libraries inside each preprocessing process are single-threaded. Completed raw
+chunks are released. The final few chunks, I/O, startup and fitting may use
+fewer than 64 CPUs; the allocation is not an assertion of 100% utilization.
+
+Every chunk uses its original **per-file** record quota; each file's chunk
+reservoirs merge back to the same stratified bottom-hash sample. Population
+counts are summed before N/k inclusion weights are computed. No per-chunk
+quota, different source mixture, looser association limits, approximation,
+or removal of unresolved jets from evaluation is introduced. Canonical file
+order and ordered identity hashes reproduce legacy calibration reports. A/C
+reuse the prepared records; B's separate allocation prepares the same records.
+
+The parent logs startup, read completion and global completed-jet/chunk counts,
+plus 15-second wait heartbeats. Counts are completed work, not a guessed ETA.
+Completed-jet progress includes unresolved jets; `resolved` is a separate
+association diagnostic, not the fraction of the job completed.
+An eight-jet chunk still in progress is not yet counted. Normal module-level
+fit/publication messages follow preparation. A/C numerical fitting retains
+16 threads; **B fitting retains one thread** because the 16-thread diagnostic
+segfaulted. The 64 CPUs address preprocessing, not a claim of parallelizing B's
+single numerical optimizer. No running allocations are resized or resumed.
+
+Create/dry-review at the new pushed checkout, then separately authorize:
+
+```bash
+python -s "${PROJECT_DIR}/scripts/cms2jc2_response_dev.py" create-compare64 \
+  --parent-spec /home/ryreu/atlas/HLT_Classification/checkpoints/cms2jc2_dev_de9890b2_r1/stages/confirm_search_r1/stage_spec.json \
+  --project-dir "${PROJECT_DIR}" --source-commit "${NEW_COMMIT}" \
+  --root "${NEW_ROOT}" --partition debug
+
+SPEC="${NEW_ROOT}/stages/compare64_r1/stage_spec.json"
+python -s "${PROJECT_DIR}/scripts/cms2jc2_response_dev.py" dry-run --spec "${SPEC}"
+python -s "${PROJECT_DIR}/scripts/cms2jc2_response_dev.py" submit \
+  --spec "${SPEC}" --execute \
+  --authorization-phrase "AUTHORIZE CMS2JC2 CPU DEVELOPMENT COMPARE EXACT PLAN" \
+  --reviewed-plan-hash "${REVIEWED_PLAN_HASH}"
+```
+
+Use the existing `monitor` and `results` commands on this **new** SPEC. Keep
+the original metadata/worktree paths available for authenticated reuse. Any
+decision to cancel the two older fits and their descendants is separate and
+must use their exact original study-bound IDs; these tools never cancel them.
+
 ## Purpose and evidence
 
 The SPORC 20k probes at f966dd804ed9ca8ca93c9c3227d1a7f036ef4434 completed
@@ -179,7 +257,7 @@ old campaign worktree. Set PROJECT_DIR to that worktree, DEV_COMMIT to its full
 commit, and DEV_ROOT to a new sibling checkpoint directory. The established
 preparation is:
 
-`/home/ryreu/atlas/HLT_Classification/checkpoints/cms2jc2_response_f966dd80_r1/preparation_spec.json`
+`/home/ryreu/atlas/HLT_Classification/checkpoints/cms2jc2_response_prep_f966dd80_r1/preparation_spec.json`
 
 The following illustrates the explicit first-stage API; no command cancels or
 changes another campaign. Run in a subshell if using shell fail-fast options so

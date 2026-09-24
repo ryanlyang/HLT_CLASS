@@ -92,6 +92,11 @@ def parallel_records(ctx, roles, rules, workers, *, mode):
 
 def collected(ctx, role, rules, workers):
     outputs = parallel_records(ctx, [role], rules, workers, mode="collect")
+    return combine_records(outputs, role, rules)
+
+
+def combine_records(outputs, role, rules):
+    """Canonical per-file order and quotas, shared by legacy and CPU64 execution."""
     reports = [r for _, r in outputs]
     counts = {k: sum(r["counts"][k] for r in reports) for k in reports[0]["counts"]}
     if counts["jets"] != COUNTS[role]:
@@ -133,8 +138,15 @@ def association_task(ctx, spec, t):
 def fitting(ctx, study, spec, t):
     rules = POLICIES[spec["policy"]]
     start = time.monotonic()
-    loc, lr = collected(ctx, "location", rules, t["cpus"])
-    res, rr = collected(ctx, "residual", rules, t["cpus"])
+    if spec.get("contract") == "CMS2JC2_RESPONSE_DEV_STAGE64/v1":
+        from .dev_parallel import prepare_records
+        prepared = prepare_records(ctx, ["location", "residual"], rules, workers=t["cpus"])
+        loc, lr = combine_records(prepared["location"], "location", rules)
+        res, rr = combine_records(prepared["residual"], "residual", rules)
+        del prepared
+    else:
+        loc, lr = collected(ctx, "location", rules, t["cpus"])
+        res, rr = collected(ctx, "residual", rules, t["cpus"])
     prep = time.monotonic()-start
     from threadpoolctl import threadpool_limits
     outputs = {}
@@ -270,6 +282,7 @@ def allocation(study, t):
 
 
 def run(spec, task_id):
+    print(f"CMS2JC2-DEV phase=start task={task_id} stage={spec['name']} validating_sources=true", flush=True)
     study = validate_stage(spec)
     t = next(t for t in spec["tasks"] if t["task_id"] == task_id)
     allocated = allocation(study, t)

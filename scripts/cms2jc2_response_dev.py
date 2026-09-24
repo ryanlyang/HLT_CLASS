@@ -29,6 +29,10 @@ def main():
     p.add_argument("--parent-spec")
     p.add_argument("--policy", choices=tuple(campaign.POLICIES))
     p.add_argument("--b-threads", type=int, choices=(1, 16), default=1)
+    p = commands.add_parser("create-compare64")
+    for name in ("parent-spec", "project-dir", "source-commit", "root"):
+        p.add_argument("--"+name, required=True)
+    p.add_argument("--partition", default="debug")
     for name in ("dry-run", "submit", "run-task", "monitor", "results", "reconcile"):
         p = commands.add_parser(name)
         p.add_argument("--spec", required=True)
@@ -44,6 +48,10 @@ def main():
     if a.command == "create":
         result = campaign.create_study(project_dir=a.project_dir, source_commit=a.source_commit,
                                       preparation_spec=a.preparation_spec, root=a.root, partition=a.partition)
+    elif a.command == "create-compare64":
+        from hlt_classification.cms2jc2_response.dev_restart import create_compare64
+        result = create_compare64(parent_spec=a.parent_spec, project_dir=a.project_dir,
+                                 source_commit=a.source_commit, root=a.root, partition=a.partition)
     elif a.command == "stage":
         result = campaign.create_stage(a.study, stage=a.stage, name=a.name, parent_spec=a.parent_spec,
                                        policy_id=a.policy, b_threads=a.b_threads)

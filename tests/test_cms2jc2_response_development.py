@@ -338,7 +338,8 @@ def test_a_model_survives_later_c_failure_without_certifying_batch(tmp_path, mon
         campaign.verified_outputs(spec, "candidate_A_L")
 
 
-def test_tiny_real_root_through_fit_evaluation_and_report(tmp_path, monkeypatch):
+@pytest.mark.parametrize("cpu64", [False, True])
+def test_tiny_real_root_through_fit_evaluation_and_report(tmp_path, monkeypatch, cpu64):
     from test_cms2jc2_response_end_to_end import cms_fixture
     root = tmp_path/"raw"
     root.mkdir()
@@ -359,8 +360,14 @@ def test_tiny_real_root_through_fit_evaluation_and_report(tmp_path, monkeypatch)
     ctx = dict(cms_root=root, inventory=inv, roles=roles, review=provisional_compatibility(inventory_hash=inv["content_hash"]), samples=samples)
     with data.sample_stream(ctx, "location") as stream:
         ranges = diagnostics.fit_ranges(stream, samples["content_hash"])
-    loc, lr = worker.collected(ctx, "location", campaign.POLICIES["BASE"], 1)
-    res, rr = worker.collected(ctx, "residual", campaign.POLICIES["BASE"], 1)
+    if cpu64:
+        from hlt_classification.cms2jc2_response.dev_parallel import prepare_records
+        outputs = prepare_records(ctx, ["location", "residual"], campaign.POLICIES["BASE"], workers=1)
+        loc, lr = worker.combine_records(outputs["location"], "location", campaign.POLICIES["BASE"])
+        res, rr = worker.combine_records(outputs["residual"], "residual", campaign.POLICIES["BASE"])
+    else:
+        loc, lr = worker.collected(ctx, "location", campaign.POLICIES["BASE"], 1)
+        res, rr = worker.collected(ctx, "residual", campaign.POLICIES["BASE"], 1)
     from hlt_classification.cms2jc2_response.response import fit_response
     response = fit_response(loc, res, location_report=lr, residual_report=rr, candidate_id="A_L",
         review=ctx["review"], rules=campaign.POLICIES["BASE"], budget="SYNTHETIC_DEV", source_hash="a"*64)
