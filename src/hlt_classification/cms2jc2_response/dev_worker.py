@@ -138,7 +138,7 @@ def association_task(ctx, spec, t):
 def fitting(ctx, study, spec, t):
     rules = POLICIES[spec["policy"]]
     start = time.monotonic()
-    if spec.get("contract") == "CMS2JC2_RESPONSE_DEV_STAGE64/v1":
+    if spec.get("contract") in ("CMS2JC2_RESPONSE_DEV_STAGE64/v1", "CMS2JC2_RESPONSE_DEV_STAGE36/v1"):
         from .dev_parallel import prepare_records
         prepared = prepare_records(ctx, ["location", "residual"], rules, workers=t["cpus"])
         loc, lr = combine_records(prepared["location"], "location", rules)

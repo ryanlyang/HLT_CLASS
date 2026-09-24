@@ -1,4 +1,4 @@
-"""CPU64 development preparation: read each file once, schedule small RAM chunks.
+"""CPU36/64 preparation: read each file once, schedule small RAM chunks.
 
 Execution order never defines sampling quotas, record order or inclusion weights.
 No raw pairs, calibration arrays, or process spill files are persisted.
@@ -19,8 +19,10 @@ from .records import Reservoir
 from .response import collect
 
 
-def execution_profile():
-    return artifact("DEV_CPU64_EXECUTION", preprocessing_cpus=64, chunk_jets=8,
+def execution_profile(cpus=64):
+    if type(cpus) is not int or cpus not in (36, 64):
+        raise ValueError("Only CPU36 and CPU64 preparation profiles are registered")
+    return artifact(f"DEV_CPU{cpus}_EXECUTION", preprocessing_cpus=cpus, chunk_jets=8,
                     in_flight_per_worker=2, heartbeat_seconds=15,
                     loaded_pair_payload_limit_bytes=8*1024**3,
                     reader="one_authenticated_read_per_file_v1",
@@ -147,7 +149,7 @@ def collect_loaded(files, rules, *, workers, chunk_jets=8, heartbeat_seconds=15)
 
     def progress(in_flight=None):
         outstanding = {} if in_flight is None else {"outstanding_chunks": in_flight}
-        _log("records_cpu64", done, total, begin, resolved=resolved,
+        _log("records_cpu36" if workers == 36 else "records_cpu64", done, total, begin, resolved=resolved,
              chunks=f"{finished}/{expected}", worker_capacity=workers, **outstanding)
 
     def accept(key, result):
@@ -198,11 +200,12 @@ def collect_loaded(files, rules, *, workers, chunk_jets=8, heartbeat_seconds=15)
 def prepare_records(ctx, roles, rules, *, workers, cap=2_000_000):
     """Authenticate/read once per file, then use all workers across BOTH roles."""
     if roles != ["location", "residual"] or type(workers) is not int or not 1 <= workers <= 64:
-        raise ValueError("CPU64 prepares only the declared fitting roles")
+        raise ValueError("Chunked preprocessing prepares only the declared fitting roles")
     for name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
         if os.environ.get(name, "1") != "1":
             raise ValueError("Spawn preprocessing requires single-thread child environments")
-    policy = execution_profile()
+    # The validated task supplies the pool size; both profiles share RAM/chunk limits.
+    policy = execution_profile(36) if workers == 36 else execution_profile()
     registry = [(role, row["path"], row["selected_entries"], cap//len(ctx["samples"]["members"][role]))
                 for role in roles for row in sorted(ctx["samples"]["members"][role], key=lambda r: r["path"])]
     total = sum(row[2] for row in registry)
@@ -212,7 +215,7 @@ def prepare_records(ctx, roles, rules, *, workers, cap=2_000_000):
 
     def progress(pending=None):
         outstanding = {} if pending is None else {"outstanding_files": pending}
-        _log("load_cpu64", done, total, begin, files=f"{sum(x is not None for x in loaded)}/{len(registry)}",
+        _log("load_cpu36" if workers == 36 else "load_cpu64", done, total, begin, files=f"{sum(x is not None for x in loaded)}/{len(registry)}",
              reader_capacity=min(workers, len(registry)), **outstanding)
 
     def accept(i, pairs):

@@ -4,6 +4,55 @@ Date: 2026-09-23. Implementation-authoritative, separately authorized developmen
 extension to the three-family response plan. This is not its full science,
 selection, confirmation, classifier, or JetClass2 transfer stage.
 
+## 2026-09-24: authorized CPU36 tier3 execution
+
+The user's SPORC resource probes found 36 CPUs per debug node. The attempted
+single-node CPU64 debug submission failed its `sbatch --test-only` admission
+check before submitting any jobs. Tier3 accepted a test-only request for
+36 CPUs, 128 GiB, 24h. Test-only acceptance is neither a reservation nor a
+guaranteed start time. The user explicitly chose **tier3, 36 CPUs**.
+
+New `create-compare36` registers a fresh `DEV_STAGE36/v1` comparison named
+`compare36_r1`. All 17 jobs use tier3, account reu-aisocial, QoS qos_tier3,
+one node/task, no GPUs. Each of the two fits requests 36 CPUs/128 GiB/24h.
+The twelve evaluation shards retain 1 CPU/32 GiB/12h, and three reports retain
+1 CPU/16 GiB/2h. The conservative sum-of-requests CPU bound is 87. Tier3 is
+required for this registration; no in-place JSON/resource overrides are used.
+
+The same read-once, RAM-only, eight-jet preprocessing below now uses a
+**36-process** association/record pool with at most **72 outstanding chunks**.
+It is not capped at the number of input files. The read phase is still capped
+by available files; tail chunks and numerical fitting can use fewer cores.
+The same native child thread limits, 8-GiB raw array/key guard, 15-second
+heartbeats, per-file sampling, matching limits, populations and model equations
+apply. Logs identify `load_cpu36` and `records_cpu36` with actual worker capacity.
+A/C numerical fitting stays at 16 threads, B at one; no numerical threading
+change is being made in response to the previous B crash.
+
+Reuse the original completed `confirm_search_r1` as parent, not the unsubmitted
+CPU64 comparison. Reauthenticate the exact frozen samples, ranges, confirmation
+receipt, CMS inputs, scientific source and numerical environment. Neither
+preparation nor confirmation is rerun. Do not import old fitted models or
+alter running jobs. Old 16-CPU and CPU64 specifications/roots stay unchanged.
+`DEV_CPU36_EXECUTION/v1` and `DEV_CPU36_REUSE/v1` bind the new execution and
+reuse evidence; the CPU64 contracts below retain their original definitions.
+
+After a scoped commit/push, create a clean detached checkout and fresh root:
+
+```bash
+python -s "${PROJECT_DIR}/scripts/cms2jc2_response_dev.py" create-compare36 \
+  --parent-spec /home/ryreu/atlas/HLT_Classification/checkpoints/cms2jc2_dev_de9890b2_r1/stages/confirm_search_r1/stage_spec.json \
+  --project-dir "${PROJECT_DIR}" --source-commit "${NEW_COMMIT}" \
+  --root "${NEW_ROOT}" --partition tier3
+SPEC="${NEW_ROOT}/stages/compare36_r1/stage_spec.json"
+python -s "${PROJECT_DIR}/scripts/cms2jc2_response_dev.py" dry-run --spec "${SPEC}"
+```
+
+Review the exact plan before the standard explicit COMPARE submission below.
+Live submission rechecks every current site resource shape before any `sbatch`.
+No jobs are cancelled, resized, held or requeued. No speedup factor or measured
+36-core utilization is claimed until the new jobs actually run.
+
 ## 2026-09-24: authorized CPU64 execution extension
 
 The user requested 64-CPU preparation after the 16-CPU A/C and B jobs showed

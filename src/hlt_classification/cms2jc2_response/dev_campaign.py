@@ -89,9 +89,16 @@ def task(name, action, cpus, memory, hours, deps=(), mode="afterok", **params):
                 depends_on=list(deps), dependency_mode=mode, params=params)
 
 
-def tasks(stage, policy_id, b_threads, *, cpu64=False):
-    if cpu64 and (stage != "compare" or b_threads != 1):
-        raise ValueError("CPU64 is a comparison-only execution with single-thread B")
+def tasks(stage, policy_id, b_threads, *, cpu64=False, preprocessing_cpus=None):
+    if cpu64:
+        if preprocessing_cpus is not None:
+            raise ValueError("Choose one preprocessing execution profile")
+        preprocessing_cpus = 64  # Preserve the historical caller interface.
+    if preprocessing_cpus is not None:
+        if type(preprocessing_cpus) is not int or preprocessing_cpus not in (36, 64):
+            raise ValueError("Unregistered preprocessing CPU count")
+        if stage != "compare" or b_threads != 1:
+            raise ValueError("Chunked preparation is comparison-only with single-thread B")
     if stage == "pilot":
         return [task("prepare", "prepare", 1, 16, 4), *[
             task("assoc_"+p, "association", 8, 32, 12, ["prepare"], policy=p, population="pilot") for p in POLICIES], *[
@@ -102,9 +109,9 @@ def tasks(stage, policy_id, b_threads, *, cpu64=False):
         raise ValueError("Unknown development stage")
     result = [task("fit_AC", "fit", 16, 128, 24, candidates=["A_L", "C_L"], threads=16),
               task("fit_B", "fit", 16, 128, 24, candidates=["B_L"], threads=b_threads)]
-    if cpu64:
+    if preprocessing_cpus is not None:
         for row in result:
-            row["cpus"] = 64
+            row["cpus"] = preprocessing_cpus
     for f in "ABC":
         parent = "fit_B" if f == "B" else "fit_AC"
         names = [f"evaluate_{f}_{i}" for i in range(4)]
@@ -185,6 +192,9 @@ def create_stage(study_path, *, stage, name, parent_spec=None, policy_id=None, b
 
 
 def validate_stage(spec, *, source=True):
+    if spec.get("contract") == "CMS2JC2_RESPONSE_DEV_STAGE36/v1":
+        from .dev_restart import validate_compare36
+        return validate_compare36(spec, source=source)
     if spec.get("contract") == "CMS2JC2_RESPONSE_DEV_STAGE64/v1":
         from .dev_restart import validate_compare64
         return validate_compare64(spec, source=source)
@@ -231,7 +241,8 @@ def command_plan(spec, study):
                 str(project), str(root/"stage_spec.json"), t["task_id"]]
         commands.append(dict(task_id=t["task_id"], depends_on=t["depends_on"], dependency_mode=t["dependency_mode"], argv=argv))
     return artifact("DEV_PLAN", parents={"stage": spec["content_hash"]}, commands=commands,
-                    cpu_upper_bound=(143 if spec.get("contract") == "CMS2JC2_RESPONSE_DEV_STAGE64/v1"
-                                     else {"pilot": 64, "confirm": 16, "compare": 47}[spec["stage"]]),
+                    cpu_upper_bound={"CMS2JC2_RESPONSE_DEV_STAGE64/v1": 143,
+                                     "CMS2JC2_RESPONSE_DEV_STAGE36/v1": 87}.get(
+                                         spec.get("contract"), {"pilot": 64, "confirm": 16, "compare": 47}[spec["stage"]]),
                     allocated_cpu_hour_upper_bound=sum(t["cpus"]*t["hours"] for t in spec["tasks"]),
                     gpus=0, live_authorization_phrase=PHRASES[spec["stage"]])

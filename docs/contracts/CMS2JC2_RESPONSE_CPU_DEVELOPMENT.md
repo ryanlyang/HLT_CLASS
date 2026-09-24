@@ -21,6 +21,24 @@ the production six-block score. Low coverage/poor closure completes with honest
 diagnostics; invalid data, stale source, corruption and missing required model
 receipts fail closed. No candidate can become a qualified response here.
 
+## CPU36 tier3 execution extension, 2026-09-24
+
+Additive `DEV_STAGE36/v1`, `DEV_CPU36_EXECUTION/v1`, `DEV_CPU36_REUSE/v1`
+register `compare36_r1` on tier3 only. They do not mutate DEV_STAGE64 or legacy
+DEV_STAGE contracts. Each fit requests 36 CPUs/128 GiB/24h, with 36 preprocessing
+processes, eight-jet chunks, at most 72 outstanding chunks and 15-second
+heartbeats. A/C fit threads stay 16, B stays one. The other fifteen jobs retain
+their existing CPU/memory/time and dependency definitions but use tier3 too.
+All jobs remain single-node/task and request no GPU.
+
+The frozen data, association rules, sampling, model equations, diagnostics,
+RAM-only policy, storage caps and exact read-only confirmation reuse rules
+below are identical. A fresh source-pinned study and newly reviewed command
+plan are required; changing a 64-CPU spec or overriding its Slurm allocation
+is forbidden. The registered task CPU count supplies the worker pool size;
+fewer source files must not cap association/record preprocessing to that count.
+This registration conveys no full-time CPU utilization or queue-time guarantee.
+
 ## CPU64 execution extension, 2026-09-24
 
 New additive `DEV_STAGE64/v1`, `DEV_CPU64_EXECUTION/v1` and
