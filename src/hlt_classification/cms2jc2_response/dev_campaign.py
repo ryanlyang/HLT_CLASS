@@ -21,7 +21,7 @@ POLICIES = {
     "SEARCH": policy(search_nodes=1_000_000),
     "BOTH": policy(max_component_objects=256, max_component_hypotheses=16384, search_nodes=1_000_000),
 }
-PHRASES = {s: f"AUTHORIZE CMS2JC2 CPU DEVELOPMENT {s.upper()} EXACT PLAN" for s in ("pilot", "confirm", "compare", "cdiag", "ctopo")}
+PHRASES = {s: f"AUTHORIZE CMS2JC2 CPU DEVELOPMENT {s.upper()} EXACT PLAN" for s in ("pilot", "confirm", "compare", "cdiag", "ctopo", "btrack")}
 REMAINING_WRITES = 2*GIB
 
 
@@ -31,7 +31,9 @@ def source_snapshot(project, commit=None, *, executable=True):
     extra = EXTRA_SOURCE + ("docs/plans/CMS2JC2_FROZEN_C_DIAGNOSTIC_PLAN.md",
                             "docs/contracts/CMS2JC2_FROZEN_C_DIAGNOSTIC.md",
                             "docs/plans/CMS2JC2_C_OBSERVED_TOPOLOGY_DIAGNOSTIC_PLAN.md",
-                            "docs/contracts/CMS2JC2_C_OBSERVED_TOPOLOGY_DIAGNOSTIC.md")
+                            "docs/contracts/CMS2JC2_C_OBSERVED_TOPOLOGY_DIAGNOSTIC.md",
+                            "docs/plans/CMS2JC2_FROZEN_B_TRACKING_AUDIT_PLAN.md",
+                            "docs/contracts/CMS2JC2_FROZEN_B_TRACKING_AUDIT.md")
     if executable:
         for name in extra:
             subprocess.check_output(["git", "-C", str(project), "ls-files", "--error-unmatch", name])
@@ -196,6 +198,9 @@ def create_stage(study_path, *, stage, name, parent_spec=None, policy_id=None, b
 
 
 def validate_stage(spec, *, source=True):
+    if spec.get("contract") == "CMS2JC2_RESPONSE_DEV_B_TRACKING/v1":
+        from .b_tracking import validate_stage as validate_bt
+        return validate_bt(spec, source=source)
     if spec.get("contract") == "CMS2JC2_RESPONSE_DEV_C_TOPOLOGY/v1":
         from .c_topology import validate_stage as validate_ct
         return validate_ct(spec, source=source)
@@ -253,6 +258,6 @@ def command_plan(spec, study):
     return artifact("DEV_PLAN", parents={"stage": spec["content_hash"]}, commands=commands,
                     cpu_upper_bound={"CMS2JC2_RESPONSE_DEV_STAGE64/v1": 143,
                                      "CMS2JC2_RESPONSE_DEV_STAGE36/v1": 87}.get(
-                                         spec.get("contract"), {"pilot": 64, "confirm": 16, "compare": 47, "cdiag": 27, "ctopo": 144}[spec["stage"]]),
+                                         spec.get("contract"), {"pilot": 64, "confirm": 16, "compare": 47, "cdiag": 27, "ctopo": 144, "btrack": 144}[spec["stage"]]),
                     allocated_cpu_hour_upper_bound=sum(t["cpus"]*t["hours"] for t in spec["tasks"]),
                     gpus=0, live_authorization_phrase=PHRASES[spec["stage"]])
