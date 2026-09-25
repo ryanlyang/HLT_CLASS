@@ -313,6 +313,10 @@ def run(spec, task_id):
             outputs = dict(samples=publish_result(spec, "samples", ctx["samples"], "DEV_SAMPLES"),
                            ranges=publish_result(spec, "ranges", ranges, "DEV_RANGES"))
             result = artifact("DEV_PREPARED", parents={"samples": ctx["samples"]["content_hash"]}, counts=COUNTS)
+        elif t["action"].startswith("c_"):
+            from .c_diagnostic_worker import dispatch
+            result = dispatch(ctx, spec, t)
+            outputs = {}
         else:
             functions = dict(association=lambda: association_task(ctx, spec, t),
                 b_diagnostic=lambda: b_diagnostic(ctx, spec, t), fit=lambda: fitting(ctx, study, spec, t),

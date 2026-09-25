@@ -34,7 +34,10 @@ def main():
         for name in ("parent-spec", "project-dir", "source-commit", "root"):
             p.add_argument("--"+name, required=True)
         p.add_argument("--partition", default=partition)
-    for name in ("dry-run", "submit", "run-task", "monitor", "results", "reconcile"):
+    p = commands.add_parser("create-c-diagnostic")
+    for name in ("parent-spec", "project-dir", "source-commit", "root"):
+        p.add_argument("--"+name, required=True)
+    for name in ("dry-run", "submit", "run-task", "monitor", "results", "reconcile", "c-results"):
         p = commands.add_parser(name)
         p.add_argument("--spec", required=True)
         if name == "submit":
@@ -57,11 +60,19 @@ def main():
         from hlt_classification.cms2jc2_response.dev_restart import create_compare36
         result = create_compare36(parent_spec=a.parent_spec, project_dir=a.project_dir,
                                  source_commit=a.source_commit, root=a.root, partition=a.partition)
+    elif a.command == "create-c-diagnostic":
+        from hlt_classification.cms2jc2_response.c_diagnostic import create
+        result = create(parent_spec=a.parent_spec, project_dir=a.project_dir,
+                        source_commit=a.source_commit, root=a.root)
     elif a.command == "stage":
         result = campaign.create_stage(a.study, stage=a.stage, name=a.name, parent_spec=a.parent_spec,
                                        policy_id=a.policy, b_threads=a.b_threads)
     else:
         spec = load_json(Path(a.spec))
+        if a.command == "c-results":
+            from hlt_classification.cms2jc2_response.c_diagnostic_results import render
+            print(render(spec))
+            return 0
         if a.command in ("dry-run", "submit"):
             result = submission.submit(spec, execute=getattr(a, "execute", False),
                 authorization_phrase=getattr(a, "authorization_phrase", None),
