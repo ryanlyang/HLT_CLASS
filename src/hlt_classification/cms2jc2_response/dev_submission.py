@@ -109,6 +109,9 @@ def submit(spec, *, execute=False, authorization_phrase=None, reviewed_plan_hash
         return plan
     if authorization_phrase != PHRASES[spec["stage"]] or reviewed_plan_hash != plan["content_hash"]:
         raise PermissionError("Exact stage phrase and reviewed dry-plan hash required")
+    if spec.get("contract") == "CMS2JC2_RESPONSE_DEV_B_TRACKING_DEBUG/v1":
+        from .b_tracking_debug import verify_retirement
+        verify_retirement(spec, live=True)
     jobs = submitted_jobs(spec, plan)
     for row in plan["commands"]:
         if row["task_id"] not in jobs and journal(spec, row["task_id"]).exists():
@@ -142,7 +145,7 @@ def submit(spec, *, execute=False, authorization_phrase=None, reviewed_plan_hash
     return ledger
 
 
-def scheduler_identity(spec, study, task_id, job_id):
+def scheduler_identity(spec, study, task_id, job_id, *, pending=False):
     result = scheduler(["scontrol", "show", "job", "-o", job_id])
     fields = dict(re.findall(r"(?:^|\s)([A-Za-z0-9_]+)=([^\s]+)", result.stdout))
     t = next(row for row in spec["tasks"] if row["task_id"] == task_id)
@@ -154,6 +157,10 @@ def scheduler_identity(spec, study, task_id, job_id):
     validate(intent, "DEV_SUBMIT_INTENT", parents={"stage": spec["content_hash"], "plan": plan["content_hash"]})
     if intent["task_id"] != task_id or intent["argv"] != argv_for(row, submitted_jobs(spec, plan)):
         raise PermissionError("Worker does not match its exact reviewed submission intent")
+    # SPORC reports a one-node request as a range before allocation. Only the
+    # explicit pending-job retirement check accepts this form; workers remain
+    # bound to an actual one-node allocation.
+    node_shapes = {"1", "1-1"} if pending and fields.get("JobState") == "PENDING" else {"1"}
     if (result.returncode or fields.get("JobId") != job_id
             or fields.get("Comment") != f"c2jd:{spec['content_hash']}:{task_id}"
             or fields.get("WorkDir") != study["project_dir"]
@@ -162,7 +169,7 @@ def scheduler_identity(spec, study, task_id, job_id):
             or fields.get("Partition") != study["site"]["partition"]
             or fields.get("Account") != study["site"]["account"]
             or fields.get("QOS") != study["site"]["qos"] or fields.get("NumCPUs") != str(t["cpus"])
-            or fields.get("NumNodes") != "1" or "gres/gpu" in fields.get("ReqTRES", "")
+            or fields.get("NumNodes") not in node_shapes or "gres/gpu" in fields.get("ReqTRES", "")
             or "gres/gpu" in fields.get("AllocTRES", "")):
         raise PermissionError("Exact scheduler provenance/allocation differs")
     return fields

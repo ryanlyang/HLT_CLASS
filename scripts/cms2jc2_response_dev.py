@@ -43,12 +43,15 @@ def main():
     p = commands.add_parser("create-b-tracking")
     for name in ("parent-spec", "project-dir", "source-commit", "root"):
         p.add_argument("--"+name, required=True)
-    for name in ("dry-run", "submit", "run-task", "monitor", "results", "reconcile", "c-results", "c-audit", "c-topology-results", "b-tracking-results"):
+    p = commands.add_parser("create-b-tracking-debug")
+    for name in ("parent-spec", "project-dir", "source-commit", "root"):
+        p.add_argument("--"+name, required=True)
+    for name in ("dry-run", "submit", "retire-b-tracking", "run-task", "monitor", "results", "reconcile", "c-results", "c-audit", "c-topology-results", "b-tracking-results"):
         p = commands.add_parser(name)
         p.add_argument("--spec", required=True)
         if name in ("c-audit", "c-topology-results", "b-tracking-results"):
             p.add_argument("--json", action="store_true", help="Print full authenticated accounting to stdout; no files written")
-        if name == "submit":
+        if name in ("submit", "retire-b-tracking"):
             p.add_argument("--execute", action="store_true")
             p.add_argument("--authorization-phrase")
             p.add_argument("--reviewed-plan-hash")
@@ -80,11 +83,21 @@ def main():
         from hlt_classification.cms2jc2_response.b_tracking import create
         result = create(parent_spec=a.parent_spec, project_dir=a.project_dir,
                         source_commit=a.source_commit, root=a.root)
+    elif a.command == "create-b-tracking-debug":
+        from hlt_classification.cms2jc2_response.b_tracking_debug import create
+        result = create(parent_spec=a.parent_spec, project_dir=a.project_dir,
+                        source_commit=a.source_commit, root=a.root)
     elif a.command == "stage":
         result = campaign.create_stage(a.study, stage=a.stage, name=a.name, parent_spec=a.parent_spec,
                                        policy_id=a.policy, b_threads=a.b_threads)
     else:
         spec = load_json(Path(a.spec))
+        if a.command == "retire-b-tracking":
+            from hlt_classification.cms2jc2_response.b_tracking_debug import retire
+            result = retire(spec, execute=a.execute, authorization_phrase=a.authorization_phrase,
+                            reviewed_plan_hash=a.reviewed_plan_hash)
+            print(json.dumps(result, indent=2, sort_keys=True))
+            return 0
         if a.command == "b-tracking-results":
             from hlt_classification.cms2jc2_response.b_tracking_results import read, render
             result = read(spec)
