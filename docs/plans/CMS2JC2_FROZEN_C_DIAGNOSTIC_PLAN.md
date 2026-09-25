@@ -1,5 +1,55 @@
 # Frozen C response diagnostic (2026-09-24)
 
+## 2026-09-25: report-only momentum accounting audit
+
+The user authorized investigating the charged/neutral momentum imbalance and
+residual-bin backoff after inspecting the five completed interventions. Start
+with authenticated saved reports and the fitted C_L model: no new jobs, ROOT
+reads, generation, association, fitting or mutation of existing products.
+`c-audit --spec ...` prints the audit; optional `--json` prints a content-hashed
+DEV_C_ACCOUNTING_AUDIT/v1 document to stdout, not into any campaign root.
+The reporting implementation is identified separately from the donor source.
+
+For offline, real HLT and all five proxies, calculate PID counts per jet,
+particle-weighted mean pT, scalar pT per jet and pooled PID momentum shares.
+Keep unknown PID separate: its charge breakdown was not saved. Report bounds
+on pooled actual charged momentum share, not an invented charged assignment.
+Do not equate pooled momentum shares with the saved mean per-nonempty-jet
+charged pT fraction. Print cohort-conditioned fractions and retain all cohorts
+in JSON. Empty jets remain in count/momentum denominators; undefined particle
+means or zero-total momentum shares are null, never fake zero-quality scores.
+
+Disaggregate generated output momentum by module/mechanism/PID, including
+identity fallbacks. Check count/pT sums against the complete collection for
+each PID. These are output budgets, not mechanism efficiencies: no input-pT
+denominator or real-HLT mechanism truth was saved. Use disjoint /all emission
+groups for reason rates; split emissions can appear in multiple /pid groups.
+Show actual log-pT coordinate clipping separately from other coordinate clips.
+
+Inventory stored residual cells by module, input category and conditioning
+level, including supported/unsupported cells and distinct jets per cell.
+Calibration jets overlap across cells and cannot be summed. This is available
+calibration support, NOT empirical selected-bin occupancy. Existing v1 reports
+did not save the selected level; obtaining its frequencies requires a separately
+registered replay, not a fabricated estimate. No such replay is submitted here.
+
+Authenticate registration, receipts, report/model hashes, common population and
+parent lineage. Corrupt/incomplete accounting fails closed; poor physical
+agreement does not. Preserve the registered provisional physical conventions,
+sealed confirmation/test roles and non-independent replica interpretation.
+This extension adds no response-model change and does not select a winner.
+
+Run from a new checkout containing the reporting code, retaining the original
+study and donor worktrees unchanged. The read-only reader validates old artifact
+lineage without pretending its own source is the old worker's source:
+
+```bash
+python -s "${PROJECT_DIR}/scripts/cms2jc2_response_dev.py" c-audit \
+  --spec /home/ryreu/atlas/HLT_Classification/checkpoints/cms2jc2_frozen_c_0c3682bb_r1/stages/frozen_c_r1/stage_spec.json
+```
+
+No study creation, source migration, sbatch or requeue is needed for this audit.
+
 This is an authorized, isolated development extension, not a new response fit,
 production selection or JetClass2 transfer. It supersedes the CPU development
 plan only for the new `DEV_C_DIAGNOSTIC/v1` registration. Existing studies,

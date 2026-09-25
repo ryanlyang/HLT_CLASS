@@ -37,9 +37,11 @@ def main():
     p = commands.add_parser("create-c-diagnostic")
     for name in ("parent-spec", "project-dir", "source-commit", "root"):
         p.add_argument("--"+name, required=True)
-    for name in ("dry-run", "submit", "run-task", "monitor", "results", "reconcile", "c-results"):
+    for name in ("dry-run", "submit", "run-task", "monitor", "results", "reconcile", "c-results", "c-audit"):
         p = commands.add_parser(name)
         p.add_argument("--spec", required=True)
+        if name == "c-audit":
+            p.add_argument("--json", action="store_true", help="Print full authenticated accounting to stdout; no files written")
         if name == "submit":
             p.add_argument("--execute", action="store_true")
             p.add_argument("--authorization-phrase")
@@ -69,6 +71,11 @@ def main():
                                        policy_id=a.policy, b_threads=a.b_threads)
     else:
         spec = load_json(Path(a.spec))
+        if a.command == "c-audit":
+            from hlt_classification.cms2jc2_response.c_accounting_audit import build, render
+            result = build(spec)
+            print(json.dumps(result, indent=2, sort_keys=True, allow_nan=False) if a.json else render(result))
+            return 0
         if a.command == "c-results":
             from hlt_classification.cms2jc2_response.c_diagnostic_results import render
             print(render(spec))

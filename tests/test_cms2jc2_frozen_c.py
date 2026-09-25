@@ -292,4 +292,32 @@ def test_tiny_root_all_variants_through_reports(frozen_root, monkeypatch):
     from hlt_classification.cms2jc2_response.c_diagnostic_results import render
     text = render(spec)
     assert "INDEPENDENT" in text and "EMISSION-LEVEL" in text and "Final test accessed: False" in text
+    from hlt_classification.cms2jc2_response import c_accounting_audit as audit
+    monkeypatch.setattr(audit, "COUNTS", data.COUNTS)
+    snapshot = {p: sha256_file(p) for p in Path(spec["root"]).rglob("*") if p.is_file()}
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Read-only audit attempted generation, raw access, publication or scheduler access")
+    with monkeypatch.context() as guard:
+        guard.setattr(worker, "sample_stream", forbidden)
+        guard.setattr(Generator, "__call__", forbidden)
+        guard.setattr(dev, "write", forbidden)
+        guard.setattr(submission, "scheduler", forbidden)
+        result = audit.build(spec)
+    assert result["read_only"] and not result["raw_data_accessed"]
+    assert result["accounting"]["all"]["FULL"]["jet_observations"] == 36
+    assert result["residual_inventory"]["observed_selected_level_counts"] is None
+    assert "not mapping quality" in audit.render(result)
+    assert "not recorded" in result["residual_inventory"]["occupancy_status"]
+    import json
+    json.dumps(result, allow_nan=False)
+    assert snapshot == {p: sha256_file(p) for p in Path(spec["root"]).rglob("*") if p.is_file()}
     assert before == {p: sha256_file(p) for p in Path(donor["root"]).rglob("*") if p.is_file()}
+    original_product = audit.product
+    def wrong_parent(stage, owner, key):
+        value = original_product(stage, owner, key)
+        if owner == "c_report_FULL":
+            return with_content_hash(dict(value, parents=dict(value["parents"], samples="f"*64)))
+        return value
+    monkeypatch.setattr(audit, "product", wrong_parent)
+    with pytest.raises(ValueError, match="lineage"):
+        audit.build(spec)

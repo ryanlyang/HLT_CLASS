@@ -24,3 +24,25 @@ and flag equality.
 Generic DEV_STUDY/PLAN/OUTPUTS/submission journal contracts are reused. No
 permission to modify a donor, open final test, fit a new model or use JetClass2
 HLT is granted by this diagnostic registration.
+
+## Additive report-only accounting v1, 2026-09-25
+
+`CMS2JC2_RESPONSE_DEV_C_ACCOUNTING_AUDIT/v1` binds the diagnostic stage, fitted
+response, samples, histogram ranges and all five DEV_C_REPORT hashes. It records
+the audit-module SHA separately from the original study source commit. It is
+stdout-only: no publication, scheduler call, particle read or model execution.
+Original v1 reports and their scientific semantics remain unchanged.
+
+Accounting exposes jet/jet-replica, emission, particle and coordinate-exposure
+denominators explicitly. PID momentum shares are ratios of pooled scalar-pT
+sums; mean per-jet charged fraction is a separate nonempty-jet observable.
+Unknown PID charge is not reconstructed. Its pT supplies bounds on total
+charged share. Missing particle categories in complete populations have zero
+counts/sums and undefined means; empty populations have null fractions.
+
+Generated mechanism sums must close to saved per-PID totals (exact counts;
+floating pT rel_tol=1e-9, abs_tol=1e-6 GeV). Parent reference floating moments
+retain the historical 1e-10 replay tolerance. Residual support inventories have
+`observed_selected_level_counts: null`, explicitly not evaluation occupancy.
+No independent-replica uncertainty, real-HLT mechanism truth, response efficiency,
+physical qualification or automatic selection claim is permitted.
