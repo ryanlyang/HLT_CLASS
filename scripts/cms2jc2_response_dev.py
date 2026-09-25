@@ -49,7 +49,12 @@ def main():
     p = commands.add_parser("create-c-topology-debug")
     for name in ("parent-spec", "project-dir", "source-commit", "root"):
         p.add_argument("--"+name, required=True)
-    for name in ("dry-run", "submit", "retire-b-tracking", "retire-c-topology", "run-task", "monitor", "results", "reconcile", "c-results", "c-audit", "c-topology-results", "b-tracking-results"):
+    p = commands.add_parser("create-bounded")
+    for name in ("parent-spec", "project-dir", "source-commit", "root"):
+        p.add_argument("--"+name, required=True)
+    p = commands.add_parser("advance-bounded")
+    p.add_argument("--parent-spec", required=True)
+    for name in ("dry-run", "submit", "retire-b-tracking", "retire-c-topology", "run-task", "monitor", "results", "reconcile", "c-results", "c-audit", "c-topology-results", "b-tracking-results", "bounded-results"):
         p = commands.add_parser(name)
         p.add_argument("--spec", required=True)
         if name in ("c-audit", "c-topology-results", "b-tracking-results"):
@@ -94,11 +99,22 @@ def main():
         from hlt_classification.cms2jc2_response.c_topology_debug import create
         result = create(parent_spec=a.parent_spec, project_dir=a.project_dir,
                         source_commit=a.source_commit, root=a.root)
+    elif a.command == "create-bounded":
+        from hlt_classification.cms2jc2_response.bounded_campaign import create
+        result = create(parent_spec=a.parent_spec, project_dir=a.project_dir,
+                        source_commit=a.source_commit, root=a.root)
+    elif a.command == "advance-bounded":
+        from hlt_classification.cms2jc2_response.bounded_campaign import advance
+        result = advance(a.parent_spec)
     elif a.command == "stage":
         result = campaign.create_stage(a.study, stage=a.stage, name=a.name, parent_spec=a.parent_spec,
                                        policy_id=a.policy, b_threads=a.b_threads)
     else:
         spec = load_json(Path(a.spec))
+        if a.command == "bounded-results":
+            from hlt_classification.cms2jc2_response.bounded_campaign import render
+            print(render(spec))
+            return 0
         if a.command == "retire-c-topology":
             from hlt_classification.cms2jc2_response.c_topology_debug import retire
             result = retire(spec, execute=a.execute, authorization_phrase=a.authorization_phrase,
