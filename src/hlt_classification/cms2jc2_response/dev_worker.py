@@ -287,6 +287,9 @@ def run(spec, task_id):
     if spec.get("contract") == "CMS2JC2_RESPONSE_DEV_B_TRACKING_DEBUG/v1":
         from .b_tracking_debug import verify_retirement
         verify_retirement(spec)
+    if spec.get("contract") == "CMS2JC2_RESPONSE_DEV_C_TOPOLOGY_DEBUG/v1":
+        from .c_topology_debug import verify_retirement
+        verify_retirement(spec)
     t = next(t for t in spec["tasks"] if t["task_id"] == task_id)
     allocated = allocation(study, t)
     from .dev_submission import scheduler_identity

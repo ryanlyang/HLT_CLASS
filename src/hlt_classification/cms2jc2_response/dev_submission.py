@@ -112,6 +112,9 @@ def submit(spec, *, execute=False, authorization_phrase=None, reviewed_plan_hash
     if spec.get("contract") == "CMS2JC2_RESPONSE_DEV_B_TRACKING_DEBUG/v1":
         from .b_tracking_debug import verify_retirement
         verify_retirement(spec, live=True)
+    if spec.get("contract") == "CMS2JC2_RESPONSE_DEV_C_TOPOLOGY_DEBUG/v1":
+        from .c_topology_debug import verify_retirement
+        verify_retirement(spec, live=True)
     jobs = submitted_jobs(spec, plan)
     for row in plan["commands"]:
         if row["task_id"] not in jobs and journal(spec, row["task_id"]).exists():

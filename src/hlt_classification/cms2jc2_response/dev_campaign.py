@@ -35,7 +35,9 @@ def source_snapshot(project, commit=None, *, executable=True):
                             "docs/plans/CMS2JC2_FROZEN_B_TRACKING_AUDIT_PLAN.md",
                             "docs/contracts/CMS2JC2_FROZEN_B_TRACKING_AUDIT.md",
                             "docs/plans/CMS2JC2_B_TRACKING_DEBUG_REPLACEMENT_PLAN.md",
-                            "docs/contracts/CMS2JC2_B_TRACKING_DEBUG_REPLACEMENT.md")
+                            "docs/contracts/CMS2JC2_B_TRACKING_DEBUG_REPLACEMENT.md",
+                            "docs/plans/CMS2JC2_C_TOPOLOGY_DEBUG_REPLACEMENT_PLAN.md",
+                            "docs/contracts/CMS2JC2_C_TOPOLOGY_DEBUG_REPLACEMENT.md")
     if executable:
         for name in extra:
             subprocess.check_output(["git", "-C", str(project), "ls-files", "--error-unmatch", name])
@@ -200,6 +202,9 @@ def create_stage(study_path, *, stage, name, parent_spec=None, policy_id=None, b
 
 
 def validate_stage(spec, *, source=True):
+    if spec.get("contract") == "CMS2JC2_RESPONSE_DEV_C_TOPOLOGY_DEBUG/v1":
+        from .c_topology_debug import validate_stage as validate_debug
+        return validate_debug(spec, source=source)
     if spec.get("contract") == "CMS2JC2_RESPONSE_DEV_B_TRACKING_DEBUG/v1":
         from .b_tracking_debug import validate_stage as validate_debug
         return validate_debug(spec, source=source)
