@@ -284,6 +284,9 @@ def allocation(study, t):
 def run(spec, task_id):
     print(f"CMS2JC2-DEV phase=start task={task_id} stage={spec['name']} validating_sources=true", flush=True)
     study = validate_stage(spec)
+    if spec.get("contract") == "CMS2JC2_RESPONSE_BDZ_AUDIT_DEBUG/v1":
+        from .bdz_audit_debug import verify_retirement
+        verify_retirement(spec)
     if spec.get("contract") == "CMS2JC2_RESPONSE_BDZ_TIER3/v1":
         from .bdz_tier3 import verify_retirement
         verify_retirement(spec)
@@ -323,7 +326,10 @@ def run(spec, task_id):
                            ranges=publish_result(spec, "ranges", ranges, "DEV_RANGES"))
             result = artifact("DEV_PREPARED", parents={"samples": ctx["samples"]["content_hash"]}, counts=COUNTS)
         elif t["action"].startswith("ba_"):
-            from .bdz_audit_worker import dispatch
+            if spec.get("contract") == "CMS2JC2_RESPONSE_BDZ_AUDIT_DEBUG/v1":
+                from .bdz_audit_debug_worker import dispatch
+            else:
+                from .bdz_audit_worker import dispatch
             result = dispatch(ctx, spec, t)
             outputs = {}
         elif t["action"].startswith("bz_"):

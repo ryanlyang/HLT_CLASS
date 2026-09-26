@@ -51,7 +51,10 @@ def source_snapshot(project, commit=None, *, executable=True):
                             "scripts/queue_cms2jc2_bdz_tier3.sh",
                             "docs/plans/CMS2JC2_BDZ_SIGNIFICANCE_AUDIT_PLAN.md",
                             "docs/contracts/CMS2JC2_BDZ_SIGNIFICANCE_AUDIT.md",
-                            "scripts/queue_cms2jc2_bdz_audit.sh")
+                            "scripts/queue_cms2jc2_bdz_audit.sh",
+                            "docs/plans/CMS2JC2_BDZ_AUDIT_DEBUG_REPLACEMENT_PLAN.md",
+                            "docs/contracts/CMS2JC2_BDZ_AUDIT_DEBUG_REPLACEMENT.md",
+                            "scripts/queue_cms2jc2_bdz_audit_debug.sh")
     if executable:
         for name in extra:
             subprocess.check_output(["git", "-C", str(project), "ls-files", "--error-unmatch", name])
@@ -216,6 +219,9 @@ def create_stage(study_path, *, stage, name, parent_spec=None, policy_id=None, b
 
 
 def validate_stage(spec, *, source=True):
+    if spec.get("contract") == "CMS2JC2_RESPONSE_BDZ_AUDIT_DEBUG/v1":
+        from .bdz_audit_debug import validate_stage as validate_audit_debug
+        return validate_audit_debug(spec, source=source)
     if spec.get("contract") == "CMS2JC2_RESPONSE_BDZ_AUDIT_STAGE/v1":
         from .bdz_audit_campaign import validate_stage as validate_audit
         return validate_audit(spec, source=source)
