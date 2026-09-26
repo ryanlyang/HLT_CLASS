@@ -284,6 +284,9 @@ def allocation(study, t):
 def run(spec, task_id):
     print(f"CMS2JC2-DEV phase=start task={task_id} stage={spec['name']} validating_sources=true", flush=True)
     study = validate_stage(spec)
+    if spec.get("contract") == "CMS2JC2_RESPONSE_BDZ_TIER3/v1":
+        from .bdz_tier3 import verify_retirement
+        verify_retirement(spec)
     if spec.get("contract") == "CMS2JC2_RESPONSE_DEV_B_TRACKING_DEBUG/v1":
         from .b_tracking_debug import verify_retirement
         verify_retirement(spec)

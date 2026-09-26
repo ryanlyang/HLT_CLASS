@@ -109,6 +109,9 @@ def submit(spec, *, execute=False, authorization_phrase=None, reviewed_plan_hash
         return plan
     if authorization_phrase != PHRASES[spec["stage"]] or reviewed_plan_hash != plan["content_hash"]:
         raise PermissionError("Exact stage phrase and reviewed dry-plan hash required")
+    if spec.get("contract") == "CMS2JC2_RESPONSE_BDZ_TIER3/v1":
+        from .bdz_tier3 import verify_retirement
+        verify_retirement(spec, live=True)
     if spec.get("contract") == "CMS2JC2_RESPONSE_DEV_B_TRACKING_DEBUG/v1":
         from .b_tracking_debug import verify_retirement
         verify_retirement(spec, live=True)
