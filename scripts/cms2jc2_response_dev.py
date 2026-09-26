@@ -64,6 +64,12 @@ def main():
         p.add_argument("--"+name, required=True)
     p = commands.add_parser("bdz-results")
     p.add_argument("--spec", required=True)
+    p = commands.add_parser("create-bdz-audit")
+    for name in ("parent-spec", "project-dir", "source-commit", "root"):
+        p.add_argument("--"+name, required=True)
+    p = commands.add_parser("bdz-audit-results")
+    p.add_argument("--spec", required=True)
+    p.add_argument("--json", action="store_true")
     for name in ("dry-run", "submit", "retire-bdz-tier3", "retire-b-tracking", "retire-c-topology", "run-task", "monitor", "results", "reconcile", "c-results", "c-audit", "c-topology-results", "b-tracking-results", "bounded-results"):
         p = commands.add_parser(name)
         p.add_argument("--spec", required=True)
@@ -123,6 +129,10 @@ def main():
     elif a.command == "advance-bdz-tuning":
         from hlt_classification.cms2jc2_response.bdz_campaign import advance
         result = advance(a.parent_spec)
+    elif a.command == "create-bdz-audit":
+        from hlt_classification.cms2jc2_response.bdz_audit_campaign import create
+        result = create(parent_spec=a.parent_spec, project_dir=a.project_dir,
+                        source_commit=a.source_commit, root=a.root)
     elif a.command == "create-bdz-tier3":
         from hlt_classification.cms2jc2_response.bdz_tier3 import create
         result = create(parent_spec=a.parent_spec, project_dir=a.project_dir,
@@ -132,6 +142,15 @@ def main():
                                        policy_id=a.policy, b_threads=a.b_threads)
     else:
         spec = load_json(Path(a.spec))
+        if a.command == "bdz-audit-results":
+            from hlt_classification.cms2jc2_response.bdz_audit_campaign import read
+            from hlt_classification.cms2jc2_response.bdz_audit_metrics import render
+            report = read(spec)
+            print(json.dumps(report, indent=2, sort_keys=True, allow_nan=False) if a.json else render(report))
+            if not a.json:
+                print(f"Full report: {Path(spec['root'])/'reports'/spec['name']/'ba_report.json'}")
+                print(f"Figures: {Path(spec['root'])/'figures'/spec['name']}")
+            return 0
         if a.command == "bdz-results":
             if spec.get("contract") == "CMS2JC2_RESPONSE_BDZ_TIER3/v1":
                 from hlt_classification.cms2jc2_response.bdz_tier3 import render

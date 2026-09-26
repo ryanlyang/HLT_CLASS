@@ -25,6 +25,7 @@ PHRASES = {s: f"AUTHORIZE CMS2JC2 CPU DEVELOPMENT {s.upper()} EXACT PLAN" for s 
 PHRASES.update({s: f"AUTHORIZE CMS2JC2 {s.upper()} EXACT PLAN"
                 for s in ("bounded_gate", "bounded_compare", "bounded_confirm")})
 PHRASES.update({s: f"AUTHORIZE CMS2JC2 {s.upper()} EXACT PLAN" for s in ("bdz_gate", "bdz_compare")})
+PHRASES["bdz_audit"] = "AUTHORIZE CMS2JC2 BDZ_AUDIT EXACT PLAN"
 REMAINING_WRITES = 2*GIB
 
 
@@ -47,7 +48,10 @@ def source_snapshot(project, commit=None, *, executable=True):
                             "docs/contracts/CMS2JC2_BDZ_TRACKING_TUNING.md",
                             "docs/plans/CMS2JC2_BDZ_TIER3_REPLACEMENT_PLAN.md",
                             "docs/contracts/CMS2JC2_BDZ_TIER3_REPLACEMENT.md",
-                            "scripts/queue_cms2jc2_bdz_tier3.sh")
+                            "scripts/queue_cms2jc2_bdz_tier3.sh",
+                            "docs/plans/CMS2JC2_BDZ_SIGNIFICANCE_AUDIT_PLAN.md",
+                            "docs/contracts/CMS2JC2_BDZ_SIGNIFICANCE_AUDIT.md",
+                            "scripts/queue_cms2jc2_bdz_audit.sh")
     if executable:
         for name in extra:
             subprocess.check_output(["git", "-C", str(project), "ls-files", "--error-unmatch", name])
@@ -212,6 +216,9 @@ def create_stage(study_path, *, stage, name, parent_spec=None, policy_id=None, b
 
 
 def validate_stage(spec, *, source=True):
+    if spec.get("contract") == "CMS2JC2_RESPONSE_BDZ_AUDIT_STAGE/v1":
+        from .bdz_audit_campaign import validate_stage as validate_audit
+        return validate_audit(spec, source=source)
     if spec.get("contract") == "CMS2JC2_RESPONSE_BDZ_TIER3/v1":
         from .bdz_tier3 import validate_stage as validate_tier3
         return validate_tier3(spec, source=source)
@@ -289,6 +296,6 @@ def command_plan(spec, study):
                                      "CMS2JC2_RESPONSE_DEV_STAGE36/v1": 87}.get(
                                          spec.get("contract"), {"pilot": 64, "confirm": 16, "compare": 47, "cdiag": 27, "ctopo": 144, "btrack": 144,
                                          "bounded_gate": 36, "bounded_compare": 144, "bounded_confirm": 144,
-                                         "bdz_gate": 36, "bdz_compare": 144}[spec["stage"]]),
+                                         "bdz_gate": 36, "bdz_compare": 144, "bdz_audit": 144}[spec["stage"]]),
                     allocated_cpu_hour_upper_bound=sum(t["cpus"]*t["hours"] for t in spec["tasks"]),
                     gpus=0, live_authorization_phrase=PHRASES[spec["stage"]])
