@@ -84,6 +84,20 @@ def main():
     display = p.add_mutually_exclusive_group()
     display.add_argument("--json", action="store_true")
     display.add_argument("--statistics", action="store_true", help="Full moments chart and PID significance diagnostics")
+    p = commands.add_parser("create-frozen-joint")
+    for name in ("parent-spec", "project-dir", "source-commit", "root"):
+        p.add_argument("--"+name, required=True)
+    p.add_argument("--partition", choices=("debug", "tier3"), required=True)
+    p.add_argument("--assert-untouched", action="store_true")
+    p = commands.add_parser("advance-frozen-joint")
+    p.add_argument("--parent-spec", required=True)
+    p = commands.add_parser("frozen-joint-results")
+    p.add_argument("--spec", required=True)
+    display = p.add_mutually_exclusive_group()
+    display.add_argument("--json", action="store_true")
+    display.add_argument("--statistics", action="store_true")
+    p = commands.add_parser("probe-frozen-joint")
+    p.add_argument("--json", action="store_true")
     for name in ("dry-run", "submit", "retire-bdz-audit-debug", "retire-bdz-tier3", "retire-b-tracking", "retire-c-topology", "run-task", "monitor", "results", "reconcile", "c-results", "c-audit", "c-topology-results", "b-tracking-results", "bounded-results"):
         p = commands.add_parser(name)
         p.add_argument("--spec", required=True)
@@ -98,7 +112,19 @@ def main():
         if name == "reconcile":
             p.add_argument("--job-id", required=True)
     a = parser.parse_args()
-    if a.command == "create":
+    if a.command == "probe-frozen-joint":
+        from hlt_classification.cms2jc2_response.frozen_joint_queue import probe, render
+        row = probe()
+        print(json.dumps(row, indent=2) if a.json else render(row))
+        return 0
+    if a.command == "create-frozen-joint":
+        from hlt_classification.cms2jc2_response.frozen_joint_campaign import create
+        result = create(parent_spec=a.parent_spec, project_dir=a.project_dir, source_commit=a.source_commit,
+                        root=a.root, partition=a.partition, assert_untouched=a.assert_untouched)
+    elif a.command == "advance-frozen-joint":
+        from hlt_classification.cms2jc2_response.frozen_joint_campaign import advance
+        result = advance(a.parent_spec)
+    elif a.command == "create":
         result = campaign.create_study(project_dir=a.project_dir, source_commit=a.source_commit,
                                       preparation_spec=a.preparation_spec, root=a.root, partition=a.partition)
     elif a.command == "create-compare64":
@@ -167,6 +193,10 @@ def main():
                                        policy_id=a.policy, b_threads=a.b_threads)
     else:
         spec = load_json(Path(a.spec))
+        if a.command == "frozen-joint-results":
+            from hlt_classification.cms2jc2_response.frozen_joint_campaign import read, render
+            print(json.dumps(read(spec), indent=2, allow_nan=False) if a.json else render(spec, statistics=a.statistics))
+            return 0
         if a.command == "bdz-joint-results":
             from hlt_classification.cms2jc2_response.bdz_joint_campaign import read, render
             print(json.dumps(read(spec), indent=2, sort_keys=True, allow_nan=False) if a.json else render(spec, statistics=a.statistics))

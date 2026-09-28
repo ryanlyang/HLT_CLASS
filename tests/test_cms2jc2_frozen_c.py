@@ -186,7 +186,7 @@ def frozen_root(tmp_path, monkeypatch):
         review=ctx["review"], rules=dev.POLICIES["BASE"], budget="SYNTHETIC_DEV", source_hash="a"*64)
     root = tmp_path/"old"; root.mkdir()
     publish(root/"inv.json", inv, "CMS_INVENTORY"); publish(root/"roles.json", roles, "ROLES")
-    imported = dict(files={"cms_inventory.json": data.file_ref(root/"inv.json"),
+    imported = dict(cms_root=str(raw), files={"cms_inventory.json": data.file_ref(root/"inv.json"),
                            "response_roles.json": data.file_ref(root/"roles.json")},
                     preparation_spec=data.file_ref(root/"inv.json"))
     source = artifact("SOURCE", files={"scientific.py": "a"*64}, commit="b"*40)
