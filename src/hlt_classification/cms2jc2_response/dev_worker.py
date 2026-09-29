@@ -282,6 +282,12 @@ def allocation(study, t):
 
 
 def run(spec, task_id):
+    if spec.get("contract") == "CMS2JC2_RESPONSE_PORT_STAGE/v1":
+        from .generation_portable_worker import run as run_portable
+        return run_portable(spec, task_id)
+    if spec.get("contract") == "CMS2JC2_RESPONSE_GEN_STAGE/v1":
+        from .generation_benchmark_worker import run as run_generation
+        return run_generation(spec, task_id)
     print(f"CMS2JC2-DEV phase=start task={task_id} stage={spec['name']} validating_sources=true", flush=True)
     study = validate_stage(spec)
     if spec.get("contract") == "CMS2JC2_RESPONSE_BDZ_AUDIT_DEBUG/v1":

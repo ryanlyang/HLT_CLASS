@@ -18,6 +18,32 @@ def main():
     faulthandler.enable(all_threads=True)
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
+    p = commands.add_parser("create-portable-export")
+    for name in ("parent-spec", "project-dir", "source-commit", "root"):
+        p.add_argument("--"+name, required=True)
+    p.add_argument("--partition", choices=("debug", "tier3"), default="tier3")
+    p = commands.add_parser("create-tigris-benchmark")
+    for name in ("packet", "packet-sha256", "project-dir", "source-commit", "root"):
+        p.add_argument("--"+name, required=True)
+    p.add_argument("--max-workers", choices=(36, 72, 144), type=int, default=36)
+    p = commands.add_parser("advance-tigris-benchmark")
+    p.add_argument("--parent-spec", required=True)
+    p = commands.add_parser("portable-benchmark-results")
+    p.add_argument("--spec", required=True)
+    p.add_argument("--json", action="store_true")
+    p = commands.add_parser("probe-portable-benchmark")
+    p.add_argument("--spec", required=True)
+    p = commands.add_parser("create-generation-benchmark")
+    for name in ("parent-spec", "inventory", "profile", "data-root", "project-dir", "source-commit", "root"):
+        p.add_argument("--"+name, required=True)
+    p.add_argument("--partition", choices=("debug", "tier3"), default="tier3")
+    p = commands.add_parser("advance-generation-benchmark")
+    p.add_argument("--parent-spec", required=True)
+    p = commands.add_parser("generation-benchmark-results")
+    p.add_argument("--spec", required=True)
+    p.add_argument("--json", action="store_true")
+    p = commands.add_parser("probe-generation-benchmark")
+    p.add_argument("--json", action="store_true")
     p = commands.add_parser("create")
     for name in ("project-dir", "source-commit", "preparation-spec", "root"):
         p.add_argument("--"+name, required=True)
@@ -112,12 +138,55 @@ def main():
         if name == "reconcile":
             p.add_argument("--job-id", required=True)
     a = parser.parse_args()
+    if a.command == "portable-benchmark-results":
+        from hlt_classification.cms2jc2_response.generation_portable_worker import read, render
+        spec = load_json(a.spec)
+        print(json.dumps(read(spec), indent=2) if a.json else render(spec))
+        return 0
+    if a.command == "probe-portable-benchmark":
+        spec = load_json(a.spec)
+        study = campaign.validate_stage(spec)
+        seen = set()
+        for row, task in zip(campaign.command_plan(spec, study)["commands"], spec["tasks"]):
+            shape = (task["cpus"], task["memory_gib"], task["hours"])
+            if shape in seen:
+                continue
+            seen.add(shape)
+            result = submission.scheduler(row["argv"][:1]+["--test-only"]+row["argv"][1:])
+            print(shape, result.returncode, (result.stdout+result.stderr).strip(), flush=True)
+        print("Read-only scheduling probes. No jobs submitted.")
+        return 0
+    if a.command in ("create-portable-export", "create-tigris-benchmark", "advance-tigris-benchmark"):
+        from hlt_classification.cms2jc2_response.generation_portable_campaign import create, advance
+        if a.command == "advance-tigris-benchmark":
+            result = advance(a.parent_spec)
+        else:
+            common = dict(project_dir=a.project_dir, source_commit=a.source_commit, root=a.root)
+            if a.command == "create-portable-export":
+                result = create(**common, parent_spec=a.parent_spec, partition=a.partition)
+            else:
+                result = create(**common, packet=a.packet, packet_sha256=a.packet_sha256,
+                                max_workers=a.max_workers, partition="tigris")
+        print(json.dumps(result, indent=2))
+        return 0
+    if a.command == "probe-generation-benchmark":
+        from hlt_classification.cms2jc2_response.generation_benchmark_queue import probe, render
+        row = probe()
+        print(json.dumps(row, indent=2) if a.json else render(row))
+        return 0
     if a.command == "probe-frozen-joint":
         from hlt_classification.cms2jc2_response.frozen_joint_queue import probe, render
         row = probe()
         print(json.dumps(row, indent=2) if a.json else render(row))
         return 0
-    if a.command == "create-frozen-joint":
+    if a.command == "create-generation-benchmark":
+        from hlt_classification.cms2jc2_response.generation_benchmark_campaign import create
+        result = create(parent_spec=a.parent_spec, inventory=a.inventory, profile=a.profile, data_root=a.data_root,
+                        project_dir=a.project_dir, source_commit=a.source_commit, root=a.root, partition=a.partition)
+    elif a.command == "advance-generation-benchmark":
+        from hlt_classification.cms2jc2_response.generation_benchmark_campaign import advance
+        result = advance(a.parent_spec)
+    elif a.command == "create-frozen-joint":
         from hlt_classification.cms2jc2_response.frozen_joint_campaign import create
         result = create(parent_spec=a.parent_spec, project_dir=a.project_dir, source_commit=a.source_commit,
                         root=a.root, partition=a.partition, assert_untouched=a.assert_untouched)
@@ -193,6 +262,10 @@ def main():
                                        policy_id=a.policy, b_threads=a.b_threads)
     else:
         spec = load_json(Path(a.spec))
+        if a.command == "generation-benchmark-results":
+            from hlt_classification.cms2jc2_response.generation_benchmark_campaign import read, render
+            print(json.dumps(read(spec), indent=2, allow_nan=False) if a.json else render(spec))
+            return 0
         if a.command == "frozen-joint-results":
             from hlt_classification.cms2jc2_response.frozen_joint_campaign import read, render
             print(json.dumps(read(spec), indent=2, allow_nan=False) if a.json else render(spec, statistics=a.statistics))

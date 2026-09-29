@@ -28,6 +28,8 @@ PHRASES.update({s: f"AUTHORIZE CMS2JC2 {s.upper()} EXACT PLAN" for s in ("bdz_ga
 PHRASES["bdz_audit"] = "AUTHORIZE CMS2JC2 BDZ_AUDIT EXACT PLAN"
 PHRASES.update({s: f"AUTHORIZE CMS2JC2 {s.upper()} EXACT PLAN" for s in ("joint_gate", "joint_compare")})
 PHRASES.update({s: f"AUTHORIZE CMS2JC2 {s.upper()} EXACT PLAN" for s in ("frozen_gate", "frozen_confirm")})
+PHRASES.update({s: f"AUTHORIZE CMS2JC2 {s.upper()} EXACT PLAN" for s in ("generation_gate", "generation_screen")})
+PHRASES.update({s: f"AUTHORIZE CMS2JC2 {s.upper()} EXACT PLAN" for s in ("port_export", "port_gate", "port_screen")})
 REMAINING_WRITES = 2*GIB
 
 
@@ -62,7 +64,14 @@ def source_snapshot(project, commit=None, *, executable=True):
                             "scripts/queue_cms2jc2_bdz_joint.sh",
                             "docs/plans/CMS2JC2_FROZEN_JOINT_CONFIRMATION_PLAN.md",
                             "docs/contracts/CMS2JC2_FROZEN_JOINT_CONFIRMATION.md",
-                            "scripts/queue_cms2jc2_frozen_joint.sh")
+                            "scripts/queue_cms2jc2_frozen_joint.sh",
+                            "docs/plans/CMS2JC2_JOINT_GENERATION_BENCHMARK_PLAN.md",
+                            "docs/contracts/CMS2JC2_JOINT_GENERATION_BENCHMARK.md",
+                            "scripts/queue_cms2jc2_generation_benchmark.sh",
+                            "docs/plans/CMS2JC2_TIGRIS_GENERATION_BENCHMARK_PLAN.md",
+                            "docs/contracts/CMS2JC2_TIGRIS_GENERATION_BENCHMARK.md",
+                            "scripts/queue_cms2jc2_portable_benchmark.sh",
+                            "sbatch/run_cms2jc2_response_portable_cpu.sh")
     if executable:
         for name in extra:
             subprocess.check_output(["git", "-C", str(project), "ls-files", "--error-unmatch", name])
@@ -227,6 +236,12 @@ def create_stage(study_path, *, stage, name, parent_spec=None, policy_id=None, b
 
 
 def validate_stage(spec, *, source=True):
+    if spec.get("contract") == "CMS2JC2_RESPONSE_PORT_STAGE/v1":
+        from .generation_portable_campaign import validate_stage as validate_portable
+        return validate_portable(spec, source=source)
+    if spec.get("contract") == "CMS2JC2_RESPONSE_GEN_STAGE/v1":
+        from .generation_benchmark_campaign import validate_stage as validate_generation
+        return validate_generation(spec, source=source)
     if spec.get("contract") == "CMS2JC2_RESPONSE_FROZEN_STAGE/v1":
         from .frozen_joint_campaign import validate_stage as validate_frozen
         return validate_frozen(spec, source=source)
@@ -301,6 +316,9 @@ def preparation_stage(spec):
 
 
 def command_plan(spec, study):
+    if spec.get("contract") == "CMS2JC2_RESPONSE_PORT_STAGE/v1":
+        from .generation_portable_campaign import command_plan as portable_plan
+        return portable_plan(spec, study)
     commands = []
     root, project, site = stage_dir(spec), Path(study["project_dir"]), study["site"]
     for t in spec["tasks"]:
@@ -318,6 +336,7 @@ def command_plan(spec, study):
                                          "bounded_gate": 36, "bounded_compare": 144, "bounded_confirm": 144,
                                          "bdz_gate": 36, "bdz_compare": 144, "bdz_audit": 144,
                                          "joint_gate": 36, "joint_compare": 144,
-                                         "frozen_gate": 8, "frozen_confirm": 128}[spec["stage"]]),
+                                         "frozen_gate": 8, "frozen_confirm": 128,
+                                         "generation_gate": 4, "generation_screen": 120}[spec["stage"]]),
                     allocated_cpu_hour_upper_bound=sum(t["cpus"]*t["hours"] for t in spec["tasks"]),
                     gpus=0, live_authorization_phrase=PHRASES[spec["stage"]])

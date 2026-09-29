@@ -170,14 +170,19 @@ def scheduler_identity(spec, study, task_id, job_id, *, pending=False):
     # explicit pending-job retirement check accepts this form; workers remain
     # bound to an actual one-node allocation.
     node_shapes = {"1", "1-1"} if pending and fields.get("JobState") == "PENDING" else {"1"}
+    portable = spec.get("contract") == "CMS2JC2_RESPONSE_PORT_STAGE/v1"
+    worker = "sbatch/run_cms2jc2_response_portable_cpu.sh" if portable else "sbatch/run_cms2jc2_response_dev_cpu.sh"
+    # Only the new Tigris protocol accepts the site's default QoS. Its exact
+    # submitted argv must omit --qos; the assigned value remains in evidence.
+    default_qos = portable and study["site"]["partition"] == "tigris" and study["site"]["qos"] is None
     if (result.returncode or fields.get("JobId") != job_id
             or fields.get("Comment") != f"c2jd:{spec['content_hash']}:{task_id}"
             or fields.get("WorkDir") != study["project_dir"]
-            or fields.get("Command") != str(Path(study["project_dir"])/"sbatch/run_cms2jc2_response_dev_cpu.sh")
+            or fields.get("Command") != str(Path(study["project_dir"])/worker)
             or fields.get("UserId", "").split("(")[0] != os.environ.get("USER")
             or fields.get("Partition") != study["site"]["partition"]
             or fields.get("Account") != study["site"]["account"]
-            or fields.get("QOS") != study["site"]["qos"] or fields.get("NumCPUs") != str(t["cpus"])
+            or (not default_qos and fields.get("QOS") != study["site"]["qos"]) or fields.get("NumCPUs") != str(t["cpus"])
             or fields.get("NumNodes") not in node_shapes or "gres/gpu" in fields.get("ReqTRES", "")
             or "gres/gpu" in fields.get("AllocTRES", "")):
         raise PermissionError("Exact scheduler provenance/allocation differs")
