@@ -14,6 +14,12 @@ Fitted JOINT parameters, random-key domains, replica 0, native units and physica
 validity remain exact. 10k unique TRAIN rows; up to eight source files; at least
 four. No JC2 HLT branches, jet labels, validation/test particles or CMS particles.
 Population membership comes from authenticated existing train masks only.
+The data-root guard admits exactly the documented `20260918_dzfix` and
+`20260918_dzfix_partial_v1` snapshot directory names (both prefixed
+`jetclass2_10M_`, each with a `jetclass2` child). This is a location assertion,
+not interchangeable inventory/split identity or proof that all producer files
+were copied. The exact root, inventory/profile content, file bytes and row
+membership remain frozen. No arbitrary suffixes or directory renaming bypass.
 Bounded offline-branch ROOT windows can decode unused TRAIN rows between mask
 entries; only registered rows are generated, and no other role file is opened.
 

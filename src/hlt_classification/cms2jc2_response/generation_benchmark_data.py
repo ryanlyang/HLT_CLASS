@@ -17,7 +17,20 @@ from hlt_classification.jetclass2_delphes.contracts import row_identity
 
 COUNT = 10_000
 RELEASE = 'jetclass2_10M_20260918_dzfix'
+SNAPSHOTS = (RELEASE, RELEASE+'_partial_v1')
 BRANCHES = ('jet_nparticles', *('part_'+f for f in JC2_FIELDS))
+
+
+def validate_data_root(value):
+    """Recognize documented locations; hashes, not names, authenticate a snapshot.
+
+    The partial SPORC inventory/splits are not interchangeable with the larger
+    local inventory/splits. Keep the literal root and supplied metadata frozen;
+    never normalize the suffix, rename data, or infer unregistered aliases.
+    """
+    path = Path(value)
+    if path.name != 'jetclass2' or path.parent.name not in SNAPSHOTS:
+        raise PermissionError(f'Explicit dzfix offline snapshot required; got {path}')
 
 
 def build(inventory, profile):

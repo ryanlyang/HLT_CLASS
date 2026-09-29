@@ -20,10 +20,18 @@ are not edited, and no final-test capability is implemented.
 
 ## Fixed population and work
 
-Require an authenticated dzfix inventory and explicit split profile, and a data
-root named `jetclass2_10M_20260918_dzfix/jetclass2`. The name is an operator release
-assertion, not proof of producer revision; actual input identity is the inventory
-hash and per-file bytes. Validate all split metadata, then select up to eight
+Require an authenticated dzfix inventory and explicit split profile. The exact
+documented locations admitted are `jetclass2_10M_20260918_dzfix/jetclass2` and
+`jetclass2_10M_20260918_dzfix_partial_v1/jetclass2`. The latter is the existing
+SPORC partial snapshot, documented in `JETCLASS2_DZFIX_SALIENCE_MATCHING_HANDOFF.md`;
+it is not an incomplete ROOT file or permission to substitute the larger local
+inventory. Do not rename/symlink data to bypass the guard or accept arbitrary
+`dzfix*` names. Keep the actual root, its own inventory and its own split profile
+frozen. These two file sets and role assignments are not interchangeable.
+The name is an operator release assertion, not proof of producer revision;
+actual input identity is the inventory hash and per-file bytes. This operational
+location correction does not change v1 membership, reader or response semantics.
+Validate all split metadata, then select up to eight
 training files deterministically, preferring different source groups, with at
 least four files and sufficient eligible capacity. Distribute 10,000 rows evenly;
 choose one hash-positioned consecutive window of eligible entries per file.

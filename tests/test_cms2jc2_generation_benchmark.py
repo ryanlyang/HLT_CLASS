@@ -69,6 +69,26 @@ def metadata(monkeypatch, files=None):
     return inv, prof
 
 
+@pytest.mark.parametrize('snapshot_name', d.SNAPSHOTS)
+def test_documented_dzfix_locations_are_accepted_without_normalization(tmp_path, snapshot_name):
+    path = tmp_path/snapshot_name/'jetclass2'
+    d.validate_data_root(path)
+    assert not path.exists()  # Pure location assertion, not data authentication.
+
+
+@pytest.mark.parametrize('relative', [
+    'jetclass2_10M_20260910/jetclass2',
+    'jetclass2_10M_20260917_puppinocharged/jetclass2',
+    d.RELEASE+'_partial_v2/jetclass2',
+    d.RELEASE+'_partial_v1_wrong/jetclass2',
+    d.RELEASE+'/hlt',
+    d.RELEASE+'_partial_v1',
+])
+def test_unknown_snapshot_names_are_not_dzfix_aliases(tmp_path, relative):
+    with pytest.raises(PermissionError, match='dzfix offline snapshot'):
+        d.validate_data_root(tmp_path/relative)
+
+
 def test_membership_is_exact_deterministic_train_only_and_bounded(monkeypatch):
     inv, prof = metadata(monkeypatch)
     value = d.build(inv, prof)
@@ -130,8 +150,10 @@ def test_claim_and_role_precede_any_particle_access(monkeypatch, tmp_path):
     assert not opened
 
 
-def test_real_root_reader_only_opens_frozen_offline_rows(monkeypatch, tmp_path):
-    root = tmp_path/d.RELEASE/'jetclass2'; root.mkdir(parents=True)
+@pytest.mark.parametrize('snapshot_name', d.SNAPSHOTS)
+def test_real_root_reader_only_opens_frozen_offline_rows(monkeypatch, tmp_path, snapshot_name):
+    root = tmp_path/snapshot_name/'jetclass2'; root.mkdir(parents=True)
+    d.validate_data_root(root)
     columns = {}
     values = dict(px=[2., 10.], py=[0., 0.], pz=[0., 0.], energy=[2.1, 10.1], charge=[1, 0],
         isChargedHadron=[1, 0], isNeutralHadron=[0, 1], isPhoton=[0, 0], isElectron=[0, 0], isMuon=[0, 0],
@@ -292,13 +314,14 @@ def test_source_freeze_refuses_changed_donor_before_generation(monkeypatch, tmp_
     with pytest.raises(PermissionError, match='boundary'): c.validate_study(with_content_hash(bad), source=False)
 
 
-def test_campaign_creation_separate_gate_and_bundle_authentication(monkeypatch, tmp_path, bundle):
+@pytest.mark.parametrize('snapshot_name', d.SNAPSHOTS)
+def test_campaign_creation_separate_gate_and_bundle_authentication(monkeypatch, tmp_path, bundle, snapshot_name):
     inv, profile = metadata(monkeypatch)
     inventory_path, profile_path = tmp_path/'inventory.json', tmp_path/'profile.json'
     inventory_path.write_text(json.dumps(inv)); profile_path.write_text(json.dumps(profile))
     previous_root, project = tmp_path/'old', tmp_path/'project'
     previous_root.mkdir(); project.mkdir()
-    data_root = tmp_path/d.RELEASE/'jetclass2'; data_root.mkdir(parents=True)
+    data_root = tmp_path/snapshot_name/'jetclass2'; data_root.mkdir(parents=True)
     source = artifact('SOURCE', commit='a'*40, files={'frozen_science.py': 'b'*64})
     env = artifact('NUMERICAL_ENVIRONMENT')
     previous = artifact('DEV_STUDY', root=str(previous_root), source=source, numerical_environment=env,
@@ -316,6 +339,16 @@ def test_campaign_creation_separate_gate_and_bundle_authentication(monkeypatch, 
     assert spec['stage'] == 'generation_gate' and len(spec['tasks']) == 1
     study = c.validate_stage(spec)
     assert study['particle_roles'] == ['train'] and study['site']['partition'] == 'tier3'
+    assert study['data_root'] == str(data_root.resolve())
+    assert study['inventory'] == file_ref(inventory_path)
+    assert study['profile'] == file_ref(profile_path)
+    bad_root = with_content_hash({**study, 'data_root': str(tmp_path/'other_release'/'jetclass2')})
+    with pytest.raises(PermissionError, match='dzfix offline snapshot'):
+        c.validate_study(bad_root, source=False)
+    bad_inventory = with_content_hash({**study, 'inventory': {**study['inventory'], 'sha256': 'f'*64}})
+    with pytest.raises(ValueError): c.validate_study(bad_inventory, source=False)
+    bad_profile = with_content_hash({**study, 'profile': {**study['profile'], 'sha256': 'f'*64}})
+    with pytest.raises(ValueError): c.validate_study(bad_profile, source=False)
     assert not (dev.stage_dir(spec)/'submission_ledger.json').exists()
     with pytest.raises(FileNotFoundError): c.advance(dev.stage_dir(spec)/'stage_spec.json')
     (root/'frozen_bundle.json').write_text('{}')

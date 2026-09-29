@@ -67,9 +67,7 @@ def validate_study(study, *, source=True):
             or study['particle_roles'] != ['train'] or study['native_hlt_access'] is not False
             or study['production_qualified'] is not False):
         raise PermissionError('Generation study boundary differs')
-    path = Path(study['data_root'])
-    if path.name != 'jetclass2' or path.parent.name != data.RELEASE:
-        raise PermissionError('Explicit dzfix offline release required')
+    data.validate_data_root(study['data_root'])
     data.validate_membership(study)
     parent = load_json(checked_file(study['donor']))
     previous = load_json(checked_file(parent['study']))
@@ -176,8 +174,7 @@ def create(*, parent_spec, inventory, profile, data_root, project_dir, source_co
         joint.audit.disjoint(root, other)
     if any((p/'study_spec.json').exists() or (p/'campaign_spec.json').exists() for p in root.parents):
         raise PermissionError('Do not nest an existing campaign')
-    if data_root.name != 'jetclass2' or data_root.parent.name != data.RELEASE:
-        raise PermissionError('This benchmark is dzfix only')
+    data.validate_data_root(data_root)
     inv, prof = file_ref(inventory), file_ref(profile)
     membership = data.build(load_json(checked_file(inv)), load_json(checked_file(prof)))
     source = dev.source_snapshot(project, source_commit)
