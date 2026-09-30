@@ -194,7 +194,21 @@ def test_block_corruption_and_reordering_rejected(study, bundle, monkeypatch):
     with pytest.raises(ValueError, match='checksum'): o.verify_shard(study, row)
 
 
-def test_full_synthetic_bank_and_sealed_reader(study, bundle, monkeypatch):
+@pytest.mark.parametrize('reduced', [False, True])
+def test_full_synthetic_bank_and_sealed_reader(study, bundle, monkeypatch, reduced):
+    if reduced:
+        study['contract'] = 'CMS2JC2_PROXY_STUDY_REDUCED_CONFIRMATION/v1'
+        study['allow_reduced_confirmation'] = True
+        study['confirmation_status'] = 'inconclusive_incomplete_population'
+        study['confirmation_scope'] = dict(kind='reduced_36_of_57',
+            coverage=dict(included_indices=list(range(36)), excluded_indices=list(range(36, 57))),
+            full_population_status=study['confirmation_status'], subset_decision='supported')
+        study = with_content_hash(study)
+        root = Path(study['root'])
+        (root/'study_spec.json').write_text(json.dumps(study))
+        preflight = k.load_json(root/'preflight.json')
+        preflight['parents']['study'] = study['content_hash']
+        (root/'preflight.json').write_text(json.dumps(with_content_hash(preflight)))
     lock_test(study)
     original = e.parallel
     for shard in study['shards']:
@@ -202,6 +216,13 @@ def test_full_synthetic_bank_and_sealed_reader(study, bundle, monkeypatch):
         fixture_generate(monkeypatch, study, shard, bundle,
                          attempt_name='pilot_000' if shard['pilot'] else 'bulk_001')
     result = o.finalize(study)
+    assert result['contract'] == ('CMS2JC2_PROXY_DATASET_REDUCED_CONFIRMATION/v1' if reduced
+                                 else 'CMS2JC2_PROXY_DATASET/v1')
+    if reduced:
+        assert result['confirmation_scope'] == study['confirmation_scope']
+        with pytest.raises(ValueError): k.validate(result, 'DATASET', test=True)
+        disguised = with_content_hash(dict(study, contract='CMS2JC2_PROXY_STUDY/v1'))
+        with pytest.raises(ValueError, match='masquerade'): c.validate_study(disguised)
     assert result['counts'] == p.COUNTS and result['final_test_accessed']
     assert not result['physics_production_qualified']
     assert len(list(o.read_role(study['root'], 'train'))) == p.COUNTS['train']
@@ -436,7 +457,8 @@ def test_invalid_bank_shapes_and_dtypes_fail(tmp_path):
     with pytest.raises(ValueError, match='dtype'): o.arrays(path)
 
 
-def test_create_and_full_preflight_keep_frozen_lineage(population, bundle, tmp_path, monkeypatch):
+@pytest.mark.parametrize('reduced', [False, True])
+def test_create_and_full_preflight_keep_frozen_lineage(population, bundle, tmp_path, monkeypatch, reduced):
     inv, prof, donor, population = population
     parent = tmp_path/'persistent'; parent.mkdir()
     project = tmp_path/'project'; project.mkdir()
@@ -457,6 +479,15 @@ def test_create_and_full_preflight_keep_frozen_lineage(population, bundle, tmp_p
     profile_path = old/'profile.json'; k.write(profile_path, prof)
     gr = old_artifact('TG_GATE', compatible=True, within_site_exact=True, serial=dict(output_bytes=10000))
     cr = old_artifact('FROZEN_REPORT', selected='JOINT', decision={'status': 'rejected'})
+    if reduced:
+        from hlt_classification.cms2jc2_response import reduced_confirmation as rc
+        cs.update(stage='frozen_reduced', contract=rc.CONTRACT)
+        confirm_path.write_text(json.dumps(cs))
+        cr = old_artifact('FROZEN_REDUCED_REPORT', selected='JOINT', decision={'status': 'supported'},
+            coverage=dict(included_indices=list(range(36)), excluded_indices=list(range(36, 57))),
+            full_population_status=rc.FULL_STATUS)
+        monkeypatch.setattr(rc, 'read', lambda *a: cr)
+        monkeypatch.setattr(rc, 'donor', lambda *a: {'content_hash': 'c'*64})
     monkeypatch.setattr(c.dev, 'product', lambda spec, task, *a: gr if task == 'jt_gate' else cr)
     monkeypatch.setattr(c.confirmation, 'donor', lambda spec: {'content_hash': 'c'*64})
     monkeypatch.setattr(c, 'source_snapshot', lambda *a: source)
@@ -465,9 +496,14 @@ def test_create_and_full_preflight_keep_frozen_lineage(population, bundle, tmp_p
     attempt = c.create(gate_spec=gate_path, confirmation_spec=confirm_path,
         confirmation_hash=cr['content_hash'], profile=profile_path, project_dir=project,
         source_commit='a'*40, root=parent/'production', persistent_parent=parent,
-        budget_gib=50, available_quota_gib=60, acknowledge_proxy=True, persistent_attested=True)
+        budget_gib=50, available_quota_gib=60, acknowledge_proxy=True, persistent_attested=True,
+        allow_reduced_confirmation=reduced)
     study = k.load_json(k.checked(attempt['study']))
-    assert study['confirmation_status'] == 'rejected'  # poor physics is not an execution error
+    expected_status = 'inconclusive_incomplete_population' if reduced else 'rejected'
+    assert study['confirmation_status'] == expected_status  # poor/incomplete physics is not an execution error
+    if reduced:
+        assert study['confirmation_scope']['subset_decision'] == 'supported'
+        assert study['contract'] == 'CMS2JC2_PROXY_STUDY_REDUCED_CONFIRMATION/v1'
     assert c.imported(study, 'bundle') == model
     assert study['population'] == population and study['counts'] == p.COUNTS
     assert not (parent/'production'/'test_build_lock.json').exists()
@@ -476,8 +512,8 @@ def test_create_and_full_preflight_keep_frozen_lineage(population, bundle, tmp_p
     monkeypatch.setattr(c.direct, 'inputs', lambda *a: (original, {}, model))
     monkeypatch.setattr(c.confirmation, 'read', lambda *a: cr)
     receipt = c.preflight(study)
-    assert receipt['passed'] and receipt['confirmation_status'] == 'rejected'
-    monkeypatch.setattr(c.confirmation, 'donor', lambda *a: {'content_hash': 'd'*64})
+    assert receipt['passed'] and receipt['confirmation_status'] == expected_status
+    monkeypatch.setattr(rc if reduced else c.confirmation, 'donor', lambda *a: {'content_hash': 'd'*64})
     with pytest.raises(ValueError, match='authentication'): c.preflight(study)
 
 

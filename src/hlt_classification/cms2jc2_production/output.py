@@ -93,7 +93,7 @@ def completed(study, *, physical=False):
 
 
 def finalize(study):
-    from .campaign import require_preflight, test_lock
+    from .campaign import require_preflight, test_lock, study_kind
     require_preflight(study)
     lock = test_lock(study)
     rows = completed(study)
@@ -108,7 +108,10 @@ def finalize(study):
         relative = f"shards/{shard['shard_id']}.json"
         path = safe(study['root'], relative)
         refs.append(dict(relative=relative, sha256=sha256_file(path), content_hash=rows[shard['shard_id']]['content_hash']))
-    result = artifact('DATASET', parents={'study': study['content_hash'],
+    reduced = study_kind(study) == 'STUDY_REDUCED_CONFIRMATION'
+    extra = dict(confirmation_scope=study['confirmation_scope']) if reduced else {}
+    result = artifact('DATASET_REDUCED_CONFIRMATION' if reduced else 'DATASET', **extra,
+        parents={'study': study['content_hash'],
         'population': study['population']['content_hash'], 'test_lock': lock['content_hash']}, test=True,
         counts=counts, shards=refs, candidate='JOINT', replica=0,
         dataset_kind=study['dataset_kind'], physics_production_qualified=False,
@@ -127,9 +130,14 @@ def read_role(root, role):
         raise PermissionError('Final-test inference is sealed; this reader has no unlock mode')
     root = Path(root).resolve()
     study = load_json(root/'study_spec.json')
-    validate(study, 'STUDY', test=False)
+    from .campaign import validate_study, study_kind
+    validate_study(study)
     manifest = load_json(root/'dataset_manifest.json')
-    validate(manifest, 'DATASET', parents={'study': study['content_hash'],
+    reduced = study_kind(study) == 'STUDY_REDUCED_CONFIRMATION'
+    if reduced and manifest.get('confirmation_scope') != study['confirmation_scope']:
+        raise ValueError('Dataset reduced evidence differs')
+    validate(manifest, 'DATASET_REDUCED_CONFIRMATION' if reduced else 'DATASET',
+        parents={'study': study['content_hash'],
         'population': study['population']['content_hash'],
         'test_lock': load_json(root/'test_build_lock.json')['content_hash']}, test=True)
     # Reader verifies only the authorized role's physical blocks, not sealed test particles.

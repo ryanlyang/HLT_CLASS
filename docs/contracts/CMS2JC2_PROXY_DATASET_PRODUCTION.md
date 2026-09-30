@@ -6,6 +6,15 @@ All new objects use `CMS2JC2_PROXY_<KIND>/v1`, schema version 1, canonical
 content hashes, parent hashes, and immutable publication. Old
 `CMS2JC2_RESPONSE_*` objects retain their original scope and semantics.
 
+Reduced confirmation is separately defined in
+[CMS2JC2_REDUCED_CONFIRMATION.md](CMS2JC2_REDUCED_CONFIRMATION.md).
+Only the explicit opt-in route emits
+`CMS2JC2_PROXY_STUDY_REDUCED_CONFIRMATION/v1` and
+`CMS2JC2_PROXY_DATASET_REDUCED_CONFIRMATION/v1`; neither is interchangeable
+with the original STUDY/DATASET contracts. Both preserve the reduced coverage,
+subset result, and incomplete full-population status. Output fields, population,
+storage admission, generation kernel, and final-test restrictions are unchanged.
+
 Dataset: one frozen JOINT replica-zero proxy per selected dzfix offline jet.
 Counts: TRAIN 1,000,000; validation 250,000; sealed final test 1,000,000.
 An authenticated same-registry TRAIN_1M profile defines the outer roles.

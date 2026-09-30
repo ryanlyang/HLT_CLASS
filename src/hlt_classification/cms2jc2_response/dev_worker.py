@@ -334,6 +334,10 @@ def run(spec, task_id):
             outputs = dict(samples=publish_result(spec, "samples", ctx["samples"], "DEV_SAMPLES"),
                            ranges=publish_result(spec, "ranges", ranges, "DEV_RANGES"))
             result = artifact("DEV_PREPARED", parents={"samples": ctx["samples"]["content_hash"]}, counts=COUNTS)
+        elif t['action'] == 'jr_report':
+            from .reduced_confirmation import report
+            result = report(spec)
+            outputs = {}
         elif t["action"].startswith("jf_"):
             from .frozen_joint_worker import dispatch
             result = dispatch(ctx, spec, t)

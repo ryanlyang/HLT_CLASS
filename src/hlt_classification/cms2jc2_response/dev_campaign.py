@@ -28,6 +28,7 @@ PHRASES.update({s: f"AUTHORIZE CMS2JC2 {s.upper()} EXACT PLAN" for s in ("bdz_ga
 PHRASES["bdz_audit"] = "AUTHORIZE CMS2JC2 BDZ_AUDIT EXACT PLAN"
 PHRASES.update({s: f"AUTHORIZE CMS2JC2 {s.upper()} EXACT PLAN" for s in ("joint_gate", "joint_compare")})
 PHRASES.update({s: f"AUTHORIZE CMS2JC2 {s.upper()} EXACT PLAN" for s in ("frozen_gate", "frozen_confirm")})
+PHRASES['frozen_reduced'] = 'AUTHORIZE CMS2JC2 FROZEN_REDUCED EXACT PLAN'
 PHRASES.update({s: f"AUTHORIZE CMS2JC2 {s.upper()} EXACT PLAN" for s in ("generation_gate", "generation_screen")})
 PHRASES.update({s: f"AUTHORIZE CMS2JC2 {s.upper()} EXACT PLAN" for s in ("port_export", "port_gate", "port_screen")})
 PHRASES.update({s: f"AUTHORIZE CMS2JC2 {s.upper()} EXACT PLAN" for s in ("tigris_direct_gate", "tigris_direct_screen")})
@@ -75,7 +76,11 @@ def source_snapshot(project, commit=None, *, executable=True):
                             "sbatch/run_cms2jc2_response_portable_cpu.sh",
                             "docs/plans/CMS2JC2_DIRECT_TIGRIS_GENERATION_PLAN.md",
                             "docs/contracts/CMS2JC2_DIRECT_TIGRIS_GENERATION.md",
-                            "scripts/queue_cms2jc2_direct_tigris.sh")
+                            "scripts/queue_cms2jc2_direct_tigris.sh",
+                            "docs/plans/CMS2JC2_REDUCED_CONFIRMATION_PLAN.md",
+                            "docs/contracts/CMS2JC2_REDUCED_CONFIRMATION.md",
+                            "scripts/cms2jc2_reduced_confirmation.py",
+                            "scripts/queue_cms2jc2_reduced_confirmation.sh")
     if executable:
         for name in extra:
             subprocess.check_output(["git", "-C", str(project), "ls-files", "--error-unmatch", name])
@@ -240,6 +245,9 @@ def create_stage(study_path, *, stage, name, parent_spec=None, policy_id=None, b
 
 
 def validate_stage(spec, *, source=True):
+    if spec.get('contract') == 'CMS2JC2_RESPONSE_FROZEN_REDUCED_STAGE/v1':
+        from .reduced_confirmation import validate_stage as validate_reduced
+        return validate_reduced(spec, source=source)
     if spec.get("contract") == "CMS2JC2_RESPONSE_TG_STAGE/v1":
         from .generation_direct_campaign import validate_stage as validate_direct
         return validate_direct(spec, source=source)
@@ -346,7 +354,7 @@ def command_plan(spec, study):
                                          "bounded_gate": 36, "bounded_compare": 144, "bounded_confirm": 144,
                                          "bdz_gate": 36, "bdz_compare": 144, "bdz_audit": 144,
                                          "joint_gate": 36, "joint_compare": 144,
-                                         "frozen_gate": 8, "frozen_confirm": 128,
+                                         "frozen_gate": 8, "frozen_confirm": 128, "frozen_reduced": 1,
                                          "generation_gate": 4, "generation_screen": 120}[spec["stage"]]),
                     allocated_cpu_hour_upper_bound=sum(t["cpus"]*t["hours"] for t in spec["tasks"]),
                     gpus=0, live_authorization_phrase=PHRASES[spec["stage"]])

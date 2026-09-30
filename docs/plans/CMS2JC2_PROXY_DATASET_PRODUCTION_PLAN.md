@@ -17,6 +17,13 @@ is required within the pinned Tigris numerical environment.
 
 ## Required evidence
 
+The user-authorized [36-of-57 confirmation amendment](CMS2JC2_REDUCED_CONFIRMATION_PLAN.md)
+adds a separate reduced-evidence route. It requires explicit
+`--allow-reduced-confirmation`, a reviewed reduced report hash, and new study
+and dataset contract names. It records incomplete full-population support even
+if the subset checks pass. It does not change the original full-confirmation
+route, frozen mapping, storage budget, retained writer pilots, or test seal.
+
 Import the completed Tigris direct gate (64 jets, serial/process exact replay
 and SPORC compatibility) and a completed frozen CMS confirmation. The operator
 must review and supply the confirmation report content hash and acknowledge

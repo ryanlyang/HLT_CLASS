@@ -42,8 +42,29 @@ def imported(study, name):
     return load_json(path)
 
 
+def study_kind(study):
+    return ('STUDY_REDUCED_CONFIRMATION' if study.get('contract') ==
+        'CMS2JC2_PROXY_STUDY_REDUCED_CONFIRMATION/v1' else 'STUDY')
+
+
+def confirmation_evidence(spec, *, allow_reduced=False, full_auth=False):
+    if spec.get('stage') == 'frozen_confirm':
+        row = confirmation.read(spec) if full_auth else dev.product(spec, 'jf_report', 'result')
+        return row, confirmation.donor(spec)['content_hash']
+    from hlt_classification.cms2jc2_response import reduced_confirmation as reduced
+    if spec.get('contract') != reduced.CONTRACT or not allow_reduced:
+        raise PermissionError('Reduced confirmation requires explicit --allow-reduced-confirmation')
+    return reduced.read(spec), reduced.donor(spec)['content_hash']
+
+
+def reduced_scope(row):
+    return dict(kind='reduced_36_of_57', coverage=row['coverage'],
+        subset_decision=row['decision']['status'], full_population_status=row['full_population_status'])
+
+
 def validate_study(study, *, source=False):
-    validate(study, 'STUDY', parents={'source': study['source']['content_hash'],
+    kind = study_kind(study)
+    validate(study, kind, parents={'source': study['source']['content_hash'],
         'population': study['population']['content_hash'],
         'confirmation': study['reviewed_confirmation_hash']}, test=False)
     if (study['counts'] != pop.COUNTS or study['candidate'] != 'JOINT' or study['replica'] != 0
@@ -53,6 +74,16 @@ def validate_study(study, *, source=False):
             or study['storage']['persistent_attested'] is not True
             or study['storage']['budget_bytes'] > study['storage']['available_quota_bytes']):
         raise ValueError('Production scope differs')
+    if kind == 'STUDY_REDUCED_CONFIRMATION':
+        scope = study['confirmation_scope']
+        if (study.get('allow_reduced_confirmation') is not True or scope['kind'] != 'reduced_36_of_57'
+                or scope['coverage']['included_indices'] != list(range(36))
+                or scope['coverage']['excluded_indices'] != list(range(36, 57))
+                or scope['full_population_status'] != 'inconclusive_incomplete_population'
+                or study['confirmation_status'] != scope['full_population_status']):
+            raise ValueError('Reduced production evidence scope differs')
+    elif study.get('allow_reduced_confirmation') or 'confirmation_scope' in study:
+        raise ValueError('Reduced evidence cannot masquerade as original production study')
     validate(study['source'], 'SOURCE', test=False)
     validate(study['population'], 'POPULATION', test=False)
     if study['population']['counts'] != study['counts']:
@@ -78,7 +109,7 @@ def location(root, persistent_parent, others):
 
 def create(*, gate_spec, confirmation_spec, confirmation_hash, profile, project_dir,
            source_commit, root, persistent_parent, budget_gib, available_quota_gib,
-           acknowledge_proxy=False, persistent_attested=False):
+           acknowledge_proxy=False, persistent_attested=False, allow_reduced_confirmation=False):
     if not acknowledge_proxy or not persistent_attested:
         raise PermissionError('Review proxy limitations and attest persistent storage explicitly')
     if not (50 <= budget_gib <= available_quota_gib and math.isfinite(available_quota_gib)):
@@ -86,16 +117,16 @@ def create(*, gate_spec, confirmation_spec, confirmation_hash, profile, project_
     print('CMS2JC2-PRODUCTION phase=import_metadata no_particle_reads=true', flush=True)
     gate_ref, confirm_ref = ref(gate_spec), ref(confirmation_spec)
     gs, cs = load_json(checked(gate_ref)), load_json(checked(confirm_ref))
-    if gs.get('stage') != 'tigris_direct_gate' or cs.get('stage') != 'frozen_confirm':
-        raise PermissionError('Require completed direct Tigris gate and full frozen CMS confirmation')
+    if gs.get('stage') != 'tigris_direct_gate':
+        raise PermissionError('Require completed direct Tigris gate')
     ts = load_json(checked_file(gs['study']))
     evidence = load_json(checked_file(ts['imported']))
     original = load_json(checked_file(evidence['original_study']))
     bundle = load_json(checked_file(original['bundle']))
     gr = dev.product(gs, 'jt_gate', 'result')
-    cr = dev.product(cs, 'jf_report', 'result')
+    cr, comparison_hash = confirmation_evidence(cs, allow_reduced=allow_reduced_confirmation)
     if (cr['content_hash'] != confirmation_hash or cr['selected'] != 'JOINT'
-            or confirmation.donor(cs)['content_hash'] != bundle['parents']['comparison']
+            or comparison_hash != bundle['parents']['comparison']
             or not gr['compatible'] or not gr['within_site_exact']):
         raise ValueError('Reviewed confirmation/gate/frozen mapping lineage differs')
     validate_data_root(original['data_root'])
@@ -125,11 +156,15 @@ def create(*, gate_spec, confirmation_spec, confirmation_hash, profile, project_
         relative = f'provenance/{name}.json'
         record = write(safe(root, relative), value)
         imports[name] = dict(relative=relative, sha256=record['sha256'], bytes=record['bytes'])
-    study = artifact('STUDY', parents={'source': source['content_hash'],
+    reduced = cs.get('stage') == 'frozen_reduced'
+    extra = dict(allow_reduced_confirmation=True, confirmation_scope=reduced_scope(cr)) if reduced else {}
+    study = artifact('STUDY_REDUCED_CONFIRMATION' if reduced else 'STUDY',
+        parents={'source': source['content_hash'],
         'population': population['content_hash'], 'confirmation': confirmation_hash},
         project_dir=str(project), root=str(root), source=source,
         numerical_environment=env, gate_spec=gate_ref, confirmation_spec=confirm_ref,
-        reviewed_confirmation_hash=confirmation_hash, confirmation_status=cr['decision']['status'],
+        reviewed_confirmation_hash=confirmation_hash,
+        confirmation_status=cr['full_population_status'] if reduced else cr['decision']['status'], **extra,
         imports=imports, review=original['review'], data_root=original['data_root'],
         population=population, shards=shard_rows, counts=pop.COUNTS, candidate='JOINT', replica=0,
         generation_workers=36, max_concurrent=16, native_hlt_access=False,
@@ -150,11 +185,14 @@ def preflight(study):
     gr = direct.accepted(gs, ts)
     original, _, bundle = direct.inputs(ts)
     cs = load_json(checked(study['confirmation_spec']))
-    cr = confirmation.read(cs)
+    reduced = study_kind(study) == 'STUDY_REDUCED_CONFIRMATION'
+    cr, comparison_hash = confirmation_evidence(cs, allow_reduced=reduced, full_auth=True)
+    if reduced and study['confirmation_scope'] != reduced_scope(cr):
+        raise ValueError('Reviewed reduced evidence scope changed')
     if (cr != imported(study, 'confirmation_report') or gr != imported(study, 'tigris_gate')
             or bundle != imported(study, 'bundle')
             or cr['content_hash'] != study['reviewed_confirmation_hash']
-            or confirmation.donor(cs)['content_hash'] != bundle['parents']['comparison']
+            or comparison_hash != bundle['parents']['comparison']
             or original['review'] != study['review'] or original['data_root'] != study['data_root']):
         raise ValueError('Production import authentication differs')
     direct.source_match(study['source'], ts['source'])
@@ -164,7 +202,7 @@ def preflight(study):
     return artifact('PREFLIGHT', parents={'study': study['content_hash']},
         imports=study['imports'], source=study['source']['content_hash'],
         environment=study['numerical_environment']['content_hash'],
-        confirmation_status=cr['decision']['status'], passed=True)
+        confirmation_status=study['confirmation_status'], passed=True)
 
 
 def require_preflight(study):

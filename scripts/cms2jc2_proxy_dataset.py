@@ -22,6 +22,7 @@ def main():
     create.add_argument('--available-quota-gib', type=float, required=True)
     create.add_argument('--acknowledge-proxy', action='store_true')
     create.add_argument('--persistent-attested', action='store_true')
+    create.add_argument('--allow-reduced-confirmation', action='store_true')
     for action in ('bulk', 'recover'):
         cmd = sub.add_parser(action)
         cmd.add_argument('--study', required=True)
@@ -53,10 +54,11 @@ def main():
         index = int(os.environ['SLURM_ARRAY_TASK_ID']) if args['task'] == 'generate' else None
         result = worker.run(args['attempt'], args['task'], index=index)
     elif command == 'review-confirmation':
-        from hlt_classification.cms2jc2_response import frozen_joint_campaign as fc
-        report = fc.read(load_json(args['spec']))
+        report, _ = campaign.confirmation_evidence(load_json(args['spec']), allow_reduced=True, full_auth=True)
         result = dict(content_hash=report['content_hash'], selected=report['selected'],
             jets=report['jets'], decision=report['decision'], production_qualified=False)
+        if 'coverage' in report:
+            result.update(confirmation_scope=campaign.reduced_scope(report))
     else:
         study = load_json(args['study'])
         campaign.validate_study(study)
