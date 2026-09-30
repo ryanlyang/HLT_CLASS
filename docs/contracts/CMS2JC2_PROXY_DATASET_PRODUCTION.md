@@ -50,3 +50,13 @@ authorization phrase. CPU-only Tigris arrays request 36 CPUs per element and
 at most 16 simultaneous elements. Exact scheduler IDs, immutable intents and
 submission receipts provide the recovery boundary. Ambiguous submission is
 not automatically retried. Existing live campaigns are never mutated.
+
+Scheduler authentication clarification (2026-09-30, no schema/physics change):
+generation addresses the exact `ArrayJobId_ArrayTaskId` selector, then checks
+the returned raw `JobId` against the worker environment. `scontrol -o` output
+must contain exactly one record with no repeated keys. A parent-wide query
+must never be flattened into one allocation. Existing source pinning remains
+mandatory; this correction alone does not migrate an old execution spec.
+Explicit source-pinned recovery is a separate
+[execution-repair contract](CMS2JC2_PROXY_EXECUTION_RECOVERY.md), with distinct
+attempt/shard/manifest kinds. Original v1 artifacts keep their existing meaning.

@@ -261,11 +261,11 @@ def admission(study, pilots):
 
 
 def require_admission(study, attempt):
+    from .recovery import validate_shard_lineage
     pilots = [load_json(safe(study['root'], f'shards/{s["shard_id"]}.json'))
               for s in study['shards'] if s['pilot']]
     for row in pilots:
-        validate(row, 'SHARD', parents={'study': study['content_hash'],
-            'population': study['population']['content_hash']}, test=False)
+        validate_shard_lineage(study, row)
     saved = load_json(safe(study['root'], 'pilot_admission.json'))
     if saved != admission(study, pilots):
         raise ValueError('Measured pilot admission changed')
@@ -274,8 +274,13 @@ def require_admission(study, attempt):
     return saved
 
 
-def make_attempt(study, kind, shards, *, memory_gib, hours, bytes_per_jet):
+def make_attempt(study, kind, shards, *, memory_gib, hours, bytes_per_jet, execution_repair=None):
     from .submission import plan
+    from .recovery import load_repair
+    extra = {}
+    if execution_repair is not None:
+        load_repair(study, execution_repair)
+        extra = dict(execution_repair=execution_repair)
     root = Path(study['root'])
     with storage.lock(root, 'attempt'):
         index = len(list(safe(root, 'attempts').glob('*/attempt_spec.json')))
@@ -283,7 +288,8 @@ def make_attempt(study, kind, shards, *, memory_gib, hours, bytes_per_jet):
         path = safe(root, f'attempts/{name}')
         if path.exists():
             raise FileExistsError('Incomplete attempt directory; inspect without deleting')
-        value = artifact('ATTEMPT', parents={'study': study['content_hash']}, name=name, kind=kind,
+        value = artifact('ATTEMPT_EXECUTION_REPAIR' if extra else 'ATTEMPT',
+            parents={'study': study['content_hash']}, name=name, kind=kind, **extra,
             study=ref(root/'study_spec.json'), shards=[s['shard_id'] for s in shards],
             resources=dict(cpus=36, memory_gib=memory_gib, hours=hours,
                 concurrent=min(16, len(shards)), bytes_per_jet=bytes_per_jet),
@@ -295,7 +301,14 @@ def make_attempt(study, kind, shards, *, memory_gib, hours, bytes_per_jet):
 
 
 def validate_attempt(value, study):
-    validate(value, 'ATTEMPT', parents={'study': study['content_hash']}, test=False)
+    from .recovery import load_repair
+    repaired = value.get('contract') == 'CMS2JC2_PROXY_ATTEMPT_EXECUTION_REPAIR/v1'
+    validate(value, 'ATTEMPT_EXECUTION_REPAIR' if repaired else 'ATTEMPT',
+             parents={'study': study['content_hash']}, test=False)
+    if repaired:
+        load_repair(study, value['execution_repair'])
+    elif 'execution_repair' in value:
+        raise ValueError('Original attempt cannot carry a source repair')
     if load_json(checked(value['study'])) != study:
         raise ValueError('Attempt study differs')
     rows = {r['shard_id']: r for r in study['shards']}
@@ -316,16 +329,18 @@ def validate_attempt(value, study):
         raise PermissionError('Attempt test build lock differs')
 
 
-def advance(study, *, authorize_test=False, recovery=False):
+def advance(study, *, authorize_test=False, recovery=False, execution_repair=None):
     from .submission import require_terminal
     from .output import completed
-    validate_study(study, source=True)
+    from .recovery import validate_execution
+    validate_execution(study, execution_repair)
+    extra = dict(execution_repair=execution_repair) if execution_repair is not None else {}
     require_terminal(study)
     if safe(study['root'], 'preflight.json').exists():
         require_preflight(study)
     elif recovery:
         return make_attempt(study, 'pilot', [s for s in study['shards'] if s['pilot']],
-            memory_gib=64, hours=4,
+            memory_gib=64, hours=4, **extra,
             bytes_per_jet=max(4096, imported(study, 'tigris_gate')['serial']['output_bytes']/64*8))
     else:
         raise PermissionError('Preflight did not complete; use recovery')
@@ -335,7 +350,7 @@ def advance(study, *, authorize_test=False, recovery=False):
         if not recovery:
             raise PermissionError('Retained pilot not complete; use recovery, not bulk')
         missing = [s for s in study['shards'] if s['pilot'] and s['shard_id'] not in done]
-        return make_attempt(study, 'pilot', missing, memory_gib=64, hours=4,
+        return make_attempt(study, 'pilot', missing, memory_gib=64, hours=4, **extra,
             bytes_per_jet=max(4096, imported(study, 'tigris_gate')['serial']['output_bytes']/64*8))
     envelope = resources(pilots)
     if not authorize_test:
@@ -350,10 +365,10 @@ def advance(study, *, authorize_test=False, recovery=False):
     if not missing:
         if safe(study['root'], 'dataset_manifest.json').exists():
             raise ValueError('Complete manifest already exists; no new jobs needed')
-        return make_attempt(study, 'finalize', [], **envelope)
+        return make_attempt(study, 'finalize', [], **envelope, **extra)
     pending_bytes = sum(envelope['bytes_per_jet']*s['jets']+64*2**20 for s in missing)
     reserved = sum(load_json(p)['allowance'] for p in safe(study['root'], 'reservations').glob('*.json'))
     if reserved+pending_bytes+storage.METADATA_ALLOWANCE > study['storage']['budget_bytes']:
         raise OSError('Measured build does not fit frozen output budget; no bulk submission')
     storage.check_space(study['root'], int(pending_bytes))
-    return make_attempt(study, 'recovery' if recovery else 'bulk', missing, **envelope)
+    return make_attempt(study, 'recovery' if recovery else 'bulk', missing, **envelope, **extra)

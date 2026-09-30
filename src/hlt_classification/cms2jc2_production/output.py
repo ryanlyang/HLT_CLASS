@@ -35,13 +35,13 @@ def particles(values):
 
 
 def verify_shard(study, receipt, *, physical=True):
+    from .recovery import validate_shard_lineage
     shard = next(s for s in study['shards'] if s['shard_id'] == receipt['shard_id'])
-    validate(receipt, 'SHARD', parents={'study': study['content_hash'],
-        'population': study['population']['content_hash']}, test=shard['role'] == 'final_test')
+    validate_shard_lineage(study, receipt)
     if (receipt['role'] != shard['role'] or receipt['jets'] != shard['jets']
             or receipt['ordered_identities'] != shard['ordered_identities']
             or receipt.get('physical_schema_verified') is not True
-            or not receipt['blocks'] or receipt['source'] != study['source']['content_hash']
+            or not receipt['blocks']
             or receipt['environment'] != study['numerical_environment']['content_hash']):
         raise ValueError('Shard identity/lineage differs')
     if shard['role'] == 'final_test':
@@ -94,6 +94,7 @@ def completed(study, *, physical=False):
 
 def finalize(study):
     from .campaign import require_preflight, test_lock, study_kind
+    from .recovery import manifest_execution
     require_preflight(study)
     lock = test_lock(study)
     rows = completed(study)
@@ -110,7 +111,8 @@ def finalize(study):
         refs.append(dict(relative=relative, sha256=sha256_file(path), content_hash=rows[shard['shard_id']]['content_hash']))
     reduced = study_kind(study) == 'STUDY_REDUCED_CONFIRMATION'
     extra = dict(confirmation_scope=study['confirmation_scope']) if reduced else {}
-    result = artifact('DATASET_REDUCED_CONFIRMATION' if reduced else 'DATASET', **extra,
+    kind, execution = manifest_execution(study, rows.values())
+    result = artifact(kind, **extra, **execution,
         parents={'study': study['content_hash'],
         'population': study['population']['content_hash'], 'test_lock': lock['content_hash']}, test=True,
         counts=counts, shards=refs, candidate='JOINT', replica=0,
@@ -133,10 +135,12 @@ def read_role(root, role):
     from .campaign import validate_study, study_kind
     validate_study(study)
     manifest = load_json(root/'dataset_manifest.json')
+    from .recovery import validate_manifest_execution
+    kind = validate_manifest_execution(study, manifest)
     reduced = study_kind(study) == 'STUDY_REDUCED_CONFIRMATION'
     if reduced and manifest.get('confirmation_scope') != study['confirmation_scope']:
         raise ValueError('Dataset reduced evidence differs')
-    validate(manifest, 'DATASET_REDUCED_CONFIRMATION' if reduced else 'DATASET',
+    validate(manifest, kind,
         parents={'study': study['content_hash'],
         'population': study['population']['content_hash'],
         'test_lock': load_json(root/'test_build_lock.json')['content_hash']}, test=True)
@@ -148,6 +152,8 @@ def read_role(root, role):
         if sha256_file(path) != reference['sha256']:
             raise ValueError('Manifest shard receipt changed')
         row = load_json(path)
+        if row.get('execution_repair') != manifest.get('execution_repair') and 'execution_repair' in row:
+            raise ValueError('Manifest omitted shard execution repair')
         if row['content_hash'] != reference['content_hash']:
             raise ValueError('Manifest shard lineage differs')
         if row['shard_id'] not in wanted:

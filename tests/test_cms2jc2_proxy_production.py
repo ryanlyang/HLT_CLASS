@@ -324,6 +324,37 @@ def test_slurm_field_parser_keeps_cpus_per_task(monkeypatch):
     assert sub.fields('123')['CPUs/Task'] == '36'
 
 
+@pytest.mark.parametrize('response', [
+    '', 'slurm_load_jobs error: Invalid job id specified',
+    'JobId=123 ArrayJobId=123 ArrayTaskId=1\nJobId=124 ArrayJobId=123 ArrayTaskId=0',
+    'JobId=124 ArrayJobId=123 ArrayTaskId=0\nJobId=123 ArrayJobId=123 ArrayTaskId=1',
+    'JobId=123 JobId=124', 'JobId=123 NumCPUs=36 NumCPUs=72',
+    'JobId=123_1 ArrayJobId=123 ArrayTaskId=1',
+])
+def test_slurm_field_parser_rejects_ambiguous_or_malformed_response(monkeypatch, response):
+    monkeypatch.setattr(sub.subprocess, 'run', lambda *a, **k: SimpleNamespace(stdout=response))
+    with pytest.raises(PermissionError): sub.fields('123')
+
+
+@pytest.mark.parametrize('selector, response', [
+    ('123', 'JobId=124'),
+    ('123_1', 'JobId=123 ArrayJobId=123 ArrayTaskId=0'),
+    ('123_1', 'JobId=123 ArrayJobId=122 ArrayTaskId=1'),
+    ('123_1', 'JobId=123 ArrayJobId=123 ArrayTaskId=0-1'),
+    ('123_1', 'JobId=123'),
+])
+def test_slurm_field_parser_binds_requested_identity(monkeypatch, selector, response):
+    monkeypatch.setattr(sub.subprocess, 'run', lambda *a, **k: SimpleNamespace(stdout=response))
+    with pytest.raises(PermissionError, match='different allocation'): sub.fields(selector)
+
+
+@pytest.mark.parametrize('selector', ['', '123_0-1', '123_[0-1]', '123,124', '123_1.batch', '-a'])
+def test_slurm_field_parser_rejects_nonexact_selectors(monkeypatch, selector):
+    def forbidden(*args, **kwargs): raise AssertionError('Must fail before scheduler query')
+    monkeypatch.setattr(sub.subprocess, 'run', forbidden)
+    with pytest.raises(PermissionError, match='selector'): sub.fields(selector)
+
+
 def test_array_accounting_preserves_array_identity(monkeypatch):
     def run(argv, **kwargs):
         assert 'JobID%80,State,ExitCode,User,Account,JobName%80' in argv
@@ -425,8 +456,11 @@ def test_storage_attestation_and_overlap_checks(tmp_path):
         root='', persistent_parent='', budget_gib=50, available_quota_gib=60)
 
 
-def test_worker_scheduler_rejects_identity_or_resource_mutation(study, monkeypatch):
+@pytest.fixture
+def scheduler_worker(study, monkeypatch):
     a = c.make_attempt(study, 'pilot', study['shards'][:2], memory_gib=64, hours=4, bytes_per_jet=10000)
+    for name in list(sub.os.environ):
+        if name.startswith('SLURM_'): monkeypatch.delenv(name)
     environment = dict(CONDA_PREFIX=c.ENVIRONMENT, SLURM_JOB_PARTITION='tigris',
         SLURM_JOB_ACCOUNT='reu-aisocial', SLURM_CPUS_PER_TASK='36', SLURM_JOB_NUM_NODES='1',
         PYTHONNOUSERSITE='1', PYTHONDONTWRITEBYTECODE='1', LD_LIBRARY_PATH=c.ENVIRONMENT+'/lib',
@@ -435,18 +469,89 @@ def test_worker_scheduler_rejects_identity_or_resource_mutation(study, monkeypat
     for name, value in environment.items(): monkeypatch.setenv(name, value)
     monkeypatch.setattr(sub.platform, 'system', lambda: 'Linux')
     monkeypatch.setattr(sub, 'submitted_identity', lambda *a, **k: '120')
-    f = dict(Comment=f'c2jp:{a["content_hash"]}:generate', JobName='c2jp_generate',
+    f = dict(JobId='123', Comment=f'c2jp:{a["content_hash"]}:generate', JobName='c2jp_generate',
         Partition='tigris', Account='reu-aisocial', NumCPUs='36', NumNodes='1', NumTasks='1',
         TimeLimit='04:00:00', MinMemoryNode='64G', JobState='RUNNING', WorkDir=study['project_dir'],
         UserId=sub.getpass.getuser()+'(123)', ReqTRES='cpu=36,mem=64G,node=1', ArrayTaskId='0', ArrayJobId='120')
     f['CPUs/Task'] = '36'
+    return a, f
+
+
+def test_worker_scheduler_rejects_identity_or_resource_mutation(study, scheduler_worker, monkeypatch):
+    a, f = scheduler_worker
     monkeypatch.setattr(sub, 'fields', lambda job: f)
     assert sub.worker_identity(study, a, 'generate', 0)['cpus'] == 36
-    for key, value in [('Comment', 'other'), ('NumCPUs', '72'), ('MinMemoryNode', '32G'),
+    for key, value in [('JobId', '999'), ('Comment', 'other'), ('NumCPUs', '72'), ('MinMemoryNode', '32G'),
                        ('ArrayTaskId', '1'), ('ReqTRES', 'cpu=36,gres/gpu=1')]:
         old = f[key]; f[key] = value
         with pytest.raises(PermissionError): sub.worker_identity(study, a, 'generate', 0)
         f[key] = old
+
+
+@pytest.mark.parametrize('index, raw_id', [(0, '121'), (1, '120'), (0, '120'), (1, '121')])
+def test_worker_queries_exact_array_element_even_when_raw_job_is_parent(
+        study, scheduler_worker, monkeypatch, index, raw_id):
+    a, f = scheduler_worker
+    monkeypatch.setenv('SLURM_JOB_ID', raw_id)
+    monkeypatch.setenv('SLURM_ARRAY_TASK_ID', str(index))
+    f.update(JobId=raw_id, ArrayTaskId=str(index))
+    calls = []
+    def run(argv, **kwargs):
+        calls.append(argv)
+        assert argv == ['scontrol', 'show', 'job', '-o', f'120_{index}']
+        assert kwargs == dict(check=True, capture_output=True, text=True)
+        return SimpleNamespace(stdout=' '.join(f'{k}={v}' for k, v in f.items())+'\n')
+    monkeypatch.setattr(sub.subprocess, 'run', run)
+    result = sub.worker_identity(study, a, 'generate', index)
+    assert len(calls) == 1
+    assert (result['job_id'], result['array_job_id'], result['index']) == (raw_id, '120', index)
+    assert result['scheduler']['JobId'] == raw_id
+
+
+@pytest.mark.parametrize('index, task_id', [(None, '0'), (True, '1'), (-1, '-1'), (2, '2'), (0, '1')])
+def test_worker_rejects_invalid_index_before_scheduler_lookup(study, scheduler_worker, monkeypatch, index, task_id):
+    a, _ = scheduler_worker
+    monkeypatch.setenv('SLURM_ARRAY_TASK_ID', task_id)
+    def forbidden(*args, **kwargs): raise AssertionError('Must fail before scheduler query')
+    monkeypatch.setattr(sub, 'fields', forbidden)
+    with pytest.raises(PermissionError, match='exact shard'): sub.worker_identity(study, a, 'generate', index)
+
+
+def test_worker_rejects_wrong_array_parent_before_lookup(study, scheduler_worker, monkeypatch):
+    a, _ = scheduler_worker
+    monkeypatch.setenv('SLURM_ARRAY_JOB_ID', '999')
+    def forbidden(*args, **kwargs): raise AssertionError('Must fail before scheduler query')
+    monkeypatch.setattr(sub, 'fields', forbidden)
+    with pytest.raises(PermissionError, match='registered submission'):
+        sub.worker_identity(study, a, 'generate', 0)
+
+
+def test_nonarray_worker_uses_single_numeric_allocation(study, scheduler_worker, monkeypatch):
+    a, f = scheduler_worker
+    monkeypatch.delenv('SLURM_ARRAY_JOB_ID')
+    monkeypatch.delenv('SLURM_ARRAY_TASK_ID')
+    monkeypatch.setenv('SLURM_JOB_ID', '120')
+    monkeypatch.setenv('SLURM_CPUS_PER_TASK', '4')
+    f.pop('ArrayJobId'); f.pop('ArrayTaskId')
+    f.update(JobId='120', Comment=f'c2jp:{a["content_hash"]}:preflight', JobName='c2jp_preflight',
+             NumCPUs='4', MinMemoryNode='32G', ReqTRES='cpu=4,mem=32G,node=1')
+    f['CPUs/Task'] = '4'
+    def run(argv, **kwargs):
+        assert argv == ['scontrol', 'show', 'job', '-o', '120']
+        return SimpleNamespace(stdout=' '.join(f'{k}={v}' for k, v in f.items()))
+    monkeypatch.setattr(sub.subprocess, 'run', run)
+    result = sub.worker_identity(study, a, 'preflight', None)
+    assert result['job_id'] == '120' and result['array_job_id'] is None
+    with pytest.raises(PermissionError, match='Non-array'):
+        sub.worker_identity(study, a, 'preflight', 0)
+    f['ArrayJobId'] = '120'
+    f['ArrayTaskId'] = '0'
+    with pytest.raises(PermissionError, match='Non-array'):
+        sub.worker_identity(study, a, 'preflight', None)
+    f.pop('ArrayJobId'); f.pop('ArrayTaskId')
+    monkeypatch.setenv('SLURM_ARRAY_JOB_ID', '120')
+    with pytest.raises(PermissionError, match='Non-array'):
+        sub.worker_identity(study, a, 'preflight', None)
 
 
 def test_invalid_bank_shapes_and_dtypes_fail(tmp_path):

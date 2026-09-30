@@ -21,11 +21,12 @@ def clean_env():
 def task_specs(attempt):
     r = attempt['resources']
     tasks = []
-    if attempt['kind'] == 'pilot':
+    preflight = attempt['kind'] == 'pilot' and 'execution_repair' not in attempt
+    if preflight:
         tasks.append(dict(task='preflight', cpus=4, memory_gib=32, hours=4, dependency=None))
     if attempt['kind'] != 'finalize':
         tasks.append(dict(task='generate', cpus=36, memory_gib=r['memory_gib'], hours=r['hours'],
-            dependency='afterok:preflight' if attempt['kind'] == 'pilot' else None,
+            dependency='afterok:preflight' if preflight else None,
             array=f'0-{len(attempt["shards"])-1}%{r["concurrent"]}'))
     if attempt['kind'] != 'pilot':
         tasks.append(dict(task='finalize', cpus=1, memory_gib=32, hours=4,
@@ -34,6 +35,8 @@ def task_specs(attempt):
 
 
 def plan(study, attempt):
+    from .recovery import execution_project
+    project = execution_project(study, attempt)
     commands = []
     directory = safe(study['root'], f'attempts/{attempt["name"]}')
     for task in task_specs(attempt):
@@ -42,12 +45,12 @@ def plan(study, attempt):
             '--partition=tigris', '--account=reu-aisocial', f'--cpus-per-task={task["cpus"]}',
             f'--mem={task["memory_gib"]}G', f'--time={task["hours"]:02d}:00:00',
             f'--job-name=c2jp_{name}', f'--comment=c2jp:{attempt["content_hash"]}:{name}',
-            f'--chdir={study["project_dir"]}',
+            f'--chdir={project}',
             f'--output={directory}/slurm-{name}-%A_%a.out']
         if task.get('array'):
             argv.append('--array='+task['array'])
-        argv += [str(Path(study['project_dir'])/'sbatch/run_cms2jc2_proxy_dataset_cpu.sh'),
-                 study['project_dir'], str(directory/'attempt_spec.json'), name]
+        argv += [str(Path(project)/'sbatch/run_cms2jc2_proxy_dataset_cpu.sh'),
+                 project, str(directory/'attempt_spec.json'), name]
         commands.append(dict(**task, argv=argv))
     return artifact('PLAN', parents={'attempt': attempt['content_hash']}, commands=commands,
         gpus=0, generation_cpu_cap=576, maximum_concurrent_generation_tasks=16,
@@ -66,9 +69,29 @@ def get_plan(attempt_path):
 
 
 def fields(job):
-    result = subprocess.run(['scontrol', 'show', 'job', '-o', str(job)],
+    """Read one exact allocation, never flatten an array parent's records."""
+    selector = str(job)
+    if not re.fullmatch(r'[0-9]+(?:_[0-9]+)?', selector):
+        raise PermissionError('Exact numeric job or array-element selector required')
+    result = subprocess.run(['scontrol', 'show', 'job', '-o', selector],
                             check=True, capture_output=True, text=True)
-    return dict(re.findall(r'(?:^|\s)([\w/]+)=([^\s]+)', result.stdout))
+    # -o prints one line PER RECORD, not one line for the entire query.
+    lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    if len(lines) != 1:
+        raise PermissionError(f'Scheduler query {selector} returned {len(lines)} records; expected one')
+    pairs = re.findall(r'(?:^|\s)([\w/]+)=([^\s]+)', lines[0])
+    value = dict(pairs)
+    if (not lines[0].startswith('JobId=') or len(value) != len(pairs)
+            or not re.fullmatch(r'[0-9]+', value.get('JobId', ''))):
+        raise PermissionError(f'Malformed or duplicate scheduler identity for {selector}')
+    if '_' in selector:
+        parent, index = selector.split('_')
+        matches = value.get('ArrayJobId') == parent and value.get('ArrayTaskId') == index
+    else:
+        matches = value['JobId'] == selector
+    if not matches:
+        raise PermissionError(f'Scheduler returned a different allocation for {selector}')
+    return value
 
 
 def submitted_identity(study, attempt, task, *, wait_for_response=False):
@@ -105,6 +128,8 @@ def submitted_identity(study, attempt, task, *, wait_for_response=False):
 
 
 def worker_identity(study, attempt, task, index):
+    from .recovery import execution_project
+    project = execution_project(study, attempt)
     row = next((r for r in task_specs(attempt) if r['task'] == task), None)
     env = os.environ
     if row is None or platform.system() != 'Linux':
@@ -121,19 +146,28 @@ def worker_identity(study, attempt, task, index):
                 ('SLURM_GPUS', 'SLURM_JOB_GPUS', 'SLURM_GPUS_ON_NODE'))):
         raise PermissionError('Allocated CPU-only Tigris environment/resources differ')
     job = env.get('SLURM_JOB_ID', '')
-    if not job.isdigit():
+    if not re.fullmatch(r'[0-9]+', job):
         raise PermissionError('Missing numeric scheduler job ID')
+    if task == 'generate':
+        if (type(index) is not int or not 0 <= index < len(attempt['shards'])
+                or env.get('SLURM_ARRAY_TASK_ID') != str(index)):
+            raise PermissionError('Array element escaped exact shard registration')
+    elif index is not None or any(env.get(k) for k in ('SLURM_ARRAY_JOB_ID', 'SLURM_ARRAY_TASK_ID')):
+        raise PermissionError('Non-array task received an array identity')
     expected_job = submitted_identity(study, attempt, task, wait_for_response=True)
     if (env.get('SLURM_ARRAY_JOB_ID') if task == 'generate' else job) != expected_job:
         raise PermissionError('Job does not belong to this registered submission')
-    f = fields(job)
-    if (f.get('Comment') != f'c2jp:{attempt["content_hash"]}:{task}'
+    # The placeholder element's raw JobId can equal ArrayJobId. Querying that
+    # numeric ID may return ALL siblings. Always address parent_index instead.
+    selector = f'{expected_job}_{index}' if task == 'generate' else job
+    f = fields(selector)
+    if (f.get('JobId') != job or f.get('Comment') != f'c2jp:{attempt["content_hash"]}:{task}'
             or f.get('JobName') != 'c2jp_'+task or f.get('Partition') != 'tigris'
             or f.get('Account') != 'reu-aisocial' or f.get('NumCPUs') != str(row['cpus'])
             or f.get('CPUs/Task') != str(row['cpus']) or f.get('NumNodes') != '1'
             or f.get('NumTasks') != '1'
             or f.get('TimeLimit') != f'{row["hours"]:02d}:00:00'
-            or f.get('JobState') != 'RUNNING' or f.get('WorkDir') != study['project_dir']
+            or f.get('JobState') != 'RUNNING' or f.get('WorkDir') != project
             or f.get('UserId', '').split('(')[0] != getpass.getuser()
             or 'gres/gpu' in f.get('ReqTRES', '')):
         raise PermissionError('Scheduler identity/resources differ')
@@ -142,13 +176,10 @@ def worker_identity(study, attempt, task, index):
             != row['memory_gib']*2**30):
         raise PermissionError('Scheduler memory reservation differs')
     if task == 'generate':
-        if (type(index) is not int or not 0 <= index < len(attempt['shards'])
-                or env.get('SLURM_ARRAY_TASK_ID') != str(index)
-                or f.get('ArrayTaskId') != str(index)
-                or f.get('ArrayJobId') != env.get('SLURM_ARRAY_JOB_ID')):
+        if f.get('ArrayTaskId') != str(index) or f.get('ArrayJobId') != expected_job:
             raise PermissionError('Array element escaped exact shard registration')
-    elif index is not None:
-        raise PermissionError('Non-array task received an array index')
+    elif 'ArrayJobId' in f or 'ArrayTaskId' in f:
+        raise PermissionError('Non-array task received an array identity')
     return dict(job_id=job, array_job_id=env.get('SLURM_ARRAY_JOB_ID'), index=index,
                 partition='tigris', account='reu-aisocial', cpus=row['cpus'], gpus=0,
                 scheduler=f, host=platform.node())
@@ -209,12 +240,15 @@ def require_terminal(study, *, exclude=None):
 
 
 def submit(attempt_path, *, execute=False, plan_hash=None, phrase=None):
+    from .recovery import validate_execution
     study, attempt, saved = get_plan(attempt_path)
     if not execute:
         return saved
     if saved['content_hash'] != plan_hash or saved['authorization_phrase'] != phrase:
         raise PermissionError('Exact reviewed plan hash and authorization phrase required')
-    c.validate_study(study, source=True)
+    validate_execution(study, attempt.get('execution_repair'))
+    if 'execution_repair' in attempt:
+        c.require_preflight(study)
     require_terminal(study, exclude=attempt['name'])
     if attempt['kind'] != 'pilot':
         c.require_preflight(study)

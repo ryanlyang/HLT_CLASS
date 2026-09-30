@@ -122,8 +122,26 @@ overlap.
 Array identity checks use `sacct`'s `JobID` (parent plus element index), not
 `JobIDRaw`, which reports individual raw job IDs; see the official
 [Slurm accounting field definitions](https://slurm.schedmd.com/sacct.html).
+Worker authentication queries `scontrol show job -o ARRAY_JOB_ID_TASK_ID`
+for generation, never the raw `SLURM_JOB_ID`: an element's raw ID can equal
+the parent ID, whose query may return multiple records. Require one record,
+unique field keys, exact array parent/index, and a returned raw `JobId` equal
+to `SLURM_JOB_ID`. Non-array workers retain a single numeric-ID lookup and
+must not carry array identity. Owner, submission journal, comment, worktree,
+state, CPU, memory and GPU checks remain mandatory.
 The array `%16` limit follows the official
 [job-array concurrency mechanism](https://slurm.schedmd.com/job_array.html).
+
+This scheduler fix does not authorize changing an existing study's frozen
+source. The existing `recover` command requires that original source; using
+a changed checkout against an old study is not a source-migration mechanism.
+The separately authorized [execution recovery amendment](CMS2JC2_PROXY_EXECUTION_RECOVERY_PLAN.md)
+provides that boundary for the one-completed/one-failed pilot case. Its new
+`queue_cms2jc2_proxy_recovery.sh` helper pins replacement source, retains the
+completed pilot and successful preflight, and can automatically submit measured
+bulk after the missing pilot succeeds. Preserve completed receipts,
+blocks, original worktree and journals; do not edit their source hashes or
+rerun an old failed allocation as though it contained the fix.
 
 ## Validation and honest status
 

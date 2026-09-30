@@ -83,12 +83,13 @@ def generate(study, attempt, shard, reservation, *, bundle, measurement_factory=
 
 def run(attempt_path, task, *, index=None):
     from .submission import worker_identity
+    from .recovery import validate_execution
     start = time.perf_counter()
     print(f'CMS2JC2-PRODUCTION phase=authenticate task={task} index={index}', flush=True)
     attempt = load_json(attempt_path)
     study = load_json(c.checked(attempt['study']))
-    c.validate_study(study, source=True)
     c.validate_attempt(attempt, study)
+    repair = validate_execution(study, attempt.get('execution_repair'))
     if attempt['kind'] != 'pilot':
         c.require_admission(study, attempt)
     allocation = worker_identity(study, attempt, task, index)
@@ -115,12 +116,16 @@ def run(attempt_path, task, *, index=None):
         auth_seconds = time.perf_counter()-start
         print(f'CMS2JC2-PRODUCTION phase=generate shard={shard["shard_id"]} jets={shard["jets"]} workers=36 authentication_seconds={auth_seconds:.1f}', flush=True)
         row = generate(study, attempt, shard, reservation, bundle=c.imported(study, 'bundle'))
-        result = artifact('SHARD', parents={'study': study['content_hash'],
+        extra = dict(execution_repair=attempt['execution_repair'],
+                     scientific_source=study['source']['content_hash']) if repair else {}
+        result = artifact('SHARD_EXECUTION_REPAIR' if repair else 'SHARD',
+            parents={'study': study['content_hash'],
             'population': study['population']['content_hash']}, test=shard['role'] == 'final_test',
-            **row, source=study['source']['content_hash'], environment=study['numerical_environment']['content_hash'],
+            **row, **extra, source=(repair['source'] if repair else study['source'])['content_hash'],
+            environment=study['numerical_environment']['content_hash'],
             authentication_seconds=auth_seconds, allocation=allocation)
         output.verify_shard(study, result)
-        c.validate_study(study, source=True)
+        validate_execution(study, attempt.get('execution_repair'))
         if numerical_environment() != study['numerical_environment']:
             raise ValueError('Numerical environment changed during generation')
         # Receipt is the commit marker; any earlier interrupted blocks remain uncommitted.
