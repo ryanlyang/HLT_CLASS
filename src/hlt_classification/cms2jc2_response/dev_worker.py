@@ -282,6 +282,9 @@ def allocation(study, t):
 
 
 def run(spec, task_id):
+    if spec.get("contract") == "CMS2JC2_RESPONSE_TG_STAGE/v1":
+        from .generation_direct_worker import run as run_direct
+        return run_direct(spec, task_id)
     if spec.get("contract") == "CMS2JC2_RESPONSE_PORT_STAGE/v1":
         from .generation_portable_worker import run as run_portable
         return run_portable(spec, task_id)

@@ -30,6 +30,7 @@ PHRASES.update({s: f"AUTHORIZE CMS2JC2 {s.upper()} EXACT PLAN" for s in ("joint_
 PHRASES.update({s: f"AUTHORIZE CMS2JC2 {s.upper()} EXACT PLAN" for s in ("frozen_gate", "frozen_confirm")})
 PHRASES.update({s: f"AUTHORIZE CMS2JC2 {s.upper()} EXACT PLAN" for s in ("generation_gate", "generation_screen")})
 PHRASES.update({s: f"AUTHORIZE CMS2JC2 {s.upper()} EXACT PLAN" for s in ("port_export", "port_gate", "port_screen")})
+PHRASES.update({s: f"AUTHORIZE CMS2JC2 {s.upper()} EXACT PLAN" for s in ("tigris_direct_gate", "tigris_direct_screen")})
 REMAINING_WRITES = 2*GIB
 
 
@@ -71,7 +72,10 @@ def source_snapshot(project, commit=None, *, executable=True):
                             "docs/plans/CMS2JC2_TIGRIS_GENERATION_BENCHMARK_PLAN.md",
                             "docs/contracts/CMS2JC2_TIGRIS_GENERATION_BENCHMARK.md",
                             "scripts/queue_cms2jc2_portable_benchmark.sh",
-                            "sbatch/run_cms2jc2_response_portable_cpu.sh")
+                            "sbatch/run_cms2jc2_response_portable_cpu.sh",
+                            "docs/plans/CMS2JC2_DIRECT_TIGRIS_GENERATION_PLAN.md",
+                            "docs/contracts/CMS2JC2_DIRECT_TIGRIS_GENERATION.md",
+                            "scripts/queue_cms2jc2_direct_tigris.sh")
     if executable:
         for name in extra:
             subprocess.check_output(["git", "-C", str(project), "ls-files", "--error-unmatch", name])
@@ -236,6 +240,9 @@ def create_stage(study_path, *, stage, name, parent_spec=None, policy_id=None, b
 
 
 def validate_stage(spec, *, source=True):
+    if spec.get("contract") == "CMS2JC2_RESPONSE_TG_STAGE/v1":
+        from .generation_direct_campaign import validate_stage as validate_direct
+        return validate_direct(spec, source=source)
     if spec.get("contract") == "CMS2JC2_RESPONSE_PORT_STAGE/v1":
         from .generation_portable_campaign import validate_stage as validate_portable
         return validate_portable(spec, source=source)
@@ -316,6 +323,9 @@ def preparation_stage(spec):
 
 
 def command_plan(spec, study):
+    if spec.get("contract") == "CMS2JC2_RESPONSE_TG_STAGE/v1":
+        from .generation_direct_campaign import command_plan as direct_plan
+        return direct_plan(spec, study)
     if spec.get("contract") == "CMS2JC2_RESPONSE_PORT_STAGE/v1":
         from .generation_portable_campaign import command_plan as portable_plan
         return portable_plan(spec, study)

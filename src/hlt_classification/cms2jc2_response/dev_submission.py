@@ -170,7 +170,7 @@ def scheduler_identity(spec, study, task_id, job_id, *, pending=False):
     # explicit pending-job retirement check accepts this form; workers remain
     # bound to an actual one-node allocation.
     node_shapes = {"1", "1-1"} if pending and fields.get("JobState") == "PENDING" else {"1"}
-    portable = spec.get("contract") == "CMS2JC2_RESPONSE_PORT_STAGE/v1"
+    portable = spec.get("contract") in ("CMS2JC2_RESPONSE_PORT_STAGE/v1", "CMS2JC2_RESPONSE_TG_STAGE/v1")
     worker = "sbatch/run_cms2jc2_response_portable_cpu.sh" if portable else "sbatch/run_cms2jc2_response_dev_cpu.sh"
     # Only the new Tigris protocol accepts the site's default QoS. Its exact
     # submitted argv must omit --qos; the assigned value remains in evidence.

@@ -18,6 +18,16 @@ def main():
     faulthandler.enable(all_threads=True)
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
+    p = commands.add_parser("create-direct-tigris")
+    for name in ("parent-spec", "project-dir", "source-commit", "root"):
+        p.add_argument("--"+name, required=True)
+    p = commands.add_parser("advance-direct-tigris")
+    p.add_argument("--parent-spec", required=True)
+    p = commands.add_parser("direct-tigris-results")
+    p.add_argument("--spec", required=True)
+    p.add_argument("--json", action="store_true")
+    p = commands.add_parser("probe-direct-tigris")
+    p.add_argument("--spec", required=True)
     p = commands.add_parser("create-portable-export")
     for name in ("parent-spec", "project-dir", "source-commit", "root"):
         p.add_argument("--"+name, required=True)
@@ -138,12 +148,24 @@ def main():
         if name == "reconcile":
             p.add_argument("--job-id", required=True)
     a = parser.parse_args()
+    if a.command in ("create-direct-tigris", "advance-direct-tigris"):
+        from hlt_classification.cms2jc2_response.generation_direct_campaign import create, advance
+        result = (advance(a.parent_spec) if a.command == "advance-direct-tigris" else
+                  create(parent_spec=a.parent_spec, project_dir=a.project_dir,
+                         source_commit=a.source_commit, root=a.root))
+        print(json.dumps(result, indent=2))
+        return 0
+    if a.command == "direct-tigris-results":
+        from hlt_classification.cms2jc2_response.generation_direct_worker import read, render
+        spec = load_json(a.spec)
+        print(json.dumps(read(spec), indent=2) if a.json else render(spec))
+        return 0
     if a.command == "portable-benchmark-results":
         from hlt_classification.cms2jc2_response.generation_portable_worker import read, render
         spec = load_json(a.spec)
         print(json.dumps(read(spec), indent=2) if a.json else render(spec))
         return 0
-    if a.command == "probe-portable-benchmark":
+    if a.command in ("probe-portable-benchmark", "probe-direct-tigris"):
         spec = load_json(a.spec)
         study = campaign.validate_stage(spec)
         seen = set()
