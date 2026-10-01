@@ -652,7 +652,9 @@ def test_direct_coarse_science_plan_has_16_tasks_and_no_dense(tmp_path, monkeypa
     )
 
 
-def test_offline_ecc_recovery_is_exact_three_task_closure(tmp_path, monkeypatch):
+def test_campaign_ecc_recovery_reuses_completed_and_retries_exact_closure(
+    tmp_path, monkeypatch,
+):
     from hlt_classification.cms_proxy_ladder import recovery as module
 
     tasks = [
@@ -685,12 +687,13 @@ def test_offline_ecc_recovery_is_exact_three_task_closure(tmp_path, monkeypatch)
         tasks=tasks,
     )
     ids = {row["task_id"]: str(100 + index) for index, row in enumerate(tasks)}
+    gpu = ["--gres=gpu:l40s:1"]
     commands = {
-        "train_M0HLT": ["sbatch", "--job-name=jc2pxc_train_M0HLT", "--output=old", "--wrap=m0"],
-        "train_OFFLINE": ["sbatch", "--job-name=jc2pxc_train_OFFLINE", "--output=old", "--wrap=offline"],
-        "train_U000": ["sbatch", "--job-name=jc2pxc_train_U000", "--output=old", "--wrap=u000"],
-        "reduce_U000": ["sbatch", "--job-name=jc2pxc_reduce_U000", "--output=old", "--dependency=afterok:102", "--wrap=reduce"],
-        "train_CMSP_DIRECT_D000_from_U000": ["sbatch", "--job-name=jc2pxc_direct", "--output=old", "--dependency=afterok:103", "--wrap=direct"],
+        "train_M0HLT": ["sbatch", "--job-name=jc2pxc_train_M0HLT", "--output=old", *gpu, "--wrap=m0"],
+        "train_OFFLINE": ["sbatch", "--job-name=jc2pxc_train_OFFLINE", "--output=old", *gpu, "--wrap=offline"],
+        "train_U000": ["sbatch", "--job-name=jc2pxc_train_U000", "--output=old", *gpu, "--wrap=u000"],
+        "reduce_U000": ["sbatch", "--job-name=jc2pxc_reduce_U000", "--output=old", *gpu, "--dependency=afterok:102", "--wrap=reduce"],
+        "train_CMSP_DIRECT_D000_from_U000": ["sbatch", "--job-name=jc2pxc_direct", "--output=old", *gpu, "--dependency=afterok:103", "--wrap=direct"],
         "aggregate": ["sbatch", "--job-name=jc2pxc_aggregate", "--output=old", "--dependency=afterok:100:101:102:103:104", "--wrap=aggregate"],
         "campaign_complete": ["sbatch", "--job-name=jc2pxc_complete", "--output=old", "--dependency=afterok:105", "--wrap=complete"],
     }
@@ -704,40 +707,64 @@ def test_offline_ecc_recovery_is_exact_three_task_closure(tmp_path, monkeypatch)
         module, "_context",
         lambda root: (campaign_root, campaign, ledger, original_plan),
     )
-    monkeypatch.setattr(module, "completed_task", lambda spec, task: None)
+    monkeypatch.setattr(
+        module, "completed_task",
+        lambda spec, task: {"task_id": task}
+        if task in {"train_M0HLT", "train_U000"} else None,
+    )
     monkeypatch.setattr(module, "source_lock", lambda project, commit: source)
-    log = campaign_root / "slurm-101.out"
-    log.write_text("Nodelist : gpu3001\nuncorrectable ECC error encountered\n")
-    states = {job: "COMPLETED" for job in ids.values()}
-    states["101"] = "FAILED"; states["105"] = "CANCELLED"; states["106"] = "CANCELLED"
-    nodes = {job: "gpu3002" for job in ids.values()}; nodes["101"] = "gpu3001"
+    for job in ("101", "103"):
+        (campaign_root / f"slurm-{job}.out").write_text(
+            "Nodelist : gpu3001\nuncorrectable ECC error encountered\n",
+        )
+    states = {
+        "100": "COMPLETED", "101": "FAILED", "102": "COMPLETED",
+        "103": "FAILED", "104": "CANCELLED", "105": "CANCELLED",
+        "106": "CANCELLED",
+    }
+    nodes = {job: "gpu3002" for job in ids.values()}
+    nodes["101"] = nodes["103"] = "gpu3001"
 
-    spec = module.create_offline_ecc_recovery(
+    spec = module.create_ecc_recovery(
         campaign_root=campaign_root, recovery_root=tmp_path / "recovery",
         project_dir=tmp_path, source_commit="a" * 40,
-        failed_job_id="101", failed_node="gpu3001",
         states_by_job_id=states, nodes_by_job_id=nodes,
     )
     assert spec["retry_tasks"] == [
-        "train_OFFLINE", "aggregate", "campaign_complete",
+        "train_OFFLINE", "reduce_U000",
+        "train_CMSP_DIRECT_D000_from_U000", "aggregate",
+        "campaign_complete",
     ]
-    assert spec["superseded_jobs"] == {
-        "train_OFFLINE": "101", "aggregate": "105",
-        "campaign_complete": "106",
+    assert spec["failure_roots"] == ["train_OFFLINE", "reduce_U000"]
+    assert spec["source_jobs"] == {
+        "train_M0HLT": "100", "train_U000": "102",
     }
     plan = module.recovery_plan(spec)
     rows = {row["task_id"]: row for row in plan["commands"]}
-    assert list(rows) == ["train_OFFLINE", "aggregate", "campaign_complete"]
+    assert list(rows) == spec["retry_tasks"]
     assert "--exclude=gpu3001" in rows["train_OFFLINE"]["command"]
+    reduce_dependency = next(
+        item for item in rows["reduce_U000"]["command"]
+        if item.startswith("--dependency=")
+    )
+    assert reduce_dependency == "--dependency=afterok:102"
+    direct_dependency = next(
+        item for item in rows["train_CMSP_DIRECT_D000_from_U000"]["command"]
+        if item.startswith("--dependency=")
+    )
+    assert direct_dependency == "--dependency=afterok:${JOB_reduce_U000}"
     dependency = next(
         item for item in rows["aggregate"]["command"]
         if item.startswith("--dependency=")
     )
-    assert dependency == "--dependency=afterok:${JOB_train_OFFLINE}:100:102:103:104"
+    assert dependency == (
+        "--dependency=afterok:100:${JOB_train_OFFLINE}:102:"
+        "${JOB_reduce_U000}:${JOB_train_CMSP_DIRECT_D000_from_U000}"
+    )
     assert rows["campaign_complete"]["dependencies"] == ["aggregate"]
 
 
-def test_offline_ecc_recovery_rejects_wider_failure_closure(tmp_path, monkeypatch):
+def test_campaign_ecc_recovery_rejects_non_ecc_failure(tmp_path, monkeypatch):
     from hlt_classification.cms_proxy_ladder import recovery as module
 
     tasks = [
@@ -772,11 +799,10 @@ def test_offline_ecc_recovery_rejects_wider_failure_closure(tmp_path, monkeypatc
         "200": "FAILED", "201": "FAILED", "202": "CANCELLED",
         "203": "CANCELLED",
     }
-    with pytest.raises(ValueError, match="not narrow"):
-        module.create_offline_ecc_recovery(
+    with pytest.raises(ValueError, match="lacks bound ECC"):
+        module.create_ecc_recovery(
             campaign_root=campaign_root, recovery_root=tmp_path / "recovery",
             project_dir=tmp_path, source_commit="a" * 40,
-            failed_job_id="200", failed_node="gpu3001",
             states_by_job_id=states,
             nodes_by_job_id={job: "gpu3001" for job in states},
         )

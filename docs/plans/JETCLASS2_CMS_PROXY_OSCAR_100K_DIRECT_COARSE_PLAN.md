@@ -63,15 +63,18 @@ fail closed on drift.
 
 ## Narrow hardware-failure recovery
 
-An uncorrectable GPU ECC failure before `train_OFFLINE` began optimization is
-an operational failure, not a scientific result. The registered recovery is
-exactly `train_OFFLINE -> aggregate -> campaign_complete`. It reuses every
-other original train/reduce job as an exact aggregate dependency, excludes the
-failed node, preserves the original campaign specification and completed
-outputs, and changes no data, view, seed, model, optimizer, or population.
+An uncorrectable GPU ECC failure is an operational failure, not a scientific
+result. `CAMPAIGN_ECC_RECOVERY/v1` discovers every direct ECC root from exact
+Slurm accounting and immutable failed-log bytes, then retries precisely their
+registered downstream closure. Tasks with authenticated successful outputs
+are retained. Every recovered GPU task excludes all evidenced failed nodes;
+data, views, seeds, model, optimizer, population, and parent campaign remain
+unchanged.
 
-`OFFLINE_ECC_RECOVERY/v1` binds the original campaign and live ledger, a full
-exact-ID accounting monitor, the failed log bytes and node, the three-job
-downstream closure, and a separately pinned recovery-controller source. Its
-command plan and dry/live ledgers are immutable. Live recovery requires the
-exact phrase `AUTHORIZE JETCLASS2 CMS PROXY OFFLINE ECC RECOVERY`.
+The observed Oscar incident has two roots on `gpu3001`: `train_OFFLINE` and
+`reduce_U000`. The authenticated `train_M0HLT` and `train_U000` outputs remain
+reusable, while the two roots, all DIRECT/COARSE descendants, aggregate, and
+completion are replaced. The recovery fails closed for a non-ECC root or any
+unrelated terminal task. Its command plan and dry/live ledgers are immutable.
+Live recovery requires the exact phrase
+`AUTHORIZE JETCLASS2 CMS PROXY CAMPAIGN ECC RECOVERY`.

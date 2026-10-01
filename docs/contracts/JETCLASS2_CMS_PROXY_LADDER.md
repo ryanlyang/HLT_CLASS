@@ -97,14 +97,14 @@ reported control, not the recovery oracle.
 
 ### Oscar OFFLINE ECC recovery
 
-`JETCLASS2_CMS_PROXY_LADDER_OFFLINE_ECC_RECOVERY/v1` is the only registered
-recovery for a verified uncorrectable-ECC failure of the fresh pure-offline
-control in `CAMPAIGN_SPEC/v2`. It retries `train_OFFLINE` with identical
-scientific inputs while excluding the failed node, then replaces only the
-aggregate and completion tail. Every unaffected train/reduce dependency is
-the exact job ID from the parent live ledger. The recovery must fail closed if
-another task is failed, if OFFLINE already published an authenticated result,
-or if the observed retry closure is wider than those three tasks.
+`JETCLASS2_CMS_PROXY_LADDER_CAMPAIGN_ECC_RECOVERY/v1` is the registered
+recovery for verified uncorrectable-ECC roots in `CAMPAIGN_SPEC/v2`. It derives
+the retry set as the exact registered downstream closure, reuses authenticated
+successful task outputs, and excludes every evidenced failed node from all
+replacement GPU jobs. Every reused dependency is the exact job ID from the
+parent live ledger. The recovery fails closed for non-ECC roots, unrelated
+terminal tasks, missing success artifacts, or a retry set that differs from
+the graph closure.
 
 `CAMPAIGN_SPEC/v1` binds the completed gate, foundation, runtime profile,
 scientific plan, task graph, model factory, exact source, and separate fresh
