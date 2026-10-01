@@ -14,9 +14,13 @@ from .gate import (
     DEBUG_AUTHORIZATION as DEBUG_GATE_AUTHORIZATION,
     PREFLIGHT_RECOVERY_AUTHORIZATION,
     OSCAR_AUTHORIZATION, OSCAR_DUAL_SLOT_AUTHORIZATION,
+    OSCAR_DIRECT_COARSE_AUTHORIZATION,
     validate_gate,
 )
-from .production import AUTHORIZATION as SCIENCE_AUTHORIZATION, validate_campaign
+from .production import (
+    AUTHORIZATION as SCIENCE_AUTHORIZATION,
+    DIRECT_COARSE_AUTHORIZATION, validate_campaign,
+)
 
 
 def _walltime(minutes: int) -> str:
@@ -73,7 +77,7 @@ def gate_plan(spec: dict) -> dict:
                 mode="gate", spec_path=path, task=task,
                 job_prefix={
                     1: "jc2pxg", 2: "jc2pxd", 3: "jc2pxr",
-                    4: "jc2pxo", 5: "jc2pxq",
+                    4: "jc2pxo", 5: "jc2pxq", 6: "jc2pxs",
                 }[
                     spec.get("schema_version")
                 ],
@@ -105,7 +109,10 @@ def science_plan(spec: dict) -> dict:
             "task_id": row["task_id"], "dependencies": row["dependencies"],
             "command": _command(
                 project=spec["project_dir"], output_root=spec["campaign_root"],
-                mode="campaign", spec_path=path, task=task, job_prefix="jc2px",
+                mode="campaign", spec_path=path, task=task,
+                job_prefix=(
+                    "jc2pxc" if spec.get("schema_version") == 2 else "jc2px"
+                ),
                 site=site,
             ),
         })
@@ -142,10 +149,14 @@ def submit(
         3: PREFLIGHT_RECOVERY_AUTHORIZATION,
         4: OSCAR_AUTHORIZATION,
         5: OSCAR_DUAL_SLOT_AUTHORIZATION,
+        6: OSCAR_DIRECT_COARSE_AUTHORIZATION,
     }
     required = (
         gate_authorizations[subject.get("schema_version")]
-        if mode == "gate" else SCIENCE_AUTHORIZATION
+        if mode == "gate" else (
+            DIRECT_COARSE_AUTHORIZATION
+            if subject.get("schema_version") == 2 else SCIENCE_AUTHORIZATION
+        )
     )
     if execute and authorization_phrase != required:
         raise PermissionError(f"Live {mode} submission requires exact authorization phrase")

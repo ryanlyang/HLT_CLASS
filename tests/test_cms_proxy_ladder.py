@@ -7,12 +7,13 @@ import pytest
 
 from hlt_classification.cms2jc2_response.bridge import Particles
 from hlt_classification.cms_proxy_ladder.campaign import (
-    BRANCHES, build_scientific_plan, coordinate, task_graph,
+    BRANCHES, DIRECT_COARSE_BRANCHES, build_direct_coarse_plan,
+    build_scientific_plan, coordinate, task_graph,
 )
 from hlt_classification.cms_proxy_ladder.contracts import artifact
 from hlt_classification.cms_proxy_ladder.gate import (
     debug_gate_tasks, gate_tasks, oscar_dual_slot_preflight_tasks,
-    oscar_preflight_tasks,
+    oscar_direct_coarse_preflight_tasks, oscar_preflight_tasks,
     preflight_recovery_tasks,
 )
 from hlt_classification.cms_proxy_ladder.inputs import build_inputs, input_contract
@@ -62,6 +63,86 @@ def test_registered_graph_is_exact_three_spine_17_fit_12_reducer():
     assert coordinate("D066") == (Fraction(1), Fraction(1, 3))
     with pytest.raises(ValueError):
         coordinate("D0500")
+
+
+def test_direct_coarse_graph_is_exact_9_fit_5_reducer(monkeypatch):
+    from hlt_classification.cms_proxy_ladder import campaign as campaign_module
+    from hlt_classification.cms_proxy_ladder import population as population_module
+
+    foundation = artifact("FOUNDATION_TEST", marker="synthetic")
+    selection = artifact(
+        "POPULATION_SELECTION_TEST", counts={"train": 100_000, "validation": 50_000},
+    )
+    monkeypatch.setattr(
+        population_module, "validate_direct_coarse_population",
+        lambda value, foundation, foundation_root: value["content_hash"],
+    )
+    monkeypatch.setattr(campaign_module, "validate_foundation", lambda value, root: value)
+    plan = build_direct_coarse_plan(
+        foundation, population_selection=selection,
+        foundation_root="synthetic-foundation",
+    )
+    assert DIRECT_COARSE_BRANCHES == {
+        "DIRECT": ("D000",),
+        "COARSE": ("U050", "U100", "D066", "D033", "D000"),
+    }
+    assert plan["schema_version"] == 2
+    assert plan["fresh_fit_count"] == 9
+    assert plan["probability_publication_count"] == 5
+    assert plan["population_selection"] == selection
+    tasks = task_graph(plan)
+    assert len(tasks) == 16
+    assert sum(row["kind"] == "train" for row in tasks) == 9
+    assert sum(row["kind"] == "reduce" for row in tasks) == 5
+    assert not any("DENSE" in row["task_id"] for row in tasks)
+
+
+def test_nested_population_is_deterministic_label_blind_and_exact(monkeypatch, tmp_path):
+    from hlt_classification.cms_proxy_ladder import population as module
+
+    monkeypatch.setattr(
+        module, "DIRECT_COARSE_COUNTS", {"train": 3, "validation": 2},
+    )
+    identities = {
+        "train": np.asarray([
+            np.frombuffer(hashlib.sha256(f"train:{index}".encode()).digest(), np.uint8)
+            for index in range(7)
+        ]),
+        "validation": np.asarray([
+            np.frombuffer(hashlib.sha256(f"validation:{index}".encode()).digest(), np.uint8)
+            for index in range(5)
+        ]),
+    }
+    foundation = artifact(
+        "FOUNDATION_TEST", role_counts={"train": 7, "validation": 5},
+    )
+    monkeypatch.setattr(module, "validate_foundation", lambda value, root: value)
+    monkeypatch.setattr(
+        module, "load_assignments",
+        lambda value, root, role: (
+            identities[role], np.arange(len(identities[role]) + 1, dtype=np.int64),
+            np.empty(0, np.int32),
+        ),
+    )
+    root = tmp_path / "foundation"
+    root.mkdir()
+    first = module.create_direct_coarse_population(
+        foundation, foundation_root=root,
+    )
+    second = module.create_direct_coarse_population(
+        foundation, foundation_root=root,
+    )
+    assert first == second
+    assert first["counts"] == {"train": 3, "validation": 2}
+    assert first["labels_read"] is False
+    assert first["selection_depends_on_labels"] is False
+    assert first["final_test_in_selection"] is False
+    assert module.selection_mask(
+        first, foundation=foundation, foundation_root=root, role="train",
+    ).sum() == 3
+    assert module.selection_mask(
+        first, foundation=foundation, foundation_root=root, role="validation",
+    ).sum() == 2
 
 
 def test_persistent_proxy_endpoints_and_tail_cardinality():
@@ -293,6 +374,29 @@ def test_oscar_dual_slot_preflight_fits_two_jobs_inside_qos(tmp_path, monkeypatc
     assert "JC2_SITE=oscar_l40s" in command[-1]
 
 
+def test_oscar_direct_coarse_gate_uses_v6_and_same_dual_slot_shape(tmp_path, monkeypatch):
+    from hlt_classification.cms_proxy_ladder import submission
+
+    site = execution_site("oscar_l40s")
+    tasks = oscar_direct_coarse_preflight_tasks()
+    assert tasks == [{
+        "task_id": "preflight", "kind": "gpu", "dependencies": [],
+        "cpus": 6, "memory_mb": 90_000, "minutes": 720,
+    }]
+    spec = artifact(
+        "GATE_SPEC", version=6, gate_root=str(tmp_path / "gate"),
+        project_dir=str(tmp_path), measurement_site=site,
+        execution_site=site, tasks=tasks,
+    )
+    monkeypatch.setattr(submission, "validate_gate", lambda value: value["content_hash"])
+    plan = submission.gate_plan(spec)
+    command = plan["commands"][0]["command"]
+    assert "--cpus-per-task=6" in command
+    assert "--mem=90000M" in command
+    assert "--gres=gpu:l40s:1" in command
+    assert any("jc2pxs_preflight" in value for value in command)
+
+
 def test_oscar_dual_slot_gate_v5_validates_exact_resource_semantics(
     tmp_path, monkeypatch,
 ):
@@ -349,11 +453,87 @@ def test_oscar_dual_slot_gate_v5_validates_exact_resource_semantics(
     monkeypatch.setattr(module, "validate_foundation", lambda value, root: value)
     monkeypatch.setattr(
         module, "preparation_bound",
-        lambda foundation, role, workers: bounds[role],
+        lambda foundation, role, workers, **kwargs: bounds[role],
     )
     monkeypatch.setattr(
         module, "cache_budgets",
-        lambda foundation, memory_mb, workers: budgets,
+        lambda foundation, memory_mb, workers, **kwargs: budgets,
+    )
+    monkeypatch.setattr(release_module, "validate_request", lambda value: value)
+    assert module.validate_gate(spec) == spec["content_hash"]
+
+
+def test_oscar_direct_coarse_gate_v6_binds_nested_population(tmp_path, monkeypatch):
+    from hlt_classification.cms_proxy_ladder import gate as module
+    from hlt_classification.cms_proxy_ladder import portable, release as release_module
+
+    source = artifact("SOURCE", commit="a" * 40, files={})
+    request = release_request(
+        study_root=tmp_path / "study", offline_root=tmp_path / "offline",
+    )
+    imported_release = artifact("RELEASE_TEST", request=request)
+    imported_foundation = artifact("FOUNDATION_TEST", release=imported_release)
+    release_root = tmp_path / "materialized/release"
+    foundation_root = tmp_path / "materialized/foundation"
+    materialization = artifact(
+        "PORTABLE_MATERIALIZATION_TEST", bundle_sha256="b" * 64,
+        release_root=str(release_root), release=imported_release,
+        foundation_root=str(foundation_root), foundation=imported_foundation,
+    )
+    population = artifact(
+        "POPULATION_SELECTION", parents={"foundation": imported_foundation["content_hash"]},
+        counts={"train": 100_000, "validation": 50_000},
+    )
+    bounds = {"train": 20, "validation": 10}
+    budgets = {"train": 60, "validation": 30}
+    site = execution_site("oscar_l40s")
+    intent = {
+        "jobs": 2, "per_job_cpus": 6, "per_job_memory_mb": 90_000,
+        "per_job_gpus": 1, "aggregate_cpus": 12,
+        "aggregate_memory_mb": 180_000, "aggregate_gpus": 2,
+    }
+    spec = artifact(
+        "GATE_SPEC", version=6,
+        parents={
+            "source": source["content_hash"],
+            "request": request["content_hash"],
+            "imported_release": imported_release["content_hash"],
+            "imported_foundation": imported_foundation["content_hash"],
+            "portable_materialization": materialization["content_hash"],
+            "portable_bundle": materialization["bundle_sha256"],
+            "population_selection": population["content_hash"],
+        },
+        source=source, request=request, gate_root=str(tmp_path / "gate"),
+        project_dir=str(tmp_path), source_commit="a" * 40, capacity=512,
+        measurement_site=site, execution_site=site,
+        tasks=oscar_direct_coarse_preflight_tasks(), workers=6,
+        full_views_persisted=False,
+        materialization_root=str(tmp_path / "materialized"),
+        portable_materialization=materialization,
+        foundation_root=str(foundation_root), imported_foundation=imported_foundation,
+        imported_release_root=str(release_root), imported_release=imported_release,
+        population_selection=population, scientific_branches=["DIRECT", "COARSE"],
+        cache_preparation_bounds=bounds, cache_budgets=budgets,
+        admission=(
+            "relocated_exact_inputs_nested_100k_50k_then_oscar_l40s_"
+            "direct_coarse_full_selected_population_preflight"
+        ),
+        concurrency_intent=intent, site_transfer_policy=None,
+    )
+    monkeypatch.setattr(portable, "validate_materialization", lambda value, root: value)
+    monkeypatch.setattr(module, "validate_release", lambda value, root: value)
+    monkeypatch.setattr(module, "validate_foundation", lambda value, root: value)
+    monkeypatch.setattr(
+        module, "validate_direct_coarse_population",
+        lambda value, foundation, foundation_root: value["content_hash"],
+    )
+    monkeypatch.setattr(
+        module, "preparation_bound",
+        lambda foundation, role, workers, **kwargs: bounds[role],
+    )
+    monkeypatch.setattr(
+        module, "cache_budgets",
+        lambda foundation, memory_mb, workers, **kwargs: budgets,
     )
     monkeypatch.setattr(release_module, "validate_request", lambda value: value)
     assert module.validate_gate(spec) == spec["content_hash"]
@@ -425,6 +605,50 @@ def test_science_command_plan_has_17_fits_12_reducers_and_cpu_tail(tmp_path, mon
     assert "--gres=gpu:gh200:1" in rows["train_U000"]["command"]
     assert "--gres=gpu:gh200:1" not in rows["aggregate"]["command"]
     assert rows["campaign_complete"]["dependencies"] == ["aggregate"]
+
+
+def test_direct_coarse_science_plan_has_16_tasks_and_no_dense(tmp_path, monkeypatch):
+    from hlt_classification.cms_proxy_ladder import campaign as campaign_module
+    from hlt_classification.cms_proxy_ladder import population as population_module
+    from hlt_classification.cms_proxy_ladder import submission
+
+    foundation = artifact("FOUNDATION_TEST", marker="synthetic")
+    selection = artifact("POPULATION_SELECTION_TEST", marker="synthetic")
+    monkeypatch.setattr(
+        population_module, "validate_direct_coarse_population",
+        lambda value, foundation, foundation_root: value["content_hash"],
+    )
+    monkeypatch.setattr(campaign_module, "validate_foundation", lambda value, root: value)
+    plan = build_direct_coarse_plan(
+        foundation, population_selection=selection,
+        foundation_root=tmp_path / "foundation",
+    )
+    spec = artifact(
+        "CAMPAIGN_SPEC_TEST", version=2,
+        campaign_root=str(tmp_path / "campaign"), project_dir=str(tmp_path),
+        scientific_plan=plan, tasks=task_graph(plan),
+        runtime_profile={
+            "cpus": 6, "memory_mb": 90_000,
+            "train_minutes": 600, "reduce_minutes": 120,
+            "execution_site": execution_site("oscar_l40s"),
+        },
+    )
+    monkeypatch.setattr(submission, "validate_campaign", lambda value: value["content_hash"])
+    command_plan = submission.science_plan(spec)
+    rows = {row["task_id"]: row for row in command_plan["commands"]}
+    assert len(rows) == 16
+    assert sum(name.startswith("train_") for name in rows) == 9
+    assert sum(name.startswith("reduce_") for name in rows) == 5
+    assert not any("DENSE" in name for name in rows)
+    assert all(
+        "--cpus-per-task=6" in row["command"]
+        for name, row in rows.items()
+        if name.startswith(("train_", "reduce_"))
+    )
+    assert all(
+        any("jc2pxc_" in value for value in row["command"])
+        for row in rows.values()
+    )
 
 
 def test_small_committed_release_is_label_blind_and_identity_exact(tmp_path, monkeypatch):

@@ -24,7 +24,10 @@ def _limit_worker_threads():
 
 
 def _prepare_source(arguments) -> RamBlock:
-    foundation, foundation_root, role, coordinate, source_indices = arguments
+    (
+        foundation, foundation_root, role, coordinate, source_indices,
+        selected_mask,
+    ) = arguments
     identity_bank, assignment_offsets, assignment_mapping = load_assignments(
         foundation, root=Path(foundation_root), role=role,
     )
@@ -34,6 +37,8 @@ def _prepare_source(arguments) -> RamBlock:
         release, release_root=Path(foundation["release_root"]), role=role,
         source_file_index=tuple(source_indices),
     ):
+        if selected_mask is not None and not selected_mask[row.ordinal]:
+            continue
         if bytes(identity_bank[row.ordinal]).hex() != row.identity:
             raise ValueError("Proxy-ladder cache/assignment identity join differs")
         lo, hi = assignment_offsets[row.ordinal:row.ordinal + 2]
@@ -58,20 +63,55 @@ def _prepare_source(arguments) -> RamBlock:
     )
 
 
-def role_sources(foundation: dict, role: str) -> list[int]:
+def _mask(
+    foundation: dict, foundation_root: Path, role: str,
+    population_selection: dict | None,
+) -> np.ndarray | None:
+    if population_selection is None:
+        return None
+    from .population import selection_mask
+    return selection_mask(
+        population_selection, foundation=foundation,
+        foundation_root=foundation_root, role=role,
+    )
+
+
+def role_sources(
+    foundation: dict, role: str, *, foundation_root: Path | None = None,
+    population_selection: dict | None = None,
+) -> list[int]:
     release = foundation["release"]
     from .release import load_bank
     arrays = load_bank(release, root=Path(foundation["release_root"]))
     code = 0 if role == "train" else 1 if role == "validation" else None
     if code is None:
         raise PermissionError("Proxy-ladder caches cannot access final test")
-    return sorted(set(map(int, arrays["source_file"][arrays["role"] == code])))
+    selected = np.flatnonzero(arrays["role"] == code)
+    if population_selection is not None:
+        if foundation_root is None:
+            raise ValueError("Nested population requires foundation root")
+        selected = selected[_mask(
+            foundation, foundation_root, role, population_selection,
+        )]
+    return sorted(set(map(int, arrays["source_file"][selected])))
 
 
-def preparation_bound(foundation: dict, role: str, workers: int) -> int:
+def preparation_bound(
+    foundation: dict, role: str, workers: int, *,
+    foundation_root: Path | None = None,
+    population_selection: dict | None = None,
+) -> int:
     if type(workers) is not int or not 1 <= workers <= 72:
         raise ValueError("Invalid proxy-ladder preparation worker count")
-    rows = foundation["role_counts"][role]
+    if population_selection is not None and foundation_root is None:
+        raise ValueError("Nested population requires foundation root")
+    mask = _mask(
+        foundation, foundation_root, role, population_selection,
+    ) if population_selection is not None else None
+    rows = (
+        foundation["role_counts"][role]
+        if population_selection is None else population_selection["counts"][role]
+    )
     capacity = foundation["inputs"]["capacity"]
     # Resident upper bound plus bounded worker/IPC copies.  Every row is
     # conservatively charged at capacity although the durable cache is ragged.
@@ -82,10 +122,15 @@ def preparation_bound(foundation: dict, role: str, workers: int) -> int:
     )
     code = 0 if role == "train" else 1
     selected_sources = release_arrays["source_file"][release_arrays["role"] == code]
+    if mask is not None:
+        selected_sources = selected_sources[mask]
     counts = np.bincount(
         selected_sources, minlength=len(foundation["release"]["source_files"]),
     )
-    source_values = role_sources(foundation, role)
+    source_values = role_sources(
+        foundation, role, foundation_root=foundation_root,
+        population_selection=population_selection,
+    )
     chunks = np.array_split(source_values, min(workers, len(source_values)))
     max_worker_rows = max(
         sum(int(counts[index]) for index in chunk) for chunk in chunks
@@ -93,13 +138,23 @@ def preparation_bound(foundation: dict, role: str, workers: int) -> int:
     per_worker = max(1, max_worker_rows) * (
         capacity * (17 + 4) * 4 + 64
     )
-    return resident + 3 * min(workers, len(role_sources(foundation, role))) * per_worker
+    return resident + 3 * min(workers, len(source_values)) * per_worker
 
 
-def cache_budgets(foundation: dict, memory_mb: int, workers: int) -> dict[str, int]:
+def cache_budgets(
+    foundation: dict, memory_mb: int, workers: int, *,
+    foundation_root: Path | None = None,
+    population_selection: dict | None = None,
+) -> dict[str, int]:
     if type(memory_mb) is not int or memory_mb <= 0:
         raise ValueError("Positive proxy-ladder memory allocation required")
-    bounds = {role: preparation_bound(foundation, role, workers) for role in ("train", "validation")}
+    bounds = {
+        role: preparation_bound(
+            foundation, role, workers, foundation_root=foundation_root,
+            population_selection=population_selection,
+        )
+        for role in ("train", "validation")
+    }
     available = memory_mb * 1024**2 * 3 // 4
     if sum(bounds.values()) > available:
         raise MemoryError(f"Proxy-ladder cache bounds {bounds} exceed 75% RAM budget {available}")
@@ -110,12 +165,22 @@ def cache_budgets(foundation: dict, memory_mb: int, workers: int) -> dict[str, i
 def prepare_cache(
     foundation: dict, *, foundation_root: Path, role: str, coordinate: str,
     workers: int, max_ram_bytes: int,
+    population_selection: dict | None = None,
 ) -> RamCache:
     validate_foundation(foundation, root=foundation_root)
     if role not in {"train", "validation"}:
         raise PermissionError("Proxy-ladder cache role is sealed")
-    sources = role_sources(foundation, role)
-    bound = preparation_bound(foundation, role, workers)
+    selected_mask = _mask(
+        foundation, foundation_root, role, population_selection,
+    ) if population_selection is not None else None
+    sources = role_sources(
+        foundation, role, foundation_root=foundation_root,
+        population_selection=population_selection,
+    )
+    bound = preparation_bound(
+        foundation, role, workers, foundation_root=foundation_root,
+        population_selection=population_selection,
+    )
     if bound > max_ram_bytes:
         raise MemoryError(f"Proxy-ladder RAM bound {bound} exceeds explicit budget {max_ram_bytes}")
     chunks = [
@@ -124,7 +189,10 @@ def prepare_cache(
         if len(chunk)
     ]
     arguments = [
-        (foundation, str(Path(foundation_root).resolve()), role, coordinate, chunk)
+        (
+            foundation, str(Path(foundation_root).resolve()), role, coordinate,
+            chunk, selected_mask,
+        )
         for chunk in chunks
     ]
     blocks, resident = [], 0
@@ -166,8 +234,19 @@ def prepare_cache(
         blocks, role=role, foundation_sha256=foundation["content_hash"],
         coordinate_name=coordinate,
     )
-    if len(cache) != foundation["role_counts"][role]:
+    expected = (
+        foundation["role_counts"][role]
+        if population_selection is None else population_selection["counts"][role]
+    )
+    if len(cache) != expected:
         raise ValueError("Proxy-ladder cache population differs")
+    if population_selection is not None:
+        import hashlib
+        digest = hashlib.sha256()
+        for identity in cache.identities:
+            digest.update(bytes(identity))
+        if digest.hexdigest() != population_selection["identity_sha256"][role]:
+            raise ValueError("Proxy-ladder nested cache identities differ")
     return cache
 
 

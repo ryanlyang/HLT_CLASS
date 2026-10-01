@@ -1,6 +1,7 @@
 # JetClass2 CMS-proxy Oscar dual-slot recovery plan
 
-Status: active operational recovery plan
+Status: completed v5 preflight evidence; superseded before replacement science
+submission by `JETCLASS2_CMS_PROXY_OSCAR_100K_DIRECT_COARSE_PLAN.md`
 
 ## Objective
 
@@ -9,6 +10,12 @@ profile with a measured profile that permits two concurrent L40S jobs under
 the user's `norm-gpu` QOS. The scientific population, matching foundation,
 views, controls, seeds, model, loss, schedule, branch graph, and final-test
 seal remain unchanged.
+
+The v5 preflight completed successfully as job `6877779`. Ryan subsequently
+changed the requested population and graph before authorizing replacement
+science, so the 17-fit campaign described below must not be submitted. Its
+resource evidence remains historical; the active v6 plan requires its own
+100k/50k full-selected-population measurement.
 
 ## Evidence and scheduler constraint
 

@@ -22,16 +22,20 @@ from hlt_classification.jetclass2_delphes.model import (
 from hlt_classification.jetclass2_delphes.runner import predict, train_kernel
 
 from .cache import cache_budgets, preparation_bound, prepare_cache
-from .campaign import build_scientific_plan
+from .campaign import build_direct_coarse_plan, build_scientific_plan
 from .contracts import artifact, file_ref, validate, write_json
 from .data import build_foundation, validate_foundation
 from .release import build_release, release_request, validate_release
+from .population import (
+    create_direct_coarse_population, validate_direct_coarse_population,
+)
 
 SOURCE_FILES = (
     "docs/plans/JETCLASS2_CMS_PROXY_TIGRIS_200K_THREE_SPINE_IMPLEMENTATION_PLAN.md",
     "docs/plans/JETCLASS2_CMS_PROXY_SPORC_DEBUG_GATE_AMENDMENT.md",
     "docs/plans/JETCLASS2_CMS_PROXY_OSCAR_PORTABILITY_PLAN.md",
     "docs/plans/JETCLASS2_CMS_PROXY_OSCAR_DUAL_SLOT_RECOVERY_PLAN.md",
+    "docs/plans/JETCLASS2_CMS_PROXY_OSCAR_100K_DIRECT_COARSE_PLAN.md",
     "docs/contracts/JETCLASS2_CMS_PROXY_LADDER.md",
     "docs/contracts/JETCLASS2_CMS_PROXY_OSCAR_PORTABILITY.md",
     "docs/JETCLASS2_CMS_PROXY_TIGRIS_200K_HANDOFF.md",
@@ -52,6 +56,9 @@ PREFLIGHT_RECOVERY_AUTHORIZATION = (
 OSCAR_AUTHORIZATION = "AUTHORIZE JETCLASS2 CMS PROXY 200K OSCAR PREFLIGHT"
 OSCAR_DUAL_SLOT_AUTHORIZATION = (
     "AUTHORIZE JETCLASS2 CMS PROXY 200K OSCAR DUAL SLOT PREFLIGHT"
+)
+OSCAR_DIRECT_COARSE_AUTHORIZATION = (
+    "AUTHORIZE JETCLASS2 CMS PROXY 100K OSCAR DIRECT COARSE PREFLIGHT"
 )
 
 
@@ -136,6 +143,11 @@ def oscar_dual_slot_preflight_tasks() -> list[dict]:
         "task_id": "preflight", "kind": "gpu", "dependencies": [],
         "cpus": 6, "memory_mb": 90_000, "minutes": 720,
     }]
+
+
+def oscar_direct_coarse_preflight_tasks() -> list[dict]:
+    """Measure the selected 100k/50k population at the dual-slot shape."""
+    return oscar_dual_slot_preflight_tasks()
 
 
 def create_gate(
@@ -384,9 +396,89 @@ def create_oscar_dual_slot_gate(
     return spec
 
 
+def create_oscar_direct_coarse_gate(
+    *, materialization_root: Path, gate_root: Path, project_dir: Path,
+    source_commit: str,
+) -> dict:
+    """Measure the nested 100k/50k DIRECT+COARSE Oscar execution."""
+    from .portable import validate_materialization
+
+    root = Path(gate_root).resolve()
+    if root.exists():
+        raise FileExistsError("Proxy-ladder Oscar direct/coarse gate root must be fresh")
+    project = Path(project_dir).resolve(strict=True)
+    source = source_lock(project, source_commit)
+    materialized_root = Path(materialization_root).resolve(strict=True)
+    materialization = load_json(materialized_root / "materialization.json")
+    validate_materialization(materialization, root=materialized_root)
+    release = materialization["release"]
+    foundation = materialization["foundation"]
+    foundation_root = Path(materialization["foundation_root"])
+    population = create_direct_coarse_population(
+        foundation, foundation_root=foundation_root,
+    )
+    task = oscar_direct_coarse_preflight_tasks()[0]
+    workers, memory_mb = task["cpus"], task["memory_mb"]
+    bounds = {
+        role: preparation_bound(
+            foundation, role, workers, foundation_root=foundation_root,
+            population_selection=population,
+        )
+        for role in ("train", "validation")
+    }
+    budgets = cache_budgets(
+        foundation, memory_mb, workers, foundation_root=foundation_root,
+        population_selection=population,
+    )
+    site = execution_site("oscar_l40s")
+    spec = artifact(
+        "GATE_SPEC", version=6,
+        parents={
+            "source": source["content_hash"],
+            "request": release["request"]["content_hash"],
+            "imported_release": release["content_hash"],
+            "imported_foundation": foundation["content_hash"],
+            "portable_materialization": materialization["content_hash"],
+            "portable_bundle": materialization["bundle_sha256"],
+            "population_selection": population["content_hash"],
+        },
+        source=source, request=release["request"], gate_root=str(root),
+        project_dir=str(project), source_commit=source_commit,
+        capacity=foundation["inputs"]["capacity"],
+        measurement_site=site, execution_site=site,
+        tasks=oscar_direct_coarse_preflight_tasks(), workers=workers,
+        full_views_persisted=False,
+        materialization_root=str(materialized_root),
+        portable_materialization=materialization,
+        foundation_root=str(foundation_root), imported_foundation=foundation,
+        imported_release_root=materialization["release_root"],
+        imported_release=release, population_selection=population,
+        scientific_branches=["DIRECT", "COARSE"],
+        cache_preparation_bounds=bounds, cache_budgets=budgets,
+        admission=(
+            "relocated_exact_inputs_nested_100k_50k_then_oscar_l40s_"
+            "direct_coarse_full_selected_population_preflight"
+        ),
+        concurrency_intent={
+            "jobs": 2,
+            "per_job_cpus": 6,
+            "per_job_memory_mb": 90_000,
+            "per_job_gpus": 1,
+            "aggregate_cpus": 12,
+            "aggregate_memory_mb": 180_000,
+            "aggregate_gpus": 2,
+        },
+        site_transfer_policy=None,
+    )
+    root.mkdir(parents=True, exist_ok=False)
+    write_json(root / "gate_spec.json", spec)
+    validate_gate(spec, check_source=True)
+    return spec
+
+
 def validate_gate(spec: dict, *, check_source: bool = False) -> str:
     version = spec.get("schema_version")
-    if version not in (1, 2, 3, 4, 5):
+    if version not in (1, 2, 3, 4, 5, 6):
         raise ValueError("Unsupported proxy-ladder gate version")
     parents = {"source": spec["source"]["content_hash"], "request": spec["request"]["content_hash"]}
     if version in (2, 3):
@@ -396,19 +488,21 @@ def validate_gate(spec: dict, *, check_source: bool = False) -> str:
         })
     if version == 3:
         parents["imported_foundation"] = spec["imported_foundation"]["content_hash"]
-    if version in (4, 5):
+    if version in (4, 5, 6):
         parents.update({
             "imported_release": spec["imported_release"]["content_hash"],
             "imported_foundation": spec["imported_foundation"]["content_hash"],
             "portable_materialization": spec["portable_materialization"]["content_hash"],
             "portable_bundle": spec["portable_materialization"]["bundle_sha256"],
         })
+    if version == 6:
+        parents["population_selection"] = spec["population_selection"]["content_hash"]
     digest = validate(spec, "GATE_SPEC", version=version, parents=parents)
     validate(spec["source"], "SOURCE")
     from .release import validate_request
     validate_request(spec["request"])
     common_differs = (
-        spec["workers"] != ({4: 12, 5: 6}.get(version, 16))
+        spec["workers"] != ({4: 12, 5: 6, 6: 6}.get(version, 16))
         or spec["full_views_persisted"] is not False
         or type(spec["capacity"]) is not int or spec["capacity"] < 16
     )
@@ -476,19 +570,32 @@ def validate_gate(spec: dict, *, check_source: bool = False) -> str:
         foundation_root = Path(spec["foundation_root"])
         validate_release(spec["imported_release"], root=release_root)
         validate_foundation(spec["imported_foundation"], root=foundation_root)
+        population = spec.get("population_selection")
+        if version == 6:
+            validate_direct_coarse_population(
+                population, foundation=spec["imported_foundation"],
+                foundation_root=foundation_root,
+            )
         bounds = {
-            role: preparation_bound(spec["imported_foundation"], role, spec["workers"])
+            role: preparation_bound(
+                spec["imported_foundation"], role, spec["workers"],
+                foundation_root=foundation_root,
+                population_selection=population,
+            )
             for role in ("train", "validation")
         }
         task = (
             oscar_preflight_tasks()[0]
-            if version == 4 else oscar_dual_slot_preflight_tasks()[0]
+            if version == 4 else oscar_direct_coarse_preflight_tasks()[0]
+            if version == 6 else oscar_dual_slot_preflight_tasks()[0]
         )
         budgets = cache_budgets(
             spec["imported_foundation"], task["memory_mb"], spec["workers"],
+            foundation_root=foundation_root,
+            population_selection=population,
         )
         concurrency_differs = (
-            version == 5 and spec.get("concurrency_intent") != {
+            version in (5, 6) and spec.get("concurrency_intent") != {
                 "jobs": 2,
                 "per_job_cpus": 6,
                 "per_job_memory_mb": 90_000,
@@ -503,7 +610,8 @@ def validate_gate(spec: dict, *, check_source: bool = False) -> str:
             or spec["execution_site"] != execution_site("oscar_l40s")
             or spec["tasks"] != (
                 oscar_preflight_tasks()
-                if version == 4 else oscar_dual_slot_preflight_tasks()
+                if version == 4 else oscar_direct_coarse_preflight_tasks()
+                if version == 6 else oscar_dual_slot_preflight_tasks()
             )
             or spec["site_transfer_policy"] is not None
             or spec["imported_release"] != spec["portable_materialization"]["release"]
@@ -513,6 +621,11 @@ def validate_gate(spec: dict, *, check_source: bool = False) -> str:
             or spec["cache_preparation_bounds"] != bounds
             or spec["cache_budgets"] != budgets
             or concurrency_differs
+            or (
+                version == 6
+                and spec.get("scientific_branches") != ["DIRECT", "COARSE"]
+            )
+            or (version != 6 and "population_selection" in spec)
         )
     if common_differs or differs:
         raise ValueError("Proxy-ladder gate semantics differ")
@@ -558,21 +671,33 @@ def validate_profile(profile: dict, *, foundation: dict, spec: dict) -> str:
     )
     oscar_task = (
         oscar_preflight_tasks()[0] if version == 4
-        else oscar_dual_slot_preflight_tasks()[0] if version == 5
+        else oscar_dual_slot_preflight_tasks()[0] if version in (5, 6)
         else None
     )
     oscar_resources_differ = (
-        version in (4, 5) and (
+        version in (4, 5, 6) and (
             profile["cpus"] != oscar_task["cpus"]
             or profile["memory_mb"] != oscar_task["memory_mb"]
             or profile["workers"] != spec["workers"]
         )
     )
+    population = spec.get("population_selection")
+    population_differs = (
+        version == 6 and (
+            profile.get("population_selection_sha256")
+            != population["content_hash"]
+            or profile.get("measured_role_counts") != population["counts"]
+        )
+    ) or (version != 6 and (
+        "population_selection_sha256" in profile
+        or "measured_role_counts" in profile
+    ))
     if (
         profile["source_commit"] != spec["source_commit"]
         or site_differs
         or recovery_resources_differ
         or oscar_resources_differ
+        or population_differs
         or profile["foundation_sha256"] != foundation["content_hash"]
         or profile["model"] != model_contract()
         or profile["passed"] is not True
@@ -590,6 +715,8 @@ def validate_profile(profile: dict, *, foundation: dict, spec: dict) -> str:
     )
     if profile["cache_budgets"] != cache_budgets(
         foundation, profile["memory_mb"], profile["workers"],
+        foundation_root=Path(spec.get("foundation_root", ".")),
+        population_selection=population,
     ):
         raise ValueError("Proxy-ladder measured cache budgets differ")
     return digest
@@ -600,19 +727,32 @@ def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> di
     job_id, cpus, memory_mb = allocation(site)
     workers = spec["workers"]
     validate_resources(site, cpus, memory_mb, workers)
-    budgets = cache_budgets(foundation, memory_mb, workers)
-    environment = installed_environment()
     foundation_root = Path(spec.get("foundation_root", output_root.parent / "foundation"))
-    plan = build_scientific_plan(foundation, foundation_root=foundation_root)
+    population = spec.get("population_selection")
+    budgets = cache_budgets(
+        foundation, memory_mb, workers, foundation_root=foundation_root,
+        population_selection=population,
+    )
+    environment = installed_environment()
+    plan = (
+        build_direct_coarse_plan(
+            foundation, population_selection=population,
+            foundation_root=foundation_root,
+        )
+        if spec.get("schema_version") == 6
+        else build_scientific_plan(foundation, foundation_root=foundation_root)
+    )
     node = next(row for row in plan["nodes"] if row["node_id"] == "U000")
     started = time.monotonic()
     train = prepare_cache(
         foundation, foundation_root=foundation_root, role="train",
         coordinate="U000", workers=workers, max_ram_bytes=budgets["train"],
+        population_selection=population,
     )
     validation_cache = prepare_cache(
         foundation, foundation_root=foundation_root, role="validation",
         coordinate="U000", workers=workers, max_ram_bytes=budgets["validation"],
+        population_selection=population,
     )
     u000_cache_seconds = time.monotonic() - started
     torch.manual_seed(node["initialization_seed"])
@@ -635,6 +775,7 @@ def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> di
         prepare_cache(
             foundation, foundation_root=foundation_root, role=role,
             coordinate="D050", workers=workers, max_ram_bytes=budgets[role],
+            population_selection=population,
         )
         for role in ("train", "validation")
     ]
@@ -650,6 +791,13 @@ def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> di
         dict(measurement_site=site, site_transfer_policy=DEBUG_PROFILE_TRANSFER)
         if site["name"] == "sporc_a100_debug" else {}
     )
+    population_fields = (
+        {
+            "population_selection_sha256": population["content_hash"],
+            "measured_role_counts": population["counts"],
+        }
+        if population is not None else {}
+    )
     profile = artifact(
         "RUNTIME_PROFILE", version=spec.get("schema_version", 1),
         parents={"gate": spec["content_hash"], "foundation": foundation["content_hash"]},
@@ -663,7 +811,7 @@ def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> di
         one_pass_seconds=report["runtime_seconds"], inference_seconds=inference_seconds,
         cache_bytes=cache_bytes, gpu=gpu_identity(), gpu_peak_bytes=gpu_peak,
         acceptance_training_report=report,
-        ram_only_views=True, rolling_resume=False, **transfer,
+        ram_only_views=True, rolling_resume=False, **population_fields, **transfer,
     )
     validate_profile(profile, foundation=foundation, spec=spec)
     return profile
@@ -676,7 +824,7 @@ def run_gate_task(spec: dict, task_id: str) -> dict:
     root = Path(spec["gate_root"])
     release_root = (
         Path(spec["imported_release_root"])
-        if spec.get("schema_version") in (2, 3, 4, 5) else root / "release"
+        if spec.get("schema_version") in (2, 3, 4, 5, 6) else root / "release"
     )
     foundation_root = Path(spec.get("foundation_root", root / "foundation"))
     evidence_root = root / "evidence"
@@ -742,10 +890,13 @@ def run_gate_task(spec: dict, task_id: str) -> dict:
 __all__ = [
     "AUTHORIZATION", "DEBUG_AUTHORIZATION", "PREFLIGHT_RECOVERY_AUTHORIZATION",
     "OSCAR_AUTHORIZATION", "OSCAR_DUAL_SLOT_AUTHORIZATION",
+    "OSCAR_DIRECT_COARSE_AUTHORIZATION",
     "create_oscar_gate", "create_oscar_dual_slot_gate",
+    "create_oscar_direct_coarse_gate",
     "create_gate", "create_sporc_debug_gate", "create_sporc_preflight_recovery",
     "debug_gate_tasks", "gate_tasks", "preflight_recovery_tasks",
     "oscar_preflight_tasks", "oscar_dual_slot_preflight_tasks",
+    "oscar_direct_coarse_preflight_tasks",
     "run_gate_task",
     "source_lock", "validate_gate", "validate_profile",
 ]

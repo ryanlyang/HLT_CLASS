@@ -51,3 +51,9 @@ preflight; v4 timing evidence cannot be edited or relabelled as v5.
 
 Final-test access remains false throughout. Scientific metrics cannot control
 completion, and live gate/science submissions retain separate exact phrases.
+
+`GATE_SPEC/v6` and `RUNTIME_PROFILE/v6` are the 100k-train/50k-validation
+DIRECT+COARSE variant. They reuse the exact v4/v5 portable materialization and
+assignment bank, bind `POPULATION_SELECTION/v1`, and retain the v5 per-job
+shape of 6 CPUs/workers, 90000 MiB, and one L40S. The v6 preflight must measure
+all selected train and validation rows under its own exact pushed source.

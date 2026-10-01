@@ -67,5 +67,11 @@ with each job and therefore serialized the science DAG. The additive
 materialization, reruns the full-population preflight under the exact new
 allocation, and changes no scientific semantics.
 
+After v5 preflight completion and before replacement science submission, Ryan
+superseded the requested science graph with the nested 100k/50k DIRECT+COARSE
+variant in `JETCLASS2_CMS_PROXY_OSCAR_100K_DIRECT_COARSE_PLAN.md`. The portable
+bundle/materialization remain reusable, but neither the v4 nor v5 science DAG
+is authorized by that revision.
+
 Interrupted exports, materializations, or destinations fail closed and require
 a fresh target. Existing Tigris and SPORC artifacts and jobs are not mutated.

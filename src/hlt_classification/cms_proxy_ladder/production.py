@@ -20,12 +20,15 @@ from hlt_classification.jetclass2_delphes.runner import predict, train_kernel
 from hlt_classification.scouting.hcwdl_authorization import validate_source_checkout
 
 from .cache import prepare_cache
-from .campaign import build_scientific_plan, task_graph
+from .campaign import build_direct_coarse_plan, build_scientific_plan, task_graph
 from .contracts import artifact, file_ref, safe, validate, validate_file_ref, write_json
 from .data import validate_foundation
 from .gate import source_lock, validate_gate, validate_profile
 
 AUTHORIZATION = "AUTHORIZE JETCLASS2 CMS PROXY 200K THREE SPINE SCIENCE"
+DIRECT_COARSE_AUTHORIZATION = (
+    "AUTHORIZE JETCLASS2 CMS PROXY 100K OSCAR DIRECT COARSE SCIENCE"
+)
 
 
 def _source(project: Path, commit: str) -> None:
@@ -82,25 +85,112 @@ def create_campaign(*, gate_root: Path, campaign_root: Path) -> dict:
     return spec
 
 
+def create_direct_coarse_campaign(*, gate_root: Path, campaign_root: Path) -> dict:
+    gate_root = Path(gate_root).resolve(strict=True)
+    gate = load_json(gate_root / "gate_spec.json")
+    validate_gate(gate, check_source=True)
+    if gate.get("schema_version") != 6:
+        raise ValueError("Direct/coarse campaign requires completed Oscar gate v6")
+    foundation_root = Path(gate["foundation_root"])
+    foundation = load_json(foundation_root / "foundation.json")
+    validate_foundation(foundation, root=foundation_root)
+    profile = load_json(gate_root / "evidence/runtime_profile.json")
+    validate_profile(profile, foundation=foundation, spec=gate)
+    complete = load_json(gate_root / "gate_complete.json")
+    validate(
+        complete, "GATE_COMPLETE",
+        parents={
+            "gate": gate["content_hash"], "foundation": foundation["content_hash"],
+            "profile": profile["content_hash"],
+        },
+    )
+    if (
+        complete["passed"] is not True
+        or complete["source_commit"] != gate["source_commit"]
+        or complete["foundation_sha256"] != foundation["content_hash"]
+        or complete["runtime_profile_sha256"] != profile["content_hash"]
+    ):
+        raise ValueError("Proxy-ladder direct/coarse gate completion differs")
+    root = Path(campaign_root).resolve()
+    if root.exists() or root.is_relative_to(gate_root):
+        raise FileExistsError("Proxy-ladder campaign root must be fresh and separate from gate")
+    population = gate["population_selection"]
+    plan = build_direct_coarse_plan(
+        foundation, population_selection=population,
+        foundation_root=foundation_root,
+    )
+    spec = artifact(
+        "CAMPAIGN_SPEC", version=2,
+        parents={
+            "gate": gate["content_hash"],
+            "foundation": foundation["content_hash"],
+            "profile": profile["content_hash"],
+            "plan": plan["content_hash"],
+            "population_selection": population["content_hash"],
+        },
+        gate_root=str(gate_root), campaign_root=str(root),
+        project_dir=gate["project_dir"], source_commit=gate["source_commit"],
+        source=gate["source"], foundation_root=str(foundation_root),
+        foundation=foundation, runtime_profile=profile,
+        population_selection=population,
+        scientific_plan=plan, tasks=task_graph(plan), model=model_contract(),
+        fresh_fit_count=9, reducer_count=5,
+        selected_branches=["DIRECT", "COARSE"],
+        full_views_persisted=False, existing_campaign_mutations=False,
+    )
+    root.mkdir(parents=True, exist_ok=False)
+    write_json(root / "campaign_spec.json", spec)
+    validate_campaign(spec, check_source=True)
+    return spec
+
+
 def validate_campaign(spec: dict, *, check_source: bool = False) -> str:
+    version = spec.get("schema_version")
+    if version not in (1, 2):
+        raise ValueError("Unsupported proxy-ladder campaign version")
     parents = {
         "gate": spec["parents"]["gate"],
         "foundation": spec["foundation"]["content_hash"],
         "profile": spec["runtime_profile"]["content_hash"],
         "plan": spec["scientific_plan"]["content_hash"],
     }
-    digest = validate(spec, "CAMPAIGN_SPEC", parents=parents)
+    if version == 2:
+        parents["population_selection"] = spec["population_selection"]["content_hash"]
+    digest = validate(spec, "CAMPAIGN_SPEC", version=version, parents=parents)
     gate = load_json(Path(spec["gate_root"]) / "gate_spec.json")
     validate_gate(gate, check_source=check_source)
     if gate["content_hash"] != parents["gate"]:
         raise ValueError("Proxy-ladder campaign gate lineage differs")
     validate_foundation(spec["foundation"], root=Path(spec["foundation_root"]))
     validate_profile(spec["runtime_profile"], foundation=spec["foundation"], spec=gate)
-    plan = build_scientific_plan(spec["foundation"], foundation_root=Path(spec["foundation_root"]))
+    plan = (
+        build_direct_coarse_plan(
+            spec["foundation"],
+            population_selection=spec["population_selection"],
+            foundation_root=Path(spec["foundation_root"]),
+        )
+        if version == 2
+        else build_scientific_plan(
+            spec["foundation"], foundation_root=Path(spec["foundation_root"]),
+        )
+    )
+    registered_counts_differ = (
+        spec["fresh_fit_count"] != (9 if version == 2 else 17)
+        or spec["reducer_count"] != (5 if version == 2 else 12)
+    )
+    variant_differs = (
+        version == 2 and (
+            gate.get("schema_version") != 6
+            or spec.get("selected_branches") != ["DIRECT", "COARSE"]
+            or spec["population_selection"] != gate["population_selection"]
+        )
+    ) or (version == 1 and (
+        "population_selection" in spec or "selected_branches" in spec
+    ))
     if (
         spec["scientific_plan"] != plan or spec["tasks"] != task_graph(plan)
         or spec["model"] != model_contract()
-        or spec["fresh_fit_count"] != 17 or spec["reducer_count"] != 12
+        or registered_counts_differ or variant_differs
         or spec["full_views_persisted"] is not False
         or spec["existing_campaign_mutations"] is not False
         or spec["source"] != source_lock(Path(spec["project_dir"]), spec["source_commit"])
@@ -214,6 +304,7 @@ def run_task(spec: dict, task_id: str, *, attempt: str, device="cuda") -> dict:
             foundation, foundation_root=Path(spec["foundation_root"]), role=role,
             coordinate=coordinate, workers=profile["workers"],
             max_ram_bytes=profile["cache_budgets"][role],
+            population_selection=spec.get("population_selection"),
         )
 
     if task["kind"] in {"train", "reduce"}:
@@ -300,6 +391,7 @@ def run_task(spec: dict, task_id: str, *, attempt: str, device="cuda") -> dict:
 
 
 __all__ = [
-    "AUTHORIZATION", "completed_task", "create_campaign", "result_rows", "run_task",
-    "validate_campaign",
+    "AUTHORIZATION", "DIRECT_COARSE_AUTHORIZATION", "completed_task",
+    "create_campaign", "create_direct_coarse_campaign", "result_rows",
+    "run_task", "validate_campaign",
 ]

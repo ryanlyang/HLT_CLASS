@@ -108,3 +108,28 @@ closed.
 `COMMAND_PLAN/v1` and the exact submission ledger bind every Slurm command and
 dependency by exact task/job identity.  Live gate and science submission use
 different explicit authorization phrases.
+
+## Nested 100k/50k DIRECT+COARSE variant
+
+`POPULATION_SELECTION/v1` derives exactly 100,000 train and 50,000 validation
+rows from the authenticated 200k/100k foundation. It ranks canonical row
+identities using SHA-256 over a versioned domain, parent foundation hash, role,
+and identity, selects the lowest ranks, then preserves foundation order. It
+records exact ordered identity digests. Labels, particle features, and final
+test are not read during selection; the existing assignment bank is reused
+without recomputation.
+
+Oscar `GATE_SPEC/v6` and `RUNTIME_PROFILE/v6` bind that population and are
+defined operationally by `JETCLASS2_CMS_PROXY_OSCAR_PORTABILITY.md`. A genuine
+full-selected-population v6 preflight is required even though the immutable
+portable materialization and full-cardinality matches are reused.
+
+`SCIENTIFIC_PLAN/v2` and `CAMPAIGN_SPEC/v2` register only:
+
+- `M0HLT`, pure `OFFLINE`, and `U000` controls;
+- one DIRECT student;
+- five COARSE students.
+
+They contain exactly 9 fresh fits, 5 probability reducers, and 16 total Slurm
+tasks including aggregate and completion. DENSE is absent from the registered
+plan and submission ledger. Recovery remains `M0HLT` to pure `OFFLINE`.

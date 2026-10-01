@@ -14,6 +14,9 @@ BRANCHES = {
     "COARSE": ("U050", "U100", "D066", "D033", "D000"),
     "DENSE": ("U033", "U066", "U100", "D080", "D060", "D040", "D020", "D000"),
 }
+DIRECT_COARSE_BRANCHES = {
+    name: BRANCHES[name] for name in ("DIRECT", "COARSE")
+}
 
 
 def coordinate(name: str) -> tuple[Fraction, Fraction]:
@@ -36,7 +39,10 @@ def paired_seed(coordinate_name: str, domain: str) -> int:
     return int.from_bytes(hashlib.sha256(payload).digest()[:4], "big")
 
 
-def build_scientific_plan(foundation: dict, *, foundation_root=None) -> dict:
+def _build_scientific_plan(
+    foundation: dict, *, registered_branches: dict, version: int,
+    foundation_root=None, population_selection: dict | None = None,
+) -> dict:
     if foundation_root is not None:
         validate_foundation(foundation, root=foundation_root)
     nodes = [
@@ -45,8 +51,8 @@ def build_scientific_plan(foundation: dict, *, foundation_root=None) -> dict:
         {"node_id": "U000", "coordinate": "U000", "teacher": None, "branch": "CONTROL"},
     ]
     publications = ["U000"]
-    branches = {}
-    for branch, path in BRANCHES.items():
+    branch_nodes = {}
+    for branch, path in registered_branches.items():
         teacher, previous, names = "U000", "U000", []
         for index, name in enumerate(path):
             node_id = f"CMSP_{branch}_{name}_from_{previous}"
@@ -58,7 +64,7 @@ def build_scientific_plan(foundation: dict, *, foundation_root=None) -> dict:
                 publications.append(node_id)
             names.append(node_id)
             teacher, previous = node_id, name
-        branches[branch] = names
+        branch_nodes[branch] = names
     for node in nodes:
         u, f = coordinate(node["coordinate"])
         node.update(
@@ -67,16 +73,45 @@ def build_scientific_plan(foundation: dict, *, foundation_root=None) -> dict:
             sampler_seed=paired_seed(node["coordinate"], "sampler"),
             deployable=node["coordinate"] == "D000",
         )
+    parents = {"foundation": foundation["content_hash"]}
+    fields = {}
+    if population_selection is not None:
+        parents["population_selection"] = population_selection["content_hash"]
+        fields["population_selection"] = population_selection
     return artifact(
-        "SCIENTIFIC_PLAN",
-        parents={"foundation": foundation["content_hash"]},
-        recipe=recipe(), nodes=nodes, branches=branches,
+        "SCIENTIFIC_PLAN", version=version,
+        parents=parents,
+        recipe=recipe(), nodes=nodes, branches=branch_nodes,
         probability_publications=publications,
         fresh_fit_count=len(nodes),
         probability_publication_count=len(publications),
         controls=["M0HLT", "OFFLINE", "U000"],
         recovery_reference={"zero": "M0HLT", "hundred": "OFFLINE"},
-        imported_models=[], final_test_evaluation=False,
+        imported_models=[], final_test_evaluation=False, **fields,
+    )
+
+
+def build_scientific_plan(foundation: dict, *, foundation_root=None) -> dict:
+    return _build_scientific_plan(
+        foundation, registered_branches=BRANCHES, version=1,
+        foundation_root=foundation_root,
+    )
+
+
+def build_direct_coarse_plan(
+    foundation: dict, *, population_selection: dict, foundation_root=None,
+) -> dict:
+    if foundation_root is None:
+        raise ValueError("Direct/coarse plan requires an authenticated foundation root")
+    from .population import validate_direct_coarse_population
+    validate_direct_coarse_population(
+        population_selection, foundation=foundation,
+        foundation_root=foundation_root,
+    )
+    return _build_scientific_plan(
+        foundation, registered_branches=DIRECT_COARSE_BRANCHES, version=2,
+        foundation_root=foundation_root,
+        population_selection=population_selection,
     )
 
 
@@ -106,5 +141,6 @@ def task_graph(plan: dict) -> list[dict]:
 
 
 __all__ = [
-    "BRANCHES", "build_scientific_plan", "coordinate", "paired_seed", "task_graph",
+    "BRANCHES", "DIRECT_COARSE_BRANCHES", "build_direct_coarse_plan",
+    "build_scientific_plan", "coordinate", "paired_seed", "task_graph",
 ]

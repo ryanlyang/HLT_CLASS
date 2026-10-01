@@ -7,14 +7,17 @@ from pathlib import Path
 
 from hlt_classification.data.cache_contracts import load_json
 from hlt_classification.cms_proxy_ladder.gate import (
-    create_gate, create_oscar_dual_slot_gate, create_oscar_gate,
+    create_gate, create_oscar_direct_coarse_gate,
+    create_oscar_dual_slot_gate, create_oscar_gate,
     create_sporc_debug_gate,
     create_sporc_preflight_recovery,
 )
 from hlt_classification.cms_proxy_ladder.portable import (
     export_bundle, materialize_bundle,
 )
-from hlt_classification.cms_proxy_ladder.production import create_campaign, result_rows
+from hlt_classification.cms_proxy_ladder.production import (
+    create_campaign, create_direct_coarse_campaign, result_rows,
+)
 from hlt_classification.cms_proxy_ladder.submission import submit
 
 
@@ -54,6 +57,11 @@ def main() -> int:
     oscar_dual.add_argument("--gate-root", type=Path, required=True)
     oscar_dual.add_argument("--project-dir", type=Path, required=True)
     oscar_dual.add_argument("--source-commit", required=True)
+    oscar_compact = sub.add_parser("create-oscar-direct-coarse-gate")
+    oscar_compact.add_argument("--materialization-root", type=Path, required=True)
+    oscar_compact.add_argument("--gate-root", type=Path, required=True)
+    oscar_compact.add_argument("--project-dir", type=Path, required=True)
+    oscar_compact.add_argument("--source-commit", required=True)
     for name in ("dry-run-gate", "submit-gate"):
         command = sub.add_parser(name)
         command.add_argument("--gate-spec", type=Path, required=True)
@@ -61,6 +69,9 @@ def main() -> int:
     science = sub.add_parser("create-campaign")
     science.add_argument("--gate-root", type=Path, required=True)
     science.add_argument("--campaign-root", type=Path, required=True)
+    compact_science = sub.add_parser("create-direct-coarse-campaign")
+    compact_science.add_argument("--gate-root", type=Path, required=True)
+    compact_science.add_argument("--campaign-root", type=Path, required=True)
     for name in ("dry-run-campaign", "submit-campaign"):
         command = sub.add_parser(name)
         command.add_argument("--campaign-spec", type=Path, required=True)
@@ -111,6 +122,13 @@ def main() -> int:
             source_commit=args.source_commit,
         )
         print(value["content_hash"])
+    elif args.command == "create-oscar-direct-coarse-gate":
+        value = create_oscar_direct_coarse_gate(
+            materialization_root=args.materialization_root,
+            gate_root=args.gate_root, project_dir=args.project_dir,
+            source_commit=args.source_commit,
+        )
+        print(value["content_hash"])
     elif args.command in {"dry-run-gate", "submit-gate"}:
         value = load_json(args.gate_spec)
         ledger = submit(
@@ -120,6 +138,11 @@ def main() -> int:
         print(ledger["content_hash"])
     elif args.command == "create-campaign":
         value = create_campaign(gate_root=args.gate_root, campaign_root=args.campaign_root)
+        print(value["content_hash"])
+    elif args.command == "create-direct-coarse-campaign":
+        value = create_direct_coarse_campaign(
+            gate_root=args.gate_root, campaign_root=args.campaign_root,
+        )
         print(value["content_hash"])
     elif args.command in {"dry-run-campaign", "submit-campaign"}:
         value = load_json(args.campaign_spec)
