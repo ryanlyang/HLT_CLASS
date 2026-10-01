@@ -95,6 +95,17 @@ It contains exactly 12 probability publications.  Recovery is defined with
 `M0HLT` as zero and pure `OFFLINE` as one hundred percent; `U000` remains a
 reported control, not the recovery oracle.
 
+### Oscar OFFLINE ECC recovery
+
+`JETCLASS2_CMS_PROXY_LADDER_OFFLINE_ECC_RECOVERY/v1` is the only registered
+recovery for a verified uncorrectable-ECC failure of the fresh pure-offline
+control in `CAMPAIGN_SPEC/v2`. It retries `train_OFFLINE` with identical
+scientific inputs while excluding the failed node, then replaces only the
+aggregate and completion tail. Every unaffected train/reduce dependency is
+the exact job ID from the parent live ledger. The recovery must fail closed if
+another task is failed, if OFFLINE already published an authenticated result,
+or if the observed retry closure is wider than those three tasks.
+
 `CAMPAIGN_SPEC/v1` binds the completed gate, foundation, runtime profile,
 scientific plan, task graph, model factory, exact source, and separate fresh
 campaign root.

@@ -20,6 +20,7 @@ from hlt_classification.cms_proxy_ladder.inputs import build_inputs, input_contr
 from hlt_classification.cms_proxy_ladder.release import COUNTS, release_request
 from hlt_classification.cms_proxy_ladder.views import build_view, view_contract
 from hlt_classification.jetclass2_delphes.execution import execution_site
+from hlt_classification.scouting.hcwdl_recovery import build_submission_ledger
 
 
 def particles(p4, category, charge, *, tracking=None, valid=None, prefix="p"):
@@ -649,6 +650,136 @@ def test_direct_coarse_science_plan_has_16_tasks_and_no_dense(tmp_path, monkeypa
         any("jc2pxc_" in value for value in row["command"])
         for row in rows.values()
     )
+
+
+def test_offline_ecc_recovery_is_exact_three_task_closure(tmp_path, monkeypatch):
+    from hlt_classification.cms_proxy_ladder import recovery as module
+
+    tasks = [
+        {"task_id": "train_M0HLT", "kind": "train", "dependencies": []},
+        {"task_id": "train_OFFLINE", "kind": "train", "dependencies": []},
+        {"task_id": "train_U000", "kind": "train", "dependencies": []},
+        {
+            "task_id": "reduce_U000", "kind": "reduce",
+            "dependencies": ["train_U000"],
+        },
+        {
+            "task_id": "train_CMSP_DIRECT_D000_from_U000", "kind": "train",
+            "dependencies": ["reduce_U000"],
+        },
+        {
+            "task_id": "aggregate", "kind": "aggregate",
+            "dependencies": [
+                "train_M0HLT", "train_OFFLINE", "train_U000", "reduce_U000",
+                "train_CMSP_DIRECT_D000_from_U000",
+            ],
+        },
+        {
+            "task_id": "campaign_complete", "kind": "complete",
+            "dependencies": ["aggregate"],
+        },
+    ]
+    campaign_root = tmp_path / "campaign"; campaign_root.mkdir()
+    campaign = artifact(
+        "CAMPAIGN_SPEC_TEST", version=2, campaign_root=str(campaign_root),
+        tasks=tasks,
+    )
+    ids = {row["task_id"]: str(100 + index) for index, row in enumerate(tasks)}
+    commands = {
+        "train_M0HLT": ["sbatch", "--job-name=jc2pxc_train_M0HLT", "--output=old", "--wrap=m0"],
+        "train_OFFLINE": ["sbatch", "--job-name=jc2pxc_train_OFFLINE", "--output=old", "--wrap=offline"],
+        "train_U000": ["sbatch", "--job-name=jc2pxc_train_U000", "--output=old", "--wrap=u000"],
+        "reduce_U000": ["sbatch", "--job-name=jc2pxc_reduce_U000", "--output=old", "--dependency=afterok:102", "--wrap=reduce"],
+        "train_CMSP_DIRECT_D000_from_U000": ["sbatch", "--job-name=jc2pxc_direct", "--output=old", "--dependency=afterok:103", "--wrap=direct"],
+        "aggregate": ["sbatch", "--job-name=jc2pxc_aggregate", "--output=old", "--dependency=afterok:100:101:102:103:104", "--wrap=aggregate"],
+        "campaign_complete": ["sbatch", "--job-name=jc2pxc_complete", "--output=old", "--dependency=afterok:105", "--wrap=complete"],
+    }
+    ledger = build_submission_ledger(
+        campaign_spec_sha256=campaign["content_hash"], jobs=ids,
+        commands=commands, dry_run=False,
+    )
+    original_plan = artifact("COMMAND_PLAN_TEST", commands=[])
+    source = artifact("SOURCE", commit="a" * 40, files={})
+    monkeypatch.setattr(
+        module, "_context",
+        lambda root: (campaign_root, campaign, ledger, original_plan),
+    )
+    monkeypatch.setattr(module, "completed_task", lambda spec, task: None)
+    monkeypatch.setattr(module, "source_lock", lambda project, commit: source)
+    log = campaign_root / "slurm-101.out"
+    log.write_text("Nodelist : gpu3001\nuncorrectable ECC error encountered\n")
+    states = {job: "COMPLETED" for job in ids.values()}
+    states["101"] = "FAILED"; states["105"] = "CANCELLED"; states["106"] = "CANCELLED"
+    nodes = {job: "gpu3002" for job in ids.values()}; nodes["101"] = "gpu3001"
+
+    spec = module.create_offline_ecc_recovery(
+        campaign_root=campaign_root, recovery_root=tmp_path / "recovery",
+        project_dir=tmp_path, source_commit="a" * 40,
+        failed_job_id="101", failed_node="gpu3001",
+        states_by_job_id=states, nodes_by_job_id=nodes,
+    )
+    assert spec["retry_tasks"] == [
+        "train_OFFLINE", "aggregate", "campaign_complete",
+    ]
+    assert spec["superseded_jobs"] == {
+        "train_OFFLINE": "101", "aggregate": "105",
+        "campaign_complete": "106",
+    }
+    plan = module.recovery_plan(spec)
+    rows = {row["task_id"]: row for row in plan["commands"]}
+    assert list(rows) == ["train_OFFLINE", "aggregate", "campaign_complete"]
+    assert "--exclude=gpu3001" in rows["train_OFFLINE"]["command"]
+    dependency = next(
+        item for item in rows["aggregate"]["command"]
+        if item.startswith("--dependency=")
+    )
+    assert dependency == "--dependency=afterok:${JOB_train_OFFLINE}:100:102:103:104"
+    assert rows["campaign_complete"]["dependencies"] == ["aggregate"]
+
+
+def test_offline_ecc_recovery_rejects_wider_failure_closure(tmp_path, monkeypatch):
+    from hlt_classification.cms_proxy_ladder import recovery as module
+
+    tasks = [
+        {"task_id": "train_OFFLINE", "kind": "train", "dependencies": []},
+        {"task_id": "train_U000", "kind": "train", "dependencies": []},
+        {
+            "task_id": "aggregate", "kind": "aggregate",
+            "dependencies": ["train_OFFLINE", "train_U000"],
+        },
+        {
+            "task_id": "campaign_complete", "kind": "complete",
+            "dependencies": ["aggregate"],
+        },
+    ]
+    campaign_root = tmp_path / "campaign"; campaign_root.mkdir()
+    campaign = artifact("CAMPAIGN_SPEC_TEST", version=2, tasks=tasks)
+    ids = {row["task_id"]: str(200 + index) for index, row in enumerate(tasks)}
+    commands = {task: ["sbatch", "--wrap=true"] for task in ids}
+    ledger = build_submission_ledger(
+        campaign_spec_sha256=campaign["content_hash"], jobs=ids,
+        commands=commands, dry_run=False,
+    )
+    monkeypatch.setattr(
+        module, "_context",
+        lambda root: (campaign_root, campaign, ledger, artifact("PLAN_TEST")),
+    )
+    monkeypatch.setattr(module, "completed_task", lambda spec, task: None)
+    (campaign_root / "slurm-200.out").write_text(
+        "gpu3001 uncorrectable ECC error encountered\n",
+    )
+    states = {
+        "200": "FAILED", "201": "FAILED", "202": "CANCELLED",
+        "203": "CANCELLED",
+    }
+    with pytest.raises(ValueError, match="not narrow"):
+        module.create_offline_ecc_recovery(
+            campaign_root=campaign_root, recovery_root=tmp_path / "recovery",
+            project_dir=tmp_path, source_commit="a" * 40,
+            failed_job_id="200", failed_node="gpu3001",
+            states_by_job_id=states,
+            nodes_by_job_id={job: "gpu3001" for job in states},
+        )
 
 
 def test_small_committed_release_is_label_blind_and_identity_exact(tmp_path, monkeypatch):

@@ -60,3 +60,18 @@ fail closed on drift.
 - Scientific metric quality never controls task success or downstream rows.
 - Live gate and science submission require separate exact authorization
   phrases after dry-run inspection.
+
+## Narrow hardware-failure recovery
+
+An uncorrectable GPU ECC failure before `train_OFFLINE` began optimization is
+an operational failure, not a scientific result. The registered recovery is
+exactly `train_OFFLINE -> aggregate -> campaign_complete`. It reuses every
+other original train/reduce job as an exact aggregate dependency, excludes the
+failed node, preserves the original campaign specification and completed
+outputs, and changes no data, view, seed, model, optimizer, or population.
+
+`OFFLINE_ECC_RECOVERY/v1` binds the original campaign and live ledger, a full
+exact-ID accounting monitor, the failed log bytes and node, the three-job
+downstream closure, and a separately pinned recovery-controller source. Its
+command plan and dry/live ledgers are immutable. Live recovery requires the
+exact phrase `AUTHORIZE JETCLASS2 CMS PROXY OFFLINE ECC RECOVERY`.

@@ -18,6 +18,9 @@ from hlt_classification.cms_proxy_ladder.portable import (
 from hlt_classification.cms_proxy_ladder.production import (
     create_campaign, create_direct_coarse_campaign, result_rows,
 )
+from hlt_classification.cms_proxy_ladder.recovery import (
+    create_offline_ecc_recovery, scheduler_snapshot, submit_recovery,
+)
 from hlt_classification.cms_proxy_ladder.submission import submit
 
 
@@ -75,6 +78,17 @@ def main() -> int:
     for name in ("dry-run-campaign", "submit-campaign"):
         command = sub.add_parser(name)
         command.add_argument("--campaign-spec", type=Path, required=True)
+        command.add_argument("--authorization-phrase")
+    recover = sub.add_parser("create-offline-ecc-recovery")
+    recover.add_argument("--campaign-root", type=Path, required=True)
+    recover.add_argument("--recovery-root", type=Path, required=True)
+    recover.add_argument("--project-dir", type=Path, required=True)
+    recover.add_argument("--source-commit", required=True)
+    recover.add_argument("--failed-job-id", required=True)
+    recover.add_argument("--failed-node", required=True)
+    for name in ("dry-run-offline-ecc-recovery", "submit-offline-ecc-recovery"):
+        command = sub.add_parser(name)
+        command.add_argument("--recovery-spec", type=Path, required=True)
         command.add_argument("--authorization-phrase")
     results = sub.add_parser("results")
     results.add_argument("--campaign-spec", type=Path, required=True)
@@ -148,6 +162,26 @@ def main() -> int:
         value = load_json(args.campaign_spec)
         ledger = submit(
             subject=value, mode="science", execute=args.command == "submit-campaign",
+            authorization_phrase=args.authorization_phrase,
+        )
+        print(ledger["content_hash"])
+    elif args.command == "create-offline-ecc-recovery":
+        campaign = load_json(args.campaign_root / "submission_ledger.json")
+        states, nodes = scheduler_snapshot(campaign["jobs"].values())
+        value = create_offline_ecc_recovery(
+            campaign_root=args.campaign_root, recovery_root=args.recovery_root,
+            project_dir=args.project_dir, source_commit=args.source_commit,
+            failed_job_id=args.failed_job_id, failed_node=args.failed_node,
+            states_by_job_id=states, nodes_by_job_id=nodes,
+        )
+        print(value["content_hash"])
+    elif args.command in {
+        "dry-run-offline-ecc-recovery", "submit-offline-ecc-recovery",
+    }:
+        value = load_json(args.recovery_spec)
+        ledger = submit_recovery(
+            value,
+            execute=args.command == "submit-offline-ecc-recovery",
             authorization_phrase=args.authorization_phrase,
         )
         print(ledger["content_hash"])
