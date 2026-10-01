@@ -1,5 +1,18 @@
 # CMS_SALIENCE_LEARNED_DENSE contracts
 
+## Isolated fusion-to-fusion chain (2026-09-20)
+
+The additive CAMPAIGN_SPEC/v7 / GRAPH/v4 branch is governed by
+`docs/plans/CMS_FUSION_CHAIN_500K_PLAN.md` and `docs/contracts/CMS_FUSION_CHAIN.md`.
+It imports completed coarse ACQUIRE_U050, cold-distills adjacent fusion models
+through D033/D000, then registers both direct single-D000 compression and
+D000/D000 fusion followed by single-D000 compression. No withdrawal or output
+ensembles. Seven fresh fits and 21 science tasks use `cmsfc_` on debug; existing
+specs and job families remain unchanged. New preparation/shared/acceptance
+import versions bind the consumer without changing the measured kernels or
+claiming a fresh GPU run. ACQUISITION_SOURCE/v1 validates the completed coarse
+fit and bank separately. Neither donor is modified or retired.
+
 ## Standalone direct fusion comparison (2026-09-19)
 
 Scientific authority: `docs/plans/CMS_SALIENCE_DIRECT_FUSION_500K_PLAN.md`.

@@ -15,6 +15,7 @@ FAMILY = "CMS_SALIENCE_LEARNED_DENSE"
 AUTHORIZATION = "AUTHORIZE CMS SALIENCE LEARNED DENSE 500K EXACT SPEC"
 COARSE_AUTHORIZATION = "AUTHORIZE CMS SALIENCE LEARNED COARSE 500K EXACT SPEC"
 DIRECT_FUSION_AUTHORIZATION = "AUTHORIZE CMS DIRECT FUSION 500K EXACT SPEC"
+FUSION_CHAIN_AUTHORIZATION = "AUTHORIZE CMS FUSION CHAIN 500K EXACT SPEC"
 RUNG_ORDER = ("U000", "U033", "U066", "U100", "D080", "D060", "D040", "D020", "D000")
 COARSE_RUNG_ORDER = ("U000", "U050", "U100", "D066", "D033", "D000")
 SHARED_TASKS = ("train_M0HLT", "train_OFFLINE", "train_U000", "reduce_U000", "train_DIRECT_D000")
@@ -30,10 +31,10 @@ TRAINING = dict(maximum_passes=100, minimum_passes=60, patience=15,
 ACCEPTANCE_POLICY = dict(cpu_peak_fraction_limit=.85, cuda_peak_fraction_limit=.90,
     withdrawal_probe_steps_per_alpha=5, withdrawal_probe_alphas=[1., .5, 0.],
     withdrawal_probe_batch_size=256, withdrawal_probe_batch_selection="longest_u000")
-CONTRACT_VERSIONS = {"CAMPAIGN_SPEC": (1, 2, 3, 4, 5, 6), "EXECUTION_ACCEPTANCE": (1, 2),
-                     "GRAPH": (1, 2, 3), "PREPARATION_IMPORT": (1, 2, 3),
-                     "SHARED_SOURCE": (1, 2), "ACCEPTANCE_IMPORT": (1, 2),
-                     "ACCEPTANCE_REUSE": (1, 2)}
+CONTRACT_VERSIONS = {"CAMPAIGN_SPEC": (1, 2, 3, 4, 5, 6, 7), "EXECUTION_ACCEPTANCE": (1, 2),
+                     "GRAPH": (1, 2, 3, 4), "PREPARATION_IMPORT": (1, 2, 3, 4),
+                     "SHARED_SOURCE": (1, 2, 3), "ACCEPTANCE_IMPORT": (1, 2, 3),
+                     "ACCEPTANCE_REUSE": (1, 2, 3)}
 
 
 def artifact(artifact_type: str, *, contract_version=None, **fields):
@@ -53,9 +54,9 @@ def validate(value, artifact_type):
 
 
 def acceptance_policy(spec):
-    """Old specs retain their 85% gate; v3-v6 specs explicitly opt into 90%."""
+    """Old specs retain their 85% gate; v3-v7 specs explicitly opt into 90%."""
     version = spec["schema_version"]
-    if version in (3, 4, 5, 6):
+    if version in (3, 4, 5, 6, 7):
         if spec.get("acceptance_policy") != ACCEPTANCE_POLICY:
             raise ValueError("CMS v3 acceptance policy differs")
         return deepcopy(ACCEPTANCE_POLICY)
@@ -131,6 +132,9 @@ def node(name, role, primary, context=None, teacher=None, parent=None, alias=Non
 
 
 def graph(ladder="dense"):
+    if ladder == "fusion_chain":
+        from .fusion_chain import chain_graph
+        return chain_graph()
     if ladder not in {"dense", "coarse", "direct_fusion"}:
         raise ValueError("Unregistered CMS ladder")
     rungs = {"dense": RUNG_ORDER, "coarse": COARSE_RUNG_ORDER,

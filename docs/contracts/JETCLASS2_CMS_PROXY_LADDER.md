@@ -58,6 +58,14 @@ Full materialized views are forbidden.
 installed Weaver/numerical environment, full-population RAM caches, a real
 one-pass fit, reducer inference, GPU peak, and measured walltime envelopes.
 
+`GATE_SPEC/v2` is the explicit SPORC recovery gate. It imports the immutable
+`RELEASE/v1` from a completed `GATE_SPEC/v1`, then binds SPORC-debug foundation
+construction and preflight resources. `RUNTIME_PROFILE/v2` records an A100
+measurement on `sporc_a100_debug` and the sole authorized transfer to
+`sporc_a100` tier3 under
+`sporc_debug_to_tier3_same_a100_environment_resources_v1`. Debug is never the
+scientific execution site.
+
 `GATE_COMPLETE/v1` authenticates the gate, foundation, and runtime profile.  It
 does not itself authorize scientific submission.
 

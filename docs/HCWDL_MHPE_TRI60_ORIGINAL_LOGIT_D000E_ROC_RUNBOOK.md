@@ -41,7 +41,7 @@ export PYTHONDONTWRITEBYTECODE=1
 
 export MAIN_REPO=/home/ryreu/atlas/HLT_Classification
 export CHECKPOINTS="${MAIN_REPO}/checkpoints"
-export ROC_COMMIT=REPLACE_WITH_PUSHED_40_CHARACTER_COMMIT
+export ROC_COMMIT=6a4ab1a6fddf7af71c3e949610b4c812db77acd2
 export ROC_SHORT="${ROC_COMMIT:0:8}"
 export PROJECT_DIR="/home/ryreu/atlas/HLT_Classification_tri60_original_logit_roc_${ROC_SHORT}"
 export TRI60_SPEC="${CHECKPOINTS}/hcwdl_mhpe_tri60_full_d218961c_r1/campaign_spec.json"

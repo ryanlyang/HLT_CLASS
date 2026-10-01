@@ -30,6 +30,7 @@ class ParticleSet:
     lost_track: np.ndarray
     measurements: np.ndarray | None = None
     measurement_validity: np.ndarray | None = None
+    category_flag_count: np.ndarray | None = None
 
     def __post_init__(self) -> None:
         p4 = np.asarray(self.p4)
@@ -52,8 +53,19 @@ class ParticleSet:
             raise ValueError("particle measurement/value validity shape differs")
         if not np.isfinite(measurements).all():
             raise ValueError("invalid particle measurements must be finite-filled and masked")
+        category_flag_count = (
+            np.where(np.asarray(self.categories) >= 0, 1, 0).astype(np.int8)
+            if self.category_flag_count is None
+            else np.asarray(self.category_flag_count, np.int8)
+        )
+        if (
+            category_flag_count.shape != (count,)
+            or np.any(category_flag_count < 0)
+        ):
+            raise ValueError("particle category-flag count differs")
         object.__setattr__(self, "measurements", measurements)
         object.__setattr__(self, "measurement_validity", validity)
+        object.__setattr__(self, "category_flag_count", category_flag_count)
 
 
 @dataclass(frozen=True)

@@ -130,6 +130,11 @@ def from_scouting_particles(value: object, *, offline: bool) -> Particles:
         native = None
     return Particles(
         p4[keep], category[keep], charge[keep], track[keep], valid[keep], native,
+        (
+            None
+            if getattr(value, "category_flag_count", None) is None
+            else np.asarray(value.category_flag_count, np.int8)[keep]
+        ),
     )
 
 

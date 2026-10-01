@@ -144,7 +144,7 @@ def submit_shared_dag(spec, plan, *, execute):
             job_id=job, command=command, sequence=index)
         write_immutable_json(directory / f"{index:04d}_{task}.json", event)
         events.append(event); jobs[task] = job
-        label = "CMS-DIRECT-FUSION" if spec.get("ladder") == "direct_fusion" else "CMS-COARSE"
+        label = {"direct_fusion": "CMS-DIRECT-FUSION", "fusion_chain": "CMS-FUSION-CHAIN"}.get(spec.get("ladder"), "CMS-COARSE")
         print(f"{label} submitted task={task} job={job} source_dependency={external or 'none'}", flush=True)
     ledger = assemble_submission_ledger(events, campaign_spec_sha256=spec["content_hash"])
     if ledger_path.exists():

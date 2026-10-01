@@ -11,7 +11,7 @@ from hlt_classification.scouting.hcwdl_exact_dag_submission import submit_exact_
 from hlt_classification.scouting.splits import validate_split_manifest
 from .contracts import (
     ACCEPTANCE_POLICY, AUTHORIZATION, COARSE_AUTHORIZATION, DIRECT_FUSION_AUTHORIZATION, BUDGETS, acceptance_policy, allocation_site,
-    artifact, graph, site_for_partition, validate, SHARED_TASKS,
+    artifact, graph, site_for_partition, validate, SHARED_TASKS, FUSION_CHAIN_AUTHORIZATION,
 )
 from .storage import checked_file, fingerprint, load_receipt
 
@@ -30,6 +30,11 @@ def tasks(spec):
         for row in science:
             if row["task_id"] in SHARED_TASKS:
                 row["kind"] = "import_shared"
+    if spec.get("acquisition_source") is not None:
+        from .fusion_chain import ACQUISITION_TASKS
+        for row in science:
+            if row["task_id"] in ACQUISITION_TASKS:
+                row["kind"] = "import_acquisition"
     gate_kind = "import_preflight" if spec.get("acceptance_import") is not None else "preflight"
     return dict(prepare=preparation, gate=[dict(task_id="preflight", kind=gate_kind, dependencies=[])], science=science)
 
@@ -57,6 +62,9 @@ def command_plan(spec, stage):
         if spec.get("ladder") == "direct_fusion":
             label = "import_" + task["task_id"] if kind.startswith("import_") else task["task_id"]
             job_name = "cmsdf_" + label
+        if spec.get("ladder") == "fusion_chain":
+            label = "import_" + task["task_id"] if kind.startswith("import_") else task["task_id"]
+            job_name = "cmsfc_" + label
         command = ["sbatch", "--parsable", f"--account={site['account']}", f"--partition={site['partition']}", f"--qos={site['qos']}",
             "--nodes=1", "--ntasks=1", "--export=ALL", "--no-requeue",
             f"--cpus-per-task={cpus}", f"--mem={memory}M", f"--time={minutes}",
@@ -81,7 +89,12 @@ def command_plan(spec, stage):
 
 def validate_campaign(spec, *, check_source=False):
     digest = validate(spec, "CAMPAIGN_SPEC")
-    if spec["schema_version"] == 6:
+    if spec["schema_version"] == 7:
+        if (spec.get("ladder") != "fusion_chain" or spec.get("preparation_import") is None
+            or spec.get("shared_source") is None or spec.get("acceptance_import") is None
+            or spec.get("acquisition_source") is None or spec.get("site") != site_for_partition("debug")):
+            raise ValueError("CMS v7 requires an isolated fusion-chain debug study with completed acquisition imports")
+    elif spec["schema_version"] == 6:
         if (spec.get("ladder") != "direct_fusion" or spec.get("preparation_import") is None
             or spec.get("shared_source") is None or spec.get("acceptance_import") is None
             or spec.get("site") != site_for_partition("debug")):
@@ -91,7 +104,9 @@ def validate_campaign(spec, *, check_source=False):
             raise ValueError("CMS versions 4/5 require the registered coarse ladder")
     elif "ladder" in spec or "shared_source" in spec:
         raise ValueError("Legacy CMS specs remain dense")
-    if spec["schema_version"] in (5, 6):
+    if spec["schema_version"] != 7 and "acquisition_source" in spec:
+        raise ValueError("Legacy campaigns cannot import a fusion-chain acquisition")
+    if spec["schema_version"] in (5, 6, 7):
         if spec.get("acceptance_import") is None or spec.get("shared_source") is None:
             raise ValueError("CMS v5 requires explicit accepted dense preflight reuse")
     elif "acceptance_import" in spec:
@@ -132,6 +147,9 @@ def validate_campaign(spec, *, check_source=False):
     if spec.get("acceptance_import") is not None:
         from .preflight_reuse import validate_acceptance_import
         validate_acceptance_import(spec)
+    if spec.get("acquisition_source") is not None:
+        from .fusion_chain import validate_acquisition_source
+        validate_acquisition_source(spec)
     return digest
 
 
@@ -143,7 +161,7 @@ def view_config_hash(registered_graph):
 
 def create(*, split_manifest, data_root, campaign_root, project_dir, source_commit,
            cpus=16, workers=16, memory_mb=192000, partition="tier3", reuse_preparation_spec=None,
-           ladder="dense", reuse_shared_spec=None, reuse_dense_preflight=False):
+           ladder="dense", reuse_shared_spec=None, reuse_dense_preflight=False, reuse_acquisition_spec=None):
     root = Path(campaign_root).resolve()
     if root.exists():
         raise FileExistsError("Use a fresh isolated campaign root; existing roots are never overwritten")
@@ -153,17 +171,25 @@ def create(*, split_manifest, data_root, campaign_root, project_dir, source_comm
         if split["roles"][role]["mapped_entries"] < budget:
             raise ValueError(f"Insufficient {role} population")
     registered = graph(ladder)
-    if reuse_shared_spec is not None and ladder not in {"coarse", "direct_fusion"}:
+    if reuse_shared_spec is not None and ladder not in {"coarse", "direct_fusion", "fusion_chain"}:
         raise ValueError("Shared-source reuse is only registered for coarse/direct-fusion studies")
-    if reuse_dense_preflight and (ladder not in {"coarse", "direct_fusion"} or reuse_shared_spec is None):
+    if reuse_dense_preflight and (ladder not in {"coarse", "direct_fusion", "fusion_chain"} or reuse_shared_spec is None):
         raise ValueError("Preflight reuse requires a coarse shared-source replacement or registered direct-fusion study")
     if ladder == "direct_fusion" and (partition != "debug" or reuse_preparation_spec is None
                                      or reuse_shared_spec is None or not reuse_dense_preflight):
         raise ValueError("Direct fusion requires debug and all accepted source imports")
+    if ladder == "fusion_chain" and (partition != "debug" or reuse_preparation_spec is None
+                                    or reuse_shared_spec is None or not reuse_dense_preflight
+                                    or reuse_acquisition_spec is None):
+        raise ValueError("Fusion chain requires debug and all completed source imports")
+    if reuse_acquisition_spec is not None and ladder != "fusion_chain":
+        raise ValueError("Acquisition import is only registered for fusion chain")
     extra = dict(ladder=ladder, shared_source=None) if ladder != "dense" else {}
     if reuse_dense_preflight:
         extra["acceptance_import"] = None
-    version = 6 if ladder == "direct_fusion" else 5 if reuse_dense_preflight else 4 if ladder == "coarse" else 3
+    if ladder == "fusion_chain":
+        extra["acquisition_source"] = None
+    version = 7 if ladder == "fusion_chain" else 6 if ladder == "direct_fusion" else 5 if reuse_dense_preflight else 4 if ladder == "coarse" else 3
     spec = artifact("CAMPAIGN_SPEC", contract_version=version,
         project_dir=str(Path(project_dir).resolve()), source_commit=source_commit,
         campaign_root=str(root), data_root=str(Path(data_root).resolve()), site=site_for_partition(partition),
@@ -187,6 +213,11 @@ def create(*, split_manifest, data_root, campaign_root, project_dir, source_comm
         from .preflight_reuse import build_acceptance_import
         value = {k: v for k, v in spec.items() if k != "content_hash"}
         value["acceptance_import"] = build_acceptance_import(spec)
+        spec = artifact("CAMPAIGN_SPEC", contract_version=version, **value)
+    if reuse_acquisition_spec is not None:
+        from .fusion_chain import build_acquisition_source
+        value = {k: v for k, v in spec.items() if k != "content_hash"}
+        value["acquisition_source"] = build_acquisition_source(spec, reuse_acquisition_spec)
         spec = artifact("CAMPAIGN_SPEC", contract_version=version, **value)
     validate_campaign(spec, check_source=True)
     write_immutable_json(root / "campaign_spec.json", spec)
@@ -231,6 +262,25 @@ def create_direct_fusion_from_dense(*, source_spec, campaign_root, project_dir, 
         **source["resources"], partition="debug", ladder="direct_fusion",
         reuse_preparation_spec=Path(producer["campaign_root"]) / "campaign_spec.json",
         reuse_shared_spec=path, reuse_dense_preflight=True)
+
+
+def create_fusion_chain_from_coarse(*, source_spec, campaign_root, project_dir, source_commit):
+    """Reuse a completed first fusion and the same original accepted references."""
+    from .preparation_import import preparation_spec
+    path = Path(source_spec).resolve()
+    source = load_json(path)
+    validate_campaign(source)
+    if (path != Path(source["campaign_root"]) / "campaign_spec.json"
+        or source["schema_version"] != 5 or source.get("ladder") != "coarse"
+        or source["site"] != site_for_partition("debug")):
+        raise ValueError("Fusion chain needs the canonical accepted coarse-v5 debug source")
+    producer = preparation_spec(source)
+    return create(split_manifest=source["split_manifest"]["path"], data_root=source["data_root"],
+        campaign_root=campaign_root, project_dir=project_dir, source_commit=source_commit,
+        **source["resources"], partition="debug", ladder="fusion_chain",
+        reuse_preparation_spec=Path(producer["campaign_root"]) / "campaign_spec.json",
+        reuse_shared_spec=checked_file(source["shared_source"]["source_spec"]),
+        reuse_dense_preflight=True, reuse_acquisition_spec=path)
 
 
 def validate_acceptance_resources(spec, value):
@@ -306,7 +356,8 @@ def submit(spec, stage, *, execute=False, authorization_phrase=None):
         raise ValueError("Stored command plan changed")
     if execute:
         expected_authorization = {"coarse": COARSE_AUTHORIZATION,
-            "direct_fusion": DIRECT_FUSION_AUTHORIZATION}.get(spec.get("ladder"), AUTHORIZATION)
+            "direct_fusion": DIRECT_FUSION_AUTHORIZATION,
+            "fusion_chain": FUSION_CHAIN_AUTHORIZATION}.get(spec.get("ladder"), AUTHORIZATION)
         if authorization_phrase != expected_authorization:
             raise PermissionError("Explicit exact-campaign authorization is required")
         if stage == "gate":

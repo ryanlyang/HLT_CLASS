@@ -35,6 +35,27 @@ inventory, split membership, particle decoding, native-index semantics,
 matcher spec, assignment producer bytes, and foundation lock all validate
 unchanged. A new split or matcher requires a new foundation.
 
+For the completed JetClass2 `TRAIN_500K` selection, the reusable winner is the
+`SALIENCE_PT_LINEAR` foundation rooted at
+`checkpoints/jc2_salience500k_linear_4f5e520e_r1/foundation`, authorized by
+`checkpoints/jc2_salience500k_screen_4f5e520e_r1/selection_lock.json`. Future
+same-population ladders authenticate and consume that foundation read-only;
+they do not rebuild its assignment shards. The foundation spec, lock, sample
+and recomputation audits, and every assignment payload/report are one atomic
+retention unit. Copying or retaining NPZ payloads without their reports and
+parent locks is not reuse.
+
+The currently supported production creator also authenticates the full frozen
+screen provenance. Consequently, the three candidate foundation roots, the
+bottleneck contextual foundation spec/lock, the screen's four durable lock and
+profile files, and the referenced measured resource profile must remain
+available while that creator is used. A future narrower consumer may retain
+only winner assignments plus immutable selection evidence only after defining
+a new versioned source contract and tests for that authentication boundary.
+Training-recipe, seed, and ladder-graph changes may reuse assignments; dataset,
+split, decoder, input schema, truncation, matcher, endpoint, or support-policy
+changes may not.
+
 ## Implementation map
 
 - `jetclass2_delphes/salience_views.py`: JetClass2 particle adapter and the

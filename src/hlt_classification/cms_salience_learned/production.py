@@ -453,6 +453,9 @@ def run_task(spec, task_id, *, device="cuda"):
         elif kind == "import_shared":
             from .shared_import import import_shared_task
             outputs = import_shared_task(spec, task_id)
+        elif kind == "import_acquisition":
+            from .fusion_chain import import_acquisition
+            outputs = import_acquisition(spec, task_id)
         elif kind == "import_preflight":
             from .preflight_reuse import publish_acceptance_reuse
             load_receipt(spec, "foundation")
@@ -467,7 +470,11 @@ def run_task(spec, task_id, *, device="cuda"):
         elif kind == "extract":
             outputs = extract(spec, task["model"], device)
         elif kind == "aggregate":
-            outputs = aggregate(spec)
+            if spec.get("ladder") == "fusion_chain":
+                from .fusion_chain import aggregate_chain
+                outputs = aggregate_chain(spec)
+            else:
+                outputs = aggregate(spec)
         else:
             outputs = [root(spec) / "campaign_complete.json"]
             write_immutable_json(outputs[0], artifact("COMPLETE", campaign_spec_sha256=spec["content_hash"],

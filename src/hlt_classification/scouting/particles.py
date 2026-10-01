@@ -59,6 +59,7 @@ def decode_particle_sets(
         hlt_p4, decode_exclusive_categories(hlt_flags),
         _row(arrays, "scoutpfcand_charge", row)[:hlt_max_length].astype(np.float64),
         np.zeros(len(hlt_p4), np.bool_), hlt_measurements, hlt_validity,
+        category_flag_count=np.sum(hlt_flags == 1, axis=1).astype(np.int8),
     )
     charged_p4 = _p4(arrays, "cpfcandlt", row)
     neutral_p4 = _p4(arrays, "npfcand", row)
@@ -98,6 +99,9 @@ def decode_particle_sets(
         )),
         np.concatenate((charged_measurements, neutral_measurements)),
         np.concatenate((charged_validity, neutral_validity)),
+        category_flag_count=np.sum(
+            np.concatenate((charged_flags, neutral_flags)) == 1, axis=1,
+        ).astype(np.int8),
     )
     return hlt, offline, max(0, raw_hlt_count - hlt_max_length)
 

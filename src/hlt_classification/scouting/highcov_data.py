@@ -20,6 +20,7 @@ class Particles:
     track: np.ndarray
     track_valid: np.ndarray
     native_index: np.ndarray | None = None
+    category_flag_count: np.ndarray | None = None
 
     def __post_init__(self) -> None:
         count = len(self.p4)
@@ -33,6 +34,11 @@ class Particles:
             raise ValueError("particle track values must be finite-filled")
         if self.native_index is not None and self.native_index.shape != (count,):
             raise ValueError("offline native index shape differs")
+        if self.category_flag_count is not None and (
+            self.category_flag_count.shape != (count,)
+            or np.any(self.category_flag_count < 0)
+        ):
+            raise ValueError("particle category-flag count shape differs")
 
 
 @dataclass(frozen=True)

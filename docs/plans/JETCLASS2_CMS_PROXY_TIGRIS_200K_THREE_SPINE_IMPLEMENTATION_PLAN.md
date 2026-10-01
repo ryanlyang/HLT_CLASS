@@ -90,7 +90,7 @@ caches may not.
 
 ## Execution and gates
 
-Execution site is Tigris only:
+The original execution site is Tigris:
 
 - account `reu-aisocial`;
 - partition `tigris`;
@@ -111,6 +111,12 @@ Queueing is intentionally two-stage.
 The full campaign cannot be submitted merely because the gate job was queued.
 The gate's immutable completion lock and runtime profile must exist and pass
 validation first.
+
+The unfinished gate may instead follow the source-pinned
+`JETCLASS2_CMS_PROXY_SPORC_DEBUG_GATE_AMENDMENT.md`. That amendment reuses the
+already authenticated release, measures the remaining gate on SPORC `debug`,
+and transfers the exact measured A100 resource profile to SPORC `tier3` for
+science. It changes execution only, not any scientific semantics above.
 
 ## Required evidence
 

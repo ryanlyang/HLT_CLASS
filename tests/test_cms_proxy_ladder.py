@@ -10,7 +10,7 @@ from hlt_classification.cms_proxy_ladder.campaign import (
     BRANCHES, build_scientific_plan, coordinate, task_graph,
 )
 from hlt_classification.cms_proxy_ladder.contracts import artifact
-from hlt_classification.cms_proxy_ladder.gate import gate_tasks
+from hlt_classification.cms_proxy_ladder.gate import debug_gate_tasks, gate_tasks
 from hlt_classification.cms_proxy_ladder.inputs import build_inputs, input_contract
 from hlt_classification.cms_proxy_ladder.release import COUNTS, release_request
 from hlt_classification.cms_proxy_ladder.views import build_view, view_contract
@@ -174,6 +174,30 @@ def test_gate_command_plan_is_tigris_exact_dependency_dag(tmp_path):
     assert all("--partition=tigris" in row["command"] for row in commands.values())
 
 
+def test_sporc_debug_gate_is_bounded_and_transfers_science_to_tier3(tmp_path, monkeypatch):
+    from hlt_classification.cms_proxy_ladder import submission
+
+    tasks = debug_gate_tasks()
+    assert [row["task_id"] for row in tasks] == [
+        "authenticate_release", "build_foundation", "preflight",
+    ]
+    assert all(row["minutes"] <= 480 for row in tasks)
+    assert max(row["cpus"] for row in tasks) == 36
+    spec = artifact(
+        "GATE_SPEC", version=2, gate_root=str(tmp_path / "gate"),
+        project_dir=str(tmp_path), measurement_site=execution_site("sporc_a100_debug"),
+        execution_site=execution_site("sporc_a100"), tasks=tasks,
+    )
+    monkeypatch.setattr(submission, "validate_gate", lambda value: value["content_hash"])
+    plan = submission.gate_plan(spec)
+    commands = {row["task_id"]: row for row in plan["commands"]}
+    assert all("--partition=debug" in row["command"] for row in commands.values())
+    assert all("--qos=qos_tier3" in row["command"] for row in commands.values())
+    assert "--gres=gpu:a100:1" in commands["preflight"]["command"]
+    assert "--gres=gpu:a100:1" not in commands["build_foundation"]["command"]
+    assert "JC2_SITE=sporc_a100_debug" in commands["preflight"]["command"][-1]
+
+
 def test_science_command_plan_has_17_fits_12_reducers_and_cpu_tail(tmp_path, monkeypatch):
     from hlt_classification.cms_proxy_ladder import submission
 
@@ -185,6 +209,7 @@ def test_science_command_plan_has_17_fits_12_reducers_and_cpu_tail(tmp_path, mon
         runtime_profile={
             "cpus": 32, "memory_mb": 384_000,
             "train_minutes": 600, "reduce_minutes": 120,
+            "execution_site": execution_site("tigris_gh200"),
         },
     )
     monkeypatch.setattr(submission, "validate_campaign", lambda value: value["content_hash"])

@@ -69,7 +69,7 @@ def _source(consumer, path):
         raise ValueError("Preparation source spec is not canonical")
     if old == new or old.is_relative_to(new) or new.is_relative_to(old):
         raise ValueError("Preparation import roots must be disjoint")
-    if consumer.get("ladder") in {"coarse", "direct_fusion"}:
+    if consumer.get("ladder") in {"coarse", "direct_fusion", "fusion_chain"}:
         from .contracts import graph
         if consumer["graph"] != graph(consumer["ladder"]):
             raise ValueError("Unregistered preparation consumer")
@@ -89,12 +89,12 @@ def build_import(consumer, source_path):
     source = _source(consumer, source_path)
     code = preparation_code(consumer["project_dir"], source["source_commit"])
     new_code = preparation_code(consumer["project_dir"], consumer["source_commit"])
-    migrated = consumer.get("ladder") in {"coarse", "direct_fusion"}
+    migrated = consumer.get("ladder") in {"coarse", "direct_fusion", "fusion_chain"}
     if not (compatible_preparation_code(code, new_code) if migrated else code == new_code):
         raise ValueError("Preparation code changed; recompute or implement a reviewed migration")
     root = Path(source["campaign_root"])
     extra = dict(source_preparation_code=code, coordinate_migration="add_coarse_coordinates_v1") if migrated else {}
-    version = {"coarse": 2, "direct_fusion": 3}.get(consumer.get("ladder"), 1)
+    version = {"coarse": 2, "direct_fusion": 3, "fusion_chain": 4}.get(consumer.get("ladder"), 1)
     result = artifact("PREPARATION_IMPORT", contract_version=version, source_spec=fingerprint(source_path),
         source_campaign_sha256=source["content_hash"], source_commit=source["source_commit"],
         foundation=fingerprint(root / "foundation/foundation_lock.json"), preparation_code=new_code,
@@ -112,13 +112,13 @@ def validate_import(consumer, *, deep=False):
     root = Path(source["campaign_root"]).resolve()
     expected_code = preparation_code(consumer["project_dir"], consumer["source_commit"])
     source_code = preparation_code(consumer["project_dir"], source["source_commit"])
-    if value["schema_version"] in (2, 3):
-        code_ok = (consumer.get("ladder") == {2: "coarse", 3: "direct_fusion"}[value["schema_version"]]
+    if value["schema_version"] in (2, 3, 4):
+        code_ok = (consumer.get("ladder") == {2: "coarse", 3: "direct_fusion", 4: "fusion_chain"}[value["schema_version"]]
             and value.get("coordinate_migration") == "add_coarse_coordinates_v1"
             and value.get("source_preparation_code") == source_code
             and compatible_preparation_code(source_code, expected_code))
     else:
-        code_ok = consumer.get("ladder") != "direct_fusion" and source_code == expected_code
+        code_ok = consumer.get("ladder") not in {"direct_fusion", "fusion_chain"} and source_code == expected_code
     if (value["source_campaign_sha256"] != source["content_hash"]
         or value["source_commit"] != source["source_commit"]
         or value["final_test_accessed"] is not False

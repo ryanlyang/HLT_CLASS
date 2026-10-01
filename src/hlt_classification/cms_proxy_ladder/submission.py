@@ -1,14 +1,19 @@
-"""Exact-ID Slurm plans for the staged Tigris gate and science DAG."""
+"""Exact-ID Slurm plans for staged gate and science DAG execution."""
 from __future__ import annotations
 
 from pathlib import Path
 import shlex
 
 from hlt_classification.data.cache_contracts import load_json
+from hlt_classification.jetclass2_delphes.execution import slurm_options
 from hlt_classification.scouting.hcwdl_exact_dag_submission import submit_exact_dag
 
 from .contracts import artifact, validate, write_json
-from .gate import AUTHORIZATION as GATE_AUTHORIZATION, validate_gate
+from .gate import (
+    AUTHORIZATION as GATE_AUTHORIZATION,
+    DEBUG_AUTHORIZATION as DEBUG_GATE_AUTHORIZATION,
+    validate_gate,
+)
 from .production import AUTHORIZATION as SCIENCE_AUTHORIZATION, validate_campaign
 
 
@@ -19,7 +24,7 @@ def _walltime(minutes: int) -> str:
     return f"{days}-{value}" if days else value
 
 
-def _wrap(project: str, mode: str, spec_path: str, task_id: str) -> str:
+def _wrap(project: str, site: dict, mode: str, spec_path: str, task_id: str) -> str:
     worker = f"{project}/scripts/run_jetclass2_cms_proxy_ladder_task.py"
     arguments = (
         f"--{mode}-spec {shlex.quote(spec_path)} --task {shlex.quote(task_id)}"
@@ -27,36 +32,35 @@ def _wrap(project: str, mode: str, spec_path: str, task_id: str) -> str:
     return "\n".join((
         "set -euo pipefail",
         f"export PROJECT_DIR={shlex.quote(project)}",
-        f"source {shlex.quote(project + '/sbatch/common.sh')}",
-        "hlt_activate",
-        f"export PYTHONPATH={shlex.quote(project + '/src')}",
+        f"export JC2_SITE={shlex.quote(site['name'])}",
+        f"source {shlex.quote(project + '/sbatch/jetclass2_delphes_common.sh')}",
         f"python -s {shlex.quote(worker)} {arguments}",
     ))
 
 
 def _command(
     *, project: str, output_root: str, mode: str, spec_path: str,
-    task: dict, job_prefix: str,
+    task: dict, job_prefix: str, site: dict,
 ) -> list[str]:
     dependency = ":".join(f"${{JOB_{item}}}" for item in task["dependencies"])
     args = [
-        "sbatch", "--parsable", "--account=reu-aisocial", "--partition=tigris",
-        "--nodes=1", "--ntasks=1", "--no-requeue", "--export=ALL",
+        *slurm_options(site),
         f"--cpus-per-task={task['cpus']}", f"--mem={task['memory_mb']}M",
         f"--time={_walltime(task['minutes'])}",
         f"--job-name={job_prefix}_{task['task_id']}"[:128],
         f"--chdir={project}", f"--output={output_root}/slurm-%j.out",
     ]
     if task["kind"] == "gpu":
-        args.append("--gres=gpu:gh200:1")
+        args.append("--gres=" + site["gres"])
     if dependency:
         args.append("--dependency=afterok:" + dependency)
-    args.append("--wrap=" + _wrap(project, mode, spec_path, task["task_id"]))
+    args.append("--wrap=" + _wrap(project, site, mode, spec_path, task["task_id"]))
     return args
 
 
 def gate_plan(spec: dict) -> dict:
     validate_gate(spec)
+    site = spec.get("measurement_site", spec["execution_site"])
     path = str(Path(spec["gate_root"]) / "gate_spec.json")
     commands = []
     for task in spec["tasks"]:
@@ -64,7 +68,9 @@ def gate_plan(spec: dict) -> dict:
             "task_id": task["task_id"], "dependencies": task["dependencies"],
             "command": _command(
                 project=spec["project_dir"], output_root=spec["gate_root"],
-                mode="gate", spec_path=path, task=task, job_prefix="jc2pxg",
+                mode="gate", spec_path=path, task=task,
+                job_prefix="jc2pxd" if spec.get("schema_version") == 2 else "jc2pxg",
+                site=site,
             ),
         })
     return artifact(
@@ -76,6 +82,7 @@ def gate_plan(spec: dict) -> dict:
 def science_plan(spec: dict) -> dict:
     validate_campaign(spec)
     profile = spec["runtime_profile"]
+    site = profile["execution_site"]
     path = str(Path(spec["campaign_root"]) / "campaign_spec.json")
     commands = []
     for row in spec["tasks"]:
@@ -92,6 +99,7 @@ def science_plan(spec: dict) -> dict:
             "command": _command(
                 project=spec["project_dir"], output_root=spec["campaign_root"],
                 mode="campaign", spec_path=path, task=task, job_prefix="jc2px",
+                site=site,
             ),
         })
     return artifact(
@@ -121,7 +129,10 @@ def submit(
             raise FileExistsError("Proxy-ladder command plan differs")
     else:
         write_json(plan_path, plan)
-    required = GATE_AUTHORIZATION if mode == "gate" else SCIENCE_AUTHORIZATION
+    required = (
+        (DEBUG_GATE_AUTHORIZATION if subject.get("schema_version") == 2 else GATE_AUTHORIZATION)
+        if mode == "gate" else SCIENCE_AUTHORIZATION
+    )
     if execute and authorization_phrase != required:
         raise PermissionError(f"Live {mode} submission requires exact authorization phrase")
     return submit_exact_dag(

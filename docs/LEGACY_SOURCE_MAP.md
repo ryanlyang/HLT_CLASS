@@ -1,5 +1,416 @@
 # Legacy Donor-Source Map
 
+## 2026-09-22: K2 deterministic parity and layout-preserving saved tensors
+
+Repository-local donor/baseline: `49516092a646cfe21f7bb1377b07a142161eb3d2`,
+the failed 21767292 execution. Modified `concat_k2_model.py` storage hooks and
+parity harness; `concat_k2_runtime.py` composes a new early gate from existing
+`acceptance.installed_parity`, `concat_k2_data.load_assignment`, `DatasetReader`,
+`build_view`, `build_inputs` and `RamCache`. New `concat_k2_parity.py` reuses
+those APIs without copying or editing their matching/data producer files.
+The K2 worker sets preflight-only cuBLAS configuration; registration binds new
+execution policy versions. Native model, optimizer, matching and science
+recipe are unchanged. Original completed-map donor remains
+`1f9306504dfd040c9c22e0a89829d277d1ff2194`, subject to the full reuse checks.
+
+Tests reuse repository synthetic ROOT, completed-donor and model fixtures;
+new tests cover stride/value preservation, deterministic-state restoration,
+bounded authentic training-row sampling and early failure. Weaver 0.5.3 was
+installed into an isolated scratch directory for additional local validation;
+no Weaver/PyTorch source was vendored, no external weights imported, and no
+third-party license/attribution changes were introduced. Results and the
+remaining SPORC acceptance boundary are recorded in `docs/HANDOFF.md`.
+
+## 2026-09-22: authenticated K2 compact-assignment reuse
+
+Baseline: `df29abcce078b2be80bd465b22c28066ec32d8f6`. Original reusable K2
+producer: `1f9306504dfd040c9c22e0a89829d277d1ff2194` (only after its completed
+foundation is authenticated). New repository-local
+`jetclass2_delphes/concat_k2_preparation_import.py` composes the existing
+`concat_k2_data.load_assignment/foundation_lock/producer`,
+`concat_k2_runtime.completed`, and `concat_k2_source.validate_import`
+validators. Those matching/data producer files and their byte identities are
+unchanged by this block. No external donor code or trained weights are copied.
+Campaign/source/runtime and thin CLI/queue helper wire the optional import;
+launch/campaign become v4, PREPARATION_IMPORT is v1, GPU acceptance remains v3.
+
+## 2026-09-22: K2 pair saved-tensor storage and 128/256 probes
+
+Repository-local donor/baseline: `b35fbda64d2d823a9eb9c5592017074db58d6ac8`.
+The failed original K2 execution was `1f9306504dfd040c9c22e0a89829d277d1ff2194`.
+`concat_k2_model.py` adapts the saved-tensor CPU-storage pattern from committed
+`jetclass2_delphes/dzfix_fusion_model.py` to the single native K2 encoder; it
+does not import or modify that fusion adapter. Native base is `model.py`;
+training/optimizer are reused from `salience_learned_training.py` unchanged.
+`concat_k2_runtime.py` adds ordered probes and evidence validation;
+`concat_k2_campaign.py` registers the storage/probe policies and v3 execution
+artifacts. No external code or scientific model weights are copied.
+
+`tests/test_jetclass2_concat_k2_memory.py` reuses committed `PairBN`/physical
+input fixtures from `test_jetclass2_dzfix_fusion_offload.py`, and existing
+`make_cache`/`fake_native` fixtures ultimately based on
+`test_hcwdl_offline_hlt_fusion.py::_FakeWeaver`. They test a K2-only adapter,
+not a fusion architecture. PyTorch public `save_on_cpu`/`saved_tensors_hooks`
+are composed without vendoring. Existing partition-portability changes are
+retained; no other campaign runtime is changed by this repair.
+
+## 2026-09-22: dzfix fusion pair saved-tensor memory repair
+
+Repository-local baseline/donor commit:
+`6172f5be459f0a0f7b6c3ed99ee3c6f8ac7e542c`; the failed remote execution was
+`2f0afe5c438cbab5d66e047c4d86534aab02032b` (preflight 21757056).
+Modified `jetclass2_delphes/dzfix_fusion_{model,chain,runtime}.py` and added a
+native-default pair-embedding hook to `salience_learned_model.py` at that
+baseline. `tests/test_jetclass2_dzfix_fusion_offload.py` reuses the repository's
+existing fusion-chain RAM fixtures and `_FakeWeaver` from
+`tests/test_hcwdl_offline_hlt_fusion.py`, adding a trainable full-pair BN test
+double. No external source is copied. PyTorch's public `save_on_cpu` and
+`saved_tensors_hooks` APIs are composed, not vendored.
+
+Scope: storage of tensors saved inside the three pair embeddings only; full
+pair populations, BN computation, dtype, batch, loss, model keys and data stay
+unchanged. Tests cover three optimizer updates in CPU/FP32 CUDA/BF16 CUDA,
+actual pinned copies/retrieval, BN tampering, checkpoint transparency,
+inference bypass and hook cleanup. LAUNCH_SPEC/CAMPAIGN_SPEC become v4,
+ACCEPTANCE v2; SOURCE_IMPORT remains v3 so completed matching is reused via
+the same authenticated read-only boundary. Real Weaver/A100 acceptance is
+still required; local test doubles cannot certify it.
+
+## 2026-09-22: K2 tier3/debug execution portability
+
+Repository-local donor commit: `1f9306504dfd040c9c22e0a89829d277d1ff2194`.
+Adapted existing `jetclass2_delphes/concat_k2_{campaign,source,submit,runtime}.py`,
+`scripts/jetclass2_concat_k2.py`, `scripts/queue_jetclass2_concat_k2.sh`,
+`sbatch/run_jetclass2_concat_k2.sh` and their two test files. New K2-scoped
+`concat_k2_execution.py` composes the existing `execution.execution_site`
+profiles and strict `allocation`/`gpu_identity` validators without altering
+those shared files or other campaigns. No external source or scientific
+kernel is copied. New policy defaults to tier3 and accepts only partition-only
+pending-job moves to/from debug with identical resources/hardware/software.
+Launch/campaign/acceptance are versioned v2; view/matcher/seed identities are
+unchanged. Tests add actual/requested-site and cross-partition gate coverage.
+
+## 2026-09-21: isolated dzfix K2 concatenation ladder
+
+Repository-local donor commit: `2f0afe5c438cbab5d66e047c4d86534aab02032b`.
+No external repository, data, weights, generated campaign or Fresh_check
+runtime import is copied. The K2 matcher/view semantics and graph are new.
+Local donor-byte SHA-256 values below precede the LF normalization used while
+adapting new files; the Git commit identifies the canonical source revision.
+
+| Donor file | Local donor SHA-256 | New adapted surface |
+|---|---|---|
+| `jetclass2_delphes/dzfix_fusion_source.py` | `d3a888c251d45ffc053178c4d2124437b8ebfa63209ad88ff3ee6313a665ca94` | `concat_k2_source.py` |
+| `jetclass2_delphes/dzfix_fusion_submit.py` | `da30bff454ce8914e3436d05d7b31001566e11a7c6973988747d11d2d3fc2fcf` | `concat_k2_submit.py` |
+| `jetclass2_delphes/dzfix_fusion_runtime.py` | `5d9ccefc7faff6132e49e2b30689ad263a9e2cc9476419ef0584c87d0f4c8603` | `concat_k2_runtime.py` |
+| `jetclass2_delphes/dzfix_fusion_data.py` | `dc00aad07a7a2d6a2b309caa9f13ce6c9bafa6bc1a5713fc172acb4921cca94c` | bounded-cache/partition patterns in `concat_k2_data.py` |
+| `scripts/jetclass2_dzfix_fusion_chain.py` | `6966f734f2bd9f935680a9962d221eea5cf38a7dec9a46cea064a4b63809e9b2` | `scripts/jetclass2_concat_k2.py` |
+| `scripts/queue_jetclass2_dzfix_fusion_chain.sh` | `92add0f6e4f241d38b93d73a8befd8592b32f34bdd7d19c5944cf23c33989107` | `scripts/queue_jetclass2_concat_k2.sh` |
+| `sbatch/run_jetclass2_dzfix_fusion_chain.sh` | `c0a4a42a3b0342393d32cb43ac7d4913046c7a8ad5f1361ae135e47d5f8a0c8b` | `sbatch/run_jetclass2_concat_k2.sh` |
+| `tests/test_jetclass2_dzfix_fusion_chain.py` | `718920b0fc25adcb1fdade60b5e9bf027465045d0d9f132eae15f643f3381bb1` | adapted source tests and reused synthetic fixtures |
+
+Package paths in this table are under `src/hlt_classification/`. Retained:
+read-only screen/ledger authentication, immutable task receipts, staged exact
+submission, validation-role partitioning, ordinary train-bank KD and selected
+checkpoint reporting. Changed: no dual-view model or weight/map reuse; new
+capacity-two preparation, fixed 3*N_HLT support, K2-only schemas/namespaces,
+ten-fit D-only graph and expanded-input GPU acceptance. All new jobs use debug.
+
+Composition (not file migration) additionally uses the same revision's
+`salience_views.pairing_matrices`, `scouting/hcwdl_fullcard_salience_matcher`
+exact solver/reference, its versioned salience contracts, and the common
+`reader`, `inputs`, `cache`, `model`, `banks`, `reporting`, `execution`,
+`salience_learned_training`, `salience_learned_graph`, `salience_learned_data`,
+`acceptance`, `submission`, provenance/cache-contract and exact-DAG helpers.
+The full-native salience is frozen before new retention/duplication; the old
+one-to-one artifact is never reused. Runtime source fingerprints include
+actual preparation bytes, so unrelated dirty worktree edits are not falsely
+claimed as donor-commit evidence or silently accepted as old artifacts.
+
+Tests: `test_jetclass2_concat_k2.py` (exhaustive matching, typed views, real
+synthetic ROOT preparation, CPU test-double DAG, deployment, gates) and
+`test_jetclass2_concat_k2_source.py` (screen imports, dry/live plan isolation,
+receipts, bad-parent failure injection). No new third-party dependency or
+license obligation. Local CPU tests do not certify installed Weaver/SPORC.
+
+## 2026-09-21: isolated JetClass2 dz-fix fusion-to-fusion debug chain
+
+Internal code donor: `f1753bd1f26dd2bffe36d21fc937aeb663cab00d`.
+New `jetclass2_delphes/dzfix_fusion_{chain,source,data,model,runtime,submit}.py`
+uses the donor's `salience_learned_{graph,training,model,data,cache}.py`,
+`cache.py`, `banks.py`, `execution.py`, `reporting.py`, `model.py`,
+`salience_foundation.py`, `salience_screen.py`, `salience_production.py`,
+`dzfix_salience_continuation.py`, `submission.py` and the shared exact-DAG
+submission/authorization/cache-contract helpers. No shared graph or loss is
+redefined. A default-no-op injection-bias hook in `salience_learned_model.py`
+lets the new adapter apply `cms_salience_learned/model.py`'s temporary-mask
+optimization while preserving historical adapters and full pair-BN semantics.
+The native pure-OFFLINE adapter uses `cache._prepare_file` at its exact native
+offline endpoint; persistent U000 remains a different view.
+
+The scientific graph specializes the prior local CMS fusion-chain plan; that
+prior uncommitted CMS extension is not falsely attributed to the donor commit.
+No CMS model, acceptance, metric, split or matching artifact is imported.
+Data/preparation selection donor: the source-pinned replacement v2 debug
+screen at `0d25a4a53aafb1348c8279d86bac7dbac82c8841`. Its unchanged compact
+foundations retain their original producer fingerprints. The updated consumer
+reuses this commit's `salience_screen.py` v2 validator/command plan/task reports
+and `salience_production.py::_screen_artifacts`; winner and exact foundation
+paths/hashes are resolved from the screen, never named in advance. The canceled
+46f10c7 continuation/production-preview route is no longer a parent.
+The consumer orchestration baseline is `cde3ed8` (the committed initial
+dz-fix fusion chain); only its source adapter, submission boundary, CLI/helper,
+input-contract versions and tests are changed. Scientific kernels are not.
+
+Thin CLI/worker/queue helper derive environment handling from
+`sbatch/jetclass2_delphes_common.sh` and staged exact submission from
+`salience_learned_autolaunch.py`, but all new jobs are explicitly debug.
+Tests reuse only the synthetic `_FakeWeaver` from
+`tests/test_hcwdl_offline_hlt_fusion.py` and particle fixtures from
+`tests/test_jetclass2_delphes.py` (same code donor).
+Capacity-fix baseline: `e3b02d6f6f0f3b6433230603a2438767b69e25fd`.
+The consumer adapter now verifies the same inventory-maximum/round-up-to-16
+capacity calculation as that commit's `jetclass2_delphes/foundation.py` and
+`salience_foundation.py`, and uses `inputs.py::input_contract` unchanged.
+Current dzfix capacity is 320, not the stale 240 inherited in the handoff.
+Those shared producer files and all assignment payloads remain unmodified.
+Tests explicitly preserve >240-particle native inputs, use 320 in pending and
+completed source imports, and exercise capacity-driven cache/stress behavior.
+Family: `JETCLASS2_DELPHES_DZFIX_FUSION_CHAIN_*`; LAUNCH_SPEC, SOURCE_IMPORT,
+CAMPAIGN_SPEC advance to v3 for the inventory-derived no-truncation policy
+(v2 introduced direct-screen provenance); other kinds stay v1.
+No external source code copied.
+
+## 2026-09-20: isolated CMS adjacent fusion-to-fusion KD chain
+
+Internal implementation donor `f1753bd1f26dd2bffe36d21fc937aeb663cab00d`:
+`src/hlt_classification/cms_salience_learned/{contracts,campaign,production,
+preparation_import,shared_import,preflight_reuse,coarse_submission}.py` and
+`scripts/cms_salience_learned.py` are extended for a new fusion-chain consumer.
+New `fusion_chain.py` derives the shared-reference/first-acquisition nodes
+from the donor's coarse graph, authenticates completed acquisition outputs,
+and provides the new graph/import/report orchestration. Scientific model,
+training, cache, publication/reduction and worker kernels remain unchanged.
+New `scripts/queue_cms_fusion_chain.sh` derives its environment/staged workflow
+from `scripts/queue_cms_direct_fusion.sh`, without cancellation. New tests
+reuse `test_cms_direct_fusion.py`, `test_cms_salience_learned.py` and
+`test_hcwdl_offline_hlt_fusion.py` fixtures from the same donor.
+No external source code was copied.
+
+Scientific execution donor remains accepted dense
+`7bb171382b7206013bc5d9308a4c22b2929bc7f4` (genuine SPORC preflight 21720795),
+with original preparation `f2e8a374f522a39c7f3a6331f0ec77ae12cabaea`.
+First acquisition data donor is the explicit completed coarse-v5 campaign
+at `7cf690301d66b1d02d98b450d20aababf296429a`; its spec, live ledger, exact
+model/teacher identities, receipts and artifact bytes are verified at reuse.
+CAMPAIGN_SPEC/v7, GRAPH/v4, PREPARATION_IMPORT/v4, SHARED_SOURCE/v3,
+ACCEPTANCE_IMPORT/v3 and ACCEPTANCE_REUSE/v3 bind this separate consumer.
+ACQUISITION_SOURCE/v1 and FUSION_CHAIN_AGGREGATE/v1 add explicit import and
+two-endpoint reporting semantics. Old campaign graphs/artifacts stay unchanged.
+
+## 2026-09-19: isolated CMS direct fusion/withdrawal comparison
+
+Internal implementation donor `7cf690301d66b1d02d98b450d20aababf296429a`:
+native CMS `contracts.py`, `campaign.py`, `preparation_import.py`,
+`shared_import.py`, `preflight_reuse.py`, `coarse_submission.py` and
+`scripts/cms_salience_learned.py` are extended for a separate direct consumer.
+New `scripts/queue_cms_direct_fusion.sh` uses the environment setup from
+`scripts/switch_cms_salience_coarse.sh` at that donor, but not its cancellation
+workflow. New regression tests reuse synthetic fixtures from the native CMS,
+coarse and fusion tests at the same donor. No external code is copied.
+
+Scientific execution donor remains accepted dense commit
+`7bb171382b7206013bc5d9308a4c22b2929bc7f4` (SPORC GPU job 21720795), with
+original preparation `f2e8a374f522a39c7f3a6331f0ec77ae12cabaea`.
+Native model/training/data/production kernels and the worker shell are reused
+unchanged, not migrated to a new runtime. CAMPAIGN_SPEC/v6 and GRAPH/v3 declare
+the one-arrow U000/D000 study. New preparation/shared/acceptance import
+versions bind this consumer without changing coarse replacement artifacts.
+
+## 2026-09-19: CMS reuse AST encoding compatibility fix
+
+Internal baseline `4f862c11045943f1237d1cef166d32a85c341ed3`;
+original preparation producer `f2e8a374f522a39c7f3a6331f0ec77ae12cabaea`,
+accepted runtime donor `7bb171382b7206013bc5d9308a4c22b2929bc7f4` and coarse
+registry donor `48ab8609ee87ba72ab9868dfc951a36a1c9d851e`.
+Extended only the exact reviewed function-hash pairs in native
+`preparation_import.py` and `preflight_reuse.py` to cover Python 3.10's
+empty-list-emitting AST dump in addition to Python 3.13's original encoding.
+Both are derived from the same immutable donor functions; no external source
+copied, no stored fingerprints rewritten, no scientific contract version changed.
+Regression changes are in the existing coarse and preflight-reuse test files.
+
+## 2026-09-19: explicit dense-to-coarse execution evidence reuse
+
+Internal baseline `48ab8609ee87ba72ab9868dfc951a36a1c9d851e`; execution donor
+`7bb171382b7206013bc5d9308a4c22b2929bc7f4` (accepted SPORC preflight 21720795).
+Added `cms_salience_learned/preflight_reuse.py` and focused tests; extended
+native contracts/campaign/dispatch and the two operator CLIs. No external
+code was migrated and no training/model/cache kernel changed.
+New CAMPAIGN_SPEC/v5 plus ACCEPTANCE_IMPORT/v1 and ACCEPTANCE_REUSE/v1 record
+explicit user-authorized reuse of the old measured envelope. Source evidence
+is never rewritten as a new measurement. Git identities cover the same native
+reference kernels, shared models/data, worker shell, allocation adapter and
+preflight probes; the sole allowed driver AST migration is its schema-version
+predicate, previously introduced in coarse commit 48ab8609. V4 fresh-gate and
+all older scientific/operational meanings remain unchanged.
+
+## 2026-09-19: native CMS coarse graph and authenticated shared references
+
+Internal baseline: `7bb171382b7206013bc5d9308a4c22b2929bc7f4`, accepted dense
+SPORC preflight 21720795. Extended native `cms_salience_learned/contracts.py`,
+`campaign.py`, `production.py`, `preparation_import.py`, the native CLI and
+tests. Added `shared_import.py`, `coarse_submission.py`, coarse tests and the
+staged operator shell helper. No external code was copied. The exact journal
+pattern and ledger/event schemas reuse internal
+`scouting/hcwdl_exact_dag_submission.py` and `scouting/hcwdl_recovery.py` at the
+same donor commit; those shared modules are not changed.
+
+New native CAMPAIGN_SPEC/v4, GRAPH/v2, PREPARATION_IMPORT/v2 and
+SHARED_SOURCE/v1 distinguish the coarse graph and reviewed imports. Retaining
+the original family seed namespace is intentional. Preparation Git objects
+from original producer `f2e8a374f522a39c7f3a6331f0ec77ae12cabaea` are confirmed
+identical to the accepted dense source; only the closed addition of coarse
+coordinate names gets an explicit AST migration. Reference training/model/
+cache modules and scientific worker/seed/schedule ASTs remain unchanged.
+Neither imported source files nor the previous GPU gate are rewritten.
+
+## 2026-09-18: native CMS-LFH compact shared cross-attention bias
+
+Internal baseline: `77c9d2b1fe17a9fb321f1f85ebf9cd803c0f5ec1`, source
+of SPORC debug preflight 21720511. Extended native
+`cms_salience_learned/model.py` and shared
+`models/hcwdl_offline_hlt_fusion_transformer.py`; added
+`tests/test_cms_fusion_temporary_memory.py`. No external donor was copied.
+The shared base exposes a legacy-preserving bias-preparation hook; only the
+CMS subclass opts into merging padding once and sharing its compact rectangle
+across the four injections. Weaver's full pair construction is not altered.
+Other model adapters retain the old path. Scientific/state-dictionary and
+execution contracts are unchanged; exact new source still requires its own
+installed-Weaver checks and genuine A100 acceptance. Preparation-code Git
+objects, graph, matching, loss, batch, schedules and seeds are untouched by
+this patch, permitting authenticated read-only original preparation reuse.
+
+## 2026-09-18: native CMS-LFH versioned 90% CUDA acceptance
+
+Internal donor baseline: `9af094b08cdc112a8a5048374fee4f135b704087`, source
+of SPORC debug preflight 21719837. Extended native
+`cms_salience_learned/contracts.py`, `campaign.py`, `production.py` and
+`tests/test_cms_salience_learned.py`; no external code was migrated.
+Campaign execution v3 and execution acceptance v2 register the user-authorized
+90% CUDA / unchanged 85% CPU policy and consecutive worst-length, batch-256
+withdrawal probes. Legacy campaign v1/v2 keeps its 85% CUDA policy. Scientific
+graph/artifacts remain v1. Training kernel, preparation modules, coordinate
+semantics, matching, model, loss, batch size and schedule are unchanged.
+Original completed preparation remains reusable read-only; no prior failed
+gate or source campaign is modified or treated as newly accepted.
+
+## 2026-09-18: native CMS-LFH preflight lifetime and memory diagnostics
+
+Internal donor baseline: `85fd0214178227026625dd3a5d2b9c79a5fbe2a7`, source
+of SPORC preflight 21719606. Refactored that revision's native
+`cms_salience_learned/production.py` miniature loop into per-route function
+scope and extended `tests/test_cms_salience_learned.py`. No external code
+was migrated. The production training kernel, preparation code, matcher,
+models, batch size, losses, schedules and registered 85% memory thresholds
+are unchanged. Added console diagnostics, not a new scientific artifact
+contract. A weak-reference regression reproduces the old acquisition
+optimizer retaining parameters into the next route; failure injection checks
+that CPU/GPU headroom failures remain fail-closed and publish no acceptance.
+
+## 2026-09-18: native CMS-LFH paired-cache extraction inference repair
+
+Internal baseline: `08c3647981ad6dac54d3cba30212a2515f839915`, the pinned
+source of failed SPORC preflight 21719164. Extended native
+`src/hlt_classification/cms_salience_learned/training.py` and
+`tests/test_cms_salience_learned.py`; no external donor migration. Ordinary
+inference now requests the primary-only batch even when a cache retains context.
+The existing `data.Cache.batch_primary` API is reused unchanged. Models, loss,
+matching, schedules, graph and byte-exact extraction semantics are unchanged;
+no scientific contract/version change. Local tests cover the actual preflight
+call with a paired cache and extend the optional installed-Weaver parity check.
+
+## 2026-09-18: native CMS-LFH partition routing and preparation reuse
+
+Internal donor checkout: `f966dd804ed9ca8ca93c9c3227d1a7f036ef4434`.
+Extended `src/hlt_classification/cms_salience_learned/campaign.py`,
+`contracts.py`, `production.py`, `scripts/cms_salience_learned.py`, and
+`tests/test_cms_salience_learned.py`; the new `preparation_import.py` is local
+implementation, not an external copied donor. Reused scheduler/environment
+checks from `src/hlt_classification/jetclass2_delphes/execution.py` unchanged,
+including its already registered `sporc_a100_debug` allocation profile; no
+Delphes data/model semantics or profiling-to-production transfer are imported.
+Publication continues to use native `storage.py` and `data/cache_contracts.py`.
+
+The completed producer motivating reuse is native CMS commit
+`f2e8a374f522a39c7f3a6331f0ec77ae12cabaea`. Import validates the selected
+producer's actual source commit, not this documentary example: native
+`data.py`, `storage.py`, the full scouting/data Git trees, and the coordinate
+function AST must match the consuming commit. Reusing preparation preserves
+its original hashes and does not execute code from the old worktree.
+`CAMPAIGN_SPEC` advances to v2 and `PREPARATION_IMPORT/v1` is added;
+scientific graph, models, seeds, losses and remaining v1 artifacts are unchanged.
+
+## 2026-09-17: CMS2JC2 staged production tooling and diagnostics
+
+Same internal donor commit: `2b4c2531c39118edebc8c7890d312f2285ca8eab`;
+the exact reused files remain enumerated below and in `provenance.DONORS`.
+`campaign`, `submission`, `orchestration`, `measurement`, `tasks`,
+`synthetic_acceptance`, `diagnostics` and `plots` are new repository code, not
+copied donor implementations. Publication still uses internal cache contracts.
+Vector example plots are generated directly, with no external assets. Installed
+NumPy/SciPy/Awkward/Uproot/scikit-learn/threadpoolctl/matplotlib and native numeric
+library bytes are recorded by acceptance; no environment was installed or changed.
+
+## 2026-09-17: CMS2JC2 provisional integrated response development
+
+Same internal donor baseline: `2b4c2531c39118edebc8c7890d312f2285ca8eab`.
+The response continues using the internal sources listed below. The new storage
+guard additionally reuses `data/cache_contracts.py::atomic_publish_bytes`;
+held-out non-selecting class diagnostics reuse the existing native label mapping.
+Assumption contracts, record sampling/parallel quotas, topology/generation,
+conditional summaries, paired selection, support/transfer, graph and quota
+logic are new code, not migrated sibling-worktree or external implementation.
+No old matcher, classifier, active campaign, external environment or raw dataset
+was changed. Portable fitted previews are local development evidence only;
+this extension is not yet a full-science queue-ready campaign.
+
+## 2026-09-17: CMS2JC2 response preparation and calibration primitives
+
+Internal donor baseline: `2b4c2531c39118edebc8c7890d312f2285ca8eab`.
+The new isolated namespace is `src/hlt_classification/cms2jc2_response/`.
+No external source, sibling-worktree module, fitted classifier, or previous
+matcher/calibration artifact is imported. Existing dirty scientific kernels
+were preserved, not copied into this response.
+
+- `data/cache_contracts.py`: canonical hashes, immutable JSON publication and
+  validation, file checksums.
+- `scouting/{schema,labels,splits}.py`: native branch names, exact historical
+  baseline/mapped label selection, and historical manifest authentication.
+  Labels authenticate frozen populations; they are not response predictors.
+- `jetclass2_delphes/{inventory,contracts,schema,splits,split_registry}.py`:
+  source/checksum validation, canonical row identities and frozen profile
+  membership masks. The paired `reader.py` was inspected but deliberately not
+  reused: the new offline-only reader must work without native HLT branches.
+
+Association search, counter RNG, role allocation, conditional-model cores,
+residual backend and guarded preparation submission are new implementation.
+Numerical libraries are imported, not vendored. The optional `response` extra
+declares scikit-learn/threadpoolctl without GPU/Weaver dependencies. Production
+versions still need a recorded SPORC environment/resource acceptance. This is
+partial implementation, not full-science readiness.
+
+## 2026-09-16: bounded JetClass2 raw jet-pair audit
+
+Internal donor snapshot: `9640bae8147c8e78ae14e165cb969b066a23baea`.
+`jetclass2_delphes/pairing_audit.py` reuses `reader.py::_particles`,
+`inputs.py::{eta_phi,wrap_phi}`, inventory checksum/schema validation,
+selection policy, split-profile masks, canonical identities, source-byte
+provenance and immutable JSON publication. It adds bounded diagnostic sampling
+and class/source/kinematics-preserving shuffle controls. No external code is
+copied, no constituent matcher or training kernel is changed, and no model
+performance or physical-pairing certification is implied by completion.
+
 ## 2026-09-16: JetClass2 native concatenation, one-job oracle
 
 Internal donor snapshot: `f2e8a374f522a39c7f3a6331f0ec77ae12cabaea`.

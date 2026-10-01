@@ -31,10 +31,24 @@ from `M0HLT` (0%) to pure `OFFLINE` (100%).
 
 ## Staged execution
 
-The first queue action is only the source-pinned Tigris gate.  It freezes the
+The first queue action was the source-pinned Tigris gate. It freezes the
 release, recomputes full-cardinality salience assignments for the proxy
 endpoint, audits endpoints, and measures a real GH200 full-population pass.
 The full 17-fit campaign is created and queued only after that gate completes.
+
+On 2026-09-30 the Tigris release task had completed, while the foundation and
+preflight were delayed in queue. The active recovery is the execution-only
+[SPORC debug gate amendment](plans/JETCLASS2_CMS_PROXY_SPORC_DEBUG_GATE_AMENDMENT.md):
+reuse that exact release, construct the foundation and measure on SPORC debug,
+then run the unchanged science DAG on SPORC tier3. Cancel only the exact old
+pending foundation/preflight IDs; do not cancel proxy generation or delete the
+old release root.
+
+The recovery implementation was added from repository base
+`5d693817d3d31f344fda1f3b21c417fe546e7d4d`; it has no external donor. Focused
+local verification passed 22 tests covering the proxy ladder and the reusable
+SPORC debug-profile transfer. The live SPORC gate remains the required real
+validation; local tests do not replace it.
 
 The exact commands are provided in the completion response for the pushed
 commit.  Do not substitute the main checkout for the detached source-pinned

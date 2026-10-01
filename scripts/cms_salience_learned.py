@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from hlt_classification.data.cache_contracts import load_json
 from hlt_classification.cms_salience_learned.campaign import (
-    create, create_coarse_from_dense, create_direct_fusion_from_dense, gate_check, submit,
+    create, create_coarse_from_dense, create_direct_fusion_from_dense, create_fusion_chain_from_coarse, gate_check, submit,
 )
 
 
@@ -42,6 +42,10 @@ def main():
     direct.add_argument("--source-spec", required=True)
     direct.add_argument("--campaign-root", required=True)
     direct.add_argument("--source-commit", required=True)
+    chain = modes.add_parser("create-fusion-chain", help="Adjacent paired-teacher KD, two terminal routes, seven fresh fits")
+    chain.add_argument("--source-spec", required=True, help="Completed first-acquisition coarse-v5 debug campaign")
+    chain.add_argument("--campaign-root", required=True)
+    chain.add_argument("--source-commit", required=True)
     for mode in ("submit", "run", "gate", "results", "status", "retire-dense"):
         p = modes.add_parser(mode)
         p.add_argument("--spec", required=True)
@@ -68,6 +72,9 @@ def main():
     elif args.mode == "create-direct-fusion":
         result = create_direct_fusion_from_dense(source_spec=args.source_spec, campaign_root=args.campaign_root,
             project_dir=ROOT, source_commit=args.source_commit)
+    elif args.mode == "create-fusion-chain":
+        result = create_fusion_chain_from_coarse(source_spec=args.source_spec, campaign_root=args.campaign_root,
+            project_dir=ROOT, source_commit=args.source_commit)
     else:
         spec = load_json(args.spec)
         if Path(args.spec).resolve() != (Path(spec["campaign_root"]) / "campaign_spec.json").resolve():
@@ -93,6 +100,10 @@ def main():
                 print(f"{stage}: {complete}/{len(rows)} verified task receipts")
             return 0
         else:
+            if spec.get("ladder") == "fusion_chain":
+                from hlt_classification.cms_salience_learned.fusion_chain import print_results
+                print_results(spec)
+                return 0
             from hlt_classification.cms_salience_learned.production import metric_recovery, model_task
             from hlt_classification.cms_salience_learned.storage import load_receipt, receipt_path
             campaign_root = Path(spec["campaign_root"])
@@ -130,7 +141,7 @@ def main():
                 print(f"Fusion minus ordinary KD: dAccuracy={carrier['accuracy']-direct['accuracy']:+.6f} "
                       f"dAUC={carrier['macro_ovr_auc']-direct['macro_ovr_auc']:+.6f} dR50={delta_r50}")
             return 0
-    if args.mode in {"create", "create-coarse", "create-direct-fusion"}:
+    if args.mode in {"create", "create-coarse", "create-direct-fusion", "create-fusion-chain"}:
         from hlt_classification.cms_salience_learned.campaign import tasks
         print(json.dumps(dict(campaign_root=result["campaign_root"], content_hash=result["content_hash"],
                               fits=result["graph"]["fit_count"], science_tasks=len(result["graph"]["tasks"]),

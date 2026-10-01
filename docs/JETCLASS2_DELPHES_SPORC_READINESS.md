@@ -1,5 +1,11 @@
 # Delphes SPORC readiness handoff
 
+For the later successful A100 profile, queued campaign, exact current paths,
+and a detailed dataset/environment/code explanation, start with the
+[SPORC/new-dataset agent handoff](JETCLASS2_DELPHES_SPORC_AGENT_HANDOFF.md).
+The initial readiness below has already run for TRAIN_500K. Do not repeat it
+or reuse its staging allowlist without inspecting current artifacts/changes.
+
 This procedure queues **no scientific fits** and changes no existing jobs.
 The selected profile is TRAIN_500K, with fixed 1M validation / 1M sealed test.
 Raw ROOT files already exist on shared RC storage. Only compact split metadata

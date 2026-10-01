@@ -5,6 +5,35 @@ and training-time use of paired offline information.
 
 ## Current status
 
+The isolated [CMS-calibrated JetClass2 response comparison](docs/plans/CMS_CALIBRATED_JETCLASS2_HLT_RESPONSE_THREE_FAMILY_IMPLEMENTATION_PLAN.md)
+has staged CPU queue tooling and local end-to-end tests. It compares tables,
+neighbourhood splines and shallow trees on CMS training-only roles, then audits
+frozen transfer to JetClass2 **offline only**. Producer conventions are explicitly
+provisional under the user's authorization, not verified physics. Real SPORC
+20k/100k acceptance, measured resource locks, clean pushed source and separate
+stage authorization remain mandatory before full science. Existing ladders are
+untouched. See the [response contract](docs/contracts/CMS2JC2_RESPONSE_PREPARATION.md).
+
+The separate [JetClass2 Delphes migration](docs/plans/JETCLASS2_DELPHES_DATASET_MIGRATION_IMPLEMENTATION_PLAN.md)
+now has a locally tested inventory/reader, frozen file splits, reduced 17-input
+interface, full-cardinality U/D views, RAM cache, probability banks and CE/KD
+components under `src/hlt_classification/jetclass2_delphes/`. Its reusable split
+registry defines nested 500k/1M/1.5M/2M training profiles with identical 1M
+validation and 1M sealed test jets; the first intended run is TRAIN_500K,
+not the full-data reservoir. Source-pinned
+preparation, measured acceptance, checkpoint publication, Slurm dry/live plans,
+monitoring and restart-zero recovery are implemented. The user has now supplied
+successful genuine new-data Weaver/A100 profile evidence (job 21619139), then
+a passed 59-task dry run and live submission of the 500k matching campaign.
+Its profile-only debug measurement is explicitly bound to tier3 production
+using `atlas_kd_sporc`; readiness does not auto-launch science. See the detailed
+[SPORC and new-dataset agent handoff](docs/JETCLASS2_DELPHES_SPORC_AGENT_HANDOFF.md)
+for exact paths, measured resources, current branch-cancellation intent, safe
+commands, code map, and the limits of this evidence. The
+[new dataset contract](docs/contracts/JETCLASS2_DELPHES.md) remains authoritative;
+another study needs its own applicable acceptance. Existing campaigns below
+are not migrated or mutated by that implementation.
+
 PMARD is the active campaign. Its repository-local Scouting schema, label and
 file-split contracts, bounded ROOT streaming, 21-channel HLT and native-offline
 inputs, the canonical fitted-strict selective matcher, persistent compact
@@ -118,6 +147,17 @@ JetClass data on Tigris:
 - [HCWDL TRI100 four-spine LOGIT contract](docs/contracts/HCWDL_TRI100_FOUR_SPINE_LOGIT.md)
 - [HCWDL TRI100 four-spine LOGIT runbook](docs/HCWDL_TRI100_FOUR_SPINE_RUNBOOK.md)
 - [HCWDL TRI100 full-cardinality bottleneck-matching plan](docs/plans/HCWDL_TRI100_FOUR_SPINE_FULL_CARDINALITY_BOTTLENECK_MATCHING_IMPLEMENTATION_PLAN.md)
+- [HCWDL TRI100 full-cardinality salience-matching plan](docs/plans/HCWDL_TRI100_FOUR_SPINE_FULL_CARDINALITY_SALIENCE_MATCHING_IMPLEMENTATION_PLAN.md)
+- [HCWDL full-cardinality salience-matching contracts](docs/contracts/HCWDL_FULLCARD_SALIENCE_MATCHING.md)
+- [HCWDL full-cardinality salience-matching scientific and code guide](docs/HCWDL_FULLCARD_SALIENCE_MATCHING_CODE_GUIDE.md)
+- [JetClass2 Delphes 500k salience persistent-HLT three-spine plan](docs/plans/JETCLASS2_DELPHES_FULLCARD_SALIENCE_PERSISTENT_500K_PLAN.md)
+- [JetClass2 Delphes salience persistent-HLT contracts](docs/contracts/JETCLASS2_DELPHES_FULLCARD_SALIENCE_PERSISTENT.md)
+- [JetClass2 Delphes 500k salience learned-fusion handoff plan](docs/plans/JETCLASS2_DELPHES_SALIENCE_LEARNED_HANDOFF_500K_PLAN.md)
+- [JetClass2 Delphes salience learned-fusion handoff contracts](docs/contracts/JETCLASS2_DELPHES_SALIENCE_LEARNED_HANDOFF.md)
+- [JetClass2 Delphes 500k salience MT20 three-spine plan](docs/plans/JETCLASS2_DELPHES_SALIENCE_MT20_500K_PLAN.md)
+- [JetClass2 Delphes salience MT20 contracts](docs/contracts/JETCLASS2_DELPHES_SALIENCE_MT20.md)
+- [JetClass2 D033-only C25/P75 endpoint-ablation plan](docs/plans/JETCLASS2_DELPHES_D000_D033_ONLY_C25P75_500K_PLAN.md)
+- [JetClass2 D033-only C25/P75 endpoint-ablation contract](docs/contracts/JETCLASS2_DELPHES_D000_D033_ONLY_C25P75.md)
 - [HCWDL adjacent-view fusion-handoff ladder plan](docs/plans/HCWDL_ADJACENT_VIEW_FUSION_HANDOFF_LADDERS_PLAN.md)
 - [HCWDL adjacent output-fusion handoff contract](docs/contracts/HCWDL_ADJACENT_OUTPUT_FUSION_HANDOFF.md)
 - [HCWDL TRI100 full-cardinality bottleneck-matching runbook](docs/HCWDL_TRI100_FOUR_SPINE_FULLCARD_BOTTLENECK_RUNBOOK.md)

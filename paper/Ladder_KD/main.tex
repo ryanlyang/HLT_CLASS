@@ -1,0 +1,594 @@
+\documentclass[11pt]{article}
+
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{amsmath,amssymb,bm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage[nameinlink,capitalise]{cleveref}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage{lineno}
+\usepackage{microtype}
+
+% Paper-facing names for the input homotopy.  Implementation identifiers are
+% intentionally kept out of the scientific narrative.
+\newcommand{\xoff}{\mathcal{X}_{\mathrm{off}}}
+\newcommand{\xalign}{\mathcal{X}_{\mathrm{align}}}
+\newcommand{\xhlt}{\mathcal{X}_{\mathrm{HLT}}}
+\newcommand{\xsupp}[1]{\mathcal{X}^{S}_{#1}}
+\newcommand{\xfield}[1]{\mathcal{X}^{F}_{#1}}
+
+\linenumbers
+
+\title{Bridging Offline and Trigger-Level Jet Representations
+       through Homotopy-Guided Knowledge Distillation}
+
+\author{
+  Ryan Yang \\
+  \small Institution \\
+  \small \texttt{email@example.com}
+}
+
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+% Write this last. For now, place 3--5 bullets describing:
+% the problem, the proposed method, the evaluation, and the central claim.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:introduction}
+
+\section{Related Work}
+\label{sec:related-work}
+
+\section{Problem Formulation}
+\label{sec:problem}
+
+\subsection{Paired offline and trigger-level views}
+
+We consider jet classification with paired offline and trigger-level views.
+For jet $i$, the offline input $x_i^{\mathrm{off}}\in\xoff$ is constructed
+from the richer particle information available after full event
+reconstruction, whereas $x_i^{\mathrm{hlt}}\in\xhlt$ contains only the
+particles and measurements available to the high-level trigger (HLT).  The
+two particle collections need not have the same cardinality, and no
+particle-level correspondence is assumed a priori.  They nevertheless share
+a canonical jet identity and class label $y_i$, giving the paired sample
+\begin{equation}
+    \mathcal{D}
+    = \left\{
+        \left(i,x_i^{\mathrm{off}},x_i^{\mathrm{hlt}},y_i\right)
+      \right\}_{i=1}^{N}.
+    \label{eq:paired-data}
+\end{equation}
+Jet-level identity alignment is sufficient for cross-view distillation: a
+prediction obtained from one representation can supervise a model evaluated
+on another representation of the same physical jet.
+
+The offline view is information-rich but unavailable at trigger inference.
+The HLT view is deployable, but some offline particles are absent and the
+measurements of corresponding particles may differ because of online
+reconstruction.  We use the same classifier family
+$g_{\theta}:\mathcal{X}\rightarrow\mathbb{R}^{C}$ throughout, with
+$g_{\theta}(x)$ denoting logits over $C$ jet classes.  Models at different
+views therefore differ in their available input information, not in their
+prediction task or architectural capacity.
+
+A model trained on $\xoff$ defines the projected-offline reference.  An
+independently trained, cross-entropy-only model on $\xhlt$ defines the
+deployable HLT baseline.  Our objective is to transfer as much of the
+reference model's predictive structure as possible to a terminal model whose
+inference graph consumes exactly $\xhlt$ and no offline quantities.
+
+\subsection{The limitation of a direct offline-to-HLT transfer}
+
+The most direct knowledge-distillation (KD) strategy trains an exact-HLT
+student from the logits of the projected-offline teacher:
+\begin{equation}
+    g_{\theta_{\mathrm{off}}}(x^{\mathrm{off}})
+    \longrightarrow
+    g_{\theta_{\mathrm{hlt}}}(x^{\mathrm{hlt}}).
+    \label{eq:direct-kd}
+\end{equation}
+Although the paired jet identities make this objective well-defined, the
+student must cross the complete input-information gap in one optimization
+problem.  The offline teacher may base its prediction on particles that are
+absent online or on particle measurements and identities that differ at HLT.
+Its soft distribution can reveal class similarities and relative confidence,
+but it cannot make the missing evidence observable to the student.  The
+resulting target may therefore be informative yet poorly attainable from the
+student's input.
+
+This differs from conventional model compression, in which teacher and
+student commonly observe the same input while differing in capacity.  Here,
+the architecture remains fixed and deployability is constrained by the input
+representation.  We instead seek a continuation in \emph{input information}:
+a sequence of paired views connecting the offline and HLT endpoints while
+holding the task and classifier family fixed.
+
+Let
+\begin{equation}
+    x_i^{(0)},x_i^{(1)},\ldots,x_i^{(K)}
+    \label{eq:view-sequence}
+\end{equation}
+be such a sequence, with $x_i^{(0)}=x_i^{\mathrm{off}}$ and
+$x_i^{(K)}=x_i^{\mathrm{hlt}}$.  At edge $k$, a teacher evaluated on
+$x_i^{(k-1)}$ supervises a freshly initialized student evaluated on
+$x_i^{(k)}$.  Our central hypothesis is that nearby teachers define more
+attainable targets: each teacher has already adapted to almost the same
+observable information as its student while retaining predictive structure
+transferred from richer views upstream.  A sequence of such local transfers
+may therefore preserve information that is lost in the single projection of
+\cref{eq:direct-kd}.  The number and placement of intermediate views determine
+the density of this continuation without changing its endpoints.
+
+\section{Homotopy-Guided Knowledge Distillation}
+\label{sec:method}
+
+\subsection{A two-coordinate input homotopy}
+
+The offline and HLT representations differ in two conceptually distinct
+ways.  First, they may contain different particles.  Second, even when an
+offline particle is paired with an HLT particle, their measured features may
+differ.  We handle these changes in separate stages rather than modifying
+particle support and particle features at the same time.
+
+For jet $i$, define the deterministic view operator
+\begin{equation}
+    x_i(s,f)
+      = V_{s,f}\!\left(x_i^{\mathrm{off}},x_i^{\mathrm{hlt}};A_i\right),
+    \qquad s,f\in[0,1],
+    \label{eq:view-operator}
+\end{equation}
+where $A_i$ is a fixed one-to-one particle pairing for one realization of the
+homotopy.  The choice of pairing rule is a configurable part of the view
+construction rather than a requirement of the distillation objective.  The
+support coordinate $s$ controls which particles occupy the input, while the
+field coordinate $f$ controls whether paired particles carry offline or HLT
+measurements.  The three important views are
+\begin{align}
+    x_i(0,0) &\in \xoff, \\
+    x_i(1,0) &\in \xalign, \\
+    x_i(1,1) &= x_i^{\mathrm{hlt}}\in\xhlt.
+    \label{eq:view-corners}
+\end{align}
+The first endpoint, $\xoff$, is the native projected-offline view in the
+unified input schema.  Increasing $s$ from zero to one changes its particle
+support into the HLT particle support but leaves the features of paired
+particles at their offline endpoints.  This produces $\xalign$.  If the HLT
+collection is larger than the offline collection, the unavoidable unpaired
+HLT particles already carry their native HLT features in $\xalign$.
+Increasing $f$ from zero to one then replaces the remaining paired-offline
+features with their HLT values, yielding the exact deployable view $\xhlt$.
+The path followed in this work is therefore
+\begin{equation}
+    x_i(s,0):\ \xoff\longrightarrow\xalign,
+    \qquad
+    x_i(1,f):\ \xalign\longrightarrow\xhlt.
+    \label{eq:factorized-homotopy}
+\end{equation}
+
+We use \emph{homotopy} in the continuation-method sense: $(s,f)$ indexes an
+endpoint-preserving family of related learning problems.  Continuous fields
+can vary continuously with these coordinates, but particle insertions,
+removals, and categorical changes are necessarily discrete.  For an
+individual jet, the resulting tensor path is therefore partly continuous and
+partly piecewise constant.  Across the population, the discrete changes are
+distributed deterministically and the views remain nested.  We do not assume
+that every jet follows a continuous Euclidean trajectory in input space.
+
+\subsection{Full-cardinality bottleneck pairing}
+
+To construct $\xalign$, we must decide which offline and HLT particles refer
+to corresponding slots in the homotopy.  Let
+$H_i=\{h_{ia}\}_{a=1}^{n_h}$ and
+$O_i=\{o_{ib}\}_{b=1}^{n_o}$ be the valid, non-padded HLT and offline
+particles in jet $i$.  A one-to-one assignment can contain at most
+\begin{equation}
+    k_i=\min(n_h,n_o)
+    \label{eq:pairing-cardinality}
+\end{equation}
+pairs.  We always use this maximum cardinality.  Thus, if $n_h\leq n_o$,
+every HLT particle receives an offline partner; if $n_h>n_o$, every offline
+particle receives an HLT partner.  Only the excess particles in the larger
+collection remain unpaired.
+
+Among all maximum-cardinality assignments, we prefer the one that controls
+the worst angular separations.  For a candidate pair $(a,b)$, define
+\begin{equation}
+    \Delta R_{ab}
+      = \sqrt{(\eta_{ia}^{\mathrm{hlt}}-\eta_{ib}^{\mathrm{off}})^2
+        +(\Delta\phi_{ab})^2},
+    \label{eq:pair-delta-r}
+\end{equation}
+where $\Delta\phi_{ab}$ is the shortest wrapped azimuthal difference.  These
+distances are canonically quantized as
+$\delta_{ab}=\operatorname{round}_{\mathrm{even}}(\Delta R_{ab}/10^{-7})$
+to remove platform-dependent floating-point ambiguity.  For an assignment
+$A$, sort its selected distances from largest to smallest:
+\begin{equation}
+    \bm d(A)
+      = \operatorname{sort}_{\downarrow}
+        \left(\left\{\delta_{ab}:(a,b)\in A\right\}\right).
+    \label{eq:bottleneck-vector}
+\end{equation}
+We then choose
+\begin{equation}
+    A_i^{\star}
+      = \underset{A:\,|A|=k_i}{\operatorname{arg\,min}_{\mathrm{lex}}}
+        \;\bm d(A).
+    \label{eq:bottleneck-assignment}
+\end{equation}
+Lexicographic minimization has a direct interpretation: first minimize the
+largest selected $\Delta R$; among assignments attaining that optimum,
+minimize the second-largest; then the third-largest; and continue through all
+$k_i$ pairs.  Unlike minimizing the mean or sum of $\Delta R$, this objective
+does not allow improvements to many easy pairs to compensate for one
+avoidable, very poor pair.
+
+Multiple assignments can share the same complete distance vector.  Such ties
+are resolved deterministically, in order, using the descending vector of
+absolute log transverse-momentum responses, the numbers of particle-category
+and valid-charge disagreements, and finally the native offline indices.
+These quantities never override a difference in the primary $\Delta R$
+objective.
+
+The resulting relation is best understood as a geometric coordinate system
+for constructing intermediate views, not as a detector-level truth match.
+There is no $\Delta R$, response, category, charge, or confidence threshold,
+so full cardinality may require physically imperfect pairs.  The optimization
+only guarantees that the ordered tail of selected angular separations is the
+best possible among one-to-one assignments of size $k_i$.  We therefore keep
+pairing validity distinct from correspondence confidence.  Neither the
+assignment indices nor any pairing diagnostic is provided to the classifier.
+
+Full-cardinality bottleneck pairing is the empirically motivated
+instantiation studied here, but it is not assumed to be uniquely optimal.
+The KD ladder requires only a deterministic, endpoint-consistent pairing from
+which nested views can be constructed.  A gated high-purity matcher, a
+sum-cost assignment, an optimal-transport construction, or a learned matching
+rule could define a different path through the same endpoint representations.
+Such alternatives may perform similarly or better, and the appropriate
+matching objective should therefore be regarded as a tunable methodological
+choice rather than a fixed property of homotopy-guided KD.
+
+Different pairing rules may also induce complementary errors.  One possible
+extension is to train a separate ladder for each matching strategy and combine
+the predictions of their terminal $\xhlt$ models.  Since every terminal model
+receives exact HLT inputs only, this cross-matcher ensemble would not require
+offline information at inference.  Where the latency or memory cost of an
+ensemble is undesirable, its combined distribution could instead supervise a
+single freshly initialized $\xhlt$ model.  We leave both possibilities to
+future work; the primary method evaluated here uses one bottleneck pairing
+and no model ensemble.
+
+\subsection{Balanced structural transition}
+
+The first leg of the homotopy changes particle support while keeping paired
+particle fields at their offline endpoints.  The assignment $A_i^{\star}$
+decomposes this change into atomic structural edits.  A paired offline
+particle is placed in its corresponding HLT slot; an unused offline particle
+is removed; and an unavoidable unpaired HLT particle is inserted with its
+native HLT values.  Applying every edit produces exact HLT particle order,
+multiplicity, and padding, while paired slots still carry offline fields.  In
+other words, the endpoint of the support leg is precisely $\xalign$.
+
+The progress coordinate $s$ determines when these edits occur.  A simple
+schedule based only on the number of edits would be poorly calibrated: the
+removal of one high-momentum particle can change a jet more than several
+low-momentum edits.  We therefore assign every edit $e$ a positive
+information-mass proxy $w_e$.  This proxy combines the edit's particle-count
+contribution, momentum or energy share, and difference between its endpoint
+representations.  A deterministic balancing procedure uses the $w_e$ values
+to assign each edit a switch coordinate $\tau_e\in[0,1)$.  The endpoint
+convention keeps every edit inactive at $s=0$ and active at $s=1$.
+
+At an interior coordinate $0<s<1$, the support view applies exactly the edits
+satisfying
+\begin{equation}
+    e\ \text{is active at }s
+    \quad\Longleftrightarrow\quad
+    \tau_e\leq s.
+    \label{eq:structural-switch}
+\end{equation}
+This definition gives three useful properties.  First, the endpoints are
+exact: no structural edits are active at $s=0$, and all are active at $s=1$.
+Second, the views are nested because each edit switches once and never
+reverses.  Third, the construction is reproducible: $\tau_e$ is fixed by the
+jet identity, particle pairing, and view configuration, rather than by the
+epoch, mini-batch order, or worker process.  Different ladder densities thus
+sample the same structural path at different resolutions.
+
+An atomic particle edit cannot be divided continuously.  Individual jets can
+therefore still exhibit a finite jump when an influential edit switches.  The
+information-mass balancing does not remove this discreteness; it distributes
+such changes more evenly across the population and avoids concentrating many
+high-impact edits in the same interval of $s$.
+
+\subsection{Uniform matched-field transition}
+
+Once $s=1$, the field path moves every paired particle from its offline field
+values to its HLT values.  Unpaired HLT particles are already native and do
+not require interpolation.  Define the retained offline strength as
+\begin{equation}
+    \alpha = 1-f.
+    \label{eq:offline-strength}
+\end{equation}
+For an ordinary continuous field $a$ with offline and HLT endpoints
+$a^{\mathrm{off}}$ and $a^{\mathrm{hlt}}$, respectively, the intermediate
+value is
+\begin{equation}
+    a(\alpha)
+    = \alpha a^{\mathrm{off}}
+      +(1-\alpha)a^{\mathrm{hlt}}.
+    \label{eq:continuous-interpolation}
+\end{equation}
+The same $\alpha$ is applied simultaneously to every paired continuous field.
+Angular variables follow the shortest wrapped path, and both endpoints copy
+the original offline or HLT values exactly.  The interpolation is not weighted
+by a correspondence-confidence score; full-cardinality pairing conveys
+validity within the constructed coordinate system, not calibrated match
+confidence.
+
+Categorical quantities cannot be linearly interpolated.  Each mismatched
+semantic group is instead assigned one deterministic, identity-keyed switch
+threshold $r_{i,g}\in[0,1)$.  At offline strength $\alpha$, the group value is
+\begin{equation}
+    a_{i,g}(\alpha) =
+    \begin{cases}
+        a_{i,g}^{\mathrm{off}}, & r_{i,g}<\alpha,\\
+        a_{i,g}^{\mathrm{hlt}}, & r_{i,g}\geq\alpha.
+    \end{cases}
+    \label{eq:discrete-switch}
+\end{equation}
+The threshold is a hash-derived function of the jet identity, HLT particle
+slot, semantic group, seed, and view contract; it is never resampled during
+training.  Thus, at a view retaining $80\%$ offline strength, approximately
+$80\%$ of mismatched groups retain their offline endpoint across the
+population, while every individual decision remains reproducible.  Sharing
+thresholds across all rungs makes the switches nested: a group changes once
+and cannot revert later.  Dependent quantities, including charge,
+particle-identity flags, applicability, and validity fields, switch as
+coherent atomic groups.  No missing category is invented merely to facilitate
+the forced pairing.
+
+We write support-transition views as
+$\xsupp{\rho}=V(\rho,0)$, where $\rho$ directly measures progress toward the
+target particle support.  Similarly, field-transition views are
+$\xfield{\phi}=V(1,\phi)$, where $\phi$ measures progress toward HLT field
+values.  The support-aligned pivot satisfies
+$\xalign=\xsupp{1}=\xfield{0}$, and the endpoints satisfy
+$\xoff=\xsupp{0}$ and $\xhlt=\xfield{1}$.  Both coordinates therefore increase
+in the intuitive offline-to-HLT direction.
+
+\subsection{Sequential local distillation}
+
+The main realization uses the following fine-grained path:
+\begin{equation}
+\begin{split}
+    \xoff
+      &\rightarrow \xsupp{0.2}\rightarrow \xsupp{0.4}
+       \rightarrow \xsupp{0.6}\rightarrow \xsupp{0.8}
+       \rightarrow \xalign\\
+      &\rightarrow \xfield{0.1}\rightarrow \xfield{0.2}
+       \rightarrow \xfield{0.3}\rightarrow \xfield{0.4}
+       \rightarrow \xfield{0.5}\\
+      &\rightarrow \xfield{0.6}\rightarrow \xfield{0.7}
+       \rightarrow \xfield{0.8}\rightarrow \xfield{0.9}
+       \rightarrow \xhlt.
+    \label{eq:primary-spine}
+\end{split}
+\end{equation}
+The specific grid is not part of the definition of the method.  Coarser or
+nonuniform grids select different coordinates from the same $V_{s,f}$ family.
+
+Each arrow in \cref{eq:primary-spine} represents predictive supervision, not
+checkpoint continuation.  A student at rung $k$ is initialized from scratch
+and receives only the selected teacher distribution from rung $k-1$.  For a
+paired jet $i$, let
+\begin{align}
+    z_i^{(k-1)} &= g_{\theta_{k-1}}(x_i^{(k-1)}),\\
+    z_i^{(k)}   &= g_{\theta_k}(x_i^{(k)}).
+\end{align}
+The softened teacher and student distributions at temperature $T$ are
+\begin{equation}
+    q_i^{(k-1,T)}=\operatorname{softmax}\!\left(z_i^{(k-1)}/T\right),
+    \qquad
+    p_i^{(k,T)}=\operatorname{softmax}\!\left(z_i^{(k)}/T\right).
+\end{equation}
+The student minimizes the per-example objective
+\begin{equation}
+\begin{split}
+    \mathcal{L}_k
+      ={}& \lambda_{\mathrm{CE}}
+          \operatorname{CE}\!\left(y_i,p_i^{(k,1)}\right) \\
+       &+\lambda_{\mathrm{KD}}T^2
+          D_{\mathrm{KL}}\!\left(
+            q_i^{(k-1,T)}\,\|\,p_i^{(k,T)}
+          \right),
+    \label{eq:ladder-loss}
+\end{split}
+\end{equation}
+with constant coefficients at every edge.  The class-unweighted hard-label
+term prevents the chain from being defined entirely by upstream errors, while
+the soft target transfers class similarities and relative confidence learned
+from the richer preceding view.
+
+The primary method uses logit distillation only.  Each rung contains one
+trained model, and its immediate predecessor is its sole teacher.  No
+probability ensemble or representation-level auxiliary objective is inserted
+between rungs.  This isolates the effect of traversing intermediate input
+views from gains that could instead arise from ensembling or additional
+supervision channels.
+
+After training, the checkpoint selected on validation macro-AUC is restored
+and evaluated over all training identities to construct the frozen teacher
+distribution for the next edge.  Only class probabilities pass down the
+spine.  Model parameters, optimizer state, hidden representations, and random
+state are not inherited.
+
+This construction replaces one difficult cross-view projection with a
+sequence of local projections.  Adjacent teacher and student views share most
+of their observable evidence, making the teacher distribution more plausibly
+attainable than a target produced directly from $\xoff$.  At the same time,
+the teacher carries supervision inherited from richer predecessors.  Greater
+path density reduces the nominal input change per edge but also creates more
+opportunities to propagate imperfect predictions.  Path density is therefore
+an experimental variable, not an assumption that adding rungs must help.
+
+\section{Experimental Setup}
+\label{sec:experiments}
+
+\subsection{Data partitions and endpoint construction}
+
+The study uses the complete authenticated population of jets for which the
+offline and HLT representations can be paired by canonical identity.  The
+registered split contains $2{,}777{,}855$ training jets, $957{,}541$
+validation jets, and $899{,}779$ held-out test jets.  Ordinary development,
+checkpoint selection, and method comparison access only the training and
+validation roles.  The test role remains sealed until the analysis and model
+selection procedure are frozen.
+
+% TODO before circulation: describe event generation, detector simulation,
+% reconstruction versions, physics-process composition, selections, and the
+% exact 15-class label taxonomy.
+
+All homotopy views are derived from the same paired endpoints and immutable
+full-cardinality bottleneck assignment.  Assignment integrity requires
+exactly $\min(n_h,n_o)$ one-to-one pairs for every nonempty jet, giving
+$100\%$ coverage of the smaller particle collection.  Coverage, the selected
+$\Delta R$ distribution, its per-jet tail, and comparisons with the gated
+high-coverage assignment are retained as matching diagnostics; they are not
+classifier inputs or quality cuts.  Neither the class label nor any model
+prediction enters view construction.  The homotopy coordinates are likewise
+not supplied as model features.  Every classifier must solve the same task
+using only the particle information present at its registered view.
+
+\subsection{Registered path-density comparisons}
+
+The fine-grained path in \cref{eq:primary-spine} is the main spine.  Three
+additional branches sample the same frozen homotopy more sparsely:
+\begin{align}
+    \text{direct:}\quad
+      &\xoff \rightarrow \xhlt, \\
+    \text{coarse:}\quad
+      &\xoff \rightarrow \xsupp{0.5} \rightarrow \xalign
+       \rightarrow \xfield{1/3} \rightarrow \xfield{2/3}
+       \rightarrow \xhlt, \\
+    \text{intermediate:}\quad
+      &\xoff \rightarrow \xsupp{1/3} \rightarrow \xsupp{2/3}
+       \rightarrow \xalign \rightarrow \xfield{0.2}
+       \rightarrow \xfield{0.4} \rightarrow \xfield{0.6}
+       \rightarrow \xfield{0.8} \rightarrow \xhlt.
+    \label{eq:path-density-branches}
+\end{align}
+Every branch begins from the same authenticated projected-offline teacher.
+Models trained at a common coordinate use matched initialization, sampler,
+and view seeds across branches, while the causal teacher path changes.  This
+design separates the effect of teacher proximity from architecture,
+initialization, and endpoint choice.  Every registered branch is evaluated;
+validation performance on an early rung does not prune later fits.
+
+\subsection{Model and training protocol}
+
+Every rung uses the same unified Particle Transformer architecture and the
+same 21-channel particle-feature schema.  Architectural capacity therefore
+cannot explain differences between adjacent rungs, and the terminal $\xhlt$
+model has the intended HLT deployment interface.  All models produce logits
+over the same 15 classes.  A single authenticated $\xoff$ model is reused as
+the common root teacher; every subsequent model is fitted from a fresh
+initialization.
+
+Each student is freshly initialized and trained on the full mapped training
+population with unweighted cross entropy.  The distillation configuration is
+held fixed across the spine:
+\begin{equation}
+    \lambda_{\mathrm{CE}}=0.25,
+    \qquad
+    \lambda_{\mathrm{KD}}=0.75,
+    \qquad
+    T=2.
+    \label{eq:registered-loss}
+\end{equation}
+The mini-batch size is 256.  Optimization uses AdamW with peak learning
+rate $3\times10^{-4}$, weight decay $10^{-2}$, $(\beta_1,\beta_2)=(0.9,0.999)$,
+and $\epsilon=10^{-8}$.  Forward computation uses bfloat16 where appropriate,
+while loss and metric calculations retain the precision required by their
+registered implementations.
+
+The learning-rate schedule permits up to 100 complete passes through the
+training population:
+\begin{itemize}
+    \item passes 1--3 linearly warm up to $3\times10^{-4}$;
+    \item passes 4--45 hold the peak learning rate;
+    \item passes 46--60 use cosine decay to $1.5\times10^{-5}$; and
+    \item passes 61--100 retain $1.5\times10^{-5}$ for refinement.
+\end{itemize}
+Validation is performed after every pass.  Early stopping requires at least
+60 passes and uses a patience of 15 passes, with an increase greater than
+$5\times10^{-5}$ in macro-AUC required to reset the patience clock.  This
+threshold controls stopping only: smaller improvements remain eligible for
+exact checkpoint selection.  The selected checkpoint maximizes validation
+macro-AUC, with minimum cross entropy, maximum macro log-rejection at $50\%$
+signal efficiency, and earliest update used as deterministic tie breakers.
+
+Each fit runs as one process on one GPU with batch size 256.  Teacher
+distributions are materialized from the selected checkpoint and joined to
+student examples by canonical jet identity.  There is no weight continuation,
+multi-model ensemble, representation-level distillation loss, or rolling
+optimizer resume.
+
+\subsection{Comparisons and evaluation quantities}
+
+The primary endpoint is the $\xhlt$ model obtained from
+\cref{eq:primary-spine}.  Two controls establish the relevant scale.  First,
+an exact-HLT model trained with cross entropy alone measures performance
+without privileged supervision.  Second, a freshly initialized exact-HLT
+student distilled directly from $\xoff$ implements the one-step transfer in
+\cref{eq:direct-kd}.  The $\xoff$ model is reported as an information-rich
+reference rather than a deployable competitor.  The coarser paths in
+\cref{eq:path-density-branches} test whether any advantage of the main method
+depends on the proximity of successive teachers.
+
+We report classification accuracy, macro one-vs-rest area under the ROC curve
+(AUC), and QCD background rejection at fixed signal efficiency.  To quantify
+how much of the offline-to-HLT gap is recovered, let $m_{\mathrm{HLT}}$ be the
+metric of the cross-entropy-only exact-HLT baseline, $m_{\mathrm{off}}$ the
+metric of $\xoff$, and $m$ the metric of a candidate model.  Its recovery is
+defined as
+\begin{equation}
+    \mathcal{R}_{m}
+      = 100\,
+        \frac{m-m_{\mathrm{HLT}}}
+             {m_{\mathrm{off}}-m_{\mathrm{HLT}}}\,\%.
+    \label{eq:metric-recovery}
+\end{equation}
+For rejection metrics, \cref{eq:metric-recovery} is evaluated in linear
+background-rejection space.  Under this convention, the HLT baseline has
+$0\%$ recovery and the offline reference has $100\%$ recovery.  Values above
+or below that interval are retained rather than clipped.  This normalization
+does not replace the underlying metrics; it provides a direct measure of how
+much predictive performance lost between the offline and HLT views is restored
+by the proposed transfer procedure.
+
+\section{Results}
+\label{sec:results}
+% Intentionally reserved while the production studies complete.
+
+\section{Discussion}
+\label{sec:discussion}
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+\bibliographystyle{unsrtnat}
+\bibliography{references}
+
+\end{document}

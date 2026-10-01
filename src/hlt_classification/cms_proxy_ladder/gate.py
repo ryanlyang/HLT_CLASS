@@ -1,4 +1,4 @@
-"""Source-pinned Tigris release, matcher, and measured-runtime gate."""
+"""Source-pinned release, matcher, and measured-runtime gates."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -13,7 +13,8 @@ from hlt_classification.data.cache_contracts import load_json, sha256_file
 from hlt_classification.scouting.hcwdl_authorization import validate_source_checkout
 from hlt_classification.jetclass2_delphes.campaign import recipe
 from hlt_classification.jetclass2_delphes.execution import (
-    allocation, execution_site, gpu_identity, validate_resources,
+    DEBUG_PROFILE_TRANSFER, allocation, execution_site, gpu_identity,
+    production_site, validate_resources,
 )
 from hlt_classification.jetclass2_delphes.model import (
     DelphesParticleTransformer, installed_environment, model_contract,
@@ -28,15 +29,18 @@ from .release import build_release, release_request, validate_release
 
 SOURCE_FILES = (
     "docs/plans/JETCLASS2_CMS_PROXY_TIGRIS_200K_THREE_SPINE_IMPLEMENTATION_PLAN.md",
+    "docs/plans/JETCLASS2_CMS_PROXY_SPORC_DEBUG_GATE_AMENDMENT.md",
     "docs/contracts/JETCLASS2_CMS_PROXY_LADDER.md",
     "docs/JETCLASS2_CMS_PROXY_TIGRIS_200K_HANDOFF.md",
     "scripts/jetclass2_cms_proxy_ladder.py",
     "scripts/run_jetclass2_cms_proxy_ladder_task.py",
     "scripts/submit_jetclass2_cms_proxy_ladder.py",
+    "sbatch/jetclass2_delphes_common.sh",
     "sbatch/run_jetclass2_cms_proxy_ladder.sh",
     "tests/test_cms_proxy_ladder.py",
 )
 AUTHORIZATION = "AUTHORIZE JETCLASS2 CMS PROXY 200K TIGRIS GATE"
+DEBUG_AUTHORIZATION = "AUTHORIZE JETCLASS2 CMS PROXY 200K SPORC DEBUG GATE"
 
 
 def _source(project: Path, commit: str) -> None:
@@ -80,6 +84,26 @@ def gate_tasks() -> list[dict]:
     ]
 
 
+def debug_gate_tasks() -> list[dict]:
+    """Bounded SPORC-debug recovery; debug measures, tier3 runs science."""
+    return [
+        {
+            "task_id": "authenticate_release", "kind": "cpu", "dependencies": [],
+            "cpus": 4, "memory_mb": 32_000, "minutes": 60,
+        },
+        {
+            "task_id": "build_foundation", "kind": "cpu",
+            "dependencies": ["authenticate_release"],
+            "cpus": 36, "memory_mb": 320_000, "minutes": 480,
+        },
+        {
+            "task_id": "preflight", "kind": "gpu",
+            "dependencies": ["build_foundation"],
+            "cpus": 36, "memory_mb": 320_000, "minutes": 480,
+        },
+    ]
+
+
 def create_gate(
     *, study_root: Path, offline_root: Path, gate_root: Path,
     project_dir: Path, source_commit: str, capacity: int = 512,
@@ -106,20 +130,89 @@ def create_gate(
     return spec
 
 
-def validate_gate(spec: dict, *, check_source: bool = False) -> str:
-    digest = validate(
-        spec, "GATE_SPEC",
-        parents={"source": spec["source"]["content_hash"], "request": spec["request"]["content_hash"]},
+def create_sporc_debug_gate(
+    *, source_gate_root: Path, gate_root: Path, project_dir: Path,
+    source_commit: str,
+) -> dict:
+    """Recover after the Tigris release freeze using SPORC debug evidence."""
+    root = Path(gate_root).resolve()
+    if root.exists():
+        raise FileExistsError("Proxy-ladder SPORC debug gate root must be fresh")
+    project = Path(project_dir).resolve(strict=True)
+    source = source_lock(project, source_commit)
+    source_root = Path(source_gate_root).resolve(strict=True)
+    subject = load_json(source_root / "gate_spec.json")
+    validate_gate(subject)
+    release_root = source_root / "release"
+    release = load_json(release_root / "release.json")
+    validate_release(release, root=release_root)
+    if release["request"] != subject["request"]:
+        raise ValueError("Imported proxy-ladder release/request lineage differs")
+    measurement = execution_site("sporc_a100_debug")
+    spec = artifact(
+        "GATE_SPEC", version=2,
+        parents={
+            "source": source["content_hash"],
+            "request": release["request"]["content_hash"],
+            "imported_release": release["content_hash"],
+            "subject_gate": subject["content_hash"],
+        },
+        source=source, request=release["request"], gate_root=str(root),
+        project_dir=str(project), source_commit=source_commit, capacity=subject["capacity"],
+        measurement_site=measurement, execution_site=production_site(measurement),
+        tasks=debug_gate_tasks(), workers=16, foundation_workers=36,
+        full_views_persisted=False, source_gate_root=str(source_root),
+        imported_release_root=str(release_root), imported_release=release,
+        admission="reuse_authenticated_release_then_sporc_debug_foundation_and_full_population_preflight",
+        site_transfer_policy=DEBUG_PROFILE_TRANSFER,
     )
+    root.mkdir(parents=True, exist_ok=False)
+    write_json(root / "gate_spec.json", spec)
+    validate_gate(spec, check_source=True)
+    return spec
+
+
+def validate_gate(spec: dict, *, check_source: bool = False) -> str:
+    version = spec.get("schema_version")
+    if version not in (1, 2):
+        raise ValueError("Unsupported proxy-ladder gate version")
+    parents = {"source": spec["source"]["content_hash"], "request": spec["request"]["content_hash"]}
+    if version == 2:
+        parents.update({
+            "imported_release": spec["imported_release"]["content_hash"],
+            "subject_gate": spec["parents"]["subject_gate"],
+        })
+    digest = validate(spec, "GATE_SPEC", version=version, parents=parents)
     validate(spec["source"], "SOURCE")
     from .release import validate_request
     validate_request(spec["request"])
-    if (
-        spec["execution_site"] != execution_site("tigris_gh200")
-        or spec["tasks"] != gate_tasks() or spec["workers"] != 16
-        or spec["full_views_persisted"] is not False
+    common_differs = (
+        spec["workers"] != 16 or spec["full_views_persisted"] is not False
         or type(spec["capacity"]) is not int or spec["capacity"] < 16
-    ):
+    )
+    if version == 1:
+        differs = (
+            spec["execution_site"] != execution_site("tigris_gh200")
+            or spec["tasks"] != gate_tasks()
+        )
+    else:
+        release_root = Path(spec["imported_release_root"])
+        subject = load_json(Path(spec["source_gate_root"]) / "gate_spec.json")
+        if subject.get("schema_version") != 1:
+            raise ValueError("SPORC recovery must import the original Tigris gate")
+        validate_gate(subject)
+        validate_release(spec["imported_release"], root=release_root)
+        differs = (
+            spec["measurement_site"] != execution_site("sporc_a100_debug")
+            or spec["execution_site"] != execution_site("sporc_a100")
+            or spec["tasks"] != debug_gate_tasks()
+            or spec["foundation_workers"] != 36
+            or spec["site_transfer_policy"] != DEBUG_PROFILE_TRANSFER
+            or subject["content_hash"] != spec["parents"]["subject_gate"]
+            or spec["imported_release"]["request"] != spec["request"]
+            or release_root != Path(spec["source_gate_root"]) / "release"
+        )
+    if common_differs or differs:
         raise ValueError("Proxy-ladder gate semantics differ")
     if check_source:
         _source(Path(spec["project_dir"]), spec["source_commit"])
@@ -129,13 +222,28 @@ def validate_gate(spec: dict, *, check_source: bool = False) -> str:
 
 
 def validate_profile(profile: dict, *, foundation: dict, spec: dict) -> str:
+    version = profile.get("schema_version")
+    expected = 1 if spec.get("schema_version") == 1 else 2
+    if version != expected:
+        raise ValueError("Proxy-ladder runtime-profile/gate versions differ")
     digest = validate(
-        profile, "RUNTIME_PROFILE",
+        profile, "RUNTIME_PROFILE", version=version,
         parents={"gate": spec["content_hash"], "foundation": foundation["content_hash"]},
     )
+    if version == 1:
+        site_differs = (
+            profile["execution_site"] != execution_site("tigris_gh200")
+            or "measurement_site" in profile or "site_transfer_policy" in profile
+        )
+    else:
+        site_differs = (
+            profile.get("measurement_site") != execution_site("sporc_a100_debug")
+            or profile["execution_site"] != execution_site("sporc_a100")
+            or profile.get("site_transfer_policy") != DEBUG_PROFILE_TRANSFER
+        )
     if (
         profile["source_commit"] != spec["source_commit"]
-        or profile["execution_site"] != execution_site("tigris_gh200")
+        or site_differs
         or profile["foundation_sha256"] != foundation["content_hash"]
         or profile["model"] != model_contract()
         or profile["passed"] is not True
@@ -144,7 +252,7 @@ def validate_profile(profile: dict, *, foundation: dict, spec: dict) -> str:
         or profile["rolling_resume"] is not False
         or not 60 <= profile["train_minutes"] <= 2880
         or not 30 <= profile["reduce_minutes"] <= 1440
-        or profile["gpu"]["name"].find("GH200") < 0
+        or profile["execution_site"]["gpu_family"] not in profile["gpu"]["name"]
         or profile["gpu_peak_bytes"] > .85 * profile["gpu"]["total_memory_bytes"]
     ):
         raise ValueError("Proxy-ladder measured runtime profile differs")
@@ -159,7 +267,7 @@ def validate_profile(profile: dict, *, foundation: dict, spec: dict) -> str:
 
 
 def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> dict:
-    site = spec["execution_site"]
+    site = spec.get("measurement_site", spec["execution_site"])
     job_id, cpus, memory_mb = allocation(site)
     workers = spec["workers"]
     validate_resources(site, cpus, memory_mb, workers)
@@ -208,11 +316,15 @@ def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> di
     reduce_minutes = max(30, math.ceil((worst_cache + inference_seconds) * 2 / 60))
     if train_minutes > 2880 or reduce_minutes > 1440:
         raise ValueError("Measured proxy-ladder walltime exceeds registered envelope")
+    transfer = (
+        dict(measurement_site=site, site_transfer_policy=DEBUG_PROFILE_TRANSFER)
+        if site["name"] == "sporc_a100_debug" else {}
+    )
     profile = artifact(
-        "RUNTIME_PROFILE",
+        "RUNTIME_PROFILE", version=2 if transfer else 1,
         parents={"gate": spec["content_hash"], "foundation": foundation["content_hash"]},
         source_commit=spec["source_commit"], foundation_sha256=foundation["content_hash"],
-        execution_site=site, slurm_job_id=job_id, passed=True,
+        execution_site=production_site(site), slurm_job_id=job_id, passed=True,
         installed_environment=environment, model=model_contract(),
         measured_full_population=True, cpus=cpus, memory_mb=memory_mb, workers=workers,
         train_minutes=train_minutes, reduce_minutes=reduce_minutes,
@@ -221,7 +333,7 @@ def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> di
         one_pass_seconds=report["runtime_seconds"], inference_seconds=inference_seconds,
         cache_bytes=cache_bytes, gpu=gpu_identity(), gpu_peak_bytes=gpu_peak,
         acceptance_training_report=report,
-        ram_only_views=True, rolling_resume=False,
+        ram_only_views=True, rolling_resume=False, **transfer,
     )
     validate_profile(profile, foundation=foundation, spec=spec)
     return profile
@@ -230,9 +342,19 @@ def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> di
 def run_gate_task(spec: dict, task_id: str) -> dict:
     validate_gate(spec, check_source=True)
     root = Path(spec["gate_root"])
-    release_root, foundation_root, evidence_root = root / "release", root / "foundation", root / "evidence"
+    release_root = (
+        Path(spec["imported_release_root"])
+        if spec.get("schema_version") == 2 else root / "release"
+    )
+    foundation_root, evidence_root = root / "foundation", root / "evidence"
     if task_id == "authenticate_release":
-        result = build_release(spec["request"], output_root=release_root)
+        if spec.get("schema_version") == 2:
+            result = load_json(release_root / "release.json")
+            validate_release(result, root=release_root)
+            if result != spec["imported_release"]:
+                raise ValueError("Imported proxy-ladder release bytes differ")
+        else:
+            result = build_release(spec["request"], output_root=release_root)
         pointer = artifact(
             "GATE_TASK", parents={"gate": spec["content_hash"]},
             task_id=task_id, result_sha256=result["content_hash"],
@@ -245,7 +367,7 @@ def run_gate_task(spec: dict, task_id: str) -> dict:
         validate_release(release, root=release_root)
         result = build_foundation(
             release, release_root=release_root, output_root=foundation_root,
-            capacity=spec["capacity"], workers=72,
+            capacity=spec["capacity"], workers=spec.get("foundation_workers", 72),
         )
         pointer = artifact(
             "GATE_TASK", parents={"gate": spec["content_hash"]},
@@ -285,6 +407,7 @@ def run_gate_task(spec: dict, task_id: str) -> dict:
 
 
 __all__ = [
-    "AUTHORIZATION", "create_gate", "gate_tasks", "run_gate_task", "source_lock",
-    "validate_gate", "validate_profile",
+    "AUTHORIZATION", "DEBUG_AUTHORIZATION", "create_gate", "create_sporc_debug_gate",
+    "debug_gate_tasks", "gate_tasks", "run_gate_task", "source_lock", "validate_gate",
+    "validate_profile",
 ]

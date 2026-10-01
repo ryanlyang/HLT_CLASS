@@ -1,5 +1,62 @@
 # Scientific Implementation Plans
 
+The [dz-fix fixed-slot K=2 concatenation ladder](JETCLASS2_DZFIX_FIXED_SLOT_CONCAT_K2_LADDER_PLAN.md)
+records a separate one-encoder study: one original HLT slot plus two
+salience-matched rich slots per HLT particle, fixed threefold support, rich-only
+overflow cropping, the fixed D100 -> D075 -> D050 -> D025 -> D000 ladder,
+an HLT x3 endpoint, and final KD into HLT x1. D100 is native offline + HLT +
+fillers, not the old persistent-U000 multiset. Its isolated ten-fit
+[debug-only staged campaign](../contracts/JETCLASS2_DZFIX_CONCAT_K2.md)
+is implemented; fresh expanded-input GPU acceptance must pass before science.
+The
+[local 6.86M-jet count audit](../JETCLASS2_DZFIX_K2_CAPACITY_AUDIT.md) found
+0.4731% overflow overall but substantial class-dependent tails. Exact new K2
+preparation and expanded-input resource acceptance run in the new workflow;
+neither old one-to-one maps nor old GPU acceptance are reused.
+
+The isolated [dz-fix fusion-to-fusion coarse chain](JETCLASS2_DZFIX_FUSION_CHAIN_500K_PLAN.md)
+reuses selected matching, not CMS checkpoints: 500k/1M/1M, fresh U000 and first
+fusion, five adjacent pairs, then direct and same-view-bridge single-D000
+endings. All new jobs run on SPORC/debug behind their own real GPU gate.
+
+The active [JetClass2 Delphes 20260918 dz-fix 500k migration](JETCLASS2_DELPHES_DZFIX_500K_MIGRATION_PLAN.md)
+freezes a capacity-safe partial producer snapshot, re-inventories and verifies
+it on SPORC, then rebuilds the TRAIN_500K salience screen and three-spine
+campaign without reusing old dataset-bound artifacts. Old jobs remain untouched
+until the new snapshot, screen, and production dry run are authenticated.
+
+The [CMS-calibrated JetClass2 HLT response comparison](CMS_CALIBRATED_JETCLASS2_HLT_RESPONSE_THREE_FAMILY_IMPLEMENTATION_PLAN.md)
+specifies an isolated CPU-only SPORC calibration study: three response families,
+nine candidates at three data budgets, at least 2M CMS fitting jets plus separate
+selection/confirmation files, fixed-key response replicas, and offline-only
+JetClass2 transfer. It is a detailed design, not an implemented or authorized
+live campaign; existing CMS and JetClass2 experiments are unchanged.
+
+The isolated [native-CMS salience learned dense ladder](CMS_SALIENCE_LEARNED_DENSE_500K_PLAN.md)
+specifies one Strategy-B dense spine on original CMS/Scouting data with
+500k/250k/250k role budgets, fresh references and direct KD on SPORC A100.
+Its [contract](../contracts/CMS_SALIENCE_LEARNED_DENSE.md) is distinct from
+the existing JetClass2 and full-population Tigris campaigns.
+
+The standalone
+[JetClass2 Delphes offline auxiliary-supervision 500k plan](JETCLASS2_DELPHES_OFFLINE_AUXILIARY_SUPERVISION_500K_PLAN.md)
+specifies CE, offline composition, offline structure, and combined supervision
+for a single HLT-only classifier: ten loss-weight discovery fits, then twelve
+matched-seed confirmation fits. It freezes targets/losses, internal validation
+roles, deployment isolation, compact storage and real-A100 readiness gates.
+Its [isolated implementation contract](../contracts/JETCLASS2_DELPHES_OFFLINE_AUXILIARY_SUPERVISION.md)
+documents staged queue tooling, local evidence and the remaining genuine
+installed-Weaver/A100 gate. No jobs have been submitted by this implementation;
+it does not alter the separate migration or any existing ladder.
+
+The [JetClass2 Delphes dataset migration plan](JETCLASS2_DELPHES_DATASET_MIGRATION_IMPLEMENTATION_PLAN.md)
+records the September 10 production's local audit, implemented 11-class/common-input
+adapter, provisional producer assumptions, file-group splits, fresh HLT/offline
+references, and the route to a separately versioned four-spine campaign. The
+[local implementation contract](../contracts/JETCLASS2_DELPHES.md) distinguishes
+tested preparation/training/orchestration code from the remaining remote
+preparation and real-Weaver/A100 gates on SPORC. No job submission is authorized by these documents.
+
 The additive
 [TRI60 D000 matched-seed diversity ablation](HCWDL_TRI60_D000_SD5_ABLATION_PLAN.md)
 re-fits the five frozen LOGIT D000 teacher edges with the exact five distinct
@@ -234,8 +291,17 @@ acceptance:
 
 ## TRI100 four-spine path-density study
 
+- [JetClass2 Delphes 500k full-cardinality salience persistent-HLT three-spine plan](JETCLASS2_DELPHES_FULLCARD_SALIENCE_PERSISTENT_500K_PLAN.md)
+- [JetClass2 Delphes 500k salience learned-fusion handoff plan](JETCLASS2_DELPHES_SALIENCE_LEARNED_HANDOFF_500K_PLAN.md)
+- [JetClass2 Delphes 500k salience MT20 three-spine plan](JETCLASS2_DELPHES_SALIENCE_MT20_500K_PLAN.md)
+
 - [Implementation-authoritative full-data four-spine LOGIT plan](HCWDL_TRI100_FOUR_SPINE_LOGIT_IMPLEMENTATION_PLAN.md)
 - [Implementation-authoritative full-cardinality bottleneck-matching control](HCWDL_TRI100_FOUR_SPINE_FULL_CARDINALITY_BOTTLENECK_MATCHING_IMPLEMENTATION_PLAN.md)
+- [Implementation-authoritative full-cardinality salience-matching control](HCWDL_TRI100_FOUR_SPINE_FULL_CARDINALITY_SALIENCE_MATCHING_IMPLEMENTATION_PLAN.md)
+  Implemented under the separate
+  [full-cardinality salience-matching contracts](../contracts/HCWDL_FULLCARD_SALIENCE_MATCHING.md),
+  with a reusable [scientific and code guide](../HCWDL_FULLCARD_SALIENCE_MATCHING_CODE_GUIDE.md)
+  for future campaign integrations.
 - [Implementation-authoritative persistent-HLT all-prior MT20 four-spine campaign](HCWDL_TRI100_FOUR_SPINE_PERSISTENT_HLT_MT20_IMPLEMENTATION_PLAN.md)
 - [Implementation-authoritative full-four-spine Phase-I attention re-optimization and deferred privileged-attention-oracle design](HCWDL_DISTILLATION_GUIDED_ATTENTION_REOPTIMIZATION_PLAN.md)
 - [Implementation-authoritative offline+HLT concatenation, unrestricted fusion, and HLT-only withdrawal plan](HCWDL_OFFLINE_HLT_CONCATENATION_FUSION_WITHDRAWAL_IMPLEMENTATION_PLAN.md)
