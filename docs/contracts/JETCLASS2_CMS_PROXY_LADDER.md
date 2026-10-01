@@ -73,6 +73,12 @@ A100, and eight hours on SPORC debug. `RUNTIME_PROFILE/v3` carries the same
 explicit debug-to-tier3 transfer and makes those right-sized resources the
 only eligible science allocation.
 
+Oscar `GATE_SPEC/v4`/`RUNTIME_PROFILE/v4` and the dual-slot operational
+replacement `GATE_SPEC/v5`/`RUNTIME_PROFILE/v5` are defined by
+`JETCLASS2_CMS_PROXY_OSCAR_PORTABILITY.md`. Both consume the same exact
+portable release and foundation; v5 changes only measured CPU-worker and
+memory allocation.
+
 `GATE_COMPLETE/v1` authenticates the gate, foundation, and runtime profile.  It
 does not itself authorize scientific submission.
 

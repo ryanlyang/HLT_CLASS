@@ -151,6 +151,7 @@ JetClass data on Tigris:
 - [HCWDL full-cardinality salience-matching contracts](docs/contracts/HCWDL_FULLCARD_SALIENCE_MATCHING.md)
 - [HCWDL full-cardinality salience-matching scientific and code guide](docs/HCWDL_FULLCARD_SALIENCE_MATCHING_CODE_GUIDE.md)
 - [JetClass2 Delphes 500k salience persistent-HLT three-spine plan](docs/plans/JETCLASS2_DELPHES_FULLCARD_SALIENCE_PERSISTENT_500K_PLAN.md)
+- [JetClass2 CMS-proxy Oscar dual-slot recovery plan](docs/plans/JETCLASS2_CMS_PROXY_OSCAR_DUAL_SLOT_RECOVERY_PLAN.md)
 - [JetClass2 Delphes salience persistent-HLT contracts](docs/contracts/JETCLASS2_DELPHES_FULLCARD_SALIENCE_PERSISTENT.md)
 - [JetClass2 Delphes 500k salience learned-fusion handoff plan](docs/plans/JETCLASS2_DELPHES_SALIENCE_LEARNED_HANDOFF_500K_PLAN.md)
 - [JetClass2 Delphes salience learned-fusion handoff contracts](docs/contracts/JETCLASS2_DELPHES_SALIENCE_LEARNED_HANDOFF.md)

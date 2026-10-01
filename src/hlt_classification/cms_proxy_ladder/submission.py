@@ -13,7 +13,7 @@ from .gate import (
     AUTHORIZATION as GATE_AUTHORIZATION,
     DEBUG_AUTHORIZATION as DEBUG_GATE_AUTHORIZATION,
     PREFLIGHT_RECOVERY_AUTHORIZATION,
-    OSCAR_AUTHORIZATION,
+    OSCAR_AUTHORIZATION, OSCAR_DUAL_SLOT_AUTHORIZATION,
     validate_gate,
 )
 from .production import AUTHORIZATION as SCIENCE_AUTHORIZATION, validate_campaign
@@ -71,7 +71,10 @@ def gate_plan(spec: dict) -> dict:
             "command": _command(
                 project=spec["project_dir"], output_root=spec["gate_root"],
                 mode="gate", spec_path=path, task=task,
-                job_prefix={1: "jc2pxg", 2: "jc2pxd", 3: "jc2pxr", 4: "jc2pxo"}[
+                job_prefix={
+                    1: "jc2pxg", 2: "jc2pxd", 3: "jc2pxr",
+                    4: "jc2pxo", 5: "jc2pxq",
+                }[
                     spec.get("schema_version")
                 ],
                 site=site,
@@ -138,6 +141,7 @@ def submit(
         2: DEBUG_GATE_AUTHORIZATION,
         3: PREFLIGHT_RECOVERY_AUTHORIZATION,
         4: OSCAR_AUTHORIZATION,
+        5: OSCAR_DUAL_SLOT_AUTHORIZATION,
     }
     required = (
         gate_authorizations[subject.get("schema_version")]

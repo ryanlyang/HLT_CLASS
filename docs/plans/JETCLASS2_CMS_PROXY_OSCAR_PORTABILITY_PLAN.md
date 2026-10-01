@@ -60,6 +60,12 @@ timings and GPU identity are not transferred.
 6. Only after the gate completes, create and dry-run the unchanged science
    campaign. Live science submission remains separately authorized.
 
+The initial v4 profile consumed the complete 12-CPU per-user QOS allowance
+with each job and therefore serialized the science DAG. The additive
+`JETCLASS2_CMS_PROXY_OSCAR_DUAL_SLOT_RECOVERY_PLAN.md` defines the v5
+6-CPU/90000-MiB replacement. It reuses the same authenticated portable
+materialization, reruns the full-population preflight under the exact new
+allocation, and changes no scientific semantics.
+
 Interrupted exports, materializations, or destinations fail closed and require
 a fresh target. Existing Tigris and SPORC artifacts and jobs are not mutated.
-

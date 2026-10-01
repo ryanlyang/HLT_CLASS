@@ -41,6 +41,13 @@ registered site is `oscar_l40s`. A profile measured on Tigris or SPORC cannot
 authorize Oscar science. The Oscar gate has one full-population preflight task;
 it does not rebuild the release or matching foundation.
 
+`GATE_SPEC/v5` and `RUNTIME_PROFILE/v5` are the Oscar dual-slot operational
+replacement. They retain the same `oscar_l40s` execution site and exact
+portable materialization but require exactly 6 CPUs/workers, 90000 MiB, one
+L40S, and a 12-hour preflight ceiling. Their explicit two-job intent totals
+12 CPUs, 180000 MiB, and two GPUs, remaining within the observed user QOS.
+The v5 profile is eligible only after its own genuine full-population
+preflight; v4 timing evidence cannot be edited or relabelled as v5.
+
 Final-test access remains false throughout. Scientific metrics cannot control
 completion, and live gate/science submissions retain separate exact phrases.
-

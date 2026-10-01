@@ -7,7 +7,8 @@ from pathlib import Path
 
 from hlt_classification.data.cache_contracts import load_json
 from hlt_classification.cms_proxy_ladder.gate import (
-    create_gate, create_oscar_gate, create_sporc_debug_gate,
+    create_gate, create_oscar_dual_slot_gate, create_oscar_gate,
+    create_sporc_debug_gate,
     create_sporc_preflight_recovery,
 )
 from hlt_classification.cms_proxy_ladder.portable import (
@@ -48,6 +49,11 @@ def main() -> int:
     oscar.add_argument("--gate-root", type=Path, required=True)
     oscar.add_argument("--project-dir", type=Path, required=True)
     oscar.add_argument("--source-commit", required=True)
+    oscar_dual = sub.add_parser("create-oscar-dual-slot-gate")
+    oscar_dual.add_argument("--materialization-root", type=Path, required=True)
+    oscar_dual.add_argument("--gate-root", type=Path, required=True)
+    oscar_dual.add_argument("--project-dir", type=Path, required=True)
+    oscar_dual.add_argument("--source-commit", required=True)
     for name in ("dry-run-gate", "submit-gate"):
         command = sub.add_parser(name)
         command.add_argument("--gate-spec", type=Path, required=True)
@@ -93,6 +99,13 @@ def main() -> int:
         print(value["content_hash"])
     elif args.command == "create-oscar-gate":
         value = create_oscar_gate(
+            materialization_root=args.materialization_root,
+            gate_root=args.gate_root, project_dir=args.project_dir,
+            source_commit=args.source_commit,
+        )
+        print(value["content_hash"])
+    elif args.command == "create-oscar-dual-slot-gate":
+        value = create_oscar_dual_slot_gate(
             materialization_root=args.materialization_root,
             gate_root=args.gate_root, project_dir=args.project_dir,
             source_commit=args.source_commit,

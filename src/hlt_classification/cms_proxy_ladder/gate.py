@@ -31,6 +31,7 @@ SOURCE_FILES = (
     "docs/plans/JETCLASS2_CMS_PROXY_TIGRIS_200K_THREE_SPINE_IMPLEMENTATION_PLAN.md",
     "docs/plans/JETCLASS2_CMS_PROXY_SPORC_DEBUG_GATE_AMENDMENT.md",
     "docs/plans/JETCLASS2_CMS_PROXY_OSCAR_PORTABILITY_PLAN.md",
+    "docs/plans/JETCLASS2_CMS_PROXY_OSCAR_DUAL_SLOT_RECOVERY_PLAN.md",
     "docs/contracts/JETCLASS2_CMS_PROXY_LADDER.md",
     "docs/contracts/JETCLASS2_CMS_PROXY_OSCAR_PORTABILITY.md",
     "docs/JETCLASS2_CMS_PROXY_TIGRIS_200K_HANDOFF.md",
@@ -49,6 +50,9 @@ PREFLIGHT_RECOVERY_AUTHORIZATION = (
     "AUTHORIZE JETCLASS2 CMS PROXY 200K SPORC PREFLIGHT RECOVERY"
 )
 OSCAR_AUTHORIZATION = "AUTHORIZE JETCLASS2 CMS PROXY 200K OSCAR PREFLIGHT"
+OSCAR_DUAL_SLOT_AUTHORIZATION = (
+    "AUTHORIZE JETCLASS2 CMS PROXY 200K OSCAR DUAL SLOT PREFLIGHT"
+)
 
 
 def _source(project: Path, commit: str) -> None:
@@ -123,6 +127,14 @@ def oscar_preflight_tasks() -> list[dict]:
     return [{
         "task_id": "preflight", "kind": "gpu", "dependencies": [],
         "cpus": 12, "memory_mb": 160_000, "minutes": 720,
+    }]
+
+
+def oscar_dual_slot_preflight_tasks() -> list[dict]:
+    """Oscar profile sized for two concurrent jobs under the user QOS."""
+    return [{
+        "task_id": "preflight", "kind": "gpu", "dependencies": [],
+        "cpus": 6, "memory_mb": 90_000, "minutes": 720,
     }]
 
 
@@ -303,9 +315,78 @@ def create_oscar_gate(
     return spec
 
 
+def create_oscar_dual_slot_gate(
+    *, materialization_root: Path, gate_root: Path, project_dir: Path,
+    source_commit: str,
+) -> dict:
+    """Measure the same Oscar science with a two-concurrent-job QOS profile."""
+    from .portable import validate_materialization
+
+    root = Path(gate_root).resolve()
+    if root.exists():
+        raise FileExistsError("Proxy-ladder Oscar dual-slot gate root must be fresh")
+    project = Path(project_dir).resolve(strict=True)
+    source = source_lock(project, source_commit)
+    materialized_root = Path(materialization_root).resolve(strict=True)
+    materialization = load_json(materialized_root / "materialization.json")
+    validate_materialization(materialization, root=materialized_root)
+    release = materialization["release"]
+    foundation = materialization["foundation"]
+    task = oscar_dual_slot_preflight_tasks()[0]
+    workers, memory_mb = task["cpus"], task["memory_mb"]
+    bounds = {
+        role: preparation_bound(foundation, role, workers)
+        for role in ("train", "validation")
+    }
+    budgets = cache_budgets(foundation, memory_mb, workers)
+    site = execution_site("oscar_l40s")
+    spec = artifact(
+        "GATE_SPEC", version=5,
+        parents={
+            "source": source["content_hash"],
+            "request": release["request"]["content_hash"],
+            "imported_release": release["content_hash"],
+            "imported_foundation": foundation["content_hash"],
+            "portable_materialization": materialization["content_hash"],
+            "portable_bundle": materialization["bundle_sha256"],
+        },
+        source=source, request=release["request"], gate_root=str(root),
+        project_dir=str(project), source_commit=source_commit,
+        capacity=foundation["inputs"]["capacity"],
+        measurement_site=site, execution_site=site,
+        tasks=oscar_dual_slot_preflight_tasks(), workers=workers,
+        full_views_persisted=False,
+        materialization_root=str(materialized_root),
+        portable_materialization=materialization,
+        foundation_root=materialization["foundation_root"],
+        imported_foundation=foundation,
+        imported_release_root=materialization["release_root"],
+        imported_release=release,
+        cache_preparation_bounds=bounds, cache_budgets=budgets,
+        admission=(
+            "relocated_exact_inputs_then_oscar_l40s_dual_slot_"
+            "full_population_preflight"
+        ),
+        concurrency_intent={
+            "jobs": 2,
+            "per_job_cpus": 6,
+            "per_job_memory_mb": 90_000,
+            "per_job_gpus": 1,
+            "aggregate_cpus": 12,
+            "aggregate_memory_mb": 180_000,
+            "aggregate_gpus": 2,
+        },
+        site_transfer_policy=None,
+    )
+    root.mkdir(parents=True, exist_ok=False)
+    write_json(root / "gate_spec.json", spec)
+    validate_gate(spec, check_source=True)
+    return spec
+
+
 def validate_gate(spec: dict, *, check_source: bool = False) -> str:
     version = spec.get("schema_version")
-    if version not in (1, 2, 3, 4):
+    if version not in (1, 2, 3, 4, 5):
         raise ValueError("Unsupported proxy-ladder gate version")
     parents = {"source": spec["source"]["content_hash"], "request": spec["request"]["content_hash"]}
     if version in (2, 3):
@@ -315,7 +396,7 @@ def validate_gate(spec: dict, *, check_source: bool = False) -> str:
         })
     if version == 3:
         parents["imported_foundation"] = spec["imported_foundation"]["content_hash"]
-    if version == 4:
+    if version in (4, 5):
         parents.update({
             "imported_release": spec["imported_release"]["content_hash"],
             "imported_foundation": spec["imported_foundation"]["content_hash"],
@@ -327,7 +408,7 @@ def validate_gate(spec: dict, *, check_source: bool = False) -> str:
     from .release import validate_request
     validate_request(spec["request"])
     common_differs = (
-        spec["workers"] != (12 if version == 4 else 16)
+        spec["workers"] != ({4: 12, 5: 6}.get(version, 16))
         or spec["full_views_persisted"] is not False
         or type(spec["capacity"]) is not int or spec["capacity"] < 16
     )
@@ -399,14 +480,31 @@ def validate_gate(spec: dict, *, check_source: bool = False) -> str:
             role: preparation_bound(spec["imported_foundation"], role, spec["workers"])
             for role in ("train", "validation")
         }
+        task = (
+            oscar_preflight_tasks()[0]
+            if version == 4 else oscar_dual_slot_preflight_tasks()[0]
+        )
         budgets = cache_budgets(
-            spec["imported_foundation"], oscar_preflight_tasks()[0]["memory_mb"],
-            spec["workers"],
+            spec["imported_foundation"], task["memory_mb"], spec["workers"],
+        )
+        concurrency_differs = (
+            version == 5 and spec.get("concurrency_intent") != {
+                "jobs": 2,
+                "per_job_cpus": 6,
+                "per_job_memory_mb": 90_000,
+                "per_job_gpus": 1,
+                "aggregate_cpus": 12,
+                "aggregate_memory_mb": 180_000,
+                "aggregate_gpus": 2,
+            }
         )
         differs = (
             spec["measurement_site"] != execution_site("oscar_l40s")
             or spec["execution_site"] != execution_site("oscar_l40s")
-            or spec["tasks"] != oscar_preflight_tasks()
+            or spec["tasks"] != (
+                oscar_preflight_tasks()
+                if version == 4 else oscar_dual_slot_preflight_tasks()
+            )
             or spec["site_transfer_policy"] is not None
             or spec["imported_release"] != spec["portable_materialization"]["release"]
             or spec["imported_foundation"] != spec["portable_materialization"]["foundation"]
@@ -414,6 +512,7 @@ def validate_gate(spec: dict, *, check_source: bool = False) -> str:
             or foundation_root != Path(spec["portable_materialization"]["foundation_root"])
             or spec["cache_preparation_bounds"] != bounds
             or spec["cache_budgets"] != budgets
+            or concurrency_differs
         )
     if common_differs or differs:
         raise ValueError("Proxy-ladder gate semantics differ")
@@ -457,10 +556,15 @@ def validate_profile(profile: dict, *, foundation: dict, spec: dict) -> str:
             or profile["workers"] != spec["workers"]
         )
     )
+    oscar_task = (
+        oscar_preflight_tasks()[0] if version == 4
+        else oscar_dual_slot_preflight_tasks()[0] if version == 5
+        else None
+    )
     oscar_resources_differ = (
-        version == 4 and (
-            profile["cpus"] != oscar_preflight_tasks()[0]["cpus"]
-            or profile["memory_mb"] != oscar_preflight_tasks()[0]["memory_mb"]
+        version in (4, 5) and (
+            profile["cpus"] != oscar_task["cpus"]
+            or profile["memory_mb"] != oscar_task["memory_mb"]
             or profile["workers"] != spec["workers"]
         )
     )
@@ -572,7 +676,7 @@ def run_gate_task(spec: dict, task_id: str) -> dict:
     root = Path(spec["gate_root"])
     release_root = (
         Path(spec["imported_release_root"])
-        if spec.get("schema_version") in (2, 3, 4) else root / "release"
+        if spec.get("schema_version") in (2, 3, 4, 5) else root / "release"
     )
     foundation_root = Path(spec.get("foundation_root", root / "foundation"))
     evidence_root = root / "evidence"
@@ -637,10 +741,11 @@ def run_gate_task(spec: dict, task_id: str) -> dict:
 
 __all__ = [
     "AUTHORIZATION", "DEBUG_AUTHORIZATION", "PREFLIGHT_RECOVERY_AUTHORIZATION",
-    "OSCAR_AUTHORIZATION",
-    "create_oscar_gate",
+    "OSCAR_AUTHORIZATION", "OSCAR_DUAL_SLOT_AUTHORIZATION",
+    "create_oscar_gate", "create_oscar_dual_slot_gate",
     "create_gate", "create_sporc_debug_gate", "create_sporc_preflight_recovery",
-    "debug_gate_tasks", "gate_tasks", "preflight_recovery_tasks", "oscar_preflight_tasks",
+    "debug_gate_tasks", "gate_tasks", "preflight_recovery_tasks",
+    "oscar_preflight_tasks", "oscar_dual_slot_preflight_tasks",
     "run_gate_task",
     "source_lock", "validate_gate", "validate_profile",
 ]

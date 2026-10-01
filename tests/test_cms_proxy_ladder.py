@@ -11,7 +11,8 @@ from hlt_classification.cms_proxy_ladder.campaign import (
 )
 from hlt_classification.cms_proxy_ladder.contracts import artifact
 from hlt_classification.cms_proxy_ladder.gate import (
-    debug_gate_tasks, gate_tasks, oscar_preflight_tasks,
+    debug_gate_tasks, gate_tasks, oscar_dual_slot_preflight_tasks,
+    oscar_preflight_tasks,
     preflight_recovery_tasks,
 )
 from hlt_classification.cms_proxy_ladder.inputs import build_inputs, input_contract
@@ -259,6 +260,103 @@ def test_oscar_l40s_site_and_preflight_plan_are_exact(tmp_path, monkeypatch):
     assert "--gres=gpu:l40s:1" in command
     assert any("jc2pxo_preflight" in value for value in command)
     assert "JC2_SITE=oscar_l40s" in command[-1]
+
+
+def test_oscar_dual_slot_preflight_fits_two_jobs_inside_qos(tmp_path, monkeypatch):
+    from hlt_classification.cms_proxy_ladder import submission
+
+    site = execution_site("oscar_l40s")
+    tasks = oscar_dual_slot_preflight_tasks()
+    assert tasks == [{
+        "task_id": "preflight", "kind": "gpu", "dependencies": [],
+        "cpus": 6, "memory_mb": 90_000, "minutes": 720,
+    }]
+    assert 2 * tasks[0]["cpus"] <= site["max_cpus"]
+    assert 2 * tasks[0]["memory_mb"] <= site["max_memory_mb"]
+    spec = artifact(
+        "GATE_SPEC", version=5, gate_root=str(tmp_path / "gate"),
+        project_dir=str(tmp_path), measurement_site=site,
+        execution_site=site, tasks=tasks,
+    )
+    monkeypatch.setattr(submission, "validate_gate", lambda value: value["content_hash"])
+    plan = submission.gate_plan(spec)
+    assert len(plan["commands"]) == 1
+    command = plan["commands"][0]["command"]
+    assert "--account=default" in command
+    assert "--partition=gpu" in command
+    assert "--qos=norm-gpu" in command
+    assert "--cpus-per-task=6" in command
+    assert "--mem=90000M" in command
+    assert "--time=12:00:00" in command
+    assert "--gres=gpu:l40s:1" in command
+    assert any("jc2pxq_preflight" in value for value in command)
+    assert "JC2_SITE=oscar_l40s" in command[-1]
+
+
+def test_oscar_dual_slot_gate_v5_validates_exact_resource_semantics(
+    tmp_path, monkeypatch,
+):
+    from hlt_classification.cms_proxy_ladder import gate as module
+    from hlt_classification.cms_proxy_ladder import portable, release as release_module
+
+    source = artifact("SOURCE", commit="a" * 40, files={})
+    request = release_request(
+        study_root=tmp_path / "study", offline_root=tmp_path / "offline",
+    )
+    imported_release = artifact("RELEASE_TEST", request=request)
+    imported_foundation = artifact("FOUNDATION_TEST", release=imported_release)
+    release_root = tmp_path / "materialized/release"
+    foundation_root = tmp_path / "materialized/foundation"
+    materialization = artifact(
+        "PORTABLE_MATERIALIZATION_TEST",
+        bundle_sha256="b" * 64,
+        release_root=str(release_root), release=imported_release,
+        foundation_root=str(foundation_root), foundation=imported_foundation,
+    )
+    bounds = {"train": 40, "validation": 20}
+    budgets = {"train": 60, "validation": 30}
+    site = execution_site("oscar_l40s")
+    intent = {
+        "jobs": 2, "per_job_cpus": 6, "per_job_memory_mb": 90_000,
+        "per_job_gpus": 1, "aggregate_cpus": 12,
+        "aggregate_memory_mb": 180_000, "aggregate_gpus": 2,
+    }
+    spec = artifact(
+        "GATE_SPEC", version=5,
+        parents={
+            "source": source["content_hash"],
+            "request": request["content_hash"],
+            "imported_release": imported_release["content_hash"],
+            "imported_foundation": imported_foundation["content_hash"],
+            "portable_materialization": materialization["content_hash"],
+            "portable_bundle": materialization["bundle_sha256"],
+        },
+        source=source, request=request, gate_root=str(tmp_path / "gate"),
+        project_dir=str(tmp_path), source_commit="a" * 40, capacity=512,
+        measurement_site=site, execution_site=site,
+        tasks=oscar_dual_slot_preflight_tasks(), workers=6,
+        full_views_persisted=False,
+        materialization_root=str(tmp_path / "materialized"),
+        portable_materialization=materialization,
+        foundation_root=str(foundation_root), imported_foundation=imported_foundation,
+        imported_release_root=str(release_root), imported_release=imported_release,
+        cache_preparation_bounds=bounds, cache_budgets=budgets,
+        admission="relocated_exact_inputs_then_oscar_l40s_dual_slot_full_population_preflight",
+        concurrency_intent=intent, site_transfer_policy=None,
+    )
+    monkeypatch.setattr(portable, "validate_materialization", lambda value, root: value)
+    monkeypatch.setattr(module, "validate_release", lambda value, root: value)
+    monkeypatch.setattr(module, "validate_foundation", lambda value, root: value)
+    monkeypatch.setattr(
+        module, "preparation_bound",
+        lambda foundation, role, workers: bounds[role],
+    )
+    monkeypatch.setattr(
+        module, "cache_budgets",
+        lambda foundation, memory_mb, workers: budgets,
+    )
+    monkeypatch.setattr(release_module, "validate_request", lambda value: value)
+    assert module.validate_gate(spec) == spec["content_hash"]
 
 
 def test_portable_relocation_republishes_paths_without_recomputing_banks(tmp_path):
