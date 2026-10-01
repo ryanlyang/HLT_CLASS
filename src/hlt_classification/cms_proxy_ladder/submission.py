@@ -12,6 +12,7 @@ from .contracts import artifact, validate, write_json
 from .gate import (
     AUTHORIZATION as GATE_AUTHORIZATION,
     DEBUG_AUTHORIZATION as DEBUG_GATE_AUTHORIZATION,
+    PREFLIGHT_RECOVERY_AUTHORIZATION,
     validate_gate,
 )
 from .production import AUTHORIZATION as SCIENCE_AUTHORIZATION, validate_campaign
@@ -69,7 +70,9 @@ def gate_plan(spec: dict) -> dict:
             "command": _command(
                 project=spec["project_dir"], output_root=spec["gate_root"],
                 mode="gate", spec_path=path, task=task,
-                job_prefix="jc2pxd" if spec.get("schema_version") == 2 else "jc2pxg",
+                job_prefix={1: "jc2pxg", 2: "jc2pxd", 3: "jc2pxr"}[
+                    spec.get("schema_version")
+                ],
                 site=site,
             ),
         })
@@ -129,8 +132,13 @@ def submit(
             raise FileExistsError("Proxy-ladder command plan differs")
     else:
         write_json(plan_path, plan)
+    gate_authorizations = {
+        1: GATE_AUTHORIZATION,
+        2: DEBUG_GATE_AUTHORIZATION,
+        3: PREFLIGHT_RECOVERY_AUTHORIZATION,
+    }
     required = (
-        (DEBUG_GATE_AUTHORIZATION if subject.get("schema_version") == 2 else GATE_AUTHORIZATION)
+        gate_authorizations[subject.get("schema_version")]
         if mode == "gate" else SCIENCE_AUTHORIZATION
     )
     if execute and authorization_phrase != required:

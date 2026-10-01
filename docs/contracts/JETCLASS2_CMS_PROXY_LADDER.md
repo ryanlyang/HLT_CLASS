@@ -66,6 +66,13 @@ measurement on `sporc_a100_debug` and the sole authorized transfer to
 `sporc_debug_to_tier3_same_a100_environment_resources_v1`. Debug is never the
 scientific execution site.
 
+`GATE_SPEC/v3` is a preflight-only recovery. It imports and validates the exact
+completed `FOUNDATION/v1` and `RELEASE/v1` from its v2 parent gate, binds the
+measured 16-worker cache bounds, and requests exactly 16 CPUs, 160000 MiB, one
+A100, and eight hours on SPORC debug. `RUNTIME_PROFILE/v3` carries the same
+explicit debug-to-tier3 transfer and makes those right-sized resources the
+only eligible science allocation.
+
 `GATE_COMPLETE/v1` authenticates the gate, foundation, and runtime profile.  It
 does not itself authorize scientific submission.
 

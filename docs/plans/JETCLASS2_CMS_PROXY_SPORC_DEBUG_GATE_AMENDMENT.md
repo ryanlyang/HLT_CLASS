@@ -41,3 +41,19 @@ old Tigris gate.
 If foundation construction or preflight exceeds the debug limit, the job must
 fail closed. Increasing the time or silently moving the measurement is not an
 authorized fallback.
+
+## Right-sized preflight recovery
+
+The first v2 foundation completed, but its pending preflight requested 36 CPUs
+and 320000 MiB. Scheduler probes showed that this full-node-shaped profile
+would delay tier3 placement by roughly two days. The completed foundation's
+16-worker conservative cache bounds were measured as 39.90 GiB for train and
+22.42 GiB for validation; the registered 75%-RAM admission calculation
+requires 85069 MiB.
+
+`GATE_SPEC/v3` therefore imports the exact v2 release and completed foundation
+and runs only the preflight with 16 CPUs, 160000 MiB, one A100, and an
+eight-hour ceiling. The memory request exceeds the conservative admission
+minimum by 74931 MiB. Its `RUNTIME_PROFILE/v3` transfers those exact measured
+resources from SPORC debug to tier3. The superseded v2 preflight must be
+cancelled by exact job ID only after the v3 dry run is authenticated.

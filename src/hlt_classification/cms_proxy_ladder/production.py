@@ -38,7 +38,7 @@ def create_campaign(*, gate_root: Path, campaign_root: Path) -> dict:
     gate_root = Path(gate_root).resolve(strict=True)
     gate = load_json(gate_root / "gate_spec.json")
     validate_gate(gate, check_source=True)
-    foundation_root = gate_root / "foundation"
+    foundation_root = Path(gate.get("foundation_root", gate_root / "foundation"))
     foundation = load_json(foundation_root / "foundation.json")
     validate_foundation(foundation, root=foundation_root)
     profile = load_json(gate_root / "evidence/runtime_profile.json")

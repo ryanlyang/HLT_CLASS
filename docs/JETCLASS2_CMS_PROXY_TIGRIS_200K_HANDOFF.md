@@ -50,6 +50,14 @@ local verification passed 22 tests covering the proxy ladder and the reusable
 SPORC debug-profile transfer. The live SPORC gate remains the required real
 validation; local tests do not replace it.
 
+The v2 foundation subsequently completed. Its 16-worker cache audit found
+39.90 GiB train and 22.42 GiB validation conservative bounds, requiring 85069
+MiB under the 75%-RAM rule. Scheduler probes showed materially earlier tier3
+placement for 16 CPUs/160000 MiB than for 36 CPUs/320000 MiB. The active v3
+recovery therefore reuses the exact completed foundation and reruns only the
+A100 preflight with the right-sized allocation; the old v2 preflight is
+superseded, not the release or foundation.
+
 The exact commands are provided in the completion response for the pushed
 commit.  Do not substitute the main checkout for the detached source-pinned
 worktree, and do not submit science before `gate_complete.json` and

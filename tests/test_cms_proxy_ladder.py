@@ -10,7 +10,9 @@ from hlt_classification.cms_proxy_ladder.campaign import (
     BRANCHES, build_scientific_plan, coordinate, task_graph,
 )
 from hlt_classification.cms_proxy_ladder.contracts import artifact
-from hlt_classification.cms_proxy_ladder.gate import debug_gate_tasks, gate_tasks
+from hlt_classification.cms_proxy_ladder.gate import (
+    debug_gate_tasks, gate_tasks, preflight_recovery_tasks,
+)
 from hlt_classification.cms_proxy_ladder.inputs import build_inputs, input_contract
 from hlt_classification.cms_proxy_ladder.release import COUNTS, release_request
 from hlt_classification.cms_proxy_ladder.views import build_view, view_contract
@@ -196,6 +198,31 @@ def test_sporc_debug_gate_is_bounded_and_transfers_science_to_tier3(tmp_path, mo
     assert "--gres=gpu:a100:1" in commands["preflight"]["command"]
     assert "--gres=gpu:a100:1" not in commands["build_foundation"]["command"]
     assert "JC2_SITE=sporc_a100_debug" in commands["preflight"]["command"][-1]
+
+
+def test_sporc_preflight_recovery_is_right_sized_and_preflight_only(tmp_path, monkeypatch):
+    from hlt_classification.cms_proxy_ladder import submission
+
+    tasks = preflight_recovery_tasks()
+    assert tasks == [{
+        "task_id": "preflight", "kind": "gpu", "dependencies": [],
+        "cpus": 16, "memory_mb": 160_000, "minutes": 480,
+    }]
+    spec = artifact(
+        "GATE_SPEC", version=3, gate_root=str(tmp_path / "gate"),
+        project_dir=str(tmp_path), measurement_site=execution_site("sporc_a100_debug"),
+        execution_site=execution_site("sporc_a100"), tasks=tasks,
+    )
+    monkeypatch.setattr(submission, "validate_gate", lambda value: value["content_hash"])
+    plan = submission.gate_plan(spec)
+    assert len(plan["commands"]) == 1
+    command = plan["commands"][0]["command"]
+    assert "--partition=debug" in command
+    assert "--cpus-per-task=16" in command
+    assert "--mem=160000M" in command
+    assert "--time=08:00:00" in command
+    assert "--gres=gpu:a100:1" in command
+    assert any("jc2pxr_preflight" in value for value in command)
 
 
 def test_science_command_plan_has_17_fits_12_reducers_and_cpu_tail(tmp_path, monkeypatch):

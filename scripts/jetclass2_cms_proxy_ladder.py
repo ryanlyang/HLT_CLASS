@@ -6,7 +6,9 @@ import argparse
 from pathlib import Path
 
 from hlt_classification.data.cache_contracts import load_json
-from hlt_classification.cms_proxy_ladder.gate import create_gate, create_sporc_debug_gate
+from hlt_classification.cms_proxy_ladder.gate import (
+    create_gate, create_sporc_debug_gate, create_sporc_preflight_recovery,
+)
 from hlt_classification.cms_proxy_ladder.production import create_campaign, result_rows
 from hlt_classification.cms_proxy_ladder.submission import submit
 
@@ -26,6 +28,11 @@ def main() -> int:
     recover.add_argument("--gate-root", type=Path, required=True)
     recover.add_argument("--project-dir", type=Path, required=True)
     recover.add_argument("--source-commit", required=True)
+    preflight = sub.add_parser("create-sporc-preflight-recovery")
+    preflight.add_argument("--source-gate-root", type=Path, required=True)
+    preflight.add_argument("--gate-root", type=Path, required=True)
+    preflight.add_argument("--project-dir", type=Path, required=True)
+    preflight.add_argument("--source-commit", required=True)
     for name in ("dry-run-gate", "submit-gate"):
         command = sub.add_parser(name)
         command.add_argument("--gate-spec", type=Path, required=True)
@@ -49,6 +56,12 @@ def main() -> int:
         print(value["content_hash"])
     elif args.command == "create-sporc-debug-gate":
         value = create_sporc_debug_gate(
+            source_gate_root=args.source_gate_root, gate_root=args.gate_root,
+            project_dir=args.project_dir, source_commit=args.source_commit,
+        )
+        print(value["content_hash"])
+    elif args.command == "create-sporc-preflight-recovery":
+        value = create_sporc_preflight_recovery(
             source_gate_root=args.source_gate_root, gate_root=args.gate_root,
             project_dir=args.project_dir, source_commit=args.source_commit,
         )

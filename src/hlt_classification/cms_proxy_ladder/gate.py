@@ -21,7 +21,7 @@ from hlt_classification.jetclass2_delphes.model import (
 )
 from hlt_classification.jetclass2_delphes.runner import predict, train_kernel
 
-from .cache import cache_budgets, prepare_cache
+from .cache import cache_budgets, preparation_bound, prepare_cache
 from .campaign import build_scientific_plan
 from .contracts import artifact, file_ref, validate, write_json
 from .data import build_foundation, validate_foundation
@@ -41,6 +41,9 @@ SOURCE_FILES = (
 )
 AUTHORIZATION = "AUTHORIZE JETCLASS2 CMS PROXY 200K TIGRIS GATE"
 DEBUG_AUTHORIZATION = "AUTHORIZE JETCLASS2 CMS PROXY 200K SPORC DEBUG GATE"
+PREFLIGHT_RECOVERY_AUTHORIZATION = (
+    "AUTHORIZE JETCLASS2 CMS PROXY 200K SPORC PREFLIGHT RECOVERY"
+)
 
 
 def _source(project: Path, commit: str) -> None:
@@ -102,6 +105,13 @@ def debug_gate_tasks() -> list[dict]:
             "cpus": 36, "memory_mb": 320_000, "minutes": 480,
         },
     ]
+
+
+def preflight_recovery_tasks() -> list[dict]:
+    return [{
+        "task_id": "preflight", "kind": "gpu", "dependencies": [],
+        "cpus": 16, "memory_mb": 160_000, "minutes": 480,
+    }]
 
 
 def create_gate(
@@ -172,16 +182,71 @@ def create_sporc_debug_gate(
     return spec
 
 
+def create_sporc_preflight_recovery(
+    *, source_gate_root: Path, gate_root: Path, project_dir: Path,
+    source_commit: str,
+) -> dict:
+    """Reuse a completed v2 foundation and measure the right-sized profile."""
+    root = Path(gate_root).resolve()
+    if root.exists():
+        raise FileExistsError("Proxy-ladder preflight-recovery root must be fresh")
+    project = Path(project_dir).resolve(strict=True)
+    source = source_lock(project, source_commit)
+    source_root = Path(source_gate_root).resolve(strict=True)
+    subject = load_json(source_root / "gate_spec.json")
+    validate_gate(subject)
+    if subject.get("schema_version") != 2:
+        raise ValueError("Preflight recovery requires the completed SPORC v2 foundation gate")
+    foundation_root = source_root / "foundation"
+    foundation = load_json(foundation_root / "foundation.json")
+    validate_foundation(foundation, root=foundation_root)
+    workers, memory_mb = 16, 160_000
+    budgets = cache_budgets(foundation, memory_mb, workers)
+    bounds = {
+        role: preparation_bound(foundation, role, workers)
+        for role in ("train", "validation")
+    }
+    measurement = execution_site("sporc_a100_debug")
+    spec = artifact(
+        "GATE_SPEC", version=3,
+        parents={
+            "source": source["content_hash"],
+            "request": subject["request"]["content_hash"],
+            "imported_release": subject["imported_release"]["content_hash"],
+            "imported_foundation": foundation["content_hash"],
+            "subject_gate": subject["content_hash"],
+        },
+        source=source, request=subject["request"], gate_root=str(root),
+        project_dir=str(project), source_commit=source_commit,
+        capacity=subject["capacity"], measurement_site=measurement,
+        execution_site=production_site(measurement), tasks=preflight_recovery_tasks(),
+        workers=workers, full_views_persisted=False,
+        source_gate_root=str(source_root), foundation_root=str(foundation_root),
+        imported_foundation=foundation,
+        imported_release_root=subject["imported_release_root"],
+        imported_release=subject["imported_release"],
+        cache_preparation_bounds=bounds, cache_budgets=budgets,
+        admission="reuse_authenticated_release_and_completed_foundation_then_right_sized_sporc_debug_preflight",
+        site_transfer_policy=DEBUG_PROFILE_TRANSFER,
+    )
+    root.mkdir(parents=True, exist_ok=False)
+    write_json(root / "gate_spec.json", spec)
+    validate_gate(spec, check_source=True)
+    return spec
+
+
 def validate_gate(spec: dict, *, check_source: bool = False) -> str:
     version = spec.get("schema_version")
-    if version not in (1, 2):
+    if version not in (1, 2, 3):
         raise ValueError("Unsupported proxy-ladder gate version")
     parents = {"source": spec["source"]["content_hash"], "request": spec["request"]["content_hash"]}
-    if version == 2:
+    if version in (2, 3):
         parents.update({
             "imported_release": spec["imported_release"]["content_hash"],
             "subject_gate": spec["parents"]["subject_gate"],
         })
+    if version == 3:
+        parents["imported_foundation"] = spec["imported_foundation"]["content_hash"]
     digest = validate(spec, "GATE_SPEC", version=version, parents=parents)
     validate(spec["source"], "SOURCE")
     from .release import validate_request
@@ -195,7 +260,7 @@ def validate_gate(spec: dict, *, check_source: bool = False) -> str:
             spec["execution_site"] != execution_site("tigris_gh200")
             or spec["tasks"] != gate_tasks()
         )
-    else:
+    elif version == 2:
         release_root = Path(spec["imported_release_root"])
         subject = load_json(Path(spec["source_gate_root"]) / "gate_spec.json")
         if subject.get("schema_version") != 1:
@@ -212,6 +277,39 @@ def validate_gate(spec: dict, *, check_source: bool = False) -> str:
             or spec["imported_release"]["request"] != spec["request"]
             or release_root != Path(spec["source_gate_root"]) / "release"
         )
+    else:
+        source_root = Path(spec["source_gate_root"])
+        subject = load_json(source_root / "gate_spec.json")
+        if subject.get("schema_version") != 2:
+            raise ValueError("Preflight recovery must import the SPORC v2 gate")
+        validate_gate(subject)
+        release_root = Path(spec["imported_release_root"])
+        foundation_root = Path(spec["foundation_root"])
+        validate_release(spec["imported_release"], root=release_root)
+        validate_foundation(spec["imported_foundation"], root=foundation_root)
+        bounds = {
+            role: preparation_bound(spec["imported_foundation"], role, spec["workers"])
+            for role in ("train", "validation")
+        }
+        budgets = cache_budgets(
+            spec["imported_foundation"],
+            preflight_recovery_tasks()[0]["memory_mb"], spec["workers"],
+        )
+        differs = (
+            spec["measurement_site"] != execution_site("sporc_a100_debug")
+            or spec["execution_site"] != execution_site("sporc_a100")
+            or spec["tasks"] != preflight_recovery_tasks()
+            or spec["site_transfer_policy"] != DEBUG_PROFILE_TRANSFER
+            or subject["content_hash"] != spec["parents"]["subject_gate"]
+            or spec["imported_release"] != subject["imported_release"]
+            or spec["imported_foundation"]["release"]["content_hash"]
+            != spec["imported_release"]["content_hash"]
+            or spec["imported_foundation"]["content_hash"]
+            != spec["parents"]["imported_foundation"]
+            or foundation_root != source_root / "foundation"
+            or spec["cache_preparation_bounds"] != bounds
+            or spec["cache_budgets"] != budgets
+        )
     if common_differs or differs:
         raise ValueError("Proxy-ladder gate semantics differ")
     if check_source:
@@ -223,7 +321,7 @@ def validate_gate(spec: dict, *, check_source: bool = False) -> str:
 
 def validate_profile(profile: dict, *, foundation: dict, spec: dict) -> str:
     version = profile.get("schema_version")
-    expected = 1 if spec.get("schema_version") == 1 else 2
+    expected = spec.get("schema_version")
     if version != expected:
         raise ValueError("Proxy-ladder runtime-profile/gate versions differ")
     digest = validate(
@@ -241,9 +339,17 @@ def validate_profile(profile: dict, *, foundation: dict, spec: dict) -> str:
             or profile["execution_site"] != execution_site("sporc_a100")
             or profile.get("site_transfer_policy") != DEBUG_PROFILE_TRANSFER
         )
+    recovery_resources_differ = (
+        version == 3 and (
+            profile["cpus"] != preflight_recovery_tasks()[0]["cpus"]
+            or profile["memory_mb"] != preflight_recovery_tasks()[0]["memory_mb"]
+            or profile["workers"] != spec["workers"]
+        )
+    )
     if (
         profile["source_commit"] != spec["source_commit"]
         or site_differs
+        or recovery_resources_differ
         or profile["foundation_sha256"] != foundation["content_hash"]
         or profile["model"] != model_contract()
         or profile["passed"] is not True
@@ -273,15 +379,16 @@ def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> di
     validate_resources(site, cpus, memory_mb, workers)
     budgets = cache_budgets(foundation, memory_mb, workers)
     environment = installed_environment()
-    plan = build_scientific_plan(foundation, foundation_root=output_root.parent / "foundation")
+    foundation_root = Path(spec.get("foundation_root", output_root.parent / "foundation"))
+    plan = build_scientific_plan(foundation, foundation_root=foundation_root)
     node = next(row for row in plan["nodes"] if row["node_id"] == "U000")
     started = time.monotonic()
     train = prepare_cache(
-        foundation, foundation_root=output_root.parent / "foundation", role="train",
+        foundation, foundation_root=foundation_root, role="train",
         coordinate="U000", workers=workers, max_ram_bytes=budgets["train"],
     )
     validation_cache = prepare_cache(
-        foundation, foundation_root=output_root.parent / "foundation", role="validation",
+        foundation, foundation_root=foundation_root, role="validation",
         coordinate="U000", workers=workers, max_ram_bytes=budgets["validation"],
     )
     u000_cache_seconds = time.monotonic() - started
@@ -303,7 +410,7 @@ def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> di
     started = time.monotonic()
     dense = [
         prepare_cache(
-            foundation, foundation_root=output_root.parent / "foundation", role=role,
+            foundation, foundation_root=foundation_root, role=role,
             coordinate="D050", workers=workers, max_ram_bytes=budgets[role],
         )
         for role in ("train", "validation")
@@ -321,7 +428,7 @@ def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> di
         if site["name"] == "sporc_a100_debug" else {}
     )
     profile = artifact(
-        "RUNTIME_PROFILE", version=2 if transfer else 1,
+        "RUNTIME_PROFILE", version=spec.get("schema_version", 1) if transfer else 1,
         parents={"gate": spec["content_hash"], "foundation": foundation["content_hash"]},
         source_commit=spec["source_commit"], foundation_sha256=foundation["content_hash"],
         execution_site=production_site(site), slurm_job_id=job_id, passed=True,
@@ -341,12 +448,15 @@ def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> di
 
 def run_gate_task(spec: dict, task_id: str) -> dict:
     validate_gate(spec, check_source=True)
+    if task_id not in {row["task_id"] for row in spec["tasks"]}:
+        raise ValueError("Unregistered proxy-ladder gate task")
     root = Path(spec["gate_root"])
     release_root = (
         Path(spec["imported_release_root"])
-        if spec.get("schema_version") == 2 else root / "release"
+        if spec.get("schema_version") in (2, 3) else root / "release"
     )
-    foundation_root, evidence_root = root / "foundation", root / "evidence"
+    foundation_root = Path(spec.get("foundation_root", root / "foundation"))
+    evidence_root = root / "evidence"
     if task_id == "authenticate_release":
         if spec.get("schema_version") == 2:
             result = load_json(release_root / "release.json")
@@ -407,7 +517,8 @@ def run_gate_task(spec: dict, task_id: str) -> dict:
 
 
 __all__ = [
-    "AUTHORIZATION", "DEBUG_AUTHORIZATION", "create_gate", "create_sporc_debug_gate",
-    "debug_gate_tasks", "gate_tasks", "run_gate_task", "source_lock", "validate_gate",
-    "validate_profile",
+    "AUTHORIZATION", "DEBUG_AUTHORIZATION", "PREFLIGHT_RECOVERY_AUTHORIZATION",
+    "create_gate", "create_sporc_debug_gate", "create_sporc_preflight_recovery",
+    "debug_gate_tasks", "gate_tasks", "preflight_recovery_tasks", "run_gate_task",
+    "source_lock", "validate_gate", "validate_profile",
 ]
