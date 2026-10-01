@@ -14,7 +14,7 @@ import numpy as np
 import uproot
 
 from hlt_classification.cms2jc2_production import output
-from hlt_classification.cms2jc2_production.campaign import imported, validate_study
+from hlt_classification.cms2jc2_production.campaign import validate_study
 from hlt_classification.cms2jc2_production.contracts import load_json, safe as source_safe
 from hlt_classification.cms2jc2_response.bridge import JC2_FIELDS, Particles, from_jc2
 from hlt_classification.cms2jc2_response.generation_benchmark_data import BRANCHES
@@ -76,7 +76,18 @@ def iter_paired(
     offline_root = Path(release["offline_root"])
     study = load_json(study_root / "study_spec.json")
     validate_study(study)
-    inventory = imported(study, "inventory")
+    # The study artifact retains its original scientific identity when a
+    # portable bundle is relocated. Resolve the authenticated import relative
+    # to the release-selected study root, not the historical absolute root
+    # embedded in the immutable study artifact.
+    inventory_record = study["imports"]["inventory"]
+    inventory_path = source_safe(study_root, inventory_record["relative"])
+    if (
+        inventory_path.stat().st_size != inventory_record["bytes"]
+        or sha256_file(inventory_path) != inventory_record["sha256"]
+    ):
+        raise ValueError("Proxy-ladder relocated inventory bytes differ")
+    inventory = load_json(inventory_path)
     if inventory["content_hash"] != study["population"]["parents"]["inventory"]:
         raise ValueError("Proxy-ladder offline inventory lineage differs")
     cursor = 0

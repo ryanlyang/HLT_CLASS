@@ -30,13 +30,17 @@ from .release import build_release, release_request, validate_release
 SOURCE_FILES = (
     "docs/plans/JETCLASS2_CMS_PROXY_TIGRIS_200K_THREE_SPINE_IMPLEMENTATION_PLAN.md",
     "docs/plans/JETCLASS2_CMS_PROXY_SPORC_DEBUG_GATE_AMENDMENT.md",
+    "docs/plans/JETCLASS2_CMS_PROXY_OSCAR_PORTABILITY_PLAN.md",
     "docs/contracts/JETCLASS2_CMS_PROXY_LADDER.md",
+    "docs/contracts/JETCLASS2_CMS_PROXY_OSCAR_PORTABILITY.md",
     "docs/JETCLASS2_CMS_PROXY_TIGRIS_200K_HANDOFF.md",
     "scripts/jetclass2_cms_proxy_ladder.py",
     "scripts/run_jetclass2_cms_proxy_ladder_task.py",
     "scripts/submit_jetclass2_cms_proxy_ladder.py",
     "sbatch/jetclass2_delphes_common.sh",
     "sbatch/run_jetclass2_cms_proxy_ladder.sh",
+    "src/hlt_classification/jetclass2_delphes/execution.py",
+    "sbatch/common.sh",
     "tests/test_cms_proxy_ladder.py",
 )
 AUTHORIZATION = "AUTHORIZE JETCLASS2 CMS PROXY 200K TIGRIS GATE"
@@ -44,6 +48,7 @@ DEBUG_AUTHORIZATION = "AUTHORIZE JETCLASS2 CMS PROXY 200K SPORC DEBUG GATE"
 PREFLIGHT_RECOVERY_AUTHORIZATION = (
     "AUTHORIZE JETCLASS2 CMS PROXY 200K SPORC PREFLIGHT RECOVERY"
 )
+OSCAR_AUTHORIZATION = "AUTHORIZE JETCLASS2 CMS PROXY 200K OSCAR PREFLIGHT"
 
 
 def _source(project: Path, commit: str) -> None:
@@ -111,6 +116,13 @@ def preflight_recovery_tasks() -> list[dict]:
     return [{
         "task_id": "preflight", "kind": "gpu", "dependencies": [],
         "cpus": 16, "memory_mb": 160_000, "minutes": 480,
+    }]
+
+
+def oscar_preflight_tasks() -> list[dict]:
+    return [{
+        "task_id": "preflight", "kind": "gpu", "dependencies": [],
+        "cpus": 12, "memory_mb": 160_000, "minutes": 720,
     }]
 
 
@@ -235,9 +247,65 @@ def create_sporc_preflight_recovery(
     return spec
 
 
+def create_oscar_gate(
+    *, materialization_root: Path, gate_root: Path, project_dir: Path,
+    source_commit: str,
+) -> dict:
+    """Measure an Oscar-native profile from relocated authenticated inputs."""
+    from .portable import validate_materialization
+
+    root = Path(gate_root).resolve()
+    if root.exists():
+        raise FileExistsError("Proxy-ladder Oscar gate root must be fresh")
+    project = Path(project_dir).resolve(strict=True)
+    source = source_lock(project, source_commit)
+    materialized_root = Path(materialization_root).resolve(strict=True)
+    materialization = load_json(materialized_root / "materialization.json")
+    validate_materialization(materialization, root=materialized_root)
+    release = materialization["release"]
+    foundation = materialization["foundation"]
+    workers, memory_mb = 12, oscar_preflight_tasks()[0]["memory_mb"]
+    bounds = {
+        role: preparation_bound(foundation, role, workers)
+        for role in ("train", "validation")
+    }
+    budgets = cache_budgets(foundation, memory_mb, workers)
+    site = execution_site("oscar_l40s")
+    spec = artifact(
+        "GATE_SPEC", version=4,
+        parents={
+            "source": source["content_hash"],
+            "request": release["request"]["content_hash"],
+            "imported_release": release["content_hash"],
+            "imported_foundation": foundation["content_hash"],
+            "portable_materialization": materialization["content_hash"],
+            "portable_bundle": materialization["bundle_sha256"],
+        },
+        source=source, request=release["request"], gate_root=str(root),
+        project_dir=str(project), source_commit=source_commit,
+        capacity=foundation["inputs"]["capacity"],
+        measurement_site=site, execution_site=site,
+        tasks=oscar_preflight_tasks(), workers=workers,
+        full_views_persisted=False,
+        materialization_root=str(materialized_root),
+        portable_materialization=materialization,
+        foundation_root=materialization["foundation_root"],
+        imported_foundation=foundation,
+        imported_release_root=materialization["release_root"],
+        imported_release=release,
+        cache_preparation_bounds=bounds, cache_budgets=budgets,
+        admission="relocated_exact_inputs_then_oscar_l40s_full_population_preflight",
+        site_transfer_policy=None,
+    )
+    root.mkdir(parents=True, exist_ok=False)
+    write_json(root / "gate_spec.json", spec)
+    validate_gate(spec, check_source=True)
+    return spec
+
+
 def validate_gate(spec: dict, *, check_source: bool = False) -> str:
     version = spec.get("schema_version")
-    if version not in (1, 2, 3):
+    if version not in (1, 2, 3, 4):
         raise ValueError("Unsupported proxy-ladder gate version")
     parents = {"source": spec["source"]["content_hash"], "request": spec["request"]["content_hash"]}
     if version in (2, 3):
@@ -247,12 +315,20 @@ def validate_gate(spec: dict, *, check_source: bool = False) -> str:
         })
     if version == 3:
         parents["imported_foundation"] = spec["imported_foundation"]["content_hash"]
+    if version == 4:
+        parents.update({
+            "imported_release": spec["imported_release"]["content_hash"],
+            "imported_foundation": spec["imported_foundation"]["content_hash"],
+            "portable_materialization": spec["portable_materialization"]["content_hash"],
+            "portable_bundle": spec["portable_materialization"]["bundle_sha256"],
+        })
     digest = validate(spec, "GATE_SPEC", version=version, parents=parents)
     validate(spec["source"], "SOURCE")
     from .release import validate_request
     validate_request(spec["request"])
     common_differs = (
-        spec["workers"] != 16 or spec["full_views_persisted"] is not False
+        spec["workers"] != (12 if version == 4 else 16)
+        or spec["full_views_persisted"] is not False
         or type(spec["capacity"]) is not int or spec["capacity"] < 16
     )
     if version == 1:
@@ -277,7 +353,7 @@ def validate_gate(spec: dict, *, check_source: bool = False) -> str:
             or spec["imported_release"]["request"] != spec["request"]
             or release_root != Path(spec["source_gate_root"]) / "release"
         )
-    else:
+    elif version == 3:
         source_root = Path(spec["source_gate_root"])
         subject = load_json(source_root / "gate_spec.json")
         if subject.get("schema_version") != 2:
@@ -310,6 +386,35 @@ def validate_gate(spec: dict, *, check_source: bool = False) -> str:
             or spec["cache_preparation_bounds"] != bounds
             or spec["cache_budgets"] != budgets
         )
+    else:
+        from .portable import validate_materialization
+
+        materialized_root = Path(spec["materialization_root"])
+        validate_materialization(spec["portable_materialization"], root=materialized_root)
+        release_root = Path(spec["imported_release_root"])
+        foundation_root = Path(spec["foundation_root"])
+        validate_release(spec["imported_release"], root=release_root)
+        validate_foundation(spec["imported_foundation"], root=foundation_root)
+        bounds = {
+            role: preparation_bound(spec["imported_foundation"], role, spec["workers"])
+            for role in ("train", "validation")
+        }
+        budgets = cache_budgets(
+            spec["imported_foundation"], oscar_preflight_tasks()[0]["memory_mb"],
+            spec["workers"],
+        )
+        differs = (
+            spec["measurement_site"] != execution_site("oscar_l40s")
+            or spec["execution_site"] != execution_site("oscar_l40s")
+            or spec["tasks"] != oscar_preflight_tasks()
+            or spec["site_transfer_policy"] is not None
+            or spec["imported_release"] != spec["portable_materialization"]["release"]
+            or spec["imported_foundation"] != spec["portable_materialization"]["foundation"]
+            or release_root != Path(spec["portable_materialization"]["release_root"])
+            or foundation_root != Path(spec["portable_materialization"]["foundation_root"])
+            or spec["cache_preparation_bounds"] != bounds
+            or spec["cache_budgets"] != budgets
+        )
     if common_differs or differs:
         raise ValueError("Proxy-ladder gate semantics differ")
     if check_source:
@@ -333,11 +438,17 @@ def validate_profile(profile: dict, *, foundation: dict, spec: dict) -> str:
             profile["execution_site"] != execution_site("tigris_gh200")
             or "measurement_site" in profile or "site_transfer_policy" in profile
         )
-    else:
+    elif version in (2, 3):
         site_differs = (
             profile.get("measurement_site") != execution_site("sporc_a100_debug")
             or profile["execution_site"] != execution_site("sporc_a100")
             or profile.get("site_transfer_policy") != DEBUG_PROFILE_TRANSFER
+        )
+    else:
+        site_differs = (
+            profile.get("measurement_site") is not None
+            or profile["execution_site"] != execution_site("oscar_l40s")
+            or profile.get("site_transfer_policy") is not None
         )
     recovery_resources_differ = (
         version == 3 and (
@@ -346,10 +457,18 @@ def validate_profile(profile: dict, *, foundation: dict, spec: dict) -> str:
             or profile["workers"] != spec["workers"]
         )
     )
+    oscar_resources_differ = (
+        version == 4 and (
+            profile["cpus"] != oscar_preflight_tasks()[0]["cpus"]
+            or profile["memory_mb"] != oscar_preflight_tasks()[0]["memory_mb"]
+            or profile["workers"] != spec["workers"]
+        )
+    )
     if (
         profile["source_commit"] != spec["source_commit"]
         or site_differs
         or recovery_resources_differ
+        or oscar_resources_differ
         or profile["foundation_sha256"] != foundation["content_hash"]
         or profile["model"] != model_contract()
         or profile["passed"] is not True
@@ -428,7 +547,7 @@ def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> di
         if site["name"] == "sporc_a100_debug" else {}
     )
     profile = artifact(
-        "RUNTIME_PROFILE", version=spec.get("schema_version", 1) if transfer else 1,
+        "RUNTIME_PROFILE", version=spec.get("schema_version", 1),
         parents={"gate": spec["content_hash"], "foundation": foundation["content_hash"]},
         source_commit=spec["source_commit"], foundation_sha256=foundation["content_hash"],
         execution_site=production_site(site), slurm_job_id=job_id, passed=True,
@@ -453,7 +572,7 @@ def run_gate_task(spec: dict, task_id: str) -> dict:
     root = Path(spec["gate_root"])
     release_root = (
         Path(spec["imported_release_root"])
-        if spec.get("schema_version") in (2, 3) else root / "release"
+        if spec.get("schema_version") in (2, 3, 4) else root / "release"
     )
     foundation_root = Path(spec.get("foundation_root", root / "foundation"))
     evidence_root = root / "evidence"
@@ -518,7 +637,10 @@ def run_gate_task(spec: dict, task_id: str) -> dict:
 
 __all__ = [
     "AUTHORIZATION", "DEBUG_AUTHORIZATION", "PREFLIGHT_RECOVERY_AUTHORIZATION",
+    "OSCAR_AUTHORIZATION",
+    "create_oscar_gate",
     "create_gate", "create_sporc_debug_gate", "create_sporc_preflight_recovery",
-    "debug_gate_tasks", "gate_tasks", "preflight_recovery_tasks", "run_gate_task",
+    "debug_gate_tasks", "gate_tasks", "preflight_recovery_tasks", "oscar_preflight_tasks",
+    "run_gate_task",
     "source_lock", "validate_gate", "validate_profile",
 ]

@@ -7,7 +7,11 @@ from pathlib import Path
 
 from hlt_classification.data.cache_contracts import load_json
 from hlt_classification.cms_proxy_ladder.gate import (
-    create_gate, create_sporc_debug_gate, create_sporc_preflight_recovery,
+    create_gate, create_oscar_gate, create_sporc_debug_gate,
+    create_sporc_preflight_recovery,
+)
+from hlt_classification.cms_proxy_ladder.portable import (
+    export_bundle, materialize_bundle,
 )
 from hlt_classification.cms_proxy_ladder.production import create_campaign, result_rows
 from hlt_classification.cms_proxy_ladder.submission import submit
@@ -33,6 +37,17 @@ def main() -> int:
     preflight.add_argument("--gate-root", type=Path, required=True)
     preflight.add_argument("--project-dir", type=Path, required=True)
     preflight.add_argument("--source-commit", required=True)
+    bundle = sub.add_parser("export-portable-bundle")
+    bundle.add_argument("--source-gate-root", type=Path, required=True)
+    bundle.add_argument("--output-root", type=Path, required=True)
+    materialize = sub.add_parser("materialize-portable-bundle")
+    materialize.add_argument("--bundle-root", type=Path, required=True)
+    materialize.add_argument("--output-root", type=Path, required=True)
+    oscar = sub.add_parser("create-oscar-gate")
+    oscar.add_argument("--materialization-root", type=Path, required=True)
+    oscar.add_argument("--gate-root", type=Path, required=True)
+    oscar.add_argument("--project-dir", type=Path, required=True)
+    oscar.add_argument("--source-commit", required=True)
     for name in ("dry-run-gate", "submit-gate"):
         command = sub.add_parser(name)
         command.add_argument("--gate-spec", type=Path, required=True)
@@ -64,6 +79,23 @@ def main() -> int:
         value = create_sporc_preflight_recovery(
             source_gate_root=args.source_gate_root, gate_root=args.gate_root,
             project_dir=args.project_dir, source_commit=args.source_commit,
+        )
+        print(value["content_hash"])
+    elif args.command == "export-portable-bundle":
+        value = export_bundle(
+            source_gate_root=args.source_gate_root, output_root=args.output_root,
+        )
+        print(value["content_hash"])
+    elif args.command == "materialize-portable-bundle":
+        value = materialize_bundle(
+            bundle_root=args.bundle_root, output_root=args.output_root,
+        )
+        print(value["content_hash"])
+    elif args.command == "create-oscar-gate":
+        value = create_oscar_gate(
+            materialization_root=args.materialization_root,
+            gate_root=args.gate_root, project_dir=args.project_dir,
+            source_commit=args.source_commit,
         )
         print(value["content_hash"])
     elif args.command in {"dry-run-gate", "submit-gate"}:

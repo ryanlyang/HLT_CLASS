@@ -11,6 +11,13 @@ case "${JC2_SITE:?explicit Delphes execution site required}" in
     export CONDA_BASE=/home/ryreu/miniforge3-aarch64
     export CONDA_ENV=atlas_kd_tigris
     ;;
+  oscar_l40s)
+    module load miniforge3/25.3.0-3-a6hh
+    export CONDA_BASE=/oscar/scratch/rlyang/hlt_classification/environments
+    export CONDA_ENV=atlas_kd_oscar
+    export CONDA_ACTIVATE_TARGET="${CONDA_BASE}/envs/${CONDA_ENV}"
+    export CONDA_SH="$(conda info --base)/etc/profile.d/conda.sh"
+    ;;
   *) echo "Unknown Delphes execution site: ${JC2_SITE}" >&2; exit 2 ;;
 esac
 

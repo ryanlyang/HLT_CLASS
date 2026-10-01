@@ -13,8 +13,8 @@ set -euo pipefail
 hlt_activate() {
   export PYTHONNOUSERSITE=1
   export PYTHONDONTWRITEBYTECODE=1
-  source "${CONDA_BASE}/etc/profile.d/conda.sh"
-  conda activate "${CONDA_ENV}"
+  source "${CONDA_SH:-${CONDA_BASE}/etc/profile.d/conda.sh}"
+  conda activate "${CONDA_ACTIVATE_TARGET:-${CONDA_ENV}}"
   export LD_LIBRARY_PATH="${CONDA_PREFIX}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
   cd "${PROJECT_DIR}"
   python -s -c 'import sys; assert sys.version_info[:2] == (3, 10)'

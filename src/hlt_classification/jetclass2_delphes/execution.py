@@ -28,10 +28,17 @@ def execution_site(name: str) -> dict:
                              gres="gpu:gh200:1", gpu_family="GH200", architecture="aarch64",
                              conda_base="/home/ryreu/miniforge3-aarch64", conda_env="atlas_kd_tigris",
                              max_cpus=72, max_memory_mb=550000),
+        "oscar_l40s": dict(cluster="slurmctld", partition="gpu", qos="norm-gpu",
+                            gres="gpu:l40s:1", gpu_family="L40S", architecture="x86_64",
+                            conda_base=("/oscar/scratch/rlyang/hlt_classification/"
+                                        "environments"),
+                            conda_env="atlas_kd_oscar", max_cpus=12,
+                            max_memory_mb=192000),
     }
     if name not in sites:
         raise ValueError("Unknown Delphes execution site")
-    return artifact("EXECUTION_SITE", name=name, account="reu-aisocial",
+    account = "default" if name == "oscar_l40s" else "reu-aisocial"
+    return artifact("EXECUTION_SITE", name=name, account=account,
                     nodes=1, tasks=1, gpus=1, **sites[name])
 
 

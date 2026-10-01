@@ -11,7 +11,8 @@ from hlt_classification.cms_proxy_ladder.campaign import (
 )
 from hlt_classification.cms_proxy_ladder.contracts import artifact
 from hlt_classification.cms_proxy_ladder.gate import (
-    debug_gate_tasks, gate_tasks, preflight_recovery_tasks,
+    debug_gate_tasks, gate_tasks, oscar_preflight_tasks,
+    preflight_recovery_tasks,
 )
 from hlt_classification.cms_proxy_ladder.inputs import build_inputs, input_contract
 from hlt_classification.cms_proxy_ladder.release import COUNTS, release_request
@@ -223,6 +224,84 @@ def test_sporc_preflight_recovery_is_right_sized_and_preflight_only(tmp_path, mo
     assert "--time=08:00:00" in command
     assert "--gres=gpu:a100:1" in command
     assert any("jc2pxr_preflight" in value for value in command)
+
+
+def test_oscar_l40s_site_and_preflight_plan_are_exact(tmp_path, monkeypatch):
+    from hlt_classification.cms_proxy_ladder import submission
+
+    site = execution_site("oscar_l40s")
+    assert site["cluster"] == "slurmctld"
+    assert site["account"] == "default"
+    assert site["partition"] == "gpu"
+    assert site["qos"] == "norm-gpu"
+    assert site["gres"] == "gpu:l40s:1"
+    assert site["max_cpus"] == 12
+    assert site["max_memory_mb"] == 192_000
+    tasks = oscar_preflight_tasks()
+    assert tasks == [{
+        "task_id": "preflight", "kind": "gpu", "dependencies": [],
+        "cpus": 12, "memory_mb": 160_000, "minutes": 720,
+    }]
+    spec = artifact(
+        "GATE_SPEC", version=4, gate_root=str(tmp_path / "gate"),
+        project_dir=str(tmp_path), measurement_site=site,
+        execution_site=site, tasks=tasks,
+    )
+    monkeypatch.setattr(submission, "validate_gate", lambda value: value["content_hash"])
+    plan = submission.gate_plan(spec)
+    command = plan["commands"][0]["command"]
+    assert "--account=default" in command
+    assert "--partition=gpu" in command
+    assert "--qos=norm-gpu" in command
+    assert "--cpus-per-task=12" in command
+    assert "--mem=160000M" in command
+    assert "--time=12:00:00" in command
+    assert "--gres=gpu:l40s:1" in command
+    assert any("jc2pxo_preflight" in value for value in command)
+    assert "JC2_SITE=oscar_l40s" in command[-1]
+
+
+def test_portable_relocation_republishes_paths_without_recomputing_banks(tmp_path):
+    from hlt_classification.cms_proxy_ladder.portable import (
+        _relocated_foundation, _relocated_release,
+    )
+
+    original_request = release_request(
+        study_root=tmp_path / "old-study", offline_root=tmp_path / "old-offline",
+    )
+    original_release = artifact(
+        "RELEASE",
+        parents={"request": original_request["content_hash"], "study": "1" * 64},
+        request=original_request, study_root=str(tmp_path / "old-study"),
+        offline_root=str(tmp_path / "old-offline"), marker="same-bank",
+    )
+    matcher = artifact("MATCHER_TEST")
+    views = artifact("VIEWS_TEST")
+    inputs = artifact("INPUTS_TEST")
+    original_foundation = artifact(
+        "FOUNDATION",
+        parents={
+            "release": original_release["content_hash"],
+            "matcher": matcher["content_hash"], "views": views["content_hash"],
+            "inputs": inputs["content_hash"],
+        },
+        release=original_release, release_root=str(tmp_path / "old-release"),
+        matcher=matcher, views=views, inputs=inputs, assignments={"path": "assignments.npz"},
+    )
+    relocated_release = _relocated_release(
+        original_release, release_root=tmp_path / "new-release",
+        study_root=tmp_path / "new-study", offline_root=tmp_path / "new-offline",
+    )
+    relocated_foundation = _relocated_foundation(
+        original_foundation, release=relocated_release,
+        release_root=tmp_path / "new-release",
+    )
+    assert relocated_release["relocated_from"] == original_release["content_hash"]
+    assert relocated_release["marker"] == "same-bank"
+    assert relocated_release["content_hash"] != original_release["content_hash"]
+    assert relocated_foundation["relocated_from"] == original_foundation["content_hash"]
+    assert relocated_foundation["release"] == relocated_release
+    assert relocated_foundation["assignments"] == original_foundation["assignments"]
 
 
 def test_science_command_plan_has_17_fits_12_reducers_and_cpu_tail(tmp_path, monkeypatch):
