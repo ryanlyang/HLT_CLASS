@@ -76,5 +76,27 @@ The observed Oscar incident has two roots on `gpu3001`: `train_OFFLINE` and
 reusable, while the two roots, all DIRECT/COARSE descendants, aggregate, and
 completion are replaced. The recovery fails closed for a non-ECC root or any
 unrelated terminal task. Its command plan and dry/live ledgers are immutable.
+`CAMPAIGN_ECC_RECOVERY_COMMAND_PLAN/v2` places Slurm `afterok` dependencies
+only on jobs submitted inside the replacement closure. Reused parents are
+already authenticated immutable outputs and therefore carry provenance in the
+recovery specification without referring to historical Slurm IDs that may
+have aged out of the controller. This changes no task graph or scientific
+dependency: a reused parent is admitted only after its completed artifact has
+validated byte-for-byte during recovery creation.
+
+If a legacy v1 live submission accepted a prefix before Slurm rejected an
+aged-out external dependency, `CAMPAIGN_ECC_RECOVERY_SUBMISSION_REPAIR/v1`
+imports the exact validated journal prefix instead of cancelling or
+resubmitting it. Its separate command plan and dry/live ledgers bind the v2
+dependency policy and a fresh controller source lock. Imported job IDs are
+re-authenticated through exact accounting and are never submitted twice.
+Because an imported job can itself age out before the continuation is
+submitted, it is not reused as a Slurm dependency. Its true descendant worker
+still checks the immutable completed-task artifact before doing any work and
+fails closed if the imported task did not publish successfully. The repair is
+additive: the historical v1 plan, dry run, and partial journal remain immutable
+evidence.
 Live recovery requires the exact phrase
 `AUTHORIZE JETCLASS2 CMS PROXY CAMPAIGN ECC RECOVERY`.
+Live submission repair separately requires
+`AUTHORIZE JETCLASS2 CMS PROXY ECC SUBMISSION REPAIR`.

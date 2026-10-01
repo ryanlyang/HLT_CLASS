@@ -47,6 +47,13 @@ def _journal(
     return events, jobs
 
 
+def load_exact_dag_journal(
+    directory: str | Path, *, identity: str, plan: Mapping[str, Any],
+) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    """Validate and return an immutable partial exact-DAG submission prefix."""
+    return _journal(Path(directory), identity=identity, plan=plan)
+
+
 def submit_exact_dag(
     *, identity: str, plan: Mapping[str, Any], output: str | Path,
     canonical_dry_run: str | Path, execute: bool,
@@ -103,4 +110,4 @@ def submit_exact_dag(
     return ledger
 
 
-__all__ = ["submit_exact_dag"]
+__all__ = ["load_exact_dag_journal", "submit_exact_dag"]

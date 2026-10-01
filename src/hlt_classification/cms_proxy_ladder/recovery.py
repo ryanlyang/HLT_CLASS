@@ -6,10 +6,12 @@ import re
 import subprocess
 
 from hlt_classification.data.cache_contracts import load_json, validate_content_hash
-from hlt_classification.scouting.hcwdl_exact_dag_submission import submit_exact_dag
+from hlt_classification.scouting.hcwdl_exact_dag_submission import (
+    load_exact_dag_journal, submit_exact_dag,
+)
 from hlt_classification.scouting.hcwdl_recovery import (
-    TERMINAL_FAILURE, build_monitor_report, resume_tasks,
-    validate_submission_ledger,
+    TERMINAL_FAILURE, build_monitor_report, build_submission_event,
+    build_submission_ledger, resume_tasks, validate_submission_ledger,
 )
 
 from .contracts import artifact, file_ref, validate, validate_file_ref, write_json
@@ -19,6 +21,7 @@ from .submission import validate_plan
 
 
 AUTHORIZATION = "AUTHORIZE JETCLASS2 CMS PROXY CAMPAIGN ECC RECOVERY"
+REPAIR_AUTHORIZATION = "AUTHORIZE JETCLASS2 CMS PROXY ECC SUBMISSION REPAIR"
 ECC_SIGNATURE = "uncorrectable ECC error encountered"
 _NODE = re.compile(r"^[A-Za-z0-9._-]+$")
 _ROOT_FAILURES = frozenset({
@@ -251,8 +254,8 @@ def recovery_plan(spec: dict) -> dict:
             if parent in retry:
                 dependencies.append(parent)
                 slurm_dependencies.append(f"${{JOB_{parent}}}")
-            else:
-                slurm_dependencies.append(spec["source_jobs"][parent])
+            elif parent not in spec["source_jobs"]:
+                raise ValueError("Recovery parent is neither retried nor authenticated")
         if slurm_dependencies:
             command.insert(
                 wrap, "--dependency=afterok:" + ":".join(slurm_dependencies),
@@ -263,7 +266,235 @@ def recovery_plan(spec: dict) -> dict:
         })
     return artifact(
         "CAMPAIGN_ECC_RECOVERY_COMMAND_PLAN",
+        version=2,
         parents={"recovery": spec["content_hash"]}, commands=commands,
+    )
+
+
+def _legacy_recovery_evidence(spec: dict):
+    root = Path(spec["recovery_root"])
+    legacy_plan = load_json(root / "command_plan.json")
+    validate(
+        legacy_plan, "CAMPAIGN_ECC_RECOVERY_COMMAND_PLAN", version=1,
+        parents={"recovery": spec["content_hash"]},
+    )
+    legacy_dry = load_json(root / "dry_run_submission_ledger.json")
+    validate_submission_ledger(legacy_dry)
+    raw = {
+        row["task_id"]: list(map(str, row["command"]))
+        for row in legacy_plan["commands"]
+    }
+    expected_dry = build_submission_ledger(
+        campaign_spec_sha256=spec["content_hash"],
+        jobs={task: "1" for task in raw}, commands=raw, dry_run=True,
+    )
+    if legacy_dry != expected_dry:
+        raise ValueError("Legacy ECC recovery dry-run evidence differs")
+    if (root / "submission_ledger.json").exists():
+        raise FileExistsError("Legacy ECC recovery already has a live ledger")
+    journal = root / "submission_ledger_journal"
+    events, jobs = load_exact_dag_journal(
+        journal, identity=spec["content_hash"], plan=legacy_plan,
+    )
+    if not events:
+        raise ValueError("ECC submission repair requires a partial live journal")
+    fixed = recovery_plan(spec)
+    for index, event in enumerate(events):
+        row = fixed["commands"][index]
+        command = list(map(str, row["command"]))
+        for parent in row["dependencies"]:
+            if parent not in jobs:
+                raise ValueError("Imported ECC dependency is absent")
+            command = [
+                item.replace(f"${{JOB_{parent}}}", jobs[parent])
+                for item in command
+            ]
+        if event["task_id"] != row["task_id"] or event["command"] != command:
+            raise ValueError("Partial ECC journal prefix differs from fixed plan")
+    paths = sorted(journal.glob("*.json"))
+    return root, legacy_plan, legacy_dry, fixed, paths, events, jobs
+
+
+def create_submission_repair(
+    *, recovery_spec: dict, project_dir: Path, source_commit: str,
+    states_by_job_id: dict[str, str], nodes_by_job_id: dict[str, str],
+) -> dict:
+    """Bind a fixed plan to an already-submitted valid journal prefix."""
+    validate_recovery(recovery_spec, check_source=True)
+    root, legacy_plan, legacy_dry, _, paths, events, jobs = (
+        _legacy_recovery_evidence(recovery_spec)
+    )
+    destination = root / "submission_repair_spec.json"
+    if destination.exists():
+        raise FileExistsError("ECC submission repair already exists")
+    if set(states_by_job_id) != set(jobs.values()):
+        raise ValueError("Imported ECC job-state snapshot is incomplete")
+    if set(nodes_by_job_id) != set(jobs.values()):
+        raise ValueError("Imported ECC node snapshot is incomplete")
+    allowed = {"PENDING", "CONFIGURING", "RUNNING", "COMPLETING", "COMPLETED"}
+    if any(state not in allowed for state in states_by_job_id.values()):
+        raise ValueError("Imported ECC job is not live or successfully completed")
+    repair_source = source_lock(Path(project_dir), source_commit)
+    parents = {
+        "recovery": recovery_spec["content_hash"],
+        "legacy_command_plan": legacy_plan["content_hash"],
+        "legacy_dry_run": legacy_dry["content_hash"],
+        "repair_source": repair_source["content_hash"],
+    }
+    value = artifact(
+        "CAMPAIGN_ECC_RECOVERY_SUBMISSION_REPAIR", parents=parents,
+        recovery_root=str(root), recovery_spec_sha256=recovery_spec["content_hash"],
+        project_dir=str(Path(project_dir).resolve()), source_commit=source_commit,
+        repair_source=repair_source,
+        imported_journal=[file_ref(path, root=root) for path in paths],
+        imported_jobs=jobs,
+        imported_accounting_states={
+            task: states_by_job_id[job] for task, job in jobs.items()
+        },
+        imported_nodes={task: nodes_by_job_id[job] for task, job in jobs.items()},
+        stale_completed_source_dependencies_removed=True,
+        imported_jobs_resubmitted=False,
+        scientific_configuration_changed=False,
+    )
+    write_json(destination, value)
+    validate_submission_repair(value, check_source=True)
+    return value
+
+
+def validate_submission_repair(value: dict, *, check_source: bool = False) -> str:
+    parents = value["parents"]
+    digest = validate(
+        value, "CAMPAIGN_ECC_RECOVERY_SUBMISSION_REPAIR", parents=parents,
+    )
+    root = Path(value["recovery_root"]).resolve(strict=True)
+    recovery = load_json(root / "recovery_spec.json")
+    validate_recovery(recovery, check_source=True)
+    evidence = _legacy_recovery_evidence(recovery)
+    _, legacy_plan, legacy_dry, _, paths, _, jobs = evidence
+    repair_source = value["repair_source"]
+    validate(repair_source, "SOURCE")
+    if (
+        parents != {
+            "recovery": recovery["content_hash"],
+            "legacy_command_plan": legacy_plan["content_hash"],
+            "legacy_dry_run": legacy_dry["content_hash"],
+            "repair_source": repair_source["content_hash"],
+        }
+        or value["recovery_spec_sha256"] != recovery["content_hash"]
+        or value["imported_journal"]
+        != [file_ref(path, root=root) for path in paths]
+        or value["imported_jobs"] != jobs
+        or set(value["imported_accounting_states"]) != set(jobs)
+        or any(
+            state not in {
+                "PENDING", "CONFIGURING", "RUNNING", "COMPLETING", "COMPLETED",
+            }
+            for state in value["imported_accounting_states"].values()
+        )
+        or set(value["imported_nodes"]) != set(jobs)
+        or value["stale_completed_source_dependencies_removed"] is not True
+        or value["imported_jobs_resubmitted"] is not False
+        or value["scientific_configuration_changed"] is not False
+    ):
+        raise ValueError("ECC submission-repair lineage or semantics differ")
+    if check_source and (
+        source_lock(Path(value["project_dir"]), value["source_commit"])
+        != repair_source
+    ):
+        raise ValueError("ECC submission-repair controller source differs")
+    return digest
+
+
+def submission_repair_plan(value: dict) -> dict:
+    validate_submission_repair(value)
+    root = Path(value["recovery_root"])
+    recovery = load_json(root / "recovery_spec.json")
+    fixed = recovery_plan(recovery)
+    imported = set(value["imported_jobs"])
+    commands = []
+    for source in fixed["commands"]:
+        row = {
+            "task_id": source["task_id"],
+            "dependencies": [
+                parent for parent in source["dependencies"]
+                if parent not in imported
+            ],
+            "command": [],
+        }
+        omitted = {f"${{JOB_{parent}}}" for parent in imported}
+        for item in source["command"]:
+            if item.startswith("--dependency=afterok:"):
+                values = item.removeprefix("--dependency=afterok:").split(":")
+                values = [candidate for candidate in values if candidate not in omitted]
+                if values:
+                    row["command"].append("--dependency=afterok:" + ":".join(values))
+            else:
+                row["command"].append(item)
+        commands.append(row)
+    return artifact(
+        "CAMPAIGN_ECC_RECOVERY_SUBMISSION_REPAIR_COMMAND_PLAN",
+        parents={"repair": value["content_hash"]},
+        commands=commands,
+    )
+
+
+def _seed_submission_repair_journal(value: dict, plan: dict) -> None:
+    root = Path(value["recovery_root"])
+    original = root / "submission_ledger_journal"
+    legacy_plan = load_json(root / "command_plan.json")
+    events, _ = load_exact_dag_journal(
+        original,
+        identity=load_json(root / "recovery_spec.json")["content_hash"],
+        plan=legacy_plan,
+    )
+    destination = root / "submission_repair_ledger_journal"
+    jobs = {}
+    for sequence, old in enumerate(events):
+        row = plan["commands"][sequence]
+        command = list(map(str, row["command"]))
+        for parent in row["dependencies"]:
+            command = [
+                item.replace(f"${{JOB_{parent}}}", jobs[parent])
+                for item in command
+            ]
+        event = build_submission_event(
+            campaign_spec_sha256=value["content_hash"],
+            task_id=row["task_id"], job_id=old["job_id"],
+            command=command, sequence=sequence,
+        )
+        path = destination / f"{sequence:04d}_{row['task_id']}.json"
+        if path.exists():
+            if load_json(path) != event:
+                raise FileExistsError("Imported ECC repair journal differs")
+        else:
+            write_json(path, event)
+        jobs[row["task_id"]] = old["job_id"]
+
+
+def submit_submission_repair(
+    value: dict, *, execute: bool, authorization_phrase: str | None,
+) -> dict:
+    validate_submission_repair(value, check_source=True)
+    plan = submission_repair_plan(value)
+    root = Path(value["recovery_root"])
+    plan_path = root / "submission_repair_command_plan.json"
+    if plan_path.exists():
+        if load_json(plan_path) != plan:
+            raise FileExistsError("ECC submission-repair command plan differs")
+    else:
+        write_json(plan_path, plan)
+    if execute and authorization_phrase != REPAIR_AUTHORIZATION:
+        raise PermissionError("Live ECC submission repair requires exact authorization")
+    if execute:
+        _seed_submission_repair_journal(value, plan)
+    return submit_exact_dag(
+        identity=value["content_hash"], plan=plan,
+        output=root / (
+            "submission_repair_ledger.json" if execute
+            else "submission_repair_dry_run_ledger.json"
+        ),
+        canonical_dry_run=root / "submission_repair_dry_run_ledger.json",
+        execute=execute,
     )
 
 
@@ -293,7 +524,9 @@ def submit_recovery(
 
 
 __all__ = [
-    "AUTHORIZATION", "ECC_SIGNATURE", "create_ecc_recovery",
-    "recovery_plan", "scheduler_snapshot", "submit_recovery",
-    "validate_recovery",
+    "AUTHORIZATION", "ECC_SIGNATURE", "REPAIR_AUTHORIZATION",
+    "create_ecc_recovery", "create_submission_repair", "recovery_plan",
+    "scheduler_snapshot", "submission_repair_plan", "submit_recovery",
+    "submit_submission_repair", "validate_recovery",
+    "validate_submission_repair",
 ]

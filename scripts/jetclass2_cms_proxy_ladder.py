@@ -19,9 +19,13 @@ from hlt_classification.cms_proxy_ladder.production import (
     create_campaign, create_direct_coarse_campaign, result_rows,
 )
 from hlt_classification.cms_proxy_ladder.recovery import (
-    create_ecc_recovery, scheduler_snapshot, submit_recovery,
+    create_ecc_recovery, create_submission_repair, scheduler_snapshot,
+    submit_recovery, submit_submission_repair,
 )
 from hlt_classification.cms_proxy_ladder.submission import submit
+from hlt_classification.scouting.hcwdl_exact_dag_submission import (
+    load_exact_dag_journal,
+)
 
 
 def main() -> int:
@@ -87,6 +91,16 @@ def main() -> int:
     for name in ("dry-run-ecc-recovery", "submit-ecc-recovery"):
         command = sub.add_parser(name)
         command.add_argument("--recovery-spec", type=Path, required=True)
+        command.add_argument("--authorization-phrase")
+    repair = sub.add_parser("create-ecc-submission-repair")
+    repair.add_argument("--recovery-spec", type=Path, required=True)
+    repair.add_argument("--project-dir", type=Path, required=True)
+    repair.add_argument("--source-commit", required=True)
+    for name in (
+        "dry-run-ecc-submission-repair", "submit-ecc-submission-repair",
+    ):
+        command = sub.add_parser(name)
+        command.add_argument("--repair-spec", type=Path, required=True)
         command.add_argument("--authorization-phrase")
     results = sub.add_parser("results")
     results.add_argument("--campaign-spec", type=Path, required=True)
@@ -179,6 +193,31 @@ def main() -> int:
         ledger = submit_recovery(
             value,
             execute=args.command == "submit-ecc-recovery",
+            authorization_phrase=args.authorization_phrase,
+        )
+        print(ledger["content_hash"])
+    elif args.command == "create-ecc-submission-repair":
+        recovery = load_json(args.recovery_spec)
+        root = Path(recovery["recovery_root"])
+        legacy_plan = load_json(root / "command_plan.json")
+        _, jobs = load_exact_dag_journal(
+            root / "submission_ledger_journal",
+            identity=recovery["content_hash"], plan=legacy_plan,
+        )
+        states, nodes = scheduler_snapshot(jobs.values())
+        value = create_submission_repair(
+            recovery_spec=recovery, project_dir=args.project_dir,
+            source_commit=args.source_commit, states_by_job_id=states,
+            nodes_by_job_id=nodes,
+        )
+        print(value["content_hash"])
+    elif args.command in {
+        "dry-run-ecc-submission-repair", "submit-ecc-submission-repair",
+    }:
+        value = load_json(args.repair_spec)
+        ledger = submit_submission_repair(
+            value,
+            execute=args.command == "submit-ecc-submission-repair",
             authorization_phrase=args.authorization_phrase,
         )
         print(ledger["content_hash"])

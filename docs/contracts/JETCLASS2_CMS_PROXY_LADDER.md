@@ -101,10 +101,29 @@ reported control, not the recovery oracle.
 recovery for verified uncorrectable-ECC roots in `CAMPAIGN_SPEC/v2`. It derives
 the retry set as the exact registered downstream closure, reuses authenticated
 successful task outputs, and excludes every evidenced failed node from all
-replacement GPU jobs. Every reused dependency is the exact job ID from the
-parent live ledger. The recovery fails closed for non-ECC roots, unrelated
-terminal tasks, missing success artifacts, or a retry set that differs from
-the graph closure.
+replacement GPU jobs. Reused parent job IDs remain recorded as immutable
+provenance in the recovery specification. They are not emitted as Slurm
+dependencies because their outputs are authenticated before the recovery is
+created and historical jobs may age out of the Slurm controller.
+`JETCLASS2_CMS_PROXY_LADDER_CAMPAIGN_ECC_RECOVERY_COMMAND_PLAN/v2` emits exact
+`afterok` dependencies only between jobs in the replacement closure. The
+recovery fails closed for non-ECC roots, unrelated terminal tasks, missing
+success artifacts, an unauthenticated reused parent, or a retry set that
+differs from the graph closure.
+
+`JETCLASS2_CMS_PROXY_LADDER_CAMPAIGN_ECC_RECOVERY_SUBMISSION_REPAIR/v1`
+authenticates an interrupted legacy v1 submission whose immutable journal is a
+valid prefix of the corrected plan. It binds the legacy recovery, v1 command
+plan, canonical dry-run ledger, every journal-event byte, exact imported job
+IDs and their accounting snapshot, and a fresh source lock. Its corresponding
+`CAMPAIGN_ECC_RECOVERY_SUBMISSION_REPAIR_COMMAND_PLAN/v1` removes only
+historical completed-parent Slurm dependencies. It imports, but never
+resubmits, the accepted prefix. Imported jobs are also omitted from new Slurm
+dependencies because they can age out before continuation; registered
+descendant workers retain the scientific dependency and fail closed unless the
+imported task's immutable completed output authenticates. Separate command-plan,
+dry-run, live-ledger and journal filenames preserve all legacy evidence without
+overwrite.
 
 `CAMPAIGN_SPEC/v1` binds the completed gate, foundation, runtime profile,
 scientific plan, task graph, model factory, exact source, and separate fresh

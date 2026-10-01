@@ -740,14 +740,17 @@ def test_campaign_ecc_recovery_reuses_completed_and_retries_exact_closure(
         "train_M0HLT": "100", "train_U000": "102",
     }
     plan = module.recovery_plan(spec)
+    assert plan["contract"] == (
+        "JETCLASS2_CMS_PROXY_LADDER_"
+        "CAMPAIGN_ECC_RECOVERY_COMMAND_PLAN/v2"
+    )
     rows = {row["task_id"]: row for row in plan["commands"]}
     assert list(rows) == spec["retry_tasks"]
     assert "--exclude=gpu3001" in rows["train_OFFLINE"]["command"]
-    reduce_dependency = next(
-        item for item in rows["reduce_U000"]["command"]
-        if item.startswith("--dependency=")
+    assert not any(
+        item.startswith("--dependency=")
+        for item in rows["reduce_U000"]["command"]
     )
-    assert reduce_dependency == "--dependency=afterok:102"
     direct_dependency = next(
         item for item in rows["train_CMSP_DIRECT_D000_from_U000"]["command"]
         if item.startswith("--dependency=")
@@ -758,10 +761,116 @@ def test_campaign_ecc_recovery_reuses_completed_and_retries_exact_closure(
         if item.startswith("--dependency=")
     )
     assert dependency == (
-        "--dependency=afterok:100:${JOB_train_OFFLINE}:102:"
+        "--dependency=afterok:${JOB_train_OFFLINE}:"
         "${JOB_reduce_U000}:${JOB_train_CMSP_DIRECT_D000_from_U000}"
     )
+    rendered = "\n".join(
+        " ".join(row["command"]) for row in plan["commands"]
+    )
+    assert "--dependency=afterok:100" not in rendered
+    assert "--dependency=afterok:102" not in rendered
     assert rows["campaign_complete"]["dependencies"] == ["aggregate"]
+
+    # Reproduce the real Oscar interruption: v1 accepted the first root job,
+    # then Slurm rejected the next row's aged-out completed-job dependency.
+    from hlt_classification.scouting.hcwdl_recovery import build_submission_event
+
+    recovery_root = tmp_path / "recovery"
+    legacy_rows = json.loads(json.dumps(plan["commands"]))
+    legacy_by_task = {row["task_id"]: row for row in legacy_rows}
+    reduce_row = legacy_by_task["reduce_U000"]
+    reduce_wrap = next(
+        index for index, item in enumerate(reduce_row["command"])
+        if item.startswith("--wrap=")
+    )
+    reduce_row["command"].insert(reduce_wrap, "--dependency=afterok:102")
+    aggregate_row = legacy_by_task["aggregate"]
+    aggregate_row["command"] = [
+        item.replace(
+            "--dependency=afterok:",
+            "--dependency=afterok:100:102:",
+        ) if item.startswith("--dependency=") else item
+        for item in aggregate_row["command"]
+    ]
+    legacy_plan = artifact(
+        "CAMPAIGN_ECC_RECOVERY_COMMAND_PLAN", version=1,
+        parents={"recovery": spec["content_hash"]}, commands=legacy_rows,
+    )
+    module.write_json(recovery_root / "command_plan.json", legacy_plan)
+    legacy_raw = {
+        row["task_id"]: row["command"] for row in legacy_plan["commands"]
+    }
+    legacy_dry = build_submission_ledger(
+        campaign_spec_sha256=spec["content_hash"],
+        jobs={task: "1" for task in legacy_raw},
+        commands=legacy_raw, dry_run=True,
+    )
+    module.write_json(
+        recovery_root / "dry_run_submission_ledger.json", legacy_dry,
+    )
+    first = legacy_plan["commands"][0]
+    event = build_submission_event(
+        campaign_spec_sha256=spec["content_hash"],
+        task_id=first["task_id"], job_id="999",
+        command=first["command"], sequence=0,
+    )
+    module.write_json(
+        recovery_root
+        / "submission_ledger_journal/0000_train_OFFLINE.json",
+        event,
+    )
+    repair = module.create_submission_repair(
+        recovery_spec=spec, project_dir=tmp_path, source_commit="b" * 40,
+        states_by_job_id={"999": "RUNNING"},
+        nodes_by_job_id={"999": "gpu3105"},
+    )
+    assert repair["imported_jobs"] == {"train_OFFLINE": "999"}
+    repaired_plan = module.submission_repair_plan(repair)
+    repaired_rendered = "\n".join(
+        " ".join(row["command"])
+        for row in repaired_plan["commands"]
+    )
+    assert "afterok:100" not in repaired_rendered
+    assert "afterok:102" not in repaired_rendered
+    repaired_dry = module.submit_submission_repair(
+        repair, execute=False, authorization_phrase=None,
+    )
+    assert repaired_dry["dry_run"] is True
+    module._seed_submission_repair_journal(repair, repaired_plan)
+    imported = json.loads(
+        (
+            recovery_root
+            / "submission_repair_ledger_journal/0000_train_OFFLINE.json"
+        ).read_text()
+    )
+    assert imported["job_id"] == "999"
+    assert imported["campaign_spec_sha256"] == repair["content_hash"]
+    from types import SimpleNamespace
+    from hlt_classification.scouting import hcwdl_exact_dag_submission as exact
+
+    submitted = []
+
+    def fake_submit(command, **kwargs):
+        submitted.append(command)
+        return SimpleNamespace(stdout=f"{1000 + len(submitted)}\n")
+
+    monkeypatch.setattr(exact.subprocess, "run", fake_submit)
+    repaired_live = module.submit_submission_repair(
+        repair, execute=True,
+        authorization_phrase=module.REPAIR_AUTHORIZATION,
+    )
+    assert repaired_live["jobs"]["train_OFFLINE"] == "999"
+    assert len(submitted) == len(spec["retry_tasks"]) - 1
+    assert not any(
+        item.startswith("--dependency=") for item in submitted[0]
+    )
+    aggregate_command = submitted[-2]
+    aggregate_dependency = next(
+        item for item in aggregate_command if item.startswith("--dependency=")
+    )
+    assert "999" not in aggregate_dependency
+    assert "100" not in aggregate_dependency.split(":")[2:]
+    assert "102" not in aggregate_dependency.split(":")[2:]
 
 
 def test_campaign_ecc_recovery_rejects_non_ecc_failure(tmp_path, monkeypatch):
