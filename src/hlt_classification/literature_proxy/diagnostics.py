@@ -37,11 +37,11 @@ def edges(name):
     return np.arange(-.5, 1000.5)  # counts
 
 
-def summarize(values, name):
+def summarize(values, name, *, bins=None):
     a = np.asarray(values, dtype=np.float64).reshape(-1)
     if not np.isfinite(a).all():
         raise ValueError(f"Nonfinite diagnostic: {name}")
-    bins = edges(name)
+    bins = edges(name) if bins is None else np.asarray(bins)
     return dict(count=len(a), sum=float(a.sum()), sumsq=float(np.dot(a, a)),
                 minimum=float(a.min()) if len(a) else None, maximum=float(a.max()) if len(a) else None,
                 bins=bins.tolist(), histogram=np.histogram(a, bins=bins)[0].tolist(),
@@ -158,7 +158,7 @@ class Collector:
         return {name: summarize(np.concatenate(values), name) for name, values in sorted(self.values.items())}
 
 
-def exports(root, rows):
+def exports(root, rows, *, sides=("OFFLINE", "MILD", "NOMINAL", "STRONG")):
     buf = io.StringIO(newline="")
     w = csv.writer(buf)
     w.writerow(("observable", "count", "mean", "sd", "q50_bin_approx", "q90_bin_approx", "q99_bin_approx", "min", "max", "underflow", "overflow"))
@@ -177,7 +177,7 @@ def exports(root, rows):
             fig, axes = plt.subplots(2, 3, figsize=(12, 7))
             for ax, field in zip(axes.flat, fields[start:start + 6]):
                 occupied = []
-                for side in ("OFFLINE", "MILD", "NOMINAL", "STRONG"):
+                for side in sides:
                     row = rows[f"{side}/{field}"]
                     hist = np.array(row["histogram"]) / max(1, row["count"])
                     ax.stairs(hist, row["bins"], label=side)
