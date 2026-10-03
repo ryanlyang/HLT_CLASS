@@ -68,11 +68,17 @@ def _source(project: Path, commit: str) -> None:
     validate_source_checkout(Path(project), expected_commit=commit)
 
 
-def source_lock(project: Path, commit: str) -> dict:
+def source_lock(project: Path, commit: str, *, literature: bool = False) -> dict:
     _source(project, commit)
     root = Path(project).resolve()
     package = sorted((root / "src/hlt_classification/cms_proxy_ladder").glob("*.py"))
     files = [root / name for name in SOURCE_FILES] + package
+    if literature:
+        from .literature import SOURCE_FILES as extra
+        files += [root / name for name in extra]
+        for folder in ("literature_proxy_production", "literature_proxy", "literature_proxy_v2",
+                       "literature_proxy_v3", "jetclass2_delphes", "cms2jc2_production", "cms2jc2_response"):
+            files += sorted((root / "src/hlt_classification" / folder).glob("*.py"))
     result = {}
     for path in files:
         relative = path.relative_to(root).as_posix()
@@ -478,6 +484,9 @@ def create_oscar_direct_coarse_gate(
 
 def validate_gate(spec: dict, *, check_source: bool = False) -> str:
     version = spec.get("schema_version")
+    if version == 7:
+        from .literature import validate_gate as validate_literature_gate
+        return validate_literature_gate(spec, check_source=check_source)
     if version not in (1, 2, 3, 4, 5, 6):
         raise ValueError("Unsupported proxy-ladder gate version")
     parents = {"source": spec["source"]["content_hash"], "request": spec["request"]["content_hash"]}
@@ -637,6 +646,9 @@ def validate_gate(spec: dict, *, check_source: bool = False) -> str:
 
 
 def validate_profile(profile: dict, *, foundation: dict, spec: dict) -> str:
+    if spec.get("schema_version") == 7:
+        from .literature import validate_profile as validate_literature_profile
+        return validate_literature_profile(profile, foundation=foundation, spec=spec)
     version = profile.get("schema_version")
     expected = spec.get("schema_version")
     if version != expected:
@@ -723,6 +735,7 @@ def validate_profile(profile: dict, *, foundation: dict, spec: dict) -> str:
 
 
 def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> dict:
+    literature = spec.get("schema_version") == 7
     site = spec.get("measurement_site", spec["execution_site"])
     job_id, cpus, memory_mb = allocation(site)
     workers = spec["workers"]
@@ -734,14 +747,18 @@ def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> di
         population_selection=population,
     )
     environment = installed_environment()
-    plan = (
-        build_direct_coarse_plan(
-            foundation, population_selection=population,
-            foundation_root=foundation_root,
+    if literature:
+        from .literature import scientific_plan
+        plan = scientific_plan(foundation, foundation_root=foundation_root)
+    else:
+        plan = (
+            build_direct_coarse_plan(
+                foundation, population_selection=population,
+                foundation_root=foundation_root,
+            )
+            if spec.get("schema_version") == 6
+            else build_scientific_plan(foundation, foundation_root=foundation_root)
         )
-        if spec.get("schema_version") == 6
-        else build_scientific_plan(foundation, foundation_root=foundation_root)
-    )
     node = next(row for row in plan["nodes"] if row["node_id"] == "U000")
     started = time.monotonic()
     train = prepare_cache(
@@ -755,6 +772,11 @@ def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> di
         population_selection=population,
     )
     u000_cache_seconds = time.monotonic() - started
+    parity_fields = {}
+    if literature:
+        from hlt_classification.jetclass2_delphes.acceptance import installed_parity
+        parity_fields = {"installed_weaver_parity": installed_parity(train, device="cuda"),
+                         "measured_role_counts": {"train": len(train), "validation": len(validation_cache)}}
     torch.manual_seed(node["initialization_seed"])
     model = DelphesParticleTransformer()
     torch.cuda.reset_peak_memory_stats()
@@ -787,9 +809,11 @@ def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> di
     reduce_minutes = max(30, math.ceil((worst_cache + inference_seconds) * 2 / 60))
     if train_minutes > 2880 or reduce_minutes > 1440:
         raise ValueError("Measured proxy-ladder walltime exceeds registered envelope")
+    if literature and train_minutes > 1440:
+        raise ValueError(f"Measured training request {train_minutes} minutes exceeds debug's 24h limit; no science admitted")
     transfer = (
         dict(measurement_site=site, site_transfer_policy=DEBUG_PROFILE_TRANSFER)
-        if site["name"] == "sporc_a100_debug" else {}
+        if site["name"] == "sporc_a100_debug" and not literature else {}
     )
     population_fields = (
         {
@@ -802,7 +826,7 @@ def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> di
         "RUNTIME_PROFILE", version=spec.get("schema_version", 1),
         parents={"gate": spec["content_hash"], "foundation": foundation["content_hash"]},
         source_commit=spec["source_commit"], foundation_sha256=foundation["content_hash"],
-        execution_site=production_site(site), slurm_job_id=job_id, passed=True,
+        execution_site=site if literature else production_site(site), slurm_job_id=job_id, passed=True,
         installed_environment=environment, model=model_contract(),
         measured_full_population=True, cpus=cpus, memory_mb=memory_mb, workers=workers,
         train_minutes=train_minutes, reduce_minutes=reduce_minutes,
@@ -811,7 +835,7 @@ def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> di
         one_pass_seconds=report["runtime_seconds"], inference_seconds=inference_seconds,
         cache_bytes=cache_bytes, gpu=gpu_identity(), gpu_peak_bytes=gpu_peak,
         acceptance_training_report=report,
-        ram_only_views=True, rolling_resume=False, **population_fields, **transfer,
+        ram_only_views=True, rolling_resume=False, **population_fields, **transfer, **parity_fields,
     )
     validate_profile(profile, foundation=foundation, spec=spec)
     return profile

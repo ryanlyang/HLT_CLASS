@@ -77,7 +77,7 @@ def gate_plan(spec: dict) -> dict:
                 mode="gate", spec_path=path, task=task,
                 job_prefix={
                     1: "jc2pxg", 2: "jc2pxd", 3: "jc2pxr",
-                    4: "jc2pxo", 5: "jc2pxq", 6: "jc2pxs",
+                    4: "jc2pxo", 5: "jc2pxq", 6: "jc2pxs", 7: "jc2lvg",
                 }[
                     spec.get("schema_version")
                 ],
@@ -111,6 +111,7 @@ def science_plan(spec: dict) -> dict:
                 project=spec["project_dir"], output_root=spec["campaign_root"],
                 mode="campaign", spec_path=path, task=task,
                 job_prefix=(
+                    "jc2lv" if spec.get("schema_version") == 3 else
                     "jc2pxc" if spec.get("schema_version") == 2 else "jc2px"
                 ),
                 site=site,
@@ -151,15 +152,25 @@ def submit(
         5: OSCAR_DUAL_SLOT_AUTHORIZATION,
         6: OSCAR_DIRECT_COARSE_AUTHORIZATION,
     }
+    from .literature import GATE_AUTHORIZATION as LITERATURE_GATE, SCIENCE_AUTHORIZATION as LITERATURE_SCIENCE
+    gate_authorizations[7] = LITERATURE_GATE
     required = (
         gate_authorizations[subject.get("schema_version")]
         if mode == "gate" else (
+            LITERATURE_SCIENCE if subject.get("schema_version") == 3 else
             DIRECT_COARSE_AUTHORIZATION
             if subject.get("schema_version") == 2 else SCIENCE_AUTHORIZATION
         )
     )
     if execute and authorization_phrase != required:
         raise PermissionError(f"Live {mode} submission requires exact authorization phrase")
+    literature = (mode == "gate" and subject.get("schema_version") == 7) or (
+        mode == "science" and subject.get("schema_version") == 3)
+    if execute and literature:
+        from .literature import check_submission_site, submit_claimed
+        (validate_gate if mode == "gate" else validate_campaign)(subject, check_source=True)
+        check_submission_site(plan)
+        return submit_claimed(subject, plan, root)
     return submit_exact_dag(
         identity=subject["content_hash"], plan=plan,
         output=root / ("submission_ledger.json" if execute else "dry_run_submission_ledger.json"),

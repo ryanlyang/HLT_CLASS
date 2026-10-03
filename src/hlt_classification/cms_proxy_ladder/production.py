@@ -41,6 +41,8 @@ def create_campaign(*, gate_root: Path, campaign_root: Path) -> dict:
     gate_root = Path(gate_root).resolve(strict=True)
     gate = load_json(gate_root / "gate_spec.json")
     validate_gate(gate, check_source=True)
+    if gate.get("schema_version") == 7:
+        raise ValueError("Literature gates require the literature direct/coarse campaign creator")
     foundation_root = Path(gate.get("foundation_root", gate_root / "foundation"))
     foundation = load_json(foundation_root / "foundation.json")
     validate_foundation(foundation, root=foundation_root)
@@ -146,6 +148,9 @@ def create_direct_coarse_campaign(*, gate_root: Path, campaign_root: Path) -> di
 
 def validate_campaign(spec: dict, *, check_source: bool = False) -> str:
     version = spec.get("schema_version")
+    if version == 3:
+        from .literature import validate_campaign as validate_literature_campaign
+        return validate_literature_campaign(spec, check_source=check_source)
     if version not in (1, 2):
         raise ValueError("Unsupported proxy-ladder campaign version")
     parents = {

@@ -25,11 +25,11 @@ CANDIDATE = SALIENCE_PT_LINEAR
 SUPPORT_POLICY = "cms_proxy_persistent_shell_offline_tail_v1"
 
 
-def view_contract() -> dict:
+def view_contract(*, literature: bool = False) -> dict:
     return artifact(
-        "VIEWS",
+        "VIEWS", version=2 if literature else 1,
         matcher=matcher_spec(CANDIDATE),
-        support=SUPPORT_POLICY,
+        support="literature_v3_persistent_shell_offline_tail_v1" if literature else SUPPORT_POLICY,
         U="persistent_proxy_shell_plus_mass_balanced_source_only_offline_removal",
         D="linear_p4_atomic_identity_and_validity_aware_tracking",
         D_coordinate="Dxxx_names_retained_offline_fraction_D000_exact_proxy",
@@ -37,7 +37,7 @@ def view_contract() -> dict:
         endpoints={
             "U000": "offline_on_matched_proxy_slots_unmatched_proxy_plus_offline_tail",
             "U100": "proxy_cardinality_offline_on_matched_slots_unmatched_proxy",
-            "D000": "exact_cms_calibrated_proxy_hlt",
+            "D000": "exact_frozen_literature_noise_v3_proxy" if literature else "exact_cms_calibrated_proxy_hlt",
             "OFFLINE": "exact_original_dzfix_offline",
         },
         unknown_category="all_zero_model_one_hot",

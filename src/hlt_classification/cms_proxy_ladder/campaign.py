@@ -42,6 +42,7 @@ def paired_seed(coordinate_name: str, domain: str) -> int:
 def _build_scientific_plan(
     foundation: dict, *, registered_branches: dict, version: int,
     foundation_root=None, population_selection: dict | None = None,
+    node_prefix: str = "CMSP",
 ) -> dict:
     if foundation_root is not None:
         validate_foundation(foundation, root=foundation_root)
@@ -55,7 +56,7 @@ def _build_scientific_plan(
     for branch, path in registered_branches.items():
         teacher, previous, names = "U000", "U000", []
         for index, name in enumerate(path):
-            node_id = f"CMSP_{branch}_{name}_from_{previous}"
+            node_id = f"{node_prefix}_{branch}_{name}_from_{previous}"
             nodes.append({
                 "node_id": node_id, "coordinate": name,
                 "teacher": teacher, "branch": branch,

@@ -23,7 +23,10 @@ BANK_FIELDS = {
 }
 
 
-def release_request(*, study_root: Path, offline_root: Path) -> dict:
+def release_request(*, study_root: Path, offline_root: Path, literature: bool = False) -> dict:
+    if literature:
+        from .literature import release_request as literature_request
+        return literature_request(study_root=study_root, offline_root=offline_root)
     return artifact(
         "RELEASE_REQUEST",
         study_root=str(Path(study_root).resolve()),
@@ -37,6 +40,9 @@ def release_request(*, study_root: Path, offline_root: Path) -> dict:
 
 
 def validate_request(value: dict) -> str:
+    if value.get("schema_version") == 2:
+        from .literature import validate_request as validate_literature_request
+        return validate_literature_request(value)
     digest = validate(value, "RELEASE_REQUEST")
     if value != release_request(
         study_root=Path(value["study_root"]), offline_root=Path(value["offline_root"]),
@@ -45,8 +51,8 @@ def validate_request(value: dict) -> str:
     return digest
 
 
-def _rank(study_hash: str, role: str, identity: str) -> tuple[bytes, bytes]:
-    payload = b"\0".join((SELECTION_DOMAIN.encode(), study_hash.encode(), role.encode(), bytes.fromhex(identity)))
+def _rank(study_hash: str, role: str, identity: str, domain: str = SELECTION_DOMAIN) -> tuple[bytes, bytes]:
+    payload = b"\0".join((domain.encode(), study_hash.encode(), role.encode(), bytes.fromhex(identity)))
     return hashlib.sha256(payload).digest(), bytes.fromhex(identity)
 
 
@@ -72,7 +78,15 @@ def build_release(request: dict, *, output_root: Path) -> dict:
     study_root = Path(request["study_root"]).resolve(strict=True)
     offline_root = Path(request["offline_root"]).resolve(strict=True)
     study = load_json(study_root / "study_spec.json")
-    validate_study(study)
+    literature = request.get("schema_version") == 2
+    backend = output
+    counts, domain = request["counts"], request["selection_domain"]
+    if literature:
+        from hlt_classification.literature_proxy_production import output as backend
+        from .literature import authenticate_dataset
+        authenticate_dataset(study_root)
+    else:
+        validate_study(study)
     if Path(study["data_root"]).resolve() != offline_root:
         raise ValueError("Requested offline root differs from the proxy study source")
     # Do not call output.completed(): it deliberately scans every receipt and
@@ -80,12 +94,12 @@ def build_release(request: dict, *, output_root: Path) -> dict:
     # This ordinary reader opens only exact registered train/validation paths.
     ordinary = {}
     for shard in study["shards"]:
-        if shard["role"] not in COUNTS:
+        if shard["role"] not in counts:
             continue
         path = source_safe(study_root, f"shards/{shard['shard_id']}.json")
         if not path.is_file():
             continue
-        receipt = output.verify_shard(study, load_json(path), physical=False)
+        receipt = backend.verify_shard(study, load_json(path), physical=False)
         if receipt["role"] != shard["role"]:
             raise ValueError("Ordinary proxy receipt role differs")
         ordinary[shard["shard_id"]] = receipt
@@ -111,7 +125,7 @@ def build_release(request: dict, *, output_root: Path) -> dict:
         for block in receipt["blocks"]:
             relative = block["relative"]
             path = source_safe(study_root, relative)
-            values = output.arrays(path)
+            values = backend.arrays(path)
             count = len(values["jet_identity"])
             selected_entries = entries[cursor:cursor + count]
             if len(selected_entries) != count:
@@ -124,14 +138,14 @@ def build_release(request: dict, *, output_root: Path) -> dict:
             for row, (raw_identity, entry) in enumerate(zip(values["jet_identity"], selected_entries, strict=True)):
                 identity = bytes(raw_identity).hex()
                 candidates[receipt["role"]].append((
-                    _rank(study["content_hash"], receipt["role"], identity),
+                    _rank(study["content_hash"], receipt["role"], identity, domain),
                     identity, source["path"], int(entry), index, row,
                 ))
             cursor += count
         if cursor != len(entries):
             raise ValueError("Committed shard blocks omit source entries")
     chosen = []
-    for role, target in COUNTS.items():
+    for role, target in counts.items():
         available = candidates[role]
         if len(available) < target:
             raise ValueError(f"Insufficient committed {role} proxy rows: {len(available)} < {target}")
@@ -168,15 +182,15 @@ def build_release(request: dict, *, output_root: Path) -> dict:
     bank_path = root / "release_index.npz"
     _save_npz(bank_path, arrays)
     manifest = artifact(
-        "RELEASE",
+        "RELEASE", version=2 if literature else 1,
         parents={"request": request["content_hash"], "study": study["content_hash"]},
         request=request,
         study_contract=study["contract"],
         study_root=str(study_root), offline_root=str(offline_root),
         scope=("complete_dataset_manifest" if (study_root / "dataset_manifest.json").is_file()
                else "committed_ordinary_receipt_snapshot"),
-        counts=COUNTS,
-        selection_domain=SELECTION_DOMAIN,
+        counts=counts,
+        selection_domain=domain,
         labels_read=False,
         selection_depends_on_labels=False,
         receipts=receipts,
@@ -221,16 +235,24 @@ def load_bank(manifest: dict, *, root: Path) -> dict[str, np.ndarray]:
 
 
 def validate_release(manifest: dict, *, root: Path, check_bank: bool = True) -> str:
+    version = manifest.get("schema_version")
+    if version not in (1, 2):
+        raise ValueError("Unsupported proxy-ladder release version")
     digest = validate(
-        manifest, "RELEASE",
+        manifest, "RELEASE", version=version,
         parents={"request": manifest["request"]["content_hash"], "study": manifest["parents"]["study"]},
     )
     validate_request(manifest["request"])
+    counts, domain = manifest["request"]["counts"], manifest["request"]["selection_domain"]
+    if version == 2:
+        from .literature import validate_release_source
+        validate_release_source(manifest)
     if (
-        manifest["counts"] != COUNTS or manifest["selection_domain"] != SELECTION_DOMAIN
+        manifest["request"]["schema_version"] != version
+        or manifest["counts"] != counts or manifest["selection_domain"] != domain
         or manifest["labels_read"] is not False
         or manifest["selection_depends_on_labels"] is not False
-        or manifest["total_rows"] != sum(COUNTS.values())
+        or manifest["total_rows"] != sum(counts.values())
         or manifest["scope"] not in {"complete_dataset_manifest", "committed_ordinary_receipt_snapshot"}
         or len({row["shard_id"] for row in manifest["receipts"]}) != len(manifest["receipts"])
     ):
@@ -239,7 +261,7 @@ def validate_release(manifest: dict, *, root: Path, check_bank: bool = True) -> 
         arrays = load_bank(manifest, root=root)
         for name, code in (("train", 0), ("validation", 1)):
             selected = arrays["identity"][arrays["role"] == code]
-            if len(selected) != COUNTS[name] or _identity_digest(selected) != manifest["identity_sha256"][name]:
+            if len(selected) != counts[name] or _identity_digest(selected) != manifest["identity_sha256"][name]:
                 raise ValueError("Proxy-ladder release identity population differs")
         if len({bytes(row) for row in arrays["identity"]}) != manifest["total_rows"]:
             raise ValueError("Proxy-ladder release identities overlap")

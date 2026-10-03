@@ -75,15 +75,22 @@ def iter_paired(
     study_root = Path(release["study_root"])
     offline_root = Path(release["offline_root"])
     study = load_json(study_root / "study_spec.json")
-    validate_study(study)
+    literature = release.get("schema_version") == 2
+    if literature:
+        from .literature import authenticate_dataset
+        from hlt_classification.literature_proxy.population import from_columns
+        study, inventory = authenticate_dataset(study_root)
+    else:
+        validate_study(study)
     # The study artifact retains its original scientific identity when a
     # portable bundle is relocated. Resolve the authenticated import relative
     # to the release-selected study root, not the historical absolute root
     # embedded in the immutable study artifact.
-    inventory_record = study["imports"]["inventory"]
-    inventory_path = source_safe(study_root, inventory_record["relative"])
+    inventory_record = study["inventory"] if literature else study["imports"]["inventory"]
+    inventory_path = (Path(inventory_record["path"]) if literature
+                      else source_safe(study_root, inventory_record["relative"]))
     if (
-        inventory_path.stat().st_size != inventory_record["bytes"]
+        (not literature and inventory_path.stat().st_size != inventory_record["bytes"])
         or sha256_file(inventory_path) != inventory_record["sha256"]
     ):
         raise ValueError("Proxy-ladder relocated inventory bytes differ")
@@ -141,11 +148,15 @@ def iter_paired(
                     proxy_row = int(arrays["proxy_row"][index])
                     if bytes(proxy_values["jet_identity"][proxy_row]).hex() != identity:
                         raise ValueError("Proxy-ladder release/proxy identity join differs")
+                    if literature:
+                        from hlt_classification.jetclass2_delphes.contracts import row_identity
+                        if identity != row_identity(inventory["content_hash"], source["path"], source["tree_key"], entry):
+                            raise ValueError("Literature proxy/offline canonical join differs")
                     yield PairedRow(
                         ordinal=int(index) - role_start,
                         identity=identity, role=role, label=int(labels[local]),
                         proxy=_proxy_particles(proxy_values, proxy_row),
-                        offline=from_jc2(
+                        offline=from_columns(columns) if literature else from_jc2(
                             columns, study["review"],
                             keys=tuple(f"offline_native:{item}" for item in range(count)),
                         ),
@@ -299,17 +310,19 @@ def build_foundation(
                 build_inputs(view, capacity=capacity)
             checks += 1
             role_checks += 1
+    literature = release.get("schema_version") == 2
+    views_contract = view_contract(literature=literature)
     foundation = artifact(
-        "FOUNDATION",
+        "FOUNDATION", version=2 if literature else 1,
         parents={
             "release": release["content_hash"],
             "matcher": matcher_spec(CANDIDATE)["content_hash"],
-            "views": view_contract()["content_hash"],
+            "views": views_contract["content_hash"],
             "inputs": inputs["content_hash"],
         },
         release=release,
         release_root=str(Path(release_root).resolve()),
-        matcher=matcher_spec(CANDIDATE), views=view_contract(), inputs=inputs,
+        matcher=matcher_spec(CANDIDATE), views=views_contract, inputs=inputs,
         assignments=file_ref(bank_path, root=root),
         role_offsets=role_offsets,
         role_counts=release["counts"],
@@ -356,17 +369,21 @@ def load_assignments(foundation: dict, *, root: Path, role: str):
 
 
 def validate_foundation(foundation: dict, *, root: Path, check_bank: bool = True) -> str:
+    version = foundation.get("schema_version")
+    if version not in (1, 2):
+        raise ValueError("Unsupported foundation version")
     parents = {
         "release": foundation["release"]["content_hash"],
         "matcher": foundation["matcher"]["content_hash"],
         "views": foundation["views"]["content_hash"],
         "inputs": foundation["inputs"]["content_hash"],
     }
-    digest = validate(foundation, "FOUNDATION", parents=parents)
+    digest = validate(foundation, "FOUNDATION", version=version, parents=parents)
     validate_release(foundation["release"], root=Path(foundation["release_root"]))
     if (
-        foundation["matcher"] != matcher_spec(CANDIDATE)
-        or foundation["views"] != view_contract()
+        foundation["release"]["schema_version"] != version
+        or foundation["matcher"] != matcher_spec(CANDIDATE)
+        or foundation["views"] != view_contract(literature=version == 2)
         or foundation["inputs"] != input_contract(capacity=foundation["inputs"]["capacity"])
         or foundation["role_counts"] != foundation["release"]["counts"]
         or foundation["mapping_orientation"] != "proxy_slot_to_native_offline_index_or_minus_one"

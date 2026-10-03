@@ -57,6 +57,7 @@ def load_exact_dag_journal(
 def submit_exact_dag(
     *, identity: str, plan: Mapping[str, Any], output: str | Path,
     canonical_dry_run: str | Path, execute: bool,
+    environment: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     destination = Path(output)
     raw = {
@@ -96,6 +97,7 @@ def submit_exact_dag(
         command = _resolved(row, jobs)
         job = subprocess.run(
             command, check=True, capture_output=True, text=True,
+            **({"env": dict(environment)} if environment is not None else {}),
         ).stdout.strip().split(";")[0]
         event = build_submission_event(
             campaign_spec_sha256=identity, task_id=row["task_id"],
