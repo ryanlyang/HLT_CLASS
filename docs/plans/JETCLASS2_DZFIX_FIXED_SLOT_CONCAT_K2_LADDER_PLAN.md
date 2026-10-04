@@ -696,3 +696,29 @@ Weaver/SPORC expanded-input acceptance. The queue workflow runs this gate
 automatically; it never imports old acceptance or alters the recipe to fit.
 No new scientific matching/classifier result, real GPU acceptance, or Slurm
 submission is claimed by local implementation and tests alone.
+
+## 13. 2026-10-03 execution-only segmented continuation amendment
+
+For the full campaign pinned to
+`c891da0d45dd3251dea9ea72df975bb96bae3570`, the user approved continuing only
+D025, D000 and HLT-x1 compression through up to three sequential 23h debug
+allocations per fit. The completed seven fits, D050 bank, matching,
+populations and validation partition are authenticated read-only imports.
+The ladder, batch 128, original 100-pass recipe, loss, seeds, inputs and sealed
+final test do not change. A segment is not a new rung or fresh initialization.
+Full AdamW/model/RNG/selection/patience state resumes at the next absolute
+epoch. Only the first segment cold-starts each remaining fit.
+
+The additive executor and versioned semantics are in
+[JETCLASS2_K2_SEGMENTED_CONTINUATION.md](../contracts/JETCLASS2_K2_SEGMENTED_CONTINUATION.md).
+Its `K2_SEGMENTED_*/v1` namespace supersedes the restart-zero execution rule
+**only for this registered continuation**. Original specs and workers retain
+their 96h tier3 requests, remain immutable, and are not retrofitted.
+
+Initial partition is debug; pending partition-only debug/tier3 moves are
+allowed with identical resources. A fresh native resume-parity gate is
+mandatory before automatic science release. Retire only the exact unfinished
+old pending IDs before replacement submission. On execution failure or
+three-segment exhaustion preserve checkpoints for reviewed recovery; never
+shorten the scientific budget. Operator confirmation of RC debug policy is
+required. No scheduling speedup or GPU acceptance is inferred from CPU tests.

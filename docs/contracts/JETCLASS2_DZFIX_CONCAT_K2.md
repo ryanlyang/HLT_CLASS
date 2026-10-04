@@ -1,5 +1,15 @@
 # JetClass2 dzfix fixed-slot K=2 concatenation campaign
 
+## Additive segmented continuation (2026-10-03)
+
+The separately versioned
+[K2 segmented continuation contract](JETCLASS2_K2_SEGMENTED_CONTINUATION.md)
+authorizes full-state resume of only the unfinished D025, D000 and x1
+compression fits in the c891da0d execution. It does not change the v7/v8
+registrations below or old workers. It imports completed outputs read-only,
+adds a native resume gate and uses up to three23h debug allocations per fit.
+Only new continuation jobs allow the corresponding partition-only moves.
+
 ## Separate 100k/50k pilot, opt-in v8 (2026-09-23)
 
 The active plan additionally authorizes `pilot_100k_50k_60`. Its launch and
