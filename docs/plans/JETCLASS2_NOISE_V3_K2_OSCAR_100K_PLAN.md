@@ -1,5 +1,30 @@
 # Frozen NOISE_V3 K2 concatenation on Oscar, 100k/50k
 
+## 2026-10-04 operational recovery amendment
+
+User authorized targeted recovery after GPU ECC failures on gpu3001 and a
+separate missing-Python-files failure. This amendment permits reuse within
+this exact OSCAR experiment, not the cross-dataset imports forbidden below.
+The original root, failed outputs, receipts, ledgers and source checkout stay
+read-only. A sibling recovery root owns replacement jobs/results. Authenticate
+all original receipts and output bytes, exact journals, terminal scheduler
+states, original native acceptance and the restored software fingerprint.
+Only incomplete science tasks may restart, from zero, with unchanged resources,
+population, models, seeds, matching, training, inference and reporting.
+
+Preserve the seven completed science tasks reported through D050; retry the
+two failed CE controls, D050 reducer, D025/D000 fits and reducers, x1 compression,
+aggregation and completion (ten jobs if that state still authenticates).
+Dependencies refer only to replacement jobs; completed original parents are
+artifact dependencies, never aged-out Slurm dependencies. Exclude gpu3001
+from all replacement GPU allocations. Check CUDA health before cache loading.
+Use the original source's scientific modules byte-for-byte, with new explicit
+I/O/lineage orchestration under the separate RECOVERY v1 contracts. A full
+replacement dry run and exact explicit authorization precede live submission.
+No cancellation, environment repair, source-root mutation, silent partial-task
+resume, changed GPU family, or new final-test capability is authorized.
+See [recovery contract](../contracts/JETCLASS2_NOISE_V3_K2_RECOVERY.md).
+
 ## Authority and scope
 
 Authorized by the 2026-10-04 request. This is a new experiment, not a
