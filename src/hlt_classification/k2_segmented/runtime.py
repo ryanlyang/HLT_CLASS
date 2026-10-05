@@ -21,7 +21,7 @@ from hlt_classification.jetclass2_delphes.concat_k2_model import parity_backend
 from hlt_classification.jetclass2_delphes.salience_learned_training import predict, train_kernel
 from . import training
 from .campaign import (artifact, validate, original, validate_spec, graph, NODES,
-    authenticate_job, gate, submit, AUTHORIZE, require_authorization)
+    authenticate_job, gate, submit, AUTHORIZE, require_authorization, migrated, resources)
 
 
 def completed(spec, name):
@@ -31,7 +31,7 @@ def completed(spec, name):
         return None
     value = load_json(path)
     validate(value, 'TASK_REPORT')
-    row = next(r for r in graph() if r['task_id'] == name)
+    row = next(r for r in graph(spec) if r['task_id'] == name)
     if (value['campaign_sha256'] != spec['content_hash'] or value['task_id'] != name
             or value['executor_source'] != spec['source_commit']
             or value['original_scientific_source'] != spec['original_commit']
@@ -70,7 +70,11 @@ def teacher(spec, source, node, identities):
 
 
 def binding_for(spec, node, lineage):
-    return dict(campaign_sha256=spec['content_hash'], teacher_lineage=lineage,
+    # Keep the authenticated in-progress fit's identity, including RNG and
+    # teacher binding. The new execution spec/receipts own the memory migration.
+    identity = (spec['resume_import']['donor_spec']['content_hash']
+                if migrated(spec) and node['node_id'] == NODES[0] else spec['content_hash'])
+    return dict(campaign_sha256=identity, teacher_lineage=lineage,
                 original_campaign_sha256=spec['source_spec']['content_hash'], training=spec['training'])
 
 
@@ -99,7 +103,13 @@ def fit_segment(spec, source, row, deadline, device):
     root = Path(spec['campaign_root'])
     node = node_for(source, row['node_id'])
     if row['segment'] > 1:
-        previous = completed(spec, row['dependencies'][0])
+        if migrated(spec) and node['node_id'] == NODES[0]:
+            from .memory_migration import verify_copy, read_descriptor, PREFIX
+            verify_copy(spec)
+            donor = read_descriptor(spec['resume_import']['donor_spec'])
+            previous = completed(donor, PREFIX[-1])
+        else:
+            previous = completed(spec, row['dependencies'][0])
         if previous['result']['fit_complete']:
             # A prequeued spare segment authenticates the completed fit; no data
             # loading, optimizer creation or extra training is performed.
@@ -266,6 +276,10 @@ def preflight(spec, source, device):
     if device != 'cuda' or not torch.cuda.is_available():
         raise PermissionError('Real installed-Weaver A100 resume acceptance required')
     root = Path(spec['campaign_root'])
+    imported_paths = []
+    if migrated(spec):
+        from .memory_migration import materialize
+        imported_paths.append(materialize(spec))
     old_acceptance = legacy.science_gate(source)
     if old_acceptance['gpu'] != gpu_identity() or old_acceptance['environment'] != installed_environment():
         raise PermissionError('Hardware/software differs from original accepted K2 run')
@@ -274,7 +288,13 @@ def preflight(spec, source, device):
     started = time.monotonic()
     caches = legacy.caches(source, node)
     cache_seconds = time.monotonic() - started
-    q, _ = legacy.teacher(source, node, caches['train'].identities)
+    q, lineage = legacy.teacher(source, node, caches['train'].identities)
+    if migrated(spec):
+        # Recompute population and teacher bindings from genuine caches before
+        # allowing a transferred state to participate in production training.
+        saved, _ = training.load_checkpoint(root / 'checkpoints' / node['node_id'],
+            full_binding(binding_for(spec, node, lineage), node, caches['train'], caches['checkpoint']))
+        del saved
     indices = legacy.representative(caches['train'], 256)
     val_indices = legacy.representative(caches['checkpoint'], 128)
     from hlt_classification.jetclass2_delphes.salience_learned_data import IndexedRamCache
@@ -290,8 +310,11 @@ def preflight(spec, source, device):
     import resource
     rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
     peak = torch.cuda.max_memory_allocated()
-    if rss > 320000 * 1024**2 * .8 or peak > gpu_identity()['total_memory_bytes'] * .9:
+    memory_mb = resources(spec)['preflight']['memory_mb']
+    if not 0 < rss <= memory_mb * 1024**2 * .8 or not 0 < peak <= gpu_identity()['total_memory_bytes'] * .9:
         raise MemoryError('Resume gate leaves insufficient production headroom')
+    extra = (dict(memory_request_mb=memory_mb, resume_import_sha256=spec['resume_import']['content_hash'])
+             if migrated(spec) else {})
     evidence = artifact('ACCEPTANCE', campaign_sha256=spec['content_hash'], passed=True,
         original_acceptance_sha256=old_acceptance['content_hash'], gpu=gpu_identity(),
         environment=installed_environment(), legacy_kernel_parity=True, uninterrupted_resumed_parity=True,
@@ -299,10 +322,10 @@ def preflight(spec, source, device):
         cache_seconds=cache_seconds, peak_cpu_bytes=rss, peak_cuda_bytes=peak,
         checkpoint_bytes_upper_bound=checkpoint_bound, projected_checkpoint_storage_bytes=projected_storage,
         per_segment_minutes=1380, maximum_segments_per_fit=3, original_science_unchanged=True,
-        final_test_accessed=False)
+        final_test_accessed=False, **extra)
     path = root / 'preflight/acceptance.json'
     write_immutable_json(path, evidence)
-    return dict(acceptance=path.relative_to(root).as_posix()), [path]
+    return dict(acceptance=path.relative_to(root).as_posix()), [path, *imported_paths]
 
 
 def result_rows(spec, source):
@@ -332,7 +355,7 @@ def run(spec, name, *, device='cuda'):
         require_authorization(spec)
         return submit(spec, stage='science', execute=True, authorization=AUTHORIZE, debug_policy_confirmed=True)
     root = Path(spec['campaign_root'])
-    row = next(r for r in graph() if r['task_id'] == name)
+    row = next(r for r in graph(spec) if r['task_id'] == name)
     parents = {p: completed(spec, p) for p in row['dependencies']}
     if not all(parents.values()):
         raise PermissionError('Segmented task parents are incomplete')

@@ -40,6 +40,10 @@ def main():
     create.add_argument('--source-spec', required=True)
     create.add_argument('--campaign-root', required=True)
     create.add_argument('--source-commit', required=True)
+    migration = subs.add_parser('create-128g', help='Resume the original segmented D025 after part2 at 128 GiB')
+    migration.add_argument('--donor-spec', required=True)
+    migration.add_argument('--campaign-root', required=True)
+    migration.add_argument('--source-commit', required=True)
     for name in ('submit', 'retire', 'run', 'gate', 'results', 'monitor'):
         sub = subs.add_parser(name)
         sub.add_argument('--spec', required=True)
@@ -52,17 +56,25 @@ def main():
         if name == 'run':
             sub.add_argument('--task', required=True)
     args = parser.parse_args()
-    spec = None if args.mode == 'create' else json.loads(Path(args.spec).read_text(encoding='utf-8'))
+    spec = None if args.mode in ('create', 'create-128g') else json.loads(Path(args.spec).read_text(encoding='utf-8'))
     if spec is not None and (Path(spec['project_dir']).resolve() != ROOT
             or Path(args.spec).resolve() != Path(spec['campaign_root']).resolve() / 'campaign_spec.json'):
         raise ValueError('Use the registered executor checkout and original spec location')
-    bootstrap(args.source_spec if spec is None else spec['source_spec']['path'])
+    if args.mode == 'create-128g':
+        donor = json.loads(Path(args.donor_spec).read_text(encoding='utf-8'))
+        bootstrap(donor['source_spec']['path'])
+    else:
+        bootstrap(args.source_spec if spec is None else spec['source_spec']['path'])
     from hlt_classification.k2_segmented import campaign, runtime
     if Path(campaign.__file__).resolve().parents[3] != ROOT:
         raise ValueError('Wrong segmented executor package was imported')
     print('K2 segmented continuation: authenticating the original completed prefix; '
           'source checks may take several minutes. No matching or completed fit is rerun.', flush=True)
-    if args.mode == 'create':
+    if args.mode == 'create-128g':
+        from hlt_classification.k2_segmented.memory_migration import create as create_migration
+        value = create_migration(donor_spec=args.donor_spec, campaign_root=args.campaign_root,
+            project_dir=ROOT, source_commit=args.source_commit)
+    elif args.mode == 'create':
         value = campaign.create(source_spec=args.source_spec, campaign_root=args.campaign_root,
             project_dir=ROOT, source_commit=args.source_commit)
     elif args.mode == 'submit':

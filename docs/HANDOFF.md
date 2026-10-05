@@ -1,5 +1,54 @@
 # Current Handoff
 
+## 2026-10-05: checkpoint-preserving 128-GiB SPORC K2 continuation
+
+Implemented the authorized [plan amendment](plans/JETCLASS2_DZFIX_FIXED_SLOT_CONCAT_K2_LADDER_PLAN.md)
+and [128-GiB migration contract](contracts/JETCLASS2_K2_128G_CONTINUATION.md).
+New `k2_segmented/memory_migration.py`, `scripts/queue_jetclass2_k2_128g.sh` and
+`tests/test_k2_segmented_memory.py`; extended the segmented CLI/campaign/runtime
+backward-compatibly, updated the v1 contract and donor map. No old scientific
+module, training kernel, Slurm worker or other campaign is modified.
+
+The user supplied successful original preflight and D025 part1/part2 accounting
+(jobs 21798257, 21798741 and 21798744; batch-step MaxRSS 34.78G, 23.48G and
+31.48G), with part3 still pending. A fresh `K2_SEGMENTED_CAMPAIGN_SPEC/v2`
+authenticates this actual donor state rather than assuming those IDs or epochs.
+The exact supported execution donor is
+`71c1bde2d759b11cddb1f5cfbc1d199847bd6eef`; scientific imports remain pinned to
+`c891da0d45dd3251dea9ea72df975bb96bae3570`.
+
+The new full dry DAG contains 13 jobs (preflight and launcher plus eleven science
+jobs). It does not register D025 parts1/part2. Every committed D025 checkpoint
+is authenticated and copied byte-for-byte to a fresh root; its donor training
+binding is retained explicitly. Part3 restores current/best weights, AdamW,
+all RNG, absolute epoch/update and patience state. A fit already completed in
+part2 is imported without retraining. Only exact pending unfinished donor IDs
+can be retired; running/advanced/corrupt sources fail closed. The original
+roots/checkouts and completed results remain read-only.
+
+All new GPU tasks request 131072 MiB (128 GiB), keeping one A100/four CPUs,
+23h segments, 6h reducers/preflight, batch128 and every scientific setting.
+Debug remains default, with pending partition-only debug/tier3 moves allowed.
+Fresh genuine 128-GiB cache/resume preflight must pass before the authorized
+after-gate launcher submits the remaining science. Reported RSS motivates the
+lower request but does not guarantee future aggregate process usage or faster
+scheduling. Final test stays sealed.
+
+Local evidence: **54 passed** for old/new segmented suites with scientific
+imports from the archived c891da0d source, including real tiny CPU kernel/state
+IO, exact original-vs-migrated final state, downstream T2 banks/compression,
+completed-part2 spare behavior, exact retirement/race guards, corruption,
+population, resource and gate rejection. Additional focused original K2
+execution/batch128/memory regression: **123 passed, 6 skipped** (Weaver missing).
+CLI help, Python AST, shell syntax and scoped whitespace checks pass. These
+are synthetic local checks, not new installed-Weaver/SPORC acceptance.
+
+No remote submissions, cancellations, `scontrol` changes, commits or pushes
+were performed. Next: push a clean executor commit, use a new SPORC worktree
+and fresh root with the 128-GiB helper, inspect its dry plan/retirement mapping,
+then explicitly authorize the cutover and new gate. Do not lower the old v1
+job's memory in place or restart D025 from scratch.
+
 ## 2026-10-04: targeted NOISE-K2 recovery after OSCAR environment/ECC failures
 
 Implemented the authorized recovery amendment in the

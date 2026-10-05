@@ -1,5 +1,27 @@
 # Legacy Donor-Source Map
 
+## 2026-10-05: 128-GiB SPORC K2 full-state continuation
+
+Execution donor: **`71c1bde2d759b11cddb1f5cfbc1d199847bd6eef`**. Scientific donor
+remains **`c891da0d45dd3251dea9ea72df975bb96bae3570`**. Developed against local
+HEAD `984ec4560cce1c3b6610f69e928dd248218e67cf`. No third-party files copied.
+
+| Donor paths | Use/adaptation |
+| --- | --- |
+| `src/hlt_classification/k2_segmented/campaign.py`, `runtime.py` (71c1bde2) | Backward-compatible v1 plus v2 graph/resource routing; authenticate the existing segmented donor and import its part2 endpoint into a fresh root |
+| `src/hlt_classification/k2_segmented/training.py` (71c1bde2) | Unchanged full-state kernel/serialization; require byte parity with the donor at registration and runtime |
+| `scripts/jetclass2_k2_segmented.py`, `queue_jetclass2_k2_segmented.sh`; `sbatch/run_jetclass2_k2_segmented.sh` (71c1bde2) | New `create-128g` CLI mode and separate dry-first helper; existing scientific bootstrap and Slurm worker unchanged |
+| `tests/test_k2_segmented.py` (71c1bde2) | Reuse tiny seeded CPU model/cache fixtures; test exact old-vs-migrated continuation and downstream banks |
+| `jetclass2_delphes/concat_k2_runtime.py`, `concat_k2_campaign.py`, `salience_learned_training.py`, `banks.py`, `production.py`, `execution.py`; `data/cache_contracts.py`; `scouting/hcwdl_exact_dag_submission.py`, `hcwdl_recovery.py` (under `src/hlt_classification/`, c891da0d) | Existing original scientific semantics, source/ledger authentication, byte hashes, immutable publication and exact-ID retirement/submission; no scientific donor modules edited |
+
+Added `k2_segmented/memory_migration.py`, `scripts/queue_jetclass2_k2_128g.sh`,
+`tests/test_k2_segmented_memory.py`, the 128-GiB contract and active-plan
+amendment. New spec `K2_SEGMENTED_CAMPAIGN_SPEC/v2`; new import/copy artifacts
+`K2_SEGMENTED_MEMORY_RESUME_IMPORT/v1` and `K2_SEGMENTED_RESUME_COPY/v1`.
+Existing checkpoint/payload/task schemas retain their identities. The D025
+payload keeps its donor binding; v2 execution receipts explicitly record the
+migration. No `Fresh_check`, other campaign, final-test, or environment changes.
+
 ## 2026-10-04: additive OSCAR NOISE-K2 targeted recovery
 
 Donor commit: **`0ffb4ba54b02cea6558db5ea8a44995c76ef22d7`**.

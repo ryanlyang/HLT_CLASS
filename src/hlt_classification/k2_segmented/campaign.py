@@ -41,11 +41,24 @@ def validate(value, kind):
     return validate_content_hash(value, expected_contract='K2_SEGMENTED_' + kind + '/v1', expected_schema_version=1)
 
 
-def graph():
+def migrated(spec):
+    return spec is not None and spec.get('contract') == 'K2_SEGMENTED_CAMPAIGN_SPEC/v2'
+
+
+def resources(spec):
+    if not migrated(spec):
+        return RESOURCES
+    return {k: {**v, 'memory_mb': 131072 if v['gpu'] else v['memory_mb']}
+            for k, v in RESOURCES.items()}
+
+
+def graph(spec=None):
     rows = [dict(task_id='preflight', kind='preflight', dependencies=[], resource='preflight')]
     parent = 'preflight'
     for node in NODES:
         for segment in (1, 2, 3):
+            if migrated(spec) and node == NODES[0] and segment < 3:
+                continue
             name = f'train_{node}_part{segment}'
             rows.append(dict(task_id=name, kind='segment', node_id=node, segment=segment,
                              dependencies=[parent], resource='segment'))
@@ -139,10 +152,15 @@ def create(*, source_spec, campaign_root, project_dir, source_commit):
 
 
 def validate_spec(spec, *, deep=True):
-    validate(spec, 'CAMPAIGN_SPEC')
+    if migrated(spec):
+        validate_content_hash(spec, expected_contract='K2_SEGMENTED_CAMPAIGN_SPEC/v2', expected_schema_version=2)
+    else:
+        validate(spec, 'CAMPAIGN_SPEC')
+        if 'resume_import' in spec:
+            raise ValueError('Resume import requires a v2 registration')
     source = original(spec)
     _source(Path(spec['project_dir']), spec['source_commit'])
-    fixed = dict(tasks=graph(), resources=RESOURCES, segments_per_fit=3, segment_minutes=1380,
+    fixed = dict(tasks=graph(spec), resources=resources(spec), segments_per_fit=3, segment_minutes=1380,
         reserve_seconds=1800, maximum_checkpoint_bytes=32 * 1024**3, minimum_free_bytes=4 * 1024**3,
         initial_partition='debug', allowed_partitions=['debug', 'tier3'],
         training=dict(source['training']), role_counts=source['role_counts'],
@@ -152,10 +170,13 @@ def validate_spec(spec, *, deep=True):
         raise ValueError('Segmented registration differs')
     ledger = source_ledger(source)
     if (ledger['content_hash'] != spec['source_ledger_sha256']
-            or spec['old_jobs'] != {name: ledger['jobs'][name] for name in REMAINING}):
+            or (not migrated(spec) and spec['old_jobs'] != {name: ledger['jobs'][name] for name in REMAINING})):
         raise ValueError('Source job mapping differs')
     if deep:
         verify_prefix(source, spec['imported_receipts'])
+    if migrated(spec):
+        from .memory_migration import validate_import
+        validate_import(spec)
     return source
 
 
@@ -176,16 +197,16 @@ def command(spec, name, resource, dependencies=()):
 def plan(spec, stage):
     if stage not in ('full', 'gate', 'science'):
         raise ValueError('Unknown stage')
-    rows = [r for r in graph() if stage == 'full' or (r['kind'] == 'preflight') == (stage == 'gate')]
+    rows = [r for r in graph(spec) if stage == 'full' or (r['kind'] == 'preflight') == (stage == 'gate')]
     names = {r['task_id'] for r in rows}
     commands = []
     for row in rows:
         parents = [p for p in row['dependencies'] if p in names]
         commands.append(dict(task_id=row['task_id'], dependencies=parents,
-            command=command(spec, row['task_id'], RESOURCES[row['resource']], ['${JOB_' + p + '}' for p in parents])))
+            command=command(spec, row['task_id'], resources(spec)[row['resource']], ['${JOB_' + p + '}' for p in parents])))
     if stage in ('full', 'gate'):
         commands.insert(1, dict(task_id='after_gate', dependencies=['preflight'],
-            command=command(spec, 'after_gate', RESOURCES['metadata'], ['${JOB_preflight}'])))
+            command=command(spec, 'after_gate', resources(spec)['metadata'], ['${JOB_preflight}'])))
     return artifact('COMMAND_PLAN', campaign_sha256=spec['content_hash'], stage=stage, commands=commands)
 
 
@@ -203,7 +224,7 @@ def accounting(ids):
 def require_retired(spec):
     states = accounting(list(spec['old_jobs'].values()))
     if any(states.get(job, ('UNKNOWN',))[0] != 'CANCELLED' for job in spec['old_jobs'].values()):
-        raise PermissionError('All seven exact old pending jobs must be retired before replacement submission')
+        raise PermissionError('All exact old remainder jobs must be retired before replacement submission')
 
 
 def retire(spec, *, execute=False, authorization=None):
@@ -242,6 +263,11 @@ def gate(spec):
             or evidence['final_test_accessed'] or not evidence['uninterrupted_resumed_parity']
             or not evidence['legacy_kernel_parity']):
         raise ValueError('Segmented acceptance differs')
+    if migrated(spec):
+        if (evidence.get('memory_request_mb') != 131072
+                or evidence.get('resume_import_sha256') != spec['resume_import']['content_hash']
+                or not 0 < evidence['peak_cpu_bytes'] <= 131072 * 1024**2 * .8):
+            raise ValueError('128-GiB migration acceptance differs')
     return evidence
 
 
@@ -306,7 +332,7 @@ def authenticate_job(spec, name):
         time.sleep(.25)
     if jobs.get(name) != job:
         raise PermissionError('Worker does not match its exact submission journal')
-    resource = RESOURCES['metadata'] if name == 'after_gate' else RESOURCES[next(r['resource'] for r in graph() if r['task_id'] == name)]
+    resource = resources(spec)['metadata'] if name == 'after_gate' else resources(spec)[next(r['resource'] for r in graph(spec) if r['task_id'] == name)]
     result = subprocess.run(['scontrol', 'show', 'job', '-o', job], text=True, capture_output=True, check=True)
     fields = dict(token.split('=', 1) for token in result.stdout.split() if '=' in token)
     if (fields.get('JobId') != job or fields.get('Partition') not in spec['allowed_partitions']

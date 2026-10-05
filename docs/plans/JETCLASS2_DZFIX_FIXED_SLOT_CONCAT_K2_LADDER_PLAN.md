@@ -722,3 +722,27 @@ old pending IDs before replacement submission. On execution failure or
 three-segment exhaustion preserve checkpoints for reviewed recovery; never
 shorten the scientific budget. Operator confirmation of RC debug policy is
 required. No scheduling speedup or GPU acceptance is inferred from CPU tests.
+
+## 14. 2026-10-05 checkpoint-preserving 128-GiB execution amendment
+
+The user authorized reducing host RAM to 128 GiB while retaining D025's
+completed training from segmented parts1/part2. This is not a cold restart.
+The only execution donor is the original `71c1bde2` v1 segmented campaign;
+scientific imports remain pinned to `c891da0d`. Register a fresh v2 sidecar,
+authenticate the part2 epoch endpoint and copy its full state without changing
+bytes or fit identity. Never mutate either original campaign/checkouts.
+
+The exact protocol is in
+[JETCLASS2_K2_128G_CONTINUATION.md](../contracts/JETCLASS2_K2_128G_CONTINUATION.md).
+Only the eleven unfinished donor jobs are retired after explicit authorization.
+The replacement graph omits D025 parts1/part2: a fresh native 128-GiB gate
+releases D025 part3, its reducer, D000/compression segments and final reporting.
+If D025 already finished in part2, imported final outputs are carried forward
+without another fit. A changed/advanced donor fails closed for review.
+
+New GPU jobs request 131072 MiB with the same CPUs/GPU/batch/walltimes. Debug
+remains default with pending partition-only moves to/from tier3. The change
+does not alter samples, matching, loss, LR, RNG, AdamW, selection, patience or
+the sealed final test. The old v1 320000-MiB jobs remain immutable; do not lower
+their memory in place. Accounting peaks motivate but cannot certify the new
+envelope. Fresh genuine SPORC cache/resume acceptance is still mandatory.

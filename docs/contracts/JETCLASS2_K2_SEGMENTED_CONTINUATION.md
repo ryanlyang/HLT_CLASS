@@ -1,5 +1,10 @@
 # K2 segmented continuation / v1
 
+The narrow 2026-10-05 [128-GiB migration amendment](JETCLASS2_K2_128G_CONTINUATION.md)
+adds a v2 execution registration that imports completed D025 part1/part2 state
+and queues only part3 onward. It does not change this v1 resource contract or
+permit in-place memory changes to existing v1 jobs.
+
 ## Scope and scientific authority
 
 Execution-only amendment authorized by the 2026-10-03 request to split the
