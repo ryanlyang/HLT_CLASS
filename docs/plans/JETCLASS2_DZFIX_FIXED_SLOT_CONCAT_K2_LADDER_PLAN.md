@@ -746,3 +746,21 @@ does not alter samples, matching, loss, LR, RNG, AdamW, selection, patience or
 the sealed final test. The old v1 320000-MiB jobs remain immutable; do not lower
 their memory in place. Accounting peaks motivate but cannot certify the new
 envelope. Fresh genuine SPORC cache/resume acceptance is still mandatory.
+
+## 15. 2026-10-05 restoration of the already accepted original envelope
+
+The user subsequently requested the original 312.5-GiB setup back, preserving
+D025's 76 saved epochs and omitting a repeat GPU preflight. The 128-GiB attempt
+has not executed science and is abandoned, not relaxed. A fresh v3 execution
+registration restores original resources, authenticates and copies the v1
+part2 full state, and explicitly reuses its actual passed native acceptance.
+The unchanged kernel, original inputs/recipe and per-worker exact hardware/
+software checks remain mandatory. No scientific settings or budgets change.
+
+The [restoration contract](../contracts/JETCLASS2_K2_ORIGINAL_MEMORY_RESTORATION.md)
+defines the narrow fresh-gate exception, independent state ownership and exact
+retirement. Only the eleven remaining science jobs are queued, with new IDs;
+there is no gate/launcher or repeated completed work. Default debug, original
+23h segments/320000-MiB GPU jobs, pending partition-only tier3/debug portability.
+Original artifacts remain immutable. The two unused 128-GiB jobs are the only
+normally pending cancellation targets; no running or ambiguous work is lost.

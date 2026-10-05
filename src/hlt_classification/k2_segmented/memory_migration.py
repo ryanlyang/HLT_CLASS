@@ -140,6 +140,9 @@ def compatible_training(project, donor):
 
 
 def validate_import(spec):
+    if campaign.restored(spec):
+        from .restoration import validate_import as validate_restoration
+        return validate_restoration(spec)
     imported = spec['resume_import']
     campaign.validate(imported, 'MEMORY_RESUME_IMPORT')
     donor = read_descriptor(imported['donor_spec'])

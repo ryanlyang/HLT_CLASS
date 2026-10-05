@@ -42,11 +42,16 @@ def validate(value, kind):
 
 
 def migrated(spec):
-    return spec is not None and spec.get('contract') == 'K2_SEGMENTED_CAMPAIGN_SPEC/v2'
+    return spec is not None and spec.get('contract') in (
+        'K2_SEGMENTED_CAMPAIGN_SPEC/v2', 'K2_SEGMENTED_CAMPAIGN_SPEC/v3')
+
+
+def restored(spec):
+    return spec is not None and spec.get('contract') == 'K2_SEGMENTED_CAMPAIGN_SPEC/v3'
 
 
 def resources(spec):
-    if not migrated(spec):
+    if not migrated(spec) or restored(spec):
         return RESOURCES
     return {k: {**v, 'memory_mb': 131072 if v['gpu'] else v['memory_mb']}
             for k, v in RESOURCES.items()}
@@ -69,6 +74,9 @@ def graph(spec=None):
             parent = name
     rows.extend([dict(task_id='aggregate', kind='aggregate', dependencies=[parent], resource='metadata'),
                  dict(task_id='complete', kind='complete', dependencies=['aggregate'], resource='metadata')])
+    if restored(spec):
+        rows = rows[1:]
+        rows[0]['dependencies'] = []  # Completed donor gate/part2 are authenticated artifacts.
     return rows
 
 
@@ -152,7 +160,9 @@ def create(*, source_spec, campaign_root, project_dir, source_commit):
 
 
 def validate_spec(spec, *, deep=True):
-    if migrated(spec):
+    if restored(spec):
+        validate_content_hash(spec, expected_contract='K2_SEGMENTED_CAMPAIGN_SPEC/v3', expected_schema_version=3)
+    elif migrated(spec):
         validate_content_hash(spec, expected_contract='K2_SEGMENTED_CAMPAIGN_SPEC/v2', expected_schema_version=2)
     else:
         validate(spec, 'CAMPAIGN_SPEC')
@@ -197,6 +207,8 @@ def command(spec, name, resource, dependencies=()):
 def plan(spec, stage):
     if stage not in ('full', 'gate', 'science'):
         raise ValueError('Unknown stage')
+    if restored(spec) and stage == 'gate':
+        raise ValueError('Restoration reuses the original native gate; submit science, not another gate')
     rows = [r for r in graph(spec) if stage == 'full' or (r['kind'] == 'preflight') == (stage == 'gate')]
     names = {r['task_id'] for r in rows}
     commands = []
@@ -204,7 +216,7 @@ def plan(spec, stage):
         parents = [p for p in row['dependencies'] if p in names]
         commands.append(dict(task_id=row['task_id'], dependencies=parents,
             command=command(spec, row['task_id'], resources(spec)[row['resource']], ['${JOB_' + p + '}' for p in parents])))
-    if stage in ('full', 'gate'):
+    if stage in ('full', 'gate') and not restored(spec):
         commands.insert(1, dict(task_id='after_gate', dependencies=['preflight'],
             command=command(spec, 'after_gate', resources(spec)['metadata'], ['${JOB_preflight}'])))
     return artifact('COMMAND_PLAN', campaign_sha256=spec['content_hash'], stage=stage, commands=commands)
@@ -253,6 +265,9 @@ def retire(spec, *, execute=False, authorization=None):
 
 
 def gate(spec):
+    if restored(spec):
+        from .restoration import reused_gate
+        return reused_gate(spec)
     from .runtime import completed
     receipt = completed(spec, 'preflight')
     if receipt is None:
@@ -274,7 +289,8 @@ def gate(spec):
 def authorization_record(spec):
     return artifact('AUTHORIZATION', campaign_sha256=spec['content_hash'],
         authorization_phrase=AUTHORIZE, debug_policy_confirmed=True,
-        automatic_science_after_native_gate=True, final_test_accessed=False)
+        automatic_science_after_native_gate=not restored(spec), final_test_accessed=False,
+        **(dict(native_gate_reused=True) if restored(spec) else {}))
 
 
 def require_authorization(spec):
@@ -301,6 +317,10 @@ def submit(spec, *, stage, execute=False, authorization=None, debug_policy_confi
     require_retired(spec)
     if stage == 'science':
         gate(spec)
+        if restored(spec):
+            from .memory_migration import verify_copy, verify_completed_accounting
+            verify_copy(spec)
+            verify_completed_accounting(spec['resume_import'])
     write_immutable_json(Path(spec['campaign_root']) / 'authorization.json', authorization_record(spec))
     full_dry = Path(spec['campaign_root']) / 'submissions_full/dry_run_submission_ledger.json'
     submit_exact_dag(identity=spec['content_hash'], plan=plan(spec, 'full'), output=full_dry,

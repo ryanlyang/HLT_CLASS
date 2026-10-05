@@ -1,5 +1,28 @@
 # Legacy Donor-Source Map
 
+## 2026-10-05: restore original-memory K2 continuation without another native gate
+
+Scientific donor: **`c891da0d45dd3251dea9ea72df975bb96bae3570`**, unchanged.
+Accepted execution donor: **`71c1bde2d759b11cddb1f5cfbc1d199847bd6eef`**.
+Implementation base and unused retirement target:
+**`c640942f8a4a91086016fa4bd151ae5d3bc9c31a`**. No third-party code copied.
+
+| Donor paths | Use/adaptation |
+| --- | --- |
+| `k2_segmented/memory_migration.py` (c640942f) | Existing exact checkpoint/prefix authentication and independent byte-copy machinery; narrow v3 dispatch to original-memory restoration |
+| `k2_segmented/campaign.py`, `runtime.py` (c640942f) | V3 omits native gate/launcher and completed D025 segments, restores v1 resources, retains exact-ID retirement/submission and hardware/software checks |
+| `k2_segmented/training.py` (71c1bde2) | Unchanged scientific full-state kernel; byte equality required against the accepted donor |
+| `scripts/jetclass2_k2_segmented.py`, `queue_jetclass2_k2_128g.sh` (c640942f) | Add explicit restoration/CPU preparation modes and separate dry-first restoration helper; worker and original scientific bootstrap unchanged |
+| `tests/test_k2_segmented_memory.py` (c640942f) | Reuse tiny real CPU state/resume fixtures for original-vs-restored final state and downstream teacher tests |
+
+Package paths above are under `src/hlt_classification/`. Added
+`k2_segmented/restoration.py`, `scripts/queue_jetclass2_k2_restored.sh`,
+`tests/test_k2_segmented_restoration.py`, restoration contract and plan amendment.
+New spec v3 and `RESTORE_RESUME_IMPORT`, `ABANDONED_EXECUTION`,
+`REUSED_NATIVE_GATE` artifacts under `K2_SEGMENTED_*/v1`. The actual original
+native acceptance retains its original identity; no new measurement is claimed.
+Other campaigns, prior specs, completed outputs and final-test seal stay intact.
+
 ## 2026-10-05: 128-GiB SPORC K2 full-state continuation
 
 Execution donor: **`71c1bde2d759b11cddb1f5cfbc1d199847bd6eef`**. Scientific donor

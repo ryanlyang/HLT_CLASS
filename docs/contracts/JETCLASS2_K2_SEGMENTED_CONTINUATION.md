@@ -5,6 +5,11 @@ adds a v2 execution registration that imports completed D025 part1/part2 state
 and queues only part3 onward. It does not change this v1 resource contract or
 permit in-place memory changes to existing v1 jobs.
 
+The later [original-memory restoration amendment](JETCLASS2_K2_ORIGINAL_MEMORY_RESTORATION.md)
+adds v3 new-ID continuation after the user abandoned the unused v2 attempt.
+It reuses v1's actual passed native gate at the identical original resource
+envelope; it does not weaken the separate v2 fresh-gate requirement.
+
 ## Scope and scientific authority
 
 Execution-only amendment authorized by the 2026-10-03 request to split the

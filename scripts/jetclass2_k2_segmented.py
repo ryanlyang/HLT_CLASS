@@ -44,7 +44,11 @@ def main():
     migration.add_argument('--donor-spec', required=True)
     migration.add_argument('--campaign-root', required=True)
     migration.add_argument('--source-commit', required=True)
-    for name in ('submit', 'retire', 'run', 'gate', 'results', 'monitor'):
+    restoration = subs.add_parser('create-restored', help='Restore 312.5 GiB and reuse the completed native gate')
+    restoration.add_argument('--abandoned-spec', required=True)
+    restoration.add_argument('--campaign-root', required=True)
+    restoration.add_argument('--source-commit', required=True)
+    for name in ('submit', 'retire', 'run', 'gate', 'results', 'monitor', 'prepare-restored'):
         sub = subs.add_parser(name)
         sub.add_argument('--spec', required=True)
         if name in ('submit', 'retire'):
@@ -56,12 +60,12 @@ def main():
         if name == 'run':
             sub.add_argument('--task', required=True)
     args = parser.parse_args()
-    spec = None if args.mode in ('create', 'create-128g') else json.loads(Path(args.spec).read_text(encoding='utf-8'))
+    spec = None if args.mode in ('create', 'create-128g', 'create-restored') else json.loads(Path(args.spec).read_text(encoding='utf-8'))
     if spec is not None and (Path(spec['project_dir']).resolve() != ROOT
             or Path(args.spec).resolve() != Path(spec['campaign_root']).resolve() / 'campaign_spec.json'):
         raise ValueError('Use the registered executor checkout and original spec location')
-    if args.mode == 'create-128g':
-        donor = json.loads(Path(args.donor_spec).read_text(encoding='utf-8'))
+    if args.mode in ('create-128g', 'create-restored'):
+        donor = json.loads(Path(args.donor_spec if args.mode == 'create-128g' else args.abandoned_spec).read_text(encoding='utf-8'))
         bootstrap(donor['source_spec']['path'])
     else:
         bootstrap(args.source_spec if spec is None else spec['source_spec']['path'])
@@ -70,13 +74,23 @@ def main():
         raise ValueError('Wrong segmented executor package was imported')
     print('K2 segmented continuation: authenticating the original completed prefix; '
           'source checks may take several minutes. No matching or completed fit is rerun.', flush=True)
-    if args.mode == 'create-128g':
+    if args.mode == 'create-restored':
+        from hlt_classification.k2_segmented.restoration import create as create_restored
+        value = create_restored(abandoned_spec=args.abandoned_spec, campaign_root=args.campaign_root,
+            project_dir=ROOT, source_commit=args.source_commit)
+    elif args.mode == 'create-128g':
         from hlt_classification.k2_segmented.memory_migration import create as create_migration
         value = create_migration(donor_spec=args.donor_spec, campaign_root=args.campaign_root,
             project_dir=ROOT, source_commit=args.source_commit)
     elif args.mode == 'create':
         value = campaign.create(source_spec=args.source_spec, campaign_root=args.campaign_root,
             project_dir=ROOT, source_commit=args.source_commit)
+    elif args.mode == 'prepare-restored':
+        if not campaign.restored(spec):
+            raise ValueError('CPU gate reuse is only authorized for v3 restoration')
+        campaign.validate_spec(spec)
+        from hlt_classification.k2_segmented.restoration import prepare
+        value = prepare(spec)
     elif args.mode == 'submit':
         value = campaign.submit(spec, stage=args.stage, execute=args.execute,
             authorization=args.authorization_phrase, debug_policy_confirmed=args.confirm_debug_policy)

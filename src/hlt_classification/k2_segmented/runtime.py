@@ -350,6 +350,9 @@ def result_rows(spec, source):
 
 def run(spec, name, *, device='cuda'):
     source = validate_spec(spec)
+    from .campaign import restored
+    if restored(spec) and name not in {r['task_id'] for r in graph(spec)}:
+        raise ValueError('Restoration has no preflight or after-gate job')
     deadline = authenticate_job(spec, name)
     if name == 'after_gate':
         require_authorization(spec)

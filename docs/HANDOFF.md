@@ -1,5 +1,52 @@
 # Current Handoff
 
+## 2026-10-05: restore original 312.5-GiB K2 continuation, reuse passed native gate
+
+The user explicitly abandoned the unused 128-GiB attempt and requested the
+original setup back. Supplied SPORC output confirms D025 saved through epoch
+76 (incomplete), original part3/downstream IDs 21798745-21798755 CANCELLED
+with Requeue=0, new gate/launcher 21807909/21807910 PENDING, and no new science
+ledger. Actual queue state must be rechecked at execution; these IDs are
+observations, not reusable constants. No remote mutation was performed here.
+
+Implemented the [restoration amendment](contracts/JETCLASS2_K2_ORIGINAL_MEMORY_RESTORATION.md)
+and active-plan section15. New `k2_segmented/restoration.py`, dry-first
+`scripts/queue_jetclass2_k2_restored.sh`, and restoration tests; narrow changes
+to the segmented CLI/campaign/runtime/import dispatch. Training kernel and
+Slurm worker are unchanged. `K2_SEGMENTED_CAMPAIGN_SPEC/v3` independently
+copies the authenticated original full-state chain and retains D025's donor
+binding. Original resources, science and completed work remain untouched.
+
+The full dry/science plans each have **11 jobs**, beginning with D025 part3.
+There is **no preflight or after-gate job**. The original successful native
+acceptance is explicitly reused without fabricating new measurements, with
+per-worker GPU/software/resource checks retained. The separate v2 fresh-gate
+requirement is unchanged. CPU preparation is idempotent, authenticated and
+requires additional disk space; it does not train or rebuild particle caches.
+
+Only the two unused 128-GiB gates are normally cancelled; the original eleven
+IDs must already be cancelled. Running/advanced/ambiguous attempts block the
+cutover. Exact new-ID science submission follows the full dry plan and
+confirmed retirement. GPU jobs restore 320000 MiB, four CPUs, one A100; training
+parts retain 23h, reducers 6h. Default debug with pending partition-only tier3
+moves. No queue-speed guarantee, dataset change, new matching or final-test
+inference. Native source remains c891da0d; accepted executor donor 71c1bde2;
+unused attempt/base c640942f, recorded in the donor map.
+
+Local evidence: **54 existing segmented/migration tests plus 20 restoration
+tests passed**, scientific imports pinned to archived c891da0d. These include
+real tiny CPU uninterrupted-vs-restored model/AdamW/RNG/history equivalence,
+downstream banks and HLT-x1 export, exact two-job cancellation, race/corruption
+rejection, original-memory graph and no-GPU-gate enforcement. CLI help, Python
+AST, shell syntax and scoped whitespace checks pass. No new native GPU test
+was run or needed by this narrow same-envelope reuse amendment; live reuse
+still authenticates the real original evidence on SPORC.
+
+Next: commit/push the scoped restoration changes, create a clean pushed SPORC
+worktree and fresh restoration root, then run the helper dry and explicitly
+execute it. Do not edit prior specs/ledgers or requeue cancelled no-requeue
+jobs blindly. Preserve all original roots and checkpoints.
+
 ## 2026-10-05: checkpoint-preserving 128-GiB SPORC K2 continuation
 
 Implemented the authorized [plan amendment](plans/JETCLASS2_DZFIX_FIXED_SLOT_CONCAT_K2_LADDER_PLAN.md)
