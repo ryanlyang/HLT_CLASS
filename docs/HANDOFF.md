@@ -1,5 +1,2140 @@
 # Current Handoff
 
+## 2026-10-04: targeted NOISE-K2 recovery after OSCAR environment/ECC failures
+
+Implemented the authorized recovery amendment in the
+[active plan](plans/JETCLASS2_NOISE_V3_K2_OSCAR_100K_PLAN.md), with separate
+[recovery v1 contracts and queue instructions](contracts/JETCLASS2_NOISE_V3_K2_RECOVERY.md).
+Added `noise_k2/recovery.py`, `recovery_runtime.py`, a recovery CLI,
+`scripts/queue_noise_k2_recovery.sh`, `sbatch/run_noise_k2_recovery.sh`, and
+`tests/test_noise_k2_recovery.py`. Donor: `0ffb4ba54b02cea6558db5ea8a44995c76ef22d7`;
+see the updated donor map. Original scientific modules and environment helpers
+are unchanged and must compare byte-for-byte before acceptance reuse.
+
+The user reports repaired Conda files, a matching accepted software fingerprint,
+seven completed science tasks through train_CONCAT_K2_D050, two ECC-failed CE
+controls on gpu3001, and a D050 reducer that failed before Python startup.
+Recovery authenticates these states rather than assuming them: original exact
+journals/receipts, file hashes, terminal accounting and native acceptance.
+A fresh sibling root owns the expected ten replacements, keeping the original
+root and failed outputs read-only. GPU jobs exclude gpu3001 and check CUDA
+before dataset cache loading; mixed original/replacement results are supported.
+No matching, completed fit, or native preflight is rerun when all evidence
+validates. Final test stays sealed; no scientific hyperparameters change.
+
+Local tests: **71 passed** (40 existing + 31 recovery), including native-kernel
+synthetic end-to-end, original/recovery CE/KD selected-weight and metric parity,
+exact-ID/allocation rejection, corrupt-artifact rejection, ambiguous-submit
+protection and source-root byte preservation. CLI help, Python AST, shell syntax
+and scoped whitespace checks pass. Another **27 reader/relocation regression
+tests passed** (98 total across these suites); existing Matplotlib/Pyparsing
+deprecation warnings remain. These are local synthetic checks, not new
+installed-Weaver/GPU acceptance. The adapter requires the original genuine
+OSCAR acceptance and unchanged software/source; a small startup GPU smoke does
+not certify future hardware health. No remote submissions, cancellations,
+environment changes, commits or pushes were performed here. Next: push exact
+source, use a clean OSCAR recovery worktree, review the real ten-job dry run,
+then explicitly submit the replacements.
+
+## 2026-10-04: frozen NOISE_V3 K2 100k/50k OSCAR consumer
+
+Implemented the separate [NOISE_V3 K2 plan](plans/JETCLASS2_NOISE_V3_K2_OSCAR_100K_PLAN.md)
+and [v1 contract](contracts/JETCLASS2_NOISE_V3_K2_OSCAR.md) in
+`src/hlt_classification/noise_k2/`, `scripts/noise_k2.py`, the dry-by-default
+`scripts/queue_noise_k2.sh`, and `sbatch/run_noise_k2.sh`.
+This does not modify the existing SPORC native-Delphes K2, pilot or segmented
+campaigns, the frozen producer, or the independently owned relocated reader.
+
+The fixed experiment selects 100k train / 50k total validation from the frozen
+actual 1M/250k ordinary population. The same salience formula is required via
+an unchanged copy of the original full K2 v7 campaign JSON and its independently
+recorded raw SHA256. No default formula or old assignments/models are imported.
+Fresh exact capacity-two maps, physical GeV/mm/validity-aware views and
+proxy-only x3/x1 endpoints precede the original full quarter ladder:
+D100 -> D075 -> D050 -> D025 -> D000 -> compressed x1. With CE/reference and
+direct-KD controls this is 10 fresh fits and 5 reducers. Batch 128, original
+100-pass H45/decay60/floor-tail recipe; no implicit shortened pilot.
+
+Use OSCAR batch CPU preparation and gpu/norm-gpu L40S training. Resources are
+requested envelopes, checked with live Slurm test-only validation, not measured
+claims. Fresh native preflight checks all selected caches, native Weaver and
+FP32/BF16 storage parity, batch-128 longest-real-jet stress, production CE/KD
+miniatures, checkpoint/bank round trips, memory and runtime. No performance
+threshold gates science. Final 1M test remains sealed.
+
+The full dry run, exact source, exact-ID journals and stage submission claims
+are mandatory. Optional explicitly authorized after_gate submission launches
+the 17 science tasks only after fresh acceptance; no old SPORC dependency is
+needed. `results` can show authenticated completed validation-report rows early.
+No new jobs have been submitted, canceled or changed by this implementation.
+
+Local new-code evidence: 40 focused unit/graph/queue/native-kernel tests passed;
+the 3 real synthetic relocated-reader/selection/matching/cache tests also passed.
+The tests include all ten lightweight-model fits and five native bank reducers,
+all physical rungs and overflow, unknown/invalid tracking, no-offline endpoint
+access, exact formula provenance, scheduler-ID/partition checks, ambiguous-submit
+protection and rejection of rehashed invalid gate evidence. CPU test doubles
+are never published as remote GPU acceptance. The combined new/reader/K2 suite
+passed **101 tests, with 1 installed-Weaver skip**, in 686.67s. The expanded final
+new-code unit suite also passed **40 tests** in 40.95s (43 new tests including
+the 3 relocated-data integration checks; 70 existing regression tests passed).
+The skipped test requires locally installed Weaver; source code cannot waive
+the genuine OSCAR gate. Existing Matplotlib/Pyparsing warnings remain. Python
+AST/whitespace, new documentation links, shell syntax and scoped diff checks
+also passed.
+
+Donor checkout: `71c1bde2d759b11cddb1f5cfbc1d199847bd6eef`; donor files and the
+independently developed reader's working-tree hash are in LEGACY_SOURCE_MAP.
+The reader/handoff/contract/tests were already untracked and must be included
+in the eventual pushed source. No genuine OSCAR paired-data/GPU acceptance or
+Tigris miniature has been claimed. Next task: commit/push the isolated consumer
+and reader dependencies, copy the original K2 JSON plus recorded SHA to OSCAR,
+create a clean pinned checkout, dry-run, then submit the fresh gate.
+
+## 2026-10-03: frozen literature NOISE_V3 copy on Oscar, read-only paired adapter
+
+User reported successful transport and byte verification of the complete
+1M train / 250k validation / 1M final-test literature NOISE_V3 dataset:
+2,341 proxy blocks, 186 required offline ROOT files, and the inventory,
+TRAIN_1M profile and three direct pilot provenance files. Destination is
+`/oscar/home/rlyang/datasets/literature_noise_v3_2250k_ebd5bc1a_r1`;
+the attempted `/oscar/data/nopi` destination was inaccessible and not used.
+Complete manifest content hash is
+`26c902d04988b3f32be98a8d2ccbed6d48dd8c3f49c71ddc2c660da0f2ec5deb`.
+This is user-supplied remote evidence, not a local physical dataset audit.
+Transport checks did not decode or evaluate final-test particles.
+
+Added [Oscar literature handoff](JETCLASS2_LITERATURE_NOISE_V3_OSCAR_HANDOFF.md),
+`src/hlt_classification/literature_proxy_consumer.py`, and thin read-only CLI
+`scripts/jetclass2_literature_proxy_consumer.py`. The new adapter externally
+resolves copied paths, authenticates original bytes/parent identities, and
+joins each proxy jet to the original offline raw ROOT entry via canonical
+identity. No original JSON/path/hash is rewritten; no RIT worktree, source
+dataset or running campaign is modified. Native tracking units remain mm.
+Labels default off; native Delphes HLT particles are never requested.
+Train/validation only; test role and cross-role shard requests fail closed.
+
+New runtime inspection contract: `JC2_LITERATURE_RELOCATED_READER/v1`, specified
+in [the consumer contract](contracts/JETCLASS2_LITERATURE_RELOCATED_CONSUMER.md).
+Original production scientific schemas, recipe, memberships and classifier
+implementations are unchanged. Internal donor checkout is
+`71c1bde2d759b11cddb1f5cfbc1d199847bd6eef`; see LEGACY_SOURCE_MAP for reuse.
+The prior CMS-fitted proxy handoff describes a different dataset. The original
+SPORC 200k/50k selected release, matching, checkpoints and execution receipts
+are not included in this transport; the adapter is not a training campaign port.
+
+Local evidence: four focused baseline checks passed. Final focused suite:
+**62 passed in 253.03s** across `test_literature_proxy_consumer.py` (24),
+`test_literature_proxy_production.py` and `test_literature_proxy_ladder.py` (38).
+Coverage includes a real synthetic ROOT/NPZ copy with old-path reads forbidden,
+hash/identity failures, native units, no writes, test isolation and both CLI
+paired smokes. Markdown links, Python syntax, CLI help and scoped diff checks
+passed. Existing Matplotlib/Pyparsing deprecation warnings remain.
+No real Oscar reader smoke, Weaver/GPU acceptance, new Tigris miniature, or
+remote job submission has been performed by this change. Exact next task:
+push/install the reviewed reader source and run the documented eight-jet train
+and validation paired smokes on Oscar. Final-test decoding remains sealed.
+
+## 2026-10-03: K2 segmented debug continuation, native resume gate required
+
+Implemented the requested execution-only continuation of the full-size K2
+campaign's unfinished D025, D000 and HLT-x1 compression fits. New package
+`src/hlt_classification/k2_segmented/` separates campaign/source/Slurm checks,
+epoch-boundary full-state training, and runtime/report/bank handling. New thin
+CLI `scripts/jetclass2_k2_segmented.py`, dry-first queue helper
+`scripts/queue_jetclass2_k2_segmented.sh`, Slurm worker and focused tests.
+
+Authority: section 13 of the K2 scientific plan and
+[segmented execution contract](contracts/JETCLASS2_K2_SEGMENTED_CONTINUATION.md).
+New `K2_SEGMENTED_*/v1`, `K2_SEGMENT_CHECKPOINT/v1`,
+`K2_FULL_TRAINING_STATE/v1`; original full-size/pilot schemas and scientific
+modules are unchanged. Donor source is
+`c891da0d45dd3251dea9ea72df975bb96bae3570`, with all scientific imports bound
+to the original clean checkout. The executor is separately pinned. Full donor
+inventory is added to LEGACY_SOURCE_MAP.
+
+The original seven completed fits, matching, validation split and D050 bank
+are authenticated read-only imports. Original source root is
+`/home/ryreu/atlas/HLT_Classification/checkpoints/jc2_dzfix_concat_k2_96hc891da0d_r1`.
+Source remainder was last reported as jobs 21782821--21782827; actual IDs are
+derived from its authenticated live ledger, not hardcoded for cancellation.
+Only PENDING or already CANCELLED remainder jobs may be retired. The live
+switch uses exact IDs plus Slurm's pending-state filter; running or advanced
+fits cause a refusal. No remote job has been changed by this local work.
+
+New full dry plan: 15 jobs (preflight, after-gate launcher, 13 science tasks).
+Science comprises three 23h segments per remaining fit, two reducers and two
+closures. Default debug, same A100/4CPU/320000MiB science resources, no requeue;
+pending partition-only debug/tier3 moves are authenticated. Full population,
+batch128, C25P75/T2, original max100/min60 and patience15 clock60 remain fixed.
+Save current/best model, AdamW, RNG, update/epoch, history, LR position and
+patience at every completed epoch. CPU tensors plus hash-chained immutable
+commits prevent partial or cross-subject reuse. Restore RNG after constructing
+model/optimizer; initialize CUDA before restoring its generator so a deferred
+seed cannot overwrite the saved state.
+
+Do not deliberately time out: stop with a conservative whole-epoch estimate
+and 30min publication reserve. Spare third segments authenticate and exit
+without retraining, but still need an allocation. Three-segment exhaustion or
+execution failure preserves checkpoints and blocks descendants for reviewed
+recovery. All committed checkpoints are retained within a measured 32GiB
+budget; no old source artifacts or user files are deleted.
+
+Local evidence: initial focused full-size batch/walltime baseline **46 passed**.
+New continuation suite against the extracted original c891da0d scientific
+modules: **27 passed**, including three-fit CPU handoffs, a fresh-interpreter
+resume, original-kernel parity, dropout/BatchNorm/AdamW/RNG state, LR/patience
+across pass60, corrupt/cross-lineage state refusal, exact retirement and
+partition/resource guards. Completed current-checkout runtime regression:
+**180 passed, 6 skipped** across the new suite plus K2 walltime, execution,
+memory, parity and batch128 suites. The six skips require installed Weaver.
+The full historical preparation/reuse/pilot sweep was stopped during slow
+unchanged preparation fixtures; it is not claimed as a completed full-suite
+pass. CLI help, Python AST, Bash syntax and scoped whitespace checks pass.
+No installed Weaver exists
+in this local test environment. No remote native miniature, Slurm submission,
+scientific model or final-test inference has been performed.
+
+Next release step: commit/push the additive executor, keep the old scientific
+checkout/root, create a fresh continuation and inspect its dry plan. After
+confirming RC permits this debug usage, explicitly retire only the old pending
+remainder and submit the new native A100 resume gate. Its passed receipt plus
+durable authorization releases science automatically; local tests alone do
+not release science. Original expanded-input acceptance is reused, while the
+new resume behavior is tested by a fresh native checkpoint reconstruction.
+
+## 2026-10-03: genuine CMS FullSim shared-feature 200k/50k direct/coarse
+
+New isolated [scientific plan](plans/CMS_FULLSIM_SHARED_FEATURE_LADDER_200K_PLAN.md),
+[contract](contracts/CMS_FULLSIM_FEATURE_LADDER.md), and
+[queue runbook](CMS_FULLSIM_FEATURE_LADDER_RUNBOOK.md). The user's latest
+literature-proxy validation report shows coarse D000 AUC0.963700 versus direct
+0.963786, so this experiment tests genuine CMS pairs under the common interface;
+it does not retune either proxy generator or claim a diagnosed cause.
+
+Added `src/hlt_classification/cms_feature_ladder/` (contracts, raw physical
+inputs, file-local preparation/RAM caches, campaign receipts, training, runtime,
+submission), `scripts/cms_fullsim_feature_ladder.py`,
+`scripts/queue_cms_fullsim_feature_ladder.sh`, and focused tests.
+Default is **SHARED17 only**: 200k train/50k validation, three CE controls,
+DIRECT and COARSE, nine fresh fits/five reducers/two closures. The optional
+CMS21 representation control is explicit `--arms both` (18 fits/32 science
+jobs); its extra compute is not silently included. No dense or final-test DAG.
+
+Both feature arms use the same selected native CMS rows, PT_LINEAR assignments,
+persistent HLT shell/offline tail, own-view geometry, no sequence trimming,
+15 CMS classes, coordinate seeds, and literature C25/P75 T2 immediate-parent
+training recipe. SHARED17 reconstructs mm uncertainties only from valid nonzero
+raw CMS value/significance pairs and uses the common 17 analytic transforms.
+Zero/multi-hot binary PID flags and offline lost tracks are retained; the old
+response-study bridge, which dropped lost tracks, is deliberately not used.
+CMS21 is a native-feature representation control, **not** a claim of exact
+historical execution replay. Final test is sealed at row selection and cache API.
+
+Gate submission queues CPU selection/matching/foundation and a fresh A100
+preflight per requested arm. Preflight includes full-population caches,
+installed-Weaver FP32 parity, longest-jet batch256 KD probes, a genuine one-pass
+CE fit/reduction and short KD miniature, environment and measured resource
+checks. Science is a separately reviewed full DAG on SPORC/debug, with exact
+source/plan hashes and durable submission claims/journals. No existing job,
+artifact, source checkout or dataset is modified or cancelled.
+
+Baseline donor regressions: **83 passed, 1 skipped** in260.83s (native CMS and
+proxy ladder). Final new local suite: **27 passed** in188.01s, including real
+synthetic ROOT preparation, paired caches, both complete direct/coarse chains,
+identity joins, acceptance rejection checks, and exact submission replay.
+Slurm wrappers explicitly invoke Bash; tests check the quoting and dependency
+resolution. Bash syntax, CLI help and whitespace checks pass. All local model
+tests use an explicit tiny stand-in: installed Weaver is absent here.
+No genuine A100/Tigris acceptance or remote submission has been performed.
+
+Next: commit/push only these additive files and the
+scoped handoff/source-map hunks, create a clean pinned SPORC worktree, import
+the existing CMS split/raw paths, and queue the gate. Science is intentionally
+blocked until its own acceptance succeeds. User choice of extra native arm is
+optional; the requested shared-feature experiment is the default.
+
+## 2026-10-03: automatic literature science follow-up for existing preflight
+
+User-supplied SPORC output now shows literature preflight **21796580** pending
+on debug (Resources). The user explicitly authorized automatically submitting
+the full science DAG once it succeeds. New execution-only authority:
+[conditional follow-up v1](contracts/JETCLASS2_LITERATURE_LADDER_FOLLOWUP.md).
+No claim that the preflight has passed or science is already submitted.
+
+Added `src/hlt_classification/literature_ladder_followup.py`, thin CLI
+`scripts/jetclass2_literature_ladder_followup.py`, detached launcher
+`scripts/start_jetclass2_literature_ladder_followup.sh`, and focused tests.
+The controller remains outside the scientific source snapshot and invokes
+the original **99a1e231e38fe5a07ce5a31a4f4a74bb9ec40539** worktree; neither
+that worktree nor current jobs need changing. It binds the full gate hash,
+all three exact live gate IDs/journals, clean pushed source and SPORC identity.
+Only all-COMPLETED/0:0 plus authenticated gate_complete/runtime/parity evidence
+permits the dry-reviewed sixteen-job DIRECT/COARSE science submission.
+The advance user authorization is bounded to 200k/50k, nine fits/five reducers,
+debug and the existing measured 24h envelope. No scientific recipe change,
+partition migration, cancellation, or final-test access.
+
+The launcher survives an SSH disconnect using nohup and a persistent log.
+Look for ARMED; it is not itself a Slurm job. A kernel lock rejects concurrent
+controllers. The original exclusive science claim rejects ambiguous partial
+submissions; complete ledgers are reusable without resubmission. Controller
+authorization/review/submission receipts are hash-linked and immutable.
+
+Focused baseline: **14 passed** (`test_literature_proxy_ladder`). An initial
+test invocation used a `tmp/` base path and correctly hit the persistent-data
+guard in synthetic producer fixtures (5 passed/9 setup errors); rerunning in
+a dedicated non-ephemeral workspace test directory passed unchanged code.
+Final focused regression: **41 passed** (27 follow-up tests plus 14 existing
+literature-ladder tests); final follow-up-only rerun: **27 passed**. Covers
+pending/running/completed accounting, bad exits, wrong job/account/site,
+ledger/journal tampering, changed gates, failed validation, complete-ledger
+reuse, bounded wait, exclusive locking, immutable receipts and original-source
+subprocess routing. CLI help, Git Bash syntax and diff whitespace checks pass.
+No commit, push, remote controller launch or Slurm write was performed locally.
+Next: push the additive controller, then arm it against the existing gate;
+remote preflight remains the authority for real GPU/Weaver admission.
+
+## 2026-10-03: literature V3 200k/50k DIRECT + COARSE classifier implementation
+
+The user requested a fresh **200,000 train / 50,000 validation** classifier
+comparison on the frozen literature NOISE_V3 dataset, with **all jobs on SPORC
+debug** and no dense branch. User-supplied accounting shows generation array
+218347 and finalizer 218348 completed successfully (finalizer ended
+2026-10-03 02:08:34). The local implementation does not claim independent
+verification of those remote artifacts or an already-submitted classifier.
+
+Authority: [new plan](plans/JETCLASS2_LITERATURE_V3_200K_DIRECT_COARSE_PLAN.md)
+and [versioned contracts](contracts/JETCLASS2_LITERATURE_V3_LADDER.md).
+The new `cms_proxy_ladder/literature.py` adapter uses saved literature banks
+in native GeV/mm, joins each to its original inventory-bound offline ROOT
+file/tree/entry, selects label-blind ordinary-role subsets, and constructs new
+salience full-cardinality assignments. It neither invokes the CMS-fitted
+generator nor imports old assignments/models. No final-test particle access.
+
+Nine fresh fits: M0HLT, pure OFFLINE, persistent-HLT U000;
+DIRECT U000 -> D000; COARSE U000 -> U050 -> U100 -> D066 -> D033 -> D000.
+Five reducers plus aggregate/completion make **16 science jobs**. Immediate
+parent C25/P75, T=2, batch256, paired seeds and the existing min60/max100
+early-stopping recipe are retained. Per-class rejection@50% is printed with
+the accuracy/AUC and pure-offline recovery results.
+
+CLI: `scripts/jetclass2_literature_proxy_ladder.py`; queue helper:
+`scripts/queue_jetclass2_literature_proxy_ladder.sh COMMIT DATASET_ROOT STUDY_ROOT gate|science
+[--execute PLAN_HASH]` (arguments on one shell command). The helper defaults
+to a dry review, requires exact clean pushed source, and never cancels existing
+jobs. Three scheduled gate tasks authenticate the release, build the fresh
+foundation, then measure actual full-population training/reduction and
+installed-Weaver parity on SPORC. All training/reduction uses one A100,
+16 CPUs/workers and 160000 MiB; measured requests must fit debug's 24h limit.
+This explicitly differs from old variants which used debug only for measuring
+and tier3 for science. Science creation waits for the completed measured gate.
+Live requests clear inherited SBATCH/SLURM settings; a durable exclusive claim
+blocks concurrent or ambiguous interrupted submission retries.
+
+Donor commit: `ebd5bc1ae4eb6d6c11bfba5e1a6cdc5fd487653a`; details in
+`LEGACY_SOURCE_MAP.md`. Focused local synthetic integration/regression checks
+completed using the local `tagging-hlt` Python with `PYTHONPATH=src` and no
+bytecode/cache writes:
+
+- Main regression: **82 passed** (`test_literature_proxy_ladder`,
+  `test_cms_proxy_ladder`, `test_literature_proxy_production`,
+  `test_jetclass2_delphes`, `test_jetclass2_delphes_production`).
+- Extra shared-DAG/SPORC coverage: **53 passed** (`test_cms_direct_fusion`,
+  `test_cms_salience_coarse`, `test_jetclass2_delphes_sporc`).
+- Final new-variant rerun: **14 passed**, including actual preflight routing
+  with mocked CUDA/Weaver kernels. The first additional preflight test hit a
+  zero elapsed Windows clock tick for mocked inference; the test now controls
+  its clock while the production positive-duration guard remains unchanged.
+  These suites overlap; their counts are not additive. Matplotlib/pyparsing
+  deprecation warnings remain. CLI help, Bash syntax and scoped diff checks pass.
+
+**No commit, push or remote submission
+was performed in this implementation turn.** Remaining admission: exact source
+push, real SPORC gate (including installed-Weaver parity), then review and
+submit its measured science DAG. Existing unrelated work was preserved.
+
+## 2026-10-03: frozen literature NOISE_V3 full-dataset implementation
+
+The user approved the full **1M train / 250k validation / 1M final-test**
+dataset after genuine Tigris pilot **218339** completed in **2m00s**.
+Evidence root: `/home/ryreu/atlas/HLT_Classification/checkpoints/jc2_literature_noise_d505e807_r1`.
+Its 20k training jets retained **38.0021** output particles/jet, exact
+serial/process replay and exactly saved-v2 structure; calibration was not
+refitted. Compared with v2, v3 increased jet pT-ratio width to **0.0415**,
+single-parent pT-ratio width to **0.094831**, and d0/dz added-residual widths
+to **0.24278/0.70636 mm**. This supersedes the preceding entry's pending-v3
+remote status. It does not establish CMS realism or classifier/KD benefit.
+
+New [production plan](plans/JETCLASS2_LITERATURE_NOISE_V3_PRODUCTION_PLAN.md)
+and [production/consumer contract](contracts/JETCLASS2_LITERATURE_NOISE_V3_PRODUCTION.md)
+authorize deterministic final-test materialization only, not inference or
+evaluation. Namespace: `JC2_LITERATURE_PRODUCTION_<KIND>/v1`.
+Package: `src/hlt_classification/literature_proxy_production/`.
+CLI/helper/worker: `jetclass2_literature_proxy_dataset` under scripts/sbatch.
+Donor details are recorded in `LEGACY_SOURCE_MAP.md`; existing scientific
+v1/v2/v3 and learned CMS-proxy implementations are unchanged.
+
+The frozen recipe and exact full-precision rates are imported from the
+completed v3 pilot with original calibration lineage. Scientific source hashes
+must also match the pilot; execution plumbing is a separate new implementation.
+The existing TRAIN_1M
+registry, label-blind 250k validation subset and 1M test membership are reused
+unchanged from the previous 2.25M population metadata contract. Only dzfix
+OFFLINE branches are transformed, in native GeV/mm. The generator preserves
+the literature pilot's canonical jet IDs and `part:{i:08d}` particle keys;
+no original keys or construction ancestry enter output model features.
+
+One exact-plan submission queues preflight -> full array -> finalizer.
+Preflight and generation request **36 CPUs / 64 GiB / 2h**, no GPU; generation
+is capped at **16 simultaneous tasks (576 CPUs)**. File-local shards are at
+most 25k jets; windows 512 entries, banks 1k jets, bounded process queues.
+The scheduled preflight reauthenticates the parent and all population metadata,
+checks Python/architecture/NumPy, and compares production raw-reader,
+serial/process and physical-writer outputs against up to 64 saved v3 jets.
+Measured time/memory/storage projections must fit before the array starts.
+Per-shard checks avoid rehashing the full 2.25M identity list in every worker.
+
+Output is a new persistent root, never an overwrite of either existing
+dataset. Default bounded budget **20 GiB**, plus **2 GiB** free headroom;
+current quota and persistence must be explicitly attested at launch. Failed
+partial outputs retain reservations. Exact Slurm array-element identity and
+durable submission journals prevent the previous array-parent lookup bug
+and duplicate submission. Explicit same-commit recovery preserves completed
+shards, requires all prior jobs terminal and generates only missing shards.
+No broad cancellation or automatic deletion is implemented.
+
+Train/validation role manifests can be published independently before test
+completion; `read_role` authenticates only the requested role and joins by
+jet identity. Test materialization flags are truthful; no test metrics,
+labels, distributions or model inference are produced. The older CMS-proxy
+consumer handoff does not describe this new recipe or namespace.
+
+Local baseline: **80 passed in 39.36s** (v3 equations and existing production).
+Initial focused suite: **21 passed in 90.42s**; final focused suite after source
+freeze hardening: **24 passed in 93.50s**. Broader regression: **159 passed in
+434.23s** across all literature-proxy tests, JetClass2 split-registry tests and
+existing CMS-proxy production tests. Synthetic ROOT, spawned processes and
+mocked Slurm only; not remote production evidence. Matplotlib/pyparsing
+deprecation warnings only. Tests identified and
+fixed iterable-to-iterator conversion in bounded chunking. CLI help and Bash
+syntax checks passed. No real data/test particles were read locally; no
+commit, push, job submission, cancellation or dataset generation occurred.
+Real-Weaver parity is not applicable to this non-classifier transform.
+
+Next: commit/push scoped changes, confirm current persistent storage/quota,
+create and review the complete dry plan on Tigris, then execute that exact
+plan once. The genuine new production-worker miniature remains the first
+scheduled job; only success admits the already-queued full array.
+
+## 2026-10-02: final count-preserving noise-only literature pilot v3
+
+User-supplied Tigris evidence now confirms the preceding v2 pilot: job
+**218313**, `jc2_literature_count38_d4b5d5fd_r1`, completed in **1m33s**.
+20,000 training jets; exact process replay; 818,458 offline particles and
+760,042 output particles (**38.0021/jet**); 40,098 drops and 18,318 disjoint
+merges, with no unfillable count budget. This supersedes the earlier entry's
+then-pending v2 remote status. Console probabilities are rounded; never reuse
+them in place of the sealed calibration artifact.
+
+Implemented the separate [noise-only plan](plans/JETCLASS2_LITERATURE_PROXY_NOISE_PILOT_PLAN.md)
+and [v3 contract](contracts/JETCLASS2_LITERATURE_PROXY_NOISE.md).
+New package: `src/hlt_classification/literature_proxy_v3/`;
+CLI/helper/worker use `jetclass2_literature_proxy_noise` filenames under
+`scripts/` and `sbatch/`. Donor commit and files are in `LEGACY_SOURCE_MAP.md`.
+All scientific v1/v2 code remains unchanged. Existing unrelated work is retained.
+
+The final pilot compares OFFLINE, saved COUNT38_V2 and NOISE_V3 on the SAME
+authenticated parent training population. It copies the exact v2 calibration
+with original lineage (no refit) and keeps all streams/topology/PID probabilities.
+Tracking added-noise amplitudes increase from 3x to 4x nominal; pT/angle noise
+from 1.5x to 2x. Every jet's ancestry, output count, categories, charge, validity
+masks and ordered keys must match saved v2. Every mechanism count is checked
+per file and globally. Only smeared p4 and applicable tracking values/errors
+change. The existing pilot's count mean is therefore retained exactly.
+
+New diagnostics show paired jet pT/axis responses and single-parent particle
+pT/angular/tracking residuals and error ratios; merged descendants are excluded
+only from those single-parent diagnostics. Outputs include physical blocks,
+separate forbidden-as-model-input lineage, exact serial/process replay,
+inclusive and paired PDFs, CSV, examples and a complete immutable receipt.
+This remains a controlled synthetic benchmark, not genuine CMS HLT; stable
+means or increased noise do not establish detector realism or KD benefit.
+
+Queue shape: one CPU-only Tigris job, 16 CPUs, 64 GiB, 2 hours, no followup;
+exact pushed source, full dry plan/hash authorization, site resource validation
+and duplicate/ambiguous-submission protection. No job has been submitted here.
+No real dataset, CMS, validation or final-test particles were read locally.
+No commit/push/cancellation or full generation was performed.
+
+Local v2 baseline: **21 passed in 43.79s**. New focused v3 tests:
+**24 passed in 71.45s**, including a real spawned-process synthetic v1/v2/v3
+end-to-end chain, identical saved-control statistics, byte replay, exact topology,
+coupled error/noise formulas, read-scope, corruption, provenance and queue guards.
+Final broader regression: **136 passed in 282.40s** across all six
+`test_literature_proxy*.py` files, `test_jetclass2_delphes_split_registry.py`
+and `test_cms2jc2_proxy_production.py`. Matplotlib/pyparsing deprecation warnings
+only. CLI help, Bash syntax, Python AST/whitespace checks and `git diff --check`
+passed. AST comparison confirms v3 generation equations equal v2's verbatim;
+only the frozen noise-amplitude constants differ. V1/v2 source has no diff.
+Real-Weaver parity is not applicable to this non-classifier transformation.
+A genuine v3 Tigris pilot is still required before any production-readiness claim.
+
+Next: commit/push the scoped implementation, review and submit this single
+pilot against the completed v2 parent, then inspect response widths and physical
+sanity. The possible 2.25M production dataset (1M train, 250k validation, 1M
+final test) is a subsequent explicit decision, not an automatic action. A frozen
+recipe/calibration must not be retuned on those validation/test jets.
+
+## 2026-10-02: stronger count-targeted literature proxy v2 pilot
+
+Implemented the separate
+[count38 v2 plan](plans/JETCLASS2_LITERATURE_PROXY_COUNT38_PILOT_PLAN.md) and
+[versioned contract](contracts/JETCLASS2_LITERATURE_PROXY_COUNT38.md).
+New package: `src/hlt_classification/literature_proxy_v2/`.
+CLI/helper/worker: `scripts/jetclass2_literature_proxy_count38.py`,
+`scripts/queue_jetclass2_literature_proxy_count38.sh`, and
+`sbatch/run_jetclass2_literature_proxy_count38.sh`.
+
+The user supplied successful v1 Tigris pilot job **218291**, 20,000 training
+jets, 2m07s, with mean offline multiplicity 40.9229 and nominal 40.8267.
+This updates the earlier v1 entry's then-pending remote status; no v2 remote
+measurement has been made. V2 reuses the completed pilot's authenticated physical
+OFFLINE/NOMINAL blocks and exact train population. No new ROOT/native-HLT reads.
+
+Two training-only scalar-rate calibration passes target a mean of 38: about
+two eligible soft drops per jet, followed by enough expected disjoint nearby
+same-category neutral merges to cover the remaining deficit. There is no
+per-jet truncation to 38 or forced ineligible removal. Shortfalls are reported,
+not quality-gated. PID conversion probabilities and added tracking noise
+amplitudes are 3x NOMINAL; pT/angle amplitudes are 1.5x NOMINAL. Tracking errors
+remain coupled to added variance. This is a controlled synthetic benchmark,
+not a CMS-calibrated or literature-measured detector response.
+
+One 16-CPU, 64-GiB, two-hour CPU-only Tigris job calibrates, freezes rates,
+checks serial/process replay and generates paired statistics/CSV/PDF/examples
+plus v2 physical blocks and diagnostic-only ancestry. Source/parent/manifest
+hashes, complete receipt validation, exact authorization, test-only resource
+check and duplicate-submission locks are enforced. V1 science is unchanged;
+only optional plotting sides/histogram bins were added to its shared diagnostics,
+preserving original defaults. Donor interfaces at `08cbf06309ff7bb2bdeccf6da2874e21de43da87`
+are recorded in `LEGACY_SOURCE_MAP.md`.
+
+Local baseline: 19 v1 tests passed. Final verification in `tagging-hlt` Python:
+**112 passed in 217.61 seconds** across the four `test_literature_proxy*.py`
+files, `test_jetclass2_delphes_split_registry.py` and
+`test_cms2jc2_proxy_production.py`. This includes 21 new tests and a real
+spawned-process synthetic-parent miniature with immutable blocks, calibration,
+complete exports/receipt, unchanged nominal statistics, corruption/manifest/
+source/offset guards and infeasible-count handling. Existing Matplotlib/pyparsing
+deprecation warnings occurred, with no test failures in the final run.
+Python syntax, CLI help and Bash syntax checks passed. No genuine data particles,
+CMS models, validation or final-test data were accessed locally. No remote job,
+commit, push, cancellation or production generation was performed. Real-Weaver
+parity is not applicable to this non-classifier kernel. A genuine **v2 Tigris
+pilot remains required**; local miniature tests are not detector qualification.
+
+Next: commit/push scoped files, create a clean Tigris worktree, review the
+one-job count38 helper's dry plan, explicitly execute that exact plan, and inspect
+achieved count/noise diagnostics before considering production. Existing unrelated
+documentation and code changes have been preserved.
+
+## 2026-09-30: paired proxy dataset consumer handoff
+
+Added [JETCLASS2_CMS_PROXY_DATASET_CONSUMER_HANDOFF.md](JETCLASS2_CMS_PROXY_DATASET_CONSUMER_HANDOFF.md)
+and linked it prominently from the older SPORC Delphes guide. It records exact
+generated-bank and dzfix offline paths, the user-reported completion snapshot,
+split membership, original/repaired provenance, ragged physical array schema,
+units/PIDs/validity, label mapping, and an identity-checked streaming example
+joining proxy jets, offline particles and supervised labels. Jet correspondence
+is explicitly distinct from particle matching. Test materialization is not
+inference permission, and the current train/validation reader still requires
+the complete dataset manifest; no partial training release was implemented.
+
+Only documentation and documentation-example tests changed. No new/versioned
+contracts, generator, population, feature adapter or training implementation;
+no raw data, remote jobs or source-pinned execution worktrees changed. Code/API
+reference: local commit `3655955f6ef7184cc6fdb3b0e68bdc6d089e9fe2`; no external
+donor migration. Focused pre-edit production checks passed (4 tests), covering
+real ROOT input, sealed readers and refusal to publish an incomplete dataset.
+The new example suite passed all 8 tests: real synthetic ROOT/label joins,
+mismatch and incomplete-release rejection, the test seal and repository-relative
+links. These isolate the example's join logic; physical bank authentication
+remains covered by the separate production/recovery suites. Both Bash examples
+passed syntax checks, and scoped whitespace checks passed.
+No new real-Weaver/RC run is applicable to this documentation step. Next:
+consume the authenticated completed manifest when available, and implement a
+separately specified classifier adapter/cache for the desired downstream study.
+
+## 2026-09-30: separate committed-training proxy diagnostics
+
+Added `cms2jc2_proxy_audit/{campaign,worker,diagnostics}.py`, a thin CLI,
+Tigris worker and queue helper, plus the `CMS2JC2_PROXY_TRAIN_AUDIT` plan and
+v1 contract. This is an independent read-only diagnostic job, not a change to
+the running generation campaign or a partial-dataset training release.
+
+The audit binds every registered train receipt (original or execution-repaired),
+then checks physical banks against exact offline-only ROOT row identities. It
+does not require the whole-dataset manifest. No validation/test particles,
+native Delphes HLT, labels, new proxy replicas or raw CMS particles are read.
+Saved real CMS offline/HLT confirmation histograms and their original fitted
+bins are reused, retaining reduced coverage and unsuccessful/inconclusive status.
+
+Outputs: four-population mean/SD/count/flow table, all canonical jet/particle/PID
+histograms, offline-conditioned comparisons, exact paired multiplicity/PID
+changes, particle totals, correlations, CSV, PDF and a hashed completion receipt.
+Cross-dataset marginal TV is descriptive: different offline populations are
+shown separately, not mistaken for paired response closure. No physics
+qualification or new model selection is claimed.
+
+Queue shape: one Tigris CPU-only job, eight processes, 64 GiB, eight-hour cap;
+at least 2 GiB free audit storage. The full-runtime envelope remains unmeasured.
+Source must be clean/pushed, output root separate, all train receipts present;
+submission requires the reviewed plan hash and uses an exclusive intent.
+Per-shard summaries are immutable/resumable, with live progress and rough ETA.
+
+Local verification: 101 tests passed across the audit, production and recovery
+suites; the final audit-only rerun passed all 17 tests. This includes a real
+synthetic ROOT reader and exact serial/spawned-process diagnostic parity,
+corruption/membership/access-boundary checks, authenticated CMS range discovery,
+complete PDF/CSV/report publication and interrupted-report reuse. Bash syntax,
+CLI help and whitespace checks passed; plotting emitted only dependency
+deprecation warnings. No actual RC audit or full-dataset timing was performed.
+Nothing was committed, pushed, submitted, cancelled, or modified on RC.
+Next: push the dedicated audit changes, create a clean pinned worktree on
+Tigris, dry-review `queue_cms2jc2_proxy_train_audit.sh COMMIT DATASET_ROOT
+AUDIT_ROOT`, then repeat with `--execute PLAN_HASH`. The first scheduled audit
+is the real-environment validation; no Weaver test is relevant to this
+non-classifier diagnostic worker.
+
+## 2026-09-30: source-pinned proxy recovery helper implemented
+
+This completes the execution-repair next task in the preceding array-fix
+entry below; it does not change the frozen scientific study. New
+`CMS2JC2_PROXY_EXECUTION_RECOVERY_PLAN.md` and its reusable contract authorize
+one explicit operational source replacement for the pre-bulk failure.
+
+New `cms2jc2_production/recovery.py` and `recovery_controller.py`, thin
+`scripts/cms2jc2_proxy_recovery.py` and
+`scripts/queue_cms2jc2_proxy_recovery.sh` preserve the original study, preflight,
+successful pilot receipt and physical shard. Dry preparation checks original
+terminal job identities, authenticates the retained bank, pins a clean pushed
+replacement worktree and permits only enumerated operational source changes.
+The response kernel, generation function, split/population, random keys,
+numerical environment, storage and physical encoding must remain unchanged.
+
+Distinct EXECUTION_REPAIR, ATTEMPT_EXECUTION_REPAIR, SHARD_EXECUTION_REPAIR,
+DATASET_EXECUTION_REPAIR and DATASET_REDUCED_CONFIRMATION_EXECUTION_REPAIR /v1
+contracts record actual execution source without rewriting historical source
+hashes. RECOVERY_PLAN, RECOVERY_CONTINUATION and RECOVERY_HANDOFF /v1 bind the
+reviewed continuation and durable submission evidence. Existing campaign,
+submission, worker and output modules validate both legacy and repaired
+lineage explicitly. Reduced-confirmation limitations remain visible; this
+is a controlled proxy, not qualified detector HLT.
+
+After review, one detached controller retries only the missing pilot (no new
+preflight), waits for its successful accounting and authenticated receipt,
+then automatically queues all remaining frozen shards and the finalizer.
+The unchanged measured resource formula limits generation to 16 x 36 CPUs
+with no GPU request. Storage admission, sealed-test materialization lock,
+no-overlap guards and exact submission journals remain enforced. Controller
+restart follows existing jobs; failure or an ambiguous/partial submission
+stops instead of cancelling, deleting or blindly retrying anything.
+
+Verification: production baseline 64 passed in 32.48s. Final production,
+new recovery and reduced-confirmation suites: **99 passed in 171.20s**.
+These include actual old-commit scientific-AST comparisons, source drift,
+dry non-submission, preserved shard bytes, repaired worker publication,
+controller continuation/restart/failure, legacy and reduced repaired-bank
+assembly, and sealed reader behavior. CLI help, Bash syntax and scoped
+whitespace checks passed. Synthetic tests do not establish remote throughput.
+
+No remote submission, cancellation, deletion, commit or push in this step.
+Only the user-supplied original Tigris preflight/pilot results are available;
+the repaired worker has not run there yet. Weaver parity is not applicable
+to this data-only scheduler repair. Next: commit/push the repair, create its
+clean detached Tigris worktree, review the helper's dry recovery plan, then
+execute that exact hash. The real retry is required before automatic bulk
+release; no further manual handoff between retry and bulk is needed.
+
+## 2026-09-30: production array-element authentication fix
+
+User-provided Tigris logs show preflight `209945` succeeded (11m26s), retained
+TRAIN shard `209946_0` succeeded (4,432 jets; 3m03s), and `209946_1` failed
+before generation with `Array element escaped exact shard registration`.
+The overnight controller stopped without bulk submission. Successful receipt:
+`268c32360ec468d2f3d359b0e4bc695a4bd36ea712a3e46d0362c7a684f8776b`.
+These are supplied remote records, not a fresh remote inspection by the agent.
+
+Code inspection identified raw `SLURM_JOB_ID` lookup plus flattening of all
+`scontrol -o` records. An array element can have the parent as its raw ID;
+querying that ID can therefore merge sibling records and reject the correct
+element. The actual failing scheduler response was not logged, so its exact
+record ordering is not independently known.
+
+`cms2jc2_production/submission.py` now queries the ledger-bound parent/index,
+validates the index before lookup, rejects empty/multiple/duplicate-key
+responses, and binds returned raw JobId as well as array parent/index.
+Non-array workers reject array identity. Submission-journal, ownership,
+worktree, running state and resource validation remain intact. Mapping,
+population, numerical environment, random keys, writer and contracts' schema
+versions are unchanged. Plan/contract clarify this execution check only.
+
+Baseline: 35 focused production tests passed in 32.90s after setting local
+PYTHONPATH (the first collection attempt lacked that path). After the fix:
+64 passed in 32.87s. Coverage includes both raw-ID/parent orderings, ambiguous
+responses, invalid selectors/indexes, foreign raw/array IDs, non-array workers,
+resource mutation, and existing no-overlap/completed-shard recovery tests.
+Adjacent reduced-confirmation suite: 15 passed in 98.63s (79 passing tests
+across the two final suites). CLI help and scoped `git diff --check` passed.
+
+No remote mutation, cancellation, submission, deletion, commit or push.
+Completed shard and frozen campaign are untouched. This fix has not run on
+Tigris. IMPORTANT: current `recover` still requires the original study's exact
+source. The old `b6f88def` root cannot silently adopt a patched worktree.
+Next task is an explicit source-pinned execution-repair path preserving and
+authenticating its completed shard, followed by retry of only the unfinished
+pilot and measured bulk release. Do not requeue the old job, edit frozen
+source hashes, or claim that cross-source recovery is already implemented.
+
+## 2026-09-29: user-ordered stop at 36 frozen confirmation shards
+
+Ryan explicitly demanded stopping the remaining 21 of 57 evaluations for time.
+New authority: `CMS2JC2_REDUCED_CONFIRMATION_PLAN.md` and its versioned contract.
+The exact retained prefix is `jf_eval_0000` through `jf_eval_0035`, not a
+metric-selected subset or a moving set of whichever jobs finish later.
+
+New `cms2jc2_response/reduced_confirmation.py`, thin CLI and disconnect-safe
+dry-by-default queue helper pin the original spec, submission ledger/intents,
+36 successful shard receipts, identity digests, result bytes and jet counts.
+The explicit reviewed retirement step authenticates and cancels only live
+`jf_eval_0036` through `jf_eval_0056` plus the original `jf_report`. Completed
+excluded outputs are preserved. Unknown identities/states fail before any
+cancellation; partial cancellation requires explicit recheck/retry.
+
+One new 1-CPU/32-GiB/4h SPORC job merges saved statistics, runs the unchanged
+file-bootstrap checks and publishes FROZEN_REDUCED_REPORT/v1. No new ROOT
+particles, fitting, selection, or final-test reads. Coverage is recorded by
+file/source, including partial files and missing sources. This file-ordered
+prefix is not a representative random sample. A subset result never becomes
+full-population support: `inconclusive_incomplete_population` remains explicit.
+
+Production can import that reviewed report only with
+`--allow-reduced-confirmation`, using distinct reduced-evidence STUDY/DATASET
+contracts and carrying the limitation into the final manifest. Original full
+confirmation, physical kernel, 16x36 generation, measured retained writer
+pilots, quota budget and sealed-test restrictions remain unchanged.
+
+Baseline focused verification before edits: 66 passed, 1 deliberately excluded
+long real-root confirmation integration test. Final focused reduced/production
+suites: 50 passed in 157.67s. Original frozen confirmation, direct Tigris and
+development submission regressions: 74 passed, 1 deselected in 75.94s (existing
+Matplotlib/Pyparsing deprecation warnings). After final report-scope fields,
+the reduced suite passed again: 15 passed in 115.17s. CLI help, Python AST,
+Bash syntax and whitespace checks passed. Tests cover cutoff/coverage,
+retirement, corruption, real synthetic-statistics aggregation, worker publication,
+explicit import, distinct schemas and sealed bank reader. Initial local test
+harness omitted the Windows measurement mock; this was fixed in the tests,
+not by weakening Linux allocation/resource evidence. No new remote validation
+or classifier/Weaver run; this change merges reports rather than training.
+
+No remote jobs submitted/cancelled, no commit/push, and no files deleted in
+this local implementation. Source must be committed/pushed, then the new
+helper's exact dry plan reviewed before execution on SPORC. The user-reported
+old report is pending; remote reduced report has not run. Production still
+needs verified persistent quota: about 28G home free, and reclaiming a 17G tar
+alone does not meet the 50-GiB budget plus filesystem headroom. The extracted
+`dzfix_partial_v1/jetclass2` remains live input. The transfer tar is only a
+cleanup candidate after extraction/identity verification; metadata stays.
+
+## 2026-09-29: full frozen proxy bank, 16 x 36 Tigris CPUs
+
+Ryan requested a full 1M TRAIN / 250k validation / 1M sealed-test dataset from
+dzfix offline using the frozen JOINT mapping, with 16 concurrent 36-CPU jobs.
+New authority: `docs/plans/CMS2JC2_PROXY_DATASET_PRODUCTION_PLAN.md` and
+`docs/contracts/CMS2JC2_PROXY_DATASET_PRODUCTION.md`. This is controlled
+CMS-calibrated proxy materialization, NOT a claim of real detector HLT or
+physics qualification. The older response development/GEN/PORT/TG scopes and
+their test-access flags remain unchanged.
+
+New isolated package `cms2jc2_production` provides exact same-registry
+TRAIN_1M membership, a label-blind 250k validation subset, unchanged 1M test
+membership, frozen bundle/confirmation imports, CPU preflight, retained
+source-diverse TRAIN pilot shards, measured bulk admission, `%16` CPU arrays,
+durable reservations/atomic NPZ blocks and commit receipts, complete-bank
+assembly, exact-journal scheduler identity and terminal-only recovery.
+An interrupted shard gets a new attempt directory; completed verified shards
+are reused, never retrained/regenerated. The two pilot shards are actual
+dataset output, not a discarded benchmark. Native HLT and label branches are
+not generation inputs. The ordinary bank reader exposes train/validation
+physical fields only; classifier-specific input adaptation is downstream.
+
+Entry points: `scripts/cms2jc2_proxy_dataset.py`,
+`scripts/queue_cms2jc2_proxy_dataset.sh`, and
+`sbatch/run_cms2jc2_proxy_dataset_cpu.sh`. No remote submission, cancellation,
+commit, push, raw-data modification or deletion occurred in this work.
+
+User-reported donor gate `209413` completed on Tigris (0:0, 2m36s): 64 jets,
+within-Tigris exact replay, cross-site compatibility, 24.22s serial versus
+9.25s with four processes, 48.33s initial authentication, 0.78 GiB sampled
+RSS. This supports the unchanged physical kernel only. It is NOT a measured
+36-CPU production writer or 576-CPU throughput result.
+
+Local verification: original three generation suites passed 95 tests before
+edits; the new focused suite passed 33 tests, including actual spawned-process
+kernel replay and full synthetic bank assembly. Final combined regression:
+128 passed in 179.66s. After the final progress/timing refinement the focused
+suite passed again: 33 passed in 37.80s. CLI help, Python AST parsing, Bash
+syntax and whitespace checks passed. No real new-production pilot or
+classifier/Weaver run yet.
+
+Operational inputs still required: exact pushed clean source; the completed
+frozen CMS confirmation spec and operator-reviewed result hash; an explicit
+persistent project-storage destination with at least a 50 GiB available,
+operator-verified quota budget. Do not guess a `/shared/rc/` allocation or use
+the nearly full home directory by default. A supported/rejected/inconclusive
+confirmation is disclosed, not silently relabeled a physics pass. Before bulk,
+the genuine retained 36-CPU pilots must pass exact replay and measured
+resource admission, and sealed-test materialization must be explicitly
+authorized. It does not authorize final-test inference or analysis.
+
+## 2026-09-29: direct Tigris benchmark, no additional SPORC export
+
+User-reported SPORC GEN gate job `21790279` completed (0:0, 28m41s). Its saved
+report shows 64 jets, exact replay parity, a passing resource envelope, 13.77
+minutes initial authentication, 1.07 seconds input reading and 28.23 minutes
+worker elapsed. Generation/output/readback measured 42.85s serial, 42.76s with
+trace, 14.39s with four processes, 14.50s compressed; peak sampled RSS 0.85 GiB.
+These are a small real gate, not a 10k or multi-node speed guarantee.
+
+Ryan explicitly requested skipping further SPORC jobs. His Tigris read-only
+check found the original `cms2jc2_gen_9215fdcf_r1` study/bundle/report, partial
+dzfix dataset and ARM environment. Existence is not authenticated reuse, but
+it enables a direct path without export/copy. This supersedes the recommended
+SPORC-export next step **for this request only**; the prior PORT contract is
+unchanged and still requires its full 10k cross-site reference.
+
+New authority: `CMS2JC2_DIRECT_TIGRIS_GENERATION_PLAN.md` and TG_* v1 contracts.
+`generation_direct_{campaign,worker}.py` authenticate the completed GEN chain
+once on metadata-only import, then pin and revalidate the materialized bundle,
+stage/study, reference hash/receipt/bytes, inventory/profile and exact TRAIN
+membership. Old scientific source must remain byte-identical outside the
+pre-existing execution-only allowlist. Old environments and artifacts remain
+untouched; the Tigris environment is pinned independently.
+
+One separately reviewed Tigris 4-CPU gate compares 64 raw-ROOT TRAIN rows to
+the saved SPORC reference with the registered PORT tolerance and exact discrete
+checks, plus exact serial/trace/process replay within Tigris. Only after it
+passes can the 10k screen be created: 16/36/72 processes, two repeats each,
+124-CPU ceiling, one report. Full runs include ROOT/hash/write/readback costs
+and must match each other exactly and the gate's physical/identity prefix.
+Cross-site evidence is explicitly only 64 jets. No production/test capability.
+
+The new dry-default heartbeat helper is `queue_cms2jc2_direct_tigris.sh`;
+CLI adds create/advance/probe/direct-tigris-results. It uses existing immutable
+submission journals and the absolute CPU-only Tigris wrapper. It never submits
+SPORC jobs, copies data, cancels jobs or automatically advances stages. The
+measured 12-GiB cap/free-space checks remain (user reports only ~28 GB free).
+
+Baseline GEN/PORT tests: **72 passed in 83.50s** after setting local PYTHONPATH;
+the initial invocation without PYTHONPATH failed collection, not science.
+Initial new direct tests: **20 passed in 50.35s**, including a real synthetic
+Generator serial/spawn gate and a full 10k registration/receipt lifecycle with
+the expensive kernel replaced by a deterministic fixture. Scheduler evidence
+is mocked, not RC acceptance. The broader run reached its last synthetic
+historical full-confirmation test without reported failures, but that test
+remained CPU-active beyond 15 minutes. Only that exact local pytest process
+was stopped; this is an incomplete test, not a pass. The fresh focused-plus-
+neighbor run finished with **146 passed, 1 deselected in 168.03s**, explicitly
+excluding `test_full_confirmation_real_root`. This includes all 23 new direct
+tests plus GEN/PORT, development and frozen-JOINT neighbors. The 300 warnings
+are Matplotlib/Pyparsing deprecations. Python/CLI/helper syntax checks and
+scoped whitespace checks passed.
+Donors are recorded in LEGACY_SOURCE_MAP. No commit/push/SSH/Slurm operation
+was performed; old source kernels and unrelated work are preserved.
+Next: scoped pushed source, clean Tigris worktree and dry review of **direct
+gate only**. Real Tigris compatibility/performance remains unmeasured. GPU or
+Weaver parity does not apply to this frozen CPU-only response benchmark.
+
+## 2026-09-29: generation benchmark partial-snapshot location correction
+
+The user's read-only SPORC check stopped at the existing K2 campaign's actual
+root, `/home/ryreu/atlas/datasets/jetclass2_10M_20260918_dzfix_partial_v1/jetclass2`.
+The preceding assistant command and GEN create/validate guard required the
+larger local snapshot's directory spelling. This was an overly narrow location
+guard, not evidence of corrupt particle data or failed jobs. The existing
+`JETCLASS2_DZFIX_SALIENCE_MATCHING_HANDOFF.md` already documents the partial
+snapshot, its 186-file inventory and its separate TRAIN_500K profile.
+
+Added one shared explicit guard for the two documented directory names, used
+by GEN creation and revalidation. No prefix glob, rename, symlink, old-spec
+rewrite, inventory substitution or split rebuilding is performed. Literal
+data roots and inventory/profile/file/row hashes remain frozen; the two file
+sets are not interchangeable. The active GEN plan and v1 contract now state
+this operational correction. JOINT generation, selection, CPU requests and
+the TRAIN-only boundary are unchanged. Donors are recorded in LEGACY_SOURCE_MAP.
+
+Baseline: **24 tests passed** (156.87 s). Targeted corrected-root, bad-name,
+metadata-corruption, source-freeze and campaign-creation tests: **11 passed,
+23 deselected** (480.31 s). Full GEN/PORT regression: **72 passed** (363.95 s),
+including bounded synthetic ROOT reading under both exact snapshot names and
+the existing portable export/gate/screen/report lifecycle. Python syntax and
+scoped whitespace checks passed. The supplied metadata-checked, disconnect-safe
+queue block passed Bash syntax inspection only; it was not executed locally.
+No RC jobs, particles, existing campaign artifacts, Git commits or pushes were
+changed by this repair. The next step is a scoped pushed fix, verification of
+the documented partial inventory/profile against the existing K2 foundation,
+and a dry review of the separate SPORC generation gate before live submission.
+Real SPORC/Tigris parity and performance remain unmeasured by this change;
+GPU/Weaver validation does not apply to the frozen CPU-only response replay.
+
+## 2026-09-29: isolated Tigris portability and generation test
+
+Ryan authorized testing Tigris after CPU-only test submissions were accepted.
+His snapshot shows 36 CPU-only 144-CPU nodes plus 128 72-CPU GH200 nodes; reported
+idle CPUs and scheduling estimates are not reservations or scaling evidence.
+
+Implemented the additive `CMS2JC2_TIGRIS_GENERATION_BENCHMARK_PLAN.md` and
+PORT_{PROTOCOL,STUDY,STAGE,PACKET,EXPORT,GATE,RUN,REPORT}/v1 contracts. The original
+GEN benchmark and all confirmation/scientific source contracts remain in place.
+No automatic migration or cross-architecture reuse of SPORC numerical hashes.
+
+New `generation_portable_{campaign,data,worker}.py` provides an explicitly
+claimed SPORC export after the existing real GEN_GATE: 10k frozen dzfix TRAIN
+inputs and JOINT reference outputs, relative NPZ blocks and a trusted manifest
+fingerprint. A separate clean same-source Tigris worktree/root imports that
+packet without ROOT/CMS access. Its 64-row gate checks serial/trace/process exact
+replay and cross-site discrete equality plus predeclared float tolerances
+(atol 1e-12, rtol 1e-10); tolerance agreement is not called byte identity.
+
+Separately reviewed Tigris screen defaults to 16/36 workers, two repeats, with
+72/144 optional at fresh registration. Every 10k replay is compared to SPORC;
+within-Tigris outputs must remain exact across runs. Measured gate projections
+freeze smaller RAM/time requests when sufficient (32/64/128 GiB, 2--8h), rather
+than always requesting eight hours. Dependency lanes cap allocation at 52, 124
+or 144 CPUs. Report distinguishes fastest elapsed from CPU efficiency and
+cached-input mapping/output throughput from unmeasured raw ROOT ingestion.
+
+CLI: create-portable-export, create-tigris-benchmark, advance-tigris-benchmark,
+probe-portable-benchmark, portable-benchmark-results. New CPU wrapper activates
+the site-specific existing Conda environment; Tigris omits an explicit QoS
+instead of guessing SPORC's. The dry-default queue helper takes an already
+created stage and exact reviewed hash, preserves stdin/exit/heartbeat behavior,
+and does not cancel, copy data, advance stages or submit implicitly.
+
+Donors and co-developed uncommitted GEN dependencies are explicitly recorded in
+LEGACY_SOURCE_MAP; do not attribute those new files to an older committed tree.
+Unrelated staged/unstaged work is preserved. No commit/push/SSH/job submission,
+RC output mutation or production/test particle access has occurred here.
+
+Local verification: **38 portable tests passed** (123.15 s), including real
+serial/spawn Generator replay, exact/tolerant comparisons, packet relocation,
+full claimed gate/screen/report flow, export publication, CPU caps, submission
+idempotence/ambiguity, corruption and helper stdin/exit/syntax tests. After the
+final raw-data-root protection, both affected export tests passed again.
+The earlier 32-test full-flow run passed before the portable reader optimization;
+its repeated per-jet validation was replaced by equivalent block-vectorized
+Particles validation, with five added physical-invariant failure tests.
+
+Neighboring GEN/development/CPU36-64/frozen-JOINT regression: **96 passed,
+3 deselected**, 206.14 s; the slow original synthetic ROOT integrations were
+excluded from this rerun (the preceding GEN work recorded a full confirmation
+pass). Matplotlib/pyparsing deprecation warnings only. Python syntax/CLI help,
+Bash syntax, scoped whitespace and unchanged scientific-kernel diffs checked.
+Fixtures/mock scheduler evidence are not real RC performance measurements.
+
+Real SPORC gate/export and Tigris parity/resource measurements remain outstanding. Next operational
+step is a scoped pushed commit, explicit dzfix inventory/profile/data-root,
+then the SPORC GEN_GATE only (if not already completed with this exact source).
+After that, separately export and review the Tigris gate. GPU/Weaver checks do
+not apply to CPU-only frozen mapping replay. This does not qualify the mapping
+or authorize the future 2.25M production dataset.
+
+## 2026-09-29: separate JOINT generation-throughput benchmark
+
+Ryan asked to determine the fastest practical generation route for a future
+1M train / 250k validation / 1M test proxy-HLT dataset. Implemented a separate
+TRAIN-only engineering campaign under the new
+`docs/plans/CMS2JC2_JOINT_GENERATION_BENCHMARK_PLAN.md` and additive
+`CMS2JC2_RESPONSE_GEN_* /v1` contracts. This is **not** full production or
+scientific qualification, and does not alter the running CMS confirmation.
+
+The five new `generation_benchmark_{campaign,data,engine,worker,queue}.py`
+modules reuse the selected JOINT response/maps without changing scientific
+source or random-key domains. Explicit authenticated dzfix inventory/profile
+metadata freezes 10,000 TRAIN rows across 4--8 files; only offline particle
+branches are decoded. Old DEV_STUDY's no-JC2 boundary is unchanged. New GEN_STUDY
+has its own role validator, exact source/receipt/claim checks and no test reader.
+
+Gate: 64 rows, serial/4-process/trace/encoding parity, measured resource/storage
+admission. Separately submitted screen: 4/8/16 CPUs, two chunk sizes, stored vs
+lossless compressed NPZ, two repeats; ten runs and a report (120-CPU ceiling).
+Models load once per child, queues are bounded, native libraries use one thread,
+output blocks are atomic with exact readback and independent physical/key
+digests. Reports distinguish processing vs authentication-inclusive timings,
+fastest single job vs CPU efficiency, and conditional 2.25M time/storage estimates.
+No queue or multi-job scaling guarantee is claimed.
+
+CLI additions: create/advance/probe/generation-benchmark-results. The new
+`scripts/queue_cms2jc2_generation_benchmark.sh` is dry by default, accepts an
+explicit debug/tier3 choice, emits heartbeat output and requires the exact
+reviewed plan hash for live submission. It neither migrates nor cancels jobs.
+
+Local evidence: original frozen-confirmation/prediction baseline **40 passed**
+(including full synthetic confirmation); benchmark/development/CPU36-64/frozen
+regression **97 passed, 1 deselected** (the already-passed slow confirmation).
+Final focused benchmark suite: **24 passed**, including creation/bundle
+corruption and helper stdin/exit handling. Matplotlib/pyparsing deprecation
+warnings only in the broader regression. Synthetic tests include genuine
+spawn processes, ROOT reads, registered metadata, output replay and dry/live
+journal checks; they are not RC throughput evidence.
+
+Next: push the scoped source, pin a clean RC worktree, provide the actual dzfix
+inventory/profile/data-root and completed JOINT comparison spec, inspect actual
+resource probes, then review/submit **generation_gate only**. Real SPORC gate
+and 10k screen have not been run here. No commit, push, submission, old artifact
+mutation, or validation/final-test particle access was performed. Existing
+unrelated staged/worktree changes are preserved. Production remains a separate
+decision after CMS confirmation, JC2 support review and explicit split/storage
+authorization; there is no automatic production step.
+
+## 2026-09-28: frozen JOINT CMS confirmation (local implementation)
+
+Ryan authorized freezing the development-selected JOINT and proceeding to a
+larger, finite confirmation, with CPU parallelism and a debug/tier3 wait check.
+User-reported JOINT jobs 21788038..21788042 completed; the downloaded
+`cms2jc2_joint_results.log` ends with RESULTS_EXIT=0. Development selected JOINT,
+but the paired jet-pT response SD was about 2.66 times CMS and rare tracking tails
+remain concerns. Improved tracking is not evidence of full response qualification.
+
+New authority: `docs/plans/CMS2JC2_FROZEN_JOINT_CONFIRMATION_PLAN.md`; additive
+FROZEN_{PROTOCOL,MEMBERSHIP,REUSE,STAGE,ACCEPTANCE,ACCESS,SHARD,REPORT}/v1 contracts.
+The five `frozen_joint_{campaign,data,metrics,worker,queue}.py` modules freeze the
+completed model/maps, JOINT and the non-selecting B_DZ reference, exact physical
+interface, ranges, keys and three dependent replicas. No refitting, new winner,
+old campaign mutation, JC2 particle access or final-test access is authorized.
+
+ALL authenticated outer `response_confirm` rows, minimum 250,000 jets, are frozen
+metadata-only into file-local <=5,000-jet shards. No fit/select/test borrowing.
+An explicit untouched-population assertion is required; absence of outside
+program reads cannot be proven. Source/receipt/candidate/membership/access lock
+and exact worker claim precede particle access. Physics criteria are fixed before
+fresh data: per-observable mean/TV/SD-ratio checks, populated conditional and PID
+checks, validity and jet correlations, paired file bootstrap, explicit sparse/
+unavailable cells. Poor fidelity publishes rejected/inconclusive normally.
+The known broad pT response is explicitly tested and cannot be hidden by a score.
+This collection-response confirmation does not waive the original production
+six-block/association/producer/transfer requirements or automatically certify HLT.
+
+Two separately submitted stages: `frozen_gate` is an 8-CPU/32-GiB/2h, 64-residual-
+jet serial/process and historical-kernel acceptance with measured time/RSS/disk
+projections. Only after that real gate succeeds may `frozen_confirm` be created:
+16-CPU/64-GiB/4h evaluations, eight dependency lanes (<=128 CPUs), then a
+1-CPU/32-GiB/4h report. Bounded spawn queues and progress heartbeats; no durable
+particle arrays. Storage projections respect inherited 12-GiB total/2-GiB report
+caps and publication free-space headroom. Charts, fixed-bin overlays with explicit
+under/overflow, full histograms/PID/tails/routes and statistics are retained.
+
+CLI adds `create-frozen-joint`, `advance-frozen-joint`, `frozen-joint-results`
+(`--statistics`/`--json`) and read-only `probe-frozen-joint`.
+`queue_cms2jc2_frozen_joint.sh COMMIT COMPLETED_JOINT_SPEC ROOT
+auto|debug|tier3 gate|confirm [--assert-untouched] [--execute]` defaults dry.
+`auto` compares actual gate/evaluation/report shapes with test-only Slurm probes
+at fresh creation; existing roots keep their frozen partition. Queue estimates
+are hints, not whole-campaign completion guarantees. No cancellation or job
+migration; SSH-safe heartbeat/stdin/exit behavior. Donors at
+`7b57a32de74e4bcff4fa83e1ffcde67b5fcd0872` are recorded in LEGACY_SOURCE_MAP.
+
+Local verification complete:
+
+- Focused frozen-JOINT, prior JOINT, development, B_DZ tier3 and audit-debug
+  suite: 107 passed, six expensive integration cases deselected, 19.17 s.
+- The new complete synthetic ROOT donor/gate/confirmation workflow passed
+  separately (1 passed, 1134.09 s): actual serial/spawn replay, original-kernel
+  parity, both mocked Slurm stages, exact authorization/idempotency, claims and
+  disjoint held-out reads, all shards, seven figures, rejected physics saved
+  successfully, authenticated readback/statistics, unchanged donor bytes and
+  refusal of a further stage. An initial run exposed missing `cms_root` metadata
+  in the historical synthetic fixture; the fixture was corrected and this clean
+  full rerun passed. No production-reader fallback was added.
+- Final helper/source-interface/partition-probe checks: 11 passed, 1.93 s.
+  Bash stdin/exit status and syntax, Python AST/CLI help, scoped whitespace and
+  unchanged donor scientific code checks passed. Warnings are Matplotlib/
+  Pyparsing deprecations. This is not a repository-wide test-suite claim.
+- Completed temporary test output was moved out of the checkout into the local
+  temporary directory, not deleted. No user-owned files or RC artifacts moved.
+
+These fixtures are not real CMS or SPORC resource evidence. No commit, push, SSH
+or live submission has been performed. Other staged/unstaged user work is
+preserved. Ready for the isolated gate. Exact next operational step is a scoped pushed commit and clean
+pinned SPORC worktree, followed by dry review and the isolated acceptance gate
+against `cms2jc2_bdz_joint_7b57a32d_r1/stages/joint_compare_r1/stage_spec.json`.
+Do not queue confirmation until the real gate passes. GPU/Weaver parity is not
+applicable to this CPU-only frozen response replay.
+
+## 2026-09-27: bounded B_DZ joint tracking repair (local implementation)
+
+Ryan approved one repair round after the frozen significance audit. User-reported
+SPORC debug jobs 21786728..21786732 completed; local read-only inspection of the
+downloaded ba_report.json authenticated content hash
+`e5c6830b2cc694dc338e0c464d75a57f63a59232608d774941b25224cb1b6177` and reproduced
+its summaries. Independent displacement/error maps inflated tails; low-support
+muons inherited pooled corrections. This is not evidence to discard CMS extremes
+or claim that tracking is the only remaining response limitation.
+
+New authority: `docs/plans/CMS2JC2_BDZ_JOINT_REPAIR_PLAN.md`, with additive
+BDZ_JOINT_PROTOCOL/STAGE/REUSE/MAP/ACCEPTANCE/REGISTRY/SHARD/SELECTION v1 kinds.
+New bdz_joint_{maps,campaign,worker,metrics}.py retains B_DZ, TRACK_HALF and
+TRACK_FULL as exact controls; PID_SAFE disables pooled fallback for unsupported
+coordinates; JOINT calibrates error and error-rank-conditional significance,
+then reconstructs displacement. Unsupported PID/rank pairs stay B_DZ. All p4,
+counts, PID, masks, identities and generator randomness are invariant.
+
+Existing 4k residual-calibration jets and 10k repeated development jets only.
+No confirmation, final-test, JC2 transfer, generator refit, old artifact mutation
+or automatic follow-up. Source-bound gate (real serial/process acceptance then
+calibration) precedes separately created comparison (four shards then report).
+CPU-only debug by default, tier3 selectable at fresh creation; 36 CPUs/128 GiB/8h
+for calibration/evaluation. Report retains historical choice separately from a
+new guarded PID-aware development score and includes full charts via
+`bdz-joint-results --statistics`. Poor candidates still complete and publish.
+
+CLI: create-bdz-joint, advance-bdz-joint, bdz-joint-results, existing dry-run,
+submit and monitor. `queue_cms2jc2_bdz_joint.sh COMMIT COMPLETED_AUDIT_SPEC ROOT
+debug|tier3 gate|compare [--execute]` defaults dry, preserves stdin/exit status,
+prints authentication heartbeats and exposes no cancellation or cleanup.
+Both original and completed debug audit ancestry are admitted. Donors at
+`b1d59811609020b40c65f9f4063128be1faf526b` are recorded in LEGACY_SOURCE_MAP.
+Historical scientific modules are unchanged; dispatch/source/CLI changes only
+use the already existing execution allowlist.
+
+Verification complete locally:
+
+- `tests/test_cms2jc2_bdz_joint.py`: 24 passed in 569.16 s. Includes the complete
+  synthetic ROOT donor/gate/calibration/four-shard/report chain, serial/spawn
+  replay, nonidentity joint probes, full statistics rendering, both mocked
+  live submission DAGs, authorization/idempotency, memory/population refusal,
+  malformed-map/resource-evidence rejection, source/access guards and unchanged
+  donor bytes. Fixtures are not real CMS/SPORC qualification evidence.
+- Development, B_DZ tier3 and audit-debug neighboring regressions: 53 passed,
+  two slow migration workflows deselected. Initial prechange checks also passed,
+  including the original B_DZ synthetic ROOT workflow.
+- Bash syntax/stdin/exit-code tests, Python AST/CLI help checks, scoped whitespace
+  checks and unchanged pre-existing scientific-module check passed. Warnings
+  are existing Matplotlib/Pyparsing deprecations, not test failures.
+
+Ready to push and queue the isolated acceptance/calibration gate. No commit,
+push, SSH or live submission has been performed. Exact next task: publish a
+scoped commit, create a clean pinned SPORC worktree, review the helper's gate
+dry run against the completed `cms2jc2_bdz_audit_debug_b1d59811_r1` audit, then
+explicitly execute that gate. Only after its real acceptance and calibration
+finish should the separate comparison be created/reviewed/submitted. No claim
+of improved physics or production qualification is made. Weaver/GPU parity is
+not applicable to this CPU-only response study.
+
+Unrelated staged work and existing roots are preserved. Do not use `git add .`
+or an unrestricted commit to publish this study.
+
+## 2026-09-26: significance audit debug replacement
+
+Ryan authorized an execution-only debug replacement after his SPORC estimates
+showed tier3 evaluation IDs 21786453..21786456 pending (September 27/30 starts)
+and a hypothetical debug request starting September 26. These are user-supplied
+snapshots, not current scheduler observations or four-job start guarantees.
+Report 21786457 was pending on dependencies. Code derives exact IDs from the
+authenticated original ledger; these numbers are not hard-coded cancellation
+targets. Original acceptance must be verified completed, not inferred from
+the jobs' pending reasons.
+
+Authority: `CMS2JC2_BDZ_AUDIT_DEBUG_REPLACEMENT_PLAN.md` and its reusable
+contract. New BDZ_AUDIT_DEBUG/REUSE/RETIREMENT v1 artifacts bind a disjoint
+debug study, original acceptance/receipt, live ledger/journals, frozen protocol
+and unchanged scientific source. Four 36-CPU/128-GiB/8h shards plus one
+1-CPU/32-GiB/4h report; no acceptance rerun, old dependency, model change,
+confirmation/test access or scientific reselection. Original audit campaign,
+worker and metrics remain unchanged. New adapter publishes only in its root.
+
+CLI: create-bdz-audit-debug, retire-bdz-audit-debug, existing dry-run/submit/
+monitor and bdz-audit-results. New queue_cms2jc2_bdz_audit_debug.sh defaults to
+dry review, prints phase/heartbeat progress, and requires --execute for exact
+pending retirement and submission. Debug admission precedes cancellation;
+claims/receipts, running/successful/unknown states, identity drift, accounting
+lag and ambiguous submission stop migration. No broad job-name cancellation,
+source rewrite, automatic retry or deletion is exposed.
+
+Donor commit a61e4ea1d09d0cca80251c7b8fc7e70e72577fb5 and files are recorded in
+LEGACY_SOURCE_MAP. Local validation in tagging-hlt: 39 focused audit/debug tests
+passed, plus the new full synthetic ROOT migration/replay test and 38 development,
+C-debug and B_DZ-tier3 regression tests (78 distinct passing tests). The new full
+test covers preserved donor bytes, original acceptance reuse, pending/running
+races, accounting lag, exact-ID isolation, idempotent submission, new dependencies,
+serial/process shard parity, identical scientific report fields and rejection of
+corrupted acceptance. Its initial assertion expected a later guard's error text;
+the earlier scheduler-allocation guard correctly refused cancellation. The test
+expectation was corrected and the complete replay passed. Matplotlib/pyparsing
+deprecation warnings remain. Bash syntax, helper stdin/exit propagation, CLI help
+and scoped whitespace checks passed. The old scientific audit files have no diff.
+
+No live migration, commit, push or SSH has been performed. Unrelated staged work
+is preserved. Next: a scoped commit/push, a clean pinned SPORC worktree, and the
+new helper's dry review followed by explicitly authorized --execute. Do not commit
+all pre-existing staged work as part of this change. Real SPORC acceptance reuse,
+resource admission and exact pending identities remain runtime requirements;
+Weaver/GPU parity does not apply to this CPU-only diagnostic. Queue estimates
+must be rechecked; already-running/completed original work is never retired.
+
+## 2026-09-26: frozen B_DZ significance audit (development only)
+
+Ryan authorized a focused replay after local read-only inspection of the
+downloaded TRACK_FULL report. The new authority is
+`docs/plans/CMS2JC2_BDZ_SIGNIFICANCE_AUDIT_PLAN.md`, with additive
+BDZ_AUDIT_PROTOCOL/STAGE/REUSE/ACCEPTANCE/SHARD/REPORT v1 artifacts. This is
+not the next repair screen: no fit, map change, candidate reselection,
+confirmation access, JetClass2 transfer or production qualification occurs.
+
+New `bdz_audit_campaign.py`, `bdz_audit_worker.py`, `bdz_audit_metrics.py`
+reuse the frozen model/maps and the same 10k development jets/three replicas.
+Every shard replays the old identity digest, histograms, tracking counters,
+flags and corrections before publishing the new PID-specific value/error and
+significance accounting. Reports preserve all six PIDs, valid/missing pair
+denominators, tail sum-of-squares, signed and magnitude correlations,
+error-conditioned moments, joint heatmaps and bounded hashed extreme examples.
+Pooled moments label jet-replica exposures; replicas are not extra independent
+jets. The old selected model and all old scientific modules remain unchanged.
+
+CLI: `create-bdz-audit`, `bdz-audit-results`, plus existing dry-run/submit/
+monitor. `scripts/queue_cms2jc2_bdz_audit.sh COMMIT COMPLETED_STAGE NEW_ROOT`
+defaults to dry review; `--execute` is separate explicit authorization. Source
+must be pushed/pinned/clean. CPU-only tier3: 2-CPU acceptance, four 36-CPU/
+128-GiB/8h replay shards after acceptance, then a 1-CPU report. No cancellation,
+partition update or write into another campaign is exposed. Real SPORC
+acceptance measures the new diagnostic and gates the full replay; it has not
+been run here. Weaver/GPU parity does not apply to this CPU-only diagnostic.
+
+Donor files and commit `6b9a4bc1b3a9172d8b3ca63deb8c2c9e49c387d8` are recorded
+in LEGACY_SOURCE_MAP. Existing unrelated staged/unstaged work is preserved.
+No commit, push, SSH, Slurm submission or remote artifact change was made.
+Local evidence in tagging-hlt with bytecode disabled and native threads capped
+at one: pre-change focused baseline 5 passed; final new audit tests 15 passed
+(14 unit/guard checks plus the complete synthetic-ROOT replay in 595.44s).
+The integration exercised actual nonidentity maps in spawned children,
+measured-acceptance refusal, all shards/plots/report, source/receipt corruption,
+explicit authorization, idempotent submission and unchanged donor files.
+Neighbor B_DZ/tier3 nonintegration regressions 15 passed; CPU development suite
+18 passed. Thus 48 distinct final focused/regression tests passed; the old
+two long B_DZ integration tests and full repository suite were not rerun.
+Only existing Matplotlib/Pyparsing deprecations appeared. CLI help, Python AST,
+Bash syntax and scoped whitespace checks pass. An earlier integration attempt
+was intentionally interrupted while finishing report fields; the complete
+final rerun above passed. Real SPORC acceptance remains unexecuted. Next:
+scoped commit/push, clean pinned RC worktree, dry review, explicit submission.
+
+## 2026-09-25: B_DZ pending comparison tier3 replacement
+
+Ryan authorized moving B_DZ evaluation from debug to tier3 after test-only
+estimates favored tier3. His snapshot showed all five original comparison
+jobs `21785980..21785984` pending. Completed real SPORC gate jobs `21785922`
+and `21785923` passed serial/process replay, resource acceptance and the
+4,000-jet calibration. These are user-supplied observations, not local remote
+verification and not proof that the calibrated response improves physics.
+
+New authority: `docs/plans/CMS2JC2_BDZ_TIER3_REPLACEMENT_PLAN.md`; additive
+BDZ_TIER3/REUSE/RETIREMENT v1 contracts. `bdz_tier3.py` authenticates the
+original live ledger/journals and exact gate/map receipts, preserves the
+scientific source bytes and uses a fresh root. Four tier3 evaluations retain
+36 CPUs/128 GiB/8h; the 1-CPU/32-GiB/4h report depends on the four new IDs.
+The calibration, matching, random keys, replicas, 10k development population,
+selection and all numerical workers are unchanged. No confirmation/test read.
+
+`create-bdz-tier3`, `retire-bdz-tier3`, existing `dry-run`/`submit`/`monitor`
+and `bdz-results` support the replacement. The new
+`scripts/queue_cms2jc2_bdz_tier3.sh COMMIT SUBJECT_SPEC NEW_ROOT [--execute]`
+performs a dry review by default; execute separately authorizes exact pending
+retirement then submission. Admission is checked before cancellation. The
+controller filters exact old IDs by PENDING/debug/account. Active, successful,
+unknown jobs, old claims/receipts or accounting lag stop migration; no automatic
+cancellation retry and no silent discard of completed work. Frozen original
+artifacts and unrelated campaigns are never modified.
+
+Local validation in `tagging-hlt`, with bytecode disabled and native threads
+limited to one: B_DZ/C-migration baseline 16 passed (598s); CPU development,
+CPU64 and B-debug regressions 48 passed (246s); new tier3 lifecycle and real
+synthetic ROOT replay 11 passed (692s). The replay matched every scientific
+result field against the unchanged original worker and retained old artifact
+hashes. Scheduler tests covered admission rejection, identity/state races,
+accounting lag, authorization, unrelated-job isolation and idempotent submit.
+Only existing Matplotlib/Pyparsing deprecation warnings appeared. CLI help,
+Bash syntax and focused whitespace checks passed. Two superseded local test
+runs were intentionally stopped while refactoring repeated fixture validation;
+the final complete run above passed. No production performance was inferred.
+Donor execution patterns and the unchanged B_DZ implementation come from
+`1cdf6b890ce0b88de174948916593c106ddc8a06` (LEGACY_SOURCE_MAP records files).
+No Git commit/push, SSH, remote cancellation or live submission has been run
+by this implementation turn. Remaining step: scoped push, pinned worktree,
+dry review, then explicit execution on SPORC. No Weaver/GPU code is affected.
+
+## 2026-09-25: separate B_DZ tracking-calibration screen
+
+Ryan requested a bounded follow-up after the completed B_DZ development result
+showed mismatched displacement tails and uncertainty widths. Authority is now
+`docs/plans/CMS2JC2_BDZ_TRACKING_TUNING_PLAN.md` for this **new study only**;
+`docs/contracts/CMS2JC2_BDZ_TRACKING_TUNING.md` defines its BDZ_* v1 artifacts.
+The old bounded campaign and its scientific source/artifacts remain unchanged.
+
+Implemented three tracking-only candidates: historical B_DZ, half-strength and
+full-strength monotone marginal calibration. Four physical tracking fields are
+calibrated from the existing 4,000 residual-calibration jets, by PID where both
+sides have 1,000 unique contributing jets, otherwise pooled/identity fallback.
+The 10,000 existing development jets compare core TV, explicit tail counts and
+tracking correlations. Particle p4, PID, charge, identities/order and validity
+are invariant. This cannot fix the jet-mass/charged-fraction bias and is not a
+claim of new mapping quality or independent confirmation.
+
+`bdz_campaign.py`, `bdz_maps.py`, `bdz_metrics.py`, `bdz_worker.py` add a fresh
+CPU-only debug gate (acceptance then calibration) and separately authorized
+four-shard comparison/report. Calibration/evaluation request 36 CPUs, 128 GiB,
+eight hours. Source hashes, completed donor receipts, environment, serial/process
+parity, historical B_DZ replay, immutable publication and explicit authorization
+are enforced. No confirmation reader or automatic follow-up is exposed.
+
+The new donor reader resolves the known *ordering-only* old guard-reason-list
+validation issue without editing the frozen bounded modules or accepting changed
+reason multiplicities, winner, model or parents. Reports include physical moments,
+valid-particle correction denominators, tail curves, conditional overlays and
+source-file leave-one-out sensitivity; repeated development use is explicit.
+
+CLI: `create-bdz-tuning`, `advance-bdz-tuning`, `bdz-results`, plus existing
+`dry-run`, `submit`, `monitor`. Start from the completed
+`cms2jc2_bounded_b79e76be_r1/stages/bounded_compare_r1/stage_spec.json`.
+Use a new disjoint root and clean pushed worktree. No old jobs/artifacts were
+changed; no live jobs were submitted. Real SPORC resource acceptance remains a
+separate mandatory gate. No Weaver/model-inference code changed.
+
+Validation evidence: pre-change bounded/B-tracking focused tests **24 passed**;
+full CMS2JC2 regression suite **215 passed** in 607.89 s; final new-screen tests
+**6 passed** in 169.78 s, including actual synthetic ROOT reads,
+two-process/nonidentity-map replay, independent-jet calibration support,
+immutable receipt ancestry, mocked exact-DAG submission, historical replay,
+tail SVG generation, frozen selection and confirmation-access refusal. CLI help
+for all three new commands and whitespace checks pass. Only existing
+Matplotlib/Pyparsing deprecation warnings were emitted. Real SPORC acceptance
+and performance measurements have not been run locally.
+
+## 2026-09-25: bounded final response comparison (B / B_DZ / BC)
+
+User approved ending open-ended separate B/C tuning with one finite comparison,
+one frozen development response, then one separately authorized CMS confirmation.
+The new authoritative scope is
+`docs/plans/CMS2JC2_BOUNDED_FINAL_COMPARISON_PLAN.md`; its BOUNDED_* v1 contracts
+are in `docs/contracts/CMS2JC2_BOUNDED_FINAL_COMPARISON.md`. Original production
+qualification criteria have **not** been relaxed. Current association coverage
+and provisional physical conventions remain qualification limitations.
+
+Added five `cms2jc2_response/bounded_*.py` modules and staged tests; the existing
+development CLI, source snapshot and worker dispatch change additively.
+Repository-local donor files/commit `7d56425f3bb88b6ea36bbc9bd80e81fb166e5bb2`
+are recorded in LEGACY_SOURCE_MAP. Original B/C fits, scientific workers,
+fit-only reader, production held-out API and numerical models are unchanged.
+No remote job, ledger, dataset or completed output has been modified.
+
+The exact candidates are original B; B with dz residual-quantile multiplier
+selected from {0,.25,.5,.75,1} on the existing 4k residual calibration jets;
+and B's categorical topology/identity with C's whole joint continuous block.
+The hybrid uses B-generated states, never oracle HLT states. Field/topology
+parity is checked on every generated jet-replica. All 10k development jets are
+included; none are filtered by association coverage or poor scientific quality.
+Reports include per-file histograms, conditional plots, counts/kinematics/
+tracking/jet-shape scores, jet correlations, paired source-file uncertainty,
+explicit missingness and guarded selection. These are named development metrics,
+not the original six-block production score or a qualified detector mapping.
+
+Three separately created/submitted stages on CPU-only debug, no GPU:
+
+1. `bounded_gate_r1`: real 32-jet serial/process acceptance, then 4k calibration.
+2. `bounded_compare_r1`: four 2,500-jet shards, then report and immutable selection.
+3. `bounded_confirm_r1`: four 5,000-jet shards, selected model versus B only,
+   then final report. Fresh canonical response_confirm rows, whole-file disjoint
+   from development, become readable only after a stage/selection/membership/
+   compatibility-bound claim. This consumes a 20k subset, **not** the original
+   >=250k confirmation; those files must no longer be described as untouched.
+
+Generation requests 36 CPUs/128 GiB/8h per task, bounded RAM chunks and progress
+logging. Gate acceptance requests 2 CPUs/32 GiB/2h; reducers 1 CPU/32 GiB/4h.
+Measured acceptance must fit the declared envelope. No further tuning stage,
+automatic transfer or automatic submission follows confirmation, including
+`no_clear_improvement` and `control_retained` scientific outcomes.
+
+CLI additions: `create-bounded --parent-spec ... --project-dir ...
+--source-commit ... --root ...`, `advance-bounded --parent-spec ...`, and
+`bounded-results --spec ...`. Reuse the completed original comparison:
+`checkpoints/cms2jc2_dev_de9890b2_r1/stages/compare_search_b1_r1/stage_spec.json`,
+not the unused C-debug replacement or canceled duplicate comparison.
+Existing `dry-run`, `submit`, `monitor` and exact-ID `reconcile` apply. The
+three explicit live phrases are `AUTHORIZE CMS2JC2 BOUNDED_GATE EXACT PLAN`,
+`AUTHORIZE CMS2JC2 BOUNDED_COMPARE EXACT PLAN`, and
+`AUTHORIZE CMS2JC2 BOUNDED_CONFIRM EXACT PLAN`; each also requires its reviewed
+dry-plan hash. No stage queues the next one.
+
+Local evidence: the 42-test B/C focused baseline passed before edits; all ten
+new bounded checks passed, including real synthetic ROOT-to-fit-to-confirmation,
+serial/process replay, immutable donors, corruption/role/protocol rejection,
+missing-data scoring, finite stopping and stable result-column ordering after
+JSON serialization. Broader response regression: **207 passed, 1 deselected**
+in 338.83s, with 14 existing Matplotlib/Pyparsing warnings; the additional
+result-column test passed separately. The original full 33-fit/transfer
+integration test was not rerun. CLI help and scoped whitespace checks passed.
+Local fixtures are not genuine SPORC evidence.
+Remaining next step: scoped commit/push, clean source-pinned RC worktree, fresh
+bounded gate creation/dry audit and explicit CPU gate submission. No production
+acceptance, physical closure or JC2 transfer is claimed. Weaver/Tigris parity
+is not applicable to this isolated CPU response study; real SPORC gate remains.
+
+## 2026-09-25: pending C topology replacement on debug
+
+User authorized moving C to debug after B's replacement. Their latest snapshot
+shows C evaluations 21784612..21784615 and report 21784616 pending on tier3;
+original acceptance 21784611 had completed. B debug evaluations 21785374 and
+21785375 are running and are explicitly out of scope. No remote job was changed
+by this local implementation. Debug shares capacity with B, so a shorter wait
+is not guaranteed.
+
+Added `c_topology_debug.py`, its plan/contract and ten tests, adapting the
+execution-only B replacement lifecycle from pushed commit
+`0bed4cbb598f0476b1c00d08f43859c7e46120fa`. Donor details are in LEGACY_SOURCE_MAP.
+The CLI adds `create-c-topology-debug` and `retire-c-topology`; shared stage,
+submission and worker dispatch change additively. New v1 kinds are
+DEV_C_TOPOLOGY_DEBUG, DEV_C_TOPOLOGY_DEBUG_REUSE and
+DEV_C_TOPOLOGY_DEBUG_RETIREMENT. Original C/B scientific modules are unchanged.
+
+The fresh isolated stage reuses authenticated original C acceptance and frozen
+C_L inputs/model. Four independent 36-CPU/128-GiB/8h CPU-only debug evaluations
+feed one 1-CPU/32-GiB/4h debug report. The same 10k development jets, three
+replicas, six free/fixed views, association policy and scientific worker remain
+registered. Evaluation associations are still recomputed (unlike B's tracking
+audit); no refit, fitting-target regeneration, JC2 or final-test access occurs.
+The eight-hour limit is a trial envelope, not measured runtime.
+
+Retirement defaults to a read-only preview. Live actions require separate
+phrase/plan authorization, authenticated original acceptance/ledger/journals,
+debug test-only admission, and exact old scheduler identities. One
+controller-filtered pending-only cancellation can target only the five bound C
+IDs. Active/successful/unknown targets or published old target receipts stop
+migration; accounting lag publishes no retirement receipt. Submission requires
+terminal old states and immutable retirement evidence, and preserves the
+existing journal/reconciliation protocol. No B or classifier job is targeted.
+
+Baseline C topology/B migration tests: 20 passed. New C migration tests:
+**10 passed** in 53.63s, including tiny ROOT acceptance/evaluation/report,
+wrong-family refusal, exact five-job graph, corrupt acceptance/ledger/source,
+pending-to-running races, debug admission failure, accounting lag, old-output
+preservation and B isolation. Combined response regression: **198 passed,
+1 deselected** in 274.39s, with 14 existing Matplotlib/pyparsing warnings. The
+excluded test is the unchanged long 33-fit production-selection/confirmation/
+transfer integration, not a diagnostic acceptance test. CLI help, scoped
+whitespace checks and unchanged B/C scientific source checks pass.
+No commit, push, remote validation,
+cancellation or submission was performed. Real SPORC reuse is conditional on
+runtime authentication; GPU/Weaver parity does not apply to this CPU diagnostic.
+Next: scoped push, clean pinned worktree, fresh root, reviewed dry plan, exact
+retirement, then debug submission. Mixed unrelated HANDOFF/LEGACY_SOURCE_MAP
+edits must not be swept into the scoped commit.
+
+## 2026-09-25: pending B audit replacement on debug
+
+User authorized moving B to debug, including exact-ID cancellation/replacement
+if necessary. Their snapshot has B evaluations 21785116..21785119 and report
+21785120 pending. C and classifier jobs are out of scope. Old acceptance 21785115
+must be authenticated from its receipt and live accounting, not inferred from
+its absence in squeue. No scheduler change has been made locally.
+
+Added `b_tracking_debug.py`, its plan/contract and tests. The development CLI
+adds `create-b-tracking-debug` and `retire-b-tracking`; source capture, stage
+dispatch, live submission and worker startup are extended. New v1 kinds are
+DEV_B_TRACKING_DEBUG, DEV_B_TRACKING_DEBUG_REUSE and
+DEV_B_TRACKING_DEBUG_RETIREMENT. Original B/C scientific files are unchanged.
+Donor commit and reused paths are recorded in LEGACY_SOURCE_MAP.
+
+A fresh debug study reuses the completed original B acceptance, fit and frozen
+10k-jet diagnostic inputs. Four independent 36-CPU/128-GiB/8h CPU-only evaluation
+jobs and one 1-CPU/32-GiB/4h afterok report use the same worker and results reader.
+No refit, rematching, JC2 access or final-test access. Eight hours is a trial cap,
+not measured production runtime; debug cannot guarantee a shorter wait.
+
+Retirement is read-only by default. Explicit phrase/plan authorization, exact
+ledger and scheduler identities, completed acceptance and debug test-only
+admission precede one controller-filtered `scancel --ctld --state=PENDING` on
+the five bound old IDs. Running/unknown/completed targets or already published
+old evaluation receipts stop migration. Accounting lag publishes no retirement
+receipt; live submit cannot bypass terminal-state checks. Old files are never
+edited/deleted. Failed/ambiguous submission uses the existing journal/reconcile
+protocol rather than blind retries.
+
+Baseline focused B/topology: 27 passed. Initial new migration tests: 7 passed,
+including tiny real ROOT/B evaluation through report, mocked submission,
+source checks, pending-to-running race refusal and unchanged donor bytes.
+Combined response regression: **188 passed, 1 deselected** in 188.72s, with
+14 existing Matplotlib/pyparsing warnings. The excluded test is the unchanged
+long 33-fit production-selection/confirmation/transfer integration. Pending
+Slurm request identity accepts `NumNodes=1-1` only in explicit retirement mode;
+running workers still require a one-node allocation. CLI help, tracked/new-file
+whitespace checks and unchanged B/C scientific source checks passed.
+After that pending-node compatibility change, migration/development/CPU-reuse
+regressions were rerun: **48 passed** in 65.13s (same 14 warnings), including
+acceptance/journal corruption, debug admission failure and accounting lag.
+Real SPORC reuse is conditional on runtime authentication;
+no remote validation, commit, push, cancellation or submission was performed.
+No Weaver/GPU parity is relevant to this execution-only CPU diagnostic change.
+
+## 2026-09-25: isolated frozen-B tracking audit
+
+User-supplied evidence: original B report job 21781386 completed. On its same
+10k development evaluation B improves several count/kinematic histograms over
+C, but dz TV is 0.2951 versus C 0.0587, and dz significance TV 0.3240 versus
+C 0.0539. These are descriptive, not qualification or proof of a sign bug.
+The separately queued C topology acceptance 21784611 completed; evaluations
+21784612..21784615 and report 21784616 were pending in the latest pasted snapshot.
+No scheduler changes were made by this implementation.
+
+Added the plan/contract `CMS2JC2_FROZEN_B_TRACKING_AUDIT` and five reusable
+`cms2jc2_response/b_tracking*.py` modules. CLI adds `create-b-tracking` and
+`b-tracking-results --spec ... [--json]`; existing campaign/worker dispatch is
+extended additively. New DEV_B_TRACKING/REUSE/ACCEPTANCE/SHARD/REPORT v1
+contracts bind the original authenticated B_L fit, samples, ranges, historical
+shards/report, scientific source and environment. No original scientific kernel
+or C diagnostic module is modified. Donor/provenance is in LEGACY_SOURCE_MAP.
+
+Fresh root, same 10k jets and replicas, no refit, rematching, JC2 access or outer
+holdout/final-test reads. FULL, TRACK_CENTRAL, DZ_CENTRAL and DZERR_CENTRAL
+zero only designated tracking residuals; exact output p4, topology, PID and
+validity are preserved. FULL replays original production generation per jet.
+New applicable-coordinate counters separate valid tracking from inactive
+placeholders, and central predictions from residual contributions and clipping.
+Actual selected residual cells, missing states/backoff, model envelopes,
+conditional histograms and plots are saved; raw particle arrays/traces are not.
+
+Six CPU-only tier3 jobs: 2-CPU correctness acceptance; four 36-CPU/128-GiB/24h
+shards; 1-CPU report. Each shard evaluates all variants through a bounded spawned
+pool with native threads limited to one, eight-jet chunks and progress/wait
+heartbeats. Resource shapes are development envelopes, not a measured speedup.
+Submission requires clean pushed source, fresh root, full reviewed dry plan,
+site admission and the explicit BTRACK authorization phrase. The first acceptance
+job remains required on SPORC; Weaver/GPU validation is inapplicable.
+
+Baseline: 39 frozen-C/topology/accounting tests passed before code changes.
+New focused B tests: 14 passed, including a real B fit, exact unaffected-field
+replay, 16-coordinate split masks, valid/inapplicable accounting, missing-backend
+fallback, real serial/spawn execution and tiny ROOT through plots/receipts,
+mock six-job submission/idempotence, corrupt donor rejection and donor byte
+preservation. Final combined response regression: **181 passed, 1 deselected**
+in 146.01s, with 14 existing Matplotlib/pyparsing deprecation warnings. The
+excluded test is the unchanged long 33-fit production-selection/confirmation/
+transfer integration, not a diagnostic acceptance test. CLI help and scoped
+tracked/new-file whitespace checks pass. No remote execution, Git commit/push
+or live submission has been performed. Next: scoped push, clean pinned worktree,
+fresh root, reviewed dry plan and explicit submission of this independent audit.
+
+## 2026-09-25: isolated observed-topology diagnostic for frozen C
+
+The user approved the next diagnostic after the report-only audit. Their saved
+10k-jet output shows charged count 21.7763 versus real 21.1976 per jet, but mean
+charged pT 25.6892 versus 12.5261 GeV. Opposite neutral/photon momentum errors
+partially cancel in the total jet momentum. The error persists with zero pT
+residuals; merged output is important but not the only contributor. These are
+descriptive user-supplied results, not proof of a particular causal mechanism.
+
+New authority: `docs/plans/CMS2JC2_C_OBSERVED_TOPOLOGY_DIAGNOSTIC_PLAN.md` and its
+versioned reusable contract. `create-c-topology` imports the original completed
+C_L comparison into a fresh disjoint study. It uses the same 10k development
+evaluation jets and three replicas, never refits and never reads JC2 or outer
+confirmation/final-test data. The original matcher, response generator, frozen-C
+diagnostic, shared features, bridge and residual kernels remain unchanged.
+
+Six CPU-only tier3 jobs: two-CPU correctness acceptance; four independent
+36-CPU/128-GiB/24h evaluation shards; one combined report. Bounded spawned workers
+process eight-jet RAM chunks, including the association/generation/histograms;
+native pools use one thread. Resources are development envelopes, not a measured
+speedup. Existing jobs, models, ledgers and worktrees are untouched.
+
+The diagnostic verifies the observed emission codec against canonical calibration
+records, then holds association-derived topology and categorical output state
+fixed while frozen C predicts continuous quantities, with FULL versus CENTRAL
+residuals. This is explicitly privileged HLT information, not a deployable mapper.
+Free generation remains on every registered jet, with resolved/unresolved and
+identical comparable subsets reported separately. Missing continuous modules are
+unestimable, not target/identity substitutions. Reports include mechanism/PID
+momentum budgets, actual fixed residual-bin selections, population denominators,
+all existing conditional kinematic/tracking distributions and SVGs. Tiny source
+rounding spacelike p4 use the bridge's nonnegative-mass energy projection for
+codec closure; the raw-energy correction is recorded separately.
+
+Implementation: new `c_topology.py`, `c_topology_generation.py`,
+`c_topology_worker.py`, `c_topology_results.py`, focused tests, and additive
+development CLI/campaign/worker dispatch. New contracts are
+DEV_C_TOPOLOGY/ACCEPTANCE/SHARD/REPORT v1. Existing DEV_C_REUSE authenticates
+frozen inputs; the new stage separately declares evaluation rematching.
+Baseline before changes: 26 focused frozen-C/accounting tests passed. The new
+diagnostic's 13 focused tests pass, including real spawned-process parity,
+tiny ROOT evaluation/plots/receipts, donor corruption, and mocked six-job
+submission/dependency/idempotence checks. CLI help and scoped `git diff --check`
+also pass. Matplotlib emits only pre-existing pyparsing deprecation warnings.
+Final combined response regression: **167 passed, 1 deselected** in 108.14s;
+the deliberately excluded test is the unrelated full 33-fit production
+selection/confirmation/transfer integration, not a diagnostic acceptance test.
+No new SPORC job has been submitted or validated. Next: commit/push this scoped
+change, create a clean source-pinned worktree and fresh diagnostic root, inspect
+the six-command dry plan, and explicitly submit with the CTOPO authorization
+phrase. The registered acceptance must pass before its evaluation shards run.
+
+## 2026-09-25: frozen-C report-only momentum accounting audit
+
+User-supplied production output from frozen_c_0c3682bb_r1 reports all five
+interventions on the same 10,000 development jets and replicas 0/1/2. FULL has
+mean mass 208.05 versus real 178.906; NO_PT gives 184.745 and axis histogram TV
+0.0692 versus FULL 0.1998. NO_PT still worsens the mean jet-pT ratio; it is not
+a qualified replacement. Charged scalar-pT fraction stays around 0.49 in every
+proxy versus real 0.291. These are descriptive user-reported diagnostics, not
+independent confirmation or a demonstrated causal mechanism/producer bug.
+
+Implemented `c-audit --spec ... [--json]` in the development CLI and new
+`cms2jc2_response/c_accounting_audit.py`. This reads only authenticated saved
+model/report/metadata products, checks common population/lineage and count/pT
+closure, and prints PID momentum budgets, generated mechanism/PID budgets,
+emission reasons, log-pT clipping, conditional charged fractions and available
+residual-cell support. It performs no ROOT reads, generation, refit, rematching,
+Slurm call or publication. All old kernels, readers, workers, plans and ledgers
+remain unchanged. It can run from a new reporting checkout against old products
+without modifying the source-pinned donor worktrees.
+
+Pooled pT shares and mean per-jet fractions have different explicit denominators.
+Unknown PID is retained with bounds on its possible charged-pT contribution.
+Generated mechanism output totals are not response efficiencies or real-HLT
+mechanism labels. Existing reports did not save selected residual-bin levels;
+model cell inventory is explicitly NOT measured evaluation occupancy. A new
+registered replay would be needed for those frequencies, and is not queued.
+
+Additive stdout-only DEV_C_ACCOUNTING_AUDIT/v1 contract and active-plan extension
+document these limits. Donor is 0c3682bbb9a4c57b0f632574f878c43e863faa5c; schema/API
+reuse is recorded in LEGACY_SOURCE_MAP. Baseline 15 focused tests passed; the
+new 26-test focused set and broader response regression (154 passed, one unchanged
+long 33-fit integration test deselected, 14 existing plotting warnings, 74.11s)
+passed. CLI help and scoped whitespace checks pass. No actual remote audit,
+submission or push has been performed. Weaver/GPU validation is inapplicable
+to this read-only CPU report command. Next: scoped push preserving unrelated
+staged work, then run c-audit on SPORC against the completed frozen-C spec and
+inspect the real momentum budgets before proposing any calibration changes.
+
+## 2026-09-24: isolated frozen-C response diagnostic
+
+Implemented `create-c-diagnostic` and `c-results` in the CPU development CLI.
+The new plan is `docs/plans/CMS2JC2_FROZEN_C_DIAGNOSTIC_PLAN.md`, with additive
+DEV_C_DIAGNOSTIC/REUSE/ACCEPTANCE/SHARD/REPORT/SUMMARY v1 contracts. Five new
+`cms2jc2_response/c_diagnostic*.py` modules implement authenticated C_L reuse,
+explicit diagnostic generation, bounded instrumentation, workers and display.
+Existing dev campaign/worker dispatch is extended; original production
+Generator, residual sampler, readers, diagnostics, submission journal and Slurm
+script are unchanged. Donor 5f8fecc8013a2439fb725198487dc5899246ab94 and copied
+traversal/API reuse are documented in LEGACY_SOURCE_MAP.
+
+Fresh source-pinned tier3 root, 27 CPU-only jobs: one 32-jet correctness gate,
+20 independent one-CPU evaluation jobs (five interventions x four frozen
+2,500-jet shards), five reports and one summary. Uses the original completed
+compare_search_b1_r1 C_L, 10k development jets and replicas 0/1/2. No association
+recomputation, refitting, JC2 particle access, current-job changes or donor
+overwrites. Interventions are FULL, CENTRAL, NO_ANGLE, NO_PT and INDEPENDENT;
+the last preserves total within-emission latent covariance while removing
+shared-jet noise. Every evaluated jet-replica checks production-generator
+topology/PID equality; FULL also checks exact particle-array/flag replay.
+Historical histogram bins/counts/identities must match, allowing only 1e-10
+rtol/atol on saved floating moments across CPU kernels.
+
+Counters distinguish coarser-bin backoff, low statistics, missing modules,
+states/categories and actual clipping, with emission/coordinate/input-particle
+denominators and pre/post clipping magnitude moments. Existing any-particle
+per-jet flag rates remain separate. Raw traces and particles are RAM-only;
+durable products are bounded JSON/SVG under existing 12-GiB total and 2-GiB
+report/figure caps. This is exploratory development, not final confirmation
+or a claim of better mapping. No automatic winner or quality-driven failure.
+
+Baseline focused tests: 25 passed. Final broad completed regression: 143
+passed, one unchanged long 33-fit integration test explicitly deselected,
+14 existing Matplotlib/pyparsing warnings, 71.52s. This includes actual tiny
+ROOT -> fitted C -> frozen replay -> all five variant reports/real SVG output,
+authenticated reuse/corruption rejection, exact dry/fake live 27-job DAG,
+unchanged donor bytes, deterministic masks, covariance, traversal and historical
+moment tolerance checks. CLI help and scoped donor/whitespace checks
+passed. No remote jobs submitted or cancelled. Real SPORC acceptance remains
+the first registered gate; Weaver/GPU validation is inapplicable here.
+Next: scoped commit/push (preserve unrelated staged work), clean pinned RC
+worktree, new root, review dry plan, explicitly submit CDIAG. Keep the original
+comparison metadata/model/shard/report paths available for read-only reuse.
+
+## 2026-09-24: CMS2JC2 36-CPU tier3 comparison
+
+User-reported SPORC probes show debug has two 36-CPU nodes; the CPU64 debug
+comparison failed site admission before submission. Test-only tier3 admission
+accepted 36 CPUs/128 GiB/24h. The user chose that shape; these are resource
+admission observations, not a reservation, benchmark or guaranteed queue time.
+
+Added `create-compare36`, a fresh `compare36_r1` stage on tier3 only, with
+DEV_STAGE36/DEV_CPU36_EXECUTION/DEV_CPU36_REUSE v1 contracts. The two fits
+request 36 CPUs/128 GiB/24h, no GPUs. The 12 evaluation shards and three reports
+retain their smaller requests; all 17 jobs use tier3. Preprocessing shares
+the existing read-once, eight-jet, completion-order RAM implementation with
+36 processes and at most 72 outstanding chunks, not one worker per file.
+Reading and numerical fitting can use fewer cores. A/C numerical fitting
+retains 16 threads and B one. Existing CPU64 profile contents/hashes and legacy
+task shapes are unchanged; new registrations cannot resize old specifications.
+
+Import only the original completed confirm_search_r1 metadata/receipts and
+frozen samples/ranges. No preparation/confirmation rerun, old fitted models,
+raw/calibration disk spill, or mutation of previous studies/jobs. Matching,
+sampling, quotas, populations and physics equations are unchanged. Donor is
+0560c6db42a43fc5ddca22ef7bbf5407b64fa933; original confirmation uses de9890b2.
+Changed the development CLI, campaign/parallel/restart/worker modules, focused
+tests, active plan and contract; provenance is in LEGACY_SOURCE_MAP.
+
+Verification: 31 baseline tests passed before edits; 41 focused tests passed
+after edits in 20.60s, with 14 existing Matplotlib/pyparsing warnings. Coverage
+includes authenticated parent reuse, unchanged donor bytes, full dry/fake live
+17-job submission, rejection before any live jobs, exact tier3/CPU guards,
+36-worker scheduling capacity, CLI defaults, numerical parity, real spawn and
+tiny ROOT end-to-end development checks. The broader response regression run
+passed 128 tests in 45.40s (14 existing warnings); the unchanged long
+33-candidate scientific integration test was explicitly deselected. CLI help
+and scoped whitespace checks also passed. No actual 36-core benchmark or remote
+submission has been performed; Weaver/Tigris/GPU acceptance is not applicable
+to this execution-only CPU development change. Next is a scoped commit/push,
+fresh pinned checkout/root, reviewed dry plan and current site admission.
+Keep the rejected CPU64 root and original running jobs unchanged.
+
+## 2026-09-24: CMS2JC2 CPU64 comparison execution
+
+Implemented a separate opt-in `create-compare64` stage in the response
+development CLI. Both fit allocations request 64 CPUs/128 GiB/24h in debug,
+with no GPU; the same 17-task A/B/C comparison and held-out evaluation remain.
+The new `dev_parallel.py` reads authenticated selected files into RAM, then
+distributes eight-jet chunks across a 64-process pool, including location and
+residual roles together. Completion-order scheduling and a bounded 128-item
+queue remove the old one-worker-per-file ceiling and long-file imbalance.
+There are startup, global jet/chunk progress and 15-second wait-heartbeat logs.
+Native pools inside preprocessing workers use one thread to avoid nesting.
+
+Per-file bottom-hash quotas, record order, population counts, inclusion weights,
+matching limits, seeds, models and evaluation definitions are unchanged. Raw
+pairs/calibration records remain in RAM, with an 8-GiB array/key payload guard
+(not a total-RSS estimate), no disk spill, and existing durable storage limits.
+A/C fitting retains 16 numerical threads; B retains one, following the user's
+reported B_threads_16 failure and B_threads_1 completion. This parallelizes
+preparation, not B's single optimizer. Reading, startup, model fitting and the
+last chunks may use fewer than 64 CPUs; no speedup factor is established yet.
+
+`dev_restart.py` imports the completed SEARCH 20k confirmation and original
+frozen samples/ranges into a fresh disjoint study. It authenticates receipts,
+canonical memberships, numerical environment, CMS inputs and all scientific
+source bytes; only enumerated execution files may differ. No pilot or
+confirmation rerun, old model import, cancellation, queue mutation or overwrite
+is performed. Keep the old metadata and worktree paths available. Additive
+DEV_STAGE64/DEV_CPU64_EXECUTION/DEV_CPU64_REUSE v1 contracts and the active
+plan document this execution-only extension; legacy registrations are intact.
+
+User-supplied SPORC evidence: comparison jobs 21781375/21781376 were running;
+their 30-second CPU deltas were 266/211 CPU seconds (about 8.9/7.0 active cores).
+This supports investigating file-level underutilization but is not a complete
+runtime profile or an indication of a hang. The new implementation has not
+been submitted or benchmarked on SPORC. Real-Weaver/Tigris/GPU validation is
+not applicable to this CPU-only response-development change.
+
+Focused verification: 31 tests passed, including actual two-process spawn
+parity, exact sampled records/reports/weights, scheduler refill/heartbeat and
+failure propagation, read-once/memory guards, authentic confirmation reuse,
+17-job dry/fake submission, unchanged parent bytes, and tiny real-ROOT through
+fit/evaluation/plots using both legacy and chunked preparation. Broader response
+regression run: **118 passed, 1 deselected**, in 64.48s, with only 14 existing
+Matplotlib/pyparsing deprecation warnings. The unchanged 33-candidate full
+scientific end-to-end test was interrupted during metric evaluation in an
+earlier run and excluded from this completed run; no full-suite pass is claimed.
+The changed development path's real-ROOT end-to-end tests passed in both modes.
+CLI help, seven-file Python AST checks and scoped/new-file whitespace checks
+pass. Donors are recorded in LEGACY_SOURCE_MAP.
+Next is a scoped commit/push, clean pinned SPORC worktree, fresh comparison
+root, full dry review and resource-shape admission before explicit submission.
+The existing running jobs have not been cancelled, resumed or resized.
+
+## 2026-09-24: dz-fix coarse-ladder validation figure
+
+Additional `--style recovery-compact` variant omits U050 and labels U000
+`Offline` (asterisk removed on request), with a figure note explicitly identifying persistent-HLT U000.
+All retained values and pure-offline normalization are unchanged. Separate
+`coarse_ladder_recovery_compact.png/.pdf/.svg` outputs preserve the previous
+figures. Seven focused tests pass, including exact five-point selection and
+the clarification label; no campaign/scientific contract changed.
+
+Presentation update: `--style recovery` adds a single-panel accuracy/AUC
+recovery figure matching the user's visual reference, without R50, direct-KD
+markers, or per-point labels. Outputs are `coarse_ladder_recovery.png/.pdf/.svg`
+in the same artifact directory. Native HLT CE remains 0%, pure offline CE
+remains 100%; persistent-HLT U000 is not relabeled offline or forced to 100%,
+and above-100% values are retained. Six focused tests pass, including plotted
+series, normalization and omission of R50 even when supplied. PNG visually
+inspected. This changes only display code/tests and generated figures; no
+donor migration, contract change, inference, or remote campaign change.
+
+Generated Matplotlib PNG/PDF/SVG under
+`artifacts/jetclass2_coarse_ladder_20260924/` from the user's pasted six-decimal
+validation accuracy/AUC table. The figure plots U000 -> U050 -> U100 -> D066
+-> D033 -> D000, with native HLT CE and pure offline CE reference lines and
+the direct-KD endpoint. Coarse D000 recovers approximately 10.0% of the
+accuracy gap and 12.3% of the AUC gap to pure offline. This is descriptive
+single-run validation evidence, not a final-test or significance result.
+
+`jetclass2_delphes/coarse_progress_plot.py` and thin
+`scripts/plot_jetclass2_coarse_progress.py` can read either the saved display
+snapshot or completed campaign reports. Optional hadronic R50 is explicitly
+the geometric mean of X_bb/X_cc/X_ss/X_qq/X_gg rejection against QCD at 50%
+signal efficiency. Missing/censored values leave the affected mean unavailable;
+this does not redefine the registered ten-signal macro R50. The pasted table
+contains no per-class values, so the delivered figure has two panels. Reading
+the actual reports will add the third panel when hadronic values are available.
+`--export-only` needs only standard-library Python. No raw data, inference,
+matching, jobs, checkpoints or existing campaign artifacts are accessed/changed.
+
+Verification: five focused metric/rendering checks passed; only existing
+Matplotlib/pyparsing deprecation warnings. No donor migration or contract change;
+no remote validation is applicable to this report-only plotting tool.
+
+## 2026-09-23: separate K2 100k/50k short-ladder pilot
+
+Implemented the authorized `pilot_100k_50k_60` profile without altering the
+full-size tier3 registration. Main path is D100 -> D050 -> D000 (HLT x3) ->
+HLT-x1 compression. Four existing controls remain registered: HLT-x1 CE,
+HLT-x3 CE, pure-offline CE, and direct D100 -> HLT-x3 KD. There are eight
+fresh fits, three teacher banks and thirteen science tasks. Batch 128,
+C25/P75, T=2 and the original paired seeds are retained. Schedule is three
+warmup passes, hold through 20, decay through 30, then floor refinement through
+60; patience 15 starts at 30, so the earliest stop is 45, restoring best weights.
+
+The pilot reuses authenticated compact K2 assignments from the original
+`jc2_dzfix_concat_k2_1f930650_r1` donor. A new content-hashed population task
+selects class-stratified 100k training/50k validation subsets inside the parent
+memberships, then partitions validation for checkpoint/diagnostic/report use.
+Final-test metadata remains the same sealed 1M population. Only selected
+particle rows are cached; native identity joins map them into unchanged parent
+assignments. No rematching, trained weights, teacher banks or old acceptance
+are imported. HLT-only endpoints do not read offline arrays or matching maps.
+
+New launch/campaign contracts are v8, acceptance v7, training reports v3 and
+pilot population v1; the v7 full-size campaign remains unchanged. New
+`scripts/queue_jetclass2_concat_k2_pilot.sh` is dry by default, requests debug
+for every job, uses isolated `jc2k2p_` names and roots, and accepts `--execute`
+for the staged launcher. Training requests 24h with a 23h measured projection
+ceiling. Pending partition-only debug/tier3 moves preserve registered resources.
+The full dry run has seven gate tasks plus thirteen science tasks; automatic
+science release still requires fresh installed-Weaver/A100 acceptance.
+
+Evidence: 331 K2/source/memory/batching/execution/fusion/trainer regression tests
+passed; 22 pilot plus 28 preparation-reuse tests passed together, and a further
+real-ROOT pilot import/population integration test passed (382 total). Nine
+installed-Weaver checks skipped because Weaver is absent locally. The pilot
+tests include full CPU test-double production dispatch, actual kernel 45/60-pass
+stopping/restoration, unchanged parent input bytes, sealed test access, and
+fresh-acceptance enforcement. CLI help, all three Bash syntax checks and scoped
+whitespace checks passed. Implementation donor is repository
+commit `c891da0d45dd3251dea9ea72df975bb96bae3570`; source details are recorded
+in `docs/LEGACY_SOURCE_MAP.md`. No remote job, existing campaign, source commit
+or push was changed. Next is scoped commit/push, a fresh pinned SPORC checkout,
+pilot dry run, then staged submission; no remote GPU acceptance is claimed.
+
+## 2026-09-23: isolated CMS2JC2 CPU response development study
+
+Implemented the user-requested RC CPU development workflow under
+`cms2jc2_response/dev_{data,campaign,submission,worker,diagnostics}.py`, thin
+`scripts/cms2jc2_response_dev.py`, and CPU-only
+`sbatch/run_cms2jc2_response_dev_cpu.sh`. Authority is
+`docs/plans/CMS2JC2_RESPONSE_CPU_DEVELOPMENT_PLAN.md`; new DEV_* v1 artifacts
+are described in `docs/contracts/CMS2JC2_RESPONSE_CPU_DEVELOPMENT.md`.
+Original response algorithms, science gates and existing campaign code are
+unchanged. No RC access, submissions, cancellations, source commits or pushes
+were performed in this implementation turn.
+
+Separately authorized stages: 7-job pilot (2k association policies + B 1/16-thread
+diagnostics), one-job chosen-policy 20k confirmation, then 17-job three-family
+comparison with 16k location/4k residual/10k development evaluation jets. All
+come from original response_fit; original response_select/response_confirm
+remain sealed. Same source mixture across roles, file-disjoint evaluation,
+four 2500-row shards, fixed replicas 0/1/2. Local real metadata validated exact
+counts: 18 location files, 5 residual files, 3 evaluation files; signal has only
+two original location files, so one is reserved and one retained. This is not
+strong multi-file signal uncertainty evidence; no such claim is made.
+
+Import only authenticated CMS preparation metadata from
+`cms2jc2_response_f966dd80_r1`, verifying receipt bytes and CMS semantic hashes.
+No old JC2 particles/profiles or old acceptance are reused. Intended later
+transfer release is `jetclass2_10M_20260918_dzfix`; this study reads CMS only.
+CMS cm/Delphes mm conversion matches the producer reply; other unresolved
+physical conventions remain explicitly provisional. No transfer qualification.
+
+CPU process pools obey allocation limits; A/C share RAM-prepared records, B is
+isolated. A's model is published before C fitting; per-family afterany evaluation
+authenticates its own model, so a subsequent C failure does not invalidate A.
+A evaluation still waits for their shared fit allocation to terminate. Each
+family has its own report/plots, with no all-family success barrier. All-jet
+histograms retain empty/missing/underflow/overflow counts; conditional PID,
+particle/jet kinematic, displacement and correlation diagnostics are exploratory,
+not a replacement for the production six-block closure score. Unestimable models
+produce explicit zero-evaluated-jet reports, not successful physics scores.
+
+Only models, compact diagnostics/plots, masks and provenance persist. Fitting
+records and generated particles remain in RAM; core dumps are disabled. Existing
+12-GiB total/2-GiB reports+figures caps and publication headroom cover the entire
+study including failed attempts. Clean pushed source, environment fingerprints,
+exact intents/receipts/claims, scheduler identity, no GPU allocation, partition
+UP and resource-shape `sbatch --test-only` checks protect live execution. Separate
+stages cannot overlap allocations within this study. Default partition is debug,
+explicitly chosen at creation; current site admission still needs the real check.
+
+Evidence: **105 response tests passed** in 119.51s, including 17 new development
+tests and actual tiny ROOT->fit->four evaluation shards->SVG report coverage;
+only existing matplotlib/pyparsing deprecation warnings. CLI help, seven-file
+Python AST parsing, worker `bash -n` and scoped whitespace checks passed.
+Tiny tests do not establish SPORC resource acceptance; no Weaver/Tigris/GPU
+validation is applicable to this CPU-only response-development workflow.
+Next: commit/push the explicit new surface plus documentation, create a clean
+source-pinned SPORC worktree, then create/dry-review/authorize the pilot. Inspect
+its results before authorizing confirm and compare; nothing auto-launches them.
+
+## 2026-09-23: K2 tier3 96-hour training profile
+
+User-reported physical-batch-128 preflight `21770762` at
+`11ff05dff72224ff365e3873c2731d79a802780d` completed the D100, D075, D000
+and HLT-x1 probes, then failed the old portable 23-hour runtime guard. Reported
+peak allocated CUDA was 21.16 GiB (33.57 GiB reserved), CPU RSS 58.02 GiB,
+cache construction 6987.22 seconds and conservative maximum-fit projection
+262478.22 seconds / 72.91 hours. This is not measured full-fit duration and
+the failed gate did not authorize science. The user's tier3 inspection showed
+20-day MaxTime and no displayed qos_tier3 MaxWall. Their 96-hour A100/4-CPU/
+320000-MiB `sbatch --test-only` succeeded; response 21775265 was **not** an
+actual submission.
+
+Implemented K2-only launch/campaign v7, acceptance v6, execution policy v2:
+all ten fits request 96h on tier3, and both preflight/science release require
+a finite positive projected maximum fit <=95h. The one-hour reserve is
+registered and hashed. Existing 1.30 projection multiplier/cache accounting,
+90% GPU and 80% CPU limits, physical/inference batch 128, pass-based schedule,
+early stopping, inputs/matching, seeds and models are unchanged.
+
+Short jobs keep their existing <=24h requests and partition-only debug/tier3
+portability. Initial `--partition` selects short jobs; long fits always use
+tier3 even if the launcher runs on debug. Runtime authentication rejects a
+long fit on debug or altered TimeLimit. Execution records/monitoring report
+the canonical requested partition per task. No current job is retargeted.
+
+Files changed: K2 campaign/execution/runtime/submit/preparation-import modules,
+queue helper and CLI, K2 tests (including new walltime regression file), plan,
+contract, donor map and this handoff. No shared matching producer, Weaver model
+or training-kernel file was changed. Source baseline is
+`20358f5568a2a5d42c8849ca99439bc435122f26`; original matching donor stays
+`1f9306504dfd040c9c22e0a89829d277d1ff2194`.
+
+Validation: focused installed-Weaver 0.5.3 K2/memory/parity/batching/
+withdrawal regressions **218 passed** in 88.66s; source/launcher tests
+**46 passed** in 10.74s. All **28** preparation-reuse cases passed across the
+lineage run and focused rerun (two legacy expectations about all-debug plans
+and CLI wording were updated; source suite and both reuse partition cases
+then passed). This covers **292 distinct tests**, including unchanged donor
+bytes/input parity, corruption rejection and no imported GPU acceptance.
+Checks also include local native CPU/CUDA parity, 73h
+acceptance and 96h rejection through the preflight dispatcher, exact Slurm
+day/hour TimeLimit checks and debug-short/tier3-long dry runs. These are local
+tests, not new SPORC acceptance. CLI help, both Bash syntax checks and scoped
+whitespace checks passed.
+
+Next: commit/push only the intended K2 changes, use a new clean pinned checkout
+and fresh roots, set `K2_PARTITION=tier3`, and explicitly set `K2_REUSE_SPEC`
+to the original `jc2_dzfix_concat_k2_1f930650_r1/campaign_spec.json`. A verified
+import avoids rematching; a fresh GPU gate remains mandatory before automatic
+release of 17 science tasks. Do not edit old failed specs/ledgers or move 96h
+fits to debug. No jobs were submitted/canceled, no final-test data accessed,
+and unrelated staged work was preserved.
+
+## 2026-09-23: dzfix fusion moves to tier3 for long fits
+
+User-supplied preflight 21770778 at source
+`20358f5568a2a5d42c8849ca99439bc435122f26` completed early/population parity,
+all four batch-256 stress paths and memory checks, then rejected the 48.50h
+maximum-budget projection against the debug 23h ceiling. It ran for 37m34s;
+this was not a Slurm timeout or another OOM. It did not publish passing
+acceptance or authorize science. The separately pasted K2 72.91h forecast is
+not this fusion campaign's measurement and K2 is outside this change.
+
+The user authorized tier3. Their scheduler output reports MaxTime=20 days and
+qos_tier3 with no explicit MaxWall value; account/association constraints are
+not certified by those two outputs. Updated the active fusion plan and code
+to register tier3/qos_tier3, one A100, 8 CPUs/320000 MiB and 72h per fit.
+Preflight remains 12h, partition/reducers 6h and metadata 4h. Runtime acceptance
+retains the 1.30 multiplier plus cache time and reserves an additional hour:
+the derived ceiling is 71h. Nonfinite/over-budget projections still fail.
+Workers authenticate exact scheduler partition and TimeLimit for every task.
+No scheduler-side pending-job override or silent debug portability is allowed.
+
+Changed: fusion chain/runtime/submission modules; thin CLI, queue helper and
+worker; focused chain tests plus new tier3 execution tests; active plan,
+contract, donor map and this handoff. Launch/campaign schemas are v6,
+ACCEPTANCE v4 with a spec-bound fit-runtime budget. SOURCE_IMPORT remains v3,
+EARLY_PARITY v1. Baseline/donor files are the same repository-local fusion
+surfaces at `20358f55` (full commit above); no external source copied.
+An exact registration comparison against that commit confirms only site,
+fit-walltime and shutdown-reserve fields changed. No matching/model/training
+kernel, population, batch 256, capacity 320, seed, loss, schedule, validation
+split, final-test rule, or other campaign file was changed. Existing unrelated
+staged work remains untouched.
+
+Focused scheduler/contract tests: 89 passed, one optional-Weaver skip, two
+existing mask warnings. The final full installed-Weaver 0.5.3/local-CUDA plus
+neighboring withdrawal and dzfix-continuation regression passed **138 tests**
+in 124.17s, no skips and only those two existing warnings. This covers real
+FP32/BF16 storage parity, synthetic pipeline/dependencies, tier3 live-job
+authentication (receipts and journal), walltime rejection and old-schema
+rejection. CLI help and both Bash syntax checks pass; scoped whitespace checks
+pass. Laptop tests are not SPORC resource acceptance. The matching source is
+still the completed v2 debug screen at `0d25a4a5`, authenticated via its exact
+ledger/durable receipts, never an expired afterok edge. New helper defaults
+use `jc2_dzfix_fusion_tier3_launch_<commit8>_r1` and
+`jc2_dzfix_fusion_tier3_coarse_<commit8>_r1`.
+
+Next: commit/push only the intended changes, create a clean pinned checkout
+with fresh roots, dry-run then authorize the helper. It submits new tier3
+gates and releases the unchanged 21 science tasks only after acceptance.
+No current-tier3 A100 acceptance is claimed; the failed debug run cannot be
+relabelled as passing evidence. No remote submission/cancellation, commit or
+push occurred during this local change. Any old blocked after-gate cleanup
+must use its current exact ledger, not a historical guessed ID.
+
+## 2026-09-23: dzfix fusion strict parity repair and early diagnostics
+
+User-reported debug preflight `21765886` at
+`b35fbda64d2d823a9eb9c5592017074db58d6ac8` completed all four repeated stress
+paths, including actual context/primary/cross saved-tensor transfers at batch
+256 and capacity 320. Peak allocated CUDA memory was 19.39 GiB; reserved
+memory was 38.87 GiB. It then failed FP32 gradient parity at
+`primary_mod.pair_embed.embed.0.weight`, maximum absolute difference
+1.1146e-5. This was not another OOM and did not produce passing acceptance.
+
+Locally reproduced the same failure with genuine Weaver 0.5.3 / PyTorch 2.5.1
+on RTX 2000 Ada, using masked physical inputs with lengths 96/113. The old
+storage comparison failed (maximum absolute mismatch 5.0902e-5); a native
+versus native control with storage disabled on both sides also failed
+(2.1204e-5). A scoped deterministic backend made the old comparison pass;
+the repaired implementation passes with the unchanged strict tolerances.
+Thus equal seeds were insufficient for this numerical test. No claim is
+made that offloading changed the scientific objective or that tolerance
+relaxation was necessary.
+
+The fusion-only adapter now uses shape/stride-preserving physical-span pinned
+storage, adapted from K2 donor `91be01940f814e1ea7a8a460b9694f0148f0d024`.
+Parity uses deterministic algorithms with TF32/benchmarking disabled, restoring
+all PyTorch flags on success/failure. Only preflight sets cuBLAS workspace
+configuration before Python. Production remains physical batch 256, capacity
+320, BF16, C25P75/T2, original schedules/seeds/population and debug resources.
+K2's separate batch-128 policy and all matching/source artifacts are untouched.
+
+New `dzfix_fusion_parity.py` authenticates existing assignments for four real
+train jets and tests U050/U000 and D000/D000 in FP32/BF16 before the expensive
+full paired-cache build. Each successful diagnostic is published atomically.
+Missing/corrupt maps or numerical failures stop early; no rematching or test
+input access occurs. Full-population parity, three-step batch-256 stress,
+resource limits and round trips remain mandatory before science.
+
+Changed files: fusion model/chain/runtime, new early-parity module, its worker,
+three fusion test files, active plan/contract, donor map and this handoff.
+LAUNCH_SPEC/CAMPAIGN_SPEC are v5, ACCEPTANCE v3, EARLY_PARITY v1;
+SOURCE_IMPORT remains v3. Old roots/acceptance cannot authorize this version.
+
+Validation: the three focused fusion test files passed **105 tests** in 93.07s
+with two existing mask-type warnings. This includes actual installed-Weaver
+CPU/CUDA training parity, both precisions, unequal masked views and same-view
+fusion at length 320, three AdamW updates, feature/parameter gradients, BN and
+optimizer state, lossless layout transfer and scoped backend restoration.
+Synthetic-ROOT early sampling matches production views byte-for-byte and its
+failure injection proves rejection precedes full cache construction. Neighboring
+withdrawal/dzfix-continuation regressions passed **14 tests** in 25.87s.
+CLI help, queue/worker Bash syntax and scoped whitespace checks passed.
+No A100/SPORC acceptance is claimed from laptop measurements.
+The retry must use a newly committed/pushed
+clean checkout and fresh commit-derived roots through the existing debug queue
+helper. It reuses the completed matching screen and requires fresh gates before
+auto-submitting 21 science tasks. No jobs were submitted/canceled and no commit,
+push, existing campaign artifact or unrelated staged work was changed here.
+
+## 2026-09-23: K2 explicitly re-registered at physical batch 128
+
+The user authorized batch 128 after SPORC job `21768860` at source
+`91be01940f814e1ea7a8a460b9694f0148f0d024`. Its early D100/D000 FP32/BF16
+parity and population D100 parity passed. The D100 batch-128 probe completed
+three optimizer steps and validation, peaking at 22,720,257,536 allocated CUDA
+bytes (21.16 GiB). Batch 256 then genuinely OOMed while requesting another
+2.64 GiB. That run did **not** produce execution acceptance or release science.
+The partial 128 result is encouraging evidence, not full campaign acceptance.
+
+Implemented, K2 only:
+
+- `concat_k2_campaign.py` owns a deep-copied batch-128 training registration
+  and inference batch 128; it does not mutate shared campaign defaults.
+- The opt-in batch arguments in `salience_learned_training.py` drive actual
+  optimizer batches and checkpoint inference. Legacy callers remain at 256
+  with the original report layout. No accumulation or automatic LR scaling.
+- `concat_k2_runtime.py` passes 128 to every K2 fit, checkpoint/report
+  validation, teacher-bank reducer and preflight round trip; records and
+  validates the actual kernel batching. The final partial batch is retained.
+- `concat_k2_model.py` now registers only 128 in the probe policy. Fresh
+  D100, D075, D000 and HLT-X1 stress checks, native parity, memory headroom,
+  throughput projection and checkpoint/bank round trips remain required.
+  It neither retries 256 nor silently switches to a smaller batch.
+- K2 launch/campaign contracts are v6, acceptance v5, training report v2 and
+  batch probe v2. Old 256 acceptance cannot authorize this execution. Matching
+  and view contracts, seeds, all registered jets, particle capacity, C25P75,
+  T=2 and the pass-based LR/stopping protocol remain unchanged. Physical 128
+  changes update count and batch statistics; it is not numerically equivalent
+  to a 256 fit and no throughput or performance equivalence is claimed.
+- `concat_k2_preparation_import.py` still accepts authenticated original
+  fresh-compute preparation donors (v1-v6), never nested imports. No matching
+  producer or view files were edited for this change. The queue helper prints
+  both registered batch sizes. Pending-job tier3 <-> debug portability stays
+  intact; other resources and campaign registrations are unchanged.
+- Updated the plan, reusable contract, donor map, focused tests, and added
+  `tests/test_jetclass2_concat_k2_batch128.py` with real kernel batching,
+  final-partial-batch, KD identity join and fail-closed registration checks.
+
+Implementation donor is the K2/shared training code at `91be0194` above;
+the intended remote preparation donor remains
+`jc2_dzfix_concat_k2_1f930650_r1/campaign_spec.json` from
+`1f9306504dfd040c9c22e0a89829d277d1ff2194`. No external source was vendored.
+
+Validation evidence: the final K2 campaign, batch, memory, parity, portable
+execution and shared withdrawal regression passed **191 tests**, no skips,
+in 79.20s with isolated installed Weaver 0.5.3 and local CUDA available.
+The earlier focused batch, memory and portable-execution rerun passed
+**129 tests** in 31.74s; these counts overlap. Source/reuse regressions passed
+in the broader run. That run
+reported 352 passed and two failures: one stale schema-version assertion
+(corrected and covered by the passing focused rerun), and an unchanged
+native two-view fusion test feeding independent Gaussian four-vectors to
+Weaver, producing NaNs. A diagnostic with timelike vectors also exposed its
+strict extracted-output equality issue. Both that test and its model code
+are unchanged from HEAD and left outside this K2 patch; the broad suite is
+not claimed fully green. This does not affect K2's single-encoder path.
+Initial sandbox runs could not import the isolated Weaver directory because
+of Windows permissions; native results above use the approved accessible
+test environment, not skipped native tests. CLI help, worker/queue Bash
+syntax and scoped whitespace checks pass. These are local checks, not SPORC
+acceptance or a full-population batch-128 A100 fit.
+
+Next remote step: commit/push only the scoped batch-128 changes, pin a new
+checkout and fresh launch/campaign roots, keep `K2_REUSE_SPEC` bound to the
+original `1f930650` donor, and run the fresh A100 preflight. Verified reuse
+does not schedule assignment jobs. Science remains gated until all batch-128
+acceptance checks pass. No remote job or existing artifact was changed by
+this implementation, and final-test rows remain sealed.
+
 ## 2026-09-22: K2 strict CUDA parity repair; early checks before full caches
 
 Scope is **K2 only**. User supplied failure 21767292 at source
@@ -59,6 +2194,40 @@ still move debug <-> tier3 without changing other resources. New A100 preflight
 and batch probes remain mandatory before the automatic science release.
 No remote jobs were submitted, canceled or changed, and no final-test rows
 were accessed. No full-batch A100 fit or throughput claim is made.
+
+## 2026-10-05: targeted final-direct node-failure recovery (local implementation)
+
+User-supplied Slurm evidence identifies `21783378` as the final-direct fit
+interrupted by a node failure after 35 passes. Its same-ID recovery attempt
+stopped on an expired controller record before making changes. The separate
+fusion/bridge branch must not be restarted or canceled.
+
+The new `dzfix_fusion_recovery.py` adapter, thin recovery CLI/Slurm wrapper,
+queue helper, and focused tests implement exactly three replacements: final
+direct, aggregate, complete. All scientific imports remain in the original
+`fd1c05786287c57b080b2d229dd64664f830a571` checkout. The helper uses a separate
+hashed recovery spec/ledger, reauthenticates original acceptance and teachers,
+archives partial output without deletion, and publishes companion execution
+receipts. The original spec/ledger are not rewritten. New training is held
+until all replacement IDs are recorded and only the two obsolete summaries
+are retired. The independent bridge remains an external prerequisite.
+
+Scientific registration and operational schemas are documented in the active
+fusion plan and `docs/contracts/JETCLASS2_DZFIX_FUSION_RECOVERY.md`. Local tests
+exercise purged failed IDs, exact cancellation scope, partial submissions,
+ambiguous acknowledgements, source/allocation rejection, and a tiny original
+training-kernel replay. This is not a new Weaver/GPU acceptance claim.
+
+Validation: original focused baseline **89 passed, 1 skipped**; new recovery
+suite **25 passed**; combined recovery/fusion/tier3 suite **114 passed,
+1 skipped** in 34.63 seconds. The skip is installed Weaver (absent locally);
+the two warnings are existing PyTorch attention-mask deprecations. Both shell
+wrappers pass `bash -n`; CLI help and `git diff --check` pass. Real SPORC
+execution remains pending and must reauthenticate the original genuine gate.
+
+No remote jobs were submitted or canceled during local implementation. The
+next step is a clean pushed helper checkout on SPORC, its full dry run, then
+explicit live recovery. Unrelated pending documentation changes are preserved.
 
 ## 2026-09-22: opt-in completed K2 preparation reuse
 
@@ -6609,3 +8778,172 @@ gate reruns authentication, support audit, and preflight before science is
 released. Local verification is 13/13 attention tests, 133/133 affected and
 neighboring persistent-HLT tests, and 819/819 repository-wide tests; only
 pre-existing third-party plotting deprecation warnings remain.
+
+## CMS-proxy 200k/100k Oscar portability implementation
+
+The existing CMS-proxy three-spine study now has an additive Brown Oscar
+execution path. The science graph, selected identities, matching assignments,
+views, controls, seeds, and train/validation population are unchanged. A new
+root-independent `PORTABLE_BUNDLE/v1` copies only the frozen ordinary-role
+release inputs, proxy blocks, release bank, assignment bank, study metadata,
+and inventory. A site-local `PORTABLE_MATERIALIZATION/v1` republishes the
+absolute-path wrappers while recording the original release and foundation
+hashes and reusing both banks byte-for-byte. No final-test file is included or
+read and matching is not recomputed.
+
+Oscar is registered as cluster `slurmctld`, account `default`, partition
+`gpu`, QOS `norm-gpu`, one L40S, x86-64, with a 12-CPU/192000-MiB envelope.
+The v4 gate requests 12 CPUs, 160000 MiB, and 12 hours for an Oscar-native
+full-population one-pass preflight. SPORC A100 runtime evidence does not
+authorize Oscar science. The exact environment prefix is
+`/oscar/scratch/rlyang/hlt_classification/environments/envs/atlas_kd_oscar`.
+
+Local focused verification is 13/13 CMS-proxy tests and 28/28 CMS-proxy plus
+SPORC-neighbor tests. Python syntax compilation passes for the changed worker,
+portable-transfer, gate, submission, and execution modules. No external donor
+file was copied, so no legacy donor-map entry is required. Remaining external
+work is: push an exact source commit; export and transfer the authenticated
+bundle from SPORC; install and attest the Oscar environment; materialize the
+bundle; then run the v4 preflight before any separately authorized science
+submission.
+
+## 2026-09-30: CMS-proxy Oscar dual-slot operational recovery
+
+The portable Oscar setup and v4 full-population preflight completed on real
+L40S hardware. Setup job `6873717` completed in 2m21s. Preflight job `6874281`
+completed in 7m22s with exit code 0, exercised all 12 cache workers, published
+both `RUNTIME_PROFILE/v4` and the gate-completion lock, and used approximately
+31.4 GiB peak host RSS. No failure signature or final-test access occurred.
+
+The first v4 science submission then exposed the Oscar `norm-gpu` per-user
+limit: each 12-CPU/160000-MiB job consumed the complete 12-CPU allowance, so
+independent controls and branches were serialized with
+`QOSMaxCpuPerUserLimit` despite the two-GPU allowance. The additive
+`JETCLASS2_CMS_PROXY_OSCAR_DUAL_SLOT_RECOVERY_PLAN.md` therefore introduces
+`GATE_SPEC/v5` and `RUNTIME_PROFILE/v5` with exactly 6 CPUs/workers, 90000 MiB,
+one L40S, and the existing 12-hour preflight ceiling. Two jobs total 12 CPUs,
+180000 MiB, and two GPUs. Scientific population, assignments, inputs, seeds,
+training recipe, graph, and sealed-test policy are unchanged.
+
+The v5 implementation reuses and validates the existing portable
+materialization but requires its own real full-population preflight; the v4
+profile is not edited. Local focused verification is 15/15 CMS-proxy tests
+and 30/30 with the neighboring SPORC suite.
+No remote job was changed or cancelled by this implementation. Next: push the
+exact source, create/dry-run/submit the v5 gate on Oscar, and only after it
+passes create the replacement science campaign and cancel exact pending IDs
+from the superseded ledger.
+
+## 2026-10-01: Oscar ECC partial-submission dependency repair
+
+The 100k/50k DIRECT+COARSE Oscar campaign's authenticated ECC recovery dry run
+completed as job `6891720`. Its first live replacement,
+`train_OFFLINE` job `6894770`, was accepted and observed running normally on
+healthy node `gpu3105`. Submission then stopped before `reduce_U000`: legacy
+recovery command-plan v1 emitted `afterok:6883891` for the already completed,
+artifact-authenticated U000 fit, but that historical ID had aged out of the
+Slurm controller. This was a controller dependency-lifetime defect, not a new
+training, data, or GPU failure. No descendant replacement was submitted.
+
+Recovery command-plan v2 now emits Slurm dependencies only inside the retry
+closure. Reused completed parents remain exact provenance in the recovery spec
+and must still authenticate byte-for-byte, but require no live scheduler ID.
+An additive submission-repair contract imports exact valid legacy journal
+prefixes into a separately source-bound plan/dry/live ledger, so running job
+`6894770` is preserved and is not submitted twice. Its true descendants still
+authenticate its immutable completed-task output before doing any work, but do
+not emit its possibly aged-out ID as a new Slurm dependency. The old recovery
+spec, plan, dry run, and partial journal remain immutable. Local focused
+verification passes all 22 CMS
+proxy ladder tests, including an injected one-job partial journal, absence of
+stale source IDs, exact imported-job reuse, and continuation submission.
+No corrected source has yet been committed, pushed, or used for remote repair.
+
+## 2026-09-30: CMS-proxy Oscar 100k DIRECT+COARSE revision
+
+Before submitting replacement science, Ryan explicitly reduced the study to
+100,000 training and 50,000 validation jets and removed DENSE. The completed
+v5 preflight job `6877779` remains valid evidence about the old 200k/100k
+resource implementation, but it is not relabelled as the new campaign gate.
+No revised science campaign has been submitted.
+
+The active `JETCLASS2_CMS_PROXY_OSCAR_100K_DIRECT_COARSE_PLAN.md` adds a
+label-blind nested population over the immutable Oscar foundation. Exact rows
+are selected by versioned SHA-256 rank over foundation hash, role, and identity;
+foundation order is restored afterward. Existing full-cardinality assignments
+are reused byte-for-byte, and final test remains sealed. New
+`POPULATION_SELECTION/v1`, `GATE_SPEC/v6`, `RUNTIME_PROFILE/v6`,
+`SCIENTIFIC_PLAN/v2`, and `CAMPAIGN_SPEC/v2` semantics register 9 fits, 5
+reducers, and 16 total tasks: three controls plus DIRECT and COARSE only.
+
+The v6 gate retains 6 CPUs/workers, 90000 MiB, and one Oscar L40S per job, with
+two-job intent, but requires a genuine full-selected-population preflight under
+the new exact source. Python syntax compilation and scoped whitespace checks
+pass. Local focused verification is 20/20 CMS-proxy tests and 35/35 with the
+neighboring SPORC suite. No donor file, remote mutation, submission,
+cancellation, or data copy occurred in this revision. Next: push the exact
+source, create/dry-run/execute the v6 preflight on Oscar, then create and
+dry-run—but do not live-submit—the v2 campaign until Ryan explicitly authorizes
+it.
+
+## 2026-10-02: separate literature-inspired proxy pilot implemented
+
+User-authorized implementation, not a revision of the CMS-fitted mapping or
+the Oscar classifier campaign above. New authority:
+`docs/plans/JETCLASS2_LITERATURE_PROXY_PILOT_PLAN.md` and
+`docs/contracts/JETCLASS2_LITERATURE_PROXY.md`. New `JC2_LITERATURE_PROXY_* /v1`
+artifacts bind the frozen recipe, source, existing split membership, selected
+population, execution plan, outputs and receipt. Numerical response parameters
+are explicit benchmark choices, not asserted CMS measurements.
+
+New reusable package `src/hlt_classification/literature_proxy/` implements
+label-blind per-jet random streams; crowded/soft charged-to-neutral conversion;
+rare electron-to-photon conversion; coupled impact-parameter/uncertainty noise;
+modest positive pT and angular fluctuations; at most one soft nonleptonic drop
+and one nearby same-neutral-category merge. It retains physical p4, unknown PID,
+and invalid-tracking semantics. Mild/nominal/strong share random draws. No CMS
+calibration or learned response is imported. In-repository interface reuse and
+the donor commit are recorded in `docs/LEGACY_SOURCE_MAP.md`.
+
+The pilot selects 20,000 authenticated **training-only** dzfix offline rows,
+without new class cuts, native HLT arrays, labels, validation/test particles, or
+particle truncation. Existing parent-profile eligibility is acknowledged, not
+misrepresented as label-independent. Saved physical NPZ blocks preserve paired
+identities/offsets; construction ancestry is separate, diagnostic-only. CSV,
+overlay PDF, JSON statistics and mechanism-selected examples cover counts/PID,
+kinematics, tracking masks/values/errors/significances/tails, paired count/pT
+changes and original-coordinate conditional distributions. No quality score
+chooses a winner, and poor distributions do not fail the job.
+
+Thin entry points:
+
+- `scripts/jetclass2_literature_proxy.py` (create/submit/run/results).
+- `scripts/queue_jetclass2_literature_proxy_pilot.sh` (dry review first, then
+  explicit reviewed-hash execution).
+- `sbatch/run_jetclass2_literature_proxy_pilot.sh` (absolute project CLI,
+  Tigris ARM conda, isolated Python and one numerical thread per process).
+
+One CPU-only `tigris` job requests 16 CPUs, 64 GiB and two hours. These are
+initial requests, not measured RC throughput. Exact clean pushed source,
+artifact lineage, per-used-file authentication, serial/process replay,
+`sbatch --test-only`, explicit authorization and single-submission locking are
+enforced. Failed/ambiguous locks are not automatically stolen. No controller,
+production follow-up, training, cancellation or dataset overwrite is scheduled.
+
+Verification in local `tagging-hlt` Python: **91 passed** in 191.83 seconds
+across `test_literature_proxy.py`, `test_literature_proxy_campaign.py`,
+`test_jetclass2_delphes_split_registry.py`, and
+`test_cms2jc2_proxy_production.py`. This includes 19 new tests, real spawn replay,
+synthetic ROOT train-only branch checks, complete miniature exports/receipt,
+corruption rejection, exact authorization and source/resource guards. Existing
+Matplotlib/pyparsing deprecation warnings occurred; no test failure. Python
+syntax, CLI help, and both Bash syntax checks passed. The initial baseline
+also passed 72/72 in this environment; the default system Python lacks NumPy.
+
+No real JetClass2/CMS particles or final-test data were read locally. No remote
+job, commit or push was performed. Real-Weaver validation is not applicable to
+this non-classifier kernel; a **genuine Tigris pilot remains unrun**. Exact next
+step: commit/push the scoped implementation, create its clean Tigris worktree,
+review and execute the one-job helper, then inspect saved statistics and
+measured resources before authorizing any larger generation. Existing dirty
+documentation and unrelated user code were preserved.

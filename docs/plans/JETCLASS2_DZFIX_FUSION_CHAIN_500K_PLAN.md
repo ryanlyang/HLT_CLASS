@@ -3,6 +3,33 @@
 Status: implementation plan; real SPORC/tier3 acceptance is required before
 science submission. This is a new isolated experiment, not a recovery of CMS.
 
+## 2026-10-05 authorized final-direct node-failure recovery
+
+The user authorized recovery after job `21783378` (`train_FINAL_DIRECT_D000`)
+lost its node after 35 completed passes. Slurm subsequently purged that job
+from its active records; same-ID requeue is unavailable. Its selected state
+was held in RAM until fit completion, so recovery is **restart-zero**, not an
+epoch-35 resume. The independently running `FUSION_D000_D000` branch is retained.
+
+This explicitly reviewed execution-only exception to the no-automatic-retry
+rule replaces exactly `train_FINAL_DIRECT_D000`, `aggregate`, and `complete`.
+The scientific worker and its imports remain at original source
+`fd1c05786287c57b080b2d229dd64664f830a571`. A separately pinned helper binds new
+Slurm IDs through a new recovery ledger and original allocation checks; it
+does not edit the original spec, ledger, or scientific source. See
+`docs/contracts/JETCLASS2_DZFIX_FUSION_RECOVERY.md`.
+
+The replacement fit stays held until all three IDs are durably recorded and
+only the two old blocked summary jobs have been retired. The new aggregate
+also waits on the original final-bridge job if that branch is unfinished;
+completed prerequisites instead require authenticated artifacts, not stale
+Slurm IDs. The failed fit's partial output directory is archived, not deleted.
+Its new results occupy the original canonical output paths with companion
+recovery execution receipts. The original genuine gate and all reused teacher
+artifacts must still authenticate; no matching or GPU preflight is rerun.
+All views, population, seeds, losses, selection, resource requests, and the
+sealed-final-test policy remain unchanged.
+
 ## Scientific registration
 
 Use the authenticated `20260918_dzfix` partial snapshot and exact TRAIN_500K

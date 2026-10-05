@@ -1,5 +1,932 @@
 # Legacy Donor-Source Map
 
+## 2026-10-04: additive OSCAR NOISE-K2 targeted recovery
+
+Donor commit: **`0ffb4ba54b02cea6558db5ea8a44995c76ef22d7`**.
+New `noise_k2/recovery.py` and `recovery_runtime.py` add an isolated recovery
+namespace and output resolver; all original scientific Python modules and
+environment helpers must remain byte-identical before native acceptance reuse.
+
+| Donor | Recovery reuse/adaptation |
+| --- | --- |
+| `src/hlt_classification/noise_k2/campaign.py`, `contracts.py` | Original immutable graph, completed receipts, resource commands, safe paths and byte checks; adapt exact-ID replacement planning into a sibling root |
+| `src/hlt_classification/noise_k2/runtime.py`, `data.py` | Same caches, seeded model factory, kernels, inference, selected state and preparation; fit/reduce I/O adapted to resolve original or replacement teachers without changing global source state |
+| `src/hlt_classification/jetclass2_delphes/salience_learned_training.py`, `banks.py`, `reporting.py`, `model.py`, `execution.py` | Unmodified scientific kernels, ordered T2 banks, recovery metrics, environment and allocation checks |
+| `src/hlt_classification/data/cache_contracts.py`; `src/hlt_classification/scouting/hcwdl_exact_dag_submission.py`, `hcwdl_recovery.py` | Atomic immutable publication, content/file hashes, exact submission journals and ledgers |
+| `scripts/noise_k2.py`, `scripts/queue_noise_k2.sh`, `sbatch/run_noise_k2.sh`, `sbatch/jetclass2_delphes_common.sh` | Separate recovery CLI/dry helper/worker; unchanged absolute OSCAR environment helper |
+| `tests/test_noise_k2.py`, `tests/test_jetclass2_dzfix_fusion_chain.py` | Local graph/cache fixtures and seeded tiny model tests; synthetic adapter parity is not native OSCAR evidence |
+
+New schema family: `NOISE_V3_K2_RECOVERY_*/v1`. Existing scientific/report
+artifacts retain their original contracts, hashes and source/job identities.
+No donor files modified, external copies, `Fresh_check` imports, producer
+changes, or final-test capabilities introduced.
+
+## 2026-10-04: NOISE_V3 K2 100k/50k consumer on OSCAR
+
+Internal donor checkout: **`71c1bde2d759b11cddb1f5cfbc1d199847bd6eef`**.
+Additive package `src/hlt_classification/noise_k2/`, CLI, queue helper and worker;
+old native Delphes/SPORC K2 and producer source are unchanged. No third-party
+copy, `Fresh_check`, detector generator, old assignment or trained weight import.
+
+| Donor under `src/hlt_classification/` | Reuse/adaptation |
+| --- | --- |
+| `jetclass2_delphes/concat_k2_views.py`; `scouting/hcwdl_fullcard_salience_matcher.py`, `hcwdl_fullcard_salience_contracts.py`, `hcwdl_fullcard_bottleneck_matcher.py` | Same pre-retention endpoint salience, exact capacity-two integer objective and independent exhaustive solver; physical endpoints replace native Delphes arrays |
+| `cms2jc2_response/bridge.py`, `readers.py`; `cms_proxy_ladder/inputs.py`, `views.py` | Physical GeV/mm/validity schema, authenticated ROOT context, 17-feature adapter and salience projection; adapt interpolation with atomic validity groups |
+| `literature_proxy_production/population.py`, `output.py`; `literature_proxy/population.py`; `jetclass2_delphes/selection.py`, `split_registry.py` | Frozen shard/raw-entry identity joins, physical bank schema, offline-only ROOT fields, scalar labels and natural Hamilton quotas |
+| `jetclass2_delphes/concat_k2_campaign.py`, `concat_k2_data.py`, `cache.py`, `salience_learned_data.py` | Full ten-node recipe/seeds, stratified validation partition and ragged RAM-only/indexed caches |
+| `jetclass2_delphes/concat_k2_runtime.py`, `concat_k2_model.py`, `salience_learned_training.py`, `salience_learned_graph.py`, `model.py`, `acceptance.py` | Reuse native model/lossless pair storage, scoped FP32/BF16 parity, full original CE/KD kernel, longest-real-batch stress and representative miniature selection; adapt fresh OSCAR admission |
+| `jetclass2_delphes/banks.py`, `reporting.py`, `production.py`, `execution.py` | Ordered T2 banks, metrics/recovery, clean pushed source, existing OSCAR site/allocation |
+| `data/cache_contracts.py`; `scouting/hcwdl_exact_dag_submission.py`, `hcwdl_recovery.py` | Immutable publication, canonical/file hashes, exact-ID submission journal and dry/live ledgers |
+
+Also imports the independently developed, previously untracked
+`src/hlt_classification/literature_proxy_consumer.py` without editing it.
+That working-tree donor has no published commit asserted here; its SHA256 at
+integration is `1bd2152aff3febb94c04bf5d0473a0f8da11af8551bb0885391d7c68a1ac692d`.
+Include that reader and its handoff/contract/tests in the eventual pushed source.
+The source dataset's immutable manifest and the original K2 formula's copied
+JSON/raw SHA256 are independent provenance anchors, not this development HEAD.
+
+The new Slurm worker sources the existing absolute-path
+`sbatch/jetclass2_delphes_common.sh` OSCAR environment. Tests reuse physical
+fixtures and real synthetic relocated ROOT/NPZ fixtures from
+`test_literature_proxy_consumer.py`/`test_literature_proxy_production.py` and the
+ragged cache fixture in `test_jetclass2_dzfix_fusion_chain.py`.
+New scientific/execution namespace: `NOISE_V3_K2_*/v1`.
+
+## 2026-10-03: relocated literature NOISE_V3 consumer for Oscar
+
+Internal donor checkout **`71c1bde2d759b11cddb1f5cfbc1d199847bd6eef`**.
+New root module `src/hlt_classification/literature_proxy_consumer.py` and thin
+inspection/smoke CLI reuse these implementations without modifying original
+producer packages or their source-bound science. No third-party code copied,
+no `Fresh_check` import, no generator rerun, and no producer metadata rewrite.
+
+| Donor path under `src/hlt_classification/` | Reuse/adaptation |
+| --- | --- |
+| `data/cache_contracts.py` | Canonical content hashes, file SHA256 and JSON reads |
+| `literature_proxy_production/contracts.py`, `output.py`, `codec.py` | Original schema/parent validation, safe local relative paths, physical bank schema and `Particles` decoding |
+| `literature_proxy_production/population.py`; `cms2jc2_production/population.py`, `contracts.py` | Exact population/shard metadata, original-entry mask decoding, canonical jet IDs; no split rebuilding |
+| `literature_proxy/population.py` | Offline-only branch set and raw native-mm physical conversion; adapt bounded ROOT read loop for paired consumption |
+| `literature_proxy_v2/kernel.py`; `literature_proxy_v3/kernel.py`, `contracts.py` | Validate frozen count calibration, NOISE_V3 recipe and direct pilot evidence; no fitting/generation |
+| `cms2jc2_response/bridge.py`, `readers.py` | Physical `Particles` validity and ROOT byte authentication before/after access, including early close |
+| `jetclass2_delphes/inventory.py`, `split_registry.py`, `selection.py`, `contracts.py` | Original inventory/profile contracts, tree-cycle selection, mapped labels and canonical identity semantics |
+
+Tests reuse existing synthetic production fixtures from
+`tests/test_literature_proxy_production.py` (including its v1/v2/v3 pilot fixture
+chain), copy their actual ROOT/banks to a new layout and forbid original paths.
+New contract `JC2_LITERATURE_RELOCATED_READER/v1` describes read-only runtime
+inspection; scientific production/pilot/split contracts remain unchanged.
+Dataset producer lineage continues to come from the original, independently
+anchored manifest/study, not from this reader-development donor commit.
+
+## 2026-10-03: K2 epoch-boundary segmented continuation
+
+Scientific donor commit **`c891da0d45dd3251dea9ea72df975bb96bae3570`**;
+executor developed against local HEAD `98095b680cb968a06bd766cf114007883ce053cc`.
+No third-party code copied and no `Fresh_check` import. New package
+`src/hlt_classification/k2_segmented/`, CLI/queue wrapper and Slurm worker are
+additive; they do not modify the donor checkout or any old scientific module.
+The CLI binds every scientific import to the original donor checkout and only
+the new executor package to the new pushed checkout.
+
+| Donor path (under `src/hlt_classification/`) | Use |
+| --- | --- |
+| `jetclass2_delphes/salience_learned_training.py` | Adapt original epoch loop; reuse original AdamW, CE/KD loss, BF16, inference, metrics and selection key; add full-state save/resume without changing schedule or patience |
+| `jetclass2_delphes/salience_learned_graph.py` | Frozen training constants and absolute-epoch LR function |
+| `jetclass2_delphes/concat_k2_runtime.py`, `concat_k2_campaign.py` | Read-only source registration, completed-prefix acceptance, native models/caches, source teacher bank, metrics/reporting/export primitives |
+| `jetclass2_delphes/concat_k2_submit.py` | Original canonical science plan and exact walltime parsing |
+| `jetclass2_delphes/concat_k2_model.py`, `model.py` | Original lossless pair storage and scoped deterministic parity backend; installed environment identity and model contract |
+| `jetclass2_delphes/salience_learned_data.py`, `banks.py`, `contracts.py` | Indexed miniature cache, identity-joined T2 banks and safe relative paths |
+| `jetclass2_delphes/production.py`, `execution.py`, `submission.py` | Clean pushed source, SPORC allocation checks, submission-intent protection |
+| `data/cache_contracts.py`; `scouting/hcwdl_exact_dag_submission.py`, `hcwdl_recovery.py` | Immutable publication, content hashes, exact-ID journals and ledger validation |
+| `sbatch/jetclass2_delphes_common.sh` | Existing absolute-path SPORC environment setup; inherited from the new pinned executor checkout |
+
+New contracts are `K2_SEGMENTED_*/v1`, `K2_SEGMENT_CHECKPOINT/v1`, and
+`K2_FULL_TRAINING_STATE/v1`. Authority and evidence limits are documented in
+the K2 plan amendment, segmented contract and HANDOFF. Existing full-size and
+pilot schemas are not rewritten.
+
+## 2026-10-03: genuine CMS common-interface direct/coarse comparison
+
+Internal donor checkout: **`b7fd9c63d5f747983b4ab603b86a315d68bcc24a`**.
+New implementation under `src/hlt_classification/cms_feature_ladder/`; no
+third-party source copied and no runtime `Fresh_check` import. Older scientific
+modules/specs are unchanged. New authority is CMS_FULLSIM_FEATURE_LADDER/v1.
+
+| Donor (relative to `src/hlt_classification/`) | Reuse/adaptation |
+| --- | --- |
+| `scouting/schema.py`, `splits.py`, `selective_assignment.py`, `identity.py` | Authenticated native file roles, 15 labels, seed1337 proportional identity-rank subsets; new200k/50k budget |
+| `scouting/hcwdl_homotopy.py`, `repair.py`, `inputs.py` | Raw endpoint projection with validity, retaining lost tracks; native21 transforms for opt-in control, no inversion of clipped inputs |
+| `cms_proxy_ladder/views.py`, `inputs.py`, `campaign.py` | PT_LINEAR matching, persistent support, rational U/D coordinates, keyed interpolation, shared17 normalization, paired coordinate seeds; raw binary PID flags explicitly preserved for CMS |
+| `cms2jc2_response/bridge.py` | Validated physical `Particles` container only; **not** `from_cms`, whose lost-track filtering would change this population |
+| `cms_salience_learned/data.py`, `storage.py`, `training.py` | Bounded raw ROOT projection/process map, RAM batch interface, immutable byte IO; tensor/autocast/AdamW utilities, no learned-fusion scientific graph |
+| `jetclass2_delphes/campaign.py`, `runner.py`, `acceptance.py`, `model.py`, `execution.py` | Exact literature schedule, adapted15-class kernel/parity, installed environment hashing and SPORC allocation checks |
+| `models/particle_transformer.py`, `scouting/evaluation.py` | Installed Weaver factory/backbone; CMS metrics with explicit censored R50 representation |
+| `scouting/hcwdl_authorization.py`, `hcwdl_exact_dag_submission.py`; `data/cache_contracts.py` | Pushed clean source validation, exact DAG/journal, content hashes/immutable publication |
+| `cms2jc2_response/measurement.py`; `sbatch/jetclass2_delphes_common.sh` | Process-tree RSS measurement and absolute SPORC environment setup |
+
+The new runner is single-view, cold-start, immediate-parent C25/P75, not the
+native learned-fusion acquisition/withdrawal donor. The opt-in CMS21 control
+shares support/p4/identity changes with SHARED17 and holds trim=False. This
+compares representations, not an assertion of an exact old21-feature result.
+Tests/evidence and the remaining real-GPU gate are recorded in HANDOFF.
+
+## 2026-10-03: additive literature gate-to-science follow-up
+
+In-repository donor commit **`99a1e231e38fe5a07ce5a31a4f4a74bb9ec40539`**.
+No external code copied, license change or `Fresh_check` import. New reusable
+execution module is `src/hlt_classification/literature_ladder_followup.py`.
+
+| Donor | SHA-256 at inspection | Retained use |
+| --- | --- | --- |
+| `cms_proxy_ladder/literature.py` | `316734ea5dd44d3fb738c00e81c3cfb88aeaa41c6456177bb7124ebc1a9d7fd0` | Original pinned gate/profile/science validation and exclusive submit claim; no changes |
+| `cms_proxy_ladder/submission.py` | `a6e969c62c049cb2f3721afee06447fe6ba53109e7e86a81a2266eb1f9a47d02` | Exact recomputed plans, canonical dry ledger and site checks, delegated to old CLI |
+| `scouting/hcwdl_exact_dag_submission.py` | `65c031db95630d034d19112d8d0ff76af5189fc9a43e7ad7e9da1430b5df4a6b` | Authenticate old gate journal; original idempotent science DAG submission |
+| `cms2jc2_production/recovery_controller.py` | `eb0cb1d862e3903ef9799408f97e4b6f23adda7726778ed7ae8c0c915cd785d5` | Pattern only: kernel controller lock and bounded exact-job polling; no imports |
+
+Donor paths above are relative to `src/hlt_classification/`. The embedded
+read-only inspection runs in a fresh interpreter importing the original gate
+checkout, not the controller checkout. This preserves already-running source
+locks. Execution amendment and operational receipt v1 are documented in
+`docs/contracts/JETCLASS2_LITERATURE_LADDER_FOLLOWUP.md`; scientific schema
+versions remain unchanged. Tests: `tests/test_literature_ladder_followup.py`;
+local/remote evidence and remaining launch step are recorded in `HANDOFF.md`.
+
+## 2026-10-03: literature V3 200k/50k SPORC debug DIRECT + COARSE
+
+Repository-local donor commit **`ebd5bc1ae4eb6d6c11bfba5e1a6cdc5fd487653a`**.
+No third-party donor or runtime `Fresh_check` import. The dataset generator
+and its recipe/calibration are reused unchanged; new classifier versions
+explicitly identify the literature rather than CMS-fitted endpoint.
+
+| Donor files (under `src/hlt_classification/` unless noted) | Reuse/adaptation |
+| --- | --- |
+| `cms_proxy_ladder/release.py`, `data.py`, `views.py`, `inputs.py`, `cache.py` | Versioned 200k/50k literature release, native-unit paired reader, fresh salience matching, persistent skeleton/offline tail, exact D000 and existing RAM cache |
+| `cms_proxy_ladder/campaign.py`, `gate.py`, `production.py`, `submission.py`, `contracts.py` | Existing direct/coarse coordinates, seeds, C25/P75 training, reports and exact DAG; new literature source lock, full-population debug-only gate/profile and nine-fit science variant |
+| `literature_proxy_production/campaign.py`, `population.py`, `output.py`, `contracts.py`; `literature_proxy_v3/contracts.py`; `literature_proxy/population.py` | Validate frozen source/bundle/population, ordinary role manifests and physical blocks; convert original offline fields without CMS unit/sign conversion; no generator execution |
+| `cms2jc2_production/output.py`; `cms2jc2_response/bridge.py`, `generation_benchmark_data.py` | Reuse physical-bank decoder/schema and offline branch allowlist only, not learned response or CMS bridge conversion |
+| `jetclass2_delphes/{campaign,model,runner,acceptance,execution,reporting,inventory,selection,contracts}.py` | Reuse model/recipe, installed-Weaver parity, single-GPU kernels, per-class R50, SPORC site and inventory-bound identities |
+| `scouting/hcwdl_exact_dag_submission.py`, `hcwdl_recovery.py` | Existing exact-ID journal/ledger; optional explicit environment for sanitized literature submissions, plus adapter-owned exclusive submission claim |
+| `scripts/jetclass2_cms_proxy_ladder.py`, `run_jetclass2_cms_proxy_ladder_task.py`; `sbatch/jetclass2_delphes_common.sh` | Thin new CLI/helper; retain existing worker and absolute environment setup |
+| `tests/test_literature_proxy_production.py`, `test_cms_proxy_ladder.py` | Synthetic producer fixtures and classifier contract patterns; new reader/gate/DAG/claim tests |
+
+New authority: `docs/plans/JETCLASS2_LITERATURE_V3_200K_DIRECT_COARSE_PLAN.md`
+and `docs/contracts/JETCLASS2_LITERATURE_V3_LADDER.md`. No historical artifact
+is relabeled or overwritten; no final-test particle capability is added.
+
+## 2026-10-03: frozen literature v3 full production dataset
+
+Repository-local donor commit **`d505e807500b7e0f4149f940413c542b63b308d2`**.
+New code: `src/hlt_classification/literature_proxy_production/`; old scientific
+modules remain unchanged. No third-party donor or `Fresh_check` dependency.
+
+| Donor files (under `src/hlt_classification/`) | Production reuse/adaptation |
+| --- | --- |
+| `literature_proxy_v3/kernel.py`, `inputs.py`, `worker.py`, `campaign.py`, `contracts.py` | Reuse frozen generator and recipe verbatim, completed v3/v2/v1 authentication, saved-v3 replay, exact source/hash chain |
+| `literature_proxy_v2/kernel.py` | Validate inherited full-precision calibration and original parent lineage; never recalibrate |
+| `literature_proxy/population.py`, `campaign.py` | Reuse exact raw OFFLINE conversion, padded particle keys and branch allowlist, clean/pushed source and exclusive failed-attempt locks |
+| `cms2jc2_production/population.py` | Reuse metadata-only TRAIN_1M population builder including unchanged validation subset domain; new sharding and raw reader do not call its CMS-compatible physical converter |
+| `cms2jc2_production/contracts.py`, `storage.py` | Adapt truthful flags/atomic references and path-safe quota reservations into a separate versioned namespace |
+| `cms2jc2_production/campaign.py` | Adapt fresh persistent-root non-overlap checks only; no learned campaign/gate dependency |
+| `cms2jc2_production/submission.py` | Adapt exact array-element identity, scheduler/environment checks, journals and terminal-only recovery; replace staged pilot/bulk submissions with one frozen preflight/array/finalizer DAG |
+| `cms2jc2_production/output.py` | Adapt physical-bank validation, receipt binding and manifest checks; add train/validation-only independent releases |
+| `cms2jc2_response/generation_benchmark_engine.py` | Copy pure physical digest, pack, lossless codec/readback; adapt bounded ordered process/writer design with ONLY literature v3 generation |
+| `cms2jc2_response/readers.py`, `measurement.py`, `bridge.py` | Reuse byte-authenticated ROOT open, Linux process-tree measurement and physical schema; no CMS reading/learning or units conversion |
+| `data/cache_contracts.py`, `jetclass2_delphes/inventory.py`, `contracts.py`, `split_registry.py` | Atomic bytes, identities, tree/inventory authentication and canonical split masks |
+
+The new CLI/queue/Slurm wrapper adapt
+`scripts/jetclass2_literature_proxy_noise.py`,
+`scripts/queue_jetclass2_literature_proxy_noise.sh` and
+`sbatch/run_jetclass2_literature_proxy_noise.sh`. Tests reuse synthetic ROOT
+and sealed-pilot fixtures from `tests/test_literature_proxy_v3_campaign.py`,
+`tests/test_literature_proxy_v2_campaign.py`, `tests/test_jetclass2_delphes.py`
+and `tests/test_jetclass2_delphes_split_registry.py`, with scheduler/codec
+test patterns from `tests/test_cms2jc2_proxy_production.py`. Production role
+counts are not configurable; only isolated tests patch miniature counts.
+
+## 2026-10-02: final noise-only literature proxy v3
+
+Repository-local donor commit `d4b5d5fda19a6401442cb6b605ad22c2b7013e5e`.
+New package: `src/hlt_classification/literature_proxy_v3/`. No external source,
+learned CMS response or `Fresh_check` runtime dependency.
+
+| Donor files (relative to `src/hlt_classification/`) | v3 reuse/adaptation |
+| --- | --- |
+| `literature_proxy_v2/kernel.py` | Reuse topology and probability validation unchanged; copy generation equations with only tracking amplitude 3 to 4 and kinematic amplitude 1.5 to 2 |
+| `literature_proxy_v2/inputs.py`, `worker.py` | Authenticate original OFFLINE and saved count38 blocks and complete receipts; replace calibration passes with exact inherited calibration, add every-jet structure/count equality |
+| `literature_proxy_v2/campaign.py`, `contracts.py` | One-job source pinning, immutable publication, submission protections; new v3 namespace and pinned v2 ancestors |
+| `literature_proxy/kernel.py`, `worker.py`, `diagnostics.py` | Unchanged random streams, physical arrays/RSS, inclusive moments/conditional statistics/exports; add separate v3 paired-response diagnostics |
+| `literature_proxy/contracts.py`, `cms2jc2_response/bridge.py`, `data/cache_contracts.py`, `jetclass2_delphes/contracts.py` | Hash/reference primitives, validated particles, p4/wrapped phi, deterministic NPZ and confined artifact paths |
+
+The new noise CLI, queue helper and Slurm wrapper adapt the donor's
+`scripts/jetclass2_literature_proxy_count38.py`,
+`scripts/queue_jetclass2_literature_proxy_count38.sh` and
+`sbatch/run_jetclass2_literature_proxy_count38.sh`. Tests reuse the donor's
+`tests/test_literature_proxy.py` and `tests/test_literature_proxy_v2_campaign.py`
+fixtures (including their JetClass2 synthetic ROOT/split fixtures). All v1/v2
+source remains unchanged. No third-party source/license changes. Verification
+and genuine Tigris status are recorded in `HANDOFF.md`.
+
+## 2026-10-02: count-targeted literature proxy v2
+
+Repository-local donor commit `08cbf06309ff7bb2bdeccf6da2874e21de43da87`.
+New code lives under `src/hlt_classification/literature_proxy_v2/`. No external
+donor, learned CMS response, or `Fresh_check` dependency was introduced.
+
+| Donor files (under `src/hlt_classification/`) | Reuse/adaptation |
+| --- | --- |
+| `literature_proxy/kernel.py` | Physical response equations, crowding, common per-operation random streams and Response container; v2 separately scales PID/tracking/kinematics and changes loss topology |
+| `literature_proxy/campaign.py`, `contracts.py` | Clean/pushed source guard, exclusive lock and immutable/hash primitives; new v2 campaign and artifact namespace |
+| `literature_proxy/population.py` | Recompute exactly the same authenticated training selection; no new ROOT reader |
+| `literature_proxy/worker.py` | Authenticate completed parent receipt, physical-array extraction, per-process RSS conventions; new two-pass calibration/generation worker |
+| `literature_proxy/diagnostics.py` | Existing moments, masks, fixed-bin/conditional statistics and PDF/CSV; optional bins/sides preserve v1 defaults |
+| `cms2jc2_response/bridge.py`, `data/cache_contracts.py`, `jetclass2_delphes/contracts.py` | Physical particle constraints, deterministic NPZ, byte/content hashes and confined artifact paths |
+
+New CLI/helper/Slurm wrapper adapt the donor's
+`scripts/jetclass2_literature_proxy.py`,
+`scripts/queue_jetclass2_literature_proxy_pilot.sh`, and
+`sbatch/run_jetclass2_literature_proxy_pilot.sh`. Synthetic fixtures reuse
+`tests/test_literature_proxy.py`, `tests/test_jetclass2_delphes.py`, and
+`tests/test_jetclass2_delphes_split_registry.py` from the same commit. No
+original scientific v1 kernel, population or saved result was replaced.
+The new count calibration is explicitly a training-only benchmark choice,
+not a CMS/literature-measured rate or a classification-performance fit.
+
+## 2026-09-30: proxy dataset consumer documentation
+
+The consumer handoff references existing production, recovery, bridge and
+JetClass2 label/identity APIs at repository commit
+`3655955f6ef7184cc6fdb3b0e68bdc6d089e9fe2`; it migrates no implementation or
+external donor files. Its example test reuses synthetic ROOT/split fixtures
+from `tests/test_jetclass2_delphes.py` and
+`tests/test_jetclass2_delphes_split_registry.py` at that commit. The separately
+tested production reader remains authoritative for physical bank validation.
+No new schema, response semantics or final-test permissions are introduced.
+
+## 2026-09-30: committed proxy training audit
+
+Repository-local donor commit `314e9faa680cad677aca9c9cd158d83cf973ea0b`:
+
+- `cms2jc2_production/{campaign,contracts,population,output,recovery}.py`:
+  import immutable provenance, safe paths, exact offline-only source membership,
+  physical bank schema/identity checks and repaired receipt validation unchanged.
+- `cms2jc2_response/{dev_diagnostics,metrics,features,bridge}.py`: reuse canonical
+  observables, validity masks, offline-only cohorts, transforms and bridge units.
+  The independent audit compares saved populations; it does not reuse a paired
+  same-population score for unpaired CMS-vs-JetClass2 samples.
+- `cms2jc2_response/{dev_data,provenance,generation_benchmark_engine}.py`:
+  reuse authenticated metadata references, environment/source evidence and
+  physical digests. The audit never calls the generation kernel.
+- `tests/test_cms2jc2_proxy_production.py`,
+  `test_cms2jc2_generation_benchmark.py`, and JetClass2 split-registry fixtures:
+  reuse synthetic physical schemas and ROOT data for the new audit tests.
+
+New logic lives in `cms2jc2_proxy_audit/`; existing frozen producer/response
+modules are unchanged. New plan and `CMS2JC2_PROXY_AUDIT_* /v1` contracts prevent
+diagnostic completion from masquerading as dataset completion or qualification.
+No external donor files, Fresh_check imports or remote changes.
+
+## 2026-09-30: source-pinned production execution recovery
+
+Repository-local donor commit `b6f88defce6f357969b2e6ded80585db439540a3`,
+plus the local array-element authentication fix documented immediately below:
+
+- `cms2jc2_production/{campaign,submission,worker,output}.py`: retain original
+  admission, exact submission intents, resource guards, worker generation
+  and bank validation. Enumerated operational entry points add explicit
+  repair lineage; the generation kernel is unchanged.
+- `cms2jc2_production/{contracts,storage,population}.py`: reuse immutable
+  content/parent hashes, safe paths, claims, reservations and frozen identities
+  without changes. New recovery modules use these rather than rebuilding data.
+- Existing production CLI/queue helpers: reuse Tigris environment activation,
+  absolute source paths, single-thread numerical libraries and detached log
+  handling in new `cms2jc2_proxy_recovery.py` and its queue shell helper.
+- `tests/test_cms2jc2_proxy_production.py`: reuse synthetic bank, scheduler and
+  source fixtures for `test_cms2jc2_proxy_recovery.py`; local mocked timings
+  do not replace the required real retained/retried pilot measurements.
+
+New execution-repair plan/contract version the repaired attempt, shard and
+manifest kinds instead of changing legacy artifact meaning. No external
+donor migration, Fresh_check runtime import, scientific refit or remote action.
+Exact local verification and remaining remote step are recorded in HANDOFF.
+
+## 2026-09-30: exact production Slurm array-element lookup
+
+Repository-local donor commit `b6f88defce6f357969b2e6ded80585db439540a3`:
+`src/hlt_classification/cms2jc2_production/submission.py` and
+`tests/test_cms2jc2_proxy_production.py`. Correct raw-parent ambiguity in
+`worker_identity`/`fields`, retaining original submission and resource guards.
+No donor file migration or Fresh_check import; no response kernel, physical
+writer, population, random-key or scientific-schema change. Production plan
+and contract clarify the exact selector and unchanged source-pinning boundary.
+Test and user-supplied remote evidence are recorded in HANDOFF.
+
+## 2026-09-29: explicit 36-of-57 frozen confirmation amendment
+
+Repository-local donor commit `f3db2ce8ff0f8e5716aab19df4cba9677f72c06c`:
+
+- `cms2jc2_response/frozen_joint_campaign.py`, `frozen_joint_metrics.py`,
+  `bdz_worker.py`, `bdz_audit_metrics.py`: unchanged frozen protocol, additive
+  diagnostic merging, file-bootstrap checks and significance diagnostics.
+  Called by new `cms2jc2_response/reduced_confirmation.py`; original complete
+  membership/report validation remains untouched. Only the new contract
+  authorizes the fixed prefix, with explicit missing-source/file coverage.
+- `cms2jc2_response/dev_submission.py`, `dev_campaign.py`, `dev_worker.py`,
+  `dev_data.py`: reuse exact-intent/ledger scheduler identity, immutable outputs,
+  source/environment authentication and publication; new dispatch/authorization
+  for a single report task. Retirement is separately authorized and preserves
+  completed excluded artifacts and all included artifacts.
+- `cms2jc2_production/{campaign,output}.py`: new explicit reduced-evidence
+  study/manifest kinds. Original full-evidence route and physical generation
+  semantics remain unchanged. No legacy donor/Fresh_check runtime import,
+  license change, data migration, raw-particle read or remote action here.
+- Existing synthetic frozen diagnostics and production bank fixtures support
+  new retirement/refusal, report aggregation, opt-in, provenance and sealed
+  reader tests. Test evidence is recorded in HANDOFF, not remote qualification.
+
+## 2026-09-29: 2.25M frozen proxy dataset production
+
+Repository-local donor commit `b88a35123e6f7658a4b1679cd797b7f157c4602b`:
+
+- `cms2jc2_response/generation_benchmark_engine.py`: unchanged JOINT replica-0
+  generation, ordered spawn pool, physical/key digests, float64 bank packing,
+  deterministic lossless encoding and full schema/readback checks. Called
+  directly; old benchmark writer/caps are not weakened or reused for bulk.
+- `cms2jc2_response/generation_benchmark_data.py`, `readers.py`, `bridge.py`:
+  original offline-only branch capability, bounded windows, authenticated ROOT
+  open, stable row identity, unit/validity conversion and physical schema.
+  Production adapts the window reader to its new versioned population; original
+  reader semantics remain unchanged.
+- `cms2jc2_response/generation_direct_campaign.py`,
+  `frozen_joint_campaign.py`, `dev_campaign.py`, `dev_data.py`, `provenance.py`:
+  completed gate/confirmation and immutable donor authentication, existing
+  scientific source matching and native-library/environment pinning.
+- `cms2jc2_response/measurement.py`: real Linux process-tree resource sampling.
+- `jetclass2_delphes/{inventory,split_registry,contracts}.py` and
+  `data/cache_contracts.py`: input/profile validation, packed masks, existing
+  original identities, canonical hashes and atomic no-overwrite publication.
+- Existing direct/benchmark tests, `test_cms2jc2_bounded.LocalMeasurement`, and
+  JetClass2 registered synthetic ROOT fixtures: fixture inputs and local-only
+  measurements. Synthetic timing is explicitly forbidden as bulk admission.
+- Existing response queue/wrapper scripts: activation, absolute project paths,
+  single-thread child environments and disconnect-safe heartbeat patterns.
+
+New package `cms2jc2_production`, separate CLI/worker/helper, plan and
+`CMS2JC2_PROXY_* /v1` contracts add durable production storage, new authorized
+test materialization semantics, pilot admission, arrays, recovery, manifests
+and the train/validation physical-bank reader. No fitted response, tracking
+map, random key algorithm or old test-access boundary is modified.
+
+## 2026-09-29: direct Tigris frozen-JOINT generation
+
+Repository-local donor commit `9215fdcf940c116d5d89675a42bd8c82bdec05ea`:
+
+- `cms2jc2_response/generation_benchmark_{campaign,data,engine,worker}.py`:
+  authenticated GEN lineage/bundle/TRAIN membership, unchanged bounded
+  offline-only ROOT reader, bounded once-per-process generation, lossless
+  NPZ/readback, physical/key/identity digests and filesystem measurements.
+- `generation_portable_{campaign,data,worker}.py`: registered Tigris CPU site,
+  resource projection, exact discrete/tolerant floating comparison, source
+  and environment separation. Reused through calls; PORT semantics unchanged.
+- `dev_campaign.py`, `dev_submission.py`, `dev_worker.py`, `dev_restart.py`,
+  `storage.py`, `measurement.py`, `provenance.py`: claims, immutable submission
+  and output receipts, pre-existing execution-only source allowlist, native
+  environment pinning, cap/free-space checks. Dispatcher/CLI/source-list and
+  scheduler-worker recognition additions are execution-only.
+- `scripts/queue_cms2jc2_portable_benchmark.sh` and
+  `sbatch/run_cms2jc2_response_portable_cpu.sh`: heartbeat/stdin/exit and site
+  activation patterns. New direct helper adapts them; original files unchanged.
+- GEN/PORT response fixtures and `LocalMeasurement` tests: deterministic
+  synthetic data, real Generator/spawn replay and mocked scheduler lifecycle.
+
+New `generation_direct_{campaign,worker}.py` provide separate TG_* v1
+contracts, reuse the existing 64-jet reference and read the same 10k TRAIN
+ROOT population on Tigris. No new external donor, fitting, scientific kernel,
+key-domain, unit/sign convention or Fresh_check dependency. Full 10k SPORC
+parity is not claimed; only the existing 64-row reference is available.
+
+## 2026-09-29: explicit dzfix partial-snapshot benchmark location
+
+Repository-local donor commit `292e38896d7ae8bf9e973e9fd1c1efed8dc71548`:
+`cms2jc2_response/generation_benchmark_{data,campaign}.py` supplies the existing
+root guard and authenticated TRAIN membership/reader; the corresponding
+benchmark tests supply synthetic ROOT, inventory/profile and campaign fixtures.
+The guard now also accepts the exact documented `_partial_v1` directory name.
+`docs/JETCLASS2_DZFIX_SALIENCE_MATCHING_HANDOFF.md` and
+`docs/plans/JETCLASS2_DZFIX_FIXED_SLOT_CONCAT_K2_LADDER_PLAN.md` at that commit
+record the actual SPORC snapshot and explain its noninterchangeable inventory.
+No new external donor, particle transform, response fit, key-domain change or
+Fresh_check dependency. GEN v1 membership and PORT replay semantics unchanged.
+
+## 2026-09-29: separate Tigris portable JOINT benchmark
+
+Repository-local committed donors remain
+`455557980168a131e22b6990c902e1c52815a52f`: `cms2jc2_response/{dev_campaign,
+dev_submission,dev_worker,storage,measurement,provenance,bridge,readers,
+bdz_joint_maps,response}.py`. Science kernels, fitted maps and key domains are
+unchanged. Exact scheduler identity is extended only for PORT_STAGE's new worker
+and Tigris's site-assigned (not guessed SPORC) QoS; old contracts retain their
+checks. New CLI, helper and source-snapshot registrations are execution-only.
+
+The preceding, still-uncommitted 2026-09-29 GEN benchmark supplies
+`generation_benchmark_{campaign,data,engine,worker}.py`: membership, frozen
+bundle, bounded offline reader, once-per-process initialization, deterministic
+NPZ encoding/readback and measurements. These are co-developed in this worktree,
+NOT falsely attributed to the earlier committed donor. The engine additionally
+admits 36/72/144 workers for new PORT task registries; old GEN tasks stay frozen.
+The new `generation_portable_{campaign,data,worker}.py` adds source-pinned packet
+export/import and explicitly separate cross-architecture tolerance contracts;
+it never weakens the GEN donor-environment validator. The native CPU wrapper and
+dry-default heartbeat helper adapt existing queue patterns. No external donor or
+Fresh_check import is added. New tests reuse existing synthetic physical/model
+fixtures and supplement them with relocatable packet and lifecycle checks.
+
+## 2026-09-29: generation-only JOINT engineering benchmark
+
+Repository-local donors at `455557980168a131e22b6990c902e1c52815a52f`:
+
+- `cms2jc2_response/bdz_joint_campaign.py`, `bdz_joint_worker.py`,
+  `bdz_joint_maps.py`, `response.py`: authenticate and reuse the selected JOINT
+  runtime unchanged, one label-independent realization per jet. No numerical
+  implementation, fitted parameters, or key domains are edited.
+- `frozen_joint_campaign.py`, `frozen_joint_worker.py`, `dev_parallel.py`:
+  separate gate/next-stage pattern, bounded spawn queue, native-thread limiting,
+  conservative resource estimates and frozen-replay checks, adapted for a
+  distinct TRAIN generation capability with no confirmation/test access.
+- `bridge.py`, `readers.py`, `dev_data.py` plus
+  `jetclass2_delphes/{inventory,splits,split_registry,contracts}.py`: authenticated
+  metadata, stable row identities, offline-only physical bridge and file-byte
+  verification. A new bounded-window reader is separate from old readers.
+- `dev_campaign.py`, `dev_submission.py`, `dev_worker.py`, `storage.py`,
+  `measurement.py`: immutable records, receipts, exact CPU submission journals,
+  allocation claims and storage accounting. Changes to existing modules are
+  additive execution routing/source snapshots/CLI only; no old scientific
+  semantics or no-JC2 boundary is relaxed.
+- `scripts/queue_cms2jc2_frozen_joint.sh`: adapted heartbeat/stdin/exit handling
+  for the new dry-default queue helper, with an explicitly supplied reviewed
+  plan hash. `frozen_joint_queue.py`: read-only resource-probe pattern, without
+  interpreting a single-job estimate as multi-job completion evidence.
+- Existing response-science, JOINT map, synthetic ROOT/split-registry and
+  LocalMeasurement test fixtures are reused; mocked allocation evidence cannot
+  authorize real production. New NPZ encoding/readback/digest implementation
+  stays in `generation_benchmark_engine.py`; no external donor or Fresh_check
+  runtime dependency is added.
+
+## 2026-09-28: frozen JOINT collection-response confirmation
+
+Repository-local donors at `7b57a32de74e4bcff4fa83e1ffcde67b5fcd0872`:
+
+- `cms2jc2_response/bdz_joint_campaign.py`, `bdz_joint_worker.py`,
+  `bdz_joint_maps.py`: authenticate the completed selected JOINT response and
+  replay unchanged maps/random keys. The new `frozen_joint_worker.py` adapts
+  ordered, bounded spawn execution to exactly JOINT and B_DZ. Acceptance compares
+  both against the original five-candidate kernel; there is no new fitting API.
+- `bounded_data.py`, `dev_data.py`, `readers.py`, `splits.py`: authenticated
+  metadata, identities, streaming and access-lock pattern. New
+  `frozen_joint_data.py` admits ALL outer-confirmation rows only through its
+  separately claimed capability; the old fit-only reader is unchanged.
+- `dev_diagnostics.py`, `bdz_audit_metrics.py`, `bdz_worker.py`: unchanged bounded
+  additive histograms, tracking/PID diagnostics and canonical merges. New
+  `frozen_joint_metrics.py` adds predeclared thresholds and paired file-bootstrap
+  supported/rejected/inconclusive evidence, not a new development selection.
+- `dev_campaign.py`, `dev_submission.py`, `storage.py`, `measurement.py`: existing
+  source/receipt/submission/allocation/storage checks. Only execution dispatch,
+  source extras and CLI are extended. `frozen_joint_queue.py` probes actual CPU
+  shapes with test-only requests; it does not mutate existing jobs.
+- `scripts/queue_cms2jc2_bdz_joint.sh`: heartbeat/stdin/exit-status pattern adapted
+  into `queue_cms2jc2_frozen_joint.sh`, with separate gate/confirmation and no
+  cancellation or automatic follow-up.
+- JOINT/B_DZ/audit/bounded synthetic ROOT test ancestry reused. The
+  `test_cms2jc2_frozen_c.py` fixture adds its synthetic authenticated `cms_root`
+  field; no donor scientific implementation or real dataset is modified.
+
+Intentional new semantics are under additive FROZEN_* v1 contracts and the
+frozen JOINT confirmation plan. No external code, model, particle bank or
+Fresh_check runtime import was copied. This finite collection-response study
+does not replace the original production qualification or authorize JC2 transfer.
+
+## 2026-09-27: bounded PID-safe / joint tracking repair
+
+Repository-local donors at `b1d59811609020b40c65f9f4063128be1faf526b`:
+
+- `cms2jc2_response/bdz_maps.py`: unchanged historical controls/quantile knots;
+  `bdz_joint_maps.py` adds coordinate-local PID identity fallback and joint
+  log-error / error-rank-conditional asinh-significance transport. No old map
+  or model is rewritten; new semantics use new BDZ_JOINT_* contracts.
+- `bdz_worker.py`, `bdz_audit_worker.py`: bounded ordered spawn orchestration
+  adapted into `bdz_joint_worker.py`; original aggregation called directly for
+  exact historical replay. New calibration reads residual jets only.
+- `bdz_audit_metrics.py`, `bdz_metrics.py`, `dev_diagnostics.py`: unchanged
+  diagnostic accumulators reused; new PID-aware score, guard and rendering
+  live separately in `bdz_joint_metrics.py` and `bdz_joint_campaign.py`.
+- `bdz_campaign.py`, `bdz_audit_campaign.py`, `bdz_audit_debug.py`: completed
+  donor/receipt/source checks reused, including the completed debug audit.
+- `scripts/queue_cms2jc2_bdz_audit_debug.sh`: phase heartbeat/stdin/exit-status
+  pattern adapted into the new joint helper WITHOUT retirement or cancellation.
+- `tests/test_cms2jc2_bdz_tuning.py`, `test_cms2jc2_bdz_audit.py` and their
+  bounded/B/C synthetic ROOT fixture ancestry supply regression patterns.
+
+Only the existing execution-only `dev_campaign.py`, `dev_worker.py` and CLI
+are extended for source/stage/worker dispatch. No donor scientific file is
+edited; no external code or Fresh_check runtime dependency is introduced.
+
+## 2026-09-26: significance audit pending-job debug replacement
+
+Repository-local donors at `a61e4ea1d09d0cca80251c7b8fc7e70e72577fb5`:
+
+- `cms2jc2_response/c_topology_debug.py`: exact-ledger pending-only retirement,
+  scheduler identity/account checks, admission-before-cancel, immutable evidence
+  and fresh debug study adapted to `bdz_audit_debug.py`. Audit migration also
+  refuses original claims and refreshes accounting after slow authentication.
+- `bdz_audit_campaign.py`, `bdz_audit_worker.py`, `bdz_audit_metrics.py`:
+  unchanged frozen protocol, acceptance, generation, replay and reporting
+  primitives. `bdz_audit_debug_worker.py` is the external-acceptance adapter;
+  it publishes new-stage results and references the original acceptance hash.
+- `dev_campaign.py`, `dev_submission.py`, `dev_worker.py`, and the development
+  CLI: additive contract/source/retirement/dispatch routing on the existing
+  execution-only allowlist. No enlargement of that scientific-source exception.
+- `scripts/queue_cms2jc2_bdz_audit.sh` and `queue_cms2jc2_bdz_tier3.sh`:
+  dry/live source-pinned helper pattern, with phase/heartbeat feedback added in
+  the new debug helper only. Neither donor helper is modified.
+- Audit and C-debug tests plus their B_DZ/bounded/B/C synthetic ROOT ancestry:
+  reused fixtures and lifecycle tests; no external donor or Fresh_check import.
+
+## 2026-09-26: frozen B_DZ significance replay
+
+Repository-local donors at `6b9a4bc1b3a9172d8b3ca63deb8c2c9e49c387d8`:
+
+- `cms2jc2_response/bdz_worker.py`: unchanged historical accumulator invoked
+  directly; bounded ordered spawn-worker orchestration adapted into
+  `bdz_audit_worker.py`. No response/quantile-map refit is introduced.
+- `bdz_campaign.py`, `bdz_tier3.py`, `bdz_maps.py`, `bdz_metrics.py`: completed
+  donor/calibration lineage, numerical maps and historical score validation
+  reused unchanged. New PID/value-error diagnostics live in separate modules.
+- `dev_campaign.py`, `dev_worker.py`, `scripts/cms2jc2_response_dev.py`:
+  additive stage/source/worker/CLI dispatch; immutable submission/claim and
+  receipt machinery reused without changing old scientific semantics.
+- `scripts/queue_cms2jc2_bdz_tier3.sh`: source/environment and dry/live wrapper
+  pattern adapted to `queue_cms2jc2_bdz_audit.sh`, without any retirement or
+  cancellation path.
+- `tests/test_cms2jc2_bdz_tuning.py` and its bounded/B/C synthetic ROOT fixture
+  ancestry: donor replay, immutable receipts and CPU lifecycle test patterns.
+
+The new plan/contracts explicitly permit bounded hashed forensic examples,
+not durable full particle banks. No external donor or Fresh_check import.
+
+## 2026-09-25: B_DZ tier3 execution replacement
+
+Repository-local donors at `1cdf6b890ce0b88de174948916593c106ddc8a06`:
+
+- `src/hlt_classification/cms2jc2_response/c_topology_debug.py`: exact-ID,
+  pending-only retirement, fresh-root reuse, immutable retirement evidence and
+  scheduler race checks adapted into `bdz_tier3.py` (now also refuses claims).
+- `bdz_campaign.py`, `bdz_worker.py`, `bdz_maps.py`, `bdz_metrics.py`: reused
+  byte-for-byte for protocol, gate/map ancestry and all numerical evaluation;
+  selection-display validation adapted in the new module, not the donor.
+- `dev_campaign.py`, `dev_submission.py`, `dev_worker.py` and
+  `scripts/cms2jc2_response_dev.py`: additive execution routing only.
+- `tests/test_cms2jc2_c_topology_debug.py`, `test_cms2jc2_bdz_tuning.py` and
+  their synthetic ROOT ancestors: fixture/lifecycle test patterns reused.
+
+New plan/contracts and queue wrapper change only execution placement. No
+external model or Fresh_check runtime dependency is introduced.
+
+## 2026-09-25: B_DZ tracking-calibration screen
+
+Repository-local donors at `b79e76be2ad7fb8884f6bb5128ae5b22e7aaa0a1`:
+
+- `src/hlt_classification/cms2jc2_response/bounded_campaign.py`,
+  `bounded_models.py`, `bounded_metrics.py`: authenticated original B_DZ
+  selection/recipe and conditional TV semantics reused without modifying donors.
+  New `bdz_campaign.py` handles only the known guard-list order normalization.
+- `bounded_worker.py`, `dev_parallel.py`, `c_diagnostic_worker.py`: bounded
+  spawn-process orchestration, identity digest and tight historical replay checks
+  adapted/reused by `bdz_worker.py`.
+- `dev_diagnostics.py`, `bridge.py`: physical/conditional histograms, plotting,
+  immutable particles and validity semantics reused directly.
+- `dev_campaign.py`, `dev_worker.py`, `scripts/cms2jc2_response_dev.py`: additive
+  routing/source-plan registration; existing submission and claim machinery reused.
+- `tests/test_cms2jc2_bounded.py`, `test_cms2jc2_b_tracking.py`,
+  `test_cms2jc2_frozen_c.py`: real synthetic ROOT/receipt fixture ancestry reused
+  in `tests/test_cms2jc2_bdz_tuning.py`.
+
+The marginal tracking maps, tail-balanced metrics and BDZ_* contracts are new;
+no Fresh_check runtime dependency or external model donor is introduced.
+
+## 2026-09-25: bounded final B / B_DZ / BC comparison
+
+Repository-local donors at `7d56425f3bb88b6ea36bbc9bd80e81fb166e5bb2`,
+under `src/hlt_classification/cms2jc2_response/`:
+
+- `b_tracking.py`, `c_diagnostic.py`: completed B/C fit/report/receipt import
+  reused directly by `bounded_campaign.py`; scientific source equality remains.
+- `b_tracking_worker.py`, `dev_parallel.py`: bounded spawned-process chunking,
+  identity checking, histogram aggregation and progress patterns adapted in
+  `bounded_worker.py`. New worker merges in bounded deterministic order.
+- `dev_data.py:iter_sample`, `_sample`: reader/hashed membership pattern adapted
+  into a separately claimed, 20k outer-confirmation capability in
+  `bounded_data.py`; the original development reader is not broadened.
+- `response.py`, `residuals.py`: unchanged runtime generator and joint residual
+  backend reused by new portable recipe wrappers in `bounded_models.py`.
+- `dev_diagnostics.py`, `c_diagnostic_worker.py`: unchanged fit-only histograms,
+  plotting and historical replay helpers reused; new explicitly development-only
+  selection/uncertainty rules live in `bounded_metrics.py`.
+- `dev_campaign.py`, `dev_worker.py`, `scripts/cms2jc2_response_dev.py` gain
+  additive source/stage/CLI dispatch; no existing scientific worker changes.
+- `tests/test_cms2jc2_frozen_c.py` and `tests/test_cms2jc2_b_tracking.py` supply
+  the tiny ROOT and actual B/C fitting fixtures for the new staged tests.
+
+No Fresh_check imports, external donor code, model weights or raw-data copies.
+No old execution is edited or adopted as a newly fitted model. New artifacts
+use BOUNDED_* v1, with an explicit recipe and old-model parents. No new license
+obligation. Independent confirmation is separately authorized, not production
+qualification or automatic JC2 transfer.
+
+## 2026-09-25: frozen C topology debug replacement
+
+Repository-local donor: `0bed4cbb598f0476b1c00d08f43859c7e46120fa`.
+New `cms2jc2_response/c_topology_debug.py` adapts `b_tracking_debug.py`'s
+authenticated acceptance reuse, fresh five-job registration and exact pending
+retirement lifecycle. C-specific acceptance fields, original six-view worker,
+evaluation association recomputation and DEV_C_REUSE lineage are retained.
+CLI/source/stage/submission/worker dispatch is additive; original B and C
+scientific files remain byte-identical. New tests adapt the B migration fixture
+to real tiny ROOT C acceptance and evaluation. No external code, dataset,
+weights or output artifacts are migrated; no new license obligation.
+
+Donor checkout-byte SHA-256 (Git may normalize line endings), under
+`src/hlt_classification/cms2jc2_response/`:
+
+| Reused donor | SHA-256 |
+| --- | --- |
+| `b_tracking_debug.py` | `aced8c3dab0430015e65d9bfd281f2de7001fbd6d57bfa0dcd977425072d45ad` |
+| `c_topology.py` | `462e5b3bee90b9da0adc6be679e2f692b4f2be782ab63ce6e7c722ba87bd22d8` |
+| `c_topology_worker.py` | `65103052a33ab245981de253f8e2cf9ab54b2912ddbfc596edd677984cff0d74` |
+
+Ten focused migration tests pass, including exact worker replay/population,
+old-file and unrelated-B preservation, corrupt donor rejection, admission before
+cancellation, state races and accounting lag. Full evidence is in HANDOFF.
+
+## 2026-09-25: frozen B debug replacement
+
+Repository-local donor: `56ab24cba04b81456021f10e45caa5379e244256`.
+New `cms2jc2_response/b_tracking_debug.py` composes the existing frozen-B
+authentication, execution-only source whitelist and acknowledged scheduler
+journals. It registers a distinct five-job debug stage, reuses completed B
+acceptance, and adds explicitly authorized pending-only retirement evidence.
+The CLI and existing campaign/submission/worker dispatch change only for this
+new stage. Original B generation, metrics, worker and result reader are reused
+unchanged. No external code, data, learned weights or original output artifact
+was migrated; no license/attribution changes.
+
+Donor checkout-byte SHA-256 (Git may normalize line endings), under
+`src/hlt_classification/cms2jc2_response/`:
+
+| Reused donor | SHA-256 |
+| --- | --- |
+| `b_tracking.py` | `46f6cf6a896c77f15bb9d9e708daa9462fd2452a2dd919947d281eb797ac7cf3` |
+| `dev_restart.py` | `0798dbd1887d4fcf081b27cb03bca221443390ac127602482164826b7ed9d39b` |
+| `b_tracking_worker.py` | `6a7deb61ccccdd4f5243a4f0ce576d215a5909b76571d509caa9d7729bfc7adb` |
+| `b_tracking_results.py` | `3878d5cfa244c9b7410566378e1e67566c0e897aa9de4d180ea2ab416e052cdb` |
+
+Regression evidence: `tests/test_cms2jc2_b_tracking_debug.py` exercises the
+unchanged worker on tiny ROOT inputs, donor byte preservation, exact mocked
+five-job submission, cancellation races and authenticated acceptance reuse.
+Complete response regression results are recorded in HANDOFF.
+
+## 2026-09-25: frozen B tracking audit
+
+Repository-local donor: `5c18760f06fb5cb727668ce5482c2b6c35a73223`.
+New `b_tracking.py` adapts the C frozen-reuse registration to B_L with a distinct
+DEV_B_REUSE/v1 contract. `b_tracking_generation.py` copies the diagnostic
+traversal and reuses the unchanged residual draw and physical emission codec;
+only selected tracking residuals are zeroed. New event fields capture central
+predictions, increments, limits and selected cells. `b_tracking_metrics.py`
+extends original counters with validity-filtered tracking accounting.
+`b_tracking_worker.py` adapts the bounded process/evaluation lifecycle from
+`c_topology_worker.py`, removing association/oracle work. New result display
+reuses authenticated products and historical replay checks. No old scientific
+module, external code, dataset, trained weights or donor artifact is changed.
+
+Donor checkout-byte SHA-256 (Git may normalize line endings):
+
+| Donor under `src/hlt_classification/cms2jc2_response/` | SHA-256 |
+| --- | --- |
+| `c_diagnostic.py` | `7f02b36c4dbb2692c08a82b9d544f93c22cd4651bde97969c030f67a594fbb29` |
+| `c_diagnostic_generation.py` | `59a8ca4069e6e03511421778bb724b077fdc1b9f38297632907352d0754c0050` |
+| `c_diagnostic_metrics.py` | `aa467d44b02c977c70d000ddb08654e7290826cecafc0966b59838a662a46b3f` |
+| `c_topology_worker.py` | `65103052a33ab245981de253f8e2cf9ab54b2912ddbfc596edd677984cff0d74` |
+
+Fourteen focused tests pass, including actual B fitting, exact FULL replay,
+unchanged kinematics/state, selective masks, validity/clipping accounting,
+process parity and tiny ROOT -> immutable reports/plots. No new licensing
+impact. Combined response regression: 181 passed, one unchanged long 33-fit
+production integration deselected. The first registered real SPORC acceptance
+is still required.
+
+## 2026-09-25: observed-topology C diagnostic
+
+Repository-local donor: `36a01900a73447680cdc3e28bb0b9170c265a544`.
+New `cms2jc2_response/c_topology_generation.py` copies the frozen continuous
+emission equations from `c_diagnostic_generation.DiagnosticGenerator.emit`;
+learned topology/state draws are intentionally replaced with observed-association
+state for a privileged diagnostic. `topology.calibration_records` and its codec
+are reused unchanged to authenticate the registry/round trip. The new worker
+reuses frozen-C inputs, metrics/accounting, plotting and CPU bounded scheduling.
+Only execution dispatch/source registration and the CLI are extended. No donor
+scientific kernel, raw dataset, external code, model or weights are copied.
+
+Donor byte SHA-256 values (local checkout bytes; Git may normalize line endings):
+
+| Donor under `src/hlt_classification/cms2jc2_response/` | SHA-256 |
+| --- | --- |
+| `c_diagnostic_generation.py` | `59a8ca4069e6e03511421778bb724b077fdc1b9f38297632907352d0754c0050` |
+| `topology.py` | `f7c9f19a74830e7321068ccd6dad8af1c948c3fa0832a48c5a4924e483fa578a` |
+| `c_diagnostic_worker.py` | `2e3e70722a42b21a7e302fd01efe74e673e9b7ee159577497202de2d308dde00` |
+| `dev_parallel.py` | `7185b56220a78491c6339924ff22ac50e21dadd5f66390407a19d75de9c9c099` |
+| `c_accounting_audit.py` | `891b3b7b038ed60a59e741cd07f61530ac086708299854391966b141dff23f0f` |
+
+Parity tests cover frozen continuous generation given identical free states,
+no observed-continuous-value leakage into fixed prediction, canonical codec
+closure, real process execution, ordinary full-population historical replay,
+and tiny ROOT data through immutable reports. The new observed-topology plan
+and contract declare all intentional differences; no new licensing impact.
+Local validation: 13 new focused tests passed; combined response regression
+167 passed, with the unrelated long 33-fit production integration deselected.
+Real SPORC acceptance remains a separately queued requirement.
+
+## 2026-09-25: read-only frozen-C momentum accounting
+
+Repository-local donor: `0c3682bbb9a4c57b0f632574f878c43e863faa5c`.
+New `cms2jc2_response/c_accounting_audit.py` consumes the existing
+`dev_diagnostics.Histograms` payload and `c_diagnostic_metrics.Counters`
+schemas, reuses development receipt/registration authentication and the
+historical floating-moment replay comparison. No generator traversal or
+scientific kernel is copied or modified. The dev CLI adds `c-audit` only;
+existing frozen-C integration fixtures exercise read-only accounting.
+New pure accounting tests cover ratios, empty jets, unknown charge bounds,
+split/fallback denominators, inventory-not-occupancy and corrupt sums.
+Additive stdout-only DEV_C_ACCOUNTING_AUDIT/v1 does not modify the donor reports.
+No external data, models, weights or new training artifacts are copied.
+
+## 2026-09-24: frozen CMS2JC2 C diagnostic
+
+Repository-local donor: `5f8fecc8013a2439fb725198487dc5899246ab94`.
+`cms2jc2_response/c_diagnostic_generation.py` copies the traversal from
+`response.Generator` and reuses `residuals.sample`, RNG, features and topology.
+Production `response.py` and `residuals.py` are unchanged. FULL replay is checked
+against the production generator on every evaluated jet-replica. Other variants
+are explicitly diagnostic interventions, not version-compatible fitted models.
+`c_diagnostic.py` reuses development campaign/restart authentication patterns;
+`c_diagnostic_worker.py` reuses frozen development readers, histograms, plotting,
+publication and receipts. `c_diagnostic_metrics.py` and `c_diagnostic_results.py`
+add bounded counters/display. The existing dev CLI, worker and campaign dispatch
+are extended without changing old task definitions. Existing submission and
+Slurm worker files are reused unchanged. Tests reuse science particles and tiny
+ROOT fixtures. No external donor, weights or raw files are copied into Git.
+DEV_C_DIAGNOSTIC/REUSE/ACCEPTANCE/SHARD/REPORT/SUMMARY v1 contracts bind the
+fresh tier3 study; completed original de9890b2 C_L remains a read-only donor.
+
+## 2026-09-24: CMS2JC2 CPU36 tier3 execution profile
+
+Repository-local donor: `0560c6db42a43fc5ddca22ef7bbf5407b64fa933`.
+Reuse `cms2jc2_response/dev_parallel.py`, `dev_restart.py`, `dev_campaign.py`,
+`dev_worker.py` and `scripts/cms2jc2_response_dev.py` from the CPU64 implementation.
+Generalize only registration/dispatch to a separate 36-CPU tier3 profile;
+retain original CPU64 artifact definitions and the legacy 16-CPU path.
+Tests extend `test_cms2jc2_response_cpu64.py`, including its original development
+and science fixtures. No external donor, raw data, models or weights copied.
+New DEV_STAGE36/DEV_CPU36_EXECUTION/DEV_CPU36_REUSE v1 contracts bind fresh
+execution. Exact read-only confirmation reuse remains from the original
+`de9890b22c7506c58172f20a4ab71e1b85ba5a18` development study; no scientific
+matching, sampling, response or diagnostic definitions changed.
+
+## 2026-09-24: CMS2JC2 CPU64 chunked preparation
+
+Repository-local implementation baseline:
+`a43c6ef7a00a3d0cc470a4f2be66ea1f5ce3f6f9`. Original development donor pin:
+`de9890b22c7506c58172f20a4ab71e1b85ba5a18`.
+New `cms2jc2_response/dev_parallel.py` reuses `dev_data.sample_stream`,
+`response.collect`, `records.Reservoir`, and the process-pool pattern from
+`dev_worker.py`; `combine_records` is extracted from that worker without
+changing record semantics. New `dev_restart.py` reuses `dev_campaign.py`
+source/import/receipt validation and its existing task/submission machinery.
+No external donor code, models, or weights are copied. The matcher, native
+readers, features, sampling rules, models and diagnostic definitions remain
+unchanged; all non-execution source hashes are checked on confirmation reuse.
+
+Tests reuse the development population fixture and science particle fixtures,
+plus the existing real-ROOT end-to-end fit/evaluation test. Additive
+DEV_STAGE64, DEV_CPU64_EXECUTION and DEV_CPU64_REUSE v1 contracts distinguish
+the opt-in 64-CPU comparison; legacy DEV_STAGE v1 remains unchanged. The old
+SEARCH confirmation and preparation products are read-only metadata donors,
+not imported fit results or authority to modify their Slurm jobs.
+
+## 2026-09-23: separate K2 100k/50k short-ladder debug pilot
+
+Repository-local baseline/donor: `c891da0d45dd3251dea9ea72df975bb96bae3570`.
+Reuse K2 campaign/source/submission/execution/runtime/parity and thin queue
+interfaces. New `concat_k2_pilot.py` owns the opt-in recipe; new
+`concat_k2_pilot_data.py` adapts `concat_k2_data.py` RAM construction and
+`split_registry.py` quota/mask containers to authenticated parent-row subsets.
+Matching/data/view producer files themselves are unchanged. Original compact
+matching donor remains `1f9306504dfd040c9c22e0a89829d277d1ff2194`.
+`salience_learned_training.py` gains an exact opt-in pilot schedule with no
+changes to default callers. Fixtures reuse `test_jetclass2_delphes.py`,
+`test_jetclass2_concat_k2.py`, `test_jetclass2_concat_k2_source.py`,
+`test_jetclass2_concat_k2_memory.py`, `test_jetclass2_concat_k2_reuse.py`,
+`test_jetclass2_dzfix_fusion_chain.py`.
+No external donor code or checkpoints copied. Pilot launch/campaign v8,
+training report v3, GPU acceptance v7, population v1 isolate the smaller
+study. Existing v7 full-size registration and other campaigns remain unchanged.
+
+## 2026-09-23: CMS2JC2 isolated CPU development study
+
+Repository-local baseline: `c891da0d45dd3251dea9ea72df975bb96bae3570`.
+No external donor code copied. New `cms2jc2_response/dev_{data,campaign,
+submission,worker,diagnostics}.py` reuse the namespace's `audit.py`, `splits.py`,
+`readers.py`, `bridge.py`, `association.py`, `features.py`, `records.py`,
+`parallel.py`, `families.py`, `response.py`, `metrics.py`, `evaluation.py`,
+`measurement.py`, `provenance.py`, `storage.py`, `contracts.py`, `assumptions.py`
+and underlying keyed RNG, topology and residual modules. Submission journaling
+adapts `submission.py`; the CPU worker adapts
+`sbatch/run_cms2jc2_response_cpu.sh`. Tiny ROOT test fixtures are reused from
+`tests/test_cms2jc2_response_end_to_end.py` and particle fixtures from
+`tests/test_cms2jc2_response_science.py`.
+
+Read-only RC metadata donor is the completed preparation at
+`f966dd804ed9ca8ca93c9c3227d1a7f036ef4434`, not its models or old JC2 inputs.
+CMS audit/split/schema/label semantic hashes must still match before reuse.
+New DEV_* v1 contracts isolate smaller exploratory samples/diagnostics from
+production gates. No classifier, matching, response-family or old queue code
+is changed. Existing jobs remain source-pinned to their original worktrees.
+
+## 2026-09-23: K2 tier3 long-walltime execution policy
+
+Repository-local baseline: `20358f5568a2a5d42c8849ca99439bc435122f26`.
+Execution evidence: batch-128 source `11ff05dff72224ff365e3873c2731d79a802780d`,
+SPORC preflight 21770762 (memory probes passed; 72.91h projection exceeded
+23h guard). Reuse `concat_k2_campaign.py`, `concat_k2_execution.py`,
+`concat_k2_runtime.py`, `concat_k2_submit.py`, and the existing CLI/queue helper;
+no external source is copied. Adapt existing K2 registration/source/reuse tests
+and add `tests/test_jetclass2_concat_k2_walltime.py` for 96h-tier3 admission,
+95h acceptance, unchanged short-job portability and exact TimeLimit rejection.
+
+Original preparation donor remains
+`1f9306504dfd040c9c22e0a89829d277d1ff2194`; the importer additionally recognizes
+fresh v7 donors, without accepting nested imports or historical GPU gates.
+Matching/data/view producers and their source fingerprints are not changed.
+Launch/campaign v7, GPU acceptance v6 and execution policy v2 distinguish the
+new resource envelope. Model/training code, batch 128, scientific seeds and
+other campaigns are unchanged. New real SPORC acceptance remains required.
+
+## 2026-09-23: dzfix fusion tier3 long-fit registration
+
+Repository-local baseline/donor: `20358f5568a2a5d42c8849ca99439bc435122f26`,
+the 21770778 debug preflight. Adapted `dzfix_fusion_chain.py`,
+`dzfix_fusion_runtime.py`, `dzfix_fusion_submit.py`, the fusion CLI/queue/worker
+and existing fusion contract tests. Added tier3 scheduler/runtime regression
+tests. Reused `execution.execution_site("sporc_a100")` without modifying shared
+site code. No model, training kernel, external code or weights copied.
+Launch/campaign v6 and acceptance v4 separate the tier3 72-hour registration
+from debug; source-import v3 and all matching producer hashes are unchanged.
+K2 and salience campaigns are not edited. See HANDOFF for test/remote evidence.
+
+## 2026-09-23: dzfix fusion strict parity and layout-preserving offload
+
+Failed execution baseline: `b35fbda64d2d823a9eb9c5592017074db58d6ac8`
+(SPORC preflight 21765886). Repository-local donor:
+`91be01940f814e1ea7a8a460b9694f0148f0d024`, specifically
+`src/hlt_classification/jetclass2_delphes/concat_k2_model.py` (scoped strict
+backend and physical-span saved-tensor storage), `concat_k2_parity.py`
+(bounded early real-train diagnostic pattern), and
+`tests/test_jetclass2_concat_k2_parity.py` (failure-before-cache tests).
+Adapted into `dzfix_fusion_model.py`, new `dzfix_fusion_parity.py`, and fusion
+tests. The sampler uses salience `load_assignments` / `build_view`, not K2
+maps, views or batch policy. No K2/shared preparation files are changed.
+No external source or scientific checkpoints were copied.
+
+Execution contracts: fusion launch/campaign v5, acceptance v3, early parity
+v1; matching source-import stays v3. Production remains batch 256. Local
+installed Weaver 0.5.3 is an isolated test dependency, not vendored code.
+
+## 2026-09-23: explicitly registered K2 physical batch 128
+
+Repository-local baseline/donor: `91be01940f814e1ea7a8a460b9694f0148f0d024`,
+the user-reported 21768860 preflight. Adapt `concat_k2_campaign.py`,
+`concat_k2_model.py` probe policy, `concat_k2_runtime.py` and the K2 queue
+helper; add opt-in batch overrides to `salience_learned_training.py` while
+preserving legacy defaults/report layout. No training loop, Weaver source,
+model weight or external code is copied. K2-only versions distinguish the
+new recipe/acceptance; preparation import additionally admits fresh v6 donors.
+
+Original matching donor remains `1f9306504dfd040c9c22e0a89829d277d1ff2194`.
+Matching/data/view producer files and hashes are untouched by this block.
+Tests adapt existing campaign/memory/reuse fixtures and add 300-row physical
+CE/KD batch-boundary, teacher-join, final-partial-batch, legacy-default and
+batch-evidence rejection tests in `test_jetclass2_concat_k2_batch128.py`.
+Real SPORC full batch-128 acceptance remains required before science release.
+
 ## 2026-09-22: K2 deterministic parity and layout-preserving saved tensors
 
 Repository-local donor/baseline: `49516092a646cfe21f7bb1377b07a142161eb3d2`,
@@ -20,6 +947,28 @@ installed into an isolated scratch directory for additional local validation;
 no Weaver/PyTorch source was vendored, no external weights imported, and no
 third-party license/attribution changes were introduced. Results and the
 remaining SPORC acceptance boundary are recorded in `docs/HANDOFF.md`.
+
+## 2026-10-05: exact final-direct node-failure recovery adapter
+
+Scientific donor: `fd1c05786287c57b080b2d229dd64664f830a571`.
+New adapter: `src/hlt_classification/jetclass2_delphes/dzfix_fusion_recovery.py`,
+with thin CLI/worker and queue helper. No scientific donor files are copied or
+edited. The new CLI imports these original checkout modules at execution:
+
+- `jetclass2_delphes/dzfix_fusion_chain.py`, `dzfix_fusion_runtime.py`, and
+  `dzfix_fusion_submit.py`: original campaign, gate, training/publication and
+  exact allocation checks;
+- `jetclass2_delphes/contracts.py`, `jetclass2_delphes/submission.py`,
+  `data/cache_contracts.py`, `scouting/hcwdl_exact_dag_submission.py`, and
+  `scouting/hcwdl_recovery.py`: original hashing, immutable publication and
+  guarded exact-DAG submission;
+- `sbatch/jetclass2_delphes_common.sh`: original SPORC environment setup;
+- `tests/test_jetclass2_dzfix_fusion_chain.py`: reusable local cache fixtures
+  for the recovery tests (not a production import).
+
+The new versioned recovery artifacts govern only a three-task restart-zero
+execution exception; scientific contracts and original pinned source remain
+unchanged. See `docs/contracts/JETCLASS2_DZFIX_FUSION_RECOVERY.md`.
 
 ## 2026-09-22: authenticated K2 compact-assignment reuse
 
@@ -929,3 +1878,26 @@ third-party license/attribution impact
 
 Do not migrate checkpoints, caches, logs, run registries, historical campaign
 IDs, unrelated campaign packages, old handoffs, or broad script collections.
+
+## 2026-10-02: literature-inspired offline-only pilot
+
+No external donor or `Fresh_check` runtime dependency. New implementation lives
+under `src/hlt_classification/literature_proxy/`; it does not reuse any learned
+CMS response, calibration map, or generated proxy particles. In-repository
+interfaces reused from donor commit `41a59b644f1fa4398fc022e06ff88ab16f5fb5d9`:
+
+| Donor file | Local SHA-256 at inspection | Retained semantics |
+| --- | --- | --- |
+| `cms2jc2_response/bridge.py` | `c3a3e9e810996899894390f8733c5c6ac547599fecaf323a3415c137d7db9dae` | Physical `Particles`, wrapped phi, physical p4 reconstruction; no fitted response |
+| `data/cache_contracts.py` | `004aef8e8bbdf6ce513479024d4a119f92277fca3e359f977a5f4022d8e0d7dc` | Canonical hashes, deterministic NPZ, immutable atomic publication |
+| `jetclass2_delphes/split_registry.py` | `fd2246185b042de3e255c5073ccd75c47d687a9428139d22cb6fac32aeace911` | Existing authenticated train membership, without resplitting |
+| `jetclass2_delphes/inventory.py` | `998323e064d10916268f0ab2e4ea833d2cd7a568eafde259611d92ce6b98e605` | Per-source ROOT byte/schema/cycle authentication |
+
+Paths above are relative to `src/hlt_classification/`. The new offline adapter
+retains the bridge's explicit unknown PID and unavailable-error policy, but
+uses native JetClass2 GeV/mm/sign/PV semantics directly instead of importing a
+CMS/JC2 fitted compatibility review. The new reader deliberately does not use
+`DatasetReader`, which also reads HLT arrays. No third-party source was copied;
+literature citations motivate mechanisms, not measured parameter values.
+Focused replay, mask, physics-invariant, native ROOT, and artifact tests reside
+in `tests/test_literature_proxy*.py`; execution evidence is in `docs/HANDOFF.md`.
