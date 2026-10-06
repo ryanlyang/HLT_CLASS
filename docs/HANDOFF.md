@@ -1,5 +1,61 @@
 # Current Handoff
 
+## 2026-10-06: freeze the approved CONTEXT_V1 recipe for 2.25M generation
+
+The user approves the completed context pilot and requests full generation.
+User-supplied Tigris evidence: job **225085**, COMPLETED 0:0 in **2m09s**,
+20,000 training jets, exact process replay, mean **38.0021** particles/jet,
+343,888 transformed eligible tracks, raw inverse scaled error **3.84e-15**
+and new-frontend inverse error **4.87e-7**. This supersedes the earlier pilot's
+pending-remote-validation note below; it does not demonstrate KD improvement.
+
+Added the [full production plan](plans/JETCLASS2_LITERATURE_CONTEXT_PRODUCTION_PLAN.md),
+[versioned contract](contracts/JETCLASS2_LITERATURE_CONTEXT_PRODUCTION.md),
+`literature_context_production/`, thin CLI, dry-first queue helper and Slurm
+worker, plus focused tests. The approved pilot commit/spec hash and its saved
+physical CONTEXT outputs are authenticated. The unchanged low-noise kernel
+is explicitly composed with the unchanged nonlinear context transform; the
+count calibration and keyed randomness are reused without refitting.
+
+Exactly **1M train / 250k validation / 1M test**, with the existing TRAIN_1M
+registry, offline source and pairing identities. A fresh persistent sibling
+root is mandatory. The complete Tigris DAG is submitted in one execution:
+production-worker preflight -> generation array -> finalizer. Generation is
+capped at **16 x 36 CPUs**, 64 GiB and 2h per element, CPU-only. Preflight checks
+exact saved CONTEXT replay, real resource measurements and budget estimates
+before releasing generation. No additional manual submission after it passes.
+
+New `JC2_CONTEXT_PRODUCTION_*/v1` manifests bind the required unclipped
+17-input asinh/log1p tracking representation. Physical banks remain lossless
+and include no construction ancestry or latent keys as model inputs. Final
+test is authorized for materialization only, never evaluation or tuning.
+Role releases, checksums, immutable attempts, exact scheduler identities and
+missing-shard recovery preserve prior evidence. Default budget is 20 GiB plus
+2 GiB headroom, subject to fresh operator quota/persistence confirmation.
+
+All donors are internal at **6cb5f32ab6e8d179f846f0cfeb4511ef1a0b6ab4**, listed
+in `LEGACY_SOURCE_MAP.md`. Old context/pilot equations, NOISE_V3 production,
+CMS proxies, Oscar copies, classifier campaigns and unrelated user edits are
+unchanged. No commit, push, remote submission or full dataset creation was
+performed in this implementation step. Installed-Weaver parity is not relevant
+to this generation-only change; the new production-worker Tigris preflight
+remains to be run and is not replaced by local synthetic tests.
+
+Local evidence: **99 focused tests pass** (32 new production tests, 24 original
+production regressions, 14 context kernel/campaign tests and 29 original v2/v3
+kernel tests). Synthetic ROOT fixtures with valid tracking uncertainties exercise
+nontrivial saved-pilot -> raw reader -> context -> lossless writer parity, not
+just the unchanged partial-tracking case. Approval/source drift, wrong input
+encoding, broken inverse, sealed test, immutable releases, corruption, storage
+and exact scheduler/array recovery checks pass. Both Bash syntax checks, CLI
+help, new documentation links and scoped whitespace checks pass. Matplotlib/
+Pyparsing deprecation warnings remain from the existing plotting environment.
+
+Next: commit/push the scoped additions, create the exact pinned Tigris worktree,
+confirm available persistent quota, review the full dry plan, then execute the
+helper with its exact plan hash. Operator entry points are in the plan. No
+new recipe tuning, classifier training or Oscar migration is included.
+
 ## 2026-10-06: lower-noise, context-dependent literature pilot
 
 Implemented the [context mechanism pilot plan](plans/JETCLASS2_LITERATURE_CONTEXT_PILOT_PLAN.md)

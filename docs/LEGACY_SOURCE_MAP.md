@@ -1,5 +1,34 @@
 # Legacy Donor-Source Map
 
+## 2026-10-06: frozen CONTEXT_V1 full dataset production
+
+Internal donor checkout **`6cb5f32ab6e8d179f846f0cfeb4511ef1a0b6ab4`**.
+Separate `literature_context_production/` package and wrappers; no old response
+kernel, dataset, input transform or classifier modified. No external donor code
+or `Fresh_check` runtime imports. New `JC2_CONTEXT_PRODUCTION_*/v1` contracts
+retain the old pilot and NOISE_V3 namespaces without relabelling artifacts.
+
+| Donor paths | Reuse/adaptation |
+| --- | --- |
+| `literature_proxy_production/campaign.py`, `contracts.py`, `storage.py` | Frozen evidence, source, quota, immutable attempts and reservations; new namespace and exact approved context pilot binding |
+| `literature_proxy_production/population.py` | Same metadata population, file-local shards, offline ROOT reader and original identity/RNG keys |
+| `literature_proxy_production/engine.py`, `worker.py` | Bounded ordered processes, actual production-reader/writer preflight; explicitly compose unchanged low-noise and context kernels and check inverse integrity |
+| `literature_proxy_production/output.py`, `submission.py` | Role manifests, exact array IDs, durable submit journals, full DAG and same-source missing-shard recovery; require context recipe/input encoding |
+| `literature_proxy_production/codec.py` | Imported unchanged lossless physical-bank codec; no old scientific artifact identity reused |
+| `literature_context/kernel.py`, `transform.py`, `campaign.py`, `worker.py` | Import frozen equations, input encoding, approved pilot authentication and saved CONTEXT endpoints without edits |
+| `literature_proxy_v3/inputs.py`, `contracts.py`; v1/v2 parent modules | Completed pilot ancestry, original full-precision COUNT38 rates and physical evidence |
+| `cms2jc2_production/population.py`, `contracts.py`; `literature_proxy/population.py` | Existing TRAIN_1M/250k-validation/1M-test metadata selection and raw offline conversion, not CMS-fitted response generation |
+| `cms2jc2_response/bridge.py`, `readers.py`, `measurement.py`; `jetclass2_delphes/inventory.py`, `split_registry.py`; `data/cache_contracts.py` | Physical validation, authenticated source reads, measured resources, tree/entry identities and artifact hashing |
+
+Package paths above are under `src/hlt_classification/`. Thin wrappers adapt
+`scripts/jetclass2_literature_proxy_dataset.py`,
+`scripts/queue_jetclass2_literature_proxy_dataset.sh`, and
+`sbatch/run_jetclass2_literature_proxy_dataset.sh` into the corresponding
+`literature_context_dataset` files. `tests/test_literature_context_production.py`
+adapts `tests/test_literature_proxy_production.py`, reuses the original completed
+v1/v2 synthetic ROOT pilot fixtures, and adds context-specific approval,
+composition, representation, inverse and namespace checks.
+
 ## 2026-10-06: lower noise and context coupled tracking pilot
 
 Internal donor checkout **`0a1013e9fa0571333242871b7cc34b2dfe0ba464`**.
