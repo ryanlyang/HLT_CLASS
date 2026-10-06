@@ -1,5 +1,47 @@
 # Current Handoff
 
+## 2026-10-06: CONTEXT_V1 copied to Oscar; fresh 100k/50k ladder implementation
+
+User-reported transfer verification passed for 210 shards, 2,341 physical blocks
+and 186 offline ROOT files, including the copied inventory/profile/pilot evidence.
+Manifest `2ec2c933a37f50bb85e83577b9c1cf9d31c35a6e0be42089f0088ae62c485efb`:
+1M train / 250k validation / 1M test. Test was hashed as opaque bytes, not decoded
+or evaluated. CONTEXT data are in
+`/oscar/home/rlyang/datasets/literature_context_v1_2250k_4f473c3e_r1`;
+offline is reused from the verified NOISE_V3 transfer, not copied again.
+
+Implemented the [Oscar comparison plan](plans/JETCLASS2_CONTEXT_OSCAR_100K_DIRECT_COARSE_PLAN.md)
+and [versioned contracts](contracts/JETCLASS2_CONTEXT_OSCAR_LADDER.md): relocated
+`literature_context_consumer.py`, `cms_proxy_ladder/context.py` and
+`context_inputs.py`, explicit shared release/foundation/cache/gate/submission
+dispatch, thin `jetclass2_context_ladder.py` and dry-first queue helper, plus
+focused consumer/campaign tests. Internal donor and exact inspected hashes are
+recorded in `LEGACY_SOURCE_MAP.md` (donor commit `4f473c3e97ee3270cec520914477dfe9a38728ab`).
+
+Fresh label-blind 100k/50k selection and SALIENCE_PT_LINEAR assignments; nine
+fresh fits (three controls, direct KD, five coarse stages), five reducers and
+two reporting jobs. New shared asinh/log1p tracking encoding applies to **all**
+models and views. Frozen generator/transform, old reader/frontend, existing
+datasets and old campaigns are unchanged. No dense branch or final-test job.
+The context-only result cannot isolate the mechanism against historical NOISE_V3;
+the plan explicitly distinguishes it from a matched LOW_NOISE control experiment.
+
+Gate is authentication -> foundation -> genuine Oscar L40S preflight. It checks
+installed-Weaver forward/gradient parity, CE and KD acceptance, full selected
+cache and timing/memory bounds. Science is a separate exact dry/live plan.
+Live submission has a durable exclusive claim, sanitized Slurm environment,
+site feasibility probes and exact-ID journals. No automatic followup/cancellation.
+
+Validation: 34 new context consumer/campaign tests and 63 regression tests for
+existing proxy/literature ladder and followup paths passed (97 total). Synthetic
+relocated ROOT -> current context caches ->
+real CPU CE/KD kernel passed using a toy model; this is not Weaver/GPU evidence.
+CLI help and Bash syntax checks passed. Warnings are upstream Matplotlib/Pyparsing
+deprecations. No remote commands, jobs, git commits or pushes were made.
+Next: commit/push the reviewed changes, create a clean pinned
+Oscar worktree and dry-review/submit the three gate jobs. Real Oscar acceptance
+and measured science admission remain outstanding.
+
 ## 2026-10-06: freeze the approved CONTEXT_V1 recipe for 2.25M generation
 
 The user approves the completed context pilot and requests full generation.

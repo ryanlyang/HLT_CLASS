@@ -33,6 +33,9 @@ def _prepare_source(arguments) -> RamBlock:
     )
     offsets, features, vectors, identities, labels = [0], [], [], [], []
     release = foundation["release"]
+    make_inputs = build_inputs
+    if foundation.get("schema_version") == 3:
+        from .context_inputs import build_inputs as make_inputs
     for row in iter_paired(
         release, release_root=Path(foundation["release_root"]), role=role,
         source_file_index=tuple(source_indices),
@@ -47,7 +50,7 @@ def _prepare_source(arguments) -> RamBlock:
             identity=row.identity, proxy=row.proxy, offline=row.offline,
             coordinate=coordinate, mapping=mapping,
         )
-        transformed = build_inputs(view, capacity=foundation["inputs"]["capacity"])
+        transformed = make_inputs(view, capacity=foundation["inputs"]["capacity"])
         features.append(transformed.features)
         vectors.append(transformed.vectors)
         offsets.append(offsets[-1] + len(view))

@@ -68,7 +68,7 @@ def _source(project: Path, commit: str) -> None:
     validate_source_checkout(Path(project), expected_commit=commit)
 
 
-def source_lock(project: Path, commit: str, *, literature: bool = False) -> dict:
+def source_lock(project: Path, commit: str, *, literature: bool = False, context: bool = False) -> dict:
     _source(project, commit)
     root = Path(project).resolve()
     package = sorted((root / "src/hlt_classification/cms_proxy_ladder").glob("*.py"))
@@ -78,6 +78,11 @@ def source_lock(project: Path, commit: str, *, literature: bool = False) -> dict
         files += [root / name for name in extra]
         for folder in ("literature_proxy_production", "literature_proxy", "literature_proxy_v2",
                        "literature_proxy_v3", "jetclass2_delphes", "cms2jc2_production", "cms2jc2_response"):
+            files += sorted((root / "src/hlt_classification" / folder).glob("*.py"))
+    if context:
+        from .context import SOURCE_FILES as extra
+        files += [root / name for name in extra]
+        for folder in ("literature_context", "literature_context_production"):
             files += sorted((root / "src/hlt_classification" / folder).glob("*.py"))
     result = {}
     for path in files:
@@ -484,6 +489,9 @@ def create_oscar_direct_coarse_gate(
 
 def validate_gate(spec: dict, *, check_source: bool = False) -> str:
     version = spec.get("schema_version")
+    if version == 8:
+        from .context import validate_gate as validate_context_gate
+        return validate_context_gate(spec, check_source=check_source)
     if version == 7:
         from .literature import validate_gate as validate_literature_gate
         return validate_literature_gate(spec, check_source=check_source)
@@ -646,6 +654,9 @@ def validate_gate(spec: dict, *, check_source: bool = False) -> str:
 
 
 def validate_profile(profile: dict, *, foundation: dict, spec: dict) -> str:
+    if spec.get("schema_version") == 8:
+        from .context import validate_profile as validate_context_profile
+        return validate_context_profile(profile, foundation=foundation, spec=spec)
     if spec.get("schema_version") == 7:
         from .literature import validate_profile as validate_literature_profile
         return validate_literature_profile(profile, foundation=foundation, spec=spec)
@@ -735,7 +746,8 @@ def validate_profile(profile: dict, *, foundation: dict, spec: dict) -> str:
 
 
 def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> dict:
-    literature = spec.get("schema_version") == 7
+    context = spec.get("schema_version") == 8
+    literature = spec.get("schema_version") in (7, 8)
     site = spec.get("measurement_site", spec["execution_site"])
     job_id, cpus, memory_mb = allocation(site)
     workers = spec["workers"]
@@ -749,6 +761,8 @@ def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> di
     environment = installed_environment()
     if literature:
         from .literature import scientific_plan
+        if context:
+            from .context import scientific_plan
         plan = scientific_plan(foundation, foundation_root=foundation_root)
     else:
         plan = (
@@ -786,8 +800,23 @@ def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> di
     started = time.monotonic()
     for cache, temperature in ((train, 2.), (validation_cache, 1.)):
         values = predict(model, cache, device="cuda", temperature=temperature)
+        if context and cache is train:
+            teacher_values = values
         del values
     inference_seconds = time.monotonic() - started
+    measured_pass = report["runtime_seconds"]
+    if context:
+        # Acceptance-only KD smoke on the same U000 caches; not a registered
+        # scientific fit or a teacher checkpoint reusable by science.
+        torch.manual_seed(node["initialization_seed"])
+        kd_model = DelphesParticleTransformer()
+        kd_node = dict(node, node_id="PREFLIGHT_CONTEXT_KD", teacher="PREFLIGHT_U000_CE")
+        kd_report, _ = train_kernel(kd_model, train, validation_cache,
+            node=kd_node, device="cuda", acceptance_passes=1,
+            teacher_probabilities=teacher_values, teacher_identities=train.identities)
+        parity_fields["acceptance_kd_training_report"] = kd_report
+        measured_pass = max(measured_pass, kd_report["runtime_seconds"])
+        del teacher_values, kd_model
     cache_bytes = train.nbytes + validation_cache.nbytes
     gpu_peak = torch.cuda.max_memory_allocated()
     del train, validation_cache, cache, model
@@ -805,11 +834,11 @@ def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> di
     cache_bytes = max(cache_bytes, sum(cache.nbytes for cache in dense))
     del dense
     worst_cache = max(u000_cache_seconds, d050_cache_seconds)
-    train_minutes = max(60, math.ceil((worst_cache + 100 * report["runtime_seconds"]) * 1.75 / 60))
+    train_minutes = max(60, math.ceil((worst_cache + 100 * measured_pass) * 1.75 / 60))
     reduce_minutes = max(30, math.ceil((worst_cache + inference_seconds) * 2 / 60))
     if train_minutes > 2880 or reduce_minutes > 1440:
         raise ValueError("Measured proxy-ladder walltime exceeds registered envelope")
-    if literature and train_minutes > 1440:
+    if literature and not context and train_minutes > 1440:
         raise ValueError(f"Measured training request {train_minutes} minutes exceeds debug's 24h limit; no science admitted")
     transfer = (
         dict(measurement_site=site, site_transfer_policy=DEBUG_PROFILE_TRANSFER)
@@ -832,7 +861,7 @@ def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> di
         train_minutes=train_minutes, reduce_minutes=reduce_minutes,
         cache_budgets=budgets,
         cache_seconds_by_coordinate={"U000": u000_cache_seconds, "D050": d050_cache_seconds},
-        one_pass_seconds=report["runtime_seconds"], inference_seconds=inference_seconds,
+        one_pass_seconds=measured_pass, inference_seconds=inference_seconds,
         cache_bytes=cache_bytes, gpu=gpu_identity(), gpu_peak_bytes=gpu_peak,
         acceptance_training_report=report,
         ram_only_views=True, rolling_resume=False, **population_fields, **transfer, **parity_fields,

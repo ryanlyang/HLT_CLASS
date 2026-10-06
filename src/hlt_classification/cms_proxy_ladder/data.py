@@ -60,6 +60,7 @@ def iter_paired(
     source_file_index: int | tuple[int, ...] | None = None,
 ):
     """Yield exact identity-joined physical endpoints in frozen release order."""
+    _role_code(role)  # Reject sealed roles before reading even a release bank.
     validate_release(release, root=release_root)
     arrays = load_bank(release, root=release_root)
     selected = np.flatnonzero(arrays["role"] == _role_code(role))
@@ -76,7 +77,13 @@ def iter_paired(
     offline_root = Path(release["offline_root"])
     study = load_json(study_root / "study_spec.json")
     literature = release.get("schema_version") == 2
-    if literature:
+    context = release.get("schema_version") == 3
+    if context:
+        from .context import reader
+        from hlt_classification.literature_proxy.population import from_columns
+        consumer = reader(release["request"])
+        inventory, study = consumer.inventory, consumer.study
+    elif literature:
         from .literature import authenticate_dataset
         from hlt_classification.literature_proxy.population import from_columns
         study, inventory = authenticate_dataset(study_root)
@@ -86,11 +93,12 @@ def iter_paired(
     # portable bundle is relocated. Resolve the authenticated import relative
     # to the release-selected study root, not the historical absolute root
     # embedded in the immutable study artifact.
-    inventory_record = study["inventory"] if literature else study["imports"]["inventory"]
-    inventory_path = (Path(inventory_record["path"]) if literature
+    inventory_record = study["inventory"] if literature or context else study["imports"]["inventory"]
+    inventory_path = (Path(consumer.local_references["inventory"]) if context else
+                      Path(inventory_record["path"]) if literature
                       else source_safe(study_root, inventory_record["relative"]))
     if (
-        (not literature and inventory_path.stat().st_size != inventory_record["bytes"])
+        (not (literature or context) and inventory_path.stat().st_size != inventory_record["bytes"])
         or sha256_file(inventory_path) != inventory_record["sha256"]
     ):
         raise ValueError("Proxy-ladder relocated inventory bytes differ")
@@ -108,7 +116,12 @@ def iter_paired(
         path = offline_root / source["path"]
         if path.stat().st_size != source["bytes"] or sha256_file(path) != source["sha256"]:
             raise ValueError("Proxy-ladder offline source bytes differ")
-        with uproot.open(path) as handle:
+        if context:
+            from hlt_classification.cms2jc2_response.readers import authenticated_open
+            opened = authenticated_open(path, source["sha256"])
+        else:
+            opened = uproot.open(path)
+        with opened as handle:
             key, tree = latest_tree(handle)
             if key != source["tree_key"] or tree.num_entries != source["raw_entries"]:
                 raise ValueError("Proxy-ladder offline ROOT tree identity differs")
@@ -125,6 +138,8 @@ def iter_paired(
                 if block_path.stat().st_size != block["bytes"] or sha256_file(block_path) != block["sha256"]:
                     raise ValueError("Proxy-ladder proxy block bytes differ")
                 proxy_values = output.arrays(block_path)
+                if context and sha256_file(block_path) != block["sha256"]:
+                    raise ValueError("Context proxy block changed during reading")
                 entries = arrays["entry"][group]
                 start, end = int(entries.min()), int(entries.max()) + 1
                 raw = tree.arrays(
@@ -148,7 +163,7 @@ def iter_paired(
                     proxy_row = int(arrays["proxy_row"][index])
                     if bytes(proxy_values["jet_identity"][proxy_row]).hex() != identity:
                         raise ValueError("Proxy-ladder release/proxy identity join differs")
-                    if literature:
+                    if literature or context:
                         from hlt_classification.jetclass2_delphes.contracts import row_identity
                         if identity != row_identity(inventory["content_hash"], source["path"], source["tree_key"], entry):
                             raise ValueError("Literature proxy/offline canonical join differs")
@@ -156,7 +171,7 @@ def iter_paired(
                         ordinal=int(index) - role_start,
                         identity=identity, role=role, label=int(labels[local]),
                         proxy=_proxy_particles(proxy_values, proxy_row),
-                        offline=from_columns(columns) if literature else from_jc2(
+                        offline=from_columns(columns) if literature or context else from_jc2(
                             columns, study["review"],
                             keys=tuple(f"offline_native:{item}" for item in range(count)),
                         ),
@@ -227,7 +242,11 @@ def build_foundation(
         raise FileExistsError("Proxy-ladder foundation root must be fresh")
     if type(workers) is not int or not 1 <= workers <= 72:
         raise ValueError("Proxy-ladder foundation workers must be in [1,72]")
-    inputs = input_contract(capacity=capacity)
+    context = release.get("schema_version") == 3
+    make_inputs, make_contract = build_inputs, input_contract
+    if context:
+        from .context_inputs import build_inputs as make_inputs, input_contract as make_contract
+    inputs = make_contract(capacity=capacity)
     identities, offsets, mappings = [], [0], []
     role_offsets = {"train": [0, 0], "validation": [0, 0]}
     max_proxy = max_offline = max_view = 0
@@ -307,13 +326,13 @@ def build_foundation(
             ):
                 raise ValueError("Persistent-proxy endpoint audit differs")
             for view in views.values():
-                build_inputs(view, capacity=capacity)
+                make_inputs(view, capacity=capacity)
             checks += 1
             role_checks += 1
     literature = release.get("schema_version") == 2
-    views_contract = view_contract(literature=literature)
+    views_contract = view_contract(literature=literature, context=context)
     foundation = artifact(
-        "FOUNDATION", version=2 if literature else 1,
+        "FOUNDATION", version=release["schema_version"],
         parents={
             "release": release["content_hash"],
             "matcher": matcher_spec(CANDIDATE)["content_hash"],
@@ -370,7 +389,7 @@ def load_assignments(foundation: dict, *, root: Path, role: str):
 
 def validate_foundation(foundation: dict, *, root: Path, check_bank: bool = True) -> str:
     version = foundation.get("schema_version")
-    if version not in (1, 2):
+    if version not in (1, 2, 3):
         raise ValueError("Unsupported foundation version")
     parents = {
         "release": foundation["release"]["content_hash"],
@@ -380,11 +399,14 @@ def validate_foundation(foundation: dict, *, root: Path, check_bank: bool = True
     }
     digest = validate(foundation, "FOUNDATION", version=version, parents=parents)
     validate_release(foundation["release"], root=Path(foundation["release_root"]))
+    make_contract = input_contract
+    if version == 3:
+        from .context_inputs import input_contract as make_contract
     if (
         foundation["release"]["schema_version"] != version
         or foundation["matcher"] != matcher_spec(CANDIDATE)
-        or foundation["views"] != view_contract(literature=version == 2)
-        or foundation["inputs"] != input_contract(capacity=foundation["inputs"]["capacity"])
+        or foundation["views"] != view_contract(literature=version == 2, context=version == 3)
+        or foundation["inputs"] != make_contract(capacity=foundation["inputs"]["capacity"])
         or foundation["role_counts"] != foundation["release"]["counts"]
         or foundation["mapping_orientation"] != "proxy_slot_to_native_offline_index_or_minus_one"
         or foundation["full_views_persisted"] is not False

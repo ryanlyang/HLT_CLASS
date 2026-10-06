@@ -1,5 +1,27 @@
 # Legacy Donor-Source Map
 
+## 2026-10-06: CONTEXT_V1 relocated Oscar 100k/50k ladder
+
+Internal donor commit `4f473c3e97ee3270cec520914477dfe9a38728ab`.
+No external source or `Fresh_check` runtime imports. SHA-256 values below are
+local donor bytes at inspection (before line-ending conversion in another checkout).
+
+| Donor file | SHA-256 | New surface / retained meaning |
+| --- | --- | --- |
+| `src/hlt_classification/literature_proxy_consumer.py` | `1bd2152aff3febb94c04bf5d0473a0f8da11af8551bb0885391d7c68a1ac692d` | `literature_context_consumer.py`: external-root relocation, identity joins and sealed ordinary reader; new context manifest/recipe/input contract |
+| `src/hlt_classification/cms_proxy_ladder/literature.py` | `316734ea5dd44d3fb738c00e81c3cfb88aeaa41c6456177bb7124ebc1a9d7fd0` | `cms_proxy_ladder/context.py`: source-pinned gate, exact dry/live DAG, fresh fits; Oscar 100k/50k and CE/KD preflight |
+| `scripts/jetclass2_literature_proxy_ladder.py` | `464d417be8c482fe717c25b972a9745e2b12225c5e2f1b6fcb8e9d3e9230c579` | `scripts/jetclass2_context_ladder.py`: thin CLI and saved validation results |
+| `scripts/queue_jetclass2_literature_proxy_ladder.sh` | `1fac627bcdb773cc8cd745c20a7745e59ae3dd9dafe085fa3ad1db1688014c92` | `scripts/queue_jetclass2_context_ladder.sh`: two explicit reviewed phases; Oscar copied roots and clean pushed source |
+| `tests/test_literature_proxy_consumer.py` | `f106089c15dd1e34edff8e9ae1f41393b0bdd790ad6391d3ee37be48a30408cc` | Context relocation, corrupt bytes, swapped IDs, no native-HLT/test reads |
+| `tests/test_literature_proxy_ladder.py` | `d6a717cd3c2afbb0ed0f65b4bf75c0c77a409b530ba62b9b04dd786d14dfaaeb` | Context fresh foundation/cache/DAG and durable submission tests |
+| `src/hlt_classification/literature_context/transform.py` | `5917d13717776200681107adf8415d52828ff20e0d8320c95b8cb78aea26cc59` | Imported **unchanged** through `context_inputs.py`; no generator/inverse retuning |
+
+Shared ladder release/data/cache/gate/production/submission/views dispatch through
+explicit new versions, preserving existing versions. Matching, model, loss,
+schedule and teacher publication code are reused without new scientific equations.
+No third-party license change. Tests and remote-admission status are recorded in
+`docs/HANDOFF.md`; local synthetic acceptance is not a real Oscar GPU run.
+
 ## 2026-10-06: frozen CONTEXT_V1 full dataset production
 
 Internal donor checkout **`6cb5f32ab6e8d179f846f0cfeb4511ef1a0b6ab4`**.

@@ -40,6 +40,9 @@ def release_request(*, study_root: Path, offline_root: Path, literature: bool = 
 
 
 def validate_request(value: dict) -> str:
+    if value.get("schema_version") == 3:
+        from .context import validate_request as validate_context_request
+        return validate_context_request(value)
     if value.get("schema_version") == 2:
         from .literature import validate_request as validate_literature_request
         return validate_literature_request(value)
@@ -79,15 +82,22 @@ def build_release(request: dict, *, output_root: Path) -> dict:
     offline_root = Path(request["offline_root"]).resolve(strict=True)
     study = load_json(study_root / "study_spec.json")
     literature = request.get("schema_version") == 2
+    context = request.get("schema_version") == 3
     backend = output
     counts, domain = request["counts"], request["selection_domain"]
-    if literature:
+    if context:
+        from .context import reader
+        from hlt_classification.literature_context_production import output as backend
+        consumer = reader(request)
+        for role in counts:
+            consumer._shards(role, None)
+    elif literature:
         from hlt_classification.literature_proxy_production import output as backend
         from .literature import authenticate_dataset
         authenticate_dataset(study_root)
     else:
         validate_study(study)
-    if Path(study["data_root"]).resolve() != offline_root:
+    if not context and Path(study["data_root"]).resolve() != offline_root:
         raise ValueError("Requested offline root differs from the proxy study source")
     # Do not call output.completed(): it deliberately scans every receipt and
     # would authenticate final-test blocks after a full production completes.
@@ -99,7 +109,10 @@ def build_release(request: dict, *, output_root: Path) -> dict:
         path = source_safe(study_root, f"shards/{shard['shard_id']}.json")
         if not path.is_file():
             continue
-        receipt = backend.verify_shard(study, load_json(path), physical=False)
+        if context:
+            receipt = consumer._receipt(shard)
+        else:
+            receipt = backend.verify_shard(study, load_json(path), physical=False)
         if receipt["role"] != shard["role"]:
             raise ValueError("Ordinary proxy receipt role differs")
         ordinary[shard["shard_id"]] = receipt
@@ -125,9 +138,17 @@ def build_release(request: dict, *, output_root: Path) -> dict:
         for block in receipt["blocks"]:
             relative = block["relative"]
             path = source_safe(study_root, relative)
+            if context and (path.stat().st_size != block["bytes"] or sha256_file(path) != block["sha256"]):
+                raise ValueError("Context proxy block bytes differ")
             values = backend.arrays(path)
+            if context and (path.stat().st_size != block["bytes"] or sha256_file(path) != block["sha256"]):
+                raise ValueError("Context proxy block bytes differ")
             count = len(values["jet_identity"])
             selected_entries = entries[cursor:cursor + count]
+            if context:
+                expected_ids = list(population.ids(study["population"]["parents"]["inventory"], source, selected_entries))
+                if [bytes(i).hex() for i in values["jet_identity"]] != expected_ids:
+                    raise ValueError("Context block canonical pairing differs")
             if len(selected_entries) != count:
                 raise ValueError("Proxy block/source-entry alignment differs")
             key = (relative, block["sha256"], block["bytes"])
@@ -182,7 +203,7 @@ def build_release(request: dict, *, output_root: Path) -> dict:
     bank_path = root / "release_index.npz"
     _save_npz(bank_path, arrays)
     manifest = artifact(
-        "RELEASE", version=2 if literature else 1,
+        "RELEASE", version=request["schema_version"],
         parents={"request": request["content_hash"], "study": study["content_hash"]},
         request=request,
         study_contract=study["contract"],
@@ -236,7 +257,7 @@ def load_bank(manifest: dict, *, root: Path) -> dict[str, np.ndarray]:
 
 def validate_release(manifest: dict, *, root: Path, check_bank: bool = True) -> str:
     version = manifest.get("schema_version")
-    if version not in (1, 2):
+    if version not in (1, 2, 3):
         raise ValueError("Unsupported proxy-ladder release version")
     digest = validate(
         manifest, "RELEASE", version=version,
@@ -246,6 +267,9 @@ def validate_release(manifest: dict, *, root: Path, check_bank: bool = True) -> 
     counts, domain = manifest["request"]["counts"], manifest["request"]["selection_domain"]
     if version == 2:
         from .literature import validate_release_source
+        validate_release_source(manifest)
+    if version == 3:
+        from .context import validate_release_source
         validate_release_source(manifest)
     if (
         manifest["request"]["schema_version"] != version
