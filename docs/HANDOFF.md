@@ -1,5 +1,58 @@
 # Current Handoff
 
+## 2026-10-06: lower-noise, context-dependent literature pilot
+
+Implemented the [context mechanism pilot plan](plans/JETCLASS2_LITERATURE_CONTEXT_PILOT_PLAN.md)
+and [versioned contract](contracts/JETCLASS2_LITERATURE_CONTEXT.md). This is a
+separate synthetic experiment, not a CMS response fit or a detector-fidelity
+claim. Original NOISE_V3, its completed Oscar copy, and all current classifier
+campaigns remain unchanged. No remote jobs or new production data were created.
+
+The new `literature_context/` package, thin CLI, queue helper and CPU worker
+compare OFFLINE, NOISE_V3, LOW_NOISE and CONTEXT on the same authenticated
+20,000 training jets from the completed COUNT38_V2 pilot. LOW_NOISE uses one
+quarter of V3's added tracking-noise amplitude and half its kinematic-noise
+amplitude. CONTEXT adds six nonlinear d0/dz couplings and two error-scale maps
+conditioned only on output-visible pT, jet-axis radius and local density.
+Drops, merges, PID conversions, charge, validity and ancestry stay fixed;
+CONTEXT preserves LOW_NOISE p4 exactly. All constants are frozen synthetic
+choices, not tuned against classifier outcomes.
+
+The new map has an explicit output-only inverse. This does not recover the
+information removed by the base drops/noise. A separate optional 17-input
+adapter replaces the existing saturated/clipped tracking channels with
+asinh/log1p encodings; original model inputs are not modified. Raw inverse,
+float32 encode/decode/inverse errors, old-input saturation, paired distributions,
+PID counts and observed-density conditional tracking statistics are reported.
+Transformed error fields are encoded scales, not calibrated uncertainties.
+
+New `JC2_LITERATURE_CONTEXT_*/v1` artifacts bind source, completed physical
+parent banks, frozen rates, scope and exact outputs; receipts publish last.
+The dry-first helper requests one Tigris CPU job (16 CPUs, 64 GiB, 2h), checks
+the site and requires the exact reviewed hash before submission. There is no
+automatic followup. Parent physical pilot banks remain on RIT; the transferred
+Oscar production provenance alone is not this pilot's complete input ancestry.
+
+Internal donors are recorded in `LEGACY_SOURCE_MAP.md`, commit
+`0a1013e9fa0571333242871b7cc34b2dfe0ba464`; no external code or Fresh_check
+runtime imports. Changes are additive: package, wrappers, two test modules,
+plan/contract, donor map and this handoff. No old scientific kernel was edited.
+
+Local evidence: 43 focused tests pass (14 new context tests and 29 original
+v2/v3 kernel tests), including real synthetic-parent NPZ/report execution,
+serial/spawn byte replay, inverse/tail/missing-track cases, preserved topology,
+no ROOT reads, artifact corruption and guarded/idempotent submission. Bash
+syntax and CLI help pass. These are local CPU tests, not a real Tigris pilot or
+installed-Weaver parity validation.
+
+Next: commit/push the scoped changes, create a clean pinned Tigris worktree,
+review and submit the single diagnostic pilot. Inspect genuine distributions
+and representation audits before registering a classifier comparison. That
+later experiment must use identical frontend/matching policies and paired
+seeds/budgets across LOW_NOISE and CONTEXT CE/direct/coarse arms. No classifier
+integration, 2.25M generation, validation or final-test inference was implemented
+or authorized in this step. Ladder improvement remains an open hypothesis.
+
 ## 2026-10-05: restore original 312.5-GiB K2 continuation, reuse passed native gate
 
 The user explicitly abandoned the unused 128-GiB attempt and requested the

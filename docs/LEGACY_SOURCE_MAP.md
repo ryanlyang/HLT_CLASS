@@ -1,5 +1,30 @@
 # Legacy Donor-Source Map
 
+## 2026-10-06: lower noise and context coupled tracking pilot
+
+Internal donor checkout **`0a1013e9fa0571333242871b7cc34b2dfe0ba464`**.
+New `literature_context/`, CLI/queue helper and CPU worker are additive.
+No third-party source or `Fresh_check` import. Old NOISE_V3, generator, input
+transforms and datasets remain unchanged; no fitted CMS response is reused.
+
+| Donor paths under `src/hlt_classification/` | Use or adaptation |
+| --- | --- |
+| `literature_proxy_v3/kernel.py` | Adapt independent smearing implementation with tracking amplitude 1 instead of 4 and kinematic amplitude 1 instead of 2; original function remains the noisy control |
+| `literature_proxy_v2/kernel.py`; `literature_proxy/kernel.py` | Exact frozen topology, PID/drops/merges, full-precision calibration validation and original keyed random streams |
+| `literature_proxy_v3/inputs.py`; v1/v2 ancestor input and campaign modules | Authenticate completed training-only parent, physical NPZ endpoints and separate diagnostic ancestry, without reading ROOT |
+| `literature_proxy_v3/campaign.py`, `contracts.py`, `worker.py`, `diagnostics.py` | Adapt single-job dry/live safeguards, source closure, atomic artifact patterns and per-file spawn execution; reuse count reduction and descriptive statistics |
+| `literature_proxy/diagnostics.py`, `worker.py`, `contracts.py`; `data/cache_contracts.py` | Metrics, PDF/CSV, array serialization, sampled process RSS, file/content hashes and immutable publication |
+| `cms_proxy_ladder/inputs.py`, `contracts.py`; `jetclass2_delphes/inputs.py` | Reuse unchanged 17-input physical frontend for saturation audit; optional new four-channel tracking encoding is separately versioned and never installed in an old campaign |
+| `cms2jc2_response/bridge.py`; `jetclass2_delphes/contracts.py` | Physical validity, p4/wrapped angles and safe relative file paths |
+
+Adapted thin wrappers from `scripts/jetclass2_literature_proxy_noise.py`,
+`scripts/queue_jetclass2_literature_proxy_noise.sh` and
+`sbatch/run_jetclass2_literature_proxy_noise.sh`. Tests reuse original synthetic
+particle fixtures and completed v1/v2 pilot fixtures. Context equations and
+inverse are new synthetic benchmark choices, not fitted/literature-derived
+detector parameters. New `JC2_LITERATURE_CONTEXT_*/v1` artifacts preserve all
+original donor schemas and calibration parents.
+
 ## 2026-10-05: restore original-memory K2 continuation without another native gate
 
 Scientific donor: **`c891da0d45dd3251dea9ea72df975bb96bae3570`**, unchanged.
