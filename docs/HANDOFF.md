@@ -1,5 +1,43 @@
 # Current Handoff
 
+## 2026-10-07: automatic CONTEXT_V1 1M science after the existing Oscar gate
+
+User asks to make science follow the already queued foundation/gate jobs.
+The new [operational amendment](plans/JETCLASS2_CONTEXT_1M_FOLLOWUP_PLAN.md)
+replaces only the manual second approval; frozen V1 science is unchanged.
+Original source `9cebdbe133da20f00cc14ec4155bd627accb7e85`, gate jobs
+7083139/7083140/7083141, with full gate hash recorded in the amendment/runbook.
+The pasted queue showed pending jobs. No remote completion is asserted here.
+
+New `context_full_followup.py`, thin CLI and detached Oscar launcher stay
+outside the scientific source snapshot and call the original pinned CLI.
+They wait for authentication, foundation AND GPU preflight COMPLETED/0:0,
+reauthenticate source/ledger/journal, require genuine measured gate outputs,
+dry-review the canonical 16-job 1M/250k DIRECT+COARSE plan, then submit it once.
+Authorization binds exact gate IDs and both sources, L40S/6 CPU/180000 MiB,
+measured fit <=48h/reducer <=24h and final-test seal. No second manual science
+prompt, gate rerun, old-job cancellation, stronger recipe or V2 import.
+
+[Contract](contracts/JETCLASS2_CONTEXT_1M_FOLLOWUP.md):
+`JC2_CONTEXT_1M_FOLLOWUP/v1` operational evidence only. Existing scientific
+versions/source pins remain intact. Exclusive locks and immutable evidence
+prevent duplicate controllers; live claims/journals stop ambiguous retries.
+Background process survives ordinary SSH disconnect, not host/admin cleanup.
+
+Local evidence: **92 tests passed** across the new followup and existing
+literature/correlated followup regressions (5.28s); includes real canonical
+Slurm-plan construction and journal authentication with fake accounting,
+full-gate waiting, missing/failing records, source drift, resource/population
+scope, duplicate/partial submissions and pinned subprocess environment.
+CLI help and Bash syntax pass. No real Oscar, Weaver or GPU run performed;
+these remain the original preflight's required acceptance, not local evidence.
+
+Next: scoped publish, then arm from a separate clean executor checkout using
+the [push-and-arm runbook](JETCLASS2_CONTEXT_1M_FOLLOWUP_RUNBOOK.md). Do not
+also submit MODE=science manually after ARMED. ALL 16 SCIENCE JOBS QUEUED
+means submission, not completed training. Nothing committed/pushed/submitted
+by the local agent.
+
 ## 2026-10-07: unchanged CONTEXT_V1, separate Oscar 1M/250k DIRECT+COARSE
 
 User explicitly chose scaling the existing frozen CONTEXT_V1 dataset instead

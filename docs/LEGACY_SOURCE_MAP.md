@@ -1,5 +1,24 @@
 # Legacy Donor-Source Map
 
+## 2026-10-07: Oscar CONTEXT_V1 1M conditional science followup
+
+Internal donor commit: `9cebdbe133da20f00cc14ec4155bd627accb7e85` (also the
+immutable scientific gate source). No external donor or Fresh_check import.
+
+| Donor path | New use |
+| --- | --- |
+| `src/hlt_classification/literature_ladder_followup.py` | Reuse hash/read, sanitized subprocess environment, exclusive Linux lock and authenticated pinned gate inspector; adapt polling, source binding and immutable publication for the new controller |
+| `src/hlt_classification/correlated_ladder_followup.py` | Separate executor-source binding and explicit measured-resource policy pattern |
+| `scripts/start_jetclass2_correlated_tier3_followup.sh`, `scripts/jetclass2_literature_ladder_followup.py` | Oscar dry/live detached launcher and thin CLI |
+| `tests/test_literature_ladder_followup.py` | Fake scheduler, source-bound orchestration, state machine and real journal-authentication test patterns |
+| `src/hlt_classification/cms_proxy_ladder/context_full.py`, `submission.py` | Unmodified original 1M scientific admission, dry/live CLI and exact journaled submission called as subprocesses |
+| `src/hlt_classification/scouting/hcwdl_authorization.py` | Unchanged exact clean pushed source validator |
+
+New paths: `src/hlt_classification/context_full_followup.py`, corresponding
+CLI/launcher/test and `JETCLASS2_CONTEXT_1M_FOLLOWUP` plan/contract/runbook.
+Old source-hashed gate/plan files are not edited. Concurrent V2 changes remain
+unrelated to this execution amendment.
+
 ## 2026-10-07: unchanged CONTEXT_V1, full 1M/250k Oscar campaign
 
 In-repository donor commit: `779382740cdd44a5120449f02fde4a7719fed298`.
