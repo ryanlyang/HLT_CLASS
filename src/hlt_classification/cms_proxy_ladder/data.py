@@ -76,7 +76,8 @@ def iter_paired(
     study_root = Path(release["study_root"])
     offline_root = Path(release["offline_root"])
     study = load_json(study_root / "study_spec.json")
-    literature = release.get("schema_version") == 2
+    correlated = release.get("schema_version") == 4
+    literature = release.get("schema_version") in (2, 4)
     context = release.get("schema_version") == 3
     if context:
         from .context import reader
@@ -85,6 +86,8 @@ def iter_paired(
         inventory, study = consumer.inventory, consumer.study
     elif literature:
         from .literature import authenticate_dataset
+        if correlated:
+            from .correlated import authenticate_dataset
         from hlt_classification.literature_proxy.population import from_columns
         study, inventory = authenticate_dataset(study_root)
     else:
@@ -116,7 +119,7 @@ def iter_paired(
         path = offline_root / source["path"]
         if path.stat().st_size != source["bytes"] or sha256_file(path) != source["sha256"]:
             raise ValueError("Proxy-ladder offline source bytes differ")
-        if context:
+        if context or correlated:
             from hlt_classification.cms2jc2_response.readers import authenticated_open
             opened = authenticated_open(path, source["sha256"])
         else:
@@ -138,7 +141,7 @@ def iter_paired(
                 if block_path.stat().st_size != block["bytes"] or sha256_file(block_path) != block["sha256"]:
                     raise ValueError("Proxy-ladder proxy block bytes differ")
                 proxy_values = output.arrays(block_path)
-                if context and sha256_file(block_path) != block["sha256"]:
+                if (context or correlated) and sha256_file(block_path) != block["sha256"]:
                     raise ValueError("Context proxy block changed during reading")
                 entries = arrays["entry"][group]
                 start, end = int(entries.min()), int(entries.max()) + 1
@@ -205,12 +208,15 @@ def _limit_worker_threads():
 def _match_sources(arguments):
     release, release_root, role, source_indices, capacity = arguments
     identities, offsets, mappings = [], [0], []
+    matching = match_particles
+    if release.get("schema_version") == 4:
+        from .correlated_views import match_particles as matching
     max_proxy = max_offline = max_view = pairs = 0
     for row in iter_paired(
         release, release_root=Path(release_root), role=role,
         source_file_index=tuple(source_indices),
     ):
-        mapping = match_particles(row.proxy, row.offline)
+        mapping = matching(row.proxy, row.offline)
         identities.append(np.frombuffer(bytes.fromhex(row.identity), np.uint8))
         mappings.append(mapping.astype(np.int32, copy=False))
         offsets.append(offsets[-1] + len(mapping))
@@ -246,6 +252,10 @@ def build_foundation(
     make_inputs, make_contract = build_inputs, input_contract
     if context:
         from .context_inputs import build_inputs as make_inputs, input_contract as make_contract
+    make_view, make_matcher = build_view, lambda: matcher_spec(CANDIDATE)
+    if release.get("schema_version") == 4:
+        from .correlated_views import build_inputs as make_inputs, input_contract as make_contract
+        from .correlated_views import build_view as make_view, matcher_contract as make_matcher
     inputs = make_contract(capacity=capacity)
     identities, offsets, mappings = [], [0], []
     role_offsets = {"train": [0, 0], "validation": [0, 0]}
@@ -312,7 +322,7 @@ def build_foundation(
             if identity != row.identity:
                 raise ValueError("Assignment audit identity differs")
             views = {
-                name: build_view(
+                name: make_view(
                     identity=row.identity, proxy=row.proxy, offline=row.offline,
                     coordinate=name, mapping=mapping,
                 )
@@ -331,17 +341,20 @@ def build_foundation(
             role_checks += 1
     literature = release.get("schema_version") == 2
     views_contract = view_contract(literature=literature, context=context)
+    if release.get("schema_version") == 4:
+        from .correlated_views import view_contract as correlated_contract
+        views_contract = correlated_contract()
     foundation = artifact(
         "FOUNDATION", version=release["schema_version"],
         parents={
             "release": release["content_hash"],
-            "matcher": matcher_spec(CANDIDATE)["content_hash"],
+            "matcher": make_matcher()["content_hash"],
             "views": views_contract["content_hash"],
             "inputs": inputs["content_hash"],
         },
         release=release,
         release_root=str(Path(release_root).resolve()),
-        matcher=matcher_spec(CANDIDATE), views=views_contract, inputs=inputs,
+        matcher=make_matcher(), views=views_contract, inputs=inputs,
         assignments=file_ref(bank_path, root=root),
         role_offsets=role_offsets,
         role_counts=release["counts"],
@@ -389,7 +402,7 @@ def load_assignments(foundation: dict, *, root: Path, role: str):
 
 def validate_foundation(foundation: dict, *, root: Path, check_bank: bool = True) -> str:
     version = foundation.get("schema_version")
-    if version not in (1, 2, 3):
+    if version not in (1, 2, 3, 4):
         raise ValueError("Unsupported foundation version")
     parents = {
         "release": foundation["release"]["content_hash"],
@@ -402,10 +415,15 @@ def validate_foundation(foundation: dict, *, root: Path, check_bank: bool = True
     make_contract = input_contract
     if version == 3:
         from .context_inputs import input_contract as make_contract
+    expected_matcher = matcher_spec(CANDIDATE)
+    expected_views = view_contract(literature=version == 2, context=version == 3)
+    if version == 4:
+        from .correlated_views import input_contract as make_contract, matcher_contract, view_contract as correlated_contract
+        expected_matcher, expected_views = matcher_contract(), correlated_contract()
     if (
         foundation["release"]["schema_version"] != version
-        or foundation["matcher"] != matcher_spec(CANDIDATE)
-        or foundation["views"] != view_contract(literature=version == 2, context=version == 3)
+        or foundation["matcher"] != expected_matcher
+        or foundation["views"] != expected_views
         or foundation["inputs"] != make_contract(capacity=foundation["inputs"]["capacity"])
         or foundation["role_counts"] != foundation["release"]["counts"]
         or foundation["mapping_orientation"] != "proxy_slot_to_native_offline_index_or_minus_one"
@@ -428,6 +446,10 @@ def validate_foundation(foundation: dict, *, root: Path, check_bank: bool = True
                 or _identity_digest(identity) != foundation["identity_sha256"][role]
             ):
                 raise ValueError("Proxy-ladder assignment population differs")
+            if version == 4:
+                for lo, hi in zip(offsets[:-1], offsets[1:]):
+                    if not np.array_equal(mapping[lo:hi], np.arange(hi-lo)):
+                        raise ValueError("Correlated identity mapping differs")
             total += int(np.count_nonzero(mapping >= 0))
         if total != foundation["selected_pairs"]:
             raise ValueError("Proxy-ladder selected pair count differs")

@@ -1,5 +1,60 @@
 # Current Handoff
 
+## 2026-10-07: user freezes CORR_MID; full dataset and SPORC follow-up implemented
+
+User reported Tigris correlated pilot job **228972 COMPLETED (1m43s)** at
+`0667355d8c4d72e48e32c03f2d1540595fe654b7`, then explicitly chose **MID** and
+requested 2.25M production followed by 100k/50k direct/coarse on SPORC, without
+an intermediate CE strength screen. The [active production plan](plans/JETCLASS2_CORRELATED_TRACKING_PRODUCTION_PLAN.md)
+supersedes the older pilot plan's proposed screening/repeated-KD next stage.
+The hoped-for ~1.5-point CE gap and ladder advantage remain unmeasured.
+
+New isolated `correlated_tracking_production/` authenticates that exact pilot
+job/plan/source/receipts, wraps its unchanged CORR_MID kernel and generates from
+raw original dzfix OFFLINE with the same canonical jet/particle RNG identities.
+Same authenticated 1M train / 250k validation / 1M sealed-test membership; no
+CMS fitting, context/NOISE_V3 transformation, topology/PID/p4 changes or new split.
+The new namespace is `JC2_CORRELATED_TRACKING_PRODUCTION_*/v1`; bank encoding,
+immutable publication, checksums, storage reservations and terminal-only
+missing-shard recovery are documented in the [production contract](contracts/JETCLASS2_CORRELATED_TRACKING_PRODUCTION.md).
+
+One exact dry-reviewed Tigris production submission queues preflight, complete
+generation array and finalization. At most 16 x 36 CPUs, 64 GiB/2h per generation
+task, no GPUs. Production preflight uses the actual raw reader/process/writer to
+replay 64 saved training rows before dependencies admit bulk generation. This
+is integrity/resource acceptance, not another strength-selection experiment.
+Fresh persistent destination and current quota attestation are required: the
+default is a 20 GiB output budget plus 2 GiB free headroom. Nothing is deleted.
+
+New `cms_proxy_ladder/correlated.py` and `correlated_views.py`, thin CLI/queue
+helpers and explicit shared version dispatch implement SPORC debug training:
+six fresh fits (HLT, OFFLINE, direct D000, coarse D066/D033/D000), three reducers
+and aggregate/completion = 11 science jobs. No duplicate ascending fits: the
+tracking-only endpoints have exact common topology. Identity pairing is verified
+from p4/PID/charge/masks; intermediate tracking residual amplitude is linear,
+added uncertainty variance quadratic, with no redraw. All arms use the same
+unclipped 17-input asinh/log1p frontend. No offline/latent/construction fields at
+deployable inference and no final-test evaluation. See the [ladder contract](contracts/JETCLASS2_CORRELATED_TRACKING_LADDER.md)
+for new request/foundation/view/input/gate/profile/campaign schema versions.
+
+Internal donors at commit `0667355d8c4d72e48e32c03f2d1540595fe654b7` are listed
+in LEGACY_SOURCE_MAP. Existing proxy/pilot scientific kernels and unrelated
+user work were preserved. Local evidence: **141 tests passed** in the broad
+production/pilot/shared-ladder/follow-up regression run (467.99s), followed by
+**22 passed** in the final updated CORR_MID adapter and shared training-kernel
+check (121.95s; suites overlap). These include exact raw/saved-pilot/process/writer
+replay, all-role synthetic publication, recovery and source guards, poisoned
+test-artifact isolation, noise-variance bridge checks and actual CPU CE/teacher
+probabilities/KD execution using a tiny test model. No performance claims derive
+from the tiny model. Matplotlib/Pyparsing deprecation warnings remain, without
+test failures. Both CLI help commands, three Bash syntax checks, new Python
+parsing, documentation links and scoped whitespace checks passed.
+Remote production-worker acceptance and installed-Weaver/A100 validation for
+this new adapter have **not** been run locally. They remain mandatory gate jobs.
+No commit, push, remote submission, cancellation or existing-data mutation was
+performed during implementation. Next: push exact source and follow the
+[production → SPORC queue runbook](JETCLASS2_CORRELATED_TRACKING_PRODUCTION_RUNBOOK.md).
+
 ## 2026-10-07: correlated tracking 20k diagnostic pilot implemented locally
 
 New isolated `correlated_tracking/` package, CLI, dry-first queue helper and

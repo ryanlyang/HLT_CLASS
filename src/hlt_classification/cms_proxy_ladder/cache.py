@@ -36,6 +36,9 @@ def _prepare_source(arguments) -> RamBlock:
     make_inputs = build_inputs
     if foundation.get("schema_version") == 3:
         from .context_inputs import build_inputs as make_inputs
+    make_view = build_view
+    if foundation.get("schema_version") == 4:
+        from .correlated_views import build_inputs as make_inputs, build_view as make_view
     for row in iter_paired(
         release, release_root=Path(foundation["release_root"]), role=role,
         source_file_index=tuple(source_indices),
@@ -46,7 +49,7 @@ def _prepare_source(arguments) -> RamBlock:
             raise ValueError("Proxy-ladder cache/assignment identity join differs")
         lo, hi = assignment_offsets[row.ordinal:row.ordinal + 2]
         mapping = assignment_mapping[int(lo):int(hi)]
-        view = build_view(
+        view = make_view(
             identity=row.identity, proxy=row.proxy, offline=row.offline,
             coordinate=coordinate, mapping=mapping,
         )

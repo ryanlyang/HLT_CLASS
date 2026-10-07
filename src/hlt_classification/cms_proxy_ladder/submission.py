@@ -77,7 +77,7 @@ def gate_plan(spec: dict) -> dict:
                 mode="gate", spec_path=path, task=task,
                 job_prefix={
                     1: "jc2pxg", 2: "jc2pxd", 3: "jc2pxr",
-                    4: "jc2pxo", 5: "jc2pxq", 6: "jc2pxs", 7: "jc2lvg", 8: "jc2ctxg",
+                    4: "jc2pxo", 5: "jc2pxq", 6: "jc2pxs", 7: "jc2lvg", 8: "jc2ctxg", 9: "jc2crg",
                 }[
                     spec.get("schema_version")
                 ],
@@ -111,6 +111,7 @@ def science_plan(spec: dict) -> dict:
                 project=spec["project_dir"], output_root=spec["campaign_root"],
                 mode="campaign", spec_path=path, task=task,
                 job_prefix=(
+                    "jc2cr" if spec.get("schema_version") == 5 else
                     "jc2ctx" if spec.get("schema_version") == 4 else
                     "jc2lv" if spec.get("schema_version") == 3 else
                     "jc2pxc" if spec.get("schema_version") == 2 else "jc2px"
@@ -157,9 +158,12 @@ def submit(
     gate_authorizations[7] = LITERATURE_GATE
     from .context import GATE_AUTHORIZATION as CONTEXT_GATE, SCIENCE_AUTHORIZATION as CONTEXT_SCIENCE
     gate_authorizations[8] = CONTEXT_GATE
+    from .correlated import GATE_AUTHORIZATION as CORR_GATE, SCIENCE_AUTHORIZATION as CORR_SCIENCE
+    gate_authorizations[9] = CORR_GATE
     required = (
         gate_authorizations[subject.get("schema_version")]
         if mode == "gate" else (
+            CORR_SCIENCE if subject.get("schema_version") == 5 else
             CONTEXT_SCIENCE if subject.get("schema_version") == 4 else
             LITERATURE_SCIENCE if subject.get("schema_version") == 3 else
             DIRECT_COARSE_AUTHORIZATION
@@ -172,10 +176,14 @@ def submit(
         mode == "science" and subject.get("schema_version") == 3)
     context = (mode == "gate" and subject.get("schema_version") == 8) or (
         mode == "science" and subject.get("schema_version") == 4)
-    if execute and (literature or context):
+    correlated = (mode == "gate" and subject.get("schema_version") == 9) or (
+        mode == "science" and subject.get("schema_version") == 5)
+    if execute and (literature or context or correlated):
         from .literature import check_submission_site, submit_claimed
         if context:
             from .context import check_submission_site, submit_claimed
+        if correlated:
+            from .correlated import check_submission_site, submit_claimed
         (validate_gate if mode == "gate" else validate_campaign)(subject, check_source=True)
         check_submission_site(plan)
         return submit_claimed(subject, plan, root)

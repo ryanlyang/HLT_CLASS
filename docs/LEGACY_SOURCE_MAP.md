@@ -1,5 +1,29 @@
 # Legacy Donor-Source Map
 
+## 2026-10-07: frozen CORR_MID production and SPORC direct/coarse
+
+Internal donor commit `0667355d8c4d72e48e32c03f2d1540595fe654b7`.
+No external code copied or `Fresh_check` runtime import. Historical pilot kernel,
+recipe, frontend and artifacts are unchanged; new versioned adapters select MID.
+
+| Donor paths | Reuse/adaptation |
+| --- | --- |
+| `literature_context_production/{campaign,contracts,population,storage,submission,engine,output,worker,codec}.py` | New `correlated_tracking_production/`: 2.25M membership, bounded process output, reservations, exact array identity, full DAG and missing-only recovery; new namespace and saved CORR_MID replay |
+| `correlated_tracking/{campaign,contracts,kernel,worker}.py` | Historical pilot evidence and unchanged physical generator; new evidence module authenticates known job 228972, source and all output hashes |
+| `literature_proxy_v2/inputs.py`, `literature_proxy/population.py`, `cms2jc2_production/population.py` | Original completed-parent evidence, exact raw particle keys and existing registry/split membership; no CMS-fit generation |
+| `literature_context/transform.py`; `literature_proxy_production/codec.py` | Import unchanged common asinh/log1p frontend and lossless physical codec, never apply context degradation |
+| `cms_proxy_ladder/{literature,context,views}.py` | New `correlated.py` original-storage SPORC adapter and `correlated_views.py` verified identity matching/noise-amplitude bridge; six fits and three reducers |
+| `cms_proxy_ladder/{release,data,cache,gate,production,submission}.py` | Explicit new-schema dispatch while preserving old campaign semantics; shared CE/KD/cache/report kernels retained |
+| `scripts/jetclass2_literature_context_dataset.py`, `scripts/queue_jetclass2_literature_context_dataset.sh`, `sbatch/run_jetclass2_literature_context_dataset.sh` | Thin production CLI/environment/queue wrappers under `correlated_tracking_dataset` names |
+| `scripts/jetclass2_context_ladder.py`, `scripts/queue_jetclass2_literature_proxy_ladder.sh` | Thin CORR_MID SPORC CLI and separately reviewed gate/science helper |
+| `tests/test_literature_context_production.py`, `tests/test_context_ladder.py`, `tests/test_literature_proxy_v2_campaign.py`, `tests/test_jetclass2_delphes.py`, `tests/test_jetclass2_delphes_training.py` | Synthetic ROOT/parent/production/cache, exact-plan, teacher-bank and CPU CE/KD integration tests |
+
+Package paths are under `src/hlt_classification/`. New production contracts use
+`JC2_CORRELATED_TRACKING_PRODUCTION_*/v1`; shared ladder versions are recorded in
+the [new contract](contracts/JETCLASS2_CORRELATED_TRACKING_LADDER.md). The active
+plan supersedes the proposed CE-only strength screen through explicit user MID
+selection, not through a claim that the desired classifier gap has been measured.
+
 ## 2026-10-07: shared-versus-independent tracking pilot
 
 Internal donor commit `f889f359cdddca1beb3d6e817332d2b42a42ddf3`.
