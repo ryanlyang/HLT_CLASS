@@ -1,5 +1,25 @@
 # Legacy Donor-Source Map
 
+## 2026-10-07: shared-versus-independent tracking pilot
+
+Internal donor commit `f889f359cdddca1beb3d6e817332d2b42a42ddf3`.
+New `correlated_tracking/` package; no old generator, dataset or classifier
+edited. No external code copied and no `Fresh_check` runtime import.
+
+| Donor paths | Reuse/adaptation |
+| --- | --- |
+| `literature_proxy/campaign.py`, `contracts.py` | Clean/pushed source, dry/live authorization, durable ambiguous-submit lock, immutable artifacts; new namespace and complete Python source pin |
+| `literature_proxy_v2/inputs.py` | Import unchanged completed-v1 pilot authentication and original OFFLINE reader; old NOMINAL endpoint is ignored, no v2 rates used |
+| `literature_context/campaign.py`, `worker.py` | Per-file spawn pilot, physical banks, serial/process replay, receipt-last publication patterns |
+| `literature_proxy/diagnostics.py`, `worker.py`; `data/cache_contracts.py` | Descriptive histograms/moments/CSV/PDF, physical arrays/RSS, deterministic NPZ serialization |
+| `cms2jc2_response/bridge.py`; `jetclass2_delphes/contracts.py` | Physical schema/applicability validation and safe relative output paths |
+| `scripts/jetclass2_literature_context.py`, `scripts/queue_jetclass2_literature_context.sh`, `sbatch/run_jetclass2_literature_context.sh` | Thin CLI and dry-first Tigris environment wrappers |
+| `tests/test_literature_proxy.py`, `tests/test_literature_proxy_v2_campaign.py`, `tests/test_literature_context_campaign.py` | Particle/synthetic completed-parent fixtures and submission/replay failure checks |
+
+Package paths in the table are under `src/hlt_classification/`. Reference-noise
+kernel, conditional residual and analytic pair-covariance diagnostics are new
+synthetic equations specified in the versioned plan, not a migrated CMS fit.
+
 ## 2026-10-06: CONTEXT_V1 relocated Oscar 100k/50k ladder
 
 Internal donor commit `4f473c3e97ee3270cec520914477dfe9a38728ab`.

@@ -1,5 +1,49 @@
 # Current Handoff
 
+## 2026-10-07: correlated tracking 20k diagnostic pilot implemented locally
+
+New isolated `correlated_tracking/` package, CLI, dry-first queue helper and
+Tigris CPU worker implement the approved shared-versus-independent tracking
+mechanism test. See the [plan](plans/JETCLASS2_CORRELATED_TRACKING_PILOT_PLAN.md),
+[contract](contracts/JETCLASS2_CORRELATED_TRACKING.md) and
+[queue/results runbook](JETCLASS2_CORRELATED_TRACKING_PILOT_RUNBOOK.md).
+Existing CONTEXT_V1/NOISE_V3 data, classifiers and user changes are untouched.
+
+The completed original 20k literature pilot supplies authenticated original
+OFFLINE banks. No old degradation is applied. Compare one per-jet 3D reference
+shift with independent per-particle shifts, at three fixed amplitudes. Marginals
+and within-track covariance match in expectation; cross-track covariance differs.
+All p4/PID/counts/charge/keys/masks are preserved exactly. Values and error
+inflation follow the same added-variance model. Units are GeV/mm; the synthetic
+straight-line sign convention is explicit, not a newly verified producer claim.
+No labels or latent shifts enter generated physical features. Inherited sample
+selection was label-stratified; transformation is label-blind. Test stays sealed.
+
+New `JC2_CORRELATED_TRACKING_*/v1` artifacts bind exact source, parent evidence,
+population, physical banks and diagnostic outputs. CSV/PDF/JSON include the
+familiar whole-distribution chart, conditional residuals and added-noise pulls,
+plus jet-weighted distinct-pair products/differences and analytic expectations.
+Exact serial/spawn replay and structural integrity are execution checks;
+disappointing scientific metrics never fail the job.
+
+Resources: one Tigris/reu-aisocial CPU-only job, 16 CPUs, 64 GiB, 2h requested
+envelope, no automatic followup. Internal donors at
+`f889f359cdddca1beb3d6e817332d2b42a42ddf3` are recorded in LEGACY_SOURCE_MAP;
+no external code copied. Local evidence: 30 focused tests passed (16 new and
+14 existing CONTEXT tests), including full synthetic-parent worker/receipt
+execution, covariance/marginal checks, unchanged structure, process replay,
+source/scope and submission guards, modified-plan rejection and insufficient
+disk failure. CLI help, both Bash syntax checks, new documentation links and
+scoped diff whitespace checks passed. Matplotlib/Pyparsing deprecation warnings
+are present in the local environment; no test failures.
+
+No remote jobs submitted, real Tigris acceptance or installed-Weaver validation
+performed. This implements the diagnostic stage, not full SPORC training.
+Next: push exact source, dry-review and queue the 20k pilot. Then inspect it and
+implement a CE-only strength screen before freezing a SPORC direct/coarse plus
+same-view repeated-KD comparison. A roughly 1.5-point CE gap and ladder benefit
+remain hypotheses, not properties established by these diagnostics.
+
 ## 2026-10-06: CONTEXT_V1 copied to Oscar; fresh 100k/50k ladder implementation
 
 User-reported transfer verification passed for 210 shards, 2,341 physical blocks
