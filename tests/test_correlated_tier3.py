@@ -59,13 +59,24 @@ def test_reject_unmeasured_source_changes(source_case, change):
         t.source_transfer(c.base, c.new, "f" * 40)
 
 
-def test_actual_production_diff_is_only_the_registered_dispatch():
+def test_historical_executor_diff_is_only_the_registered_dispatch():
     import subprocess
     root = Path(__file__).resolve().parents[1]
     before = subprocess.run(["git", "show", f"{t.BASE_COMMIT}:{t.PRODUCTION}"], cwd=root,
                             check=True, capture_output=True, text=True).stdout
-    after = (root / t.PRODUCTION).read_text()
+    # This amendment authorizes the historical executor, not all future main
+    # revisions. New experiments require fresh measured gates of their own.
+    executor = '779382740cdd44a5120449f02fde4a7719fed298'
+    after = subprocess.run(['git', 'show', f'{executor}:{t.PRODUCTION}'], cwd=root,
+                           check=True, capture_output=True, text=True).stdout
     assert after == before.replace(t.NEEDLE, t.NEEDLE + t.INSERTION, 1)
+
+
+def test_new_experiment_source_cannot_reuse_historical_transfer(source_case):
+    root = Path(__file__).resolve().parents[1]
+    (source_case.new / t.PRODUCTION).write_text((root / t.PRODUCTION).read_text())
+    with pytest.raises(ValueError, match='dispatch'):
+        t.source_transfer(source_case.base, source_case.new, 'f'*40)
 
 
 @pytest.mark.parametrize("name", ["docs/plans/JETCLASS2_CORRELATED_TRACKING_PRODUCTION_PLAN.md",

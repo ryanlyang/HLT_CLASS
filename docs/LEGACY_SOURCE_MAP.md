@@ -1,5 +1,27 @@
 # Legacy Donor-Source Map
 
+## 2026-10-07: CORR_HIGH_TOPO ordinary dataset and direct/coarse ladder
+
+Internal donor snapshot: `eb69f6af3d9aacd8effc1125e9ecf273d0089510`.
+No external donor, legacy runtime import, copied credentials, or model import.
+
+| Donor path (under src/hlt_classification unless noted) | Reuse |
+| --- | --- |
+| `correlated_tracking/kernel.py` | Unchanged HIGH endpoint and tightly bounded historical ARM/x86 MID tracking replay (structure exact) |
+| `literature_proxy/kernel.py`, `literature_proxy_v2/kernel.py`, `literature_proxy_v3/worker.py` | Identity-keyed streams, same eligibility/disjoint-pair pattern, authenticated frozen drop/merge calibration; deliberately omit PID and p4 noise |
+| `literature_proxy/diagnostics.py`, `literature_proxy_production/codec.py` | Fixed descriptive histograms and lossless physical bank publication/readback |
+| `cms_proxy_ladder/correlated.py`, `correlated_views.py`, `release.py`, `data.py`, `cache.py`, `gate.py`, `production.py`, `submission.py`, `cache_full.py` | Versioned successor release/representative views; unchanged old defaults; bounded process work, measured admission, six-fit direct/coarse plan, exact journaled submission |
+| `jetclass2_delphes/runner.py`, `model.py`, `acceptance.py`; `sbatch/jetclass2_delphes_common.sh` | Existing 17-field ParT training, CE/KD acceptance, installed-Weaver checks and SPORC environment |
+| `tests/test_correlated_tracking_ladder.py`, `test_correlated_tracking_production.py`, `test_literature_proxy_v3_campaign.py`, `test_literature_proxy.py` (under tests) | Synthetic ROOT/real codec/CPU training and saved pilot fixtures |
+
+New code: `correlated_topology/{kernel,views,dataset}.py`, ladder adapter,
+`scripts/jetclass2_correlated_topology.py`, queue helper and focused tests.
+New plan/contract/runbook: `JETCLASS2_CORR_HIGH_TOPO*`.
+The historical tier3 dispatch test now checks its actual pinned executor
+`779382740cdd44a5120449f02fde4a7719fed298`, not arbitrary future main;
+an additional rejection test proves newer scientific code cannot inherit that
+old source-transfer approval. Runtime source-transfer rules are unchanged.
+
 ## 2026-10-07: Oscar CONTEXT_V1 1M conditional science followup
 
 Internal donor commit: `9cebdbe133da20f00cc14ec4155bd627accb7e85` (also the
@@ -18,6 +40,28 @@ New paths: `src/hlt_classification/context_full_followup.py`, corresponding
 CLI/launcher/test and `JETCLASS2_CONTEXT_1M_FOLLOWUP` plan/contract/runbook.
 Old source-hashed gate/plan files are not edited. Concurrent V2 changes remain
 unrelated to this execution amendment.
+
+## 2026-10-07: CONTEXT_V2 frozen re-encoding and automatic Oscar workflow
+
+Internal donor snapshot: `779382740cdd44a5120449f02fde4a7719fed298`.
+The executed V1 classifier parent remains the separate immutable
+`f889f359cdddca1beb3d6e817332d2b42a42ddf3` campaign. No external donor or
+Fresh_check runtime imports; no migration of credentials, model weights or data.
+
+| Donor paths | New use |
+| --- | --- |
+| `literature_context/transform.py` | `context_v2/kernel.py` retains the triangular forward/inverse structure, visible-p4 context, phases and scale mapping; only shear amplitude becomes 1.0. Frozen V1 code is imported unchanged for inversion. |
+| `literature_context_consumer.py`, `literature_context_production/{contracts,codec,output,population}.py` | Reuse authenticated relocated source, canonical identities and lossless bank schema. New producer validates V1 test-build authority separately and gives V2 its own receipts/manifests and ordinary-only consumer. |
+| `cms_proxy_ladder/{context,release,data,cache,views,gate,production,submission,campaign}.py` | New explicit v5/v10/v7 dispatch, byte-identical old selection index, fresh matching and unchanged CE/KD kernel. Private adapter parameters preserve old V1 defaults. |
+| `scouting/hcwdl_exact_dag_submission.py`, `cms_proxy_ladder/context.py` | Reuse exact accepted-ID journal, canonical dry ledger and exclusive live-submission claim. New initial DAG includes a preauthorized bounded 16-job science launcher. |
+| `sbatch/jetclass2_delphes_common.sh`, `jetclass2_delphes/{execution,model,runner}.py` | Existing absolute-path Oscar environment activation, L40S runtime acceptance and training/reduction code reused. |
+| `tests/test_context_ladder.py`, `tests/test_literature_context_consumer.py`, `tests/test_literature_context.py`, `tests/test_literature_proxy.py` | Synthetic ROOT/relocation fixtures and particle fixtures reused for new production, pairing, inverse, process, cache and submission tests. |
+
+All source paths above are under `src/hlt_classification/` except explicitly
+named scripts/tests. New plan and contract:
+`JETCLASS2_CONTEXT_V2_OSCAR_WORKFLOW_PLAN.md` and
+`JETCLASS2_CONTEXT_V2_OSCAR_WORKFLOW.md`. Existing unrelated full-population
+CONTEXT_V1 work is a separate experiment and is preserved.
 
 ## 2026-10-07: unchanged CONTEXT_V1, full 1M/250k Oscar campaign
 

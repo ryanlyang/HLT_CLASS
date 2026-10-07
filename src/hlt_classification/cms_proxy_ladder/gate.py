@@ -496,8 +496,14 @@ def create_oscar_direct_coarse_gate(
 
 
 def validate_gate(spec: dict, *, check_source: bool = False) -> str:
+    if spec.get('schema_version') == 12:
+        from .correlated_topology import validate_gate as check
+        return check(spec, check_source=check_source)
     if spec.get("schema_version") == 11:
         from .context_full import validate_gate as check
+        return check(spec, check_source=check_source)
+    if spec.get("schema_version") == 10:
+        from .context_v2 import validate_gate as check
         return check(spec, check_source=check_source)
     version = spec.get("schema_version")
     if version == 9:
@@ -668,8 +674,14 @@ def validate_gate(spec: dict, *, check_source: bool = False) -> str:
 
 
 def validate_profile(profile: dict, *, foundation: dict, spec: dict) -> str:
+    if spec.get('schema_version') == 12:
+        from .correlated_topology import validate_profile as check
+        return check(profile, foundation=foundation, spec=spec)
     if spec.get("schema_version") == 11:
         from .context_full import validate_profile as check
+        return check(profile, foundation=foundation, spec=spec)
+    if spec.get("schema_version") == 10:
+        from .context_v2 import validate_profile as check
         return check(profile, foundation=foundation, spec=spec)
     if spec.get("schema_version") == 9:
         from .correlated import validate_profile as validate_correlated_profile
@@ -766,9 +778,9 @@ def validate_profile(profile: dict, *, foundation: dict, spec: dict) -> str:
 
 
 def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> dict:
-    correlated = spec.get("schema_version") == 9
-    context = spec.get("schema_version") in (8, 9, 11)
-    literature = spec.get("schema_version") in (7, 8, 9, 11)
+    correlated = spec.get("schema_version") in (9, 12)
+    context = spec.get("schema_version") in (8, 9, 10, 11, 12)
+    literature = spec.get("schema_version") in (7, 8, 9, 10, 11, 12)
     site = spec.get("measurement_site", spec["execution_site"])
     job_id, cpus, memory_mb = allocation(site)
     workers = spec["workers"]
@@ -788,8 +800,12 @@ def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> di
             from .context import scientific_plan
         if correlated:
             from .correlated import scientific_plan
+        if spec.get("schema_version") == 10:
+            from .context_v2 import scientific_plan
         if spec.get("schema_version") == 11:
             from .context_full import scientific_plan
+        if spec.get('schema_version') == 12:
+            from .correlated_topology import scientific_plan
         plan = scientific_plan(foundation, foundation_root=foundation_root)
     else:
         plan = (

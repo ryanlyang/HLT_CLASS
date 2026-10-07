@@ -1,5 +1,58 @@
 # Current Handoff
 
+## 2026-10-07: CORR_HIGH_TOPO successor to the completed CORR_MID study
+
+User authorized stronger correlated tracking with NOISE_V3-style drops and
+merges. [Plan](plans/JETCLASS2_CORR_HIGH_TOPO_PLAN.md),
+[contract](contracts/JETCLASS2_CORR_HIGH_TOPO.md), and
+[queue/diagnostics runbook](JETCLASS2_CORR_HIGH_TOPO_RUNBOOK.md).
+
+New `correlated_topology/{kernel,views,dataset}.py`, ladder adapter, thin CLI,
+queue helper and tests implement a separate **100k train / 50k validation**
+study using the exact original CORR_MID release population. No full 2.25M
+export, old-data deletion, job changes or final-test materialization. Retain
+the original release/physical blocks and raw offline data: pairing and replay
+authenticate them rather than silently reinterpreting CORR_MID.
+
+Frozen CORR_HIGH tracking is 2x MID amplitude / 4x added variance. Exact
+saved NOISE_V3 p_drop/p_merge are imported without refitting; original-PID
+soft particles may drop and nearby same-category neutrals merge in disjoint
+pairs. No PID changes or additional p4 noise; merged p4 is summed. Original
+neutral candidates differ from NOISE_V3's post-PID candidates, so a mean of
+38 is not guaranteed or enforced. All D rungs retain final degraded topology;
+only tracking residual/added variance is interpolated. OFFLINE remains the
+unmodified teacher/control; no construction index reaches model inputs.
+Historical ARM/x86 MID tracking is verified with predeclared
+rtol=1e-12/atol=1e-12 mm, exact structure/ineligible tracking, and recorded
+bitwise counts/max drift. New serial/process output and readback remain exact.
+
+Versioned release/foundation/views v7, gate/profile v12, science/campaign v9;
+old defaults unchanged. Six fits, three reducers, aggregate/completion on
+SPORC debug. CPU materialization -> foundation -> full-size genuine
+installed-Weaver/A100 CE+KD/resource preflight; separate exact-plan dry/live
+science submission after gate completion. Train-only count/PID/kinematic/
+tracking/mask histograms and moments are saved alongside physical blocks.
+Scientific quality is not an acceptance condition. Changed mechanisms and
+one seed do not identify the cause of a gain or establish significance.
+
+Local evidence: **129 distinct focused/regression tests passed across runs**:
+11 new topology tests (latest run 417.51s), 19 historical tier3 tests, 54
+correlated/ladder/NOISE_V2/V3 tests, and 45 shared proxy/CONTEXT/V2 tests.
+Includes actual spawn-process generation/readback, exact pairing, train-only
+diagnostics, genuine synthetic saved NOISE_V3 calibration import, real CPU
+CE/teacher/KD kernel with a tiny model, mocked hardware preflight coordination,
+source drift, corruption, test seal, budget/root guards and dry DAG submission.
+Existing matplotlib/pyparsing deprecation warnings remain. The historical
+tier3 dispatch test was corrected to inspect its pinned historical executor;
+an added rejection test preserves the strict source-transfer policy for newer
+code. Shell syntax, CLI help, new Markdown links and `git diff --check` pass.
+
+No new authoritative installed-Weaver/SPORC/Tigris acceptance or remote jobs
+have been run. Next: review/commit/push the exact source, then queue the gate
+from the runbook; science requires its own dry review after measured admission.
+Internal donor snapshot/path inventory are in `LEGACY_SOURCE_MAP.md`;
+unrelated CONTEXT work is preserved. No data was deleted or overwritten.
+
 ## 2026-10-07: automatic CONTEXT_V1 1M science after the existing Oscar gate
 
 User asks to make science follow the already queued foundation/gate jobs.
@@ -37,6 +90,62 @@ the [push-and-arm runbook](JETCLASS2_CONTEXT_1M_FOLLOWUP_RUNBOOK.md). Do not
 also submit MODE=science manually after ARMED. ALL 16 SCIENCE JOBS QUEUED
 means submission, not completed training. Nothing committed/pushed/submitted
 by the local agent.
+
+## 2026-10-07: CONTEXT_V2 stronger encoding, one Oscar dataset-to-science workflow
+
+User authorizes one modest frozen change, no extra tuning pilots, full 2.25M
+generation on Oscar, followed automatically by the same 100k/50k DIRECT+COARSE
+comparison. This is distinct from the separate unchanged V1 1M/250k effort
+below. Existing V1 datasets, jobs and reports are untouched.
+
+Active authority: [CONTEXT_V2 plan](plans/JETCLASS2_CONTEXT_V2_OSCAR_WORKFLOW_PLAN.md),
+[new contract](contracts/JETCLASS2_CONTEXT_V2_OSCAR_WORKFLOW.md),
+[queue/runbook](JETCLASS2_CONTEXT_V2_OSCAR_WORKFLOW.md).
+The only recipe parameter changed is shear amplitude **0.65 -> 1.0**, retaining
+three layers. Re-encode the authenticated Oscar V1 banks via V2(V1-inverse),
+preserving p4, PID, charge, masks, counts, stochastic draws, roles and identities.
+The expected baseline accuracy-gap increase is a hypothesis, not a job gate.
+
+New `context_v2/{contracts,kernel,dataset,workflow}.py`, shared-ladder V2 adapter,
+thin CLI, queue helper and `tests/test_context_v2.py` implement:
+
+- 1M/250k/1M materialization, lossless atomic blocks/receipts, first-block
+  process replay inside each real shard job, inverse checks and full finalization;
+- CPU generation array -> finalizer -> matching/preparation -> standard L40S
+  installed-Weaver/resource preflight -> automatic bounded science launcher;
+- exact V1 100k/50k release-index byte reuse (no new hash-based resampling),
+  fresh assignments, same unclipped 17-input frontend and training recipe;
+- nine fits, five reducers, aggregate and completion, no dense branch; no
+  strength pilots, final-test evaluation, metric gates or existing-job mutation;
+- frozen authorization policy, exact accepted-job journal, allocation/source
+  binding, exclusive claims and fail-closed partial-submission handling.
+
+Producer namespace is `JC2_CONTEXT_V2_{KIND}/v1`; shared release/foundation/views
+v5, gate/profile v10 and science/campaign v7 are explicit and separate from V1
+and concurrent unrelated versions. Source reuse/donor commit are recorded in
+`LEGACY_SOURCE_MAP.md` (`779382740cdd44a5120449f02fde4a7719fed298`); no external
+code or Fresh_check runtime imports.
+
+Local evidence: **10 distinct V2 tests passed across focused runs** (full
+nine-test suite, then a three-test rerun covering the added historical-inverse
+source guard and automatic followup). This includes actual spawned-process
+byte replay, immutable paired-bank generation, all ladder caches, CPU CE/KD
+forward/backward with a tiny network, and mocked complete Slurm submission.
+Regression suite
+`test_context_ladder.py`, `test_literature_context.py`, `test_cms_proxy_ladder.py`
+and `test_literature_context_consumer.py`: **64 passed** (existing Matplotlib/
+Pyparsing deprecation warnings). Bash syntax and CLI help pass. An attempted
+installed-Weaver CPU smoke found Weaver absent in the local environment;
+the production Oscar parity requirement remains intact. The tiny-network
+kernel smoke is not authoritative installed-Weaver model parity. Total:
+**74 distinct focused/regression tests passed**; no genuine RC jobs were run.
+
+Nothing was submitted, pushed or committed locally. Next: commit/push a clean
+complete source snapshot, attest persistent available quota (at least 30 GiB),
+create/review the exact workflow plan and execute it once using the runbook.
+Oscar dataset execution, installed-Weaver/GPU parity and resulting scientific
+performance have not yet been observed. No further manual science submission
+is needed after successful workflow setup.
 
 ## 2026-10-07: unchanged CONTEXT_V1, separate Oscar 1M/250k DIRECT+COARSE
 

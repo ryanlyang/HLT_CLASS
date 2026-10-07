@@ -41,7 +41,7 @@ def create_campaign(*, gate_root: Path, campaign_root: Path) -> dict:
     gate_root = Path(gate_root).resolve(strict=True)
     gate = load_json(gate_root / "gate_spec.json")
     validate_gate(gate, check_source=True)
-    if gate.get("schema_version") in (7, 8, 9, 11):
+    if gate.get("schema_version") in (7, 8, 9, 10, 11, 12):
         raise ValueError("Literature gates require the literature direct/coarse campaign creator")
     foundation_root = Path(gate.get("foundation_root", gate_root / "foundation"))
     foundation = load_json(foundation_root / "foundation.json")
@@ -147,8 +147,14 @@ def create_direct_coarse_campaign(*, gate_root: Path, campaign_root: Path) -> di
 
 
 def validate_campaign(spec: dict, *, check_source: bool = False) -> str:
+    if spec.get('schema_version') == 9:
+        from .correlated_topology import validate_campaign as check
+        return check(spec, check_source=check_source)
     if spec.get("schema_version") == 8:
         from .context_full import validate_campaign as check
+        return check(spec, check_source=check_source)
+    if spec.get("schema_version") == 7:
+        from .context_v2 import validate_campaign as check
         return check(spec, check_source=check_source)
     version = spec.get("schema_version")
     if version == 6:

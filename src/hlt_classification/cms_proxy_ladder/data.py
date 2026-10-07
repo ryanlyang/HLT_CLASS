@@ -61,6 +61,10 @@ def iter_paired(
 ):
     """Yield exact identity-joined physical endpoints in frozen release order."""
     _role_code(role)  # Reject sealed roles before reading even a release bank.
+    if release.get('schema_version') == 7:
+        from hlt_classification.correlated_topology.dataset import iter_paired as paired
+        yield from paired(release, release_root=release_root, role=role, source_file_index=source_file_index)
+        return
     validate_release(release, root=release_root)
     arrays = load_bank(release, root=release_root)
     selected = np.flatnonzero(arrays["role"] == _role_code(role))
@@ -78,9 +82,11 @@ def iter_paired(
     study = load_json(study_root / "study_spec.json")
     correlated = release.get("schema_version") == 4
     literature = release.get("schema_version") in (2, 4)
-    context = release.get("schema_version") in (3, 6)
+    context = release.get("schema_version") in (3, 5, 6)
     if context:
         from .context import reader
+        if release.get("schema_version") == 5:
+            from .context_v2 import reader
         from hlt_classification.literature_proxy.population import from_columns
         consumer = reader(release["request"])
         inventory, study = consumer.inventory, consumer.study
@@ -216,7 +222,11 @@ def _match_sources(arguments):
         release, release_root=Path(release_root), role=role,
         source_file_index=tuple(source_indices),
     ):
-        mapping = matching(row.proxy, row.offline)
+        if release.get('schema_version') == 7:
+            from hlt_classification.correlated_topology.views import match_particles as replay_matching
+            mapping = replay_matching(row.proxy, row.offline, identity=row.identity, frozen=release['request']['recipe'])
+        else:
+            mapping = matching(row.proxy, row.offline)
         identities.append(np.frombuffer(bytes.fromhex(row.identity), np.uint8))
         mappings.append(mapping.astype(np.int32, copy=False))
         offsets.append(offsets[-1] + len(mapping))
@@ -248,7 +258,7 @@ def build_foundation(
         raise FileExistsError("Proxy-ladder foundation root must be fresh")
     if type(workers) is not int or not 1 <= workers <= 72:
         raise ValueError("Proxy-ladder foundation workers must be in [1,72]")
-    context = release.get("schema_version") in (3, 6)
+    context = release.get("schema_version") in (3, 5, 6)
     make_inputs, make_contract = build_inputs, input_contract
     if context:
         from .context_inputs import build_inputs as make_inputs, input_contract as make_contract
@@ -257,6 +267,10 @@ def build_foundation(
         from .correlated_views import build_inputs as make_inputs, input_contract as make_contract
         from .correlated_views import build_view as make_view, matcher_contract as make_matcher
     inputs = make_contract(capacity=capacity)
+    if release.get('schema_version') == 7:
+        from hlt_classification.correlated_topology.views import build_inputs as make_inputs, input_contract as make_contract
+        from hlt_classification.correlated_topology.views import build_view as make_view, matcher_contract as make_matcher
+        inputs = make_contract(capacity=capacity)
     identities, offsets, mappings = [], [0], []
     role_offsets = {"train": [0, 0], "validation": [0, 0]}
     max_proxy = max_offline = max_view = 0
@@ -347,6 +361,12 @@ def build_foundation(
             role_checks += 1
     literature = release.get("schema_version") == 2
     views_contract = view_contract(literature=literature, context=context)
+    if release.get('schema_version') == 7:
+        from hlt_classification.correlated_topology.views import view_contract as topology_views
+        views_contract = topology_views()
+    if release.get("schema_version") == 5:
+        from .context_v2 import view_contract as v2_views
+        views_contract = v2_views()
     if release.get("schema_version") == 4:
         from .correlated_views import view_contract as correlated_contract
         views_contract = correlated_contract()
@@ -410,7 +430,7 @@ def load_assignments(foundation: dict, *, root: Path, role: str):
 
 def validate_foundation(foundation: dict, *, root: Path, check_bank: bool = True) -> str:
     version = foundation.get("schema_version")
-    if version not in (1, 2, 3, 4, 6):
+    if version not in (1, 2, 3, 4, 5, 6, 7):
         raise ValueError("Unsupported foundation version")
     parents = {
         "release": foundation["release"]["content_hash"],
@@ -421,10 +441,16 @@ def validate_foundation(foundation: dict, *, root: Path, check_bank: bool = True
     digest = validate(foundation, "FOUNDATION", version=version, parents=parents)
     validate_release(foundation["release"], root=Path(foundation["release_root"]))
     make_contract = input_contract
-    if version in (3, 6):
+    if version in (3, 5, 6):
         from .context_inputs import input_contract as make_contract
     expected_matcher = matcher_spec(CANDIDATE)
     expected_views = view_contract(literature=version == 2, context=version in (3, 6))
+    if version == 7:
+        from hlt_classification.correlated_topology.views import input_contract as make_contract, matcher_contract, view_contract as topology_views
+        expected_matcher, expected_views = matcher_contract(), topology_views()
+    if version == 5:
+        from .context_v2 import view_contract as v2_views
+        expected_views = v2_views()
     if version == 4:
         from .correlated_views import input_contract as make_contract, matcher_contract, view_contract as correlated_contract
         expected_matcher, expected_views = matcher_contract(), correlated_contract()

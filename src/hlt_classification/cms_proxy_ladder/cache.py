@@ -34,9 +34,11 @@ def _prepare_source(arguments) -> RamBlock:
     offsets, features, vectors, identities, labels = [0], [], [], [], []
     release = foundation["release"]
     make_inputs = build_inputs
-    if foundation.get("schema_version") in (3, 6):
+    if foundation.get("schema_version") in (3, 5, 6):
         from .context_inputs import build_inputs as make_inputs
     make_view = build_view
+    if foundation.get('schema_version') == 7:
+        from hlt_classification.correlated_topology.views import build_inputs as make_inputs, build_view as make_view
     if foundation.get("schema_version") == 4:
         from .correlated_views import build_inputs as make_inputs, build_view as make_view
     for row in iter_paired(

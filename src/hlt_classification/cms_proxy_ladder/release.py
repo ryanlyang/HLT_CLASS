@@ -40,9 +40,15 @@ def release_request(*, study_root: Path, offline_root: Path, literature: bool = 
 
 
 def validate_request(value: dict) -> str:
+    if value.get('schema_version') == 7:
+        from hlt_classification.correlated_topology.dataset import validate_request as check
+        return check(value)
     if value.get("schema_version") == 6:
         from .context_full import validate_request as validate_full_request
         return validate_full_request(value)
+    if value.get("schema_version") == 5:
+        from .context_v2 import validate_request as check
+        return check(value)
     if value.get("schema_version") == 4:
         from .correlated import validate_request as validate_correlated_request
         return validate_correlated_request(value)
@@ -81,6 +87,12 @@ def _save_npz(path: Path, arrays: dict[str, np.ndarray]) -> None:
 def build_release(request: dict, *, output_root: Path) -> dict:
     """Freeze a committed ordinary-role snapshot without touching labels/test."""
     validate_request(request)
+    if request.get('schema_version') == 7:
+        from hlt_classification.correlated_topology.dataset import build_release as build
+        return build(request, output_root=output_root)
+    if request.get("schema_version") == 5:
+        from .context_v2 import build_release as build
+        return build(request, output_root=output_root)
     root = Path(output_root).resolve()
     if root.exists():
         raise FileExistsError("Proxy-ladder release root must be fresh")
@@ -269,7 +281,7 @@ def load_bank(manifest: dict, *, root: Path) -> dict[str, np.ndarray]:
 
 def validate_release(manifest: dict, *, root: Path, check_bank: bool = True) -> str:
     version = manifest.get("schema_version")
-    if version not in (1, 2, 3, 4, 6):
+    if version not in (1, 2, 3, 4, 5, 6, 7):
         raise ValueError("Unsupported proxy-ladder release version")
     digest = validate(
         manifest, "RELEASE", version=version,
@@ -277,6 +289,12 @@ def validate_release(manifest: dict, *, root: Path, check_bank: bool = True) -> 
     )
     validate_request(manifest["request"])
     counts, domain = manifest["request"]["counts"], manifest["request"]["selection_domain"]
+    if version == 7:
+        from hlt_classification.correlated_topology.dataset import validate_release_source
+        validate_release_source(manifest)
+    if version == 5:
+        from .context_v2 import validate_release_source
+        validate_release_source(manifest)
     if version == 2:
         from .literature import validate_release_source
         validate_release_source(manifest)
@@ -289,7 +307,7 @@ def validate_release(manifest: dict, *, root: Path, check_bank: bool = True) -> 
     if (
         manifest["request"]["schema_version"] != version
         or manifest["counts"] != counts or manifest["selection_domain"] != domain
-        or manifest["labels_read"] is not False
+        or manifest["labels_read"] is not (version == 7)
         or manifest["selection_depends_on_labels"] is not False
         or manifest["total_rows"] != sum(counts.values())
         or manifest["scope"] not in {"complete_dataset_manifest", "committed_ordinary_receipt_snapshot"}

@@ -153,11 +153,11 @@ def scientific_plan(foundation, *, foundation_root=None):
         version=4, foundation_root=foundation_root, node_prefix="CTXV1")
 
 
-def validate_profile(profile, *, foundation, spec):
+def validate_profile(profile, *, foundation, spec, _version=8, _plan_builder=None):
     from .cache import cache_budgets
     from hlt_classification.jetclass2_delphes.campaign import recipe
     from hlt_classification.jetclass2_delphes.contracts import validate as validate_jc2
-    digest = validate(profile, "RUNTIME_PROFILE", version=8, parents={
+    digest = validate(profile, "RUNTIME_PROFILE", version=_version, parents={
         "gate": spec["content_hash"], "foundation": foundation["content_hash"],
     })
     parity = profile["installed_weaver_parity"]
@@ -165,7 +165,7 @@ def validate_profile(profile, *, foundation, spec):
     validate_jc2(profile["installed_environment"], "INSTALLED_ENVIRONMENT", version=2)
     report = profile["acceptance_training_report"]
     validate_jc2(report, "KERNEL_TRAINING_REPORT")
-    expected_node = next(n for n in scientific_plan(foundation)["nodes"] if n["node_id"] == "U000")
+    expected_node = next(n for n in (_plan_builder or scientific_plan)(foundation)["nodes"] if n["node_id"] == "U000")
     import math
     kd = profile["acceptance_kd_training_report"]
     validate_jc2(kd, "KERNEL_TRAINING_REPORT")
@@ -185,7 +185,7 @@ def validate_profile(profile, *, foundation, spec):
         raise ValueError("Literature timing measurements differ")
     train_minutes = max(60, math.ceil((max(caches.values()) + 100 * one_pass) * 1.75 / 60))
     reduce_minutes = max(30, math.ceil((max(caches.values()) + profile["inference_seconds"]) * 2 / 60))
-    if (spec.get("schema_version") != 8 or foundation["release"]["request"] != spec["request"]
+    if (spec.get("schema_version") != _version or foundation["release"]["request"] != spec["request"]
             or foundation["role_counts"] != COUNTS or profile["measured_role_counts"] != COUNTS
             or profile["execution_site"] != execution_site("oscar_l40s")
             or profile.get("site_transfer_policy") is not None
@@ -275,25 +275,29 @@ def submit_claimed(subject, plan, root):
         canonical_dry_run=dry_path, execute=True, environment=env)
 
 
-def create_campaign(*, gate_root, campaign_root):
+def create_campaign(*, gate_root, campaign_root, _adapter=None):
     from .data import validate_foundation
     from .campaign import task_graph
     gate_root = Path(gate_root).resolve(strict=True)
     gate = load_json(gate_root / "gate_spec.json")
-    validate_gate(gate, check_source=True)
+    check_gate = _adapter.validate_gate if _adapter else validate_gate
+    check_profile = _adapter.validate_profile if _adapter else validate_profile
+    make_plan = _adapter.scientific_plan if _adapter else scientific_plan
+    check_campaign = _adapter.validate_campaign if _adapter else validate_campaign
+    check_gate(gate, check_source=True)
     foundation_root = gate_root / "foundation"
     foundation = load_json(foundation_root / "foundation.json")
     validate_foundation(foundation, root=foundation_root)
     profile = load_json(gate_root / "evidence/runtime_profile.json")
-    validate_profile(profile, foundation=foundation, spec=gate)
+    check_profile(profile, foundation=foundation, spec=gate)
     _completed_gate(gate, foundation, profile)
     root = Path(campaign_root).resolve()
     protected = [gate_root, Path(gate["project_dir"]), Path(gate["request"]["study_root"]),
                  Path(gate["request"]["offline_root"]), Path(gate["request"]["provenance_root"])]
     if root.exists() or any(root.is_relative_to(p) or p.is_relative_to(root) for p in protected):
         raise FileExistsError("Fresh separate literature campaign root required")
-    plan = scientific_plan(foundation, foundation_root=foundation_root)
-    spec = artifact("CAMPAIGN_SPEC", version=4,
+    plan = make_plan(foundation, foundation_root=foundation_root)
+    spec = artifact("CAMPAIGN_SPEC", version=7 if _adapter else 4,
         parents={"gate": gate["content_hash"], "foundation": foundation["content_hash"],
                  "profile": profile["content_hash"], "plan": plan["content_hash"]},
         gate_root=str(gate_root), campaign_root=str(root), project_dir=gate["project_dir"],
@@ -301,8 +305,8 @@ def create_campaign(*, gate_root, campaign_root):
         foundation_root=str(foundation_root), foundation=foundation,
         runtime_profile=profile, scientific_plan=plan, tasks=task_graph(plan), model=model_contract(),
         fresh_fit_count=9, reducer_count=5, selected_branches=["DIRECT", "COARSE"],
-        dataset_kind=KIND, full_views_persisted=False, existing_campaign_mutations=False)
-    validate_campaign(spec, check_source=True)
+        dataset_kind=_adapter.KIND if _adapter else KIND, full_views_persisted=False, existing_campaign_mutations=False)
+    check_campaign(spec, check_source=True)
     root.mkdir(parents=True, exist_ok=False)
     write_json(root / "campaign_spec.json", spec)
     return spec
@@ -319,26 +323,26 @@ def _completed_gate(gate, foundation, profile):
         raise ValueError("Literature gate completion differs")
 
 
-def validate_campaign(spec, *, check_source=False):
+def validate_campaign(spec, *, check_source=False, _adapter=None):
     from .data import validate_foundation
     from .campaign import task_graph
-    digest = validate(spec, "CAMPAIGN_SPEC", version=4, parents={
+    digest = validate(spec, "CAMPAIGN_SPEC", version=7 if _adapter else 4, parents={
         "gate": spec["parents"]["gate"], "foundation": spec["foundation"]["content_hash"],
         "profile": spec["runtime_profile"]["content_hash"], "plan": spec["scientific_plan"]["content_hash"],
     })
     gate = load_json(Path(spec["gate_root"]) / "gate_spec.json")
-    validate_gate(gate, check_source=check_source)
+    (_adapter.validate_gate if _adapter else validate_gate)(gate, check_source=check_source)
     foundation = spec["foundation"]
     validate_foundation(foundation, root=Path(spec["foundation_root"]))
-    validate_profile(spec["runtime_profile"], foundation=foundation, spec=gate)
+    (_adapter.validate_profile if _adapter else validate_profile)(spec["runtime_profile"], foundation=foundation, spec=gate)
     _completed_gate(gate, foundation, spec["runtime_profile"])
-    plan = scientific_plan(foundation, foundation_root=Path(spec["foundation_root"]))
+    plan = (_adapter.scientific_plan if _adapter else scientific_plan)(foundation, foundation_root=Path(spec["foundation_root"]))
     if (gate["content_hash"] != spec["parents"]["gate"] or spec["source"] != gate["source"]
             or spec["source_commit"] != gate["source_commit"] or spec["project_dir"] != gate["project_dir"]
             or Path(spec["foundation_root"]) != Path(spec["gate_root"]) / "foundation"
             or spec["scientific_plan"] != plan or spec["tasks"] != task_graph(plan)
             or spec["model"] != model_contract() or spec["fresh_fit_count"] != 9 or spec["reducer_count"] != 5
-            or spec["selected_branches"] != ["DIRECT", "COARSE"] or spec["dataset_kind"] != KIND
+            or spec["selected_branches"] != ["DIRECT", "COARSE"] or spec["dataset_kind"] != (_adapter.KIND if _adapter else KIND)
             or "population_selection" in spec or spec["full_views_persisted"] is not False
             or spec["existing_campaign_mutations"] is not False):
         raise ValueError("Literature direct/coarse campaign differs")
