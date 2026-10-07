@@ -68,7 +68,7 @@ def _source(project: Path, commit: str) -> None:
     validate_source_checkout(Path(project), expected_commit=commit)
 
 
-def source_lock(project: Path, commit: str, *, literature: bool = False, context: bool = False, correlated: bool = False) -> dict:
+def source_lock(project: Path, commit: str, *, literature: bool = False, context: bool = False, correlated: bool = False, context_full: bool = False) -> dict:
     _source(project, commit)
     root = Path(project).resolve()
     package = sorted((root / "src/hlt_classification/cms_proxy_ladder").glob("*.py"))
@@ -84,6 +84,9 @@ def source_lock(project: Path, commit: str, *, literature: bool = False, context
         files += [root / name for name in extra]
         for folder in ("literature_context", "literature_context_production"):
             files += sorted((root / "src/hlt_classification" / folder).glob("*.py"))
+    if context_full:
+        from .context_full import SOURCE_FILES as extra
+        files += [root / name for name in extra]
     if correlated:
         from .correlated import SOURCE_FILES as extra
         files += [root / name for name in extra]
@@ -493,6 +496,9 @@ def create_oscar_direct_coarse_gate(
 
 
 def validate_gate(spec: dict, *, check_source: bool = False) -> str:
+    if spec.get("schema_version") == 11:
+        from .context_full import validate_gate as check
+        return check(spec, check_source=check_source)
     version = spec.get("schema_version")
     if version == 9:
         from .correlated import validate_gate as validate_correlated_gate
@@ -662,6 +668,9 @@ def validate_gate(spec: dict, *, check_source: bool = False) -> str:
 
 
 def validate_profile(profile: dict, *, foundation: dict, spec: dict) -> str:
+    if spec.get("schema_version") == 11:
+        from .context_full import validate_profile as check
+        return check(profile, foundation=foundation, spec=spec)
     if spec.get("schema_version") == 9:
         from .correlated import validate_profile as validate_correlated_profile
         return validate_correlated_profile(profile, foundation=foundation, spec=spec)
@@ -758,12 +767,14 @@ def validate_profile(profile: dict, *, foundation: dict, spec: dict) -> str:
 
 def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> dict:
     correlated = spec.get("schema_version") == 9
-    context = spec.get("schema_version") in (8, 9)
-    literature = spec.get("schema_version") in (7, 8, 9)
+    context = spec.get("schema_version") in (8, 9, 11)
+    literature = spec.get("schema_version") in (7, 8, 9, 11)
     site = spec.get("measurement_site", spec["execution_site"])
     job_id, cpus, memory_mb = allocation(site)
     workers = spec["workers"]
     validate_resources(site, cpus, memory_mb, workers)
+    if spec.get("schema_version") == 11 and (cpus != 6 or memory_mb != 180000 or workers != 6):
+        raise PermissionError("Full context preflight allocation differs from the reviewed request")
     foundation_root = Path(spec.get("foundation_root", output_root.parent / "foundation"))
     population = spec.get("population_selection")
     budgets = cache_budgets(
@@ -777,6 +788,8 @@ def _measure_preflight(spec: dict, foundation: dict, *, output_root: Path) -> di
             from .context import scientific_plan
         if correlated:
             from .correlated import scientific_plan
+        if spec.get("schema_version") == 11:
+            from .context_full import scientific_plan
         plan = scientific_plan(foundation, foundation_root=foundation_root)
     else:
         plan = (

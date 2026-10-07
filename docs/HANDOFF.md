@@ -1,5 +1,52 @@
 # Current Handoff
 
+## 2026-10-07: unchanged CONTEXT_V1, separate Oscar 1M/250k DIRECT+COARSE
+
+User explicitly chose scaling the existing frozen CONTEXT_V1 dataset instead
+of creating a stronger recipe. Implemented a separate full-population campaign:
+all 1,000,000 train + 250,000 validation rows, fresh M0HLT/OFFLINE/U000 controls,
+DIRECT and COARSE only (9 fits, 5 reducers, 16 science jobs). The original
+100k/50k execution is not mutated or resumed. Final test stays sealed; no
+generation, transfer, fitting to CMS data or recipe/model changes occur here.
+
+Authority: [1M plan](plans/JETCLASS2_CONTEXT_OSCAR_1M_DIRECT_COARSE_PLAN.md),
+[full contract](contracts/JETCLASS2_CONTEXT_OSCAR_FULL_LADDER.md).
+New implementations: `cms_proxy_ladder/context_full.py`, `cache_full.py`,
+`scripts/jetclass2_context_full_ladder.py`,
+`scripts/queue_jetclass2_context_full_ladder.sh`, and
+`tests/test_context_full_ladder.py`; explicit dispatches in shared release,
+data, cache, gate, production and submission. In-repository donor commit
+`779382740cdd44a5120449f02fde4a7719fed298`; file mapping in LEGACY_SOURCE_MAP.
+No Fresh_check runtime dependency or external donor.
+
+Versions: request/release/foundation v6, gate/profile v11, plan/campaign v8.
+These deliberately avoid concurrent CONTEXT_V2 v5/v10/v7 edits observed in the
+shared workspace; those are not part of this experiment. Old context view/v3,
+input/v2, model, recipe, coordinate seeds and selection rules remain unchanged.
+
+Full-version preparation uses one source file per task and bounded ordered
+futures, with capacity-based RAM bounds and separately charged assignment/index
+copies. Oscar GPU fits/reducers and preflight use 6 CPUs, 180000 MiB and one
+L40S. Admission checks installed-Weaver parity, full-size CE and KD acceptance,
+cache preparation/inference and GPU memory; measured walltimes are mandatory.
+The old 100k profile cannot authorize full-size science. No optimistic ETA or
+actual full-size memory measurement is claimed from local tests.
+
+Local evidence: full tests **6 passed** (87.71 s; actual spawned processes for
+synthetic assignment/cache parity, mocked hardware only for preflight wiring);
+old context tests **13 passed**; base proxy ladder **22 passed**; correlated
+submission/default regressions **5 passed**. Existing matplotlib/pyparsing
+deprecation warnings only in the synthetic-fixture suites. New CLI help and
+Git Bash syntax check passed. No remote jobs, push, commit or cancellation.
+
+Next: review/push scoped changes, pin a clean Oscar worktree, dry-review/submit
+the three gate jobs, then dry-review/submit the 16 science jobs after admission.
+[Exact runbook](JETCLASS2_CONTEXT_OSCAR_1M_RUNBOOK.md) uses the real Git root
+`/oscar/home/rlyang/hlt_classification/source/HLT_Classification` and existing
+copied dataset. Live helpers retain exclusive claims/journals on ambiguity.
+Native installed-Weaver/Oscar full-population execution is pending; neither
+local mocks nor the earlier 100k run establish its production readiness.
+
 ## 2026-10-07: automatic CORR_MID tier3 continuation, preserving the debug gate
 
 User reports completed CORR_MID generation (Tigris finalizer 229068, 2m47s),

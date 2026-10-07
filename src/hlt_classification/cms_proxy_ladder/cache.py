@@ -34,7 +34,7 @@ def _prepare_source(arguments) -> RamBlock:
     offsets, features, vectors, identities, labels = [0], [], [], [], []
     release = foundation["release"]
     make_inputs = build_inputs
-    if foundation.get("schema_version") == 3:
+    if foundation.get("schema_version") in (3, 6):
         from .context_inputs import build_inputs as make_inputs
     make_view = build_view
     if foundation.get("schema_version") == 4:
@@ -109,6 +109,13 @@ def preparation_bound(
 ) -> int:
     if type(workers) is not int or not 1 <= workers <= 72:
         raise ValueError("Invalid proxy-ladder preparation worker count")
+    if role not in ("train", "validation"):
+        raise PermissionError("Proxy-ladder cache role is sealed")
+    if foundation.get("schema_version") == 6:
+        if population_selection is not None:
+            raise ValueError("Full context cache cannot subsample its population")
+        from .cache_full import preparation_bound as full_bound
+        return full_bound(foundation, role, workers)
     if population_selection is not None and foundation_root is None:
         raise ValueError("Nested population requires foundation root")
     mask = _mask(
@@ -194,6 +201,8 @@ def prepare_cache(
         for chunk in np.array_split(sources, min(workers, len(sources)))
         if len(chunk)
     ]
+    if foundation.get("schema_version") == 6:
+        chunks = [(source,) for source in sources]
     arguments = [
         (
             foundation, str(Path(foundation_root).resolve()), role, coordinate,

@@ -78,7 +78,7 @@ def iter_paired(
     study = load_json(study_root / "study_spec.json")
     correlated = release.get("schema_version") == 4
     literature = release.get("schema_version") in (2, 4)
-    context = release.get("schema_version") == 3
+    context = release.get("schema_version") in (3, 6)
     if context:
         from .context import reader
         from hlt_classification.literature_proxy.population import from_columns
@@ -248,7 +248,7 @@ def build_foundation(
         raise FileExistsError("Proxy-ladder foundation root must be fresh")
     if type(workers) is not int or not 1 <= workers <= 72:
         raise ValueError("Proxy-ladder foundation workers must be in [1,72]")
-    context = release.get("schema_version") == 3
+    context = release.get("schema_version") in (3, 6)
     make_inputs, make_contract = build_inputs, input_contract
     if context:
         from .context_inputs import build_inputs as make_inputs, input_contract as make_contract
@@ -271,6 +271,8 @@ def build_foundation(
             for chunk in np.array_split(sources, min(workers, len(sources)))
             if len(chunk)
         ]
+        if release.get("schema_version") == 6:
+            chunks = [(source,) for source in sources]
         arguments = [
             (release, str(Path(release_root).resolve()), role, chunk, capacity)
             for chunk in chunks
@@ -283,7 +285,11 @@ def build_foundation(
                 mp_context=multiprocessing.get_context("spawn"),
                 initializer=_limit_worker_threads,
             )
-            results = pool.map(_match_sources, arguments)
+            if release.get("schema_version") == 6:
+                from .cache_full import ordered_results
+                results = ordered_results(pool, _match_sources, arguments, workers)
+            else:
+                results = pool.map(_match_sources, arguments)
         try:
             for result in results:
                 base = offsets[-1]
@@ -371,6 +377,8 @@ def build_foundation(
         preparation_workers=workers,
         full_views_persisted=False,
         assignments_recomputed_for_proxy_endpoint=True,
+        **({"assignment_slots": len(mapping_array), "cache_preparation": "source_file_bounded/v1"}
+           if release.get("schema_version") == 6 else {}),
     )
     write_json(root / "foundation.json", foundation)
     validate_foundation(foundation, root=root)
@@ -402,7 +410,7 @@ def load_assignments(foundation: dict, *, root: Path, role: str):
 
 def validate_foundation(foundation: dict, *, root: Path, check_bank: bool = True) -> str:
     version = foundation.get("schema_version")
-    if version not in (1, 2, 3, 4):
+    if version not in (1, 2, 3, 4, 6):
         raise ValueError("Unsupported foundation version")
     parents = {
         "release": foundation["release"]["content_hash"],
@@ -413,10 +421,10 @@ def validate_foundation(foundation: dict, *, root: Path, check_bank: bool = True
     digest = validate(foundation, "FOUNDATION", version=version, parents=parents)
     validate_release(foundation["release"], root=Path(foundation["release_root"]))
     make_contract = input_contract
-    if version == 3:
+    if version in (3, 6):
         from .context_inputs import input_contract as make_contract
     expected_matcher = matcher_spec(CANDIDATE)
-    expected_views = view_contract(literature=version == 2, context=version == 3)
+    expected_views = view_contract(literature=version == 2, context=version in (3, 6))
     if version == 4:
         from .correlated_views import input_contract as make_contract, matcher_contract, view_contract as correlated_contract
         expected_matcher, expected_views = matcher_contract(), correlated_contract()
@@ -434,8 +442,15 @@ def validate_foundation(foundation: dict, *, root: Path, check_bank: bool = True
         or foundation["max_view_particles"] > foundation["inputs"]["capacity"]
     ):
         raise ValueError("Proxy-ladder foundation semantics differ")
+    if version == 6 and (
+        foundation.get("cache_preparation") != "source_file_bounded/v1"
+        or type(foundation.get("assignment_slots")) is not int
+        or not 0 <= foundation["assignment_slots"] <= sum(foundation["role_counts"].values()) * foundation["inputs"]["capacity"]
+    ):
+        raise ValueError("Full context cache preparation contract differs")
     if check_bank:
         total = 0
+        slots = 0
         for role in ("train", "validation"):
             identity, offsets, mapping = load_assignments(foundation, root=root, role=role)
             if (
@@ -451,6 +466,9 @@ def validate_foundation(foundation: dict, *, root: Path, check_bank: bool = True
                     if not np.array_equal(mapping[lo:hi], np.arange(hi-lo)):
                         raise ValueError("Correlated identity mapping differs")
             total += int(np.count_nonzero(mapping >= 0))
+            slots += len(mapping)
+        if version == 6 and slots != foundation["assignment_slots"]:
+            raise ValueError("Full context assignment slot bound differs")
         if total != foundation["selected_pairs"]:
             raise ValueError("Proxy-ladder selected pair count differs")
     return digest

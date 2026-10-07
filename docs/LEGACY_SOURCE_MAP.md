@@ -1,5 +1,29 @@
 # Legacy Donor-Source Map
 
+## 2026-10-07: unchanged CONTEXT_V1, full 1M/250k Oscar campaign
+
+In-repository donor commit: `779382740cdd44a5120449f02fde4a7719fed298`.
+No external donor or `Fresh_check` runtime import. This does not migrate any
+CONTEXT_V2 changes present concurrently in the shared workspace.
+
+| Donor path | New use |
+| --- | --- |
+| `src/hlt_classification/cms_proxy_ladder/context.py` | `context_full.py`: additive population, resource and version variant; reader/completion/claim semantics retained |
+| `scripts/jetclass2_context_ladder.py` | Full CLI, unchanged result/queue workflow |
+| `scripts/queue_jetclass2_context_ladder.sh` | Full helper with separate authorization/root |
+| `tests/test_context_ladder.py` | Synthetic fixture/profile helpers and regression baseline |
+| `tests/test_literature_context_consumer.py` | Actual relocated synthetic ROOT/proxy fixture |
+| `src/hlt_classification/cms_proxy_ladder/release.py` | v6 all-ordinary-row release dispatch |
+| `src/hlt_classification/cms_proxy_ladder/data.py` | v6 joins, bounded assignment tasks, authenticated slot total |
+| `src/hlt_classification/cms_proxy_ladder/cache.py` | v6 file-sized batches; conservative bounds factored into `cache_full.py` |
+| `src/hlt_classification/cms_proxy_ladder/gate.py` | v11 source/admission/preflight dispatch |
+| `src/hlt_classification/cms_proxy_ladder/production.py` | v8 campaign dispatch |
+| `src/hlt_classification/cms_proxy_ladder/submission.py` | Separate prefixes/authorization; same durable exact DAG submission |
+
+Unmodified scientific dependencies include `campaign.py`, `views.py`,
+`context_inputs.py`, the JetClass2 model/kernel/recipe and relocated reader.
+Source locking binds these dependencies and the new plan/contract/CLI/tests.
+
 ## 2026-10-07: CORR_MID deferred tier3 science
 
 Internal donor commit `062713ead3e00721d9f3cb7073e88aef83ebd325`.

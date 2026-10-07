@@ -40,6 +40,9 @@ def release_request(*, study_root: Path, offline_root: Path, literature: bool = 
 
 
 def validate_request(value: dict) -> str:
+    if value.get("schema_version") == 6:
+        from .context_full import validate_request as validate_full_request
+        return validate_full_request(value)
     if value.get("schema_version") == 4:
         from .correlated import validate_request as validate_correlated_request
         return validate_correlated_request(value)
@@ -86,7 +89,7 @@ def build_release(request: dict, *, output_root: Path) -> dict:
     study = load_json(study_root / "study_spec.json")
     correlated = request.get("schema_version") == 4
     literature = request.get("schema_version") in (2, 4)
-    context = request.get("schema_version") == 3
+    context = request.get("schema_version") in (3, 6)
     backend = output
     counts, domain = request["counts"], request["selection_domain"]
     if context:
@@ -175,6 +178,8 @@ def build_release(request: dict, *, output_root: Path) -> dict:
     chosen = []
     for role, target in counts.items():
         available = candidates[role]
+        if request.get("schema_version") == 6 and len(available) != target:
+            raise ValueError(f"Full context release requires every {role} row: {len(available)} != {target}")
         if len(available) < target:
             raise ValueError(f"Insufficient committed {role} proxy rows: {len(available)} < {target}")
         chosen.extend((role, *row[1:]) for row in heapq.nsmallest(target, available, key=lambda row: row[0]))
@@ -264,7 +269,7 @@ def load_bank(manifest: dict, *, root: Path) -> dict[str, np.ndarray]:
 
 def validate_release(manifest: dict, *, root: Path, check_bank: bool = True) -> str:
     version = manifest.get("schema_version")
-    if version not in (1, 2, 3, 4):
+    if version not in (1, 2, 3, 4, 6):
         raise ValueError("Unsupported proxy-ladder release version")
     digest = validate(
         manifest, "RELEASE", version=version,
@@ -278,7 +283,7 @@ def validate_release(manifest: dict, *, root: Path, check_bank: bool = True) -> 
     if version == 4:
         from .correlated import validate_release_source
         validate_release_source(manifest)
-    if version == 3:
+    if version in (3, 6):
         from .context import validate_release_source
         validate_release_source(manifest)
     if (
