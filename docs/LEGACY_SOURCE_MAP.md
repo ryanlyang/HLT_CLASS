@@ -1,5 +1,21 @@
 # Legacy Donor-Source Map
 
+## 2026-10-07: CORR_MID deferred tier3 science
+
+Internal donor commit `062713ead3e00721d9f3cb7073e88aef83ebd325`.
+No external code or Fresh_check imports. Old gate worktrees/receipts stay immutable.
+
+| Donor paths | Reuse/adaptation |
+| --- | --- |
+| `src/hlt_classification/literature_ladder_followup.py` | Reuse read/hash, sanitized subprocess, lock and original-pin inspection bridge; new correlated controller binds v9, exact CORR_MID manifest, 11-job tier3 policy and a separate executor |
+| `src/hlt_classification/cms_proxy_ladder/{correlated,production,submission,gate}.py` | Retain measured-science validation, kernel, command builder and durable claims. New `correlated_tier3.py` explicitly authenticates source transfer and v6 campaign; sole old-source edit is the three-line validation dispatch |
+| `src/hlt_classification/jetclass2_delphes/execution.py` | Import existing same-A100 debug-to-tier3 policy/site definitions unchanged; actual worker allocation/GPU/software checks retained |
+| `scripts/jetclass2_literature_ladder_followup.py`, `scripts/start_jetclass2_literature_ladder_followup.sh` | New thin correlated tier3 CLI and dry-first detached launcher |
+| `tests/test_literature_ladder_followup.py`, `tests/test_correlated_tracking_ladder.py` | Fake accounting/claim/inspection failure tests, synthetic real gate/foundation integration reused for tier3 |
+
+The [new contract](contracts/JETCLASS2_CORRELATED_TIER3_FOLLOWUP.md) records
+versioned execution-only artifacts; science and dataset semantics are unchanged.
+
 ## 2026-10-07: frozen CORR_MID production and SPORC direct/coarse
 
 Internal donor commit `0667355d8c4d72e48e32c03f2d1540595fe654b7`.

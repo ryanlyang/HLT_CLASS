@@ -1,5 +1,10 @@
 # Frozen CORR_MID: full dataset, then SPORC direct/coarse
 
+**Current user choice:** preserve the running debug gate, automatically launch
+science on tier3. Use the [new follow-up runbook](JETCLASS2_CORRELATED_TIER3_FOLLOWUP_RUNBOOK.md)
+instead of manually submitting debug science in section 3 below. The original
+dataset/gate paths and pins remain valid.
+
 Authority: [plan](plans/JETCLASS2_CORRELATED_TRACKING_PRODUCTION_PLAN.md),
 [production contract](contracts/JETCLASS2_CORRELATED_TRACKING_PRODUCTION.md),
 [classifier contract](contracts/JETCLASS2_CORRELATED_TRACKING_LADDER.md).

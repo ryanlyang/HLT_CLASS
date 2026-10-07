@@ -148,6 +148,9 @@ def create_direct_coarse_campaign(*, gate_root: Path, campaign_root: Path) -> di
 
 def validate_campaign(spec: dict, *, check_source: bool = False) -> str:
     version = spec.get("schema_version")
+    if version == 6:
+        from .correlated_tier3 import validate_campaign as validate_tier3_campaign
+        return validate_tier3_campaign(spec, check_source=check_source)
     if version == 5:
         from .correlated import validate_campaign as validate_correlated_campaign
         return validate_correlated_campaign(spec, check_source=check_source)

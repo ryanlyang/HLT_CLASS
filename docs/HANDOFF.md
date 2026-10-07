@@ -1,5 +1,60 @@
 # Current Handoff
 
+## 2026-10-07: automatic CORR_MID tier3 continuation, preserving the debug gate
+
+User reports completed CORR_MID generation (Tigris finalizer 229068, 2m47s),
+then verifies the full 1M train / 250k validation / 1M test manifest
+`ef015d3c86f8188784169f67723a0f9772af96c4dab0a06387b208d9d33b4610`, 6.10 GiB.
+Metadata verification did not re-read physical blocks or evaluate final test.
+Dataset: `/home/ryreu/atlas/datasets/jetclass2_correlated_mid_2250k_062713ea_r1`.
+User then reports SPORC authentication 21820095 completed, foundation 21820096
+running, preflight 21820097 pending, and explicitly requests automatic science
+after successful setup with the complete comparison on **tier3**.
+
+The [new active operational amendment](plans/JETCLASS2_CORRELATED_TIER3_FOLLOWUP_PLAN.md)
+supersedes only the old debug-science execution choice. The old source-hashed
+plan and contract are preserved unchanged, as are the running gate and original
+worktree at `062713ead3e00721d9f3cb7073e88aef83ebd325`. Nothing on RC was modified
+or submitted locally. Actual scheduler state must be rechecked by the controller.
+
+New `correlated_ladder_followup.py`, `cms_proxy_ladder/correlated_tier3.py`, thin
+CLI and dry-first detached launcher authenticate the exact original gate source,
+dataset, plan, live ledger and journal. The controller waits for all three exact
+jobs COMPLETED/0:0, validates genuine gate outputs, then creates and dry-reviews
+the unchanged 11-job DIRECT+COARSE science before exact-hash tier3 submission.
+It retains six fits, three reducers, 100k/50k population, final-test seal, measured
+A100 GPU/software/resources and existing internal afterok edges. No extra fit,
+preflight rerun, cancellation, or old spec rewrite is introduced.
+
+New CAMPAIGN_SPEC/v6, TIER3_RUNTIME_PROFILE/v1, TIER3_SOURCE_TRANSFER/v1 and
+CORRELATED_TIER3_FOLLOWUP/v1 explicitly distinguish debug measurement from
+tier3 execution; see [contract](contracts/JETCLASS2_CORRELATED_TIER3_FOLLOWUP.md).
+All old measured source files must match, except the exact three-line version
+dispatch in production.validate_campaign; the training/execution kernels remain
+unchanged. The only added scientific-snapshot module is the tier3 adapter.
+Controller checks compatibility before arming, uses an exclusive Linux lock,
+rejects existing debug-science submissions and never retries ambiguous sbatch.
+
+Internal donor paths at `062713ead3e00721d9f3cb7073e88aef83ebd325` are recorded
+in LEGACY_SOURCE_MAP. Local validation: **84 tests passed** in the combined new
+transfer/controller and original correlated/literature follow-up regression run
+(125.42s), then **42 passed** in the final updated transfer/controller suites
+(47.23s, overlapping the earlier run; 86 distinct tests across those runs).
+Tests exercise synthetic real gate/foundation reuse, original-plan preservation,
+strict source compatibility, actual worker site/GPU enforcement, correct complete
+dry/live DAG, accounting failure/drift, exact ledger/journal authentication,
+idempotence and ambiguous-submit refusal. CLI help, Bash syntax, Python parsing,
+new documentation links and scoped whitespace checks passed. Existing plotting
+library deprecation warnings remain; no final test or real data were read locally.
+
+Installed-Weaver/A100 acceptance remains the original remote preflight's job;
+it is not claimed complete here. The amendment has not been committed, pushed,
+armed or remote-tested. Next: push the scoped files, create a separate clean
+executor checkout and arm with preflight 21820097 using the
+[push-and-arm runbook](JETCLASS2_CORRELATED_TIER3_FOLLOWUP_RUNBOOK.md). Wait for
+ARMED; later ALL 11 TIER3 SCIENCE JOBS QUEUED indicates submission, not training
+completion. No claim that tier3 is faster or that the ladder will improve results.
+
 ## 2026-10-07: user freezes CORR_MID; full dataset and SPORC follow-up implemented
 
 User reported Tigris correlated pilot job **228972 COMPLETED (1m43s)** at
