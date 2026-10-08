@@ -1,5 +1,24 @@
 # Legacy Donor-Source Map
 
+## 2026-10-08: external S3 one-time science continuation
+
+Internal operational donor commit: `8d936b9b72ab2a10d2a9d7bb8b4e440e6fe59be5`.
+Original S3 scientific implementation remains in its own checkout (introduced
+at `06803a8ba106cd8695186140ddf08ca9ec6a6bae`). No existing scientific or
+operational Python file is edited; no Fresh_check import or external donor.
+
+| Donor paths | New reuse |
+| --- | --- |
+| `src/hlt_classification/literature_ladder_followup.py` | Reused canonical metadata reader/hash, scrubbed subprocess environment, SPORC advisory lock and active-state vocabulary; adapted pinned-interpreter/one-time continuation pattern |
+| `src/hlt_classification/s3_ladder/campaign.py`; `scripts/jetclass2_s3_ladder.py` | Invoked exclusively through the original worktree: validate unchanged gate, genuine preflight, measured seven-job plan and exact dry/live submitter |
+| `src/hlt_classification/scouting/{hcwdl_exact_dag_submission,hcwdl_recovery}.py` | Original-source bridge authenticates resolved dependency commands, all live IDs and submission journal; no automatic partial retry |
+| `scripts/start_jetclass2_literature_ladder_followup.sh`; `tests/test_literature_ladder_followup.py` | Separate-checkout/nohup launcher, accounting failure and duplicate-controller tests adapted for the single S3 preflight |
+
+New `s3_ladder_followup.py`, thin CLI/launcher, tests, operational plan/contract
+and runbook. `JC2_S3_FOLLOWUP/v1` records separate authorization/review/submission
+evidence. Historical S3 SPEC/PLAN v1 `automatic_followup=false` fields stay
+unchanged; the user-requested operational continuation is authorized externally.
+
 ## 2026-10-08: CONTEXT_V1 100k/50k Oscar fusion adaptation
 
 Internal implementation donor commit: `06803a8ba106cd8695186140ddf08ca9ec6a6bae`.
