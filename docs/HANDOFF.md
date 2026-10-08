@@ -1,5 +1,54 @@
 # Current Handoff
 
+## 2026-10-07: fast, bounded CORR_HIGH_TOPO baseline-gap screen
+
+User reports OFFLINE 0.867480 versus M0HLT 0.866980: **0.05 percentage
+points**, not the requested >1 pp gap. Those supplied validation results
+motivate a separately registered three-candidate screen, not rewriting the
+running ladder or treating a weak result as a technical failure.
+[Plan](plans/JETCLASS2_GAP_SWEEP_PLAN.md),
+[contract](contracts/JETCLASS2_GAP_SWEEP.md),
+[queue/results runbook](JETCLASS2_GAP_SWEEP_RUNBOOK.md).
+
+Added `gap_sweep/{contracts,kernel,cache,campaign,worker}.py`, thin CLI,
+queue helper and focused tests. It reuses the exact parent 100k/50k population
+and authenticated completed OFFLINE/M0HLT reports from
+`8c5b47029ed15f88aa852b6f38d06e98bbbfcd9b`; every parent scientific source
+file must remain byte-identical. New `JC2_GAP_SWEEP_*/v1` artifacts pin
+source, recipe, parents and outputs. Donors are recorded in LEGACY_SOURCE_MAP.
+
+S1/S2/S3 add frozen context-dependent drops up to 10 GeV, charged-hadron
+neutralization and tracking erasure to the existing saved CORR_HIGH_TOPO
+endpoint. Shared identity-keyed draws; labels/teacher outputs/role do not
+enter generation. Retained p4 is unchanged. No new full dataset or matching:
+bounded ephemeral RAM caches, train-only count/validity diagnostics, weights
+and full CE reports. Same model, inputs, seeds and complete training recipe.
+Three independent baseline GPU fits plus one CPU summary, preceded by one
+genuine technical GPU gate (2h request). Separate dry/live gate and science
+reviews; no automatic expansion, KD, cancellation or existing-data changes.
+
+Choose the mildest of all three completed candidates with **gap >1 and <=2
+pp**. No candidate in band is a successful result with no winner. Selection
+uses baseline accuracy only, never KD recovery. Reused validation is
+exploratory strength tuning, not held-out confirmation. Final test stays sealed.
+
+Local evidence: **31 distinct focused/regression tests passed across runs**:
+11 existing topology tests (190.77s); 14 new tests including actual spawn
+reader/replay, real tiny-model full CPU CE fits, mocked hardware preflight,
+summary/checkpoint authentication, and submission/failure guards (339.23s);
+then 19 tests covering the final 2h request change, other new units, exact
+journals and five shared training tests (19.82s; one integration test deselected
+because already run). Existing plotting deprecation warnings remain. CLI help,
+Bash syntax and diff whitespace checks pass. The initial fixture-only spawn
+failure was repaired by propagating test constants in its test initializer;
+no production validation was weakened.
+
+No commit, push, real submission, final-test read or new remote acceptance
+performed in this implementation turn. Installed-Weaver/GPU/Tigris validation
+is not claimed by the CPU tests. Next: commit/push the scoped files, dry-review
+and submit the SPORC A100 gate; only its authenticated measured result admits
+the separately reviewed three-fit science plan. Existing work remains intact.
+
 ## 2026-10-07: CORR_HIGH_TOPO successor to the completed CORR_MID study
 
 User authorized stronger correlated tracking with NOISE_V3-style drops and

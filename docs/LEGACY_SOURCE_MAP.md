@@ -1,5 +1,28 @@
 # Legacy Donor-Source Map
 
+## 2026-10-07: bounded CORR_HIGH_TOPO baseline-gap screen
+
+Internal donor and required baseline source:
+`8c5b47029ed15f88aa852b6f38d06e98bbbfcd9b`. No external donor,
+Fresh_check runtime import, imported model initialization, or credentials.
+Historical scientific files remain byte-identical; new implementation is
+isolated in `src/hlt_classification/gap_sweep/`.
+
+| Donor path (under src/hlt_classification unless noted) | Reuse |
+| --- | --- |
+| `cms_proxy_ladder/correlated_topology.py`, `production.py`, `gate.py`, `contracts.py`, `correlated.py`, `submission.py` | Authenticate the exact parent/source and two completed CE controls; same execution gate, immutable references, dry/live site checks, exclusive journaled submission and walltime formatting |
+| `cms_proxy_ladder/data.py`, `release.py`, `cache.py`, `cache_full.py`; `correlated_topology/views.py` | Authenticated ordinary-only identity pairing, bounded spawn preparation, same existing 17-field transform; no new matching or dataset export |
+| `cms2jc2_response/bridge.py`, `data/cache_contracts.py` | Physical particle invariants, canonical hash streams and atomic publication |
+| `jetclass2_delphes/cache.py`, `campaign.py`, `runner.py`, `model.py`, `acceptance.py`, `execution.py` | Same RAM batches, full CE recipe, seeds, selected weights, installed-Weaver parity, GPU/environment checks |
+| `scouting/hcwdl_exact_dag_submission.py`; `sbatch/jetclass2_delphes_common.sh`, `sbatch/common.sh` | Exact dependency IDs and durable journals; existing isolated SPORC environment |
+| `tests/test_correlated_topology.py`, `test_correlated_tracking_ladder.py`, `test_correlated_tracking_production.py`, `test_literature_proxy.py`, `test_jetclass2_delphes_training.py` (under tests) | Synthetic producer/reader fixtures, physical invariants and tiny-model CPU training tests; hardware substitutes do not claim genuine acceptance |
+
+New files: `gap_sweep/{contracts,kernel,cache,campaign,worker}.py` and package
+initializer; `scripts/jetclass2_gap_sweep.py`, queue helper, focused tests,
+plan/contract/runbook `JETCLASS2_GAP_SWEEP*`. Scientific artifacts use a new
+`JC2_GAP_SWEEP_*/v1` namespace; inherited submission journals retain their
+existing exact-DAG contract rather than impersonating new artifacts.
+
 ## 2026-10-07: CORR_HIGH_TOPO ordinary dataset and direct/coarse ladder
 
 Internal donor snapshot: `eb69f6af3d9aacd8effc1125e9ecf273d0089510`.
