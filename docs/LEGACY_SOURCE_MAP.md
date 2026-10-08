@@ -1,5 +1,29 @@
 # Legacy Donor-Source Map
 
+## 2026-10-07: frozen S3 direct/coarse comparison
+
+Internal donor and required completed screen commit:
+`8abdc943c02d9844f98c91028f68e82e02b62fd4`. Its inherited CORR_HIGH_TOPO
+baseline source remains `8c5b47029ed15f88aa852b6f38d06e98bbbfcd9b`.
+No external donor, Fresh_check runtime import or old-file modification.
+
+| Donor paths (under src/hlt_classification unless noted) | New reuse |
+| --- | --- |
+| `gap_sweep/{campaign,cache,kernel,contracts,worker}.py` | Frozen selection, completed controls, exact endpoint generator/cache, source-transfer and immutable worker pattern; no change to old source |
+| `correlated_topology/views.py`; `cms_proxy_ladder/{data,release,cache,cache_full,contracts}.py` | Original representative mapping, surviving-tracking interpolation, 17-input frontend, bounded spawn RAM views and ordinary identity joins |
+| `cms_proxy_ladder/{production,gate,correlated,submission}.py` | Original OFFLINE reducer authentication, execution environment checks, source pinning, exact dry/live submission claims and walltime formatting |
+| `jetclass2_delphes/{runner,model,banks,cache,campaign,acceptance,execution,reporting}.py` | Unchanged fresh CE25/KL75 training, selected checkpoints, T=2 probability banks, installed parity, paired seeds (inherited via old graph) and recovery metrics |
+| `data/cache_contracts.py`; `scouting/hcwdl_exact_dag_submission.py` | Atomic content/file authentication and exact resolved dependency journals |
+| `scripts/jetclass2_gap_sweep.py`, `scripts/queue_jetclass2_gap_sweep.sh`; `sbatch/jetclass2_delphes_common.sh`, `sbatch/common.sh` | Thin CLI/helper pattern and unchanged absolute-path SPORC environment activation |
+| `tests/test_gap_sweep.py`, `tests/test_correlated_topology.py`, their inherited producer fixtures, `tests/test_jetclass2_delphes_training.py` | Synthetic saved-source/readers, real spawn and tiny-model training tests; explicit mock hardware does not claim real acceptance |
+
+New files: `s3_ladder/{__init__,contracts,views,cache,campaign,worker}.py`,
+`scripts/jetclass2_s3_ladder.py`, queue helper, `tests/test_s3_ladder.py`, and
+`JETCLASS2_S3_LADDER` plan/contract/runbook. New scientific namespace
+`JC2_S3_LADDER_*/v1`; original training/bank/submission contracts reused as-is.
+Original OFFLINE weights are not student initializations; only authenticated
+training probabilities are imported as supervision. No final-test artifacts.
+
 ## 2026-10-07: bounded CORR_HIGH_TOPO baseline-gap screen
 
 Internal donor and required baseline source:

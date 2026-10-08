@@ -1,5 +1,60 @@
 # Current Handoff
 
+## 2026-10-07: frozen S3 direct/coarse follow-up implemented locally
+
+User-supplied SPORC accounting reports the screen preflight 21825487, all
+three fits 21825504--21825506, and summary 21825507 completed successfully.
+Pasted authenticated-results output selected S3: OFFLINE 0.867480, S3 0.857000
+(1.048 pp accuracy gap), AUC 0.966395 versus 0.957844. This is reported remote
+evidence, not a local re-read of RC artifacts. S3 remains development-selected,
+not independently confirmed CMS response. The user now authorizes its direct
+versus coarse comparison on the same 100k/50k population.
+
+[Plan](plans/JETCLASS2_S3_LADDER_PLAN.md),
+[contract](contracts/JETCLASS2_S3_LADDER.md),
+[push/queue/results runbook](JETCLASS2_S3_LADDER_RUNBOOK.md).
+New isolated `s3_ladder/{contracts,views,cache,campaign,worker}.py`, CLI, queue
+helper and tests use `JC2_S3_LADDER_*/v1`. Donor/pinned screen source is
+`8abdc943c02d9844f98c91028f68e82e02b62fd4`; all inherited scientific files
+remain byte-identical. OFFLINE and S3 CE reports and the original OFFLINE
+train-only T=2 probability bank are authenticated/reused, not recomputed.
+
+Four fresh KD fits: OFFLINE->D000 direct and OFFLINE->D066->D033->D000 coarse.
+Two new intermediate training-bank reducers and one CPU summary make seven
+science jobs. No U000/dense branch, weight continuation, regeneration,
+2.25M export, strength retuning, test inference or existing-job mutation.
+All D views keep fixed S3 p4/PID/charge/support/validity; only surviving valid
+tracking is interpolated against original singleton values/added variance.
+The final endpoint delegates to the unchanged screen cache and verifies its
+full train/validation digests against the completed baseline. Lost particles
+and erased tracking are never restored. Intermediate validation is oracle-only.
+
+A new genuine A100 preflight (initial 2h/6 CPU/90000 MiB request) checks all-view
+serial/process replay, full S3 endpoint parity, installed-Weaver gradients,
+full-size D066 KD with the actual OFFLINE bank, bank readback, and measured
+RAM/GPU/train/reducer bounds. It gates a separate exact dry/live science plan;
+no automatic follow-up or historical scheduler-ID dependency. The active plan
+explicitly requires SPORC acceptance for this site, not inherited Tigris proof.
+
+Local evidence: **43 distinct tests passed across runs** (12 new, 15 existing
+gap-screen, 11 topology, 5 shared training). New full synthetic workflow run:
+10 passed in 187.50s; final added guard/unit run: 11 passed, one already-run
+integration deselected, 4.07s. Real spawn preparation and real tiny-model CPU
+CE/KD training/reducers/summary are exercised; GPU/parity probes are substituted
+only in tests. Existing tests initially had one timing-granularity failure:
+Windows Python 3.10 measured a tiny CPU acceptance pass as zero seconds. The
+unchanged gap-screen/training suite reran with a high-resolution test clock:
+20 passed in 115.74s. Production timing validation and historical source were
+not relaxed or modified. Existing plotting deprecation warnings remain.
+CLI help, Bash syntax and scoped source-preservation checks pass.
+
+No new real-Weaver/A100/Tigris validation, commit, push or remote submission
+performed by the local agent. Next: scoped commit/push, fresh detached SPORC
+checkout, dry/live S3 gate; then separately review/submit the seven science
+jobs once its saved acceptance authenticates. Results report raw metrics,
+S3/OFFLINE recovery and final coarse-minus-direct differences, with reused
+validation, single-seed and unequal-total-compute caveats.
+
 ## 2026-10-07: fast, bounded CORR_HIGH_TOPO baseline-gap screen
 
 User reports OFFLINE 0.867480 versus M0HLT 0.866980: **0.05 percentage
