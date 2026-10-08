@@ -1,5 +1,29 @@
 # Legacy Donor-Source Map
 
+## 2026-10-08: CONTEXT_V1 100k/50k Oscar fusion adaptation
+
+Internal implementation donor commit: `06803a8ba106cd8695186140ddf08ca9ec6a6bae`.
+The separately authenticated historical comparison/teacher campaign is pinned
+to `f889f359cdddca1beb3d6e817332d2b42a42ddf3`. No external donor or Fresh_check
+runtime import; no historical scientific implementation is modified.
+
+| Donor paths (under src/hlt_classification unless noted) | New reuse |
+| --- | --- |
+| `cms_proxy_ladder/{context,production,campaign,cache,data,inputs,context_inputs,views,contracts,gate,submission}.py` | Authenticate the completed CONTEXT parent, reuse its selected identities/matching/frontend/U000 bank and results; original paired seeds, bounded RAM views, Oscar site checks and durable submission claims |
+| `literature_context_consumer/` | Existing frozen CONTEXT_V1 relocation/readers inherited through the parent foundation; no regeneration |
+| `jetclass2_delphes/{dzfix_fusion_model,salience_learned_model,model}.py` | Native adjacent-view asymmetric fusion, compact masks, layout-preserving pair-saved-tensor CPU offload, independent encoder initialization and ordinary single-HLT endpoints |
+| `jetclass2_delphes/{runner,campaign,cache,banks,acceptance,execution,reporting}.py` | Current single-view training schedule and validation, identity-bound T=2 banks, selected weights, installed parity, resource identity and recovery metrics; not the older fusion patience/validation partition |
+| `cms2jc2_response/measurement.py`; `data/cache_contracts.py` | Process-tree sampled RSS, canonical hashes and atomic non-overwriting publication |
+| `scouting/{hcwdl_exact_dag_submission,hcwdl_recovery}.py` | Reviewed exact-plan dry/live ledgers and dependency journals |
+| `scripts/queue_jetclass2_gap_sweep.sh`; `sbatch/{common,jetclass2_delphes_common}.sh` | Thin pinned-source helper pattern and absolute Oscar environment activation |
+| `tests/test_context_ladder.py`, `tests/test_jetclass2_dzfix_fusion_chain.py`, their producer/fake-Weaver fixtures | Real synthetic CONTEXT loader/paired tensor parity and local miniature fixtures; not remote hardware acceptance |
+
+New implementation: `context_fusion/{__init__,contracts,inputs,campaign,worker}.py`,
+thin CLI/queue helper, focused tests and CONTEXT_FUSION plan/contract/runbook.
+New `JC2_CONTEXT_FUSION_*/v1` namespace; unchanged original training/bank
+contracts. Eight cold-start fits and six reducers import supervision, never
+teacher weights as student initialization. Final-test inference stays sealed.
+
 ## 2026-10-07: frozen S3 direct/coarse comparison
 
 Internal donor and required completed screen commit:
