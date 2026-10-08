@@ -1,5 +1,25 @@
 # Legacy Donor-Source Map
 
+## 2026-10-08: Luka FullSim metadata foundation (stage 1)
+
+Internal donor commit: `97ee3434a93de2fc7b0f09d506926cd50c5cde46`.
+New package `luka_fullsim`, CLI, CPU worker, tests and independent plan/contract.
+No external donor code or `Fresh_check` imports; old scientific files unchanged.
+
+| Donor paths (under src/hlt_classification) | Reuse/adaptation |
+| --- | --- |
+| `data/cache_contracts.py` | Imported canonical hashes, full-file SHA256, immutable atomic JSON publication and loading |
+| `provenance.py` | Imported clean tracked-source snapshots and before-publication reauthentication |
+| `jetclass2_delphes/{schema,contracts}.py` | Imported eleven-class numeric mapping, branch-header validation and safe relative-path utility only; no Delphes assumptions, particle reader, selection, inputs or artifact contracts are reused |
+| `jetclass2_delphes/inventory.py` | Imported latest-tree-cycle helper; adapted bounded scalar scan and before/after content authentication into the new FullSim schema family |
+| `jetclass2_delphes/{splits,split_registry}.py` | Design donor for file coverage/deficit grouping and SHA256 within-class subset ranking; new exact-rational 40/20/40 reservoirs and global Hamilton quotas, not the donor's 60/20/20 or reserve-one quota semantics |
+
+New semantics explicitly bind strict offline pT >200, source-restricted QCD,
+natural global class proportions, exact 100k/50k and unused ordinary rows
+separate from the file-disjoint sealed test reserve. New namespace
+`LUKA_FULLSIM_{INVENTORY,SPLITS,FOUNDATION}/v1`. No particle data, teacher bank,
+model weights, existing acceptance, or historical split is imported.
+
 ## 2026-10-08: external S3 one-time science continuation
 
 Internal operational donor commit: `8d936b9b72ab2a10d2a9d7bb8b4e440e6fe59be5`.
@@ -2231,6 +2251,33 @@ intentional changes
 parity tests and results
 third-party license/attribution impact
 ```
+
+## 2026-10-08: Luka FullSim stage-2 internal reuse
+
+Donor commit: `97ee3434a93de2fc7b0f09d506926cd50c5cde46`. No external code or
+`Fresh_check` was copied/imported. New code is under
+`src/hlt_classification/luka_fullsim/{particles,particle_audit,stage2,stage2_cache,preflight}.py`.
+The stage-1 files from the same local implementation are parents, not new donor
+data. No historical training weights, split membership or fitted proxy is reused.
+
+| Donor paths relative to `src/hlt_classification/` | Retained semantics |
+| --- | --- |
+| `data/cache_contracts.py`, `provenance.py` | Canonical hashes, deterministic NPZ, immutable publication, source locks |
+| `cms2jc2_response/bridge.py` | Physical particles, charge/applicability and p4 validation only |
+| `cms2jc2_response/measurement.py` | Linux process-tree resource measurements |
+| `cms_proxy_ladder/views.py` | Full-cardinality salience matching, persistent shell, mass-balanced tail and exact deterministic switch domain |
+| `literature_context/transform.py` (`build_inputs`, `input_contract` only), `cms_proxy_ladder/inputs.py` | Existing 17-feature asinh/log1p frontend; NO synthetic context transformation called |
+| `jetclass2_delphes/cache.py` (`RamBlock`, `RamCache`) | Ragged RAM storage, real batch lengths, metadata outside features |
+| `jetclass2_delphes/{model,campaign,runner,reporting,banks,acceptance,execution,dzfix_fusion_model}.py` | Eleven-class model, unchanged 60--100-pass science recipe, marked one-pass probes, metrics, probability joins, installed parity and SPORC checks |
+| `context_fusion/inputs.py` (`PairedCache`, `new_model`), `context_fusion/worker.py` (`clear`, `save_state`, `stress`) | Paired identity joins, native independent encoders, checkpoint and longest-TRAIN-batch stress |
+
+Intentional changes: real Luka native endpoints and selected source-row joins;
+new Luka contracts instead of proxy provenance; stored-unit audit before explicit
+unit/sentinel declaration; all selected particle/view validation; no final-test
+capability; temporary same-dataset probe teacher rather than imported U000 bank.
+Current tests/evidence: `tests/test_luka_fullsim_stage2.py` and HANDOFF.
+No third-party source/license changes. Installed Weaver remains an authenticated
+runtime dependency, and local tests do not establish remote acceptance.
 
 ## Deliberately excluded
 
