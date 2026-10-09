@@ -18,6 +18,9 @@ venv/
 .idea/
 .vscode/
 
+# Local development worktrees are not deployable source or submodules.
+/.worktrees/
+
 # Research data and generated artifacts
 *.root
 *.npz

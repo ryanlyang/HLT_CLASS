@@ -120,3 +120,69 @@ Stage 2 still needs tracking-unit/sentinel and producer-label conventions,
 selected particle validity, pairing/view construction and genuine installed-
 Weaver/SPORC GPU acceptance. Neither old CONTEXT acceptance nor this metadata
 foundation admits training on Luka's new FullSim sample.
+
+## Recovery from the 2255fd85 tracked-worktree packaging failure
+
+Job `21831081` failed before data access because the source commit accidentally
+tracked four local `.worktrees/` directories as mode-160000 gitlinks. These are
+developer worktrees, not deployable source files or configured submodules.
+Its dependent audit `21831082` was reported `DependencyNeverSatisfied`.
+This is not a ROOT/schema error or a failed GPU preflight.
+
+The packaging fix removes only those four index entries with `git rm --cached`
+and adds `/.worktrees/` to `.gitignore`. It leaves the local directories, Git
+metadata, commits and uncommitted work intact. The production source verifier
+is unchanged: missing tracked files, dirty source and stale commits still fail.
+`tests/test_source_packaging.py` reproduces the failure in a fresh clone,
+checks index-only preservation and verifies successful clean-clone hashing
+after cleanup. Do not fix an older execution by bypassing the verifier or
+creating dummy files at the missing gitlink paths.
+
+On Windows, the four pointer removals are already staged by the fix. Stage
+only the accompanying files and inspect the complete index before committing:
+
+```powershell
+git add -- .gitignore tests/test_source_packaging.py docs/LUKA_FULLSIM_FOUNDATION_RUNBOOK.md
+if ($LASTEXITCODE -ne 0) { throw "Staging failed" }
+git diff --cached --name-status
+```
+
+Expected: three added/modified files above and four `D .worktrees/...` entries.
+Those deletions are **index-only**, not deleted local worktrees. Review unrelated
+work separately; `docs/HANDOFF.md` already contains mixed earlier edits and is
+deliberately excluded from this automatic staging command. After review:
+
+```powershell
+git commit -m "Keep local worktrees out of deployable source snapshots"
+if ($LASTEXITCODE -ne 0) { throw "Commit failed" }
+git push origin HEAD:main
+if ($LASTEXITCODE -ne 0) { throw "Push failed; do not force-push" }
+git rev-parse HEAD
+```
+
+Fetch that new commit on SPORC and create a **new clean detached checkout** and
+fresh output root; preserve `HLT_Classification_luka_2255fd85` and its old logs.
+Do not requeue job `21831081`: its worker still points to the broken old source.
+Before using the stage-1 dry-run/submission commands above, activate the SPORC
+environment and check the new source (no ROOT data opened or jobs submitted):
+
+```bash
+export PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1
+export PYTHONPATH="${PROJECT_DIR}/src"
+python -s -c 'import sys; from hlt_classification.provenance import capture_source_snapshot; r=capture_source_snapshot(sys.argv[1]); assert r["git_commit"] == sys.argv[2]; print("Clean source authentication passed:", r["git_commit"])' \
+  "${PROJECT_DIR}" "${COMMIT}"
+```
+
+Then rerun the **foundation and CPU particle audit**, using the new foundation
+and fresh audit output. If submitting the audit as a dependency, bind it to the
+**new** successful-foundation job ID with `afterok`, never the old failed ID.
+The existing blocked audit will not recover automatically; no cancellation
+has been performed by this local fix. Retire it only after checking its exact
+owner, job ID, original work/output paths and pending dependency state.
+
+The local real-data diagnostic report is evidence, not a clean-source production
+receipt: do not rename it into `foundation.json` or `audit.json`. Preparation and
+the genuine GPU preflight remain separate gated steps in the
+[stage-2 runbook](LUKA_FULLSIM_STAGE2_RUNBOOK.md); tracking units, zero-error policy
+and interpretation of the large finite offline tracking tails remain explicit.
+No new physics cuts, clipping or default conventions are introduced by this fix.
