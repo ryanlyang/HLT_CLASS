@@ -1,5 +1,28 @@
 # Legacy Donor-Source Map
 
+## 2026-10-09: Luka preflight-v2 operational recovery
+
+Internal donor commit: `1256c75633399ec177d07308eb17d88a78e1fb85`.
+New modules: `luka_fullsim/{preflight_reuse,preflight_cache,preflight_v2}.py`.
+All original `src/` files stay byte-identical; no external code or Fresh_check.
+
+- `luka_fullsim/preflight.py`: same four technical cases, full-population pass,
+  checkpoints/TRAIN banks and resource projections; execution order changes.
+- `luka_fullsim/{stage2_cache,particles,stage2}.py`: physical conversion,
+  prepared assignment joins, feature kernel and input fingerprints.
+- `context_fusion/{inputs,worker}.py`: paired caches, native model, unchanged
+  longest-TRAIN batch256/three-step stress, cleanup and checkpoint writer.
+- `jetclass2_delphes/{cache,acceptance,dzfix_fusion_model,runner,banks,execution,
+  campaign,model}.py`: RAM batches, parity, training, probability joins, seeds,
+  recipe, and resource authentication, all unchanged.
+- `provenance.py`, `data/cache_contracts.py`, `cms2jc2_response/measurement.py`:
+  ordinary source checks, immutable outputs and Linux measurements. Dual-source
+  compatibility is additive, not a source-verifier bypass.
+
+No imported scientific weights/data/teachers. Execution/reuse contracts and the
+new unmeasured allocation are documented in the stage-2 plan/contract. Local
+tests do not establish installed-Weaver or genuine SPORC GPU acceptance.
+
 ## 2026-10-08: Luka FullSim metadata foundation (stage 1)
 
 Internal donor commit: `97ee3434a93de2fc7b0f09d506926cd50c5cde46`.

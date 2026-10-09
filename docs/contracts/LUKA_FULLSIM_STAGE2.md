@@ -1,4 +1,4 @@
-# Luka FullSim stage-2 contracts v1
+# Luka FullSim stage-2 contracts
 
 Authority: [stage-2 plan](../plans/LUKA_FULLSIM_STAGE2_PLAN.md).
 
@@ -33,3 +33,35 @@ It cannot stand in for a scientific training report or a campaign authorization.
 Hash verification is not a claim of cryptographic signing or producer approval.
 Readiness never follows merely from file existence. Unknown conventions remain
 an explicit stop between audit and physical preparation.
+
+## Operational recovery: GPU preflight v2
+
+`LUKA_FULLSIM_GPU_PREFLIGHT/v2` / schema 2 changes execution order/resources,
+not prepared inputs or the science recipe. V1 artifacts retain their meaning.
+
+`LUKA_FULLSIM_PREFLIGHT_REUSE/v1` binds the prepared hash, distinct preparation
+and execution source hashes, authenticated worktree locations, and SHA256 of
+every byte-identical existing tracked `src/` file. Any deletion/change, or any
+addition outside `luka_fullsim/{preflight_reuse,preflight_cache,preflight_v2}.py`,
+rejects reuse. Both worktrees pass the ordinary clean-source verifier before and
+after execution. CLI/worker/docs changes are covered by the new complete source
+snapshot. Neither arbitrary source mismatch nor dirty worktrees are waived.
+
+Small probes retain the first four TRAIN rows and first longest witness for
+each of U000/D000/U050. Candidate upper bounds use mapping cardinalities and
+raw HLT/offline scalar counts; particle reads remain selected TRAIN entries.
+Witnesses must attain prepared maxima. Unchanged parity/stress kernels retain
+batch256, three steps, padding/support, BN population, offload and optimizer.
+Small probes never replace full-population technical passes. Afterwards, full
+U000/D000/U050 caches are built in one ROOT pass per role, and each original
+model-input fingerprint is verified before use. D000-only requests still decode
+no offline branches. Caches stay in RAM, never persisted as a disk cache.
+
+V2 allocation: 6 CPUs / 256000 MiB / one SPORC A100. Small-stress peak plus the
+conservative future-cache reservation must stay below 85% host RAM; GPU peak
+below 90% capacity. Resource checks may reject allocation, never poor metrics.
+The report binds both sources, reuse, witnesses, phase start/end/failure records,
+cache-build timings, Linux RSS/GPU peaks, weights and TRAIN-bank readbacks.
+An OOM may leave only a phase start record/log heartbeat; it cannot publish
+`preflight.json`. Actual v2 Slurm success is still required to establish GPU
+correctness and whether the larger host-memory allocation is sufficient.

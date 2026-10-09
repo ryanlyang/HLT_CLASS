@@ -4,6 +4,60 @@ This is particle validation and a technical GPU probe, **not** the scientific
 direct/coarse/fusion campaign. [Plan](plans/LUKA_FULLSIM_STAGE2_PLAN.md) and
 [contract](contracts/LUKA_FULLSIM_STAGE2.md). Historical jobs are unchanged.
 
+## Recovery after GPU job 21834332: use preflight-v2
+
+The 90000 MiB attempt reached fusion and exhausted host RAM (92158920 KiB
+sampled MaxRSS). Its first two train/validation passes totaled only 107.6s;
+the 2h23 elapsed includes repeated loading and technical checks. The old log
+does not pinpoint parity versus worst-case stress. V2 logs these separately,
+with 15-second heartbeats. Preserve both failed outputs and their pinned source.
+
+Reuse completed preparation from job 21831385:
+
+```bash
+PREPARED_PROJECT=/home/ryreu/atlas/HLT_Classification_luka_1256c756
+PREPARED=/home/ryreu/atlas/HLT_Classification/checkpoints/luka_fullsim_1256c756_r2/prepared_mm_r1
+BASE=/home/ryreu/atlas/HLT_Classification/checkpoints
+```
+
+Commit/push the fix and create a **new clean detached worktree**. Set `COMMIT`
+to its full new commit and `PROJECT` to that worktree. Do not edit the old one
+or use `1256c756` as the v2 execution commit. Runtime authenticates both sources
+and requires all pre-existing `src/` bytes to match. Unrelated scientific changes
+will intentionally stop reuse; do not bypass it. No foundation/audit/preparation
+rerun is needed when compatibility passes.
+
+Dry-review this request on **sporcsubmit**, with a fresh output:
+
+```bash
+GPU="${BASE}/luka_preflight_v2_${COMMIT:0:8}_r1"
+test -f "${PREPARED}/prepared.json"
+test ! -e "${GPU}"
+sbatch --test-only --nodes=1 --ntasks=1 --cpus-per-task=6 --mem=256000M \
+  --gres=gpu:a100:1 --time=08:00:00 --partition=debug \
+  --account=reu-aisocial --qos=qos_tier3 --export=NONE --no-requeue \
+  --job-name=luka_gpu_preflight_v2 --output="${BASE}/luka-preflight-v2-%j.out" \
+  "${PROJECT}/sbatch/run_luka_fullsim_stage2.sh" "${PROJECT}" "${COMMIT}" preflight-v2 \
+  --prepared "${PREPARED}" --prepared-project "${PREPARED_PROJECT}" \
+  --output "${GPU}" --site sporc_a100_debug
+```
+
+After review, repeat **once without `--test-only`**. This documentation submits
+nothing. The 256000 MiB allocation is a new envelope, not guaranteed sufficient;
+unchanged batch256 stress runs first and checks cache headroom. For tier3 change
+both partition and site (`sporc_a100`). The worker sets cuBLAS workspace before
+Python; no manual export is needed. Models/particles/batch size are unchanged.
+
+Expect small TRAIN witnesses, installed/native and offload parity, all four
+batch256 stress probes, then one multi-view ROOT pass per role and four full
+population one-pass probes. Retain partial output/logs on failure. Read successful
+`preflight.json` with the new CLI's `summary`. No science jobs auto-submit.
+
+## Original preparation and historical v1 commands
+
+Audit/convention/preparation below remain valid. The final 90000 MiB v1 GPU
+example is historical: use the v2 recovery above for this prepared population.
+
 Start with a completed [stage-1 foundation](LUKA_FULLSIM_FOUNDATION_RUNBOOK.md).
 Commit/push both stages, then create a clean detached SPORC worktree at that
 exact commit using the stage-1 runbook. Do not copy new Python into an older

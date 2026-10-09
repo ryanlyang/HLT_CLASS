@@ -1,5 +1,37 @@
 # Luka FullSim stage 2: particle audit and technical admission
 
+## 2026-10-09 operational recovery amendment
+
+The user authorized the recommended fix after SPORC preflight 21834332 reached
+fusion and exhausted its 90000 MiB host-RAM allocation. Preflight v2 changes
+execution, not the scientific recipe. Preserve prepared-v1, provisional mm,
+error-only zero masking, all particles, assignments, model and training kernel.
+
+Before full caches, reconstruct the first four TRAIN rows and first actual
+maximum-length TRAIN witness per required view, using authenticated prepared
+maxima, scalar cardinalities and assignments. Only selected TRAIN candidate
+particles are decoded. Run installed/native-mask and FP32/BF16 offload parity,
+and the unchanged longest-TRAIN batch256/three-step stress for all four probes.
+Reserve full-cache headroom; fail stress before loading full populations.
+
+Then build U000/D000/U050 together in one selected-particle pass per role,
+rechecking every prepared-input fingerprint. Share these RAM caches across
+probes and the D000 object across both HLT-pair branches. Full-population
+one-pass CE/KD and checkpoint/TRAIN-bank readbacks remain mandatory.
+
+V2 requires exactly 6 CPUs, one SPORC A100 and **256000 MiB host RAM**. This is
+an unmeasured recovery envelope, not a sufficiency guarantee. Keep 85% host /
+90% GPU headroom checks and phase timing/RAM logs. Set the deterministic cuBLAS
+workspace before Python. Do not change model/offload math or weaken stress.
+
+Explicit old/new-source reuse requires both clean worktrees authenticated and
+every existing tracked `src/` file byte-identical. Only the three named new v2
+execution modules may be added. Record distinct preparation/execution parents;
+never rewrite old snapshots or prepared products. Historical v1 code remains
+intact. No automatic retry/submission, science graph or final-test access.
+
+## Original stage-2 scope
+
 User authorization: implement stage 2, 2026-10-08. The producer has **not**
 confirmed tracking units or zero-error semantics. Stage 1 remains authoritative
 for source selection, natural class proportions and exact file-disjoint splits.

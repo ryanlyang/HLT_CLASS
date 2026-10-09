@@ -3,7 +3,7 @@
 import argparse
 from pathlib import Path
 
-from hlt_classification.data.cache_contracts import load_json, write_immutable_json
+from hlt_classification.data.cache_contracts import load_json, write_immutable_json, validate_content_hash
 from hlt_classification.luka_fullsim import stage2 as s
 from hlt_classification.luka_fullsim.contracts import validate
 
@@ -11,13 +11,15 @@ from hlt_classification.luka_fullsim.contracts import validate
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    for mode in ("audit", "prepare", "preflight"):
+    for mode in ("audit", "prepare", "preflight", "preflight-v2"):
         p = commands.add_parser(mode)
         p.add_argument("--expected-commit", required=True)
         p.add_argument("--output", required=True, type=Path)
-        if mode == "preflight":
+        if mode in ("preflight", "preflight-v2"):
             p.add_argument("--prepared", required=True, type=Path)
             p.add_argument("--site", choices=("sporc_a100", "sporc_a100_debug"), required=True)
+            if mode == "preflight-v2":
+                p.add_argument("--prepared-project", required=True, type=Path)
         else:
             p.add_argument("--foundation", required=True, type=Path)
         if mode == "prepare":
@@ -36,10 +38,15 @@ def main():
     a = parser.parse_args()
     if a.command == "summary":
         report = load_json(a.path)
-        kind = report["contract"].removeprefix("LUKA_FULLSIM_").removesuffix("/v1")
+        kind, version = report["contract"].removeprefix("LUKA_FULLSIM_").rsplit("/", 1)
         if kind not in ("PARTICLE_AUDIT", "PREPARED", "GPU_PREFLIGHT"):
             raise ValueError("Unknown stage-2 report")
-        validate(report, kind)
+        if kind == "GPU_PREFLIGHT" and version == "v2":
+            validate_content_hash(report, expected_contract="LUKA_FULLSIM_GPU_PREFLIGHT/v2")
+        elif version == "v1":
+            validate(report, kind)
+        else:
+            raise ValueError("Unknown stage-2 report version")
         print("Report:", kind, "Counts:", report["counts"])
         if kind == "PARTICLE_AUDIT":
             print("STORED UNCONFIRMED UNITS; zeros do not establish sentinel semantics. SD is width.")
@@ -73,6 +80,9 @@ def main():
         result = s.audit(a.foundation, a.output, **kwargs)
     elif a.command == "prepare":
         result = s.prepare(a.foundation, a.audit, a.conventions, a.output, **kwargs)
+    elif a.command == "preflight-v2":
+        from hlt_classification.luka_fullsim.preflight_v2 import run
+        result = run(a.prepared, a.output, site_name=a.site, prepared_project=a.prepared_project, **kwargs)
     else:
         from hlt_classification.luka_fullsim.preflight import run
         result = run(a.prepared, a.output, site_name=a.site, **kwargs)
