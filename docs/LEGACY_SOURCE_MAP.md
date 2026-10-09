@@ -1,5 +1,35 @@
 # Legacy Donor-Source Map
 
+## 2026-10-09: Luka stage-3 fusion science campaign
+
+Internal donor commit: `bcccd498ee66fdee6fd3731b823d09ac2bb5df8b`.
+Five new `luka_fullsim/science_*.py` modules; no existing `src/` file changes,
+no external code, Fresh_check import, imported fit or probe-weight reuse.
+
+- `context_fusion/{campaign,worker,inputs}.py`: graph/receipt design, asymmetric
+  native fusion, paired cache identity joins, new-model factory and checkpoint
+  writer. Controls and U000 are now fresh Luka fits, not imported CONTEXT fits.
+- `luka_fullsim/{stage2,stage2_cache,preflight_cache,preflight_v2,preflight_reuse,
+  particles,contracts}.py`: unchanged physical/view/input semantics, exact saved
+  fingerprints, one-pass cache design, phase logging and explicit source reuse.
+  New cache wrapper supports all seven already prepared coarse coordinates.
+- `jetclass2_delphes/{runner,campaign,banks,reporting,model,execution,
+  dzfix_fusion_model}.py`: current 60--100 schedule, fit/bank/metric kernels,
+  environment, native offload and parity contracts; no old-overview schedule.
+- `cms_proxy_ladder/{campaign,contracts,submission}.py`: current paired seeds,
+  safe file references and walltime format; not dataset/schema impersonation.
+- `scouting/{hcwdl_exact_dag_submission,hcwdl_recovery}.py`: immutable exact-DAG
+  dry/live ledgers and per-submission journal. New exclusive Luka live claim.
+- `provenance.py`, `data/cache_contracts.py`, `sbatch/common.sh`: unchanged
+  clean-source checks, canonical hashes, atomic publication and shell helpers.
+- `tests/test_luka_fullsim_{stage2,preflight_v2}.py`: synthetic ROOT/source
+  fixtures. `tests/test_context_fusion.py`: miniature/failure-injection design.
+
+New Luka science v1 contracts distinguish admission/source/spec/plan/task/results
+from historical artifacts. Accepted genuine SPORC preflight 21835630 is reused
+only with exact report/source/output authentication and unchanged kernel bytes.
+The new orchestration's local tests do not assert a new remote campaign run.
+
 ## 2026-10-09: Luka preflight-v2 operational recovery
 
 Internal donor commit: `1256c75633399ec177d07308eb17d88a78e1fb85`.
