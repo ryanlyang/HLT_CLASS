@@ -1,5 +1,42 @@
 # Legacy Donor-Source Map
 
+## 2026-10-12: Luka locked final-test comparison
+
+Internal donor commit: `01a738328b267da1ecc13bbf4263c2e4a2d9e4e2`.
+Four additive `luka_fullsim/final_test_{campaign,data,worker,submission}.py`
+modules; every old tracked `src/` byte remains unchanged and is checked against
+that exact parent at admission. No external source or Fresh_check import.
+
+- `luka_fullsim/{science_campaign,science_worker,science_submission}.py`:
+  registered twelve-node graph, original selected-checkpoint/report/complete
+  validators, measured allocation/environment checks and exact scheduler checks.
+  Original source authentication executes in the original pinned worktree;
+  its restricted additive-source contract is not weakened.
+- `luka_fullsim/{stage2,particles,contracts,preflight_cache,preflight_reuse,
+  preflight_v2}.py`: physical conventions, original matching/input kernels,
+  selected contiguous ROOT ranges, row identities, ragged blocks, source-byte
+  comparison and phase/peak-memory logging. The new reader is explicitly
+  final-test-capable behind locks/claim/TRAIN-smoke; old readers remain sealed.
+- `jetclass2_delphes/{cache,runner,reporting,acceptance,dzfix_fusion_model}.py`
+  and `context_fusion/inputs.py`: unchanged single/paired tensor batching,
+  checkpoint model factory, T=1 prediction, validation/test metric definitions,
+  recovery convention and installed/native-mask parity. No training kernel,
+  teacher-bank creation, optimizer or checkpoint selection is invoked.
+- `cms_proxy_ladder/{contracts,submission}.py`,
+  `scouting/{hcwdl_exact_dag_submission,hcwdl_recovery}.py`, `provenance.py`,
+  `data/cache_contracts.py`, `sbatch/common.sh`: immutable file references,
+  source hashes, publication and exact dry/live DAG submission semantics.
+- `tests/test_luka_fullsim_stage2.py`: synthetic ROOT, preparation and source
+  fixtures. New tests exercise all twelve tiny frozen CPU checkpoints and
+  compare tie-correct weighted AUC to installed sklearn; not real test data.
+
+Intentional new semantics: separate v1 finalist/execution/access/result
+contracts, exactly the existing 149553-jet holdout, all-model frozen comparison,
+and paired source-file bootstrap contrasts. No dataset re-splitting or ordinary
+unused rows. Selected historical science weights are explicitly authorized
+inference parents, never initialization for new fits. No third-party license
+change. Local evidence and remaining genuine GPU execution are in HANDOFF.
+
 ## 2026-10-09: Luka stage-3 fusion science campaign
 
 Internal donor commit: `bcccd498ee66fdee6fd3731b823d09ac2bb5df8b`.
