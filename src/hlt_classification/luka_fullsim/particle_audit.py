@@ -37,7 +37,10 @@ class Moments:
                     abs_bin_edges=self.edges.tolist(), abs_bin_counts=self.histogram.tolist())
 
 
-def scan(container, inventory, splits):
+def scan(container, inventory, splits, *, reader_factory=None):
+    # An internal iterator adapter lets durable preparation audit the same rows
+    # it is already decoding. The default legacy audit is unchanged.
+    reader_factory = ParticleReader if reader_factory is None else reader_factory
     statistics, coverage, issues = {}, {}, {}
     for role in ("train", "validation"):
         meters = {}
@@ -48,7 +51,7 @@ def scan(container, inventory, splits):
         jets = 0
         def add(key, values):
             meters.setdefault(key, Moments()).add(values)
-        for jet in ParticleReader(container, inventory, splits, role=role, include_offline=True):
+        for jet in reader_factory(container, inventory, splits, role=role, include_offline=True):
             jets += 1
             for side in ("hlt", "offline"):
                 a = getattr(jet, side)

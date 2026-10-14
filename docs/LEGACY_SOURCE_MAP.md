@@ -1,5 +1,49 @@
 # Legacy Donor-Source Map
 
+## 2026-10-13: restored Luka regular DIRECT/COARSE with durable inputs
+
+Internal donor commit: `6c4cf9d12a6f354f3175103836d4e85d835a9a46`.
+No external donor or runtime Fresh_check import. Five additive regular modules
+implement new campaign/cache/admission semantics, rather than changing the
+historical fusion/final-test contracts.
+
+- `luka_fullsim/{foundation,inventory,splits,contracts}.py`: original 890-file
+  authentication, selection, identity and exact 100k/50k file-disjoint split.
+- `luka_fullsim/{particles,stage2,preflight_cache,stage2_cache}.py`:
+  selected-contiguous ROOT ranges, physical conventions, salience matching,
+  seven-view/input construction, assignment arrays, ragged blocks and ordered
+  input fingerprints. The new file worker transcribes the selected-range reader
+  after authenticating the complete split once per process. Serial donor replay
+  and serial/parallel byte-parity tests guard this adaptation.
+- `particle_audit.py`: the only existing scientific module with an additive
+  API change, an optional internal reader factory. Its default iterator and
+  diagnostic calculations are unchanged. The adapter audits the same decoded
+  rows during preparation; file-local moments merge in fixed order, permitting
+  diagnostic floating-point roundoff but never differences in model-input bytes.
+- `luka_fullsim/{science_campaign,science_worker,science_submission}.py`:
+  single-coordinate node fields/paired seeds, receipt-bound training/checkpoint/
+  TRAIN-bank logic, partial results/recoveries and exact dry/live submission.
+  Worker/submission code is adapted into the separate `REGULAR_*` namespace:
+  nine fits/five reducers, durable single-view loader, new gate evidence and no
+  historical-worktree dependency. Old workers and admission remain unchanged.
+- `luka_fullsim/preflight_v2.py`, `context_fusion/{inputs,worker}.py`,
+  `jetclass2_delphes/{cache,runner,banks,acceptance,model,reporting,execution,
+  campaign}.py`: phase logging, single-model factory,
+  full-support stress, save/readback, original batch masks, training/KD recipe,
+  installed single-encoder parity, environment, metrics and fresh-reference recovery.
+  No fusion model is instantiated; each node's context is explicitly None.
+- `data/cache_contracts.py`, `cms_proxy_ladder/contracts.py`,
+  `scouting/{hcwdl_exact_dag_submission,hcwdl_recovery}.py`, `provenance.py`:
+  deterministic atomic payload publication, source/content/parent hashes,
+  exclusive claims and exact per-job submission journals.
+- `tests/test_luka_fullsim_{stage2,science}.py`: synthetic ROOT/prepared fixtures
+  and a tiny CPU-only model to test the full regular scientific graph. This is
+  not installed-Weaver or SPORC acceptance evidence.
+
+New behavior is authorized by `plans/LUKA_FULLSIM_REGULAR_PLAN.md` and versioned
+in `contracts/LUKA_FULLSIM_REGULAR.md`. The prior holdout is recorded consumed;
+the new campaign has no test-evaluation capability.
+
 ## 2026-10-12: Luka locked final-test comparison
 
 Internal donor commit: `01a738328b267da1ecc13bbf4263c2e4a2d9e4e2`.
