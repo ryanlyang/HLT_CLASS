@@ -237,7 +237,8 @@ def evidence_fixture():
     from hlt_classification.jetclass2_delphes.contracts import artifact
     from hlt_classification.jetclass2_delphes.model import model_contract
     gate = dict(content_hash='a'*64, execution_site=c.registration()['execution_site'], source_snapshot=dict(content_hash='b'*64))
-    p = dict(content_hash='c'*64, summaries={'train':{co:dict(maximum=5) for co in cache.s.COORDINATES}})
+    p = dict(content_hash='c'*64, source_snapshot=gate['source_snapshot'],
+        summaries={role:{co:dict(maximum=n) for co in cache.s.COORDINATES} for role, n in [('train',5),('validation',9)]})
     manifest = dict(content_hash='d'*64)
     measurements = []
     for node in pre.probe_nodes():
@@ -245,16 +246,18 @@ def evidence_fixture():
             recipe_sha256=c.recipe()['content_hash'], scientific_fit=False, acceptance_only=True,
             selected_weights_restored=True, final_test_accessed=False, passes=1, runtime_seconds=10., validation=dict(rows=50000))
         measurements.append(dict(node=node, training=training, counts=c.COUNTS,
-            cache_seconds=1., inference_seconds=2., stress_batch=256, stress_steps=3))
+            cache_seconds=1., inference_seconds=2., stress_batch=256, stress_steps=3,
+            validation_stress_batch=256, validation_stress_steps=3, validation_stress_inference_only=True))
     train, reduce = pre.projections(measurements)
-    r = c.make_artifact('PREFLIGHT', parents=dict(gate='a'*64, prepared='c'*64, cache='d'*64),
+    r = c.make_artifact('PREFLIGHT', version=2, parents=dict(gate='a'*64, prepared='c'*64, cache='d'*64),
         counts=c.COUNTS, cpus=6, memory_mb=90000, site=gate['execution_site'], recipe=c.recipe(),
         source_snapshot=gate['source_snapshot'], scientific_fit=False, scientific_metrics_for_selection=False,
         checkpoint_probability_roundtrip=True, technical_checks_passed=True, resource_envelope_ok=True, fits_debug_24h=True,
         job_id='123', parities=dict(installed=artifact('WEAVER_PARITY', model=model_contract(), device='cuda', passed=True, forward_and_feature_and_parameter_gradients=True)),
         peak_rss_bytes=2**30, gpu_peak_bytes=2**30, gpu=dict(total_memory_bytes=40*2**30, name='A100'),
         measurements=measurements, projected_train_minutes=train, projected_reduce_minutes=reduce,
-        stress_maxima={co:5 for co in cache.s.COORDINATES},
+        preparation_source_snapshot=p['source_snapshot'], stress_policy=pre.stress_policy(),
+        stress_maxima={role:{co:n for co in cache.s.COORDINATES} for role,n in [('train',5),('validation',9)]},
         outputs=[dict(path=name, bytes=1, sha256='f'*64) for name in ['runtime.json', *(n['node_id']+'.pt' for n in pre.probe_nodes()),
                                                                    *(n['node_id']+'_bank/manifest.json' for n in pre.probe_nodes())]])
     return r, gate, p, manifest
@@ -358,8 +361,9 @@ def test_cpu_prepare_completion_and_consumed_test_flag(prepared, tmp_path, monke
         cache.prepare(gate)
 
 
-@pytest.mark.parametrize('fail_stress', [False, True])
-def test_full_preflight_orchestration_roundtrips(prepared, durable, tmp_path, monkeypatch, fail_stress):
+@pytest.mark.parametrize('fail_stress', [False, True, 'validation'])
+@pytest.mark.parametrize('recovered', [False, True])
+def test_full_preflight_orchestration_roundtrips(prepared, durable, tmp_path, monkeypatch, fail_stress, recovered):
     """Real cache and bank math; explicitly mock Slurm/GPU model execution only."""
     import torch
     from test_luka_fullsim_science import TinyModel
@@ -373,13 +377,22 @@ def test_full_preflight_orchestration_roundtrips(prepared, durable, tmp_path, mo
     p = deepcopy(p)
     p['foundation_root'] = str(tmp_path/'foundation')
     gate = dict(root=str(tmp_path), content_hash='b'*64, source_snapshot=p['source_snapshot'], execution_site=c.registration()['execution_site'])
+    if recovered:
+        original = dict(gate)
+        write_immutable_json(tmp_path/'original_gate.json', original)
+        gate = dict(gate, contract='LUKA_FULLSIM_REGULAR_RECOVERY_GATE/v1', content_hash='c'*64,
+            source_snapshot=dict(content_hash='e'*64),
+            reuse=dict(prepared_root=str(root), original_gate=dict(path=str(tmp_path/'original_gate.json'))))
     monkeypatch.setattr(c, 'COUNTS', p['counts'])
     monkeypatch.setattr(c, 'validate_gate', lambda _: None)
     monkeypatch.setattr(c, 'check_population', lambda *a: None)
     monkeypatch.setattr(c, 'conventions', lambda _: p['conventions'])
     monkeypatch.setattr(cache, 'metadata', lambda _: (manifest, p, inventory, splits))
     actual_load = cache.load
-    monkeypatch.setattr(cache, 'load', lambda unused, **kw: actual_load(root, **kw))
+    def load_once(location, **kw):
+        assert Path(location) == (root if recovered else tmp_path/'prepared')
+        return actual_load(root, **kw)
+    monkeypatch.setattr(cache, 'load', load_once)
     monkeypatch.setenv('CUBLAS_WORKSPACE_CONFIG', ':4096:8')
     monkeypatch.setattr(execution, 'allocation', lambda _: ('123', 6, 90000))
     monkeypatch.setattr(execution, 'gpu_identity', lambda: dict(name='A100', total_memory_bytes=40*2**30))
@@ -393,12 +406,22 @@ def test_full_preflight_orchestration_roundtrips(prepared, durable, tmp_path, mo
     events = []
     def stress(model, train):
         events.append('stress')
-        if fail_stress:
+        if fail_stress is True:
             raise MemoryError('injected stress failure')
     monkeypatch.setattr(worker, 'stress', stress)
+    actual_validation_stress = pre.validation_stress
+    def validation_stress(model, val):
+        events.append('validation_inference')
+        if fail_stress == 'validation':
+            raise MemoryError('injected validation stress failure')
+        actual_validation_stress(model, val, device='cpu')
+    monkeypatch.setattr(pre, 'validation_stress', validation_stress)
     actual_train, actual_predict = runner.train_kernel, runner.predict
-    monkeypatch.setattr(runner, 'train_kernel', lambda model, train, val, **kw:
-        actual_train(model, train, val, **{**kw, 'device':'cpu'}))
+    def timed_train(model, train, val, **kw):
+        report, state = actual_train(model, train, val, **{**kw, 'device':'cpu'})
+        # Tiny CPU fixtures can complete below Windows' timer resolution.
+        return with_content_hash(dict(report, runtime_seconds=max(.001, report['runtime_seconds']))), state
+    monkeypatch.setattr(runner, 'train_kernel', timed_train)
     monkeypatch.setattr(runner, 'predict', lambda model, train, **kw:
         actual_predict(model, train, **{**kw, 'device':'cpu'}))
     class Measured:
@@ -416,11 +439,12 @@ def test_full_preflight_orchestration_roundtrips(prepared, durable, tmp_path, mo
             with pytest.raises(MemoryError, match='injected'):
                 pre.run(gate)
             assert not (tmp_path/'preflight/preflight.json').exists()
-            assert events == ['stress']
+            assert events == (['stress', 'validation_inference'] if fail_stress == 'validation' else ['stress'])
         else:
             result = pre.run(gate)
             assert result['checkpoint_probability_roundtrip'] is True
             assert result['scientific_fit'] is False and len(result['measurements']) == 7
-            assert events == ['stress']*7
+            assert events == ['stress','validation_inference']*7
+            assert result['schema_version'] == 2 and set(result['stress_maxima']) == {'train','validation'}
     finally:
         torch.set_num_threads(before)

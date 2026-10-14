@@ -4,10 +4,9 @@ import subprocess
 
 from hlt_classification.cms_proxy_ladder.campaign import coordinate, paired_seed
 from hlt_classification.cms_proxy_ladder.contracts import file_ref, validate_file_ref
-from hlt_classification.data.cache_contracts import load_json, write_immutable_json
+from hlt_classification.data.cache_contracts import load_json, write_immutable_json, with_content_hash, validate_content_hash
 from hlt_classification.jetclass2_delphes.campaign import recipe
 from hlt_classification.jetclass2_delphes.execution import execution_site
-from .contracts import artifact, validate as base_validate
 from .foundation import _source, load_foundation
 from .science_campaign import preflight_accounting
 from . import stage2 as s
@@ -17,20 +16,21 @@ INVENTORY = '0832a577f7bcd0b9a9b719a7f62ef2a8e1b5b24108beec5bd7b3946a09642d17'
 SPLITS = '79ac6e577b92a5d2ed00d848c996812b388cab57f9d97d6b519f2bc10060c3b2'
 AUTHORIZATION = 'AUTHORIZE LUKA REGULAR EXACT PLAN'
 REQUIRED = [f'src/hlt_classification/luka_fullsim/regular_{name}.py'
-            for name in ('cache', 'campaign', 'preflight', 'worker', 'submission')]
+            for name in ('cache', 'campaign', 'preflight', 'worker', 'submission', 'recovery')]
 REQUIRED += ['scripts/luka_fullsim_regular.py', 'scripts/queue_luka_fullsim_regular.sh',
              'sbatch/run_luka_fullsim_regular.sh', 'tests/test_luka_fullsim_regular.py',
              'docs/plans/LUKA_FULLSIM_REGULAR_PLAN.md', 'docs/contracts/LUKA_FULLSIM_REGULAR.md',
-             'docs/LUKA_FULLSIM_REGULAR_RUNBOOK.md']
+             'docs/LUKA_FULLSIM_REGULAR_RUNBOOK.md', 'scripts/queue_luka_fullsim_regular_recovery.sh',
+             'tests/test_luka_fullsim_regular_recovery.py']
 
 
-def make_artifact(kind, *, parents=None, **fields):
-    return artifact('REGULAR_'+kind, parents=dict(parents or {}), final_test_accessed=False,
-                    historical_test_evaluated=True, **fields)
+def make_artifact(kind, *, parents=None, version=1, **fields):
+    return with_content_hash(dict(contract=f'LUKA_FULLSIM_REGULAR_{kind}/v{version}', schema_version=version,
+        parents=dict(parents or {}), final_test_accessed=False, historical_test_evaluated=True, **fields))
 
 
-def validate(value, kind, parents=None):
-    digest = base_validate(value, 'REGULAR_'+kind)
+def validate(value, kind, parents=None, *, version=1):
+    digest = validate_content_hash(value, expected_contract=f'LUKA_FULLSIM_REGULAR_{kind}/v{version}', expected_schema_version=version)
     if value.get('final_test_accessed') is not False or value.get('historical_test_evaluated') is not True:
         raise PermissionError('New test access forbidden; prior holdout is consumed')
     if parents is not None and value.get('parents') != parents:
@@ -123,6 +123,9 @@ def create_gate(*, root, container, project, commit):
 
 
 def validate_gate(gate):
+    if is_recovery(gate):
+        from .regular_recovery import validate_gate as validate_recovery
+        return validate_recovery(gate)
     validate(gate, 'GATE', dict(source=gate['source_snapshot']['content_hash']))
     if (any(gate.get(k) != v for k, v in gate_policy().items())
             or source(gate['project_dir'], gate['source_commit']) != gate['source_snapshot']
@@ -134,19 +137,36 @@ def validate_gate(gate):
     return gate
 
 
+def is_recovery(gate):
+    return gate.get('contract') == 'LUKA_FULLSIM_REGULAR_RECOVERY_GATE/v1'
+
+
+def is_gate(spec):
+    return spec.get('contract') == 'LUKA_FULLSIM_REGULAR_GATE/v1' or is_recovery(spec)
+
+
+def prepared_root(gate):
+    return Path(gate['reuse']['prepared_root']) if is_recovery(gate) else Path(gate['root'])/'prepared'
+
+
+def preparation_gate(gate):
+    return load_json(gate['reuse']['original_gate']['path']) if is_recovery(gate) else gate
+
+
 def evidence(gate):
     from .regular_cache import metadata
     from .regular_preflight import validate_evidence
     validate_gate(gate)
     root = Path(gate['root'])
-    f, inventory, splits = load_foundation(root/'foundation')
+    original = preparation_gate(gate)
+    f, inventory, splits = load_foundation(Path(original['root'])/'foundation')
     check_population(inventory, splits)
-    if f['source_snapshot'] != gate['source_snapshot'] or f['input_container'] != gate['input_container']:
+    if f['source_snapshot'] != original['source_snapshot'] or f['input_container'] != original['input_container']:
         raise ValueError('Foundation source/container differs')
-    manifest, p, _, _ = metadata(root/'prepared')
-    if (manifest['parents'] != dict(prepared=p['content_hash'], gate=gate['content_hash'])
-            or p['source_snapshot'] != gate['source_snapshot']
-            or p['foundation_root'] != str(root/'foundation')
+    manifest, p, _, _ = metadata(prepared_root(gate))
+    if (manifest['parents'] != dict(prepared=p['content_hash'], gate=original['content_hash'])
+            or p['source_snapshot'] != original['source_snapshot']
+            or p['foundation_root'] != str(Path(original['root'])/'foundation')
             or p['conventions'] != conventions(p['audit']['content_hash'])):
         raise ValueError('Prepared source/policy differs')
     r = load_json(root/'preflight/preflight.json')
@@ -160,31 +180,38 @@ def evidence(gate):
     return manifest, p, r
 
 
-def gate_ledger(gate):
+def gate_ledger(gate, *, historical=False):
     # Authenticate both the final ledger and its resolved per-job journal.
     ledger = load_json(Path(gate['root'])/'submission/submission_ledger.json')
-    from .regular_submission import plan
+    from .regular_submission import plan, _plan
     from hlt_classification.scouting.hcwdl_recovery import assemble_submission_ledger
     from hlt_classification.scouting.hcwdl_exact_dag_submission import load_exact_dag_journal
-    events, jobs = load_exact_dag_journal(Path(gate['root'])/'submission/submission_ledger_journal',
-        identity=gate['content_hash'], plan=plan(gate))
+    events, _ = load_exact_dag_journal(Path(gate['root'])/'submission/submission_ledger_journal',
+        identity=gate['content_hash'], plan=_plan(gate) if historical else plan(gate))
     expected = assemble_submission_ledger(campaign_spec_sha256=gate['content_hash'], events=events)
-    if ledger != expected or set(ledger['jobs']) != {'foundation', 'prepare', 'preflight'}:
+    if ledger != expected or set(ledger['jobs']) != ({'preflight'} if is_recovery(gate) else {'foundation', 'prepare', 'preflight'}):
         raise ValueError('Gate submission journal/IDs differ')
     return ledger
 
 
+def gate_jobs(gate):
+    jobs = dict(gate_ledger(gate)['jobs'])
+    if is_recovery(gate):
+        jobs.update({k: gate['reuse']['accounting'][k]['job_id'] for k in ('foundation', 'prepare')})
+    return jobs
+
+
 def create_science(gate):
     manifest, p, r = evidence(gate)
-    ledger = gate_ledger(gate)
-    if ledger['jobs']['preflight'] != str(r['job_id']):
+    jobs = gate_jobs(gate)
+    if jobs['preflight'] != str(r['job_id']):
         raise ValueError('Accepted preflight job differs from gate journal')
-    accounting = {name: preflight_accounting(job) for name, job in ledger['jobs'].items()}
+    accounting = {name: preflight_accounting(job) for name, job in jobs.items()}
     root = Path(gate['root'])/'science'
     spec = make_artifact('SPEC', parents=dict(gate=gate['content_hash'], cache=manifest['content_hash'], preflight=r['content_hash']),
         root=str(root), project_dir=gate['project_dir'], source_commit=gate['source_commit'], source_snapshot=gate['source_snapshot'],
         gate_path=str(Path(gate['root'])/'gate_spec.json'), gate_accounting=accounting,
-        admission=dict(prepared_root=str(Path(gate['root'])/'prepared'), preflight=file_ref(Path(gate['root'])/'preflight/preflight.json')),
+        admission=dict(prepared_root=str(prepared_root(gate)), preflight=file_ref(Path(gate['root'])/'preflight/preflight.json')),
         prepared_sha256=p['content_hash'], preflight_sha256=r['content_hash'],
         train_minutes=r['projected_train_minutes'], reduce_minutes=r['projected_reduce_minutes'], **registration())
     root.mkdir(exist_ok=False)
@@ -201,14 +228,14 @@ def validate_spec(spec):
             or spec['source_snapshot'] != gate['source_snapshot'] or spec['source_commit'] != gate['source_commit']
             or spec['project_dir'] != gate['project_dir'] or Path(spec['root']) != Path(gate['root'])/'science'
             or spec['train_minutes'] != r['projected_train_minutes'] or spec['reduce_minutes'] != r['projected_reduce_minutes']
-            or spec['admission'] != dict(prepared_root=str(Path(gate['root'])/'prepared'), preflight=file_ref(Path(gate['root'])/'preflight/preflight.json'))
+            or spec['admission'] != dict(prepared_root=str(prepared_root(gate)), preflight=file_ref(Path(gate['root'])/'preflight/preflight.json'))
             or load_json(Path(spec['root'])/'campaign_spec.json') != spec):
         raise ValueError('Registered science/source/resources differ')
     if set(spec['gate_accounting']) != {'foundation', 'prepare', 'preflight'} or any(
             row.get('state') != 'COMPLETED' or row.get('exit_code') != '0:0' for row in spec['gate_accounting'].values()):
         raise ValueError('Successful full gate accounting required')
-    ledger = gate_ledger(gate)
-    if ({k: v['job_id'] for k, v in spec['gate_accounting'].items()} != ledger['jobs']
-            or ledger['jobs']['preflight'] != str(r['job_id'])):
+    jobs = gate_jobs(gate)
+    if ({k: v['job_id'] for k, v in spec['gate_accounting'].items()} != jobs
+            or jobs['preflight'] != str(r['job_id'])):
         raise ValueError('Science gate-accounting identities differ')
     return p, r

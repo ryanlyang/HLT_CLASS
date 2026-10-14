@@ -69,6 +69,40 @@ gate and science. Failed/ambiguous directories are preserved, never retried
 silently. No live submission is part of local implementation. No automatic
 science follow-up unless separately authorized.
 
+## Validation-length preflight correction and recovery
+
+The original a54c60e5 gate completed foundation (21880174) and preparation
+(21880175), then rejected a validation maximum longer than TRAIN (21880176).
+The user authorized fixing this operational assumption and reusing the completed
+inputs. This amendment supersedes the v1 cross-role length comparison, not any
+scientific data/model/training rule.
+
+Preflight v2 stress-tests each coordinate's longest TRAIN input with the existing
+batch-256, three-step backward test. Separately, it repeats that coordinate's
+longest validation input at batch 256 for three inference-only forward passes.
+No validation labels, losses, gradients, optimizer or scientific metrics enter
+the validation stress. Record maxima separately by role, and fail on resource
+headroom/nonfinite failures. Keep full-population technical passes and installed
+parity. Do not truncate particles, pad with fake active particles, increase
+memory silently, or require validation lengths to be bounded by TRAIN lengths.
+
+Recovery creates a fresh sibling gate root and queues only one replacement
+preflight. Authenticate the original clean a54c60e5 source, exact gate journal,
+successful foundation/preparation accounting, FAILED/1:0 original preflight,
+failure log, and original prepared/cache parents. Preserve all original files.
+Every existing src module must remain byte-identical except the regular campaign,
+preflight and submission orchestration; only regular_recovery.py may be added.
+Also compare the campaign's scientific declarations (population, conventions,
+nodes, tasks, registration and gate policy) as syntax trees. No changed physical
+reader/cache, scientific worker, model, matching, seeds, recipe or split is
+admitted. Preparation and execution source parents remain distinct.
+
+New science under the recovery root must bind the two original successful CPU
+jobs and the new successful preflight job, with the old prepared-root path.
+The old failed preflight never becomes success evidence. Full dry review and
+explicit execution remain mandatory separately for recovery and science. A
+second failure remains inspectable and is not silently retried.
+
 ## Test status
 
 The old 149553-jet final holdout was already evaluated in the previous fusion

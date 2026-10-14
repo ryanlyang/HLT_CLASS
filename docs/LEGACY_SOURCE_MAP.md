@@ -1,5 +1,25 @@
 # Legacy Donor-Source Map
 
+## 2026-10-13: regular preflight v2 and cache-preserving recovery
+
+Internal donor commit: `a54c60e5354f61b4c065f9322d89dbb4f6cf8dc3`.
+Adapted `luka_fullsim/regular_{campaign,preflight,submission}.py` and the thin
+regular CLI; added `regular_recovery.py` and a queue wrapper. Reuse source-hash
+enumeration from `luka_fullsim/preflight_reuse.py` and snapshot validation from
+`provenance.py`. Source/metadata contracts remain canonical and completion-last.
+
+The existing `context_fusion.worker.stress` still supplies the TRAIN-only
+backward stress, unchanged. A separate label-free validation stress reuses
+`jetclass2_delphes.runner._forward` and the original cached batch interface in
+eval/inference mode; it creates no scientific checkpoint or teacher. No fusion
+model is instantiated. All physical input/cache/scientific-worker/model modules
+and the campaign's scientific declarations remain identical to the donor.
+
+Operational evidence is versioned as REGULAR_PREFLIGHT/v2, with new
+REGULAR_RECOVERY_GATE/v1 and REGULAR_SOURCE_REUSE/v1 bindings. Tests cover longer
+validation support, no gradients/weight updates, source drift, original
+accounting/journals and single-job recovery followed by the unchanged science DAG.
+
 ## 2026-10-13: restored Luka regular DIRECT/COARSE with durable inputs
 
 Internal donor commit: `6c4cf9d12a6f354f3175103836d4e85d835a9a46`.

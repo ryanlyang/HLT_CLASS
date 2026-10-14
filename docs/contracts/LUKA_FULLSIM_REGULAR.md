@@ -23,6 +23,27 @@ Unknown coordinates, duplicate/missing/reordered blocks, corrupt arrays, changed
 fingerprints or changed source fail closed. Partial outputs have no completion
 manifest and are not reusable. Output paths cannot overlap source/raw inputs.
 
+### Preflight v2 and recovery-gate v1
+
+`LUKA_FULLSIM_REGULAR_PREFLIGHT/v2` supersedes v1's TRAIN-only support envelope.
+`stress_policy` declares TRAIN backward and validation inference-only, each
+batch 256 for three steps. `stress_maxima` is a two-role mapping with all seven
+coordinate maxima exactly equal to prepared metadata. Validation may be longer
+than TRAIN, up to the unchanged 512 capacity. Each measurement must bind both
+stress cases; v1 evidence and missing/relabelled maxima are rejected. Record
+`preparation_source_snapshot` separately from current `source_snapshot`.
+
+`LUKA_FULLSIM_REGULAR_RECOVERY_GATE/v1` binds original gate, prepared/cache and
+`LUKA_FULLSIM_REGULAR_SOURCE_REUSE/v1` hashes plus the active source. The recovery
+root cannot overlap either worktree, raw inputs or original artifact root.
+SOURCE_REUSE records old/new src hashes, the exact operational change allowlist,
+the sole added module, and verifies frozen scientific declarations unchanged.
+Canonical paths, original failed log hash and exact ledger/accounting IDs are
+bound. Admission requires old CPU jobs COMPLETED/0:0 and old preflight FAILED/1:0;
+live/successful original preflights or existing original science are rejected.
+Only the replacement preflight is submitted. Prepared/cache v1 artifacts remain
+read-only under their original source and never acquire rewritten parent hashes.
+
 Source-bound GPU evidence includes genuine Slurm identity, installed environment,
 GPU identity, parity, worst-support stress, full-population technical reports,
 checkpoint/bank readbacks, measured peaks and conservatively projected requests.

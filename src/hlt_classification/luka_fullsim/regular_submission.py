@@ -12,12 +12,20 @@ from . import regular_campaign as c
 
 
 def plan(spec):
-    gate = spec['contract'] == 'LUKA_FULLSIM_REGULAR_GATE/v1'
+    gate = c.is_gate(spec)
     c.validate_gate(spec) if gate else c.validate_spec(spec)
+    return _plan(spec)
+
+
+def _plan(spec):
+    # Pure rendering also replays the already-authenticated original gate journal.
+    gate = c.is_gate(spec)
     root, project, site = Path(spec['root']), spec['project_dir'], spec['execution_site']
     rows = ([dict(task_id='foundation', kind='foundation', dependencies=[]),
              dict(task_id='prepare', kind='prepare', dependencies=['foundation']),
              dict(task_id='preflight', kind='preflight', dependencies=['prepare'])] if gate else c.tasks())
+    if c.is_recovery(spec):
+        rows = [dict(task_id='preflight', kind='preflight', dependencies=[])]
     commands = []
     for row in rows:
         name, kind, deps = row['task_id'], row['kind'], row['dependencies']

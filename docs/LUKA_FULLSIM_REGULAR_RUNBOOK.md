@@ -11,6 +11,10 @@ Read [the active plan](plans/LUKA_FULLSIM_REGULAR_PLAN.md) and
 not replace the real SPORC acceptance gate below. Nothing has been submitted
 by implementing these files.
 
+**Recovering the failed a54c60e5 preflight (21880176)?** Use the
+[preflight-only recovery section](#preflight-only-recovery-after-21880176), not
+the fresh three-job gate. Keep the original worktree and completed caches.
+
 ## 1. Commit and push on Windows
 
 Review changes; do not stage the thousands of unrelated fixtures or raw data.
@@ -24,8 +28,11 @@ git add -- src/hlt_classification/luka_fullsim/particle_audit.py `
   src/hlt_classification/luka_fullsim/regular_preflight.py `
   src/hlt_classification/luka_fullsim/regular_worker.py `
   src/hlt_classification/luka_fullsim/regular_submission.py `
+  src/hlt_classification/luka_fullsim/regular_recovery.py `
   scripts/luka_fullsim_regular.py scripts/queue_luka_fullsim_regular.sh `
+  scripts/queue_luka_fullsim_regular_recovery.sh `
   sbatch/run_luka_fullsim_regular.sh tests/test_luka_fullsim_regular.py `
+  tests/test_luka_fullsim_regular_recovery.py `
   docs/plans/LUKA_FULLSIM_REGULAR_PLAN.md docs/contracts/LUKA_FULLSIM_REGULAR.md `
   docs/LUKA_FULLSIM_REGULAR_RUNBOOK.md docs/LEGACY_SOURCE_MAP.md
 git add -p -- docs/HANDOFF.md
@@ -184,3 +191,73 @@ only. Reports include validation accuracy/AUC/rejection50 and recovery relative
 to M0HLT=0%, pure OFFLINE=100%, with unfinished rows retained. Direct versus
 coarse is a development comparison with unequal training compute, not evidence
 from a new blind holdout.
+
+## Preflight-only recovery after 21880176
+
+The original gate is
+`/home/ryreu/atlas/HLT_Classification/checkpoints/luka_regular_a54c60e5_r1/gate_spec.json`.
+Foundation 21880174 and preparation 21880175 completed; preflight 21880176
+failed because validation support exceeded the TRAIN maximum. That comparison
+is replaced by separate TRAIN-backward and validation-inference stress tests.
+No particles, splits, labels or recipe change. No validation fitting occurs.
+
+First commit/push the explicit files in section 1 (including the new recovery
+module, helper and tests). This must produce a **new** commit, not a54c60e5.
+Do not edit the old worktree, metadata, source hashes or failed preflight folder.
+No preprocessing is rerun and no second copy of the caches is created.
+
+On SPORC, paste the following. Leave `MODE=gate` for the initial recovery.
+It dry-reviews **one** A100 preflight job (6 CPUs, 90000 MiB, 8h), then asks
+before submitting. A helper PID is not proof of submission: wait for the ledger
+and `QUEUE_HELPER_EXIT=0` in the printed log.
+
+```bash
+bash <<'BASH'
+set -euo pipefail
+trap 'echo "Stopped at line ${LINENO}; preserve everything and paste the error." >&2' ERR
+MODE=gate
+read -r -p 'Paste the new pushed 40-character recovery commit: ' COMMIT </dev/tty
+[[ "${COMMIT}" =~ ^[0-9a-f]{40}$ ]]
+MAIN=/home/ryreu/atlas/HLT_Classification
+PROJECT="/home/ryreu/atlas/HLT_Classification_luka_regular_${COMMIT:0:8}"
+ROOT="${MAIN}/checkpoints/luka_regular_recovery_${COMMIT:0:8}_r1"
+ORIGINAL="${MAIN}/checkpoints/luka_regular_a54c60e5_r1/gate_spec.json"
+PYTHON=/home/ryreu/miniconda3/envs/atlas_kd_sporc/bin/python
+test -f "${ORIGINAL}"
+test -f "$(dirname "${ORIGINAL}")/prepared/cache_manifest.json"
+test -x "${PYTHON}"
+git -C "${MAIN}" fetch origin main
+git -C "${MAIN}" merge-base --is-ancestor "${COMMIT}" origin/main
+if [[ -e "${PROJECT}" ]]; then
+    test "$(git -C "${PROJECT}" rev-parse HEAD)" = "${COMMIT}"
+    test -z "$(git -C "${PROJECT}" status --porcelain --untracked-files=all)"
+else
+    git -C "${MAIN}" worktree add --detach "${PROJECT}" "${COMMIT}"
+fi
+HELPER="${PROJECT}/scripts/queue_luka_fullsim_regular_recovery.sh"
+bash "${HELPER}" "${COMMIT}" "${ORIGINAL}" "${ROOT}" "${MODE}"
+PLAN="${ROOT}/submission/command_plan.json"
+if [[ "${MODE}" == science ]]; then PLAN="${ROOT}/science/submission/command_plan.json"; fi
+PLAN_HASH="$(PYTHONNOUSERSITE=1 "${PYTHON}" -s -c \
+    'import json,sys; print(json.load(open(sys.argv[1]))["content_hash"])' "${PLAN}")"
+printf '\nMode: %s\nRoot: %s\nReviewed plan: %s\n' "${MODE}" "${ROOT}" "${PLAN_HASH}"
+read -r -p 'Submit exactly this reviewed plan? Type YES: ' CONFIRM </dev/tty
+if [[ "${CONFIRM}" != YES ]]; then echo 'Stopped without submission.'; exit 0; fi
+LOG="$(mktemp "${ROOT}/${MODE}-recovery-submit.XXXXXX.log")"
+nohup bash "${HELPER}" "${COMMIT}" "${ORIGINAL}" "${ROOT}" "${MODE}" \
+    --execute "${PLAN_HASH}" >"${LOG}" 2>&1 </dev/null &
+printf 'Helper PID: %s\nWatch with:\ntail -f "%s"\n' "$!" "${LOG}"
+BASH
+```
+
+After the replacement preflight is COMPLETED/0:0, inspect its
+`ROOT/preflight/preflight.json` (REGULAR_PREFLIGHT/v2): separate role maxima,
+inference-only validation stress, technical checks and resource bounds must pass.
+Then repeat the same block with **only `MODE=science`** and the same new commit.
+That separately dry-reviews/submits the unchanged 16-job regular DIRECT/COARSE
+graph using the old caches. The failed old job is not a dependency or acceptance
+parent; the new gate binds its replacement ID alongside the two successful old
+CPU IDs. No automatic follow-up, cancellation or retry occurs.
+
+For results use the earlier results command, but set
+`ROOT="/home/ryreu/atlas/HLT_Classification/checkpoints/luka_regular_recovery_${COMMIT:0:8}_r1"`.

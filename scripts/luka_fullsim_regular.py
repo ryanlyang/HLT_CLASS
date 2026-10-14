@@ -10,7 +10,7 @@ from hlt_classification.luka_fullsim import regular_campaign as c, regular_submi
 def read_spec(path):
     path = Path(path).resolve(strict=True)
     value = load_json(path)
-    name = 'gate_spec.json' if value['contract'] == 'LUKA_FULLSIM_REGULAR_GATE/v1' else 'campaign_spec.json'
+    name = 'gate_spec.json' if c.is_gate(value) else 'campaign_spec.json'
     if path != Path(value['root']).resolve()/name:
         raise ValueError('Use the canonical specification, not a relocated copy')
     return value
@@ -22,6 +22,9 @@ def main():
     create = modes.add_parser('create-gate')
     for option in ('root', 'container', 'expected-commit'):
         create.add_argument('--'+option, required=True)
+    recovery = modes.add_parser('create-recovery')
+    for option in ('root', 'original-gate', 'expected-commit'):
+        recovery.add_argument('--'+option, required=True)
     science = modes.add_parser('create-science')
     science.add_argument('--spec', required=True)
     submit = modes.add_parser('submit')
@@ -38,6 +41,10 @@ def main():
     if a.mode == 'create-gate':
         result = c.create_gate(root=a.root, container=a.container,
             project=Path(__file__).resolve().parents[1], commit=a.expected_commit)
+    elif a.mode == 'create-recovery':
+        from hlt_classification.luka_fullsim.regular_recovery import create
+        result = create(original_gate=a.original_gate, root=a.root,
+            project=Path(__file__).resolve().parents[1], commit=a.expected_commit)
     else:
         spec = read_spec(a.spec)
         if a.mode == 'create-science':
@@ -48,8 +55,10 @@ def main():
             from hlt_classification.luka_fullsim.regular_worker import print_results
             print_results(spec)
             return
-        elif spec['contract'] == 'LUKA_FULLSIM_REGULAR_GATE/v1':
+        elif c.is_gate(spec):
             c.validate_gate(spec)
+            if c.is_recovery(spec) and a.task != 'preflight':
+                raise PermissionError('Recovery only runs preflight; never rebuild completed preparation')
             if a.task == 'foundation':
                 from hlt_classification.luka_fullsim.foundation import build, load_foundation
                 root = Path(spec['root'])/'foundation'
