@@ -10,6 +10,20 @@ from hlt_classification.jetclass2_delphes.execution import execution_site
 from .foundation import _source, load_foundation
 from .science_campaign import preflight_accounting
 from . import stage2 as s
+from .contracts import artifact as data_artifact
+
+
+def for_spec(value):
+    """Explicit dispatch; no global mutation and no relabelling of legacy artifacts."""
+    if value.get('contract', '').startswith('LUKA_FULLSIM_ALLJETS_'):
+        from . import alljets_campaign
+        return alljets_campaign
+    import sys
+    return sys.modules[__name__]
+
+
+def load_prepared(root):
+    return s.load_prepared(root)
 
 COUNTS = dict(train=100000, validation=50000)
 INVENTORY = '0832a577f7bcd0b9a9b719a7f62ef2a8e1b5b24108beec5bd7b3946a09642d17'
@@ -156,11 +170,12 @@ def preparation_gate(gate):
 def evidence(gate):
     from .regular_cache import metadata
     from .regular_preflight import validate_evidence
-    validate_gate(gate)
+    policy = for_spec(gate)
+    policy.validate_gate(gate)
     root = Path(gate['root'])
     original = preparation_gate(gate)
-    f, inventory, splits = load_foundation(Path(original['root'])/'foundation')
-    check_population(inventory, splits)
+    f, inventory, splits = policy.load_foundation(Path(original['root'])/'foundation')
+    policy.check_population(inventory, splits)
     if f['source_snapshot'] != original['source_snapshot'] or f['input_container'] != original['input_container']:
         raise ValueError('Foundation source/container differs')
     manifest, p, _, _ = metadata(prepared_root(gate))
@@ -202,28 +217,32 @@ def gate_jobs(gate):
 
 
 def create_science(gate):
-    manifest, p, r = evidence(gate)
-    jobs = gate_jobs(gate)
+    policy = for_spec(gate)
+    manifest, p, r = policy.evidence(gate)
+    jobs = policy.gate_jobs(gate)
     if jobs['preflight'] != str(r['job_id']):
         raise ValueError('Accepted preflight job differs from gate journal')
-    accounting = {name: preflight_accounting(job) for name, job in jobs.items()}
+    accounting = {name: policy.preflight_accounting(job) for name, job in jobs.items()}
     root = Path(gate['root'])/'science'
-    spec = make_artifact('SPEC', parents=dict(gate=gate['content_hash'], cache=manifest['content_hash'], preflight=r['content_hash']),
+    spec = policy.make_artifact('SPEC', parents=dict(gate=gate['content_hash'], cache=manifest['content_hash'], preflight=r['content_hash']),
         root=str(root), project_dir=gate['project_dir'], source_commit=gate['source_commit'], source_snapshot=gate['source_snapshot'],
         gate_path=str(Path(gate['root'])/'gate_spec.json'), gate_accounting=accounting,
         admission=dict(prepared_root=str(prepared_root(gate)), preflight=file_ref(Path(gate['root'])/'preflight/preflight.json')),
         prepared_sha256=p['content_hash'], preflight_sha256=r['content_hash'],
-        train_minutes=r['projected_train_minutes'], reduce_minutes=r['projected_reduce_minutes'], **registration())
+        train_minutes=r['projected_train_minutes'], reduce_minutes=r['projected_reduce_minutes'], **policy.registration())
     root.mkdir(exist_ok=False)
     write_immutable_json(root/'campaign_spec.json', spec)
     return spec
 
 
 def validate_spec(spec):
+    policy = for_spec(spec)
     gate = load_json(spec['gate_path'])
-    manifest, p, r = evidence(gate)
-    validate(spec, 'SPEC', dict(gate=gate['content_hash'], cache=manifest['content_hash'], preflight=r['content_hash']))
-    if (any(spec.get(k) != v for k, v in registration().items())
+    if for_spec(gate) is not policy:
+        raise ValueError('Campaign and gate families differ')
+    manifest, p, r = policy.evidence(gate)
+    policy.validate(spec, 'SPEC', dict(gate=gate['content_hash'], cache=manifest['content_hash'], preflight=r['content_hash']))
+    if (any(spec.get(k) != v for k, v in policy.registration().items())
             or spec['prepared_sha256'] != p['content_hash'] or spec['preflight_sha256'] != r['content_hash']
             or spec['source_snapshot'] != gate['source_snapshot'] or spec['source_commit'] != gate['source_commit']
             or spec['project_dir'] != gate['project_dir'] or Path(spec['root']) != Path(gate['root'])/'science'

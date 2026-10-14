@@ -283,7 +283,11 @@ def test_preflight_rejects_small_or_fused_or_unmeasured_evidence():
         pre.validate_evidence(with_content_hash(bad), gate, p, manifest)
 
 
-def test_gate_ledger_and_science_creation(tmp_path, monkeypatch):
+@pytest.mark.parametrize('family', ['regular', 'alljets'])
+def test_gate_ledger_and_science_creation(tmp_path, monkeypatch, family):
+    from hlt_classification.luka_fullsim import regular_campaign as c
+    if family == 'alljets':
+        from hlt_classification.luka_fullsim import alljets_campaign as c
     gate = c.make_artifact('GATE', root=str(tmp_path), project_dir=str(tmp_path/'project'),
         source_commit='a'*40, source_snapshot=dict(content_hash='b'*64), **c.gate_policy())
     monkeypatch.setattr(c, 'validate_gate', lambda _: None)
@@ -346,7 +350,7 @@ def test_cpu_prepare_completion_and_consumed_test_flag(prepared, tmp_path, monke
         source_snapshot=p['source_snapshot'], input_container=foundation['input_container'])
     monkeypatch.setattr(c, 'validate_gate', lambda _: None)
     monkeypatch.setattr(c, 'check_population', lambda *a: None)
-    monkeypatch.setattr(cache, 'load_foundation', lambda _: (foundation, inventory, splits))
+    monkeypatch.setattr(c, 'load_foundation', lambda _: (foundation, inventory, splits))
     monkeypatch.setattr(cache.s, 'load_foundation', lambda _: (foundation, inventory, splits))
     original = cache.build_rows
     monkeypatch.setattr(cache, 'build_rows', lambda *a, **kw: original(*a, **{**kw, 'workers':1}))
@@ -362,8 +366,8 @@ def test_cpu_prepare_completion_and_consumed_test_flag(prepared, tmp_path, monke
 
 
 @pytest.mark.parametrize('fail_stress', [False, True, 'validation'])
-@pytest.mark.parametrize('recovered', [False, True])
-def test_full_preflight_orchestration_roundtrips(prepared, durable, tmp_path, monkeypatch, fail_stress, recovered):
+@pytest.mark.parametrize('profile', ['ordinary', 'recovery', 'alljets'])
+def test_full_preflight_orchestration_roundtrips(prepared, durable, tmp_path, monkeypatch, fail_stress, profile):
     """Real cache and bank math; explicitly mock Slurm/GPU model execution only."""
     import torch
     from test_luka_fullsim_science import TinyModel
@@ -377,19 +381,26 @@ def test_full_preflight_orchestration_roundtrips(prepared, durable, tmp_path, mo
     p = deepcopy(p)
     p['foundation_root'] = str(tmp_path/'foundation')
     gate = dict(root=str(tmp_path), content_hash='b'*64, source_snapshot=p['source_snapshot'], execution_site=c.registration()['execution_site'])
+    recovered = profile == 'recovery'
     if recovered:
         original = dict(gate)
         write_immutable_json(tmp_path/'original_gate.json', original)
         gate = dict(gate, contract='LUKA_FULLSIM_REGULAR_RECOVERY_GATE/v1', content_hash='c'*64,
             source_snapshot=dict(content_hash='e'*64),
             reuse=dict(prepared_root=str(root), original_gate=dict(path=str(tmp_path/'original_gate.json'))))
-    monkeypatch.setattr(c, 'COUNTS', p['counts'])
-    monkeypatch.setattr(c, 'validate_gate', lambda _: None)
-    monkeypatch.setattr(c, 'check_population', lambda *a: None)
-    monkeypatch.setattr(c, 'conventions', lambda _: p['conventions'])
+    if profile == 'alljets':
+        gate.update(contract='LUKA_FULLSIM_ALLJETS_GATE/v1',
+                    preflight_cache_policy='one_coordinate_train_validation_at_a_time')
+    policy = c.for_spec(gate)
+    monkeypatch.setattr(policy, 'COUNTS', p['counts'])
+    monkeypatch.setattr(policy, 'validate_gate', lambda _: None)
+    monkeypatch.setattr(policy, 'check_population', lambda *a: None)
+    monkeypatch.setattr(policy, 'conventions', lambda _: p['conventions'])
     monkeypatch.setattr(cache, 'metadata', lambda _: (manifest, p, inventory, splits))
     actual_load = cache.load
+    loaded = []
     def load_once(location, **kw):
+        loaded.append((kw['role'], kw['coordinate']))
         assert Path(location) == (root if recovered else tmp_path/'prepared')
         return actual_load(root, **kw)
     monkeypatch.setattr(cache, 'load', load_once)
@@ -446,5 +457,8 @@ def test_full_preflight_orchestration_roundtrips(prepared, durable, tmp_path, mo
             assert result['scientific_fit'] is False and len(result['measurements']) == 7
             assert events == ['stress','validation_inference']*7
             assert result['schema_version'] == 2 and set(result['stress_maxima']) == {'train','validation'}
+            if profile == 'alljets':
+                assert loaded == [(role, n['coordinate']) for n in pre.probe_nodes() for role in ('train', 'validation')]
+                assert result['historical_test_repurposed_for_training'] is True
     finally:
         torch.set_num_threads(before)

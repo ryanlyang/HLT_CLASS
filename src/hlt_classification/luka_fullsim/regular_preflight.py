@@ -54,6 +54,8 @@ def projections(measurements):
 
 
 def validate_evidence(r, gate, p, manifest):
+    from . import regular_campaign as c
+    c = c.for_spec(gate)
     c.validate(r, 'PREFLIGHT', dict(gate=gate['content_hash'], prepared=p['content_hash'], cache=manifest['content_hash']), version=2)
     expected = dict(counts=c.COUNTS, cpus=6, memory_mb=90000, site=gate['execution_site'],
         recipe=c.recipe(), source_snapshot=gate['source_snapshot'], scientific_fit=False,
@@ -62,6 +64,8 @@ def validate_evidence(r, gate, p, manifest):
         preparation_source_snapshot=p['source_snapshot'], stress_policy=stress_policy())
     if any(r.get(k) != v for k, v in expected.items()):
         raise ValueError('Fresh regular preflight evidence/policy differs')
+    if gate.get('preflight_cache_policy') is not None and r.get('preflight_cache_policy') != gate['preflight_cache_policy']:
+        raise ValueError('Preflight cache policy differs')
     parity = r['parities']['installed']
     kernel_validate(parity, 'WEAVER_PARITY')
     from hlt_classification.jetclass2_delphes.model import model_contract
@@ -107,6 +111,8 @@ def validate_evidence(r, gate, p, manifest):
 
 
 def run(gate):
+    from . import regular_campaign as c
+    c = c.for_spec(gate)
     require_backend()
     import torch
     from hlt_classification.context_fusion.inputs import new_model
@@ -138,27 +144,39 @@ def run(gate):
     write_immutable_json(output/'runtime.json', dict(job_id=job, environment=environment, gpu=gpu,
         cublas_workspace_config=os.environ['CUBLAS_WORKSPACE_CONFIG'],
         cudnn_v8_disabled=os.environ.get('TORCH_CUDNN_V8_API_DISABLED', 'unset')))
-    bound = sum(2*m['resident_bytes'] for role in p['summaries'].values() for m in role.values())+128*2**20
+    streaming = gate.get('preflight_cache_policy') == 'one_coordinate_train_validation_at_a_time'
+    if streaming:
+        bound = max(sum(2*p['summaries'][role][co]['resident_bytes'] for role in ('train', 'validation'))
+                    for co in cache.s.COORDINATES)+128*2**20
+    else:
+        bound = sum(2*m['resident_bytes'] for role in p['summaries'].values() for m in role.values())+128*2**20
     if bound > .30*memory*1024**2:
         raise MemoryError('All-view acceptance cache bound exceeds reserved 30% host RAM')
     log = PhaseLog(output, lambda: memory_snapshot(torch))
     bundles, timings, measurements, maxima = {}, {}, [], {'train':{}, 'validation':{}}
     teacher_arguments = None
+    def load_coordinate(role, co):
+        with log.phase(f'load_{role}_{co}') as phase:
+            value = cache.load(prepared_root, role=role, coordinate=co,
+                max_ram_bytes=int(memory*1024**2*.15), authenticated=authenticated)
+        timings[role, co] = phase['seconds']
+        return value
     with Measurement() as measured:
         torch.cuda.reset_peak_memory_stats()
-        for role in ('train', 'validation'):
-            bundles[role] = {}
-            for co in cache.s.COORDINATES:
-                with log.phase(f'load_{role}_{co}') as phase:
-                    bundles[role][co] = cache.load(prepared_root, role=role, coordinate=co,
-                        max_ram_bytes=int(memory*1024**2*.15), authenticated=authenticated)
-                timings[role, co] = phase['seconds']
-        with log.phase('installed_single_encoder_parity'):
-            parities = dict(installed=installed_parity(bundles['train']['U000'], device='cuda'))
-            clear()
+        if not streaming:
+            for role in ('train', 'validation'):
+                bundles[role] = {co: load_coordinate(role, co) for co in cache.s.COORDINATES}
+        parities = None
         for node in probe_nodes():
             co, name = node['coordinate'], node['node_id']
-            train, val = bundles['train'][co], bundles['validation'][co]
+            if streaming:
+                train, val = load_coordinate('train', co), load_coordinate('validation', co)
+            else:
+                train, val = bundles['train'][co], bundles['validation'][co]
+            if parities is None:
+                with log.phase('installed_single_encoder_parity'):
+                    parities = dict(installed=installed_parity(train, device='cuda'))
+                    clear()
             for role, value in (('train', train), ('validation', val)):
                 maxima[role][co] = max(int(np.diff(b.offsets).max()) for b in value.blocks)
             print(f'LUKA support coordinate={co} train_max={maxima["train"][co]} '
@@ -203,6 +221,8 @@ def run(gate):
                 inference_seconds=phase['seconds'], stress_steps=3, stress_batch=256,
                 validation_stress_batch=256, validation_stress_steps=3, validation_stress_inference_only=True))
             del model, state, restored, probabilities, replay, kwargs
+            if streaming:
+                del train, val, value
             clear()
     c.validate_gate(gate)
     if cache.metadata(prepared_root)[:2] != authenticated[:2] or installed_environment() != environment:
@@ -219,6 +239,7 @@ def run(gate):
         resource_envelope_ok=bool(peak < .85*memory*1024**2 and snap['gpu_peak_bytes'] < .9*gpu['total_memory_bytes']),
         fits_debug_24h=max(train_minutes, reduce_minutes) <= 1440, checkpoint_probability_roundtrip=True,
         technical_checks_passed=True, scientific_fit=False, scientific_metrics_for_selection=False,
+        **({'preflight_cache_policy': gate['preflight_cache_policy']} if streaming else {}),
         outputs=[file_ref(path, root=output) for path in sorted(output.rglob('*')) if path.is_file()])
     # Keep diagnostics even when resource admission fails; no false PASS report.
     write_immutable_json(output/'measurement.json', result)

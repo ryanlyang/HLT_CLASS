@@ -1,5 +1,28 @@
 # Legacy Donor-Source Map
 
+## 2026-10-14: all-eligible Luka regular development experiment
+
+Internal donor commit: `adb2e939fd26b0fa22b84369e283f71a3944cee8`.
+No external source or `Fresh_check` runtime dependency was added. New modules
+are `luka_fullsim/alljets_{data,campaign,reporting}.py` (paths below relative to
+`src/hlt_classification/`).
+
+| Donor files | Reuse / explicit change |
+| --- | --- |
+| `luka_fullsim/{inventory,splits,contracts,particles}.py` | Unchanged original inventory/split replay and selected-range reader; new separately validated split explicitly retires former test files into TRAIN |
+| `luka_fullsim/{regular_campaign,regular_cache,regular_preflight,regular_submission,regular_worker}.py` | Explicit artifact-family dispatch; identical default regular semantics, new streaming-preflight policy and fixed-old-validation diagnostics |
+| `luka_fullsim/{stage2,preflight_cache,particle_audit,preflight_v2}.py` | Same conventions, physical inputs, per-file ragged blocks, integrated audit, runtime/headroom checks |
+| `cms_proxy_ladder/views.py`, `context_fusion/{inputs,worker}.py` | Unchanged matching and views; single-encoder model constructor, selected-state readback and stress only; no fusion instantiated |
+| `jetclass2_delphes/{cache,runner,campaign,reporting,banks,acceptance,execution,model}.py` | Same batch256 CE/KD schedule/seeds, metrics, identity-bound TRAIN banks, installed parity and A100 acceptance |
+| `data/cache_contracts.py`, `provenance.py`, `cms_proxy_ladder/contracts.py` | Canonical hashes, deterministic predictions, immutable publication, source and file bindings |
+| `scripts/{luka_fullsim_regular.py,queue_luka_fullsim_regular.sh}`, `sbatch/run_luka_fullsim_regular.sh` (repository-relative) | Thin all-jets CLI/helper/worker variants with separate namespace and authorization |
+
+Tests reuse the synthetic ROOT and tiny CPU model fixtures in
+`tests/test_luka_fullsim_{stage2,regular,science}.py` from the same donor.
+New semantics are versioned under `LUKA_FULLSIM_ALLJETS_*`; legacy split,
+feature and model schemas are not silently changed. No weights or old GPU
+preflight acceptance evidence are imported. The prior test is not independent.
+
 ## 2026-10-13: regular preflight v2 and cache-preserving recovery
 
 Internal donor commit: `a54c60e5354f61b4c065f9322d89dbb4f6cf8dc3`.

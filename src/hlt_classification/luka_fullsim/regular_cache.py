@@ -25,9 +25,16 @@ from .foundation import load_foundation
 from .particles import FIELDS, RawJet, _ranges, _matrix, physical
 from .particle_audit import scan, Moments
 from .preflight_cache import _block
-from .splits import validate_splits
+from .splits import validate_splits as validate_legacy_splits
 
 _WORK = None
+
+
+def validate_splits(splits, inventory):
+    if splits.get('contract') == 'LUKA_FULLSIM_ALLJETS_SPLITS/v1':
+        from .alljets_data import validate_splits as validate_alljets
+        return validate_alljets(splits, inventory)
+    return validate_legacy_splits(splits, inventory)
 
 
 def _init(container, inventory, splits, config, output):
@@ -201,29 +208,34 @@ def build_rows(container, inventory, splits, config, output, *, workers):
 
 def prepare(gate):
     from . import regular_campaign as c
+    c = c.for_spec(gate)
     c.validate_gate(gate)
     root = Path(gate['root'])
-    foundation, inventory, splits = load_foundation(root/'foundation')
+    foundation, inventory, splits = c.load_foundation(root/'foundation')
     c.check_population(inventory, splits)
     output = root/'prepared'
     output.mkdir(exist_ok=False)
     # Worst case for all 7 full-support views plus temporary file blocks.
-    bound = sum(gate['counts'].values())*(512*84+128)*7
-    if shutil.disk_usage(root).free < bound + 5*2**30:
+    bound = sum(gate['counts'].values())*(512*84+128)*7 + 5*2**30
+    if gate.get('storage_policy') == 'authenticated_scalar_ragged_upper_bound_with_reserve':
+        from .alljets_data import storage_bound
+        bound = storage_bound(foundation['input_container'], inventory, splits)
+    print(f'LUKA preparation required_free_GiB={bound/2**30:.2f} (including reserve)', flush=True)
+    if shutil.disk_usage(root).free < bound:
         raise OSError('Insufficient free storage for conservative nontruncated cache bound')
     started = time.monotonic()
     # Temporary parent only: numerical policies are frozen; final config binds
     # the completed integrated audit rather than pretending it existed earlier.
     temporary = c.conventions(gate['content_hash'])
     products = build_rows(foundation['input_container'], inventory, splits, temporary, output, workers=8)
-    audit = artifact('PARTICLE_AUDIT', parents=dict(foundation=foundation['content_hash'], source=gate['source_snapshot']['content_hash']),
+    audit = c.data_artifact('PARTICLE_AUDIT', parents=dict(foundation=foundation['content_hash'], source=gate['source_snapshot']['content_hash']),
         source_snapshot=gate['source_snapshot'], counts=gate['counts'], statistics=products.pop('statistics'),
         issues=products.pop('issues'), units='stored_unconfirmed_no_conversion',
         moments='particle_weighted_except_jet_counts_SD_is_width', zero_error_meaning='unresolved_not_inferred',
         scientific_admission=False, final_test_accessed=False, aggregation='fixed_order_source_file_parallel_moments')
     config = c.conventions(audit['content_hash'])
     refs = products.pop('blocks')
-    p = artifact('PREPARED', parents=dict(foundation=foundation['content_hash'], audit=audit['content_hash'],
+    p = c.data_artifact('PREPARED', parents=dict(foundation=foundation['content_hash'], audit=audit['content_hash'],
         conventions=config['content_hash'], source=gate['source_snapshot']['content_hash']),
         source_snapshot=gate['source_snapshot'], foundation_root=str(root/'foundation'), audit=audit,
         conventions=config, **s.contracts(), **products, counts=gate['counts'],
@@ -234,6 +246,8 @@ def prepare(gate):
     # Replay one actual TRAIN source file through the original reader/view path.
     # This is input parity, never a scientific miniature or validation selection.
     from .particles import ParticleReader
+    if splits.get('contract') == 'LUKA_FULLSIM_ALLJETS_SPLITS/v1':
+        from .alljets_data import ParticleReader
     from .preflight_cache import _values
     first = splits['memberships']['train'][0]
     assignment = s.load_assignment(output, p['assignments']['train'][0])
@@ -255,7 +269,7 @@ def prepare(gate):
     manifest = c.make_artifact('CACHE', parents=manifest['parents'], blocks=refs,
                                serial_reference_passed=True, serial_reference_rows=checked)
     c.validate_gate(gate)
-    if s.load_prepared(output)[0] != p:
+    if c.load_prepared(output)[0] != p:
         raise ValueError('Prepared metadata changed before cache commit')
     from .inventory import verify_source_bytes
     verify_source_bytes(foundation['input_container'], inventory)
@@ -266,8 +280,9 @@ def prepare(gate):
 def metadata(root):
     from . import regular_campaign as c
     root = Path(root)
-    p, f, inventory, splits = s.load_prepared(root)
     manifest = load_json(root/'cache_manifest.json')
+    c = c.for_spec(manifest)
+    p, f, inventory, splits = c.load_prepared(root)
     c.validate(manifest, 'CACHE')
     if (manifest['parents']['prepared'] != p['content_hash'] or not manifest['serial_reference_passed']
             or set(manifest['blocks']) != {'train', 'validation'}):

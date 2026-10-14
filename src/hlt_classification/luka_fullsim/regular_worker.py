@@ -34,6 +34,8 @@ def validate_training(spec, node, report):
 
 
 def completed(spec, task_id, seen=None):
+    from . import regular_campaign as c
+    c = c.for_spec(spec)
     seen = {} if seen is None else seen
     if task_id in seen:
         return seen[task_id]
@@ -72,6 +74,16 @@ def completed(spec, task_id, seen=None):
         validate_training(spec, node, report)
         if report['content_hash'] != result['training_report_sha256']:
             raise ValueError('Scientific report hash differs')
+        if spec.get('validation_predictions_saved'):
+            from .alljets_reporting import validate, population
+            if '_validation_population' not in seen:
+                seen['_validation_population'] = population(spec)
+            diagnostic = validate(spec, task_id, report, authenticated_population=seen['_validation_population'])
+            for name in ('validation_diagnostics.json', 'validation_predictions.npz'):
+                if task_id+'/'+name not in paths:
+                    raise ValueError('Missing saved validation output binding')
+            if result.get('validation_diagnostics_sha256') != diagnostic['content_hash']:
+                raise ValueError('Validation diagnostic receipt differs')
     elif task['kind'] == 'reduce':
         result = row['result']
         fitted = seen['train_'+task['node_id']]['result']
@@ -138,15 +150,26 @@ def result_rows(spec):
             state='UNFINISHED' if report is None else 'COMPLETE', validation=value,
             selected_pass=None if report is None else report['selected_pass'], passes=None if report is None else report['passes'],
             recovery_to_pure_offline=None if value is None or not refs_ready else recovery(value, metrics['M0HLT'], metrics['OFFLINE'])))
+        if spec.get('validation_predictions_saved'):
+            rows[-1]['original_validation'] = (None if report is None else
+                load_json(Path(spec['root'])/('train_'+node['node_id'])/'validation_diagnostics.json')['original_validation'])
     # M0HLT precedes OFFLINE: recompute all recoveries after collecting controls.
     if metrics.get('M0HLT') is not None and metrics.get('OFFLINE') is not None:
         for row in rows:
             if row['validation'] is not None:
                 row['recovery_to_pure_offline'] = recovery(row['validation'], metrics['M0HLT'], metrics['OFFLINE'])
+    if spec.get('validation_predictions_saved'):
+        controls = {r['node_id']: r['original_validation'] for r in rows}
+        for row in rows:
+            row['original_validation_recovery'] = (None if row['original_validation'] is None
+                or controls['M0HLT'] is None or controls['OFFLINE'] is None else
+                recovery(row['original_validation'], controls['M0HLT'], controls['OFFLINE']))
     return rows
 
 
 def run(spec, task_id):
+    from . import regular_campaign as c
+    c = c.for_spec(spec)
     p, evidence = c.validate_spec(spec)
     task = next((r for r in c.tasks() if r['task_id'] == task_id), None)
     if task is None:
@@ -188,6 +211,13 @@ def run(spec, task_id):
                 write_immutable_json(directory/'training_report.json', report)
             result = dict(checkpoint=task_id+'/selected.pt', training_report=task_id+'/training_report.json',
                           training_report_sha256=report['content_hash'])
+            if spec.get('validation_predictions_saved'):
+                from .alljets_reporting import publish
+                with log.phase('selected_checkpoint_validation_diagnostics'):
+                    model.load_state_dict(restored, strict=True)
+                    probabilities = predict(model, val, device='cuda', temperature=1.)
+                    diagnostic = publish(spec, task_id, report, val, probabilities)
+                result['validation_diagnostics_sha256'] = diagnostic['content_hash']
         else:
             fitted = completed(spec, 'train_'+node['node_id'])['result']
             with log.phase('selected_checkpoint_train_bank'):
@@ -227,9 +257,15 @@ def run(spec, task_id):
 
 
 def print_results(spec):
+    from . import regular_campaign as c
+    c = c.for_spec(spec)
     c.validate_spec(spec)
     rows = result_rows(spec)
-    print('Luka genuine FullSim: 100,000 train / 50,000 validation; no test access in this run; historical holdout already consumed.')
+    if spec.get('historical_test_repurposed_for_training'):
+        print(f"Luka genuine FullSim: {spec['counts']['train']:,} train / {spec['counts']['validation']:,} validation.")
+        print('Exploratory development: former test explicitly retired into TRAIN; NO independent test set.')
+    else:
+        print('Luka genuine FullSim: 100,000 train / 50,000 validation; no test access in this run; historical holdout already consumed.')
     print('Recovery: M0HLT=0%, pure OFFLINE=100%; single-seed development validation.')
     print(f"{'node':25} {'pick':>10} {'accuracy':>10} {'AUC':>10} {'acc rec.%':>10} {'AUC rec.%':>10}")
     def fmt(value, digits=6):
@@ -243,3 +279,10 @@ def print_results(spec):
             print('  QCD rejection @50%: '+', '.join(k+'='+('censored (0 passing)' if v['zero_fpr_censored'] else
                   fmt(v['rejection_at_50pct'], 1)) for k, v in m['per_class'].items()))
     print('Regular single-encoder teachers only. Compare M0HLT, DIRECT_D000 and COARSE_D000.')
+    if spec.get('validation_predictions_saved'):
+        print('\nFixed original 50,000 validation rows; SAME full-validation-selected checkpoints, no subset selection.')
+        print(f"{'node':25} {'accuracy':>10} {'AUC':>10} {'acc rec.%':>10} {'AUC rec.%':>10}")
+        for row in rows:
+            m, rec = row['original_validation'] or {}, row['original_validation_recovery'] or {}
+            print(f"{row['node_id']:25} {fmt(m.get('accuracy')):>10} {fmt(m.get('macro_ovr_auc')):>10} "
+                  f"{fmt(rec.get('accuracy'),1):>10} {fmt(rec.get('macro_ovr_auc'),1):>10}")

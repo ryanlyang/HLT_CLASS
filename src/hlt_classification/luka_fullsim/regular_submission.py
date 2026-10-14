@@ -12,14 +12,18 @@ from . import regular_campaign as c
 
 
 def plan(spec):
-    gate = c.is_gate(spec)
-    c.validate_gate(spec) if gate else c.validate_spec(spec)
+    policy = c.for_spec(spec)
+    gate = policy.is_gate(spec)
+    policy.validate_gate(spec) if gate else policy.validate_spec(spec)
     return _plan(spec)
 
 
 def _plan(spec):
     # Pure rendering also replays the already-authenticated original gate journal.
-    gate = c.is_gate(spec)
+    policy = c.for_spec(spec)
+    gate = policy.is_gate(spec)
+    prefix = getattr(policy, 'JOB_PREFIX', 'lukar')
+    worker = getattr(policy, 'WORKER', 'run_luka_fullsim_regular.sh')
     root, project, site = Path(spec['root']), spec['project_dir'], spec['execution_site']
     rows = ([dict(task_id='foundation', kind='foundation', dependencies=[]),
              dict(task_id='prepare', kind='prepare', dependencies=['foundation']),
@@ -37,17 +41,17 @@ def _plan(spec):
         args = ['sbatch', '--parsable', '--no-requeue', '--nodes=1', '--ntasks=1', '--export=NONE',
             '--partition='+site['partition'], '--account='+site['account'], '--qos='+site['qos'],
             '--cpus-per-task='+str(cpus), '--mem='+str(memory)+'M', '--time='+_walltime(minutes),
-            '--job-name=lukar_'+name, '--comment=lukar:'+spec['content_hash']+':'+name,
+            '--job-name='+prefix+'_'+name, '--comment='+prefix+':'+spec['content_hash']+':'+name,
             '--chdir='+project, '--output='+str(root/(name+'-%j.out'))]
         if gpu:
             args.append('--gres='+site['gres'])
         if deps:
             args.append('--dependency=afterok:'+':'.join('${JOB_'+d+'}' for d in deps))
-        args += [project+'/sbatch/run_luka_fullsim_regular.sh', project,
+        args += [project+'/sbatch/'+worker, project,
                  str(root/('gate_spec.json' if gate else 'campaign_spec.json')), name]
         commands.append(dict(task_id=name, dependencies=deps, command=args))
-    return c.make_artifact('PLAN', parents=dict(spec=spec['content_hash']),
-        commands=commands, jobs=len(commands), mode='gate' if gate else 'science', authorization=c.AUTHORIZATION)
+    return policy.make_artifact('PLAN', parents=dict(spec=spec['content_hash']),
+        commands=commands, jobs=len(commands), mode='gate' if gate else 'science', authorization=policy.AUTHORIZATION)
 
 
 def clean_environment():
@@ -77,9 +81,10 @@ def check_site(value):
 
 
 def submit(spec, *, execute=False, plan_hash=None, authorization=None):
+    policy = c.for_spec(spec)
     value = plan(spec)
     root = Path(spec['root'])/'submission'
-    if execute and (plan_hash != value['content_hash'] or authorization != c.AUTHORIZATION):
+    if execute and (plan_hash != value['content_hash'] or authorization != policy.AUTHORIZATION):
         raise PermissionError('Exact reviewed plan hash and science authorization required')
     root.mkdir(exist_ok=True)
     path, dry = root/'command_plan.json', root/'dry_run_submission_ledger.json'
@@ -102,7 +107,7 @@ def submit(spec, *, execute=False, plan_hash=None, authorization=None):
             claim.mkdir(exist_ok=False)
         except FileExistsError as exc:
             raise PermissionError('Live submitter active/interrupted: preserve journals; no automatic retry') from exc
-        write_immutable_json(claim/'intent.json', c.make_artifact('SUBMISSION_CLAIM',
+        write_immutable_json(claim/'intent.json', policy.make_artifact('SUBMISSION_CLAIM',
             parents=dict(spec=spec['content_hash'], plan=value['content_hash'])))
     return submit_exact_dag(identity=spec['content_hash'], plan=value, output=ledger, canonical_dry_run=dry,
         execute=True, environment=clean_environment())
