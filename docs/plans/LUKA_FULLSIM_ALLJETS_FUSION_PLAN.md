@@ -96,3 +96,49 @@ are required. No in-place environment upgrade. Production-size A100 evidence
 and a separately registered full preflight remain necessary before any repair
 is promoted into science. Instrumented timings cannot replace throughput
 measurements or bypass the existing debug24h admission.
+
+## 2026-10-15 synchronous restoration recovery /v2
+
+User authorized promotion after diagnostic **21896886**, source658cafa5, report
+`60abf23c62b03b2b627d8afc5823b69f65cedbf3564ab1edb104f7b0a48bea8b`.
+Original asynchronous D000/D000 failed with CUDNN_STATUS_EXECUTION_FAILED;
+launch-blocking original failed with illegal memory access. Synchronous restore
+D000/D000 and U050/U000 passed strict FP32/BF16 parity and batch256/three-step
+longest-TRAIN stress. MaxRSS135163040KiB of250GiB. This is A100 candidate evidence,
+not a complete scientific admission or proof of the exact underlying CUDA bug.
+
+For a NEW v2 execution only, use `alljets_fusion_sync.SynchronousFusionModel`:
+same old full-population pair embedding and physical-span pack, same stats,
+checkpoint layout, tensors, strides, dtype and seed; H2D restore uses
+`non_blocking=False`. No production global monkeypatch. Old shared model and
+factories remain unchanged. The canonical three-update parity harness temporarily
+selects the actual new subclass for reference/offloaded constructors and restores
+that constructor even on error; tolerances/BN/optimizer checks are unchanged.
+Its explicit policy is `pair_saved_tensors_cpu_sync_v3`, not the old async v2.
+
+This supersedes the preceding byte-identical-execution rule ONLY for new v2
+recovery: add named sync/recovery modules and permit version-dispatch edits only
+to the five existing alljets_fusion orchestration modules. All other old src bytes
+(data, caches, splits, kernels, diagnostic, scientific graph/seeds/recipe helpers)
+must match658cafa5. Reauthenticate the diagnostic with its original source, which
+in turn authenticates the failed gate and completed regular parent with theirs.
+Bind the exact report hash, all case payloads/parities, original and diagnostic
+submission journals, terminal FAILED/1:0 accounting at creation, and old/new
+source digests. A fresh nonoverlapping root is mandatory; never modify old roots.
+
+Queue only ONE replacement FULL technical preflight: debug A10040GB, original
+software/cuDNN,6CPUs,256000MiB,8h. Use existing TRAIN/validation cache and original
+scientific U000 bank, no ROOT rebuild or control refits. Both paired families and
+single-HLT must repeat full population passes, longest-role stresses, actual
+production-subclass parity, checkpoint/bank readback and uninstrumented timings.
+Use the same new factory in all subsequent eight science fits and reducers.
+No CUDA_LAUNCH_BLOCKING instrumentation in v2 production.
+
+Version GATE/SPEC/PREFLIGHT/PLAN/TASK/RESULTS/DIAGNOSTICS/SUBMISSION_CLAIM to v2
+for this execution; require matching versions across dependencies. Original v1
+artifacts are never relabeled as repaired evidence. Scientific data/population,
+schedule60--100,batch256/BF16,seeds,loss,branches and all16 jobs remain unchanged.
+The1.75 conservative100-pass projection and debug24h limit remain mandatory.
+If runtime does not fit, save measurement.json but NO admitting preflight.json:
+no automatic partition, schedule, safety-margin or batch changes. The CUDA
+repair alone does not resolve the independently observed approximately60h bound.

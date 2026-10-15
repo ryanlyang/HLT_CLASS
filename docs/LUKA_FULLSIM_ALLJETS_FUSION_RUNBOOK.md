@@ -237,3 +237,100 @@ The earlier U050 technical pass took about20.7min. Its unchanged conservative
 100-pass request would be about60h, beyond debug24h. That independent runtime
 issue needs fresh uninstrumented measurements and an explicit execution plan;
 instrumented diagnostic timings do not establish a speedup.
+
+## Synchronous production repair after diagnostic21896886
+
+Use this section now, NOT the diagnostic commands above. The original two cases
+failed while both synchronous candidates passed. This queues ONE full replacement
+preflight, NOT science, using the same existing caches. Preserve both original
+worktrees, all failed outputs and the successful regular parent. No uploads or
+preprocessing rerun required. Request remains debug/A100/6CPU/250GiB/8h.
+
+Publish the following scoped changes from Windows; review HANDOFF hunks separately
+because that file contains unrelated work. Do not `git add .`:
+
+```powershell
+$files = @(
+    "src/hlt_classification/luka_fullsim/alljets_fusion_sync.py"
+    "src/hlt_classification/luka_fullsim/alljets_fusion_recovery.py"
+    "src/hlt_classification/luka_fullsim/alljets_fusion_campaign.py"
+    "src/hlt_classification/luka_fullsim/alljets_fusion_source.py"
+    "src/hlt_classification/luka_fullsim/alljets_fusion_preflight.py"
+    "src/hlt_classification/luka_fullsim/alljets_fusion_worker.py"
+    "src/hlt_classification/luka_fullsim/alljets_fusion_submission.py"
+    "scripts/luka_fullsim_alljets_fusion.py"
+    "scripts/queue_luka_fusion_sync_recovery.sh"
+    "tests/test_luka_fusion_sync_recovery.py"
+    "tests/test_luka_fullsim_alljets_fusion.py"
+    "tests/test_luka_fusion_cuda_diagnostic.py"
+    "docs/plans/LUKA_FULLSIM_ALLJETS_FUSION_PLAN.md"
+    "docs/contracts/LUKA_FULLSIM_ALLJETS_FUSION.md"
+    "docs/LUKA_FULLSIM_ALLJETS_FUSION_RUNBOOK.md"
+    "docs/LEGACY_SOURCE_MAP.md"
+)
+git add -- $files
+if ($LASTEXITCODE -ne 0) { throw "Staging failed" }
+git diff --cached --stat
+git commit -m "Promote synchronous Luka fusion restore with v2 preflight recovery"
+if ($LASTEXITCODE -ne 0) { throw "Check commit output before continuing" }
+git push origin HEAD:main
+if ($LASTEXITCODE -ne 0) { throw "Push failed" }
+git rev-parse HEAD
+```
+
+Then on SPORC (prompts for the NEW commit, not658cafa5/e9b0b560):
+
+```bash
+bash <<'BASH'
+set -euo pipefail
+trap 'printf "Stopped at line %s. Preserve files and paste the error.\n" "${LINENO}" >&2' ERR
+read -r -p 'Paste the NEW 40-character repair commit: ' COMMIT </dev/tty
+[[ "${COMMIT}" =~ ^[0-9a-f]{40}$ ]]
+MAIN=/home/ryreu/atlas/HLT_Classification
+PROJECT="/home/ryreu/atlas/HLT_Classification_luka_sync_${COMMIT:0:8}"
+ROOT="${MAIN}/checkpoints/luka_fusion_sync_${COMMIT:0:8}_r1"
+DIAGNOSTIC="${MAIN}/checkpoints/luka_fusion_cuda_658cafa5_r1/diagnostic_spec.json"
+PYTHON=/home/ryreu/miniconda3/envs/atlas_kd_sporc/bin/python
+test -f "${DIAGNOSTIC}"
+test -x "${PYTHON}"
+git -C "${MAIN}" fetch origin main
+git -C "${MAIN}" merge-base --is-ancestor "${COMMIT}" origin/main
+if [[ -e "${PROJECT}" ]]; then
+    test "$(git -C "${PROJECT}" rev-parse HEAD)" = "${COMMIT}"
+    test -z "$(git -C "${PROJECT}" status --porcelain --untracked-files=all)"
+else
+    git -C "${MAIN}" worktree add --detach "${PROJECT}" "${COMMIT}"
+fi
+bash "${PROJECT}/scripts/queue_luka_fusion_sync_recovery.sh" \
+    "${COMMIT}" "${ROOT}" "${DIAGNOSTIC}"
+PLAN_HASH="$("${PYTHON}" -B -s -c \
+    'import json,sys; print(json.load(open(sys.argv[1]))["content_hash"])' \
+    "${ROOT}/submission/command_plan.json")"
+[[ "${PLAN_HASH}" =~ ^[0-9a-f]{64}$ ]]
+printf '\nReviewed plan: %s\n' "${PLAN_HASH}"
+read -r -p 'Submit this ONE full repaired preflight? Type YES: ' CONFIRM </dev/tty
+if [[ "${CONFIRM}" != YES ]]; then
+    echo 'Stopped. No job submitted.'
+    exit 0
+fi
+LOG="$(mktemp "${ROOT}/submit.XXXXXX.log")"
+nohup bash "${PROJECT}/scripts/queue_luka_fusion_sync_recovery.sh" \
+    "${COMMIT}" "${ROOT}" "${DIAGNOSTIC}" --execute "${PLAN_HASH}" \
+    >"${LOG}" 2>&1 </dev/null &
+printf 'Submission helper PID: %s\nLog: %s\n' "$!" "${LOG}"
+printf 'Watch with:\ntail -f "%s"\n' "${LOG}"
+BASH
+```
+
+Wait for the job ID and `QUEUE_HELPER_EXIT=0`; helper PID alone is not submission.
+Preflight progress is in `ROOT/preflight-JOBID.out` and `ROOT/preflight/phases/`.
+Successful admission publishes `ROOT/preflight/preflight.json` with contract v2.
+If technical checks finish but the conservative full-schedule request exceeds
+debug24h, `measurement.json` is preserved and `preflight.json` is NOT published.
+Paste that measured request/error; do not lower the schedule/margin or manually
+create a receipt. An8h preflight limit does not imply8h scientific fits.
+
+Only after admitted completion may the existing `create-science` and `submit`
+commands operate on this NEW v2 root. Its16-job graph uses the synchronous model
+for all paired fits/reducers and the unchanged factory for single-HLT endpoints.
+Science still requires a separate exact dry review and explicit live permission.

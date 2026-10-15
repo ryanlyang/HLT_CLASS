@@ -1,5 +1,25 @@
 # Legacy Donor-Source Map
 
+## 2026-10-15: ALLJETS synchronous fusion production recovery
+
+Internal donor `658cafa5f4f59b7be907cbfed245a2c37cb0dcd6` (diagnostic);
+original failed fusion gate source `e9b0b560e60b60bf4e779cd69756e1e3163a7fb6`.
+New `luka_fullsim/alljets_fusion_{sync,recovery}.py`, recovery queue helper and
+tests. Existing ALLJETS fusion orchestration/CLI dispatches explicitly by v1/v2.
+No external/Fresh_check code or shared model/data/kernel changes.
+
+| Donor paths under src/hlt_classification | Reuse/change |
+| --- | --- |
+| `jetclass2_delphes/dzfix_fusion_model.py` | Pair-hook body adapted into isolated subclass; identical pack/layout/stats, synchronous H2D restore. Reuse strict parity harness with actual new constructor, no relaxed tolerances |
+| `context_fusion/inputs.py` | Inherit FusionModel input transport; same cold seeds, state keys, single-HLT model and paired identity joins |
+| `luka_fullsim/alljets_fusion_diagnostic.py` | Promote passing candidate semantics; authenticate original report and source read-only, diagnostic itself unchanged |
+| `luka_fullsim/alljets_fusion_{campaign,source,worker,preflight,submission}.py` | Versioned factory/policy/artifact dispatch; preserve original graph, caches and resource admission |
+| `luka_fullsim/{regular_recovery,preflight_reuse}.py` | Named-source compatibility, nonoverlap and terminal failed-job checks; use original validator subprocesses |
+
+Contracts above become v2 only for new repaired executions. The diagnostic v1
+remains non-admitting. Cluster evidence21896886 established candidate parity and
+stress, not a full repaired-production pass or a debug24h runtime admission.
+
 ## 2026-10-15: isolated ALLJETS fusion CUDA failure diagnostic
 
 Internal donor: `e9b0b560e60b60bf4e779cd69756e1e3163a7fb6`. New module

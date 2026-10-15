@@ -43,6 +43,10 @@ def cache(spec, prepared, node, role, *, authenticated=None):
 
 def execution(spec, measured=None):
     require_backend()
+    if spec.get('schema_version') == 2:
+        from .alljets_fusion_sync import PAIR_STORAGE
+        if spec.get('pair_storage') != PAIR_STORAGE or os.environ.get('CUDA_LAUNCH_BLOCKING', '0') != '0':
+            raise PermissionError('Synchronous production policy/backend differs; no diagnostic launch blocking')
     job, cpus, memory = allocation(spec['execution_site'])
     if (cpus, memory) != (spec['cpus'], spec['memory_mb']):
         raise PermissionError('Wrong fusion allocation')
@@ -78,7 +82,7 @@ def diagnostic(spec, task, report, arrays, *, authenticated=None):
         raise ValueError('Invalid validation prediction schema')
     ix = alljets_data.comparison_indices(inv, splits, arrays['identities'], arrays['labels'])
     root = Path(spec['root'])
-    return c.artifact('DIAGNOSTICS', parents=dict(spec=spec['content_hash'], report=report['content_hash']),
+    return c.bound_artifact(spec, 'DIAGNOSTICS', parents=dict(spec=spec['content_hash'], report=report['content_hash']),
         task_id=task, selection_population='entire_validation', secondary_selection_used=False,
         checkpoint=file_ref(root/task/'selected.pt', root=root),
         predictions=file_ref(root/task/'validation_predictions.npz', root=root),
@@ -97,7 +101,7 @@ def completed(spec, name, seen=None):
     if not (root/name/'receipt.json').is_file():
         return None
     row = load_json(root/name/'receipt.json')
-    c.validate(row, 'TASK', dict(spec=spec['content_hash'], preflight=spec['preflight_sha256']))
+    c.validate_bound(row, spec, 'TASK', dict(spec=spec['content_hash'], preflight=spec['preflight_sha256']))
     if (row['task_id'] != name or row['source_commit'] != spec['source_commit']
             or row['prepared_sha256'] != spec['prepared_sha256']
             or row['dependencies'] != dependency_hashes(spec, task, seen)):
@@ -146,7 +150,7 @@ def completed(spec, name, seen=None):
             if dict(path=name+'/train/'+shard['path'], bytes=shard['bytes'], sha256=shard['sha256']) not in row['outputs']:
                 raise ValueError('Unbound probability shard')
     elif task['kind'] == 'aggregate':
-        c.validate(result, 'RESULTS', dict(spec=spec['content_hash']))
+        c.validate_bound(result, spec, 'RESULTS', dict(spec=spec['content_hash']))
         if (name+'/results.json' not in paths or load_json(root/name/'results.json') != result
                 or result['rows'] != result_rows(spec, seen=seen)):
             raise ValueError('Aggregate row replay differs')
@@ -212,7 +216,11 @@ def run(spec, name):
         log = PhaseLog(directory, lambda: memory_snapshot(torch))
         with log.phase('load_authenticated_train_views'):
             train = cache(spec, p, node, 'train')
-        model = new_model(node)
+        if spec.get('schema_version') == 2:
+            from .alljets_fusion_sync import new_model as model_factory
+        else:
+            model_factory = new_model
+        model = model_factory(node)
         if task['kind'] == 'train':
             with log.phase('load_authenticated_validation_views'):
                 val = cache(spec, p, node, 'validation')
@@ -252,7 +260,7 @@ def run(spec, name):
         rows = result_rows(spec)
         if any(r['state'] != 'COMPLETE' for r in rows):
             raise ValueError('Every registered model required, regardless of quality')
-        result = c.artifact('RESULTS', parents=dict(spec=spec['content_hash']), rows=rows,
+        result = c.bound_artifact(spec, 'RESULTS', parents=dict(spec=spec['content_hash']), rows=rows,
             caveats=['single seed', 'development validation', 'no independent test', 'unequal capacity/training compute',
                      'provisional mm', 'cross-file event independence unverified'])
         write_immutable_json(directory/'results.json', result)
@@ -261,7 +269,7 @@ def run(spec, name):
     c.validate_spec(spec)
     if deps != dependency_hashes(spec, task, {}):
         raise ValueError('Dependency changed during execution')
-    receipt = c.artifact('TASK', parents=dict(spec=spec['content_hash'], preflight=spec['preflight_sha256']),
+    receipt = c.bound_artifact(spec, 'TASK', parents=dict(spec=spec['content_hash'], preflight=spec['preflight_sha256']),
         task_id=name, source_commit=spec['source_commit'], prepared_sha256=p['content_hash'], job_id=job,
         dependencies=deps, result=result,
         outputs=[file_ref(path, root=root) for path in sorted(directory.rglob('*')) if path.is_file()])

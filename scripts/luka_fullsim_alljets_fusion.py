@@ -13,6 +13,9 @@ def main():
     create = modes.add_parser('create-gate')
     for option in ('root','parent','expected-commit'):
         create.add_argument('--'+option, required=True)
+    recovery = modes.add_parser('create-recovery')
+    for option in ('root', 'diagnostic', 'expected-commit'):
+        recovery.add_argument('--'+option, required=True)
     for name in ('create-science','submit','run','results'):
         p = modes.add_parser(name)
         p.add_argument('--spec', required=True)
@@ -23,7 +26,11 @@ def main():
         if name == 'run':
             p.add_argument('--task', required=True)
     args = parser.parse_args()
-    if args.mode == 'create-gate':
+    if args.mode == 'create-recovery':
+        from hlt_classification.luka_fullsim.alljets_fusion_recovery import create
+        result = create(root=args.root, diagnostic_path=args.diagnostic,
+            project=Path(__file__).resolve().parents[1], commit=args.expected_commit)
+    elif args.mode == 'create-gate':
         result = c.create_gate(root=args.root, parent_path=args.parent,
             project=Path(__file__).resolve().parents[1], commit=args.expected_commit)
     else:

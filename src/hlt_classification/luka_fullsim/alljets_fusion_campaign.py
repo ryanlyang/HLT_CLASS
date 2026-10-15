@@ -15,17 +15,36 @@ FLAGS = dict(final_test_accessed=False, historical_test_evaluated=True,
     evaluation_scope='exploratory_development_validation')
 
 
-def artifact(kind, *, parents=None, **fields):
-    return with_content_hash(dict(contract=f'LUKA_ALLJETS_FUSION_{kind}/v1', schema_version=1,
+V2_KINDS = {'GATE', 'SPEC', 'PREFLIGHT', 'PLAN', 'TASK', 'RESULTS', 'DIAGNOSTICS', 'SUBMISSION_CLAIM'}
+
+
+def artifact(kind, *, parents=None, version=1, **fields):
+    if version != 1 and not (version == 2 and kind in V2_KINDS):
+        raise ValueError('Unsupported fusion artifact version')
+    return with_content_hash(dict(contract=f'LUKA_ALLJETS_FUSION_{kind}/v{version}', schema_version=version,
         parents=dict(parents or {}), **FLAGS, **fields))
 
 
+def bound_artifact(scope, kind, **fields):
+    return artifact(kind, version=scope.get('schema_version', 1), **fields)
+
+
 def validate(value, kind, parents=None):
-    digest = validate_content_hash(value, expected_contract=f'LUKA_ALLJETS_FUSION_{kind}/v1', expected_schema_version=1)
+    version = value.get('schema_version')
+    if type(version) is not int or (version != 1 and not (version == 2 and kind in V2_KINDS)):
+        raise ValueError('Unsupported fusion artifact version')
+    digest = validate_content_hash(value, expected_contract=f'LUKA_ALLJETS_FUSION_{kind}/v{version}', expected_schema_version=version)
     if any(value.get(k) != v for k, v in FLAGS.items()):
         raise PermissionError('Exploratory/no-independent-test scope differs')
     if parents is not None and value.get('parents') != parents:
         raise ValueError('Fusion parent lineage differs')
+    return digest
+
+
+def validate_bound(value, scope, kind, parents=None):
+    digest = validate(value, kind, parents)
+    if value['schema_version'] != scope.get('schema_version', 1):
+        raise ValueError('Fusion execution versions differ')
     return digest
 
 
@@ -46,14 +65,20 @@ def tasks():
     return rows
 
 
-def registration():
+def registration(version=1):
+    extra = {}
+    if version == 2:
+        from .alljets_fusion_sync import PAIR_STORAGE
+        extra['pair_storage'] = dict(PAIR_STORAGE)
+    elif version != 1:
+        raise ValueError('Unsupported fusion registration')
     return dict(counts=COUNTS, nodes=nodes(), tasks=tasks(), training_recipe=old.recipe(),
         fits=8, reducers=6, jobs=16, comparison_parent_fits=9, cpus=6, memory_mb=MEMORY_MB,
         execution_site=execution_site('sporc_a100_debug'), gate_minutes=480,
         alpha=1., fusion_injections=[2,4,6,8], direction='context_to_primary',
         imported_weights=[], imported_train_banks=['U000'], new_models_cold_start=True,
         validation_policy='entire_74895_checkpoint_selection_original_50000_secondary_reporting_only',
-        automatic_followup=False, automatic_retry=False)
+        automatic_followup=False, automatic_retry=False, **extra)
 
 
 def protect(root, parent, project):
@@ -80,6 +105,9 @@ def create_gate(*, root, parent_path, project, commit):
 
 
 def validate_gate(gate):
+    if gate.get('schema_version') == 2:
+        from .alljets_fusion_recovery import validate_gate as recovered_gate
+        return recovered_gate(gate)
     validate(gate, 'GATE', dict(source=gate['source_snapshot']['content_hash'], parent=gate['parent_import']['evidence']['spec']))
     if (any(gate.get(k) != v for k,v in registration().items())
             or sources.source(gate['project_dir'], gate['source_commit']) != gate['source_snapshot']
@@ -133,12 +161,12 @@ def create_science(gate):
     if jobs != {'preflight': str(report['job_id'])}:
         raise ValueError('Accepted preflight differs from exact submitted journal')
     root = Path(gate['root'])/'science'
-    spec = artifact('SPEC', parents=dict(gate=gate['content_hash'], preflight=report['content_hash']),
+    spec = bound_artifact(gate, 'SPEC', parents=dict(gate=gate['content_hash'], preflight=report['content_hash']),
         root=str(root), gate_path=str(Path(gate['root'])/'gate_spec.json'),
         project_dir=gate['project_dir'], source_commit=gate['source_commit'], source_snapshot=gate['source_snapshot'],
         parent_import=gate['parent_import'], prepared_sha256=p['content_hash'], preflight_sha256=report['content_hash'],
         preflight_accounting=preflight_accounting(report['job_id']),
-        train_minutes=report['projected_train_minutes'], reduce_minutes=report['projected_reduce_minutes'], **registration())
+        train_minutes=report['projected_train_minutes'], reduce_minutes=report['projected_reduce_minutes'], **registration(gate['schema_version']))
     root.mkdir(exist_ok=False)
     write_immutable_json(root/'campaign_spec.json', spec)
     return spec
@@ -148,8 +176,8 @@ def validate_spec(spec):
     from .alljets_fusion_submission import accepted_jobs
     gate = load_json(spec['gate_path'])
     parent, p, report = evidence(gate)
-    validate(spec, 'SPEC', dict(gate=gate['content_hash'], preflight=report['content_hash']))
-    expected = dict(**registration(), parent_import=gate['parent_import'],
+    validate_bound(spec, gate, 'SPEC', dict(gate=gate['content_hash'], preflight=report['content_hash']))
+    expected = dict(**registration(gate['schema_version']), parent_import=gate['parent_import'],
         project_dir=gate['project_dir'], source_commit=gate['source_commit'], source_snapshot=gate['source_snapshot'],
         prepared_sha256=p['content_hash'], preflight_sha256=report['content_hash'],
         train_minutes=report['projected_train_minutes'], reduce_minutes=report['projected_reduce_minutes'],

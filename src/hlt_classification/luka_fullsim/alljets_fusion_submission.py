@@ -10,7 +10,7 @@ from . import alljets_fusion_campaign as c
 
 
 def is_gate(spec):
-    return spec['contract'] == 'LUKA_ALLJETS_FUSION_GATE/v1'
+    return spec['contract'] in {'LUKA_ALLJETS_FUSION_GATE/v1', 'LUKA_ALLJETS_FUSION_GATE/v2'}
 
 
 def render(spec):
@@ -35,7 +35,7 @@ def render(spec):
         args += [spec['project_dir']+'/sbatch/run_luka_fullsim_alljets_fusion.sh', spec['project_dir'],
             str(root/('gate_spec.json' if gate else 'campaign_spec.json')), name]
         commands.append(dict(task_id=name, dependencies=row['dependencies'], command=args))
-    return c.artifact('PLAN', parents=dict(spec=spec['content_hash']), commands=commands, jobs=len(commands),
+    return c.bound_artifact(spec, 'PLAN', parents=dict(spec=spec['content_hash']), commands=commands, jobs=len(commands),
         mode='gate' if gate else 'science', authorization=c.AUTHORIZATION)
 
 
@@ -71,7 +71,7 @@ def submit(spec, *, execute=False, plan_hash=None, authorization=None):
                 (root/'live_claim').mkdir(exist_ok=False)
             except FileExistsError as exc:
                 raise PermissionError('Submission active/interrupted; preserve journal, no automatic retry') from exc
-            write_immutable_json(root/'live_claim/intent.json', c.artifact('SUBMISSION_CLAIM',
+            write_immutable_json(root/'live_claim/intent.json', c.bound_artifact(spec, 'SUBMISSION_CLAIM',
                 parents=dict(spec=spec['content_hash'], plan=plan['content_hash'])))
     result = submit_exact_dag(identity=spec['content_hash'], plan=plan, output=ledger if execute else dry,
         canonical_dry_run=dry, execute=execute, environment=clean_environment())

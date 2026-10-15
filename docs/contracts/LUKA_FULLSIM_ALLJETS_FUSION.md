@@ -68,3 +68,37 @@ or schedule changes, performance-driven model selection, full campaign queueing,
 or production admission are exposed. No silent replay into an existing case
 directory. Submission uses a separate exact plan, dry ledger, exclusive claim,
 durable journal and authorization phrase. Partial submissions are not retried.
+
+## Synchronous production recovery /v2
+
+`LUKA_ALLJETS_FUSION_{GATE,SPEC,PREFLIGHT,PLAN,TASK,RESULTS,DIAGNOSTICS,SUBMISSION_CLAIM}/v2`
+retain the scientific registrations and exploratory flags. GATE and SPEC add
+`pair_storage` with `version=pair_saved_tensors_cpu_sync_v3` and
+`h2d_non_blocking=false`; the remainder matches the old physical-storage policy.
+PREFLIGHT echoes that policy; every paired FP32/BF16 parity report must record it.
+Version1 evidence, plans or task receipts cannot satisfy a version2 dependency.
+The old generic kernel/checkpoint/TRAIN-bank contracts are unchanged; their new
+source/report/gate parent hashes bind execution provenance.
+
+GATE/v2 parents bind active source, original failed gate and exact diagnostic
+report content hash. `recovery` freezes original gate/runtime and diagnostic
+spec/report file references, allowed named module additions/changes, per-file
+before/after digests, and creation-time terminal accounting. Current source must
+be clean, exact committed/pushed source; original sources are verified in their
+own worktrees. Check both exact submission journals. Authenticate every diagnostic
+output/log; both candidate cases require real CUDA offload counters, both strict
+precisions and full256 stress. Reusing a diagnostic never means science admission.
+
+Replacement preflight repeats all existing full-population technical checks using
+the production synchronous subclass and same software/A100 as the diagnostic.
+No execution-time global monkeypatch, microbatching, tiling, truncation, data
+regeneration, checkpoint/teacher import beyond the registered U000 TRAIN bank,
+or changes to batch/BN/schedule/precision/physics. Parity-only constructor scoping
+must restore on failure. Checkpoint state keys and cold initialization remain
+identical to v1. Ordinary single-HLT factories are unchanged.
+
+Only exact one-job dry/live preflight submission is exposed by the recovery
+helper. Science creation/submission is still separate and requires an admitted
+v2 preflight and exact COMPLETED/0:0 accounting. Insufficient memory/runtime
+headroom fails closed after preserving non-admitting measurement.json; the
+unchanged conservative debug24h check may still block this campaign.

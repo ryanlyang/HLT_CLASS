@@ -8,7 +8,7 @@ import numpy as np
 import torch
 
 from hlt_classification.cms_proxy_ladder.contracts import file_ref
-from hlt_classification.data.cache_contracts import write_immutable_json
+from hlt_classification.data.cache_contracts import load_json, write_immutable_json
 from hlt_classification.context_fusion.inputs import PairedCache, new_model
 from hlt_classification.context_fusion.worker import clear, save_state, stress, largest_raw
 from hlt_classification.jetclass2_delphes.runner import train_kernel, predict, _forward
@@ -70,7 +70,13 @@ def projections(measurements):
 
 
 def validate_evidence(r, gate, p):
-    c.validate(r, 'PREFLIGHT', dict(gate=gate['content_hash'], prepared=p['content_hash']))
+    c.validate_bound(r, gate, 'PREFLIGHT', dict(gate=gate['content_hash'], prepared=p['content_hash']))
+    storage = PAIR_OFFLOAD_POLICY
+    if gate.get('schema_version') == 2:
+        from .alljets_fusion_sync import PAIR_STORAGE
+        storage = PAIR_STORAGE
+        if r.get('pair_storage') != storage or gate.get('pair_storage') != storage:
+            raise ValueError('Synchronous preflight storage policy differs')
     expected = dict(counts=c.COUNTS, cpus=6, memory_mb=c.MEMORY_MB,
         source_snapshot=gate['source_snapshot'], preparation_source_snapshot=p['source_snapshot'],
         site=gate['execution_site'], recipe=gate['training_recipe'], scientific_fit=False,
@@ -99,7 +105,7 @@ def validate_evidence(r, gate, p):
         row, precision = par[key], key.rsplit('_',1)[1]
         if (row['passed'] is not True or row['precision'] != precision or row['device_type'] != 'cuda'
                 or row['steps'] != 3 or row['checks'] != PARITY_CHECKS or row['parity_backend'] != PARITY_BACKEND
-                or row['saved_tensor_storage'] != PAIR_OFFLOAD_POLICY or row['tolerance'] != PARITY_TOLERANCES[precision]):
+                or row['saved_tensor_storage'] != storage or row['tolerance'] != PARITY_TOLERANCES[precision]):
             raise ValueError('Lossless fusion offload parity differs')
         validate_offload_stats(row['offload_stats'], calls=3)
     if [m['node'] for m in r['measurements']] != probe_nodes():
@@ -140,12 +146,22 @@ def run(gate):
     require_backend()
     parent = c.validate_gate(gate)
     job = w.execution(gate)
+    factory, parity = new_model, native_offload_parity
+    extra = {}
+    if gate.get('schema_version') == 2:
+        from .alljets_fusion_sync import new_model as factory, native_offload_parity as parity, PAIR_STORAGE
+        extra['pair_storage'] = dict(PAIR_STORAGE)
     authenticated = regular_cache.metadata(parent['admission']['prepared_root'])
     _, p, _, _ = authenticated
     maxima = support(p)
     gpu, environment = gpu_identity(), installed_environment()
     if 'A100' not in gpu['name']:
         raise PermissionError('SPORC A100 required')
+    if gate.get('schema_version') == 2:
+        original = load_json(gate['recovery']['original_runtime']['path'])
+        if (environment != original['environment'] or gpu != original['gpu']
+                or os.environ.get('TORCH_CUDNN_V8_API_DISABLED', 'unset') != original['cudnn_v8_disabled']):
+            raise PermissionError('Recovery must use the diagnosed software/GPU/backend')
     bound = max(sum(2*p['summaries'][r][co]['resident_bytes'] for r in ('train','validation')
         for co in {n['coordinate'], n['context_coordinate']}-{None}) for n in c.nodes())+256*2**20
     if bound > .30*c.MEMORY_MB*1024**2:
@@ -175,11 +191,11 @@ def run(gate):
                 for bf16 in (False, True):
                     key = name+('_bf16' if bf16 else '_fp32')
                     with log.phase(key+'_offload_parity'):
-                        parities[key] = native_offload_parity(train.primary.batch(np.arange(4)),
+                        parities[key] = parity(train.primary.batch(np.arange(4)),
                             train.context.batch(np.arange(4)), device='cuda', bf16=bf16)
                         clear()
             with log.phase(name+'_train_stress256_steps3'):
-                model = new_model(node)
+                model = factory(node)
                 stats = stress(model, train)
                 if isinstance(train, PairedCache):
                     validate_offload_stats(stats, calls=3)
@@ -187,14 +203,14 @@ def run(gate):
                 clear()
                 check_headroom(memory_snapshot(torch), memory_mb=c.MEMORY_MB, future_cache_bytes=0, gpu_bytes=gpu['total_memory_bytes'])
             with log.phase(name+'_validation_inference_stress256_steps3'):
-                model = new_model(node)
+                model = factory(node)
                 validation_stress(model, val)
                 del model
                 clear()
                 check_headroom(memory_snapshot(torch), memory_mb=c.MEMORY_MB, future_cache_bytes=0, gpu_bytes=gpu['total_memory_bytes'])
             targets = w.teacher(gate, 'U000', train.identities)
             with log.phase(name+'_full_population_technical_pass'):
-                model = new_model(node)
+                model = factory(node)
                 training, state = train_kernel(model, train, val, node=node, device='cuda', acceptance_passes=1,
                     teacher_probabilities=targets, teacher_identities=train.identities)
             with log.phase(name+'_checkpoint_train_bank_readback') as bank_phase:
@@ -220,7 +236,7 @@ def run(gate):
     snap = memory_snapshot(torch)
     peak = max(snap['peak_rss_bytes'], measured.report()['sampled_peak_tree_rss_bytes'])
     train_minutes, reduce_minutes = projections(measurements)
-    result = c.artifact('PREFLIGHT', parents=dict(gate=gate['content_hash'], prepared=p['content_hash']),
+    result = c.bound_artifact(gate, 'PREFLIGHT', parents=dict(gate=gate['content_hash'], prepared=p['content_hash']),
         **runtime, cpus=6, memory_mb=c.MEMORY_MB, counts=c.COUNTS, site=gate['execution_site'],
         source_snapshot=gate['source_snapshot'], preparation_source_snapshot=p['source_snapshot'],
         recipe=gate['training_recipe'], parities=parities, support_maxima=maxima, measurements=measurements,
@@ -229,7 +245,7 @@ def run(gate):
         resource_envelope_ok=bool(peak < .85*c.MEMORY_MB*1024**2 and snap['gpu_peak_bytes'] < .9*gpu['total_memory_bytes']),
         fits_debug_24h=max(train_minutes,reduce_minutes) <= 1440, checkpoint_probability_roundtrip=True,
         scientific_fit=False, scientific_metrics_for_selection=False, technical_checks_passed=True,
-        outputs=[file_ref(path, root=output) for path in sorted(output.rglob('*')) if path.is_file()])
+        outputs=[file_ref(path, root=output) for path in sorted(output.rglob('*')) if path.is_file()], **extra)
     write_immutable_json(output/'measurement.json', result)
     print(f'LUKA fusion measured requests: train={train_minutes}min reduce={reduce_minutes}min; debug ceiling=1440min', flush=True)
     validate_evidence(result, gate, p)

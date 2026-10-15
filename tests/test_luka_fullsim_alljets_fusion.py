@@ -289,16 +289,22 @@ def test_validation_stress_has_no_labels_loss_or_gradients(all_prepared,tmp_path
 
 
 @pytest.mark.parametrize('failure', [None, 'train', 'validation'])
-def test_cpu_preflight_payloads_admission_and_stress_failure(all_prepared,tmp_path,monkeypatch,failure):
+@pytest.mark.parametrize('version', [1, 2])
+def test_cpu_preflight_payloads_admission_and_stress_failure(all_prepared,tmp_path,monkeypatch,failure,version):
     """Real cached populations, technical passes and banks; GPU facts mocked."""
     spec,parent,p=fixture_spec(all_prepared,tmp_path)
     monkeypatch.setattr(c,'COUNTS',p['counts'])
     _,_,_=pre.probe_nodes()
     synthetic,_,_=evidence_fixture()
-    gate=c.artifact('GATE',root=str(tmp_path/'gate'),project_dir=str(tmp_path/'project'),source_commit='a'*40,
+    gate=c.artifact('GATE',version=version,root=str(tmp_path/'gate'),project_dir=str(tmp_path/'project'),source_commit='a'*40,
         source_snapshot=dict(content_hash='e'*64),parent_import=spec['parent_import'],
-        prepared_sha256=p['content_hash'],**c.registration())
+        prepared_sha256=p['content_hash'],**c.registration(version))
     Path(gate['root']).mkdir()
+    if version == 2:
+        from hlt_classification.luka_fullsim import alljets_fusion_sync as sync
+        runtime = Path(gate['root'])/'original_runtime.json'
+        write_immutable_json(runtime, dict(environment=synthetic['environment'], gpu=synthetic['gpu'], cudnn_v8_disabled='unset'))
+        gate = with_content_hash(dict(gate, recovery=dict(original_runtime=file_ref(runtime))))
     write_immutable_json(Path(gate['root'])/'gate_spec.json',gate)
     monkeypatch.setattr(c,'validate_gate',lambda _ :parent)
     monkeypatch.setattr(w,'execution',lambda *a:'123')
@@ -313,6 +319,13 @@ def test_cpu_preflight_payloads_admission_and_stress_failure(all_prepared,tmp_pa
     monkeypatch.setattr(torch.cuda,'reset_peak_memory_stats',lambda:None)
     monkeypatch.setattr(pre,'clear',lambda:None)
     monkeypatch.setattr(pre,'new_model',lambda n:(torch.manual_seed(n['initialization_seed']),TinyModel())[1])
+    if version == 2:
+        for key, row in synthetic['parities'].items():
+            if key not in ('installed', 'native_mask'):
+                row['saved_tensor_storage'] = deepcopy(sync.PAIR_STORAGE)
+        monkeypatch.setattr(sync, 'new_model', pre.new_model)
+        monkeypatch.setattr(sync, 'native_offload_parity', pre.native_offload_parity)
+        monkeypatch.setattr(pre, 'new_model', lambda _: (_ for _ in ()).throw(AssertionError('v1 factory used')))
     events=[]
     def train_stress(model,train):
         events.append('train')
@@ -353,12 +366,14 @@ def test_cpu_preflight_payloads_admission_and_stress_failure(all_prepared,tmp_pa
         r=pre.run(gate)
         assert events==['train','validation','fit']*3
         assert r['technical_checks_passed'] and len(r['measurements'])==3
+        assert r['schema_version'] == version
         assert c.evidence(gate)==(parent,p,r)
         monkeypatch.setattr(sub,'accepted_jobs',lambda _ :{'preflight':'123'})
         monkeypatch.setattr(c,'preflight_accounting',lambda job:dict(job_id=str(job),state='COMPLETED',exit_code='0:0'))
         science=c.create_science(gate)
         assert c.validate_spec(science)==(parent,p,r)
         assert len(science['nodes'])==8 and science['jobs']==16
+        assert science['schema_version'] == version
         with pytest.raises(ValueError):
             c.validate_spec(with_content_hash(dict(science,train_minutes=1)))
         monkeypatch.setattr(sub,'accepted_jobs',lambda _ :{'preflight':'999'})

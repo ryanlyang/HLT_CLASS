@@ -275,5 +275,13 @@ def test_no_validation_reads_no_science_factory_change_and_source_guard():
     assert "w.cache(gate, p, node, 'validation'" not in text
     names=subprocess.run(['git','diff','--name-only','e9b0b560e60b60bf4e779cd69756e1e3163a7fb6','--','src'],
         cwd=root,check=True,capture_output=True,text=True).stdout.splitlines()
-    assert set(names)<={'src/hlt_classification/luka_fullsim/alljets_fusion_source.py',
-                       'src/hlt_classification/luka_fullsim/alljets_fusion_diagnostic.py'}
+    # The diagnostic still permits only its ORIGINAL two source differences.
+    # Production recovery has a separately versioned, explicit allowlist.
+    from hlt_classification.luka_fullsim import alljets_fusion_recovery as recovery
+    assert set(names) <= ({'src/hlt_classification/luka_fullsim/alljets_fusion_source.py',
+                          'src/hlt_classification/luka_fullsim/alljets_fusion_diagnostic.py'}
+                         | recovery.CHANGES | recovery.ADDITIONS)
+    relative = 'src/hlt_classification/luka_fullsim/alljets_fusion_diagnostic.py'
+    pinned = subprocess.run(['git', 'show', recovery.DIAGNOSTIC_COMMIT+':'+relative],
+        cwd=root, check=True, capture_output=True).stdout
+    assert (root/relative).read_text() == pinned.decode().replace('\r\n', '\n')
