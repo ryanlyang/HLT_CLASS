@@ -1,5 +1,9 @@
 # Luka ALLJETS fusion, both final routes (SPORC debug)
 
+**Current blocker (2026-10-15):** gate21896409 failed in D000/D000 CUDA stress.
+Do not submit science or rerun the unchanged full gate. Use the
+[targeted diagnostic](#cuda-diagnostic-after-failed-gate21896409) below first.
+
 Authority: [plan](plans/LUKA_FULLSIM_ALLJETS_FUSION_PLAN.md) and
 [contracts](contracts/LUKA_FULLSIM_ALLJETS_FUSION.md).
 
@@ -16,7 +20,7 @@ Do not change old source to accommodate this continuation.
 
 ## Publish source
 
-Review and commit the five `alljets_fusion_*.py` modules, the CLI, queue helper,
+Review and commit the `alljets_fusion_*.py` modules, the CLI, queue helper,
 worker, focused test, this runbook and its plan/contract. Include the applicable
 HANDOFF and LEGACY_SOURCE_MAP hunks without staging unrelated work. Push the exact
 commit to `origin/main`; copy its full 40-character hash. Nothing here commits,
@@ -143,3 +147,93 @@ are diagnostics, not equal-capacity single-HLT deployment comparisons.
 Full 74,895 validation is primary; fixed original50k is secondary, not a test or
 a second checkpoint-selection opportunity. All recoveries use the same imported
 M0HLT/OFFLINE controls within their respective evaluation populations.
+
+## CUDA diagnostic after failed gate21896409
+
+This queues ONE diagnostic, not another full preflight. Reuse the original
+TRAIN caches; no data upload, ROOT processing, validation evaluation or full
+training epoch. Four fresh processes isolate original asynchronous execution,
+blocking CUDA localization, synchronous-restoration D000/D000 and synchronous-
+restoration U050/U000. The last two are candidate tests, not an accepted repair.
+Synchronous restore passed local small-model parity; the A100 failure is not
+yet reproduced locally. The convolution-tiling idea was rejected by parity.
+
+Publish only these new/changed implementation files (plus reviewed documentation
+hunks; do not stage unrelated dirty files):
+
+```powershell
+git add -- src/hlt_classification/luka_fullsim/alljets_fusion_source.py src/hlt_classification/luka_fullsim/alljets_fusion_diagnostic.py scripts/luka_fusion_cuda_diagnostic.py scripts/queue_luka_fusion_cuda_diagnostic.sh sbatch/run_luka_fusion_cuda_diagnostic.sh tests/test_luka_fusion_cuda_diagnostic.py docs/plans/LUKA_FULLSIM_ALLJETS_FUSION_PLAN.md docs/contracts/LUKA_FULLSIM_ALLJETS_FUSION.md docs/LUKA_FULLSIM_ALLJETS_FUSION_RUNBOOK.md docs/LEGACY_SOURCE_MAP.md
+git diff --cached --stat
+git commit -m "Add isolated Luka fusion CUDA failure diagnostic"
+if ($LASTEXITCODE -ne 0) { throw "Check commit output before continuing" }
+git push origin HEAD:main
+if ($LASTEXITCODE -ne 0) { throw "Push failed" }
+git rev-parse HEAD
+```
+
+Stage the applicable HANDOFF hunk separately with `git add -p docs/HANDOFF.md`;
+that file contains unrelated pre-existing edits. Do not use `git add .`.
+
+On SPORC, paste the full NEW commit into COMMIT (not e9b0b560):
+
+```bash
+COMMIT=YOUR_NEW_40_CHARACTER_COMMIT
+MAIN=/home/ryreu/atlas/HLT_Classification
+PROJECT="/home/ryreu/atlas/HLT_Classification_luka_cuda_${COMMIT:0:8}"
+ROOT="${MAIN}/checkpoints/luka_fusion_cuda_${COMMIT:0:8}_r1"
+ORIGINAL="${MAIN}/checkpoints/luka_alljets_fusion_e9b0b560_r1/gate_spec.json"
+(
+set -euo pipefail
+[[ "${COMMIT}" =~ ^[0-9a-f]{40}$ ]]
+test -f "${ORIGINAL}"
+git -C "${MAIN}" fetch origin main
+git -C "${MAIN}" merge-base --is-ancestor "${COMMIT}" origin/main
+if [[ -e "${PROJECT}" ]]; then
+    test "$(git -C "${PROJECT}" rev-parse HEAD)" = "${COMMIT}"
+    test -z "$(git -C "${PROJECT}" status --porcelain --untracked-files=all)"
+else
+    git -C "${MAIN}" worktree add --detach "${PROJECT}" "${COMMIT}"
+fi
+bash "${PROJECT}/scripts/queue_luka_fusion_cuda_diagnostic.sh" \
+    "${COMMIT}" "${ROOT}" "${ORIGINAL}"
+)
+```
+
+Review the printed plan: one debug A100 job, 6 CPUs, 250GiB, **1h limit**, no
+dependencies or followup. This is a limit, not a promised runtime. Then:
+
+```bash
+PLAN_HASH=YOUR_REVIEWED_64_CHARACTER_PLAN_HASH
+(
+set -euo pipefail
+[[ "${PLAN_HASH}" =~ ^[0-9a-f]{64}$ ]]
+LOG="$(mktemp "${ROOT}/submit.XXXXXX.log")"
+nohup bash "${PROJECT}/scripts/queue_luka_fusion_cuda_diagnostic.sh" \
+    "${COMMIT}" "${ROOT}" "${ORIGINAL}" --execute "${PLAN_HASH}" \
+    >"${LOG}" 2>&1 </dev/null &
+printf 'Helper PID: %s\nLog: %s\n' "$!" "${LOG}"
+)
+```
+
+Read `${ROOT}/diagnostic_report.json` after completion. Each case has an `.out`
+log plus `cases/CASE/{runtime,witness,result|failure}.json` and
+`cases/CASE/operations.jsonl`. These bind the exact operation shapes and strides;
+the blocking case should localize an asynchronous CUDA failure. Results may be
+printed/authenticated with the same isolated environment and:
+
+```bash
+python -u -s "${PROJECT}/scripts/luka_fusion_cuda_diagnostic.py" results \
+    --spec "${ROOT}/diagnostic_spec.json"
+```
+
+The overall Slurm job deliberately exits FAILED if any case fails, even when
+the other cases and summary completed. Inspect the per-case report rather than
+assuming a failed reference prevented collection. Even all four passing does
+not prove the old transient fault is fixed. No scientific preflight receipt is
+written; the original failed gate remains failed. Do not weaken parity,
+stress support, full256 batch or100-pass runtime admission to proceed.
+
+The earlier U050 technical pass took about20.7min. Its unchanged conservative
+100-pass request would be about60h, beyond debug24h. That independent runtime
+issue needs fresh uninstrumented measurements and an explicit execution plan;
+instrumented diagnostic timings do not establish a speedup.

@@ -15,7 +15,8 @@ Authenticate the completed parent with its ORIGINAL pinned source in a separate
 Python process. Require ALLJETS SPEC/v1 and exact counts, split, recipe, all nine
 committed fits, five banks and completion. Authenticate old/new source snapshots;
 all old tracked src bytes must be identical, with only the five named fusion
-modules added. Freeze parent receipt hashes and both-population result rows.
+production modules plus the explicitly diagnostic-only `alljets_fusion_diagnostic`
+module added. Freeze parent receipt hashes and both-population result rows.
 Reuse existing controls, DIRECT and regular COARSE as comparison rows and the
 scientific U000 TRAIN probability bank as the first teacher. Never import
 initial model weights or a technical probe bank. Do not refit controls.
@@ -58,3 +59,40 @@ New exact source, contracts and roots; saved dry plans, explicit hash-authorized
 live submission, exclusive claims and per-job journals for gate and science.
 No automatic followup/retry/cancellation or commit/push/submission during local
 implementation. Poor science never fails jobs or suppresses any registered row.
+
+## 2026-10-15 CUDA failure investigation (not science admission)
+
+User authorized investigating/fixing gate21896409. Preserve its original
+e9b0b560 worktree, failed output and all parent/data/cache artifacts. CUDA illegal
+access occurred in D000/D000 batch256 stress; earlier U050/direct technical passes
+completed. The captured stack alone does not identify the originating kernel.
+PyTorch2.5.1+cu118/cuDNN9.1 warns of a large-convolution fallback, but that is not
+proof of the illegal-access cause. No OOM kill was reported.
+
+One separate 1-hour SPORC debug diagnostic allocation (6 CPUs, 256000MiB, A100)
+may run four fresh child processes: original D000/D000 asynchronous, original
+D000/D000 launch-blocking, synchronous saved-tensor restoration D000/D000, and
+synchronous restoration U050/U000. The sole candidate change is waiting for
+the H2D restore; same tensors, dtype, shape/strides, BN/reductions, batch256 and
+three longest-TRAIN steps. Candidate runs must first pass existing strict
+FP32/BF16 three-update installed-Weaver/offload parity. A proposed convolution
+tiling alternative failed local optimizer/gradient parity and was discarded;
+do not relax tolerances or microbatch the model.
+
+No validation arrays, model-quality selection, probability-bank publication,
+scientific checkpoints or full-population training pass in this diagnostic.
+Trace operation names/shapes/strides and exceptions. A failed child must not
+prevent collecting the other explicitly registered diagnostic cases; each uses
+a new Python/CUDA context. Overall worker exits nonzero if any case fails, even
+if the comparison report was published. No automatic retry/followup. Reports
+always say science_admissible=false, including an all-pass diagnostic.
+
+The new source authenticates the failed gate using its ORIGINAL validator and
+exact submission journal, with old source immutable. Relative to e9b0b560 only
+the named new diagnostic src module and source allowlist may change; existing
+scientific factories and workers remain byte-identical. A separate pushed
+source, fresh diagnostic root, dry review and explicit exact-plan authorization
+are required. No in-place environment upgrade. Production-size A100 evidence
+and a separately registered full preflight remain necessary before any repair
+is promoted into science. Instrumented timings cannot replace throughput
+measurements or bypass the existing debug24h admission.

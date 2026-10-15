@@ -12,7 +12,8 @@ GATE binds new source and original parent spec file bytes, original completion
 and all task receipt hashes, both-population comparison rows, prepared/cache
 hashes, U000 bank, scientific registration and fixed GPU envelope. Parent
 authentication runs its old validator in its own worktree. All prior src bytes
-remain identical, and only five named fusion modules may be added. Cache inputs
+remain identical, and only the five production fusion modules plus the named
+diagnostic-only module may be added. Cache inputs
 keep their original ALLJETS contracts, source and physical fingerprints.
 
 PREFLIGHT binds this gate, exact source, installed environment/GPU/allocation,
@@ -40,3 +41,30 @@ recoveries in each respective population. All rows are required for completion.
 PLAN binds complete argv/dependencies; external completed tasks have no scheduler
 dependency. Reuse the exact-DAG dry/live ledger contracts, exclusive live claim
 and durable journals. Only exact saved-plan-hash execution is authorized.
+
+## CUDA_DIAGNOSTIC_* /v1 (separate, non-admitting artifacts)
+
+`LUKA_ALLJETS_FUSION_CUDA_DIAGNOSTIC_{SPEC,PLAN,CASE,FAILURE,REPORT}/v1`
+retains the exploratory/historical-test flags above. SPEC binds new clean pushed
+source, original failed gate and runtime file hashes, immutable four-case policy,
+one-hour/6CPU/256000MiB/A100 envelope and fresh output. Validate the original gate
+and submission journal in the original source worktree, not by rewriting it.
+Exact named source compatibility forbids changes to old model, cache, training,
+preflight and science execution. Only the source allowlist and new diagnostic
+module are permitted differences from the failed source.
+
+Each CASE records the actual environment/GPU, longest-TRAIN lengths, original
+prepared hash, full256/3-step stress, synchronous/asynchronous restore choice,
+strict candidate parity (when applicable), offload counters, peak allocation and
+durable operation trace. Runtime must match the failed job's environment/GPU;
+launch blocking is set per case BEFORE process startup. No CUDA queries after a
+failure; preserve traceback/operation metadata even with a poisoned context.
+REPORT binds each fresh child exit code, completion and output/log hashes. An
+all-pass report is still NOT resource or scientific admission. Candidate parity
+failure prevents that child's stress, not the remaining diagnostic children.
+
+No cache recreation, validation/test evaluation, scientific weights/banks, batch
+or schedule changes, performance-driven model selection, full campaign queueing,
+or production admission are exposed. No silent replay into an existing case
+directory. Submission uses a separate exact plan, dry ledger, exclusive claim,
+durable journal and authorization phrase. Partial submissions are not retried.

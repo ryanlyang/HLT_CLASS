@@ -1,5 +1,26 @@
 # Legacy Donor-Source Map
 
+## 2026-10-15: isolated ALLJETS fusion CUDA failure diagnostic
+
+Internal donor: `e9b0b560e60b60bf4e779cd69756e1e3163a7fb6`. New module
+`luka_fullsim/alljets_fusion_diagnostic.py`, thin CLI/helper/worker and tests.
+No copied external implementation or Fresh_check dependency. Current scientific
+models/workers remain byte-identical; only the named source allowlist expands.
+
+| Donor files (under src/hlt_classification unless stated) | Reuse / change |
+| --- | --- |
+| `luka_fullsim/alljets_fusion_{source,campaign,worker,submission}.py` | Exact source/parent/cache/Slurm contracts; original gate validated in its own worktree; separate non-admitting one-job diagnostic |
+| `context_fusion/{inputs,worker}.py` | Unchanged paired cache, cold model factory and longest-TRAIN batch256/three-step stress |
+| `jetclass2_delphes/dzfix_fusion_model.py` | Existing strict FP32/BF16 three-update parity; candidate changes only H2D saved-tensor restore to blocking in an isolated child, with identical shape/stride/dtype/storage span |
+| `luka_fullsim/{regular_submission,preflight_reuse}.py`, `scouting/hcwdl_exact_dag_submission.py` | SPORC dry resource checks, exact review/journals and byte-compatibility guards |
+| `tests/test_jetclass2_dzfix_fusion_{chain,offload}.py`, `tests/test_luka_fullsim_{stage2,alljets,alljets_fusion}.py` (repository-relative) | Synthetic model/cache fixtures and physical input witnesses; additionally run the installed Weaver0.5.3 CUDA parity, distinct from cluster acceptance |
+
+New `LUKA_ALLJETS_FUSION_CUDA_DIAGNOSTIC_* /v1` contracts explicitly forbid
+science admission. A convolution-tiling experiment failed local optimizer and
+gradient parity and was removed; no production tiling/microbatch change was
+retained. Synchronous restoration is a diagnostic candidate, not a proven
+repair of the reported A100 illegal memory access.
+
 ## 2026-10-15: all-eligible Luka fusion continuation, both final routes
 
 Internal donor commit: `9e591c7a73e1fcf24d2e2032be441dd3ee965052`.
