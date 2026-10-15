@@ -13,14 +13,16 @@ from .preflight_reuse import _files
 from . import alljets_campaign as parent_policy
 
 ADDITIONS = frozenset('src/hlt_classification/luka_fullsim/alljets_fusion_'+name+'.py'
-    for name in ('source', 'campaign', 'worker', 'preflight', 'submission', 'diagnostic', 'sync', 'recovery'))
+    for name in ('source', 'campaign', 'worker', 'preflight', 'submission', 'diagnostic', 'sync', 'recovery',
+                 'isolated_preflight', 'isolated_recovery'))
 REQUIRED = sorted(ADDITIONS) + ['scripts/luka_fullsim_alljets_fusion.py',
     'scripts/queue_luka_fullsim_alljets_fusion.sh', 'sbatch/run_luka_fullsim_alljets_fusion.sh',
     'tests/test_luka_fullsim_alljets_fusion.py', 'docs/plans/LUKA_FULLSIM_ALLJETS_FUSION_PLAN.md',
     'docs/contracts/LUKA_FULLSIM_ALLJETS_FUSION.md', 'docs/LUKA_FULLSIM_ALLJETS_FUSION_RUNBOOK.md',
     'scripts/luka_fusion_cuda_diagnostic.py', 'scripts/queue_luka_fusion_cuda_diagnostic.sh',
     'sbatch/run_luka_fusion_cuda_diagnostic.sh', 'tests/test_luka_fusion_cuda_diagnostic.py',
-    'scripts/queue_luka_fusion_sync_recovery.sh', 'tests/test_luka_fusion_sync_recovery.py']
+    'scripts/queue_luka_fusion_sync_recovery.sh', 'tests/test_luka_fusion_sync_recovery.py',
+    'scripts/queue_luka_fusion_isolated_preflight.sh', 'tests/test_luka_fusion_isolated_preflight.py']
 
 PARENT_CHECK = '''
 import json, sys

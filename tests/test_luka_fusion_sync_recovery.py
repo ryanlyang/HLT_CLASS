@@ -168,10 +168,12 @@ def test_interrupted_v2_submit_is_not_retried(tmp_path, monkeypatch):
         sub.submit(gate, execute=True, plan_hash=plan['content_hash'], authorization=c.AUTHORIZATION)
 
 
-def test_v2_worker_uses_repaired_factory_for_both_routes(all_prepared, tmp_path, monkeypatch):
+@pytest.mark.parametrize('version', [2, 3])
+def test_v2_worker_uses_repaired_factory_for_both_routes(all_prepared, tmp_path, monkeypatch, version):
     spec, parent, p = fixture_spec(all_prepared, tmp_path)
-    spec = with_content_hash(dict(spec, schema_version=2, contract='LUKA_ALLJETS_FUSION_SPEC/v2',
-                                 pair_storage=sync.PAIR_STORAGE))
+    spec = with_content_hash(dict(spec, schema_version=version, contract=f'LUKA_ALLJETS_FUSION_SPEC/v{version}',
+                                 pair_storage=sync.PAIR_STORAGE,
+                                 **({'preflight_execution':c.registration(3)['preflight_execution']} if version == 3 else {})))
     cpu_worker(monkeypatch, p, parent)
     factory, called = w.new_model, []
     def new(node):
@@ -184,7 +186,7 @@ def test_v2_worker_uses_repaired_factory_for_both_routes(all_prepared, tmp_path,
     try:
         for task in c.tasks():
             receipt = w.run(spec, task['task_id'])
-            assert receipt['schema_version'] == 2
+            assert receipt['schema_version'] == version
         assert all(node['node_id'] in called for node in c.nodes())
         assert len(w.result_rows(spec)) == 17
         assert w.completed(spec, 'complete')['result']['fits'] == 8

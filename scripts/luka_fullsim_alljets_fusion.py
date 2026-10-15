@@ -16,6 +16,12 @@ def main():
     recovery = modes.add_parser('create-recovery')
     for option in ('root', 'diagnostic', 'expected-commit'):
         recovery.add_argument('--'+option, required=True)
+    isolated = modes.add_parser('create-isolated-recovery')
+    for option in ('root', 'failed-gate', 'expected-commit'):
+        isolated.add_argument('--'+option, required=True)
+    child = modes.add_parser('preflight-child')
+    for option in ('spec', 'kind', 'node'):
+        child.add_argument('--'+option, required=True)
     for name in ('create-science','submit','run','results'):
         p = modes.add_parser(name)
         p.add_argument('--spec', required=True)
@@ -26,7 +32,11 @@ def main():
         if name == 'run':
             p.add_argument('--task', required=True)
     args = parser.parse_args()
-    if args.mode == 'create-recovery':
+    if args.mode == 'create-isolated-recovery':
+        from hlt_classification.luka_fullsim.alljets_fusion_isolated_recovery import create
+        result = create(root=args.root, failed_gate=args.failed_gate,
+            project=Path(__file__).resolve().parents[1], commit=args.expected_commit)
+    elif args.mode == 'create-recovery':
         from hlt_classification.luka_fullsim.alljets_fusion_recovery import create
         result = create(root=args.root, diagnostic_path=args.diagnostic,
             project=Path(__file__).resolve().parents[1], commit=args.expected_commit)
@@ -40,7 +50,10 @@ def main():
         c.validate(spec, 'GATE' if gate else 'SPEC')
         if path != Path(spec['root'])/('gate_spec.json' if gate else 'campaign_spec.json'):
             raise ValueError('Use canonical specification')
-        if args.mode == 'create-science':
+        if args.mode == 'preflight-child':
+            from hlt_classification.luka_fullsim.alljets_fusion_isolated_preflight import run_child
+            result = run_child(spec, args.kind, args.node)
+        elif args.mode == 'create-science':
             result = c.create_science(spec)
         elif args.mode == 'submit':
             result = sub.submit(spec, execute=args.execute, plan_hash=args.plan_hash, authorization=args.authorization)

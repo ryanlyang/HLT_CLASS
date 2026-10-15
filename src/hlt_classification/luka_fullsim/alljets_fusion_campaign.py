@@ -19,7 +19,7 @@ V2_KINDS = {'GATE', 'SPEC', 'PREFLIGHT', 'PLAN', 'TASK', 'RESULTS', 'DIAGNOSTICS
 
 
 def artifact(kind, *, parents=None, version=1, **fields):
-    if version != 1 and not (version == 2 and kind in V2_KINDS):
+    if version != 1 and not (version in (2, 3) and kind in V2_KINDS) and not (version == 3 and kind == 'PROBE'):
         raise ValueError('Unsupported fusion artifact version')
     return with_content_hash(dict(contract=f'LUKA_ALLJETS_FUSION_{kind}/v{version}', schema_version=version,
         parents=dict(parents or {}), **FLAGS, **fields))
@@ -31,7 +31,7 @@ def bound_artifact(scope, kind, **fields):
 
 def validate(value, kind, parents=None):
     version = value.get('schema_version')
-    if type(version) is not int or (version != 1 and not (version == 2 and kind in V2_KINDS)):
+    if type(version) is not int or (version != 1 and not (version in (2, 3) and kind in V2_KINDS) and not (version == 3 and kind == 'PROBE')):
         raise ValueError('Unsupported fusion artifact version')
     digest = validate_content_hash(value, expected_contract=f'LUKA_ALLJETS_FUSION_{kind}/v{version}', expected_schema_version=version)
     if any(value.get(k) != v for k, v in FLAGS.items()):
@@ -67,9 +67,13 @@ def tasks():
 
 def registration(version=1):
     extra = {}
-    if version == 2:
+    if version in (2, 3):
         from .alljets_fusion_sync import PAIR_STORAGE
         extra['pair_storage'] = dict(PAIR_STORAGE)
+        if version == 3:
+            from .alljets_fusion_isolated_preflight import POLICY
+            from copy import deepcopy
+            extra['preflight_execution'] = deepcopy(POLICY)
     elif version != 1:
         raise ValueError('Unsupported fusion registration')
     return dict(counts=COUNTS, nodes=nodes(), tasks=tasks(), training_recipe=old.recipe(),
@@ -105,6 +109,9 @@ def create_gate(*, root, parent_path, project, commit):
 
 
 def validate_gate(gate):
+    if gate.get('schema_version') == 3:
+        from .alljets_fusion_isolated_recovery import validate_gate as isolated_gate
+        return isolated_gate(gate)
     if gate.get('schema_version') == 2:
         from .alljets_fusion_recovery import validate_gate as recovered_gate
         return recovered_gate(gate)
@@ -141,6 +148,8 @@ def evidence(gate):
     from hlt_classification.jetclass2_delphes.contracts import validate as kernel_validate
     for measured in report['measurements']:
         name = measured['node']['node_id']+'_bank'
+        if gate['schema_version'] == 3:
+            name = 'children/measure_'+measured['node']['node_id']+'/'+name
         bank = load_json(output/name/'manifest.json')
         kernel_validate(bank, 'PROBABILITY_BANK')
         expected = dict(foundation_sha256=p['content_hash'], teacher_report_sha256=measured['training']['content_hash'],

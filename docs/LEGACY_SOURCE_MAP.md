@@ -1,5 +1,24 @@
 # Legacy Donor-Source Map
 
+## Luka ALLJETS fusion isolated recovery (2026-10-15)
+
+Donor commit: `f979171c40c0280ec307c4ed585889328b86732a`.
+Repository-local donor files (no Fresh_check runtime import):
+
+- `src/hlt_classification/luka_fullsim/alljets_fusion_preflight.py` -> new
+  `alljets_fusion_isolated_preflight.py`: unchanged model/parity/stress/kernel/
+  bank calls, reorganized into fresh child processes, D000-first stress ordering,
+  authenticated child outputs and a CUDA-safe failure reporter.
+- `src/hlt_classification/luka_fullsim/alljets_fusion_recovery.py` -> new
+  `alljets_fusion_isolated_recovery.py`: original-source validation and exact
+  submission/failed-accounting reuse, now bound to failed gate21898311.
+- `scripts/queue_luka_fusion_sync_recovery.sh` -> new
+  `scripts/queue_luka_fusion_isolated_preflight.sh`: same scoped dry/live workflow,
+  with a new failed-gate input and v3 contract.
+
+No donor model, data/cache/scientific kernel or training recipe is modified.
+This records an execution-lifecycle change, not a proven A100 kernel fix.
+
 ## 2026-10-15: ALLJETS synchronous fusion production recovery
 
 Internal donor `658cafa5f4f59b7be907cbfed245a2c37cb0dcd6` (diagnostic);

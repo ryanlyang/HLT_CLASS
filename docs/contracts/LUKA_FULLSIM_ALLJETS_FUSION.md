@@ -102,3 +102,34 @@ helper. Science creation/submission is still separate and requires an admitted
 v2 preflight and exact COMPLETED/0:0 accounting. Insufficient memory/runtime
 headroom fails closed after preserving non-admitting measurement.json; the
 unchanged conservative debug24h check may still block this campaign.
+
+## Process-isolated preflight recovery /v3
+
+The existing GATE/SPEC/PREFLIGHT/PLAN/TASK/RESULTS/DIAGNOSTICS/SUBMISSION_CLAIM
+families gain version3; scientific fields and pair_storage remain identical to
+v2. `preflight_execution=isolated_cuda_probes_v1` binds fresh processes, D000-first
+order, all stresses before measurements, no instrumentation/retry, and the same
+production synchronous factory. Earlier v1/v2 admission cannot satisfy v3.
+
+GATE/v3 binds the original f979171c failed gate, its source and validator, exact
+submission journal for21898311, runtime, failed D000 stress phase and Slurm log.
+Creation requires FAILED/1:0 accounting. All paths remain immutable/read-only;
+new output cannot overlap protected raw data, prepared caches, source or prior
+attempts. Named source-digest allowlists reject scientific/model changes.
+
+`LUKA_ALLJETS_FUSION_PROBE/v3` records child phase/node/PID, exact gate/prepared
+parents, source, runtime/job, counts/support maxima, unchanged pair policy,
+strict parity/stress or full-pass/checkpoint/bank evidence, resource high-water
+marks and all output hashes. It ALWAYS declares science_admissible=false.
+Parity and stress have separate processes, not merely separate phases within a
+single child. PREFLIGHT/v3 binds all nine child exit codes/PIDs, output/log references, canonical
+order, combined parity/measurement coverage, full process-tree RAM peak and
+maximum child GPU peak. Replay verifies child file hashes and aggregates rather
+than trusting copied scalar fields. Technical banks are nested under
+`preflight/children/measure_NODE/NODE_bank/`, never used as scientific teachers.
+
+Only a complete resource-admitted aggregate publishes preflight.json. A failed
+child stops subsequent work; no retry or success receipt. Runtime-limit failure
+preserves non-admitting measurement.json. Separate exact-plan authorization is
+still required for the unchanged16-job science graph, whose workers already run
+one model per process. No model, data, units, recipe or backend changes.

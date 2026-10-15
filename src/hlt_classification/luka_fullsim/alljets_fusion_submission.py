@@ -10,7 +10,7 @@ from . import alljets_fusion_campaign as c
 
 
 def is_gate(spec):
-    return spec['contract'] in {'LUKA_ALLJETS_FUSION_GATE/v1', 'LUKA_ALLJETS_FUSION_GATE/v2'}
+    return spec['contract'] in {f'LUKA_ALLJETS_FUSION_GATE/v{v}' for v in (1, 2, 3)}
 
 
 def render(spec):

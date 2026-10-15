@@ -72,7 +72,7 @@ def projections(measurements):
 def validate_evidence(r, gate, p):
     c.validate_bound(r, gate, 'PREFLIGHT', dict(gate=gate['content_hash'], prepared=p['content_hash']))
     storage = PAIR_OFFLOAD_POLICY
-    if gate.get('schema_version') == 2:
+    if gate.get('schema_version') in (2, 3):
         from .alljets_fusion_sync import PAIR_STORAGE
         storage = PAIR_STORAGE
         if r.get('pair_storage') != storage or gate.get('pair_storage') != storage:
@@ -134,6 +134,12 @@ def validate_evidence(r, gate, p):
         raise ValueError('Measured fusion memory headroom insufficient')
     required_outputs = {'runtime.json'} | {n['node_id']+'.pt' for n in probe_nodes()} | {
         n['node_id']+'_bank/manifest.json' for n in probe_nodes()}
+    if gate.get('schema_version') == 3:
+        from .alljets_fusion_isolated_preflight import validate_execution
+        validate_execution(r, gate)
+        required_outputs = {'runtime.json'} | {
+            'children/measure_'+n['node_id']+'/'+suffix for n in probe_nodes()
+            for suffix in (n['node_id']+'.pt', n['node_id']+'_bank/manifest.json')}
     paths = [ref['path'] for ref in r['outputs']]
     if len(paths) != len(set(paths)) or not required_outputs <= set(paths):
         raise ValueError('Missing bound technical payloads')
@@ -141,6 +147,9 @@ def validate_evidence(r, gate, p):
 
 
 def run(gate):
+    if gate.get('schema_version') == 3:
+        from .alljets_fusion_isolated_preflight import run as isolated_run
+        return isolated_run(gate)
     # CUDA workspace check precedes even expensive source authentication.
     from .preflight_v2 import require_backend
     require_backend()

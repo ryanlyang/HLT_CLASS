@@ -1,5 +1,9 @@
 # Luka ALLJETS fusion, both final routes (SPORC debug)
 
+Current recovery after job **21898311**: use
+[the process-isolated v3 section](#process-isolated-preflight-after-job-21898311),
+not the earlier diagnostic or synchronous-v2 submission commands.
+
 **Current blocker (2026-10-15):** gate21896409 failed in D000/D000 CUDA stress.
 Do not submit science or rerun the unchanged full gate. Use the
 [targeted diagnostic](#cuda-diagnostic-after-failed-gate21896409) below first.
@@ -334,3 +338,107 @@ Only after admitted completion may the existing `create-science` and `submit`
 commands operate on this NEW v2 root. Its16-job graph uses the synchronous model
 for all paired fits/reducers and the unchanged factory for single-HLT endpoints.
 Science still requires a separate exact dry review and explicit live permission.
+
+## Process-isolated preflight after job 21898311
+
+The synchronous v2 run failed at full-size D000/D000 backward stress after U050
+and direct passed. No model/backend changes are promoted here. New v3 runs nine
+fresh sequential children in ONE allocation: separate parity and stress processes
+for D000/D000, U050/U000, single-HLT, then three complete technical passes/readbacks.
+Even small parity models never share a CUDA process with full-size stress.
+No instrumentation or automatic retry. This matches scientific workers' fresh
+process lifecycle but still needs real A100 acceptance; it is not proof the
+underlying CUDA bug is fixed. Existing datasets/caches are reused read-only.
+
+Publish only the scoped files below from Windows. HANDOFF contains unrelated
+work; review its hunks separately. The entire script block stops on failure.
+
+```powershell
+& {
+    $ErrorActionPreference = 'Stop'
+    $files = @(
+        'src/hlt_classification/luka_fullsim/alljets_fusion_isolated_preflight.py'
+        'src/hlt_classification/luka_fullsim/alljets_fusion_isolated_recovery.py'
+        'src/hlt_classification/luka_fullsim/alljets_fusion_campaign.py'
+        'src/hlt_classification/luka_fullsim/alljets_fusion_source.py'
+        'src/hlt_classification/luka_fullsim/alljets_fusion_preflight.py'
+        'src/hlt_classification/luka_fullsim/alljets_fusion_worker.py'
+        'src/hlt_classification/luka_fullsim/alljets_fusion_submission.py'
+        'scripts/luka_fullsim_alljets_fusion.py'
+        'scripts/queue_luka_fusion_isolated_preflight.sh'
+        'tests/test_luka_fusion_isolated_preflight.py'
+        'tests/test_luka_fusion_sync_recovery.py'
+        'docs/plans/LUKA_FULLSIM_ALLJETS_FUSION_PLAN.md'
+        'docs/contracts/LUKA_FULLSIM_ALLJETS_FUSION.md'
+        'docs/LUKA_FULLSIM_ALLJETS_FUSION_RUNBOOK.md'
+        'docs/LEGACY_SOURCE_MAP.md'
+    )
+    git add -- $files
+    if ($LASTEXITCODE -ne 0) { throw 'Staging failed' }
+    git diff --cached --stat
+    git commit -m 'Isolate Luka fusion preflight CUDA processes and run D000 stress first'
+    if ($LASTEXITCODE -ne 0) { throw 'Stop and inspect commit output' }
+    git push origin HEAD:main
+    if ($LASTEXITCODE -ne 0) { throw 'Push failed' }
+    git rev-parse HEAD
+}
+```
+
+On SPORC, paste the NEW commit at the prompt (not f979171c):
+
+```bash
+bash <<'BASH'
+set -euo pipefail
+trap 'printf "Stopped at line %s. Preserve files and paste the error.\n" "${LINENO}" >&2' ERR
+read -r -p 'Paste the NEW 40-character isolated-preflight commit: ' COMMIT </dev/tty
+[[ "${COMMIT}" =~ ^[0-9a-f]{40}$ ]]
+MAIN=/home/ryreu/atlas/HLT_Classification
+PROJECT="/home/ryreu/atlas/HLT_Classification_luka_isolated_${COMMIT:0:8}"
+ROOT="${MAIN}/checkpoints/luka_fusion_isolated_${COMMIT:0:8}_r1"
+FAILED_GATE="${MAIN}/checkpoints/luka_fusion_sync_f979171c_r1/gate_spec.json"
+PYTHON=/home/ryreu/miniconda3/envs/atlas_kd_sporc/bin/python
+test -f "${FAILED_GATE}"
+test -x "${PYTHON}"
+git -C "${MAIN}" fetch origin main
+git -C "${MAIN}" merge-base --is-ancestor "${COMMIT}" origin/main
+if [[ -e "${PROJECT}" ]]; then
+    test "$(git -C "${PROJECT}" rev-parse HEAD)" = "${COMMIT}"
+    test -z "$(git -C "${PROJECT}" status --porcelain --untracked-files=all)"
+else
+    git -C "${MAIN}" worktree add --detach "${PROJECT}" "${COMMIT}"
+fi
+bash "${PROJECT}/scripts/queue_luka_fusion_isolated_preflight.sh" \
+    "${COMMIT}" "${ROOT}" "${FAILED_GATE}"
+PLAN_HASH="$("${PYTHON}" -B -s -c \
+    'import json,sys; print(json.load(open(sys.argv[1]))["content_hash"])' \
+    "${ROOT}/submission/command_plan.json")"
+[[ "${PLAN_HASH}" =~ ^[0-9a-f]{64}$ ]]
+printf '\nReviewed plan: %s\n' "${PLAN_HASH}"
+read -r -p 'Submit ONE isolated full preflight (debug/A100/250GiB/8h)? Type YES: ' CONFIRM </dev/tty
+if [[ "${CONFIRM}" != YES ]]; then
+    echo 'Stopped. No job submitted.'
+    exit 0
+fi
+LOG="$(mktemp "${ROOT}/submit.XXXXXX.log")"
+nohup bash "${PROJECT}/scripts/queue_luka_fusion_isolated_preflight.sh" \
+    "${COMMIT}" "${ROOT}" "${FAILED_GATE}" --execute "${PLAN_HASH}" \
+    >"${LOG}" 2>&1 </dev/null &
+printf 'Submission helper PID: %s\nLog: %s\n' "$!" "${LOG}"
+printf 'Watch with:\ntail -f "%s"\n' "${LOG}"
+BASH
+```
+
+Wait for a Slurm job ID AND `QUEUE_HELPER_EXIT=0`, not merely the helper PID.
+Request: one debug A100, 6 CPUs, 250 GiB, 8h. Authentication may take minutes.
+Progress is streamed to `ROOT/preflight-JOBID.out`, with separate logs under
+`ROOT/preflight/children/{parity,stress,measure}_NODE.out`. No science is submitted.
+Preserve all old worktrees, gates, diagnostics and caches; they are authenticated.
+
+If the first D000 stress fails, this attempt stops before U050's long pass and
+preserves the exact child log. A successful aggregate requires all nine children,
+full validation, checkpoint/bank verification, unchanged strict parity and
+resource admission. The existing conservative100-pass/debug24h requirement is
+still in force: a measured request above24h writes `measurement.json` but not
+`preflight.json`. Do not shorten the recipe, alter the safety factor, or hand-edit
+receipts. A longer-partition or exact checkpoint/resume plan needs separate
+authorization. No extra data upload/preprocessing is necessary.

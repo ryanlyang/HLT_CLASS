@@ -43,7 +43,7 @@ def cache(spec, prepared, node, role, *, authenticated=None):
 
 def execution(spec, measured=None):
     require_backend()
-    if spec.get('schema_version') == 2:
+    if spec.get('schema_version') in (2, 3):
         from .alljets_fusion_sync import PAIR_STORAGE
         if spec.get('pair_storage') != PAIR_STORAGE or os.environ.get('CUDA_LAUNCH_BLOCKING', '0') != '0':
             raise PermissionError('Synchronous production policy/backend differs; no diagnostic launch blocking')
@@ -216,7 +216,7 @@ def run(spec, name):
         log = PhaseLog(directory, lambda: memory_snapshot(torch))
         with log.phase('load_authenticated_train_views'):
             train = cache(spec, p, node, 'train')
-        if spec.get('schema_version') == 2:
+        if spec.get('schema_version') in (2, 3):
             from .alljets_fusion_sync import new_model as model_factory
         else:
             model_factory = new_model

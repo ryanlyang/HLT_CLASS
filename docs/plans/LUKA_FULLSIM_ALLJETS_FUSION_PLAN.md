@@ -142,3 +142,43 @@ The1.75 conservative100-pass projection and debug24h limit remain mandatory.
 If runtime does not fit, save measurement.json but NO admitting preflight.json:
 no automatic partition, schedule, safety-margin or batch changes. The CUDA
 repair alone does not resolve the independently observed approximately60h bound.
+
+## 2026-10-15 process-isolated recovery /v3
+
+Job21898311 (source f979171c) disproved sufficiency of the synchronous-copy
+workaround in the sequential preflight: U050 and direct completed, but D000/D000
+failed full256 backward stress after passing small FP32/BF16 parity. There was no
+OOM or runtime-admission failure. Fresh traced diagnostic success does NOT prove
+uninstrumented full-run stability. The originating CUDA kernel remains unknown.
+
+User authorizes fixing execution without changing the scientific experiment.
+Use the byte-identical v2 synchronous model and all existing kernels. Change only
+the preflight process lifecycle: one fresh Python/CUDA process per family/phase,
+sequentially within ONE allocation. Run D000/D000, U050/U000, then single-HLT
+stress, all BEFORE any population passes. Run each full-population technical pass
+and checkpoint/bank roundtrip in its own fresh process as science workers do.
+No TorchDispatch tracing, launch blocking, retries, skipped checks or fallback.
+All cases still require original full256/three-step stress, role-specific support,
+strict both-precision parity and uninstrumented timings. Small local tests are not
+production-support acceptance. If isolated D000 still fails, stop immediately.
+
+This supersedes v2's sequential in-process gate execution ONLY for a new v3 root.
+Freeze f979171c's failed gate, original validator/journal/job21898311, runtime,
+failure phase and Slurm log. All prior src files remain identical except the five
+fusion orchestration modules; add only isolated_preflight and isolated_recovery.
+The synchronous model, original recovery, diagnostic, physics, data/cache/kernel,
+seeds, loss, paired BN population, schedule and 16-job graph remain unchanged.
+
+One debug/A100/6CPU/256000MiB/8h job; original software environment. Children
+must exit zero and have authenticated source/runtime/population/output evidence.
+Small parity runs in its OWN child, never the subsequent stress process; each
+full-size stress starts without preceding model work in that CUDA context.
+Only the coordinating gate can admit science after all nine children pass.
+Peak resource evidence includes the coordinator's process-tree RSS and every
+child's sampled/high-water memory. Child failure never publishes admission;
+do not query a poisoned CUDA context during exception reporting. Both successful
+and failed child logs are preserved. No automatic retries or science followup.
+The original100-pass/1.75-margin/debug24h admission remains unchanged. If it does
+not fit, preserve measurements and request a separately authorized scheduling
+change. Process isolation is an execution repair candidate, not a guaranteed
+fix for the still-unlocalized A100 error or the independent walltime constraint.
