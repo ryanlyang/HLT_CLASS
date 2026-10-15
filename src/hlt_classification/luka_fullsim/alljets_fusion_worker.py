@@ -43,7 +43,7 @@ def cache(spec, prepared, node, role, *, authenticated=None):
 
 def execution(spec, measured=None):
     require_backend()
-    if spec.get('schema_version') in (2, 3):
+    if spec.get('schema_version') in (2, 3, 4):
         from .alljets_fusion_sync import PAIR_STORAGE
         if spec.get('pair_storage') != PAIR_STORAGE or os.environ.get('CUDA_LAUNCH_BLOCKING', '0') != '0':
             raise PermissionError('Synchronous production policy/backend differs; no diagnostic launch blocking')
@@ -63,7 +63,7 @@ def dependency_hashes(spec, task, seen):
         if row is None:
             raise ValueError('Missing committed teacher/dependency: '+dep)
         values[dep] = row['content_hash']
-    if task['task_id'] == 'train_FUSION_U050':
+    if task['task_id'] == 'train_FUSION_U050' and spec.get('schema_version') != 4:
         values['external:reduce_U000'] = spec['parent_import']['evidence']['tasks']['reduce_U000']
     return values
 
@@ -94,7 +94,7 @@ def completed(spec, name, seen=None):
     seen = {} if seen is None else seen
     if name in seen:
         return seen[name]
-    task = next((t for t in c.tasks() if t['task_id'] == name), None)
+    task = next((t for t in c.scoped_tasks(spec) if t['task_id'] == name), None)
     if task is None:
         raise ValueError('Unregistered fusion task')
     root = Path(spec['root'])
@@ -116,7 +116,7 @@ def completed(spec, name, seen=None):
         expected = {'training_report': name+'/training_report.json', 'checkpoint': name+'/selected.pt'}
         if any(result.get(k) != v or v not in paths for k,v in expected.items()):
             raise ValueError('Missing scientific checkpoint/report')
-        node = next(n for n in c.nodes() if n['node_id'] == task['node_id'])
+        node = next(n for n in c.scoped_nodes(spec) if n['node_id'] == task['node_id'])
         report = load_json(root/expected['training_report'])
         validate_training(spec, node, report)
         if result['training_report_sha256'] != report['content_hash']:
@@ -154,14 +154,14 @@ def completed(spec, name, seen=None):
         if (name+'/results.json' not in paths or load_json(root/name/'results.json') != result
                 or result['rows'] != result_rows(spec, seen=seen)):
             raise ValueError('Aggregate row replay differs')
-    elif result != dict(fits=8, reducers=6, imported_comparisons=9, performance_never_gates_completion=True):
+    elif result != c.completion(spec):
         raise ValueError('Wrong completion coverage')
     seen[name] = row
     return row
 
 
 def teacher(spec, name, identities):
-    if name == 'U000':
+    if name == 'U000' and spec.get('schema_version') != 4:
         parent = load_json(spec['parent_import']['spec']['path'])
         root, result = Path(parent['root']), spec['parent_import']['evidence']['u000_bank']
     else:
@@ -181,9 +181,9 @@ def input_label(node):
 
 def result_rows(spec, *, seen=None):
     rows = [dict(r, origin='parent', input='single HLT' if r['deployable'] else 'OFFLINE ORACLE')
-            for r in spec['parent_import']['evidence']['rows']]
+            for r in ([] if spec.get('schema_version') == 4 else spec['parent_import']['evidence']['rows'])]
     seen = {} if seen is None else seen
-    for node in c.nodes():
+    for node in c.scoped_nodes(spec):
         name = 'train_'+node['node_id']
         receipt = completed(spec, name, seen)
         report = None if receipt is None else load_json(Path(spec['root'])/name/'training_report.json')
@@ -195,13 +195,14 @@ def result_rows(spec, *, seen=None):
     controls = {r['node_id']: r for r in rows}
     for row in rows:
         for field, dest in [('validation', 'recovery_to_pure_offline'), ('original_validation', 'original_validation_recovery')]:
-            row[dest] = None if row[field] is None else recovery(row[field], controls['M0HLT'][field], controls['OFFLINE'][field])
+            row[dest] = (None if row[field] is None or controls['M0HLT'][field] is None or controls['OFFLINE'][field] is None
+                         else recovery(row[field], controls['M0HLT'][field], controls['OFFLINE'][field]))
     return rows
 
 
 def run(spec, name):
     _, p, measured = c.validate_spec(spec)
-    task = next((t for t in c.tasks() if t['task_id'] == name), None)
+    task = next((t for t in c.scoped_tasks(spec) if t['task_id'] == name), None)
     if task is None:
         raise ValueError('Unregistered task; no test or parent-write capability')
     prior = completed(spec, name)
@@ -212,11 +213,11 @@ def run(spec, name):
     root, directory = Path(spec['root']), Path(spec['root'])/name
     directory.mkdir(exist_ok=False)
     if task['kind'] in ('train', 'reduce'):
-        node = next(n for n in c.nodes() if n['node_id'] == task['node_id'])
+        node = next(n for n in c.scoped_nodes(spec) if n['node_id'] == task['node_id'])
         log = PhaseLog(directory, lambda: memory_snapshot(torch))
         with log.phase('load_authenticated_train_views'):
             train = cache(spec, p, node, 'train')
-        if spec.get('schema_version') in (2, 3):
+        if spec.get('schema_version') in (2, 3, 4):
             from .alljets_fusion_sync import new_model as model_factory
         else:
             model_factory = new_model
@@ -224,10 +225,11 @@ def run(spec, name):
         if task['kind'] == 'train':
             with log.phase('load_authenticated_validation_views'):
                 val = cache(spec, p, node, 'validation')
-            probabilities = teacher(spec, node['teacher'], train.identities)
+            probabilities = None if node['teacher'] is None else teacher(spec, node['teacher'], train.identities)
             with log.phase('scientific_fit'):
                 report, state = train_kernel(model, train, val, node=node, device='cuda',
-                    teacher_probabilities=probabilities, teacher_identities=train.identities)
+                    teacher_probabilities=probabilities, teacher_identities=None if probabilities is None else train.identities,
+                    **(dict(training_recipe=spec['training_recipe']) if spec.get('schema_version') == 4 else {}))
                 validate_training(spec, node, report)
             with log.phase('checkpoint_and_validation_readback'):
                 save_state(directory/'selected.pt', state)
@@ -237,7 +239,7 @@ def run(spec, name):
                 write_immutable_json(directory/'training_report.json', report)
                 model.load_state_dict(restored, strict=True)
                 arrays = dict(identities=val.identities, labels=val.labels,
-                    probabilities=predict(model, val, device='cuda', temperature=1.))
+                    probabilities=predict(model, val, device='cuda', temperature=1., batch_size=spec['training_recipe'].get('inference_batch_size', 256)))
                 atomic_publish_bytes(directory/'validation_predictions.npz', deterministic_npz_bytes(arrays))
                 diag = diagnostic(spec, name, report, arrays)
                 write_immutable_json(directory/'validation_diagnostics.json', diag)
@@ -248,7 +250,7 @@ def run(spec, name):
             with log.phase('selected_teacher_train_bank'):
                 model.load_state_dict(torch.load(root/fit['checkpoint'], map_location='cpu', weights_only=True), strict=True)
                 model.to('cuda').eval()
-                probabilities = predict(model, train, device='cuda', temperature=2.)
+                probabilities = predict(model, train, device='cuda', temperature=2., batch_size=spec['training_recipe'].get('inference_batch_size', 256))
                 args = dict(foundation_sha256=p['content_hash'], teacher_report_sha256=fit['training_report_sha256'],
                     teacher_node=node['node_id'], role='train')
                 publish_bank(directory/'train', identities=train.identities, probabilities=probabilities, **args)
@@ -265,7 +267,7 @@ def run(spec, name):
                      'provisional mm', 'cross-file event independence unverified'])
         write_immutable_json(directory/'results.json', result)
     else:
-        result = dict(fits=8, reducers=6, imported_comparisons=9, performance_never_gates_completion=True)
+        result = c.completion(spec)
     c.validate_spec(spec)
     if deps != dependency_hashes(spec, task, {}):
         raise ValueError('Dependency changed during execution')
@@ -281,20 +283,21 @@ def print_results(spec):
     c.validate_spec(spec)
     rows = result_rows(spec)
     print('Luka genuine FullSim fusion: 299,234 train / 74,895 validation; NO independent test.')
-    print('M0HLT=0%, pure OFFLINE=100%; nine parent fits reused read-only; eight fresh fusion-route fits.')
+    print('M0HLT=0%, pure OFFLINE=100%; ' + ('all17 models refitted at true batch128, no accumulation or imported teachers.'
+        if spec.get('schema_version') == 4 else 'nine parent fits reused read-only; eight fresh fusion-route fits.'))
     for field, recfield in [('validation', 'recovery_to_pure_offline'), ('original_validation', 'original_validation_recovery')]:
         print('\n'+('FULL validation (checkpoint selection)' if field == 'validation' else
             'ORIGINAL 50k validation subset; SAME selected checkpoints, no subset selection'))
         print(f"{'node':25} {'accuracy':>10} {'AUC':>10} {'acc rec%':>10} {'AUC rec%':>10} input")
         for row in rows:
-            m, rec = row[field], row[recfield]
+            m, rec = row[field], row[recfield] or {}
             if m is None:
                 print(f"{row['node_id']:25} UNFINISHED")
                 continue
             def fmt(x, digits=6):
                 return 'n/a' if x is None else f'{x:.{digits}f}'
             print(f"{row['node_id']:25} {fmt(m['accuracy']):>10} {fmt(m['macro_ovr_auc']):>10} "
-                  f"{fmt(rec['accuracy'],1):>10} {fmt(rec['macro_ovr_auc'],1):>10} {row['input']}")
+                  f"{fmt(rec.get('accuracy'),1):>10} {fmt(rec.get('macro_ovr_auc'),1):>10} {row['input']}")
             if field == 'validation':
                 print('  QCD rejection @50%: '+', '.join(k+'='+('censored (0 passing)' if v['zero_fpr_censored']
                       else fmt(v['rejection_at_50pct'],1)) for k,v in m['per_class'].items()))

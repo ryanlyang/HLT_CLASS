@@ -25,9 +25,18 @@ from .preflight_v2 import PhaseLog, memory_snapshot, check_headroom
 from . import alljets_fusion_campaign as c, alljets_fusion_worker as w, regular_cache
 
 
-def probe_nodes():
+def probe_nodes(scope=None):
     chosen = {'FUSION_U050', 'FUSION_D000_D000', 'FINAL_DIRECT_D000'}
-    return [{**n, 'node_id':n['node_id']+'_probe', 'teacher':'U000'} for n in c.nodes() if n['node_id'] in chosen]
+    rows = [{**n, 'node_id':n['node_id']+'_probe', 'teacher':'U000'} for n in c.nodes() if n['node_id'] in chosen]
+    if scope is not None and scope.get('schema_version') == 4:
+        node = next(n for n in c.old.nodes() if n['node_id'] == 'U000')
+        rows.append(dict(node, node_id='U000_probe'))
+    return rows
+
+
+def technical_teacher(scope):
+    return ('uniform_11_class_technical_only' if scope.get('schema_version') == 4
+            else 'authenticated_parent_U000_train_bank')
 
 
 def support(prepared):
@@ -44,11 +53,13 @@ def support(prepared):
     return maxima
 
 
-def validation_stress(model, value, *, device='cuda'):
+def validation_stress(model, value, *, device='cuda', batch_size=256):
+    if batch_size not in (128, 256):
+        raise ValueError('Unregistered validation stress batch')
     if value.role != 'validation':
         raise PermissionError('Validation inference-only stress requires validation role')
     views = (value.primary, value.context) if isinstance(value, PairedCache) else (value,)
-    raws = [largest_raw(view) for view in views]
+    raws = [largest_raw(view, size=batch_size) for view in views]
     width = max(raw['mask'].shape[-1] for raw in raws)
     raw = {key: np.stack([np.pad(x[key], ((0,0),(0,0),(0,width-x[key].shape[-1]))) for x in raws], axis=1)
            for key in ('features','vectors','mask')} if len(raws) == 2 else {
@@ -57,7 +68,7 @@ def validation_stress(model, value, *, device='cuda'):
     with torch.inference_mode():
         for _ in range(3):
             logits = _forward(model, raw, device, bf16=str(device).startswith('cuda'))
-            if logits.shape != (256,11) or not torch.isfinite(logits).all():
+            if logits.shape != (batch_size,11) or not torch.isfinite(logits).all():
                 raise ValueError('Invalid validation inference stress logits')
     if str(device).startswith('cuda'):
         torch.cuda.synchronize()
@@ -72,7 +83,7 @@ def projections(measurements):
 def validate_evidence(r, gate, p):
     c.validate_bound(r, gate, 'PREFLIGHT', dict(gate=gate['content_hash'], prepared=p['content_hash']))
     storage = PAIR_OFFLOAD_POLICY
-    if gate.get('schema_version') in (2, 3):
+    if gate.get('schema_version') in (2, 3, 4):
         from .alljets_fusion_sync import PAIR_STORAGE
         storage = PAIR_STORAGE
         if r.get('pair_storage') != storage or gate.get('pair_storage') != storage:
@@ -83,7 +94,7 @@ def validate_evidence(r, gate, p):
         scientific_metrics_for_selection=False, checkpoint_probability_roundtrip=True,
         technical_checks_passed=True, resource_envelope_ok=True, fits_debug_24h=True,
         cublas_workspace_config=':4096:8', support_maxima=support(p),
-        technical_teacher='authenticated_parent_U000_train_bank')
+        technical_teacher=technical_teacher(gate))
     if any(r.get(k) != v for k,v in expected.items()):
         raise ValueError('Fusion preflight facts differ or resource admission failed')
     if re.fullmatch('[1-9][0-9]*', str(r['job_id'])) is None:
@@ -92,7 +103,7 @@ def validate_evidence(r, gate, p):
     if r['environment']['architecture'] != 'x86_64' or 'A100' not in r['gpu']['name']:
         raise ValueError('Expected SPORC A100 installed environment')
     par = r['parities']
-    required_parities = {'installed', 'native_mask'} | {n['node_id']+'_'+precision for n in probe_nodes()
+    required_parities = {'installed', 'native_mask'} | {n['node_id']+'_'+precision for n in probe_nodes(gate)
         if n['context_coordinate'] is not None for precision in ('fp32','bf16')}
     if set(par) != required_parities:
         raise ValueError('Missing fusion parity coverage')
@@ -108,7 +119,7 @@ def validate_evidence(r, gate, p):
                 or row['saved_tensor_storage'] != storage or row['tolerance'] != PARITY_TOLERANCES[precision]):
             raise ValueError('Lossless fusion offload parity differs')
         validate_offload_stats(row['offload_stats'], calls=3)
-    if [m['node'] for m in r['measurements']] != probe_nodes():
+    if [m['node'] for m in r['measurements']] != probe_nodes(gate):
         raise ValueError('Missing measured model family')
     for m in r['measurements']:
         t = m['training']
@@ -118,8 +129,8 @@ def validate_evidence(r, gate, p):
                 or t['scientific_fit'] is not False or t['acceptance_only'] is not True
                 or t['selected_weights_restored'] is not True or t['final_test_accessed'] is not False
                 or t['validation']['rows'] != c.COUNTS['validation'] or m['counts'] != c.COUNTS
-                or m['stress_batch'] != 256 or m['stress_steps'] != 3
-                or m['validation_stress_batch'] != 256 or m['validation_stress_steps'] != 3
+                or m['stress_batch'] != gate['training_recipe']['batch_size'] or m['stress_steps'] != 3
+                or m['validation_stress_batch'] != gate['training_recipe']['batch_size'] or m['validation_stress_steps'] != 3
                 or m['validation_stress_inference_only'] is not True):
             raise ValueError('Full-population technical-only evidence differs')
         if m['node']['context_coordinate'] is not None:
@@ -132,13 +143,13 @@ def validate_evidence(r, gate, p):
     if (not 0 < r['peak_rss_bytes'] < .85*c.MEMORY_MB*1024**2
             or not 0 < r['gpu_peak_bytes'] < .90*r['gpu']['total_memory_bytes']):
         raise ValueError('Measured fusion memory headroom insufficient')
-    required_outputs = {'runtime.json'} | {n['node_id']+'.pt' for n in probe_nodes()} | {
-        n['node_id']+'_bank/manifest.json' for n in probe_nodes()}
-    if gate.get('schema_version') == 3:
+    required_outputs = {'runtime.json'} | {n['node_id']+'.pt' for n in probe_nodes(gate)} | {
+        n['node_id']+'_bank/manifest.json' for n in probe_nodes(gate)}
+    if gate.get('schema_version') in (3, 4):
         from .alljets_fusion_isolated_preflight import validate_execution
         validate_execution(r, gate)
         required_outputs = {'runtime.json'} | {
-            'children/measure_'+n['node_id']+'/'+suffix for n in probe_nodes()
+            'children/measure_'+n['node_id']+'/'+suffix for n in probe_nodes(gate)
             for suffix in (n['node_id']+'.pt', n['node_id']+'_bank/manifest.json')}
     paths = [ref['path'] for ref in r['outputs']]
     if len(paths) != len(set(paths)) or not required_outputs <= set(paths):
@@ -147,7 +158,7 @@ def validate_evidence(r, gate, p):
 
 
 def run(gate):
-    if gate.get('schema_version') == 3:
+    if gate.get('schema_version') in (3, 4):
         from .alljets_fusion_isolated_preflight import run as isolated_run
         return isolated_run(gate)
     # CUDA workspace check precedes even expensive source authentication.
@@ -185,7 +196,7 @@ def run(gate):
     parities, measurements = {}, []
     with Measurement() as measured:
         torch.cuda.reset_peak_memory_stats()
-        for node in probe_nodes():
+        for node in probe_nodes(gate):
             name = node['node_id']
             with log.phase(name+'_load_cached_inputs') as load_phase:
                 train = w.cache(gate, p, node, 'train', authenticated=authenticated)
@@ -249,7 +260,7 @@ def run(gate):
         **runtime, cpus=6, memory_mb=c.MEMORY_MB, counts=c.COUNTS, site=gate['execution_site'],
         source_snapshot=gate['source_snapshot'], preparation_source_snapshot=p['source_snapshot'],
         recipe=gate['training_recipe'], parities=parities, support_maxima=maxima, measurements=measurements,
-        technical_teacher='authenticated_parent_U000_train_bank', peak_rss_bytes=peak, gpu_peak_bytes=snap['gpu_peak_bytes'],
+        technical_teacher=technical_teacher(gate), peak_rss_bytes=peak, gpu_peak_bytes=snap['gpu_peak_bytes'],
         projected_train_minutes=train_minutes, projected_reduce_minutes=reduce_minutes,
         resource_envelope_ok=bool(peak < .85*c.MEMORY_MB*1024**2 and snap['gpu_peak_bytes'] < .9*gpu['total_memory_bytes']),
         fits_debug_24h=max(train_minutes,reduce_minutes) <= 1440, checkpoint_probability_roundtrip=True,

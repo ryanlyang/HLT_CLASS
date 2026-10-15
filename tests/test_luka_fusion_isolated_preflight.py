@@ -234,7 +234,8 @@ def test_scientific_source_and_recipe_unchanged():
     root = Path(__file__).resolve().parents[1]
     result = subprocess.run(['git', 'diff', '--name-only', recovery.FAILED_COMMIT, '--', 'src'],
                             cwd=root, check=True, text=True, capture_output=True)
-    assert set(result.stdout.splitlines()) <= recovery.CHANGES | recovery.ADDITIONS
+    from hlt_classification.luka_fullsim import alljets_batch128 as batch128
+    assert set(result.stdout.splitlines()) <= recovery.CHANGES | recovery.ADDITIONS | batch128.CHANGES | batch128.ADDITIONS
     assert {k:v for k,v in c.registration(3).items() if k != 'preflight_execution'} == c.registration(2)
     assert iso.ORDER[0] == 'FUSION_D000_D000_probe'
     assert c.registration(3)['preflight_execution']['automatic_retry'] is False

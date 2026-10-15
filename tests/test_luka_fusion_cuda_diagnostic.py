@@ -278,9 +278,12 @@ def test_no_validation_reads_no_science_factory_change_and_source_guard():
     # The diagnostic still permits only its ORIGINAL two source differences.
     # Production recovery has a separately versioned, explicit allowlist.
     from hlt_classification.luka_fullsim import alljets_fusion_recovery as recovery
+    from hlt_classification.luka_fullsim import alljets_fusion_isolated_recovery as isolated
+    from hlt_classification.luka_fullsim import alljets_batch128 as batch128
     assert set(names) <= ({'src/hlt_classification/luka_fullsim/alljets_fusion_source.py',
                           'src/hlt_classification/luka_fullsim/alljets_fusion_diagnostic.py'}
-                         | recovery.CHANGES | recovery.ADDITIONS)
+                         | recovery.CHANGES | recovery.ADDITIONS | isolated.CHANGES | isolated.ADDITIONS
+                         | batch128.CHANGES | batch128.ADDITIONS)
     relative = 'src/hlt_classification/luka_fullsim/alljets_fusion_diagnostic.py'
     pinned = subprocess.run(['git', 'show', recovery.DIAGNOSTIC_COMMIT+':'+relative],
         cwd=root, check=True, capture_output=True).stdout

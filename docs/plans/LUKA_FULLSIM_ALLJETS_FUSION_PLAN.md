@@ -1,5 +1,10 @@
 # Luka all-eligible fusion continuation, both single-HLT endings
 
+For the subsequently authorized matched batch128 rerun (v4), use
+[LUKA_ALLJETS_BATCH128_PLAN](LUKA_ALLJETS_BATCH128_PLAN.md). Its explicit
+recipe/refit changes supersede the batch256/import clauses below only for v4.
+The v1--v3 policies below remain the authority for their historical executions.
+
 Authorized 2026-10-15. Add a separate read-only-parent continuation to the
 completed ALLJETS regular campaign. This plan supersedes the old fusion plan's
 100k/50k population, raw-view rebuilding and fresh control fits, only for this

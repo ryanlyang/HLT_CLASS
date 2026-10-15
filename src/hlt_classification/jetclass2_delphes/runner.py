@@ -63,13 +63,18 @@ def train_kernel(model, train: RamCache, validation: RamCache, *, node: dict, de
     config = base if training_recipe is None else training_recipe
     if not isinstance(config, dict) or "content_hash" not in config:
         raise ValueError("Training recipe is not an authenticated artifact")
-    validate_content_hash(
-        config, expected_contract=base["contract"],
-        expected_schema_version=base["schema_version"],
-    )
-    invariant_fields = set(base) - {"content_hash", "ce_weight", "kd_weight"}
-    if any(config.get(name) != base[name] for name in invariant_fields):
-        raise ValueError("Training recipe changes the registered kernel schedule")
+    from .batch128_recipe import CONTRACT as batch128_contract, recipe as batch128_recipe
+    if config.get('contract') == batch128_contract:
+        if config != batch128_recipe():
+            raise ValueError('Batch128 requires the exact registered recipe')
+    else:
+        validate_content_hash(
+            config, expected_contract=base["contract"],
+            expected_schema_version=base["schema_version"],
+        )
+        invariant_fields = set(base) - {"content_hash", "ce_weight", "kd_weight"}
+        if any(config.get(name) != base[name] for name in invariant_fields):
+            raise ValueError("Training recipe changes the registered kernel schedule")
     weights = (config.get("ce_weight"), config.get("kd_weight"))
     if (
         any(type(value) not in {int, float} or not math.isfinite(value) or value < 0
@@ -132,7 +137,8 @@ def train_kernel(model, train: RamCache, validation: RamCache, *, node: dict, de
             optimizer.step()
         train_seconds = time.monotonic() - train_started
         validation_started = time.monotonic()
-        probabilities = predict(model, validation, device=device)
+        probabilities = predict(model, validation, device=device,
+                                batch_size=config.get('inference_batch_size', 256))
         metrics = evaluate_probabilities(validation.labels, probabilities)
         history.append(dict(pass_number=pass_number, update=update, learning_rate=lr, validation=metrics,
                             train_seconds=train_seconds, validation_seconds=time.monotonic() - validation_started))

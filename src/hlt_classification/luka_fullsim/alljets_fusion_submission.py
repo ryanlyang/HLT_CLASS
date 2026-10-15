@@ -10,14 +10,15 @@ from . import alljets_fusion_campaign as c
 
 
 def is_gate(spec):
-    return spec['contract'] in {f'LUKA_ALLJETS_FUSION_GATE/v{v}' for v in (1, 2, 3)}
+    return spec['contract'] in {f'LUKA_ALLJETS_FUSION_GATE/v{v}' for v in (1, 2, 3, 4)}
 
 
 def render(spec):
     gate = is_gate(spec)
-    rows = [dict(task_id='preflight', kind='preflight', dependencies=[])] if gate else c.tasks()
+    rows = [dict(task_id='preflight', kind='preflight', dependencies=[])] if gate else c.scoped_tasks(spec)
     root, site = Path(spec['root']), spec['execution_site']
     commands = []
+    prefix = 'lukab' if spec.get('schema_version') == 4 else 'lukaaf'
     for row in rows:
         name, kind = row['task_id'], row['kind']
         gpu = kind in ('train','reduce','preflight')
@@ -26,7 +27,7 @@ def render(spec):
             '--partition='+site['partition'], '--account='+site['account'], '--qos='+site['qos'],
             '--cpus-per-task='+str(spec['cpus'] if gpu else 1),
             '--mem='+str(spec['memory_mb'] if gpu else 16384)+'M', '--time='+_walltime(minutes),
-            '--job-name=lukaaf_'+name, '--comment=lukaaf:'+spec['content_hash']+':'+name,
+            '--job-name='+prefix+'_'+name, '--comment='+prefix+':'+spec['content_hash']+':'+name,
             '--chdir='+spec['project_dir'], '--output='+str(root/(name+'-%j.out'))]
         if gpu:
             args.append('--gres='+site['gres'])
@@ -36,7 +37,7 @@ def render(spec):
             str(root/('gate_spec.json' if gate else 'campaign_spec.json')), name]
         commands.append(dict(task_id=name, dependencies=row['dependencies'], command=args))
     return c.bound_artifact(spec, 'PLAN', parents=dict(spec=spec['content_hash']), commands=commands, jobs=len(commands),
-        mode='gate' if gate else 'science', authorization=c.AUTHORIZATION)
+        mode='gate' if gate else 'science', authorization=c.authorization(spec))
 
 
 def accepted_jobs(spec):
@@ -52,7 +53,7 @@ def accepted_jobs(spec):
 def submit(spec, *, execute=False, plan_hash=None, authorization=None):
     c.validate_gate(spec) if is_gate(spec) else c.validate_spec(spec)
     plan = render(spec)
-    if execute and (plan_hash != plan['content_hash'] or authorization != c.AUTHORIZATION):
+    if execute and (plan_hash != plan['content_hash'] or authorization != c.authorization(spec)):
         raise PermissionError('Exact reviewed hash and authorization required')
     root = Path(spec['root'])/'submission'
     root.mkdir(exist_ok=True)

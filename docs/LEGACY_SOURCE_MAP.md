@@ -1,5 +1,21 @@
 # Legacy Donor-Source Map
 
+## Matched ALLJETS batch128 (2026-10-15)
+
+Internal donor: `5cab18304d991e46457aa0d9318f8731ae3b7338`.
+No Fresh_check or external code. New `alljets_batch128.py` adapts original-source
+authentication from `alljets_fusion_isolated_recovery.py` and true128 stress from
+`context_fusion/worker.py` (same longest-row construction/three updates).
+New `jetclass2_delphes/batch128_recipe.py` derives a separately named recipe
+from `jetclass2_delphes/campaign.py`; the existing runner gains an exact opt-in,
+including128 inference. The original recipe and default execution remain256.
+Fusion campaign/worker/submission/preflight/isolated_preflight gain v4 dispatch
+for17 cold fits/11 local reducers, four technical families and no old targets.
+CLI and new queue helper reuse the donor's exact-hash dry/live workflow.
+The synchronous model, physics, cache/split implementation and parity tolerances
+remain unchanged. Active batch128 plan supersedes prior byte-identical-source
+and imported-comparison clauses only for v4; old source policies are retained.
+
 ## Luka ALLJETS fusion isolated recovery (2026-10-15)
 
 Donor commit: `f979171c40c0280ec307c4ed585889328b86732a`.

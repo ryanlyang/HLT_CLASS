@@ -19,6 +19,9 @@ def main():
     isolated = modes.add_parser('create-isolated-recovery')
     for option in ('root', 'failed-gate', 'expected-commit'):
         isolated.add_argument('--'+option, required=True)
+    batch128 = modes.add_parser('create-batch128')
+    for option in ('root', 'failed-gate', 'expected-commit'):
+        batch128.add_argument('--'+option, required=True)
     child = modes.add_parser('preflight-child')
     for option in ('spec', 'kind', 'node'):
         child.add_argument('--'+option, required=True)
@@ -32,7 +35,11 @@ def main():
         if name == 'run':
             p.add_argument('--task', required=True)
     args = parser.parse_args()
-    if args.mode == 'create-isolated-recovery':
+    if args.mode == 'create-batch128':
+        from hlt_classification.luka_fullsim.alljets_batch128 import create
+        result = create(root=args.root, failed_gate=args.failed_gate,
+            project=Path(__file__).resolve().parents[1], commit=args.expected_commit)
+    elif args.mode == 'create-isolated-recovery':
         from hlt_classification.luka_fullsim.alljets_fusion_isolated_recovery import create
         result = create(root=args.root, failed_gate=args.failed_gate,
             project=Path(__file__).resolve().parents[1], commit=args.expected_commit)

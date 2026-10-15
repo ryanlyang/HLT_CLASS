@@ -57,11 +57,12 @@ def test_scope_and_unchanged_parent_sources():
     root = Path(__file__).resolve().parents[1]
     for name in source.REQUIRED:
         assert (root/name).is_file(), name
-    # This continuation must not edit any old scientific source, unlike older
-    # historical allowlists spanning unrelated intervening campaigns.
+    # Later v4 has an explicitly authorized recipe/kernel opt-in; old source
+    # validators still reject it. Its own exact 5cab allowlist is tested too.
     changed = subprocess.run(['git','diff','--name-only','9e591c7a73e1fcf24d2e2032be441dd3ee965052','--','src'],
         cwd=root, check=True, capture_output=True, text=True).stdout.splitlines()
-    assert set(changed) <= source.ADDITIONS
+    from hlt_classification.luka_fullsim import alljets_batch128 as batch128
+    assert set(changed) <= source.ADDITIONS | batch128.CHANGES | batch128.ADDITIONS
     worker = (root/'sbatch/run_luka_fullsim_alljets_fusion.sh').read_text()
     for text in ('${PROJECT_DIR}/sbatch/common.sh', 'PYTHONNOUSERSITE=1', '${CONDA_PREFIX}/lib', 'atlas_kd_sporc'):
         assert text in worker

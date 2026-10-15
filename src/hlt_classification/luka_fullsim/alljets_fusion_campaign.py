@@ -19,7 +19,7 @@ V2_KINDS = {'GATE', 'SPEC', 'PREFLIGHT', 'PLAN', 'TASK', 'RESULTS', 'DIAGNOSTICS
 
 
 def artifact(kind, *, parents=None, version=1, **fields):
-    if version != 1 and not (version in (2, 3) and kind in V2_KINDS) and not (version == 3 and kind == 'PROBE'):
+    if version != 1 and not (version in (2, 3, 4) and kind in V2_KINDS) and not (version in (3, 4) and kind == 'PROBE'):
         raise ValueError('Unsupported fusion artifact version')
     return with_content_hash(dict(contract=f'LUKA_ALLJETS_FUSION_{kind}/v{version}', schema_version=version,
         parents=dict(parents or {}), **FLAGS, **fields))
@@ -31,7 +31,7 @@ def bound_artifact(scope, kind, **fields):
 
 def validate(value, kind, parents=None):
     version = value.get('schema_version')
-    if type(version) is not int or (version != 1 and not (version in (2, 3) and kind in V2_KINDS) and not (version == 3 and kind == 'PROBE')):
+    if type(version) is not int or (version != 1 and not (version in (2, 3, 4) and kind in V2_KINDS) and not (version in (3, 4) and kind == 'PROBE')):
         raise ValueError('Unsupported fusion artifact version')
     digest = validate_content_hash(value, expected_contract=f'LUKA_ALLJETS_FUSION_{kind}/v{version}', expected_schema_version=version)
     if any(value.get(k) != v for k, v in FLAGS.items()):
@@ -65,7 +65,49 @@ def tasks():
     return rows
 
 
+def scoped_nodes(scope):
+    return old.nodes() + nodes() if scope.get('schema_version') == 4 else nodes()
+
+
+def scoped_tasks(scope):
+    if scope.get('schema_version') != 4:
+        return tasks()
+    rows = []
+    models = scoped_nodes(scope)
+    teachers = {n['teacher'] for n in models} - {None}
+    for n in models:
+        name = n['node_id']
+        rows.append(dict(task_id='train_'+name, kind='train', node_id=name,
+            dependencies=[] if n['teacher'] is None else ['reduce_'+n['teacher']]))
+        if name in teachers:
+            rows.append(dict(task_id='reduce_'+name, kind='reduce', node_id=name,
+                dependencies=['train_'+name]))
+    rows.append(dict(task_id='aggregate', kind='aggregate', node_id=None,
+                     dependencies=[t['task_id'] for t in rows]))
+    rows.append(dict(task_id='complete', kind='complete', node_id=None, dependencies=['aggregate']))
+    return rows
+
+
+def completion(scope):
+    return (dict(fits=17, reducers=11, imported_comparisons=0, performance_never_gates_completion=True)
+            if scope.get('schema_version') == 4 else
+            dict(fits=8, reducers=6, imported_comparisons=9, performance_never_gates_completion=True))
+
+
+def authorization(scope):
+    return 'AUTHORIZE LUKA MATCHED BATCH128 EXACT PLAN' if scope.get('schema_version') == 4 else AUTHORIZATION
+
+
 def registration(version=1):
+    if version == 4:
+        from .alljets_batch128 import POLICY
+        from hlt_classification.jetclass2_delphes.batch128_recipe import recipe
+        from copy import deepcopy
+        scope = dict(schema_version=4)
+        return dict(registration(3), nodes=scoped_nodes(scope), tasks=scoped_tasks(scope),
+            training_recipe=recipe(), fits=17, reducers=11, jobs=30, comparison_parent_fits=0,
+            imported_train_banks=[], preflight_execution=deepcopy(POLICY),
+            scientific_comparison='all_models_refitted_at_true_batch128_no_accumulation')
     extra = {}
     if version in (2, 3):
         from .alljets_fusion_sync import PAIR_STORAGE
@@ -109,6 +151,9 @@ def create_gate(*, root, parent_path, project, commit):
 
 
 def validate_gate(gate):
+    if gate.get('schema_version') == 4:
+        from .alljets_batch128 import validate_gate as batch128_gate
+        return batch128_gate(gate)
     if gate.get('schema_version') == 3:
         from .alljets_fusion_isolated_recovery import validate_gate as isolated_gate
         return isolated_gate(gate)
@@ -148,7 +193,7 @@ def evidence(gate):
     from hlt_classification.jetclass2_delphes.contracts import validate as kernel_validate
     for measured in report['measurements']:
         name = measured['node']['node_id']+'_bank'
-        if gate['schema_version'] == 3:
+        if gate['schema_version'] in (3, 4):
             name = 'children/measure_'+measured['node']['node_id']+'/'+name
         bank = load_json(output/name/'manifest.json')
         kernel_validate(bank, 'PROBABILITY_BANK')
