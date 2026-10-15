@@ -1,5 +1,28 @@
 # Legacy Donor-Source Map
 
+## 2026-10-15: all-eligible Luka fusion continuation, both final routes
+
+Internal donor commit: `9e591c7a73e1fcf24d2e2032be441dd3ee965052`.
+Five additive `luka_fullsim/alljets_fusion_{source,campaign,worker,preflight,submission}.py`
+modules. No old scientific source edits, external donor, or Fresh_check runtime
+dependency. Authenticate original results in their original pinned worktree;
+import only completed comparison rows and the scientific U000 TRAIN bank.
+
+| Donor files (under `src/hlt_classification/` unless noted) | Reuse / explicit change |
+| --- | --- |
+| `luka_fullsim/{alljets_campaign,alljets_data,alljets_reporting,regular_cache,regular_worker}.py` | Unchanged full-population split, cached physical views, natural proportions, scientific schedule and old50k diagnostics; no repeated ROOT preprocessing or control fits |
+| `luka_fullsim/{science_campaign,preflight_v2,preflight_reuse,foundation}.py` | Last eight fusion nodes and paired seeds, phase/headroom checks, old/new source-byte compatibility; new admission family measures full all-eligible cached pairs |
+| `context_fusion/{inputs,worker}.py`, `jetclass2_delphes/dzfix_fusion_model.py` | Independent identity-joined views, context-to-primary two-encoder model, same-input alias, batch256 longest-TRAIN stress, lossless CPU-offload parity and selected-state readback |
+| `jetclass2_delphes/{runner,campaign,banks,model,reporting,execution,acceptance,contracts}.py` | Unchanged scientific kernel, CE/KD objective and schedule, identity-bound TRAIN banks, metrics, environment and native/installed parity |
+| `data/cache_contracts.py`, `cms_proxy_ladder/{contracts,submission}.py`, `provenance.py`, `scouting/{hcwdl_exact_dag_submission,hcwdl_recovery}.py` | Immutable canonical artifacts and exact durable submission journals; new namespace and exclusive claim, no parent mutation |
+| `luka_fullsim/regular_submission.py` | Same SPORC cluster/resource test-only checks and sanitized Slurm environment |
+| `tests/test_luka_fullsim_{stage2,alljets,science}.py` (repository-relative) | Synthetic ROOT, full-view cache, tiny CPU model and explicit mocked parity fixtures; not real-GPU acceptance |
+
+The new thin CLI/helper/worker follow the existing regular and ALLJETS wrappers.
+New contracts are `LUKA_ALLJETS_FUSION_*/v1`; old contracts are not reinterpreted.
+The only external supervision edge is the authenticated U000 TRAIN bank; old
+weights and technical-probe banks cannot initialize or supervise new science.
+
 ## 2026-10-14: all-eligible Luka regular development experiment
 
 Internal donor commit: `adb2e939fd26b0fa22b84369e283f71a3944cee8`.
