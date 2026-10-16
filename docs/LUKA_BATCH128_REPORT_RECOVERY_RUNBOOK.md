@@ -15,44 +15,71 @@ After the CPU report succeeds, separately review/submit all **30 science jobs**:
 models, seeds, full particle support and 60--100-pass schedule; both fusion
 endings and matched regular comparisons. No independent test set.
 
-## 1. Commit and push on Windows
+## 1. Publish the narrow zero-allocation fix from isolated source on Windows
 
-Review changes first; do not stage unrelated files. HANDOFF has earlier user
-edits, so review/stage its new entry separately if desired.
-This recovery intentionally requires the model/data/recipe source to remain
-identical to `922bd972`. In particular, do not bundle concurrent FullStat/shared
-training-runner changes into this commit. If those are already committed on
-your branch, stop and isolate the repair on the original source first; the
-recovery compatibility check will reject a mixed source.
+The original recovery commit `ea7cfdfc0222768bdffd386058a807f6fac84de6`
+incorrectly rejected GPU allocation zero in the two single-encoder no-op parity
+phases. The correction allows just those two authenticated phases with empty
+`parities`; real GPU phases still require positive measurements. No GPU rerun.
+
+FullStat/shared-runner changes have since been committed on main. **Do not deploy
+the combined main tip for this recovery.** Create a narrow repair commit based
+on ea7cfdfc, then merge it into main using a separate clean worktree solely to
+publish it. Deploy the narrow repair commit, NOT that integration merge commit.
+This preserves both experiments and the strict source-compatibility check.
+
+Run from the Windows repository containing the corrected files. Review the five
+listed files first. These commands never switch/reset the current dirty worktree;
+HANDOFF/LEGACY_SOURCE_MAP living-status edits remain for separate scoped review.
+Existing helper directories cause a stop; preserve them instead of deleting them.
 
 ```powershell
-git add -- src/hlt_classification/cms2jc2_response/measurement.py `
-  src/hlt_classification/luka_fullsim/alljets_report_recovery.py `
-  src/hlt_classification/luka_fullsim/alljets_report_replay.py `
-  src/hlt_classification/luka_fullsim/alljets_fusion_campaign.py `
-  src/hlt_classification/luka_fullsim/alljets_fusion_worker.py `
-  src/hlt_classification/luka_fullsim/alljets_fusion_submission.py `
-  scripts/luka_fullsim_alljets_fusion.py `
-  scripts/queue_luka_batch128_report_recovery.sh `
-  tests/test_process_measurement.py tests/test_luka_batch128_report_recovery.py `
-  tests/test_luka_alljets_batch128.py tests/test_luka_fullsim_alljets_fusion.py `
-  tests/test_luka_fusion_isolated_preflight.py tests/test_luka_fusion_cuda_diagnostic.py `
-  docs/plans/LUKA_BATCH128_REPORT_RECOVERY_PLAN.md `
-  docs/contracts/LUKA_BATCH128_REPORT_RECOVERY.md `
-  docs/LUKA_BATCH128_REPORT_RECOVERY_RUNBOOK.md `
-  docs/plans/LUKA_ALLJETS_BATCH128_PLAN.md docs/contracts/LUKA_ALLJETS_BATCH128.md `
-  docs/LEGACY_SOURCE_MAP.md
+$ErrorActionPreference = 'Stop'
+$Repo = (Get-Location).Path
+$Base = 'ea7cfdfc0222768bdffd386058a807f6fac84de6'
+$RepairDir = Join-Path (Split-Path $Repo -Parent) 'HLT_Classification_luka_report_zero_fix'
+$PublishDir = Join-Path (Split-Path $Repo -Parent) 'HLT_Classification_luka_report_publish'
+$RepairFiles = @(
+  'src/hlt_classification/luka_fullsim/alljets_report_replay.py',
+  'tests/test_luka_batch128_report_recovery.py',
+  'docs/plans/LUKA_BATCH128_REPORT_RECOVERY_PLAN.md',
+  'docs/contracts/LUKA_BATCH128_REPORT_RECOVERY.md',
+  'docs/LUKA_BATCH128_REPORT_RECOVERY_RUNBOOK.md'
+)
+if ((Test-Path -LiteralPath $RepairDir) -or (Test-Path -LiteralPath $PublishDir)) {
+  throw 'Helper directory exists; preserve it and inspect before retrying.'
+}
+git -C $Repo fetch origin main
+if ($LASTEXITCODE -ne 0) { throw 'Fetch failed' }
+git -C $Repo merge-base --is-ancestor $Base origin/main
+if ($LASTEXITCODE -ne 0) { throw 'Recovery base not on published main' }
+git -C $Repo worktree add --detach $RepairDir $Base
+if ($LASTEXITCODE -ne 0) { throw 'Repair worktree failed' }
+foreach ($File in $RepairFiles) {
+  Copy-Item -LiteralPath (Join-Path $Repo $File) -Destination (Join-Path $RepairDir $File)
+}
+git -C $RepairDir diff --stat
+if ((Read-Host 'Commit only this reviewed recovery repair? Type YES') -ne 'YES') {
+  throw 'Stopped; worktree preserved, no commit or push'
+}
+git -C $RepairDir add -- $RepairFiles
 if ($LASTEXITCODE -ne 0) { throw 'Stage failed' }
-git diff --cached --stat
-git commit -m "Fix process sampler race and recover completed batch128 probes"
+git -C $RepairDir commit -m 'Accept zero allocation in no-op batch128 parity recovery'
 if ($LASTEXITCODE -ne 0) { throw 'Inspect commit status; do not blindly retry' }
-git push origin HEAD:main
-if ($LASTEXITCODE -ne 0) { throw 'Push failed' }
-git rev-parse HEAD
+$RepairCommit = (git -C $RepairDir rev-parse HEAD).Trim()
+if ($LASTEXITCODE -ne 0) { throw 'Cannot identify repair commit' }
+git -C $Repo worktree add --detach $PublishDir origin/main
+if ($LASTEXITCODE -ne 0) { throw 'Publishing worktree failed' }
+git -C $PublishDir merge --no-ff $RepairCommit -m 'Merge isolated batch128 report correction'
+if ($LASTEXITCODE -ne 0) { throw 'Merge needs review; do not resolve by overwriting files' }
+git -C $PublishDir push origin HEAD:main
+if ($LASTEXITCODE -ne 0) { throw 'Push failed; preserve both commits; never force-push' }
+Write-Host "DEPLOY THIS REPAIR COMMIT: $RepairCommit"
 ```
 
-If Git says nothing was staged, inspect `git log -1 --oneline` and status; the
-changes may already be committed. Do not add unrelated files to force a commit.
+Use the printed **repair commit** in every subsequent block. The normal merge
+publishes it as an ancestor of main; the integrated tip includes FullStat and is
+intentionally not a compatible recovery source. Neither worktree is deleted.
 
 ## 2. Dry-review the CPU recovery on sporcsubmit
 

@@ -25,6 +25,16 @@ Successful child exits are inferred from the original coordinator reaching that
 specific exit after processing the complete loop; the report labels this evidence.
 Missing, reordered, altered or unrelated-failure evidence stops recovery.
 
+Child memory fields must be present integers (not booleans or coerced strings).
+Host high-water must be positive for every child. GPU high-water must be positive
+for every stress/measure child and both fusion parity children. The pinned v4
+producer intentionally performs no CUDA parity work for `parity/U000_probe` and
+`parity/FINAL_DIRECT_D000_probe`: those two authenticated phases must have empty
+`parities` and may report integer zero GPU allocation. Missing, negative or
+malformed measurements are never treated as zero. This corrects the ea7cfdfc
+replay implementation's overstrict positive-only check; it changes neither the
+v5 artifact schema nor the scientific recipe or resource thresholds.
+
 The original aggregate candidate exists only in the new report, explicitly
 labelled as a reconstruction. Never insert it into the original GPU job.
 PREFLIGHT/v5 binds both original execution source and recovery source, original
