@@ -22,6 +22,9 @@ def main():
     batch128 = modes.add_parser('create-batch128')
     for option in ('root', 'failed-gate', 'expected-commit'):
         batch128.add_argument('--'+option, required=True)
+    report_recovery = modes.add_parser('create-report-recovery')
+    for option in ('root', 'failed-gate', 'expected-commit'):
+        report_recovery.add_argument('--'+option, required=True)
     child = modes.add_parser('preflight-child')
     for option in ('spec', 'kind', 'node'):
         child.add_argument('--'+option, required=True)
@@ -35,7 +38,11 @@ def main():
         if name == 'run':
             p.add_argument('--task', required=True)
     args = parser.parse_args()
-    if args.mode == 'create-batch128':
+    if args.mode == 'create-report-recovery':
+        from hlt_classification.luka_fullsim.alljets_report_recovery import create
+        result = create(root=args.root, failed_gate=args.failed_gate,
+            project=Path(__file__).resolve().parents[1], commit=args.expected_commit)
+    elif args.mode == 'create-batch128':
         from hlt_classification.luka_fullsim.alljets_batch128 import create
         result = create(root=args.root, failed_gate=args.failed_gate,
             project=Path(__file__).resolve().parents[1], commit=args.expected_commit)
@@ -71,7 +78,10 @@ def main():
         elif gate:
             if args.task != 'preflight':
                 raise ValueError('Only a new GPU preflight; no parent preprocessing or retraining')
-            from hlt_classification.luka_fullsim.alljets_fusion_preflight import run
+            if spec['schema_version'] == 5:
+                from hlt_classification.luka_fullsim.alljets_report_recovery import run
+            else:
+                from hlt_classification.luka_fullsim.alljets_fusion_preflight import run
             result = run(spec)
         else:
             from hlt_classification.luka_fullsim.alljets_fusion_worker import run

@@ -1,4 +1,4 @@
-"""Exact reviewed plans; a one-job gate then a separate sixteen-job continuation."""
+"""Exact reviewed gate and version-scoped science plans; no automatic followup."""
 from pathlib import Path
 
 from hlt_classification.data.cache_contracts import load_json, write_immutable_json
@@ -10,7 +10,7 @@ from . import alljets_fusion_campaign as c
 
 
 def is_gate(spec):
-    return spec['contract'] in {f'LUKA_ALLJETS_FUSION_GATE/v{v}' for v in (1, 2, 3, 4)}
+    return spec['contract'] in {f'LUKA_ALLJETS_FUSION_GATE/v{v}' for v in (1, 2, 3, 4, 5)}
 
 
 def render(spec):
@@ -18,15 +18,16 @@ def render(spec):
     rows = [dict(task_id='preflight', kind='preflight', dependencies=[])] if gate else c.scoped_tasks(spec)
     root, site = Path(spec['root']), spec['execution_site']
     commands = []
-    prefix = 'lukab' if spec.get('schema_version') == 4 else 'lukaaf'
+    prefix = 'lukabr' if spec.get('schema_version') == 5 else 'lukab' if spec.get('schema_version') == 4 else 'lukaaf'
     for row in rows:
         name, kind = row['task_id'], row['kind']
-        gpu = kind in ('train','reduce','preflight')
+        recovery = gate and spec.get('schema_version') == 5
+        gpu = kind in ('train','reduce','preflight') and not recovery
         minutes = spec['gate_minutes'] if gate else spec[kind+'_minutes'] if gpu else 60
         args = ['sbatch','--parsable','--no-requeue','--nodes=1','--ntasks=1','--export=NONE',
             '--partition='+site['partition'], '--account='+site['account'], '--qos='+site['qos'],
             '--cpus-per-task='+str(spec['cpus'] if gpu else 1),
-            '--mem='+str(spec['memory_mb'] if gpu else 16384)+'M', '--time='+_walltime(minutes),
+            '--mem='+str(32768 if recovery else spec['memory_mb'] if gpu else 16384)+'M', '--time='+_walltime(minutes),
             '--job-name='+prefix+'_'+name, '--comment='+prefix+':'+spec['content_hash']+':'+name,
             '--chdir='+spec['project_dir'], '--output='+str(root/(name+'-%j.out'))]
         if gpu:

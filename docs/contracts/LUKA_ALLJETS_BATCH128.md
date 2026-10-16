@@ -2,6 +2,10 @@
 
 Authority: [active plan](../plans/LUKA_ALLJETS_BATCH128_PLAN.md).
 
+For the specific completed-probe/sampler failure in job21898881, see
+[report-only execution v5](LUKA_BATCH128_REPORT_RECOVERY.md). It preserves this
+recipe and original v4 evidence, without marking the failed GPU job successful.
+
 `LUKA_MATCHED_BATCH128_RECIPE/v1` binds the original recipe hash, changing only
 batch_size to128 and explicitly inference_batch_size=128, accumulation=1.
 All other schedule/loss/selection/optimizer fields are unchanged. The runner

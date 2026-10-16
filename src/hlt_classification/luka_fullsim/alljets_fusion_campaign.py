@@ -19,7 +19,7 @@ V2_KINDS = {'GATE', 'SPEC', 'PREFLIGHT', 'PLAN', 'TASK', 'RESULTS', 'DIAGNOSTICS
 
 
 def artifact(kind, *, parents=None, version=1, **fields):
-    if version != 1 and not (version in (2, 3, 4) and kind in V2_KINDS) and not (version in (3, 4) and kind == 'PROBE'):
+    if version != 1 and not (version in (2, 3, 4, 5) and kind in V2_KINDS) and not (version in (3, 4) and kind == 'PROBE'):
         raise ValueError('Unsupported fusion artifact version')
     return with_content_hash(dict(contract=f'LUKA_ALLJETS_FUSION_{kind}/v{version}', schema_version=version,
         parents=dict(parents or {}), **FLAGS, **fields))
@@ -31,7 +31,7 @@ def bound_artifact(scope, kind, **fields):
 
 def validate(value, kind, parents=None):
     version = value.get('schema_version')
-    if type(version) is not int or (version != 1 and not (version in (2, 3, 4) and kind in V2_KINDS) and not (version in (3, 4) and kind == 'PROBE')):
+    if type(version) is not int or (version != 1 and not (version in (2, 3, 4, 5) and kind in V2_KINDS) and not (version in (3, 4) and kind == 'PROBE')):
         raise ValueError('Unsupported fusion artifact version')
     digest = validate_content_hash(value, expected_contract=f'LUKA_ALLJETS_FUSION_{kind}/v{version}', expected_schema_version=version)
     if any(value.get(k) != v for k, v in FLAGS.items()):
@@ -66,11 +66,11 @@ def tasks():
 
 
 def scoped_nodes(scope):
-    return old.nodes() + nodes() if scope.get('schema_version') == 4 else nodes()
+    return old.nodes() + nodes() if scope.get('schema_version') in (4, 5) else nodes()
 
 
 def scoped_tasks(scope):
-    if scope.get('schema_version') != 4:
+    if scope.get('schema_version') not in (4, 5):
         return tasks()
     rows = []
     models = scoped_nodes(scope)
@@ -90,15 +90,22 @@ def scoped_tasks(scope):
 
 def completion(scope):
     return (dict(fits=17, reducers=11, imported_comparisons=0, performance_never_gates_completion=True)
-            if scope.get('schema_version') == 4 else
+            if scope.get('schema_version') in (4, 5) else
             dict(fits=8, reducers=6, imported_comparisons=9, performance_never_gates_completion=True))
 
 
 def authorization(scope):
+    if scope.get('schema_version') == 5:
+        from .alljets_report_recovery import AUTHORIZATION as recovery_authorization
+        return recovery_authorization
     return 'AUTHORIZE LUKA MATCHED BATCH128 EXACT PLAN' if scope.get('schema_version') == 4 else AUTHORIZATION
 
 
 def registration(version=1):
+    if version == 5:
+        from .alljets_report_recovery import POLICY
+        from copy import deepcopy
+        return dict(registration(4), report_recovery_policy=deepcopy(POLICY), gate_minutes=240)
     if version == 4:
         from .alljets_batch128 import POLICY
         from hlt_classification.jetclass2_delphes.batch128_recipe import recipe
@@ -151,6 +158,9 @@ def create_gate(*, root, parent_path, project, commit):
 
 
 def validate_gate(gate):
+    if gate.get('schema_version') == 5:
+        from .alljets_report_recovery import validate_gate as recovered_report_gate
+        return recovered_report_gate(gate)
     if gate.get('schema_version') == 4:
         from .alljets_batch128 import validate_gate as batch128_gate
         return batch128_gate(gate)
@@ -175,6 +185,9 @@ def validate_gate(gate):
 
 
 def evidence(gate):
+    if gate.get('schema_version') == 5:
+        from .alljets_report_recovery import evidence as recovered_evidence
+        return recovered_evidence(gate)
     from .alljets_fusion_preflight import validate_evidence
     from .regular_cache import metadata
     parent = validate_gate(gate)

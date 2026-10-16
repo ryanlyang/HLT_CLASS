@@ -1,5 +1,26 @@
 # Legacy Donor-Source Map
 
+## Batch128 sampler repair and report-only recovery (2026-10-16)
+
+Internal donor: `922bd972ef9ec52079e9e750e6e7896e857aba8b`. No external or
+Fresh_check code. `cms2jc2_response/measurement.py` retains its sampling method
+and gains narrowly scoped ENOENT/ESRCH child/thread-exit handling.
+
+- `luka_fullsim/alljets_fusion_isolated_preflight.py`: aggregate construction,
+  child validation and canonical sequence reused by new `alljets_report_replay.py`.
+- `luka_fullsim/alljets_fusion_preflight.py`: unchanged resource projections and
+  strict evidence validator invoked from the original donor worktree at runtime.
+- `luka_fullsim/alljets_batch128.py` and `preflight_reuse.py`: root/source
+  compatibility patterns reused by new `alljets_report_recovery.py`.
+- `scripts/queue_luka_alljets_batch128.sh`: exact reviewed dry/live workflow
+  adapted for the new CPU-only report helper and explicit later science plan.
+- Fusion campaign/worker/submission and thin CLI gain execution-v5 dispatch;
+  all model, data, split, cache, recipe and shared training-runner bytes unchanged.
+
+New authority: LUKA_BATCH128_REPORT_RECOVERY_PLAN and contract. The old FAILED
+job and original source remain immutable; the new CPU receipt binds recovered
+GPU evidence separately. No scientific target/checkpoint is imported.
+
 ## Matched ALLJETS batch128 (2026-10-15)
 
 Internal donor: `5cab18304d991e46457aa0d9318f8731ae3b7338`.

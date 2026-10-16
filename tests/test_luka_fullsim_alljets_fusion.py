@@ -62,7 +62,8 @@ def test_scope_and_unchanged_parent_sources():
     changed = subprocess.run(['git','diff','--name-only','9e591c7a73e1fcf24d2e2032be441dd3ee965052','--','src'],
         cwd=root, check=True, capture_output=True, text=True).stdout.splitlines()
     from hlt_classification.luka_fullsim import alljets_batch128 as batch128
-    assert set(changed) <= source.ADDITIONS | batch128.CHANGES | batch128.ADDITIONS
+    from hlt_classification.luka_fullsim import alljets_report_recovery as report_recovery
+    assert set(changed) <= source.ADDITIONS | batch128.CHANGES | batch128.ADDITIONS | report_recovery.CHANGES | report_recovery.ADDITIONS
     worker = (root/'sbatch/run_luka_fullsim_alljets_fusion.sh').read_text()
     for text in ('${PROJECT_DIR}/sbatch/common.sh', 'PYTHONNOUSERSITE=1', '${CONDA_PREFIX}/lib', 'atlas_kd_sporc'):
         assert text in worker

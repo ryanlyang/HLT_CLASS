@@ -45,7 +45,8 @@ class Measurement:
         self.error = None
 
     def sample(self):
-        pending, seen, rss = [os.getpid()], set(), 0
+        root_pid = os.getpid()
+        pending, seen, rss = [root_pid], set(), 0
         while pending:
             pid = pending.pop()
             if pid in seen:
@@ -60,8 +61,13 @@ class Measurement:
                                     (int(fields[11])+int(fields[12]))/os.sysconf("SC_CLK_TCK"))
                 rss += int(fields[21])*os.sysconf("SC_PAGE_SIZE")
                 for task in (directory/"task").iterdir():
-                    pending.extend(map(int, (task/"children").read_text().split()))
-            except FileNotFoundError:
+                    try:
+                        pending.extend(map(int, (task/"children").read_text().split()))
+                    except (FileNotFoundError, ProcessLookupError):
+                        continue  # A thread exited; still inspect the other threads.
+            except (FileNotFoundError, ProcessLookupError):
+                if pid == root_pid:
+                    raise  # Our own process must remain measurable.
                 continue  # A child completed during this sample.
         self.peak = max(self.peak, rss)
         self.samples += 1

@@ -188,10 +188,11 @@ def test_batch128_keeps_runtime_admission(gate128,monkeypatch):
     assert not (Path(gate['root'])/'preflight/preflight.json').exists()
 
 
-def test_all17_fresh_scientific_fits_and_11_local_banks(all_prepared,tmp_path,monkeypatch):
+@pytest.mark.parametrize('version',[4,5])
+def test_all17_fresh_scientific_fits_and_11_local_banks(all_prepared,tmp_path,monkeypatch,version):
     old,parent,p=fixture_spec(all_prepared,tmp_path)
-    spec=with_content_hash(dict(old,contract='LUKA_ALLJETS_FUSION_SPEC/v4',schema_version=4,
-        **{**c.registration(4),'counts':p['counts']}))
+    spec=with_content_hash(dict(old,contract=f'LUKA_ALLJETS_FUSION_SPEC/v{version}',schema_version=version,
+        **{**c.registration(version),'counts':p['counts']}))
     cpu_worker(monkeypatch,p,parent)
     monkeypatch.setattr(sync,'new_model',lambda n:(torch.manual_seed(n['initialization_seed']),TinyModel())[1])
     original=w.load_bank
@@ -266,7 +267,8 @@ def test_source_allowlist_and_runtime_files_exist():
     for name in b.REQUIRED: assert (root/name).is_file(),name
     changed=subprocess.run(['git','diff','--name-only',b.FAILED_COMMIT,'--','src'],cwd=root,
         check=True,capture_output=True,text=True).stdout.splitlines()
-    assert set(changed)<=b.CHANGES|b.ADDITIONS
+    from hlt_classification.luka_fullsim import alljets_report_recovery as report_recovery
+    assert set(changed)<=b.CHANGES|b.ADDITIONS|report_recovery.CHANGES|report_recovery.ADDITIONS
     # Production model, shared stress, original recipe, split/cache bytes untouched.
     assert 'src/hlt_classification/luka_fullsim/alljets_fusion_sync.py' not in changed
     assert 'src/hlt_classification/context_fusion/worker.py' not in changed

@@ -1,5 +1,10 @@
 # Matched ALLJETS batch-128 experiment
 
+Execution-only amendment 2026-10-16: the
+[report recovery plan](LUKA_BATCH128_REPORT_RECOVERY_PLAN.md) permits authenticated
+CPU-only recovery of job21898881's twelve completed probes after its sampler
+failure. New execution v5 preserves this scientific recipe; v4 is unchanged.
+
 Authorized 2026-10-15: true batch128, accumulation1; rerun matched controls,
 ordinary DIRECT/COARSE and BOTH fusion endings. This new GATE/SPEC v4 supersedes
 the batch256 and imported-control/teacher clauses of LUKA_FULLSIM_ALLJETS_FUSION_PLAN
