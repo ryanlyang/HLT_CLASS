@@ -64,7 +64,16 @@ def train_kernel(model, train: RamCache, validation: RamCache, *, node: dict, de
     if not isinstance(config, dict) or "content_hash" not in config:
         raise ValueError("Training recipe is not an authenticated artifact")
     from .batch128_recipe import CONTRACT as batch128_contract, recipe as batch128_recipe
-    if config.get('contract') == batch128_contract:
+    from hlt_classification.luka_fullstat.recipe import (
+        CONTRACT as fullstat_contract, recipe as fullstat_recipe,
+        learning_rate as fullstat_learning_rate,
+    )
+    schedule = learning_rate
+    if config.get('contract') == fullstat_contract:
+        if config != fullstat_recipe(config.get('batch_size')):
+            raise ValueError('FullStat20 requires the exact registered recipe')
+        schedule = fullstat_learning_rate
+    elif config.get('contract') == batch128_contract:
         if config != batch128_recipe():
             raise ValueError('Batch128 requires the exact registered recipe')
     else:
@@ -115,7 +124,7 @@ def train_kernel(model, train: RamCache, validation: RamCache, *, node: dict, de
         for start in range(0, len(train), config["batch_size"]):
             indices = order[start:start + config["batch_size"]]
             update += 1
-            lr = learning_rate(update / updates_per_pass)
+            lr = schedule(update / updates_per_pass)
             for group in optimizer.param_groups:
                 group["lr"] = lr
             raw = train.batch(indices)

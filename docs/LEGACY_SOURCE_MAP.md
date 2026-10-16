@@ -1,5 +1,40 @@
 # Legacy Donor-Source Map
 
+## FullStat Oscar20 regular ladder (2026-10-16)
+
+Internal donor: `922bd972ef9ec52079e9e750e6e7896e857aba8b`. New implementation
+under `src/hlt_classification/luka_fullstat/`; no external/Fresh_check migration,
+old snapshot, selected checkpoint or technical teacher is imported. This work
+is independent of the concurrent batch128 report-recovery repair.
+
+- `luka_fullsim/regular_campaign.py`: nine-node pure-encoder graph, paired
+  initialization/sampler seeds and sixteen-task dependencies reused unchanged.
+- `luka_fullsim/{contracts,particles,stage2,preflight_cache}.py`: scalar fields,
+  raw-to-physical parsing, provisional mm/error-only zero-error semantics,
+  input/view contracts and ragged block construction reused. The new namespace
+  implements merged-file chunking, new source categories and row memberships;
+  the trial's file split and extra pT cut are NOT reused.
+- `cms_proxy_ladder/{contracts,views}.py` and
+  `literature_context/transform.py`: safe references, assignment/salience view
+  kernels and seventeen-feature construction reused unchanged for genuine data.
+- `jetclass2_delphes/{schema,inventory,cache,model,acceptance,banks,reporting,
+  campaign,execution}.py`: labels/schema, latest tree, ragged cache, actual
+  Weaver model/parity, probability-bank/metric kernels, AdamW recipe defaults
+  and existing Oscar site reused. `runner.py` gains only an exact-contract
+  FullStat20 schedule dispatch; historical and matched128 recipes are unchanged.
+- `context_fusion/{inputs,worker}.py`: the **context=None single-encoder** model
+  factory and state serialization/cleanup helpers reused; NO fusion model used.
+- `luka_fullsim/preflight_v2.py`: runtime configuration, phase heartbeat and
+  memory sampling helpers reused. No old preflight receipt accepted.
+- `scouting/{hcwdl_exact_dag_submission,hcwdl_recovery}.py`,
+  `data/cache_contracts.py`, `provenance.py`, and
+  `sbatch/{jetclass2_delphes_common,common}.sh`: exact journal, immutable payloads,
+  source snapshots and absolute-path site activation reused.
+
+New scientific and artifact meanings are versioned separately in
+LUKA_FULLSTAT_OSCAR20_PLAN / LUKA_FULLSTAT_OSCAR20. Actual source-byte snapshots
+bind the eventual pushed deployment commit, not merely this donor description.
+
 ## Batch128 sampler repair and report-only recovery (2026-10-16)
 
 Internal donor: `922bd972ef9ec52079e9e750e6e7896e857aba8b`. No external or
