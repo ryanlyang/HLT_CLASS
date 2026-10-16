@@ -23,6 +23,23 @@ FAILURE_END = 'ProcessLookupError: [Errno 3] No such process'
 MEMORY_METHOD = 'slurm_single_task_batch_maxrss_plus_largest_sequential_child_tree_peak_v1'
 
 
+def validate_child_memory(row, kind, name):
+    """Check high-water evidence after check_child authenticates the phase/node.
+
+    In the pinned v4 producer, these two single-encoder parity phases load CPU
+    inputs but perform neither installed/native nor paired offload CUDA parity.
+    Their zero CUDA allocation is a measurement, not missing evidence.
+    """
+    no_cuda_parity = kind == 'parity' and name in (
+        'FINAL_DIRECT_D000_probe', 'U000_probe')
+    if no_cuda_parity and row.get('parities') != {}:
+        raise ValueError(f'{kind}/{name}: no-op parity must record empty parities')
+    for field, minimum in (('peak_rss_bytes', 1), ('gpu_peak_bytes', 0 if no_cuda_parity else 1)):
+        value = row.get(field)
+        if type(value) is not int or value < minimum:
+            raise ValueError(f'{kind}/{name}: {field} must be an integer >= {minimum}; got {value!r}')
+
+
 def logged_results(text, gate):
     """All printed child receipts precede the coordinator-only terminal error."""
     start = text.rfind('Traceback (most recent call last):')
@@ -82,8 +99,7 @@ def replay(gate, accounting):
         row = iso.check_child(load_json(output/prefix/'result.json'), gate, kind, name, runtime)
         if row != logged[index] or row['process_id'] in pids or row['support_maxima'] != maxima:
             raise ValueError('Logged probe/PID/support differs')
-        if any(type(row[k]) is not int or row[k] <= 0 for k in ('peak_rss_bytes', 'gpu_peak_bytes')):
-            raise ValueError('Missing child memory high-water evidence')
+        validate_child_memory(row, kind, name)
         pids.add(row['process_id'])
         rows[kind, name] = row
         children.append(dict(phase=kind, node=name, pid=row['process_id'], exit_code=0,
