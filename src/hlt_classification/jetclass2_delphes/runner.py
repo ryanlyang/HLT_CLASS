@@ -69,7 +69,15 @@ def train_kernel(model, train: RamCache, validation: RamCache, *, node: dict, de
         learning_rate as fullstat_learning_rate,
     )
     schedule = learning_rate
-    if config.get('contract') == fullstat_contract:
+    from .batch128_30e_recipe import (
+        CONTRACT as thirty_contract, recipe as thirty_recipe,
+        learning_rate as thirty_learning_rate,
+    )
+    if config.get('contract') == thirty_contract:
+        if config != thirty_recipe():
+            raise ValueError('Matched30 requires the exact registered recipe')
+        schedule = thirty_learning_rate
+    elif config.get('contract') == fullstat_contract:
         if config != fullstat_recipe(config.get('batch_size')):
             raise ValueError('FullStat20 requires the exact registered recipe')
         schedule = fullstat_learning_rate

@@ -236,8 +236,10 @@ def test_scientific_source_and_recipe_unchanged():
                             cwd=root, check=True, text=True, capture_output=True)
     from hlt_classification.luka_fullsim import alljets_batch128 as batch128
     from hlt_classification.luka_fullsim import alljets_report_recovery as report_recovery
+    from hlt_classification.luka_fullsim import alljets_30epoch as thirty
     assert set(result.stdout.splitlines()) <= (recovery.CHANGES | recovery.ADDITIONS | batch128.CHANGES | batch128.ADDITIONS
-                                               | report_recovery.CHANGES | report_recovery.ADDITIONS)
+                                               | report_recovery.CHANGES | report_recovery.ADDITIONS
+                                               | thirty.CHANGES | thirty.ADDITIONS | thirty.FULLSTAT)
     assert {k:v for k,v in c.registration(3).items() if k != 'preflight_execution'} == c.registration(2)
     assert iso.ORDER[0] == 'FUSION_D000_D000_probe'
     assert c.registration(3)['preflight_execution']['automatic_retry'] is False

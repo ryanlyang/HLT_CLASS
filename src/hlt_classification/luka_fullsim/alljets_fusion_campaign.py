@@ -19,7 +19,7 @@ V2_KINDS = {'GATE', 'SPEC', 'PREFLIGHT', 'PLAN', 'TASK', 'RESULTS', 'DIAGNOSTICS
 
 
 def artifact(kind, *, parents=None, version=1, **fields):
-    if version != 1 and not (version in (2, 3, 4, 5) and kind in V2_KINDS) and not (version in (3, 4) and kind == 'PROBE'):
+    if version != 1 and not (version in (2, 3, 4, 5, 6) and kind in V2_KINDS) and not (version in (3, 4) and kind == 'PROBE'):
         raise ValueError('Unsupported fusion artifact version')
     return with_content_hash(dict(contract=f'LUKA_ALLJETS_FUSION_{kind}/v{version}', schema_version=version,
         parents=dict(parents or {}), **FLAGS, **fields))
@@ -31,7 +31,7 @@ def bound_artifact(scope, kind, **fields):
 
 def validate(value, kind, parents=None):
     version = value.get('schema_version')
-    if type(version) is not int or (version != 1 and not (version in (2, 3, 4, 5) and kind in V2_KINDS) and not (version in (3, 4) and kind == 'PROBE')):
+    if type(version) is not int or (version != 1 and not (version in (2, 3, 4, 5, 6) and kind in V2_KINDS) and not (version in (3, 4) and kind == 'PROBE')):
         raise ValueError('Unsupported fusion artifact version')
     digest = validate_content_hash(value, expected_contract=f'LUKA_ALLJETS_FUSION_{kind}/v{version}', expected_schema_version=version)
     if any(value.get(k) != v for k, v in FLAGS.items()):
@@ -66,11 +66,11 @@ def tasks():
 
 
 def scoped_nodes(scope):
-    return old.nodes() + nodes() if scope.get('schema_version') in (4, 5) else nodes()
+    return old.nodes() + nodes() if scope.get('schema_version') in (4, 5, 6) else nodes()
 
 
 def scoped_tasks(scope):
-    if scope.get('schema_version') not in (4, 5):
+    if scope.get('schema_version') not in (4, 5, 6):
         return tasks()
     rows = []
     models = scoped_nodes(scope)
@@ -90,11 +90,14 @@ def scoped_tasks(scope):
 
 def completion(scope):
     return (dict(fits=17, reducers=11, imported_comparisons=0, performance_never_gates_completion=True)
-            if scope.get('schema_version') in (4, 5) else
+            if scope.get('schema_version') in (4, 5, 6) else
             dict(fits=8, reducers=6, imported_comparisons=9, performance_never_gates_completion=True))
 
 
 def authorization(scope):
+    if scope.get('schema_version') == 6:
+        from .alljets_30epoch import AUTHORIZATION as thirty_authorization
+        return thirty_authorization
     if scope.get('schema_version') == 5:
         from .alljets_report_recovery import AUTHORIZATION as recovery_authorization
         return recovery_authorization
@@ -102,6 +105,15 @@ def authorization(scope):
 
 
 def registration(version=1):
+    if version == 6:
+        from .alljets_30epoch import POLICY
+        from hlt_classification.jetclass2_delphes.batch128_30e_recipe import recipe
+        from copy import deepcopy
+        return dict(registration(4), training_recipe=recipe(), gate_minutes=240,
+            schedule_reuse_policy=deepcopy(POLICY),
+            preflight_execution=dict(version='cpu_only_fixed30_resource_revalidation_v1',
+                                     gpus=0, repeats_gpu_probes=False),
+            scientific_comparison='all17_refitted_true128_exact30_epochs_warmup3_cosine30')
     if version == 5:
         from .alljets_report_recovery import POLICY
         from copy import deepcopy
@@ -158,6 +170,9 @@ def create_gate(*, root, parent_path, project, commit):
 
 
 def validate_gate(gate):
+    if gate.get('schema_version') == 6:
+        from .alljets_30epoch import validate_gate as thirty_gate
+        return thirty_gate(gate)
     if gate.get('schema_version') == 5:
         from .alljets_report_recovery import validate_gate as recovered_report_gate
         return recovered_report_gate(gate)
@@ -185,6 +200,9 @@ def validate_gate(gate):
 
 
 def evidence(gate):
+    if gate.get('schema_version') == 6:
+        from .alljets_30epoch import evidence as thirty_evidence
+        return thirty_evidence(gate)
     if gate.get('schema_version') == 5:
         from .alljets_report_recovery import evidence as recovered_evidence
         return recovered_evidence(gate)

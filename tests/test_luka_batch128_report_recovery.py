@@ -31,6 +31,64 @@ TAIL = '''Traceback (most recent call last):
 ProcessLookupError: [Errno 3] No such process
 '''
 
+# User-supplied job21898881 metadata, injected into synthetic CPU probes only.
+# The two single-encoder parity children intentionally allocate no CUDA tensors.
+SAVED_PEAKS = {
+    ('measure', 'FINAL_DIRECT_D000_probe'): (3442073600, 4259610624),
+    ('measure', 'FUSION_D000_D000_probe'): (9303498752, 8608491008),
+    ('measure', 'FUSION_U050_probe'): (11273818112, 9881594880),
+    ('measure', 'U000_probe'): (3661946880, 5198334464),
+    ('parity', 'FINAL_DIRECT_D000_probe'): (2215526400, 0),
+    ('parity', 'FUSION_D000_D000_probe'): (3677814784, 498853376),
+    ('parity', 'FUSION_U050_probe'): (5584388096, 549267456),
+    ('parity', 'U000_probe'): (2489503744, 0),
+    ('stress', 'FINAL_DIRECT_D000_probe'): (2947379200, 9354418688),
+    ('stress', 'FUSION_D000_D000_probe'): (66216976384, 15155068928),
+    ('stress', 'FUSION_U050_probe'): (68216737792, 18472211968),
+    ('stress', 'U000_probe'): (3227463680, 11892766720),
+}
+
+
+@pytest.mark.parametrize('kind,name', SAVED_PEAKS)
+def test_exact_saved_child_memory_pattern(kind, name):
+    rss, gpu = SAVED_PEAKS[kind, name]
+    replay.validate_child_memory(dict(peak_rss_bytes=rss, gpu_peak_bytes=gpu, parities={}), kind, name)
+
+
+@pytest.mark.parametrize('kind,name', SAVED_PEAKS)
+def test_zero_gpu_is_allowed_only_for_the_two_noop_parities(kind, name):
+    row = dict(peak_rss_bytes=1, gpu_peak_bytes=0, parities={})
+    if kind == 'parity' and name in ('FINAL_DIRECT_D000_probe', 'U000_probe'):
+        replay.validate_child_memory(row, kind, name)
+    else:
+        with pytest.raises(ValueError, match=f'{kind}/{name}: gpu_peak_bytes'):
+            replay.validate_child_memory(row, kind, name)
+
+
+@pytest.mark.parametrize('field', ['peak_rss_bytes', 'gpu_peak_bytes'])
+@pytest.mark.parametrize('bad', [None, -1, False, True, 0.0, '0'])
+@pytest.mark.parametrize('kind,name', [('parity', 'U000_probe'), ('stress', 'FUSION_U050_probe')])
+def test_invalid_memory_never_becomes_zero_evidence(field, bad, kind, name):
+    row = dict(peak_rss_bytes=1, gpu_peak_bytes=1, parities={})
+    row[field] = bad
+    with pytest.raises(ValueError, match=f'{kind}/{name}: {field}'):
+        replay.validate_child_memory(row, kind, name)
+    del row[field]
+    with pytest.raises(ValueError, match=f'{kind}/{name}: {field}'):
+        replay.validate_child_memory(row, kind, name)
+
+
+@pytest.mark.parametrize('name', ['FINAL_DIRECT_D000_probe', 'U000_probe'])
+def test_noop_parity_still_requires_host_memory_and_empty_parities(name):
+    row = dict(peak_rss_bytes=0, gpu_peak_bytes=0, parities={})
+    with pytest.raises(ValueError, match='peak_rss_bytes'):
+        replay.validate_child_memory(row, 'parity', name)
+    row['peak_rss_bytes'] = 1
+    for parities in (None, {'unexpected_cuda_parity': True}):
+        row['parities'] = parities
+        with pytest.raises(ValueError, match='no-op parity'):
+            replay.validate_child_memory(row, 'parity', name)
+
 
 @pytest.fixture
 def finished(gate128,monkeypatch):
@@ -48,6 +106,14 @@ def finished(gate128,monkeypatch):
         def __exit__(self,*a):
             if self.outer: raise ProcessLookupError(3,'No such process')
     monkeypatch.setattr(iso,'Measurement',FailedCoordinator)
+    launch = iso._launch
+    def measured_launch(g, kind, name, log):
+        rss, gpu = SAVED_PEAKS[kind, name]
+        with monkeypatch.context() as local:
+            local.setattr(replay.pre, 'memory_snapshot', lambda _:dict(
+                rss_bytes=rss, peak_rss_bytes=rss, gpu_peak_bytes=gpu))
+            return launch(g, kind, name, log)
+    monkeypatch.setattr(iso, '_launch', measured_launch)
     with pytest.raises(ProcessLookupError): iso.run(gate)
     text=''
     for kind,name in iso.sequence(gate):
@@ -67,7 +133,11 @@ def test_sampler_failure_replay_keeps_original_and_all_checks(finished):
     assert data['admission_error'] is None and data['original_job_status']=='FAILED'
     assert len(data['candidate']['isolated_children'])==12
     assert data['candidate']['job_id']==r.FAILED_JOB
-    assert data['memory_evidence']['conservative_sum_bytes']==74695592*1024+2**30
+    assert data['memory_evidence']['conservative_sum_bytes']==74695592*1024+68216737792
+    assert data['candidate']['gpu_peak_bytes']==18472211968
+    for name in ('FINAL_DIRECT_D000_probe', 'U000_probe'):
+        row=load_json(root/'preflight/children'/('parity_'+name)/'result.json')
+        assert row['gpu_peak_bytes']==0 and row['parities']=={}
     assert data['candidate']['peak_rss_bytes']==data['memory_evidence']['conservative_sum_bytes']
     assert before=={str(p):p.read_bytes() for p in root.rglob('*') if p.is_file()}
     assert not (root/'preflight/preflight.json').exists()

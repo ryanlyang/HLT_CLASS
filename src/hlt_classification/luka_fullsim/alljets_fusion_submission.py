@@ -10,7 +10,7 @@ from . import alljets_fusion_campaign as c
 
 
 def is_gate(spec):
-    return spec['contract'] in {f'LUKA_ALLJETS_FUSION_GATE/v{v}' for v in (1, 2, 3, 4, 5)}
+    return spec['contract'] in {f'LUKA_ALLJETS_FUSION_GATE/v{v}' for v in (1, 2, 3, 4, 5, 6)}
 
 
 def render(spec):
@@ -18,10 +18,10 @@ def render(spec):
     rows = [dict(task_id='preflight', kind='preflight', dependencies=[])] if gate else c.scoped_tasks(spec)
     root, site = Path(spec['root']), spec['execution_site']
     commands = []
-    prefix = 'lukabr' if spec.get('schema_version') == 5 else 'lukab' if spec.get('schema_version') == 4 else 'lukaaf'
+    prefix = 'luka30' if spec.get('schema_version') == 6 else 'lukabr' if spec.get('schema_version') == 5 else 'lukab' if spec.get('schema_version') == 4 else 'lukaaf'
     for row in rows:
         name, kind = row['task_id'], row['kind']
-        recovery = gate and spec.get('schema_version') == 5
+        recovery = gate and spec.get('schema_version') in (5, 6)
         gpu = kind in ('train','reduce','preflight') and not recovery
         minutes = spec['gate_minutes'] if gate else spec[kind+'_minutes'] if gpu else 60
         args = ['sbatch','--parsable','--no-requeue','--nodes=1','--ntasks=1','--export=NONE',

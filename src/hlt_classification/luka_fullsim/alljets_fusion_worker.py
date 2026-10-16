@@ -43,7 +43,7 @@ def cache(spec, prepared, node, role, *, authenticated=None):
 
 def execution(spec, measured=None):
     require_backend()
-    if spec.get('schema_version') in (2, 3, 4, 5):
+    if spec.get('schema_version') in (2, 3, 4, 5, 6):
         from .alljets_fusion_sync import PAIR_STORAGE
         if spec.get('pair_storage') != PAIR_STORAGE or os.environ.get('CUDA_LAUNCH_BLOCKING', '0') != '0':
             raise PermissionError('Synchronous production policy/backend differs; no diagnostic launch blocking')
@@ -63,7 +63,7 @@ def dependency_hashes(spec, task, seen):
         if row is None:
             raise ValueError('Missing committed teacher/dependency: '+dep)
         values[dep] = row['content_hash']
-    if task['task_id'] == 'train_FUSION_U050' and spec.get('schema_version') not in (4, 5):
+    if task['task_id'] == 'train_FUSION_U050' and spec.get('schema_version') not in (4, 5, 6):
         values['external:reduce_U000'] = spec['parent_import']['evidence']['tasks']['reduce_U000']
     return values
 
@@ -161,7 +161,7 @@ def completed(spec, name, seen=None):
 
 
 def teacher(spec, name, identities):
-    if name == 'U000' and spec.get('schema_version') not in (4, 5):
+    if name == 'U000' and spec.get('schema_version') not in (4, 5, 6):
         parent = load_json(spec['parent_import']['spec']['path'])
         root, result = Path(parent['root']), spec['parent_import']['evidence']['u000_bank']
     else:
@@ -181,7 +181,7 @@ def input_label(node):
 
 def result_rows(spec, *, seen=None):
     rows = [dict(r, origin='parent', input='single HLT' if r['deployable'] else 'OFFLINE ORACLE')
-            for r in ([] if spec.get('schema_version') in (4, 5) else spec['parent_import']['evidence']['rows'])]
+            for r in ([] if spec.get('schema_version') in (4, 5, 6) else spec['parent_import']['evidence']['rows'])]
     seen = {} if seen is None else seen
     for node in c.scoped_nodes(spec):
         name = 'train_'+node['node_id']
@@ -217,7 +217,7 @@ def run(spec, name):
         log = PhaseLog(directory, lambda: memory_snapshot(torch))
         with log.phase('load_authenticated_train_views'):
             train = cache(spec, p, node, 'train')
-        if spec.get('schema_version') in (2, 3, 4, 5):
+        if spec.get('schema_version') in (2, 3, 4, 5, 6):
             from .alljets_fusion_sync import new_model as model_factory
         else:
             model_factory = new_model
@@ -229,7 +229,7 @@ def run(spec, name):
             with log.phase('scientific_fit'):
                 report, state = train_kernel(model, train, val, node=node, device='cuda',
                     teacher_probabilities=probabilities, teacher_identities=None if probabilities is None else train.identities,
-                    **(dict(training_recipe=spec['training_recipe']) if spec.get('schema_version') in (4, 5) else {}))
+                    **(dict(training_recipe=spec['training_recipe']) if spec.get('schema_version') in (4, 5, 6) else {}))
                 validate_training(spec, node, report)
             with log.phase('checkpoint_and_validation_readback'):
                 save_state(directory/'selected.pt', state)
@@ -284,7 +284,9 @@ def print_results(spec):
     rows = result_rows(spec)
     print('Luka genuine FullSim fusion: 299,234 train / 74,895 validation; NO independent test.')
     print('M0HLT=0%, pure OFFLINE=100%; ' + ('all17 models refitted at true batch128, no accumulation or imported teachers.'
-        if spec.get('schema_version') in (4, 5) else 'nine parent fits reused read-only; eight fresh fusion-route fits.'))
+        if spec.get('schema_version') in (4, 5, 6) else 'nine parent fits reused read-only; eight fresh fusion-route fits.'))
+    if spec.get('schema_version') == 6:
+        print('Fixed30 epochs per fit; warmup3/cosine-to30; no early stopping. Not equal total route compute.')
     for field, recfield in [('validation', 'recovery_to_pure_offline'), ('original_validation', 'original_validation_recovery')]:
         print('\n'+('FULL validation (checkpoint selection)' if field == 'validation' else
             'ORIGINAL 50k validation subset; SAME selected checkpoints, no subset selection'))

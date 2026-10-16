@@ -25,6 +25,9 @@ def main():
     report_recovery = modes.add_parser('create-report-recovery')
     for option in ('root', 'failed-gate', 'expected-commit'):
         report_recovery.add_argument('--'+option, required=True)
+    thirty = modes.add_parser('create-30epoch')
+    for option in ('root', 'failed-gate', 'expected-commit'):
+        thirty.add_argument('--'+option, required=True)
     child = modes.add_parser('preflight-child')
     for option in ('spec', 'kind', 'node'):
         child.add_argument('--'+option, required=True)
@@ -38,7 +41,11 @@ def main():
         if name == 'run':
             p.add_argument('--task', required=True)
     args = parser.parse_args()
-    if args.mode == 'create-report-recovery':
+    if args.mode == 'create-30epoch':
+        from hlt_classification.luka_fullsim.alljets_30epoch import create
+        result = create(root=args.root, failed_gate=args.failed_gate,
+            project=Path(__file__).resolve().parents[1], commit=args.expected_commit)
+    elif args.mode == 'create-report-recovery':
         from hlt_classification.luka_fullsim.alljets_report_recovery import create
         result = create(root=args.root, failed_gate=args.failed_gate,
             project=Path(__file__).resolve().parents[1], commit=args.expected_commit)
@@ -78,7 +85,9 @@ def main():
         elif gate:
             if args.task != 'preflight':
                 raise ValueError('Only a new GPU preflight; no parent preprocessing or retraining')
-            if spec['schema_version'] == 5:
+            if spec['schema_version'] == 6:
+                from hlt_classification.luka_fullsim.alljets_30epoch import run
+            elif spec['schema_version'] == 5:
                 from hlt_classification.luka_fullsim.alljets_report_recovery import run
             else:
                 from hlt_classification.luka_fullsim.alljets_fusion_preflight import run

@@ -188,7 +188,7 @@ def test_batch128_keeps_runtime_admission(gate128,monkeypatch):
     assert not (Path(gate['root'])/'preflight/preflight.json').exists()
 
 
-@pytest.mark.parametrize('version',[4,5])
+@pytest.mark.parametrize('version',[4,5,6])
 def test_all17_fresh_scientific_fits_and_11_local_banks(all_prepared,tmp_path,monkeypatch,version):
     old,parent,p=fixture_spec(all_prepared,tmp_path)
     spec=with_content_hash(dict(old,contract=f'LUKA_ALLJETS_FUSION_SPEC/v{version}',schema_version=version,
@@ -215,8 +215,8 @@ def test_all17_fresh_scientific_fits_and_11_local_banks(all_prepared,tmp_path,mo
         assert w.completed(spec,'train_FUSION_U050')['dependencies'].keys()=={'reduce_U000'}
         for n in c.scoped_nodes(spec):
             report=load_json(Path(spec['root'])/('train_'+n['node_id'])/'training_report.json')
-            assert report['recipe_sha256']==recipe()['content_hash']
-            assert 60<=report['passes']<=100
+            assert report['recipe_sha256']==spec['training_recipe']['content_hash']
+            assert (report['passes']==30 if version==6 else 60<=report['passes']<=100)
             assert report['validation_history'][-1]['update']==report['passes']*math.ceil(p['counts']['train']/128)
         w.print_results(spec)
         assert 'U000' in banks and 'FUSION_D000_D000' in banks
@@ -268,7 +268,8 @@ def test_source_allowlist_and_runtime_files_exist():
     changed=subprocess.run(['git','diff','--name-only',b.FAILED_COMMIT,'--','src'],cwd=root,
         check=True,capture_output=True,text=True).stdout.splitlines()
     from hlt_classification.luka_fullsim import alljets_report_recovery as report_recovery
-    assert set(changed)<=b.CHANGES|b.ADDITIONS|report_recovery.CHANGES|report_recovery.ADDITIONS
+    from hlt_classification.luka_fullsim import alljets_30epoch as thirty
+    assert set(changed)<=b.CHANGES|b.ADDITIONS|report_recovery.CHANGES|report_recovery.ADDITIONS|thirty.CHANGES|thirty.ADDITIONS|thirty.FULLSTAT
     # Production model, shared stress, original recipe, split/cache bytes untouched.
     assert 'src/hlt_classification/luka_fullsim/alljets_fusion_sync.py' not in changed
     assert 'src/hlt_classification/context_fusion/worker.py' not in changed

@@ -81,6 +81,17 @@ def projections(measurements):
 
 
 def validate_evidence(r, gate, p):
+    return _validate_evidence(r, gate, p, admit_schedule=True)
+
+
+def validate_resource_reuse(r, gate, p):
+    """Validate immutable v4 technical facts, NOT admission of its old schedule."""
+    if gate.get('schema_version') != 4:
+        raise ValueError('Resource reuse requires the original batch128 v4 evidence')
+    return _validate_evidence(r, gate, p, admit_schedule=False)
+
+
+def _validate_evidence(r, gate, p, *, admit_schedule):
     c.validate_bound(r, gate, 'PREFLIGHT', dict(gate=gate['content_hash'], prepared=p['content_hash']))
     storage = PAIR_OFFLOAD_POLICY
     if gate.get('schema_version') in (2, 3, 4):
@@ -92,7 +103,8 @@ def validate_evidence(r, gate, p):
         source_snapshot=gate['source_snapshot'], preparation_source_snapshot=p['source_snapshot'],
         site=gate['execution_site'], recipe=gate['training_recipe'], scientific_fit=False,
         scientific_metrics_for_selection=False, checkpoint_probability_roundtrip=True,
-        technical_checks_passed=True, resource_envelope_ok=True, fits_debug_24h=True,
+        technical_checks_passed=True, resource_envelope_ok=True,
+        fits_debug_24h=True if admit_schedule else max(projections(r['measurements'])) <= 1440,
         cublas_workspace_config=':4096:8', support_maxima=support(p),
         technical_teacher=technical_teacher(gate))
     if any(r.get(k) != v for k,v in expected.items()):
@@ -138,7 +150,7 @@ def validate_evidence(r, gate, p):
         if any(not math.isfinite(x) or x <= 0 for x in (m['cache_seconds'], m['inference_seconds'], t['runtime_seconds'])):
             raise ValueError('Invalid timing measurements')
     times = projections(r['measurements'])
-    if times != (r['projected_train_minutes'], r['projected_reduce_minutes']) or max(times) > 1440:
+    if times != (r['projected_train_minutes'], r['projected_reduce_minutes']) or (admit_schedule and max(times) > 1440):
         raise ValueError('Measured full schedule exceeds debug24h; do not shorten training')
     if (not 0 < r['peak_rss_bytes'] < .85*c.MEMORY_MB*1024**2
             or not 0 < r['gpu_peak_bytes'] < .90*r['gpu']['total_memory_bytes']):

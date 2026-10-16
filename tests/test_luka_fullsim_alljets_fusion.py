@@ -63,7 +63,8 @@ def test_scope_and_unchanged_parent_sources():
         cwd=root, check=True, capture_output=True, text=True).stdout.splitlines()
     from hlt_classification.luka_fullsim import alljets_batch128 as batch128
     from hlt_classification.luka_fullsim import alljets_report_recovery as report_recovery
-    assert set(changed) <= source.ADDITIONS | batch128.CHANGES | batch128.ADDITIONS | report_recovery.CHANGES | report_recovery.ADDITIONS
+    from hlt_classification.luka_fullsim import alljets_30epoch as thirty
+    assert set(changed) <= source.ADDITIONS | batch128.CHANGES | batch128.ADDITIONS | report_recovery.CHANGES | report_recovery.ADDITIONS | thirty.CHANGES | thirty.ADDITIONS | thirty.FULLSTAT
     worker = (root/'sbatch/run_luka_fullsim_alljets_fusion.sh').read_text()
     for text in ('${PROJECT_DIR}/sbatch/common.sh', 'PYTHONNOUSERSITE=1', '${CONDA_PREFIX}/lib', 'atlas_kd_sporc'):
         assert text in worker
