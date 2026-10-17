@@ -41,3 +41,20 @@ receipt is inserted into it. Execution source compatibility permits only the
 sampler fix, named version dispatch, and recovery modules; models/data/recipe
 remain byte-identical. No commit, push, submission, cancellation or retry is
 authorized by local implementation alone.
+
+### 2026-10-16: zero-allocation parity correction
+
+User-supplied metadata shows all twelve child high-water records exist. Only
+`parity/U000_probe` and `parity/FINAL_DIRECT_D000_probe` have GPU allocation zero,
+consistent with the original v4 producer's no-op single-encoder parity branches.
+Correct the report validator from donor ea7cfdfc0222768bdffd386058a807f6fac84de6
+to accept those two zero measurements with empty `parities`, while requiring
+positive host memory everywhere and positive GPU memory in every actual GPU
+phase. Preserve all source/payload/parity/time/headroom checks and v5 contracts.
+Test the complete synthetic recovery using the twelve supplied memory values;
+this does not independently authenticate the remote artifacts or admit science.
+
+The unrelated FullStat changes committed after ea7cfdfc include shared training
+source. Deploy this narrow repair on an isolated ea7cfdfc-based commit, published
+as an ancestor of origin/main, NOT from the later combined main tip. Do not relax
+source compatibility to admit those unrelated changes.
