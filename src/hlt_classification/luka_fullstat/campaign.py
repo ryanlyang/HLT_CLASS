@@ -76,6 +76,9 @@ def create(container, output, cache_root, *, project, commit, acknowledge_row_sp
 
 
 def validate_gate(gate):
+    if gate.get('contract') == 'LUKA_FULLSTAT_RECOVERY_GATE/v1':
+        from .recovery import validate_gate as validate_recovery
+        return validate_recovery(gate)
     validate(gate, 'GATE', dict(source=gate['source_snapshot']['content_hash']))
     expected = policy(gate['training_recipe']['batch_size'])
     if (any(gate.get(k) != v for k, v in expected.items()) or gate['acknowledged_row_split'] is not True
@@ -106,12 +109,22 @@ def validate_foundation(gate, foundation):
 
 
 def authenticated_cache(gate):
-    result = cache.metadata(Path(gate['root'])/'foundation', gate['cache_root'], gate_hash=gate['content_hash'])
-    validate_foundation(gate, result[1])
+    origin = foundation_gate(gate)
+    result = cache.metadata(Path(origin['root'])/'foundation', gate['cache_root'], gate_hash=origin['content_hash'])
+    validate_foundation(origin, result[1])
     return result
 
 
+def foundation_gate(gate):
+    if gate.get('contract') == 'LUKA_FULLSTAT_RECOVERY_GATE/v1':
+        return load_json(validate_file_ref(gate['original_gate']))
+    return gate
+
+
 def gate_ledger(gate):
+    if gate.get('contract') == 'LUKA_FULLSTAT_RECOVERY_GATE/v1':
+        from .recovery import exact_ledger
+        return exact_ledger(gate)
     from .submission import render
     from hlt_classification.scouting.hcwdl_recovery import validate_submission_ledger
     ledger = load_json(Path(gate['root'])/'gate_submission'/'submission_ledger.json')
@@ -128,6 +141,9 @@ def gate_ledger(gate):
 
 
 def accounting(gate):
+    if gate.get('contract') == 'LUKA_FULLSTAT_RECOVERY_GATE/v1':
+        from .recovery import completed_gate
+        return completed_gate(gate)
     ledger = gate_ledger(gate)
     jobs = ledger['jobs']
     requested = [jobs['foundation'], jobs['assemble'], jobs['preflight']]
@@ -155,10 +171,11 @@ def admit(gate):
     validate_evidence(evidence, gate, manifest)
     if evidence['job_id'] != ledger['jobs']['preflight']:
         raise ValueError('Preflight report belongs to another job')
-    value = artifact('SPEC', parents=dict(gate=gate['content_hash'], cache=manifest['content_hash'], preflight=evidence['content_hash']),
+    kind = 'RECOVERY_SPEC' if gate['contract'] == 'LUKA_FULLSTAT_RECOVERY_GATE/v1' else 'SPEC'
+    value = artifact(kind, parents=dict(gate=gate['content_hash'], cache=manifest['content_hash'], preflight=evidence['content_hash']),
         gate=file_ref(Path(gate['root'])/'gate_spec.json'), root=str(Path(gate['root'])/'science'),
         project_dir=gate['project_dir'], source_commit=gate['source_commit'], source_snapshot=gate['source_snapshot'],
-        cache_root=gate['cache_root'], foundation_root=str(Path(gate['root'])/'foundation'),
+        cache_root=gate['cache_root'], foundation_root=str(Path(foundation_gate(gate)['root'])/'foundation'),
         prepared_sha256=manifest['content_hash'], preflight=file_ref(evidence_path),
         train_minutes=evidence['train_minutes'], reduce_minutes=evidence['reduce_minutes'],
         gate_ledger=file_ref(Path(gate['root'])/'gate_submission'/'submission_ledger.json'), **policy(gate['training_recipe']['batch_size']))
@@ -169,11 +186,13 @@ def admit(gate):
 
 
 def validate_spec(spec):
-    validate(spec, 'SPEC')
+    recovered = spec.get('contract') == 'LUKA_FULLSTAT_RECOVERY_SPEC/v1'
+    validate(spec, 'RECOVERY_SPEC' if recovered else 'SPEC')
     gate = load_json(validate_file_ref(spec['gate']))
     validate_gate(gate)
-    if (spec['root'] != str(Path(gate['root'])/'science')
-            or spec['foundation_root'] != str(Path(gate['root'])/'foundation')
+    if (recovered != (gate['contract'] == 'LUKA_FULLSTAT_RECOVERY_GATE/v1')
+            or spec['root'] != str(Path(gate['root'])/'science')
+            or spec['foundation_root'] != str(Path(foundation_gate(gate)['root'])/'foundation')
             or any(spec[k] != gate[k] for k in ('cache_root', 'project_dir', 'source_commit', 'source_snapshot'))
             or any(spec.get(k) != v for k,v in policy(gate['training_recipe']['batch_size']).items())
             or load_json(Path(spec['root'])/'campaign_spec.json') != spec):

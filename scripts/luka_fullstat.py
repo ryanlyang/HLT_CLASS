@@ -52,7 +52,8 @@ def main():
         result = submission.submit(load_json(a.spec), execute=a.execute, plan_hash=a.plan_hash, authorization=a.authorize)
     elif a.command == 'task':
         spec = load_json(a.spec)
-        result = (worker.gate_task(spec, a.task, a.file_index) if spec['contract']=='LUKA_FULLSTAT_GATE/v1'
+        result = (worker.gate_task(spec, a.task, a.file_index) if spec['contract'] in
+                  ('LUKA_FULLSTAT_GATE/v1', 'LUKA_FULLSTAT_RECOVERY_GATE/v1')
                   else worker.run(spec,a.task))
     else:
         worker.print_results(load_json(a.spec))

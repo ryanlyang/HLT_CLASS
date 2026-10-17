@@ -12,8 +12,11 @@ from . import campaign as c
 
 
 def render(spec):
+    if spec['contract'] == 'LUKA_FULLSTAT_RECOVERY_GATE/v1':
+        from .recovery import render
+        return render(spec)
     gate = spec['contract'] == 'LUKA_FULLSTAT_GATE/v1'
-    if not gate and spec['contract'] != 'LUKA_FULLSTAT_SPEC/v1':
+    if not gate and spec['contract'] not in ('LUKA_FULLSTAT_SPEC/v1', 'LUKA_FULLSTAT_RECOVERY_SPEC/v1'):
         raise ValueError('Not a FullStat gate/scientific spec')
     commands = []
     root, project = Path(spec['root']), spec['project_dir']
@@ -68,12 +71,18 @@ def check_site(plan):
 
 
 def submit(spec, *, execute=False, plan_hash=None, authorization=None):
-    gate = spec['contract'] == 'LUKA_FULLSTAT_GATE/v1'
+    gate = spec['contract'] in ('LUKA_FULLSTAT_GATE/v1', 'LUKA_FULLSTAT_RECOVERY_GATE/v1')
     c.validate_gate(spec) if gate else c.validate_spec(spec)
     value = render(spec)
     if execute and (plan_hash != value['content_hash'] or authorization != c.AUTHORIZATION):
         raise PermissionError('Exact reviewed plan hash and authorization required')
     root = Path(spec['root'])/('gate_submission' if gate else 'submission')
+    if execute and spec['contract'] == 'LUKA_FULLSTAT_RECOVERY_GATE/v1':
+        from .recovery import check_original, missing_outputs, claim_original
+        check_original()
+        if not (root/'submission_ledger.json').exists():
+            missing_outputs(c.foundation_gate(spec))
+        claim_original(spec)
     root.mkdir(exist_ok=True)
     path, dry, live = root/'command_plan.json', root/'dry_run_submission_ledger.json', root/'submission_ledger.json'
     if execute and (not path.is_file() or load_json(path) != value or not dry.is_file()):

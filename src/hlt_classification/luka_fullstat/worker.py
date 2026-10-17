@@ -16,6 +16,9 @@ from . import campaign as c, cache, data
 
 
 def gate_task(gate, task, file_index=None):
+    if gate.get('contract') == 'LUKA_FULLSTAT_RECOVERY_GATE/v1':
+        from .recovery import gate_task as recovered_task
+        return recovered_task(gate, task, file_index)
     c.validate_gate(gate)
     root = Path(gate['root'])
     if task == 'foundation':

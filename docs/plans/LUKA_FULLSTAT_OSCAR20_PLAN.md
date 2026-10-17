@@ -99,3 +99,42 @@ particle reads; serial/parallel chunk parity; cache corruption and role guards;
 20-epoch schedule/gradient execution; unchanged historical recipe; all nine fits
 and bank dependency checks; exact dry/live submission and interruption refusal;
 real local-data TRAIN-only witness; installed-Weaver parity; Oscar gate pending.
+
+## Explicit sparse recovery and automatic science (2026-10-16)
+
+The user now explicitly authorizes recovery of the original592a6dac Oscar gate
+and automatic submission of this SAME sixteen-job science campaign after the
+whole recovered gate passes. This is an opt-in operational addition, not a
+change to the original v1 gate's `automatic_followup=false` semantics.
+
+Authenticate original jobs7486667/7486668/7486669/7486670, their original source,
+exact plan and durable submission journal. Foundation and prepare0--11,15 must
+be COMPLETED/0:0; prepare12--14 and original assembly/preflight must be CANCELLED.
+Only retry12--14, excluding node1804, using a new recovery gate/source/root.
+Preserve the foundation, memberships, all thirteen receipts, raw data, old
+ledger and failed history. Refuse existing partial retry directories rather
+than deleting or overwriting them. The original campaign gets only an additive
+exclusive recovery ownership claim; no original artifact is relabelled.
+
+Reuse is permitted only with source-compatible preparation, authenticated
+receipt metadata, full physical verification at assembly, and a NEW GPU
+preflight under the same pinned source that will execute science. The reviewed
+parentbf04bb89 includes the unrelated trial30 dispatch; it is not grandfathered
+as GPU acceptance. New RECOVERY_GATE/RECOVERY_SPEC contracts explicitly link
+the old foundation/cache parent to the new gate/preflight/science parent.
+
+The dry review includes the sparse three-command/five-task recovery DAG AND
+the complete future sixteen-job science DAG at its48h ceilings. Arming requires
+the exact combined review hash and explicit recovery-plus-science authorization.
+After every sparse array element, assembly and GPU preflight is COMPLETED/0:0,
+normal payload/parity/resource admission determines the actual walltimes. The
+controller writes a complete exact science dry plan, verifies it against the
+authorized DAG/ceilings, and submits with its exact hash. Any failed gate,
+missing/corrupt evidence, source drift or out-of-scope request prevents science.
+Missing accounting waits at most14 days; it never implies success.
+
+An exclusive original-campaign claim prevents competing recovery roots; a
+controller lock and submission claims/journals prevent duplicate/ambiguous
+submission. No automatic retry after an uncertain sbatch response. No science
+metric becomes a gate. Nothing accesses final-test particles. Local controller
+tests do not replace the new real Oscar installed-Weaver GPU acceptance.

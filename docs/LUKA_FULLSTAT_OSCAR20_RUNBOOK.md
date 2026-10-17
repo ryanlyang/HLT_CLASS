@@ -1,5 +1,9 @@
 # Luka FullStat: 3M / 500k regular ladder on Oscar
 
+For the interrupted7486668 preparation array, use the dedicated
+[sparse recovery + automatic follow-up runbook](LUKA_FULLSTAT_RECOVERY_RUNBOOK.md).
+Do not run the fresh-gate instructions below against the existing campaign.
+
 Authority: [plan](plans/LUKA_FULLSTAT_OSCAR20_PLAN.md) and
 [contracts](contracts/LUKA_FULLSTAT_OSCAR20.md). This is a NEW experiment,
 not recovery of the old trial or batch128 fusion runs.
