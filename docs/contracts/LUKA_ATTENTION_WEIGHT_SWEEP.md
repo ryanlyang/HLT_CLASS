@@ -1,4 +1,4 @@
-# LUKA_ATTENTION_WEIGHT_* /v1
+# LUKA_ATTENTION_WEIGHT_* /v1; GATE/v2 tier3 execution
 
 Authority: [plan](../plans/LUKA_ATTENTION_WEIGHT_SWEEP_PLAN.md).
 
@@ -29,6 +29,22 @@ Reports preserve no-independent-test and single-seed limitations. Preflight
 acceptance additionally requires measured resource headroom, all three probes,
 both parity modes, six stress checks, exact partition and scheduler receipt.
 Science is a separately dry-reviewed one-job complete ladder on that same site.
+
+## GATE/v2: fresh tier3 preflight and science
+
+GATE/v2 (schema_version 2) registers `sporc_a100` / tier3 for BOTH w03 and
+w10. A gate's exact execution-site record is validated before dry-plan rendering,
+preflight acceptance, execution and saved-result reading. Science inherits that
+same gate/site and requires its own successful scheduler-bound preflight receipt.
+The gate content hash changes; old plan hashes, journals or acceptance cannot be
+transferred, including w10 whose physical partition was already tier3.
+
+GATE/v1 readers retain the original w03/debug and w10/tier3 mapping. Never
+reinterpret v1 by changing a queued job's partition or editing its immutable
+spec. The updated queue helper accepts only fresh v2 gates under its exact
+pushed source. Original pinned helpers/worktrees remain unchanged.
+Other artifact versions, scientific recipes, training seeds, resources, 8h gate,
+24h whole-ladder cap and owned-scratch retirement semantics are unchanged.
 
 ## REFERENCE_ARCHIVE/v1: comparison-only legacy import
 

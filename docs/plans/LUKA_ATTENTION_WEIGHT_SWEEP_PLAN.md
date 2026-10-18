@@ -8,9 +8,13 @@ the explicitly authorized retention policy below applies ONLY to new artifacts.
 ## Science
 
 Two fresh three-rung chains from the same authenticated fixed30 COARSE_U100:
-U100 -> D066 -> D033 -> D000. Constant attention coefficient 0.3 runs on SPORC
-debug; coefficient 1.0 runs on SPORC tier3. Both require the same A100 family,
-installed environment, 6 CPUs and 128000 MiB. Each partition has its own measured
+U100 -> D066 -> D033 -> D000. Under the user's 2026-10-18 execution amendment,
+both constant coefficients 0.3 and 1.0 run on SPORC **tier3**, for preflight AND
+science. Fresh registrations use GATE/v2. This supersedes the initial routing
+only for new runs: immutable GATE/v1 retains w03/debug and w10/tier3.
+No in-place scheduler/spec migration or reuse of old preflight acceptance.
+Both require the same A100 family, installed environment, 6 CPUs and
+128000 MiB. Each arm has its own measured
 preflight; do not infer timing portability. One sequential job per ladder keeps
 ephemeral teacher targets on the allocated node. A measured whole-ladder request
 must fit 24h, even on tier3; never shorten epochs or alter particles to fit.

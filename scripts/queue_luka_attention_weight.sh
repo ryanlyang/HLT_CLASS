@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 if [[ $# -ne 7 && $# -ne 9 ]]; then
-    echo 'Usage: helper COMMIT ROOT PARENT_SPEC REFERENCE_SPEC w03|w10 QUOTA_GIB gate|science [--execute HASH]' >&2
+    echo 'Usage: helper COMMIT ROOT PARENT_SPEC REFERENCE_SPEC w03|w10 QUOTA_GIB gate|science [--execute HASH] (both arms: tier3)' >&2
     exit 2
 fi
 COMMIT="$1"; ROOT="$2"; PARENT="$3"; REFERENCE="$4"; ARM="$5"; QUOTA="$6"; MODE="$7"
@@ -19,7 +19,7 @@ export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_TH
 CLI="${PROJECT}/scripts/luka_attention_weight.py"
 GATE="${ROOT}/gate_spec.json"
 if [[ -f "${GATE}" ]]; then
-    python -B -s -c 'import json,sys; from pathlib import Path; g=json.load(open(sys.argv[1])); assert Path(g["anchor"]["spec"]["path"]).resolve()==Path(sys.argv[2]).resolve() and Path(g["reference_import"]["spec"]["path"]).resolve()==Path(sys.argv[3]).resolve() and g["arm"]==sys.argv[4] and g["available_quota_gib"]==int(sys.argv[5]), "Different campaign requested"' "${GATE}" "${PARENT}" "${REFERENCE}" "${ARM}" "${QUOTA}"
+    python -B -s -c 'import json,sys; from pathlib import Path; from hlt_classification.luka_attention_weight.campaign import validate_execution; g=json.load(open(sys.argv[1])); validate_execution(g); assert g["schema_version"]==2, "Use a fresh tier3 gate root; never migrate an old gate in place"; assert Path(g["anchor"]["spec"]["path"]).resolve()==Path(sys.argv[2]).resolve() and Path(g["reference_import"]["spec"]["path"]).resolve()==Path(sys.argv[3]).resolve() and g["arm"]==sys.argv[4] and g["available_quota_gib"]==int(sys.argv[5]) and g["source_commit"]==sys.argv[6] and Path(g["project_dir"]).resolve()==Path(sys.argv[7]).resolve(), "Different campaign requested"' "${GATE}" "${PARENT}" "${REFERENCE}" "${ARM}" "${QUOTA}" "${COMMIT}" "${PROJECT}"
 elif [[ $# -eq 7 && "${MODE}" == gate ]]; then
     test ! -e "${ROOT}"
     python -u -B -s "${CLI}" create-gate --root "${ROOT}" --parent "${PARENT}" --reference "${REFERENCE}" --arm "${ARM}" --available-quota-gib "${QUOTA}" --expected-commit "${COMMIT}"

@@ -1,10 +1,24 @@
-# Queue the 0.3/debug and 1.0/tier3 attention ladders
+# Queue both attention-weight ladders on tier3
 
 Authority: [plan](plans/LUKA_ATTENTION_WEIGHT_SWEEP_PLAN.md),
 [contract](contracts/LUKA_ATTENTION_WEIGHT_SWEEP.md). This is a separate fixed30,
 batch128, fresh-initialization experiment; the privileged-gate run is untouched.
 Original split: 299,234 train / 74,895 validation; original 50k report-only,
 no independent test.
+
+New registrations are GATE/v2: **w03 (0.3) and w10 (1.0) both use tier3 for
+preflight and science**. Existing GATE/v1 roots keep their old routing. Use a
+NEW pushed commit and fresh root; do not edit a spec or `scontrol update` the
+partition. Each arm still needs its own newly accepted preflight, even w10.
+
+The previously reported debug job **21916405** belongs to the old attention
+weight preflight. Nothing here cancels it. Before submitting a replacement,
+inspect `scontrol show job -o 21916405` and the old submission ledger to confirm
+the name, comment/hash, source path and state. If still pending/running and you
+want to replace it, cancel only that authenticated ID with `scancel 21916405`.
+If it has finished, preserve its outputs; do not migrate its receipt.
+Leave **21916249** (`lukag_`, separate privileged-gate campaign) and all Fresh_check
+jobs alone. Do not run both old and replacement w03 science accidentally.
 
 ## Storage policy to review before submitting
 
@@ -57,7 +71,7 @@ explicit compatibility review rather than weakening the check.
 
 ## 2. SPORC dry-review an arm
 
-Run separately with `ARM=w03` (0.3/debug) and `ARM=w10` (1.0/tier3).
+Run separately with `ARM=w03` (0.3/tier3) and `ARM=w10` (1.0/tier3).
 Supply personally available quota allocated to THIS arm, not shared total free
 space. This block submits no job. Each gate uses its own fresh directory.
 
@@ -65,7 +79,7 @@ space. This block submits no job. Each gate uses its own fresh directory.
 bash <<'BASH'
 set -euo pipefail
 read -r -p 'New pushed 40-character commit: ' COMMIT </dev/tty
-read -r -p 'Arm: w03 (debug) or w10 (tier3): ' ARM </dev/tty
+read -r -p 'Arm: w03 (0.3) or w10 (1.0), both tier3: ' ARM </dev/tty
 read -r -p 'Personally available persistent GiB allocated to this arm: ' QUOTA </dev/tty
 [[ "${COMMIT}" =~ ^[0-9a-f]{40}$ && "${ARM}" =~ ^(w03|w10)$ && "${QUOTA}" =~ ^[1-9][0-9]*$ ]]
 MAIN=/home/ryreu/atlas/HLT_Classification
@@ -87,6 +101,9 @@ BASH
 ```
 
 The reference campaign must be the completed original 94f56025 LOGIT/ATTN run.
+Check that the printed gate has `LUKA_ATTENTION_WEIGHT_GATE/v2`, and the dry
+command has `--partition=tier3`, `--gres=gpu:a100:1`, `--mem=128000M` and
+`--time=08:00:00`. Stop if the command still says debug or the root is an old run.
 Authentication runs in its pinned source using the comparison-only archival
 reader. Required retained files: gate_spec.json, preflight/receipt.json,
 science/campaign_spec.json, science/aggregate/{receipt,results}.json, and each
@@ -138,7 +155,7 @@ BASH
 ```
 
 Wait for `QUEUE_HELPER_EXIT=0` and inspect the exact journal/job ID; a helper PID
-alone is not proof of submission. These are independent partition jobs, not an
+alone is not proof of submission. These are independent arm jobs, not an
 instruction to queue the same arm twice. Gate/science live claims forbid blind
 retry; preserve partial submissions or failures and inspect before recovery.
 

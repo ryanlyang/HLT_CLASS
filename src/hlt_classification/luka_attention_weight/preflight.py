@@ -111,6 +111,7 @@ def run(gate):
 
 
 def validate_report(gate, report):
+    campaign.validate_execution(gate)
     validate(report, 'PREFLIGHT', dict(gate=gate['content_hash']))
     facts = report['facts']
     if (report['environment'] != gate['anchor']['evidence']['environment']

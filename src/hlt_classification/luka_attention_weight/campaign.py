@@ -1,17 +1,30 @@
-"""Fresh split-partition registrations; no implicit source or acceptance reuse."""
+"""Fresh tier3 registrations; legacy v1 routing and acceptance stay immutable."""
 from pathlib import Path
 from hlt_classification.data.cache_contracts import load_json, write_immutable_json, atomic_publish_bytes
 from hlt_classification.cms_proxy_ladder.contracts import file_ref, validate_file_ref
 from hlt_classification.jetclass2_delphes.execution import execution_site
 from hlt_classification.luka_fullsim.science_campaign import preflight_accounting
 from . import source
-from .contracts import artifact, validate, nodes, recipe, COUNTS, ARMS, AUTHORIZATION
+from .contracts import artifact, validate, nodes, recipe, COUNTS, ARMS, AUTHORIZATION, GATE_VERSION
 
 
-def registration(parent, arm):
-    coefficient, site = ARMS[arm]
+def registered_site(arm, gate_version):
+    if type(gate_version) is not int or gate_version not in (1, GATE_VERSION):
+        raise ValueError('Unknown execution registration version')
+    legacy_site = ARMS[arm][1]
+    return execution_site(legacy_site if gate_version == 1 else 'sporc_a100')
+
+
+def validate_execution(gate):
+    validate(gate, 'GATE')
+    if gate['execution_site'] != registered_site(gate['arm'], gate['schema_version']):
+        raise ValueError('Execution site differs from versioned gate registration')
+
+
+def registration(parent, arm, *, gate_version=GATE_VERSION):
+    coefficient = ARMS[arm][0]
     return dict(arm=arm, coefficient=coefficient, counts=COUNTS, nodes=nodes(parent['nodes'], arm),
-        recipe=recipe(coefficient), execution_site=execution_site(site), cpus=6, memory_mb=128000,
+        recipe=recipe(coefficient), execution_site=registered_site(arm, gate_version), cpus=6, memory_mb=128000,
         gate_minutes=480, science_ceiling_minutes=1440, automatic_followup=False,
         automatic_retry=False, retention='verified_owned_scratch_payloads_only_v1')
 
@@ -56,6 +69,7 @@ def create(root, parent_path, reference_path, project, commit, *, arm, available
 
 def read_gate(gate):
     validate(gate, 'GATE', dict(source=gate['source_snapshot']['content_hash'], anchor=gate['anchor']['content_hash']))
+    validate_execution(gate)
     validate(gate['anchor'], 'ANCHOR')
     source.validate_archive(gate['reference_import'], gate['anchor'])
     if load_json(Path(gate['root'])/'gate_spec.json') != gate:
@@ -79,7 +93,8 @@ def check_gate(gate):
     if source.current(gate['project_dir'], gate['source_commit']) != gate['source_snapshot']:
         raise ValueError('Execution source differs')
     anchor, parent = source.authenticate(gate['anchor']['spec']['path'])
-    if anchor != gate['anchor'] or any(gate.get(k) != v for k,v in registration(parent, gate['arm']).items()):
+    expected = registration(parent, gate['arm'], gate_version=gate['schema_version'])
+    if anchor != gate['anchor'] or any(gate.get(k) != v for k,v in expected.items()):
         raise ValueError('Anchor or scientific registration differs')
     return parent
 

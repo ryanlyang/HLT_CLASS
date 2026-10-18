@@ -3,20 +3,27 @@ from hlt_classification.data.cache_contracts import with_content_hash, validate_
 from hlt_classification.luka_attention.contracts import FLAGS, SURFACE, COUNTS
 from hlt_classification.jetclass2_delphes.batch128_30e_recipe import recipe as base_recipe
 
+# Immutable v1 routing. New GATE/v2 registrations use tier3 for BOTH arms/phases.
 ARMS = {'w03': (.3, 'sporc_a100_debug'), 'w10': (1., 'sporc_a100')}
+GATE_VERSION = 2
 COORDINATES = ('D066', 'D033', 'D000')
 AUTHORIZATION = 'AUTHORIZE LUKA ATTENTION WEIGHT EXACT PLAN AND OWNED RETIREMENT'
 
 
-def artifact(kind, *, parents=None, **fields):
-    return with_content_hash(dict(contract=f'LUKA_ATTENTION_WEIGHT_{kind}/v1',
-        schema_version=1, parents=dict(parents or {}), **FLAGS, **fields))
+def artifact(kind, *, parents=None, version=None, **fields):
+    version = (GATE_VERSION if kind == 'GATE' else 1) if version is None else version
+    if type(version) is not int or version not in ((1, GATE_VERSION) if kind == 'GATE' else (1,)):
+        raise ValueError('Attention weight schema version differs')
+    return with_content_hash(dict(contract=f'LUKA_ATTENTION_WEIGHT_{kind}/v{version}',
+        schema_version=version, parents=dict(parents or {}), **FLAGS, **fields))
 
 
 def validate(value, kind, parents=None):
-    digest = validate_content_hash(value, expected_contract=f'LUKA_ATTENTION_WEIGHT_{kind}/v1')
-    if value.get('schema_version') != 1:
+    version = value.get('schema_version')
+    if type(version) is not int or version not in ((1, GATE_VERSION) if kind == 'GATE' else (1,)):
         raise ValueError('Attention weight schema version differs')
+    digest = validate_content_hash(value, expected_contract=f'LUKA_ATTENTION_WEIGHT_{kind}/v{version}',
+                                   expected_schema_version=version)
     if any(value.get(k) != v for k, v in FLAGS.items()):
         raise PermissionError('Historical test/development scope differs')
     if parents is not None and value['parents'] != parents:

@@ -10,18 +10,19 @@ from .contracts import artifact
 
 
 def is_gate(spec):
-    return spec.get('contract')=='LUKA_ATTENTION_WEIGHT_GATE/v1'
+    return spec.get('contract') in ('LUKA_ATTENTION_WEIGHT_GATE/v1', 'LUKA_ATTENTION_WEIGHT_GATE/v2')
 
 
 def render(spec,gate=None):
     gate=spec if is_gate(spec) else gate or load_json(spec['gate_path'])
+    campaign.validate_execution(gate)
     rows=[dict(task_id='preflight',kind='preflight',dependencies=[])] if is_gate(spec) else [dict(task_id='ladder',kind='ladder',dependencies=[])]
     commands=[]
     site=gate['execution_site']; root=Path(spec['root'])
     for row in rows:
         name,kind=row['task_id'],row['kind']; gpu=kind!='aggregate'
         minutes=gate['gate_minutes'] if is_gate(spec) else spec['ladder_minutes'] if gpu else 60
-        if not 1<=minutes<=1440: raise ValueError('Debug walltime ceiling exceeded')
+        if not 1<=minutes<=1440: raise ValueError('Registered 24h walltime ceiling exceeded')
         args=['sbatch','--parsable','--no-requeue','--nodes=1','--ntasks=1','--export=NONE',
               '--partition='+site['partition'],'--account='+site['account'],'--qos='+site['qos'],
               '--cpus-per-task='+str(gate['cpus'] if gpu else 1),

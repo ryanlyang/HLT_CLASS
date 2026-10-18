@@ -52,10 +52,14 @@ def fixture(tmp_path, monkeypatch, arm='w03'):
 
 
 @pytest.mark.parametrize('arm,coefficient,partition',[('w03',.3,'debug'),('w10',1.,'tier3')])
-def test_registered_graph_and_unchanged_old_recipe(arm,coefficient,partition):
+@pytest.mark.parametrize('gate_version',[1,2])
+def test_registered_graph_and_unchanged_old_recipe(arm,coefficient,partition,gate_version):
     from hlt_classification.luka_attention.contracts import recipe as old
-    reg = campaign.registration(dict(nodes=parent_nodes()),arm)
-    assert reg['execution_site']['partition']==partition
+    reg = campaign.registration(dict(nodes=parent_nodes()),arm,gate_version=gate_version)
+    assert reg['execution_site']['partition']==(partition if gate_version==1 else 'tier3')
+    legacy = campaign.registration(dict(nodes=parent_nodes()),arm,gate_version=1)
+    assert {k:v for k,v in reg.items() if k!='execution_site'}=={
+        k:v for k,v in legacy.items() if k!='execution_site'}
     assert reg['execution_site']['gres']=='gpu:a100:1'
     assert reg['recipe']['coefficient']==coefficient
     assert reg['recipe']['base']==old()['base'] and reg['recipe']['surface']==old()['surface']
@@ -188,10 +192,12 @@ def test_budgets_measure_whole_ladder_not_single_fit():
 
 
 @pytest.mark.parametrize('arm,partition',[('w03','debug'),('w10','tier3')])
-def test_exact_dry_live_partition_plans(tmp_path,monkeypatch,arm,partition):
+@pytest.mark.parametrize('gate_version',[1,2])
+def test_exact_dry_live_partition_plans(tmp_path,monkeypatch,arm,partition,gate_version):
     import hlt_classification.scouting.hcwdl_exact_dag_submission as exact
-    gate=c.artifact('GATE',root=str(tmp_path),project_dir='/project',source_commit='a'*40,
-                    **campaign.registration(dict(nodes=parent_nodes()),arm))
+    partition=partition if gate_version==1 else 'tier3'
+    gate=c.artifact('GATE',version=gate_version,root=str(tmp_path),project_dir='/project',source_commit='a'*40,
+                    **campaign.registration(dict(nodes=parent_nodes()),arm,gate_version=gate_version))
     monkeypatch.setattr(campaign,'check_gate',lambda g:None)
     monkeypatch.setattr(submission,'check_site',lambda p:None)
     calls=[]
@@ -209,6 +215,36 @@ def test_exact_dry_live_partition_plans(tmp_path,monkeypatch,arm,partition):
     assert science['jobs']==1 and science['commands'][0]['task_id']=='ladder'
     assert '--partition='+partition in science['commands'][0]['command']
     assert '--time=11:40:00' in science['commands'][0]['command']
+
+
+@pytest.mark.parametrize('arm',['w03','w10'])
+def test_gate_version_and_site_are_bound_and_old_plans_cannot_transfer(arm):
+    from hlt_classification.jetclass2_delphes.execution import execution_site
+    legacy=c.artifact('GATE',version=1,root='/old',project_dir='/project',
+        **campaign.registration(dict(nodes=parent_nodes()),arm,gate_version=1))
+    new=c.artifact('GATE',root='/new',project_dir='/project',
+        **campaign.registration(dict(nodes=parent_nodes()),arm))
+    for gate in (legacy,new):
+        campaign.validate_execution(gate)
+        assert submission.is_gate(gate)
+    assert new['schema_version']==2 and new['contract']=='LUKA_ATTENTION_WEIGHT_GATE/v2'
+    assert legacy['content_hash']!=new['content_hash']
+    assert submission.render(legacy)['content_hash']!=submission.render(new)['content_hash']
+    # A validly re-hashed debug request is still forbidden in a v2 campaign.
+    bad=with_content_hash(dict(new,execution_site=execution_site('sporc_a100_debug')))
+    with pytest.raises(ValueError,match='Execution site'):submission.render(bad)
+    # v1 w03 may not silently be rewritten into a tier3 registration.
+    if arm=='w03':
+        bad=with_content_hash(dict(legacy,execution_site=new['execution_site']))
+        with pytest.raises(ValueError,match='Execution site'):campaign.validate_execution(bad)
+    bad=with_content_hash(dict(new,contract=legacy['contract']))
+    with pytest.raises(ValueError):c.validate(bad,'GATE')
+    for version in (0,3,True,None):
+        bad=with_content_hash(dict(new,schema_version=version))
+        with pytest.raises(ValueError,match='schema version'):c.validate(bad,'GATE')
+    # No reused acceptance, even for w10 where both versions use tier3.
+    old_report=c.artifact('PREFLIGHT',parents=dict(gate=legacy['content_hash']))
+    with pytest.raises(ValueError,match='Parent lineage'):preflight.validate_report(new,old_report)
 
 
 @pytest.mark.parametrize('arm',['w03','w10'])
@@ -374,6 +410,7 @@ def test_create_snapshots_references_and_refuses_overlap(tmp_path,monkeypatch):
             arm=arm,available_quota_gib=1,scratch_base='/tmp')
         campaign.read_gate(gate)
         campaign.check_gate(gate)
+        assert gate['schema_version']==2 and gate['execution_site']['partition']=='tier3'
         saved=load_json(Path(gate['root'])/'references.json')
         assert saved['predictions']['LOGIT_D000']['sha256']==file_ref(payload)['sha256']
     with pytest.raises(PermissionError,match='overlaps'):
@@ -405,3 +442,31 @@ def test_queue_worker_cli_and_runbook_syntax():
     assert len(blocks)==3
     for block in blocks:
         subprocess.run([str(bash),'-n'],input=block,check=True,capture_output=True,text=True)
+
+
+@pytest.mark.parametrize('arm',['w03','w10'])
+def test_queue_helper_requires_new_gate_and_exact_source(tmp_path,arm):
+    import shlex
+    import subprocess
+    import sys
+    lines=Path('scripts/queue_luka_attention_weight.sh').read_text(encoding='utf-8').splitlines()
+    line=next(line for line in lines if 'python -B -s -c ' in line)
+    args=shlex.split(line)
+    program=args[args.index('-c')+1]
+    gate=c.artifact('GATE',root=str(tmp_path),project_dir=str(tmp_path/'project'),source_commit='a'*40,
+        anchor={'spec':{'path':str(tmp_path/'parent')}},
+        reference_import={'spec':{'path':str(tmp_path/'reference')}},available_quota_gib=1,
+        **campaign.registration(dict(nodes=parent_nodes()),arm))
+    path=tmp_path/'gate_spec.json'
+    write_immutable_json(path,gate)
+    command=[sys.executable,'-B','-s','-c',program,str(path),str(tmp_path/'parent'),
+             str(tmp_path/'reference'),arm,'1','a'*40,str(tmp_path/'project')]
+    assert subprocess.run(command,capture_output=True,text=True).returncode==0
+    for changed in (dict(source_commit='b'*40),dict(project_dir=str(tmp_path/'other')),
+                    dict(schema_version=1,contract='LUKA_ATTENTION_WEIGHT_GATE/v1',
+                         execution_site=campaign.registered_site(arm,1))):
+        bad_path=tmp_path/(next(iter(changed))+'.json')
+        write_immutable_json(bad_path,with_content_hash(dict(gate,**changed)))
+        bad_command=command.copy(); bad_command[5]=str(bad_path)
+        result=subprocess.run(bad_command,capture_output=True,text=True)
+        assert result.returncode!=0 and 'AssertionError' in result.stderr

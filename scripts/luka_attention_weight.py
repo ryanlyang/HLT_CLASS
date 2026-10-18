@@ -1,4 +1,4 @@
-"""Frozen coefficient sweep with explicit owned scratch retirement."""
+"""Frozen coefficient sweep: fresh tier3 gates and owned scratch retirement."""
 import argparse
 import json
 from pathlib import Path
