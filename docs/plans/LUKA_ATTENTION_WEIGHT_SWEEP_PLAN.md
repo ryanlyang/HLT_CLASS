@@ -63,6 +63,30 @@ are required before separate science authorization. No submissions by coding.
 
 ## Verification
 
+### Archived comparison import after legacy cleanup (2026-10-18)
+
+The completed 94f56025 LOGIT/ATTN experiment is a **comparison reference**, not
+the new arms' training or preflight dependency. Register a distinct
+`LUKA_ATTENTION_WEIGHT_REFERENCE_ARCHIVE/v1` proof when importing its retained
+results. Execute the read-only reader in the original pinned worktree; retain
+original source/gate/recipe and shared fixed30 U100/control authentication.
+Validate the old science/preflight metadata hashes and parent links, aggregate
+receipt's complete dependency map, and six training receipts against it.
+Require SHA256/size-bound reports, predictions and costs for all six rungs.
+Replay the original checkpoint selector and metrics; verify exact full-validation
+IDs/order/labels and the original50k subset against prepared split metadata.
+Recomputed rows, recoveries, costs and contrasts must equal the saved aggregate.
+
+This separate proof explicitly does **not** revalidate legacy technical outputs,
+science checkpoint bytes, target banks/export payloads or phase logs; their
+recorded identities are not current payload authentication. Missing legacy
+payloads do not become valid reusable artifacts, nor does this retroactively
+authorize their deletion. Original strict validators remain unchanged. No
+source mutation, bank reconstruction, raw-particle access or new test evaluation
+is part of archival import. Copy the six predictions and authenticated compact
+comparison evidence into the new root. Shared U100 and its live dependencies
+must still validate, and each new arm must pass its own full production preflight.
+
 Focused tests cover both coefficients, unchanged original recipe, matched seeds,
 three-rung production execution, scratch-only banks, immutable result readback
 after retirement, dependency/corruption/path-escape/symlink/partial-delete guards,

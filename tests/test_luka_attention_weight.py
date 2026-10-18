@@ -360,6 +360,12 @@ def test_create_snapshots_references_and_refuses_overlap(tmp_path,monkeypatch):
     atomic_publish_bytes(payload,deterministic_npz_bytes(p))
     imported=c.artifact('REFERENCES',parents=dict(anchor=anchor['content_hash']),rows=[],spec={'path':'old'},
         predictions={a+'_'+co:file_ref(payload) for a in ('LOGIT','ATTN') for co in c.COORDINATES})
+    names=imported['predictions']
+    proof=c.artifact('REFERENCE_ARCHIVE',parents=dict(anchor=anchor['content_hash'],spec='c'*64,results='d'*64),
+        **source.SCOPE,source_commit=source.REFERENCE_COMMIT,spec='c'*64,results='d'*64,
+        training_reports={n:'e'*64 for n in names},training_receipts={'train_'+n:'f'*64 for n in names},
+        recorded_dependencies={'train_'+n:'f'*64 for n in names},verified_files=[imported['spec'],file_ref(payload)])
+    imported=with_content_hash(dict(imported,archive=proof))
     monkeypatch.setattr(source,'current',lambda p,c:{'content_hash':'a'*64})
     monkeypatch.setattr(source,'authenticate',lambda p:(anchor,parent))
     monkeypatch.setattr(source,'references',lambda p,a:imported)

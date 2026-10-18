@@ -57,7 +57,7 @@ def create(root, parent_path, reference_path, project, commit, *, arm, available
 def read_gate(gate):
     validate(gate, 'GATE', dict(source=gate['source_snapshot']['content_hash'], anchor=gate['anchor']['content_hash']))
     validate(gate['anchor'], 'ANCHOR')
-    validate(gate['reference_import'], 'REFERENCES', dict(anchor=gate['anchor']['content_hash']))
+    source.validate_archive(gate['reference_import'], gate['anchor'])
     if load_json(Path(gate['root'])/'gate_spec.json') != gate:
         raise ValueError('Gate record differs')
     validate_file_ref(gate['references'])

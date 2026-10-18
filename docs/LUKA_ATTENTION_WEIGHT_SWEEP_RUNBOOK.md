@@ -44,7 +44,7 @@ quota after checking your actual usage and account for concurrent campaigns.
 ## 1. Commit/push only these changes on Windows
 
 ```powershell
-git add -- src/hlt_classification/luka_attention_weight tests/test_luka_attention_weight.py scripts/luka_attention_weight.py scripts/queue_luka_attention_weight.sh sbatch/run_luka_attention_weight.sh docs/plans/LUKA_ATTENTION_WEIGHT_SWEEP_PLAN.md docs/contracts/LUKA_ATTENTION_WEIGHT_SWEEP.md docs/LUKA_ATTENTION_WEIGHT_SWEEP_RUNBOOK.md
+git add -- src/hlt_classification/luka_attention_weight tests/test_luka_attention_weight.py tests/test_luka_attention_reference_archive.py scripts/luka_attention_weight.py scripts/queue_luka_attention_weight.sh sbatch/run_luka_attention_weight.sh docs/plans/LUKA_ATTENTION_WEIGHT_SWEEP_PLAN.md docs/contracts/LUKA_ATTENTION_WEIGHT_SWEEP.md docs/LUKA_ATTENTION_WEIGHT_SWEEP_RUNBOOK.md
 git diff --cached --stat
 ```
 
@@ -87,9 +87,24 @@ BASH
 ```
 
 The reference campaign must be the completed original 94f56025 LOGIT/ATTN run.
-Authentication is in its pinned source and requires its existing payloads at
-registration. Keep those old artifacts; this implementation does not clean them.
-Compact reference predictions and metrics are snapshotted into the new root.
+Authentication runs in its pinned source using the comparison-only archival
+reader. Required retained files: gate_spec.json, preflight/receipt.json,
+science/campaign_spec.json, science/aggregate/{receipt,results}.json, and each
+of the six science/train_LOGIT_*/train_ATTN_* directories' receipt.json,
+training_report.json, validation_predictions.npz and costs.json. Hashes,
+selection history, split membership, metrics and aggregate lineage are checked;
+presence alone is insufficient. Old technical banks and science checkpoint/bank
+payloads are not needed or certified for reuse. Their old strict validators
+remain strict. Shared fixed30 U100/control dependencies must still be intact.
+Compact reference predictions, metrics and a separately versioned archival
+evidence record are snapshotted into the new root. Nothing old is deleted.
+
+If registration at commit 3052c116 failed on a missing old preflight attention
+file, commit/push this archival-import fix and use the NEW commit and fresh root
+in step 2. That failure occurred before new root creation or job submission;
+there is no reason to rerun old training or recreate its multi-GB banks. Do not
+edit the pinned old worktree or reuse an old plan hash. The new arms still need
+their own preflights and separately reviewed science submissions.
 
 ## 3. Submit the reviewed gate; later repeat for science
 
