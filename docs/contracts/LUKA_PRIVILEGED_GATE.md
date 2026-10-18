@@ -1,11 +1,28 @@
-# Luka privileged gate contracts v1
+# Luka privileged gate contracts (scientific v1, preflight v2)
 
 Authority: [plan](../plans/LUKA_PRIVILEGED_GATE_PLAN.md).
 
-`LUKA_PRIVILEGED_GATE_{RECIPE,ANCHOR,GATE,SPEC,PLAN,PREFLIGHT,TASK,BANK,
+`LUKA_PRIVILEGED_GATE_{RECIPE,ANCHOR,GATE,SPEC,PLAN,TASK,BANK,
 TRAINING_REPORT,RESULTS,SUBMISSION_CLAIM}/v1` use canonical SHA256 content hashes,
 exact parent hashes, immutable publication and execution-source lineage.
 Old attention/fixed30 artifacts keep their original contracts and sources.
+
+The corrected execution additionally registers ATTENTION_EXECUTION/v1 inside
+GATE/v1, authenticated by the gate/source hashes and exact registration check.
+It specifies scoped math SDPA for CUDA bias-only gradients at registered gated
+attention calls, native dispatch otherwise, and exception-safe restoration.
+The scientific RECIPE/v1 is unchanged. Old gates are not rewritten or silently
+loaded under the new registration.
+
+`LUKA_PRIVILEGED_GATE_PREFLIGHT/v2` supersedes v1 acceptance under this source.
+It binds the execution policy, FP32/BF16 frozen-mode evidence and27 stresses:
+13 joint TRAIN,13 validation inference, and one early maximum-support frozen
+REPLACE_STAGED TRAIN stress. The frozen witness requires classification-only
+gate gradients, a gate optimizer update, unchanged backbone weights/buffers,
+one scoped math call, successful unfreeze and no override during inference.
+FP32 math-reference logits/gradients must pass; their BF16 fields are explicitly
+null, with finite gradients/updates still mandatory. No quality threshold is
+introduced. Version1 reports and absent/altered frozen evidence are rejected.
 
 The registered graph, seeds, view roles, gate placement/rank/bound, warm-start
 policy, losses, fixed30 recipe and historical-test flags are checked at reuse.

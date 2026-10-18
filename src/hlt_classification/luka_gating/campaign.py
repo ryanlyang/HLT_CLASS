@@ -6,7 +6,7 @@ from hlt_classification.cms_proxy_ladder.contracts import validate_file_ref
 from hlt_classification.jetclass2_delphes.execution import execution_site
 from hlt_classification.luka_fullsim.science_campaign import preflight_accounting
 from . import source
-from .contracts import artifact, validate, recipe, nodes, tasks, COUNTS
+from .contracts import artifact, validate, recipe, nodes, tasks, COUNTS, execution_policy
 
 AUTHORIZATION = 'AUTHORIZE LUKA PRIVILEGED GATE EXACT PLAN'
 
@@ -14,6 +14,7 @@ AUTHORIZATION = 'AUTHORIZE LUKA PRIVILEGED GATE EXACT PLAN'
 def registration(parent):
     models = nodes(parent['nodes'])
     return dict(counts=COUNTS, nodes=models, tasks=tasks(models), recipe=recipe(),
+                attention_execution=execution_policy(),
                 execution_site=execution_site('sporc_a100_debug'), cpus=6, memory_mb=128000,
                 gate_minutes=480, automatic_followup=False, automatic_retry=False)
 

@@ -13,6 +13,23 @@ One preflight is queued now; all23 science jobs are submitted automatically
 only after verified successful preflight and resource admission. No second
 confirmation is needed after the gate. Do NOT also submit science manually.
 
+## Restart after failed gate21914569
+
+The fixed source uses preflight v2 and an explicit scoped attention-backend
+policy. Commit/push it, then use sections2–3 with the NEW commit and a fresh
+`luka_gate_<new-short-commit>_r1` root. Review the new FOLLOWUP_PLAN hash; the old
+hash/authorization is not transferable. No new manual science submission is
+needed when the new automatic controller is armed.
+
+Preserve `luka_gate_1be6c1c0_r1` and its failed controller/probe artifacts. Do not
+delete claims or re-run that pinned source. The new gate reuses the same fixed30
+anchor and retained D-view caches, but reruns the technical graph; it does not
+import partial probes from the failed attempt. Check available quota again.
+An early `early_frozen_backend_and_unfreeze` phase and
+`early_stress_REPLACE_STAGED_frozen` phase now precede the full-population fits.
+Neither an early smoke pass nor scheduler COMPLETED alone authorizes science;
+the accepted v2 receipt and all existing source/resource checks are required.
+
 ## 1. Commit and push the implementation on Windows
 
 Review/stage ONLY these new paths, not `git add .` (there is unrelated work):

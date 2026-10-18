@@ -8,18 +8,28 @@ GATE_CONFIG = dict(rank=4, hidden=32, blocks=[6, 7], log_bound=1.386294361119890
 
 
 def artifact(kind, *, parents=None, **fields):
-    return with_content_hash(dict(contract=f'LUKA_PRIVILEGED_GATE_{kind}/v1', schema_version=1,
+    version = 2 if kind == 'PREFLIGHT' else 1
+    return with_content_hash(dict(contract=f'LUKA_PRIVILEGED_GATE_{kind}/v{version}', schema_version=version,
         parents=dict(parents or {}), **FLAGS, **fields))
 
 
 def validate(value, kind, parents=None):
-    digest = validate_content_hash(value, expected_contract=f'LUKA_PRIVILEGED_GATE_{kind}/v1',
-                                   expected_schema_version=1)
+    version = 2 if kind == 'PREFLIGHT' else 1
+    digest = validate_content_hash(value, expected_contract=f'LUKA_PRIVILEGED_GATE_{kind}/v{version}',
+                                   expected_schema_version=version)
     if any(value.get(k) != v for k, v in FLAGS.items()):
         raise PermissionError('Gate experiment evaluation scope differs')
     if parents is not None and value.get('parents') != parents:
         raise ValueError('Gate parent hashes differ')
     return digest
+
+
+def execution_policy():
+    # Numerical execution only; scientific RECIPE/v1 and checkpoint keys stay fixed.
+    return artifact('ATTENTION_EXECUTION', backend='SDPBackend.MATH',
+        scope='registered_gated_attention_call_only',
+        condition='cuda_grad_enabled_trainable_bias_frozen_attention_parameters_and_inputs',
+        otherwise='native_dispatch', restore_on_exception=True)
 
 
 def recipe():

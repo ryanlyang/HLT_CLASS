@@ -134,6 +134,91 @@ def test_warm_start_and_freeze_buffers(monkeypatch):
     assert any(p.grad is not None and p.grad.abs().sum()>0 for p in copied.mod.parameters())
 
 
+def test_execution_policy_is_not_a_scientific_recipe_change():
+    assert c.execution_policy()['backend']=='SDPBackend.MATH'
+    assert c.execution_policy()['otherwise']=='native_dispatch'
+    assert c.recipe()['schema_version']==1
+    assert c.artifact('PREFLIGHT')['schema_version']==2
+    old=with_content_hash(dict(c.artifact('PREFLIGHT'),schema_version=1,
+                              contract='LUKA_PRIVILEGED_GATE_PREFLIGHT/v1'))
+    with pytest.raises(ValueError): c.validate(old,'PREFLIGHT')
+
+
+@pytest.mark.parametrize('bf16',[False,True])
+@pytest.mark.skipif(not torch.cuda.is_available(),reason='CUDA frozen-backbone regression')
+def test_standard_cuda_frozen_backend_gradients_and_unfreeze(bf16):
+    from hlt_classification.luka_gating.preflight import frozen_backend_check
+    # Non-aligned lengths and padding, actual standard ParT, fixed non-grad inputs.
+    rng=np.random.default_rng(16)
+    vectors=rng.normal(size=(4,4,17)).astype(np.float32)
+    vectors[:,3]=np.sqrt((vectors[:,:3]**2).sum(1)+1)
+    mask=np.arange(17)[None,None,:]<np.array([17,9,3,1])[:,None,None]
+    raw=dict(features=rng.normal(size=(4,17,17)).astype(np.float32),vectors=vectors,mask=mask)
+    result=frozen_backend_check(raw,'cuda',bf16=bf16)
+    assert result['math_calls']==1 and result['joint_training_restored']
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(),reason='CUDA backend context restoration')
+def test_scoped_math_restored_after_exception_and_not_used_joint(monkeypatch):
+    tiny_config(monkeypatch)
+    model=m.GatedParT('self').cuda()
+    training.epoch_mode(model,True)
+    attention=model.mod.blocks[6].attn
+    def flags():
+        return tuple(getattr(torch.backends.cuda,n+'_sdp_enabled')() for n in ('math','flash','mem_efficient','cudnn'))
+    before=flags()
+    original=attention.forward
+    def fail(*args,**kwargs):
+        assert flags()==(True,False,False,False)
+        raise RuntimeError('injected attention failure')
+    monkeypatch.setattr(attention,'forward',fail)
+    raw=cache().batch(np.arange(4))
+    with pytest.raises(RuntimeError,match='injected attention'):
+        banks.forward(model,raw,None,'cuda')
+    assert flags()==before and model._backend_contexts=={} and model._correction is None
+    monkeypatch.setattr(attention,'forward',original)
+    banks.forward(model,raw,None,'cuda').float().square().mean().backward()
+    assert model._math_calls==1 and flags()==before
+    model.zero_grad(set_to_none=True); training.epoch_mode(model,False)
+    banks.forward(model,raw,None,'cuda').float().square().mean().backward()
+    assert model._math_calls==0 and flags()==before
+    model.eval()
+    with torch.inference_mode(): banks.forward(model,raw,None,'cuda')
+    assert model._math_calls==0 and flags()==before
+
+
+@pytest.mark.parametrize('batch_first',[False,True])
+@pytest.mark.skipif(not torch.cuda.is_available(),reason='legacy Torch MHA CUDA regression')
+def test_frozen_gate_native_torch_mha_adapter(batch_first,monkeypatch):
+    tiny_config(monkeypatch)
+    model=m.GatedParT('self').cuda()
+    attention=torch.nn.MultiheadAttention(8,2,dropout=0.,batch_first=batch_first).cuda().eval()
+    for p in attention.parameters(): p.requires_grad_(False)
+    attention.register_forward_pre_hook(model._inject,with_kwargs=True)
+    attention.register_forward_hook(model._restore_backend,with_kwargs=True,always_call=True)
+    model._correction=torch.randn(2,9,9,device='cuda',requires_grad=True)
+    x=torch.randn((2,9,8) if batch_first else (9,2,8),device='cuda')
+    out,_=attention(x,x,x,attn_mask=torch.zeros(4,9,9,device='cuda'),need_weights=False)
+    out.square().mean().backward()
+    assert model._math_calls==1 and not model._backend_contexts
+    assert torch.isfinite(model._correction.grad).all() and model._correction.grad.abs().sum()>0
+    assert all(p.grad is None for p in attention.parameters())
+
+
+def test_stress_exercises_frozen_and_joint_backbone(monkeypatch):
+    from hlt_classification.luka_gating import preflight as p
+    tiny_config(monkeypatch)
+    node=next(n for n in c.nodes(parent_nodes()) if n['node_id']=='REPLACE_STAGED')
+    for frozen in (True,False):
+        result=p.stress(cache(coordinate='D000'),None,node,'cpu',backward=True,freeze=frozen)
+        assert result['mode']==('frozen' if frozen else 'joint')
+        assert result['frozen_backbone_unchanged']==(True if frozen else None)
+    with pytest.raises(ValueError,match='Unregistered frozen'):
+        p.stress(cache(),None,node,'cpu',backward=False,freeze=True)
+    with pytest.raises(ValueError,match='Unregistered frozen'):
+        p.stress(cache(),None,c.nodes(parent_nodes())[0],'cpu',backward=True,freeze=True)
+
+
 def test_ragged_factor_bank_roundtrip_and_corruption(tmp_path,monkeypatch):
     tiny_config(monkeypatch)
     node=c.nodes(parent_nodes())[8]; teacher=m.new_model(node)
@@ -234,16 +319,39 @@ def test_full_production_preflight_graph_mock_site(tmp_path,monkeypatch):
     monkeypatch.setattr(p,'installed_environment',lambda:{})
     monkeypatch.setattr(p,'memory_snapshot',lambda t:dict(peak_rss_bytes=2**30,rss_bytes=2**30,gpu_peak_bytes=t.cuda.max_memory_allocated()))
     result=p.run(gate); p.validate_report(gate,result)
-    assert len(result['measurements'])==22 and len(result['stress'])==26
+    assert len(result['measurements'])==22 and len(result['stress'])==27
+    assert result['schema_version']==2 and len(result['frozen_checks'])==2
+    assert result['stress'][0]['mode']=='frozen'
     assert result['technical_checks_passed'] and not result['scientific_fit']
     for field,value in [('scientific_fit',True),('technical_checks_passed',False),('stress',result['stress'][:-1]),
                         ('measurements',result['measurements'][:-1]),('parities',result['parities'][:1]),
-                        ('storage',dict(result['storage'],required_bytes=1))]:
+                        ('storage',dict(result['storage'],required_bytes=1)),
+                        ('attention_execution',{}),('frozen_checks',[]),
+                        ('stress',result['stress'][1:]),
+                        ('frozen_checks',[dict(p,math_calls=0) for p in result['frozen_checks']])]:
         with pytest.raises(ValueError): p.validate_report(gate,with_content_hash(dict(result,**{field:value})))
     with pytest.raises(FileExistsError): p.run(gate)
     path=Path(gate['root'])/'preflight/train_REPLACE_GATE/selected.pt'
     with path.open('ab') as f: f.write(b'corrupt')
     with pytest.raises(ValueError): p.validate_report(gate,result)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(),reason='CUDA preflight failure ordering')
+@pytest.mark.parametrize('failure',['smoke','maximum_support'])
+def test_frozen_failure_stops_before_expensive_graph(tmp_path,monkeypatch,failure):
+    from hlt_classification.luka_gating import preflight as p
+    gate,_=mocked_population(tmp_path,monkeypatch,'cuda')
+    monkeypatch.setattr(campaign,'check_gate',lambda g:None)
+    monkeypatch.setattr(p,'installed_environment',lambda:{})
+    monkeypatch.setattr(p,'memory_snapshot',lambda t:dict(peak_rss_bytes=1,rss_bytes=1,gpu_peak_bytes=1))
+    monkeypatch.setattr(p,'parity',lambda *a,**k:{})
+    calls=[]
+    monkeypatch.setattr(worker,'execute_task',lambda *a,**k:calls.append(a))
+    def fail(*args,**kwargs): raise RuntimeError('frozen check failed')
+    monkeypatch.setattr(p,'frozen_backend_check',fail if failure=='smoke' else lambda *a,**k:{})
+    if failure=='maximum_support': monkeypatch.setattr(p,'stress',fail)
+    with pytest.raises(RuntimeError,match='frozen check failed'): p.run(gate)
+    assert not calls and not (Path(gate['root'])/'preflight/receipt.json').exists()
 
 
 def test_budgets_use_joint_estimate_not_frozen_speed(tmp_path):

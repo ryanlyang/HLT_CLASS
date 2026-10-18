@@ -120,3 +120,34 @@ completion. This operational addition uses distinct FOLLOWUP_*/v1 contracts.
 
 Queue-ready means ready to queue this new gate; it does not claim real A100
 acceptance from local tests. Original experiments and unrelated jobs unchanged.
+
+### 2026-10-18: frozen-backbone attention execution correction
+
+Job21914569 failed in the first REPLACE_STAGED backward with
+`LSE is not correctly aligned (strideH)`. Its ordinary trainable stress did
+not exercise the three-epoch gate-only mode. The scientific recipe above is
+unchanged: no extra QKV gradients, unfreezing, batch reduction, or loss change.
+
+An explicit ATTENTION_EXECUTION/v1 policy selects PyTorch math SDPA only for
+a registered gated CUDA attention call when gradients are enabled, its added
+bias requires gradients, and its inputs and attention parameters are frozen.
+All other calls retain native dispatch. The previous backend flags are restored
+on return or exception. This avoids the Torch2.5.1 efficient backend's omission
+of bias-only gradients when deciding whether to save log-sum-exp for backward.
+Native Weaver code and state-dictionary keys are unchanged. Backend numerical
+roundoff can differ; this is not a bitwise identity claim.
+
+PREFLIGHT/v2 requires early gate-only classification-gradient/update and frozen
+parameter/buffer checks in FP32 and BF16, plus unfreeze and inference checks.
+FP32 additionally compares logits and gate gradients to full math attention;
+BF16 is a finiteness/update check, not equivalence to forcing unaffected layers
+to math (which changes their reduction precision). Before any full-population
+fit, test true batch128 at maximum TRAIN support with the backbone frozen.
+The ordinary joint-training and validation-support stresses remain required:
+27 stress cases, not26. The full one-pass technical graph and resource admission
+remain mandatory. Missing frozen-mode evidence or old receipts fail closed.
+
+Use new pushed source and a fresh gate root; never edit the failed gate, remove
+its follow-up claim, or reinterpret partial probes as accepted evidence. The
+existing dry-review/manual/opt-in-auto interfaces remain available. This fix
+does not implement partial-probe recovery or submit jobs.

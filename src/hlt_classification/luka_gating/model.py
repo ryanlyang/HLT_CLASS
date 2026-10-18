@@ -6,6 +6,7 @@ Only the additive mask at the last two particle blocks receives the gate.
 import math
 import torch
 from torch import nn
+from torch.nn.attention import SDPBackend, sdpa_kernel
 from hlt_classification.jetclass2_delphes.model import DelphesParticleTransformer
 from .contracts import GATE_CONFIG
 
@@ -67,8 +68,12 @@ class GatedParT(DelphesParticleTransformer):
         self.factors = None
         self._correction = None
         self._hits = 0
+        self._math_calls = 0
+        self._backend_contexts = {}
         for i in GATE_CONFIG['blocks']:
             self.mod.blocks[i].attn.register_forward_pre_hook(self._inject,with_kwargs=True)
+            self.mod.blocks[i].attn.register_forward_hook(
+                self._restore_backend, with_kwargs=True, always_call=True)
 
     def _inject(self, module, args, kwargs):
         if self._correction is None:
@@ -89,12 +94,32 @@ class GatedParT(DelphesParticleTransformer):
         if native is None or native.dtype==torch.bool or native.shape!=delta.shape:
             raise ValueError('Expected intact native floating pair bias')
         kwargs['attn_mask'] = native + delta.to(native.dtype)
+        # Torch 2.5.1 efficient SDPA saves LSE based only on Q/K/V gradients.
+        # A frozen attention module/input with a trainable bias needs backward
+        # too. Select math for this call, without unfreezing QKV or detaching the
+        # gate. The next block normally has grad-carrying inputs and stays native.
+        if (q.device.type == 'cuda' and torch.is_grad_enabled()
+                and kwargs['attn_mask'].requires_grad
+                and not any(x.requires_grad for x in (q,k,v))
+                and not any(p.requires_grad for p in module.parameters())):
+            if module in self._backend_contexts:
+                raise RuntimeError('Reentrant gated attention backend context')
+            context = sdpa_kernel(SDPBackend.MATH)
+            context.__enter__()
+            self._backend_contexts[module] = context
+            self._math_calls += 1
         self._hits += 1
         return args,kwargs
+
+    def _restore_backend(self, module, args, kwargs, output):
+        context = self._backend_contexts.pop(module, None)
+        if context is not None:
+            context.__exit__(None, None, None)
 
     def forward(self, features, vectors, mask, *, context_features=None, context_mask=None):
         self.factors = None
         self._hits = 0
+        self._math_calls = 0
         if self.mode=='privileged':
             if context_features is None or context_mask is None or not torch.equal(mask,context_mask):
                 raise ValueError('Privileged route requires aligned richer context')
@@ -110,6 +135,10 @@ class GatedParT(DelphesParticleTransformer):
             return result
         finally:
             self._correction = None
+            # Defensive cleanup if another hook fails before the always-call hook.
+            for context in reversed(list(self._backend_contexts.values())):
+                context.__exit__(None, None, None)
+            self._backend_contexts.clear()
 
 
 def new_model(node, state=None):

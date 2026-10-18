@@ -13,8 +13,9 @@ from hlt_classification.jetclass2_delphes.execution import gpu_identity
 from hlt_classification.jetclass2_delphes.dzfix_fusion_model import parity_backend
 from hlt_classification.luka_fullsim.preflight_v2 import PhaseLog,memory_snapshot
 from hlt_classification.luka_attention.preflight import native_surface_check
-from . import worker,banks,campaign
-from .contracts import artifact,validate,recipe
+from torch.nn.attention import SDPBackend, sdpa_kernel
+from . import worker,banks,campaign,training
+from .contracts import artifact,validate,recipe,execution_policy
 from .model import GatedParT,new_model,log_gate,centered_gate_loss
 
 
@@ -89,14 +90,80 @@ def parity(raw,device,*,bf16=False):
         auxiliary_vector_gradient_topology=True)
 
 
-def stress(cache,context,node,device,*,backward):
+def frozen_backend_check(raw, device, *, bf16=False):
+    """Fail early on the actual gate-only gradient topology, then check unfreeze.
+
+    Classification-only gradients are required: auxiliary gate loss alone could
+    hide a broken or detached attention route. Compare with explicit math SDPA.
+    """
+    model=GatedParT('self').to(device)
+    with torch.no_grad(): model.gate.net[-1].weight[4:].normal_(0,.15)
+    training.epoch_mode(model,True)
+    frozen=deepcopy(model.mod.state_dict())
+    gate_before=deepcopy(model.gate.state_dict())
+    tensors={k:torch.from_numpy(raw[k]).to(device) for k in ('features','vectors','mask')}
+    optimizer=torch.optim.AdamW(model.parameters(),lr=3e-4)
+    def forward():
+        with torch.autocast(device_type=torch.device(device).type,dtype=torch.bfloat16,enabled=bf16):
+            return model(**tensors)
+    def gate_gradients():
+        grads={n:p.grad.detach().clone() for n,p in model.gate.named_parameters() if p.grad is not None}
+        if (not grads or any(not torch.isfinite(g).all() for g in grads.values())
+                or not any(g.abs().sum()>0 for g in grads.values())):
+            raise ValueError('Frozen gate has no finite classification gradient')
+        if any(p.grad is not None for p in model.mod.parameters()):
+            raise ValueError('Frozen backbone received gradients')
+        return grads
+    out=forward()
+    if not torch.isfinite(out).all(): raise ValueError('Nonfinite frozen logits')
+    out.float().square().mean().backward()
+    grads=gate_gradients(); calls=model._math_calls
+    if str(device).startswith('cuda') and calls!=1:
+        raise ValueError('Frozen bias-only attention did not use scoped math')
+    if not bf16:
+        # Authoritative FP32 equivalence. Forcing *every* block to math also
+        # upcasts BF16 attention reductions in otherwise unaffected layers;
+        # that is a different numerical execution, not a BF16 parity reference.
+        optimizer.zero_grad(set_to_none=True)
+        with sdpa_kernel(SDPBackend.MATH):
+            reference=forward()
+            reference.float().square().mean().backward()
+        torch.testing.assert_close(out,reference,rtol=2e-5,atol=2e-6)
+        torch.testing.assert_close(grads,gate_gradients(),rtol=2e-5,atol=2e-6)
+    optimizer.step()
+    if any(not torch.equal(v,model.mod.state_dict()[k]) for k,v in frozen.items()):
+        raise ValueError('Frozen backbone parameters or buffers changed')
+    if all(torch.equal(v,model.gate.state_dict()[k]) for k,v in gate_before.items()):
+        raise ValueError('Frozen-mode gate did not update')
+    training.epoch_mode(model,False); optimizer.zero_grad(set_to_none=True)
+    forward().float().square().mean().backward()
+    native_grads=[p.grad for p in model.mod.parameters() if p.grad is not None]
+    if (not native_grads or any(not torch.isfinite(g).all() for g in native_grads)
+            or not any(g.abs().sum()>0 for g in native_grads) or model._math_calls):
+        raise ValueError('Unfreeze did not restore finite joint training/native dispatch')
+    optimizer.step(); model.eval()
+    with torch.inference_mode(): forward()
+    if model._math_calls or model._backend_contexts:
+        raise ValueError('Math override leaked into inference')
+    return dict(bf16=bf16,math_calls=calls,classification_gradient=True,
+        math_reference_logits=True if not bf16 else None,
+        math_reference_gradients=True if not bf16 else None,gate_update=True,
+        frozen_backbone_unchanged=True,joint_training_restored=True,inference_native=True)
+
+
+def stress(cache,context,node,device,*,backward,freeze=False):
+    if freeze and (not backward or not node['freeze_epochs']):
+        raise ValueError('Unregistered frozen stress mode')
     banks.paired(cache,context)
     lengths=banks.counts(cache); ix=np.repeat(int(np.argmax(lengths)),128)
     raw=cache.batch(ix); ctx=None if context is None else context.batch(ix)
     model=new_model(node).to(device)
     if model.mode!='none':
         with torch.no_grad(): model.gate.net[-1].weight[4:].normal_(0,.15)
-    model.train(backward); optimizer=torch.optim.AdamW(model.parameters(),lr=3e-4)
+    if backward: training.epoch_mode(model,freeze)
+    else: model.eval()
+    frozen=deepcopy(model.mod.state_dict()) if freeze else None
+    optimizer=torch.optim.AdamW(model.parameters(),lr=3e-4)
     start=time.monotonic()
     for _ in range(3):
         optimizer.zero_grad(set_to_none=True)
@@ -112,10 +179,17 @@ def stress(cache,context,node,device,*,backward):
                 loss.backward()
                 if any(p.grad is not None and not torch.isfinite(p.grad).all() for p in model.parameters()):
                     raise ValueError('Nonfinite stress gradients')
+                if freeze and (any(p.grad is not None for p in model.mod.parameters())
+                        or not any(p.grad is not None and p.grad.abs().sum()>0 for p in model.gate.parameters())):
+                    raise ValueError('Incorrect frozen stress gradients')
                 optimizer.step()
         model.factors=None
     if str(device).startswith('cuda'): torch.cuda.synchronize()
+    if freeze and any(not torch.equal(v,model.mod.state_dict()[k]) for k,v in frozen.items()):
+        raise ValueError('Frozen stress changed backbone parameters/buffers')
     return dict(node_id=node['node_id'],role=cache.role,coordinate=cache.coordinate_name,
+        mode='frozen' if freeze else ('joint' if backward else 'inference'),
+        frozen_backbone_unchanged=True if freeze else None,
         maximum=int(lengths.max()),batch=128,steps=3,backward=backward,seconds=time.monotonic()-start)
 
 
@@ -144,18 +218,29 @@ def run(gate):
         raise PermissionError('Installed environment differs from anchor')
     root=Path(gate['root'])/'preflight'; root.mkdir(exist_ok=False)
     log=PhaseLog(root,lambda:memory_snapshot(torch)); torch.cuda.reset_peak_memory_stats()
+    stresses=[]
     with log.phase('authenticated_views_storage_and_parity'):
         tr=worker.data(gate,'train','D000'); val=worker.data(gate,'validation','D000')
         storage=campaign.storage(gate,banks.counts(tr))
         alignments=dict(train=banks.alignment(tr),validation=banks.alignment(val))
         raw=tr.batch(np.arange(min(4,len(tr))))
         parities=[parity(raw,'cuda',bf16=b) for b in (False,True)]
+    with log.phase('early_frozen_backend_and_unfreeze'):
+        frozen_checks=[]
+        for b in (False,True):
+            gc.collect(); torch.cuda.empty_cache()
+            frozen_checks.append(frozen_backend_check(raw,'cuda',bf16=b))
+    # Full batch, observed maximum TRAIN support, BEFORE the expensive graph.
+    with log.phase('early_stress_REPLACE_STAGED_frozen'):
+        gc.collect(); torch.cuda.empty_cache()
+        staged=next(n for n in gate['nodes'] if n['node_id']=='REPLACE_STAGED')
+        stresses.append(stress(tr,None,staged,'cuda',backward=True,freeze=True))
         del tr,val
     # This rehearsal uses real population caches and the same fit/export workers.
     # Probe checkpoints remain entirely below preflight, never science parents.
     probe=artifact('SPEC',parents=dict(gate=gate['content_hash']),root=str(root),technical=True)
     write_immutable_json(root/'probe_spec.json',probe)
-    measurements=[]; stresses=[]
+    measurements=[]
     for task in gate['tasks']:
         if task['kind']=='aggregate': continue
         gc.collect(); torch.cuda.empty_cache()
@@ -179,6 +264,7 @@ def run(gate):
     auth+=2*(time.monotonic()-begin)
     train_minutes,export_minutes=budgets(measurements,auth)
     result=artifact('PREFLIGHT',parents=dict(gate=gate['content_hash']),job_id=job,
+        attention_execution=execution_policy(),frozen_checks=frozen_checks,
         environment=installed_environment(),gpu=gpu,parities=parities,stress=stresses,
         alignments=alignments,measurements=measurements,memory=memory,storage=storage,
         train_minutes=train_minutes,export_minutes=export_minutes,authentication_seconds=auth,
@@ -189,6 +275,16 @@ def run(gate):
 
 def validate_report(gate,r):
     validate(r,'PREFLIGHT',dict(gate=gate['content_hash']))
+    if r.get('attention_execution')!=execution_policy() or gate.get('attention_execution')!=execution_policy():
+        raise ValueError('Attention execution policy differs')
+    frozen_keys=['classification_gradient','gate_update','frozen_backbone_unchanged',
+                 'joint_training_restored','inference_native']
+    frozen=r.get('frozen_checks',[])
+    if (len(frozen)!=2 or [p.get('bf16') for p in frozen]!=[False,True]
+            or any(p.get('math_calls')!=1 or any(p.get(k) is not True for k in frozen_keys)
+                   or any(k not in p or p[k] is not (None if p['bf16'] else True)
+                          for k in ('math_reference_logits','math_reference_gradients')) for p in frozen)):
+        raise ValueError('Missing frozen-backbone backend evidence')
     expected=[(t['node_id'],t['kind']) for t in gate['tasks'] if t['kind']!='aggregate']
     if (r['technical_checks_passed'] is not True or r['scientific_fit'] is not False
             or [(m['node_id'],m['kind']) for m in r['measurements']]!=expected
@@ -202,13 +298,17 @@ def validate_report(gate,r):
         raise ValueError('Missing installed model parity')
     from hlt_classification.luka_fullsim.regular_cache import metadata
     prepared=metadata(gate['anchor']['evidence']['prepared_root'])[1]
-    expected={(n['node_id'],role) for n in gate['nodes'] for role in ('train','validation')}
-    if len(r['stress'])!=len(expected) or {(s['node_id'],s['role']) for s in r['stress']}!=expected:
+    expected={(n['node_id'],role,'joint' if role=='train' else 'inference')
+              for n in gate['nodes'] for role in ('train','validation')}
+    expected.add(('REPLACE_STAGED','train','frozen'))
+    if len(r['stress'])!=len(expected) or {(s['node_id'],s['role'],s.get('mode')) for s in r['stress']}!=expected:
         raise ValueError('Missing stress configuration')
     for s in r['stress']:
         node=next(n for n in gate['nodes'] if n['node_id']==s['node_id'])
         if (s['coordinate']!=node['coordinate'] or s['maximum']!=prepared['summaries'][s['role']][node['coordinate']]['maximum']
-                or s['batch']!=128 or s['steps']!=3 or s['backward']!=(s['role']=='train')):
+                or s['batch']!=128 or s['steps']!=3 or s['backward']!=(s['role']=='train')
+                or s.get('frozen_backbone_unchanged')!=(True if s['mode']=='frozen' else None)
+                or not math.isfinite(s['seconds']) or s['seconds']<0):
             raise ValueError('Stress support mismatch')
     if (not 0<r['memory']['peak_rss_bytes']<.85*gate['memory_mb']*1024**2
             or not 0<r['memory']['gpu_peak_bytes']<.9*r['gpu']['total_memory_bytes']):
