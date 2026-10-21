@@ -4,6 +4,11 @@ Only for the existing **fd687181** sweep with no science directory, after the
 original controller has been verified and paused on **login010**. Keep preflight
 **7690397** running. Do not resume PID300411 or submit science manually.
 
+The original b3562677 helper failed before signaling because Python lacked a
+pidfd wrapper. This v2 launcher authenticates that exact failed attempt, keeps
+all its records, and uses a new `ordered_followup_v2` directory. It tests the
+kernel capability in dry review. No environment repair or new preflight needed.
+
 This preserves the same original source, accepted preflight, targets, seeds and
 20-epoch fits. Scheduling is serial: **50 -> 500 -> 1000 -> control -> 100 -> 10
 -> 2**. The control's recovery denominator becomes available after the fourth fit.
@@ -18,13 +23,18 @@ The existing dirty HANDOFF/LEGACY_SOURCE_MAP entries may be reviewed/staged
 separately with `git add -p`.
 
 ```powershell
-git add -- scripts/order_luka_fullstat_embedding_sweep.py scripts/queue_luka_fullstat_embedding_order.sh src/hlt_classification/operations/__init__.py src/hlt_classification/operations/fullstat_embedding_order.py tests/test_luka_fullstat_embedding_order.py docs/plans/LUKA_FULLSTAT_EMBEDDING_ORDER_PLAN.md docs/contracts/LUKA_FULLSTAT_EMBEDDING_ORDER.md docs/LUKA_FULLSTAT_EMBEDDING_ORDER_RUNBOOK.md
+& {
+git diff --cached --quiet
+if ($LASTEXITCODE -ne 0) { throw "Other changes are staged; inspect before continuing" }
+git add -- scripts/queue_luka_fullstat_embedding_order.sh src/hlt_classification/operations/fullstat_embedding_order.py tests/test_luka_fullstat_embedding_order.py tests/luka_fullstat_order_linux_smoke.py docs/plans/LUKA_FULLSTAT_EMBEDDING_ORDER_PLAN.md docs/contracts/LUKA_FULLSTAT_EMBEDDING_ORDER.md docs/LUKA_FULLSTAT_EMBEDDING_ORDER_RUNBOOK.md
+if ($LASTEXITCODE -ne 0) { throw "Staging failed" }
 git diff --cached --stat
-git commit -m "Add ordered handover for existing Oscar FullStat embedding sweep"
+git commit -m "Fix Oscar ordered handover pidfd portability and recover pre-signal failure"
 if ($LASTEXITCODE -ne 0) { throw "Commit failed; inspect before continuing" }
 git push origin HEAD:main
 if ($LASTEXITCODE -ne 0) { throw "Push failed" }
 git rev-parse HEAD
+}
 ```
 
 ## 2. Review and arm on login010
@@ -59,7 +69,7 @@ read -r -p 'Paste ORDER_PLAN_HASH printed above: ' HASH </dev/tty
 [[ "${HASH}" =~ ^[0-9a-f]{64}$ ]]
 read -r -p 'Retire the paused controller and automatically queue the ordered sweep after verified preflight success? Type YES: ' CONFIRM </dev/tty
 test "${CONFIRM}" = YES
-LOG="$(mktemp "${ROOT}/ordered-followup.XXXXXX.log")"
+LOG="$(mktemp "${ROOT}/ordered-followup-v2.XXXXXX.log")"
 nohup bash "${HELPER}" "${COMMIT}" "${ROOT}" "${ORIGINAL}" 300411 login010 --execute "${HASH}" >"${LOG}" 2>&1 </dev/null &
 printf 'Ordered controller PID: %s\nLog: %s\n' "$!" "${LOG}"
 printf 'Confirm ARMED ORDERED HANDOVER before disconnecting:\ntail -f "%s"\n' "${LOG}"
@@ -73,7 +83,7 @@ has already passed, submission can proceed immediately after verification.
 only tail. Do not rerun the launcher or resume the old controller.
 
 Original preflight/science output locations and results CLI are unchanged.
-New operational evidence lives at `ordered_followup_v1/{plan,retired,
+New operational evidence lives at `ordered_followup_v2/{plan,retired,
 measured_review,command_plan,submission_ledger,complete,failure}.json` (only
 applicable records exist). These replace neither old followup records nor
 scientific receipts. On an error, preserve everything and inspect the log and

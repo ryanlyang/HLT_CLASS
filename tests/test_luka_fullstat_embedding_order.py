@@ -30,6 +30,7 @@ def handover(controller, monkeypatch):
         old['content_hash'], '--authorization', followup.AUTHORIZATION]
     process = dict(pid=300411, host='login010', uid=123, start_ticks='123456', argv=argv)
     monkeypatch.setattr(o, 'controller_identity', lambda *args, **kwargs: deepcopy(process))
+    monkeypatch.setattr(o, 'probe_pidfd', lambda: 'python_pidfd')
     retired = []
     monkeypatch.setattr(o, 'retire_controller', lambda p, g: retired.append(p))
     backend = SimpleNamespace(campaign=campaign, contracts=contracts, followup=followup,
@@ -55,7 +56,7 @@ def test_dry_review_leaves_gate_and_controller_alone(handover):
     assert reviewed['jobs'] == 8 and reviewed['preflight_job'] == '12345'
     assert reviewed['order'] == ['w50', 'w500', 'w1000', 'w0', 'w100', 'w10', 'w2']
     assert reviewed['cancel_preflight'] is False
-    assert cache.load_json(h.c.root/'ordered_followup_v1/plan.json') == reviewed
+    assert cache.load_json(h.c.root/o.ATTEMPT/'plan.json') == reviewed
 
 
 def test_exact_success_handover_uses_existing_gate_and_preserves_original_plan(handover):
@@ -86,7 +87,7 @@ def test_exact_success_handover_uses_existing_gate_and_preserves_original_plan(h
         assert actual == expected
     assert not (h.c.root/'science/submission/submission_ledger.json').exists()
     assert (h.c.root/'science/submission/live_claim/ordering_override.json').is_file()
-    assert (h.c.root/'ordered_followup_v1/complete.json').is_file()
+    assert (h.c.root/o.ATTEMPT/'complete.json').is_file()
     with pytest.raises(FileExistsError): execute(h)
     assert len(h.c.calls) == 9
 
@@ -97,7 +98,7 @@ def test_gate_failure_never_queues_science(handover, state):
     h.c.states.clear(); h.c.states.append(state)
     with pytest.raises(RuntimeError, match='no science'): execute(h)
     assert h.retired and len(h.c.calls) == 1 and not (h.c.root/'science').exists()
-    assert (h.c.root/'ordered_followup_v1/failure.json').is_file()
+    assert (h.c.root/o.ATTEMPT/'failure.json').is_file()
 
 
 @pytest.mark.parametrize('key', ['bad_receipt', 'missing_receipt'])
@@ -123,7 +124,7 @@ def test_wrong_authorization_or_plan_cannot_retire(handover):
     for hash_, auth in [('b'*64, o.AUTHORIZATION), (reviewed['content_hash'], followup.AUTHORIZATION)]:
         with pytest.raises(PermissionError):
             run(h, execute=True, plan_hash=hash_, authorization=auth)
-    assert not h.retired and not (h.c.root/'ordered_followup_v1/live_claim').exists()
+    assert not h.retired and not (h.c.root/o.ATTEMPT/'live_claim').exists()
 
 
 def test_process_reused_or_resumed_between_review_and_execute_blocks(handover):
@@ -146,7 +147,7 @@ def test_ambiguous_partial_submission_never_retried(handover):
     h = handover
     h.c.control['fail_submit'] = 4
     with pytest.raises(RuntimeError, match='Ambiguous'): execute(h)
-    saved = h.c.root/'ordered_followup_v1/submission_ledger_journal'
+    saved = h.c.root/o.ATTEMPT/'submission_ledger_journal'
     assert len(list(saved.glob('*.json'))) == 2
     with pytest.raises(FileExistsError): execute(h)
     assert len(h.c.calls) == 4
@@ -232,3 +233,132 @@ def test_site_rejection_blocks_review_without_signals(handover, monkeypatch):
     monkeypatch.setattr(submission, 'check_site', fail)
     with pytest.raises(PermissionError): run(h)
     assert not h.retired and len(h.c.calls) == 1
+
+
+def failed_v1(h):
+    plan = run(h)
+    fields = {k:v for k,v in plan.items() if k not in (
+        'contract', 'schema_version', 'content_hash', 'final_test_accessed',
+        'pidfd_backend', 'prior_failed_attempt')}
+    fields['tool_source'] = dict(fields['tool_source'], commit=o.FAILED_DONOR)
+    fields['authorization'] = 'AUTHORIZE_FULLSTAT_EMBEDDING_ORDER_V1'
+    legacy = o.artifact('AUTHORIZATION_PLAN', version=1, **fields)
+    directory = h.c.root/'ordered_followup_v1'
+    (directory/'live_claim').mkdir(parents=True)
+    cache.write_immutable_json(directory/'plan.json', legacy)
+    cache.write_immutable_json(directory/'authorization.json', o.artifact('AUTHORIZATION', version=1,
+        parents=dict(plan=legacy['content_hash']), controller=h.process))
+    cache.write_immutable_json(directory/'failure.json', o.artifact('FAILURE', version=1,
+        parents=dict(plan=legacy['content_hash']), error_type='RuntimeError', error=o.PIDFD_ERROR,
+        automatic_retry=False))
+    # Initial run(h) above modeled a fresh review; remove only this synthetic
+    # test file so the fixture can now review the newly introduced v1 history.
+    (h.c.root/o.ATTEMPT/'plan.json').unlink()
+    return directory
+
+
+def test_recovers_only_known_presignal_failure_into_new_attempt(handover):
+    h = handover
+    prior = failed_v1(h)
+    before = {p.name:p.read_bytes() for p in prior.iterdir() if p.is_file()}
+    result = execute(h)
+    assert len(result['jobs']) == 8
+    assert {p.name:p.read_bytes() for p in prior.iterdir() if p.is_file()} == before
+    plan = cache.load_json(h.c.root/o.ATTEMPT/'plan.json')
+    assert plan['schema_version'] == 2 and plan['prior_failed_attempt']['directory'] == str(prior)
+
+
+@pytest.mark.parametrize('mutation', ['corrupt_plan', 'controller', 'wrong_error', 'retired',
+                                     'journal', 'unknown_file', 'unknown_source', 'wrong_intent'])
+def test_ambiguous_previous_attempt_cannot_be_recovered(handover, mutation):
+    h = handover
+    directory = failed_v1(h)
+    if mutation == 'corrupt_plan':
+        (directory/'plan.json').write_text('{}')
+    elif mutation in ('controller', 'unknown_source'):
+        value = cache.load_json(directory/'plan.json')
+        value.pop('content_hash')
+        if mutation == 'controller': value['controller']['start_ticks'] = 'wrong'
+        else: value['tool_source']['commit'] = 'e'*40
+        value['content_hash'] = o.digest(value)
+        (directory/'plan.json').write_text(__import__('json').dumps(value))
+    elif mutation == 'wrong_error':
+        (directory/'failure.json').write_text('{}')
+    elif mutation == 'wrong_intent':
+        (directory/'authorization.json').write_text('{}')
+    else:
+        (directory/('submission_ledger_journal' if mutation == 'journal' else mutation+'.json')).mkdir()
+    with pytest.raises(PermissionError): run(h)
+    assert not h.retired and len(h.c.calls) == 1
+
+
+def test_capability_failure_is_caught_in_dry_review_before_claim(handover, monkeypatch):
+    h = handover
+    def fail(): raise OSError('Kernel pidfd unavailable')
+    monkeypatch.setattr(o, 'probe_pidfd', fail)
+    with pytest.raises(OSError): run(h)
+    assert not (h.c.root/o.ATTEMPT).exists() and not h.retired and len(h.c.calls) == 1
+
+
+def test_readonly_probe_uses_signal_zero_and_closes(monkeypatch):
+    import sys
+    calls = []
+    api = SimpleNamespace(name='native', open=lambda pid: calls.append(('open', pid)) or 90,
+                          send=lambda fd, sig: calls.append(('send', fd, sig)))
+    monkeypatch.setattr(o, 'pidfd_api', lambda: api)
+    monkeypatch.setattr(o.os, 'close', lambda fd: calls.append(('close', fd)))
+    monkeypatch.setitem(sys.modules, 'select', SimpleNamespace(poll=lambda: None))
+    assert o.probe_pidfd() == 'native'
+    assert calls == [('open', o.os.getpid()), ('send', 90, 0), ('close', 90)]
+
+
+def test_missing_python_wrappers_use_exact_linux_syscalls(monkeypatch):
+    import ctypes
+    calls = []
+    monkeypatch.delattr(o.os, 'pidfd_open', raising=False)
+    monkeypatch.delattr(o.signal, 'pidfd_send_signal', raising=False)
+    monkeypatch.setattr(o.sys, 'platform', 'linux')
+    monkeypatch.setattr(o.platform, 'machine', lambda: 'x86_64')
+    original_sizeof = ctypes.sizeof
+    monkeypatch.setattr(ctypes, 'sizeof', lambda kind: 8 if kind in (ctypes.c_void_p,ctypes.c_long) else original_sizeof(kind))
+    class Syscall:
+        def __call__(self, number, *args):
+            calls.append((number.value, [a.value for a in args]))
+            return 77 if number.value == 434 else 0
+    monkeypatch.setattr(ctypes, 'CDLL', lambda *a,**kw: SimpleNamespace(syscall=Syscall()))
+    api = o.pidfd_api()
+    assert api.name == 'linux_x86_64_syscall_pidfd'
+    assert api.open(300411) == 77
+    api.send(77, 15)
+    assert calls == [(434, [300411, 0]), (424, [77, 15, None, 0])]
+    monkeypatch.setattr(o.platform, 'machine', lambda: 'aarch64')
+    with pytest.raises(RuntimeError, match='LP64'): o.pidfd_api()
+
+
+def test_real_linux_fallback_pidfd_roundtrip():
+    """Executed separately under a genuine Linux interpreter, not Windows."""
+    import sys
+    if sys.platform != 'linux' or o.platform.machine() != 'x86_64':
+        pytest.skip('Linux x86_64 only')
+    import subprocess
+    import signal
+    import select
+    from unittest.mock import patch
+    with patch.object(o.os, 'pidfd_open', create=True), patch.object(o.signal, 'pidfd_send_signal', create=True):
+        delattr(o.os, 'pidfd_open')
+        delattr(o.signal, 'pidfd_send_signal')
+        api = o.pidfd_api()
+        process = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])
+        fd = api.open(process.pid)
+        try:
+            api.send(fd, 0)
+            api.send(fd, signal.SIGSTOP)
+            api.send(fd, signal.SIGTERM)
+            api.send(fd, signal.SIGCONT)
+            poll = select.poll(); poll.register(fd, select.POLLIN)
+            assert poll.poll(10000)
+            assert process.wait(timeout=5) == -signal.SIGTERM
+        finally:
+            o.os.close(fd)
+            if process.poll() is None:
+                process.kill(); process.wait(timeout=5)

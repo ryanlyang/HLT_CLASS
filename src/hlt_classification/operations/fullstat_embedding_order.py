@@ -11,6 +11,7 @@ import importlib
 import json
 import os
 from pathlib import Path
+import platform
 import re
 import signal
 import socket
@@ -20,7 +21,10 @@ from types import SimpleNamespace
 
 DONOR = 'fd687181a60c1557f98d7498f577e26d6dbb35a7'
 ORDER = ('w50', 'w500', 'w1000', 'w0', 'w100', 'w10', 'w2')
-AUTHORIZATION = 'AUTHORIZE_FULLSTAT_EMBEDDING_ORDER_V1'
+AUTHORIZATION = 'AUTHORIZE_FULLSTAT_EMBEDDING_ORDER_V2'
+ATTEMPT = 'ordered_followup_v2'
+FAILED_DONOR = 'b356267787a1ce543db6d327781008315608b12c'
+PIDFD_ERROR = 'Linux Python with pidfd required; no unsafe PID fallback'
 FILES = ('scripts/order_luka_fullstat_embedding_sweep.py',
          'scripts/queue_luka_fullstat_embedding_order.sh',
          'src/hlt_classification/operations/fullstat_embedding_order.py')
@@ -31,9 +35,9 @@ def digest(value):
         ensure_ascii=True, allow_nan=False).encode()).hexdigest()
 
 
-def artifact(kind, **fields):
-    value = dict(contract='LUKA_FULLSTAT_EMBEDDING_ORDER_'+kind+'/v1',
-                 schema_version=1, final_test_accessed=False, **fields)
+def artifact(kind, *, version=2, **fields):
+    value = dict(contract=f'LUKA_FULLSTAT_EMBEDDING_ORDER_{kind}/v{version}',
+                 schema_version=version, final_test_accessed=False, **fields)
     return dict(value, content_hash=digest(value))
 
 
@@ -151,15 +155,95 @@ def ordered_plan(original):
                     scientific_dependencies_unchanged=True, scheduling_dependency='afterany')
 
 
+def prior_failure(gate, process, original, armed):
+    """Only the known pre-signal v1 portability failure permits a fresh v2 claim."""
+    directory = Path(gate['root'])/'ordered_followup_v1'
+    if not directory.exists() and not directory.is_symlink():
+        return None
+    allowed = {'plan.json', 'authorization.json', 'failure.json', 'live_claim'}
+    if (directory.is_symlink() or not directory.is_dir()
+            or {p.name for p in directory.iterdir()} != allowed
+            or any(p.is_symlink() for p in directory.iterdir())
+            or not (directory/'live_claim').is_dir()
+            or any((directory/'live_claim').iterdir())):
+        raise PermissionError('Prior attempt is not the isolated pre-signal pidfd failure')
+    plan = read(directory/'plan.json')
+    if (plan.get('content_hash') != digest({k:v for k,v in plan.items() if k != 'content_hash'})
+            or plan.get('contract') != 'LUKA_FULLSTAT_EMBEDDING_ORDER_AUTHORIZATION_PLAN/v1'
+            or plan.get('schema_version') != 1 or plan.get('final_test_accessed') is not False
+            or plan.get('tool_source', {}).get('commit') != FAILED_DONOR
+            or plan.get('parents') != dict(gate=gate['content_hash'],
+                original_followup=original['content_hash'], original_armed=armed['content_hash'])
+            or plan.get('controller') != process or plan.get('preflight_job') != armed['preflight_job']
+            or plan.get('order') != list(ORDER)):
+        raise PermissionError('Prior failed authorization/process binding differs')
+    expected_intent = artifact('AUTHORIZATION', version=1,
+        parents=dict(plan=plan['content_hash']), controller=process)
+    expected_failure = artifact('FAILURE', version=1, parents=dict(plan=plan['content_hash']),
+        error_type='RuntimeError', error=PIDFD_ERROR, automatic_retry=False)
+    if (read(directory/'authorization.json') != expected_intent
+            or read(directory/'failure.json') != expected_failure):
+        raise PermissionError('Only the exact pre-signal missing-pidfd failure is recoverable')
+    return dict(directory=str(directory), plan=plan['content_hash'],
+                failure=expected_failure['content_hash'], authorization=expected_intent['content_hash'])
+
+
+def pidfd_api():
+    """Keep kernel PID-reuse protection even if Python was built without wrappers."""
+    if hasattr(os, 'pidfd_open') and hasattr(signal, 'pidfd_send_signal'):
+        return SimpleNamespace(name='python_pidfd', open=os.pidfd_open, send=signal.pidfd_send_signal)
+    # Oscar uses the native 64-bit x86 ABI. Never guess syscall numbers for
+    # other ABIs. Linux v5.14 arch/x86/entry/syscalls/syscall_64.tbl: 434/424.
+    import ctypes
+    if (sys.platform != 'linux' or platform.machine() != 'x86_64'
+            or ctypes.sizeof(ctypes.c_void_p) != 8 or ctypes.sizeof(ctypes.c_long) != 8):
+        raise RuntimeError('No native pidfd wrappers; syscall adapter requires Linux x86_64 LP64')
+    libc = ctypes.CDLL(None, use_errno=True)
+    syscall = libc.syscall
+    syscall.restype = ctypes.c_long
+
+    def call(number, *args):
+        result = syscall(ctypes.c_long(number), *args)
+        if result == -1:
+            error = ctypes.get_errno()
+            raise OSError(error, os.strerror(error))
+        return int(result)
+
+    def open_pid(pid):
+        return call(434, ctypes.c_int(pid), ctypes.c_uint(0))
+
+    def send(fd, sig):
+        call(424, ctypes.c_int(fd), ctypes.c_int(sig), ctypes.c_void_p(None), ctypes.c_uint(0))
+
+    return SimpleNamespace(name='linux_x86_64_syscall_pidfd', open=open_pid, send=send)
+
+
+def probe_pidfd():
+    """Read-only capability probe during dry review; signal 0 delivers no signal."""
+    import select
+    if not hasattr(select, 'poll'):
+        raise RuntimeError('Linux poll support required')
+    api = pidfd_api()
+    fd = api.open(os.getpid())
+    try:
+        api.send(fd, 0)
+    finally:
+        os.close(fd)
+    return api.name
+
+
 def review(gate, backend, tool_source, pid, host):
+    capability = probe_pidfd()  # fail before any permanent claim or retirement
     original, armed = old_binding(gate, backend)
     process = controller_identity(pid, host, gate)
     if process['argv'][10] != original['content_hash']:
         raise PermissionError('Stopped controller has a different authorization hash')
+    previous = prior_failure(gate, process, original, armed)
     ceiling = ordered_plan(original['science_ceiling_plan'])
     return artifact('AUTHORIZATION_PLAN', parents=dict(gate=gate['content_hash'],
         original_followup=original['content_hash'], original_armed=armed['content_hash']),
         tool_source=tool_source, controller=process, preflight_job=armed['preflight_job'],
+        pidfd_backend=capability, prior_failed_attempt=previous,
         science_ceiling_plan=ceiling, order=list(ORDER), jobs=8,
         max_train_minutes=2880, authorization=AUTHORIZATION,
         action='retire_stopped_submit_controller_then_wait_for_original_gate',
@@ -168,15 +252,14 @@ def review(gate, backend, tool_source, pid, host):
 
 def retire_controller(expected, gate):
     """pidfd prevents PID reuse; never signal Slurm or the shell parent."""
-    if not hasattr(os, 'pidfd_open') or not hasattr(signal, 'pidfd_send_signal'):
-        raise RuntimeError('Linux Python with pidfd required; no unsafe PID fallback')
-    fd = os.pidfd_open(expected['pid'])
+    api = pidfd_api()
+    fd = api.open(expected['pid'])
     try:
         if controller_identity(expected['pid'], expected['host'], gate) != expected:
             raise PermissionError('Controller identity changed; no signal sent')
-        signal.pidfd_send_signal(fd, signal.SIGTERM)
+        api.send(fd, signal.SIGTERM)
         try:
-            signal.pidfd_send_signal(fd, signal.SIGCONT)
+            api.send(fd, signal.SIGCONT)
         except ProcessLookupError:
             pass  # TERM already exited it; the pidfd is still the same process.
         # A stopped process first needs CONT to deliver its pending TERM.
@@ -193,7 +276,7 @@ def run(gate, backend, tool_source, *, pid, host, execute=False, plan_hash=None,
         authorization=None, recheck_source=None):
     b = backend
     root = Path(gate['root'])
-    directory = root/'ordered_followup_v1'
+    directory = root/ATTEMPT
     reviewed = review(gate, b, tool_source, pid, host)
     directory.mkdir(exist_ok=True)
     if not execute:
@@ -265,7 +348,7 @@ def run(gate, backend, tool_source, *, pid, host, execute=False, plan_hash=None,
         b.cache.write_immutable_json(directory/'failure.json', artifact('FAILURE',
             parents=dict(plan=reviewed['content_hash']), error_type=type(exc).__name__, error=str(exc),
             automatic_retry=False))
-        print('STOPPED: inspect ordered_followup_v1/failure.json and journals. '
+        print('STOPPED: inspect '+ATTEMPT+'/failure.json and journals. '
               'Do not rerun or resume the old controller.', flush=True)
         raise
 

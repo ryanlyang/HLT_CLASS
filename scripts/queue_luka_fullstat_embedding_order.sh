@@ -28,6 +28,6 @@ ARGS=(--commit "${COMMIT}" --gate "${ROOT}/gate_spec.json"
       --controller-pid "${CONTROLLER_PID}" --controller-host "${CONTROLLER_HOST}")
 if [[ $# -eq 7 ]]; then
     [[ "$6" == --execute && "$7" =~ ^[0-9a-f]{64}$ ]]
-    ARGS+=(--execute --plan-hash "$7" --authorization AUTHORIZE_FULLSTAT_EMBEDDING_ORDER_V1)
+    ARGS+=(--execute --plan-hash "$7" --authorization AUTHORIZE_FULLSTAT_EMBEDDING_ORDER_V2)
 fi
 exec python -u -B -s "${TOOL_PROJECT}/scripts/order_luka_fullstat_embedding_sweep.py" "${ARGS[@]}"
