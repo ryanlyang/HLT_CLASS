@@ -3,6 +3,13 @@
 Authority: [active plan](../plans/LUKA_D066_EMBEDDING_PLAN.md).
 Separate hashes/contracts prevent old OFFLINE targets being relabelled D066.
 
+Source integration note: allow the separate FullStat U100 package only at Git
+tree8aabd738dd9314e459223a09d04a64c9e31ad01d (commit7ea8b0c6). Against the
+original4a3124e9 source baseline, all source changes must be additions in that
+exact package or the enumerated D066 implementation. Existing shared source
+modifications/deletions and unregistered new paths still fail closed. This is
+an exact repository integration allowance, not a scientific/schema change.
+
 ## Explicit direct tier3 records (2026-10-21)
 
 Under the latest active-plan amendment, DIRECT_SPEC/RESOURCES/PLAN/SCIENCE/

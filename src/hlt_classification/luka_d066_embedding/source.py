@@ -21,17 +21,54 @@ REQUIRED = ADDITIONS | {'scripts/luka_d066_embedding.py', 'scripts/queue_luka_d0
     'docs/contracts/LUKA_D066_EMBEDDING.md', 'docs/LUKA_D066_EMBEDDING_RUNBOOK.md',
     'scripts/queue_luka_d066_embedding_direct.sh', 'tests/test_luka_d066_embedding_direct.py'}
 
+# Disjoint package added by parallel commit7ea8b0c6. Pin its complete Git tree
+# (paths, contents and modes), rather than accepting arbitrary future additions
+# under that prefix or moving the scientific baseline forward.
+PARALLEL_TREES = {
+    'src/hlt_classification/luka_fullstat_u100_embedding': '8aabd738dd9314e459223a09d04a64c9e31ad01d',
+}
+
+
+def _git(project, *args):
+    return subprocess.run(['git', '-C', str(project), *args], check=True,
+                          capture_output=True, text=True).stdout.splitlines()
+
+
+def validate_additive_tree(project, commit):
+    """Authenticate the committed tree; current() separately requires clean source."""
+    parallel = set()
+    invalid = []
+    for row in _git(project, 'diff', '--name-status', '--no-renames', BASE_COMMIT, commit, '--', 'src'):
+        fields = row.split('\t')
+        if len(fields) != 2 or fields[0] != 'A':
+            invalid.append(row)
+            continue
+        path = fields[1]
+        if path in ADDITIONS:
+            continue
+        prefix = next((p for p in PARALLEL_TREES if path.startswith(p+'/')), None)
+        if prefix is None:
+            invalid.append(row)
+        else:
+            parallel.add(prefix)
+    if invalid:
+        raise ValueError('Non-additive or unregistered source changes; preserve scientific runtime:\n'
+                         +'\n'.join(invalid))
+    for prefix in sorted(parallel):
+        expected = [f'040000 tree {PARALLEL_TREES[prefix]}\t{prefix}']
+        if _git(project, 'ls-tree', commit, '--', prefix) != expected:
+            raise ValueError('Parallel source package differs from its reviewed Git tree: '+prefix)
+
 
 def current(project, commit):
     project = Path(project).resolve()
     snapshot = _source(project, commit)
-    def git(*args):
-        return subprocess.run(['git', '-C', str(project), *args], check=True,
-                              capture_output=True, text=True).stdout.splitlines()
-    if (not REQUIRED <= set(git('ls-files'))
-            or Path(__file__).resolve() != project/'src/hlt_classification/luka_d066_embedding/source.py'
-            or not set(git('diff', '--name-only', BASE_COMMIT, '--', 'src')) <= ADDITIONS):
-        raise ValueError('Commit complete additive D066 implementation; preserve existing scientific runtime')
+    missing = REQUIRED-set(_git(project, 'ls-files'))
+    if missing:
+        raise ValueError('Commit required D066 files before queuing:\n'+'\n'.join(sorted(missing)))
+    if Path(__file__).resolve() != project/'src/hlt_classification/luka_d066_embedding/source.py':
+        raise ValueError('Imported D066 source is outside the pinned project')
+    validate_additive_tree(project, commit)
     return snapshot
 
 

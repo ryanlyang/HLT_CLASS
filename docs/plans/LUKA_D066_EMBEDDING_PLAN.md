@@ -1,5 +1,18 @@
 # Frozen LOGIT_D066 embedding prediction, weight 5, SPORC
 
+## Source integration correction (2026-10-21)
+
+The9a6163b7 registration failed because the original additive-source check also
+saw the disjoint `luka_fullstat_u100_embedding` package from7ea8b0c6. Permit
+only that complete package at its reviewed Git tree
+`8aabd738dd9314e459223a09d04a64c9e31ad01d`, in addition to the enumerated D066
+files. Keep the4a3124e9 scientific baseline: every source difference must still
+be an addition, never a modification/deletion of existing shared code. Reject
+new/changed/missing parallel files or mode changes via whole-tree identity.
+No scientific recipe, resource policy, preflight waiver or schema changes.
+Name missing required files/unregistered paths explicitly in errors. Requeue
+from a fresh pushed worktree; do not patch the old remote worktree or receipts.
+
 ## 2026-10-21 direct tier3 amendment (current user authorization)
 
 The user explicitly declines a new preflight. Add a separate DIRECT_SPEC/v1

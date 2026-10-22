@@ -41,6 +41,15 @@ git rev-parse HEAD
 
 ## Current request: direct tier3 run, no new preflight
 
+If registration at9a6163b7 stopped with the generic "Commit complete additive
+D066 implementation" error, the guard rejected the separate FullStat U100
+package. The source integration fix pins that package's exact reviewed tree;
+it does not disable source checks. The failure occurred before direct root
+publication or job submission. Commit/push the fix and use a fresh worktree
+with the new commit below. The old21944417 cancellation check already passed
+on this path: do NOT repeat cancellation. Nothing needs deleting/rebuilding,
+and the retry still has no new preflight.
+
 Use `queue_luka_d066_embedding_direct.sh`, NOT the older automatic preflight
 helper. It submits exactly one `lukad6e_direct` job. That allocation authenticates
 the frozen D066 teacher, exports its compact TRAIN targets, trains the fresh

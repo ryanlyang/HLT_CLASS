@@ -167,9 +167,79 @@ def test_additive_source_required_and_unchanged_donors(monkeypatch):
     monkeypatch.setattr(source,'_source',lambda *a:dict(content_hash='a'*64))
     def git(cmd,**kw):
         return SimpleNamespace(stdout='\n'.join(source.REQUIRED) if 'ls-files' in cmd else
-                               'src/hlt_classification/luka_embedding_aux/training.py\n')
+                               'M\tsrc/hlt_classification/luka_embedding_aux/training.py\n')
     monkeypatch.setattr(source.subprocess,'run',git)
     with pytest.raises(ValueError,match='additive'): source.current(project,'f'*40)
+
+
+def test_real_committed_repository_includes_exact_parallel_tree():
+    # The previous tests mocked git and missed the actual concurrent package.
+    # Read the real committed tree without requiring this user's dirty worktree
+    # to be clean and without changing or creating anything in its Git index.
+    project=Path(__file__).resolve().parents[1]
+    commit=source._git(project,'rev-parse','HEAD')[0]
+    source.validate_additive_tree(project,commit)
+    assert not source.REQUIRED-set(source._git(project,'ls-files'))
+    prefix='src/hlt_classification/luka_fullstat_u100_embedding'
+    assert source._git(project,'ls-tree','7ea8b0c693734a26ced3820354e047f4af26c979','--',prefix)==[
+        f'040000 tree {source.PARALLEL_TREES[prefix]}\t{prefix}']
+
+
+@pytest.fixture
+def additive_git_tree(tmp_path,monkeypatch):
+    root=tmp_path/'repo'; root.mkdir()
+    def git(*args): return source._git(root,*args)
+    git('init','-q'); git('config','user.name','Fixture'); git('config','user.email','fixture@example.invalid')
+    git('config','core.autocrlf','false')
+    shared='src/hlt_classification/shared.py'
+    owned='src/hlt_classification/luka_d066_embedding/source.py'
+    prefix='src/hlt_classification/parallel'
+    def write(path,text):
+        file=root/path; file.parent.mkdir(parents=True,exist_ok=True); file.write_text(text,encoding='utf-8')
+    def commit():
+        git('add','--all'); git('commit','-qm','fixture'); return git('rev-parse','HEAD')[0]
+    write(shared,'SCIENCE=1\n'); baseline=commit()
+    write(owned,'OWNED=1\n'); write(prefix+'/one.py','PARALLEL=1\n'); write(prefix+'/two.py','PARALLEL=2\n')
+    accepted=commit(); tree=git('rev-parse',accepted+':'+prefix)[0]
+    monkeypatch.setattr(source,'BASE_COMMIT',baseline)
+    monkeypatch.setattr(source,'ADDITIONS',{owned})
+    monkeypatch.setattr(source,'PARALLEL_TREES',{prefix:tree})
+    return SimpleNamespace(root=root,git=git,write=write,commit=commit,shared=shared,owned=owned,
+                           prefix=prefix,accepted=accepted)
+
+
+def test_real_git_additive_tree_accepts_only_pinned_parallel(additive_git_tree):
+    f=additive_git_tree; source.validate_additive_tree(f.root,f.accepted)
+    f.write(f.owned,'OWNED=2\n')
+    source.validate_additive_tree(f.root,f.commit())
+
+
+@pytest.mark.parametrize('case',['modify_shared','delete_shared','unknown_package','modify_parallel',
+    'extra_parallel_file','missing_parallel_file','parallel_file_mode'])
+def test_real_git_additive_tree_rejects_mutations(additive_git_tree,case):
+    f=additive_git_tree
+    if case=='modify_shared': f.write(f.shared,'SCIENCE=2\n')
+    elif case=='delete_shared': (f.root/f.shared).unlink()
+    elif case=='unknown_package': f.write('src/hlt_classification/unreviewed/a.py','NEW=1\n')
+    elif case=='modify_parallel': f.write(f.prefix+'/one.py','PARALLEL=3\n')
+    elif case=='extra_parallel_file': f.write(f.prefix+'/extra.py','EXTRA=1\n')
+    elif case=='missing_parallel_file': (f.root/f.prefix/'one.py').unlink()
+    else:
+        f.git('update-index','--chmod=+x',f.prefix+'/one.py')
+        f.git('commit','-qm','change mode')
+        with pytest.raises(ValueError,match='reviewed Git tree'):
+            source.validate_additive_tree(f.root,f.git('rev-parse','HEAD')[0])
+        return
+    with pytest.raises(ValueError,match='source changes|reviewed Git tree'):
+        source.validate_additive_tree(f.root,f.commit())
+
+
+def test_required_file_error_names_missing_path(monkeypatch):
+    project=Path(__file__).resolve().parents[1]
+    monkeypatch.setattr(source,'_source',lambda *a:dict(content_hash='a'*64))
+    missing='scripts/queue_luka_d066_embedding_direct.sh'
+    monkeypatch.setattr(source,'_git',lambda *a:sorted(source.REQUIRED-{missing}))
+    with pytest.raises(ValueError,match=missing): source.current(project,'f'*40)
 
 
 def test_exact_submission_and_ambiguous_retry(tmp_path,monkeypatch):
