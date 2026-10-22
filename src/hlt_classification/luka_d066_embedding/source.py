@@ -13,12 +13,13 @@ BASE_COMMIT = '4a3124e9a3b190754ab195ca7430c00ceebcea78'
 TEACHER_COMMIT = '94f560259dd04253c0aa47b31dec3aedc105ac14'
 REFERENCE_COMMIT = '855c4f8d40b4db7837238c7ac6a3799597466e85'
 MODULES = ('__init__', 'contracts', 'source', 'targets', 'training', 'worker',
-           'campaign', 'preflight', 'submission', 'followup', 'priority')
+           'campaign', 'preflight', 'submission', 'followup', 'priority', 'direct')
 ADDITIONS = {'src/hlt_classification/luka_d066_embedding/'+n+'.py' for n in MODULES}
 REQUIRED = ADDITIONS | {'scripts/luka_d066_embedding.py', 'scripts/queue_luka_d066_embedding.sh',
     'sbatch/run_luka_d066_embedding.sh', 'tests/test_luka_d066_embedding.py',
     'tests/test_luka_d066_embedding_priority.py', 'docs/plans/LUKA_D066_EMBEDDING_PLAN.md',
-    'docs/contracts/LUKA_D066_EMBEDDING.md', 'docs/LUKA_D066_EMBEDDING_RUNBOOK.md'}
+    'docs/contracts/LUKA_D066_EMBEDDING.md', 'docs/LUKA_D066_EMBEDDING_RUNBOOK.md',
+    'scripts/queue_luka_d066_embedding_direct.sh', 'tests/test_luka_d066_embedding_direct.py'}
 
 
 def current(project, commit):

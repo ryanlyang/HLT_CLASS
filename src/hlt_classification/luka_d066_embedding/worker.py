@@ -97,8 +97,9 @@ def validate_fit(directory, gate, bank_hash, *, technical):
     return report, a
 
 
-def snapshot_references(gate, val, meta):
-    folder = Path(gate['root'])/'preflight/references'; folder.mkdir(exist_ok=False)
+def snapshot_references(gate, val, meta, *, folder=None):
+    folder = Path(gate['root'])/'preflight/references' if folder is None else Path(folder)
+    folder.mkdir(exist_ok=False)
     ix = alljets_data.comparison_indices(meta[2], meta[3], val.identities, val.labels)
     atomic_publish_bytes(folder/'original50k.npz', deterministic_npz_bytes(dict(indices=ix)))
     refs = {n: gate['anchor']['evidence']['models'][n]['predictions'] for n in ('M0HLT','OFFLINE')}
@@ -113,9 +114,9 @@ def snapshot_references(gate, val, meta):
         validate_file_ref(ref)
 
 
-def comparison(gate, student):
+def comparison(gate, student, *, folder=None):
     from hlt_classification.jetclass2_delphes.reporting import recovery
-    folder = Path(gate['root'])/'preflight/references'
+    folder = Path(gate['root'])/'preflight/references' if folder is None else Path(folder)
     ix = load_npz_arrays(folder/'original50k.npz')['indices']
     if (ix.dtype != np.int64 or ix.shape != (gate['original50k_rows'],)
             or len(np.unique(ix)) != len(ix) or np.any(ix < 0) or np.any(ix >= len(student['labels']))):

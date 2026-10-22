@@ -1,4 +1,60 @@
-# Frozen LOGIT_D066 embedding prediction, weight 5, debug
+# Frozen LOGIT_D066 embedding prediction, weight 5, SPORC
+
+## 2026-10-21 direct tier3 amendment (current user authorization)
+
+The user explicitly declines a new preflight. Add a separate DIRECT_SPEC/v1
+execution, not a forged/passing PREFLIGHT or a mutation of the pending debug
+gate. One tier3 A100 job authenticates inputs, exports the frozen D066 TRAIN
+targets, and runs the unchanged fresh fixed30 fit. No stress suite, parity
+rerun, technical training epoch, second job or automatic controller. Previously
+accepted tier3 sweep evidence and the completed matched OFFLINE-target w5 are
+replayed in their original source, including exact successful accounting. Their
+resource envelope applies to the identical student architecture/batch/loss;
+the changed target is NOT represented as having passed a new D066 preflight.
+Native D066 checkpoint validation-prediction readback, TRAIN-only export and
+join checks remain ordinary required setup inside the scientific job. Fail on
+invalid inputs/nonfinite execution; never on poor scientific metrics.
+
+Request6CPUs/90000MiB/oneA100 and max(360, measured_w5_minutes+120) minutes,
+bounded by24h. This is an inherited estimate plus explicit setup allowance,
+not a new measured D066 runtime. Recheck the installed environment/GPU and
+the accepted sweep's resource evidence. Retain compact targets, native selected
+checkpoint, comparisons, receipts and phase logs; no new particle caches or
+automatic deletion. The pending original21944417 must be separately cancelled
+and verified at zero elapsed time before dry/live direct submission; this
+implementation never cancels jobs or changes existing debug holds.
+
+This amendment supersedes the mandatory *new* preflight language below only
+for DIRECT_SPEC/v1. The old GATE/SPEC route remains unchanged and cannot accept
+direct results as preflight evidence. The scientific recipe and all comparison
+rules remain v1-identical. Validate the direct route with focused tests and a
+local real-Weaver/CUDA full30 miniature before calling it queue-ready. No claim
+of a new real SPORC miniature is made; prior genuine evidence is explicitly reused.
+
+## 2026-10-21 execution-site amendment
+
+The user requests moving the still-pending debug preflight21944417 to tier3.
+Support explicit `sporc_a100` (tier3) as well as the original default
+`sporc_a100_debug`. Both the fresh preflight and its automatically submitted fit
+use the selected site's canonical record, bound into new gate/plan hashes.
+Scientific semantics, recipe hashes, A100/environment,6CPUs/90000MiB,8h gate,
+measured fixed30 fit and24h science ceiling are unchanged. Existing v1 debug
+records retain their exact meaning; do not edit them, their pinned source or
+the pending job's partition in place. This is an execution-site option, not a
+new scientific recipe or permission to reuse a debug resource receipt.
+
+Before starting the replacement, cancel only the verified pending21944417 and
+confirm CANCELLED with zero elapsed time. Its old controller then exits on
+failed accounting without submitting science. If it has started/completed,
+stop and inspect instead of cancelling useful work or creating a duplicate.
+Retain the old root and journals. Run a new real tier3 preflight in a new root
+and source worktree; the same already-trained LOGIT_D066 is reused read-only.
+Tier3 mode must not hold/release the five old debug sweep jobs. Queue helper
+defaults to no ordering; old optional debug ordering now requires explicit
+`ORDER_PENDING=1` and still rejects pre-existing holds. No unrelated jobs,
+datasets or Fresh_check paths are changed.
+
+## Original scientific registration
 
 Authorized by the user on 2026-10-21: one fresh HLT-only CE + embedding
 prediction fit at weight5, replacing the pure-OFFLINE target with the frozen

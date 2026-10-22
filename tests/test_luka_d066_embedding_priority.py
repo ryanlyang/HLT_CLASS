@@ -10,9 +10,10 @@ from hlt_classification.luka_d066_embedding import contracts as c, campaign, pre
 
 
 @pytest.fixture
-def controller(tmp_path,monkeypatch):
+def controller(tmp_path,monkeypatch,request):
     import hlt_classification.scouting.hcwdl_exact_dag_submission as exact
-    gate=fixture_gate(tmp_path); write_immutable_json(tmp_path/'gate_spec.json',gate)
+    gate=fixture_gate(tmp_path,site_name=getattr(request,'param','sporc_a100_debug'))
+    write_immutable_json(tmp_path/'gate_spec.json',gate)
     monkeypatch.setattr(campaign,'check_gate',lambda _:None)
     monkeypatch.setattr(s,'check_site',lambda _:None)
     monkeypatch.setattr(f,'controller_lock',lambda _:nullcontext())
@@ -43,7 +44,7 @@ def controller(tmp_path,monkeypatch):
                 write_immutable_json(tmp_path/'preflight/receipt.json',c.artifact('PREFLIGHT',
                     job_id=job,train_minutes=96,technical_checks_passed=True))
             return SimpleNamespace(stdout=f'{job}|lukad6e_{task}|owner|reu-aisocial|{state}|0:0\n')
-        assert args[0]=='sbatch' and '--partition=debug' in args
+        assert args[0]=='sbatch' and '--partition='+gate['execution_site']['partition'] in args
         calls.append(args)
         if len(calls)>1: assert control['science_validated']
         if len(calls)==control['fail_submit']: raise RuntimeError('lost sbatch response')
@@ -217,3 +218,45 @@ def test_real_linux_controller_lock_excludes_concurrent_recovery(tmp_path):
         with pytest.raises(BlockingIOError):
             with f.controller_lock(gate): pass
     with f.controller_lock(gate): pass
+
+
+@pytest.mark.parametrize('controller',['sporc_a100'],indirect=True)
+def test_tier3_gate_and_auto_fit_preserve_all_existing_holds(controller,capsys):
+    t=controller
+    for state in t.states.values(): state.update(Priority='0',Reason='JobHeldUser')
+    before=deepcopy(t.states)
+    result=execute(t,ordered=False)
+    assert result['preflight_job']=='12345' and result['fit_job']=='12346'
+    assert len(t.calls)==2 and all('--partition=tier3' in args for args in t.calls)
+    assert all('--gres=gpu:a100:1' in args and '--mem=90000M' in args for args in t.calls)
+    assert not t.holds and not t.releases and t.states==before
+    text=capsys.readouterr().out
+    assert 'ARMED: tier3 preflight' in text and 'existing manual holds are unchanged.' in text
+    assert 'keeping owned holds' not in text
+
+
+@pytest.mark.parametrize('controller',['sporc_a100'],indirect=True)
+def test_tier3_does_not_allow_debug_priority_mutations(controller):
+    t=controller
+    with pytest.raises(PermissionError,match='leave existing debug'):
+        f.run(t.gate,order_pending=True)
+    assert not t.holds and not t.releases and not t.calls
+
+
+@pytest.mark.parametrize('controller',['sporc_a100'],indirect=True)
+def test_tier3_failed_preflight_never_submits_fit(controller):
+    t=controller; t.control['gate_state']='TIMEOUT'
+    with pytest.raises(RuntimeError,match='TIMEOUT'): execute(t,ordered=False)
+    assert len(t.calls)==1 and not (t.root/'science').exists()
+    assert not t.holds and not t.releases
+
+
+@pytest.mark.parametrize('controller',['sporc_a100'],indirect=True)
+def test_tier3_forged_partition_after_review_rejected(controller):
+    from hlt_classification.jetclass2_delphes.execution import execution_site
+    from hlt_classification.data.cache_contracts import with_content_hash
+    t=controller; review=f.run(t.gate,order_pending=False)
+    t.gate=with_content_hash(dict(t.gate,execution_site=execution_site('sporc_a100_debug')))
+    with pytest.raises(PermissionError,match='reviewed followup'):
+        execute(t,ordered=False,review=review)
+    assert not t.calls and not t.holds

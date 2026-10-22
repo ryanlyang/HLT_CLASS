@@ -29,7 +29,7 @@ def threads():
     torch.set_num_threads(before)
 
 
-def fixture_gate(root, teacher=None, reference=None):
+def fixture_gate(root, teacher=None, reference=None, *, site_name='sporc_a100_debug'):
     anchor=old.artifact('ANCHOR',spec=dict(path='/parent/spec.json'),evidence=dict(
         prepared='a'*64,cache='b'*64,prepared_root='/prepared',raw_container='/raw',
         environment=dict(fixture=True),models={}))
@@ -42,12 +42,12 @@ def fixture_gate(root, teacher=None, reference=None):
     return c.artifact('GATE',parents=dict(source=snapshot['content_hash'],anchor=anchor['content_hash'],
         teacher=teacher['content_hash'],reference=reference['content_hash']),root=str(root),project_dir='/project',
         source_commit='f'*40,source_snapshot=snapshot,anchor=anchor,teacher=teacher,reference=reference,
-        available_quota_gib=2,**campaign.registration(dict(nodes=parent_nodes())))
+        available_quota_gib=2,**campaign.registration(dict(nodes=parent_nodes()),site_name))
 
 
 def small_counts(monkeypatch, rows=22):
     actual=campaign.registration
-    monkeypatch.setattr(campaign,'registration',lambda parent:{**actual(parent),
+    monkeypatch.setattr(campaign,'registration',lambda parent,site_name='sporc_a100_debug':{**actual(parent,site_name),
         'counts':dict(train=rows,validation=rows),'original50k_rows':rows})
 
 
@@ -190,7 +190,8 @@ def test_exact_submission_and_ambiguous_retry(tmp_path,monkeypatch):
     assert len(calls)==1
 
 
-def test_complete_real_cuda_preflight_and_science(tmp_path,monkeypatch,capsys):
+@pytest.mark.parametrize('site_name',campaign.SITES)
+def test_complete_real_cuda_preflight_and_science(tmp_path,monkeypatch,capsys,site_name):
     if not torch.cuda.is_available(): pytest.skip('Real CUDA required')
     # No architecture/model math substitutes: installed native ParT plus real
     # auxiliary head. Only population, OS sampler and remote scheduler/source are fixtures.
@@ -203,7 +204,7 @@ def test_complete_real_cuda_preflight_and_science(tmp_path,monkeypatch,capsys):
     ref=file_ref(tmp_path/'pred.npz'); record['files']['predictions']=ref
     record=with_content_hash(record)
     root=tmp_path/'run'; root.mkdir()
-    gate=fixture_gate(root,record,c.artifact('REFERENCE',files=dict(predictions=ref)))
+    gate=fixture_gate(root,record,c.artifact('REFERENCE',files=dict(predictions=ref)),site_name=site_name)
     gate['anchor']['evidence']['models']={n:dict(predictions=ref) for n in ('M0HLT','OFFLINE')}
     gate['anchor']=with_content_hash(gate['anchor'])
     gate['parents']['anchor']=gate['anchor']['content_hash']
@@ -337,3 +338,80 @@ def test_d066_resource_evidence_rejects_excesses():
         with pytest.raises(ValueError): preflight.admission(gate,bad)
     for key,value in [('peak_rss_bytes',90000*1024**2),('gpu_peak_bytes',40*2**30)]:
         with pytest.raises(ValueError): preflight.admission(gate,dict(measurement,**{key:value}))
+
+
+def test_tier3_registration_changes_only_hashed_execution_site():
+    parent=dict(nodes=parent_nodes())
+    legacy=campaign.registration(parent)
+    assert legacy==campaign.registration(parent,'sporc_a100_debug')
+    tier3=campaign.registration(parent,'sporc_a100')
+    assert {k:v for k,v in legacy.items() if k!='execution_site'}=={
+        k:v for k,v in tier3.items() if k!='execution_site'}
+    old_gate=fixture_gate(Path('/run'))
+    gate=fixture_gate(Path('/run'),site_name='sporc_a100')
+    assert gate['content_hash']!=old_gate['content_hash'] and gate['recipe']==old_gate['recipe']
+    campaign.validate_gate_record(old_gate); campaign.validate_gate_record(gate)
+    bad=deepcopy(gate); bad['execution_site']['partition']='debug'
+    bad['execution_site']=with_content_hash(bad['execution_site'])
+    with pytest.raises(ValueError,match='resources differ'):
+        campaign.validate_gate_record(with_content_hash(bad))
+    for site in ('oscar_l40s','tigris_gh200','debug,tier3','tier3',None):
+        with pytest.raises(ValueError,match='SPORC A100'):
+            campaign.registration(parent,site)
+
+
+def test_create_tier3_roundtrip_and_cli_option(tmp_path,monkeypatch):
+    import sys
+    gate=fixture_gate(tmp_path/'fixture')
+    parent=dict(nodes=parent_nodes(),project_dir='/parent-source',root='/parent/science')
+    monkeypatch.setattr(source,'current',lambda *a:gate['source_snapshot'])
+    monkeypatch.setattr(source,'authenticate',lambda *a:(gate['anchor'],parent))
+    monkeypatch.setattr(source,'teacher',lambda *a:gate['teacher'])
+    monkeypatch.setattr(source,'reference',lambda *a:gate['reference'])
+    root=tmp_path/'tier3'
+    value=campaign.create(root,'/parent/spec.json','/teacher/science/spec.json',
+        '/reference/science/spec.json','/project','f'*40,available_quota_gib=2,site_name='sporc_a100')
+    assert value['execution_site']['partition']=='tier3'
+    assert load_json(root/'gate_spec.json')==value
+    campaign.validate_gate_record(value)
+    command=submission.render(value)['commands'][0]['command']
+    assert '--partition=tier3' in command and '--time=08:00:00' in command
+    assert '--partition=debug' not in command
+    help_text=subprocess.run([sys.executable,'-B','scripts/luka_d066_embedding.py','create','--help'],
+        check=True,capture_output=True,text=True).stdout
+    assert '--site {sporc_a100_debug,sporc_a100}' in help_text
+
+
+def test_execution_still_rejects_live_partition_change(monkeypatch):
+    from hlt_classification.jetclass2_delphes import execution
+    for name,value in dict(SLURM_JOB_ID='21944417',SLURM_CPUS_PER_TASK='6',
+            SLURM_MEM_PER_NODE='90000',SLURM_CLUSTER_NAME='sporc').items():
+        monkeypatch.setenv(name,value)
+    fields='Account=reu-aisocial Partition=tier3 QOS=qos_tier3 NumNodes=1 NumTasks=1 NumCPUs=6'
+    monkeypatch.setattr(execution.subprocess,'run',lambda *a,**kw:SimpleNamespace(stdout=fields))
+    with pytest.raises(PermissionError,match='registered single-task'):
+        execution.allocation(execution.execution_site('sporc_a100_debug'))
+
+
+@pytest.mark.parametrize('change,value,ok',[
+    (None,None,True),(5,'CANCELLED by 2914834',True),(5,'COMPLETED',False),
+    (5,'PENDING',False),(5,'RUNNING',False),(6,'1',False),(0,'21940433',False),
+    (1,'lukad6e_fit',False),(2,'other',False),(3,'other',False),(4,'tier3',False),
+    (0,'',False),(0,'21944417\n21944417',False),(6,'0|extra',False),
+])
+def test_replacement_guard_requires_exact_never_started_cancelled_job(change,value,ok):
+    import os
+    import shutil
+    project=Path(__file__).resolve().parents[1]
+    bash=Path('C:/Program Files/Git/bin/bash.exe')
+    executable=str(bash) if bash.is_file() else shutil.which('bash')
+    if not executable: pytest.skip('Bash unavailable')
+    source_text=(project/'scripts/queue_luka_d066_embedding.sh').read_text()
+    block=source_text.split('# Explicit replacement guard:',1)[1].split('\n',1)[1]
+    block=block.split('# End replacement guard.',1)[0]
+    fields=['21944417','lukad6e_preflight','ryreu','reu-aisocial','debug','CANCELLED','0']
+    if change is not None: fields[change]=value
+    prefix='set -euo pipefail\nPARTITION=tier3\nREPLACES_PREFLIGHT_JOB=21944417\nsacct() { printf "%s\\n" "$MOCK_ACCOUNTING"; }\n'
+    result=subprocess.run([executable,'-c',prefix+block],capture_output=True,text=True,
+        env=dict(os.environ,MOCK_ACCOUNTING='|'.join(fields)))
+    assert (result.returncode==0)==ok,result.stderr

@@ -7,14 +7,22 @@ from .contracts import artifact, validate, recipe, node, COUNTS
 from . import source
 
 
-def registration(parent):
+SITES = ('sporc_a100_debug', 'sporc_a100')
+
+
+def registration(parent, site_name='sporc_a100_debug'):
+    if site_name not in SITES:
+        raise ValueError('D066 embedding requires SPORC A100 debug or tier3')
     return dict(counts=COUNTS, original50k_rows=50000, node=node(parent), recipe=recipe(),
-        execution_site=execution_site('sporc_a100_debug'), cpus=6, memory_mb=90000,
+        execution_site=execution_site(site_name), cpus=6, memory_mb=90000,
         gate_minutes=480, science_ceiling_minutes=1440, automatic_retry=False,
         automatic_followup=False, storage_budget_bytes=2*2**30)
 
 
-def create(root, parent_path, teacher_path, reference_path, project, commit, *, available_quota_gib):
+def create(root, parent_path, teacher_path, reference_path, project, commit, *, available_quota_gib,
+           site_name='sporc_a100_debug'):
+    if site_name not in SITES:
+        raise ValueError('D066 embedding requires SPORC A100 debug or tier3')
     root, project = Path(root).resolve(), Path(project).resolve()
     snapshot = source.current(project, commit)
     anchor, parent = source.authenticate(parent_path)
@@ -30,7 +38,8 @@ def create(root, parent_path, teacher_path, reference_path, project, commit, *, 
     gate = artifact('GATE', parents=dict(source=snapshot['content_hash'], anchor=anchor['content_hash'],
         teacher=teacher['content_hash'], reference=reference['content_hash']), root=str(root),
         project_dir=str(project), source_commit=commit, source_snapshot=snapshot, anchor=anchor,
-        teacher=teacher, reference=reference, available_quota_gib=available_quota_gib, **registration(parent))
+        teacher=teacher, reference=reference, available_quota_gib=available_quota_gib,
+        **registration(parent, site_name))
     root.mkdir(parents=True, exist_ok=False); write_immutable_json(root/'gate_spec.json', gate)
     return gate
 
@@ -42,7 +51,7 @@ def validate_gate_record(gate):
         raise ValueError('Storage allowance differs')
     parent = dict(nodes=[dict(gate['node'], node_id='M0HLT', branch='BASELINE')])
     parent['nodes'][0].pop('auxiliary_weight')
-    if any(gate.get(k) != v for k,v in registration(parent).items()):
+    if any(gate.get(k) != v for k,v in registration(parent, gate['execution_site']['name']).items()):
         raise ValueError('Registered scientific setup or resources differ')
 
 
@@ -54,7 +63,7 @@ def check_gate(gate):
     anchor, parent = source.authenticate(gate['anchor']['spec']['path'])
     if (anchor != gate['anchor'] or source.teacher(gate['teacher']['spec']['path'], anchor) != gate['teacher']
             or source.reference(gate['reference']['spec']['path'], anchor, node(parent)) != gate['reference']
-            or any(gate.get(k) != v for k,v in registration(parent).items())):
+            or any(gate.get(k) != v for k,v in registration(parent, gate['execution_site']['name']).items())):
         raise ValueError('Original-source input/reference lineage changed')
     return parent
 

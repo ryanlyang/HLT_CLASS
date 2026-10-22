@@ -39,6 +39,8 @@ def ceiling_spec(gate):
 
 
 def plan(gate, *, order_pending):
+    if order_pending and gate['execution_site']['name'] != 'sporc_a100_debug':
+        raise PermissionError('Tier3 continuation must leave existing debug sweep holds untouched')
     return artifact('FOLLOWUP_PLAN', parents=dict(gate=gate['content_hash']),
         gate_plan=submission.render(gate), science_ceiling_plan=submission.render(ceiling_spec(gate)),
         priority_plan=priority.plan(gate) if order_pending else None,
@@ -143,7 +145,8 @@ def run(gate, *, order_pending=False, execute=False, plan_hash=None, authorizati
             if existing is not None and job!=existing: raise ValueError('Gate job binding changed')
             write_immutable_json(folder/'armed.json',artifact('FOLLOWUP_ARMED',
                 parents=dict(authorization=intent['content_hash']),preflight_job=job))
-            print(f'ARMED: debug preflight {job}; one fresh D066-target weight-5 fit will submit '
+            partition=gate['execution_site']['partition']
+            print(f'ARMED: {partition} preflight {job}; one fresh D066-target weight-5 fit will submit '
                   'after verified success. Do not submit science manually.',flush=True)
             wait_job(gate,job,'preflight')
             no_science(gate)
@@ -156,7 +159,8 @@ def run(gate, *, order_pending=False, execute=False, plan_hash=None, authorizati
             fit=science_job(spec,exact,ledger)
             write_immutable_json(folder/'science_queued.json',artifact('SCIENCE_QUEUED',
                 parents=dict(authorization=intent['content_hash'],ledger=ledger['content_hash']),job_id=fit))
-            print('SCIENCE QUEUED: '+fit+'; keeping owned holds until this fit finishes.',flush=True)
+            suffix='keeping owned holds until this fit finishes.' if order_pending else 'existing manual holds are unchanged.'
+            print('SCIENCE QUEUED: '+fit+'; '+suffix,flush=True)
             wait_job(gate,fit,'fit')
             complete=artifact('FOLLOWUP_COMPLETE',parents=dict(authorization=intent['content_hash']),
                               preflight_job=job,fit_job=fit)
