@@ -208,6 +208,9 @@ def completed(spec, stage, *, accounting=True, seen=None):
     from .submission import accepted_jobs, successful
     if stage not in STAGES:
         raise ValueError('Unknown scientific stage')
+    if stage == 'DE066' and spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_RECOVERY_SPEC/v1':
+        from .recovery import completed_de066
+        return completed_de066(spec, accounting=accounting)
     seen = {} if seen is None else seen
     if stage in seen:
         return seen[stage]
@@ -274,8 +277,9 @@ def results(spec):
             pending.append(stage)
         else:
             root = Path(spec['root'])/('train_'+stage)
-            sources.append((stage, dict(report=file_ref(root/'training_report.json'),
-                predictions=file_ref(root/'validation_predictions.npz')), False))
+            refs = spec['external_refs'].get(stage) or dict(report=file_ref(root/'training_report.json'),
+                predictions=file_ref(root/'validation_predictions.npz'))
+            sources.append((stage, refs, False))
     for name, refs, historical in sources:
         report = load_json(validate_file_ref(refs['report']))
         a = load_npz_arrays(validate_file_ref(refs['predictions']))
@@ -305,6 +309,9 @@ def results(spec):
 
 def run(spec, task):
     from .submission import accepted_jobs
+    if task == 'recover_DE066' and spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_RECOVERY_SPEC/v1':
+        from .recovery import run_de066
+        return run_de066(spec)
     if task not in {t['task_id'] for t in spec['tasks']}:
         raise PermissionError('Only three registered scientific fits; no preflight or test operation')
     campaign.check(spec)

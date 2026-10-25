@@ -23,7 +23,8 @@ def validate_probabilities(p, rows):
 
 
 def manifest_ref(spec, teacher):
-    if teacher in ('OFFLINE', 'UE100'):
+    if teacher in ('OFFLINE', 'UE100') or (teacher == 'M0HLT' and
+            spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_RECOVERY_SPEC/v1'):
         return spec['imported_banks'][teacher]['kd']
     if teacher not in KD_EXPORTS:
         raise ValueError('Unregistered KD export')

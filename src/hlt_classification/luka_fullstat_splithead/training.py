@@ -135,7 +135,11 @@ def validate_report(report, spec, stage, bank_hash):
                 or x['weighted_ce_loss'] != .5*x['ce_loss']
                 or any(x['weighted_logit_losses'][t] != r['logit_weights'][t]*x['logit_losses'][t] for t in teachers(stage))
                 or any(x['weighted_embedding_losses'][t] != r['weights'][t]*x['embedding_losses'][t] for t in teachers(stage))
-                or x['total_loss'] != x['weighted_ce_loss']+sum(x['weighted_logit_losses'].values())+sum(x['weighted_embedding_losses'].values())):
+                # JSON publication sorts mapping keys. Reproduce the TRAIN
+                # accumulation order exactly, not the deserialized key order.
+                or x['total_loss'] != x['weighted_ce_loss']
+                   +sum(x['weighted_logit_losses'][t] for t in teachers(stage))
+                   +sum(x['weighted_embedding_losses'][t] for t in teachers(stage))):
             raise ValueError('Epoch loss/schedule/population evidence differs')
     best = max(history, key=lambda x: selection_key(x['validation'], x['update']))
     if report['selected_pass'] != best['pass_number'] or report['validation'] != best['validation']:

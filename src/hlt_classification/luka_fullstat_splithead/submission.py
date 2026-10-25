@@ -12,27 +12,31 @@ from . import campaign
 
 
 def render(spec):
+    recovering = spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_RECOVERY_SPEC/v1'
     root, site = Path(spec['root']), spec['execution_site']
     commands = []
     for task in spec['tasks']:
         name = task['task_id']
-        minutes = spec['task_minutes'][name.removeprefix('train_')]
+        minutes = spec['task_minutes'][name.removeprefix('train_').removeprefix('recover_')]
         if type(minutes) is not int or not 1 <= minutes <= 2880:
             raise ValueError('Invalid walltime request')
         args = ['sbatch','--parsable','--no-requeue','--kill-on-invalid-dep=yes',
             '--nodes=1','--ntasks=1','--export=NONE','--partition='+site['partition'],
             '--account='+site['account'],'--qos='+site['qos'],'--gres='+site['gres'],
             '--cpus-per-task='+str(spec['cpus']),'--mem='+str(spec['memory_mb'])+'M',
-            '--time='+_walltime(minutes),'--job-name=lukafss_'+name,
+            '--time='+_walltime(minutes),'--job-name='+('lukafssr_' if recovering else 'lukafss_')+name,
             '--comment=lukafss:'+spec['content_hash']+':'+name,
             '--chdir='+spec['project_dir'],'--output='+str(root/(name+'-%j.out'))]
         if task['dependencies']:
             args.append('--dependency=afterok:'+':'.join('${JOB_'+d+'}' for d in task['dependencies']))
-        args += [spec['project_dir']+'/sbatch/run_luka_fullstat_splithead.sh', spec['project_dir'],
+        wrapper = 'run_luka_fullstat_splithead_recovery.sh' if recovering else 'run_luka_fullstat_splithead.sh'
+        args += [spec['project_dir']+'/sbatch/'+wrapper, spec['project_dir'],
                  str(root/'campaign_spec.json'), name]
         commands.append(dict(task_id=name, dependencies=task['dependencies'], command=args))
-    return artifact('PLAN', parents=dict(spec=spec['content_hash']), commands=commands,
-        jobs=3, mode='science', setup_jobs=0, preflight_jobs=0, scientific_fits=3, authorization=AUTHORIZATION)
+    return artifact('RECOVERY_PLAN' if recovering else 'PLAN', parents=dict(spec=spec['content_hash']), commands=commands,
+        jobs=3, mode='recovery' if recovering else 'science', setup_jobs=0, preflight_jobs=0,
+        scientific_fits=2 if recovering else 3,
+        authorization='AUTHORIZE_FULLSTAT_SPLITHEAD_RECOVERY_V1' if recovering else AUTHORIZATION)
 
 
 def submit(spec, *, execute=False, plan_hash=None, authorization=None):
@@ -41,12 +45,15 @@ def submit(spec, *, execute=False, plan_hash=None, authorization=None):
     root = Path(spec['root'])/'submission'
     root.mkdir(exist_ok=True)
     saved, dry, live = root/'command_plan.json', root/'dry_run_submission_ledger.json', root/'submission_ledger.json'
-    if execute and (plan_hash != plan['content_hash'] or authorization != AUTHORIZATION
+    if execute and (plan_hash != plan['content_hash'] or authorization != plan['authorization']
                     or not saved.is_file() or load_json(saved) != plan or not dry.is_file()):
         raise PermissionError('Exact saved dry review and explicit three-job authorization required')
     write_immutable_json(saved, plan)
     check_site(plan)
     if execute:
+        if spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_RECOVERY_SPEC/v1':
+            from .recovery import claim
+            claim(spec, plan)
         (root/'live_claim').mkdir(exist_ok=False)
         write_immutable_json(root/'live_claim/intent.json', artifact('SUBMISSION_CLAIM',
             parents=dict(spec=spec['content_hash'], plan=plan['content_hash'])))
@@ -73,5 +80,6 @@ def successful(spec, task, job):
         check=True, capture_output=True, text=True)
     rows = [line.strip().split('|')[:6] for line in result.stdout.splitlines() if line.strip()]
     matches = [row for row in rows if row[0] == job]
-    if matches != [[job,'lukafss_'+task,getpass.getuser(),spec['execution_site']['account'],'COMPLETED','0:0']]:
+    prefix = 'lukafssr_' if spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_RECOVERY_SPEC/v1' else 'lukafss_'
+    if matches != [[job,prefix+task,getpass.getuser(),spec['execution_site']['account'],'COMPLETED','0:0']]:
         raise ValueError('Exact ancestor must be COMPLETED/0:0 with registered owner/account')

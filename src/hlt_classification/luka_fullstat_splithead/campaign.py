@@ -74,6 +74,9 @@ def create(root, previous_spec, project, commit, *, quota_gib):
 
 
 def check(spec):
+    if spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_RECOVERY_SPEC/v1':
+        from .recovery import check as check_recovery
+        return check_recovery(spec)
     validate(spec, 'SPEC', dict(source=spec['source_snapshot']['content_hash'], reuse=spec['reuse']['content_hash']))
     if source.current(spec['project_dir'], spec['source_commit']) != spec['source_snapshot']:
         raise ValueError('Execution source changed')
