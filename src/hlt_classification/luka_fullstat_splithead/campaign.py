@@ -53,8 +53,9 @@ def policy(reuse):
 
 
 def storage(spec):
-    if spec['available_result_bytes'] < 16*2**30 or shutil.disk_usage(spec['root']).free < 16*2**30:
-        raise OSError('Need 16 GiB personally available durable headroom; no deletion')
+    minimum = 2 if spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_FINALIZE_SPEC/v1' else 16
+    if spec['available_result_bytes'] < minimum*2**30 or shutil.disk_usage(spec['root']).free < minimum*2**30:
+        raise OSError(f'Need {minimum} GiB personally available durable headroom; no deletion')
 
 
 def create(root, previous_spec, project, commit, *, quota_gib):
@@ -74,6 +75,9 @@ def create(root, previous_spec, project, commit, *, quota_gib):
 
 
 def check(spec):
+    if spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_FINALIZE_SPEC/v1':
+        from .finalize import check as check_finalization
+        return check_finalization(spec)
     if spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_RECOVERY_SPEC/v1':
         from .recovery import check as check_recovery
         return check_recovery(spec)

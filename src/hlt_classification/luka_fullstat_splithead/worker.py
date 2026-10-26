@@ -208,6 +208,9 @@ def completed(spec, stage, *, accounting=True, seen=None):
     from .submission import accepted_jobs, successful
     if stage not in STAGES:
         raise ValueError('Unknown scientific stage')
+    if stage in ('DE066', 'DE033') and spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_FINALIZE_SPEC/v1':
+        from .finalize import completed as finalized
+        return finalized(spec, stage, accounting=accounting)
     if stage == 'DE066' and spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_RECOVERY_SPEC/v1':
         from .recovery import completed_de066
         return completed_de066(spec, accounting=accounting)
@@ -309,6 +312,9 @@ def results(spec):
 
 def run(spec, task):
     from .submission import accepted_jobs
+    if task == 'finalize_DE033' and spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_FINALIZE_SPEC/v1':
+        from .finalize import run as finalize_de033
+        return finalize_de033(spec)
     if task == 'recover_DE066' and spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_RECOVERY_SPEC/v1':
         from .recovery import run_de066
         return run_de066(spec)
