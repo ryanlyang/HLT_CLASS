@@ -13,7 +13,8 @@ from . import campaign
 
 def render(spec):
     recovering = spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_RECOVERY_SPEC/v1'
-    finalizing = spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_FINALIZE_SPEC/v1'
+    retry = spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_FINALIZE_RETRY_SPEC/v1'
+    finalizing = retry or spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_FINALIZE_SPEC/v1'
     root, site = Path(spec['root']), spec['execution_site']
     commands = []
     for task in spec['tasks']:
@@ -36,11 +37,12 @@ def render(spec):
         args += [spec['project_dir']+'/sbatch/'+wrapper, spec['project_dir'],
                  str(root/'campaign_spec.json'), name]
         commands.append(dict(task_id=name, dependencies=task['dependencies'], command=args))
-    return artifact('FINALIZE_PLAN' if finalizing else 'RECOVERY_PLAN' if recovering else 'PLAN',
+    return artifact('FINALIZE_RETRY_PLAN' if retry else 'FINALIZE_PLAN' if finalizing else 'RECOVERY_PLAN' if recovering else 'PLAN',
         parents=dict(spec=spec['content_hash']), commands=commands,
         jobs=2 if finalizing else 3, mode='finalization' if finalizing else 'recovery' if recovering else 'science',
         setup_jobs=0, preflight_jobs=0, scientific_fits=1 if finalizing else 2 if recovering else 3,
-        authorization='AUTHORIZE_FULLSTAT_SPLITHEAD_FINALIZE_V1' if finalizing else
+        authorization='AUTHORIZE_FULLSTAT_SPLITHEAD_FINALIZE_RETRY_V1' if retry else
+        'AUTHORIZE_FULLSTAT_SPLITHEAD_FINALIZE_V1' if finalizing else
         'AUTHORIZE_FULLSTAT_SPLITHEAD_RECOVERY_V1' if recovering else AUTHORIZATION)
 
 
@@ -56,7 +58,8 @@ def submit(spec, *, execute=False, plan_hash=None, authorization=None):
     write_immutable_json(saved, plan)
     check_site(plan)
     if execute:
-        if spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_FINALIZE_SPEC/v1':
+        if spec.get('contract') in ('LUKA_FULLSTAT_SPLITHEAD_FINALIZE_SPEC/v1',
+                'LUKA_FULLSTAT_SPLITHEAD_FINALIZE_RETRY_SPEC/v1'):
             from .finalize import claim
             claim(spec, plan)
         if spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_RECOVERY_SPEC/v1':
@@ -89,7 +92,8 @@ def successful(spec, task, job):
     rows = [line.strip().split('|')[:6] for line in result.stdout.splitlines() if line.strip()]
     matches = [row for row in rows if row[0] == job]
     prefix = 'lukafssr_' if spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_RECOVERY_SPEC/v1' else 'lukafss_'
-    if spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_FINALIZE_SPEC/v1':
+    if spec.get('contract') in ('LUKA_FULLSTAT_SPLITHEAD_FINALIZE_SPEC/v1',
+            'LUKA_FULLSTAT_SPLITHEAD_FINALIZE_RETRY_SPEC/v1'):
         prefix = 'lukafssf_'
     if matches != [[job,prefix+task,getpass.getuser(),spec['execution_site']['account'],'COMPLETED','0:0']]:
         raise ValueError('Exact ancestor must be COMPLETED/0:0 with registered owner/account')

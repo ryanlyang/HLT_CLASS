@@ -1,5 +1,81 @@
 # Finalize saved DE033, then train DE000
 
+## Current route: retry finalizer 7963448 after its runtime-path rejection
+
+The first finalizer at 420d22f8 failed before creating its attempt directory:
+the wrapper used the replacement, but the inherited allocator still demanded
+the old Conda prefix. This was an execution-integration bug, not another fit
+failure. The new scoped allocator retains all site/resource/GPU/fingerprint
+guards while requiring the registered replacement prefix for BOTH new jobs.
+See the [retry contract](contracts/LUKA_FULLSTAT_SPLITHEAD_FINALIZE_RETRY.md).
+
+Do not delete old claims, modify pinned 420d22f8 source, or use the historical
+initial-submission block below. The successor authenticates the failed plan,
+claim, exact jobs and prefix-error log; requires its DE000 to be cancelled
+without starting; and adds a separate single-use retry claim. No new preflight,
+no DE033 training/export, unchanged 20-epoch DE000 after successful finalization.
+
+Locally, stage only these files (unrelated relational-ladder work stays out):
+The two living handoff/donor documents also contain unrelated changes; leave
+them unstaged here, or stage only the retry entries separately with `git add -p`.
+
+```powershell
+& {
+    git diff --cached --quiet
+    if ($LASTEXITCODE -ne 0) { throw "Existing staged changes: inspect before proceeding" }
+    git add -- src/hlt_classification/luka_fullstat_splithead/campaign.py src/hlt_classification/luka_fullstat_splithead/worker.py src/hlt_classification/luka_fullstat_splithead/submission.py src/hlt_classification/luka_fullstat_splithead/kd_banks.py src/hlt_classification/luka_fullstat_splithead/finalize.py src/hlt_classification/luka_fullstat_splithead/finalize_source.py src/hlt_classification/luka_fullstat_splithead/finalize_execution.py src/hlt_classification/luka_fullstat_splithead/finalize_retry.py scripts/luka_fullstat_splithead_finalize.py scripts/queue_luka_fullstat_splithead_finalize_retry.sh tests/test_luka_fullstat_splithead_finalize_retry.py docs/contracts/LUKA_FULLSTAT_SPLITHEAD_FINALIZE_RETRY.md docs/LUKA_FULLSTAT_SPLITHEAD_FINALIZE_RUNBOOK.md
+    if ($LASTEXITCODE -ne 0) { throw "Staging failed" }
+    git diff --cached --stat
+    git commit -m "Bind finalizer and DE000 to verified runtime and preserve failed attempt"
+    if ($LASTEXITCODE -ne 0) { throw "Inspect commit status" }
+    git push origin HEAD:main
+    if ($LASTEXITCODE -ne 0) { throw "Push failed" }
+    git rev-parse HEAD
+}
+```
+
+On Oscar, stay connected until BOTH new job IDs print. If interrupted during
+live submission, inspect the journals before any retry. No old job is requeued
+or cancelled by this helper. Confirm personal home headroom with checkquota.
+
+```bash
+(
+set -euo pipefail
+read -r -p 'Pushed retry commit (40 characters): ' COMMIT </dev/tty
+[[ "${COMMIT}" =~ ^[0-9a-f]{40}$ ]]
+MAIN=/oscar/home/rlyang/hlt_classification/source/HLT_Classification
+PROJECT="${MAIN}_splithead_finalize_retry_${COMMIT:0:8}"
+ROOT="/oscar/home/rlyang/hlt_classification/checkpoints/luka_splithead_finalize_retry_${COMMIT:0:8}_r1"
+FAILED=/oscar/home/rlyang/hlt_classification/checkpoints/luka_splithead_finalize_420d22f8_r1/campaign_spec.json
+git -C "${MAIN}" fetch origin main
+git -C "${MAIN}" cat-file -e "${COMMIT}^{commit}"
+git -C "${MAIN}" merge-base --is-ancestor "${COMMIT}" origin/main
+if [[ -e "${PROJECT}" ]]; then
+    test "$(git -C "${PROJECT}" rev-parse HEAD)" = "${COMMIT}"
+    test -z "$(git -C "${PROJECT}" status --porcelain --untracked-files=all)"
+else
+    git -C "${MAIN}" worktree add --detach "${PROJECT}" "${COMMIT}"
+fi
+checkquota
+read -r -p 'Personally available home quota GiB (e.g. 4; minimum 2): ' QUOTA </dev/tty
+HELPER="${PROJECT}/scripts/queue_luka_fullstat_splithead_finalize_retry.sh"
+bash "${HELPER}" "${COMMIT}" "${ROOT}" "${FAILED}" "${QUOTA}"
+read -r -p 'Reviewed PLAN_HASH: ' PLAN_HASH </dev/tty
+[[ "${PLAN_HASH}" =~ ^[0-9a-f]{64}$ ]]
+read -r -p 'Authorize corrected finalization then DE000? Type YES: ' CONFIRM </dev/tty
+test "${CONFIRM}" = YES
+bash "${HELPER}" "${COMMIT}" "${ROOT}" "${FAILED}" "${QUOTA}" --execute "${PLAN_HASH}"
+printf '\nRetry root: %s\n' "${ROOT}"
+squeue --me -o '%.18i %.12P %.40j %.2t %.10M %R'
+)
+```
+
+Review two jobs, one scientific fit, zero preflight jobs. Expected names are
+lukafssf_finalize_DE033 and lukafssf_train_DE000, bound to the NEW spec/IDs.
+Saved results use the same finalization CLI and common helper shown below.
+
+## Historical first-attempt procedure (do not reuse for 7963448)
+
 Job7938792 finished its twenty epochs and both TRAIN exports. Its final
 authentication subprocess could not start in the damaged environment, so no
 TASK receipt was published. This is not a restart of its optimizer or epochs.

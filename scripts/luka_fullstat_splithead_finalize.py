@@ -5,17 +5,18 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'src'))
 from hlt_classification.data.cache_contracts import load_json
-from hlt_classification.luka_fullstat_splithead import finalize, submission, worker
+from hlt_classification.luka_fullstat_splithead import finalize, finalize_retry, submission, worker
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
-    p = sub.add_parser('create')
-    p.add_argument('--root', required=True)
-    p.add_argument('--previous-spec', required=True)
-    p.add_argument('--expected-commit', required=True)
-    p.add_argument('--result-quota-gib', required=True, type=int)
+    for command in ('create', 'create-retry'):
+        p = sub.add_parser(command)
+        p.add_argument('--root', required=True)
+        p.add_argument('--previous-spec', required=True)
+        p.add_argument('--expected-commit', required=True)
+        p.add_argument('--result-quota-gib', required=True, type=int)
     for command in ('submit', 'run', 'results'):
         p = sub.add_parser(command)
         p.add_argument('--spec', required=True)
@@ -26,15 +27,21 @@ def main():
         if command == 'run':
             p.add_argument('--task', required=True, choices=('finalize_DE033', 'train_DE000'))
     args = parser.parse_args()
-    if args.command == 'create':
-        s = finalize.create(args.root, args.previous_spec, Path(__file__).resolve().parents[1],
-            args.expected_commit, quota_gib=args.result_quota_gib)
+    if args.command in ('create', 'create-retry'):
+        previous = args.previous_spec
+        kwargs = {}
+        if args.command == 'create-retry':
+            # Full original-source/ledger/accounting authentication occurs in create.
+            previous = load_json(args.previous_spec)['finalization']['parent_spec']['path']
+            kwargs['failed_finalization'] = args.previous_spec
+        s = finalize.create(args.root, previous, Path(__file__).resolve().parents[1],
+            args.expected_commit, quota_gib=args.result_quota_gib, **kwargs)
         result = dict(spec=str(Path(s['root'])/'campaign_spec.json'), evidence=s['finalization']['evidence'],
             new_scientific_fits=1, reused_scientific_fits=2, preflight_jobs=0,
             runtime_prefix=s['runtime_prefix'], task_minutes=s['task_minutes'])
     else:
         s = load_json(args.spec)
-        if (s.get('contract') != finalize.CONTRACT
+        if (s.get('contract') not in (finalize.CONTRACT, finalize_retry.CONTRACT)
                 or Path(args.spec).resolve() != Path(s['root']).resolve()/'campaign_spec.json'):
             raise ValueError('Wrong finalization spec/locator')
         if args.command == 'submit':

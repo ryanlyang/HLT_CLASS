@@ -23,7 +23,8 @@ def validate_probabilities(p, rows):
 
 
 def manifest_ref(spec, teacher):
-    if spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_FINALIZE_SPEC/v1' and teacher in spec['imported_banks']:
+    if spec.get('contract') in ('LUKA_FULLSTAT_SPLITHEAD_FINALIZE_SPEC/v1',
+            'LUKA_FULLSTAT_SPLITHEAD_FINALIZE_RETRY_SPEC/v1') and teacher in spec['imported_banks']:
         return spec['imported_banks'][teacher]['kd']
     if teacher in ('OFFLINE', 'UE100') or (teacher == 'M0HLT' and
             spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_RECOVERY_SPEC/v1'):

@@ -107,7 +107,7 @@ def protected(root, old, project):
         raise PermissionError('Output overlaps replacement environment')
 
 
-def create(root, previous_spec, project, commit, *, quota_gib):
+def create(root, previous_spec, project, commit, *, quota_gib, failed_finalization=None):
     root, project = Path(root).resolve(), Path(project).resolve()
     snap = source.current(project, commit)
     old, jobs, de066 = source.original(previous_spec)
@@ -115,10 +115,20 @@ def create(root, previous_spec, project, commit, *, quota_gib):
     if type(quota_gib) is not int or quota_gib < MINIMUM_GIB:
         raise ValueError('Declare at least 2 GiB personal durable headroom for this one-fit closure')
     evidence = audit(old, jobs, de066)
-    spec = artifact('FINALIZE_SPEC', parents=dict(source=snap['content_hash'], original=old['content_hash'],
-        evidence=evidence['content_hash']), root=str(root), project_dir=str(project), source_commit=commit,
+    extra = {}; parent_hashes = dict(source=snap['content_hash'], original=old['content_hash'], evidence=evidence['content_hash'])
+    if failed_finalization is not None:
+        from . import finalize_retry as retry
+        failed = retry.audit(failed_finalization)
+        if (failed['original_spec'] != file_ref(Path(previous_spec))
+                or failed['original_evidence'] != evidence['content_hash']):
+            raise ValueError('Retry is not bound to the same original fit evidence')
+        retry.protected(root, failed)
+        extra['retry'] = failed
+        parent_hashes['retry'] = failed['content_hash']
+    spec = artifact('FINALIZE_RETRY_SPEC' if extra else 'FINALIZE_SPEC', parents=parent_hashes,
+        root=str(root), project_dir=str(project), source_commit=commit,
         source_snapshot=snap, reuse=old['reuse'], available_result_bytes=quota_gib*2**30,
-        finalization=dict(parent_spec=file_ref(Path(previous_spec)), evidence=evidence), **policy(old))
+        finalization=dict(parent_spec=file_ref(Path(previous_spec)), evidence=evidence), **extra, **policy(old))
     root.mkdir(parents=True, exist_ok=False)
     campaign.storage(spec)
     write_immutable_json(root/'campaign_spec.json', spec)
@@ -128,8 +138,20 @@ def create(root, previous_spec, project, commit, *, quota_gib):
 def check(spec):
     rec = spec['finalization']
     old, jobs, de066 = source.original(validate_file_ref(rec['parent_spec']))
-    validate(spec, 'FINALIZE_SPEC', dict(source=spec['source_snapshot']['content_hash'],
-        original=old['content_hash'], evidence=rec['evidence']['content_hash']))
+    from . import finalize_retry as retry
+    retrying = spec.get('contract') == retry.CONTRACT
+    parent_hashes = dict(source=spec['source_snapshot']['content_hash'],
+        original=old['content_hash'], evidence=rec['evidence']['content_hash'])
+    if retrying:
+        failed = retry.audit(validate_file_ref(spec['retry']['failed_spec']))
+        if (failed != spec['retry'] or failed['original_spec'] != rec['parent_spec']
+                or failed['original_evidence'] != rec['evidence']['content_hash']):
+            raise ValueError('Retry evidence or original fit changed')
+        retry.protected(spec['root'], failed)
+        parent_hashes['retry'] = failed['content_hash']
+    elif 'retry' in spec:
+        raise ValueError('Retry requires its own versioned contract')
+    validate(spec, 'FINALIZE_RETRY_SPEC' if retrying else 'FINALIZE_SPEC', parent_hashes)
     if (source.current(spec['project_dir'], spec['source_commit']) != spec['source_snapshot']
             or spec['reuse'] != old['reuse'] or audit(old, jobs, de066) != rec['evidence']
             or any(spec.get(k) != v for k, v in policy(old).items())
@@ -140,20 +162,30 @@ def check(spec):
     return old
 
 
-def claim(spec, plan):
+def claim_identity(spec, plan):
     old = load_json(validate_file_ref(spec['finalization']['parent_spec']))
     path = Path(old['root'])/'finalize_DE033_claim_v1'
+    kind = 'FINALIZE_CLAIM'
+    parent_hashes = dict(spec=spec['content_hash'], plan=plan['content_hash'], original=old['content_hash'])
+    from . import finalize_retry as retry
+    if spec.get('contract') == retry.CONTRACT:
+        previous = load_json(validate_file_ref(spec['retry']['failed_spec']))
+        path = Path(previous['root'])/'retry_after_7963448_v1'
+        kind = 'FINALIZE_RETRY_CLAIM'
+        parent_hashes['previous'] = previous['content_hash']
+    return path, kind, parent_hashes
+
+
+def claim(spec, plan):
+    path, kind, parent_hashes = claim_identity(spec, plan)
     path.mkdir(exist_ok=False)
-    write_immutable_json(path/'intent.json', artifact('FINALIZE_CLAIM',
-        parents=dict(spec=spec['content_hash'], plan=plan['content_hash'], original=old['content_hash']),
-        recovery_root=spec['root']))
+    write_immutable_json(path/'intent.json', artifact(kind, parents=parent_hashes, recovery_root=spec['root']))
 
 
 def verify_claim(spec):
-    old = load_json(validate_file_ref(spec['finalization']['parent_spec']))
-    record = load_json(Path(old['root'])/'finalize_DE033_claim_v1/intent.json')
-    validate(record, 'FINALIZE_CLAIM', dict(spec=spec['content_hash'],
-        plan=submission.render(spec)['content_hash'], original=old['content_hash']))
+    path, kind, parent_hashes = claim_identity(spec, submission.render(spec))
+    record = load_json(path/'intent.json')
+    validate(record, kind, parent_hashes)
     if record['recovery_root'] != spec['root']:
         raise ValueError('Wrong finalization claim')
 

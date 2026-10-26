@@ -15,12 +15,15 @@ RUNTIME = '/oscar/scratch/rlyang/hlt_classification/runtime_repair_v1/atlas_kd_o
 MODIFIED = {f'src/hlt_classification/luka_fullstat_splithead/{n}.py'
             for n in ('campaign', 'worker', 'submission', 'kd_banks')}
 ADDED = {f'src/hlt_classification/luka_fullstat_splithead/{n}.py'
-         for n in ('finalize', 'finalize_source')}
+         for n in ('finalize', 'finalize_source', 'finalize_execution', 'finalize_retry')}
 ADDED |= {'scripts/luka_fullstat_splithead_finalize.py',
           'scripts/queue_luka_fullstat_splithead_finalize.sh',
+          'scripts/queue_luka_fullstat_splithead_finalize_retry.sh',
           'sbatch/run_luka_fullstat_splithead_finalize.sh',
           'sbatch/luka_splithead_finalize_common.sh'}
 REQUIRED = MODIFIED | ADDED | {'tests/test_luka_fullstat_splithead_finalize.py',
+    'tests/test_luka_fullstat_splithead_finalize_retry.py',
+    'docs/contracts/LUKA_FULLSTAT_SPLITHEAD_FINALIZE_RETRY.md',
     'docs/contracts/LUKA_FULLSTAT_SPLITHEAD_FINALIZE.md',
     'docs/LUKA_FULLSTAT_SPLITHEAD_FINALIZE_RUNBOOK.md'}
 JOBS = dict(recover_DE066='7938791', train_DE033='7938792', train_DE000='7938793')

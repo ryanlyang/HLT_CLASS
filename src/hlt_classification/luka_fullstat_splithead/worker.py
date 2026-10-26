@@ -13,11 +13,18 @@ from hlt_classification.jetclass2_delphes.model import DelphesParticleTransforme
 from hlt_classification.jetclass2_delphes.runner import predict
 from hlt_classification.jetclass2_delphes.reporting import evaluate_probabilities, recovery
 from hlt_classification.luka_fullstat import cache
-from hlt_classification.luka_fullstat_attention.worker import execution, metadata, validation_arrays
+from hlt_classification.luka_fullstat_attention.worker import execution as original_execution, metadata, validation_arrays
 from hlt_classification.luka_fullsim.preflight_v2 import PhaseLog, memory_snapshot
 from . import campaign, banks, kd_banks, training
 from .contracts import (artifact, validate, recipe, STAGES, teachers, ancestors,
                         EMBEDDING_EXPORTS, KD_EXPORTS)
+
+
+def execution(gate, measured=None):
+    from .finalize_execution import CONTRACTS, execution as replacement_execution
+    if gate.get('contract') in CONTRACTS:
+        return replacement_execution(gate, measured)
+    return original_execution(gate, measured)
 
 
 def data(gate, role, coordinate, *, authenticated=None):
@@ -208,7 +215,8 @@ def completed(spec, stage, *, accounting=True, seen=None):
     from .submission import accepted_jobs, successful
     if stage not in STAGES:
         raise ValueError('Unknown scientific stage')
-    if stage in ('DE066', 'DE033') and spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_FINALIZE_SPEC/v1':
+    if stage in ('DE066', 'DE033') and spec.get('contract') in (
+            'LUKA_FULLSTAT_SPLITHEAD_FINALIZE_SPEC/v1', 'LUKA_FULLSTAT_SPLITHEAD_FINALIZE_RETRY_SPEC/v1'):
         from .finalize import completed as finalized
         return finalized(spec, stage, accounting=accounting)
     if stage == 'DE066' and spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_RECOVERY_SPEC/v1':
@@ -312,7 +320,8 @@ def results(spec):
 
 def run(spec, task):
     from .submission import accepted_jobs
-    if task == 'finalize_DE033' and spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_FINALIZE_SPEC/v1':
+    if task == 'finalize_DE033' and spec.get('contract') in (
+            'LUKA_FULLSTAT_SPLITHEAD_FINALIZE_SPEC/v1', 'LUKA_FULLSTAT_SPLITHEAD_FINALIZE_RETRY_SPEC/v1'):
         from .finalize import run as finalize_de033
         return finalize_de033(spec)
     if task == 'recover_DE066' and spec.get('contract') == 'LUKA_FULLSTAT_SPLITHEAD_RECOVERY_SPEC/v1':
