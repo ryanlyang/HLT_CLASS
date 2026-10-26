@@ -68,7 +68,8 @@ def output_names(task):
     if task == 'targets':
         return (['targets/references/'+n+'.npz' for n in (*REFERENCES, 'original50k')]
             + ['targets/banks/'+t+'/'+f for t in TEACHERS for f in ('manifest.json', 'targets.npz')]
-            + ['targets/bundle.json', 'targets/startup.json', 'targets/acquisition.json', 'targets/costs.json'])
+            + ['targets/bundle.json', 'targets/startup.json', 'targets/acquisition.json',
+               'targets/reference_readback.json', 'targets/costs.json'])
     if task not in WEIGHTS:
         raise ValueError('Unknown fit task')
     return [task+'/fit/'+f for f in FIT_FILES]+[task+'/costs.json']
@@ -145,6 +146,7 @@ def validate_task(spec, task, seen=None, *, retired=None):
         banks.validate_bundle(bundle, spec, payloads=retired is None)
         startup.check(load_json(root/'targets/startup.json'), spec, bundle['content_hash'])
         reference.check_acquisition(load_json(root/'targets/acquisition.json'), spec)
+        reference.check_readback(load_json(root/'targets/reference_readback.json'), spec, row['job_id'])
         originals = dict(comparison_refs(spec), original50k=spec['reuse']['subset'])
         saved = {ref['path']: ref for ref in row['outputs']}
         for name, ref in originals.items():
@@ -276,6 +278,9 @@ def run(spec, task, *, device='cuda'):
                     del model, tr; release()
         with log.phase('shared_references_and_disposable_safety_checks'):
             tr, val = (data(spec, role, 'D000', meta) for role in ('train', 'validation'))
+            print('Read back saved K5 checkpoint; no reference retraining or reselection.', flush=True)
+            readback = reference.readback(spec, val, job, device)
+            write_immutable_json(folder/'reference_readback.json', readback)
             bank = banks.Bundle(spec, tr)
             write_immutable_json(folder/'bundle.json', bank.manifest)
             snapshot_references(folder/'references', spec, val)

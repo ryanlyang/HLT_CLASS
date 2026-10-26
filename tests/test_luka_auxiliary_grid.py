@@ -63,8 +63,14 @@ def fixture(tmp_path, monkeypatch):
         spec['reuse']['references'][name] = file_ref(path)
     atomic_publish_bytes(references/'subset.npz', deterministic_npz_bytes(dict(indices=np.arange(len(val), dtype=np.int64))))
     spec['reuse']['subset'] = file_ref(references/'subset.npz')
+    reference_model = DelphesParticleTransformer()
+    with torch.no_grad():
+        for parameter in reference_model.mod.fc.parameters(): parameter.zero_()
+    save_state(references/'k5.pt', reference_model.state_dict())
     spec['reference'] = dict(content_hash='9'*64, spec=dict(path='/old/campaign_spec.json', sha256='8'*64),
-        predictions=spec['reuse']['references']['M0HLT'])
+        predictions=spec['reuse']['references']['M0HLT'],checkpoint=file_ref(references/'k5.pt'),
+        validation=worker.evaluate_probabilities(val.labels,uniform),
+        replay=dict(mode='completed',accounting=dict(k5=dict(state='COMPLETED',exit_code='0:0'))))
     spec = with_content_hash(spec); write_immutable_json(root/'campaign_spec.json', spec)
     jobs = {t['task_id']: str(101+i) for i, t in enumerate(c.tasks())}
     monkeypatch.setattr(campaign, 'check', lambda _: None)
@@ -468,6 +474,14 @@ def test_original_strong_replay_private_copy_or_registered_retirement(tmp_path,m
         with redirect_stdout(output): exec(program,{})
         return file_ref(path),json.loads(output.getvalue().split(marker)[1])
     monkeypatch.setattr(reference,'replay',replay)
+    real_run=subprocess.run
+    def accounting_run(args,**kwargs):
+        if args[0]=='sacct':
+            job=args[args.index('-j')+1]; task={'101':'targets','102':'k5'}[job]
+            import getpass
+            return SimpleNamespace(stdout=f'{job}|lukaas_{task}|{getpass.getuser()}|{prior["execution_site"]["account"]}|COMPLETED|0:0\n')
+        return real_run(args,**kwargs)
+    monkeypatch.setattr(subprocess,'run',accounting_run)
     spec['reference']=reference.import_reference(oldpath,spec['reuse']); spec=with_content_hash(spec)
     acquired=reference.acquire(spec); reference.check_acquisition(acquired,spec)
     assert acquired['source_retired']==retired

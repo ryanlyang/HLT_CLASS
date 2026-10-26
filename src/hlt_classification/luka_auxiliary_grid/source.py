@@ -12,10 +12,10 @@ from .contracts import artifact, validate, COUNTS, TEACHERS, REFERENCES
 
 BASE = '72490a9d6de4acabe9cbea518c5b100d893e6866'
 SOURCE_BASE = '0c4a71a55e8bc163ea3c4805b72f06d18e640cb5'
-MODULES = ('__init__', 'contracts', 'source', 'model', 'banks', 'training', 'campaign', 'submission', 'worker', 'startup', 'reference')
+MODULES = ('__init__', 'contracts', 'source', 'model', 'banks', 'training', 'campaign', 'submission', 'worker', 'startup', 'reference', 'reference_replay')
 REQUIRED = {'src/hlt_classification/luka_auxiliary_grid/'+n+'.py' for n in MODULES} | {
     'scripts/luka_auxiliary_grid.py', 'scripts/queue_luka_auxiliary_grid.sh', 'sbatch/run_luka_auxiliary_grid.sh',
-    'tests/test_luka_auxiliary_grid.py', 'docs/plans/LUKA_AUXILIARY_GRID_PLAN.md',
+    'tests/test_luka_auxiliary_grid.py', 'tests/test_luka_auxiliary_grid_recovery.py', 'docs/plans/LUKA_AUXILIARY_GRID_PLAN.md',
     'docs/contracts/LUKA_AUXILIARY_GRID.md', 'docs/LUKA_AUXILIARY_GRID_RUNBOOK.md'}
 
 

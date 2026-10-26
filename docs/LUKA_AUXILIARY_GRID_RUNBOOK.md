@@ -1,9 +1,36 @@
 # Twenty DE000 auxiliary-loss fits on debug
 
 Authority: [plan](plans/LUKA_AUXILIARY_GRID_PLAN.md) and
-[v1 contract](contracts/LUKA_AUXILIARY_GRID.md). This is a trial-size follow-up,
+[versioned contract](contracts/LUKA_AUXILIARY_GRID.md). This is a trial-size follow-up,
 not FullStat and not a new ladder. It uses the completed c50 teachers and a
 fresh HLT-only DE000 model for every row. Nothing is submitted by installation.
+
+## Recovery fix for the be6a6248 creation failure
+
+The old K5 job21962581 published its selected model, predictions and receipts
+before JSON key sorting changed floating-point loss summation order during
+post-fit validation. It remains FAILED/1:0; K10 remains failed and the old
+report remains cancelled. The user's read-only diagnostic confirmed K5's
+report validates with original teacher order and unchanged values/hashes.
+
+Use a NEW commit containing this repair and the normal helper below. Do not
+patch the old pinned worktree, edit old reports, rerun old fits, or reuse an
+old dry-plan hash. The importer now authenticates either a completed K5 or the
+exact registered failure, retaining its status in REFERENCE_REPLAY evidence.
+All receipts, hashes, population, metrics, schedule and loss checks still run.
+It refuses unrelated failures or incomplete artifacts.
+
+The existing shared targets job performs saved-K5 native checkpoint readback
+on the same validation rows, requiring byte-identical predictions and metrics,
+and records `targets/reference_readback.json`. Only its successful receipt and
+accounting release the twenty fits. No new training, separate preflight or
+extra job: still22 jobs. This does not recover/label K10 as completed.
+Intact old banks are still copied privately once, not recomputed or deleted.
+
+The failed create normally left no new campaign root. The helper deliberately
+refuses any existing new root; do not delete one to make a retry pass. Preserve
+the failed be6a6248 worktree and any evidence. Fresh_check and other jobs remain
+untouched. After pushing the repair, review a NEW V2 PLAN_HASH and authorize it.
 
 ## Registered experiment
 
@@ -63,7 +90,8 @@ The helper defaults to these exact trial campaigns:
   `luka_auxlogit_strong_234b029e_debug_r1/campaign_spec.json`.
 
 Both are under `/home/ryreu/atlas/HLT_Classification/checkpoints`.
-The latter must have an authenticated completed k5 fit, not just a log. Intact
+The latter must have an authenticated completed or explicitly recovered k5 fit,
+not just a log. Intact
 four-teacher banks are checksum-checked, copied into newly owned directories
 and semantically checked against TRAIN identities/labels. No hardlinks,
 symlinks, or edits to the original campaign. If its normal retirement is
@@ -84,7 +112,7 @@ Review only this implementation's files. Preserve unrelated staged/worktree
 changes; do not use `git add .`, force-push, reset, or clean. New required paths:
 
 ```powershell
-git add -- src/hlt_classification/luka_auxiliary_grid tests/test_luka_auxiliary_grid.py scripts/luka_auxiliary_grid.py scripts/queue_luka_auxiliary_grid.sh sbatch/run_luka_auxiliary_grid.sh docs/LUKA_AUXILIARY_GRID_RUNBOOK.md docs/contracts/LUKA_AUXILIARY_GRID.md docs/plans/LUKA_AUXILIARY_GRID_PLAN.md
+git add -- src/hlt_classification/luka_auxiliary_grid tests/test_luka_auxiliary_grid.py tests/test_luka_auxiliary_grid_recovery.py scripts/luka_auxiliary_grid.py scripts/queue_luka_auxiliary_grid.sh sbatch/run_luka_auxiliary_grid.sh docs/LUKA_AUXILIARY_GRID_RUNBOOK.md docs/contracts/LUKA_AUXILIARY_GRID.md docs/plans/LUKA_AUXILIARY_GRID_PLAN.md
 if ($LASTEXITCODE -ne 0) { throw "Staging failed" }
 git diff --cached --check
 if ($LASTEXITCODE -ne 0) { throw "Check staged whitespace" }
@@ -96,7 +124,7 @@ those shared files contain other work. After reviewing the complete staged
 diff, commit and push; stop on non-fast-forward, never force-push:
 
 ```powershell
-git commit -m "Add twenty matched DE000 KD embedding relational fits"
+git commit -m "Recover saved K5 reference for the twenty-fit debug grid"
 if ($LASTEXITCODE -ne 0) { throw "Commit failed; inspect status" }
 git push origin HEAD:main
 if ($LASTEXITCODE -ne 0) { throw "Push failed; do not force-push" }

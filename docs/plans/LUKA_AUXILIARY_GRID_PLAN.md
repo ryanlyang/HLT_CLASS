@@ -1,5 +1,47 @@
 # Trial DE000 auxiliary-KD x embedding x relation sweep, v1
 
+## 2026-10-26 operational recovery amendment
+
+User authorized repair after original K5 job21962581 failed post-publication.
+The saved30-epoch report passes the original validator when its per-teacher
+dictionary order is restored; canonical bytes, numerical values and hash are
+unchanged. K10 also failed, but is not an imported reference and is not recovered
+by this amendment. The cancelled old report is not restarted.
+
+This amendment supersedes the completed-K5-only prerequisite below, not any
+scientific rule. New SPEC/REFERENCE/TASK/PLAN/ACQUISITION artifacts are v2;
+scientific recipes remain byte-identical v1. New REFERENCE_REPLAY and
+REFERENCE_READBACK v1 evidence explicitly preserve original accounting.
+Authorization is AUTHORIZE_LUKA_AUXILIARY_GRID_TWENTY_DEBUG_V2.
+
+The original pinned strong source remains untouched. An isolated read-only
+adapter can accept only commit234b029ec14a8d4861134e098cafbf939d325cd8, accepted
+K5 job21962581 FAILED/1:0, with the precise post-publication traceback, confirmed
+JSON-order discrepancy, complete FIT/TASK receipts, payload hashes, costs,
+startup/bundle, exact predictions/population/metrics, and original successful
+targets ancestor. Restore dictionary order only in memory for the original
+report validator; no tolerance, loss value, selected epoch or hash changes.
+Unexplained failures, missing/corrupt files and wrong jobs fail closed.
+
+The shared targets job replays this evidence, privately copies intact banks,
+and restores the saved native K5 checkpoint on the identical ordinary validation
+population. Require byte-identical predictions and identical saved metrics.
+Publish REFERENCE_READBACK and the new successful targets receipt before any
+new fit is eligible. This is inference-only verification: no optimizer,
+retraining, checkpoint reselection, separate preflight or extra job. Retain the
+FAILED old status and bind it to the new verification job, never report it as
+COMPLETED. The original completed-reference/registered-retirement route remains
+supported, with the same checkpoint readback requirement. After new targets
+publication, retained new receipts suffice; old target banks need not survive.
+
+No old files, claims, source, jobs or accounting are edited. Queue in a new
+commit-named root after exact pushed-source/dry-plan authorization. The failed
+be6a6248 create stopped before root creation/submission; preserve any unexpected
+existing root rather than overwriting it. All22 jobs,20 fits, budgets, ranked
+waves and native-only inference remain unchanged.
+
+## Original scientific registration
+
 User approved the revised twenty-configuration grid on 2026-10-26. This replaces
 the earlier proposed fixed-KD/extreme-embedding grid; it does not extend it.
 Implement only; no commit, push, cancellation or submission is authorized here.

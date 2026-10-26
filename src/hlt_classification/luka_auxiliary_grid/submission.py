@@ -26,7 +26,8 @@ def render(spec):
         cmd += [spec['project_dir']+'/sbatch/run_luka_auxiliary_grid.sh',spec['project_dir'],str(root/'campaign_spec.json'),task]
         commands.append(dict(task_id=task,dependencies=row['dependencies'],command=cmd))
     return artifact('PLAN',parents=dict(spec=spec['content_hash']),commands=commands,jobs=22,scientific_fits=20,
-        target_export_jobs=1,report_jobs=1,preflight_jobs=0,authorization=AUTHORIZATION)
+        target_export_jobs=1,report_jobs=1,preflight_jobs=0,authorization=AUTHORIZATION,
+        reference_readback_in_targets=True,reference_retraining=False)
 
 
 def submit(spec,*,execute=False,plan_hash=None,authorization=None):

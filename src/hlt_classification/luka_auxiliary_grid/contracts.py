@@ -18,16 +18,19 @@ FIT_SUBMISSION_ORDER = tuple(ARMS)
 PROBES = ('k5_e10_plain', 'k5_e40_rel', 'k10_e20_rel')
 TEACHERS = ('OFFLINE','UE100','DE066','DE033')
 REFERENCES = ('M0HLT','OFFLINE','OFFLINE_EMBED_W5','U100_EMBED_W5','C50_DE000','K5_EMBED5')
-AUTHORIZATION = 'AUTHORIZE_LUKA_AUXILIARY_GRID_TWENTY_DEBUG_V1'
+AUTHORIZATION = 'AUTHORIZE_LUKA_AUXILIARY_GRID_TWENTY_DEBUG_V2'
+VERSIONS = {kind: 2 for kind in ('SPEC', 'REFERENCE', 'TASK', 'PLAN', 'ACQUISITION')}
 
 
 def artifact(kind, *, parents=None, **fields):
-    return with_content_hash(dict(contract=f'LUKA_AUXILIARY_GRID_{kind}/v1', schema_version=1,
+    version = VERSIONS.get(kind, 1)
+    return with_content_hash(dict(contract=f'LUKA_AUXILIARY_GRID_{kind}/v{version}', schema_version=version,
         parents=dict(parents or {}), **FLAGS, **fields))
 
 
 def validate(value, kind, parents=None):
-    digest=validate_content_hash(value,expected_contract=f'LUKA_AUXILIARY_GRID_{kind}/v1',expected_schema_version=1)
+    version = VERSIONS.get(kind, 1)
+    digest=validate_content_hash(value,expected_contract=f'LUKA_AUXILIARY_GRID_{kind}/v{version}',expected_schema_version=version)
     if any(value.get(k)!=v for k,v in FLAGS.items()):
         raise PermissionError('Exploratory trial scope differs')
     if parents is not None and value['parents']!=parents:

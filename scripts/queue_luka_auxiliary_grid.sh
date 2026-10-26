@@ -31,11 +31,11 @@ python -u -B -s "${CLI}" create --root "${ROOT}" --parent "${PARENT}" \
 python -u -B -s "${CLI}" submit --spec "${ROOT}/campaign_spec.json"
 read -r -p 'Paste the printed 64-character PLAN_HASH value: ' PLAN_HASH </dev/tty
 [[ "${PLAN_HASH}" =~ ^[0-9a-f]{64}$ ]]
-read -r -p 'Queue debug targets + TWENTY fresh DE000 fits in ranked pairs + report, no standalone preflight; retire own target payloads afterward? Type YES: ' CONFIRM </dev/tty
+read -r -p 'Queue debug K5 verification/targets + TWENTY fresh DE000 fits in ranked pairs + report, no standalone preflight; retire own targets afterward? Type YES: ' CONFIRM </dev/tty
 [[ "${CONFIRM}" == YES ]]
 LOG="$(mktemp "${ROOT}/submit.XXXXXX.log")"
 nohup python -u -B -s "${CLI}" submit --spec "${ROOT}/campaign_spec.json" \
-    --execute --plan-hash "${PLAN_HASH}" --authorization AUTHORIZE_LUKA_AUXILIARY_GRID_TWENTY_DEBUG_V1 \
+    --execute --plan-hash "${PLAN_HASH}" --authorization AUTHORIZE_LUKA_AUXILIARY_GRID_TWENTY_DEBUG_V2 \
     >"${LOG}" 2>&1 </dev/null &
 printf '\nSubmission PID: %s\nStudy: %s\nLog: %s\nWatch with:\ntail -f "%s"\n' "$!" "${ROOT}" "${LOG}" "${LOG}"
 printf 'Expect 22 lukaax_* jobs. Slurm afterok releases fits after target export/safety checks; no login controller.\n'
