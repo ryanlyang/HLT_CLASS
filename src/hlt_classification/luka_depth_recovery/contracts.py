@@ -3,7 +3,7 @@ from hlt_classification.data.cache_contracts import with_content_hash, validate_
 from hlt_classification.luka_fullsim.alljets_data import FLAGS
 from hlt_classification.luka_supervision_depth.contracts import ARMS, TEACHER_TASKS, recipe
 
-AUTHORIZATION = 'AUTHORIZE_DEPTH_PENDING_ONLY_TWO_LANES_DEBUG_V1'
+AUTHORIZATION = 'AUTHORIZE_DEPTH_REVIEWED_TWO_LANES_DEBUG_V2'
 # Round-robin submission gives CE diversity and its capacity control early places.
 # All previous same-lane jobs are included: premature cancellation of a dependent
 # job cannot accidentally open a third slot while an earlier job is still running.
@@ -18,12 +18,12 @@ ALL_FITS = set(ARMS) | set(TEACHER_TASKS)
 
 
 def artifact(kind, *, parents=None, **fields):
-    return with_content_hash(dict(contract=f'LUKA_DEPTH_RECOVERY_{kind}/v1',
-        schema_version=1, parents=dict(parents or {}), **FLAGS, **fields))
+    return with_content_hash(dict(contract=f'LUKA_DEPTH_RECOVERY_{kind}/v2',
+        schema_version=2, parents=dict(parents or {}), **FLAGS, **fields))
 
 
 def validate(value, kind, parents=None):
-    validate_content_hash(value, expected_contract=f'LUKA_DEPTH_RECOVERY_{kind}/v1', expected_schema_version=1)
+    validate_content_hash(value, expected_contract=f'LUKA_DEPTH_RECOVERY_{kind}/v2', expected_schema_version=2)
     if any(value.get(k) != v for k, v in FLAGS.items()):
         raise PermissionError('Exploratory scope changed')
     if parents is not None and value['parents'] != parents:
@@ -39,10 +39,13 @@ def scientific_dependencies(task):
     return ['targets', *sorted(extra)]
 
 
-def schedule(reused):
+def schedule(reused, restarted=()):
     if not {'targets', 'baseline'} <= set(reused) or not set(reused) <= ALL_FITS | {'targets'}:
         raise ValueError('Completed shared targets and baseline required; unknown reuse forbidden')
-    lanes = [[t for t in lane if t not in reused] for lane in LANES]
+    if not set(restarted) <= {'set8_p3'} or set(restarted) & set(reused):
+        raise ValueError('Only the explicitly archived set8_p3 may restart')
+    lanes = [[t for t in lane if t not in reused and t not in restarted]
+             + [t for t in lane if t in restarted] for lane in LANES]
     rows = []
     for i in range(max(map(len, lanes))):
         for lane, names in enumerate(lanes):

@@ -195,4 +195,5 @@ def results(spec):
             row[role+'_delta_baseline'] = row[role]['macro_ovr_auc'] - by['K1_E40_PLAIN'][role]['macro_ovr_auc']
     return artifact('RESULTS', parents=dict(recovery=spec['content_hash'], **{t:r['content_hash'] for t,r in seen.items()}),
         rows=rows, pending=pending, independent_test=False, original50k_selection=False,
-        shared_targets_retained=True, completed_original_fits_reused=list(spec['reused']))
+        shared_targets_retained=True, completed_original_fits_reused=list(spec['reused']),
+        interrupted_original_attempts=spec.get('restarted', {}))

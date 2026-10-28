@@ -12,7 +12,7 @@ import torch
 from hlt_classification.data.cache_contracts import load_json, write_immutable_json, atomic_publish_bytes, sha256_file
 from hlt_classification.cms_proxy_ladder.contracts import file_ref
 from hlt_classification.luka_supervision_depth import contracts as science, worker as old
-from hlt_classification.luka_depth_recovery import contracts as c, source, scheduler, campaign, submission, worker, scratch
+from hlt_classification.luka_depth_recovery import contracts as c, source, scheduler, campaign, submission, worker, scratch, interrupted
 from test_luka_supervision_depth import bare, science_fixture
 
 
@@ -258,3 +258,225 @@ def test_cli_inventory_bash_and_original_source_unchanged():
     changed = subprocess.run(['git','diff','--name-only',source.BASE,'--','src/hlt_classification/luka_supervision_depth'],
         check=True, capture_output=True, text=True).stdout
     assert changed == ''
+
+
+def interrupted_fixture(tmp_path, monkeypatch):
+    original, _ = pair(tmp_path, monkeypatch, reused=('targets', 'baseline'))
+    root = Path(original['root']); jobs = {r['task_id']:str(100+i) for i,r in enumerate(original['tasks'])}
+    states = {t:dict(job_id=j, state='CANCELLED', exit_code='0:0', elapsed=0, start='Unknown') for t,j in jobs.items()}
+    for task in ('targets', 'baseline'):
+        states[task].update(state='COMPLETED', elapsed=100, start='date')
+        (root/task).mkdir(); write_immutable_json(root/task/'receipt.json', dict(task=task))
+    states['set8_p3'].update(elapsed=3600, start='date')
+    partial = root/'set8_p3'; (partial/'fit').mkdir(parents=True)
+    (partial/'phases').mkdir(); write_immutable_json(partial/'phases/00-start.json', dict(phase=0))
+    atomic_publish_bytes(root/('set8_p3-'+jobs['set8_p3']+'.out'), b'epoch=16 auc=0.963\n')
+    snap = dict(content_hash='f'*64); ref = file_ref(root/'campaign_spec.json')
+    monkeypatch.setattr(source, 'current', lambda *a:snap)
+    monkeypatch.setattr(source, 'authenticate', lambda *a:(ref, original, jobs))
+    monkeypatch.setattr(scheduler, 'accounting', lambda *a:deepcopy(states))
+    monkeypatch.setattr(old, 'validate_task', lambda *a:None)
+    monkeypatch.setattr(old.submission, 'successful', lambda *a:None)
+    monkeypatch.setattr(old.submission, 'accepted_jobs', lambda *a:jobs)
+    monkeypatch.setattr(campaign, 'storage', lambda *a:None)
+    return original, jobs, states, tmp_path/'review.json'
+
+
+def make_restart(original, output, tmp_path):
+    return interrupted.plan(Path(original['root'])/'campaign_spec.json', tmp_path/'project', 'd'*40, output)
+
+
+def execute_restart(output, value, tmp_path):
+    return interrupted.execute(output, tmp_path/'project', value['content_hash'], interrupted.AUTHORIZATION)
+
+
+def test_interrupted_restart_preserves_bytes_and_full_twenty_fit_registration(tmp_path, monkeypatch):
+    original, jobs, states, output = interrupted_fixture(tmp_path, monkeypatch)
+    root = Path(original['root']); partial, archive, log = interrupted.paths(original, jobs)
+    before = {p:sha256_file(p) for p in root.rglob('*') if p.is_file()}
+    with pytest.raises(ValueError, match='reviewed restart-plan'): campaign.inventory(original, jobs)
+    value = make_restart(original, output, tmp_path)
+    assert partial.is_dir() and not archive.exists()  # dry only
+    assert all(sha256_file(p) == h for p,h in before.items())
+    result = execute_restart(output, value, tmp_path)
+    assert result['restart_epoch'] == 1 and result['epochs'] == 30
+    assert not partial.exists() and (archive/'output/fit').is_dir()
+    for p,h in before.items():
+        target = archive/'output'/p.relative_to(partial) if p.is_relative_to(partial) else p
+        assert sha256_file(target) == h
+    stopped, reused, restarted = campaign.inventory(original, jobs)
+    assert stopped == states and set(reused) == {'targets','baseline'} and set(restarted) == {'set8_p3'}
+    spec = campaign.create(tmp_path/'corrected', root/'campaign_spec.json', tmp_path/'project', 'd'*40, available_quota_gib=8)
+    assert campaign.check(spec) == original
+    plan = submission.render(spec)
+    assert plan['jobs'] == 22 and plan['scientific_fits'] == 19 and plan['teacher_fits'] == 2
+    assert plan['target_exports'] == plan['preflight_jobs'] == 0 and plan['restarted_tasks'] == ['set8_p3']
+    rows = spec['tasks']
+    assert [r['task_id'] for r in rows[:4]] == ['teacher_ce','duplicate_offline','ce_diverse','teacher_supcon']
+    lane = [r for r in rows if r['lane'] == 0]
+    assert lane[-1]['task_id'] == 'set8_p3'
+    assert set(lane[-1]['slot_dependencies']) == {r['task_id'] for r in lane[:-1]}
+    assert len({r['task_id'] for r in rows} & set(science.ARMS)) + 1 == 20
+    # A new attempt can now occupy its original scientific path; never changes archive.
+    partial.mkdir(); write_immutable_json(partial/'new-attempt.json', {})
+    assert campaign.check(spec) == original
+    with pytest.raises(FileExistsError): submission.submit(spec)
+    assert sha256_file(log) == before[log]
+
+
+@pytest.mark.parametrize('fault', ['hash','authorization','source','state','file','log','claim'])
+def test_restart_stale_or_unapproved_plan_never_moves(tmp_path, monkeypatch, fault):
+    original, jobs, states, output = interrupted_fixture(tmp_path, monkeypatch)
+    value = make_restart(original, output, tmp_path)
+    partial, folder, log = interrupted.paths(original, jobs)
+    digest, auth = value['content_hash'], interrupted.AUTHORIZATION
+    if fault == 'hash': digest = '0'*64
+    if fault == 'authorization': auth = 'yes'
+    if fault == 'source': monkeypatch.setattr(source, 'current', lambda *a:dict(content_hash='0'*64))
+    if fault == 'state': states['set8_p3']['state'] = 'RUNNING'
+    if fault == 'file': atomic_publish_bytes(partial/'changed.json', b'changed')
+    if fault == 'log': log.write_bytes(b'changed log')
+    if fault == 'claim': (Path(original['root'])/'parallel_recovery_claim').mkdir()
+    with pytest.raises((ValueError, PermissionError, FileExistsError)):
+        interrupted.execute(output, tmp_path/'project', digest, auth)
+    assert partial.exists() and not folder.exists()
+
+
+@pytest.mark.parametrize('fault', ['running_other','failed','unknown','zero','completed_fit','checkpoint','teacher','retired','hardlink'])
+def test_restart_scope_fail_closed(tmp_path, monkeypatch, fault):
+    original, jobs, states, output = interrupted_fixture(tmp_path, monkeypatch)
+    partial, folder, _ = interrupted.paths(original, jobs)
+    if fault == 'running_other': states['set48_p3']['state'] = 'RUNNING'
+    if fault == 'failed': states['set8_p3']['state'] = 'FAILED'
+    if fault == 'unknown': states['set8_p3']['state'] = 'UNKNOWN'
+    if fault == 'zero': states['set8_p3']['elapsed'] = 0
+    if fault == 'completed_fit': write_immutable_json(partial/'fit/receipt.json', {})
+    if fault == 'checkpoint': atomic_publish_bytes(partial/'fit/selected.pt', b'checkpoint')
+    if fault == 'teacher':
+        states['teacher_ce'].update(elapsed=3600, start='date')
+        states['set8_p3'].update(elapsed=0, start='Unknown')
+    if fault == 'retired': write_immutable_json(Path(original['root'])/'cleanup/intent.json', {})
+    if fault == 'hardlink':
+        import os
+        os.link(partial/'phases/00-start.json', partial/'hardlink.json')
+    with pytest.raises((ValueError, PermissionError)): make_restart(original, output, tmp_path)
+    assert partial.is_dir() and not folder.exists()
+
+
+def test_restart_symlink_and_path_escape_rejected(tmp_path, monkeypatch):
+    original, jobs, states, output = interrupted_fixture(tmp_path, monkeypatch)
+    partial, _, _ = interrupted.paths(original, jobs)
+    with pytest.raises(PermissionError):
+        make_restart(original, partial/'review.json', tmp_path)
+    with pytest.raises(PermissionError):
+        make_restart(original, tmp_path/'unused/../new/set8_p3/review.json', tmp_path)
+    try:
+        (partial/'link').symlink_to(tmp_path, target_is_directory=True)
+    except OSError:
+        pytest.skip('Windows symlink privilege unavailable')
+    with pytest.raises(PermissionError): make_restart(original, output, tmp_path)
+
+
+def test_restart_crash_preserves_intent_and_never_blindly_retries(tmp_path, monkeypatch):
+    original, jobs, _, output = interrupted_fixture(tmp_path, monkeypatch)
+    value = make_restart(original, output, tmp_path)
+    partial, folder, _ = interrupted.paths(original, jobs)
+    with monkeypatch.context() as m:
+        m.setattr(interrupted.os, 'rename', lambda *a:(_ for _ in ()).throw(OSError('injected rename failure')))
+        with pytest.raises(OSError): execute_restart(output, value, tmp_path)
+    assert partial.exists() and (folder/'intent.json').is_file() and not (folder/'receipt.json').exists()
+    with pytest.raises(FileExistsError): execute_restart(output, value, tmp_path)
+    with pytest.raises(FileNotFoundError): campaign.inventory(original, jobs)
+
+
+def test_restart_crash_after_move_keeps_archive_but_blocks_queue(tmp_path, monkeypatch):
+    original, jobs, _, output = interrupted_fixture(tmp_path, monkeypatch)
+    value = make_restart(original, output, tmp_path)
+    partial, folder, _ = interrupted.paths(original, jobs)
+    publish = interrupted.write_immutable_json
+    def crash_receipt(path, payload):
+        if Path(path).name == 'receipt.json':
+            raise OSError('injected receipt publication failure')
+        return publish(path, payload)
+    with monkeypatch.context() as m:
+        m.setattr(interrupted, 'write_immutable_json', crash_receipt)
+        with pytest.raises(OSError): execute_restart(output, value, tmp_path)
+    assert not partial.exists() and (folder/'output').is_dir()
+    assert interrupted.tree(folder/'output') == value['files']
+    assert (folder/'intent.json').is_file() and not (folder/'receipt.json').exists()
+    with pytest.raises(FileExistsError): execute_restart(output, value, tmp_path)
+    with pytest.raises(FileNotFoundError): campaign.inventory(original, jobs)
+
+
+@pytest.mark.parametrize('fault', ['archive','log','receipt','accounting'])
+def test_restart_evidence_tamper_blocks_reuse(tmp_path, monkeypatch, fault):
+    original, jobs, states, output = interrupted_fixture(tmp_path, monkeypatch)
+    value = make_restart(original, output, tmp_path); execute_restart(output, value, tmp_path)
+    partial, folder, log = interrupted.paths(original, jobs)
+    if fault == 'archive': atomic_publish_bytes(folder/'output/extra.json', b'extra')
+    if fault == 'log': log.write_bytes(b'different')
+    if fault == 'receipt':
+        row = load_json(folder/'receipt.json'); row['job_id'] = '999'
+        (folder/'receipt.json').write_text(__import__('json').dumps(row))
+    if fault == 'accounting': states['set8_p3']['elapsed'] += 1
+    with pytest.raises(ValueError): campaign.inventory(original, jobs)
+    assert not partial.exists()
+
+
+def test_new_contract_does_not_reinterpret_v1_or_skip_rows():
+    from hlt_classification.data.cache_contracts import with_content_hash
+    value = c.artifact('SPEC')
+    value.update(contract='LUKA_DEPTH_RECOVERY_SPEC/v1', schema_version=1)
+    with pytest.raises(ValueError): c.validate(with_content_hash(value), 'SPEC')
+    for restarted in (['baseline'], ['teacher_ce'], ['set8_p10']):
+        with pytest.raises(ValueError): c.schedule(['targets','baseline'], restarted)
+    with pytest.raises(ValueError): c.schedule(['targets','baseline','set8_p3'], ['set8_p3'])
+
+
+def test_interrupted_restart_production_worker_fixed30_native_readback(tmp_path, monkeypatch):
+    if not torch.cuda.is_available(): pytest.skip('CUDA unavailable')
+    original, _, _ = science_fixture(tmp_path, monkeypatch)
+    for task in ('targets', 'baseline'):
+        old.run(original, task, device='cuda')
+    # Actual startup/export followed by an interrupted fit with no checkpoint.
+    def cancel_fit(spec, task, *args):
+        (Path(spec['root'])/task/'fit').mkdir()
+        raise RuntimeError('simulated user cancellation before checkpoint publication')
+    with monkeypatch.context() as m:
+        m.setattr(old, 'fit', cancel_fit)
+        with pytest.raises(RuntimeError, match='simulated user cancellation'):
+            old.run(original, 'set8_p3', device='cuda')
+    root = Path(original['root']); jobs = old.submission.accepted_jobs(original)
+    states = {t:dict(job_id=j, state='CANCELLED', exit_code='0:0', elapsed=0, start='Unknown') for t,j in jobs.items()}
+    for task in ('targets','baseline'):
+        states[task].update(state='COMPLETED', elapsed=100, start='date')
+    states['set8_p3'].update(elapsed=3600, start='date')
+    log = root/('set8_p3-'+jobs['set8_p3']+'.out'); atomic_publish_bytes(log, b'interrupted original log\n')
+    ref = file_ref(root/'campaign_spec.json'); snap = dict(content_hash='f'*64)
+    monkeypatch.setattr(source, 'original', lambda *a:original)
+    monkeypatch.setattr(source, 'current', lambda *a:snap)
+    monkeypatch.setattr(source, 'authenticate', lambda *a:(ref, original, jobs))
+    monkeypatch.setattr(scheduler, 'accounting', lambda *a:deepcopy(states))
+    monkeypatch.setattr(campaign, 'storage', lambda *a:None)
+    protected = {p:sha256_file(p) for t in ('targets','baseline') for p in (root/t).rglob('*') if p.is_file()}
+    output = tmp_path/'review.json'; plan = make_restart(original, output, tmp_path)
+    execute_restart(output, plan, tmp_path)
+    _, folder, _ = interrupted.paths(original, jobs)
+    archived = {p:sha256_file(p) for p in folder.rglob('*') if p.is_file()}
+    spec = campaign.create(tmp_path/'corrected', ref['path'], tmp_path/'project', 'd'*40, available_quota_gib=8)
+    newjobs = {r['task_id']:str(800+i) for i,r in enumerate(spec['tasks'])}
+    monkeypatch.setattr(worker, 'execution', lambda s,o,t:newjobs[t])
+    monkeypatch.setattr(submission, 'accepted_jobs', lambda *a:newjobs)
+    monkeypatch.setattr(submission, 'successful', lambda *a:None)
+    monkeypatch.setattr(scratch, 'reserve', lambda *a:nullcontext())
+    worker.run(spec, 'set8_p3', device='cuda')
+    report, _ = old.validate_fit(original, 'set8_p3')
+    assert report['passes'] == 30 and report['node'] == original['nodes']['set8_p3']
+    assert len(report['validation_history']) == 30
+    assert all(sha256_file(p) == h for p,h in {**protected, **archived}.items())
+    assert not (root/'set8_p3/receipt.json').exists()
+    assert worker.receipt(spec, original, 'set8_p3')['job_id'] == newjobs['set8_p3']
+    result = worker.results(spec)
+    assert 'set8_p3' not in result['pending']
+    assert result['interrupted_original_attempts'] == spec['restarted']
+    assert not list((tmp_path/'scratch').iterdir())

@@ -34,7 +34,8 @@ def render(spec):
             str(Path(spec['root'])/'campaign_spec.json'), name]
         rows.append(dict(task_id=name, dependencies=task['dependencies'], command=cmd))
     return artifact('PLAN', parents=dict(spec=spec['content_hash']), commands=rows, jobs=len(rows),
-        reused_tasks=list(spec['reused']), max_gpu_jobs=2, preflight_jobs=0, target_exports=0,
+        reused_tasks=list(spec['reused']), restarted_tasks=list(spec.get('restarted', {})),
+        max_gpu_jobs=2, preflight_jobs=0, target_exports=0,
         scientific_fits=sum(r['task_id'] in original['recipes'] for r in rows),
         teacher_fits=sum(r['task_id'] in original['teacher_recipes'] for r in rows),
         authorization=AUTHORIZATION, payload_deletion=False)
@@ -46,7 +47,7 @@ def submit(spec, *, execute=False, plan_hash=None, authorization=None):
     saved, dry, live = (folder/n for n in ('command_plan.json', 'dry_run_submission_ledger.json', 'submission_ledger.json'))
     if execute and (plan_hash != plan['content_hash'] or authorization != AUTHORIZATION
             or not saved.is_file() or load_json(saved) != plan or not dry.is_file()):
-        raise PermissionError('Exact full dry review and pending-only authorization required')
+        raise PermissionError('Exact full dry review and recovery authorization required')
     # Fail before submitting anything if another writer/partial fit appeared.
     for task in spec['tasks']:
         name = task['task_id']

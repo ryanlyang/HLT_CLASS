@@ -10,7 +10,7 @@ from hlt_classification.provenance import validate_source_snapshot
 from hlt_classification.luka_supervision_depth import contracts as old
 
 BASE = '04d1f0f5945ab9af38d83e192eff48e124ad8dc5'
-MODULES = ('__init__', 'contracts', 'source', 'scheduler', 'campaign', 'submission', 'worker', 'scratch')
+MODULES = ('__init__', 'contracts', 'source', 'scheduler', 'campaign', 'submission', 'worker', 'scratch', 'interrupted')
 REQUIRED = {'src/hlt_classification/luka_depth_recovery/' + n + '.py' for n in MODULES} | {
     'scripts/luka_depth_recovery.py', 'scripts/queue_luka_depth_recovery.sh',
     'sbatch/run_luka_depth_recovery.sh', 'tests/test_luka_depth_recovery.py',
