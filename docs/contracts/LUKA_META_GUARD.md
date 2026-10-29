@@ -1,7 +1,7 @@
-# LUKA_META_GUARD v2
+# LUKA_META_GUARD v3
 
 Authority: [active scientific plan](../plans/LUKA_META_GUARD_PLAN.md).
-Artifacts use `LUKA_META_GUARD_<KIND>/v2`, schema 2, canonical content hashes,
+Artifacts use `LUKA_META_GUARD_<KIND>/v3`, schema 3, canonical content hashes,
 explicit parent hashes and the existing exploratory-scope flags.
 
 The immutable SPEC binds the exact new source, explicit `initializer_source`,
@@ -18,8 +18,18 @@ read-only and must remain available until both new fits complete.
 Mode-specific recipe hashes and separate mode-labelled roots prevent conflation.
 `PARENT_SHARED_W5` is not a completed FIXED continuation result. No automatic
 fallback, native-only initialization, calibration rerun, or checkpoint forgery.
-V1 artifacts retain their old meaning and must use their original pinned source;
-the v2 validator rejects them rather than silently migrating an existing spec.
+V1/v2 artifacts retain their old meaning and must use their original pinned
+source; the v3 validator rejects them rather than migrating an existing spec.
+
+V3 versions the repaired diagnostic acceptance policy, not a new training loss:
+`abs(adapted_query_ce - identity_query_ce) <= 1e-6` for FIXED, with zero relative
+tolerance. These are separate five-step GPU evaluations; bitwise loss equality
+is not required. FIXED residual RMS and maximum remain exactly zero. Both arms
+require finite nonnegative CE, finite bounded residuals, and exact recorded
+signed-delta arithmetic. Raw measurements are preserved without rewriting.
+META may have positive or negative query delta; this is not a performance gate.
+The RECIPE binds this policy, and submission authorization is
+`AUTHORIZE_LUKA_META_GUARD_DEBUG_V3`. Old roots/specs/receipts are never patched.
 
 The RECIPE freezes 20 half-pass blocks, loss and optimizer semantics, three-way
 TRAIN split, adapter events and guard thresholds. REPORT validation replays every

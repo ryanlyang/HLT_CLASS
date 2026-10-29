@@ -8,7 +8,7 @@ import torch
 from hlt_classification.jetclass2_delphes.runner import predict, selection_key
 from hlt_classification.jetclass2_delphes.reporting import evaluate_probabilities
 from hlt_classification.luka_meta_embedding import training as old, model as models, meta
-from .contracts import artifact, validate, recipe, ARMS, BLOCKS, SALT, events
+from .contracts import artifact, validate, recipe, ARMS, BLOCKS, SALT, events, FIXED_QUERY_CE_ATOL
 from .policy import Guard
 
 
@@ -72,6 +72,27 @@ def diagnostics(model, optimizer, adapter, supports, query, lr, seed):
     if any(not math.isfinite(v) for v in result.values()) or maximum > .10001:
         raise ValueError('Invalid bounded-adapter diagnostic')
     return result
+
+
+def validate_diagnostic(d, arm):
+    """Retain measured signed evidence; tolerate only FIXED query roundoff."""
+    fields = {'identity_query_ce','adapted_query_ce','query_ce_delta','residual_rms','residual_max'}
+    if arm not in ARMS or set(d) != fields:
+        raise ValueError('Invalid adapter diagnostic fields or arm')
+    if (any(not math.isfinite(v) for v in d.values())
+            or not 0 <= d['residual_rms'] <= d['residual_max'] <= .10001
+            or min(d['identity_query_ce'],d['adapted_query_ce']) < 0
+            or d['query_ce_delta'] != d['adapted_query_ce']-d['identity_query_ce']):
+        raise ValueError('Invalid signed adapter diagnostic')
+    if arm == 'fixed':
+        if d['residual_rms'] != 0 or d['residual_max'] != 0:
+            raise ValueError('FIXED adapter must leave targets exactly unchanged')
+        # Two independently evaluated five-step GPU paths need not be bitwise
+        # identical, even with identical targets and restored RNG state. This is
+        # an absolute-only consistency allowance, not a performance threshold.
+        if abs(d['query_ce_delta']) > FIXED_QUERY_CE_ATOL:
+            raise ValueError(f'FIXED query diagnostic differs by {d["query_ce_delta"]:.9g}; '
+                             f'absolute tolerance is {FIXED_QUERY_CE_ATOL:.9g}')
 
 
 def train(model, train_cache, val, bank, node, arm, device, *, initial,
@@ -218,12 +239,7 @@ def validate_report(report, spec, parents, arm, *, technical=False):
             if (any(not math.isfinite(m[k]) or m[k] < 0 for k in ('query_ce','teacher_kl','anchor','total','grad_norm'))
                     or not math.isclose(m['total'],m['query_ce']+.1*m['teacher_kl']+m['anchor'],rel_tol=2e-6,abs_tol=1e-7)):
                 raise ValueError('Invalid meta-update evidence')
-        d = r['diagnostic']
-        if (any(not math.isfinite(v) for v in d.values()) or not 0 <= d['residual_rms'] <= d['residual_max'] <= .10001
-                or min(d['identity_query_ce'],d['adapted_query_ce']) < 0
-                or d['query_ce_delta'] != d['adapted_query_ce']-d['identity_query_ce']
-                or arm == 'fixed' and (d['residual_max'] != 0 or d['query_ce_delta'] != 0)):
-            raise ValueError('Invalid signed adapter diagnostic')
+        validate_diagnostic(r['diagnostic'], arm)
         candidates.append(dict(block=block, validation=r['validation']))
     selected = candidates[0]; improvements = [0]
     for candidate in candidates[1:]:

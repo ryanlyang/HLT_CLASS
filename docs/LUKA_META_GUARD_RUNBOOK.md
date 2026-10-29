@@ -51,8 +51,26 @@ existing version-1 specs/worktrees remain unchanged.
 
 ## Commit and queue
 
+### Numerical diagnostic repair (v3)
+
+SPORC setup `21977273` at `691cccf3` completed its native/maximum-support checks
+and two disposable FIXED blocks, then rejected query CE differences
+`5.364418029785156e-7` and `5.960464477539063e-8` because v2 required exact zero.
+Its science fits `21977274`/`21977275` were cancelled before starting. These
+probe metrics are not completed science results.
+
+V3 admits at most `1e-6` absolute query-loss difference for FIXED, retains exact
+zero target residuals and signed-delta arithmetic, and preserves the raw values.
+Larger differences/nonfinite data still fail. Training and resource checks are
+unchanged. Commit/push the repair, use a new clean worktree and fresh root through
+the helper below with `shared_w5`. Keep the failed root and its evidence intact;
+do not edit its spec, resubmit its scripts or release its cancelled dependents.
+The existing authenticated parent bank/predictor are reused; shared inline
+checks must run again because the previous setup did not complete. There is
+still no standalone preflight, teacher retraining or target export.
+
 Commit this campaign's changed files plus the documentation updates, preserving
-unrelated work. Push the exact commit to `origin/main`. V2 permits changes only
+unrelated work. Push the exact commit to `origin/main`. V3 permits changes only
 to this guard's runtime relative to `b9cf63b0bf4a037e11ece91da21db465d2347b96`.
 That compatibility pin includes the separately committed FullStat fine-tuning
 namespace; older scientific runtime remains unchanged and is still authenticated
@@ -148,6 +166,19 @@ initialization is a scientific change: version the contract/plan and use a fresh
 root. Do not patch a running pinned campaign or borrow validation for meta updates.
 
 ## Validation status
+
+V3: **54 guard tests** pass across focused runs (52 CPU/contract cases plus two
+installed-Weaver 0.5.3 CUDA cases). Four regression cases first reproduced the
+old failure using the observed deltas and their negative counterparts. Coverage
+includes exact tolerance boundaries, larger-difference rejection, unchanged
+targets, nonfinite/corrupt diagnostics, signed META outcomes and old-version
+rejection. GPU verification (721.89 seconds) includes full-size native parity,
+hypergradients and paired diagnostics, then shared-w5 production setup and both
+20-block fits, checkpoint readback and authenticated reporting on synthetic data.
+The worker miniature uses reduced depth and mocked source/scheduler boundaries;
+it does not establish actual SPORC acceptance. The separate completed_fixed GPU
+worker variant was not rerun. Sixteen selected parent regressions, Bash syntax,
+CLI help and scoped whitespace checks pass. No remote job or artifact was changed.
 
 V2: all **25 guard tests** passed across focused runs, including a 23-test
 installed-Weaver CUDA run (789.50 seconds) and two subsequently added source/spec

@@ -46,6 +46,8 @@ def test_recipe_and_event_budget():
     assert sum(c.events('meta',b) for b in range(1,21))==475
     assert sum(c.events('fixed',b) for b in range(1,21))==0
     assert [c.events('meta',b) for b in range(17,21)]==[0]*4
+    assert r['diagnostic']==dict(fixed_query_ce_atol=1e-6,fixed_query_ce_rtol=0.,
+        fixed_target_residual='exact_zero',signed_delta='exact_adapted_minus_identity')
     for arm,b in [('bad',1),('fixed',0),('meta',21)]:
         with pytest.raises(ValueError): c.events(arm,b)
 
@@ -103,7 +105,8 @@ def test_actual_five_step_diagnostic_and_meta_update_do_not_change_real_state():
     query=dict(inputs=dict(features=torch.randn(64,3)),labels=torch.arange(64)%11)
     before=t.old.cpu_state(m.state_dict()); rng=torch.get_rng_state().clone()
     d=t.diagnostics(m,opt,adapter,supports,query,c.INITIAL_LR,3)
-    assert d['query_ce_delta']==0 and d['residual_max']==0
+    t.validate_diagnostic(d,'fixed')
+    assert abs(d['query_ce_delta'])<=c.FIXED_QUERY_CE_ATOL and d['residual_max']==0
     classifier=torch.nn.Linear(128,11)
     for p in classifier.parameters(): p.requires_grad_(False)
     rng=torch.get_rng_state().clone()
@@ -136,6 +139,92 @@ def fixture_spec(root,train_rows=3200,initializer_source='completed_fixed'):
     return c.artifact('SPEC',root=str(root),project_dir='/project',source_commit='f'*40,
         source_snapshot=dict(content_hash='c'*64),anchor=dict(evidence=dict(prepared='a'*64,environment={})),
         parent=parent,**dict(campaign.registration(parent),counts=dict(train=train_rows,validation=22),original50k_rows=22))
+
+
+def fixed_probe_report():
+    """Minimal valid two-block report, exercising the production report validator."""
+    spec=fixture_spec('/fixture',initializer_source='shared_w5'); parents=worker.fit_parents(spec)
+    def metrics(auc,rows):
+        return dict(macro_ovr_auc=auc,cross_entropy=1.,macro_mean_log_qcd_rejection_at_50pct_signal=None,rows=rows)
+    initial_guard=metrics(.7,80); initial_validation=metrics(.95,22)
+    guard=policy.Guard(.7); history=[]
+    for block in (1,2):
+        history.append(dict(block=block,rows=1520,batches=12,learning_rate=c.INITIAL_LR,
+            ce_loss=1.,embedding_loss=.1,total_loss=1.5,guard=metrics(.7,80),
+            decision=guard.observe(block,.7),validation=metrics(.5,22),meta_updates=[],
+            diagnostic=dict(identity_query_ce=1.,adapted_query_ce=1.,query_ce_delta=0.,residual_rms=0.,residual_max=0.),
+            adapter_seconds=1.,train_seconds=1.,guard_seconds=1.,validation_seconds=1.))
+    report=c.artifact('REPORT',parents=dict(parents,recipe=spec['recipe']['content_hash']),
+        arm='fixed',technical=True,counts=spec['counts'],node=spec['node'],
+        populations=dict(inner=3040,query=80,guard=80),initial_guard=initial_guard,
+        initial_validation=initial_validation,initialization_seconds=1.,history=history,
+        selected=dict(block=0,validation=initial_validation),
+        snapshots=[dict(path='snapshots/selected-000.pt',bytes=1,sha256='a'*64)],
+        optimizer_reset=True,all_native_trainable=True,selected_full_state=True)
+    return spec,parents,report
+
+
+@pytest.mark.parametrize('delta',[9*2**-24,2**-24,-9*2**-24,-2**-24])
+def test_fixed_report_accepts_observed_gpu_diagnostic_roundoff(delta):
+    spec,parents,report=fixed_probe_report()
+    t.validate_report(report,spec,parents,'fixed',technical=True)
+    for row in report['history']:
+        d=row['diagnostic']; d['adapted_query_ce']=d['identity_query_ce']+delta
+        d['query_ce_delta']=d['adapted_query_ce']-d['identity_query_ce']
+    report=with_content_hash(report)
+    before=deepcopy(report)
+    t.validate_report(report,spec,parents,'fixed',technical=True)
+    assert report==before  # Do not clamp/rewrite the measured signed evidence.
+
+
+@pytest.mark.parametrize('delta',[0.,1e-6,-1e-6])
+def test_fixed_diagnostic_absolute_tolerance_boundary(delta):
+    d=dict(identity_query_ce=max(0.,-delta),adapted_query_ce=max(0.,delta),
+        query_ce_delta=delta,residual_rms=0.,residual_max=0.)
+    t.validate_diagnostic(d,'fixed')
+
+
+@pytest.mark.parametrize('delta',[np.nextafter(1e-6,math.inf),-np.nextafter(1e-6,math.inf),1e-4,-1e-4])
+def test_fixed_report_rejects_larger_finite_differences(delta):
+    spec,parents,report=fixed_probe_report(); d=report['history'][0]['diagnostic']
+    d.update(identity_query_ce=max(0.,-delta),adapted_query_ce=max(0.,delta),query_ce_delta=float(delta))
+    with pytest.raises(ValueError,match='absolute tolerance'):
+        t.validate_report(with_content_hash(report),spec,parents,'fixed',technical=True)
+
+
+@pytest.mark.parametrize('field',['identity_query_ce','adapted_query_ce','query_ce_delta','residual_rms','residual_max'])
+@pytest.mark.parametrize('value',[float('nan'),float('inf'),-float('inf')])
+def test_diagnostic_rejects_nonfinite_values(field,value):
+    d=fixed_probe_report()[2]['history'][0]['diagnostic']; d[field]=value
+    for arm in c.ARMS:
+        with pytest.raises(ValueError,match='Invalid signed'): t.validate_diagnostic(d,arm)
+
+
+def test_fixed_identity_and_signed_arithmetic_remain_exact():
+    spec,parents,report=fixed_probe_report()
+    for mutation in (dict(residual_max=1e-12),dict(residual_rms=1e-12,residual_max=1e-12),
+                     dict(query_ce_delta=1e-12)):
+        bad=deepcopy(report); bad['history'][0]['diagnostic'].update(mutation)
+        with pytest.raises(ValueError):
+            t.validate_report(with_content_hash(bad),spec,parents,'fixed',technical=True)
+    # No relative tolerance, even if the two losses are large.
+    d=dict(identity_query_ce=1000.,adapted_query_ce=1000.001,
+        query_ce_delta=1000.001-1000.,residual_rms=0.,residual_max=0.)
+    with pytest.raises(ValueError,match='absolute tolerance'): t.validate_diagnostic(d,'fixed')
+    # Malformed fields and invalid bounded residual evidence still fail closed.
+    for mutation in (dict(residual_rms=-1e-12),dict(residual_rms=.02,residual_max=.01),
+                     dict(residual_max=.101),dict(identity_query_ce=-1.)):
+        d=deepcopy(report['history'][0]['diagnostic']); d.update(mutation)
+        with pytest.raises(ValueError): t.validate_diagnostic(d,'meta')
+    d=deepcopy(report['history'][0]['diagnostic']); del d['query_ce_delta']
+    with pytest.raises(ValueError,match='fields'): t.validate_diagnostic(d,'fixed')
+
+
+@pytest.mark.parametrize('delta',[-.01,0.,.01])
+def test_meta_diagnostic_can_improve_or_worsen_without_performance_gate(delta):
+    d=dict(identity_query_ce=1.,adapted_query_ce=1.+delta,
+        query_ce_delta=(1.+delta)-1.,residual_rms=.01,residual_max=.02)
+    before=deepcopy(d); t.validate_diagnostic(d,'meta'); assert d==before
 
 
 @pytest.mark.parametrize('arm',['fixed','meta'])
@@ -263,8 +352,10 @@ def test_shared_initializer_is_explicit_and_still_requires_completed_setup(tmp_p
     with pytest.raises(ValueError,match='setup receipt'): source.authenticate(path,'shared_w5')
     with pytest.raises(ValueError,match='no automatic fallback'): source.authenticate(path,'auto')
     assert c.recipe('shared_w5')['content_hash']!=c.recipe('completed_fixed')['content_hash']
-    assert c.recipe('shared_w5')['schema_version']==2
-    with pytest.raises(ValueError): c.validate(dict(c.recipe(),contract='LUKA_META_GUARD_RECIPE/v1'),'RECIPE')
+    assert c.recipe('shared_w5')['schema_version']==3
+    for version in (1,2):
+        old_recipe=with_content_hash(dict(c.recipe(),contract=f'LUKA_META_GUARD_RECIPE/v{version}',schema_version=version))
+        with pytest.raises(ValueError): c.validate(old_recipe,'RECIPE')
     spec=fixture_spec(tmp_path,initializer_source='shared_w5')
     assert spec['initializer_source']=='shared_w5' and spec['recipe']==c.recipe('shared_w5')
 
@@ -333,12 +424,12 @@ def test_shared_parent_authentication_binds_inventory_and_rejects_changes(tmp_pa
     with pytest.raises(ValueError): source.validate_parent(parent)
 
 
-def test_queue_helper_requires_explicit_mode_and_v2_authorization():
+def test_queue_helper_requires_explicit_mode_and_v3_authorization():
     root=Path(__file__).resolve().parents[1]
     script=(root/'scripts/queue_luka_meta_guard.sh').read_text()
     assert '--initializer-source "${INITIALIZER_SOURCE}"' in script
     assert '[[ "${INITIALIZER_SOURCE}" == completed_fixed ]]' in script
-    assert 'AUTHORIZE_LUKA_META_GUARD_DEBUG_V2' in script
+    assert 'AUTHORIZE_LUKA_META_GUARD_DEBUG_V3' in script
     assert '${COMMIT:0:8}_${INITIALIZER_SOURCE}_debug_r1' in script
     assert 'shared_w5|completed_fixed)' in script
 
@@ -465,6 +556,9 @@ def test_full_size_weaver_cuda_hypergradient_at_guarded_rate():
     loss=meta.virtual_query(student,optimizer,adapter,supports,dict(inputs=inputs,labels=labels),[c.INITIAL_LR]*5,seed=24)
     grads=torch.autograd.grad(loss,tuple(adapter.parameters()))
     assert all(torch.isfinite(g).all() for g in grads) and any(torch.count_nonzero(g) for g in grads)
+    diagnostic=t.diagnostics(student,optimizer,adapter,supports,dict(inputs=inputs,labels=labels),c.INITIAL_LR,24)
+    t.validate_diagnostic(diagnostic,'fixed')
+    assert diagnostic['residual_rms']==diagnostic['residual_max']==0
     for k,v in before.items(): torch.testing.assert_close(v,student.state_dict()[k].cpu(),rtol=0,atol=0)
     assert not optimizer.state and all(p.grad is None for p in student.parameters())
 

@@ -52,7 +52,7 @@ read -r -p 'Queue shared inline checks and BOTH guarded debug fits? Type YES: ' 
 [[ "${CONFIRM}" == YES ]]
 LOG="$(mktemp "${ROOT}/submit.XXXXXX.log")"
 nohup python -u -B -s "${PROJECT}/scripts/luka_meta_guard.py" submit --spec "${SPEC}" \
-    --execute --plan-hash "${PLAN_HASH}" --authorization AUTHORIZE_LUKA_META_GUARD_DEBUG_V2 \
+    --execute --plan-hash "${PLAN_HASH}" --authorization AUTHORIZE_LUKA_META_GUARD_DEBUG_V3 \
     >"${LOG}" 2>&1 </dev/null &
 printf '\nSubmission PID: %s\nStudy: %s\nWatch with:\ntail -f "%s"\n' "$!" "${ROOT}" "${LOG}"
 printf 'Wait for all three exact IDs in the completed submission ledger; then Slurm owns the jobs.\n'

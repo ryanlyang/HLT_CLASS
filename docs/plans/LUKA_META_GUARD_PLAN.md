@@ -1,4 +1,4 @@
-# Guarded meta-embedding continuation — active scientific plan v2
+# Guarded meta-embedding continuation — active scientific plan v3
 
 This is additive to LUKA_META_EMBEDDING, not a change to its running experiments.
 The question is whether bounded target adaptation helps when a strong HLT student
@@ -20,7 +20,7 @@ Both start from the **same explicitly selected, authenticated full student**:
 The mode is explicit in the CLI, immutable spec, recipe hash and results; no
 automatic fallback or partial-fit reuse is permitted. V1 required completed
 FIXED exclusively; that meaning is retained in its original pinned source.
-Both v2 modes use fresh AdamW optimizers, CE + 5 times mean SmoothL1, and the
+Both modes use fresh AdamW optimizers, CE + 5 times mean SmoothL1, and the
 original frozen OFFLINE model's TRAIN embeddings and normalization. No student
 logit KD. No new teacher training, target export, or predictor calibration.
 
@@ -73,6 +73,17 @@ automatic-resume interface. Deploy only native HLT weights.
 Log real loss, guard metrics, decisions, LR, adapter residuals, hypergradient
 norms, and matched five-step query CE with identity versus current adapter.
 Finite zero/negative improvement is a result; invalid/nonfinite evidence fails.
+
+V3 repairs numerical acceptance only; objectives, optimization, initialization,
+splits, selection and the guard policy are unchanged from v2. FIXED's two
+separately computed five-step query CE values may differ by at most `1e-6`
+absolute (zero relative tolerance). The recorded signed delta must still equal
+adapted minus identity exactly, and FIXED residual RMS and maximum must both be
+exactly zero. Keep the measured losses/delta, without rounding or clamping.
+Larger FIXED discrepancies, changed targets, nonfinite values or malformed
+diagnostics fail closed. META has no improvement-sign or near-zero-delta gate.
+The diagnostic policy is bound in the recipe hash; v1/v2 artifacts stay under
+their original source and cannot be silently reinterpreted with this validator.
 
 Debug: one shared setup/check job then two independent fits, no standalone
 preflight. Setup reuses the existing bank and performs native readback, installed

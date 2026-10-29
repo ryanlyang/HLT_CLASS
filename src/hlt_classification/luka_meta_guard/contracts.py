@@ -3,7 +3,7 @@ from hlt_classification.data.cache_contracts import with_content_hash, validate_
 from hlt_classification.luka_fullsim.alljets_data import FLAGS
 from hlt_classification.luka_embedding_aux.contracts import COUNTS
 
-AUTHORIZATION = 'AUTHORIZE_LUKA_META_GUARD_DEBUG_V2'
+AUTHORIZATION = 'AUTHORIZE_LUKA_META_GUARD_DEBUG_V3'
 INITIALIZERS = {
     'completed_fixed': 'completed_parent_FIXED_selected_full_student',
     'shared_w5': 'completed_parent_setup_calibrated_OFFLINE_w5_full_student',
@@ -17,15 +17,18 @@ INITIAL_LR = 5e-6
 TOLERANCE = 2e-4
 PATIENCE = 2
 MAX_ROLLBACKS = 3
+# Only the separately evaluated FIXED query losses receive a numerical tolerance.
+# Target identity and the arithmetic of the recorded signed delta remain exact.
+FIXED_QUERY_CE_ATOL = 1e-6
 
 
 def artifact(kind, *, parents=None, **fields):
-    return with_content_hash(dict(contract=f'LUKA_META_GUARD_{kind}/v2', schema_version=2,
+    return with_content_hash(dict(contract=f'LUKA_META_GUARD_{kind}/v3', schema_version=3,
         parents=dict(parents or {}), **FLAGS, **fields))
 
 
 def validate(value, kind, parents=None):
-    digest = validate_content_hash(value, expected_contract=f'LUKA_META_GUARD_{kind}/v2', expected_schema_version=2)
+    digest = validate_content_hash(value, expected_contract=f'LUKA_META_GUARD_{kind}/v3', expected_schema_version=3)
     if any(value.get(k) != v for k, v in FLAGS.items()):
         raise PermissionError('Exploratory scope differs')
     if parents is not None and value['parents'] != parents:
@@ -59,5 +62,7 @@ def recipe(initializer_source='completed_fixed'):
         meta_steps=5, support_batch=16, query_batch=64, virtual_lr='current_real_lr',
         teacher_preservation_kl_weight=.1, residual_anchor_weight=1.,
         real_precision='native_BF16_cuda_FP32_cpu', virtual_precision='FP32_math_SDPA_no_TF32',
+        diagnostic=dict(fixed_query_ce_atol=FIXED_QUERY_CE_ATOL, fixed_query_ce_rtol=0.,
+            fixed_target_residual='exact_zero', signed_delta='exact_adapted_minus_identity'),
         selection='initial_plus_post_guard_full_validation_AUC_CE_rejection_earliest',
         guard_not_independent_test=True, inference='native_HLT_only_no_auxiliary_heads')
