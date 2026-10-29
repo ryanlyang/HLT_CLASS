@@ -8,16 +8,18 @@ from . import source
 
 
 def registration(parent):
-    return dict(counts=COUNTS,original50k_rows=50000,node=parent['node'],recipe=recipe(),
+    mode=parent['initializer_source']
+    return dict(counts=COUNTS,original50k_rows=50000,node=parent['node'],recipe=recipe(mode),
+        initializer_source=mode,
         execution_site=execution_site('sporc_a100_debug'),cpus=6,memory_mb=90000,
         minutes=MINUTES,storage_budget_bytes=4*2**30,automatic_retry=False,
-        comparison='completed_FIXED_low_rate_guarded_fixed_vs_meta')
+        comparison=mode+'_low_rate_guarded_fixed_vs_meta')
 
 
-def create(root, parent_path, project, commit, quota_gib):
+def create(root, parent_path, project, commit, quota_gib, *, initializer_source='completed_fixed'):
     root, project = Path(root).absolute(), Path(project).resolve()
     if root.resolve()!=root or root.is_symlink(): raise PermissionError('No redirected campaign root')
-    snapshot = source.current(project,commit); parent = source.authenticate(parent_path)
+    snapshot = source.current(project,commit); parent = source.authenticate(parent_path,initializer_source)
     if parent['counts'] != COUNTS: raise ValueError('Original fixed30 populations required')
     if type(quota_gib) is not int or quota_gib < 4: raise ValueError('Reserve at least four personally available GiB')
     old = load_json(parent['spec']['path'])
@@ -46,6 +48,6 @@ def check(spec):
     validate_spec(spec)
     if (load_json(Path(spec['root'])/'campaign_spec.json')!=spec
             or source.current(spec['project_dir'],spec['source_commit'])!=spec['source_snapshot']
-            or source.authenticate(spec['parent']['spec']['path'])!=spec['parent']):
+            or source.authenticate(spec['parent']['spec']['path'],spec['initializer_source'])!=spec['parent']):
         raise ValueError('Pinned source/spec/original evidence changed')
     return spec

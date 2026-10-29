@@ -6,7 +6,7 @@ Scientific authority: [plan](plans/LUKA_META_GUARD_PLAN.md) and
 
 ## What runs
 
-`lukamg_setup` authenticates the completed original FIXED selected full student,
+`lukamg_setup` authenticates the explicitly chosen full student initializer,
 borrows the existing TRAIN target bank read-only, and checks native parity,
 resource limits and real five-step meta gradients. It runs disposable two-block
 timing probes for both arms. It does **not** rerun teacher training, target export,
@@ -14,7 +14,7 @@ or predictor calibration. There is no separate preflight job, but inline
 technical acceptance is mandatory.
 
 `lukamg_fixed` and `lukamg_meta` depend on successful setup and can run concurrently.
-Both start at the same selected FIXED encoder/classifier/**trained predictor**,
+Both start at the same authenticated encoder/classifier/**trained predictor**,
 use fresh AdamW, CE+5×embedding, LR 5e-6 and 20 half-pass blocks (ten extra passes).
 Both use the same TRAIN guard. META additionally trains the bounded target
 adapter with the student held stationary between real blocks. The original
@@ -25,25 +25,38 @@ rollbacks with LR halving. Adapter progress survives. Reporting validation is
 used only for final checkpoint selection; block zero is eligible. This guard is
 not an independent test and was historically seen by the original initializer.
 
-## Prerequisite
+## Starting point after cancelling the old jobs
 
-The original campaign must have completed its FIXED job and published:
+Use **`shared_w5`**. The old setup saved a full initializer before FIXED/META
+started, so their cancellation does not require rerunning them. Both new arms
+start from the original OFFLINE-w5 model plus its already calibrated predictor,
+not from an unfinished continuation epoch. These setup artifacts must survive:
 
 ```text
-/home/ryreu/atlas/HLT_Classification/checkpoints/luka_meta_embedding_7a6dc268_debug_r1/fixed/receipt.json
-/home/ryreu/atlas/HLT_Classification/checkpoints/luka_meta_embedding_7a6dc268_debug_r1/fixed/fit/training_state.pt
+/home/ryreu/atlas/HLT_Classification/checkpoints/luka_meta_embedding_7a6dc268_debug_r1/setup/receipt.json
+/home/ryreu/atlas/HLT_Classification/checkpoints/luka_meta_embedding_7a6dc268_debug_r1/initial/student.pt
 ```
 
-Its META job need not finish. Do not cancel original FIXED to obtain an
-intermediate checkpoint: the old implementation publishes its selected full
-state at completion. Receipt, state, native predictions, scheduler completion,
-source and bank hashes are checked; path existence is only a preliminary check.
+The setup's bank, classifier, initializer manifest, references and historical
+native w5 checkpoint must also remain intact. Original-source replay validates
+the completed setup and all its outputs; path existence alone is insufficient.
+Neither original fit must finish. Nothing in the cancelled fits is reused,
+modified or deleted. Their logged improvements cannot be reconstructed from logs.
+
+The alternative **`completed_fixed`** mode still requires completed original
+FIXED `fixed/receipt.json` and `fixed/fit/training_state.pt` and native readback.
+Do not choose it for a cancelled run. No automatic fallback is made between modes.
+This explicit initialization choice is a version-2 scientific registration;
+existing version-1 specs/worktrees remain unchanged.
 
 ## Commit and queue
 
-Commit this campaign's new files plus the documentation updates, preserving
-unrelated work. Push the exact commit to `origin/main`. New source is additive
-relative to `c10d2205677bae4769d45da447c338165bc6724f`; existing runtime is not edited.
+Commit this campaign's changed files plus the documentation updates, preserving
+unrelated work. Push the exact commit to `origin/main`. V2 permits changes only
+to this guard's runtime relative to `b9cf63b0bf4a037e11ece91da21db465d2347b96`.
+That compatibility pin includes the separately committed FullStat fine-tuning
+namespace; older scientific runtime remains unchanged and is still authenticated
+in its original pinned source. Do not include unrelated runtime edits in the fix.
 Use a clean detached worktree on SPORC:
 
 ```bash
@@ -61,7 +74,7 @@ if [[ -e "${PROJECT}" ]]; then
 else
     git -C "${MAIN}" worktree add --detach "${PROJECT}" "${COMMIT}"
 fi
-bash "${PROJECT}/scripts/queue_luka_meta_guard.sh"
+bash "${PROJECT}/scripts/queue_luka_meta_guard.sh" shared_w5
 BASH
 ```
 
@@ -71,6 +84,11 @@ creates an immutable spec, prints a dry plan, asks for its literal hash and `YES
 then backgrounds submission with `nohup`. Wait for all three IDs in the final
 ledger before logging off. A submission PID alone is not scheduler acceptance.
 No manual second submission. Do not blindly retry a partially claimed root.
+The new root includes the new commit and initializer mode:
+`luka_meta_guard_<commit8>_shared_w5_debug_r1`. Do not patch the old `a65caa7`
+worktree or edit a saved spec. The reported failed launcher stopped before
+creating a guarded campaign root or submitting any jobs, so it needs no cleanup.
+Calling the helper without its mode argument prompts for an explicit choice.
 
 ## Progress and results
 
@@ -105,8 +123,10 @@ BASH
 ```
 
 `ROOT` is the printed new study directory; `PROJECT` is its clean pinned worktree.
-Results compare original M0HLT/OFFLINE, original OFFLINE-w5, completed parent FIXED,
-and new arms. Recovery always uses historical M0HLT/OFFLINE anchors. Report
+Results compare original M0HLT/OFFLINE, original OFFLINE-w5, the chosen initializer
+(`PARENT_SHARED_W5` or `PARENT_FIXED`), and new arms. `PARENT_SHARED_W5` has the
+same native predictions as original w5; calibration changed only its predictor.
+Recovery always uses historical M0HLT/OFFLINE anchors. Report
 META−FIXED for the adaptation effect, not improvement over the older w5 alone.
 
 ## Code map and reuse
@@ -129,7 +149,18 @@ root. Do not patch a running pinned campaign or borrow validation for meta updat
 
 ## Validation status
 
-Local evidence: 16 new tests plus 20 existing meta-embedding regression tests
+V2: all **25 guard tests** passed across focused runs, including a 23-test
+installed-Weaver CUDA run (789.50 seconds) and two subsequently added source/spec
+tests. Both initializer formats complete shared setup and both 20-block fits;
+the CPU check covers 22 cases. Sixteen selected original meta-embedding regressions
+also pass (four heavier original cases deselected). Cancellation-reuse tests cover explicit mode binding,
+setup-only original-source authentication, no reads of cancelled fit artifacts,
+preservation of calibrated predictor parameters, native-only/nonfinite rejection,
+changed-file/lineage rejection, and correct initializer labels in results.
+Current execution evidence is recorded in `docs/HANDOFF.md`; local tests do not
+authenticate the actual remote bank or authorize automatic submission.
+
+Historical v1 evidence: 16 new tests plus 20 existing meta-embedding regression tests
 passed across focused runs. The new CUDA worker miniature exercises shared setup
 and both 20-block fits (all 475 META science updates), real installed-Weaver
 operations at reduced depth, native/full checkpoint readback and tamper rejection.

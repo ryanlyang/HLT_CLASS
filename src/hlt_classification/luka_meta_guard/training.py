@@ -75,7 +75,8 @@ def diagnostics(model, optimizer, adapter, supports, query, lr, seed):
 
 
 def train(model, train_cache, val, bank, node, arm, device, *, initial,
-          classifier, mean, scale, parents, publish, technical=False):
+          classifier, mean, scale, parents, publish, technical=False, initializer_source='completed_fixed'):
+    registered_recipe=recipe(initializer_source)
     if (arm not in ARMS or train_cache.role != 'train' or val.role != 'validation'
             or train_cache.coordinate_name != 'D000' or val.coordinate_name != 'D000'
             or train_cache.foundation_sha256 != val.foundation_sha256
@@ -178,7 +179,7 @@ def train(model, train_cache, val, bank, node, arm, device, *, initial,
               f'lr={lr:.8g} query_delta={diagnostic["query_ce_delta"]:+.8g} '
               f'residual_rms={diagnostic["residual_rms"]:.8g}', flush=True)
     model.load_state_dict(best_state['student'], strict=True); model.eval()
-    report = artifact('REPORT', parents=dict(parents, recipe=recipe()['content_hash']), arm=arm,
+    report = artifact('REPORT', parents=dict(parents, recipe=registered_recipe['content_hash']), arm=arm,
         technical=technical, counts=dict(train=len(train_cache), validation=len(val)), node=node,
         populations=dict(inner=len(inner), query=len(query), guard=len(guard_indices)),
         split_sha256=split_hash(train_cache.identities, parts), initial_guard=initial_guard,
@@ -189,7 +190,7 @@ def train(model, train_cache, val, bank, node, arm, device, *, initial,
 
 
 def validate_report(report, spec, parents, arm, *, technical=False):
-    validate(report, 'REPORT', dict(parents, recipe=recipe()['content_hash']))
+    validate(report, 'REPORT', dict(parents, recipe=recipe(spec['initializer_source'])['content_hash']))
     n = spec['counts']['train']; q = n//20
     populations = dict(inner=n-q, query=q//2, guard=q-q//2)
     blocks = list(range(1, (2 if technical else BLOCKS)+1))

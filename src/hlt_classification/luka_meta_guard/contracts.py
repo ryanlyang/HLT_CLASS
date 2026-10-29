@@ -3,7 +3,11 @@ from hlt_classification.data.cache_contracts import with_content_hash, validate_
 from hlt_classification.luka_fullsim.alljets_data import FLAGS
 from hlt_classification.luka_embedding_aux.contracts import COUNTS
 
-AUTHORIZATION = 'AUTHORIZE_LUKA_META_GUARD_DEBUG_V1'
+AUTHORIZATION = 'AUTHORIZE_LUKA_META_GUARD_DEBUG_V2'
+INITIALIZERS = {
+    'completed_fixed': 'completed_parent_FIXED_selected_full_student',
+    'shared_w5': 'completed_parent_setup_calibrated_OFFLINE_w5_full_student',
+}
 ARMS = {'fixed': 'GUARDED_FIXED', 'meta': 'GUARDED_META'}
 TASKS = {'setup': [], 'fixed': ['setup'], 'meta': ['setup']}
 MINUTES = {k: 720 for k in TASKS}
@@ -16,12 +20,12 @@ MAX_ROLLBACKS = 3
 
 
 def artifact(kind, *, parents=None, **fields):
-    return with_content_hash(dict(contract=f'LUKA_META_GUARD_{kind}/v1', schema_version=1,
+    return with_content_hash(dict(contract=f'LUKA_META_GUARD_{kind}/v2', schema_version=2,
         parents=dict(parents or {}), **FLAGS, **fields))
 
 
 def validate(value, kind, parents=None):
-    digest = validate_content_hash(value, expected_contract=f'LUKA_META_GUARD_{kind}/v1', expected_schema_version=1)
+    digest = validate_content_hash(value, expected_contract=f'LUKA_META_GUARD_{kind}/v2', expected_schema_version=2)
     if any(value.get(k) != v for k, v in FLAGS.items()):
         raise PermissionError('Exploratory scope differs')
     if parents is not None and value['parents'] != parents:
@@ -35,8 +39,10 @@ def events(arm, block):
     return 0 if arm == 'fixed' else (100 if block == 1 else 25 if block <= 16 else 0)
 
 
-def recipe():
-    return artifact('RECIPE', initialization='completed_parent_FIXED_selected_full_student',
+def recipe(initializer_source='completed_fixed'):
+    if initializer_source not in INITIALIZERS:
+        raise ValueError('Unknown initializer source; no automatic fallback')
+    return artifact('RECIPE', initialization=INITIALIZERS[initializer_source],
         optimizer='fresh_AdamW_same_groups_as_parent', ce_weight=1., embedding_weight=5., logit_kd=False,
         blocks=BLOCKS, passes=10, batch_size=128, initial_lr=INITIAL_LR, warmup=False,
         sampling='two_consecutive_half_blocks_partition_one_shuffled_inner_pass',

@@ -1,1 +1,1 @@
-"""Guarded, low-rate continuation of a completed FIXED embedding student."""
+"""Guarded low-rate continuation from authenticated FIXED or shared-w5 state."""

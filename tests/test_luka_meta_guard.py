@@ -1,5 +1,6 @@
 """Guard isolation, full-state rollback, real meta derivatives and exact queueing."""
 from copy import deepcopy
+from pathlib import Path
 from types import SimpleNamespace
 import hashlib
 import math
@@ -127,10 +128,11 @@ class Cache:
         return dict(features=self.features[ix],vectors=self.features[ix],mask=np.ones((len(ix),1),bool),labels=self.labels[ix])
 
 
-def fixture_spec(root,train_rows=3200):
+def fixture_spec(root,train_rows=3200,initializer_source='completed_fixed'):
     from test_luka_attention import parent_nodes
     from hlt_classification.luka_meta_embedding.contracts import node
-    parent=dict(node=node(dict(nodes=parent_nodes())),files=dict(state=dict(sha256='d'*64)),bank_hash='b'*64)
+    parent=dict(node=node(dict(nodes=parent_nodes())),files=dict(state=dict(sha256='d'*64)),bank_hash='b'*64,
+        initializer_source=initializer_source)
     return c.artifact('SPEC',root=str(root),project_dir='/project',source_commit='f'*40,
         source_snapshot=dict(content_hash='c'*64),anchor=dict(evidence=dict(prepared='a'*64,environment={})),
         parent=parent,**dict(campaign.registration(parent),counts=dict(train=train_rows,validation=22),original50k_rows=22))
@@ -254,6 +256,122 @@ def test_source_refuses_missing_completed_fixed_before_replay(tmp_path,monkeypat
     with pytest.raises(ValueError,match='must finish'): source.authenticate(path)
 
 
+def test_shared_initializer_is_explicit_and_still_requires_completed_setup(tmp_path,monkeypatch):
+    path=tmp_path/'campaign_spec.json'
+    write_immutable_json(path,dict(root=str(tmp_path),source_commit=source.PARENT_COMMIT))
+    monkeypatch.setattr(source,'replay',lambda *a,**kw:pytest.fail('Must stop before replay'))
+    with pytest.raises(ValueError,match='setup receipt'): source.authenticate(path,'shared_w5')
+    with pytest.raises(ValueError,match='no automatic fallback'): source.authenticate(path,'auto')
+    assert c.recipe('shared_w5')['content_hash']!=c.recipe('completed_fixed')['content_hash']
+    assert c.recipe('shared_w5')['schema_version']==2
+    with pytest.raises(ValueError): c.validate(dict(c.recipe(),contract='LUKA_META_GUARD_RECIPE/v1'),'RECIPE')
+    spec=fixture_spec(tmp_path,initializer_source='shared_w5')
+    assert spec['initializer_source']=='shared_w5' and spec['recipe']==c.recipe('shared_w5')
+
+
+@pytest.mark.parametrize('mode',['completed_fixed','shared_w5'])
+def test_full_initializer_readback_preserves_predictor_and_rejects_native_only(tmp_path,monkeypatch,mode):
+    from hlt_classification.data.cache_contracts import atomic_publish_bytes,deterministic_npz_bytes
+    torch.manual_seed(123); model=Mini(); native=model.native_state()
+    with torch.no_grad(): model.predictor.weight.fill_(.12345)
+    state=deepcopy(model.state_dict())
+    full=dict(student=state,epoch=2) if mode=='completed_fixed' else state
+    save_state(tmp_path/'state.pt',full); save_state(tmp_path/'native.pt',native)
+    save_state(tmp_path/'classifier.pt',torch.nn.Linear(128,11).state_dict())
+    atomic_publish_bytes(tmp_path/'bank.npz',deterministic_npz_bytes(dict(mean=np.zeros(128,np.float32),scale=np.ones(128,np.float32))))
+    spec=fixture_spec(tmp_path,initializer_source=mode)
+    files={k:file_ref(tmp_path/(k+'.pt' if k!='bank' else 'bank.npz')) for k in ('state','native','classifier','bank')}
+    spec['parent'].update(files=files,selected=dict(pass_number=2) if mode=='completed_fixed' else None)
+    monkeypatch.setattr(models,'new_model',lambda _:Mini())
+    initial,classifier,mean,scale=worker.read_shared(spec)
+    assert not any(p.requires_grad for p in classifier.parameters())
+    torch.testing.assert_close(initial['predictor.weight'],state['predictor.weight'],rtol=0,atol=0)
+    for key,v in state.items(): torch.testing.assert_close(v,initial[key],rtol=0,atol=0)
+    save_state(tmp_path/'missing.pt',dict(student=native,epoch=2) if mode=='completed_fixed' else native)
+    files['state']=file_ref(tmp_path/'missing.pt')
+    with pytest.raises(RuntimeError,match='Missing key'): worker.read_shared(spec)
+    if mode=='completed_fixed':
+        save_state(tmp_path/'epoch.pt',dict(student=state,epoch=8)); files['state']=file_ref(tmp_path/'epoch.pt')
+        with pytest.raises(ValueError,match='selected FIXED epoch'): worker.read_shared(spec)
+    bad=deepcopy(state); bad['predictor.weight'][0,0]=float('nan')
+    save_state(tmp_path/'nonfinite.pt',dict(student=bad,epoch=2) if mode=='completed_fixed' else bad)
+    files['state']=file_ref(tmp_path/'nonfinite.pt')
+    with pytest.raises(ValueError,match='nonfinite'): worker.read_shared(spec)
+
+
+def test_shared_parent_authentication_binds_inventory_and_rejects_changes(tmp_path,monkeypatch):
+    root=tmp_path/'original'; root.mkdir()
+    names=dict(setup_receipt='setup/receipt.json',bank_manifest='targets/manifest.json',
+        bank='targets/targets.npz',classifier='initial/classifier.pt',original50k='references/original50k.npz',
+        state='initial/student.pt',initializer='setup/initializer.json',predictions='references/OFFLINE_EMBED_W5.npz')
+    names.update({n:'references/'+n+'.npz' for n in ('M0HLT','OFFLINE','OFFLINE_EMBED_W5')})
+    for name in set(names.values()):
+        path=root/name; path.parent.mkdir(parents=True,exist_ok=True)
+        write_immutable_json(path,dict(content_hash='b'*64))
+    native=root/'w5.pt'; write_immutable_json(native,dict(dummy=True))
+    old=dict(source_commit=source.PARENT_COMMIT,root=str(root),project_dir=str(tmp_path/'project'),
+        source_snapshot={},anchor={},node={},counts={},initial_checkpoint=file_ref(native))
+    specpath=root/'campaign_spec.json'; write_immutable_json(specpath,old)
+    files={k:file_ref(root/n) for k,n in names.items()}; files['native']=old['initial_checkpoint']
+    evidence=dict(files=files,initializer_source='shared_w5',anchor={},node={},counts={},jobs={'setup':'1'},
+        selected=None,bank_hash='b'*64)
+    monkeypatch.setattr(source,'validate_source_snapshot',lambda *a,**kw:None)
+    calls=[]
+    def replay(*args,extra):
+        calls.append(extra); return file_ref(specpath),deepcopy(evidence)
+    monkeypatch.setattr(source,'replay',replay)
+    parent=source.authenticate(specpath,'shared_w5')
+    assert calls==[('shared_w5',)] and source.validate_parent(parent)==old
+    bad=deepcopy(parent); bad['selected']=dict(pass_number=2)
+    with pytest.raises(ValueError,match='cannot claim'): source.validate_parent(with_content_hash(bad))
+    bad=deepcopy(parent); bad['files']['state']=files['native']
+    with pytest.raises(ValueError,match='lineage'): source.validate_parent(with_content_hash(bad))
+    bad=deepcopy(parent); bad['jobs']['fixed']='2'
+    with pytest.raises(ValueError,match='lineage'): source.validate_parent(with_content_hash(bad))
+    # Simulate mutation after registration without updating the authenticated file ref.
+    (root/'initial/student.pt').write_bytes(b'corrupt')
+    with pytest.raises(ValueError): source.validate_parent(parent)
+
+
+def test_queue_helper_requires_explicit_mode_and_v2_authorization():
+    root=Path(__file__).resolve().parents[1]
+    script=(root/'scripts/queue_luka_meta_guard.sh').read_text()
+    assert '--initializer-source "${INITIALIZER_SOURCE}"' in script
+    assert '[[ "${INITIALIZER_SOURCE}" == completed_fixed ]]' in script
+    assert 'AUTHORIZE_LUKA_META_GUARD_DEBUG_V2' in script
+    assert '${COMMIT:0:8}_${INITIALIZER_SOURCE}_debug_r1' in script
+    assert 'shared_w5|completed_fixed)' in script
+
+
+def test_create_and_spec_check_bind_explicit_mode_before_claiming_root(tmp_path,monkeypatch):
+    project=tmp_path/'project'; project.mkdir()
+    oldroot=tmp_path/'parent'; oldroot.mkdir()
+    oldspec=oldroot/'campaign_spec.json'
+    write_immutable_json(oldspec,dict(root=str(oldroot),project_dir=str(tmp_path/'old_project')))
+    parent=c.artifact('PARENT',initializer_source='shared_w5',spec=file_ref(oldspec),counts=c.COUNTS,
+        node={},anchor=dict(evidence=dict(prepared_root=str(tmp_path/'prepared'),raw_container=str(tmp_path/'raw'))))
+    monkeypatch.setattr(source,'current',lambda *a:dict(content_hash='c'*64))
+    requests=[]
+    def authenticate(path,mode):
+        assert Path(path)==oldspec; requests.append(mode); return parent
+    monkeypatch.setattr(source,'authenticate',authenticate)
+    monkeypatch.setattr(source,'validate_parent',lambda _:None)
+    checked=[]
+    def storage(spec):
+        assert not Path(spec['root']).exists()
+        checked.append(spec['storage_budget_bytes'])
+    monkeypatch.setattr(campaign,'storage',storage)
+    root=tmp_path/'new'
+    spec=campaign.create(root,oldspec,project,'f'*40,22,initializer_source='shared_w5')
+    assert requests==['shared_w5'] and checked==[4*2**30]
+    assert load_json(root/'campaign_spec.json')==spec and spec['initializer_source']=='shared_w5'
+    campaign.check(spec); assert requests==['shared_w5','shared_w5']
+    bad=dict(spec,initializer_source='completed_fixed')
+    with pytest.raises(ValueError,match='recipe/parent'): campaign.validate_spec(with_content_hash(bad))
+    bad=dict(spec,recipe=c.recipe('completed_fixed'))
+    with pytest.raises(ValueError,match='recipe/parent'): campaign.validate_spec(with_content_hash(bad))
+
+
 def test_training_rejects_reporting_validation_overlap_before_model_use():
     train=Cache(); val=Cache('validation',22)
     val.identities=train.identities[:22].copy()
@@ -272,29 +390,63 @@ def test_source_rejects_existing_runtime_mutation(tmp_path,monkeypatch):
     with pytest.raises(ValueError,match='runtime changed'): source.current(tmp_path,'f'*40)
 
 
-def test_original_replay_requires_fixed_and_setup_not_meta(tmp_path,monkeypatch):
+def test_source_allows_only_guard_revision_on_pinned_compatibility_base(monkeypatch):
+    project=Path(source.__file__).resolve().parents[3]; calls=[]
+    monkeypatch.setattr(source,'_source',lambda *a:{'snapshot':'checked'})
+    changed=['M\tsrc/hlt_classification/luka_meta_guard/source.py']
+    def git(cmd,**kwargs):
+        calls.append(cmd)
+        return SimpleNamespace(stdout='\n'.join(sorted(source.REQUIRED)) if 'ls-files' in cmd
+            else '\n'.join(changed) if 'diff' in cmd else '')
+    monkeypatch.setattr(source.subprocess,'run',git)
+    assert source.current(project,'f'*40)=={'snapshot':'checked'}
+    assert any(cmd[-4:]==['merge-base','--is-ancestor',source.BASE,'f'*40] for cmd in calls)
+    for row in ('M\tsrc/hlt_classification/luka_meta_embedding/worker.py',
+                'M\tsrc/hlt_classification/luka_fullstat_finetune/source.py',
+                'D\tsrc/hlt_classification/luka_meta_guard/source.py'):
+        changed[:]=[row]
+        with pytest.raises(ValueError,match='runtime changed'): source.current(project,'f'*40)
+
+
+@pytest.mark.parametrize('mode',['completed_fixed','shared_w5'])
+def test_original_replay_requires_only_selected_dependencies(tmp_path,monkeypatch,mode):
     import io,json,sys
     from contextlib import redirect_stdout
     from hlt_classification.luka_meta_embedding import campaign as oc, worker as ow, submission as os
     from hlt_classification.luka_fullsim import science_campaign
-    spec=fixture_spec(tmp_path); write_immutable_json(tmp_path/'campaign_spec.json',spec)
+    spec=fixture_spec(tmp_path)
+    spec['initial_checkpoint']=dict(path='/historical/w5.pt',bytes=1,sha256='e'*64)
+    write_immutable_json(tmp_path/'campaign_spec.json',spec)
     (tmp_path/'targets').mkdir(); write_immutable_json(tmp_path/'targets/manifest.json',dict(content_hash='b'*64))
-    validated=[]; accounted=[]
+    validated=[]; accounted=[]; shared=[]
     monkeypatch.setattr(oc,'check',lambda _:None)
     monkeypatch.setattr(os,'accepted_jobs',lambda _:dict(setup='1',fixed='2',meta='3'))
     def receipt(s,task):
+        if mode=='shared_w5': assert task=='setup', 'Cancelled fits must not be required'
         validated.append(task); return dict(job_id={'setup':'1','fixed':'2'}[task])
     monkeypatch.setattr(ow,'validate_task',receipt)
-    monkeypatch.setattr(ow,'validate_fit',lambda *a:(dict(report=dict(selected=dict(pass_number=2))),{}))
+    def fit(*a):
+        assert mode=='completed_fixed', 'Cancelled fit must not be read'
+        return dict(report=dict(selected=dict(pass_number=2))),{}
+    monkeypatch.setattr(ow,'validate_fit',fit)
+    monkeypatch.setattr(ow,'read_shared',lambda s:shared.append(s))
     monkeypatch.setattr(science_campaign,'preflight_accounting',lambda job:accounted.append(job))
     import hlt_classification.cms_proxy_ladder.contracts as fc
     monkeypatch.setattr(fc,'file_ref',lambda path:dict(path=str(path),bytes=1,sha256='a'*64))
-    monkeypatch.setattr(sys,'argv',['replay',str(tmp_path/'campaign_spec.json')])
+    monkeypatch.setattr(sys,'argv',['replay',str(tmp_path/'campaign_spec.json'),mode])
     captured=io.StringIO()
     with redirect_stdout(captured): exec(compile(source.REPLAY,'parent-replay','exec'),{})
     value=json.loads(captured.getvalue().split('META_GUARD_PARENT=')[1])
-    assert validated==['setup','fixed'] and accounted==['1','2']
-    assert value['selected']['pass_number']==2 and 'state' in value['files']
+    assert value['initializer_source']==mode and 'state' in value['files']
+    if mode=='completed_fixed':
+        assert validated==['setup','fixed'] and accounted==['1','2'] and not shared
+        assert value['selected']['pass_number']==2
+    else:
+        assert validated==['setup'] and accounted==['1'] and len(shared)==1
+        assert value['selected'] is None and value['jobs']=={'setup':'1'}
+        assert value['files']['native']==spec['initial_checkpoint']
+        assert Path(value['files']['state']['path'])==tmp_path/'initial/student.pt'
+        assert not {'fixed_receipt','report'} & value['files'].keys()
 
 
 def test_full_size_weaver_cuda_hypergradient_at_guarded_rate():
@@ -317,7 +469,8 @@ def test_full_size_weaver_cuda_hypergradient_at_guarded_rate():
     assert not optimizer.state and all(p.grad is None for p in student.parameters())
 
 
-def test_cuda_installed_weaver_production_workers_setup_and_both_twenty_blocks(tmp_path,monkeypatch):
+@pytest.mark.parametrize('mode',['completed_fixed','shared_w5'])
+def test_cuda_installed_weaver_production_workers_setup_and_both_twenty_blocks(tmp_path,monkeypatch,mode):
     """Synthetic populations, real installed Weaver/production loops, no Slurm claims."""
     if not torch.cuda.is_available(): pytest.skip('CUDA absent')
     pytest.importorskip('weaver.nn.model.ParticleTransformer')
@@ -335,11 +488,11 @@ def test_cuda_installed_weaver_production_workers_setup_and_both_twenty_blocks(t
     val.identities[:,-1]=1
     for block in val.blocks: block.identities[:,-1]=1
     offline=cache('train','OFFLINE',rows=3200)
-    spec=fixture_spec(root); student=models.new_model(spec['node']); teacher=DelphesParticleTransformer()
+    spec=fixture_spec(root,initializer_source=mode); student=models.new_model(spec['node']); teacher=DelphesParticleTransformer()
     save_state(parent_root/'teacher.pt',teacher.state_dict()); teacher_ref=file_ref(parent_root/'teacher.pt')
     manifest=targets.export(parent_root/'targets',teacher,offline,teacher_ref=teacher_ref,device='cuda')
     bank=targets.Bank(parent_root/'targets',train,teacher_ref=teacher_ref)
-    save_state(parent_root/'state.pt',dict(student=student.state_dict(),epoch=2))
+    save_state(parent_root/'state.pt',dict(student=student.state_dict(),epoch=2) if mode=='completed_fixed' else student.state_dict())
     save_state(parent_root/'native.pt',student.native_state())
     save_state(parent_root/'classifier.pt',teacher.mod.fc[0].state_dict())
     actual=predict(student.cuda(),val,device='cuda',batch_size=128)
@@ -349,7 +502,7 @@ def test_cuda_installed_weaver_production_workers_setup_and_both_twenty_blocks(t
     files={k:file_ref(parent_root/name) for k,name in dict(state='state.pt',native='native.pt',classifier='classifier.pt',
         predictions='predictions.npz',bank='targets/targets.npz',bank_manifest='targets/manifest.json',original50k='original50k.npz').items()}
     files.update({k:files['predictions'] for k in ('M0HLT','OFFLINE','OFFLINE_EMBED_W5')})
-    spec['parent'].update(files=files,bank_hash=manifest['content_hash'],selected=dict(pass_number=2))
+    spec['parent'].update(files=files,bank_hash=manifest['content_hash'],selected=dict(pass_number=2) if mode=='completed_fixed' else None)
     spec['anchor']['evidence'].update(environment=worker.installed_environment(),prepared_root='/fixture')
     spec=with_content_hash(spec); write_immutable_json(root/'campaign_spec.json',spec)
     monkeypatch.setattr(worker,'load_inputs',lambda *a:(train,val,bank))
@@ -372,6 +525,7 @@ def test_cuda_installed_weaver_production_workers_setup_and_both_twenty_blocks(t
     with pytest.raises(FileExistsError): worker.run(spec,'meta')
     monkeypatch.setattr(torch,'load',lambda *a,**kw:pytest.fail('Results must not deserialize models'))
     result=worker.results(spec); assert not result['pending'] and len(result['rows'])==6
+    assert result['rows'][3]['model']==('PARENT_FIXED' if mode=='completed_fixed' else 'PARENT_SHARED_W5')
     path=root/'meta/fit/history/block-001.json'; bad=load_json(path); bad['row']['decision']['anchor_auc']=0
     path.write_text(__import__('json').dumps(bad))  # only this test's scratch artifact
     with pytest.raises(ValueError): worker.results(spec)

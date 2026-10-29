@@ -1,15 +1,25 @@
-# LUKA_META_GUARD v1
+# LUKA_META_GUARD v2
 
 Authority: [active scientific plan](../plans/LUKA_META_GUARD_PLAN.md).
-Artifacts use `LUKA_META_GUARD_<KIND>/v1`, schema 1, canonical content hashes,
+Artifacts use `LUKA_META_GUARD_<KIND>/v2`, schema 2, canonical content hashes,
 explicit parent hashes and the existing exploratory-scope flags.
 
-The immutable SPEC binds the exact new source, completed original FIXED evidence,
-full selected student and native checkpoint, original OFFLINE classifier, original
-TRAIN bank, preparation and reference predictions. Original-source replay must
-validate FIXED and setup receipts and completed scheduler IDs; META completion is
-not required. Existence alone is insufficient. Bank payloads are borrowed
+The immutable SPEC binds the exact new source, explicit `initializer_source`,
+full student and native checkpoint, original OFFLINE classifier, original TRAIN
+bank, preparation and reference predictions. `completed_fixed` requires original
+setup and FIXED receipts and completed scheduler IDs. `shared_w5` requires only
+the completed original setup receipt/ID, its full calibrated `initial/student.pt`,
+initializer manifest and the historical native w5 checkpoint. It never reads
+cancelled FIXED/META fit outputs and records no selected continuation epoch.
+Original-source replay validates the chosen dependencies, full inventories and
+calibration evidence. Existence alone is insufficient. Bank payloads are borrowed
 read-only and must remain available until both new fits complete.
+
+Mode-specific recipe hashes and separate mode-labelled roots prevent conflation.
+`PARENT_SHARED_W5` is not a completed FIXED continuation result. No automatic
+fallback, native-only initialization, calibration rerun, or checkpoint forgery.
+V1 artifacts retain their old meaning and must use their original pinned source;
+the v2 validator rejects them rather than silently migrating an existing spec.
 
 The RECIPE freezes 20 half-pass blocks, loss and optimizer semantics, three-way
 TRAIN split, adapter events and guard thresholds. REPORT validation replays every
@@ -26,4 +36,4 @@ responses. No requeue, automatic resume, deletion or broad cancellation.
 
 Poor finite guard/validation/query improvements do not invalidate receipts.
 Nonfinite values, identity leakage, corrupt hashes, mismatched source, missing
-completed initializer, or resource violations fail closed.
+authenticated initializer for the selected mode, or resource violations fail closed.

@@ -1,4 +1,4 @@
-# Guarded meta-embedding continuation — active scientific plan v1
+# Guarded meta-embedding continuation — active scientific plan v2
 
 This is additive to LUKA_META_EMBEDDING, not a change to its running experiments.
 The question is whether bounded target adaptation helps when a strong HLT student
@@ -7,12 +7,22 @@ guarantee that overfitting cannot occur.
 
 ## Two matched arms
 
-Both start from the **completed FIXED run's selected full student**, including its
-trained embedding predictor, authenticated in its original pinned source. They
-use fresh AdamW optimizers, CE + 5 times mean SmoothL1, and the original frozen
-OFFLINE model's TRAIN embeddings and normalization. No student logit KD. No new
-teacher training, target export, or predictor calibration. Missing completed
-FIXED evidence is a blocker, not permission to substitute an initializer.
+Both start from the **same explicitly selected, authenticated full student**:
+
+- `completed_fixed`: the completed original FIXED run's selected full state,
+  including its trained embedding predictor. Its completion is still mandatory.
+- `shared_w5`: the original completed setup's `initial/student.pt`, containing
+  the historical OFFLINE-w5 native student plus its already calibrated predictor.
+  This mode is authorized after the user cancelled the original FIXED/META fits.
+  It requires only completed setup evidence, not completion of either fit. It
+  does not recover any continuation improvements from those cancelled fits.
+
+The mode is explicit in the CLI, immutable spec, recipe hash and results; no
+automatic fallback or partial-fit reuse is permitted. V1 required completed
+FIXED exclusively; that meaning is retained in its original pinned source.
+Both v2 modes use fresh AdamW optimizers, CE + 5 times mean SmoothL1, and the
+original frozen OFFLINE model's TRAIN embeddings and normalization. No student
+logit KD. No new teacher training, target export, or predictor calibration.
 
 FIXED keeps targets unchanged. META starts an identity-initialized, bounded
 128→32→128 residual adapter; the teacher itself remains completely frozen.

@@ -27,7 +27,7 @@ from .contracts import artifact, validate, TASKS, ARMS, INITIAL_LR
 from . import campaign, source, submission, training
 
 FIT_FILES = ('selected.pt','training_state.pt','training_report.json','validation_predictions.npz')
-REFS = ('M0HLT','OFFLINE','OFFLINE_EMBED_W5','PARENT_FIXED')
+REFS = ('M0HLT','OFFLINE','OFFLINE_EMBED_W5')
 
 
 def fit_parents(spec):
@@ -44,20 +44,27 @@ def read_shared(spec):
     files=spec['parent']['files']
     for name in ('state','native','classifier','bank'): validate_file_ref(files[name])
     full=torch.load(files['state']['path'],map_location='cpu',weights_only=True)
-    student=models.new_model(spec['node']); student.load_state_dict(full['student'],strict=True)
+    mode=spec['initializer_source']
+    if mode=='completed_fixed':
+        initial=full['student']
+        if full['epoch']!=spec['parent']['selected']['pass_number']:
+            raise ValueError('Parent full state is not its selected FIXED epoch')
+    elif mode=='shared_w5':
+        initial=full  # Original setup persists a full state_dict, not a fit checkpoint.
+    else:
+        raise ValueError('Unknown initializer source; no fallback')
+    student=models.new_model(spec['node']); student.load_state_dict(initial,strict=True)
     native=torch.load(files['native']['path'],map_location='cpu',weights_only=True)
     native_initial=student.native_state()
-    if full['epoch']!=spec['parent']['selected']['pass_number']:
-        raise ValueError('Parent full state is not its selected FIXED epoch')
     if (native.keys()!=native_initial.keys()
             or any(not torch.equal(v,native_initial[k]) for k,v in native.items())
-            or any(not torch.isfinite(v).all() for v in full['student'].values())):
+            or any(not torch.isfinite(v).all() for v in initial.values())):
         raise ValueError('Parent selected full/native state mismatch or nonfinite value')
     classifier=torch.nn.Linear(128,11)
     classifier.load_state_dict(torch.load(files['classifier']['path'],map_location='cpu',weights_only=True),strict=True)
     for p in classifier.parameters(): p.requires_grad_(False)
     arrays=load_npz_arrays(files['bank']['path'])
-    return full['student'],classifier,torch.from_numpy(arrays['mean']).float(),torch.from_numpy(arrays['scale']).float()
+    return initial,classifier,torch.from_numpy(arrays['mean']).float(),torch.from_numpy(arrays['scale']).float()
 
 
 def fit(folder, spec, train, val, bank, arm, device, *, technical=False):
@@ -73,7 +80,7 @@ def fit(folder, spec, train, val, bank, arm, device, *, technical=False):
         return file_ref(path,root=folder)
     report,native,full=training.train(model,train,val,bank,spec['node'],arm,device,
         initial=initial,classifier=classifier,mean=mean,scale=scale,parents=fit_parents(spec),
-        publish=publish,technical=technical)
+        publish=publish,technical=technical,initializer_source=spec['initializer_source'])
     training.validate_report(report,spec,fit_parents(spec),arm,technical=technical)
     save_state(folder/'selected.pt',native); save_state(folder/'training_state.pt',full)
     restored=DelphesParticleTransformer().to(device).eval()
@@ -152,13 +159,13 @@ def admission(spec, measured):
 
 
 def setup(spec, folder, log, metadata, authentication, device):
-    with log.phase('load_borrowed_TRAIN_bank_and_completed_FIXED') as loaded:
+    with log.phase('load_borrowed_TRAIN_bank_and_'+spec['initializer_source']) as loaded:
         train,val,bank=load_inputs(spec,metadata); initial,classifier,mean,scale=read_shared(spec)
         model=models.new_model(spec['node']).to(device); model.load_state_dict(initial,strict=True)
         actual=predict(model,val,device=device,batch_size=128)
         saved=load_npz_arrays(spec['parent']['files']['predictions']['path'])
         if not np.array_equal(saved['identities'],val.identities) or not np.array_equal(saved['labels'],val.labels):
-            raise ValueError('Original FIXED validation identities differ')
+            raise ValueError('Original initializer validation identities differ')
         np.testing.assert_allclose(actual,saved['probabilities'],rtol=1e-5,atol=1e-6)
         error=float(np.max(np.abs(actual-saved['probabilities'])))
         if bank.manifest['content_hash']!=spec['parent']['bank_hash']: raise ValueError('Borrowed bank differs')
@@ -272,7 +279,9 @@ def run(spec, task):
 
 def results(spec):
     campaign.validate_spec(spec); root=Path(spec['root']); files=spec['parent']['files']
-    arrays={n:load_npz_arrays(files['predictions' if n=='PARENT_FIXED' else n]['path']) for n in REFS}
+    arrays={n:load_npz_arrays(files[n]['path']) for n in REFS}
+    label='PARENT_FIXED' if spec['initializer_source']=='completed_fixed' else 'PARENT_SHARED_W5'
+    arrays[label]=load_npz_arrays(files['predictions']['path'])
     pending=[]
     for arm in ARMS:
         if not (root/arm/'receipt.json').is_file(): pending.append(arm); continue

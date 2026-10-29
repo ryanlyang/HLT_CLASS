@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Guarded FIXED/META continuation from the completed original FIXED student."""
+"""Guarded FIXED/META continuation from an explicitly authenticated full initializer."""
 import argparse
 import json
 from pathlib import Path
 from hlt_classification.data.cache_contracts import load_json
 from hlt_classification.luka_meta_guard import campaign, submission, worker
-from hlt_classification.luka_meta_guard.contracts import TASKS
+from hlt_classification.luka_meta_guard.contracts import TASKS, INITIALIZERS
 
 
 def main():
@@ -13,6 +13,8 @@ def main():
     p=sub.add_parser('create')
     for name in ('root','parent','expected-commit'): p.add_argument('--'+name,required=True)
     p.add_argument('--available-quota-gib',type=int,required=True)
+    p.add_argument('--initializer-source',choices=INITIALIZERS,required=True,
+        help='shared_w5 reuses completed setup even if old fits were cancelled; no automatic fallback')
     for command in ('submit','run','results'):
         p=sub.add_parser(command); p.add_argument('--spec',required=True)
         if command=='submit':
@@ -21,7 +23,7 @@ def main():
     args=parser.parse_args()
     if args.command=='create':
         value=campaign.create(args.root,args.parent,Path(__file__).resolve().parents[1],
-            args.expected_commit,args.available_quota_gib)
+            args.expected_commit,args.available_quota_gib,initializer_source=args.initializer_source)
     else:
         spec=load_json(args.spec)
         if args.command=='submit':
@@ -30,6 +32,7 @@ def main():
         else:
             value=worker.results(spec)
             print('Guarded CE+5*embedding continuations; no student KD. Original OFFLINE teacher frozen.')
+            print('Initializer: '+spec['initializer_source']+'; cancelled-fit improvements are not recovered.')
             print('TRAIN guard is adaptive, NOT independent evaluation. Full validation selection; original50k report-only.')
             for role in ('validation','original50k'):
                 print('\n'+role+'\nmodel                       AUC    recovery%')
