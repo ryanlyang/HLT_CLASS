@@ -17,10 +17,12 @@ def storage(spec):
 
 
 def registration():
+    from .offline_cache import POLICY
     return dict(recipe=recipe(), counts=COUNTS, original50k_rows=50000, tasks=TASKS,
         execution_site=execution_site('sporc_a100_debug'), cpus=6, memory_mb=120000,
         storage_budget_bytes=4*2**30, acceptance_minutes=720,
-        admission='measured_debug_acceptance_before_science_submission', automatic_retry=False)
+        admission='measured_debug_acceptance_before_science_submission', automatic_retry=False,
+        offline_input_policy=POLICY)
 
 
 def create(root, parent_path, reference_path, project, commit, quota_gib):

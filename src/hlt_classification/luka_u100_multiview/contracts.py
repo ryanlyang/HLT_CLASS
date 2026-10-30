@@ -32,13 +32,15 @@ TASKS['report'] = list(TASKS)
 
 
 def artifact(kind, *, parents=None, **fields):
-    return with_content_hash(dict(contract=f'LUKA_U100_MULTIVIEW_{kind}/v1',
-        schema_version=1, parents=dict(parents or {}), **FLAGS, **fields))
+    version = 2 if kind == 'SPEC' else 1
+    return with_content_hash(dict(contract=f'LUKA_U100_MULTIVIEW_{kind}/v{version}',
+        schema_version=version, parents=dict(parents or {}), **FLAGS, **fields))
 
 
 def validate(value, kind, parents=None):
-    result = validate_content_hash(value, expected_contract=f'LUKA_U100_MULTIVIEW_{kind}/v1',
-                                  expected_schema_version=1)
+    version = 2 if kind == 'SPEC' else 1
+    result = validate_content_hash(value, expected_contract=f'LUKA_U100_MULTIVIEW_{kind}/v{version}',
+                                  expected_schema_version=version)
     if any(value.get(k) != v for k, v in FLAGS.items()):
         raise PermissionError('Exploratory role differs')
     if parents is not None and value['parents'] != parents:

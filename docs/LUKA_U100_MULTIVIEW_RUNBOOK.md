@@ -1,7 +1,11 @@
 # U100 multiview/readout debug campaign
 
 See the [plan](plans/LUKA_U100_MULTIVIEW_READOUT_PLAN.md) for scientific meaning
-and [v1 contracts](contracts/LUKA_U100_MULTIVIEW.md) for evidence boundaries.
+and [versioned contracts](contracts/LUKA_U100_MULTIVIEW.md) for evidence boundaries.
+The [frozen-readout CE handoff](LUKA_U100_FROZEN_READOUT_CE_HANDOFF.md) explains
+`u100_readout_ce`, its code and how to adapt the idea in another setup.
+The [retained-predictor handoff](LUKA_U100_RETAINED_PREDICTOR_HANDOFF.md) covers
+`u100_use_prediction`, its matched capacity control and the FullStat port boundary.
 
 This is eight fresh HLT student fits and two fresh oracle teachers, with the
 existing regular COARSE_U100 reused. The new CONCAT teacher sees the full
@@ -19,6 +23,9 @@ separate the proposed mechanisms. All jobs use SPORC **debug**.
   selected model, reports and predictions. The old disposable U100 TRAIN array
   may be retired: it is not reused or needed for this result-only import.
 - Read-only historical ALLJETS prepared caches and raw paired source files.
+  D000/U100 payloads must be present. SPEC/v2 can reconstruct missing native
+  OFFLINE payloads in RAM, with exact historical block hashes and input
+  fingerprints; metadata/manifests and original raw files must still exist.
 - At least four personally available persistent GiB plus filesystem headroom.
   Datasets and Fresh_check are never modified or copied.
 
@@ -129,6 +136,35 @@ No teacher or bank is needed for either deployed graph.
 There is no resume mode. Preserve incomplete outputs. New loss weights,
 population, views, seeds or resource policies require new registered semantics
 and a fresh campaign; do not edit an existing `campaign_spec.json`.
+
+## Recovery from acceptance job 21983825
+
+The user-supplied traceback identifies a missing file at
+`luka_alljets_9e591c7a_r1/prepared/inputs/train/OFFLINE/0000.npz`.
+The CONCAT two-epoch miniature completed before FUSION input loading failed.
+This is a missing-cache failure, not a scientific metric failure or a reported
+OOM. The earlier CONCAT raw read shows those selected source files were
+accessible then; corrected execution still verifies them afresh.
+
+`offline_cache.py` now reconstructs absent OFFLINE blocks in memory using the
+historical raw reader, physical conventions and feature transform. It requires
+exact original serialized byte count/SHA256 and the complete prepared-input
+fingerprint. Present corruption still fails. It writes no replacement cache
+files and leaves datasets, Fresh_check and old campaigns untouched.
+
+Commit/push the scoped repair, create a new clean worktree at that commit, and
+use the `accept` block above. The commit-derived root will be new. Keep
+`luka_u100_multiview_de79c729_debug_r1`, its claims and logs intact. Do not requeue
+21983825, edit its spec, or run the corrected source against its SPEC/v1.
+The repaired registration uses SPEC/v2; its scientific RECIPE remains v1.
+
+Some U100/CONCAT technical outputs may exist in the failed root, but the full
+acceptance resource evidence was never published. The current tool has no
+authenticated partial-acceptance resume path, so the fresh acceptance repeats
+the technical work. It does not retrain a completed scientific student.
+An old automatic-submission watcher is tied to the failed job/root; do not
+assume it will submit the new campaign. Built-in staging remains `accept`,
+then review and `science` after a valid new acceptance receipt.
 
 ## Retire compact banks after success
 

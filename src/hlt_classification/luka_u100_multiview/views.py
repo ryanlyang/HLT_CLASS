@@ -81,7 +81,10 @@ def load(spec, role, coordinate, meta=None):
         ids, labels = row_arrays(inventory, splits['memberships'][role])
         if not np.array_equal(ids, result.identities) or not np.array_equal(labels, result.labels):
             raise ValueError('Union row coverage differs')
-    elif coordinate in ('D000', 'U100', 'OFFLINE'):
+    elif coordinate == 'OFFLINE':
+        from .offline_cache import load as load_offline
+        result = load_offline(anchor, role, meta, budget)
+    elif coordinate in ('D000', 'U100'):
         result = regular_cache.load(anchor['prepared_root'], role=role, coordinate=coordinate,
                                     authenticated=meta, max_ram_bytes=budget)
     else:

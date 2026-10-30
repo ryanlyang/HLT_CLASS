@@ -10,14 +10,21 @@ from hlt_classification.luka_u100_embedding.source import teacher
 from hlt_classification.luka_attention_weight.source import replay
 from .contracts import artifact, validate, COUNTS
 
-BASE = '9868f38641d1648e43f519c20e53ec12efe04dc3'
+BASE = 'ac76bbd9866cb00891bc554dac7ae8b31778c643'
 MODULES = ('__init__', 'contracts', 'source', 'views', 'teachers', 'model', 'targets',
-           'training', 'worker', 'campaign', 'submission', 'acceptance', 'retention')
+           'training', 'worker', 'campaign', 'submission', 'acceptance', 'retention', 'offline_cache')
 ADDITIONS = {'src/hlt_classification/luka_u100_multiview/'+n+'.py' for n in MODULES}
-REQUIRED = ADDITIONS | {'scripts/luka_u100_multiview.py', 'scripts/queue_luka_u100_multiview.sh',
-    'sbatch/run_luka_u100_multiview.sh', 'tests/test_luka_u100_multiview.py',
+ENTRYPOINTS = {'scripts/luka_u100_multiview.py', 'scripts/queue_luka_u100_multiview.sh',
+              'sbatch/run_luka_u100_multiview.sh'}
+REQUIRED = ADDITIONS | ENTRYPOINTS | {'tests/test_luka_u100_multiview.py',
+    'tests/test_luka_u100_multiview_offline.py',
     'docs/plans/LUKA_U100_MULTIVIEW_READOUT_PLAN.md', 'docs/contracts/LUKA_U100_MULTIVIEW.md',
     'docs/LUKA_U100_MULTIVIEW_RUNBOOK.md'}
+
+
+def compatible_changes(changed):
+    return all(line[:2] in ('A\t', 'M\t') and line[2:] in ADDITIONS | ENTRYPOINTS
+               for line in changed)
 
 
 def current(project, commit):
@@ -28,8 +35,9 @@ def current(project, commit):
                               capture_output=True, text=True).stdout.splitlines()
     if not REQUIRED <= set(git('ls-files')):
         raise ValueError('Commit the complete multiview implementation/tests/docs')
-    changed = git('diff', '--name-status', '--no-renames', BASE, commit, '--', 'src')
-    if any(not line.startswith('A\t') or line[2:] not in ADDITIONS for line in changed):
+    git('merge-base', '--is-ancestor', BASE, commit)
+    changed = git('diff', '--name-status', '--no-renames', BASE, commit, '--', 'src', 'scripts', 'sbatch')
+    if not compatible_changes(changed):
         raise ValueError('Unexpected donor/runtime changes since reviewed source')
     if Path(__file__).resolve() != project/'src/hlt_classification/luka_u100_multiview/source.py':
         raise ValueError('Runtime import escapes pinned project')

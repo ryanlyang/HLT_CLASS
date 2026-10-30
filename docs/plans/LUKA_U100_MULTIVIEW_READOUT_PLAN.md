@@ -3,7 +3,16 @@
 Date: 2026-10-29. Status: **implemented as a staged debug campaign; remote
 acceptance must pass before science submission**. See the
 [runbook](../LUKA_U100_MULTIVIEW_RUNBOOK.md) and
-[v1 contracts](../contracts/LUKA_U100_MULTIVIEW.md).
+[versioned contracts](../contracts/LUKA_U100_MULTIVIEW.md).
+
+2026-10-30 execution repair: job 21983825 completed the CONCAT miniature, then
+failed while loading a missing historical native-OFFLINE TRAIN cache block for
+FUSION. SPEC/v2 permits reconstructing absent OFFLINE blocks in RAM from the
+same raw selected rows, only with exact original block-byte hashes and complete
+input-fingerprint replay. It never replaces corrupt present blocks. Scientific
+RECIPE/v1, teacher identities, inputs, losses, seeds and schedules are unchanged.
+The failed SPEC/v1 execution is preserved; a fresh corrected acceptance must
+complete before science. This does not claim that all remote checks have passed.
 
 This document specifies the first SPORC/debug screen agreed in chat. The new
 additive runtime implements these choices. It does not authorize submission or
@@ -193,6 +202,11 @@ Each stream uses the existing 17-feature transform for its own view. Unlike
 CONCAT, stream roles are explicit in this architecture; there is still no
 particle-matching index or learned per-particle provenance field.
 
+For missing native-OFFLINE prepared payloads, use the exact replay policy in
+SPEC/v2 and `luka_u100_multiview/offline_cache.py`. Reconstructed blocks must
+match the original manifest bytes and full prepared-input fingerprint before
+use. This restores the same context view; it is not a new input definition.
+
 After primary blocks **2, 4, 6, and 8**, inject cross-attention from the OFFLINE
 context state at the corresponding depth:
 
@@ -326,6 +340,9 @@ automatically the strongest setup simply because it has more targets.
 
 ### 7.5 `u100_readout_ce`: classification-aware embedding prediction
 
+See the [frozen-readout CE code handoff](../LUKA_U100_FROZEN_READOUT_CE_HANDOFF.md)
+for the implementation map, gradient flow, artifacts and adaptation notes.
+
 Let `C_U(e) = W_U e + b_U` be the exact frozen U100 classifier. Then:
 
 ```text
@@ -384,6 +401,9 @@ Using the same coefficient does not make CE and KD gradient strengths equal;
 log both instead of retrospectively tuning a hidden normalization factor.
 
 ### 7.7 `u100_use_prediction`: retain the learned transformation
+
+The [retained-predictor code handoff](../LUKA_U100_RETAINED_PREDICTOR_HANDOFF.md)
+maps this graph, its control and deployment checks to the implementation.
 
 Use the same U100 predictor and target as the baseline, but replace the native
 linear classifier with a linear classifier on concatenated features:

@@ -1,12 +1,24 @@
-# LUKA_U100_MULTIVIEW / v1
+# LUKA_U100_MULTIVIEW / SPEC v2, scientific artifacts v1
 
 Authority: [scientific plan](../plans/LUKA_U100_MULTIVIEW_READOUT_PLAN.md).
-All new envelopes use canonical content hashes, schema 1, the ALLJETS exploratory
-flags, and exact parent hashes. Historical artifacts retain their original schemas.
+All envelopes use canonical content hashes, the ALLJETS exploratory flags, and
+exact parent hashes. SPEC uses schema 2 to register missing-OFFLINE replay;
+RECIPE and all other envelopes remain schema 1. Historical executions retain
+their original schemas/source; the corrected worker rejects old SPEC/v1.
 
 - **RECIPE/SPEC:** eight registered student arms, two fresh teachers, exact
   historical regular COARSE_U100, fixed30/batch128, CE1, total embedding5,
   separate TRAIN moments and heads, fixed readout ramp, debug execution.
+- **SPEC/v2 OFFLINE input policy:** use authenticated present native OFFLINE
+  blocks. If a payload is absent, reconstruct only that block from the original
+  checksum-verified raw selected rows, original conventions and original feature
+  kernel/capacity, in RAM. Its deterministic NPZ byte count/SHA256 must equal
+  the original manifest; the full role's ViewMeter summary/fingerprint must
+  also match. Present corrupt files never trigger reconstruction. D000/U100
+  remain on the existing strict durable-input path. No historical writes,
+  alternative teacher/view, disk particle cache, test/unused reads or reduced
+  support are allowed. Pre-decode allowance is four times saved OFFLINE
+  resident bytes plus 64 MiB; total allocation/headroom checks still apply.
 - **IMPORT:** replay the completed direct U100-w5 result in its clean original
   source, plus original fixed30 anchor/teacher replay. Result-only archival
   validation checks all retained receipt outputs except the obsolete TRAIN

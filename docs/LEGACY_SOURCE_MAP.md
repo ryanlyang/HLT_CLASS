@@ -1,5 +1,25 @@
 # Legacy Donor-Source Map
 
+## Missing native-OFFLINE cache replay for multiview (2026-10-30)
+
+Reviewed donor/source baseline: `ac76bbd9866cb00891bc554dac7ae8b31778c643`.
+The original multiview implementation was `de79c7298a54dcb5818b97772635837e0a769914`.
+Only this campaign's namespace changes; shared historical readers remain intact.
+
+| Donor at reviewed baseline | New use |
+| --- | --- |
+| `luka_fullsim/regular_cache.py` | Selected-file raw reader, authenticated present-block read, metadata ordering in `luka_u100_multiview/offline_cache.py` |
+| `luka_fullsim/{particles,preflight_cache,stage2}.py` | Native OFFLINE physical decoding, ragged `_block`, original feature frontend and complete `ViewMeter` replay |
+| `data/cache_contracts.py` | In-memory deterministic NPZ serialization for exact historical payload byte-count/SHA256 comparison |
+
+SPEC advances to v2 to register the missing-only, RAM-only replay policy.
+Scientific RECIPE and bank/fit contracts remain v1 because original inputs must
+match exactly. No historical artifact is rewritten, no alternative teacher is
+substituted and no donor/Fresh_check runtime is copied or changed. Source guard
+pins all other runtime files at the reviewed baseline and permits only the
+enumerated multiview files/wrappers to change; see the multiview runbook.
+
+
 ## FullStat Oscar20 regular ladder (2026-10-16)
 
 Internal donor: `922bd972ef9ec52079e9e750e6e7896e857aba8b`. New implementation

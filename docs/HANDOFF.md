@@ -1,5 +1,53 @@
 # Current Handoff
 
+## 2026-10-30: repair missing OFFLINE cache in multiview acceptance
+
+User-supplied job 21983825 log, source `de79c729`, shows the two-epoch CONCAT
+miniature completed, then FUSION loading failed on missing
+`luka_alljets_9e591c7a_r1/prepared/inputs/train/OFFLINE/0000.npz`.
+This is an absent-input failure, not a rejected scientific result or reported
+OOM. A real synthetic ROOT regression reproduced that same FileNotFoundError
+before the correction.
+
+Added `luka_u100_multiview/offline_cache.py`, connected through `views.load`:
+present native-OFFLINE blocks retain strict checks; absent ones are rebuilt in
+RAM from the original authenticated selected raw rows and conventions. Each
+reconstructed NPZ byte count/SHA256 must match the old manifest, followed by
+full prepared-input fingerprint, ordered-population and RAM checks. Existing
+corruption, modified raw source, changed units or fingerprints fail. D000/U100
+remain on the unchanged durable reader. No historical or raw files are written.
+
+SPEC advances to v2 with the explicit input-replay policy. Scientific RECIPE,
+bank and fit versions remain v1 because input bytes must be identical. Source
+compatibility pins other runtimes at `ac76bbd9866cb00891bc554dac7ae8b31778c643`
+and permits changes only in enumerated multiview files/wrappers. The original
+guard compared to a pre-multiview base and would reject the already committed
+unrelated FullStat namespaces. Those files remain unchanged and pinned.
+Donors are recorded in [LEGACY_SOURCE_MAP](LEGACY_SOURCE_MAP.md); updated
+[plan](plans/LUKA_U100_MULTIVIEW_READOUT_PLAN.md),
+[contract](contracts/LUKA_U100_MULTIVIEW.md) and
+[runbook](LUKA_U100_MULTIVIEW_RUNBOOK.md) describe the repair and restart boundary.
+
+Evidence: baseline focused checks **4 passed**; new missing-block test failed
+under the old code. All **74 regression cases passed** across multiview, new
+OFFLINE replay and historical regular/ALLJETS cache suites: 72 passed in the
+combined invocation; two CUDA checks initially stopped because the local shell
+lacked `CUBLAS_WORKSPACE_CONFIG=:4096:8`. Both passed when rerun with the exact
+production worker setting. These include installed-Weaver CUDA miniatures and
+the synthetic complete science-worker DAG. Fourteen new checks cover partial/
+full missing TRAIN/validation caches, exact reconstruction without writes,
+corrupt/changed evidence, sealed roles, budgets, SPEC versioning and source
+boundaries. Existing attention-mask deprecation warnings remain. AST, 29 local
+documentation links and whitespace checks passed.
+
+Next: commit/push the scoped repair and run fresh debug acceptance from its
+new worktree/root using the runbook. Preserve the failed root and claims;
+there is no complete acceptance receipt or authenticated partial-resume path.
+The old job/watcher cannot be repurposed for the new SPEC/v2 campaign. No source
+commit/push, remote change, job submission or new SPORC/Tigris acceptance was
+performed here. Local synthetic success does not claim remote acceptance.
+
+
 ## 2026-10-07: frozen S3 direct/coarse follow-up implemented locally
 
 User-supplied SPORC accounting reports the screen preflight 21825487, all
