@@ -2,6 +2,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 import gc
+import json
 import math
 import time
 import numpy as np
@@ -22,7 +23,7 @@ from hlt_classification.luka_fullstat_u100_embedding.worker import data, longest
 from hlt_classification.luka_fullstat_fine_tail.worker import rejection
 from . import campaign, submission, training, model
 from .execution import execution
-from .contracts import artifact, validate, recipe
+from .contracts import artifact, validate, recipe, teacher_replay
 
 TASK = 'train_readout'
 FIT_FILES = ('selected.pt','selected_training_state.pt','completed_training.json',
@@ -79,25 +80,69 @@ def validate_readout(spec):
     return rec
 
 
+def teacher_batches(rows, maximum_row):
+    if (type(rows) is not int or rows<=0 or type(maximum_row) is not int
+            or not 0<=maximum_row<rows):
+        raise ValueError('Invalid teacher TRAIN replay population/witness')
+    policy=teacher_replay(); batch=policy['batch_size']; count=math.ceil(rows/batch)
+    selected=np.unique(np.r_[np.linspace(0,count-1,min(policy['spread_batches'],count),dtype=np.int64),
+                               maximum_row//batch])
+    return [dict(start=int(i)*batch,stop=min((int(i)+1)*batch,rows)) for i in selected]
+
+
+def replay_backend(device):
+    # Record, do not mutate: the historical banks.export uses ordinary FP32 eval.
+    # Its manifest did not record backend flags; these describe this replay only.
+    return dict(device=torch.device(device).type, autocast=False,
+        cudnn_enabled=torch.backends.cudnn.enabled,
+        cudnn_benchmark=torch.backends.cudnn.benchmark,
+        cudnn_deterministic=torch.backends.cudnn.deterministic,
+        cudnn_allow_tf32=torch.backends.cudnn.allow_tf32,
+        matmul_allow_tf32=torch.backends.cuda.matmul.allow_tf32,
+        float32_matmul_precision=torch.get_float32_matmul_precision(),
+        deterministic_algorithms=torch.are_deterministic_algorithms_enabled(),
+        deterministic_warn_only=torch.is_deterministic_algorithms_warn_only_enabled())
+
+
 def teacher_parity(spec, bank, readout, meta, device):
+    policy=teacher_replay()
+    if spec['teacher_replay']!=policy: raise ValueError('Teacher replay policy differs')
     u = data(spec,'train','U100',authenticated=meta)
-    if not np.array_equal(u.identities,bank.identities) or not np.array_equal(u.labels,bank.labels):
+    if (u.role!='train' or u.coordinate_name!='U100' or len(u)!=spec['counts']['train']
+            or not np.array_equal(u.identities,bank.identities) or not np.array_equal(u.labels,bank.labels)):
         raise ValueError('Teacher TRAIN row join differs')
     teacher = DelphesParticleTransformer().to(device).eval().requires_grad_(False)
     teacher.load_state_dict(torch.load(validate_file_ref(spec['teacher_refs']['checkpoint']),
                                       map_location='cpu',weights_only=True),strict=True)
     index, maximum = longest(u)
-    # Distinct rows plus the largest authentic support; never validation targets.
-    ix = np.unique(np.r_[np.linspace(0,len(u)-1,min(128,len(u)),dtype=np.int64),index])
-    with parity_backend(device),torch.inference_mode(),torch.autocast(torch.device(device).type,enabled=False):
-        for start in range(0,len(ix),128):
-            ids=ix[start:start+128]; raw=u.batch(ids)
+    batches=teacher_batches(len(u),int(index)); backend=replay_backend(device)
+    errors=dict(embedding_max_abs=0.,logit_max_abs=0.)
+    print('READOUT teacher replay backend='+json.dumps(backend,sort_keys=True),flush=True)
+    # Reproduce the exporter's contiguous batch geometry (including dynamic
+    # padding). Strict parity_backend belongs only around fresh-vs-fresh probes:
+    # disabling TF32 here compares the historical bank to a different computation.
+    with torch.inference_mode(),torch.autocast(torch.device(device).type,enabled=False):
+        for span in batches:
+            ids=np.arange(span['start'],span['stop']); raw=u.batch(ids)
             tensors={k:torch.from_numpy(raw[k]).to(device) for k in ('features','vectors','mask')}
             logits,h=model.head_input(teacher,**tensors)
             z=torch.from_numpy(bank.targets[ids]).to(device)
-            torch.testing.assert_close(readout.mean+readout.scale*z,h.float(),rtol=2e-4,atol=2e-5)
-            torch.testing.assert_close(readout(z),logits.float(),rtol=2e-4,atol=2e-5)
-    return dict(train_rows=ix.tolist(),teacher_train_maximum=maximum,teacher_readout_parity=True)
+            reconstructed=readout.mean+readout.scale*z; replayed=readout(z)
+            values=(reconstructed,h,logits,replayed)
+            if any(not torch.isfinite(v).all() for v in values):
+                raise ValueError('Nonfinite teacher/readout TRAIN replay')
+            observed=dict(embedding_max_abs=float((reconstructed-h.float()).abs().max()),
+                          logit_max_abs=float((replayed-logits.float()).abs().max()))
+            print('READOUT teacher replay '+json.dumps(dict(span,padded_particles=raw['mask'].shape[-1],
+                  **observed),sort_keys=True),flush=True)
+            torch.testing.assert_close(reconstructed,h.float(),rtol=policy['rtol'],atol=policy['atol'])
+            torch.testing.assert_close(replayed,logits.float(),rtol=policy['rtol'],atol=policy['atol'])
+            errors={k:max(errors[k],v) for k,v in observed.items()}
+    if backend!=replay_backend(device): raise ValueError('Teacher replay changed backend settings')
+    return dict(train_rows=[i for b in batches for i in range(b['start'],b['stop'])],
+        teacher_batches=batches,teacher_maximum_row=int(index),teacher_replay_hash=policy['content_hash'],
+        teacher_replay_backend=backend,teacher_replay_errors=errors,
+        teacher_train_maximum=maximum,teacher_readout_parity=True)
 
 
 def check_memory(spec,value):
@@ -175,6 +220,7 @@ def startup(spec,tr,val,bank,readout,readout_record,meta,device,started):
 
 def validate_startup(spec,value,readout_record):
     validate(value,'STARTUP',dict(spec=spec['content_hash'],readout=readout_record['content_hash']))
+    validate_teacher_witness(spec,value)
     if (any(value[k] is not True for k in ('native_parity','installed_weaver_parity','main_head_CE_only',
             'readout_frozen','readout_input_gradient','finite_connected_gradients','probe_discarded','teacher_readout_parity'))
             or value['batch']!=128 or value['stress_steps']!=3
@@ -185,6 +231,26 @@ def validate_startup(spec,value,readout_record):
     check_memory(spec,value['memory']); t=value['timing']
     if t!=timing(spec,t['train_seconds_per_update'],t['validation_seconds_per_batch'],t['preparation_seconds']):
         raise ValueError('Timing record differs')
+
+
+def validate_teacher_witness(spec,value):
+    policy=teacher_replay()
+    batches=teacher_batches(spec['counts']['train'],value['teacher_maximum_row'])
+    if (spec['teacher_replay']!=policy or value['teacher_replay_hash']!=policy['content_hash']
+            or value['teacher_batches']!=batches
+            or value['train_rows']!=[i for b in batches for i in range(b['start'],b['stop'])]
+            or value['teacher_readout_parity'] is not True):
+        raise ValueError('Teacher replay witness differs')
+    backend=value['teacher_replay_backend']; expected=replay_backend('cpu')
+    if (backend.keys()!=expected.keys() or backend['device'] not in ('cpu','cuda')
+            or backend['autocast'] is not False
+            or backend['float32_matmul_precision'] not in ('highest','high','medium')
+            or any(type(backend[k]) is not bool for k,v in expected.items() if type(v) is bool)):
+        raise ValueError('Invalid teacher replay backend record')
+    errors=value['teacher_replay_errors']
+    if (set(errors)!={'embedding_max_abs','logit_max_abs'}
+            or any(not math.isfinite(v) or v<0 for v in errors.values())):
+        raise ValueError('Invalid teacher replay error record')
 
 
 def fit_parents(spec,readout_record):

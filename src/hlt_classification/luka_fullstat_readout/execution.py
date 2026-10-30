@@ -26,9 +26,9 @@ def allocation_minutes(value):
 
 
 def execution(gate, measured=None):
-    if (gate.get('contract') != 'LUKA_FULLSTAT_READOUT_SPEC/v1'
+    if (gate.get('contract') != 'LUKA_FULLSTAT_READOUT_SPEC/v2'
             or gate.get('runtime_prefix') != source.RUNTIME):
-        raise PermissionError('Replacement runtime requires the readout v1 registration')
+        raise PermissionError('Replacement runtime requires the readout v2 registration')
     require_backend()
     site = gate['execution_site']
     validate_site(site)

@@ -24,7 +24,7 @@ def allocation(tmp_path, monkeypatch):
     monkeypatch.setattr(source,'RUNTIME',str(runtime))
     monkeypatch.setattr(sys,'prefix',str(runtime))
     fingerprint={'fixture': True}; gpu={'name':'FIXTURE L40S'}
-    gate=dict(contract='LUKA_FULLSTAT_READOUT_SPEC/v1',runtime_prefix=str(runtime),
+    gate=dict(contract='LUKA_FULLSTAT_READOUT_SPEC/v2',runtime_prefix=str(runtime),
         execution_site=legacy.execution_site('oscar_l40s'),cpus=6,memory_mb=180000,minutes={'train_readout':1440},
         anchor=dict(evidence=dict(environment=fingerprint,cudnn_v8_disabled='unset')))
     fields=dict(Account='default',Partition='gpu',QOS='norm-gpu',NumNodes='1',NumTasks='1',NumCPUs='6',TimeLimit='1-00:00:00')
@@ -65,7 +65,7 @@ def test_all_replacement_runtime_guards(tmp_path,monkeypatch,bad):
     scheduler=dict(account='Account',partition='Partition',qos='QOS',nodes='NumNodes',tasks='NumTasks',scheduler_cpus='NumCPUs')
     if bad in env: monkeypatch.setenv(env[bad],'wrong')
     elif bad in scheduler: fields[scheduler[bad]]='wrong'
-    elif bad=='contract': gate['contract']='LUKA_FULLSTAT_READOUT_SPEC/v0'
+    elif bad=='contract': gate['contract']='LUKA_FULLSTAT_READOUT_SPEC/v1'
     elif bad=='registered_prefix': gate['runtime_prefix']='wrong'
     elif bad=='prefix': monkeypatch.setattr(sys,'prefix','wrong')
     elif bad=='arch': monkeypatch.setattr(ex.platform,'machine',lambda:'aarch64')

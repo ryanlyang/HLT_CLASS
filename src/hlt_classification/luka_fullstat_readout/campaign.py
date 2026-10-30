@@ -6,7 +6,7 @@ from hlt_classification.cms_proxy_ladder.contracts import validate_file_ref
 from hlt_classification.jetclass2_delphes.execution import execution_site
 from hlt_classification.luka_fullstat_multiteacher.campaign import protected
 from . import source
-from .contracts import artifact, validate, recipe, node, COUNTS
+from .contracts import artifact, validate, recipe, node, COUNTS, teacher_replay
 
 
 def registration(reuse):
@@ -28,6 +28,7 @@ def registration(reuse):
     references = {n: reuse['anchor']['evidence']['models'][n] for n in ('M0HLT','OFFLINE')}
     references['U100_W5'] = reuse['reference']
     return dict(counts=dict(COUNTS), node=node(reuse['base_node']), recipe=recipe(),
+        teacher_replay=teacher_replay(),
         anchor=reuse['anchor'], references=references, bank_manifest=reuse['bank_manifest'],
         teacher_refs=reuse['teacher_refs'], runtime_prefix=source.RUNTIME,
         execution_site=reuse['execution_site'], cpus=6, memory_mb=180000,

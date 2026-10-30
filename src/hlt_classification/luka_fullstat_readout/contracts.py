@@ -7,21 +7,32 @@ TASKS = {'train_readout': []}
 AUTHORIZATION = 'AUTHORIZE_FULLSTAT_READOUT_V1'
 LAUNCH_AUTHORIZATION = 'AUTHORIZE_FULLSTAT_READOUT_AUTOSUBMIT_V1'
 EPOCHS = 20
+VERSIONS = {'SPEC': 2, 'STARTUP': 2}
 
 
 def artifact(kind, *, parents=None, **fields):
-    return with_content_hash(dict(contract=f'LUKA_FULLSTAT_READOUT_{kind}/v1',
-        schema_version=1, parents=dict(parents or {}), **FLAGS, **fields))
+    version = VERSIONS.get(kind, 1)
+    return with_content_hash(dict(contract=f'LUKA_FULLSTAT_READOUT_{kind}/v{version}',
+        schema_version=version, parents=dict(parents or {}), **FLAGS, **fields))
 
 
 def validate(value, kind, parents=None):
-    validate_content_hash(value, expected_contract=f'LUKA_FULLSTAT_READOUT_{kind}/v1',
-                          expected_schema_version=1)
+    version = VERSIONS.get(kind, 1)
+    validate_content_hash(value, expected_contract=f'LUKA_FULLSTAT_READOUT_{kind}/v{version}',
+                          expected_schema_version=version)
     if any(value.get(k) != v for k, v in FLAGS.items()):
         raise PermissionError('FullStat sealed-role flags differ')
     if parents is not None and value['parents'] != parents:
         raise ValueError('Artifact parents differ')
     return value
+
+
+def teacher_replay():
+    return artifact('TEACHER_REPLAY', role='train', coordinate='U100', batch_size=128,
+        spread_batches=5, include_maximum_support_batch=True, include_final_batch=True,
+        batching='original_contiguous_export_batches_including_partial_tail',
+        backend='inherited_production_backend_no_strict_parity_override',
+        autocast=False, rtol=2e-4, atol=2e-5)
 
 
 def recipe():

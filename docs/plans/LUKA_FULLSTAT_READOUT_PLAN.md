@@ -1,6 +1,8 @@
 # FullStat U100 frozen-readout CE on Oscar
 
-Status: locally implemented/tested; exact pushed release and Oscar execution pending.
+Status: initial Oscar job 8118177 failed in historical teacher parity before
+any training epochs. Corrected export-faithful replay is implemented locally;
+fixed-source Oscar acceptance remains pending.
 This is the explicitly requested FullStat adaptation
 of `LUKA_U100_FROZEN_READOUT_CE_HANDOFF.md`, not a change to the smaller multiview
 campaign. One fresh HLT-only student; reuse completed U100-w5 as a historical
@@ -38,6 +40,15 @@ installed-Weaver parity, largest-support gradient/memory probes and measured
 timing admission before its fresh fit. Probe updates are discarded. Existing
 Oscar evidence is reused; new workload checks are recorded separately, never
 called a new full-epoch preflight. No extra scientific fit is hidden in setup.
+
+Historical bank replay must preserve the exporter's numerical execution:
+ordinary production FP32 eval, no strict-backend override, and complete original
+contiguous batches of 128 (including the final partial batch). Use five spread
+batch indices plus the maximum-support batch, at most six batches / 768 rows.
+Keep the original elementwise rtol=2e-4 / atol=2e-5 checks. Record replay batches,
+backend flags and errors under SPEC/STARTUP v2 and TEACHER_REPLAY v1. Keep strict
+backend comparisons for fresh native/installed-Weaver parity. This corrects the
+acceptance procedure, preserving the scientific loss, seeds, targets and fit.
 
 Persist complete student/predictor/optimizer/RNG state and validation history
 after every epoch. Persist selected native and training state before final

@@ -57,6 +57,22 @@ def test_registered_science_one_fresh_model():
     assert s['scientific_fits']==1 and s['preflight_jobs']==s['setup_jobs']==0 and s['historical_control']
     assert s['node']['teacher'] is None and s['node']['coordinate']=='D000'
     assert s['final_test_sealed'] and not s['final_test_accessed']
+    assert s['teacher_replay']==c.teacher_replay() and s['contract'].endswith('/v2')
+    assert r['contract'].endswith('/v1')  # Scientific recipe did not change.
+
+
+def test_replay_bounds_and_old_acceptance_rejected():
+    for rows,index in [(1,0),(128,127),(129,128),(3000000,100003)]:
+        batches=w.teacher_batches(rows,index)
+        assert len(batches)<=6 and batches[0]['start']==0 and batches[-1]['stop']==rows
+        assert sum(b['stop']-b['start'] for b in batches)<=768
+        assert any(b['start']<=index<b['stop'] for b in batches)
+        assert all(b['start']%128==0 and 0<b['stop']-b['start']<=128 for b in batches)
+    for rows,index in [(0,0),(22,-1),(22,22),(True,0)]:
+        with pytest.raises(ValueError): w.teacher_batches(rows,index)
+    for kind in ('SPEC','STARTUP'):
+        stale=with_content_hash(dict(c.artifact(kind),contract=f'LUKA_FULLSTAT_READOUT_{kind}/v1',schema_version=1))
+        with pytest.raises(ValueError): c.validate(stale,kind)
 
 
 @pytest.mark.parametrize('bad',['teacher','count','fused','memory','site','parent'])
@@ -94,6 +110,12 @@ def test_bank_classifier_join_parity_and_corruption(tmp_path,monkeypatch):
     monkeypatch.setattr(w,'data',lambda *a,**kw:u)
     evidence=w.teacher_parity(s,bank,readout,None,'cpu')
     assert evidence['teacher_readout_parity'] and evidence['teacher_train_maximum']==4
+    w.validate_teacher_witness(s,evidence)
+    for key,value in [('teacher_batches',[]),('train_rows',[0]),('teacher_replay_hash','0'*64),
+                      ('teacher_maximum_row',len(tr)),('teacher_readout_parity',False),
+                      ('teacher_replay_errors',dict(embedding_max_abs=float('nan'),logit_max_abs=0.)),
+                      ('teacher_replay_backend',dict(evidence['teacher_replay_backend'],autocast=True))]:
+        with pytest.raises(ValueError): w.validate_teacher_witness(s,dict(evidence,**{key:value}))
     folder=Path(s['root'])/w.TASK; folder.mkdir()
     w.save_readout(s,bank,'cpu'); w.validate_readout(s)
     state=torch.load(folder/'readout.pt',weights_only=True); state['bias'].add_(1)
@@ -103,6 +125,70 @@ def test_bank_classifier_join_parity_and_corruption(tmp_path,monkeypatch):
     with pytest.raises(ValueError,match='classifier/normalization'): w.validate_readout(s)
     wrong=deepcopy(s['teacher_refs']); wrong['checkpoint']['sha256']='0'*64
     with pytest.raises(ValueError): model.make_readout(bank,Path(s['bank_manifest']['path']).parent,wrong,'cpu')
+
+
+@pytest.mark.parametrize('device',['cpu','cuda'])
+def test_historical_replay_keeps_export_backend_and_ragged_batches(tmp_path,monkeypatch,device):
+    if device=='cuda' and not torch.cuda.is_available(): pytest.skip('CUDA unavailable')
+    if device=='cpu': tiny(monkeypatch)
+    from hlt_classification.jetclass2_delphes.cache import RamBlock, RamCache
+    rng=np.random.default_rng(43); rows=273
+    lengths=np.r_[rng.integers(1,33,128),rng.integers(1,49,128),rng.integers(1,25,17)]
+    lengths[141]=65
+    offsets=np.r_[0,np.cumsum(lengths)].astype(np.int64)
+    features=rng.normal(size=(offsets[-1],17)).astype(np.float32)
+    p=rng.normal(size=(offsets[-1],3)).astype(np.float32)
+    vectors=np.column_stack((p,np.sqrt((p*p).sum(-1)+1))).astype(np.float32)
+    identities=np.zeros((rows,32),np.uint8)
+    identities[:,:2]=np.array([[i%256,i//256] for i in range(rows)],np.uint8)
+    u=RamCache([RamBlock(0,offsets,features,vectors,identities,np.arange(rows,dtype=np.int64)%11)],
+        role='train',foundation_sha256='a'*64,coordinate_name='U100')
+    teacher=w.DelphesParticleTransformer()
+    torch.save(teacher.state_dict(),tmp_path/'teacher.pt')
+    (tmp_path/'report.json').write_text('{"fixture": true}')
+    refs=dict(checkpoint=file_ref(tmp_path/'teacher.pt'),report=file_ref(tmp_path/'report.json'))
+    # Production FP32 export permits cuDNN TF32. Strict parity_backend does not.
+    monkeypatch.setattr(torch.backends.cudnn,'allow_tf32',True)
+    before=(torch.backends.cudnn.allow_tf32,torch.backends.cuda.matmul.allow_tf32,
+            torch.are_deterministic_algorithms_enabled())
+    calls=[]; batch=u.batch
+    def capture(ids):
+        calls.append(ids.tolist()); return batch(ids)
+    monkeypatch.setattr(u,'batch',capture)
+    banks.export(tmp_path/'bank',teacher,u,refs=refs,device=device)
+    exported=deepcopy(calls); calls.clear()
+    bank=banks.Bank(tmp_path/'bank',u,refs=refs)
+    readout=model.make_readout(bank,tmp_path/'bank',refs,device)
+    if device=='cuda':
+        # Diagnostic only: magnitude of the old mixed-backend/rebatched error is
+        # hardware dependent, so the portable regression checks execution parity.
+        ix=np.unique(np.r_[np.linspace(0,rows-1,128,dtype=np.int64),141])[:128]
+        raw=batch(ix)
+        with parity_backend(device),torch.inference_mode(),torch.autocast('cuda',enabled=False):
+            _,h=model.head_input(teacher,**{k:torch.from_numpy(raw[k]).to(device)
+                                          for k in ('features','vectors','mask')})
+            z=torch.from_numpy(bank.targets[ix]).to(device)
+            old_error=float((readout.mean+readout.scale*z-h.float()).abs().max())
+        print('Old strict/rebatched CUDA replay maximum embedding error:',old_error)
+    s=fixture_spec(tmp_path/'new'); s['teacher_refs']=refs
+    s['counts']=dict(s['counts'],train=rows)
+    monkeypatch.setattr(w,'data',lambda *a,**kw:u)
+    head=model.head_input
+    def check_backend(*args,**kwargs):
+        assert before==(torch.backends.cudnn.allow_tf32,torch.backends.cuda.matmul.allow_tf32,
+                        torch.are_deterministic_algorithms_enabled()), 'historical export backend changed'
+        return head(*args,**kwargs)
+    monkeypatch.setattr(model,'head_input',check_backend)
+    evidence=w.teacher_parity(s,bank,readout,None,device)
+    assert calls==exported  # Includes max-support row and the original 17-row final batch.
+    assert evidence['teacher_readout_parity'] and evidence['teacher_train_maximum']==65
+    w.validate_teacher_witness(s,evidence)
+    # A real target change must still fail; tolerances are not loosened to bypass it.
+    bad=SimpleNamespace(identities=bank.identities,labels=bank.labels,targets=bank.targets.copy())
+    bad.targets[0,0]+=1.
+    with pytest.raises(AssertionError): w.teacher_parity(s,bad,readout,None,device)
+    assert before==(torch.backends.cudnn.allow_tf32,torch.backends.cuda.matmul.allow_tf32,
+                    torch.are_deterministic_algorithms_enabled())
 
 
 def test_full20_zero_readout_matches_historical_training(tmp_path,monkeypatch):

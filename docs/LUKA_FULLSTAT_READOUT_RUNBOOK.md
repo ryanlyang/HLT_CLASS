@@ -14,6 +14,25 @@ reused read-only. Bounded parity, largest-support gradient/memory and timing
 checks run inside this job before fresh training. There is no standalone
 preflight, no teacher retraining and no full target re-export.
 
+## Retry after job 8118177
+
+The first job at `abe387791386507580b7e826850577c2b4cea6cf` failed in
+`integrated_readout_checks` before any completed epochs. Its teacher replay
+disabled TF32/deterministically changed the backend and regrouped rows into
+different padded batches from the historical exporter. That is an invalid
+numerical comparison. The correction replays complete original export batches
+under the ordinary production backend with unchanged numerical tolerances.
+It adds logged batch ranges, backend flags and error magnitudes. Strict checks
+for fresh-vs-fresh native/installed-Weaver parity are retained.
+
+Commit/push the correction and use the launch block below with that NEW commit.
+It creates a fresh `luka_fullstat_readout_NEWCOMMIT_r1` root and submits one
+training job with inline checks; no standalone preflight or target re-export.
+Keep `luka_fullstat_readout_abe38779_r1` and its source/logs unchanged. Do not
+requeue 8118177, replace its spec or reuse its output directory: it points at
+the old code and SPEC/STARTUP v1. The correction uses SPEC/STARTUP v2 while
+retaining the scientific recipe. No trained epochs were lost in this failure.
+
 ## Commit and push this implementation
 
 Preserve unrelated work. Stage only these files; shared HANDOFF/LEGACY_SOURCE_MAP
@@ -24,7 +43,7 @@ git add -- src/hlt_classification/luka_fullstat_readout
 git add -- scripts/luka_fullstat_readout.py scripts/launch_luka_fullstat_readout.sh scripts/queue_luka_fullstat_readout.sh sbatch/run_luka_fullstat_readout.sh
 git add -- tests/test_luka_fullstat_readout.py tests/test_luka_fullstat_readout_launch.py docs/plans/LUKA_FULLSTAT_READOUT_PLAN.md docs/contracts/LUKA_FULLSTAT_READOUT.md docs/LUKA_FULLSTAT_READOUT_RUNBOOK.md
 git diff --cached --stat
-git commit -m "Add FullStat U100 frozen-readout CE on Oscar"
+git commit -m "Fix FullStat readout teacher replay backend and export batches"
 if ($LASTEXITCODE -ne 0) { throw "Inspect commit status before continuing" }
 git push origin HEAD:main
 if ($LASTEXITCODE -ne 0) { throw "Push failed" }
@@ -124,3 +143,10 @@ historical U100/multiview tests. Includes installed-Weaver CUDA full architectur
 and all20 synthetic epochs, exact historical-kernel parity with readout disabled,
 durable failure preservation and detached Bash flow. The Linux-only real HUP
 test is skipped on Windows. CLI/AST, shell syntax and documentation links pass.
+
+2026-10-30 replay correction: **120 passed, 1 skipped in 97.31s** across the
+same suites, now including ragged multi-batch historical export/replay on CPU
+and full-architecture CUDA, corruption rejection and v1 acceptance rejection.
+The complete CUDA worker still trains/publishes all20 synthetic epochs. New
+replay keeps rtol=2e-4 / atol=2e-5. AST, documentation links and diff whitespace
+checks pass. Actual corrected Oscar execution remains pending.
