@@ -7,11 +7,12 @@ import torch
 from hlt_classification.jetclass2_delphes.model import DelphesParticleTransformer
 from hlt_classification.jetclass2_delphes.acceptance import installed_parity
 from hlt_classification.jetclass2_delphes.dzfix_fusion_model import parity_backend
-from hlt_classification.luka_fullstat_retained.worker import check_memory, sync
+from hlt_classification.luka_fullstat_retained.worker import sync
 from hlt_classification.luka_fullsim.preflight_v2 import memory_snapshot
 from hlt_classification.luka_fullstat_readout import worker as rw, model as rm
 from hlt_classification.luka_u100_multiview import teachers
-from . import model, training, views
+from . import model, training, views, fusion, resources
+from .resources import check_memory
 from .contracts import artifact, validate, recipe
 
 
@@ -23,26 +24,49 @@ def stress_ids(value):
     return np.full(128,int(np.argmax(views.lengths(value))),np.int64)
 
 
-def timing(spec,task,train_step,val_step,export_step,preparation):
+def timing(spec,task,train_step,val_step,export_step,preparation,*,enforce=True):
     name=model.teacher_name(task)
     if (any(not math.isfinite(v) or v<=0 for v in (train_step,val_step))
             or not math.isfinite(export_step) or (export_step<=0 if name else export_step!=0)
             or not math.isfinite(preparation) or preparation<0): raise ValueError('Invalid timing witness')
     nt=math.ceil(spec['counts']['train']/128);nv=math.ceil(spec['counts']['validation']/128)
-    minutes=math.ceil(preparation/60+120+1.5*(20*nt*train_step+22*nv*val_step+nt*export_step)/60)
-    if minutes>spec['minutes'][task]: raise ValueError('Measured full20 plus export exceeds allocation')
+    p=resources.policy()
+    minutes=math.ceil(preparation/60+p['fixed_margin_minutes']+
+                      p['timing_factor']*(20*nt*train_step+22*nv*val_step+nt*export_step)/60)
+    if enforce and minutes>spec['minutes'][task]:
+        raise ValueError(f'Measured full20 plus export requires {minutes} minutes; '
+                         f'allocation is {spec["minutes"][task]} minutes. See startup_diagnostics; no fallback.')
     return dict(train_step=train_step,val_step=val_step,export_step=export_step,preparation=preparation,
                 conservative_minutes=minutes,full_epoch_measured=False)
 
 
 def run(spec,task,tr,val,banks,meta,device,started):
+    record=resources.Recorder(spec,task,lambda:memory_snapshot(torch))
+    try:
+        record.record('begin',allocated_minutes=spec['minutes'][task],
+                      gpu=spec['reuse']['u100']['gpu'])
+        return _run(spec,task,tr,val,banks,meta,device,started,record)
+    except Exception as exc:
+        try: record.failure(exc)
+        except Exception as diagnostic_error:
+            print(f'Could not save startup failure diagnostic: {diagnostic_error}',flush=True)
+        raise
+
+
+def _run(spec,task,tr,val,banks,meta,device,started,record):
     name=model.teacher_name(task); witness=None
+    fusion_parity=None
+    record.record('parity_started')
     if not name:
         readout=rm.make_readout(banks['U100'],Path(spec['bank_manifest']['path']).parent,spec['teacher_refs'],device)
         witness=rw.teacher_parity(spec,banks['U100'],readout,meta,device)
         del readout
     ordinary_input=tr.primary if name=='FUSION' else tr
     with parity_backend(device): installed_parity(ordinary_input,device=device)
+    if name=='FUSION':
+        ix=np.arange(min(4,len(tr)))
+        fusion_parity=fusion.parity(tr.primary.batch(ix),tr.context.batch(ix),device)
+        fusion.check_parity(fusion_parity)
     net=model.new_model(spec['nodes'][task],task).to(device).eval()
     native=DelphesParticleTransformer().to(device).eval()
     if name=='FUSION': native.mod.load_state_dict(net.primary_mod.state_dict(),strict=True)
@@ -57,6 +81,7 @@ def run(spec,task,tr,val,banks,meta,device,started):
             errors[str(bf16)]=float((a.float()-b.float()).abs().max())
     del native
     net.train();opt=training.optimizer(net,recipe()['base']);ids=stress_ids(tr)
+    record.record('stress_started',fusion_parity=fusion_parity)
     for _ in range(3):
         opt.zero_grad(set_to_none=True)
         loss,parts=model.loss_for(net,task,tr.batch(ids),ids,banks,device)
@@ -72,6 +97,11 @@ def run(spec,task,tr,val,banks,meta,device,started):
         if not all(any(p.grad is not None and torch.any(p.grad!=0) for p in head.parameters()) for head in net.predictors.values()):
             raise ValueError('Embedding predictor disconnected')
         net.capture=False
+    if name=='FUSION' and torch.device(device).type=='cuda':
+        fusion.compact.validate_offload_stats(net.pair_offload_stats(),calls=3)
+    record.record('stress_completed',pair_storage_stats=net.pair_offload_stats() if name=='FUSION' else None)
+    opt.zero_grad(set_to_none=True)
+    del loss,parts,ce_grad
     net.eval();deployed=model.deploy(net,task).to(device).eval()
     if name:
         restored=model.new_model(spec['nodes'][task],task).to(device).eval()
@@ -84,21 +114,30 @@ def run(spec,task,tr,val,banks,meta,device,started):
         b=teachers.forward(restored,raw,device,bf16=False,name=name)
         torch.testing.assert_close(a,b,rtol=0,atol=0)
     del restored,deployed
+    record.record('validation_stress_started')
     with torch.inference_mode():
         out=teachers.forward(net,val.batch(stress_ids(val)),device,bf16=torch.device(device).type=='cuda',name=name)
         if not torch.isfinite(out).all(): raise ValueError('Invalid max-support validation')
+        record.record('validation_stress_completed')
         if name:
+            record.record('export_stress_started')
             out,h=teachers.forward(net,tr.batch(ids),device,bf16=False,name=name,capture=True)
             if not torch.isfinite(h).all() or not torch.isfinite(out).all(): raise ValueError('Invalid max-support FP32 export')
+            record.record('export_stress_completed')
+            del h
+    del out
+    record.record('benchmark_started')
     rng=np.random.default_rng(73012);net.train()
     if not name: net.capture=True
     for step in range(68):
         if step==4: sync(device);begun=time.monotonic()
         ix=rng.integers(0,len(tr),128);opt.zero_grad(set_to_none=True)
-        loss,_=model.loss_for(net,task,tr.batch(ix),ix,banks,device)
+        loss,parts=model.loss_for(net,task,tr.batch(ix),ix,banks,device)
         loss.backward();training.finite_gradients(net);opt.step()
         if not name: net.predictions={}
     sync(device);train_step=(time.monotonic()-begun)/64
+    opt.zero_grad(set_to_none=True)
+    del loss,parts
     net.eval()
     if not name: net.capture=False
     sync(device);begun=time.monotonic()
@@ -115,10 +154,16 @@ def run(spec,task,tr,val,banks,meta,device,started):
                 if not torch.isfinite(h).all(): raise ValueError('Nonfinite export timing')
                 h.float().cpu().numpy()
         sync(device);export_step=(time.monotonic()-begun)/16
-    memory=memory_snapshot(torch);check_memory(spec,memory)
-    estimate=timing(spec,task,train_step,val_step,export_step,time.monotonic()-started)
+    memory=memory_snapshot(torch)
+    estimate=timing(spec,task,train_step,val_step,export_step,time.monotonic()-started,enforce=False)
+    # Persist BOTH witnesses before either guard can reject the allocation.
+    record.record('measurements',timing=estimate,measured_memory=memory,
+                  allocated_minutes=spec['minutes'][task])
+    check_memory(spec,memory)
+    timing(spec,task,train_step,val_step,export_step,estimate['preparation'])
     print(f'FULLSTAT MULTIVIEW integrated task={task} conservative_minutes={estimate["conservative_minutes"]}',flush=True)
     return artifact('STARTUP',parents=dict(spec=spec['content_hash']),task_id=task,
+        runtime_policy=resources.policy(),fusion_parity=fusion_parity,
         teacher_witness=witness,installed_weaver_parity=True,initial_parity=True,initial_errors=errors,
         finite_connected_gradients=True,classifier_CE_only=True,deployment_readback=True,
         batch=128,stress_steps=3,train=views.describe(tr),validation=views.describe(val),
@@ -134,6 +179,10 @@ def check(spec,task,value):
         raise ValueError('Startup graph checks differ')
     if set(value['initial_errors'])!={'False','True'} or any(not math.isfinite(v) or v<0 for v in value['initial_errors'].values()):
         raise ValueError('Invalid parity errors')
+    if value['runtime_policy']!=resources.policy() or spec['runtime_policy']!=resources.policy():
+        raise ValueError('Startup runtime policy differs')
+    if name=='FUSION': fusion.check_parity(value['fusion_parity'])
+    elif value['fusion_parity'] is not None: raise ValueError('Unexpected fusion parity')
     for role in ('train','validation'):
         v=value[role];ids=value[role+'_stress_rows']
         if (v['role']!=role or v['coordinate']!=(name or 'D000') or v['rows']!=spec['counts'][role]

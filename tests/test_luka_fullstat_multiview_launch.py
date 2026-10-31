@@ -24,10 +24,10 @@ def allocation(tmp_path, monkeypatch):
     monkeypatch.setattr(source,'RUNTIME',str(runtime))
     monkeypatch.setattr(sys,'prefix',str(runtime))
     fingerprint={'fixture': True}; gpu={'name':'FIXTURE L40S'}
-    gate=dict(contract='LUKA_FULLSTAT_MULTIVIEW_SPEC/v1',runtime_prefix=str(runtime),
-        execution_site=legacy.execution_site('oscar_l40s'),cpus=6,memory_mb=192000,minutes={'teacher_CONCAT':1440,'teacher_FUSION':1440,'train_multi3':1440},
+    gate=dict(contract='LUKA_FULLSTAT_MULTIVIEW_SPEC/v2',runtime_prefix=str(runtime),
+        execution_site=legacy.execution_site('oscar_l40s'),cpus=6,memory_mb=192000,minutes={'teacher_CONCAT':2880,'teacher_FUSION':2880,'train_multi3':1440},
         anchor=dict(evidence=dict(environment=fingerprint,cudnn_v8_disabled='unset')))
-    fields=dict(Account='default',Partition='gpu',QOS='norm-gpu',NumNodes='1',NumTasks='1',NumCPUs='6',TimeLimit='1-00:00:00')
+    fields=dict(Account='default',Partition='gpu',QOS='norm-gpu',NumNodes='1',NumTasks='1',NumCPUs='6',TimeLimit='2-00:00:00')
     for key,value in dict(SLURM_JOB_ID='8300001',SLURM_CPUS_PER_TASK='6',SLURM_MEM_PER_NODE='192000',
             SLURM_CLUSTER_NAME='slurmctld',CONDA_PREFIX=str(runtime),PYTHONNOUSERSITE='1',CUBLAS_WORKSPACE_CONFIG=':4096:8').items():
         monkeypatch.setenv(key,value)
@@ -116,6 +116,8 @@ def test_auto_dry_review_and_three_ordered_jobs_no_prompt(tmp_path,monkeypatch):
     assert not any(v.startswith('--dependency=') for v in calls[0])
     assert '--dependency=afterany:8300001' in calls[1]
     assert '--dependency=afterok:8300001:8300002' in calls[2]
+    assert '--time=2-00:00:00' in calls[0] and '--time=2-00:00:00' in calls[1]
+    assert '--time=1-00:00:00' in calls[2]
     assert set(result['jobs'])=={'teacher_CONCAT','teacher_FUSION','train_multi3'}
     assert load_json(directory/'complete.json')==result
     assert load_json(directory/'intent.json')['parent_spec']==s['reuse']['parent_spec']

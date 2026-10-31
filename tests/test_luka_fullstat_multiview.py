@@ -12,7 +12,7 @@ from test_luka_u100_multiview import particles
 from hlt_classification.data.cache_contracts import load_json,with_content_hash,write_immutable_json
 from hlt_classification.cms_proxy_ladder.contracts import file_ref
 from hlt_classification.luka_fullstat import campaign as original_campaign
-from hlt_classification.luka_fullstat_multiview import contracts as c, campaign, model, training, targets, views, startup, worker, submission, source
+from hlt_classification.luka_fullstat_multiview import contracts as c, campaign, model, training, targets, views, startup, worker, submission, source, resources, fusion
 
 
 def tiny(monkeypatch):
@@ -74,9 +74,13 @@ def test_registered_exact_science():
     assert s['scientific_fits']==3 and s['preflight_jobs']==s['setup_jobs']==0
     assert s['nodes']['train_multi3']['deployable'] and s['nodes']['train_multi3']['coordinate']=='D000'
     assert all(not s['nodes'][t]['deployable'] for t in ('teacher_CONCAT','teacher_FUSION'))
+    assert s['contract']=='LUKA_FULLSTAT_MULTIVIEW_SPEC/v2'
+    assert c.recipe()['contract']=='LUKA_FULLSTAT_MULTIVIEW_RECIPE/v1'
+    assert s['runtime_policy']==resources.policy()
+    assert s['minutes']==dict(teacher_CONCAT=2880,teacher_FUSION=2880,train_multi3=1440)
 
 
-@pytest.mark.parametrize('bad',['epochs','weight','retained','coordinate','order','quota','memory','flag','teacher'])
+@pytest.mark.parametrize('bad',['epochs','weight','retained','coordinate','order','quota','memory','flag','teacher','runtime','old_version'])
 def test_definition_changes_fail_closed(tmp_path,bad):
     s=fixture_spec(tmp_path/'luka_fullstat_multiview_fixture')
     if bad=='epochs':s['recipe']['epochs']=30
@@ -87,6 +91,8 @@ def test_definition_changes_fail_closed(tmp_path,bad):
     elif bad=='quota':s['available_quota_gib']=21
     elif bad=='memory':s['memory_mb']=180000
     elif bad=='flag':s['final_test_accessed']=True
+    elif bad=='runtime':s['runtime_policy']['fusion_pair_storage']['h2d_non_blocking']=True
+    elif bad=='old_version':s.update(contract='LUKA_FULLSTAT_MULTIVIEW_SPEC/v1',schema_version=1)
     else:s['reuse']['oracle_node']['node_id']='UE100'
     with pytest.raises((ValueError,PermissionError)):campaign.validate_spec(with_content_hash(s))
 
@@ -206,6 +212,116 @@ def test_timing_includes_teacher_export_and_no_fallback():
     assert b['conservative_minutes']>a['conservative_minutes']
     with pytest.raises(ValueError):startup.timing(s,'teacher_FUSION',50,20,40,10)
     with pytest.raises(ValueError):startup.timing(s,'train_multi3',.05,.02,.01,10)
+
+
+def test_teacher_allocation_admits_unchanged_fit_exceeding_old_24_hours():
+    s=fixture_spec('/fixture')
+    witness=startup.timing(s,'teacher_CONCAT',.13,.04,.06,4201)
+    assert 1440 < witness['conservative_minutes'] < 2880
+    old=deepcopy(s);old['minutes']['teacher_CONCAT']=1440
+    with pytest.raises(ValueError,match='allocation is 1440'):
+        startup.timing(old,'teacher_CONCAT',.13,.04,.06,4201)
+    with pytest.raises(ValueError,match='allocation is 2880'):
+        startup.timing(s,'teacher_CONCAT',1.,.1,.1,4201)
+
+
+@pytest.mark.parametrize('failure',['time','memory','stress'])
+def test_failed_startup_saves_evidence_before_rejection_not_acceptance(tmp_path,monkeypatch,failure):
+    tiny(monkeypatch);s,*_=worker_fixture(tmp_path,monkeypatch,'cpu')
+    monkeypatch.setattr(startup,'installed_parity',lambda *a,**kw:None)
+    monkeypatch.setattr(training,'train',lambda *a,**kw:pytest.fail('Rejected startup must not train'))
+    if failure=='time':s['minutes']['teacher_CONCAT']=1
+    elif failure=='memory':s['reuse']['u100']['gpu']['total_memory_bytes']=1
+    else:
+        def broken(*a,**kw):raise RuntimeError('synthetic CUDA OOM during stress')
+        monkeypatch.setattr(model,'loss_for',broken)
+    with pytest.raises((ValueError,MemoryError,RuntimeError)):
+        worker.run(s,'teacher_CONCAT',device='cpu')
+    folder=Path(s['root'])/'teacher_CONCAT'
+    records=[load_json(p) for p in sorted((folder/'startup_diagnostics').glob('*.json'))]
+    assert records[-1]['stage']=='failure' and all(r['accepted'] is False for r in records)
+    assert all(r['parents']==dict(spec=s['content_hash']) for r in records)
+    measured=[r for r in records if r['stage']=='measurements']
+    if failure=='stress':
+        assert not measured and records[-1]['failed_stage']=='stress_started'
+    else:
+        assert len(measured)==1
+        assert measured[0]['timing']['conservative_minutes']>0
+        assert measured[0]['measured_memory']['gpu_peak_bytes']>0
+        assert measured[0]['allocated_minutes']==s['minutes']['teacher_CONCAT']
+    assert not any((folder/p).exists() for p in ('startup.json','epochs','task_receipt.json'))
+
+
+@pytest.mark.parametrize('device,bf16',[('cpu',False),('cuda',False),('cuda',True)])
+def test_new_fusion_factory_preserves_native_ce_updates(tmp_path,monkeypatch,device,bf16):
+    if device=='cuda' and not torch.cuda.is_available():pytest.skip('CUDA unavailable')
+    if device=='cpu':tiny(monkeypatch)
+    from test_jetclass2_dzfix_fusion_offload import inputs as pair_inputs
+    from hlt_classification.jetclass2_delphes.dzfix_fusion_model import parity_backend,PARITY_TOLERANCES
+    s=fixture_spec('/fixture');node=s['nodes']['teacher_FUSION'];primary,context=pair_inputs()
+    raw=dict(primary,**{'context_'+k:context[k] for k in ('features','vectors','mask')})
+    old=model.teachers.new_teacher('FUSION',node)
+    new=model.new_model(node,'teacher_FUSION')
+    assert isinstance(new,fusion.FusionTeacher) and new.pair_offload
+    assert old.state_dict().keys()==new.state_dict().keys()
+    assert all(torch.equal(v,new.state_dict()[k]) for k,v in old.state_dict().items())
+    # Nonzero injections exercise every branch immediately, beyond zero-init parity.
+    for injection in old.injections:torch.nn.init.normal_(injection.residual_projection.weight,std=.01)
+    new.load_state_dict(old.state_dict(),strict=True)
+    models=[old.to(device).train(),new.to(device).train()]
+    opts=[training.optimizer(n,c.recipe()['base']) for n in models]
+    tolerance=PARITY_TOLERANCES['bf16' if bf16 else 'fp32']
+    with parity_backend(device):
+        for step in range(3):
+            results=[]
+            for net,opt in zip(models,opts):
+                opt.zero_grad(set_to_none=True);torch.manual_seed(923+step)
+                y=model.teachers.forward(net,raw,device,bf16=bf16,name='FUSION')
+                loss=torch.nn.functional.cross_entropy(y.float(),torch.from_numpy(raw['labels']).to(device))
+                loss.backward();training.finite_gradients(net)
+                row={'logits':y.detach().float().cpu(),'loss':loss.detach().float().cpu()}
+                row.update({'grad/'+k:p.grad.detach().cpu().clone() for k,p in net.named_parameters() if p.grad is not None})
+                opt.step()
+                row.update({'state/'+k:v.detach().cpu().clone() for k,v in net.state_dict().items()})
+                for k,p in net.named_parameters():
+                    row.update({f'optimizer/{k}/{f}':v.detach().cpu().clone() for f,v in opt.state.get(p,{}).items() if torch.is_tensor(v)})
+                results.append(row)
+            assert results[0].keys()==results[1].keys()
+            for key in results[0]:torch.testing.assert_close(results[0][key],results[1][key],**tolerance,msg=key)
+        if device=='cuda':fusion.compact.validate_offload_stats(new.pair_offload_stats(),calls=3)
+        before=new.pair_offload_stats()
+        with torch.inference_mode():
+            a=model.teachers.forward(old.eval(),raw,device,bf16=False,name='FUSION',capture=True)
+            b=model.teachers.forward(new.eval(),raw,device,bf16=False,name='FUSION',capture=True)
+        for x,y in zip(a,b):torch.testing.assert_close(x,y,**tolerance)
+        assert new.pair_offload_stats()==before
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(),reason='CUDA unavailable')
+def test_installed_weaver_batch128_fusion_storage_reduces_peak(tmp_path):
+    import gc
+    from test_jetclass2_dzfix_fusion_offload import inputs as pair_inputs
+    primary,context=pair_inputs();raw={}
+    for prefix,values in (('',primary),('context_',context)):
+        for key in ('features','vectors','mask'):
+            raw[prefix+key]=np.tile(values[key],(32,1,8))
+    raw['labels']=np.tile(primary['labels'],32)
+    assert len(raw['labels'])==128
+    node=fixture_spec('/fixture')['nodes']['teacher_FUSION'];peaks={}
+    for label in ('native','offloaded'):
+        gc.collect();torch.cuda.empty_cache()
+        net=(model.teachers.new_teacher('FUSION',node) if label=='native'
+             else model.new_model(node,'teacher_FUSION')).cuda().train()
+        opt=training.optimizer(net,c.recipe()['base'])
+        torch.cuda.synchronize();torch.cuda.reset_peak_memory_stats()
+        loss,_=model.loss_for(net,'teacher_FUSION',raw,np.arange(128),{},'cuda')
+        loss.backward();training.finite_gradients(net);opt.step()
+        torch.cuda.synchronize();peaks[label]=torch.cuda.max_memory_allocated()
+        if label=='offloaded':fusion.compact.validate_offload_stats(net.pair_offload_stats(),calls=1)
+        del loss,_,opt,net
+    assert peaks['offloaded']<peaks['native']
+    write_immutable_json(tmp_path/'synthetic_memory.json',dict(peaks,synthetic=True,batch=128,
+        primary_support=32,context_support=24,fullstat_acceptance=False))
 
 
 def test_new_bank_selected_checkpoint_row_order_and_tamper_guards(tmp_path,monkeypatch):

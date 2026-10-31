@@ -6,7 +6,7 @@ from hlt_classification.jetclass2_delphes.execution import execution_site, valid
 from hlt_classification.luka_fullstat_multiteacher.campaign import protected
 from hlt_classification.luka_fullstat_readout import campaign as readout_campaign
 from hlt_classification.luka_fullstat_readout.contracts import validate as readout_validate, teacher_replay
-from . import source
+from . import source, resources
 from .contracts import artifact, validate, recipe, nodes, COUNTS, TASKS
 
 
@@ -24,7 +24,7 @@ def registration(reuse):
     return dict(counts=dict(COUNTS),nodes=nodes(reuse),recipe=recipe(),
         anchor=u['anchor'],references=refs,bank_manifest=u['bank_manifest'],teacher_refs=u['teacher_refs'],
         teacher_replay=teacher_replay(),runtime_prefix=source.RUNTIME,execution_site=old['execution_site'],
-        cpus=6,memory_mb=192000,minutes={t:1440 for t in TASKS},
+        cpus=6,memory_mb=192000,minutes=resources.policy()['minutes'],runtime_policy=resources.policy(),
         storage_budget_bytes=20*2**30,filesystem_headroom_bytes=2*2**30,
         preflight_jobs=0,setup_jobs=0,scientific_fits=3,automatic_retry=False,
         teacher_order='afterany:teacher_CONCAT',historical_control='U100_W5')

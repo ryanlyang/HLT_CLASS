@@ -9,6 +9,22 @@ All fits use 3M TRAIN / 500k validation, 20 epochs, batch128. Auxiliary heads
 are removed at inference. No separate preflight; technical checks run inside
 each job. Existing campaigns and artifacts are untouched.
 
+## Retry after jobs 8148495 and 8148496
+
+Use the corrected SPEC/STARTUP v2 source in a **fresh commit-named root** using
+the command below. Preserve `luka_fullstat_multiview_2b1f0370_r1` and its source.
+Neither teacher reached a scientific epoch: CONCAT failed the 24h timing
+guard after about70 minutes of preparation; FUSION failed the GPU-memory
+margin check. This was not a reported scheduler OOM or training-result failure.
+There are no completed teacher weights to resume from those jobs. Their
+RAM-only preparation must run again.
+
+The correction requests 48h per teacher and reuses synchronous lossless pair
+activation host storage plus compact cross masks for FUSION. The student still
+requests24h. Science stays at20 epochs and batch128; no separate preflight.
+The exact new requests are checked using `sbatch --test-only` before any live
+submission. Full-size fit within those requests is checked inside each job.
+
 ## Launch after committing and pushing
 
 Commit the new namespace, entrypoints, tests and documentation together and push
@@ -49,7 +65,7 @@ writes the dry plan, then submits the authorized three fits. Look for
 `LAUNCH_COMPLETE` and `LAUNCHER_EXIT=0` in `${ROOT}.launch/launcher.log`. DETACHED confirms
 process launch, not successful job submission. There are no follow-up prompts.
 
-Requests per job: Oscar L40S, 6 CPUs, 192000 MiB, 24h. CONCAT runs first,
+Requests per job: Oscar L40S, 6 CPUs, 192000 MiB; teachers48h, student24h. CONCAT runs first,
 FUSION after it ends; the student requires both teachers to complete, including
 their TRAIN target exports. A poor finite teacher result does not block training.
 Technical failure does. Do not delete claims, rerun a failed launcher or manually
@@ -62,6 +78,13 @@ tail -n 60 -f "${ROOT}.launch/launcher.log"
 squeue --me -o '%.18i %.12P %.45j %.2t %.10M %R'
 grep -h 'FULLSTAT MULTIVIEW' "${ROOT}"/*.out | tail -n 40
 ```
+
+Startup writes stage records under `teacher_CONCAT/startup_diagnostics/` and
+`teacher_FUSION/startup_diagnostics/`. The `*-measurements.json` file includes
+seconds per training update, validation/export batch, extrapolated full-fit
+minutes, allocated minutes, peak GPU/host bytes and memory limits. It is saved
+before a resource rejection. A `*-failure.json` identifies the failed stage.
+These diagnostics do not constitute a passed startup or a training result.
 
 Saved result comparison (authenticates payloads, so may take several minutes):
 

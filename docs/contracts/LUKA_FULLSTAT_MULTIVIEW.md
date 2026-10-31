@@ -1,10 +1,10 @@
-# FullStat multiview contracts v1
+# FullStat multiview contracts: SPEC/STARTUP v2, scientific RECIPE v1
 
 Authority: [active scientific plan](../plans/LUKA_FULLSTAT_MULTIVIEW_PLAN.md).
 Implementation: `hlt_classification.luka_fullstat_multiview`. These contracts
 are distinct from small-data SPORC multiview and Oscar retained-predictor runs.
 
-Every `LUKA_FULLSTAT_MULTIVIEW_*/v1` object has canonical content hash, parents,
+Every `LUKA_FULLSTAT_MULTIVIEW_*` object has canonical content hash, parents,
 schema version and FullStat development-validation flags. Test access remains
 false and sealed; event independence and old-trial overlap remain unverified.
 
@@ -18,6 +18,9 @@ false and sealed; event independence and old-trial overlap remain unverified.
 - SPEC fixes exact pushed additive source, immutable root, counts, all nodes,
   teacher definitions, resources and available output quota. Existing roots
   cannot be repurposed. Three jobs, no setup or separate preflight jobs.
+  v2 binds RUNTIME_POLICY/v1: 48h teacher allocations, 24h student allocation,
+  synchronous layout-preserving pair saved-tensor host storage for FUSION and
+  compact cross masks. Original v1 specs require their original source.
 - PLAN binds exact three commands. FUSION is ordered afterany CONCAT; student
   requires afterok CONCAT and FUSION. Claims and journals prohibit silent retry
   after partial submission. Workers verify exact job/allocation/environment.
@@ -25,6 +28,17 @@ false and sealed; event independence and old-trial overlap remain unverified.
   parity, finite gradients, stress memory and measured training, validation and
   teacher export throughput. Probes are discarded before scientific training.
   Historical acceptance does not certify these new graphs.
+  v2 also binds the runtime policy and native fusion mask/storage parity
+  witnesses. CUDA storage parity covers FP32 and BF16, three updates, feature
+  and parameter gradients, BatchNorm buffers, updated weights and AdamW state.
+  Actual stress must exercise packing and backward restoration at all three
+  pair sites. Science begins only after all checks pass.
+- STARTUP_DIAGNOSTIC/v1 files are immutable, spec-bound, non-accepting records
+  under each task's `startup_diagnostics/`. Both timing and memory witnesses
+  are written before resource admission, and a failure records the last stage.
+  They cannot replace STARTUP, an epoch or a task receipt. Runtime estimates
+  remain extrapolations from bounded measurements, with the original 1.5 factor
+  and 120-minute fixed margin; full epochs are not claimed to be measured.
 - EPOCH binds the report row to full model, optimizer and RNG state, atomically
   saved after every validation pass. REPORT records all 20 epochs and selects
   by full-validation AUC with existing tie-breaks. No performance gate exists.
@@ -45,3 +59,10 @@ positional tags or per-source normalization. Natural feature differences can
 still reveal origin. FUSION preserves the existing native two-stream model,
 HLT-query/OFFLINE-context direction, pair geometry and padding semantics.
 Deployable student uses only native HLT and its native classifier.
+
+The storage adapter retains the full pair population, original dtype, shape
+and strides; CPU restoration is synchronous. No activation recomputation,
+batch-size reduction, token crop, changed teacher loss or deployment change.
+The 90% GPU-memory limit and 85% host-memory limit with 8 GiB reserve are
+unchanged. Scientific RECIPE/BANK/EPOCH/REPORT remain v1 and bind the v2 spec
+through parents; old/new execution records are not interchangeable.

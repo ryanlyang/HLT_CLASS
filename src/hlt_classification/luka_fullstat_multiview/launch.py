@@ -9,7 +9,7 @@ import os
 import socket
 from hlt_classification.data.cache_contracts import write_immutable_json
 from hlt_classification.cms_proxy_ladder.contracts import file_ref
-from . import campaign, submission, source
+from . import campaign, submission, source, resources
 from .contracts import artifact, AUTHORIZATION, LAUNCH_AUTHORIZATION, TASKS, recipe
 
 
@@ -26,7 +26,7 @@ def run(root, previous_spec, project, commit, *, quota_gib, authorization):
         intent = artifact('LAUNCH_INTENT', project_dir=str(project), source_commit=commit,
             root=str(root), parent_spec=file_ref(previous_spec), quota_gib=quota_gib,
             runtime_prefix=source.RUNTIME, authorization=authorization,
-            recipe=recipe(), jobs=3, preflight_jobs=0,
+            recipe=recipe(), runtime_policy=resources.policy(), jobs=3, preflight_jobs=0,
             host=socket.gethostname(), pid=os.getpid(), automatic_retry=False)
         write_immutable_json(directory/'intent.json', intent)
         print('STARTED: CONCAT and FUSION teachers followed by native HLT three-target student; authenticate completed parent, save full dry plan, then submit exactly three jobs.', flush=True)
@@ -36,6 +36,7 @@ def run(root, previous_spec, project, commit, *, quota_gib, authorization):
         if (plan != submission.render(spec) or plan['jobs'] != 3 or plan['scientific_fits'] != 3
                 or plan['preflight_jobs'] != 0 or plan['setup_jobs'] != 0
                 or spec['recipe'] != intent['recipe']
+                or spec['runtime_policy'] != intent['runtime_policy']
                 or spec['available_quota_gib'] != intent['quota_gib']
                 or [r['task_id'] for r in plan['commands']] != list(TASKS)
                 or file_ref(previous_spec) != intent['parent_spec']):

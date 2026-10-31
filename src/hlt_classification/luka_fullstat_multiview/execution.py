@@ -27,9 +27,9 @@ def allocation_minutes(value):
 
 
 def execution(gate, task, measured=None):
-    if (task not in TASKS or gate.get('contract') != 'LUKA_FULLSTAT_MULTIVIEW_SPEC/v1'
+    if (task not in TASKS or gate.get('contract') != 'LUKA_FULLSTAT_MULTIVIEW_SPEC/v2'
             or gate.get('runtime_prefix') != source.RUNTIME):
-        raise PermissionError('Replacement runtime requires the multiview v1 registration')
+        raise PermissionError('Replacement runtime requires the multiview v2 registration')
     require_backend()
     site = gate['execution_site']
     validate_site(site)

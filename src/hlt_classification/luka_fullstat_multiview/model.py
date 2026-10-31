@@ -4,6 +4,7 @@ from torch.nn import functional as F
 from hlt_classification.luka_u100_multiview import teachers
 from hlt_classification.luka_u100_multiview.model import Student
 from .contracts import TEACHERS, TASKS
+from . import fusion
 
 
 def teacher_name(task):
@@ -13,6 +14,7 @@ def teacher_name(task):
 
 def new_model(node, task):
     name = teacher_name(task)
+    if name == 'FUSION': return fusion.new_teacher(node)
     if name: return teachers.new_teacher(name, node)
     torch.manual_seed(node['initialization_seed'])
     return Student('u100_concat_fusion')

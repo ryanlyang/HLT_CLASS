@@ -13,7 +13,7 @@ from hlt_classification.jetclass2_delphes.reporting import evaluate_probabilitie
 from hlt_classification.luka_fullstat_readout.worker import reference_arrays
 from hlt_classification.luka_fullstat_u100_embedding import banks as original_banks
 from hlt_classification.luka_fullstat_fine_tail.worker import rejection
-from hlt_classification.luka_fullstat_retained.worker import check_memory
+from .resources import check_memory
 from hlt_classification.luka_fullsim.preflight_v2 import PhaseLog,memory_snapshot
 from . import campaign,submission,model,training,targets,views,startup
 from .execution import execution

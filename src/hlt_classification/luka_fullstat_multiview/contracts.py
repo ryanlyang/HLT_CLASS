@@ -9,15 +9,18 @@ TASKS = {'teacher_CONCAT': [], 'teacher_FUSION': ['teacher_CONCAT'],
          'train_multi3': ['teacher_CONCAT', 'teacher_FUSION']}
 AUTHORIZATION = 'AUTHORIZE_FULLSTAT_MULTIVIEW_V1'
 LAUNCH_AUTHORIZATION = 'AUTHORIZE_FULLSTAT_MULTIVIEW_AUTOSUBMIT_V1'
+VERSIONS = {'SPEC': 2, 'STARTUP': 2}
 
 
 def artifact(kind, *, parents=None, **fields):
-    return with_content_hash(dict(contract=f'LUKA_FULLSTAT_MULTIVIEW_{kind}/v1',
-        schema_version=1, parents=dict(parents or {}), **FLAGS, **fields))
+    version = VERSIONS.get(kind, 1)
+    return with_content_hash(dict(contract=f'LUKA_FULLSTAT_MULTIVIEW_{kind}/v{version}',
+        schema_version=version, parents=dict(parents or {}), **FLAGS, **fields))
 
 
 def validate(value, kind, parents=None):
-    validate_content_hash(value, expected_contract=f'LUKA_FULLSTAT_MULTIVIEW_{kind}/v1', expected_schema_version=1)
+    version = VERSIONS.get(kind, 1)
+    validate_content_hash(value, expected_contract=f'LUKA_FULLSTAT_MULTIVIEW_{kind}/v{version}', expected_schema_version=version)
     if any(value.get(k) != v for k, v in FLAGS.items()): raise PermissionError('Sealed-role flags differ')
     if parents is not None and value['parents'] != parents: raise ValueError('Artifact parents differ')
     return value

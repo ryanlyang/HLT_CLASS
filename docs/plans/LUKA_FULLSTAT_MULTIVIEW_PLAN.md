@@ -1,6 +1,6 @@
 # FullStat three-teacher auxiliary embedding study on Oscar
 
-Active plan, 2026-10-30. User authorized two fresh privileged teachers and one
+Active plan, revised 2026-10-31. User authorized two fresh privileged teachers and one
 fresh HLT-only student. This adapts the SPORC multiview scientific graph to
 3,000,000 TRAIN / 500,000 validation, 20 epochs, batch128 and the FullStat20
 optimizer/schedule. The final 1,500,000 test and 105,325 unused rows stay sealed.
@@ -52,7 +52,9 @@ fresh scientific initialization. Historical acceptance is not claimed to cover
 the new privileged graphs. Keep 20 full scientific epochs, including partial
 batches; no silent smaller batch, crop, accumulation, schedule or model fallback.
 
-Oscar L40S, 6 CPUs, 192000 MiB, 24h each. Reserve 20 GiB outputs plus 2 GiB
+Oscar L40S, 6 CPUs, 192000 MiB, 48h for each teacher and 24h for the student.
+The exact resource shapes must pass Oscar's scheduler dry review before submission.
+Reserve 20 GiB outputs plus 2 GiB
 filesystem headroom and require declared available personal quota >=22 GiB.
 CONCAT is reconstructed in bounded RAM from authenticated TRAIN/validation raw
 rows using four workers. No persistent new particle cache or historical writes.
@@ -60,7 +62,18 @@ U100 targets are reused read-only; new teacher banks are published inside their
 new task roots. Save every epoch's complete model/optimizer/RNG state before
 publication so a late failure does not discard the fit. No automatic retry.
 
-New `LUKA_FULLSTAT_MULTIVIEW_*/v1` contracts and exact pushed-source closure
+SPEC and STARTUP v2 distinguish the resource repair from the failed v1
+execution at 2b1f0370. The scientific RECIPE remains v1: inputs, losses, seeds,
+20 epochs and batch128 are unchanged. FUSION reuses the existing synchronous,
+stride-preserving pair saved-tensor host storage and compact cross-mask adapter.
+Full pair populations and BatchNorm statistics remain intact; there is no
+recomputation or microbatching. Inline checks verify native-mask equivalence
+and three-update FP32/BF16 storage parity, including gradients, buffers, updated
+weights and optimizer states. Keep the existing 90% GPU and 85% host-memory
+limits (including 8 GiB host reserve). Persist timing and memory measurements
+before admission, and stage/failure diagnostics even when a guard rejects them.
+
+Other `LUKA_FULLSTAT_MULTIVIEW_*/v1` contracts and exact pushed-source closure
 distinguish this from small-data SPORC and the retained experiment. A detached
 launcher authenticates the completed parent, saves a full dry review, and then
 submits only the authorized three jobs. It never cancels current jobs. Partial
@@ -70,3 +83,10 @@ Each fit selects on its own full-validation AUC with the existing tie-breaks.
 Report AUC/accuracy/R50/R30 using the same selected checkpoints and fixed
 M0HLT/OFFLINE recovery anchors; label both new teachers privileged. Local
 synthetic/installed-Weaver checks do not constitute new real Oscar acceptance.
+
+The original CONCAT job8148495 spent 4200.94 seconds loading the union and then
+failed the 24h timing guard. FUSION job8148496 reached 43,110,401,536 peak CUDA
+allocated bytes and failed the memory-margin guard. Neither saved a scientific
+epoch. Preserve their root and source; launch corrected code into a fresh root.
+The failed jobs did not persist the union or fitted states, so their RAM-only
+preparation must run again. No new standalone preflight is introduced.
