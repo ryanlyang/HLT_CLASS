@@ -6,7 +6,7 @@ from hlt_classification.luka_u100_multiview.source import import_parent, validat
 
 BASE = '8ad0b381547134569818b4258f3cd31b509e9efb'
 MODULES = ('__init__', 'contracts', 'source', 'model', 'targets', 'sampling', 'losses',
-           'training', 'resources', 'worker', 'campaign', 'submission')
+           'training', 'resources', 'worker', 'campaign', 'submission', 'reuse')
 RUNTIME = {'src/hlt_classification/luka_u100_contrastive/'+n+'.py' for n in MODULES} | {
     'scripts/luka_u100_contrastive.py', 'scripts/queue_luka_u100_contrastive.sh',
     'sbatch/run_luka_u100_contrastive.sh'}

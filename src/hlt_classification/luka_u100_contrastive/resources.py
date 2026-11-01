@@ -81,7 +81,8 @@ def accept_diagnostic(diagnostic, spec):
         minutes[name] = estimated_minutes(spec['counts']['train'], diagnostic['validation_seconds'],
             p['representative_step_seconds'], p['probe_seconds'], diagnostic['load_seconds'])
         if minutes[name] > spec['fit_max_minutes']:
-            raise ValueError(f'{name} exceeds registered walltime cap; measurements retained, no science submitted')
+            raise ValueError(f"{name} estimated {minutes[name]} minutes exceeds registered walltime cap "
+                             f"of {spec['fit_max_minutes']} minutes; measurements retained, no science submitted")
     return artifact('ACCEPTANCE', parents=dict(spec=spec['content_hash'], diagnostic=diagnostic['content_hash']),
         minutes=minutes, environment=diagnostic['environment'], gpu=diagnostic['gpu'],
         full_candidate_counts=True, technical_weights_discarded=True)

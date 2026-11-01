@@ -1,8 +1,11 @@
-# LUKA_U100_CONTRASTIVE / v1
+# LUKA_U100_CONTRASTIVE / SPEC and BUNDLE v2; scientific artifacts v1
 
 Scientific authority: [paired OFFLINE identification plan](../plans/LUKA_U100_OFFLINE_CONTRASTIVE_PLAN.md).
-All new artifacts use `LUKA_U100_CONTRASTIVE_<KIND>/v1`, schema 1, canonical
+Scientific artifacts use `LUKA_U100_CONTRASTIVE_<KIND>/v1`, schema 1, canonical
 content hashes, explicit parents and existing ALLJETS exploratory flags.
+SPEC and BUNDLE are v2/schema 2 to declare optional reuse of already published
+targets from the failed original setup. RECIPE, SAMPLER and KEYS stay v1:
+candidate selection and training semantics have not changed.
 Historical artifacts retain their original versions and are validated by their
 original contracts. They are never relabelled as new contrastive artifacts.
 
@@ -26,6 +29,17 @@ original contracts. They are never relabelled as new contrastive artifacts.
   still validates, otherwise a single authenticated re-export. OFFLINE keys are
   exported once. Teacher checkpoints are not retrained. Validation probability
   readback uses rtol1e-5/atol1e-6 and produces no validation retrieval bank.
+- **SETUP_REUSE / REUSED_EXPORTS (v1):** optional, explicit import from original
+  commit `755f43d874ce90ff50ae9b80fe66d36869601650`. Original-source replay
+  authenticates the spec, exact submission journal/claim, terminal FAILED/1:0
+  accounting, absence of science submission, and complete technical execution
+  rejected at walltime admission. Hash-pinned bundles, teacher readbacks and
+  original key-manifest parents remain intact. New workers authenticate ordered
+  TRAIN joins and payloads; they never relabel old keys under a new spec.
+  A fresh root records external references and reruns all production miniatures,
+  native parity and resource measurements. Old acceptance/technical weights are
+  not reused. No file or claim is removed from the failed campaign. Zero-control
+  workers validate key metadata without opening the OFFLINE key payload.
 - **CAPACITY:** all eleven TRAIN class counts, conservative per-class capacity
   proof, availability of exclusion metadata and TRAIN HLT quantile edges.
   Every class must retain at least 410 candidates under the maximum registered

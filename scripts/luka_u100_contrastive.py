@@ -14,6 +14,7 @@ def main():
     for key in ('root', 'parent', 'reference', 'expected-commit'):
         create.add_argument('--'+key, required=True)
     create.add_argument('--available-quota-gib', required=True, type=int)
+    create.add_argument('--reuse-setup', help='Original failed v1 campaign_spec.json; reuse exports, remeasure runtime')
     for name in ('review', 'dispatch', 'run', 'results'):
         p = sub.add_parser(name); p.add_argument('--spec', required=True)
         if name == 'dispatch':
@@ -23,7 +24,7 @@ def main():
     args = parser.parse_args()
     if args.command == 'create':
         value = campaign.create(args.root, args.parent, args.reference, Path(__file__).resolve().parents[1],
-                                args.expected_commit, args.available_quota_gib)
+                                args.expected_commit, args.available_quota_gib, reuse_setup=args.reuse_setup)
     else:
         spec = load_json(args.spec)
         if Path(args.spec).resolve() != Path(spec['root']).resolve()/'campaign_spec.json':

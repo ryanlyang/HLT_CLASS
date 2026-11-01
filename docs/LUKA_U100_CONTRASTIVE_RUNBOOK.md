@@ -1,7 +1,7 @@
 # U100-w5 plus paired OFFLINE identification: debug runbook
 
 This implements the [twenty-run plan](plans/LUKA_U100_OFFLINE_CONTRASTIVE_PLAN.md)
-under the [new v1 contract](contracts/LUKA_U100_CONTRASTIVE.md).
+under the [versioned contract](contracts/LUKA_U100_CONTRASTIVE.md).
 It uses the original small-data 299,234 TRAIN / 74,895 validation population,
 thirty epochs and physical batch128. This is separate from the Oscar high-data
 campaign. No recovery improvement is assumed.
@@ -44,6 +44,42 @@ Resource requests: six CPUs, 120,000 MiB RAM, one A100, debug,
 measured requests capped at twenty-four hours. The four GiB campaign budget
 does not expand to the entire personally available quota. Preserve one GiB
 of filesystem headroom. No files are deleted automatically.
+
+## Recover the failed 755f43d8 setup without repeating target export
+
+Job 21989145 completed its exports and miniatures but failed the 24-hour
+runtime check for kinmix. Its 5.19-second updates projected roughly 142 hours.
+The repaired sampler preserves candidate selection while eliminating repeated
+population scans and scalar exclusion counting. The cap and all twenty rows
+remain unchanged.
+
+Commit/push the repaired source and create its fresh detached SPORC worktree
+using the instructions below. Then use this invocation **instead of the plain
+queue-helper invocation**:
+
+```bash
+bash "${PROJECT}/scripts/queue_luka_u100_contrastive.sh" --reuse-setup \
+  /home/ryreu/atlas/HLT_Classification/checkpoints/luka_u100_contrastive_755f43d8_debug_r1/campaign_spec.json
+```
+
+The new campaign must have a fresh root. Preserve the old campaign and source
+worktree: the new spec references their exports and authenticated source.
+No manual copying, relabelling, claim removal, or rerun inside the failed root
+is needed. Reuse validates original-source accounting and evidence before
+submission; partial/corrupt banks or changed teachers fail closed.
+
+The shared setup reads D000 TRAIN/validation, loads the existing target banks,
+and reruns all six small production checks plus sampling-inclusive timings.
+It performs no U100/OFFLINE target inference or OFFLINE particle-cache rebuild.
+Successful measured admission automatically releases the same twenty fits and
+report through the existing detached dispatcher. An additional resource failure
+will retain its new diagnostic and submit no science; local speed measurements
+do not substitute for the A100 check.
+
+Code: [indexed sampler](../src/hlt_classification/luka_u100_contrastive/sampling.py),
+[target recovery](../src/hlt_classification/luka_u100_contrastive/reuse.py),
+[worker](../src/hlt_classification/luka_u100_contrastive/worker.py), and
+[measured admission](../src/hlt_classification/luka_u100_contrastive/resources.py).
 
 ## Commit and push locally
 

@@ -5,6 +5,7 @@ from hlt_classification.luka_u100_embedding.contracts import recipe as u100_reci
 
 AUTHORIZATION = 'AUTHORIZE_LUKA_U100_CONTRASTIVE_DEBUG_V1'
 WIDTH, NEGATIVES, POOL, TEMPERATURE = 128, 1024, 4096, .1
+VERSIONS = {'SPEC': 2, 'BUNDLE': 2}
 ROWS = (
     ('mix_l0p3_s0', 'mix', .3, 0), ('u100_w5_s0', 'none', 0., 0),
     ('mix_l1_s0', 'mix', 1., 0), ('random_l0p3_s0', 'random', .3, 0),
@@ -22,12 +23,15 @@ ARMS = {name: dict(strategy=s, coefficient=w, replicate=r, rank=i+1)
 
 
 def artifact(kind, *, parents=None, **fields):
-    return with_content_hash(dict(contract=f'LUKA_U100_CONTRASTIVE_{kind}/v1', schema_version=1,
+    version = VERSIONS.get(kind, 1)
+    return with_content_hash(dict(contract=f'LUKA_U100_CONTRASTIVE_{kind}/v{version}', schema_version=version,
                                   parents=dict(parents or {}), **FLAGS, **fields))
 
 
 def validate(value, kind, parents=None):
-    result = validate_content_hash(value, expected_contract=f'LUKA_U100_CONTRASTIVE_{kind}/v1')
+    version = VERSIONS.get(kind, 1)
+    result = validate_content_hash(value, expected_contract=f'LUKA_U100_CONTRASTIVE_{kind}/v{version}',
+                                   expected_schema_version=version)
     if any(value.get(k) != v for k, v in FLAGS.items()):
         raise PermissionError('Exploratory scope changed')
     if parents is not None and value['parents'] != parents:

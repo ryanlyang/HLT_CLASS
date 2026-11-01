@@ -4,7 +4,7 @@ import shutil
 from hlt_classification.data.cache_contracts import load_json, load_npz_arrays, write_immutable_json
 from hlt_classification.jetclass2_delphes.execution import execution_site
 from .contracts import artifact, validate, recipe, sampler_recipe, ARMS, COUNTS
-from . import source
+from . import source, reuse
 
 
 def registration():
@@ -27,7 +27,7 @@ def storage(spec):
     return used
 
 
-def create(root, parent, reference, project, commit, quota_gib):
+def create(root, parent, reference, project, commit, quota_gib, *, reuse_setup=None):
     root, project = Path(root).absolute(), Path(project).resolve()
     if root.resolve() != root or root.is_symlink():
         raise PermissionError('No redirected output root')
@@ -35,6 +35,7 @@ def create(root, parent, reference, project, commit, quota_gib):
         raise ValueError('Reserve at least four personally available GiB; the budget stays four GiB')
     snapshot = source.current(project, commit)
     imported = source.import_parent(parent, reference)
+    reused = reuse.import_exports(reuse_setup, imported) if reuse_setup is not None else None
     anchor = imported['anchor']
     from hlt_classification.jetclass2_delphes.reporting import evaluate_probabilities
     recovery_anchors = {}
@@ -43,11 +44,14 @@ def create(root, parent, reference, project, commit, quota_gib):
         recovery_anchors[name] = evaluate_probabilities(a['labels'], a['probabilities'])['macro_ovr_auc']
     protected = [project, Path(parent).resolve().parent, Path(reference).resolve().parent,
                  Path(anchor['evidence']['prepared_root']), Path(anchor['evidence']['raw_container'])]
+    if reused is not None:
+        protected.append(Path(reused['origin_spec']['path']).parent)
     if any(root.is_relative_to(p) or p.is_relative_to(root) for p in protected):
         raise PermissionError('Campaign overlaps protected source/data/results')
     spec = artifact('SPEC', parents=dict(source=snapshot['content_hash'], imported=imported['content_hash']),
         root=str(root), project_dir=str(project), source_commit=commit, source_snapshot=snapshot,
-        imported=imported, anchor=anchor, recovery_anchors=recovery_anchors, available_quota_gib=quota_gib, **registration())
+        imported=imported, anchor=anchor, recovery_anchors=recovery_anchors, available_quota_gib=quota_gib,
+        setup_reuse=reused, **registration())
     storage(spec)
     root.mkdir(parents=True, exist_ok=False)
     write_immutable_json(root/'campaign_spec.json', spec)
@@ -61,6 +65,8 @@ def check(spec, *, check_storage=True):
             or load_json(Path(spec['root'])/'campaign_spec.json') != spec):
         raise ValueError('Immutable campaign registration changed')
     source.validate_import(spec['imported'])
+    if spec.get('setup_reuse') is not None:
+        reuse.validate_reuse(spec['setup_reuse'], spec['imported'], metadata_only=True)
     if source.current(spec['project_dir'], spec['source_commit']) != spec['source_snapshot']:
         raise ValueError('Pinned source changed')
     if check_storage:

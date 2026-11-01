@@ -17,7 +17,7 @@ from hlt_classification.luka_u100_embedding import contracts as uc, training as 
 from hlt_classification.luka_embedding_aux.model import new_model as old_model
 from hlt_classification.jetclass2_delphes.runner import _forward, predict
 from hlt_classification.luka_u100_contrastive import (
-    contracts as c, model, losses, sampling, targets, training, resources, campaign, submission, source)
+    contracts as c, model, losses, sampling, targets, training, resources, campaign, submission, source, reuse, worker)
 
 
 @pytest.fixture(autouse=True)
@@ -44,6 +44,10 @@ def sampler_fixture(device='cpu', **kwargs):
 
 
 def test_exact_plan_registration():
+    for kind, version in (('SPEC', 2), ('BUNDLE', 2), ('KEYS', 1), ('RECIPE', 1), ('SAMPLER', 1)):
+        artifact = c.artifact(kind)
+        assert artifact['schema_version'] == version
+        c.validate(artifact, kind)
     assert len(c.ARMS) == 20 and [v['rank'] for v in c.ARMS.values()] == list(range(1, 21))
     assert sum(x['replicate'] == 1 for x in c.ARMS.values()) == 2
     assert [k for k, v in c.ARMS.items() if v['coefficient'] == 0] == ['u100_w5_s0', 'u100_w5_s1']
@@ -358,3 +362,168 @@ def test_saved_extended_metrics_and_censoring():
     assert result['macro_ovr_auc'] == 1. and len(result['per_class_auc']) == 11
     assert len(result['rejection_at_30pct']) == 10
     assert all(v['rejection'] is None and v['zero_fpr_censored'] for v in result['rejection_at_30pct'].values())
+
+
+def legacy_kinematic(self, anchor, epoch, blocked):
+    """Independent whole-population oracle for the published v1 sampling law."""
+    maximum = int(np.max(np.ptp(self.bins, axis=0)))
+    for radius in range(maximum+1):
+        rows = np.flatnonzero(np.max(np.abs(self.bins-self.bins[anchor]), axis=1) <= radius)
+        pools = [rows[self.labels[rows] == label] for label in range(11)]
+        eligible = [len(p)-sum(1 for j in blocked if self.labels[j] == label
+                    and np.max(np.abs(self.bins[j]-self.bins[anchor])) <= radius)
+                    for label, p in enumerate(pools)]
+        if sum(eligible) < 4096:
+            continue
+        try:
+            result = self.balanced(512, blocked, self.rng(epoch, anchor, 'K'),
+                                   [label for label in range(11) if eligible[label] > 0], pools)
+        except ValueError:
+            continue
+        return result, dict(radius=radius, full_region=sum(map(len, pools)) == len(self.labels))
+    raise ValueError('No eligible region')
+
+
+@pytest.mark.parametrize('constant_bins', [False, True])
+def test_indexed_kinmix_exact_legacy_candidates_and_evidence(monkeypatch, constant_bins):
+    from copy import copy
+    from types import MethodType
+    groups = np.arange(6006); groups[[11, 22]] = 0
+    sampler = sampler_fixture(event_groups=groups)
+    if constant_bins:
+        sampler.bins[:] = 0; sampler._maximum_radius = 0
+        sampler._cells = {(0, 0): np.arange(6006)}
+    previous = copy(sampler); previous.kinematic = MethodType(legacy_kinematic, previous)
+    anchors = [0, 21, 333, 5998]
+    expected = [previous.sample(anchors, epoch, 'kinmix') for epoch in (1, 3)]
+    def repeated_scan(*args, **kwargs):
+        raise AssertionError('Population bound recomputed in the per-query path')
+    monkeypatch.setattr(np, 'ptp', repeated_scan)
+    for epoch, (indices, evidence) in zip((1, 3), expected):
+        actual, proof = sampler.sample(anchors, epoch, 'kinmix')
+        np.testing.assert_array_equal(actual, indices)
+        assert proof == evidence
+    # Cached regions may be evicted/rebuilt without changing sampling.
+    sampler._regions.clear(); sampler._region_bytes = 0
+    np.testing.assert_array_equal(sampler.sample(anchors, 1, 'kinmix')[0], expected[0][0])
+
+
+def reuse_fixture(tmp_path, monkeypatch):
+    tiny(monkeypatch)
+    oldroot = tmp_path/'old'; oldroot.mkdir()
+    tr, bank, teacher = bank_fixture(oldroot)
+    imported_record = c.artifact('IMPORT_FIXTURE', teacher=teacher, node=imported()['node'])
+    counts = dict(train=len(tr), validation=22)
+    monkeypatch.setattr(reuse, 'COUNTS', counts)
+    monkeypatch.setattr(reuse, 'validate_source_snapshot', lambda *a, **kw: None)
+    anchor = dict(evidence=dict(prepared=tr.foundation_sha256,
+                  models=dict(OFFLINE=dict(checkpoint=teacher['files']['checkpoint']))))
+    old = c.artifact('SPEC', root=str(oldroot), project_dir=str(tmp_path/'old-source'),
+        source_commit=reuse.ORIGINAL_COMMIT, source_snapshot=dict(content_hash='f'*64),
+        imported=imported_record, anchor=anchor, **campaign.registration())
+    old.update(contract='LUKA_U100_CONTRASTIVE_SPEC/v1', schema_version=1, counts=counts)
+    old = with_content_hash(old); write_immutable_json(oldroot/'campaign_spec.json', old)
+    folder = oldroot/'setup'; folder.mkdir()
+    targets.publish(folder/'OFFLINE', np.random.default_rng(44).normal(size=(len(tr),128)).astype(np.float32),
+                    tr, teacher['files']['checkpoint'], spec_hash=old['content_hash'], imported_hash=imported_record['content_hash'])
+    bundle = c.artifact('BUNDLE', parents=dict(spec=old['content_hash']),
+        u100_manifest=file_ref(oldroot/'targets/manifest.json'), offline_manifest=file_ref(folder/'OFFLINE/manifest.json'),
+        reused_original_u100_payload=True, teachers_retrained=False, setup_load_seconds=1.)
+    bundle.update(contract='LUKA_U100_CONTRASTIVE_BUNDLE/v1', schema_version=1)
+    write_immutable_json(folder/'bundle.json', with_content_hash(bundle))
+    write_immutable_json(folder/'offline_readback.json', c.artifact('TEACHER_READBACK',
+        parents=dict(spec=old['content_hash'], imported=imported_record['content_hash']),
+        native_probability_parity=True, coordinate='OFFLINE', rows=22, rtol=1e-5, atol=1e-6))
+    claimfolder = oldroot/'claims/setup'; claimfolder.mkdir(parents=True)
+    write_immutable_json(claimfolder/'intent.json', c.artifact('RUN_CLAIM', parents=dict(spec=old['content_hash']),
+                         task='setup', job_id='12345'))
+    profiles = {s: dict(miniature_complete=True, full_candidate_bank_rows=len(tr),
+        representative_step_seconds=5000. if s == 'kinmix' else .1, probe_seconds=.2)
+        for s in ('none', 'mix', 'random', 'cross', 'hard', 'kinmix')}
+    # Force the genuine admission branch even at this small fixture population.
+    write_immutable_json(folder/'resource_diagnostic.json', c.artifact('RESOURCE_DIAGNOSTIC',
+        parents=dict(spec=old['content_hash']), status='complete', error=None, baseline_native_tensor_parity=True,
+        profiles=profiles, memory=dict(peak_rss_bytes=10, gpu_peak_bytes=10), gpu=dict(total_memory_bytes=1000),
+        validation_seconds=1., load_seconds=1., environment={}))
+    def replay(path, project, program, marker):
+        return file_ref(path), dict(job_id='12345', accounting=['FAILED', '1:0'])
+    monkeypatch.setattr(reuse, 'replay', replay)
+    reference = reuse.import_exports(oldroot/'campaign_spec.json', imported_record)
+    newroot = tmp_path/'new'; newroot.mkdir()
+    new = dict(spec(newroot, len(tr)), imported=imported_record, anchor=anchor, setup_reuse=reference)
+    return old, new, tr, bank
+
+
+def test_recovery_reuses_exact_banks_and_runs_new_measurements(tmp_path, monkeypatch):
+    old, new, tr, bank = reuse_fixture(tmp_path, monkeypatch)
+    loads, measured = [], []
+    def load(spec, role, coordinate):
+        loads.append((role, coordinate)); assert coordinate == 'D000'
+        return tr if role == 'train' else cache('validation', 'D000')
+    def forbidden(*args, **kwargs): raise AssertionError('Teacher targets must not be rebuilt')
+    monkeypatch.setattr(worker, 'load_view', load)
+    monkeypatch.setattr(worker, 'readback', forbidden)
+    monkeypatch.setattr(targets, 'export', forbidden)
+    monkeypatch.setattr(worker.u100_targets, 'export', forbidden)
+    def measure(spec, train, val, u100, offline, **kwargs):
+        measured.append(offline.manifest['parents']['spec'])
+        np.testing.assert_array_equal(u100.targets, bank.targets)
+        assert offline.keys.shape == (len(tr), 128)
+        assert spec['content_hash'] != old['content_hash']
+    monkeypatch.setattr(resources, 'measure', measure)
+    worker.setup(new, device='cpu')
+    assert measured == [old['content_hash']]
+    assert loads == [('train','D000'), ('validation','D000')]
+    assert not (Path(new['root'])/'setup/OFFLINE').exists()
+    assert not (Path(old['root'])/'setup/receipt.json').exists()
+    # Completed recovery receipt inventories local new evidence plus the pinned
+    # external export proof; it never pretends the failed old setup completed.
+    folder = Path(new['root'])/'setup'
+    for name in ('acceptance.json','resource_diagnostic.json','capacity.json','baseline_parity.json'):
+        (folder/name).write_text('{}')
+    value = c.artifact('TASK', parents=dict(spec=new['content_hash']), task='setup', job_id='67890',
+                      outputs=[file_ref(p,root=folder) for p in folder.iterdir()])
+    write_immutable_json(folder/'receipt.json', value)
+    monkeypatch.setattr(submission,'accepted_jobs', lambda *args: {'setup':'67890'})
+    monkeypatch.setattr(resources,'accepted', lambda *args: {})
+    worker.completed_setup(new)
+    # Zero-control validation may read metadata, but must not open OFFLINE keys.
+    (Path(old['root'])/'setup/OFFLINE/keys.npz').write_bytes(b'corrupt')
+    worker.completed_setup(new, metadata_only_keys=True)
+    with pytest.raises(ValueError): worker.completed_setup(new)
+    with pytest.raises(ValueError): targets.key_bank(new, tr)
+
+
+def test_recovery_rejects_changed_lineage_readback_and_source(tmp_path, monkeypatch):
+    old, new, tr, bank = reuse_fixture(tmp_path, monkeypatch)
+    ref = new['setup_reuse']; imported_record = new['imported']
+    wrong = with_content_hash(dict(imported_record, teacher={}))
+    with pytest.raises(ValueError): reuse.validate_reuse(ref, wrong)
+    bad = with_content_hash(dict(ref, terminal_accounting=['RUNNING','0:0']))
+    with pytest.raises(ValueError): reuse.validate_reuse(bad, imported_record)
+    source_check = reuse.validate_source_snapshot
+    def dirty(*a,**kw): raise ValueError('source changed')
+    monkeypatch.setattr(reuse, 'validate_source_snapshot', dirty)
+    with pytest.raises(ValueError, match='source changed'): reuse.validate_reuse(ref, imported_record)
+    monkeypatch.setattr(reuse, 'validate_source_snapshot', source_check)
+    root = Path(old['root']); (root/'submission_science').mkdir()
+    with pytest.raises(ValueError, match='scope'): reuse.validate_reuse(ref, imported_record)
+    # Independent immutable publication failure: altered teacher proof is caught.
+    (root/'setup/offline_readback.json').write_text('{}')
+    with pytest.raises(ValueError): reuse.validate_reuse(ref, imported_record)
+
+
+def test_original_source_replay_requires_terminal_owned_failed_setup(tmp_path, monkeypatch):
+    import sys
+    old, new, tr, bank = reuse_fixture(tmp_path, monkeypatch)
+    monkeypatch.setattr(sys, 'argv', ['-c', str(Path(old['root'])/'campaign_spec.json')])
+    monkeypatch.setattr(campaign, 'check', lambda *a, **kw: None)  # original pinned source checked separately
+    monkeypatch.setattr(submission, 'accepted_jobs', lambda *a: {'setup':'12345'})
+    monkeypatch.setattr(submission, 'accounting', lambda *a: ['FAILED','1:0'])
+    exec(reuse.REPLAY, {})
+    for state in (['RUNNING','0:0'], ['COMPLETED','0:0'], ['FAILED','2:0'], None):
+        monkeypatch.setattr(submission, 'accounting', lambda *a, state=state: state)
+        with pytest.raises(ValueError, match='terminal'): exec(reuse.REPLAY, {})
+    monkeypatch.setattr(submission, 'accounting', lambda *a: ['FAILED','1:0'])
+    monkeypatch.setattr(submission, 'accepted_jobs', lambda *a: {'setup':'77777'})
+    with pytest.raises(ValueError, match='ownership'): exec(reuse.REPLAY, {})

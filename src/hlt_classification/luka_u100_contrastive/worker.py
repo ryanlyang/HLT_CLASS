@@ -16,7 +16,7 @@ from hlt_classification.luka_u100_multiview.views import load as load_view
 from hlt_classification.luka_u100_embedding import targets as u100_targets
 from hlt_classification.luka_embedding_weight.worker import validate_predictions
 from .contracts import artifact, validate, ARMS
-from . import campaign, submission, targets, training, resources
+from . import campaign, submission, targets, training, resources, reuse
 from .model import new_model
 
 
@@ -58,6 +58,11 @@ def setup(spec, *, device='cuda'):
     start = time.perf_counter()
     train = load_view(spec, 'train', 'D000'); val = load_view(spec, 'validation', 'D000')
     load_seconds = time.perf_counter()-start
+    if spec.get('setup_reuse') is not None:
+        reuse.publish_bundle(spec, load_seconds)
+        u100, offline = targets.u100_bank(spec, train), targets.key_bank(spec, train)
+        print('Authenticated existing U100/OFFLINE exports; rerunning miniatures and timing, no teacher inference.', flush=True)
+        return resources.measure(spec, train, val, u100, offline, load_seconds=load_seconds, device=device)
     imported = spec['imported']; urecord = imported['teacher']
     old_manifest = Path(imported['files']['bank_manifest']['path'])
     old_payload = old_manifest.parent/'targets.npz'
@@ -119,8 +124,18 @@ def _receipt(spec, task, *, metadata_only_keys=False):
 def completed_setup(spec, *, metadata_only_keys=False):
     value = _receipt(spec, 'setup', metadata_only_keys=metadata_only_keys)
     names = {r['path'] for r in value['outputs']}
-    if not {'bundle.json', 'acceptance.json', 'resource_diagnostic.json', 'capacity.json',
-            'OFFLINE/keys.npz', 'OFFLINE/manifest.json', 'offline_readback.json', 'baseline_parity.json'} <= names:
+    required = {'bundle.json', 'acceptance.json', 'resource_diagnostic.json', 'capacity.json', 'baseline_parity.json'}
+    if spec.get('setup_reuse') is not None:
+        required.add('reused_exports.json')
+        reference = spec['setup_reuse']
+        reuse.validate_reuse(reference, spec['imported'], metadata_only=metadata_only_keys)
+        receipt = load_json(Path(spec['root'])/'setup/reused_exports.json')
+        validate(receipt, 'REUSED_EXPORTS', dict(spec=spec['content_hash'], reuse=reference['content_hash']))
+        if receipt['reference'] != reference:
+            raise ValueError('Reused exports differ from registered evidence')
+    else:
+        required.update({'OFFLINE/keys.npz', 'OFFLINE/manifest.json', 'offline_readback.json'})
+    if not required <= names:
         raise ValueError('Incomplete setup receipt')
     bundle = load_json(Path(spec['root'])/'setup/bundle.json')
     validate(bundle, 'BUNDLE', dict(spec=spec['content_hash']))

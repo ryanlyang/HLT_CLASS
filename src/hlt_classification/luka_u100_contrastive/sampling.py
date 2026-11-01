@@ -52,6 +52,15 @@ class Sampler:
                     index.setdefault(group, []).append(row)
                 self.groups.append((grouping, index))
         self.bins, self.edges = (None, None) if pt is None else fit_bins(pt, count)
+        # Population-wide bounds are invariant; never scan N rows per query.
+        self._maximum_radius = None if self.bins is None else int(np.max(np.ptp(self.bins, axis=0)))
+        self._cells = {}
+        if self.bins is not None:
+            extent = int(self.bins[:, 1].max())+1
+            codes = self.bins[:, 0]*extent+self.bins[:, 1]
+            ordered = np.argsort(codes, kind='stable')
+            for rows in np.split(ordered, np.flatnonzero(np.diff(codes[ordered]))+1):
+                self._cells[tuple(self.bins[rows[0]])] = rows
         self._regions = OrderedDict()
         self._region_bytes = 0
         # A sufficient, declared bound covers the largest 4,096/10-class proposal
@@ -130,7 +139,12 @@ class Sampler:
     def region(self, anchor, radius):
         key = (*self.bins[anchor], radius)
         if key not in self._regions:
-            rows = np.flatnonzero(np.max(np.abs(self.bins-self.bins[anchor]), axis=1) <= radius)
+            center = self.bins[anchor]
+            cells = [rows for (x, y), rows in self._cells.items()
+                     if abs(x-center[0]) <= radius and abs(y-center[1]) <= radius]
+            # Restore canonical row order: draw() and its RNG calls must see
+            # the exact same pools as the old whole-population mask scan.
+            rows = np.sort(np.concatenate(cells))
             self._regions[key] = [rows[self.labels[rows] == c] for c in range(11)]
             self._region_bytes += sum(p.nbytes for p in self._regions[key])
             # Cache bin regions, never a jet-by-jet matrix. Keep common regions
@@ -144,12 +158,15 @@ class Sampler:
     def kinematic(self, anchor, epoch, blocked):
         if self.bins is None:
             raise ValueError('kinmix requires TRAIN HLT pT/count bins')
-        maximum = int(np.max(np.ptp(self.bins, axis=0)))
-        for radius in range(maximum+1):
+        # Compute exclusions once, in bulk. This is exactly the previous
+        # per-class/per-radius count, including H, S and authenticated aliases.
+        excluded = np.asarray(sorted(blocked), dtype=np.int64)
+        distances = np.max(np.abs(self.bins[excluded]-self.bins[anchor]), axis=1)
+        excluded_labels = self.labels[excluded]
+        for radius in range(self._maximum_radius+1):
             pools = self.region(anchor, radius)
-            eligible = [len(p)-sum(1 for j in blocked if self.labels[j] == c
-                                   and np.max(np.abs(self.bins[j]-self.bins[anchor])) <= radius)
-                        for c, p in enumerate(pools)]
+            removed = np.bincount(excluded_labels[distances <= radius], minlength=11)
+            eligible = np.asarray([len(p) for p in pools])-removed
             if sum(eligible) < POOL:
                 continue
             classes = [c for c in range(11) if eligible[c] > 0]

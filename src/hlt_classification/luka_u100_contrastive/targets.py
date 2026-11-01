@@ -110,12 +110,27 @@ class KeyBank:
 def u100_bank(spec, train):
     bundle = load_json(Path(spec['root'])/'setup/bundle.json')
     validate(bundle, 'BUNDLE', dict(spec=spec['content_hash']))
+    if spec.get('setup_reuse') is not None and bundle['u100_manifest'] != spec['setup_reuse']['u100_manifest']:
+        raise ValueError('Reused U100 bank changed')
     location = Path(bundle['u100_manifest']['path'])
     validate_file_ref(bundle['u100_manifest'])
     return U100Bank(location.parent, train, teacher_record=spec['imported']['teacher'])
 
 
 def key_bank(spec, train):
-    return KeyBank(Path(spec['root'])/'setup/OFFLINE', train,
+    bundle = load_json(Path(spec['root'])/'setup/bundle.json')
+    validate(bundle, 'BUNDLE', dict(spec=spec['content_hash']))
+    validate_file_ref(bundle['offline_manifest'])
+    owner = spec
+    if spec.get('setup_reuse') is not None:
+        from .reuse import validate_reuse
+        reference = spec['setup_reuse']
+        owner = validate_reuse(reference, spec['imported'], metadata_only=True)
+        if (bundle['offline_manifest'] != reference['offline_manifest']
+                or bundle['reused_setup'] != reference['content_hash']):
+            raise ValueError('Reused OFFLINE bank changed')
+    elif Path(bundle['offline_manifest']['path']) != Path(spec['root'])/'setup/OFFLINE/manifest.json':
+        raise ValueError('Unexpected external OFFLINE bank')
+    return KeyBank(Path(bundle['offline_manifest']['path']).parent, train,
         spec['anchor']['evidence']['models']['OFFLINE']['checkpoint'],
-        spec_hash=spec['content_hash'], imported_hash=spec['imported']['content_hash'])
+        spec_hash=owner['content_hash'], imported_hash=spec['imported']['content_hash'])

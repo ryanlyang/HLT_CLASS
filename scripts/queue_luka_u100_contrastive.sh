@@ -6,6 +6,13 @@ COMMIT="$(git -C "${PROJECT}" rev-parse HEAD)"
 MAIN=/home/ryreu/atlas/HLT_Classification
 ROOT="${MAIN}/checkpoints/luka_u100_contrastive_${COMMIT:0:8}_debug_r1"
 SPEC="${ROOT}/campaign_spec.json"
+REUSE_ARGS=()
+if (( $# )); then
+    [[ $# -eq 2 && "$1" == --reuse-setup ]]
+    test -s "$2"
+    REUSE_ARGS=(--reuse-setup "$2")
+    printf 'Reuse published targets from: %s\nNew technical measurements will run before science.\n' "$2"
+fi
 test -z "$(git -C "${PROJECT}" status --porcelain --untracked-files=all)"
 git -C "${PROJECT}" fetch origin main
 git -C "${PROJECT}" merge-base --is-ancestor "${COMMIT}" origin/main
@@ -24,7 +31,7 @@ df -h /home/ryreu
 read -r -p 'Personally available persistent GiB (at least 4; campaign budget stays 4): ' QUOTA </dev/tty
 [[ "${QUOTA}" =~ ^[1-9][0-9]*$ ]]
 python -u -B -s "${PROJECT}/scripts/luka_u100_contrastive.py" create --root "${ROOT}" \
-    --parent "${PARENT}" --reference "${REFERENCE}" --expected-commit "${COMMIT}" --available-quota-gib "${QUOTA}"
+    --parent "${PARENT}" --reference "${REFERENCE}" --expected-commit "${COMMIT}" --available-quota-gib "${QUOTA}" "${REUSE_ARGS[@]}"
 python -u -B -s "${PROJECT}/scripts/luka_u100_contrastive.py" review --spec "${SPEC}"
 read -r -p 'Paste the printed 64-character PLAN_HASH: ' PLAN_HASH </dev/tty
 [[ "${PLAN_HASH}" =~ ^[0-9a-f]{64}$ ]]

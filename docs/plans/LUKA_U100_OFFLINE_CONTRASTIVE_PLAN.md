@@ -2,11 +2,32 @@
 
 Date: 2026-10-31. Status: **implemented as an additive debug campaign**.
 The [runbook](../LUKA_U100_CONTRASTIVE_RUNBOOK.md) provides commit, queue and
-results commands; the [v1 contract](../contracts/LUKA_U100_CONTRASTIVE.md)
+results commands; the [versioned contract](../contracts/LUKA_U100_CONTRASTIVE.md)
 defines the artifacts. Local tests are recorded in HANDOFF. Real SPORC
 admission runs inside shared setup before automatic scientific submission.
 No jobs have been submitted from the local implementation session, and no
 recovery improvement is claimed.
+
+### Setup resource repair, 2026-10-31
+
+SPORC job 21989145 completed target export, all six technical miniatures and
+native baseline parity, then failed admission: kinmix averaged 5.19361 seconds
+per update, projecting about 142 hours against its registered 24-hour cap.
+No scientific student result exists from that attempt.
+
+The repair indexes fixed TRAIN kinematic bins once, caches the maximum search
+radius, and counts excluded rows in bulk. It preserves the original ordered
+candidate pools, quotas, Chebyshev-radius expansion and RNG sequence. It does
+not drop the kinmix row or increase the reviewed resource limits.
+
+An explicit `--reuse-setup` execution mode imports the completed published
+U100/OFFLINE targets from the failed v1 campaign into a fresh campaign through
+hash-bound external references. It requires original-source authentication and
+terminal job evidence. All technical miniatures and timings run again using
+the repaired source; teacher embedding export does not. SPEC/BUNDLE advance
+to v2 for this execution mode; RECIPE/SAMPLER/KEYS remain v1. This operational
+amendment supersedes the earlier fresh-export-only launch procedure, without
+changing any of the twenty scientific rows below.
 
 ## 1. Decision and leading candidate
 
