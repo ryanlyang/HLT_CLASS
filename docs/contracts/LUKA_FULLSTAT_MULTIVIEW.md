@@ -66,3 +66,29 @@ batch-size reduction, token crop, changed teacher loss or deployment change.
 The 90% GPU-memory limit and 85% host-memory limit with 8 GiB reserve are
 unchanged. Scientific RECIPE/BANK/EPOCH/REPORT remain v1 and bind the v2 spec
 through parents; old/new execution records are not interchangeable.
+
+## Exact timing-failure recovery (v1)
+
+RECOVERY_SPEC/v1 is distinct from SPEC/v2. It binds the same recipe, nodes,
+split, historical references and U100 bank, plus RECOVERY_REUSE/v1 proving
+completed CONCAT from exact source `8ad0b381` / spec `aa0c2e10...` and jobs
+8177360/8177361/8177362. Original-source validation verifies every CONCAT
+output, bank parents and selected model; scheduler accounting must identify
+the expected owner and completed/failed/cancelled states. Accepted startup or
+any scientific FUSION/student attempt forbids this restart-zero recovery.
+
+RECOVERY_POLICY/v1 inherits RUNTIME_POLICY/v1 with FUSION4320/student1440
+minutes and unchanged memory/timing margins. STARTUP/v2 binds that explicit
+policy and recovery spec; it remains mandatory inside each allocation. Saved
+timing diagnostics must reproduce the original calculation, exceed48h, fit72h,
+and pass the original memory guard before recovery registration.
+
+PLAN/v1 for recovery contains exactly FUSION then student-afterok-FUSION, with
+a distinct recovery authorization. The original CONCAT is a read-only input
+with its original BANK/TASK parents, never a scheduled replacement or a
+rewritten artifact. Workers authenticate the reused payload and exact TRAIN
+row join. Results include the original CONCAT with explicit original provenance.
+RECOVERY_CLAIM/v1 binds the sole recovery root/spec/plan before the first sbatch;
+duplicate or ambiguous submissions retain claims and require inspection.
+The detached RECOVERY_AUTOSUBMIT authorization covers only these two commands
+after full dry review; it cannot submit a new CONCAT or bypass scheduler limits.

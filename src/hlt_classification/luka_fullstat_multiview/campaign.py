@@ -7,10 +7,10 @@ from hlt_classification.luka_fullstat_multiteacher.campaign import protected
 from hlt_classification.luka_fullstat_readout import campaign as readout_campaign
 from hlt_classification.luka_fullstat_readout.contracts import validate as readout_validate, teacher_replay
 from . import source, resources
-from .contracts import artifact, validate, recipe, nodes, COUNTS, TASKS
+from .contracts import artifact, validate, recipe, nodes, COUNTS, TASKS, is_recovery
 
 
-def registration(reuse):
+def registration(reuse, *, recovered=False):
     validate(reuse,'REUSE'); u=reuse['u100']
     old=readout_campaign.registration(u)
     proof=reuse['startup']; readout_validate(proof,'STARTUP')
@@ -21,13 +21,14 @@ def registration(reuse):
         raise ValueError('Wrong completed Oscar acceptance/population')
     refs=dict(old['references'],READOUT_CE=reuse['readout_reference'])
     validate_resources(old['execution_site'],6,192000,4)
+    policy = resources.for_spec(dict(contract='LUKA_FULLSTAT_MULTIVIEW_RECOVERY_SPEC/v1')) if recovered else resources.policy()
     return dict(counts=dict(COUNTS),nodes=nodes(reuse),recipe=recipe(),
         anchor=u['anchor'],references=refs,bank_manifest=u['bank_manifest'],teacher_refs=u['teacher_refs'],
         teacher_replay=teacher_replay(),runtime_prefix=source.RUNTIME,execution_site=old['execution_site'],
-        cpus=6,memory_mb=192000,minutes=resources.policy()['minutes'],runtime_policy=resources.policy(),
+        cpus=6,memory_mb=192000,minutes=policy['minutes'],runtime_policy=policy,
         storage_budget_bytes=20*2**30,filesystem_headroom_bytes=2*2**30,
-        preflight_jobs=0,setup_jobs=0,scientific_fits=3,automatic_retry=False,
-        teacher_order='afterany:teacher_CONCAT',historical_control='U100_W5')
+        preflight_jobs=0,setup_jobs=0,scientific_fits=2 if recovered else 3,automatic_retry=False,
+        teacher_order='reuse_completed_CONCAT' if recovered else 'afterany:teacher_CONCAT',historical_control='U100_W5')
 
 
 def storage(spec):
@@ -39,14 +40,20 @@ def storage(spec):
 
 
 def validate_spec(spec):
-    validate(spec,'SPEC',dict(source=spec['source_snapshot']['content_hash'],reuse=spec['reuse']['content_hash']))
-    if (any(spec.get(k)!=v for k,v in registration(spec['reuse']).items())
+    recovered=is_recovery(spec)
+    parents=dict(source=spec['source_snapshot']['content_hash'],reuse=spec['reuse']['content_hash'])
+    if recovered: parents['recovery']=spec['recovery']['content_hash']
+    validate(spec,'RECOVERY_SPEC' if recovered else 'SPEC',parents)
+    if (('recovery' in spec)!=recovered or any(spec.get(k)!=v for k,v in registration(spec['reuse'],recovered=recovered).items())
             or type(spec['available_quota_gib']) is not int or spec['available_quota_gib']<22):
         raise ValueError('Registered multiview science/resources differ')
     root=Path(spec['root'])
     if root.resolve()!=root or root.is_symlink() or not root.name.startswith('luka_fullstat_multiview_'):
         raise PermissionError('Dedicated unredirected multiview result root required')
     protected(root,dict(anchor=spec['anchor'],protected_roots=spec['reuse']['protected_roots']),spec['project_dir'])
+    if recovered:
+        from . import recovery
+        recovery.validate_reuse(spec)
 
 
 def create(root,previous_spec,project,commit,*,quota_gib):
@@ -62,11 +69,14 @@ def create(root,previous_spec,project,commit,*,quota_gib):
 
 def check(spec,*,full_reuse=False):
     validate_spec(spec)
+    from . import recovery
+    current=recovery.current if is_recovery(spec) else source.current
     if (load_json(Path(spec['root'])/'campaign_spec.json')!=spec
-            or source.current(spec['project_dir'],spec['source_commit'])!=spec['source_snapshot']):
+            or current(spec['project_dir'],spec['source_commit'])!=spec['source_snapshot']):
         raise ValueError('Pinned source or registration changed')
     source.check_registered_reuse(spec['reuse'],spec['project_dir'])
     if full_reuse and source.authenticate(spec['reuse']['parent_spec']['path'],spec['project_dir'])!=spec['reuse']:
         raise ValueError('Completed parent changed')
+    if is_recovery(spec): recovery.check(spec, full=full_reuse)
     storage(spec)
     return spec

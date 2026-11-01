@@ -9,7 +9,17 @@ TASKS = {'teacher_CONCAT': [], 'teacher_FUSION': ['teacher_CONCAT'],
          'train_multi3': ['teacher_CONCAT', 'teacher_FUSION']}
 AUTHORIZATION = 'AUTHORIZE_FULLSTAT_MULTIVIEW_V1'
 LAUNCH_AUTHORIZATION = 'AUTHORIZE_FULLSTAT_MULTIVIEW_AUTOSUBMIT_V1'
+RECOVERY_AUTHORIZATION = 'AUTHORIZE_FULLSTAT_MULTIVIEW_RECOVERY_V1'
+RECOVERY_LAUNCH_AUTHORIZATION = 'AUTHORIZE_FULLSTAT_MULTIVIEW_RECOVERY_AUTOSUBMIT_V1'
 VERSIONS = {'SPEC': 2, 'STARTUP': 2}
+
+
+def is_recovery(spec):
+    return spec.get('contract') == 'LUKA_FULLSTAT_MULTIVIEW_RECOVERY_SPEC/v1'
+
+
+def tasks(spec):
+    return {'teacher_FUSION': [], 'train_multi3': ['teacher_FUSION']} if is_recovery(spec) else TASKS
 
 
 def artifact(kind, *, parents=None, **fields):

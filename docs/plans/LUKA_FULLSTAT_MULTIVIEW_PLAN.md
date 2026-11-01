@@ -1,6 +1,6 @@
 # FullStat three-teacher auxiliary embedding study on Oscar
 
-Active plan, revised 2026-10-31. User authorized two fresh privileged teachers and one
+Active plan, revised 2026-11-01. User authorized two fresh privileged teachers and one
 fresh HLT-only student. This adapts the SPORC multiview scientific graph to
 3,000,000 TRAIN / 500,000 validation, 20 epochs, batch128 and the FullStat20
 optimizer/schedule. The final 1,500,000 test and 105,325 unused rows stay sealed.
@@ -90,3 +90,31 @@ allocated bytes and failed the memory-margin guard. Neither saved a scientific
 epoch. Preserve their root and source; launch corrected code into a fresh root.
 The failed jobs did not persist the union or fitted states, so their RAM-only
 preparation must run again. No new standalone preflight is introduced.
+
+## Recover the completed-CONCAT execution
+
+User-supplied accounting and diagnostics for source `8ad0b381` show CONCAT
+8177360 COMPLETED/0:0, including twenty epochs and its published TRAIN bank.
+FUSION 8177361 passed native/storage parity, full-support training, validation
+and export stress at 10.59 GiB CUDA peak, then rejected the timing envelope:
+4164 conservative minutes versus 2880 allocated. No scientific FUSION epoch
+or accepted startup exists. Student 8177362 was cancelled without running.
+
+The specific recovery reuses completed CONCAT in its original root, validated
+in original source including all epoch/checkpoint/prediction/bank payloads.
+Queue only a fresh FUSION fit requesting 4320 minutes (72h), followed by the
+unchanged 1440-minute student afterok on FUSION. The exact new request must pass
+Oscar scheduler dry review. The 1.5 timing factor, 120-minute allowance, memory
+limits, integrated checks and all scientific semantics remain unchanged. The
+69h24m estimate is extrapolated admission evidence, not measured full-fit time.
+
+Use a fresh root and RECOVERY_SPEC/RECOVERY_POLICY/RECOVERY_REUSE v1; preserve
+all original spec, startup, bank and receipt hashes. Source admission freezes
+scientific kernels and external dependencies, allowing only declared operational
+recovery adapters relative to `810433f8`. Never reparent or copy the old bank
+as a new export. A single atomic claim in the original root prevents competing
+recoveries. The detached launcher authorizes exactly two jobs, retains failures
+and partial submission journals, and performs no automatic retry or cancellation.
+No separate preflight, new control, altered batch, shortened fit or relaxed
+resource margin is introduced. Local tests do not certify Oscar's 72h policy
+or a completed full-size FUSION run.

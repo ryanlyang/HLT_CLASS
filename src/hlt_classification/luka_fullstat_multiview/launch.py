@@ -10,12 +10,15 @@ import socket
 from hlt_classification.data.cache_contracts import write_immutable_json
 from hlt_classification.cms_proxy_ladder.contracts import file_ref
 from . import campaign, submission, source, resources
-from .contracts import artifact, AUTHORIZATION, LAUNCH_AUTHORIZATION, TASKS, recipe
+from .contracts import (artifact, AUTHORIZATION, LAUNCH_AUTHORIZATION, TASKS, recipe,
+    RECOVERY_AUTHORIZATION, RECOVERY_LAUNCH_AUTHORIZATION, tasks)
 
 
-def run(root, previous_spec, project, commit, *, quota_gib, authorization):
-    if authorization != LAUNCH_AUTHORIZATION:
-        raise PermissionError('Explicit authorization for automatic three-job submission required')
+def run(root, previous_spec, project, commit, *, quota_gib, authorization, recover=False):
+    if authorization != (RECOVERY_LAUNCH_AUTHORIZATION if recover else LAUNCH_AUTHORIZATION):
+        raise PermissionError('Explicit authorization for this bounded automatic submission required')
+    policy_spec=dict(contract='LUKA_FULLSTAT_MULTIVIEW_RECOVERY_SPEC/v1') if recover else {}
+    graph=tasks(policy_spec); count=len(graph)
     root, project, previous_spec = map(lambda p: Path(p).resolve(), (root, project, previous_spec))
     directory = Path(str(root)+'.launch')
     if not directory.is_dir() or root.exists():
@@ -26,36 +29,42 @@ def run(root, previous_spec, project, commit, *, quota_gib, authorization):
         intent = artifact('LAUNCH_INTENT', project_dir=str(project), source_commit=commit,
             root=str(root), parent_spec=file_ref(previous_spec), quota_gib=quota_gib,
             runtime_prefix=source.RUNTIME, authorization=authorization,
-            recipe=recipe(), runtime_policy=resources.policy(), jobs=3, preflight_jobs=0,
+            recipe=recipe(), runtime_policy=resources.for_spec(policy_spec), jobs=count, preflight_jobs=0,
             host=socket.gethostname(), pid=os.getpid(), automatic_retry=False)
         write_immutable_json(directory/'intent.json', intent)
-        print('STARTED: CONCAT and FUSION teachers followed by native HLT three-target student; authenticate completed parent, save full dry plan, then submit exactly three jobs.', flush=True)
-        spec = campaign.create(root, previous_spec, project, commit, quota_gib=quota_gib)
+        print(f'STARTED: authenticate completed parent, save full dry plan, then submit exactly {count} jobs; recovery preserves CONCAT.' if recover else
+              'STARTED: CONCAT and FUSION teachers followed by native HLT three-target student; authenticate completed parent, save full dry plan, then submit exactly three jobs.', flush=True)
+        create=campaign.create
+        if recover:
+            from . import recovery
+            create=recovery.create
+        spec = create(root, previous_spec, project, commit, quota_gib=quota_gib)
         print('Authenticated parent and exact pushed source. Running complete dry review...', flush=True)
         plan = submission.submit(spec)
-        if (plan != submission.render(spec) or plan['jobs'] != 3 or plan['scientific_fits'] != 3
+        if (plan != submission.render(spec) or plan['jobs'] != count or plan['scientific_fits'] != count
                 or plan['preflight_jobs'] != 0 or plan['setup_jobs'] != 0
                 or spec['recipe'] != intent['recipe']
                 or spec['runtime_policy'] != intent['runtime_policy']
                 or spec['available_quota_gib'] != intent['quota_gib']
-                or [r['task_id'] for r in plan['commands']] != list(TASKS)
+                or [r['task_id'] for r in plan['commands']] != list(graph)
                 or file_ref(previous_spec) != intent['parent_spec']):
-            raise ValueError('Dry plan exceeds the explicitly authorized three-job intent')
+            raise ValueError('Dry plan exceeds the explicitly authorized job intent')
         print(json.dumps(plan, indent=2, sort_keys=True, allow_nan=False), flush=True)
         approval = artifact('LAUNCH_APPROVAL', parents=dict(intent=intent['content_hash'],
             spec=spec['content_hash'], plan=plan['content_hash']), authorization=authorization,
             full_dry_review_saved=True, bounded_automatic_authorization=True)
         write_immutable_json(directory/'approval.json', approval)
-        print('DRY_REVIEW_PASSED: plan '+plan['content_hash']+'; submitting the authorized three jobs.', flush=True)
-        submission.submit(spec, execute=True, plan_hash=plan['content_hash'], authorization=AUTHORIZATION)
+        print('DRY_REVIEW_PASSED: plan '+plan['content_hash']+f'; submitting the authorized {count} jobs.', flush=True)
+        submission.submit(spec, execute=True, plan_hash=plan['content_hash'],
+                          authorization=RECOVERY_AUTHORIZATION if recover else AUTHORIZATION)
         jobs = submission.accepted_jobs(spec)
-        if set(jobs) != set(TASKS) or len(set(jobs.values())) != 3:
+        if set(jobs) != set(graph) or len(set(jobs.values())) != count:
             raise ValueError('Incomplete/ambiguous accepted job ledger; inspect, do not retry')
         result = artifact('LAUNCH_COMPLETE', parents=dict(approval=approval['content_hash']), jobs=jobs,
             submission_ledger=file_ref(root/'submission/submission_ledger.json'))
         write_immutable_json(directory/'complete.json', result)
         print('SUBMITTED: '+json.dumps(jobs, sort_keys=True), flush=True)
-        print('LAUNCH_COMPLETE: Slurm owns all three jobs. No login controller remains.', flush=True)
+        print(f'LAUNCH_COMPLETE: Slurm owns all {count} jobs. No login controller remains.', flush=True)
         return result
     except Exception as exc:
         write_immutable_json(directory/'failure.json', artifact('LAUNCH_FAILURE',

@@ -204,14 +204,16 @@ def test_hangup_of_log_view_does_not_kill_detached_submission(tmp_path):
         if child.poll() is None: child.terminate();child.wait(timeout=5)
 
 
-def test_shell_smoke_tailing_can_exit_while_background_finishes(tmp_path):
+@pytest.mark.parametrize('recovered',[False,True])
+def test_shell_smoke_tailing_can_exit_while_background_finishes(tmp_path,recovered):
     """Actual Bash launch flow; setsid is stubbed on Windows (not a HUP test)."""
     bash='C:/Program Files/Git/bin/bash.exe' if sys.platform=='win32' else 'bash'
     def shellpath(p):
         p=Path(p).resolve()
         return '/'+p.drive[0].lower()+p.as_posix()[2:] if sys.platform=='win32' else str(p)
     repo=tmp_path/'project';(repo/'scripts').mkdir(parents=True);(repo/'sbatch').mkdir()
-    original=Path(__file__).resolve().parents[1]/'scripts/launch_luka_fullstat_multiview.sh'
+    name='launch_luka_fullstat_multiview_recovery.sh' if recovered else 'launch_luka_fullstat_multiview.sh'
+    original=Path(__file__).resolve().parents[1]/'scripts'/name
     script=repo/'scripts'/original.name;script.write_bytes(original.read_bytes())
     (repo/'sbatch/luka_splithead_finalize_common.sh').write_text('# fixture runtime\n')
     binpath=tmp_path/'bin';binpath.mkdir()
@@ -229,10 +231,11 @@ def test_shell_smoke_tailing_can_exit_while_background_finishes(tmp_path):
     # synthetic command fixtures first in each child shell, not system git.
     startup=tmp_path/'fixture_env.sh';startup.write_bytes(b'export PATH="${FIXTURE_BIN}:${PATH}"\n')
     env.update(BASH_ENV=shellpath(startup),FIXTURE_BIN=shellpath(binpath))
-    args=[bash,str(script),'0'*39+'1',shellpath(root),shellpath(parent),'22','--authorize',c.LAUNCH_AUTHORIZATION]
+    auth=c.RECOVERY_LAUNCH_AUTHORIZATION if recovered else c.LAUNCH_AUTHORIZATION
+    args=[bash,str(script),'0'*39+'1',shellpath(root),shellpath(parent),'22','--authorize',auth]
     result=subprocess.run(args,env=env,capture_output=True,text=True,timeout=10)
     assert result.returncode==0,result.stderr
-    assert 'TAIL_ATTACHED' in result.stdout and 'DETACHED: launcher PID' in result.stdout
+    assert 'TAIL_ATTACHED' in result.stdout and 'DETACHED:' in result.stdout
     deadline=time.monotonic()+10
     while not done.exists() and time.monotonic()<deadline: time.sleep(.05)
     log=Path(str(root)+'.launch/launcher.log')

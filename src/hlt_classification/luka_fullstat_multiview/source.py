@@ -12,11 +12,13 @@ from .contracts import artifact, COUNTS
 
 DONOR = 'db9afe8b87cdef6f3489f9b85603f52cf7d2084f'
 BASELINE = '74cba41f4938df8aedcee4f931ef14bfc79b839d'
-MODULES = ('__init__','contracts','source','campaign','model','training','worker','execution','submission','launch','views','targets','startup','resources','fusion')
+MODULES = ('__init__','contracts','source','campaign','model','training','worker','execution','submission','launch','views','targets','startup','resources','fusion','recovery')
 ADDITIONS = {f'src/hlt_classification/luka_fullstat_multiview/{n}.py' for n in MODULES}
 ENTRYPOINTS = {'scripts/luka_fullstat_multiview.py','scripts/launch_luka_fullstat_multiview.sh',
+              'scripts/launch_luka_fullstat_multiview_recovery.sh',
               'scripts/queue_luka_fullstat_multiview.sh','sbatch/run_luka_fullstat_multiview.sh'}
 REQUIRED = ADDITIONS | ENTRYPOINTS | {'tests/test_luka_fullstat_multiview.py',
+    'tests/test_luka_fullstat_multiview_recovery.py',
     'tests/test_luka_fullstat_multiview_launch.py','docs/plans/LUKA_FULLSTAT_MULTIVIEW_PLAN.md',
     'docs/contracts/LUKA_FULLSTAT_MULTIVIEW.md','docs/LUKA_FULLSTAT_MULTIVIEW_RUNBOOK.md'}
 

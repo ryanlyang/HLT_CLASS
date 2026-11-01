@@ -30,7 +30,7 @@ def timing(spec,task,train_step,val_step,export_step,preparation,*,enforce=True)
             or not math.isfinite(export_step) or (export_step<=0 if name else export_step!=0)
             or not math.isfinite(preparation) or preparation<0): raise ValueError('Invalid timing witness')
     nt=math.ceil(spec['counts']['train']/128);nv=math.ceil(spec['counts']['validation']/128)
-    p=resources.policy()
+    p=resources.for_spec(spec)
     minutes=math.ceil(preparation/60+p['fixed_margin_minutes']+
                       p['timing_factor']*(20*nt*train_step+22*nv*val_step+nt*export_step)/60)
     if enforce and minutes>spec['minutes'][task]:
@@ -163,7 +163,7 @@ def _run(spec,task,tr,val,banks,meta,device,started,record):
     timing(spec,task,train_step,val_step,export_step,estimate['preparation'])
     print(f'FULLSTAT MULTIVIEW integrated task={task} conservative_minutes={estimate["conservative_minutes"]}',flush=True)
     return artifact('STARTUP',parents=dict(spec=spec['content_hash']),task_id=task,
-        runtime_policy=resources.policy(),fusion_parity=fusion_parity,
+        runtime_policy=resources.for_spec(spec),fusion_parity=fusion_parity,
         teacher_witness=witness,installed_weaver_parity=True,initial_parity=True,initial_errors=errors,
         finite_connected_gradients=True,classifier_CE_only=True,deployment_readback=True,
         batch=128,stress_steps=3,train=views.describe(tr),validation=views.describe(val),
@@ -179,7 +179,7 @@ def check(spec,task,value):
         raise ValueError('Startup graph checks differ')
     if set(value['initial_errors'])!={'False','True'} or any(not math.isfinite(v) or v<0 for v in value['initial_errors'].values()):
         raise ValueError('Invalid parity errors')
-    if value['runtime_policy']!=resources.policy() or spec['runtime_policy']!=resources.policy():
+    if value['runtime_policy']!=resources.for_spec(spec) or spec['runtime_policy']!=resources.for_spec(spec):
         raise ValueError('Startup runtime policy differs')
     if name=='FUSION': fusion.check_parity(value['fusion_parity'])
     elif value['fusion_parity'] is not None: raise ValueError('Unexpected fusion parity')

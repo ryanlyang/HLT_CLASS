@@ -9,6 +9,52 @@ All fits use 3M TRAIN / 500k validation, 20 epochs, batch128. Auxiliary heads
 are removed at inference. No separate preflight; technical checks run inside
 each job. Existing campaigns and artifacts are untouched.
 
+## Recover FUSION 8177361 while keeping completed CONCAT
+
+Source8ad0b381 completed CONCAT8177360, then FUSION8177361 failed its timing
+guard (4164 conservative minutes against2880); student8177362 was cancelled.
+Use the recovery helper below, **not the original three-job launcher**. It
+requests72h for FUSION and24h for the student, checks the exact shapes with
+`sbatch --test-only`, authenticates CONCAT in its original source, and submits
+only those two fits. No separate preflight or CONCAT retraining/export occurs.
+All original artifacts and source remain required. The only original-root
+write is an exclusive recovery claim, created after the successful dry review.
+
+Commit/push the recovery namespace changes, CLI/helper, tests and active docs.
+On Oscar paste this block. It detaches before expensive authentication; after
+`DETACHED` the SSH session can close. `LAUNCH_COMPLETE` confirms submission.
+
+```bash
+bash <<'BASH'
+set -euo pipefail
+checkquota
+read -r -p 'Paste the pushed 40-character recovery commit: ' COMMIT </dev/tty
+[[ "${COMMIT}" =~ ^[0-9a-f]{40}$ ]]
+read -r -p 'Available HOME quota in whole GiB (minimum 22): ' QUOTA </dev/tty
+[[ "${QUOTA}" =~ ^[1-9][0-9]*$ && "${#QUOTA}" -le 6 ]]
+(( QUOTA >= 22 ))
+REPO=/oscar/home/rlyang/hlt_classification/source/HLT_Classification_multiview_8ad0b381
+PROJECT=/oscar/home/rlyang/hlt_classification/source/HLT_Classification_multiview_recovery_${COMMIT:0:8}
+ROOT=/oscar/home/rlyang/hlt_classification/checkpoints/luka_fullstat_multiview_recovery_${COMMIT:0:8}_r1
+PARENT=/oscar/home/rlyang/hlt_classification/checkpoints/luka_fullstat_multiview_8ad0b381_r1/campaign_spec.json
+git -C "${REPO}" fetch origin main
+git -C "${REPO}" merge-base --is-ancestor "${COMMIT}" origin/main
+if [[ ! -e "${PROJECT}" ]]; then
+    git -C "${REPO}" worktree add --detach "${PROJECT}" "${COMMIT}"
+fi
+bash "${PROJECT}/scripts/launch_luka_fullstat_multiview_recovery.sh" \
+    "${COMMIT}" "${ROOT}" "${PARENT}" "${QUOTA}" \
+    --authorize AUTHORIZE_FULLSTAT_MULTIVIEW_RECOVERY_AUTOSUBMIT_V1
+BASH
+```
+
+If scheduler dry review rejects72h, no jobs are submitted; do not lower the
+timing margin or edit the saved spec. If a live submission is partial or fails,
+preserve `${ROOT}.launch/failure.json`, journals and the original
+`multiview_recovery_claim_v1`; do not launch another root or remove the claim.
+The standard `results --spec` command below also supports the recovery root.
+Its CONCAT row reads the unchanged original artifacts.
+
 ## Retry after jobs 8148495 and 8148496
 
 Use the corrected SPEC/STARTUP v2 source in a **fresh commit-named root** using

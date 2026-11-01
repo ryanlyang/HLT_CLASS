@@ -5,13 +5,14 @@ from hlt_classification.cms_proxy_ladder.submission import _walltime
 from hlt_classification.scouting.hcwdl_exact_dag_submission import submit_exact_dag,load_exact_dag_journal
 from hlt_classification.scouting.hcwdl_recovery import assemble_submission_ledger,build_submission_ledger
 from hlt_classification.luka_fullstat.submission import check_site,environment as clean_environment
-from .contracts import artifact,TASKS,AUTHORIZATION
+from .contracts import artifact,TASKS,AUTHORIZATION,RECOVERY_AUTHORIZATION,is_recovery,tasks
 from . import campaign
 
 
 def render(spec):
     site=spec['execution_site']; root=Path(spec['root']); project=spec['project_dir']; commands=[]
-    for task,deps in TASKS.items():
+    graph=tasks(spec)
+    for task,deps in graph.items():
         command=['sbatch','--parsable','--no-requeue','--nodes=1','--ntasks=1','--export=NONE',
             '--partition='+site['partition'],'--account='+site['account'],'--qos='+site['qos'],
             '--cpus-per-task='+str(spec['cpus']),'--mem='+str(spec['memory_mb'])+'M',
@@ -23,14 +24,16 @@ def render(spec):
             command+=['--dependency='+kind+':'+':'.join('${JOB_'+d+'}' for d in deps)]
         command+=[project+'/sbatch/run_luka_fullstat_multiview.sh',project,str(root/'campaign_spec.json'),task]
         commands.append(dict(task_id=task,dependencies=deps,command=command))
-    return artifact('PLAN',parents=dict(spec=spec['content_hash']),jobs=len(TASKS),authorization=AUTHORIZATION,commands=commands,
-        mode='science',setup_jobs=0,scientific_fits=len(TASKS),preflight_jobs=0)
+    return artifact('PLAN',parents=dict(spec=spec['content_hash']),jobs=len(graph),
+        authorization=RECOVERY_AUTHORIZATION if is_recovery(spec) else AUTHORIZATION,commands=commands,
+        mode='recovery' if is_recovery(spec) else 'science',setup_jobs=0,scientific_fits=len(graph),preflight_jobs=0)
 
 
 def accepted_jobs(spec,*,partial=False):
     folder=Path(spec['root'])/'submission'
     events,jobs=load_exact_dag_journal(folder/'submission_ledger_journal',identity=spec['content_hash'],plan=render(spec))
-    if not jobs or not set(jobs)<=TASKS.keys() or (not partial and set(jobs)!=TASKS.keys()):
+    graph=tasks(spec)
+    if not jobs or not set(jobs)<=graph.keys() or (not partial and set(jobs)!=graph.keys()):
         raise ValueError('Exact submission journal incomplete')
     ledger=folder/'submission_ledger.json'
     if ledger.exists():
@@ -45,7 +48,7 @@ def submit(spec,*,execute=False,plan_hash=None,authorization=None):
     if any((Path(spec['root'])/task).exists() for task in TASKS):
         raise FileExistsError('Preserve existing task outputs; no implicit resubmission')
     plan=render(spec)
-    if execute and (plan_hash!=plan['content_hash'] or authorization!=AUTHORIZATION):
+    if execute and (plan_hash!=plan['content_hash'] or authorization!=plan['authorization']):
         raise PermissionError('Exact reviewed plan hash and authorization required')
     folder=Path(spec['root'])/'submission'; folder.mkdir(exist_ok=True)
     saved=folder/'command_plan.json'; dry=folder/'dry_run_submission_ledger.json'; ledger=folder/'submission_ledger.json'
@@ -55,6 +58,9 @@ def submit(spec,*,execute=False,plan_hash=None,authorization=None):
         expected=build_submission_ledger(campaign_spec_sha256=spec['content_hash'],jobs={r['task_id']:'1' for r in plan['commands']},
             commands={r['task_id']:r['command'] for r in plan['commands']},dry_run=True)
         if not dry.is_file() or load_json(dry)!=expected: raise ValueError('Canonical dry ledger required')
+        if is_recovery(spec):
+            from .recovery import claim
+            claim(spec,plan)
         (folder/'live_claim').mkdir(exist_ok=False)
         write_immutable_json(folder/'live_claim/intent.json',artifact('CLAIM',parents=dict(plan=plan['content_hash'])))
     value=submit_exact_dag(identity=spec['content_hash'],plan=plan,output=ledger if execute else dry,

@@ -5,7 +5,7 @@ import math
 from copy import deepcopy
 from hlt_classification.data.cache_contracts import write_immutable_json
 from hlt_classification.luka_fullsim.alljets_fusion_sync import PAIR_STORAGE
-from .contracts import artifact
+from .contracts import artifact, is_recovery, FLAGS
 
 
 def policy():
@@ -18,8 +18,18 @@ def policy():
         measurements_before_admission=True, automatic_fallback=False)
 
 
+def for_spec(spec):
+    if not is_recovery(spec):
+        return policy()
+    old = policy()
+    fields = {k: v for k, v in old.items() if k not in
+              ('contract', 'schema_version', 'content_hash', 'parents', *FLAGS)}
+    fields['minutes'] = dict(teacher_FUSION=4320, train_multi3=1440)
+    return artifact('RECOVERY_POLICY', parents=dict(original=old['content_hash']), **fields)
+
+
 def limits(spec):
-    p = policy()
+    p = for_spec(spec)
     return dict(gpu_peak_limit_bytes=p['gpu_peak_fraction']*spec['reuse']['u100']['gpu']['total_memory_bytes'],
         host_peak_limit_bytes=p['host_peak_fraction']*spec['memory_mb']*1024**2-p['host_reserve_bytes'])
 
@@ -46,7 +56,7 @@ class Recorder:
         self.stage = stage
         value = artifact('STARTUP_DIAGNOSTIC', parents=dict(spec=self.spec['content_hash']),
             task_id=self.task, stage=stage, accepted=False,
-            runtime_policy=policy(), memory=self.sample(), limits=limits(self.spec), **fields)
+            runtime_policy=for_spec(self.spec), memory=self.sample(), limits=limits(self.spec), **fields)
         write_immutable_json(self.folder/f'{self.index:02d}-{stage}.json', value)
         self.index += 1
         print('FULLSTAT MULTIVIEW diagnostic '+json.dumps(value, sort_keys=True, allow_nan=False), flush=True)

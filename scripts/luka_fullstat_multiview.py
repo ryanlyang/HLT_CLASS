@@ -11,22 +11,23 @@ from hlt_classification.luka_fullstat_multiview import campaign,submission,worke
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     sub=parser.add_subparsers(dest='command',required=True)
-    for command in ('create','launch'):
+    for command in ('create','launch','recover-launch'):
         p=sub.add_parser(command)
         for field in ('root','previous-spec','expected-commit'): p.add_argument('--'+field,required=True)
         p.add_argument('--result-quota-gib',type=int,required=True)
-        if command=='launch': p.add_argument('--authorization',required=True)
+        if command in ('launch','recover-launch'): p.add_argument('--authorization',required=True)
     for command in ('submit','run','results'):
         p=sub.add_parser(command); p.add_argument('--spec',required=True)
         if command=='submit':
             p.add_argument('--execute',action='store_true');p.add_argument('--plan-hash');p.add_argument('--authorization')
         if command=='run': p.add_argument('--task',choices=('teacher_CONCAT','teacher_FUSION','train_multi3'),required=True)
     a=parser.parse_args()
-    if a.command in ('create','launch'):
+    if a.command in ('create','launch','recover-launch'):
         action=campaign.create; kwargs=dict(quota_gib=a.result_quota_gib)
-        if a.command=='launch':
+        if a.command in ('launch','recover-launch'):
             from hlt_classification.luka_fullstat_multiview.launch import run
             action=run;kwargs['authorization']=a.authorization
+            if a.command=='recover-launch': kwargs['recover']=True
         result=action(a.root,a.previous_spec,Path(__file__).resolve().parents[1],a.expected_commit,**kwargs)
     else:
         spec=load_json(a.spec)

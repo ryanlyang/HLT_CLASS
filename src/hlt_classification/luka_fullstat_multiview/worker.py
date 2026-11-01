@@ -17,7 +17,7 @@ from .resources import check_memory
 from hlt_classification.luka_fullsim.preflight_v2 import PhaseLog,memory_snapshot
 from . import campaign,submission,model,training,targets,views,startup
 from .execution import execution
-from .contracts import artifact,validate,recipe,TASKS,TEACHERS
+from .contracts import artifact,validate,recipe,TASKS,TEACHERS,is_recovery,tasks
 
 FIT_FILES=('selected.pt','selected_full.pt','selected_training_state.pt','completed_training.json',
            'training_report.json','validation_predictions.npz','startup.json')
@@ -30,8 +30,19 @@ def output_names(task):
     return names
 
 
+def teacher_spec(spec,name):
+    if name=='CONCAT' and is_recovery(spec):
+        from .recovery import parent
+        return parent(spec)
+    return spec
+
+
+def teacher_folder(spec,name):
+    return Path(teacher_spec(spec,name)['root'])/('teacher_'+name)
+
+
 def teacher_refs(spec,name):
-    folder=Path(spec['root'])/('teacher_'+name)
+    folder=teacher_folder(spec,name)
     return {'checkpoint':file_ref(folder/'selected.pt'),'report':file_ref(folder/'training_report.json')}
 
 
@@ -40,8 +51,8 @@ def fit_parents(spec,task):
     if task=='train_multi3':
         p['U100']=spec['reuse']['u100']['bank_hash']
         for name in ('CONCAT','FUSION'):
-            m=load_json(Path(spec['root'])/('teacher_'+name)/'bank/manifest.json')
-            validate(m,'BANK',targets.parents(spec,name,teacher_refs(spec,name)));p[name]=m['content_hash']
+            m=load_json(teacher_folder(spec,name)/'bank/manifest.json')
+            validate(m,'BANK',targets.parents(teacher_spec(spec,name),name,teacher_refs(spec,name)));p[name]=m['content_hash']
     return p
 
 
@@ -53,11 +64,16 @@ def load_banks(spec,task,tr):
     if banks['U100'].manifest['content_hash']!=spec['reuse']['u100']['bank_hash']:
         raise ValueError('Original U100 bank changed')
     for name in ('CONCAT','FUSION'):
-        banks[name]=targets.Bank(Path(spec['root'])/('teacher_'+name)/'bank',tr,name,teacher_refs(spec,name),spec)
+        banks[name]=targets.Bank(teacher_folder(spec,name)/'bank',tr,name,teacher_refs(spec,name),teacher_spec(spec,name))
     return banks
 
 
 def validate_fit(spec,task):
+    if task=='teacher_CONCAT' and is_recovery(spec):
+        from .recovery import completed_concat
+        completed_concat(spec)
+        folder=teacher_folder(spec,'CONCAT')
+        return load_json(folder/'training_report.json'),load_npz_arrays(folder/'validation_predictions.npz')
     folder=Path(spec['root'])/task
     startup.check(spec,task,load_json(folder/'startup.json'))
     report=load_json(folder/'training_report.json');parents=fit_parents(spec,task)
@@ -90,6 +106,9 @@ def validate_fit(spec,task):
 
 def completed(spec,task,*,accounting=True):
     if task not in TASKS: raise PermissionError('Unknown task')
+    if task=='teacher_CONCAT' and is_recovery(spec):
+        from .recovery import completed_concat
+        return completed_concat(spec)
     root=Path(spec['root']);rec=load_json(root/task/'task_receipt.json');validate(rec,'TASK',dict(spec=spec['content_hash']))
     if (rec['task_id']!=task or rec['source_commit']!=spec['source_commit']
             or rec['job_id']!=submission.accepted_jobs(spec,partial=True).get(task)
@@ -109,6 +128,7 @@ def completed(spec,task,*,accounting=True):
 
 
 def run(spec,task,*,device='cuda'):
+    if task not in tasks(spec): raise PermissionError('Completed CONCAT is read-only; no recovery retraining')
     begun=time.monotonic();campaign.check(spec)
     job=execution(spec,task,spec['reuse']['u100'])
     if submission.accepted_jobs(spec,partial=True).get(task)!=job: raise PermissionError('Wrong exact submitted job')
@@ -166,7 +186,8 @@ def results(spec):
     campaign.check(spec);rows=[];pending=[]
     items=[(n,*reference_arrays(spec,n)) for n in ('M0HLT','OFFLINE','U100_W5')]
     for task in TASKS:
-        if not (Path(spec['root'])/task/'task_receipt.json').is_file():
+        folder=teacher_folder(spec,'CONCAT') if task=='teacher_CONCAT' else Path(spec['root'])/task
+        if not (folder/'task_receipt.json').is_file():
             pending.append(dict(task=task,status='no_completed_receipt'));continue
         completed(spec,task);items.append((task,*validate_fit(spec,task)))
     ref=items[0][2]

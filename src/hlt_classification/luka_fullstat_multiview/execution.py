@@ -13,7 +13,7 @@ from hlt_classification.jetclass2_delphes.execution import validate_site, valida
 from hlt_classification.jetclass2_delphes.model import installed_environment
 from hlt_classification.luka_fullsim.preflight_v2 import require_backend
 from . import source
-from .contracts import TASKS
+from .contracts import tasks, is_recovery
 
 
 def allocation_minutes(value):
@@ -27,7 +27,7 @@ def allocation_minutes(value):
 
 
 def execution(gate, task, measured=None):
-    if (task not in TASKS or gate.get('contract') != 'LUKA_FULLSTAT_MULTIVIEW_SPEC/v2'
+    if (task not in tasks(gate) or (gate.get('contract') != 'LUKA_FULLSTAT_MULTIVIEW_SPEC/v2' and not is_recovery(gate))
             or gate.get('runtime_prefix') != source.RUNTIME):
         raise PermissionError('Replacement runtime requires the multiview v2 registration')
     require_backend()
