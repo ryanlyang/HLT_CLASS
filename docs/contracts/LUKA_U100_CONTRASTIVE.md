@@ -14,6 +14,10 @@ original contracts. They are never relabelled as new contrastive artifacts.
   temperature0.1, 1,024 unique negatives, three-epoch linear matching ramp.
   S0/S1 seeds and launch order are immutable. Sampler RNG includes the explicit
   training/diagnostic stream as well as epoch, canonical identity and component.
+  The indexed bins and vectorized exclusion implementation must preserve exact
+  ordered candidates, diagnostics and RNG consumption, including dense and
+  empty exclusions. These are runtime optimizations of SAMPLER v1, not new
+  sampling laws. Resource admission must use newly measured repaired code.
 - **SPEC:** original fixed30 anchor and original direct-U100 result-only import,
   exact pushed clean source, all twenty arms, SPORC/debug A100, six CPUs,
   120,000 MiB host memory, four GiB persistent allowance plus one GiB free

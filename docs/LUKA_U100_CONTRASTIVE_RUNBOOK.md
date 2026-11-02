@@ -47,6 +47,15 @@ of filesystem headroom. No files are deleted automatically.
 
 ## Recover the failed 755f43d8 setup without repeating target export
 
+**2026-11-01 update:** the subsequent `810433f8` setup (job 21989719) did reuse
+the targets and pass all technical checks. Kinmix improved from 5.19 to 1.05
+seconds/update but still projected **1,747 minutes versus the 1,440-minute cap**.
+The latest repair removes repeated per-class exclusion processing and scalar
+membership loops. Candidate selection, all twenty rows and the cap are intact.
+For the next fresh campaign, continue to pass the **original 755f43d8 spec** in
+the command below: that is where the authenticated target exports live.
+Do not substitute the failed 810433f8 spec or resubmit inside either failed root.
+
 Job 21989145 completed its exports and miniatures but failed the 24-hour
 runtime check for kinmix. Its 5.19-second updates projected roughly 142 hours.
 The repaired sampler preserves candidate selection while eliminating repeated
@@ -85,7 +94,9 @@ Code: [indexed sampler](../src/hlt_classification/luka_u100_contrastive/sampling
 
 Review existing unrelated changes before committing. The new runtime is entirely
 under the paths below; historical runtime must remain unchanged from the reviewed
-base `8ad0b381547134569818b4258f3cd31b509e9efb`.
+base `a1eb1a746875a2697216d45a7c8ea4b6acdabc8a`. This freezes the independent
+FullStat recovery already on main; only this contrastive campaign may change
+relative to that baseline. Original teacher/source identities stay unchanged.
 
 ```powershell
 git add -- src/hlt_classification/luka_u100_contrastive `
@@ -99,7 +110,7 @@ git add -p -- docs/HANDOFF.md docs/LEGACY_SOURCE_MAP.md docs/plans/README.md
 git diff --cached --check
 if ($LASTEXITCODE -ne 0) { throw 'Resolve the staged whitespace errors first.' }
 git diff --cached --stat
-git commit -m "Add U100 paired OFFLINE identification debug campaign"
+git commit -m "Reduce contrastive exclusion filtering overhead"
 if ($LASTEXITCODE -ne 0) { throw 'Commit failed.' }
 git push origin main
 if ($LASTEXITCODE -ne 0) { throw 'Push failed.' }

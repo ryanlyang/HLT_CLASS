@@ -8,6 +8,29 @@ admission runs inside shared setup before automatic scientific submission.
 No jobs have been submitted from the local implementation session, and no
 recovery improvement is claimed.
 
+### Remaining exclusion-filtering cost, 2026-11-01
+
+The next setup, job 21989719 at `810433f8`, successfully reused both target
+banks and passed all six miniatures and native parity. Kinmix improved to
+1.052471 seconds per step, but its conservative estimate of 1,747 minutes
+still exceeded the unchanged 1,440-minute cap. There are still no scientific
+student results from these attempts.
+
+The second runtime repair partitions exclusions by class once, bypasses
+membership filtering for proposals with no eligible exclusions, and replaces
+the scalar membership loop with sorted-array lookup. The exact RNG calls,
+proposal order, quota/error behavior and final candidate indices are retained.
+All five samplers receive byte-for-byte candidate and diagnostic comparisons
+against the previous implementation. No weighting, schedule, sampler law,
+scientific row, timing safety factor or walltime cap changes.
+
+Use the same explicit `--reuse-setup` import from the original `755f43d8`
+campaign when creating a fresh campaign for this repair. The `810433f8`
+attempt is retained as diagnostic evidence, not reused as successful setup.
+The source guard freezes current main `a1eb1a74`, which already contains the
+independent FullStat recovery, and permits only subsequent contrastive runtime
+changes. No existing historical or FullStat runtime is changed by this repair.
+
 ### Setup resource repair, 2026-10-31
 
 SPORC job 21989145 completed target export, all six technical miniatures and

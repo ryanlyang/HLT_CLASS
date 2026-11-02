@@ -4,7 +4,9 @@ import subprocess
 from hlt_classification.luka_fullsim.foundation import _source
 from hlt_classification.luka_u100_multiview.source import import_parent, validate_import
 
-BASE = '8ad0b381547134569818b4258f3cd31b509e9efb'
+# Current reviewed main includes an independent FullStat recovery. Freeze it
+# rather than rejecting or changing that unrelated campaign on the next queue.
+BASE = 'a1eb1a746875a2697216d45a7c8ea4b6acdabc8a'
 MODULES = ('__init__', 'contracts', 'source', 'model', 'targets', 'sampling', 'losses',
            'training', 'resources', 'worker', 'campaign', 'submission', 'reuse')
 RUNTIME = {'src/hlt_classification/luka_u100_contrastive/'+n+'.py' for n in MODULES} | {

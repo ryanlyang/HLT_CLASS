@@ -384,6 +384,76 @@ def legacy_kinematic(self, anchor, epoch, blocked):
     raise ValueError('No eligible region')
 
 
+def legacy_draw(pool, size, blocked, rng):
+    """Frozen 810433f8 draw oracle, including RNG consumption on rejected rows."""
+    if len(pool) < size:
+        raise ValueError('Candidate quota unavailable')
+    if blocked:
+        values = np.asarray(sorted(blocked), dtype=np.int64)
+        positions = np.searchsorted(pool, values)
+        valid = positions < len(pool)
+        values, positions = values[valid], positions[valid]
+        blocked = set(map(int, values[pool[positions] == values]))
+    if len(blocked) > len(pool)//4:
+        pool = pool[~np.isin(pool, list(blocked))]
+        if len(pool) < size:
+            raise ValueError('Eligible candidate quota unavailable')
+        return pool[rng.choice(len(pool), size, replace=False)]
+    proposal = pool[rng.choice(len(pool), min(len(pool), size+len(blocked)), replace=False)]
+    result = np.array([j for j in proposal if int(j) not in blocked], dtype=np.int64)[:size]
+    if len(result) != size:
+        raise ValueError('Eligible candidate quota unavailable')
+    return result
+
+
+def legacy_balanced(self, size, blocked, rng, classes=None, pools=None):
+    pools = self.classes if pools is None else pools
+    classes = list(range(11)) if classes is None else list(classes)
+    if not classes:
+        raise ValueError('Empty eligible region')
+    quota = {label: size//len(classes) for label in classes}
+    for label in rng.permutation(classes)[:size % len(classes)]:
+        quota[int(label)] += 1
+    return np.concatenate([legacy_draw(pools[label], quota[label], blocked, rng) for label in classes])
+
+
+def test_vectorized_draw_exact_legacy_rng_including_dense_and_empty_exclusions():
+    pool = np.arange(0, 192, 3, dtype=np.int64)
+    exclusions = [set(), {-1, 193, 1000}, {0}, {189}, set(pool[::2]), set(pool), set(pool[:16])]
+    for blocked in exclusions:
+        for size in (0, 1, 3, 16, 64, 65):
+            before, after = np.random.default_rng(71), np.random.default_rng(71)
+            try:
+                expected = legacy_draw(pool, size, blocked, before)
+            except ValueError as exc:
+                with pytest.raises(ValueError, match=str(exc)):
+                    sampling.Sampler.draw(pool, size, blocked, after)
+            else:
+                actual = sampling.Sampler.draw(pool, size, blocked, after)
+                np.testing.assert_array_equal(actual, expected)
+                assert actual.dtype == expected.dtype
+            assert before.bit_generator.state == after.bit_generator.state
+
+
+@pytest.mark.parametrize('strategy', ['random', 'cross', 'mix', 'hard', 'kinmix'])
+def test_optimized_full_sampler_exact_legacy_draws_and_diagnostics(strategy):
+    from copy import copy
+    from types import MethodType
+    groups = np.arange(6006); groups[[11,22]] = 0
+    aliases = np.arange(6006); aliases[[33,44]] = 0
+    original = sampler_fixture(event_groups=groups, alias_groups=aliases)
+    for sampler in (original, original.diagnostic_sampler()):
+        previous = copy(sampler)
+        previous.draw = legacy_draw
+        previous.balanced = MethodType(legacy_balanced, previous)
+        previous.kinematic = MethodType(legacy_kinematic, previous)
+        for epoch in (1, 3):
+            expected, evidence = previous.sample([0, 5998, 333], epoch, strategy)
+            actual, proof = sampler.sample([0, 5998, 333], epoch, strategy)
+            np.testing.assert_array_equal(actual, expected)
+            assert proof == evidence
+
+
 @pytest.mark.parametrize('constant_bins', [False, True])
 def test_indexed_kinmix_exact_legacy_candidates_and_evidence(monkeypatch, constant_bins):
     from copy import copy

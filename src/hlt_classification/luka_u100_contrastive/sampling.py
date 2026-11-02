@@ -109,19 +109,27 @@ class Sampler:
         # All primitive pools are sorted row indices. Ignore exclusions outside
         # this pool so, for example, the S stream is identical across mix/hard:
         # their differently sized H components contain only other classes.
-        if blocked:
-            values = np.asarray(sorted(blocked), dtype=np.int64)
+        values = np.asarray(sorted(blocked), dtype=np.int64)
+        if len(values):
             positions = np.searchsorted(pool, values)
             valid = positions < len(pool)
             values, positions = values[valid], positions[valid]
-            blocked = set(map(int, values[pool[positions] == values]))
-        if len(blocked) > len(pool)//4:
-            pool = pool[~np.isin(pool, list(blocked))]
+            values = values[pool[positions] == values]
+        if not len(values):
+            # Most H proposals have no in-class exclusions. Preserve the exact
+            # RNG call while avoiding a Python membership loop over 4,096 rows.
+            return pool[rng.choice(len(pool), size, replace=False)]
+        if len(values) > len(pool)//4:
+            pool = pool[~np.isin(pool, values)]
             if len(pool) < size:
                 raise ValueError('Eligible candidate quota unavailable')
             return pool[rng.choice(len(pool), size, replace=False)]
-        proposal = pool[rng.choice(len(pool), min(len(pool), size+len(blocked)), replace=False)]
-        result = np.array([j for j in proposal if int(j) not in blocked], dtype=np.int64)[:size]
+        proposal = pool[rng.choice(len(pool), min(len(pool), size+len(values)), replace=False)]
+        positions = np.searchsorted(values, proposal)
+        valid = positions < len(values)
+        keep = np.ones(len(proposal), dtype=bool)
+        keep[valid] = values[positions[valid]] != proposal[valid]
+        result = proposal[keep][:size]
         if len(result) != size:
             raise ValueError('Eligible candidate quota unavailable')
         return result
@@ -134,7 +142,13 @@ class Sampler:
         quota = {c: size//len(classes) for c in classes}
         for c in rng.permutation(classes)[:size % len(classes)]:
             quota[int(c)] += 1
-        return np.concatenate([self.draw(pools[c], quota[c], blocked, rng) for c in classes])
+        # Every pool contains one class. Partition exclusions once instead of
+        # sorting and searching the entire H/S exclusion set for every class.
+        # draw() still intersects with the local region before its RNG call.
+        by_class = [set() for _ in range(11)]
+        for row in blocked:
+            by_class[self.labels[row]].add(row)
+        return np.concatenate([self.draw(pools[c], quota[c], by_class[c], rng) for c in classes])
 
     def region(self, anchor, radius):
         key = (*self.bins[anchor], radius)
