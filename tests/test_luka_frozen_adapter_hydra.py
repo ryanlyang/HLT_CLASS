@@ -172,6 +172,69 @@ def test_delta_exact_members_and_tampering(tmp_path,monkeypatch):
     with pytest.raises(ValueError): d.path('M0HLT.pt')
 
 
+@pytest.fixture
+def export_origin(tmp_path,monkeypatch):
+    """Real export/copy/validation path; only remote original-source replay is mocked."""
+    from hlt_classification.data.cache_contracts import write_immutable_json,with_content_hash
+    from hlt_classification.cms_proxy_ladder.contracts import file_ref
+    from hlt_classification.luka_fullsim.alljets_data import artifact as original_artifact
+    root=tmp_path/'source'; prepared=root/'prepared'
+    payload=prepared/'inputs/validation/U100/0000.npz'; payload.parent.mkdir(parents=True)
+    payload.write_bytes(b'opaque authenticated U100 payload')
+    checkpoint=root/'M0HLT.pt'; checkpoint.write_bytes(b'opaque authenticated selected checkpoint')
+    sentinel=root/'do-not-transfer.root'; sentinel.write_bytes(b'unrelated raw data')
+    shard=dict(file_ref(payload,root=prepared),file_index=0)
+    cache_manifest=original_artifact('CACHE',blocks=dict(validation=dict(U100=[shard])))
+    cache_path=prepared/'cache_manifest.json'; write_immutable_json(cache_path,cache_manifest)
+    anchor=dict(prepared_root=str(prepared),cache=cache_manifest['content_hash'],prepared='a'*64,
+        models=dict(M0HLT=dict(checkpoint=file_ref(checkpoint))))
+    old=with_content_hash(dict(contract='LUKA_U100_PAIR_CORRECTION_SPEC/v1',schema_version=1,
+        counts=c.COUNTS,anchor=dict(evidence=anchor),source_commit='c'*40,
+        reference=dict(content_hash='b'*64,environment=dict(python='3.10'))))
+    spec_path=root/'campaign_spec.json'; write_immutable_json(spec_path,old)
+    def authenticate(path,spec):
+        assert path==spec_path and spec==old
+        return dict(campaign=old['content_hash'],reference=old['reference']['content_hash'],
+            prepared=anchor['prepared'],cache=anchor['cache'],source_commit=old['source_commit'],
+            control_job='21993056',counts=c.COUNTS,environment=old['reference']['environment'],original_source_replay=True)
+    monkeypatch.setattr(inputs.transfer,'authenticate',authenticate)
+    bundle=SimpleNamespace(json=lambda name:old if name=='origin/campaign_spec.json' else cache_manifest)
+    return SimpleNamespace(root=root,prepared=prepared,payload=payload,checkpoint=checkpoint,
+        cache=cache_manifest,cache_path=cache_path,spec=old,spec_path=spec_path,bundle=bundle)
+
+
+def test_export_roundtrip_preserves_sources_and_minimal_scope(export_origin,tmp_path):
+    f=export_origin; before={p:p.read_bytes() for p in f.root.rglob('*') if p.is_file()}
+    out=tmp_path/'export'; result=inputs.export(f.spec_path,out)
+    d=inputs.Delta(out,result['manifest_hash'],f.bundle); d.verify_all()
+    assert set(d.rows)=={'M0HLT.pt','prepared/inputs/validation/U100/0000.npz'}
+    assert result['files']==2 and result['payload_bytes']==sum(len(before[p]) for p in (f.checkpoint,f.payload))
+    assert d.path('M0HLT.pt').read_bytes()==before[f.checkpoint]
+    assert d.path('prepared/inputs/validation/U100/0000.npz').read_bytes()==before[f.payload]
+    assert before=={p:p.read_bytes() for p in before}
+    with pytest.raises(ValueError,match='fresh separate'): inputs.export(f.spec_path,out)
+
+
+@pytest.mark.parametrize('problem',['contract','schema','checksum','checkpoint','shard','missing_shard'])
+def test_export_rejects_invalid_evidence_before_output(export_origin,tmp_path,problem):
+    from hlt_classification.data.cache_contracts import with_content_hash
+    import json
+    f=export_origin; out=tmp_path/'never'
+    if problem in ('contract','schema','checksum'):
+        value=dict(f.cache)
+        if problem=='contract': value['contract']='LUKA_FULLSIM_REGULAR_CACHE/v1'
+        elif problem=='schema': value['schema_version']=2
+        else: value['serial_reference_passed']=False
+        if problem!='checksum':
+            value.pop('content_hash'); value=with_content_hash(value)
+        f.cache_path.write_text(json.dumps(value))
+    elif problem=='checkpoint': f.checkpoint.write_bytes(b'corrupt checkpoint')
+    elif problem=='shard': f.payload.write_bytes(b'corrupt U100 payload')
+    else: f.payload.unlink()
+    with pytest.raises(ValueError): inputs.export(f.spec_path,out)
+    assert not out.exists()
+
+
 def test_oracle_input_alignment_and_student_guard():
     h=cache(coordinate='D000'); u=cache(coordinate='U100'); inputs.aligned(h,u)
     u.labels=u.labels[::-1].copy()

@@ -68,6 +68,14 @@ changes in this campaign commit; the queue reads the exact pushed checkout.
 
 ## Export the small missing delta on SPORC
 
+For the export TypeError from commit `d95975fa`, commit and push the repair first
+and enter the **new** commit below. That failed call stopped before creating
+the delta directory. The commit-specific paths below preserve the old checkout;
+no cleanup, dataset rebuild or reference training is needed. On Brown, use the
+same new commit and the manifest hash printed by the successful new export.
+The [validation record](LUKA_FROZEN_ADAPTER_HYDRA_VALIDATION.md) documents the
+repair and its tests.
+
 Brown already has TRAIN D000/U100, validation D000 and the U100 bank. The only
 additional payload is the authenticated original M0HLT checkpoint plus validation
 U100 shards for oracle selection (roughly 0.3 GiB; actual bytes are printed).

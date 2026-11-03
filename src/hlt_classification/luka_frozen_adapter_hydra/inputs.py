@@ -26,7 +26,8 @@ def export(original_spec, output):
         raise ValueError('Use the original pair campaign')
     proof = transfer.authenticate(path, old)
     anchor = old['anchor']['evidence']; prepared = Path(anchor['prepared_root'])
-    cache = load_json(prepared/'cache_manifest.json'); validate_content_hash(cache)
+    cache = load_json(prepared/'cache_manifest.json')
+    validate_content_hash(cache, expected_contract='LUKA_FULLSIM_ALLJETS_CACHE/v1')
     rows = expected_files(old, cache)
     sources = {'M0HLT.pt':Path(anchor['models']['M0HLT']['checkpoint']['path'])}
     sources.update({r['path']:prepared/r['path'].removeprefix('prepared/') for r in rows if r['path'] != 'M0HLT.pt'})

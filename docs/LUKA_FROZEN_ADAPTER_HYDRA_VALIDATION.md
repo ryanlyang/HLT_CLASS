@@ -6,6 +6,38 @@ queue helper and sbatch worker. Existing model/campaign runtime is unchanged.
 Scientific authority: [active plan](plans/LUKA_FROZEN_ADAPTER_HYDRA_PLAN.md).
 New contracts: `LUKA_FROZEN_ADAPTER_HYDRA_<KIND>/v1`.
 
+## 2026-11-03: SPORC export contract repair
+
+The user-reported export from `d95975fa256360814225900284f72a1be1d94afc`
+failed because `inputs.export()` called `validate_content_hash()` without its
+required `expected_contract` keyword. This happened before the export directory
+was created or any payload copied; the export command submits no jobs.
+
+The repair supplies the existing `LUKA_FULLSIM_ALLJETS_CACHE/v1` contract,
+matching the prepared manifest producer. Hash, schema, source and payload checks
+remain in force. No scientific recipe, reusable contract version, scheduling or
+storage policy changed. Modified runtime donor: this campaign's `inputs.py` at
+the commit above. No external donor or Fresh_check migration.
+
+The new exporter roundtrip regression reproduced the exact TypeError before
+the repair. It now exercises actual copying, manifest publication, destination
+verification, source preservation and minimal transfer scope. Six additional
+cases reject wrong contract/schema, bad hash, corrupt checkpoint/shard and a
+missing shard before output creation. Only the external original-checkout
+authentication is mocked in these exporter tests; the validator and exporter
+are real. The earlier tests covered delta import but missed this export call.
+
+**71 focused tests passed in 42.92 seconds** using the local environment below:
+
+```powershell
+& C:/Users/22rya/miniconda3/envs/tagging-hlt/python.exe -m pytest -q -p no:cacheprovider tests/test_luka_frozen_adapter_hydra.py tests/test_luka_u100_pair_transfer.py --basetemp=tmp/frozen-export-fixed-d95975fa
+```
+
+These suites include the existing real-Weaver/CUDA synthetic workers; remote
+SPORC export and Hydra acceptance after this repair remain unverified. Next:
+push the repair and rerun the runbook export with the new commit, then copy and
+queue using its new manifest hash. Preserve the old source checkout.
+
 ## Internal donors at the base commit
 
 * `luka_gating/model.py`, `training.py`: frozen native backbone/eval convention,
