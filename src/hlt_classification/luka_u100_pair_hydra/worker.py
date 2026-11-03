@@ -27,9 +27,13 @@ def setup(spec, *, device='cuda'):
     train = targets.load_view(spec, 'train', 'D000'); val = targets.load_view(spec, 'validation', 'D000')
     bank = targets.embedding_bank(spec, train)
     load_seconds = time.perf_counter()-started
-    parity = control_parity(spec, val, device=device)
-    write_immutable_json(root/'control_parity.json', parity)
-    require_parity(parity, spec)
+    if spec.get('schema_version') == 2:
+        from .portability import setup_record
+        write_immutable_json(root/'portability.json', setup_record(spec, val))
+    else:
+        parity = control_parity(spec, val, device=device)
+        write_immutable_json(root/'control_parity.json', parity)
+        require_parity(parity, spec)
     particles = targets.export(spec, train, device=device)
     write_immutable_json(root/'bundle.json', artifact('BUNDLE', parents=dict(spec=spec['content_hash']),
         u100_manifest=file_ref(Bundle(spec['bundle_root']).path('targets/u100/manifest.json')), particle_manifest=file_ref(root/'particles/manifest.json'),
@@ -51,7 +55,8 @@ def receipt(spec, task):
 
 def completed_setup(spec):
     value = receipt(spec, 'setup')
-    required = {'control_parity.json', 'bundle.json', 'particles/manifest.json', 'particles/targets.npz', 'resource_diagnostic.json', 'acceptance.json'}
+    required = {'portability.json' if spec.get('schema_version') == 2 else 'control_parity.json',
+        'bundle.json', 'particles/manifest.json', 'particles/targets.npz', 'resource_diagnostic.json', 'acceptance.json'}
     required |= {'mini_'+a+'/receipt.json' for a in ARMS}
     if not required <= {r['path'] for r in value['outputs']}:
         raise ValueError('Incomplete shared setup evidence')
@@ -62,7 +67,11 @@ def completed_setup(spec):
             or Path(bundle['particle_manifest']['path']) != Path(spec['root'])/'setup/particles/manifest.json'):
         raise ValueError('Target reuse/role differs')
     for key in ('u100_manifest', 'particle_manifest'): validate_file_ref(bundle[key])
-    require_parity(load_json(Path(spec['root'])/'setup/control_parity.json'), spec)
+    if spec.get('schema_version') == 2:
+        from .portability import validate_setup
+        validate_setup(spec, load_json(Path(spec['root'])/'setup/portability.json'))
+    else:
+        require_parity(load_json(Path(spec['root'])/'setup/control_parity.json'), spec)
     resources.accepted(spec)
     return value
 
@@ -106,6 +115,10 @@ def results(spec):
     references = dict(M0HLT='M0HLT', OFFLINE='OFFLINE', U100_W5_MATCHED='matched', U100_W5_HISTORICAL='historical')
     arrays = {name: load_npz_arrays(bundle.path('reference/'+group+'/predictions.npz'))
               for name, group in references.items()}
+    version = spec.get('schema_version', 1)
+    if version == 2:
+        arrays['U100_W5_HYDRA'] = load_npz_arrays(spec['portability_evidence']['refs']['predictions']['path'])
+    comparison = 'U100_W5_HYDRA' if version == 2 else 'U100_W5_MATCHED'
     subset = load_npz_arrays(bundle.path('reference/historical/subset.npz'))['indices']
     if (subset.dtype != np.int64 or subset.shape != (spec['original50k_rows'],) or len(np.unique(subset)) != len(subset)
             or np.any(subset < 0) or np.any(subset >= spec['counts']['validation'])):
@@ -136,11 +149,12 @@ def results(spec):
         row = dict(model=name, selected_epoch=selected.get(name), oracle=name == 'OFFLINE', **values)
         for role in ('validation', 'original50k'):
             row[role+'_recovery'] = recovery(values[role], metrics['M0HLT'][role], metrics['OFFLINE'][role])
-            row[role+'_delta_matched'] = values[role]['macro_ovr_auc']-metrics['U100_W5_MATCHED'][role]['macro_ovr_auc']
+            row[role+'_delta_matched'] = values[role]['macro_ovr_auc']-metrics[comparison][role]['macro_ovr_auc']
         rows.append(row)
-    return artifact('RESULTS', parents=dict(spec=spec['content_hash']), rows=rows, pending=pending,
+    return artifact('RESULTS', version=version, parents=dict(spec=spec['content_hash']), rows=rows, pending=pending,
         pending_meaning='No completed receipt; inspect exact accounting for failure/cancellation',
-        comparison='saved_completed_U100_w5_s0_job21993056', final_test_access=False)
+        comparison=comparison if version == 2 else 'saved_completed_U100_w5_s0_job21993056',
+        recovery_anchors='historical_sporc_M0HLT_OFFLINE', final_test_access=False)
 
 
 def control_parity(spec, val, *, device):
@@ -186,6 +200,8 @@ def require_parity(value, spec):
 def print_results(value):
     print('CE1 + U100 embedding5 + retained HLT particle/pair correction. Four fresh students; saved control reused.')
     print('Exploratory full validation; NO independent test. Original50k overlaps validation and is report-only.')
+    if value.get('schema_version') == 2:
+        print('Delta uses Hydra replay of U100-w5. Recovery anchors remain historical SPORC M0HLT/OFFLINE.')
     for role in ('validation', 'original50k'):
         print('\n'+role)
         print(f'{"model":24} {"epoch":>5} {"accuracy":>10} {"AUC":>12} {"recovery%":>10} {"delta U100-w5":>14}')

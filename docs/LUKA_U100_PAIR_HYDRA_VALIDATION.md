@@ -1,5 +1,65 @@
 # Hydra adapter validation and donor record
 
+## Job 131484 completed; v2 campaign qualification implemented (2026-11-03)
+
+User-supplied readout authenticates completed precision job 131484 from source
+`ad55d3cd32d7826d6e16a475228fece3c6099da4`, root
+`/cs/home/rlyang/hlt_u100_pairs/runs/pair_precision_ad55d3cd_r1`.
+Accounting reports COMPLETED/0:0, elapsed 1m43s. Full validation AUC is
+0.96209461 on Hydra versus 0.96209280 saved on SPORC; exact difference is
+1.813499919e-6, approximately 0.04574 historical recovery percentage points.
+CPU/GPU FP32 on the fixed 527 rows differs by maximum 1.3113022e-6 and RMS
+5.4447115e-8; repeated original BF16 batches are identical. Cross-site BF16
+max/RMS remain 0.01554453373/0.001017804247. The local BF16 backend comparison
+itself differs by maximum 0.01215446, supporting a backend/precision explanation.
+QCD rejection differences are retained, including X_bb @30% passing counts
+28 versus 29. There is no A100 FP32 reference or independent test.
+
+After discussing these results, the user requested the campaign. Implemented
+the explicitly versioned qualification in
+[the active plan](plans/LUKA_U100_PAIR_HYDRA_PLAN.md) and
+[contract](contracts/LUKA_U100_PAIR_HYDRA.md). New SPEC/RESULTS and
+PORTABILITY_POLICY/EVIDENCE/PORTABILITY artifacts use v2. V1 diagnostics and
+strict historical gates remain unchanged. Local FP32 max/RMS limits are
+1e-5/1e-6, repeated BF16 batches must match exactly, and the original 5e-5 AUC
+drift bound remains. Cross-site BF16 max/RMS are report-only under v2.
+
+The new `portability.py` replays validation in the original diagnostic source,
+binds exact job/spec/report/receipt/prediction/submission hashes, recomputes the
+saved numerical evidence, and checks the shared setup's actual GPU/backend and
+validation population. It never performs new control inference. Shared setup
+still requires every original miniature/resource check. The new report adds
+the Hydra baseline, retains SPORC references, and labels historical recovery
+anchors. The existing queue helper/CLI and exact DAG use v2 authorization.
+See [the current commit/queue runbook](LUKA_U100_PAIR_HYDRA_V2_RUNBOOK.md).
+
+Donor commit: `ad55d3cd32d7826d6e16a475228fece3c6099da4`.
+Changed `luka_u100_pair_hydra/{campaign,contracts,submission,worker}.py`, its CLI
+and queue helper; added `portability.py` and portability tests. Reused unchanged
+`precision.py`, original-source `luka_attention_weight/source.py:replay`,
+`luka_fullsim/foundation.py:_source`, data/cache and file-reference contracts,
+the original exact-DAG helper, and all original correction model/training/target/
+resource code. No external or Fresh_check code was migrated.
+
+Before changes: **59 tests passed in 30.32s**. Initial new qualification suite:
+**18 passed in 10.93s**. After the added AUC-bound test and final changes:
+**79 combined Hydra/precision/portability tests passed in 34.24s**, no skips.
+After adding saved-metric scalar-roundoff handling and its regression, the final
+suite passed **80 tests in 32.30s**, no skips. This allows only 1e-12 absolute/
+relative recomputation roundoff and retains original authenticated scalars in
+reusable hashes; it does not relax probability-array or identity checks.
+Coverage includes v1 strict parity, v2 original-source/receipt binding, changed
+arrays/identity/settings rejection, same-GPU setup, diagnostic reuse without
+control inference, resource measurement still invoked, explicit Hydra reporting,
+and successful/failed exact dispatcher paths for both versions. Existing local
+Weaver CPU/GPU diagnostic tests also pass; synthetic qualification fixtures do
+not replace real L40 production miniatures. Queue shell syntax, CLI help and
+whitespace checks pass. The helper prints/saves its full dry plan and binds the
+already-authorized submission automatically; the remaining prompt is the user's
+available output-space allowance. No remote submission, commit or push was performed.
+Next: push the scoped files and invoke the v2 helper on Brown. That command
+authenticates the real saved diagnostic before submitting new shared setup.
+
 ## Separate Hydra precision diagnostic implemented (2026-11-02)
 
 The user authorized a Hydra-only check after the 131410 mismatch below. Added

@@ -38,7 +38,7 @@ Do not modify system Python or unrelated environments. Environment equality is
 required, including on workers. The new execution namespace owns site/source
 validation; original scientific modules are imported unchanged.
 
-Additionally reload the transferred native control checkpoint and evaluate the
+For the original execution v1, reload the transferred native control checkpoint and evaluate the
 same 74,895 validation rows in batch128 using the original BF16 prediction
 routine. Require exact row/label order, finite normalized probabilities,
 maximum absolute probability deviation <=0.005, RMS deviation <=0.0002 and
@@ -46,7 +46,9 @@ absolute macro-AUC difference <=0.00005 against the saved SPORC predictions.
 These fixed, symmetric numerical portability tolerances are not scientific
 quality thresholds or evidence of bitwise equality. Record deviations before
 checking them. Failure requires diagnosis; never silently widen tolerances or
-rebase the control. Native geometry, zero-correction forward and deployment
+rebase the control. The explicitly authorized v2 policy below supersedes this
+cross-site check for new campaigns; it does not reinterpret old artifacts.
+Native geometry, zero-correction forward and deployment
 reload checks remain part of genuine setup.
 
 The extracted bundle is shared immutable input, with an atomic completion
@@ -109,7 +111,7 @@ before the smaller precision probes so a later error preserves useful output.
 Finite discrepancies, even outside the old limits, are diagnostic results and
 do not fail this job. Invalid inputs, misaligned identities, nonfinite outputs,
 environment/source/allocation mismatches still fail. Original science admission
-tolerances remain unchanged. Diagnostic completion publishes neither ACCEPTANCE
+tolerances were unchanged by the diagnostic implementation. Diagnostic completion publishes neither ACCEPTANCE
 nor a setup receipt, cannot release training, and cannot be substituted for
 setup evidence. Its artifacts explicitly state `admission=false`.
 
@@ -119,3 +121,59 @@ it cannot alone attribute differences to one kernel. No sampled AUC or recovery
 claim is made on the 527-row probe. Full-population agreement and rejection
 counts inform a later explicit portability decision; they are not independent
 test evidence. See [the diagnostic runbook](../LUKA_U100_PAIR_HYDRA_PRECISION_RUNBOOK.md).
+
+## Authorized Hydra execution v2 after diagnostic 131484 (2026-11-03)
+
+The user supplied successful results from precision job 131484, source
+`ad55d3cd32d7826d6e16a475228fece3c6099da4`, and requested the full campaign after
+discussion of those results. This authorizes the following explicit execution
+policy change; four-fit science, precision, data and reference weights remain
+unchanged. It requires no SPORC GPU or additional diagnostic job.
+
+Authenticate that exact completed diagnostic in its original clean source.
+Pin its spec, report, receipt, full and probe predictions, submission evidence,
+checkpoint/reference hashes, environment, GPU and transfer identity in the new
+SPEC/v2. Preserve all original files. Recompute metrics and probe differences
+from the saved arrays, including exact validation identities, labels, fixed
+batch indices and original CPU/GPU backend flags. The production worker must
+use the diagnostic's same L40 identity, environment and backend configuration.
+
+The v2 numerical qualification requires:
+
+- CPU/GPU FP32 math probability differences <=1e-5 maximum and <=1e-6 RMS on
+  the fixed 527-row probe. These are local consistency bounds, not a claim of
+  A100 FP32 agreement. Observed values were 1.3113e-6 and 5.4447e-8.
+- Exactly repeated BF16 probabilities for the same original batches. Observed
+  deviation was zero.
+- The original symmetric full-validation macro-AUC difference bound <=5e-5
+  for this same saved checkpoint. Observed difference was 1.8135e-6.
+- Finite normalized outputs and unchanged authenticated population/checkpoint
+  lineage. Corruption, stale evidence, reordered rows or missing modes fail.
+
+Cross-site BF16 maximum/RMS differences are now **report-only** under v2; the
+original v1 constants remain unchanged. This is justified by the local backend
+probe exceeding those old bounds while FP32 agrees tightly. Accuracy, rejection
+and CE changes remain visible, with no new quality gate. No student's scientific
+performance is used for job admission or cancellation.
+
+Reuse the completed full Hydra BF16 control probabilities. Do not rerun the
+reference fit or control inference. Add `U100_W5_HYDRA` to reports (validation
+AUC 0.96209461), keep the saved SPORC matched row (0.96209280), and measure the
+four students' primary AUC deltas against the Hydra replay. Recovery continues
+to use explicitly labelled historical SPORC M0HLT/OFFLINE anchors. Original50k
+is sliced from these same saved arrays and remains report-only, not independent.
+The control was trained on SPORC: replaying its inference on Hydra does not
+establish equivalence of training trajectories across GPUs or create a newly
+matched Hydra-trained control. Preserve that limitation when interpreting gains.
+
+Create a fresh campaign root and SPEC/v2 with an explicit PORTABILITY_POLICY/v2
+and imported PORTABILITY_EVIDENCE/v2. Shared setup verifies the qualified
+population/GPU/backend, records PORTABILITY/v2, reuses U100 embeddings, exports
+the still-required particle targets, and runs **all four original production
+miniatures and support/resource checks**. The diagnostic is not resource
+acceptance. Only then may the reviewed dispatcher release the four 30-epoch
+fits in C/A/D/B order across two L40 lanes, followed by the report. Use the
+distinct V2 submission authorization and the existing full dry-run/resource
+envelope. Preserve previous failed roots, and do not resubmit their job IDs.
+
+See [v2 commit and queue instructions](../LUKA_U100_PAIR_HYDRA_V2_RUNBOOK.md).

@@ -10,7 +10,7 @@ from hlt_classification.scouting.hcwdl_recovery import assemble_submission_ledge
 from hlt_classification.luka_fullsim.regular_submission import clean_environment
 from hlt_classification.luka_u100_pair_correction import resources
 from .site import check_site
-from .contracts import ARMS, AUTHORIZATION, artifact
+from .contracts import ARMS, authorization, artifact
 from . import campaign
 
 
@@ -42,7 +42,7 @@ def render(spec, stage, *, acceptance=None):
         commands.append(dict(task_id=task, dependencies=deps, command=args))
     return artifact('PLAN', parents=dict(spec=spec['content_hash'], **(
         {'acceptance': acceptance['content_hash']} if stage == 'science' else {})),
-        stage=stage, commands=commands, jobs=len(commands), authorization=AUTHORIZATION)
+        stage=stage, commands=commands, jobs=len(commands), authorization=authorization(spec))
 
 
 def review(spec):
@@ -53,7 +53,7 @@ def review(spec):
     value = artifact('REVIEW', parents=dict(spec=spec['content_hash']), setup=setup, envelope=envelope,
         automatic_science=True, scientific_fits=4, support_jobs=2,
         changes_allowed_after_measurement='walltime_may_decrease_within_envelope_only',
-        maximum_concurrency=2, authorization=AUTHORIZATION)
+        maximum_concurrency=2, authorization=authorization(spec))
     write_immutable_json(folder/'review.json', value)
     _submit(spec, setup, execute=False)
     # Full scientific command graph is saved/reviewed even before measurements.
@@ -127,7 +127,7 @@ def dispatch(spec, *, plan_hash, authorization, poll_seconds=30):
     """Run under nohup on the submit host; no GPU used while waiting for setup."""
     campaign.check(spec)
     path = Path(spec['root'])/'submission/review.json'; value = load_json(path)
-    if value != review(spec) or plan_hash != value['content_hash'] or authorization != AUTHORIZATION:
+    if value != review(spec) or plan_hash != value['content_hash'] or authorization != value['authorization']:
         raise PermissionError('Full reviewed automatic campaign authorization required')
     claim = Path(spec['root'])/'submission/dispatcher_claim'; claim.mkdir(exist_ok=False)
     write_immutable_json(claim/'intent.json', artifact('DISPATCH_CLAIM', parents=dict(review=value['content_hash'])))

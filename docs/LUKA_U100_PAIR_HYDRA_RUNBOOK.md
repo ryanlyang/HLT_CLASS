@@ -1,10 +1,11 @@
 # Run the four U100 correction fits on Brown CS Hydra
 
-**Current next step after job 131410:** run the separate
-[Hydra precision diagnostic](LUKA_U100_PAIR_HYDRA_PRECISION_RUNBOOK.md).
-Allocation now passes; numerical portability is unresolved. That runbook has
-the current scoped commit/queue commands for a single inference job. The older
-setup retry instructions below do not bypass this outstanding check.
+**Current next step after completed precision job 131484:** use the
+[v2 campaign commit/queue instructions](LUKA_U100_PAIR_HYDRA_V2_RUNBOOK.md).
+They authenticate the existing diagnostic and queue the shared setup, four fits
+and report under the explicitly revised numerical policy. No diagnostic or
+control inference is repeated. The older retry commands below are historical
+and must not be used for the new v2 creation/authorization interface.
 
 The additive adapter is `src/hlt_classification/luka_u100_pair_hydra/`.
 It reuses the original four-fit scientific runtime. This is Brown CS **Hydra**,

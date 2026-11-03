@@ -1,4 +1,4 @@
-# Brown CS Hydra execution contract v1
+# Brown CS Hydra execution contracts v1 and v2
 
 Authority: [Hydra execution plan](../plans/LUKA_U100_PAIR_HYDRA_PLAN.md), with the
 unchanged [correction science](LUKA_U100_PAIR_CORRECTION.md). New execution
@@ -56,7 +56,7 @@ semantics are unchanged. Slurm documents the
 its [23.11.4 controller formatter](https://github.com/SchedMD/slurm/blob/slurm-23-11-4-1/src/api/job_info.c)
 can emit `NumTasks=N/A` when the value is unspecified.
 
-Shared setup first checks saved control BF16 probabilities on all validation
+Original v1 shared setup first checks saved control BF16 probabilities on all validation
 rows using the plan's numerical tolerances. Diagnostics are saved before numerical
 admission. Then the unchanged production resource suite exercises all four real
 miniatures, initial native parity, reload, full-support backward and timing.
@@ -80,7 +80,8 @@ The explicitly requested inference-only diagnostic uses distinct kinds under
 the same prefix: `PRECISION_SPEC`, `PRECISION_PLAN`, `PRECISION_SUBMIT_CLAIM`,
 `PRECISION_RUN_CLAIM`, `PRECISION_FULL`, `PRECISION_REPORT`, `PRECISION_RECEIPT`.
 These new v1 kinds do not redefine SPEC, CONTROL_PARITY, TASK or ACCEPTANCE.
-No diagnostic artifact is accepted by scientific setup or science dispatch.
+Diagnostic completion alone is not accepted as scientific resource admission.
+The explicit v2 qualification below imports it as numerical evidence only.
 
 PRECISION_SPEC binds the pinned transfer/origin/source hashes, exact recorded
 environment, validation D000 population, fixed batch selection, four precision
@@ -104,3 +105,50 @@ and output bytes without performing new inference. Evidence is atomically
 published; a partial job has no completion receipt. Numerical disagreement is
 recorded, not converted to scientific admission. Any later policy change needs
 an explicit plan/contract version change and separate validation.
+
+## Execution v2: qualified Hydra diagnostic reuse
+
+Authority is the 2026-11-03 v2 section of the active execution plan, following
+the user's request to queue after reviewing successful diagnostic job 131484.
+New science specs and result tables use SPEC/v2 and RESULTS/v2 under the
+existing Hydra prefix. New PORTABILITY_POLICY/v2, PORTABILITY_EVIDENCE/v2 and
+PORTABILITY/v2 artifacts bind the admission decision. Other command/resource
+and scientific artifacts keep their original contracts and bind the new spec
+hash. V1 remains readable with its original strict probability gate; old and
+new numerical admission are not interchangeable.
+
+The only imported diagnostic is job 131484 from clean pushed source
+`ad55d3cd32d7826d6e16a475228fece3c6099da4`. Read-only validation executes in that
+original source, authenticating its spec, exact accepted-job journal, completed
+receipt and output hashes. Import all evidence paths/hashes into the new spec;
+workers recheck immutable bytes and recompute metrics from saved arrays. Bind
+the same transferred checkpoint, software, GPU, validation identities/labels,
+original batch selection and backend settings. Missing/mutated evidence fails.
+
+Numerical qualification now requires local CPU/GPU FP32 maximum <=1e-5 and RMS
+<=1e-6; exact repeated BF16 original batches; and the unchanged full-validation
+cross-site AUC-drift bound <=5e-5. All required quantities must be finite.
+Historical cross-site BF16 max/RMS limits are preserved as report-only values
+under v2. Accuracy and rejection are reported without quality gates. This
+explicit change applies only to new v2 executions; it does not bless prior
+failed setup receipts or establish A100 FP32 equivalence.
+
+Recomputed saved floating-point metrics allow only 1e-12 absolute/relative
+scalar reduction roundoff; discrete values, structure, identities and file
+hashes must match exactly. Qualification uses the recomputed arrays. After that
+check, reusable summary hashes retain the authenticated original scalar values,
+so login/compute CPU reduction paths cannot change a completion record.
+
+Shared setup writes PORTABILITY/v2 only after its current L40/backend and loaded
+validation population match the imported diagnostic. No native-control inference
+is repeated. It still exports particle targets and completes every original
+production miniature, support extreme, deployment reload and resource profile.
+PORTABILITY has `resource_acceptance=false`; it cannot replace ACCEPTANCE or
+any miniature receipt. Submission requires `AUTHORIZE_LUKA_U100_PAIR_HYDRA_V2`
+and the complete reviewed setup/four-fit/report envelope. No extra preflight.
+
+RESULTS/v2 includes distinct U100_W5_HYDRA and saved SPORC reference rows. The
+delta-matched fields now explicitly bind `comparison=U100_W5_HYDRA`. Recovery
+uses labelled historical SPORC M0HLT/OFFLINE anchors. All reference probabilities
+remain immutable; no reference model is retrained. Particle targets, losses,
+BF16 training/inference, seeds and selection remain unchanged.

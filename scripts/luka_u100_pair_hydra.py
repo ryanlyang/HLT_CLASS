@@ -18,6 +18,7 @@ def main():
     for key in ('root', 'bundle', 'expected-commit'):
         p.add_argument('--'+key, required=True)
     p.add_argument('--available-quota-gib', type=int, required=True)
+    p.add_argument('--precision-spec', required=True)
     p = sub.add_parser('precision-create')
     for key in ('root', 'bundle', 'expected-commit'):
         p.add_argument('--'+key, required=True)
@@ -50,7 +51,7 @@ def main():
         from hlt_classification.luka_u100_pair_hydra import campaign, submission, worker, precision_campaign
         if a.command == 'create':
             value = campaign.create(a.root, a.bundle, Path(__file__).resolve().parents[1],
-                                    a.expected_commit, a.available_quota_gib)
+                                    a.expected_commit, a.available_quota_gib, precision_spec=a.precision_spec)
         elif a.command == 'precision-create':
             value = precision_campaign.create(a.root, a.bundle, Path(__file__).resolve().parents[1], a.expected_commit)
         else:

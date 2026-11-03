@@ -139,7 +139,8 @@ def test_hydra_exact_four_fit_two_lane_graph(tmp_path):
     assert not submission.within_envelope(envelope, changed)
 
 
-def test_exact_dispatch_releases_once_and_failed_setup_releases_none(tmp_path, monkeypatch):
+@pytest.mark.parametrize('version', [1, 2])
+def test_exact_dispatch_releases_once_and_failed_setup_releases_none(tmp_path, monkeypatch, version):
     from hlt_classification.scouting import hcwdl_exact_dag_submission as dag
     calls = []
     def run(command, **kwargs):
@@ -150,15 +151,17 @@ def test_exact_dispatch_releases_once_and_failed_setup_releases_none(tmp_path, m
     monkeypatch.setattr(submission.resources, 'accepted', lambda s: c.artifact('ACCEPTANCE', minutes={a:120 for a in c.ARMS}))
     monkeypatch.setattr(worker, 'completed_setup', lambda s: None)
     monkeypatch.setattr(submission, 'accounting', lambda j: ['COMPLETED', '0:0'])
-    s = spec_fixture(tmp_path); review = submission.review(s)
-    submission.dispatch(s, plan_hash=review['content_hash'], authorization=c.AUTHORIZATION)
+    s = spec_fixture(tmp_path); s.update(schema_version=version, **campaign.registration(version))
+    review = submission.review(s)
+    submission.dispatch(s, plan_hash=review['content_hash'], authorization=c.authorization(s))
     assert len(calls) == 6 and len(submission.accepted_jobs(s, 'science')) == 5
-    with pytest.raises(FileExistsError): submission.dispatch(s, plan_hash=review['content_hash'], authorization=c.AUTHORIZATION)
+    with pytest.raises(FileExistsError): submission.dispatch(s, plan_hash=review['content_hash'], authorization=c.authorization(s))
     failed_root = tmp_path/'failed'; failed_root.mkdir(); failed = spec_fixture(failed_root)
+    failed.update(schema_version=version, **campaign.registration(version))
     review = submission.review(failed)
     monkeypatch.setattr(submission, 'accounting', lambda j: ['FAILED', '1:0'])
     with pytest.raises(RuntimeError, match='no scientific'):
-        submission.dispatch(failed, plan_hash=review['content_hash'], authorization=c.AUTHORIZATION)
+        submission.dispatch(failed, plan_hash=review['content_hash'], authorization=c.authorization(failed))
     assert len(calls) == 7
 
 

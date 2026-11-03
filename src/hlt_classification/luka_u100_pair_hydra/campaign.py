@@ -12,7 +12,7 @@ from .inputs import Bundle
 from . import site
 
 MODULES = ('__init__', 'contracts', 'inputs', 'site', 'campaign', 'submission', 'worker',
-           'precision', 'precision_campaign')
+           'precision', 'precision_campaign', 'portability')
 RUNTIME = {'src/hlt_classification/luka_u100_pair_hydra/'+n+'.py' for n in MODULES} | {
     'scripts/luka_u100_pair_hydra.py', 'scripts/setup_luka_u100_pair_hydra.sh',
     'scripts/queue_luka_u100_pair_hydra.sh', 'scripts/queue_luka_u100_pair_hydra_precision.sh',
@@ -20,7 +20,8 @@ RUNTIME = {'src/hlt_classification/luka_u100_pair_hydra/'+n+'.py' for n in MODUL
 REQUIRED = RUNTIME | {'docs/plans/LUKA_U100_PAIR_HYDRA_PLAN.md',
     'docs/contracts/LUKA_U100_PAIR_HYDRA.md', 'docs/LUKA_U100_PAIR_HYDRA_RUNBOOK.md',
     'tests/test_luka_u100_pair_hydra.py', 'tests/test_luka_u100_pair_hydra_precision.py',
-    'docs/LUKA_U100_PAIR_HYDRA_PRECISION_RUNBOOK.md'}
+    'docs/LUKA_U100_PAIR_HYDRA_PRECISION_RUNBOOK.md', 'tests/test_luka_u100_pair_hydra_portability.py',
+    'docs/LUKA_U100_PAIR_HYDRA_V2_RUNBOOK.md'}
 
 
 def current(project, commit):
@@ -36,16 +37,23 @@ def current(project, commit):
     return snapshot
 
 
-def registration():
-    return dict(recipe=recipe(), arms=ARMS, counts=COUNTS, original50k_rows=50000,
+def registration(version=1):
+    if version not in (1, 2): raise ValueError('Unknown Hydra spec version')
+    result = dict(recipe=recipe(), arms=ARMS, counts=COUNTS, original50k_rows=50000,
         execution_site=SITE, cpus=6, memory_mb=120000, storage_budget_bytes=8*2**30,
         setup_minutes=720, fit_max_minutes=1440, report_minutes=120, max_concurrent_fits=2,
         scientific_fits=4, reference_fits=0, new_teacher_fits=0, standalone_preflight=False,
         admission='shared_setup_cross_site_parity_and_four_real_miniatures', parity_tolerances=PARITY,
         automatic_retry=False)
+    if version == 2:
+        from .portability import policy
+        result.pop('parity_tolerances')
+        result.update(admission='qualified_diagnostic_131484_and_four_real_miniatures', portability_policy=policy())
+    return result
 
 
-def create(root, bundle_root, project, commit, quota_gib):
+def create(root, bundle_root, project, commit, quota_gib, *, precision_spec):
+    from . import portability
     root = Path(root).absolute(); project = Path(project).resolve()
     bundle = Bundle(bundle_root); bundle.verify_all()
     origin = bundle.json('origin/campaign_spec.json')
@@ -69,20 +77,26 @@ def create(root, bundle_root, project, commit, quota_gib):
     for name in ('M0HLT', 'OFFLINE'):
         a = load_npz_arrays(bundle.path(f'reference/{name}/predictions.npz'))
         anchors[name] = evaluate_probabilities(a['labels'], a['probabilities'])['macro_ovr_auc']
-    spec = artifact('SPEC', parents=dict(source=snapshot['content_hash'], origin=origin['content_hash'],
-        transfer=bundle.manifest['content_hash']), root=str(root), project_dir=str(project), source_commit=commit,
+    evidence = portability.authenticate(precision_spec, bundle.root, origin['reference'], COUNTS)
+    if root.is_relative_to(Path(precision_spec).resolve().parent) or Path(precision_spec).resolve().parent.is_relative_to(root):
+        raise PermissionError('Keep diagnostic evidence separate from the new campaign')
+    spec = artifact('SPEC', version=2, parents=dict(source=snapshot['content_hash'], origin=origin['content_hash'],
+        transfer=bundle.manifest['content_hash'], portability=evidence['content_hash']), root=str(root), project_dir=str(project), source_commit=commit,
         source_snapshot=snapshot, bundle_root=str(bundle.root), environment_dir=str(environment_dir),
         reference=origin['reference'], imported=origin['imported'], anchor=origin['anchor'],
-        recovery_anchors=anchors, available_quota_gib=quota_gib, **registration())
+        recovery_anchors=anchors, available_quota_gib=quota_gib, portability_evidence=evidence, **registration(2))
     storage(spec); root.mkdir(exist_ok=False); write_immutable_json(root/'campaign_spec.json', spec)
     return spec
 
 
 def check(spec, *, check_storage=True):
     bundle = Bundle(spec['bundle_root']); origin = bundle.json('origin/campaign_spec.json')
+    version = spec['schema_version']
+    registration(version)
+    extra = dict(portability=spec['portability_evidence']['content_hash']) if version == 2 else {}
     validate(spec, 'SPEC', dict(source=spec['source_snapshot']['content_hash'], origin=origin['content_hash'],
-        transfer=bundle.manifest['content_hash']))
-    if (any(spec.get(k) != v for k, v in registration().items()) or spec['available_quota_gib'] < 8
+        transfer=bundle.manifest['content_hash'], **extra), version=version)
+    if (any(spec.get(k) != v for k, v in registration(version).items()) or spec['available_quota_gib'] < 8
             or any(spec[k] != origin[k] for k in ('reference', 'imported', 'anchor'))
             or load_json(Path(spec['root'])/'campaign_spec.json') != spec
             or current(spec['project_dir'], spec['source_commit']) != spec['source_snapshot']):
@@ -90,6 +104,9 @@ def check(spec, *, check_storage=True):
     site.environment(spec['reference']['environment'])
     if Path(sys.prefix).resolve() != Path(spec['environment_dir']):
         raise ValueError('Use the registered isolated Python environment')
+    if version == 2:
+        from .portability import validate_evidence
+        validate_evidence(spec['portability_evidence'], spec['bundle_root'], spec['reference'], spec['counts'])
     if check_storage:
         storage(spec)
     return spec
