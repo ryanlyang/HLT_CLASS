@@ -1,4 +1,6 @@
 """Hydra-specific scheduler and isolated-environment checks."""
+from decimal import Decimal
+import json
 import os
 import platform
 from pathlib import Path
@@ -42,20 +44,77 @@ def environment(expected):
     return actual
 
 
+def _scheduler_errors(spec, job, fields, environ, cluster):
+    """Cross-check available evidence; missing metadata is never a match."""
+    errors = []
+
+    def require(label, actual, expected, *, count=False):
+        allowed = (str(expected), f'{expected}-{expected}') if count else (str(expected),)
+        if actual not in allowed:
+            errors.append(f'{label}: expected {expected!r}, observed {actual!r}')
+
+    for key, value in dict(JobId=job, JobState='RUNNING', Account=SITE['account'],
+                           Partition=SITE['partition'], QOS=SITE['qos']).items():
+        require(key, fields.get(key), value)
+    require('NumNodes', fields.get('NumNodes'), 1, count=True)
+    require('NumCPUs', fields.get('NumCPUs'), spec['cpus'], count=True)
+    require('ClusterName', cluster, SITE['cluster'])
+    if 'SLURM_CLUSTER_NAME' in environ:
+        require('SLURM_CLUSTER_NAME', environ['SLURM_CLUSTER_NAME'], SITE['cluster'])
+
+    # Slurm can render an unspecified controller task field as N/A. Use the
+    # explicitly requested batch environment in that case, while rejecting
+    # any disagreement when both sources contain concrete values.
+    for key, envkey, expected in (('NumTasks', 'SLURM_NTASKS', 1),
+                                  ('CPUs/Task', 'SLURM_CPUS_PER_TASK', spec['cpus'])):
+        reported = fields.get(key) not in (None, 'N/A', '(null)')
+        if reported:
+            require(key, fields[key], expected)
+        if envkey in environ:
+            require(envkey, environ[envkey], expected)
+        elif not reported:
+            errors.append(f'{key}/{envkey}: no task allocation evidence')
+
+    # Prefer the actual controller allocation to a required environment export.
+    # Still check an exported value: a conflicting environment must not pass.
+    tres = dict(t.split('=', 1) for t in fields.get('AllocTRES', '').split(',') if '=' in t)
+    memory = tres.get('mem')
+    if memory is not None:
+        match = re.fullmatch(r'([0-9]+(?:\.[0-9]+)?)([KMGT]?)', memory)
+        mib = (Decimal(match[1]) * {'K': Decimal(1)/1024, '': 1, 'M': 1, 'G': 1024,
+                                   'T': 1024**2}[match[2]]) if match else None
+        if mib != spec['memory_mb']:
+            errors.append(f'AllocTRES.mem: expected {spec["memory_mb"]} MiB, observed {memory!r}')
+    if 'SLURM_MEM_PER_NODE' in environ:
+        require('SLURM_MEM_PER_NODE', environ['SLURM_MEM_PER_NODE'], spec['memory_mb'])
+    elif memory is None:
+        errors.append('AllocTRES.mem/SLURM_MEM_PER_NODE: no memory allocation evidence')
+    return errors
+
+
 def allocation(spec):
-    import torch
     job = os.environ.get('SLURM_JOB_ID', '')
     if not re.fullmatch('[1-9][0-9]*', job):
         raise PermissionError('A real Slurm job is required')
     result = subprocess.run(['scontrol', 'show', 'job', '-o', job], check=True, capture_output=True, text=True)
     fields = dict(t.split('=', 1) for t in result.stdout.split() if '=' in t)
-    expected = dict(Account=SITE['account'], Partition=SITE['partition'], QOS=SITE['qos'],
-                    NumNodes='1', NumTasks='1', NumCPUs=str(spec['cpus']))
-    if (any(fields.get(k) != v for k, v in expected.items())
-            or os.environ.get('SLURM_CLUSTER_NAME') != SITE['cluster']
-            or int(os.environ.get('SLURM_CPUS_PER_TASK', '0')) != spec['cpus']
-            or int(os.environ.get('SLURM_MEM_PER_NODE', '0')) != spec['memory_mb']):
-        raise PermissionError('Not the registered Hydra allocation')
+    # Whitelist diagnostic fields; never dump unrelated environment variables.
+    evidence = dict(job_id=job, controller={k: fields.get(k) for k in (
+        'JobId', 'JobState', 'Account', 'Partition', 'QOS', 'NumNodes', 'NumTasks',
+        'NumCPUs', 'CPUs/Task', 'AllocTRES')}, environment={k: os.environ.get(k) for k in (
+        'SLURM_CLUSTER_NAME', 'SLURM_NTASKS', 'SLURM_CPUS_PER_TASK', 'SLURM_MEM_PER_NODE')})
+    print('Hydra allocation evidence: '+json.dumps(evidence, sort_keys=True), flush=True)
+    cluster = os.environ.get('SLURM_CLUSTER_NAME')
+    if cluster is None:
+        config = subprocess.run(['scontrol', 'show', 'config'], check=True,
+                                capture_output=True, text=True).stdout
+        match = re.search(r'(?m)^\s*ClusterName\s*=\s*(\S+)\s*$', config)
+        cluster = match[1] if match else None
+        print('Hydra controller ClusterName: '+repr(cluster), flush=True)
+    errors = _scheduler_errors(spec, job, fields, os.environ, cluster)
+    if errors:
+        raise PermissionError('Not the registered Hydra allocation:\n  '+'\n  '.join(errors))
+    import torch
     if (platform.machine() != SITE['architecture'] or Path(sys.prefix).resolve() != Path(spec['environment_dir'])
             or os.environ.get('PYTHONNOUSERSITE') != '1'
             or not torch.cuda.is_available() or torch.cuda.device_count() != 1

@@ -34,6 +34,24 @@ one NVIDIA L40, six CPUs, 120000 MiB, x86_64, registered venv and user-site disa
 Workers prepend its lib directory to LD_LIBRARY_PATH and set deterministic cuBLAS
 configuration. No environment or GPU substitution is automatic.
 
+The controller must identify the exact running job, account, partition, QoS,
+single node and six CPUs. Equal endpoint count ranges (`1-1`, `6-6`) are accepted
+as exact counts. For task count and CPUs/task, concrete controller and exported
+batch values must agree; at least one source must provide each. Missing, `N/A`
+or `(null)` controller task fields require the explicit batch value. A missing
+cluster export is checked through `scontrol show config`; missing memory export
+requires exact `AllocTRES.mem` in MiB. When both sources provide a value, any
+conflict fails. No memory rounding tolerance is introduced. The existing exact
+accepted-job journal check still precedes task execution.
+
+The log records only allowlisted scheduler fields before validation and names
+every mismatch on rejection. This representation repair does not version the
+scientific or artifact contracts: resources, inputs, source binding and study
+semantics are unchanged. Slurm documents the
+[batch variables](https://slurm.schedmd.com/sbatch.html#SECTION_OUTPUT-ENVIRONMENT-VARIABLES);
+its [23.11.4 controller formatter](https://github.com/SchedMD/slurm/blob/slurm-23-11-4-1/src/api/job_info.c)
+can emit `NumTasks=N/A` when the value is unspecified.
+
 Shared setup first checks saved control BF16 probabilities on all validation
 rows using the plan's numerical tolerances. Diagnostics are saved before numerical
 admission. Then the unchanged production resource suite exercises all four real

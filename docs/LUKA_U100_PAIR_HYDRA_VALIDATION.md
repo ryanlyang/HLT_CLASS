@@ -1,5 +1,43 @@
 # Hydra adapter validation and donor record
 
+## Allocation compatibility repair after job 131366 (2026-11-02)
+
+Repair donor: `63f31c2ffd3606508a789609e04e2c1f1c5ad38f`, specifically
+`src/hlt_classification/luka_u100_pair_hydra/site.py` and its allocation tests.
+No additional external code or scientific donor was copied. This section
+supersedes the initial implementation's unexecuted-site status below.
+
+User-supplied evidence: setup 131366 ran 75 seconds and failed at the opaque
+allocation guard before data loading/miniatures; no science jobs were released.
+`sacct` recorded hydra/gpus/default/normal, six requested/allocated CPUs,
+120000M and one allocated GPU. Its task-count field was blank. The subsequent
+`scontrol` query returned Invalid job id, so neither the original controller
+values nor batch environment can be recovered from that evidence. An exact
+offending field is **not established**.
+
+The repair accepts unspecified controller task metadata only with explicit
+batch evidence, checks every available value for conflicts, and can authenticate
+missing cluster/memory environment exports from controller evidence. Exact job,
+running state, resources, venv, software and L40 checks remain enforced. Allowed
+scheduler fields are printed before checks; each mismatch names expected and
+observed values. No scientific code, requested resources or artifact schema
+changed. Original source, failed outputs, transferred bundle and environment
+are preserved; retry uses a newly pushed commit and fresh output root.
+
+Before edits, three allocation/site/environment tests passed (5.66s). After
+edits, all 26 focused guard tests passed (5.67s), covering unspecified metadata,
+missing exports, conflicting counts/site/memory, malformed evidence, exact
+memory units, safe diagnostic logging, and unchanged GPU/software checks.
+The complete Hydra adapter suite then passed **38 tests in 22.55s**, including
+portable input/target replay, unchanged four-arm fitting and exact dispatch.
+Both edited Python files parse, the runbook's fresh-retry Bash block passes
+`bash -n`, all four local documentation targets resolve, and scoped
+`git diff --check` passes. Existing unrelated working-tree edits were retained.
+Real L40 numerical parity and miniature acceptance still require a successful
+shared setup. No remote jobs, commit or push were performed by the agent.
+
+## Initial adapter implementation
+
 Local implementation base: `65952ed3805f812c06d1ea54117c35b630cc684e`.
 The user reported successful export and per-member verification on Brown of
 2,287 files, 3,127,574,502 payload bytes. The new consumer pins that archive and

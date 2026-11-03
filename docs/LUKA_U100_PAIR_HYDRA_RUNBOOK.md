@@ -15,6 +15,71 @@ The original code checkout `code_65952ed3` contains only the transfer helper.
 Commit/push the additive Hydra implementation before using the commands below.
 Keep the verified archive. No further SPORC data transfer is needed.
 
+## Retry after setup 131366's allocation rejection
+
+Job 131366 failed in the allocation guard, before loading training inputs or
+running the setup miniature. Its controller record has expired. Accounting
+confirmed hydra/gpus/default/normal, six CPUs, 120000 MiB and one GPU, but left
+`NTasks` blank. That suggests a metadata difference; it does not identify the
+exact field that failed. The repair cross-checks controller and batch evidence,
+rejects contradictory values, and logs all relevant fields before admission.
+
+Preserve `runs/pair_hydra_63f31c2f_r1` and its journals. Reuse
+`environment_pair_hydra_v1` and `bundle_65952ed3`; do not reinstall or extract
+again. Commit and push the repair from Windows, staging only these paths:
+
+```powershell
+Set-Location C:\Users\22rya\ComputerScience\CERN\HLT_Classification
+if ((git branch --show-current) -ne 'main') { throw 'Use the intended main branch.' }
+if (@(git diff --cached --name-only).Count -ne 0) { throw 'Review existing staged changes first.' }
+$hydraRepairFiles = @(
+    'src/hlt_classification/luka_u100_pair_hydra/site.py',
+    'tests/test_luka_u100_pair_hydra.py',
+    'docs/plans/LUKA_U100_PAIR_HYDRA_PLAN.md',
+    'docs/contracts/LUKA_U100_PAIR_HYDRA.md',
+    'docs/LUKA_U100_PAIR_HYDRA_RUNBOOK.md',
+    'docs/LUKA_U100_PAIR_HYDRA_VALIDATION.md'
+)
+git add -- @hydraRepairFiles
+if ($LASTEXITCODE -ne 0) { throw 'Staging failed.' }
+git diff --cached --check
+if ($LASTEXITCODE -ne 0) { throw 'Check the staged changes.' }
+git diff --cached --stat
+git commit -m 'Handle Hydra allocation metadata and report mismatches'
+if ($LASTEXITCODE -ne 0) { throw 'Commit failed.' }
+git push origin main
+if ($LASTEXITCODE -ne 0) { throw 'Push failed.' }
+git rev-parse HEAD
+```
+
+Then paste this block into Brown with line breaks intact. It creates a new
+checkout and campaign root for the new commit, using the existing inputs/env:
+
+```bash
+bash <<'BASH'
+set -euo pipefail
+read -r -p 'New pushed repair commit (40 characters): ' COMMIT </dev/tty
+[[ "${COMMIT}" =~ ^[0-9a-f]{40}$ ]]
+BASE="$(cd "${HOME}" && pwd -P)/hlt_u100_pairs"
+PROJECT="${BASE}/code_hydra_${COMMIT:0:8}"
+git -C "${BASE}/code_65952ed3" fetch origin main
+git -C "${BASE}/code_65952ed3" merge-base --is-ancestor "${COMMIT}" origin/main
+if [[ -e "${PROJECT}" ]]; then
+    test "$(git -C "${PROJECT}" rev-parse HEAD)" = "${COMMIT}"
+    test -z "$(git -C "${PROJECT}" status --porcelain --untracked-files=all)"
+else
+    git -C "${BASE}/code_65952ed3" worktree add --detach "${PROJECT}" "${COMMIT}"
+fi
+bash "${PROJECT}/scripts/queue_luka_u100_pair_hydra.sh" "${BASE}"
+BASH
+```
+
+Complete the existing quota/plan review prompts. The detached dispatcher runs
+one new shared setup; only successful numerical parity and miniature checks
+automatically release the four fits. Real L40 setup remains unvalidated by
+this local repair. If admission fails, preserve the log's `Hydra allocation
+evidence` and detailed mismatch message; no extra diagnostic job is needed.
+
 ## 0. Commit/push the additive implementation from Windows
 
 These explicit paths stage the new Hydra files, leaving existing edits to shared

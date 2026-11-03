@@ -182,27 +182,122 @@ def test_environment_mismatch_remains_strict(monkeypatch):
         site.environment(dict(python='3.10', weaver_python_sources={'a':'x'}))
 
 
-def test_allocation_requires_exact_site_venv_and_one_l40(tmp_path, monkeypatch):
+@pytest.fixture
+def allocation_fixture(tmp_path, monkeypatch):
     import sys
     s = spec_fixture(tmp_path)
     s.update(environment_dir=str(Path(sys.prefix).resolve()), reference=dict(environment={}))
     for key, value in dict(SLURM_JOB_ID='123', SLURM_CLUSTER_NAME='hydra',
+                           SLURM_NTASKS='1',
                            SLURM_CPUS_PER_TASK='6', SLURM_MEM_PER_NODE='120000', PYTHONNOUSERSITE='1').items():
         monkeypatch.setenv(key, value)
-    details = 'Account=default Partition=gpus QOS=normal NumNodes=1 NumTasks=1 NumCPUs=6'
-    monkeypatch.setattr(site.subprocess, 'run', lambda *a, **kw: SimpleNamespace(stdout=details))
+    details = dict(JobId='123', JobState='RUNNING', Account='default', Partition='gpus', QOS='normal',
+                   NumNodes='1', NumTasks='1', NumCPUs='6', **{'CPUs/Task': '6'},
+                   AllocTRES='billing=6,cpu=6,gres/gpu=1,mem=120000M,node=1')
+    calls = []
+    config = dict(cluster='hydra')
+    def run(args, **kw):
+        calls.append(args)
+        if args == ['scontrol', 'show', 'config']:
+            return SimpleNamespace(stdout='ClusterName = '+config['cluster']+'\n')
+        assert args == ['scontrol', 'show', 'job', '-o', '123']
+        return SimpleNamespace(stdout=' '.join(k+'='+v for k, v in details.items()))
+    monkeypatch.setattr(site.subprocess, 'run', run)
     monkeypatch.setattr(site.platform, 'machine', lambda: 'x86_64')
     monkeypatch.setattr(site, 'environment', lambda expected: expected)
     monkeypatch.setattr(torch.cuda, 'is_available', lambda: True)
     monkeypatch.setattr(torch.cuda, 'device_count', lambda: 1)
     monkeypatch.setattr(torch.cuda, 'get_device_name', lambda _: 'NVIDIA L40')
     monkeypatch.setattr(torch.cuda, 'is_bf16_supported', lambda: True)
+    return s, details, config, calls
+
+
+def test_allocation_requires_exact_site_venv_and_one_l40(allocation_fixture, monkeypatch):
+    s, *_ = allocation_fixture
     assert site.allocation(s) == '123'
     monkeypatch.setattr(torch.cuda, 'get_device_name', lambda _: 'NVIDIA L40S')
     with pytest.raises(PermissionError, match='exactly one L40'): site.allocation(s)
     monkeypatch.setattr(torch.cuda, 'get_device_name', lambda _: 'NVIDIA L40')
     monkeypatch.setenv('SLURM_CLUSTER_NAME', 'sporc')
     with pytest.raises(PermissionError, match='Hydra allocation'): site.allocation(s)
+
+
+@pytest.mark.parametrize('tasks', ['N/A', '(null)', None])
+def test_allocation_accepts_unknown_controller_tasks_only_with_batch_evidence(
+        allocation_fixture, monkeypatch, tasks):
+    s, fields, *_ = allocation_fixture
+    fields.pop('NumTasks')
+    if tasks is not None:
+        fields['NumTasks'] = tasks
+    assert site.allocation(s) == '123'
+    monkeypatch.delenv('SLURM_NTASKS')
+    with pytest.raises(PermissionError, match='no task allocation evidence'):
+        site.allocation(s)
+
+
+def test_allocation_uses_controller_when_optional_environment_exports_are_absent(
+        allocation_fixture, monkeypatch, capsys):
+    s, fields, config, calls = allocation_fixture
+    for key in ('SLURM_CLUSTER_NAME', 'SLURM_NTASKS', 'SLURM_CPUS_PER_TASK', 'SLURM_MEM_PER_NODE'):
+        monkeypatch.delenv(key)
+    fields.update(NumNodes='1-1', NumCPUs='6-6')
+    monkeypatch.setenv('UNRELATED_SECRET', 'must-not-appear-in-logs')
+    assert site.allocation(s) == '123'
+    assert calls[-1] == ['scontrol', 'show', 'config']
+    output = capsys.readouterr().out
+    assert 'Hydra allocation evidence:' in output and "ClusterName: 'hydra'" in output
+    assert 'UNRELATED_SECRET' not in output and 'must-not-appear-in-logs' not in output
+    config['cluster'] = 'sporc'
+    with pytest.raises(PermissionError, match="ClusterName: expected 'hydra', observed 'sporc'"):
+        site.allocation(s)
+
+
+@pytest.mark.parametrize('field,value', [
+    ('JobId', '124'), ('JobState', 'PENDING'), ('Account', 'other'), ('Partition', 'cpu'),
+    ('QOS', 'other'), ('NumNodes', '1-2'), ('NumCPUs', '6-12'), ('NumTasks', '2'),
+    ('CPUs/Task', '3'), ('AllocTRES', 'cpu=6,mem=64000M,node=1,gres/gpu=1'),
+    ('AllocTRES', 'cpu=6,mem=garbled,node=1,gres/gpu=1')])
+def test_allocation_rejects_conflicting_controller_even_with_correct_environment(
+        allocation_fixture, field, value):
+    s, fields, *_ = allocation_fixture
+    fields[field] = value
+    with pytest.raises(PermissionError, match=field):
+        site.allocation(s)
+
+
+@pytest.mark.parametrize('key,value', [
+    ('SLURM_CLUSTER_NAME', 'sporc'), ('SLURM_NTASKS', '2'), ('SLURM_NTASKS', ''),
+    ('SLURM_CPUS_PER_TASK', '3'), ('SLURM_CPUS_PER_TASK', 'bad'), ('SLURM_MEM_PER_NODE', '64000')])
+def test_allocation_rejects_conflicting_environment_even_with_correct_controller(
+        allocation_fixture, monkeypatch, key, value):
+    s, *_ = allocation_fixture
+    monkeypatch.setenv(key, value)
+    with pytest.raises(PermissionError, match=key):
+        site.allocation(s)
+
+
+def test_allocation_reports_all_mismatches_and_missing_resource_evidence(allocation_fixture, monkeypatch):
+    s, fields, *_ = allocation_fixture
+    fields['NumNodes'] = '2'
+    fields['CPUs/Task'] = 'N/A'
+    fields['AllocTRES'] = 'cpu=6,node=1,gres/gpu=1'
+    monkeypatch.delenv('SLURM_CPUS_PER_TASK')
+    monkeypatch.delenv('SLURM_MEM_PER_NODE')
+    with pytest.raises(PermissionError) as error:
+        site.allocation(s)
+    message = str(error.value)
+    assert "NumNodes: expected 1, observed '2'" in message
+    assert 'no task allocation evidence' in message and 'no memory allocation evidence' in message
+
+
+def test_allocation_understands_equivalent_memory_units_without_rounding(allocation_fixture, monkeypatch):
+    s, fields, *_ = allocation_fixture
+    monkeypatch.delenv('SLURM_MEM_PER_NODE')
+    fields['AllocTRES'] = 'cpu=6,mem=117.1875G,node=1,gres/gpu=1'
+    assert site.allocation(s) == '123'
+    fields['AllocTRES'] = 'cpu=6,mem=117.19G,node=1,gres/gpu=1'
+    with pytest.raises(PermissionError, match='120000 MiB'):
+        site.allocation(s)
 
 
 def test_source_guard_requires_complete_port_and_unchanged_scientific_donors(monkeypatch):

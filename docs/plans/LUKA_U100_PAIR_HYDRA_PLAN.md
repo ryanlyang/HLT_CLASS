@@ -20,6 +20,15 @@ ordering, with `afterany` ordering dependencies. One shared setup precedes the
 four fits and report. No separate preflight job. Setup measures all four real
 production miniatures and support extremes before releasing fits, as before.
 
+Allocation checks compare the running controller job and available batch
+environment fields. An unspecified controller task count requires an explicit
+batch task count; known conflicting counts always fail. Missing cluster or
+memory environment exports require controller configuration/allocation evidence.
+The same one-node, one-task resource request remains mandatory. Whitelisted
+allocation details are logged before admission so a later controller purge
+does not erase the evidence. This is metadata compatibility, not a change to
+the registered resources or scientific experiment.
+
 Create a separate Python 3.10.21 environment with the recorded eight packages,
 PyTorch 2.5.1+cu118, cuDNN90100, and exact installed Weaver Python-source hashes.
 Do not modify system Python or unrelated environments. Environment equality is
