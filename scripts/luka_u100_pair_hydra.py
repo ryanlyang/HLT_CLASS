@@ -18,6 +18,13 @@ def main():
     for key in ('root', 'bundle', 'expected-commit'):
         p.add_argument('--'+key, required=True)
     p.add_argument('--available-quota-gib', type=int, required=True)
+    p = sub.add_parser('precision-create')
+    for key in ('root', 'bundle', 'expected-commit'):
+        p.add_argument('--'+key, required=True)
+    for name in ('precision-review', 'precision-submit', 'precision-results'):
+        p = sub.add_parser(name); p.add_argument('--spec', required=True)
+        if name == 'precision-submit':
+            p.add_argument('--plan-hash', required=True); p.add_argument('--authorization', required=True)
     for name in ('review', 'dispatch', 'run', 'results'):
         p = sub.add_parser(name); p.add_argument('--spec', required=True)
         if name == 'dispatch':
@@ -40,22 +47,29 @@ def main():
         value = dict(status='matched', environment_hash=actual['content_hash'], python=sys.executable)
     else:
         from hlt_classification.data.cache_contracts import load_json
-        from hlt_classification.luka_u100_pair_hydra import campaign, submission, worker
+        from hlt_classification.luka_u100_pair_hydra import campaign, submission, worker, precision_campaign
         if a.command == 'create':
             value = campaign.create(a.root, a.bundle, Path(__file__).resolve().parents[1],
                                     a.expected_commit, a.available_quota_gib)
+        elif a.command == 'precision-create':
+            value = precision_campaign.create(a.root, a.bundle, Path(__file__).resolve().parents[1], a.expected_commit)
         else:
             spec = load_json(a.spec)
             if Path(a.spec).resolve() != Path(spec['root'])/'campaign_spec.json':
                 raise ValueError('Spec path differs from registered root')
-            if a.command == 'review':
-                value = submission.review(spec)
+            if a.command in ('review', 'precision-review'):
+                value = (precision_campaign if a.command.startswith('precision-') else submission).review(spec)
                 print(json.dumps(value, indent=2, sort_keys=True, allow_nan=False))
                 print('PLAN_HASH='+value['content_hash']); return
             if a.command == 'dispatch':
                 value = submission.dispatch(spec, plan_hash=a.plan_hash, authorization=a.authorization)
+            elif a.command == 'precision-submit':
+                value = precision_campaign.submit(spec, plan_hash=a.plan_hash, authorization=a.authorization)
+            elif a.command == 'precision-results':
+                from hlt_classification.luka_u100_pair_hydra.precision import print_report
+                print_report(precision_campaign.results(spec)); return
             elif a.command == 'run':
-                value = worker.run(spec, a.task)
+                value = precision_campaign.run(spec) if a.task == 'precision' else worker.run(spec, a.task)
             else:
                 worker.print_results(worker.results(spec)); return
     print(json.dumps(value, indent=2, sort_keys=True, allow_nan=False))

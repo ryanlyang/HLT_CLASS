@@ -1,5 +1,11 @@
 # Run the four U100 correction fits on Brown CS Hydra
 
+**Current next step after job 131410:** run the separate
+[Hydra precision diagnostic](LUKA_U100_PAIR_HYDRA_PRECISION_RUNBOOK.md).
+Allocation now passes; numerical portability is unresolved. That runbook has
+the current scoped commit/queue commands for a single inference job. The older
+setup retry instructions below do not bypass this outstanding check.
+
 The additive adapter is `src/hlt_classification/luka_u100_pair_hydra/`.
 It reuses the original four-fit scientific runtime. This is Brown CS **Hydra**,
 partition **gpus**, account **default**, job QoS **normal**, one L40 per job.

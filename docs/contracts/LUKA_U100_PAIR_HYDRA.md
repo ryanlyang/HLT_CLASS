@@ -73,3 +73,34 @@ Exclusive claims and durable exact-job journals prevent blind duplicate retries.
 Reserve eight GiB for outputs plus one GiB filesystem headroom, separately from
 the archive, extracted inputs and environment. No automatic deletion, cancellation,
 new teacher, reference fit, final-test access or unrelated campaign mutation.
+
+## Separate precision diagnostic contracts v1
+
+The explicitly requested inference-only diagnostic uses distinct kinds under
+the same prefix: `PRECISION_SPEC`, `PRECISION_PLAN`, `PRECISION_SUBMIT_CLAIM`,
+`PRECISION_RUN_CLAIM`, `PRECISION_FULL`, `PRECISION_REPORT`, `PRECISION_RECEIPT`.
+These new v1 kinds do not redefine SPEC, CONTROL_PARITY, TASK or ACCEPTANCE.
+No diagnostic artifact is accepted by scientific setup or science dispatch.
+
+PRECISION_SPEC binds the pinned transfer/origin/source hashes, exact recorded
+environment, validation D000 population, fixed batch selection, four precision
+modes and unchanged original probability limits. It declares zero scientific,
+reference and teacher fits, no automatic retry or science release, and
+`admission=false`. Source validation admits only the additive Hydra modules and
+CLI/queue helper; original scientific runtime is unchanged.
+
+The one-hour L40 job retains the same site/allocation authentication and exact
+submission journal ownership as production. An exclusive submission claim and
+fresh task directory prevent duplicate submission and overwrite. The worker
+opens only validation D000 payloads and the native checkpoint/saved predictions;
+shared provenance metadata may describe TRAIN but its payloads are not read.
+
+PRECISION_FULL stores full-validation differences, metrics and report-only
+old-limit comparisons. PRECISION_REPORT includes the fixed-batch arrays' row
+identity digest, backend settings, timing and comparisons, immutable output
+references, checkpoint/reference hashes, environment and GPU. A completion
+receipt binds the spec, report and exact accepted job. Results verify lineage
+and output bytes without performing new inference. Evidence is atomically
+published; a partial job has no completion receipt. Numerical disagreement is
+recorded, not converted to scientific admission. Any later policy change needs
+an explicit plan/contract version change and separate validation.

@@ -11,13 +11,16 @@ from .contracts import BASE, SITE, PARITY, ARMS, COUNTS, recipe, artifact, valid
 from .inputs import Bundle
 from . import site
 
-MODULES = ('__init__', 'contracts', 'inputs', 'site', 'campaign', 'submission', 'worker')
+MODULES = ('__init__', 'contracts', 'inputs', 'site', 'campaign', 'submission', 'worker',
+           'precision', 'precision_campaign')
 RUNTIME = {'src/hlt_classification/luka_u100_pair_hydra/'+n+'.py' for n in MODULES} | {
     'scripts/luka_u100_pair_hydra.py', 'scripts/setup_luka_u100_pair_hydra.sh',
-    'scripts/queue_luka_u100_pair_hydra.sh', 'sbatch/run_luka_u100_pair_hydra.sh'}
+    'scripts/queue_luka_u100_pair_hydra.sh', 'scripts/queue_luka_u100_pair_hydra_precision.sh',
+    'sbatch/run_luka_u100_pair_hydra.sh'}
 REQUIRED = RUNTIME | {'docs/plans/LUKA_U100_PAIR_HYDRA_PLAN.md',
     'docs/contracts/LUKA_U100_PAIR_HYDRA.md', 'docs/LUKA_U100_PAIR_HYDRA_RUNBOOK.md',
-    'tests/test_luka_u100_pair_hydra.py'}
+    'tests/test_luka_u100_pair_hydra.py', 'tests/test_luka_u100_pair_hydra_precision.py',
+    'docs/LUKA_U100_PAIR_HYDRA_PRECISION_RUNBOOK.md'}
 
 
 def current(project, commit):
