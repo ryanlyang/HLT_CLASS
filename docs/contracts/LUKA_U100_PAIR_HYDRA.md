@@ -39,7 +39,11 @@ single node and six CPUs. Equal endpoint count ranges (`1-1`, `6-6`) are accepte
 as exact counts. For task count and CPUs/task, concrete controller and exported
 batch values must agree; at least one source must provide each. Missing, `N/A`
 or `(null)` controller task fields require the explicit batch value. A missing
-cluster export is checked through `scontrol show config`; missing memory export
+cluster export, including the literal `(null)` observed in job 131385, is
+checked through `scontrol show config`. Its response must explicitly identify
+`hydra`; a failed query, unknown controller name or different cluster fails.
+The raw export remains logged and is never overwritten. Concrete conflicting
+exports still fail. Missing memory export
 requires exact `AllocTRES.mem` in MiB. When both sources provide a value, any
 conflict fails. No memory rounding tolerance is introduced. The existing exact
 accepted-job journal check still precedes task execution.

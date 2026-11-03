@@ -1,5 +1,37 @@
 # Hydra adapter validation and donor record
 
+## Literal null cluster export: reproduced job 131385 (2026-11-02)
+
+Donor commit: `17a1719ea5d19ae8e2befb1cfc963f31565e2bf6`;
+changed runtime: `src/hlt_classification/luka_u100_pair_hydra/site.py`.
+The job log proves that the controller's job ID, RUNNING state, partition,
+account, QoS, node/task counts, CPUs and memory all matched. The only rejected
+value was the exported literal `SLURM_CLUSTER_NAME="(null)"`. The previous
+fallback tested only for an absent variable, so it never queried the controller.
+This evidence supersedes the uncertain diagnosis for this new attempt; it
+does not recover the missing record of earlier job 131366.
+
+The minimal runtime change treats absent and literal `(null)` cluster exports
+as unspecified in both fallback selection and comparison. It requires a
+successful controller configuration query identifying `hydra`; wrong/unknown
+names and query failure still reject. No export is spoofed, and the raw value
+remains in the log. Resource, scientific and artifact contracts remain v1;
+the plan/contract only clarify this observed metadata representation.
+
+Pre-change focused suite: **26 passed in 7.23s**. A new regression using the exact
+131385 scheduler evidence then reproduced the identical two-field rejection
+before editing runtime. After repair: **31 focused tests passed in 5.50s**,
+including the regression, controller names sporc/unknown/empty, failed controller
+query, existing allocation conflict checks, environment equality and GPU guards.
+CUDA/installed-environment checks are mocked in allocation tests; this is not
+real Hydra GPU acceptance. No remote changes, commit or push were performed.
+
+Preserve both failed roots and reuse the existing environment and extracted
+bundle. Next: commit/push the scoped repair and queue a new root using the
+[retry commands](LUKA_U100_PAIR_HYDRA_RUNBOOK.md#retry-after-setup-allocation-rejection).
+Real L40 parity/miniatures remain pending; successful setup still gates the
+four fits. No new donor files or external code were copied.
+
 ## Allocation compatibility repair after job 131366 (2026-11-02)
 
 Repair donor: `63f31c2ffd3606508a789609e04e2c1f1c5ad38f`, specifically

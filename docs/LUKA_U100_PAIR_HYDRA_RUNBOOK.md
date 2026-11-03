@@ -15,7 +15,15 @@ The original code checkout `code_65952ed3` contains only the transfer helper.
 Commit/push the additive Hydra implementation before using the commands below.
 Keep the verified archive. No further SPORC data transfer is needed.
 
-## Retry after setup 131366's allocation rejection
+## Retry after setup allocation rejection
+
+Job **131385** provides the exact cause for its rejection: all controller
+resource fields match, including `NumTasks=1`, but the job environment exports
+`SLURM_CLUSTER_NAME="(null)"`. The previous repair handled only an absent export.
+The current repair also resolves this literal placeholder through the controller
+and requires its configured cluster to be `hydra`. The regression reproduces
+the supplied error before the change and passes afterward. Real L40 shared
+setup still needs to run; the failed job never reached training inputs.
 
 Job 131366 failed in the allocation guard, before loading training inputs or
 running the setup miniature. Its controller record has expired. Accounting
@@ -24,7 +32,8 @@ confirmed hydra/gpus/default/normal, six CPUs, 120000 MiB and one GPU, but left
 exact field that failed. The repair cross-checks controller and batch evidence,
 rejects contradictory values, and logs all relevant fields before admission.
 
-Preserve `runs/pair_hydra_63f31c2f_r1` and its journals. Reuse
+Preserve both `runs/pair_hydra_63f31c2f_r1` and
+`runs/pair_hydra_17a1719e_r1`, including their journals. Reuse
 `environment_pair_hydra_v1` and `bundle_65952ed3`; do not reinstall or extract
 again. Commit and push the repair from Windows, staging only these paths:
 
@@ -45,7 +54,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Staging failed.' }
 git diff --cached --check
 if ($LASTEXITCODE -ne 0) { throw 'Check the staged changes.' }
 git diff --cached --stat
-git commit -m 'Handle Hydra allocation metadata and report mismatches'
+git commit -m 'Resolve null Hydra cluster exports using controller evidence'
 if ($LASTEXITCODE -ne 0) { throw 'Commit failed.' }
 git push origin main
 if ($LASTEXITCODE -ne 0) { throw 'Push failed.' }

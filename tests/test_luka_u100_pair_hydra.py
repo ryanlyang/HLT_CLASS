@@ -195,12 +195,12 @@ def allocation_fixture(tmp_path, monkeypatch):
                    NumNodes='1', NumTasks='1', NumCPUs='6', **{'CPUs/Task': '6'},
                    AllocTRES='billing=6,cpu=6,gres/gpu=1,mem=120000M,node=1')
     calls = []
-    config = dict(cluster='hydra')
+    config = dict(cluster='hydra', job='123')
     def run(args, **kw):
         calls.append(args)
         if args == ['scontrol', 'show', 'config']:
             return SimpleNamespace(stdout='ClusterName = '+config['cluster']+'\n')
-        assert args == ['scontrol', 'show', 'job', '-o', '123']
+        assert args == ['scontrol', 'show', 'job', '-o', config['job']]
         return SimpleNamespace(stdout=' '.join(k+'='+v for k, v in details.items()))
     monkeypatch.setattr(site.subprocess, 'run', run)
     monkeypatch.setattr(site.platform, 'machine', lambda: 'x86_64')
@@ -249,6 +249,46 @@ def test_allocation_uses_controller_when_optional_environment_exports_are_absent
     assert 'UNRELATED_SECRET' not in output and 'must-not-appear-in-logs' not in output
     config['cluster'] = 'sporc'
     with pytest.raises(PermissionError, match="ClusterName: expected 'hydra', observed 'sporc'"):
+        site.allocation(s)
+
+
+def test_allocation_replays_job_131385_null_cluster_export(allocation_fixture, monkeypatch, capsys):
+    # Exact scheduler evidence from the failed Brown job. CUDA/environment
+    # checks remain mocked locally; this is not a claim of real L40 admission.
+    s, fields, config, calls = allocation_fixture
+    fields.update(JobId='131385', AllocTRES='cpu=6,mem=120000M,node=1,billing=6,gres/gpu=1')
+    config['job'] = '131385'
+    monkeypatch.setenv('SLURM_JOB_ID', '131385')
+    monkeypatch.setenv('SLURM_CLUSTER_NAME', '(null)')
+    assert site.allocation(s) == '131385'
+    assert calls == [['scontrol', 'show', 'job', '-o', '131385'], ['scontrol', 'show', 'config']]
+    output = capsys.readouterr().out
+    assert '"SLURM_CLUSTER_NAME": "(null)"' in output
+    assert "Hydra controller ClusterName: 'hydra'" in output
+    assert site.os.environ['SLURM_CLUSTER_NAME'] == '(null)'  # never spoof the export
+
+
+@pytest.mark.parametrize('controller_cluster', ['sporc', '(null)', ''])
+def test_null_cluster_export_cannot_admit_wrong_or_unknown_controller(
+        allocation_fixture, monkeypatch, controller_cluster):
+    s, _, config, calls = allocation_fixture
+    monkeypatch.setenv('SLURM_CLUSTER_NAME', '(null)')
+    config['cluster'] = controller_cluster
+    with pytest.raises(PermissionError, match="ClusterName: expected 'hydra'"):
+        site.allocation(s)
+    assert calls[-1] == ['scontrol', 'show', 'config']
+
+
+def test_null_cluster_export_does_not_hide_controller_query_failure(allocation_fixture, monkeypatch):
+    s, *_ = allocation_fixture
+    monkeypatch.setenv('SLURM_CLUSTER_NAME', '(null)')
+    original = site.subprocess.run
+    def run(args, **kwargs):
+        if args == ['scontrol', 'show', 'config']:
+            raise site.subprocess.CalledProcessError(1, args, stderr='controller unavailable')
+        return original(args, **kwargs)
+    monkeypatch.setattr(site.subprocess, 'run', run)
+    with pytest.raises(site.subprocess.CalledProcessError):
         site.allocation(s)
 
 

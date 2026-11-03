@@ -24,6 +24,9 @@ Allocation checks compare the running controller job and available batch
 environment fields. An unspecified controller task count requires an explicit
 batch task count; known conflicting counts always fail. Missing cluster or
 memory environment exports require controller configuration/allocation evidence.
+The literal cluster export `(null)`, observed in Hydra job 131385, is also
+unspecified: query the controller and require `ClusterName=hydra`. Never replace
+an unknown name with the expected one or accept a concrete different name.
 The same one-node, one-task resource request remains mandatory. Whitelisted
 allocation details are logged before admission so a later controller purge
 does not erase the evidence. This is metadata compatibility, not a change to

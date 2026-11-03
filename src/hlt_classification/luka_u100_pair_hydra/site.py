@@ -59,7 +59,7 @@ def _scheduler_errors(spec, job, fields, environ, cluster):
     require('NumNodes', fields.get('NumNodes'), 1, count=True)
     require('NumCPUs', fields.get('NumCPUs'), spec['cpus'], count=True)
     require('ClusterName', cluster, SITE['cluster'])
-    if 'SLURM_CLUSTER_NAME' in environ:
+    if environ.get('SLURM_CLUSTER_NAME') not in (None, '(null)'):
         require('SLURM_CLUSTER_NAME', environ['SLURM_CLUSTER_NAME'], SITE['cluster'])
 
     # Slurm can render an unspecified controller task field as N/A. Use the
@@ -105,7 +105,9 @@ def allocation(spec):
         'SLURM_CLUSTER_NAME', 'SLURM_NTASKS', 'SLURM_CPUS_PER_TASK', 'SLURM_MEM_PER_NODE')})
     print('Hydra allocation evidence: '+json.dumps(evidence, sort_keys=True), flush=True)
     cluster = os.environ.get('SLURM_CLUSTER_NAME')
-    if cluster is None:
+    # Hydra job 131385 exported the literal placeholder, not an actual name.
+    # Resolve it from the controller; never substitute the expected site name.
+    if cluster in (None, '(null)'):
         config = subprocess.run(['scontrol', 'show', 'config'], check=True,
                                 capture_output=True, text=True).stdout
         match = re.search(r'(?m)^\s*ClusterName\s*=\s*(\S+)\s*$', config)
