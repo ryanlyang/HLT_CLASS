@@ -1,6 +1,6 @@
 # FullStat three-teacher auxiliary embedding study on Oscar
 
-Active plan, revised 2026-11-01. User authorized two fresh privileged teachers and one
+Active plan, revised 2026-11-03. User authorized two fresh privileged teachers and one
 fresh HLT-only student. This adapts the SPORC multiview scientific graph to
 3,000,000 TRAIN / 500,000 validation, 20 epochs, batch128 and the FullStat20
 optimizer/schedule. The final 1,500,000 test and 105,325 unused rows stay sealed.
@@ -118,3 +118,47 @@ and partial submission journals, and performs no automatic retry or cancellation
 No separate preflight, new control, altered batch, shortened fit or relaxed
 resource margin is introduced. Local tests do not certify Oscar's 72h policy
 or a completed full-size FUSION run.
+
+## Recover the finished FUSION fit after export crash
+
+Job8220911 at `a1eb1a746875a2697216d45a7c8ea4b6acdabc8a` ran all twenty
+scientific epochs and selected epoch14 (validation AUC0.9705942285340523).
+Its selected deployment readback completed before signal7 terminated the job
+at the start of TRAIN embedding export. Elapsed42h15m40s was below the72h
+allocation. The log does not establish the SIGBUS cause. Job8220912 was
+cancelled without starting; no FUSION bank or completed task receipt exists.
+
+The authorized recovery is **one fresh-process export and one student fit**.
+No teacher training, validation inference or new checkpoint selection occurs
+in the export. Authenticate the original spec/source, scheduler identities,
+all twenty epoch receipts/states, selected full/deployed weights, report and
+saved validation predictions. Preserve these files, the failed task status,
+completed CONCAT and all historical sources. Do not fabricate an original
+completion receipt. A new export receipt records the failed fit's provenance
+and the successful recovery job separately.
+
+Use the original a1eb1a74 Python scientific dependencies, with only the additive
+`luka_fullstat_multiview_export` operations loaded from the new pinned source.
+Load TRAIN HLT/OFFLINE views only, verify their fingerprint against original
+startup, reload selected FUSION weights, and run bounded first/max-support
+FP32 inference and timing checks within the export allocation. The original
+batch128 FP32 exporter and TRAIN normalization remain unchanged. Phase records
+and Python fault-handler traces make an export failure observable; a successful
+fresh process is not assumed to prove the underlying SIGBUS cause was fixed.
+
+Request6h for export and24h for the unchanged student, each L40S/6CPU/192000MiB.
+Use the unchanged1.5 timing factor,120-minute fixed allowance and memory limits.
+The student's original inline checks remain; there is no standalone preflight.
+The exact allocations pass scheduler dry review before submission. Student
+starts afterok on export and verifies original CONCAT and U100 plus the new
+FUSION bank before fitting. Science remains CE1 + total embedding10,20epochs,
+batch128, original seeds and HLT-only deployment. These allocations are upper
+limits, not promised runtimes.
+
+Use fresh `LUKA_FULLSTAT_MULTIVIEW_EXPORT_*/v1` execution artifacts and a fresh
+output directory, with the original BANK/RECIPE formats unchanged. Reserve
+20GiB outputs plus2GiB headroom. A new original-root exclusive claim prevents
+competing recoveries; other original artifacts are read-only. Retain partial
+outputs and submission journals on failure, with no automatic retry. The
+[export recovery runbook](../LUKA_FULLSTAT_MULTIVIEW_EXPORT_RUNBOOK.md) governs
+this incident; the older timing-only recovery must not be relaunched.
