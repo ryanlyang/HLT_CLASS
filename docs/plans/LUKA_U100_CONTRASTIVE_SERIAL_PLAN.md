@@ -87,13 +87,24 @@ successful setup, exact accepted job ledger, target payloads, completed fits
 and terminal accounting. Review the prospective single-lane graph and exact
 cancellation IDs before the detached dispatcher starts.
 
-The dispatcher uses `scancel --me --state=PENDING` with **only explicit IDs from
-the authenticated original campaign ledger**, including its report. Slurm's
-state filter protects a job that starts during the transition race. It waits
+The dispatcher queries the controller for the authenticated original ledger's
+current jobs and validates their exact IDs, owners and names. It uses
+`scancel --ctld --user=<owner> --state=PENDING` with **only the currently pending
+explicit IDs**, including the report when pending. The controller applies the
+state filter to protect a job that starts during the transition race; there is
+no fallback to unfiltered cancellation. An empty pending set skips cancellation.
+This corrects the original client-filtered `--me`/all-ledger-IDs implementation.
+Command status/stdout/stderr and the subsequent controller snapshot are saved.
+Nonzero cancellation status can proceed only when the controller confirms no
+original jobs remain pending; a query failure or remaining pending jobs stops
+before any replacement submission. No cancellation loop retries the command.
+It waits
 for any original running allocations to finish and for exact terminal accounting,
 then replays original authentication to reuse newly completed fits. The final
 graph is the reviewed order minus authenticated completions. All other science
 rows remain. Both old controls/results and partial outputs are untouched.
+New completions between review and dispatch are allowed provisionally, but every
+COMPLETED student must have an authenticated successful receipt at finalization.
 
 Queue all remaining fits plus report with a **single afterany chain**. Only one
 fit in this campaign can run at a time; a failed fit still releases its successor.

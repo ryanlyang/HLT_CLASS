@@ -26,7 +26,7 @@ git add -- src/hlt_classification/luka_u100_contrastive_serial `
 git diff --cached --check
 if ($LASTEXITCODE -ne 0) { throw 'Review staged whitespace.' }
 git diff --cached --stat
-git commit -m "Add serial contrastive continuation with validation patience"
+git commit -m "Fix serial campaign pending-job cancellation and verification"
 if ($LASTEXITCODE -ne 0) { throw 'Commit failed.' }
 git push origin main
 if ($LASTEXITCODE -ne 0) { throw 'Push failed.' }
@@ -72,7 +72,7 @@ The reviewed transition includes pending-only exact-ID cancellation and fresh
 attempts for terminal incomplete rows in a separate root, with partials retained.
 
 After the detached PID/log is printed, watch that log. Once it says
-`Pending old campaign jobs cancelled by exact ID`, the dispatcher is running
+`Pending-job transition verified`, the dispatcher is running
 and can wait after you log out. It does not cancel running jobs; a fit that
 starts during the cancellation race is allowed to finish and reused if valid.
 After terminal accounting and replay, it prints
@@ -84,6 +84,35 @@ new registrations are not held. Only this campaign's ledger IDs are affected.
 The dispatcher may survive logout but not a submit-host reboot. If submission
 fails, preserve request, claims, log and journals; do not rerun blindly inside
 the existing root or remove claims. No automatic recovery or deletion occurs.
+
+### Recovery from the f8f61ade cancellation error
+
+The reported `submit.2OQbFi.log` stopped at `scancel`, before new scientific
+submission. The earlier `sbatch: Job ... to start ...` lines came from
+`check_site` running `sbatch --test-only`; they were resource checks, not accepted
+replacement jobs. Some old pending jobs might have been cancelled before the
+nonzero return. The log does not establish the exact reason for that return.
+
+Commit/push this repair and use the launch block above with the **new commit**.
+It creates a distinct worktree and output root, retaining the failed
+`luka_u100_contrastive_serial_f8f61ade_debug_r1` request/claim/log for inspection.
+Do not delete its claim or rerun its old dispatcher. The parent stays the
+original `431341db` campaign: targets and completed fits are reused, including
+any that finished during the failed transition. Do not manually cancel running
+old fits, since their selected checkpoint is only published at completion.
+
+The corrected dispatcher sends only controller-listed pending original IDs,
+uses `--user=<owner>` and controller-side `--ctld --state=PENDING`, and saves
+`transition_claim/cancellation.json` plus `cancellation_check.json`. No pending
+jobs means no `scancel` call. Even a nonzero return can proceed if a fresh
+controller query proves none remain pending; all original allocations must
+still reach terminal accounting and completed receipts must authenticate.
+Remaining pending jobs, query failures or unverified completions stop submission
+with preserved diagnostics. No broad cancellation or silent retry is used.
+
+This recovery applies to the reported cancellation-stage failure. If another
+attempt reached live `sbatch`, inspect its exact submission journal first;
+creating another campaign then could duplicate work.
 
 ```bash
 squeue --me -o "%.18i %.12P %.40j %.2t %.10M %.12l %R"

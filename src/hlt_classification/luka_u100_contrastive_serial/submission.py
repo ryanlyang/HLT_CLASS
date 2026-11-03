@@ -41,7 +41,7 @@ def accounting(jobs):
     return result
 
 
-def validate_completed(proof, states):
+def validate_completed(proof, states, *, require_all_receipts=True):
     if set(proof['jobs']) != {*ARMS, 'report'} or set(proof['setup_jobs']) != {'setup'}:
         raise ValueError('Incomplete original accepted job graph')
     for task, row in {'setup': {'job_id': proof['setup_jobs']['setup']}, **proof['completed']}.items():
@@ -50,7 +50,7 @@ def validate_completed(proof, states):
         if str(expected) != j or state is None or (state['state'], state['exit_code']) != ('COMPLETED', '0:0'):
             raise ValueError('Reusable task lacks exact COMPLETED/0:0 accounting: '+task)
     for task, j in proof['jobs'].items():
-        if task != 'report' and states.get(str(j), {}).get('state') == 'COMPLETED' and task not in proof['completed']:
+        if require_all_receipts and task != 'report' and states.get(str(j), {}).get('state') == 'COMPLETED' and task not in proof['completed']:
             raise ValueError('Completed job lacks authenticated receipt: '+task)
 
 
@@ -86,6 +86,7 @@ def review(request):
     check_site(envelope)
     value = artifact('REVIEW', parents=dict(request=request['content_hash']), envelope=envelope,
         cancel_pending_exact_ids=list(request['parent']['jobs'].values()),
+        cancellation_policy='controller_pending_exact_ids_ctld_verify_v1',
         preserve_running=True, reuse_completed=True, restart_partial_in_fresh_root=True,
         allowed_final_changes='remove_newly_completed_rows_relink_single_lane_bind_final_spec',
         authorization=AUTHORIZATION)
@@ -121,8 +122,79 @@ def cancellation_command(jobs):
     ids = [str(j) for j in jobs.values()]
     if not ids or len(set(ids)) != len(ids) or any(not re.fullmatch('[1-9][0-9]*', j) for j in ids):
         raise ValueError('Only exact nonempty campaign IDs may be cancelled')
-    # Filtering is done atomically by Slurm: a pending->running race cannot kill a running fit.
-    return ['scancel', '--quiet', '--me', '--state=PENDING', *ids]
+    # Ask the controller to apply the pending filter, including jobs that start
+    # after our snapshot. Do not fall back to unfiltered per-ID cancellation.
+    return ['scancel', '--ctld', '--user='+getpass.getuser(), '--state=PENDING', *ids]
+
+
+def scheduler_environment():
+    return {k: v for k, v in clean_environment().items()
+            if not k.startswith(('SCANCEL_', 'SQUEUE_'))}
+
+
+def active_jobs(jobs):
+    """Controller snapshot; listing all states avoids invalid expired-ID queries."""
+    cancellation_command(jobs)  # Validate exact nonempty unique identities, without executing.
+    by_id = {str(j): task for task, j in jobs.items()}
+    result = subprocess.run(['squeue', '--noheader', '--states=all',
+        '--user='+getpass.getuser(), '--format=%i|%j|%u|%T'], check=True,
+        capture_output=True, text=True, env=scheduler_environment())
+    live = {}
+    for line in result.stdout.splitlines():
+        if not line.strip():
+            continue
+        fields = [f.strip() for f in line.split('|')]
+        if len(fields) != 4:
+            raise ValueError('Malformed controller job snapshot')
+        j, name, user, state = fields
+        if j not in by_id:
+            continue
+        if j in live or name != 'lukaoc_'+by_id[j] or user != getpass.getuser() or not state:
+            raise ValueError('Ambiguous or differently owned controller job')
+        live[j] = dict(state=state, name=name, user=user)
+    return live
+
+
+def cancel_pending(proof, claim, plan_hash, states):
+    before = active_jobs(proof['jobs'])
+    pending = {task: j for task, j in proof['jobs'].items()
+               if before.get(str(j), {}).get('state') == 'PENDING'}
+    command = cancellation_command(pending) if pending else None
+    intent = artifact('TRANSITION_CLAIM', parents=dict(review=plan_hash),
+        command=command, states=states, controller_before=before, never_cancel_running=True)
+    write_immutable_json(claim/'intent.json', intent)
+    if command is None:
+        write_immutable_json(claim/'cancellation.json', artifact('CANCELLATION',
+            parents=dict(intent=intent['content_hash']), command=None, returncode=None,
+            stdout='', stderr='', outcome='no_pending_jobs', controller_after=before))
+        print('No original pending jobs remain; no cancellation command issued.', flush=True)
+        return
+    print('Cancelling only controller-listed PENDING original IDs:', list(pending.values()), flush=True)
+    # Preserve the response even on nonzero status or a failed post-command query.
+    try:
+        response = subprocess.run(command, capture_output=True, text=True, env=scheduler_environment())
+    except OSError as exc:
+        write_immutable_json(claim/'cancellation.json', artifact('CANCELLATION',
+            parents=dict(intent=intent['content_hash']), command=command, returncode=None,
+            stdout='', stderr=str(exc), outcome='command_launch_failed'))
+        raise
+    response_record = artifact('CANCELLATION', parents=dict(intent=intent['content_hash']),
+        command=command, returncode=response.returncode, stdout=response.stdout, stderr=response.stderr,
+        outcome='command_returned_verify_controller')
+    write_immutable_json(claim/'cancellation.json', response_record)
+    print(f'scancel exit={response.returncode}; stdout={response.stdout!r}; stderr={response.stderr!r}', flush=True)
+    after = active_jobs(proof['jobs'])
+    still_pending = [j for j, row in after.items() if row['state'] == 'PENDING']
+    write_immutable_json(claim/'cancellation_check.json', artifact('CANCELLATION_CHECK',
+        parents=dict(cancellation=response_record['content_hash']), controller_after=after,
+        remaining_pending_ids=still_pending, pending_cleared=not still_pending))
+    if still_pending:
+        raise RuntimeError(f'Original jobs remain PENDING after scancel (exit {response.returncode}): '
+            f'{still_pending}. No replacements submitted. See {claim}/cancellation.json; '
+            f'stdout={response.stdout!r}; stderr={response.stderr!r}')
+    if response.returncode:
+        print('Nonzero scancel response retained. Controller confirms no original pending jobs; '
+              'running jobs are preserved and terminal accounting is still required.', flush=True)
 
 
 def dispatch(request, *, plan_hash, authorization):
@@ -133,15 +205,13 @@ def dispatch(request, *, plan_hash, authorization):
         raise ValueError('Reviewed transition hash differs')
     root = Path(request['root']); claim = root/'transition_claim'; claim.mkdir(exist_ok=False)
     proof = request['parent']; jobs = proof['jobs'] | proof['setup_jobs']
-    states = accounting(jobs); validate_completed(proof, states)
-    command = cancellation_command(proof['jobs'])
-    write_immutable_json(claim/'intent.json', artifact('TRANSITION_CLAIM', parents=dict(review=plan_hash),
-        command=command, states=states, never_cancel_running=True))
-    subprocess.run(command, check=True, env=clean_environment())
-    print('Pending old campaign jobs cancelled by exact ID. Running fits are preserved; waiting for their publication.', flush=True)
+    states = accounting(jobs); validate_completed(proof, states, require_all_receipts=False)
+    cancel_pending(proof, claim, plan_hash, states)
+    print('Pending-job transition verified. Running fits are preserved; waiting for their publication.', flush=True)
     while True:
         states = accounting(jobs)
-        if all(terminal(states.get(str(j))) for j in jobs.values()):
+        controller = active_jobs(proof['jobs'])
+        if all(terminal(states.get(str(j))) for j in jobs.values()) and all(terminal(row) for row in controller.values()):
             break
         live = {task: states.get(str(j)) for task, j in jobs.items() if not terminal(states.get(str(j)))}
         print('Waiting for original allocations/accounting:', live, flush=True)

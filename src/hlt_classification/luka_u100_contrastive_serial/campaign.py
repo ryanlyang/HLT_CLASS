@@ -24,7 +24,9 @@ def request(root, parent, project, commit, quota_gib):
     if any(root.is_relative_to(p) or p.is_relative_to(root) for p in protected):
         raise PermissionError('Output overlaps protected source/data/results')
     from .submission import accounting, validate_completed
-    states = accounting(proof['jobs'] | proof['setup_jobs']); validate_completed(proof, states)
+    # A fit may complete during the read-only replay. Finalization authenticates
+    # every newly completed receipt before allowing reuse or submission.
+    states = accounting(proof['jobs'] | proof['setup_jobs']); validate_completed(proof, states, require_all_receipts=False)
     value = artifact('REQUEST', parents=dict(source=snapshot['content_hash'], parent=proof['content_hash']),
         root=str(root), project_dir=str(project), source_commit=commit, source_snapshot=snapshot,
         parent=proof, reviewed_states=states, order=list(ORDER), stopping_policy=policy(), recipe=recipe(),

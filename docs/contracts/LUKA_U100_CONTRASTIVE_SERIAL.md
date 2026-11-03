@@ -17,8 +17,19 @@ flags. Historical LUKA_U100_CONTRASTIVE artifacts and original source are unchan
   arm registry, shared stopping policy,8GiB allowance and explicit authorization.
   Completed fits may be removed from the final graph only after authentication.
 - **TRANSITION_CLAIM:** exclusive intent before scheduler mutation; pending-only
-  exact-ID cancellation, never a broad name/user cancellation. Wait for old
+  exact-ID cancellation, never a broad name/user cancellation. Record the
+  controller snapshot and actual command (null when no jobs are pending).
+  Controller-side `--ctld --user=<owner> --state=PENDING` filtering is required;
+  inherited SCANCEL/SQUEUE options are cleared. Wait for old
   allocations/accounting, retain partials, re-authenticate newly completed fits.
+- **CANCELLATION / CANCELLATION_CHECK:** additive operational evidence, not
+  scientific receipts. Save return code, stdout/stderr (including failures),
+  then the authenticated controller snapshot and remaining pending IDs. A
+  nonzero command is not itself proof of failure or success: continue only
+  with no pending original jobs, and require terminal controller/accounting
+  evidence and full receipt replay before finalization. A failed query or
+  remaining pending jobs fails closed. No-pending and launch-failure outcomes
+  are explicit. Review binds `controller_pending_exact_ids_ctld_verify_v1`.
 - **SPEC:** new immutable execution after terminal original graph. Reused and
   remaining rows partition all20 original arms. Debug, one active fit, no setup
   or preflight. Bind original measured minutes/environment/GPU and target lineage.

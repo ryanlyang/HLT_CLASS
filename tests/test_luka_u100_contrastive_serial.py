@@ -152,7 +152,7 @@ def fixtures(root):
 def test_pending_only_cancel_command_and_completed_identity_checks(tmp_path):
     old,proof,request,states=fixtures(tmp_path)
     command=submission.cancellation_command(proof['jobs'])
-    assert command[:4] == ['scancel','--quiet','--me','--state=PENDING']
+    assert command[:4] == ['scancel','--ctld','--user='+submission.getpass.getuser(),'--state=PENDING']
     assert set(command[4:]) == set(proof['jobs'].values())
     for invalid in ({},{'x':'all'},{'x':'1;rm'},{'x':'12','y':'12'}):
         with pytest.raises(ValueError): submission.cancellation_command(invalid)
@@ -161,6 +161,7 @@ def test_pending_only_cancel_command_and_completed_identity_checks(tmp_path):
     with pytest.raises(ValueError): submission.validate_completed(proof,bad)
     bad=deepcopy(states); bad[proof['jobs']['hard_l1_s0']]['state']='COMPLETED'
     with pytest.raises(ValueError,match='receipt'): submission.validate_completed(proof,bad)
+    submission.validate_completed(proof,bad,require_all_receipts=False)
 
 
 def test_automatic_transition_preserves_running_reuses_completion_and_serializes(tmp_path, monkeypatch):
@@ -172,6 +173,8 @@ def test_automatic_transition_preserves_running_reuses_completion_and_serializes
     final=with_content_hash(final)
     monkeypatch.setattr(source,'inspect_parent',lambda p: final)
     current=deepcopy(states); calls=[]
+    monkeypatch.setattr(submission,'active_jobs',lambda jobs: {
+        j: deepcopy(row) for j,row in current.items() if j in jobs.values() and not submission.terminal(row)})
     def accounting(jobs): return deepcopy(current)
     monkeypatch.setattr(submission,'accounting',accounting)
     def sleep(seconds):
@@ -183,7 +186,7 @@ def test_automatic_transition_preserves_running_reuses_completion_and_serializes
         if command[0]=='scancel':
             for row in current.values():
                 if row['state']=='PENDING': row['state']='CANCELLED'
-            return SimpleNamespace(returncode=0)
+            return SimpleNamespace(returncode=0,stdout='',stderr='')
         assert command[0]=='sbatch'; return SimpleNamespace(stdout=str(300000+len(calls)))
     monkeypatch.setattr(subprocess,'run',run)
     review=submission.review(request)
@@ -192,6 +195,8 @@ def test_automatic_transition_preserves_running_reuses_completion_and_serializes
     assert len(s['remaining'])==15 and 'kinmix_l0p3_s0' in s['reused']
     assert s['remaining']==list(c.ORDER[:15]) and not (tmp_path/'setup').exists()
     assert len(calls)==17 and calls[0][0]=='scancel'
+    assert set(calls[0][4:]) == {j for j,row in states.items() if row['state']=='PENDING'}
+    assert load_json(tmp_path/'transition_claim/cancellation_check.json')['pending_cleared']
     graph=submission.plan(s)['commands']
     assert graph[0]['dependencies']==[]
     for prev,row in zip(graph,graph[1:]):
@@ -202,6 +207,105 @@ def test_automatic_transition_preserves_running_reuses_completion_and_serializes
     with pytest.raises(FileExistsError):
         submission.dispatch(request,plan_hash=review['content_hash'],authorization=c.AUTHORIZATION)
     assert len(calls)==17
+
+
+@pytest.mark.parametrize('returncode', [0, 1])
+def test_cancel_expired_pending_and_newly_running_jobs_verified(tmp_path, monkeypatch, returncode):
+    old,proof,request,states=fixtures(tmp_path)
+    pending=[j for j,row in states.items() if row['state']=='PENDING']
+    running=proof['jobs']['kinmix_l0p3_s0']
+    before={j:dict(state='PENDING') for j in pending} | {running:dict(state='RUNNING')}
+    # One pending job starts, one disappears, and the rest are cancelled.
+    after={running:dict(state='RUNNING'), pending[0]:dict(state='RUNNING')}
+    snapshots=iter([before,after])
+    monkeypatch.setattr(submission,'active_jobs',lambda jobs: next(snapshots))
+    def run(command,**kwargs):
+        assert set(command[4:])==set(pending) and running not in command
+        assert '--ctld' in command and '--state=PENDING' in command
+        assert '--quiet' not in command and '--me' not in command
+        assert kwargs['capture_output'] and kwargs['text']
+        assert not any(k.startswith(('SCANCEL_', 'SQUEUE_')) for k in kwargs['env'])
+        return SimpleNamespace(returncode=returncode,stdout='',stderr='Job already completed' if returncode else '')
+    monkeypatch.setenv('SCANCEL_STATE','RUNNING'); monkeypatch.setenv('SQUEUE_STATES','RUNNING')
+    monkeypatch.setattr(subprocess,'run',run)
+    submission.cancel_pending(proof,tmp_path,'a'*64,states)
+    response=load_json(tmp_path/'cancellation.json'); c.validate(response,'CANCELLATION')
+    check=load_json(tmp_path/'cancellation_check.json'); c.validate(check,'CANCELLATION_CHECK')
+    assert response['returncode']==returncode and check['pending_cleared']
+    assert check['controller_after']==after and not (tmp_path/'campaign_spec.json').exists()
+
+
+def test_no_pending_skips_cancellation_including_all_expired_ids(tmp_path, monkeypatch):
+    old,proof,request,states=fixtures(tmp_path)
+    monkeypatch.setattr(submission,'active_jobs',lambda jobs: {})
+    def fail(*a,**kw): pytest.fail('Must not issue a cancellation with an empty ID list')
+    monkeypatch.setattr(subprocess,'run',fail)
+    submission.cancel_pending(proof,tmp_path,'a'*64,states)
+    assert load_json(tmp_path/'intent.json')['command'] is None
+    assert load_json(tmp_path/'cancellation.json')['outcome']=='no_pending_jobs'
+
+
+@pytest.mark.parametrize('returncode', [0, 1])
+def test_remaining_pending_blocks_dispatch_even_with_zero_exit(tmp_path, monkeypatch, returncode):
+    old,proof,request,states=fixtures(tmp_path)
+    monkeypatch.setattr(campaign,'check_request',lambda r: old)
+    monkeypatch.setattr(submission,'check_site',lambda p: None)
+    monkeypatch.setattr(submission,'accounting',lambda jobs: states)
+    pending=proof['jobs']['mix_l0p1_s0']
+    monkeypatch.setattr(submission,'active_jobs',lambda jobs: {pending:dict(state='PENDING')})
+    def run(command,**kwargs):
+        assert command[0]=='scancel', 'Must not submit replacements'
+        return SimpleNamespace(returncode=returncode,stdout='',stderr='Permission denied' if returncode else '')
+    monkeypatch.setattr(subprocess,'run',run)
+    review=submission.review(request)
+    with pytest.raises(RuntimeError,match='remain PENDING'):
+        submission.dispatch(request,plan_hash=review['content_hash'],authorization=c.AUTHORIZATION)
+    assert not (tmp_path/'campaign_spec.json').exists() and not (tmp_path/'submission').exists()
+    assert load_json(tmp_path/'transition_claim/cancellation.json')['returncode']==returncode
+    assert not load_json(tmp_path/'transition_claim/cancellation_check.json')['pending_cleared']
+
+
+def test_controller_query_failure_preserves_cancel_diagnostic(tmp_path, monkeypatch):
+    old,proof,request,states=fixtures(tmp_path)
+    calls=[]
+    def active(jobs):
+        calls.append(1)
+        if len(calls)==2: raise subprocess.CalledProcessError(1,['squeue'])
+        return {proof['jobs']['mix_l0p1_s0']:dict(state='PENDING')}
+    monkeypatch.setattr(submission,'active_jobs',active)
+    monkeypatch.setattr(subprocess,'run',lambda *a,**kw: SimpleNamespace(returncode=1,stdout='out',stderr='err'))
+    with pytest.raises(subprocess.CalledProcessError): submission.cancel_pending(proof,tmp_path,'a'*64,states)
+    assert load_json(tmp_path/'cancellation.json')['stderr']=='err'
+    assert not (tmp_path/'cancellation_check.json').exists()
+
+
+def test_controller_snapshot_exact_identity_and_all_states(tmp_path, monkeypatch):
+    old,proof,request,states=fixtures(tmp_path)
+    user=submission.getpass.getuser(); task='mix_l0p1_s0'; j=proof['jobs'][task]
+    output=[f'{j}|lukaoc_{task}|{user}|PENDING\n99999999|unrelated|{user}|RUNNING\n']
+    def run(command,**kwargs):
+        assert command==['squeue','--noheader','--states=all','--user='+user,'--format=%i|%j|%u|%T']
+        assert kwargs['check'] and kwargs['capture_output']
+        return SimpleNamespace(stdout=output[0])
+    monkeypatch.setattr(subprocess,'run',run)
+    assert set(submission.active_jobs(proof['jobs']))=={j}
+    for invalid in (f'{j}|wrong|{user}|PENDING', f'{j}|lukaoc_{task}|someoneelse|PENDING',
+                    output[0]+output[0], f'{j}|incomplete'):
+        output[0]=invalid
+        with pytest.raises(ValueError): submission.active_jobs(proof['jobs'])
+    output[0]=''; assert submission.active_jobs(proof['jobs'])=={}
+
+
+def test_new_completion_must_be_authenticated_at_finalize(tmp_path, monkeypatch):
+    old,proof,request,states=fixtures(tmp_path)
+    monkeypatch.setattr(campaign,'check_request',lambda r: old)
+    monkeypatch.setattr(source,'validate_parent',lambda p: old)
+    for row in states.values():
+        if row['state'] in ('RUNNING','PENDING'): row['state']='CANCELLED'
+    states[proof['jobs']['kinmix_l0p3_s0']]['state']='COMPLETED'
+    submission.validate_completed(proof,states,require_all_receipts=False)
+    with pytest.raises(ValueError,match='receipt'): campaign.finalize(request,proof,states)
+    assert not (tmp_path/'campaign_spec.json').exists()
 
 
 def test_partial_submission_fails_closed(tmp_path,monkeypatch):
