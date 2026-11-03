@@ -1,5 +1,46 @@
 # Hydra adapter validation and donor record
 
+## Original diagnostic checkout validation repaired (2026-11-03)
+
+The user's v2 creation attempt from
+`d6f0126dd34dbded4a5be33162765a619edf648c` failed in
+`portability.authenticate` with `Imported foundation implementation is outside
+the pinned project`. The new checkout called its own `foundation._source` with
+the old diagnostic project path. That guard correctly rejects a foreign module
+path, so this was a caller bug. The exception occurred before output-root
+creation or scheduler submission; no training or new diagnostic ran.
+
+The caller now checks both declared and snapshot commits against the pinned
+diagnostic commit, then uses generic `provenance.validate_source_snapshot` to
+verify the old checkout's actual clean source bytes. Unchanged original-source
+replay runs `precision_campaign.results -> check -> campaign.current ->
+foundation._source` inside that checkout. Its module-ownership, required tracked
+files and published-commit checks remain enforced. Evidence hashes, numerical
+policy, science, resources and v2 schemas are unchanged. No old files are edited.
+
+Donor commit: `d6f0126dd34dbded4a5be33162765a619edf648c`; donor files:
+`src/hlt_classification/luka_u100_pair_hydra/portability.py` and
+`tests/test_luka_u100_pair_hydra_portability.py`, changed in place. Reuse unchanged
+`provenance.py:validate_source_snapshot`, `luka_attention_weight/source.py:replay`
+and the original diagnostic's validation chain. No external/Fresh_check code
+was migrated. Updated the active plan/contract explanation, v2 runbook and
+this validation record; shared handoff/source-map entries record the repair.
+
+Baseline: **20 portability tests passed in 11.55s**. Added a real temporary Git
+checkout with the unchanged foundation guard and an actual subprocess replay;
+before the fix it reproduced the exact production error (**1 expected failure
+in 7.18s**). After the fix, **81 combined Hydra/precision/portability tests
+passed in 38.66s**, no skips. The regression verifies clean foreign-source reuse
+and rejection of both untracked and tracked source changes. It fixtures
+diagnostic result payloads, not the source ownership check; the existing tests
+cover evidence/array integrity and actual local Weaver CPU/GPU inference.
+
+No new real Hydra allocation or production miniature was run locally. Completed
+diagnostic 131484 remains the remote numerical evidence. Next: commit/push the
+scoped repair and run the updated [v2 queue instructions](LUKA_U100_PAIR_HYDRA_V2_RUNBOOK.md)
+with the new commit. Reuse the bundle, environment and diagnostic; shared setup
+still performs its production miniatures before releasing the four fits.
+
 ## Job 131484 completed; v2 campaign qualification implemented (2026-11-03)
 
 User-supplied readout authenticates completed precision job 131484 from source

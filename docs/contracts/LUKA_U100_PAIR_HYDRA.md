@@ -120,7 +120,13 @@ new numerical admission are not interchangeable.
 The only imported diagnostic is job 131484 from clean pushed source
 `ad55d3cd32d7826d6e16a475228fece3c6099da4`. Read-only validation executes in that
 original source, authenticating its spec, exact accepted-job journal, completed
-receipt and output hashes. Import all evidence paths/hashes into the new spec;
+receipt and output hashes. Before that replay, the caller validates the pinned
+snapshot's Git commit and clean worktree using the generic provenance validator.
+Module-ownership and published-source checks execute inside the old process via
+its own `precision_campaign.results`; the new process must not apply its own
+module-path guard to the old checkout. This repairs execution of the intended
+v2 source contract without changing its semantics or schema.
+Import all evidence paths/hashes into the new spec;
 workers recheck immutable bytes and recompute metrics from saved arrays. Bind
 the same transferred checkpoint, software, GPU, validation identities/labels,
 original batch selection and backend settings. Missing/mutated evidence fails.

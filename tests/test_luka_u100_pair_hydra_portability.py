@@ -2,6 +2,7 @@
 from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
+import subprocess
 import numpy as np
 import pytest
 
@@ -11,6 +12,74 @@ from hlt_classification.cms_proxy_ladder.contracts import file_ref
 from hlt_classification.luka_u100_pair_hydra import (
     contracts as c, portability as p, precision, campaign, worker)
 from test_luka_u100_pair_correction import fixture, threads
+
+
+def test_diagnostic_source_authentication_across_real_checkouts(tmp_path, monkeypatch):
+    """Exercise the real ownership guard and replay, not a mocked _source."""
+    from hlt_classification.luka_fullsim import foundation
+    from hlt_classification.provenance import capture_source_snapshot
+
+    repository = Path(__file__).resolve().parents[1]
+    original_project = tmp_path/'original_code'; original_project.mkdir()
+    for name in foundation.REQUIRED_SOURCE:
+        target = original_project/name; target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes((repository/name).read_bytes())
+    # Import the unchanged foundation guard from the original checkout, using
+    # this repo only for its ordinary dependencies. No GPU/data replay is needed
+    # to test the process boundary; the diagnostic results fixture checks source.
+    for package in ('', 'luka_fullsim', 'luka_u100_pair_hydra'):
+        target = original_project/'src/hlt_classification'/package/'__init__.py'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text('__path__.append('+repr(str(repository/'src/hlt_classification'/package))+')\n')
+    (original_project/'src/hlt_classification/luka_u100_pair_hydra/precision_campaign.py').write_text('''
+from hlt_classification.luka_fullsim.foundation import _source
+def results(spec):
+    if _source(spec['project_dir'], spec['source_commit']) != spec['source_snapshot']:
+        raise ValueError('Original source snapshot differs')
+    return {'content_hash': 'a'*64}
+def accepted_job(spec):
+    return '131484'
+''')
+    def git(*args):
+        return subprocess.run(['git', '-C', str(original_project), *args],
+            check=True, capture_output=True, text=True).stdout.strip()
+    git('init', '-q'); git('config', 'core.autocrlf', 'false')
+    git('add', '.')
+    git('-c', 'user.name=Hydra test', '-c', 'user.email=hydra-test@example.invalid',
+        '-c', 'commit.gpgsign=false', 'commit', '-qm', 'Original diagnostic fixture')
+    git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+    commit = git('rev-parse', 'HEAD')
+    snapshot = capture_source_snapshot(original_project)
+    monkeypatch.setattr(p, 'DIAGNOSTIC_COMMIT', commit)
+    root = tmp_path/'diagnostic'; folder = root/'precision'; folder.mkdir(parents=True)
+    (root/'submission').mkdir(); (root/'submission/ledger.json').write_text('fixture')
+    spec = c.artifact('PRECISION_SPEC', root=str(root), project_dir=str(original_project),
+        source_commit=commit, source_snapshot=snapshot)
+    path = root/'campaign_spec.json'; write_immutable_json(path, spec)
+    write_immutable_json(folder/'report.json', dict(content_hash='a'*64))
+    for name in ('receipt.json', 'full_validation.json', 'fixed_batch_predictions.npz',
+                 'hydra_validation_predictions.npz'):
+        (folder/name).write_text('not read in this source-boundary test')
+    checked = []
+    monkeypatch.setattr(p, 'validate_evidence', lambda *a: checked.append(a))
+
+    # This is exactly the old call: a valid foreign checkout cannot pass the
+    # caller's own module-path guard. It must run inside original-source replay.
+    with pytest.raises(ValueError, match='outside the pinned project'):
+        foundation._source(original_project, commit)
+    evidence = p.authenticate(path, tmp_path/'bundle', {}, {})
+    assert evidence['job_id'] == '131484' and len(checked) == 1
+    assert evidence['refs']['spec'] == file_ref(path)
+    assert capture_source_snapshot(original_project) == snapshot
+
+    # Both unexpected untracked files and changed tracked code still fail closed.
+    unexpected = original_project/'unexpected.txt'; unexpected.write_text('dirty')
+    with pytest.raises(ValueError, match='dirty'): p.authenticate(path, tmp_path/'bundle', {}, {})
+    unexpected.unlink()
+    with (original_project/foundation.REQUIRED_SOURCE[0]).open('a') as handle:
+        handle.write('\n# modified source\n')
+    with pytest.raises(ValueError, match='dirty'): p.authenticate(path, tmp_path/'bundle', {}, {})
+    assert len(checked) == 1
 
 
 @pytest.fixture
@@ -29,7 +98,8 @@ def evidence_fixture(tmp_path, monkeypatch):
     reference = dict(job_id='21993056', environment={}, content_hash='e'*64)
     original = c.artifact('PRECISION_SPEC', parents=dict(transfer=c.MANIFEST_HASH),
         root=str(root), project_dir=str(tmp_path/'original_code'), bundle_root=str(bundle_root),
-        source_commit=p.DIAGNOSTIC_COMMIT, source_snapshot=dict(content_hash='a'*64),
+        source_commit=p.DIAGNOSTIC_COMMIT,
+        source_snapshot=dict(content_hash='a'*64, git_commit=p.DIAGNOSTIC_COMMIT),
         reference=reference, counts=dict(train=22, validation=22), execution_site=c.SITE)
     write_immutable_json(root/'campaign_spec.json', original)
     monkeypatch.setattr(precision, '_predict_batches', lambda *a, **k: full.copy())
@@ -52,7 +122,7 @@ def evidence_fixture(tmp_path, monkeypatch):
     write_immutable_json(folder/'receipt.json', receipt)
     bundle = SimpleNamespace(root=bundle_root, path=lambda name: paths[name])
     monkeypatch.setattr(p, 'Bundle', lambda _: bundle)
-    monkeypatch.setattr(p, '_source', lambda *a: original['source_snapshot'])
+    monkeypatch.setattr(p, 'validate_source_snapshot', lambda *a, **k: original['source_snapshot']['content_hash'])
     calls = []
     def replay(path, project, program, marker):
         calls.append((path, project, program, marker))
@@ -120,9 +190,14 @@ def test_reuse_refuses_corrupted_artifacts(evidence_fixture, ref):
 
 def test_wrong_source_or_job_not_imported(evidence_fixture, monkeypatch):
     f = evidence_fixture; path = f.root/'campaign_spec.json'
-    monkeypatch.setattr(p, '_source', lambda *a: dict(content_hash='wrong'))
+    def invalid_source(*args, **kwargs):
+        assert args == (f.original['source_snapshot'],)
+        assert kwargs == dict(repository=f.original['project_dir'], require_clean=True)
+        raise ValueError('active source snapshot differs')
+    monkeypatch.setattr(p, 'validate_source_snapshot', invalid_source)
     with pytest.raises(ValueError, match='source'): p.authenticate(path, f.bundle.root, f.reference, f.original['counts'])
-    monkeypatch.setattr(p, '_source', lambda *a: f.original['source_snapshot'])
+    assert len(f.calls) == 1  # No replay of invalid source.
+    monkeypatch.setattr(p, 'validate_source_snapshot', lambda *a, **k: f.original['source_snapshot']['content_hash'])
     monkeypatch.setattr(p, 'replay', lambda *a: (file_ref(path), dict(job='other', report_hash=f.report['content_hash'])))
     with pytest.raises(ValueError, match='reviewed'): p.authenticate(path, f.bundle.root, f.reference, f.original['counts'])
 

@@ -8,7 +8,7 @@ import numpy as np
 from hlt_classification.data.cache_contracts import load_json, load_npz_arrays
 from hlt_classification.cms_proxy_ladder.contracts import file_ref, validate_file_ref
 from hlt_classification.luka_attention_weight.source import replay
-from hlt_classification.luka_fullsim.foundation import _source
+from hlt_classification.provenance import validate_source_snapshot
 from .contracts import artifact, validate, SITE, PARITY, MANIFEST_HASH
 from .inputs import Bundle
 from . import precision
@@ -102,9 +102,13 @@ def authenticate(path, bundle_root, reference, counts):
     path = Path(path).resolve(strict=True); original = load_json(path)
     validate(original, 'PRECISION_SPEC')
     if (original['source_commit'] != DIAGNOSTIC_COMMIT
-            or path != Path(original['root'])/'campaign_spec.json'
-            or _source(original['project_dir'], DIAGNOSTIC_COMMIT) != original['source_snapshot']):
+            or original['source_snapshot']['git_commit'] != DIAGNOSTIC_COMMIT
+            or path != Path(original['root'])/'campaign_spec.json'):
         raise ValueError('Expected original completed diagnostic source')
+    # Validate foreign source bytes before importing them. The module-ownership
+    # guard belongs to that checkout: PROGRAM's results(spec) runs its original
+    # precision_campaign.check -> campaign.current -> foundation._source.
+    validate_source_snapshot(original['source_snapshot'], repository=original['project_dir'], require_clean=True)
     print('Authenticating completed Hydra precision job 131484 in its original source; no inference...', flush=True)
     spec_ref, proof = replay(path, original['project_dir'], PROGRAM, 'HYDRA_PRECISION_REUSE=')
     if proof['job'] != DIAGNOSTIC_JOB:

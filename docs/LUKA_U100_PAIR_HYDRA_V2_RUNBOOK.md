@@ -1,5 +1,10 @@
 # Queue the four Hydra fits after precision diagnostic 131484
 
+The source-authentication repair after `d6f0126d` is included in the commands
+below. That attempt stopped in campaign creation, before creating its output
+root or submitting any jobs. Commit the repair and use its new commit on Brown;
+keep the completed diagnostic and its original checkout.
+
 This queues a **new v2 campaign** using the completed diagnostic at
 `$HOME/hlt_u100_pairs/runs/pair_precision_ad55d3cd_r1`. Keep that root, its
 original code checkout, the existing bundle and venv. No SPORC GPU, data transfer,
@@ -35,28 +40,20 @@ The standalone validation record includes donor and test evidence.
     Set-Location C:\Users\22rya\ComputerScience\CERN\HLT_Classification
     if ((git branch --show-current) -ne 'main') { throw 'Use the intended main branch.' }
     if (@(git diff --cached --name-only).Count -ne 0) { throw 'Review existing staged changes first.' }
-    $hydraV2Files = @(
-        'src/hlt_classification/luka_u100_pair_hydra/campaign.py',
-        'src/hlt_classification/luka_u100_pair_hydra/contracts.py',
+    $hydraSourceFiles = @(
         'src/hlt_classification/luka_u100_pair_hydra/portability.py',
-        'src/hlt_classification/luka_u100_pair_hydra/submission.py',
-        'src/hlt_classification/luka_u100_pair_hydra/worker.py',
-        'scripts/luka_u100_pair_hydra.py',
-        'scripts/queue_luka_u100_pair_hydra.sh',
-        'tests/test_luka_u100_pair_hydra.py',
         'tests/test_luka_u100_pair_hydra_portability.py',
         'docs/plans/LUKA_U100_PAIR_HYDRA_PLAN.md',
         'docs/contracts/LUKA_U100_PAIR_HYDRA.md',
-        'docs/LUKA_U100_PAIR_HYDRA_RUNBOOK.md',
         'docs/LUKA_U100_PAIR_HYDRA_V2_RUNBOOK.md',
         'docs/LUKA_U100_PAIR_HYDRA_VALIDATION.md'
     )
-    git add -- @hydraV2Files
+    git add -- @hydraSourceFiles
     if ($LASTEXITCODE -ne 0) { throw 'Staging failed.' }
     git diff --cached --check
     if ($LASTEXITCODE -ne 0) { throw 'Check the staged changes.' }
     git diff --cached --stat
-    git commit -m 'Qualify Hydra campaign using completed precision evidence'
+    git commit -m 'Validate reused Hydra diagnostic in its original checkout'
     if ($LASTEXITCODE -ne 0) { throw 'Commit failed.' }
     git push origin main
     if ($LASTEXITCODE -ne 0) { throw 'Push failed.' }
@@ -121,3 +118,8 @@ import, v2 policy, saved-array qualification and setup evidence. `campaign.py`
 creates SPEC/v2; `worker.py` uses it and produces RESULTS/v2. `submission.py`
 keeps the original measured two-lane DAG with a distinct v2 authorization.
 The correction model/training/resource modules are imported unchanged.
+Before replay, the new process checks the old checkout's pinned Git commit and
+clean source snapshot using the generic provenance validator. The old process
+then runs its own module-ownership and published-source checks through
+`precision_campaign.results -> check -> campaign.current -> foundation._source`.
+Calling the new checkout's `_source` on the old checkout is invalid by design.

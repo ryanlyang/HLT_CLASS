@@ -131,6 +131,10 @@ policy change; four-fit science, precision, data and reference weights remain
 unchanged. It requires no SPORC GPU or additional diagnostic job.
 
 Authenticate that exact completed diagnostic in its original clean source.
+Validate its pinned commit and clean source snapshot before importing it. Run
+the module-ownership/published-source guard inside original-source replay, where
+the imported implementation belongs to that checkout; do not call the new
+checkout's ownership guard with the old project path.
 Pin its spec, report, receipt, full and probe predictions, submission evidence,
 checkpoint/reference hashes, environment, GPU and transfer identity in the new
 SPEC/v2. Preserve all original files. Recompute metrics and probe differences
