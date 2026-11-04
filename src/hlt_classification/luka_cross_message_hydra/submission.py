@@ -6,7 +6,7 @@ from hlt_classification.cms_proxy_ladder.submission import _walltime
 from hlt_classification.scouting.hcwdl_exact_dag_submission import submit_exact_dag,load_exact_dag_journal
 from hlt_classification.scouting.hcwdl_recovery import assemble_submission_ledger
 from hlt_classification.luka_fullsim.regular_submission import clean_environment
-from hlt_classification.luka_u100_pair_hydra.site import check_site
+from .execution import check_site
 from hlt_classification.luka_u100_pair_hydra.submission import accounting,within_envelope
 from .contracts import TASKS,dependencies,artifact,validate,AUTHORIZATION
 from . import campaign,resources
@@ -72,13 +72,16 @@ def review(spec):
     return value
 
 
-def dispatch(spec,plan_hash,authorization,*,poll_seconds=30):
+def dispatch(spec,plan_hash,authorization,*,poll_seconds=30,setup_only=False):
     campaign.check(spec); value=load_json(Path(spec['root'])/'submission/review.json')
     if value!=review(spec) or plan_hash!=value['content_hash'] or authorization!=AUTHORIZATION:
         raise PermissionError('Complete reviewed campaign authorization required')
     claim=Path(spec['root'])/'submission/dispatcher_claim'; claim.mkdir(exist_ok=False)
     write_immutable_json(claim/'intent.json',artifact('DISPATCH_CLAIM',parents=dict(review=value['content_hash'])))
     _submit(spec,value['setup'],execute=True); job=accepted_jobs(spec,'setup')['setup']
+    if setup_only:
+        print(f'Setup submitted as {job}. Setup only: use finish after success to release science. Safe to log off.',flush=True)
+        return dict(setup_job=job,automatic_science=False)
     print(f'Setup submitted as {job}. Automatic science submission active; safe to log off.',flush=True)
     while True:
         state=accounting(job)

@@ -9,7 +9,10 @@ from hlt_classification.luka_u100_contrastive_hydra.campaign import storage
 from .contracts import BASE, ARMS, TEACHERS, COUNTS, SITE, MANIFEST_HASH, recipe, artifact, validate
 from . import inputs
 
-MODULES=('__init__','contracts','model','inputs','training','campaign','worker','resources','submission','progress')
+# Includes the already committed, unrelated Oscar namespace without permitting
+# any further changes to donor runtime. The scientific model/recipe is unchanged.
+SOURCE_BASE='a7249f49b6f522f7df3b150d27f53613452b7fb0'
+MODULES=('__init__','contracts','model','inputs','training','campaign','worker','resources','submission','progress','execution')
 RUNTIME={'src/hlt_classification/luka_cross_message_hydra/'+n+'.py' for n in MODULES} | {
     'scripts/luka_cross_message_hydra.py','scripts/queue_luka_cross_message_hydra.sh',
     'sbatch/run_luka_cross_message_hydra.sh'}
@@ -22,22 +25,29 @@ def current(project,commit):
     project=Path(project).resolve(); snapshot=_source(project,commit)
     def git(*args):
         return subprocess.run(['git','-C',str(project),*args],check=True,capture_output=True,text=True).stdout.splitlines()
-    git('merge-base','--is-ancestor',BASE,commit)
-    changed=git('diff','--name-status','--no-renames',BASE,commit,'--','src','scripts','sbatch')
+    git('merge-base','--is-ancestor',SOURCE_BASE,commit)
+    changed=git('diff','--name-status','--no-renames',SOURCE_BASE,commit,'--','src','scripts','sbatch')
     if (not REQUIRED <= set(git('ls-files')) or any(r[:2] not in ('A\t','M\t') or r[2:] not in RUNTIME for r in changed)
             or Path(__file__).resolve()!=project/'src/hlt_classification/luka_cross_message_hydra/campaign.py'):
         raise ValueError('Commit the complete additive message implementation; preserve donor runtime')
     return snapshot
 
 
-def registration():
-    return dict(recipe=recipe(),arms=ARMS,teachers=list(TEACHERS),counts=COUNTS,original50k_rows=50000,
+def registration(gpu_profile='l40'):
+    if gpu_profile not in ('l40','a6000'): raise ValueError('Unknown GPU profile')
+    value=dict(recipe=recipe(),arms=ARMS,teachers=list(TEACHERS),counts=COUNTS,original50k_rows=50000,
         execution_site=SITE,cpus=6,memory_mb=120000,storage_budget_bytes=8*2**30,
         setup_minutes=720,fit_max_minutes=1440,report_minutes=120,standalone_preflight=False,
         max_concurrent_fits=None,automatic_retry=False,reference_retrained=False)
+    if gpu_profile=='a6000':
+        from .execution import A6000_SITE
+        value.update(gpu_profile='a6000',execution_site=A6000_SITE,memory_mb=32000,
+            setup_minutes=120,report_minutes=30,control_portability='allocation_local_full_replay_and_FP32_probe')
+    return value
 
 
-def create(root,bundle_root,delta_root,delta_hash,precision_spec,project,commit,quota_gib,encoder_root,encoder_hash):
+def create(root,bundle_root,delta_root,delta_hash,precision_spec,project,commit,quota_gib,encoder_root,encoder_hash,*,gpu_profile='l40'):
+    registered=registration(gpu_profile)
     root=Path(root).absolute(); project=Path(project).resolve()
     b=inputs.Bundle(bundle_root); d=inputs.Delta(delta_root,delta_hash,b); d.verify_all()
     e=inputs.EncoderDelta(encoder_root,encoder_hash,b); e.verify_all()
@@ -51,8 +61,8 @@ def create(root,bundle_root,delta_root,delta_hash,precision_spec,project,commit,
         raise ValueError('Use a fresh separate output directory')
     site.environment(old['reference']['environment']); snapshot=current(project,commit)
     evidence=portability.authenticate(precision_spec,b.root,old['reference'],COUNTS)
-    spec=artifact('SPEC',parents=dict(source=snapshot['content_hash'],transfer=MANIFEST_HASH,
-        delta=delta_hash,portability=evidence['content_hash'],encoder=encoder_hash),**registration(),root=str(root),project_dir=str(project),
+    spec=artifact('SPEC',version=2 if gpu_profile=='a6000' else 1,parents=dict(source=snapshot['content_hash'],transfer=MANIFEST_HASH,
+        delta=delta_hash,portability=evidence['content_hash'],encoder=encoder_hash),**registered,root=str(root),project_dir=str(project),
         source_commit=commit,source_snapshot=snapshot,environment_dir=str(Path(sys.prefix).resolve()),
         bundle_root=str(b.root),delta_root=str(d.root),delta_hash=delta_hash,available_quota_gib=quota_gib,
         reference=old['reference'],imported=old['imported'],anchor=old['anchor'],portability_evidence=evidence,
@@ -62,11 +72,12 @@ def create(root,bundle_root,delta_root,delta_hash,precision_spec,project,commit,
 
 
 def check(spec,*,check_storage=True):
+    profile=spec.get('gpu_profile','l40'); registered=registration(profile)
     d=inputs.delta(spec); b=inputs.Bundle(spec['bundle_root']); old=b.json('origin/campaign_spec.json')
     validate(spec,'SPEC',dict(source=spec['source_snapshot']['content_hash'],transfer=MANIFEST_HASH,
         delta=d.manifest['content_hash'],portability=spec['portability_evidence']['content_hash'],
-        encoder=inputs.encoder_delta(spec).manifest['content_hash']))
-    if (any(spec.get(k)!=v for k,v in registration().items()) or spec['available_quota_gib']<8
+        encoder=inputs.encoder_delta(spec).manifest['content_hash']),version=2 if profile=='a6000' else 1)
+    if (any(spec.get(k)!=v for k,v in registered.items()) or spec['available_quota_gib']<8
             or any(spec[k]!=old[k] for k in ('reference','imported','anchor'))
             or load_json(Path(spec['root'])/'campaign_spec.json')!=spec
             or current(spec['project_dir'],spec['source_commit'])!=spec['source_snapshot']

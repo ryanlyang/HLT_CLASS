@@ -219,7 +219,8 @@ def test_encoder_export_stops_before_writing_if_origin_or_payload_invalid(tmp_pa
     assert not output.exists()
 
 
-def test_campaign_binds_both_deltas_and_fixed_budget(tmp_path,monkeypatch):
+@pytest.mark.parametrize('gpu_profile',['l40','a6000'])
+def test_campaign_binds_both_deltas_and_fixed_budget(tmp_path,monkeypatch,gpu_profile):
     from hlt_classification.luka_cross_message_hydra import campaign
     roots={key:tmp_path/key for key in ('bundle','delta','encoder','project')}
     for path in roots.values(): path.mkdir()
@@ -236,8 +237,9 @@ def test_campaign_binds_both_deltas_and_fixed_budget(tmp_path,monkeypatch):
     monkeypatch.setattr(campaign.portability,'validate_evidence',lambda *a:None)
     monkeypatch.setattr(campaign,'storage',lambda *a:None)
     spec=campaign.create(tmp_path/'run',roots['bundle'],roots['delta'],'d'*64,tmp_path/'precision/spec.json',
-        roots['project'],'f'*40,28,roots['encoder'],'e'*64)
+        roots['project'],'f'*40,28,roots['encoder'],'e'*64,gpu_profile=gpu_profile)
     assert spec['storage_budget_bytes']==8*2**30 and spec['parents']['encoder']=='e'*64
+    assert spec['schema_version']==(2 if gpu_profile=='a6000' else 1)
     campaign.check(spec)
     with pytest.raises(ValueError): campaign.check(dict(spec,encoder_hash='0'*64))
 

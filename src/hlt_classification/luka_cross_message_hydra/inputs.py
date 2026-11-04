@@ -151,7 +151,10 @@ def oracle_cache(spec,hlt,device='cuda'):
     if hlt.role not in ('train','validation'): raise PermissionError('No test feature extraction')
     u=load_view(spec,'train','U100') if hlt.role=='train' else oracle_validation(spec)
     source=encoder(spec,device)
-    result=build_cache(hlt,u,source,device,budget_bytes=int(spec['memory_mb']*1024**2*.35))
+    # The smaller A6000 envelope admits up to half its RAM for one cache;
+    # shared setup also checks the actual peak with both full caches resident.
+    fraction=.5 if spec.get('gpu_profile')=='a6000' else .35
+    result=build_cache(hlt,u,source,device,budget_bytes=int(spec['memory_mb']*1024**2*fraction))
     del source,u
     if str(device).startswith('cuda'): torch.cuda.empty_cache()
     return result

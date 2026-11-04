@@ -1,5 +1,27 @@
 # Cross-attention message Hydra validation
 
+## 2026-11-04 A6000 execution amendment
+
+User-provided L40 acceptance reports14 task miniatures with host peak13.3GiB
+and GPU peak6.2-6.3GiB. Scheduler evidence reports six unallocated RTX A6000s.
+These motivate the new32000MiB profile; they do not establish A6000 acceptance.
+
+- Before changes: **44 passed in93.66s**.
+- New profile and existing focused tests: **50 passed in83.95s**.
+- Final profile/campaign/registration/setup-only/replay plus existing Hydra and
+  portability suites: **117 passed in108.30s**.
+- Tests execute actual installed-Weaver/local CUDA full-control replay and
+  BF16/FP32 probes, then authenticate saved outputs and reject corruption.
+  A6000 device identity is simulated locally; actual hardware must pass remotely.
+- Profile tests preserve the scientific recipe/DAG, distinguish SPEC/v2 from
+  v1, reject wrong GPU/RAM and mixed requests, and verify setup-only submits
+  exactly one job, with idempotent15-job release through `finish`.
+
+No remote job changes or A6000 runtime measurements have been performed here.
+The [A6000 runbook](LUKA_CROSS_MESSAGE_A6000_RUNBOOK.md) provides scoped commit,
+existing-input reuse, setup-only qualification and exact-pending-job migration.
+The original implementation evidence below remains historical.
+
 This is an additive, locally tested queue implementation. Real Brown L40
 acceptance runs inside shared setup before science submission; this agent has
 not executed it. No training outcome or high-data recovery improvement is claimed.

@@ -20,13 +20,13 @@ for name, width, mode, weight, seed in (
 TASKS = (*TEACHERS, *ARMS)
 
 
-def artifact(kind, *, parents=None, **fields):
-    return with_content_hash(dict(contract=f'LUKA_CROSS_MESSAGE_HYDRA_{kind}/v1',schema_version=1,
+def artifact(kind, *, parents=None, version=1, **fields):
+    return with_content_hash(dict(contract=f'LUKA_CROSS_MESSAGE_HYDRA_{kind}/v{version}',schema_version=version,
         parents=dict(parents or {}),**FLAGS,**fields))
 
 
-def validate(value,kind,parents=None):
-    validate_content_hash(value,expected_contract=f'LUKA_CROSS_MESSAGE_HYDRA_{kind}/v1',expected_schema_version=1)
+def validate(value,kind,parents=None,*,version=1):
+    validate_content_hash(value,expected_contract=f'LUKA_CROSS_MESSAGE_HYDRA_{kind}/v{version}',expected_schema_version=version)
     if any(value.get(k)!=v for k,v in FLAGS.items()) or (parents is not None and value.get('parents')!=parents):
         raise ValueError('Cross-message scope or parents differ')
     return value

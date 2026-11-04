@@ -18,9 +18,11 @@ def main():
     c=sub.add_parser('create')
     for name in ('root','bundle','delta','delta-hash','precision-spec','expected-commit','encoder','encoder-hash'): c.add_argument('--'+name,required=True)
     c.add_argument('--available-quota-gib',type=int,required=True)
-    for name in ('review','dispatch','finish','run','results','progress'):
+    c.add_argument('--gpu-profile',choices=('l40','a6000'),default='l40')
+    for name in ('review','dispatch','finish','run','results','progress','check-setup'):
         s=sub.add_parser(name); s.add_argument('--spec',required=True)
         if name in ('dispatch','finish'): s.add_argument('--plan-hash',required=True); s.add_argument('--authorization',required=True)
+        if name=='dispatch': s.add_argument('--setup-only',action='store_true')
         if name=='run': s.add_argument('--task',required=True)
     a=p.parse_args(); project=Path(__file__).resolve().parents[1]
     if a.command=='verify':
@@ -30,12 +32,19 @@ def main():
     elif a.command=='export':
         campaign.current(project,a.expected_commit); value=inputs.export(a.spec,a.output)
     elif a.command=='create':
-        value=campaign.create(a.root,a.bundle,a.delta,a.delta_hash,a.precision_spec,project,a.expected_commit,a.available_quota_gib,a.encoder,a.encoder_hash)
+        value=campaign.create(a.root,a.bundle,a.delta,a.delta_hash,a.precision_spec,project,a.expected_commit,a.available_quota_gib,a.encoder,a.encoder_hash,gpu_profile=a.gpu_profile)
     else:
         spec=load_json(a.spec)
         if a.command=='review': value=submission.review(spec)
-        elif a.command=='dispatch': value=submission.dispatch(spec,a.plan_hash,a.authorization)
+        elif a.command=='dispatch': value=submission.dispatch(spec,a.plan_hash,a.authorization,setup_only=a.setup_only)
         elif a.command=='finish': value=submission.finish(spec,a.plan_hash,a.authorization)
+        elif a.command=='check-setup':
+            campaign.check(spec,check_storage=False)
+            job=submission.accepted_jobs(spec,'setup').get('setup')
+            if not job or submission.accounting(job)!=['COMPLETED','0:0']:
+                raise RuntimeError('Exact setup has not completed successfully')
+            record=worker.completed_setup(spec)
+            value=dict(setup_job=job,acceptance=record['content_hash'],gpu=record['gpu'],qualified=True)
         elif a.command=='progress': progress.show(spec); return
         elif a.command=='run': value=worker.run(spec,a.task)
         else: worker.print_results(worker.results(spec)); return

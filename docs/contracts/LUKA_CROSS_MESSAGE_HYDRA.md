@@ -16,7 +16,22 @@ no inference or GPU. A directory or filename alone never admits reuse.
 environment, original input bundle, validation delta, new encoder delta,
 completed precision evidence, fixed8GiB output budget and reviewed resource
 envelope. Source changes are additive relative to
-`a40ae47ba87ee23020b482c17d467e2a42282e8f`; old runtime remains unchanged.
+`a40ae47ba87ee23020b482c17d467e2a42282e8f` for the original implementation.
+The A6000-capable launcher pins its additive runtime changes relative to
+`a7249f49b6f522f7df3b150d27f53613452b7fb0`, which includes the separately
+committed Oscar implementation. Neither donor runtime nor science is altered.
+
+`SPEC/v2` additionally declares `gpu_profile=a6000`, the exact A6000 GRES/name,
+32000MiB host RAM, and local control replay. Legacy L40 `SPEC/v1` is not relabelled.
+`GPU_PORTABILITY/v1` binds the new spec, historical L40 evidence, same native
+control checkpoint, full A6000 validation probabilities, original-batch probe,
+backend/environment/GPU identity and unchanged numerical thresholds. Full AUC
+difference versus saved SPORC must be<=5e-5, repeated BF16 batches exactly equal,
+CPU/GPU FP32 probability max<=1e-5 and RMS<=1e-6. Cross-device BF16 probability
+differences remain diagnostic. Validation recomputes saved metrics and hashes.
+Results use the A6000 control replay, not the old L40 probability file; recovery
+anchors remain historical SPORC. This is inference qualification, not retraining.
+The native-control diagnostic is inside shared setup, not a separate job.
 
 `RECIPE` declares frozen block7 U100 features, block3 HLT injection, 32/16-wide
 messages, teacher CE/KD weights, all student weights/seeds and target scaling.
@@ -61,3 +76,8 @@ uses `afterany` on all14 fits. No artificial lanes or concurrency cap.
 A fully submitted science ledger is idempotent; an active or partial science
 claim requires inspection. Do not delete claims, edit immutable specs or reuse
 failed output directories. Use a new source-bound campaign after a code fix.
+
+`dispatch --setup-only` submits just the reviewed setup and returns its exact ID.
+It does not wait or submit science. The existing `finish` path requires successful
+accounting, authenticated setup, a measured exact dry plan and original review;
+it remains idempotent. `check-setup` authenticates completion read-only.

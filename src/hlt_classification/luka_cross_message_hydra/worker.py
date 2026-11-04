@@ -10,7 +10,8 @@ from hlt_classification.jetclass2_delphes.model import DelphesParticleTransforme
 from hlt_classification.jetclass2_delphes.execution import gpu_identity
 from hlt_classification.jetclass2_delphes.reporting import evaluate_probabilities
 from hlt_classification.luka_fullsim.preflight_v2 import require_backend
-from hlt_classification.luka_u100_pair_hydra import site,portability
+from hlt_classification.luka_u100_pair_hydra import portability
+from . import execution as site
 from .contracts import TASKS,TEACHERS,ARMS,settings,artifact,validate,teacher_task,architecture_control
 from .model import new_model
 from . import campaign,inputs,resources,training,submission
@@ -28,7 +29,7 @@ def setup(spec):
             or (extraction_memory.get('peak_rss_bytes') or 0)>spec['memory_mb']*1024**2*.85):
         write_immutable_json(root/'feature_resource_failure.json',artifact('RESOURCE_FAILURE',memory=extraction_memory))
         raise MemoryError('Frozen-feature preparation exceeds reviewed resources')
-    write_immutable_json(root/'portability.json',portability.setup_record(spec,val))
+    write_immutable_json(root/'portability.json',site.setup_record(spec,val))
     actual=torch.from_numpy(oracle_val.logits).softmax(-1).numpy()
     ref=load_npz_arrays(inputs.encoder_delta(spec).path('validation_predictions.npz'))
     if any(not np.array_equal(ref[k],getattr(val,k)) for k in ('identities','labels')): raise ValueError('U100 replay population differs')
@@ -61,7 +62,7 @@ def completed_setup(spec):
     required={'portability.json','encoder_replay.json','encoder_predictions.npz','acceptance.json'} | {
         f'mini_{task}/receipt.json' for task in TASKS}
     if not required <= {r['path'] for r in record['outputs']}: raise ValueError('Shared setup incomplete')
-    portability.validate_setup(spec,load_json(root/'portability.json'))
+    site.validate_setup(spec,load_json(root/'portability.json'))
     replay=load_json(root/'encoder_replay.json'); validate(replay,'ENCODER_REPLAY',dict(spec=spec['content_hash'],encoder=spec['encoder_hash']))
     if replay['auc_abs']>5e-5 or replay['auc_tolerance']!=5e-5: raise ValueError('Unqualified U100 replay')
     return resources.accepted(spec)
@@ -119,7 +120,9 @@ def results(spec):
     campaign.check(spec,check_storage=False); b=inputs.Bundle(spec['bundle_root'])
     arrays={name:load_npz_arrays(b.path(f'reference/{name}/predictions.npz')) for name in ('M0HLT','OFFLINE')}
     arrays['U100_W5_SPORC']=load_npz_arrays(b.path('reference/matched/predictions.npz'))
-    arrays['U100_W5_HYDRA_REPLAY']=load_npz_arrays(spec['portability_evidence']['refs']['predictions']['path'])
+    if spec.get('gpu_profile')=='a6000':
+        completed_setup(spec)
+    arrays['U100_W5_HYDRA_REPLAY']=load_npz_arrays(site.control_predictions(spec))
     pending=[]; selected={}; parents={}; oracle_controls=set()
     for task in TASKS:
         folder=Path(spec['root'])/task
@@ -166,10 +169,11 @@ def results(spec):
         rows.append(row)
     return artifact('RESULTS',parents=dict(spec=spec['content_hash'],**parents),rows=rows,pending=pending,
         recovery_anchors='historical_SPORC_M0HLT_OFFLINE',independent_test=False,
-        reference_retrained=False)
+        reference_retrained=False,gpu_profile=spec.get('gpu_profile','l40'))
 
 
 def print_results(value):
+    print('Execution GPU profile: '+value.get('gpu_profile','l40')+'; U100 replay uses that GPU.')
     print('Cross-attention U100 message teachers; twelve fresh CE+U100-w5 students. Exploratory validation; matched seed pairs.')
     print('Teachers are privileged oracles. Historical SPORC recovery anchors; original50k overlaps validation.')
     print('teacher_*_message_off: same selected weights, message disabled; distribution-shift diagnostic, no reselection.')

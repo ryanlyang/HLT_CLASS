@@ -1,6 +1,8 @@
 # Queue the cross-attention message campaign on Brown Hydra
 
 This campaign trains **two privileged teachers and twelve fresh HLT students**.
+For the smaller A6000 request and migration from the pending L40 execution, use
+the [A6000 runbook](LUKA_CROSS_MESSAGE_A6000_RUNBOOK.md). No data retransfer is needed.
 Every student keeps CE+U100 embedding weight5. The recommended first comparison
 is `m32_both_l0p3_s0` against `m32_ce_s0`: same HLT architecture, with and without
 message supervision. The existing native U100-w5 reference is reused.

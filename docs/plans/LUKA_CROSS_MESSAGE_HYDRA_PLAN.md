@@ -3,7 +3,31 @@
 Authority: the user approved two privileged teachers and twelve fresh students,
 then requested implementation through queue readiness on Hydra. This is an
 additive campaign. Existing joint/frozen adapters, controls, jobs and data stay
-unchanged. Hydra uses `gpus/default/normal`, one L40 per fit.
+unchanged. Hydra uses `gpus/default/normal`, one GPU per fit.
+
+### 2026-11-04 execution amendment: A6000
+
+The user's scheduler snapshot showed all six L40s allocated but six of seven
+RTX A6000s unallocated on gpu2201. Shared L40 setup measured about13.3GiB peak
+host RSS and6.3GiB GPU memory. An optional **SPEC/v2 A6000 profile** therefore
+requests one RTX A6000, six CPUs and32000MiB RAM, with a120-minute shared setup
+and30-minute report. These supersede the L40-only execution statement for new
+A6000 roots; scientific v1, all14 fits, batches, seeds and losses are unchanged.
+The original L40 profile and immutable executions remain distinct.
+
+Fresh A6000 shared setup replays the saved native U100-w5 checkpoint across
+full validation, repeats original batches, and checks CPU/GPU FP32 consistency
+using the existing numerical policy. It also replays the frozen U100 encoder
+and measures all14 production miniatures on A6000. L40 acceptance is provenance,
+not A6000 admission. No native-control retraining or new input transfer is needed.
+The conservative2x runtime estimate plus measured preparation/overhead remains;
+do not shorten fits from L40 timing alone. Both resident feature caches and
+real peak memory must pass within85% of the smaller host/GPU envelope.
+
+A setup-only submission may qualify A6000 while old L40 fits remain pending.
+After qualification, retire only the exact old pending jobs, then use `finish`
+to release the A6000 graph. Never run duplicate science inadvertently or edit
+old specs/claims. See the [migration runbook](../LUKA_CROSS_MESSAGE_A6000_RUNBOOK.md).
 
 ## Scientific registration
 
