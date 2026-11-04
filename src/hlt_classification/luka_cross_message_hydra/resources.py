@@ -32,6 +32,34 @@ def miniature_indices(cache):
     return np.array(list(dict.fromkeys(largest[:128]+chosen+largest[128:256]))[:267],dtype=np.int64)
 
 
+def require_resources(spec,task,requested,memory,gpu,*,projection=None):
+    """Preserve exact failed limits; a runtime rejection is not an OOM."""
+    limits=dict(minutes=spec['fit_max_minutes'],gpu_peak_bytes=int(gpu['total_memory_bytes']*.85),
+                peak_rss_bytes=int(spec['memory_mb']*1024**2*.85))
+    measured=dict(minutes=requested,gpu_peak_bytes=memory['gpu_peak_bytes'],peak_rss_bytes=memory.get('peak_rss_bytes'))
+    violations=[]
+    for key,value in measured.items():
+        if value is None and key=='peak_rss_bytes': continue  # CPU fixture/unsupported RSS collector.
+        if not isinstance(value,(int,float)) or not math.isfinite(value) or value<0:
+            raise ValueError('Invalid resource measurement: '+key)
+        if value>limits[key]:
+            violations.append(dict(resource=key,measured=value,limit=limits[key],unit='minutes' if key=='minutes' else 'bytes'))
+    if not violations: return
+    root=Path(spec['root'])/'setup'
+    write_immutable_json(root/'resource_failure.json',artifact('RESOURCE_FAILURE',version=2,
+        parents=dict(spec=spec['content_hash']),task=task,minutes=requested,memory=memory,
+        limits=limits,violations=violations,projection=projection))
+    messages=[]
+    for v in violations:
+        if v['resource']=='minutes':
+            messages.append(f'projected walltime {v["measured"]} min exceeds {v["limit"]} min ceiling')
+        else:
+            name='GPU memory' if v['resource']=='gpu_peak_bytes' else 'host RAM'
+            messages.append(f'{name} peak {v["measured"]/2**30:.2f} GiB exceeds {v["limit"]/2**30:.2f} GiB safety limit')
+    raise RuntimeError(f'Resource envelope rejected {task}: '+ '; '.join(messages)+
+                       '; inspect setup/resource_failure.json. Preserve diagnostics.')
+
+
 def measure(spec,train,val,oracle_train,oracle_val,bank,load_seconds,device='cuda'):
     root=Path(spec['root'])/'setup'; ix=miniature_indices(train); vx=miniature_indices(val)
     tr,va=Subset(train,ix),Subset(val,vx); ot,ov=Subset(oracle_train,ix),Subset(oracle_val,vx)
@@ -56,10 +84,10 @@ def measure(spec,train,val,oracle_train,oracle_val,bank,load_seconds,device='cud
         estimate=30*(perstep*math.ceil(spec['counts']['train']/128)+vstep*math.ceil(spec['counts']['validation']/128))
         # Conservative multiplier, reload/statistics allowance, and measured load.
         requested=math.ceil((2*estimate+2*load_seconds+900)/60)
-        if (requested>spec['fit_max_minutes'] or memory['gpu_peak_bytes']>gpu_identity()['total_memory_bytes']*.85
-                or (memory.get('peak_rss_bytes') or 0)>spec['memory_mb']*1024**2*.85):
-            write_immutable_json(root/'resource_failure.json',artifact('RESOURCE_FAILURE',task=task,minutes=requested,memory=memory))
-            raise MemoryError('Measured adapter family exceeds reviewed resource envelope; preserve diagnostics')
+        require_resources(spec,task,requested,memory,gpu_identity(),projection=dict(
+            training_and_validation_seconds=estimate,preparation_seconds=load_seconds,
+            safety_multiplier=2,fixed_overhead_seconds=900,
+            train_step_seconds=perstep,validation_step_seconds=vstep))
         minutes[task]=max(30,requested)
         details[task]=dict(report=report['content_hash'],train_step_seconds=perstep,validation_step_seconds=vstep,memory=memory)
         del model,teacher; gc.collect()

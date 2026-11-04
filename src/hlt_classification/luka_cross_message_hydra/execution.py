@@ -19,8 +19,8 @@ A6000_SITE = dict(SITE, gres='gpu:nvidia_rtx_a6000:1', gpu_name='NVIDIA RTX A600
 def allocation(spec):
     if spec.get('gpu_profile') != 'a6000':
         return site.allocation(spec)
-    if spec['execution_site'] != A6000_SITE or spec['schema_version'] != 2:
-        raise ValueError('A6000 requires its own v2 execution registration')
+    if spec['execution_site'] != A6000_SITE or spec['schema_version'] not in (2, 3):
+        raise ValueError('A6000 requires its own v2/v3 execution registration')
     job = os.environ.get('SLURM_JOB_ID', '')
     if not re.fullmatch('[1-9][0-9]*', job):
         raise PermissionError('A real Slurm allocation is required')

@@ -33,8 +33,11 @@ def current(project,commit):
     return snapshot
 
 
-def registration(gpu_profile='l40'):
+def registration(gpu_profile='l40',*,spec_version=None):
     if gpu_profile not in ('l40','a6000'): raise ValueError('Unknown GPU profile')
+    if spec_version is None: spec_version=3 if gpu_profile=='a6000' else 1
+    if type(spec_version) is not int or spec_version not in ((2,3) if gpu_profile=='a6000' else (1,)):
+        raise ValueError('GPU profile and execution spec version differ')
     value=dict(recipe=recipe(),arms=ARMS,teachers=list(TEACHERS),counts=COUNTS,original50k_rows=50000,
         execution_site=SITE,cpus=6,memory_mb=120000,storage_budget_bytes=8*2**30,
         setup_minutes=720,fit_max_minutes=1440,report_minutes=120,standalone_preflight=False,
@@ -42,7 +45,8 @@ def registration(gpu_profile='l40'):
     if gpu_profile=='a6000':
         from .execution import A6000_SITE
         value.update(gpu_profile='a6000',execution_site=A6000_SITE,memory_mb=32000,
-            setup_minutes=120,report_minutes=30,control_portability='allocation_local_full_replay_and_FP32_probe')
+            setup_minutes=120,report_minutes=30,fit_max_minutes=2880 if spec_version==3 else 1440,
+            control_portability='allocation_local_full_replay_and_FP32_probe')
     return value
 
 
@@ -61,7 +65,7 @@ def create(root,bundle_root,delta_root,delta_hash,precision_spec,project,commit,
         raise ValueError('Use a fresh separate output directory')
     site.environment(old['reference']['environment']); snapshot=current(project,commit)
     evidence=portability.authenticate(precision_spec,b.root,old['reference'],COUNTS)
-    spec=artifact('SPEC',version=2 if gpu_profile=='a6000' else 1,parents=dict(source=snapshot['content_hash'],transfer=MANIFEST_HASH,
+    spec=artifact('SPEC',version=3 if gpu_profile=='a6000' else 1,parents=dict(source=snapshot['content_hash'],transfer=MANIFEST_HASH,
         delta=delta_hash,portability=evidence['content_hash'],encoder=encoder_hash),**registered,root=str(root),project_dir=str(project),
         source_commit=commit,source_snapshot=snapshot,environment_dir=str(Path(sys.prefix).resolve()),
         bundle_root=str(b.root),delta_root=str(d.root),delta_hash=delta_hash,available_quota_gib=quota_gib,
@@ -72,11 +76,12 @@ def create(root,bundle_root,delta_root,delta_hash,precision_spec,project,commit,
 
 
 def check(spec,*,check_storage=True):
-    profile=spec.get('gpu_profile','l40'); registered=registration(profile)
+    profile=spec.get('gpu_profile','l40'); version=spec['schema_version']
+    registered=registration(profile,spec_version=version)
     d=inputs.delta(spec); b=inputs.Bundle(spec['bundle_root']); old=b.json('origin/campaign_spec.json')
     validate(spec,'SPEC',dict(source=spec['source_snapshot']['content_hash'],transfer=MANIFEST_HASH,
         delta=d.manifest['content_hash'],portability=spec['portability_evidence']['content_hash'],
-        encoder=inputs.encoder_delta(spec).manifest['content_hash']),version=2 if profile=='a6000' else 1)
+        encoder=inputs.encoder_delta(spec).manifest['content_hash']),version=version)
     if (any(spec.get(k)!=v for k,v in registered.items()) or spec['available_quota_gib']<8
             or any(spec[k]!=old[k] for k in ('reference','imported','anchor'))
             or load_json(Path(spec['root'])/'campaign_spec.json')!=spec

@@ -239,7 +239,7 @@ def test_campaign_binds_both_deltas_and_fixed_budget(tmp_path,monkeypatch,gpu_pr
     spec=campaign.create(tmp_path/'run',roots['bundle'],roots['delta'],'d'*64,tmp_path/'precision/spec.json',
         roots['project'],'f'*40,28,roots['encoder'],'e'*64,gpu_profile=gpu_profile)
     assert spec['storage_budget_bytes']==8*2**30 and spec['parents']['encoder']=='e'*64
-    assert spec['schema_version']==(2 if gpu_profile=='a6000' else 1)
+    assert spec['schema_version']==(3 if gpu_profile=='a6000' else 1)
     campaign.check(spec)
     with pytest.raises(ValueError): campaign.check(dict(spec,encoder_hash='0'*64))
 

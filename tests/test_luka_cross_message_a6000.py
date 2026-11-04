@@ -9,7 +9,7 @@ import pytest
 import torch
 
 from test_luka_cross_message_hydra import compact_native, caches, spec_for
-from hlt_classification.data.cache_contracts import with_content_hash
+from hlt_classification.data.cache_contracts import with_content_hash, load_json
 from hlt_classification.luka_cross_message_hydra import campaign, contracts as c, execution as e, submission
 
 
@@ -19,11 +19,16 @@ def test_profile_changes_resources_only_and_versions_spec():
     assert b['execution_site'] == e.A6000_SITE
     assert b['setup_minutes'] == 120 and b['report_minutes'] == 30
     assert a['memory_mb'] == 120000 and a['setup_minutes'] == 720
-    for key in ('recipe', 'arms', 'teachers', 'counts', 'fit_max_minutes', 'storage_budget_bytes'):
+    for key in ('recipe', 'arms', 'teachers', 'counts', 'storage_budget_bytes'):
         assert a[key] == b[key]
-    v2 = c.artifact('SPEC', version=2, **b)
-    c.validate(v2, 'SPEC', version=2)
-    with pytest.raises(ValueError): c.validate(v2, 'SPEC')
+    assert a['fit_max_minutes']==1440 and b['fit_max_minutes']==2880
+    old=campaign.registration('a6000',spec_version=2)
+    assert old==dict(b,fit_max_minutes=1440)
+    v3 = c.artifact('SPEC', version=3, **b)
+    c.validate(v3, 'SPEC', version=3)
+    with pytest.raises(ValueError): c.validate(v3, 'SPEC',version=2)
+    with pytest.raises(ValueError): campaign.registration('l40',spec_version=3)
+    with pytest.raises(ValueError): campaign.registration('a6000',spec_version=1)
     with pytest.raises(ValueError): campaign.registration('any_gpu')
 
 
@@ -38,6 +43,69 @@ def test_a6000_all_stages_request_same_site_and_preserve_dag(tmp_path):
             assert '--mem=32000M' in cmd and '--cpus-per-task=6' in cmd
             assert row['dependencies'] == c.dependencies(row['task_id'])
     assert len(submission.render(spec, 'science', acceptance=measured)['commands']) == 15
+
+
+def test_measured_29h19_request_fits_new_reviewed_envelope(tmp_path):
+    from hlt_classification.luka_u100_pair_hydra.submission import within_envelope
+    spec=dict(campaign.registration('a6000'),root=str(tmp_path),project_dir='/project',content_hash='a'*64)
+    measured=c.artifact('ACCEPTANCE',minutes={t:1759 for t in c.TASKS})
+    envelope=submission.render(spec,'envelope'); plan=submission.render(spec,'science',acceptance=measured)
+    assert within_envelope(envelope,plan)
+    assert '--time=1-05:19:00' in plan['commands'][0]['command'] or '--time=29:19:00' in plan['commands'][0]['command']
+    old=dict(spec,**campaign.registration('a6000',spec_version=2))
+    assert not within_envelope(submission.render(old,'envelope'),plan)
+
+
+def test_job_144751_was_walltime_not_memory_and_v3_admits_it(tmp_path):
+    from hlt_classification.luka_cross_message_hydra.resources import require_resources
+    (tmp_path/'setup').mkdir()
+    old=dict(campaign.registration('a6000',spec_version=2),root=str(tmp_path),content_hash='a'*64)
+    memory=dict(gpu_peak_bytes=6761658880,peak_rss_bytes=14607953920,rss_bytes=14135058432)
+    gpu=dict(total_memory_bytes=48*2**30)
+    with pytest.raises(RuntimeError,match='projected walltime 1759 min exceeds 1440 min') as failure:
+        require_resources(old,'teacher_m32',1759,memory,gpu)
+    assert not isinstance(failure.value,MemoryError)
+    record=load_json(tmp_path/'setup/resource_failure.json')
+    c.validate(record,'RESOURCE_FAILURE',dict(spec=old['content_hash']),version=2)
+    assert record['violations']==[dict(resource='minutes',measured=1759,limit=1440,unit='minutes')]
+    new=dict(old,**campaign.registration('a6000'))
+    require_resources(new,'teacher_m32',1759,memory,gpu)
+    assert load_json(tmp_path/'setup/resource_failure.json')==record  # Old evidence remains immutable.
+
+
+@pytest.mark.parametrize('resource,requested,ram,gpu_peak,word',[
+    ('minutes',2881,1024,1024,'projected walltime'),
+    ('peak_rss_bytes',1759,30*2**30,1024,'host RAM'),
+    ('gpu_peak_bytes',1759,1024,45*2**30,'GPU memory'),
+])
+def test_v3_still_rejects_each_exceeded_resource(tmp_path,resource,requested,ram,gpu_peak,word):
+    from hlt_classification.luka_cross_message_hydra.resources import require_resources
+    (tmp_path/'setup').mkdir()
+    spec=dict(campaign.registration('a6000'),root=str(tmp_path),content_hash='a'*64)
+    with pytest.raises(RuntimeError,match=word):
+        require_resources(spec,'teacher_m32',requested,dict(peak_rss_bytes=ram,gpu_peak_bytes=gpu_peak),
+                          dict(total_memory_bytes=48*2**30))
+    record=load_json(tmp_path/'setup/resource_failure.json')
+    assert [v['resource'] for v in record['violations']]==[resource]
+
+
+def test_resource_failure_records_all_exceeded_limits(tmp_path):
+    from hlt_classification.luka_cross_message_hydra.resources import require_resources
+    (tmp_path/'setup').mkdir()
+    spec=dict(campaign.registration('a6000'),root=str(tmp_path),content_hash='a'*64)
+    with pytest.raises(RuntimeError,match='walltime.*GPU memory.*host RAM'):
+        require_resources(spec,'teacher_m32',3000,dict(peak_rss_bytes=32*2**30,gpu_peak_bytes=48*2**30),
+                          dict(total_memory_bytes=48*2**30),projection=dict(safety_multiplier=2))
+    record=load_json(tmp_path/'setup/resource_failure.json')
+    assert len(record['violations'])==3 and record['projection']==dict(safety_multiplier=2)
+
+
+def test_resource_guard_rejects_nonfinite_measurement(tmp_path):
+    from hlt_classification.luka_cross_message_hydra.resources import require_resources
+    spec=dict(campaign.registration('a6000'),root=str(tmp_path),content_hash='a'*64)
+    with pytest.raises(ValueError,match='Invalid resource measurement'):
+        require_resources(spec,'teacher_m32',1759,dict(peak_rss_bytes=1024,gpu_peak_bytes=float('nan')),
+                          dict(total_memory_bytes=48*2**30))
 
 
 def test_scheduler_test_only_and_mixed_gpu_plan_rejected(tmp_path, monkeypatch):
@@ -55,8 +123,9 @@ def test_scheduler_test_only_and_mixed_gpu_plan_rejected(tmp_path, monkeypatch):
     with pytest.raises(ValueError): e.check_site(bad)
 
 
-def test_allocation_accepts_placeholder_cluster_but_rejects_wrong_gpu_and_ram(monkeypatch):
-    spec = dict(campaign.registration('a6000'), schema_version=2, environment_dir=str(Path(sys.prefix).resolve()),
+@pytest.mark.parametrize('version',[2,3])
+def test_allocation_accepts_placeholder_cluster_but_rejects_wrong_gpu_and_ram(monkeypatch,version):
+    spec = dict(campaign.registration('a6000',spec_version=version), schema_version=version, environment_dir=str(Path(sys.prefix).resolve()),
                 reference=dict(environment={}))
     fields = ['JobId=123 JobState=RUNNING Account=default Partition=gpus QOS=normal NumNodes=1-1 '
               'NumCPUs=6 NumTasks=1 CPUs/Task=6 AllocTRES=cpu=6,mem=32000M,node=1,gres/gpu=1']

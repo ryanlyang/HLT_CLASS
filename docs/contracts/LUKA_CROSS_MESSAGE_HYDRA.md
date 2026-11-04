@@ -33,6 +33,18 @@ Results use the A6000 control replay, not the old L40 probability file; recovery
 anchors remain historical SPORC. This is inference qualification, not retraining.
 The native-control diagnostic is inside shared setup, not a separate job.
 
+`SPEC/v3` preserves the A6000 v2 scientific and numerical registration but raises
+`fit_max_minutes` from1440 to2880 after job144751 measured1759 minutes with safe
+RAM/GPU peaks. New A6000 registrations use v3; validation keeps v2's original
+ceiling distinct. L40 stays v1. No automatic clamp to the ceiling is allowed;
+each exact science request uses its measured duration and full dry review.
+
+`RESOURCE_FAILURE/v2` binds its spec and task, requested minutes, memory peaks,
+all three limits, each violation with units, and the measured time-estimate
+components. Rejections raise an explanatory resource-envelope error rather than
+labelling a walltime violation as a memory allocation failure. The original
+failure files remain immutable; no scientific acceptance criterion is changed.
+
 `RECIPE` declares frozen block7 U100 features, block3 HLT injection, 32/16-wide
 messages, teacher CE/KD weights, all student weights/seeds and target scaling.
 The process-local frozen-token cache preserves authenticated jet identities,

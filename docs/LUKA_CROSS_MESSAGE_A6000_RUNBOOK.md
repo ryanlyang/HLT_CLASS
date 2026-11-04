@@ -8,9 +8,16 @@ check the smaller envelope and measure its own runtime before releasing fits.
 
 No new transfer, teacher selection, data population, batch size, loss, seed,
 precision recipe or control training is introduced. The original L40 jobs and
-artifacts are unchanged by these local code edits. `SPEC/v2` distinguishes
+artifacts are unchanged by these local code edits. New `SPEC/v3` distinguishes
 A6000 execution. The [scientific plan](plans/LUKA_CROSS_MESSAGE_HYDRA_PLAN.md)
 and [contract](contracts/LUKA_CROSS_MESSAGE_HYDRA.md) define qualification.
+
+After setup144751, v3 raises the allowed fit ceiling to48h: the first A6000
+miniature projected29h19m, above v2's24h ceiling, while both memory peaks were
+safe. The numerical checks passed. Each fit still gets its own measured request,
+including the2x margin; it does not automatically request48h. The existing
+32,000MiB RAM request and both85% memory limits are unchanged. Commit the fix
+and use a fresh root with the commands below; preserve the failed c2bdfcc0 root.
 
 The migration has two stages: queue **setup only** while retaining old pending
 jobs, then cancel the exact old pending fits and release the new graph once
@@ -159,6 +166,6 @@ states; do not repeat the whole migration blindly. `finish` can safely return an
 already complete ledger, but partial submissions retain claims for inspection.
 
 Implementation: `execution.py` supplies A6000 allocation checks and numerical
-replay, `campaign.py` registers resources and version2, `submission.py` retains
+replay, `campaign.py` registers resources and version3, `submission.py` retains
 the exact DAG and adds setup-only dispatch. Original scientific `model.py`,
 `training.py` and the resource time formula are unchanged.

@@ -1,5 +1,32 @@
 # Cross-attention message Hydra validation
 
+## A6000 runtime correction after job144751
+
+The supplied log from commit `c2bdfcc08b6d478165f83ccf59641e4afd34e463`
+reached the first completed production miniature after passing control/encoder
+numerical checks. Its resource diagnostic recorded1759 minutes, GPU peak
+6761658880 bytes and host peak14607953920 bytes. Only the1440-minute ceiling
+was exceeded. No A6000 full fit or scientific result was produced by that setup.
+
+New A6000 SPEC/v3 raises the reviewed fit ceiling to2880 minutes, preserving
+the existing memory bounds, individual measured times,2x margin and science.
+RESOURCE_FAILURE/v2 records explicit limits, violations and projection pieces.
+Legacy A6000 v2 remains1440 minutes; L40 v1 remains unchanged.
+
+- Focused pre-change baseline: **52 passed in70.16s**.
+- Final cross-message/A6000 plus Hydra/portability regression:
+  **125 passed in90.78s**.
+- The exact job144751 measurements reject as walltime under v2 and pass under
+  v3. Tests independently reject excess runtime, host RAM, GPU memory, simultaneous
+  violations and nonfinite measurements. The29h19m rendered request fits the48h
+  reviewed envelope but fails the old24h envelope. Schema/site combinations,
+  exact submission and the real production miniature path remain covered.
+- Changed Python syntax, migration Bash blocks and scoped whitespace checks pass.
+
+No remote change, commit or push was performed. Actual completion of all A6000
+miniatures remains required in a fresh root. Keep the failed evidence and old
+pending L40 jobs while following the updated A6000 setup-only runbook.
+
 ## 2026-11-04 A6000 execution amendment
 
 User-provided L40 acceptance reports14 task miniatures with host peak13.3GiB

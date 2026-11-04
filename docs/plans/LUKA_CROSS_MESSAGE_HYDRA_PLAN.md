@@ -29,6 +29,24 @@ After qualification, retire only the exact old pending jobs, then use `finish`
 to release the A6000 graph. Never run duplicate science inadvertently or edit
 old specs/claims. See the [migration runbook](../LUKA_CROSS_MESSAGE_A6000_RUNBOOK.md).
 
+### A6000 runtime-envelope correction after job144751
+
+The supplied log/diagnostic from source `c2bdfcc0` shows successful numerical
+qualification and a completed teacher_m32 miniature, then a projected1759-minute
+request rejected by the inherited1440-minute ceiling. Host peak14607953920 bytes
+and GPU peak6761658880 bytes are within their envelopes. The old generic
+`MemoryError` was misleading: this was a walltime rejection, not an OOM.
+
+New A6000 `SPEC/v3` permits up to2880 minutes per fit. It retains32000MiB RAM,
+the85% memory safety thresholds,2x measured time factor, population, kernels
+and all scientific settings. Individual requests remain measured; they are not
+all set to48h. Hydra test-only review must accept the new ceiling and the exact
+measured plan. Legacy A6000 v2 retains1440 minutes, L40 v1 is unchanged, and
+existing specs/results are never edited. New resource failures identify all
+exceeded limits and retain the estimate components. Retry in a new committed
+source-bound root; retain failed setup144751 and old pending L40 jobs until the
+replacement setup succeeds.
+
 ## Scientific registration
 
 The primary population is the existing ALLJETS TRAIN299234/validation74895.
