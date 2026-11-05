@@ -9,10 +9,28 @@ control, with the embedding head removed and CE as its only loss. See the
 There are exactly two new independent jobs, named `lukac0_*`, with no teacher
 dependencies or new report/setup job. Existing jobs and specs are untouched.
 Reuse the authenticated parent setup144840 and its per-control A6000 timings.
-Each new allocation also runs its actual CE-only miniature before starting
-fresh full training. Both request one RTX A6000,6CPUs/32000MiB; thirty epochs,
+Each new allocation runs a disposable warmup and then a fresh measured CE-only
+miniature before starting fresh full training. Both request one RTX A6000,6CPUs/32000MiB; thirty epochs,
 batch128, identical TRAIN299234/validation74895. Reserve two additional GiB
 for outputs, beyond space reserved for the active parent campaign.
+
+## Retry after jobs145718 and145719
+
+Both jobs completed a technical miniature but failed the runtime projection:
+924 versus421 minutes for width32,896 versus425 for width16. These were
+first-process, three-batch estimates, not actual thirty-epoch runtime or model
+quality failures. No full CE-only fit started.
+
+Execution v2 warms the CE-only path before timing a second fresh miniature.
+Warmup overhead counts once, rather than once per projected batch. The2x
+runtime margin, parent-derived walltime requests and85% memory limits remain.
+All three models (warmup, measured miniature, full fit) start from identical
+matched weights; no technical updates carry into science.
+
+Commit/push the fix and use the normal queue block below with the **new commit**.
+It creates a new worktree and campaign root. Keep
+`cross_message_ce_5a3509eb_b29184c0_r1` and its diagnostics. Neither failed job
+needs cancellation. Do not change the active parent campaign or delete claims.
 
 ## Commit and push on Windows
 
@@ -26,7 +44,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Staging failed' }
 git diff --cached --stat
 git diff --cached --check
 if ($LASTEXITCODE -ne 0) { throw 'Check the staged changes' }
-git commit -m 'Add CE-only cross-message architecture controls on Hydra'
+git commit -m 'Warm CE-only miniature before projecting Hydra runtime'
 if ($LASTEXITCODE -ne 0) { throw 'Commit failed' }
 git push origin main
 if ($LASTEXITCODE -ne 0) { throw 'Push failed' }
@@ -108,9 +126,11 @@ Local verification and the remaining real-allocation check are recorded in
 `docs/HANDOFF.md`. Local tests do not assert that the remote jobs were submitted
 or that either new scientific control has completed.
 
-Final addon tests:24 passed/30.88s, including installed-Weaver CUDA CE updates
-and reload, synthetic full30 fits, complete worker execution, full/partial
-miniatures, exact initialization, independent submission and read-only results.
-All60 existing cross-message/A6000 regressions also passed. Python/Bash syntax,
-runbook blocks, links and new-file whitespace passed. Genuine CE-only Hydra
-measurements will be recorded by the integrated allocation checks.
+Timing-fix validation: pre-edit24 passed/30.39s; final28 passed/36.85s, including
+installed-Weaver CUDA warmup/measured full and partial batches, fresh weights
+across all three phases, authenticated warmup provenance, simulated924/896-minute
+regressions, and retained memory/runtime/nonfinite checks. The suite also covers
+synthetic full30 fits, independent submission and read-only results. The original
+addon implementation separately passed all60 cross-message/A6000 regressions;
+those donor workers remain unchanged. Real Hydra acceptance of the corrected
+timing path is still required inside the two new allocations.

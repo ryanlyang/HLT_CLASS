@@ -32,7 +32,9 @@ metadata may be read for reporting/qualification, never as optimization targets.
 The existing model/training implementation at
 `199928da991f8a4194dcf42df009130cfcf84118` is unchanged. A separate package
 subclasses its student architecture and reuses its forward, CE step, optimizer
-and schedule. Separate version1 contracts distinguish the new reports and specs.
+and schedule. Scientific reports/recipe remain version1. Execution SPEC and
+RESOURCE_CHECK are version2 to distinguish warmed timing from the original
+cold-start estimate.
 
 ## Execution
 
@@ -45,13 +47,25 @@ the matching parent's measured minutes plus ten minutes for the integrated
 CE-only miniature (within48h). No teacher or student scheduler dependencies,
 no setup/target/reference rerun, and no login-host watcher are needed.
 
-Before full training inside each allocation, load only HLT TRAIN/validation,
-run a fresh CE-only production miniature with worst-multiplicity full and partial
-batches, publish/reload its selected model, and record actual memory/timing.
-Retain85% GPU/RAM limits and a2x thirty-epoch runtime projection plus measured
-preparation/900s overhead. Exceeding resources fails with saved diagnostics;
-weak finite validation never fails. Reseed and instantiate a fresh model for
-the actual fit, preserving the matched initialization and sampler.
+Before full training inside each allocation, load only HLT TRAIN/validation.
+First run a disposable one-epoch CE-only production miniature, including
+publication/reload, to warm the kernels and allocator. Then reseed and run a
+fresh one-epoch production miniature on the identical worst-multiplicity full
+and partial batches. Project only this second fit's training/validation timing.
+Count all elapsed loading, warmup and measurement overhead once, plus900s;
+retain the2x thirty-epoch projection and85% GPU/RAM limits. Memory peaks cover
+both fits without a reset between them. Both reports and the explicit timing
+policy are authenticated by RESOURCE_CHECK/v2. No estimate is clamped or
+ignored when it exceeds the actual allocation. Weak finite validation never
+fails. Reseed again for full training: neither technical fit contributes weights,
+optimizer state or updates to the thirty-epoch scientific fit.
+
+This corrects the execution failure in jobs145718/145719: v1 extrapolated the
+first three cold-start batches to924/896 minutes, exceeding421/425-minute
+allocations. Those projections do not establish actual full-fit runtimes. The
+matching parent controls were measured after other kernels had already run.
+New specs keep the same parent-derived requests; warmed measurements must still
+fit them. Use a fresh source-bound root and retain the failed v1 diagnostics.
 
 Use a new source-bound root with a two-job dry plan, exact submission journal,
 exclusive claim and explicit CLI authorization. No writes, cancellations or

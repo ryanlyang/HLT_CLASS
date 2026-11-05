@@ -11,7 +11,7 @@ from hlt_classification.luka_fullsim.regular_submission import clean_environment
 from hlt_classification.luka_u100_pair_hydra import inputs, site
 from hlt_classification.luka_cross_message_hydra.execution import A6000_SITE
 from hlt_classification.luka_u100_embedding.contracts import COUNTS
-from .contracts import BASE, TASKS, artifact, validate, recipe, matched_task
+from .contracts import BASE, TASKS, artifact, validate, recipe, matched_task, resource_policy
 
 MODULES = ('__init__','contracts','model','training','campaign','worker','submission','reporting')
 RUNTIME = {'src/hlt_classification/luka_cross_message_ce_hydra/'+n+'.py' for n in MODULES} | {
@@ -81,7 +81,7 @@ def registration(evidence):
         raise ValueError('Measured parent control plus miniature allowance exceeds48h')
     return dict(recipe=recipe(), tasks=list(TASKS), counts=COUNTS, original50k_rows=50000,
         execution_site=A6000_SITE, gpu_profile='a6000', cpus=6, memory_mb=32000,
-        minutes=minutes, storage_budget_bytes=2*2**30, fit_max_minutes=2880,
+        minutes=minutes, resource_policy=resource_policy(), storage_budget_bytes=2*2**30, fit_max_minutes=2880,
         dependencies='none', standalone_preflight=False, privileged_supervision=False,
         reference_retrained=False, stopping_policy='full30', automatic_retry=False)
 

@@ -36,6 +36,13 @@ def fixture_spec(root, rows=22):
     return spec
 
 
+def timing_report(spec, task, seconds=.3, *, identity='m'):
+    return dict(content_hash=identity*64,task=task,technical=True,epochs=1,
+        parents=dict(spec=spec['content_hash']),counts=dict(train=267,validation=267),
+        validation_history=[dict(train_seconds=seconds,validation_seconds=.3,
+            validation=dict(macro_ovr_auc=.01))])
+
+
 @pytest.mark.parametrize('task',c.TASKS)
 def test_exact_matched_initialization_ce_gradient_and_deployment(task):
     imp = dict(node=parent_nodes()[0]); cfg = old_c.settings(c.matched_task(task))
@@ -110,6 +117,7 @@ def test_registration_and_two_independent_jobs(tmp_path):
     spec = fixture_spec(tmp_path); value = submission.plan(spec)
     assert len(value['commands']) == 2 and spec['minutes'] == {c.TASKS[0]:410,c.TASKS[1]:360}
     assert spec['privileged_supervision'] is False and spec['storage_budget_bytes'] == 2*2**30
+    assert spec['resource_policy'] == c.resource_policy()
     for row in value['commands']:
         assert row['dependencies'] == []
         assert '--gres=gpu:nvidia_rtx_a6000:1' in row['command']
@@ -143,16 +151,59 @@ def test_exact_submission_dry_auth_idempotence_and_partial_claim(tmp_path,monkey
 
 def test_resource_record_checks_time_memory_and_not_quality(tmp_path):
     spec = fixture_spec(tmp_path); gpu = evidence()['acceptance']['gpu']
-    report = dict(content_hash='m'*64,counts=dict(train=267,validation=267),
-                  validation_history=[dict(train_seconds=.3,validation_seconds=.3,validation=dict(macro_ovr_auc=.01))])
+    report = timing_report(spec,c.TASKS[0]); warmup = timing_report(spec,c.TASKS[0],10.,identity='w')
     mem = dict(gpu_peak_bytes=6*2**30,peak_rss_bytes=14*2**30)
-    row = worker.resource_record(spec,c.TASKS[0],report,mem,gpu,10)
+    row = worker.resource_record(spec,c.TASKS[0],report,mem,gpu,10,warmup=warmup)
     assert row['passed'] and row['quality_gate'] is False
     bad = deepcopy(report); bad['validation_history'][0]['train_seconds'] = 1e7
-    row = worker.resource_record(spec,c.TASKS[0],bad,mem,gpu,10)
+    row = worker.resource_record(spec,c.TASKS[0],bad,mem,gpu,10,warmup=warmup)
     assert not row['passed'] and row['violations'][0]['resource'] == 'minutes'
-    row = worker.resource_record(spec,c.TASKS[0],report,dict(gpu_peak_bytes=48*2**30,peak_rss_bytes=32*2**30),gpu,10)
+    row = worker.resource_record(spec,c.TASKS[0],report,dict(gpu_peak_bytes=48*2**30,peak_rss_bytes=32*2**30),gpu,10,warmup=warmup)
     assert {v['resource'] for v in row['violations']} == {'gpu_peak_bytes','peak_rss_bytes'}
+
+
+@pytest.mark.parametrize('task,projection,limit',[(c.TASKS[0],924,421),(c.TASKS[1],896,425)])
+def test_first_process_startup_is_not_projected_per_batch(tmp_path,task,projection,limit):
+    spec = fixture_spec(tmp_path); spec['counts'] = campaign.COUNTS; spec['minutes'][task] = limit
+    gpu = evidence()['acceptance']['gpu']; mem = dict(gpu_peak_bytes=6*2**30,peak_rss_bytes=14*2**30)
+    # Reproduce the reported bounds with synthetic durations. The remote logs
+    # establish the projected totals, not individual timing components.
+    warm = timing_report(spec,task,seconds=.3)
+    cold = timing_report(spec,task,identity='w')
+    cold['validation_history'][0]['train_seconds'] = ((projection-.5-17)*3-.3*586)/2338
+    wrongly_projected = worker.resource_record(spec,task,cold,mem,gpu,120,warmup=warm)
+    assert wrongly_projected['projected_minutes'] == projection and not wrongly_projected['passed']
+    measured = worker.resource_record(spec,task,warm,mem,gpu,120,warmup=cold)
+    assert measured['passed'] and measured['projected_minutes'] == 310
+    assert measured['limits']['minutes'] == limit and measured['safety_multiplier'] == 2
+    assert measured['parents']['warmup'] == cold['content_hash']
+    # A long actual preparation is still charged once; genuine slow warmed
+    # execution above is still rejected. No time estimate is clamped.
+    extra = worker.resource_record(spec,task,warm,mem,gpu,3720,warmup=cold)
+    assert extra['projected_minutes'] == measured['projected_minutes']+60
+
+
+def test_resource_versions_policy_and_invalid_timings(tmp_path):
+    spec = fixture_spec(tmp_path); task = c.TASKS[0]; report = timing_report(spec,task)
+    warmup = timing_report(spec,task,identity='w'); gpu = evidence()['acceptance']['gpu']
+    mem = dict(gpu_peak_bytes=6*2**30,peak_rss_bytes=14*2**30)
+    assert c.artifact('SPEC')['schema_version'] == c.artifact('RESOURCE_CHECK')['schema_version'] == 2
+    assert c.recipe()['schema_version'] == 1
+    old = c.artifact('SPEC'); old.update(contract='LUKA_CROSS_MESSAGE_CE_HYDRA_SPEC/v1',schema_version=1)
+    with pytest.raises(ValueError): c.validate(with_content_hash(old),'SPEC')
+    for seconds in (float('nan'),float('inf'),-1.,0.):
+        bad = deepcopy(report); bad['validation_history'][0]['train_seconds'] = seconds
+        with pytest.raises(ValueError,match='timing'):
+            worker.resource_record(spec,task,bad,mem,gpu,120,warmup=warmup)
+    for elapsed in (float('nan'),float('inf'),-1.):
+        with pytest.raises(ValueError,match='elapsed'):
+            worker.resource_record(spec,task,report,mem,gpu,elapsed,warmup=warmup)
+    bad = deepcopy(spec); bad['resource_policy']['safety_multiplier'] = 1
+    with pytest.raises(ValueError,match='policy'):
+        worker.resource_record(bad,task,report,mem,gpu,120,warmup=warmup)
+    warmup['task'] = c.TASKS[1]
+    with pytest.raises(ValueError,match='miniatures'):
+        worker.resource_record(spec,task,report,mem,gpu,120,warmup=warmup)
 
 
 def test_parent_authentication_runs_original_source_without_source_swap(tmp_path,monkeypatch):
@@ -190,6 +241,7 @@ def test_create_binds_parent_and_rejects_drift(tmp_path,monkeypatch):
     monkeypatch.setattr(campaign,'current',lambda *a:dict(content_hash='s'*64))
     spec = campaign.create(tmp_path/'new',path,roots['project'],'f'*40,2)
     assert spec['qualification'] == e and campaign.check(spec) == parent
+    assert spec['schema_version'] == 2
     with pytest.raises(ValueError): campaign.create(tmp_path/'new',path,roots['project'],'f'*40,2)
     with pytest.raises(ValueError): campaign.create(roots['parent']/'bad',path,roots['project'],'f'*40,2)
     bad = deepcopy(spec); bad['recipe']['embedding_weight'] = 5
@@ -222,13 +274,17 @@ def test_worker_uses_hlt_only_and_fresh_miniature_and_full_fit(tmp_path,monkeypa
     assert worker.receipt(spec,task) == receipt
     full = load_json(tmp_path/task/'fit/training_report.json')
     mini = load_json(tmp_path/task/'miniature/training_report.json')
-    assert full['epochs'] == 30 and mini['epochs'] == 1
+    warmup = load_json(tmp_path/task/'warmup/training_report.json')
+    assert full['epochs'] == 30 and mini['epochs'] == warmup['epochs'] == 1
     # Miniature rows are deliberately reordered by multiplicity. Compare the
     # actual starting weights, not the resulting epoch metrics on different orders.
-    assert len(initial_states) == 2
-    assert all(torch.equal(v,initial_states[1][k]) for k,v in initial_states[0].items())
+    assert len(initial_states) == 3
+    assert all(torch.equal(v,state[k]) for state in initial_states[1:] for k,v in initial_states[0].items())
     assert full['sampler_seed'] == mini['sampler_seed']
     with pytest.raises(FileExistsError): worker.run(spec,task)
+    # Warmup provenance is required for a completed v2 resource check.
+    (tmp_path/task/'warmup/selected.pt').write_bytes(b'corrupt')
+    with pytest.raises(ValueError): worker.receipt(spec,task)
 
 
 def test_hlt_loader_rejects_test_and_never_requests_u100(monkeypatch):
@@ -305,14 +361,20 @@ def test_results_and_progress_are_read_only_and_use_correct_anchors(tmp_path,mon
     with pytest.raises(ValueError): reporting.results(spec)
 
 
-def test_real_full_and_partial_miniature_checks(tmp_path,monkeypatch):
+@pytest.mark.parametrize('device',['cpu',pytest.param('cuda',marks=pytest.mark.skipif(
+    not torch.cuda.is_available(),reason='CUDA unavailable'))])
+def test_real_full_and_partial_miniature_checks(tmp_path,monkeypatch,device):
+    if device == 'cuda': monkeypatch.setattr(native,'model_config',lambda:deepcopy(FULL_CONFIG))
     rows = 275; spec = fixture_spec(tmp_path,rows); task = c.TASKS[1]
     root = tmp_path/task; root.mkdir(); tr = cache(coordinate='D000',rows=rows); va = cache(role='validation',coordinate='D000',rows=rows)
     monkeypatch.setattr(worker,'gpu_identity',lambda:spec['qualification']['acceptance']['gpu'])
-    record = worker.integrated_check(spec,task,tr,va,time.perf_counter(),device='cpu')
+    record = worker.integrated_check(spec,task,tr,va,time.perf_counter(),device=device)
     report,_ = t.validate_fit(root/'miniature',spec,task,technical=True)
+    warmup,_ = t.validate_fit(root/'warmup',spec,task,technical=True)
     assert record['passed'] and report['counts']['train'] > 128
     assert report['counts']['train'] % 128 != 0
+    assert report['counts'] == warmup['counts'] and record['parents']['warmup'] == warmup['content_hash']
+    assert record['schema_version'] == 2
 
 
 def test_runtime_source_scope_is_additive_and_launchers_have_no_parent_mutations():
