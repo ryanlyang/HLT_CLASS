@@ -1,5 +1,19 @@
 # Legacy Donor-Source Map
 
+## Group A execution v2 resource repair (2026-11-05)
+
+Internal implementation baseline: `0a6721edf146e2ab3166cdee976377c22240053a`.
+Refined existing `luka_next_supervision_hydra/sampling.py`, `data.py`,
+`inputs.py`, `training.py`, `resources.py`, `campaign.py` and `contracts.py`,
+plus `scripts/queue_luka_next_supervision_hydra.sh` and its existing focused
+test suite. No additional external donor or other campaign runtime is changed.
+SPEC/RESOURCE_CHECK/ACCEPTANCE are execution v2; raw/scientific recipe v1 stays
+compatible. Golden particle/group pools were captured from that exact v1
+commit before editing and replay byte-for-byte. The sparse-parent draw is an
+equivalent implementation of the original ordered eligible-parent population,
+not a new sampling law. Source lineage and failed setup150801 are documented in
+the [runbook](LUKA_NEXT_SUPERVISION_GROUP_A_RUNBOOK.md).
+
 ## Seven-candidate Group A foundation (2026-11-05)
 
 Additive baseline and all internal donors in the table:

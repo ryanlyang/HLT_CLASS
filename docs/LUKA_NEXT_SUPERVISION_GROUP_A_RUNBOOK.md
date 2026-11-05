@@ -10,7 +10,7 @@ campaign is modified, canceled or reprioritized. Groups B/C remain future work;
 this helper cannot release the full seven-candidate campaign.
 
 All fits keep fresh native HLT CE+U100-w5, batch128/full30. The new prediction
-heads are training-only. Read the [v1 contract](contracts/LUKA_NEXT_SUPERVISION_HYDRA.md)
+heads are training-only. Read the [science-v1/execution-v2 contract](contracts/LUKA_NEXT_SUPERVISION_HYDRA.md)
 for features, sampling and exact losses. Code lives in
 [luka_next_supervision_hydra](../src/hlt_classification/luka_next_supervision_hydra/__init__.py).
 
@@ -201,3 +201,82 @@ exact accepted IDs and accounting, especially a potentially lost sbatch response
 do not delete claims or blindly rerun. No automatic partial recovery/cancellation
 is implemented. Preserve failed diagnostics and register reviewed recovery
 separately. Never cancel by an ambiguous job-name prefix.
+
+## Execution v2 recovery after setup150801
+
+The user supplied the failed0a6721ed setup log and its authenticated-format
+RESOURCE_CHECK/v1 record. P1 measured11.1096s per full training step, projecting
+26014 requested minutes against the2880-minute ceiling. GPU peak was7055399936
+bytes; conservative host peak including child PSS was28798285824 against
+28521267200 bytes. These are execution measurements, not recovery results.
+No science fits were submitted. Preserve that spec, source, claims and outputs.
+
+V2 reduces index/descriptor memory and repeated parent scans, shares exact-cell
+inventories before fork, and avoids discarded per-batch probes. SPEC,
+RESOURCE_CHECK and ACCEPTANCE are now schema2; v1 raw transfer and scientific
+recipe remain compatible. Phase timings make any remaining runtime bottleneck
+visible. The6CPU/32000MiB request,48h ceiling, memory safety fraction, all anchors,
+pool sizes and full30 training budget remain. New real Hydra acceptance is
+required; laptop speedups do not certify a Hydra runtime or memory bound.
+
+After committing and pushing the fix, run this **on Brown**. It creates a new
+worktree and spec using the already verified raw transfer and existing banks.
+There is no new SPORC export/copy. Registration can be quiet while it validates
+original sources; its log is printed before starting. Type only YES when the
+queue helper asks. This submits setup only, followed by the separate science
+review after successful acceptance.
+
+```bash
+bash <<'BASH'
+set -euo pipefail
+BASE="$(cd "$HOME" && pwd -P)/hlt_u100_pairs"
+MAIN="${BASE}/code_65952ed3"
+OLD_SPEC="${BASE}/runs/next_A_0a6721ed_a6000_r1/campaign_spec.json"
+read -r -p 'New pushed 40-character fix commit: ' COMMIT </dev/tty
+[[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]]
+git -C "$MAIN" fetch origin main
+test "$(git -C "$MAIN" rev-parse origin/main)" = "$COMMIT"
+PROJECT="${BASE}/code_next_${COMMIT:0:8}"
+if [[ -e "$PROJECT" ]]; then
+    test "$(git -C "$PROJECT" rev-parse HEAD)" = "$COMMIT"
+    test -z "$(git -C "$PROJECT" status --porcelain --untracked-files=all)"
+else
+    git -C "$MAIN" worktree add --detach "$PROJECT" "$COMMIT"
+fi
+ENV_DIR="$(python3 -B -s -c 'import json,sys; print(json.load(open(sys.argv[1]))["environment_dir"])' "$OLD_SPEC")"
+ROOT="${BASE}/runs/next_A_${COMMIT:0:8}_a6000_v2_r1"
+test ! -e "$ROOT"
+export PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1
+export PYTHONPATH="${PROJECT}/src"
+export LD_LIBRARY_PATH="${ENV_DIR}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+REG_LOG="$(mktemp "${BASE}/runs/next_A_${COMMIT:0:8}_v2_registration.XXXXXX.log")"
+printf 'Registration log: %s\n' "$REG_LOG"
+if ! "${ENV_DIR}/bin/python" -u -B -s - "$OLD_SPEC" "$PROJECT" "$COMMIT" "$ROOT" >"$REG_LOG" 2>&1 <<'PY'
+import json, sys
+from hlt_classification.data.cache_contracts import load_json
+from hlt_classification.luka_next_supervision_hydra import campaign
+old = load_json(sys.argv[1])
+reused = {k: v['original_spec'] for k, v in old['reused'].items()
+          if k in ('C0', 'C1') or (k == 'J5' and 'original_spec' in v)}
+result = campaign.create(sys.argv[4], old['parent_spec']['path'],
+    old['raw_root'], old['raw_hash'], old['delta_root'], old['delta_hash'],
+    reused, sys.argv[2], sys.argv[3], old['available_quota_gib'])
+print(json.dumps({'root': result['root'], 'schema': result['schema_version'],
+                  'remaining': result['remaining']}, indent=2))
+PY
+then
+    tail -n 100 -- "$REG_LOG"
+    exit 1
+fi
+cat -- "$REG_LOG"
+SPEC="${ROOT}/campaign_spec.json"
+bash "${PROJECT}/scripts/queue_luka_next_supervision_hydra.sh" "$SPEC" setup </dev/tty
+squeue --me -o '%.18i %.30j %.12T %R'
+BASH
+```
+
+Read the new setup log and `setup/resource_P1.json` to see measured phase costs.
+If any runtime/host/GPU limit still fails, retain the new diagnostics; do not
+raise ceilings or delete claims to force admission. After exact COMPLETED/0:0
+setup and an accepted receipt, use the same new PROJECT/SPEC with the science
+command above. Its independent-fit policy is unchanged.

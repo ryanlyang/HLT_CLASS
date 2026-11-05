@@ -1,6 +1,6 @@
 # Seven supervision candidates: three implementation groups and a40-row campaign
 
-Status: implementation plan v0.3, 2026-11-05. The user requested three implementation
+Status: implementation plan v0.4, 2026-11-05. The user requested three implementation
 groups, approximately40 runs weighted toward the stronger bets, and a queue
 order that mixes candidate families with each preferred setup submitted first.
 This document selects the campaign. Group A now has an additive implementation
@@ -78,12 +78,18 @@ Implement P first, then the shared group/jet extensions. This is22 selected
 configurations:10 P,6 G and6 J.
 
 The implemented foundation is `src/hlt_classification/luka_next_supervision_hydra`.
-Its [v1 contract](../contracts/LUKA_NEXT_SUPERVISION_HYDRA.md) freezes the remaining
+Its [science-v1/execution-v2 contract](../contracts/LUKA_NEXT_SUPERVISION_HYDRA.md) freezes the remaining
 feature, bin-expansion, capacity and bounded G-feature-reservoir decisions.
 It preserves the40-row registry and rejects a full40 release while B/C are
 unimplemented. An explicitly reviewed Group A-only release filters the original
 interleaving, reuses C0/C1 (and compatible J5), and adds no fit dependencies.
 This optional partial release does not replace the combined first-seven policy.
+
+The first genuine Hydra setup150801 failed resource admission on P1 before any
+science release. Execution v2 reduces indexing/preparation overhead and measures
+individual production phases; it preserves the scientific v1 recipe and requires
+a fresh resource acceptance. The existing raw transfer/references remain reusable.
+This is an execution revision, not a change to the selected40-row campaign.
 
 Build the common foundation as part of this group:
 

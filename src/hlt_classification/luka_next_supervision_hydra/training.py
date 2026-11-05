@@ -19,9 +19,16 @@ from .model import new_model,deployment,auxiliary_loss
 from .sampling import tensors
 
 LOSS_KEYS=('ce_hlt','embedding_loss','auxiliary_loss','weighted_auxiliary','total_loss')
+PHASE_KEYS=('native_forward','candidate_sampling','auxiliary_forward','diagnostics','backward_optimizer','input_and_dispatch')
 
 
-def step(model,opt,raw,embedding,device,*,candidates,indices,epoch,position):
+def step(model,opt,raw,embedding,device,*,candidates,indices,epoch,position,probe=True,measure=False):
+    phases={}; began=time.perf_counter()
+    def timing(name):
+        nonlocal began
+        if not measure: return
+        if str(device).startswith('cuda'): torch.cuda.synchronize()
+        now=time.perf_counter(); phases[name]=now-began; began=now
     if set(raw)-{'features','vectors','mask','identities','labels'}: raise PermissionError('Unexpected student input')
     cfg=model.cfg
     if (candidates is None)!=(cfg['family']=='C'): raise ValueError('Wrong target capability')
@@ -31,6 +38,7 @@ def step(model,opt,raw,embedding,device,*,candidates,indices,epoch,position):
     target=torch.as_tensor(embedding,device=device).float().detach()
     if target.shape!=model.prediction.shape or not torch.isfinite(target).all(): raise ValueError('Invalid U100 embedding target')
     ce=F.cross_entropy(logits,labels); emb=F.smooth_l1_loss(model.prediction,target)
+    timing('native_forward')
     aux=ce.new_zeros(()); evidence=[]; diagnostics={}
     if candidates is not None:
         def mine(j,features):
@@ -45,30 +53,39 @@ def step(model,opt,raw,embedding,device,*,candidates,indices,epoch,position):
             values=np.concatenate(scores,axis=1)
             return values[0] if single else values
         batch,evidence=candidates.batch(indices,epoch,cfg,mine=mine if cfg['law']=='Hsemi' else None)
+        timing('candidate_sampling')
         batch=tensors(batch,device)
         with torch.autocast(torch.device(device).type,enabled=False):
             scores=model.auxiliary(batch); aux=auxiliary_loss(scores,batch,cfg['family'])
+            timing('auxiliary_forward')
             with torch.no_grad():
-                if cfg['family']=='J':
-                    diagnostics['retrieval_top1']=float((scores.argmax(-1)==batch['positive']).float().mean())
-                else:
-                    y=batch['labels']; diagnostics.update(positive_score=float(scores[y].sigmoid().mean()),
-                        negative_score=float(scores[~y].sigmoid().mean()),positive_fraction=float(y.float().mean()))
-                # Zero-query and within-class query shuffles expose shortcut heads.
-                # Sampling/targets remain identical and this takes no optimizer step.
-                permutation=torch.arange(len(labels),device=device)
-                for c in torch.unique(labels):
-                    members=torch.where(labels==c)[0]
-                    if len(members)>1: permutation[members]=members.roll(1)
-                diagnostics['within_class_swapped_fraction']=float((permutation!=torch.arange(len(labels),device=device)).float().mean())
-                for name,q in (('zero_query',torch.zeros_like(model.jet)),('within_class_shuffle',model.jet[permutation])):
-                    diagnostics[name+'_loss']=float(auxiliary_loss(model.auxiliary(batch,query=q.detach()),batch,cfg['family']))
+                if probe:
+                    if cfg['family']=='J':
+                        diagnostics['retrieval_top1']=float((scores.argmax(-1)==batch['positive']).float().mean())
+                    else:
+                        y=batch['labels']; diagnostics.update(positive_score=float(scores[y].sigmoid().mean()),
+                            negative_score=float(scores[~y].sigmoid().mean()),positive_fraction=float(y.float().mean()))
+                    # The published probe is the first TRAIN batch of each
+                    # epoch. Repeating it on all other batches was discarded
+                    # work; these deterministic heads consume no native RNG.
+                    permutation=torch.arange(len(labels),device=device)
+                    for c in torch.unique(labels):
+                        members=torch.where(labels==c)[0]
+                        if len(members)>1: permutation[members]=members.roll(1)
+                    diagnostics['within_class_swapped_fraction']=float((permutation!=torch.arange(len(labels),device=device)).float().mean())
+                    for name,q in (('zero_query',torch.zeros_like(model.jet)),('within_class_shuffle',model.jet[permutation])):
+                        diagnostics[name+'_loss']=float(auxiliary_loss(model.auxiliary(batch,query=q.detach()),batch,cfg['family']))
+        timing('diagnostics')
     weighted=coefficient(cfg,position)*aux; total=ce+5*emb+weighted
     if not torch.isfinite(total): raise ValueError('Nonfinite objective')
     total.backward()
     if any(not torch.isfinite(p.grad).all() for p in model.parameters() if p.grad is not None): raise ValueError('Nonfinite gradient')
     opt.step()
-    return np.array([float(x.detach()) for x in (ce,emb,aux,weighted,total)]),dict(sampling=evidence,probes=diagnostics)
+    losses=np.array([float(x.detach()) for x in (ce,emb,aux,weighted,total)])
+    timing('backward_optimizer')
+    details=dict(sampling=evidence,probes=diagnostics)
+    if measure: details['phase_seconds']={k:phases.get(k,0.) for k in PHASE_KEYS}
+    return losses,details
 
 
 def parents(spec):
@@ -93,22 +110,26 @@ def fit(folder,spec,task,train,val,bank,*,candidates=None,device='cuda',technica
     for epoch in range(1,epochs+1):
         order=np.arange(len(train)) if technical else np.random.default_rng(np.random.SeedSequence(
             [seed(spec['imported'],cfg,'sampler_seed'),epoch])).permutation(len(train))
-        sums=np.zeros(len(LOSS_KEYS)); times=[]; sizes=[]; evidence=[]
+        sums=np.zeros(len(LOSS_KEYS)); times=[]; sizes=[]; evidence=[]; phases=[]
         for start in range(0,len(order),128):
             ix=order[start:start+128]; update+=1
             if str(device).startswith('cuda'): torch.cuda.synchronize()
             began=time.perf_counter()
             losses,details=step(model,opt,train.batch(ix),bank.targets[ix],device,candidates=candidates,indices=ix,
-                epoch=epoch,position=7. if technical else update/steps)
+                epoch=epoch,position=7. if technical else update/steps,probe=start==0,measure=technical)
             if str(device).startswith('cuda'): torch.cuda.synchronize()
             times.append(time.perf_counter()-began); sizes.append(len(ix)); sums+=len(ix)*losses
+            if technical:
+                phase=details.pop('phase_seconds')
+                phase['input_and_dispatch']=max(0.,times[-1]-sum(phase.values()))
+                phases.append(phase)
             if start==0: evidence=details
             if start//128%100==0 or start+128>=len(order):
                 print(f'NEXT_SUPERVISION {task} epoch={epoch}/{epochs} batch={start//128+1}/{steps}',flush=True)
         began=time.perf_counter(); probabilities=predict(model,val,device); metrics=evaluate_probabilities(val.labels,probabilities)
         row=dict(pass_number=epoch,update=update,validation=metrics,train_seconds=sum(times),validation_seconds=time.perf_counter()-began,
             **dict(zip(LOSS_KEYS,(sums/len(train)).tolist())))
-        if technical: row.update(batch_seconds=times,batch_sizes=sizes,schedule_position=7.)
+        if technical: row.update(batch_seconds=times,batch_sizes=sizes,batch_phase_seconds=phases,schedule_position=7.)
         history.append(row); key=selection_key(metrics,update)
         if best is None or key>best: best=key; selected=epoch; state=model.deployment_state()
         write_immutable_json(folder/f'epoch_{epoch:02d}.json',artifact('EPOCH',parents=dict(spec=spec['content_hash']),task=task,**row))

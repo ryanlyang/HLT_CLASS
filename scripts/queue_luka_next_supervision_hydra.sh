@@ -20,4 +20,4 @@ printf '\nReview hash: %s\n' "${HASH}"
 printf 'Scope: Group A only. Science jobs have no dependencies, holds, lanes or priority adjustments.\n'
 read -r -p "Authorize this exact ${STAGE} plan? Type YES: " ANSWER
 [[ "${ANSWER}" == YES ]] || { printf 'Not submitted. Preserve this review.\n'; exit 1; }
-"${PYTHON}" -B -s "${CLI}" submit --spec "${SPEC}" --stage "${STAGE}" --plan-hash "${HASH}" --authorization AUTHORIZE_NEXT_SUPERVISION_GROUP_A_V1
+"${PYTHON}" -B -s "${CLI}" submit --spec "${SPEC}" --stage "${STAGE}" --plan-hash "${HASH}" --authorization AUTHORIZE_NEXT_SUPERVISION_GROUP_A_V2

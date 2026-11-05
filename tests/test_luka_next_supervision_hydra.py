@@ -326,16 +326,98 @@ def test_full30_budget_and_poor_finite_metrics_not_gate(tmp_path):
 def test_resources_do_not_admit_quality_or_unwarmed_timing(tmp_path):
     spec,tr,va,bank=spec_fixture(tmp_path)
     r=dict(task='P1',technical=True,epochs=1,parents=dict(spec=spec['content_hash']),content_hash='r',
-        counts=dict(train=130,validation=22),validation_history=[dict(batch_seconds=[.2,.1],batch_sizes=[128,2],validation_seconds=.01)])
+        counts=dict(train=130,validation=22),validation_history=[dict(batch_seconds=[.2,.1],batch_sizes=[128,2],validation_seconds=.01,
+            batch_phase_seconds=[dict.fromkeys(t.PHASE_KEYS,0.) for _ in range(2)])])
+    r['validation_history'][0]['batch_phase_seconds'][0]['candidate_sampling']=.2
+    r['validation_history'][0]['batch_phase_seconds'][1]['candidate_sampling']=.1
     mem=dict(gpu_peak_bytes=1,peak_rss_bytes=1); gpu=dict(total_memory_bytes=8*2**30)
     a=resources.resource_record(spec,'P1',r,r,mem,gpu,1)
     assert a['passed'] and a['quality_gate'] is False
     r['validation_history'][0]['batch_sizes']=[128,1]
     with pytest.raises(ValueError): resources.resource_record(spec,'P1',r,r,mem,gpu,1)
     r['validation_history'][0]['batch_sizes']=[128,2]; r['validation_history'][0]['batch_seconds']=[10000.,1000.]
+    r['validation_history'][0]['batch_phase_seconds'][0]['candidate_sampling']=10000.
+    r['validation_history'][0]['batch_phase_seconds'][1]['candidate_sampling']=1000.
     assert not resources.resource_record(spec,'P1',r,r,mem,gpu,1)['passed']
     with pytest.raises(ValueError,match='resource measurement'):
         resources.resource_record(spec,'P1',r,r,dict(gpu_peak_bytes=float('nan')),gpu,1)
+
+
+def test_resource_projection_counts_probe_once_per_epoch_and_requires_phases(tmp_path):
+    spec,_,_,_=spec_fixture(tmp_path); spec['counts']=dict(train=299234,validation=74895)
+    phase=dict.fromkeys(t.PHASE_KEYS,0.); phase['candidate_sampling']=.5; phase['diagnostics']=10.
+    r=dict(task='P1',technical=True,epochs=1,parents=dict(spec=spec['content_hash']),content_hash='r',
+        counts=dict(train=130,validation=22),validation_history=[dict(batch_seconds=[10.5,.25],batch_sizes=[128,2],validation_seconds=.01,
+            batch_phase_seconds=[phase,dict(phase,candidate_sampling=.25,diagnostics=0.)])])
+    mem=dict(gpu_peak_bytes=1,peak_rss_bytes=1); gpu=dict(total_memory_bytes=8*2**30)
+    record=resources.resource_record(spec,'P1',r,r,mem,gpu,1)
+    assert record['train_step_seconds']==.5 and record['probe_seconds_per_epoch']==10.
+    assert record['minutes']<2880 and record['schema_version']==2
+    r['validation_history'][0]['batch_phase_seconds'][0]['diagnostics']=float('nan')
+    with pytest.raises(ValueError,match='phase timings'): resources.resource_record(spec,'P1',r,r,mem,gpu,1)
+
+
+def test_sparse_parent_exclusions_replay_dense_choices_and_rng():
+    parents=np.array([2,3,7,10,11,15],np.int64)
+    for forbidden in (set(),{2},{3,7,10},{2,15,100},{-10,100},{2,3,7,10,11,15}):
+        dense=np.flatnonzero(~np.isin(parents,list(forbidden)))
+        sparse=sampling.ParentPositions(parents,forbidden)
+        assert len(sparse)==len(dense)
+        if len(dense):
+            a=np.random.default_rng(2); b=np.random.default_rng(2)
+            np.testing.assert_array_equal(sparse.draw(a,500),b.choice(dense,500))
+            assert a.bit_generator.state==b.bit_generator.state
+
+
+def test_compact_index_and_pools_replay_original_0a6721ed_bytes():
+    import hashlib
+    p=particles(n=2200,counts=40); s=sampling.MembershipSampler(p,np.arange(2200)+1,np.diff(p.offsets))
+    # Captured from the exact pushed v1 implementation, before this repair.
+    expected={
+        'P1':'23c9863feab006bfac830c5a8ec31b9f9454cb98edda2b851e6f43c21f9d5ca0',
+        'P5':'8cf70454cbcf09b99a21280d6d16076468b537f052c2dedf4f0dfe2257c405a6',
+        'P6':'fab5acb79aefd4754e793ba8281ce837408bace0a55f3ba98406e5e62286c5d4',
+        'P7':'e869ab043f0ead2e94dd2e8c05af5fe41cab11175d31046b0a0ca1259446ace7',
+        'P8':'8b50eba6a86877ef1df457c61fe08811dffd94c24f0aff6cc84aec4b7f671f8e',
+        'P9':'8d901c67c5052130ef812fc88e4c5d7fe4f4763a146871338f466371fae4b2bc',
+        'G1':'e6b6bb96e0f78e2d053555e5e9e610431d316c5e6b543524bb43a2463bc48f99',
+        'G4':'112029a426165cf88d31af5e0dc6c47fd7e51cef7d1376d521def8ceef2b329d'}
+    for task,digest in expected.items():
+        cfg=c.setting(task)
+        a=s.particle_pool(42,2,cfg['law'],lambda x:x[:,0]) if cfg['family']=='P' else s.group_pool(42,2,cfg['group_size'])
+        actual=hashlib.sha256(a['indices'].tobytes()+a['labels'].tobytes()+json.dumps(a['evidence'],sort_keys=True).encode()).hexdigest()
+        assert actual==digest
+    assert s.d.nbytes+s.n.nbytes==5*len(p.local)
+    # No cached region duplicates the large exact-cell populations in children.
+    assert all(key[-2:]!=(0,0) for key in s.regions)
+
+
+def test_chunked_descriptors_and_normalization_are_byte_identical():
+    p=particles(n=1700,counts=40)  # Cross the fixed65536-particle chunk boundary.
+    old=np.concatenate([data.descriptors(p.values[a:b]) for a,b in zip(p.offsets[:-1],p.offsets[1:])])
+    np.testing.assert_array_equal(p.local,old)
+    np.testing.assert_array_equal(p.features,((old-p.mean)/p.scale).astype(np.float32))
+
+
+def test_skipping_discarded_probes_preserves_parameters_losses_and_rng(tmp_path):
+    spec,tr,_,bank=spec_fixture(tmp_path); ix=np.arange(4); outputs=[]
+    for probe in (True,False):
+        student=m.new_model(spec['imported'],'P1'); opt=t.optimizer(student)
+        loss,details=t.step(student,opt,tr.batch(ix),bank.targets[ix],'cpu',candidates=FakeCandidates(),indices=ix,
+            epoch=1,position=7.,probe=probe,measure=True)
+        outputs.append((loss,student.state_dict(),torch.get_rng_state(),details))
+    np.testing.assert_array_equal(outputs[0][0],outputs[1][0])
+    assert all(torch.equal(v,outputs[1][1][k]) for k,v in outputs[0][1].items())
+    assert torch.equal(outputs[0][2],outputs[1][2])
+    assert outputs[0][3]['probes'] and not outputs[1][3]['probes']
+
+
+def test_old_execution_spec_cannot_be_silently_read_as_v2():
+    old=c.artifact('SPEC',execution_version=1)
+    old['contract']='LUKA_NEXT_SUPERVISION_SPEC/v1'; old['schema_version']=1
+    old=with_content_hash(old)
+    with pytest.raises(ValueError): c.validate(old,'SPEC')
+    assert campaign.registration()['execution_version']==2
 
 
 def test_measured_production_path_acceptance_and_tampering(tmp_path,monkeypatch):
@@ -624,6 +706,9 @@ def test_cuda_production_width_full_and_partial(tmp_path,monkeypatch,task):
     spec,tr,_,bank=spec_fixture(tmp_path,rows=130)
     student=m.new_model(spec['imported'],task).cuda(); opt=t.optimizer(student)
     for ix in (np.arange(128),np.arange(128,130)):
-        loss,_=t.step(student,opt,tr.batch(ix),bank.targets[ix],'cuda',candidates=FakeCandidates(),indices=ix,epoch=1,position=7.)
+        loss,details=t.step(student,opt,tr.batch(ix),bank.targets[ix],'cuda',candidates=FakeCandidates(),indices=ix,
+            epoch=1,position=7.,probe=ix[0]==0,measure=True)
         assert np.isfinite(loss).all()
+        assert set(details['phase_seconds'])==set(t.PHASE_KEYS)
+        assert all(np.isfinite(v) and v>=0 for v in details['phase_seconds'].values())
     del student,opt; torch.cuda.empty_cache()

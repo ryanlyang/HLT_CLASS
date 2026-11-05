@@ -53,10 +53,19 @@ def resource_record(spec,task,report,warm,memory,gpu,preparation_seconds):
     if (report['counts']!=warm['counts'] or len(times)!=len(sizes) or 128 not in sizes or 1 in sizes
             or not any(2<=n<128 for n in sizes) or not np.isfinite(times).all() or min(times)<=0
             or not math.isfinite(preparation_seconds) or preparation_seconds<0): raise ValueError('Need warmed full/partial timing')
-    perstep=max(t for t,n in zip(times,sizes) if n==128)
+    phases=row.get('batch_phase_seconds')
+    if (not isinstance(phases,list) or len(phases)!=len(times)
+            or any(set(p)!=set(training.PHASE_KEYS) or not np.isfinite(list(p.values())).all()
+                or min(p.values())<0 or not math.isclose(sum(p.values()),t,rel_tol=1e-6,abs_tol=1e-6)
+                for p,t in zip(phases,times))): raise ValueError('Missing complete production phase timings')
+    # Probes run once per epoch, not once per optimizer update. The complete
+    # miniature still measures their cost and memory; budget their actual use.
+    perstep=max(t-p['diagnostics'] for t,p,n in zip(times,phases,sizes) if n==128)
+    probe_seconds=max(p['diagnostics'] for p in phases)
+    if not math.isfinite(perstep) or perstep<=0: raise ValueError('Invalid regular production timing')
     vstep=row['validation_seconds']/math.ceil(report['counts']['validation']/128)
     if not math.isfinite(vstep) or vstep<=0: raise ValueError('Invalid native validation timing')
-    estimate=30*(perstep*math.ceil(spec['counts']['train']/128)+vstep*math.ceil(spec['counts']['validation']/128))
+    estimate=30*(perstep*math.ceil(spec['counts']['train']/128)+probe_seconds+vstep*math.ceil(spec['counts']['validation']/128))
     policy=spec['resource_policy']; minutes=max(30,math.ceil((2*estimate+preparation_seconds+900)/60))
     if policy!=dict(safety_multiplier=2.,fixed_overhead_seconds=900,memory_fraction=.85): raise ValueError('Resource policy drift')
     limits=dict(minutes=spec['fit_max_minutes'],gpu_peak_bytes=int(gpu['total_memory_bytes']*.85),peak_rss_bytes=int(spec['memory_mb']*1024**2*.85))
@@ -68,7 +77,8 @@ def resource_record(spec,task,report,warm,memory,gpu,preparation_seconds):
         gpu_peak_bytes=memory['gpu_peak_bytes'],peak_rss_bytes=memory.get('peak_rss_bytes')).items() if n is not None and n>limits[k]]
     return artifact('RESOURCE_CHECK',parents=dict(spec=spec['content_hash'],report=report['content_hash'],warm=warm['content_hash']),
         task=task,minutes=minutes,memory=memory,gpu=gpu,preparation_seconds=preparation_seconds,
-        train_step_seconds=perstep,validation_step_seconds=vstep,limits=limits,violations=violations,passed=not violations,quality_gate=False)
+        train_step_seconds=perstep,probe_seconds_per_epoch=probe_seconds,
+        batch_phase_seconds=phases,validation_step_seconds=vstep,limits=limits,violations=violations,passed=not violations,quality_gate=False)
 
 
 def measure(spec,train,val,bank,device='cuda',*,shared_preparation_seconds=0.):
@@ -102,6 +112,9 @@ def measure(spec,train,val,bank,device='cuda',*,shared_preparation_seconds=0.):
         if memory.get('peak_rss_bytes') is not None: memory['peak_rss_bytes']+=children
         record=resource_record(spec,task,report,warm,memory,gpu_identity(),preparation)
         write_immutable_json(root/('resource_'+task+'.json'),record)
+        print(f'NEXT_SUPERVISION resource {task}: step={record["train_step_seconds"]:.3f}s '
+            f'limit={record["minutes"]}min host={memory.get("peak_rss_bytes")} '
+            f'phases={record["batch_phase_seconds"]}',flush=True)
         if not record['passed']:
             if hasattr(source,'close'): source.close()
             raise RuntimeError('Measured Group A resource envelope exceeded: '+str(record['violations'])+'; preserve diagnostics')

@@ -54,7 +54,9 @@ class Particles:
                 or np.any(np.diff(self.offsets)<1) or self.offsets[-1]!=len(self.values)
                 or self.values.dtype!=np.float64 or self.values.shape!=(self.offsets[-1],14)):
             raise ValueError('Raw TRAIN population/offsets differ')
-        self.local=np.concatenate([descriptors(self.values[a:b]) for a,b in zip(self.offsets[:-1],self.offsets[1:])])
+        self.local=np.empty((len(self.values),len(FEATURES)),np.float32)
+        for a,b in zip(self.offsets[:-1],self.offsets[1:]):
+            self.local[a:b]=descriptors(self.values[a:b])
         self.mean=np.zeros(len(FEATURES),np.float64); self.scale=np.ones(len(FEATURES),np.float64)
         # Chunked FP64 moments avoid a full duplicate FP64 feature matrix.
         sums=np.zeros(len(CONTINUOUS)); squares=sums.copy()
@@ -63,7 +65,10 @@ class Particles:
             sums+=v.sum(0); squares+=(v*v).sum(0)
         self.mean[CONTINUOUS]=sums/len(self.local)
         self.scale[CONTINUOUS]=np.maximum(np.sqrt(np.maximum(squares/len(self.local)-self.mean[CONTINUOUS]**2,0)),.001)
-        self.features=((self.local-self.mean)/self.scale).astype(np.float32)
+        self.features=np.empty_like(self.local)
+        for start in range(0,len(self.local),65536):
+            stop=min(start+65536,len(self.local))
+            self.features[start:stop]=((self.local[start:stop]-self.mean)/self.scale).astype(np.float32)
         self.parents=np.repeat(np.arange(n,dtype=np.int64),np.diff(self.offsets))
         self.normalization=artifact('NORMALIZATION',parents=dict(raw=parent_hash),source=source,role='train',
             rows=n,tokens=len(self.local),mean=self.mean.tolist(),scale=self.scale.tolist(),features=list(FEATURES))
@@ -150,6 +155,9 @@ class RawBundle:
             offsets.append(a['offsets'][1:]+end); end+=int(a['offsets'][-1])
         arrays={k:np.concatenate([a[k] for a in chunks]) for k in ('identities','labels','values')}
         arrays['offsets']=np.concatenate(offsets)
+        # Raw shards and their concatenation otherwise coexist throughout all
+        # descriptor construction and inflate the process-lifetime RSS peak.
+        del chunks,a,offsets
         result=Particles(arrays,source=source,parent_hash=self.manifest['content_hash']); result.join(hlt)
         return result
 

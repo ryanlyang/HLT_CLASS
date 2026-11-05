@@ -1,11 +1,15 @@
-# Next supervision: Group A contracts v1
+# Next supervision: Group A science v1, execution v2
 
 Authority: [implementation plan](../plans/LUKA_SEVEN_CANDIDATE_IMPLEMENTATION_PLAN.md)
 and [candidate catalog](../plans/LUKA_NEXT_SUPERVISION_CAMPAIGN_IDEAS.md).
 Implementation is additive under `luka_next_supervision_hydra`, based on
 `ddcdd5fa22ce2455b12a62d61a926caa07969159`. New envelopes are
 `LUKA_NEXT_SUPERVISION_{KIND}/v1`, schema1, canonical content/parent hashes and
-the existing ALLJETS exploratory flags. Old contracts are unchanged.
+the existing ALLJETS exploratory flags. Execution v2 versions SPEC,
+RESOURCE_CHECK and ACCEPTANCE as `/v2`, schema2; the scientific RECIPE, raw
+transfer, normalization, targets and other envelopes stay v1. Failed execution
+v1 artifacts must be read in their pinned original source; they are not
+accepted as a v2 setup. Old contracts are unchanged.
 
 ## Scientific registration
 
@@ -148,6 +152,26 @@ is unchanged by chunk/order/process assignment. P9 proposal construction and
 rank selection run on CPU; detached scoring batches up to8 queries in the
 parent GPU process. Host accounting conservatively adds child proportional
 RSS to the parent's peak. Production measurements include IPC and preparation.
+
+Execution v2 uses compact five-byte-per-particle signature indices, immutable
+exact-cell parent/particle inventories prepared before fork, and sparse
+eligible-parent position draws instead of rescanning the parent population.
+Stable cell/parent ordering and PCG64 streams are preserved; regression pools
+replay the original0a6721ed indices, labels and evidence byte-for-byte. Expanded
+regions retain their separate64MiB bounded caches. Descriptor arrays are
+preallocated/normalized in chunks; membership drops the redundant physical
+measurement copy after authenticating and constructing its descriptors.
+
+The published correct/zero/shuffled-query probes run on the first TRAIN batch
+of each epoch only. These deterministic observation-only forwards consume no
+model RNG and their removal from other batches preserves the optimizer update.
+Technical reports retain synchronized timings for native forward, sampling and
+mining, auxiliary forward, probes, backward/optimizer, and input/dispatch. The
+projection includes regular updates, native validation and one probe per epoch;
+probe time is not multiplied by the number of training batches. Every phase
+must be finite/nonnegative and its sum must reproduce the complete batch time.
+Neither probes nor target construction are omitted from memory measurement.
+
 Projection is2x full30 fit estimate + preparation +900seconds;
 limits48h and85% host/GPU memory under one A6000,6CPUs,32000MiB. Technical weights
 are discarded. Local synthetic tests do not substitute for real Hydra acceptance.

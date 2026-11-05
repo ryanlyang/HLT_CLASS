@@ -90,6 +90,9 @@ def candidates(spec,task,train,device='cpu'):
             source_keys=hlt_keys(spec,train) if cfg['source']=='HLT' else None,
             replicate=cfg['seed_index'],device=device)
     source=raw(spec).load(cfg['source'],train)
+    # Membership consumes the authenticated local/standardized descriptors.
+    # Retaining a second physical TRAIN collection in every fork is unnecessary.
+    source.values=None
     result=MembershipSampler(source,pt,count,replicate=cfg['seed_index'])
     result.capacity=result.capacity_proof(cfg['family'])
     record=Path(spec['root'])/'setup'/('normalization_'+cfg['source']+'.json')

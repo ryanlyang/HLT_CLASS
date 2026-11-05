@@ -22,6 +22,9 @@ must be reportable as fits finish. Group A now has an additive
 22 particle-soup, intact-group and learned-judge configurations with authenticated
 reference reuse. It keeps native CE+U100-w5 and adds removable heads; independent
 science release follows real measured setup. Groups B/C remain unimplemented.
+Group A execution v2 repairs index/preparation overhead exposed by failed Hydra
+setup150801. It preserves the scientific recipe and transferred inputs; a fresh
+measured setup remains required. The runbook includes recovery registration.
 
 The [HLT-aligned particle-teacher campaign](docs/LUKA_PARTICLE_TEACHER_HYDRA_RUNBOOK.md)
 adds twelve native HLT fits on Hydra RTX A6000. Every fit keeps CE + U100-w5.

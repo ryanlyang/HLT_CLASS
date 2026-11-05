@@ -38,6 +38,8 @@ def registration():
     return dict(recipe=recipe(),tasks=list(TASKS),global_order=list(ORDER),scope='group_A_only',counts=COUNTS,
         original50k_rows=50000,execution_site=A6000_SITE,gpu_profile='a6000',cpus=6,memory_mb=32000,
         setup_minutes=720,fit_max_minutes=2880,candidate_workers=4,resource_policy=dict(safety_multiplier=2.,fixed_overhead_seconds=900,memory_fraction=.85),
+        execution_version=2,sampler_index='shared_compact_exact_cells_sparse_parent_exclusions_v2',
+        diagnostics_frequency='first_TRAIN_batch_each_epoch',
         storage_budget_bytes=4*2**30,science_dependencies='none',max_concurrent_fits=None,automatic_retry=False,
         reference_retrained=False,stopping_policy='full30',deferred_groups=['B','C'])
 

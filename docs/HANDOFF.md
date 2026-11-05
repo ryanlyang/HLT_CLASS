@@ -1,5 +1,50 @@
 # Current Handoff
 
+## 2026-11-05: Group A execution v2 resource repair after setup150801
+
+The user supplied Hydra setup150801's failure and RESOURCE_CHECK/v1 record
+from source0a6721ed. Its first P1 path measured11.1096s/full step and projected
+26014 requested minutes against2880, plus28798285824 conservative host bytes
+against28521267200. GPU peak was7055399936 bytes. These were technical warm/
+measured miniatures, not scientific recovery. No Group A science was released.
+The supplied record was not independently retrieved by the agent.
+
+Refined the existing Group A runtime: compact mixed-radix particle indexing,
+shared pre-fork exact-cell inventories, sparse parent exclusions preserving RNG,
+chunked/preallocated descriptors and early redundant-array release. Removed
+discarded diagnostic forwards from non-probe batches; saved probes remain on
+the first TRAIN batch of every epoch. Added synchronized production phase
+timings and per-epoch probe accounting. Original pool streams, objective,
+native update, all anchors and full30 budget are unchanged. The6CPU/32000MiB
+allocation,48h ceiling and85% memory bound are unchanged.
+
+SPEC/RESOURCE_CHECK/ACCEPTANCE are now schema2; raw transfer, scientific recipe
+and other artifacts remain v1. Failed v1 acceptance cannot masquerade as v2.
+The [runbook](LUKA_NEXT_SUPERVISION_GROUP_A_RUNBOOK.md) includes fresh recovery
+registration from the failed spec's already authenticated inputs/references,
+without repeating the SPORC export or changing old source/claims/outputs.
+README, contract, active implementation plan, validation and source map reflect
+this execution-only revision; Groups B/C remain unimplemented.
+
+Internal donor for these refinements:
+`0a6721edf146e2ab3166cdee976377c22240053a`; exact paths are recorded in
+[LEGACY_SOURCE_MAP.md](LEGACY_SOURCE_MAP.md). No external donor or other
+campaign runtime was changed. Pre-edit focused tests:60 passed in53.74s;
+first revised run:66 passed in47.27s. Eight original particle/group pool hashes
+replay byte-for-byte; update/RNG parity and normalization chunk boundaries pass.
+Final revised run:66 passed in46.64s, including full/partial production-width
+CUDA phase timing checks. Static checks:16 Python ASTs,9 Bash scripts/blocks,
+618 local documentation links, fences and scoped git diff --check passed.
+A serial synthetic100k-parent/3M-particle benchmark measured index preparation
+7.037s ->0.844s and128-anchor mixed pools1.107s ->0.376s, with identical arrays
+and evidence. These are local measurements, not Hydra throughput certification.
+
+Remaining requirement: commit/push this source and run a fresh genuine Hydra
+setup. Detailed phase timings will identify any remaining cost. No post-repair
+remote acceptance or new recovery result exists, and no jobs were submitted or
+canceled by the agent. Science still requires its separate successful setup/
+exact-ID review. Preserve unrelated user work and the failed attempt.
+
 ## 2026-11-05: Group A compatibility/membership implementation
 
 Implemented the Group A foundation of the

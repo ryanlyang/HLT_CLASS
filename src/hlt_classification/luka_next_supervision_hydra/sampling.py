@@ -23,6 +23,28 @@ def signatures(local, member_mask=None):
     return discrete,numeric
 
 
+class ParentPositions:
+    """Sample the sorted eligible-parent positions without a population-size mask.
+
+    This is the same ordered population and RNG draw as choice(flatnonzero(mask)).
+    Only the few excluded positions are materialized, including exhausted parents.
+    """
+    def __init__(self, parents, forbidden):
+        values=np.array(sorted(forbidden),np.int64)
+        positions=np.searchsorted(parents,values)
+        live=positions<len(parents)
+        positions=positions[live]; values=values[live]
+        self.blocked=positions[parents[positions]==values]
+        self.shifted=self.blocked-np.arange(len(self.blocked))
+        self.size=len(parents)-len(self.blocked)
+
+    def __len__(self): return self.size
+
+    def draw(self, rng, number):
+        virtual=rng.integers(self.size,size=number)
+        return virtual+np.searchsorted(self.shifted,virtual,side='right')
+
+
 class MembershipSampler:
     def __init__(self, particles, pt, count, *, replicate=0, event_groups=None):
         self.p=particles; self.replicate=replicate; self.stream='training'
@@ -32,16 +54,33 @@ class MembershipSampler:
         if any(len(x)<32 for x in self.classes): raise ValueError('Need at least32 TRAIN parents per class')
         self.events=None if event_groups is None else np.asarray(event_groups)
         if self.events is not None and self.events.shape!=self.labels.shape: raise ValueError('Malformed event groups')
-        self.d,self.n=signatures(particles.local)
+        # These are bounded categorical/bin indices, not model measurements.
+        # Avoid ever materializing full TRAIN int64 descriptor intermediates.
+        self.d=np.empty((len(particles.local),3),np.int8); self.n=np.empty((len(particles.local),2),np.int8)
+        for start in range(0,len(self.d),65536):
+            stop=min(start+65536,len(self.d))
+            self.d[start:stop],self.n[start:stop]=signatures(particles.local[start:stop])
         self.sizes=np.diff(particles.offsets)
         self.maximum_radius=int(np.ptp(self.bins,axis=0).max())
         self.feature_radius=int(np.ptp(self.n,axis=0).max())
         self.capacity=dict(class_counts=[len(x) for x in self.classes],event_groups_available=self.events is not None,
             parent_cap=16,group_parent_cap=8,source=particles.source,rows=len(self.labels))
-        keys=np.column_stack((self.d,self.n)); unique,inverse=np.unique(keys,axis=0,return_inverse=True)
-        order=np.argsort(inverse,kind='stable'); self.cells={}
-        for ix in np.split(order,np.flatnonzero(np.diff(inverse[order]))+1): self.cells[int(inverse[ix[0]])]=ix
-        self.cell_keys=unique; self.regions=OrderedDict(); self.region_bytes=0
+        # Fixed mixed-radix codes have the same lexicographic order as v1's
+        # five-column int64 unique, without its full-size sorting temporaries.
+        shape=(6,3,16,len(recipe()['pt_edges'])+1,len(recipe()['radius_edges'])+1)
+        codes=np.empty(len(self.d),np.uint16); counts=np.zeros(math.prod(shape),np.int64)
+        for start in range(0,len(codes),65536):
+            stop=min(start+65536,len(codes)); keys=np.column_stack((self.d[start:stop],self.n[start:stop]))
+            chunk=np.ravel_multi_index(keys.T,shape)
+            codes[start:stop]=chunk; counts+=np.bincount(chunk,minlength=len(counts))
+        order=np.argsort(codes,kind='stable'); cuts=np.r_[0,counts.cumsum()]; present=np.flatnonzero(counts)
+        self.cell_keys=np.array(np.unravel_index(present,shape)).T
+        self.cells={}; self.exact_regions={}
+        for cell,code in enumerate(present):
+            rows=order[cuts[code]:cuts[code+1]]; self.cells[cell]=rows
+            parents=self.p.parents[rows]; starts=np.r_[0,np.flatnonzero(np.diff(parents))+1]
+            self.exact_regions[tuple(self.cell_keys[cell])]=(rows,parents[starts],starts,np.diff(np.r_[starts,len(rows)]))
+        self.regions=OrderedDict(); self.region_bytes=0
         self.parent_rows=np.arange(len(self.labels)); self.rank=np.argsort(np.argsort(
             np.array([bytes(x).hex() for x in particles.identities]),kind='stable'),kind='stable')
         self.parent_pools={}; self.exclusion_cache={}; self.kinematic_cells={}
@@ -91,6 +130,10 @@ class MembershipSampler:
         return self.exclusion_cache[anchor]
 
     def region(self,prototype,discrete_distance,radius):
+        if discrete_distance==0 and radius==0:
+            # Built once before fork, shared read-only by every worker. Exact
+            # cells partition the particles rather than duplicating regions.
+            return self.exact_regions[(*self.d[prototype],*self.n[prototype])]
         key=(*self.d[prototype],*self.n[prototype],discrete_distance,radius)
         if key not in self.regions:
             delta=(self.cell_keys[:,:3]!=self.d[prototype]).sum(-1)
@@ -157,7 +200,7 @@ class MembershipSampler:
         return self.kinematic_regions[key]
 
     def feature_particle(self,prototype,rng,blocked,used,cap,excluded):
-        maximum=int(max(self.n.max(0)-self.n.min(0)))
+        maximum=self.feature_radius
         for discrete in range(4):
             for radius in range(maximum+1):
                 rows,parents,starts,counts=self.region(prototype,discrete,radius)
@@ -215,9 +258,9 @@ class MembershipSampler:
                         for radius in range(maximum+1):
                             rows,parents,starts,counts=self.region(proto,discrete,radius)
                             unavailable=set(excluded)
-                            valid=~np.isin(parents,list(unavailable|exhausted)); positions=np.flatnonzero(valid)
+                            positions=ParentPositions(parents,unavailable|exhausted)
                             while need and len(positions):
-                                js=rng.choice(positions,max(16,need*2))
+                                js=positions.draw(rng,max(16,need*2))
                                 slots=starts[js]+(rng.random(len(js))*counts[js]).astype(np.int64)
                                 if bulk(rows[slots[:need]],dict(discrete_expansion=discrete,numeric_radius=radius)):
                                     need=0; break
@@ -231,7 +274,7 @@ class MembershipSampler:
                                         idx=available[int(rng.integers(len(available)))]
                                     accept(idx,dict(discrete_expansion=discrete,numeric_radius=radius)); need-=1
                                     if not need: break
-                                positions=positions[~np.isin(parents[positions],list(unavailable|exhausted))]
+                                positions=ParentPositions(parents,unavailable|exhausted)
                             if not need: break
                         if not need: break
                     if need: raise ValueError('Feature-matched capacity exhausted; no fallback law')

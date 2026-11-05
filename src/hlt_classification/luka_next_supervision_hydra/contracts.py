@@ -22,7 +22,7 @@ ARMS['G5']['independent'] = True
 ARMS['J5']['dot'] = True
 for name in ('C0','C1'): ARMS[name]['coefficient'] = 0.
 TASKS = tuple(n for n in ORDER if n in ARMS)
-AUTHORIZATION = 'AUTHORIZE_NEXT_SUPERVISION_GROUP_A_V1'
+AUTHORIZATION = 'AUTHORIZE_NEXT_SUPERVISION_GROUP_A_V2'
 FEATURES = ('log_pt_fraction','log_energy_fraction','deta','sin_dphi','cos_dphi','charge',
             'pid0','pid1','pid2','pid3','pid4','pid_unknown',
             'd0','dz','d0err','dzerr','d0sig','dzsig','valid_d0','valid_dz','valid_d0err','valid_dzerr')
@@ -30,12 +30,14 @@ GROUP_PROPOSALS=4096
 
 
 def artifact(kind, *, parents=None, **fields):
-    return with_content_hash(dict(contract=f'LUKA_NEXT_SUPERVISION_{kind}/v1', schema_version=1,
+    version=2 if kind in ('SPEC','RESOURCE_CHECK','ACCEPTANCE') else 1
+    return with_content_hash(dict(contract=f'LUKA_NEXT_SUPERVISION_{kind}/v{version}', schema_version=version,
         parents=dict(parents or {}), **FLAGS, **fields))
 
 
 def validate(value, kind, parents=None):
-    validate_content_hash(value, expected_contract=f'LUKA_NEXT_SUPERVISION_{kind}/v1', expected_schema_version=1)
+    version=2 if kind in ('SPEC','RESOURCE_CHECK','ACCEPTANCE') else 1
+    validate_content_hash(value, expected_contract=f'LUKA_NEXT_SUPERVISION_{kind}/v{version}', expected_schema_version=version)
     if any(value.get(k) != v for k,v in FLAGS.items()) or (parents is not None and value['parents'] != parents):
         raise ValueError('Supervision scope or parent lineage differs')
 
