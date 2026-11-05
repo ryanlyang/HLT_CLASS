@@ -5,6 +5,130 @@ and training-time use of paired offline information.
 
 ## Current status
 
+The [next supervision ideas draft](docs/plans/LUKA_NEXT_SUPERVISION_CAMPAIGN_IDEAS.md)
+collects seven proposed additions to native CE+U100-w5: conditional distributions
+of richer jet embeddings, conditional denoising of pure-OFFLINE particle sets,
+a learned HLT/OFFLINE compatibility judge, structured OFFLINE question prediction,
+particle-soup membership, intact pair/triplet membership and learned offline
+pattern-frequency prediction. Particle soup is the user's current priority, with
+broad, matched and mined distractor comparisons. The draft describes preferred
+designs, controls and an expandable grid at fixed deployed architecture.
+The [three-group implementation proposal](docs/plans/LUKA_SEVEN_CANDIDATE_IMPLEMENTATION_PLAN.md)
+selects40 comparison rows with an interleaved submission order: the first seven
+science submissions cover all seven preferred setups. Every science fit is
+independent, with no fit-to-fit dependencies or family lanes; partial results
+must be reportable as fits finish. Group A now has an additive
+[implementation and Hydra runbook](docs/LUKA_NEXT_SUPERVISION_GROUP_A_RUNBOOK.md):
+22 particle-soup, intact-group and learned-judge configurations with authenticated
+reference reuse. It keeps native CE+U100-w5 and adds removable heads; independent
+science release follows real measured setup. Groups B/C remain unimplemented.
+
+The [HLT-aligned particle-teacher campaign](docs/LUKA_PARTICLE_TEACHER_HYDRA_RUNBOOK.md)
+adds twelve native HLT fits on Hydra RTX A6000. Every fit keeps CE + U100-w5.
+Ten add removable heads predicting full block6/block8 particle embeddings from
+the completed privileged `teacher_m16`; two are same-seed native U100-w5 controls.
+Student attention and deployed architecture remain native. The grid tests target
+depth, weight, centered supervision and a second seed. Targets stay in allocation
+RAM; a durable CPU release queues independent fits after real measured setup.
+See the [scientific plan](docs/plans/LUKA_PARTICLE_TEACHER_HYDRA_PLAN.md),
+[v1 contract](docs/contracts/LUKA_PARTICLE_TEACHER_HYDRA.md) and
+[local validation](docs/LUKA_PARTICLE_TEACHER_HYDRA_VALIDATION.md).
+
+The [shared-message Hydra campaign](docs/LUKA_SHARED_MESSAGE_HYDRA_RUNBOOK.md)
+adds twelve fresh RTX A6000 fits. Every HLT model retains U100 embedding weight5.
+HLT and privileged message producers share the downstream classifier; agreement
+encourages messages the HLT branch can reproduce. Matched attention-predictor
+controls, two seeds, weighting and fade ablations separate the effects. A durable
+Slurm release job submits independent fits after warmed production miniatures.
+See the [plan](docs/plans/LUKA_SHARED_MESSAGE_HYDRA_PLAN.md) for scientific scope;
+the existing campaigns and their outputs remain separate.
+
+The [CE-only cross-message controls](docs/LUKA_CROSS_MESSAGE_CE_HYDRA_RUNBOOK.md)
+add two independent Hydra A6000 fits alongside the running cross-message study.
+They retain the width16/32 HLT message architectures and matched seed0 but remove
+the embedding head and use CE alone, with no privileged optimization targets.
+The existing CE+U100-w5 controls remain separate. Parent setup evidence is reused;
+each new allocation warms its CE-only kernels, measures a fresh miniature, then
+starts full training from the matched initial weights. Execution v2 corrects
+the cold-start runtime projections that stopped jobs145718/145719.
+
+The [Oscar FullStat Multi3 contrastive campaign](docs/LUKA_FULLSTAT_MULTI3_CONTRASTIVE_RUNBOOK.md)
+adds pure-OFFLINE jet identification to the completed U100/CONCAT/FUSION
+embedding-prediction recipe: one fresh HLT student,3M/500k,20 epochs, mix0.3
+with a three-epoch ramp. It reuses all frozen teachers and has no separate
+preflight job. Exact sampler optimizations, full epoch recovery, detached
+submission and integrated real-allocation checks are included. See the
+[plan](docs/plans/LUKA_FULLSTAT_MULTI3_CONTRASTIVE_PLAN.md) and
+[local evidence](docs/LUKA_FULLSTAT_MULTI3_CONTRASTIVE_VALIDATION.md).
+
+The [cross-attention message Hydra campaign](docs/LUKA_CROSS_MESSAGE_HYDRA_RUNBOOK.md)
+adds two jointly trained privileged teachers and twelve fresh CE+U100-w5 students.
+Teachers read frozen U100 particle features and inject compact32/16-wide messages
+after HLT block4. Students predict those messages from HLT, with injection,
+auxiliary-only and matched architecture controls at weights0.1/0.3/1 plus a
+second-seed pair. Existing Brown data are reused; a small authenticated U100
+encoder export is required. There is one shared measured setup, no separate
+preflight or scheduling lanes. See the [plan](docs/plans/LUKA_CROSS_MESSAGE_HYDRA_PLAN.md)
+and [local validation](docs/LUKA_CROSS_MESSAGE_HYDRA_VALIDATION.md).
+
+The [joint privileged-adapter Hydra follow-up](docs/LUKA_JOINT_ADAPTER_HYDRA_RUNBOOK.md)
+adds two teachers trained end to end from scratch and twelve fresh HLT students,
+all with U100 embedding weight5. It compares intermediate injected corrections,
+intermediate auxiliary supervision and final-particle auxiliary supervision at
+weights0.3/1. Existing Brown inputs and completed architecture controls are
+reused. Shared setup measures the new training paths; there are no student lanes
+or new reference fits. See the [plan](docs/plans/LUKA_JOINT_ADAPTER_HYDRA_PLAN.md)
+and [validation evidence](docs/LUKA_JOINT_ADAPTER_HYDRA_VALIDATION.md).
+
+The [frozen privileged-adapter Hydra campaign](docs/LUKA_FROZEN_ADAPTER_HYDRA_RUNBOOK.md)
+adds two oracle adapters on a frozen M0HLT checkpoint and twelve fresh HLT
+students: attention-bias or edge-message correction, auxiliary-only/CE-only/
+combined use, with and without U100-w5. It has no scheduling lanes; only genuine
+selected-teacher dependencies. Shared setup measures the new kernels before
+science submission. See the [plan](docs/plans/LUKA_FROZEN_ADAPTER_HYDRA_PLAN.md)
+and [validation evidence](docs/LUKA_FROZEN_ADAPTER_HYDRA_VALIDATION.md).
+
+The [U100 particle/pair correction plan](docs/plans/LUKA_U100_PARTICLE_PAIR_CORRECTION_PLAN.md)
+defines **four new SPORC/debug fits, each on top of CE + 5 * U100
+jet-embedding prediction**: direct pair correction, particle correction,
+particle correction with derived-pair supervision, and independent particle/pair
+predictors. The question is whether each addition improves AUC and recovery
+beyond U100-w5. **Reuse the completed U100-w5 reference (u100_w5_s0,
+job 21993056); do not retrain or queue another reference fit.** Authenticate its
+saved results and reuse compatible existing U100 targets. The additive
+implementation is under `src/hlt_classification/luka_u100_pair_correction/`.
+The graph has one shared setup, four student fits and one report, automatically
+queued in two debug lanes after measured setup acceptance. See the
+[queue/runbook](docs/LUKA_U100_PAIR_CORRECTION_RUNBOOK.md) and
+[v1 contract](docs/contracts/LUKA_U100_PAIR_CORRECTION.md). New-model SPORC
+resource acceptance is performed by shared setup before any scientific fit.
+
+For the proposed Brown CS Hydra move, the [minimal transfer runbook](docs/LUKA_U100_PAIR_HYDRA_TRANSFER_RUNBOOK.md)
+provides a campaign-only exporter and plain-Python checksum verifier. The user
+has verified that compact bundle on Brown. The additive
+[Hydra execution adapter](docs/LUKA_U100_PAIR_HYDRA_RUNBOOK.md) provides portable
+inputs, a separate pinned environment, control portability checks and the same
+four fits in two L40 lanes on `gpus`. The environment and precision diagnostic
+131484 have completed; the [v2 campaign runbook](docs/LUKA_U100_PAIR_HYDRA_V2_RUNBOOK.md)
+reuses that numerical evidence and the saved Hydra control. Genuine shared
+setup miniatures/resource acceptance remain required before science release.
+Existing SPORC workers and jobs are unchanged.
+
+The [contrastive Hydra runbook](docs/LUKA_U100_CONTRASTIVE_HYDRA_RUNBOOK.md)
+adds a separate execution of the original twenty-row U100-w5/OFFLINE jet
+identification campaign. Completed SPORC fits are reused; all remaining
+students queue together after shared setup with no student dependencies or
+concurrency cap. Only the report waits. It reuses Brown's existing inputs and
+environment and transfers only OFFLINE TRAIN keys plus completed results.
+Original thirty-epoch scientific code is unchanged. Local validation and
+required real L40 resource acceptance are documented in the runbook.
+
+For a different Oscar split or epoch schedule, the
+[U100 contrastive porting handoff](docs/LUKA_U100_CONTRASTIVE_OSCAR_HANDOFF.md)
+explains the successful mixed/kinematic sampling candidates, exact losses,
+code dependencies, and how to adapt targets, controls and scheduling together.
+It documents a future port; it does not add an executable Oscar campaign.
+
 The isolated [CMS-calibrated JetClass2 response comparison](docs/plans/CMS_CALIBRATED_JETCLASS2_HLT_RESPONSE_THREE_FAMILY_IMPLEMENTATION_PLAN.md)
 has staged CPU queue tooling and local end-to-end tests. It compares tables,
 neighbourhood splines and shallow trees on CMS training-only roles, then audits

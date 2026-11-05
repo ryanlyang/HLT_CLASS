@@ -1,5 +1,1396 @@
 # Current Handoff
 
+## 2026-11-05: Group A compatibility/membership implementation
+
+Implemented the Group A foundation of the
+[seven-candidate plan](plans/LUKA_SEVEN_CANDIDATE_IMPLEMENTATION_PLAN.md):10 P
+particle-soup,6 G intact-group and6 J jet-compatibility configurations. The
+shared registry retains the complete40-row order; full40 release is explicitly
+unavailable while B/C remain unimplemented. An explicit Group A-only review
+filters that order without science dependencies, lanes, holds, caps or nice
+adjustments. Native CE+U100-w5/HLT-only deployment and full30 budgets remain.
+
+New runtime is additive under `luka_next_supervision_hydra`, with thin
+CLI/queue/Slurm entrypoints, original native initialization/update parity,
+TRAIN-only physical export, feature/group sampling, learned judge/dot paths,
+frozen HLT-source controls, native checkpoint readback, saved results/progress,
+source/reference proofs and durable exact-ID journals. C0/C1 reuse completed
+same-seed particle-teacher controls; J5 automatically reuses a compatible
+completed SPORC result from the contrastive transfer and labels its location.
+No reference is silently rerun or historical artifact relabeled.
+
+Serial candidate-construction timing motivated vectorized draws/bounded caches
+and four CPU-only fork workers within each six-CPU job. They start before the
+student graph and share TRAIN arrays; mining CUDA stays in the parent and
+scores up to8 queries together. Every anchor/pool size is retained. Warmed
+production measurements include sampling/IPC and conservative child-memory
+accounting. Windows tests emulate transport; Linux fork and real throughput
+remain explicit production setup checks.
+
+Contracts: `LUKA_NEXT_SUPERVISION_*/v1`. Internal donor baseline:
+`ddcdd5fa22ce2455b12a62d61a926caa07969159`; exact files are recorded in
+[LEGACY_SOURCE_MAP.md](LEGACY_SOURCE_MAP.md). No donor runtime was edited.
+Latest focused local evidence:60 tests passed; related regressions:99 passed.
+See [validation](LUKA_NEXT_SUPERVISION_GROUP_A_VALIDATION.md) for environment,
+coverage and execution limits. No real-data Hydra/Tigris miniature or new
+remote submission occurred. Actual recovery is unmeasured.
+
+Next task: commit/push the reviewed additive files, export/copy the missing
+TRAIN physical measurements, register a fresh spec and run the reviewed
+A6000 setup from the [runbook](LUKA_NEXT_SUPERVISION_GROUP_A_RUNBOOK.md).
+Only authenticated setup with exact COMPLETED/0:0 accounting admits a separate
+independent science review. Existing campaigns/jobs/data and unrelated dirty
+work remain untouched.
+
+## 2026-11-05: explicit independent-fit queue policy and three-group overview
+
+Updated the [implementation plan](plans/LUKA_SEVEN_CANDIDATE_IMPLEMENTATION_PLAN.md)
+to v0.2 under the user's clarification: queue all scientific fits independently,
+using only interleaved submission order to encourage mixed candidate coverage.
+The three implementation groups now have an explicit overview table. Their
+engineering sequence does not serialize scientific training. The40-row selection
+and order are unchanged; first seven submissions cover all preferred seed0 arms.
+
+Scientific jobs have no --dependency flags, first-wave barriers, holds, family
+lanes, artificial concurrency caps or relative nice/priority changes. This
+supersedes v0.1's optional scheduling-priority tiers. Preparation/technical
+acceptance completes before science submission. Actual Slurm start order remains
+resource-dependent. Partial completed-results and running-epoch progress views
+are explicitly required, with on-demand final reporting and no report dependency
+needed to inspect interim results. Reference reuse remains authenticated.
+
+Changed only five planning/index/handoff documents, with no runtime donor,
+artifact contract, model, implementation or remote-job changes. Pre-edit focused
+scaffold checks:3 passed; known scratch-link failures excluded. Post-edit focused
+scaffold checks:3 passed. All635 relative links across the5 changed documents,
+fences/whitespace, three-group overview, unchanged40-row allocation/order,
+independent-fit policy and partial-result requirements passed direct checks;
+git diff --check passed. No model or remote validation applied. Next: implement
+the reviewed groups once remaining scientific/source details are frozen,
+preserving this independent-fit policy.
+
+## 2026-11-05: three implementation groups and interleaved40-row proposal
+
+Added the [implementation/queue proposal](plans/LUKA_SEVEN_CANDIDATE_IMPLEMENTATION_PLAN.md)
+at the user's request. Group A implements J/P/G with common native training,
+source and matching infrastructure; B implements Q/V target oracles/statistics;
+C implements D/S probabilistic/denoising paths. The working selection has38
+candidate/control configurations plus2 shared native references: P10,G6,J6,Q5,
+V4,D4,S3,C2. Reuse compatible completed C0/C1 and J5 rather than retraining them.
+Particle soup retains the most slots. Every family's preferred recipe has two
+seeds and its seed0 setting is in the first seven scientific submissions.
+
+The exact40-row order and three nonblocking priority tiers are documented.
+All science fits can be eligible together after true prerequisites, with no
+family lanes or experiment-completion chains. Slurm/backfill determines actual
+starts; simultaneous seven-family execution is a preference, not a guarantee.
+The former59-configuration proposal remains the wider ideas catalog, now v0.6;
+its unselected rows are explicitly deferred during planning. README/index link
+the selected40-row proposal. This is not live queue or implementation authority.
+
+Changed only five planning/index/handoff documents. No runtime donor, artifact
+contract, model or remote job changed. Pre-edit focused scaffold checks:3 passed;
+known whole-workspace scratch-link failures excluded. Post-edit focused scaffold
+checks:3 passed. All634 relative links across the5 changed documents, fences/
+whitespace, exact40-row selection, allocations, first-seven family coverage and
+priority tiers passed direct checks; git diff --check passed. No new model or
+remote validation applied. Next: review/freeze remaining scientific/source details,
+then implement the three groups and perform production acceptance before release.
+
+## 2026-11-05: intact groups and offline vocabulary added as ideas06/07
+
+Expanded the [campaign draft](plans/LUKA_NEXT_SUPERVISION_CAMPAIGN_IDEAS.md)
+to v0.5 with candidate06 intact pair/triplet membership (G) and candidate07
+offline pattern-frequency prediction (V). G scores intact groups from the
+paired source against intact groups from other parents, with permutation-safe
+local/relation descriptors, matched independent-member scoring, HLT-group
+controls and explicit low-multiplicity handling. V fits a frozen TRAIN-only
+K128 local-pattern dictionary, predicts count and scalar-pT frequency targets,
+and tests dictionary size, HLT-source targets, weighting and coarse regions.
+The optional neural tokenizer is described separately and is not an initial row.
+
+Eight G and eight V configurations extend the provisional shortlist to59
+auxiliary configurations plus up to2 native references before compatible reuse.
+All keep native CE+U100-w5 and remove auxiliary modules at deployment. Particle
+soup remains the user's priority. README/index reflect all seven candidates.
+The full grid/budget is still a discussion draft, not execution registration.
+
+Only the draft, README, plans index and this handoff changed. No runtime donor
+was copied, artifact contract versioned, remote job changed or implementation
+performed. Pre-edit focused scaffold checks:3 passed; known scratch-link failures
+excluded. Post-edit focused scaffold checks:3 passed. All629 relative links
+across the4 changed documents, fences/whitespace, numbered sections and the59-row
+seven-family grid passed direct checks; git diff --check passed. No new model or
+remote validation was applicable. Next: freeze scientific grid, target
+preparation/source semantics and budget before implementation.
+
+## 2026-11-05: particle-soup membership added as priority idea05
+
+Expanded the [campaign discussion draft](plans/LUKA_NEXT_SUPERVISION_CAMPAIGN_IDEAS.md)
+to v0.4 with particle-soup family P, the user's current highest-priority idea.
+The main setup uses the full native HLT jet embedding to independently score500
+local candidate particles, up to32 from the paired OFFLINE jet and the rest from
+other TRAIN parents. Source membership labels require no physical particle
+matches. All arms retain CE+U100-w5 and strip auxiliary modules for deployment.
+
+The preferred mixture combines broad, same-class, kinematic and particle-feature
+matched negatives. Isolated samplers, semi-hard/hard mining, weights, two seeds,
+an HLT-candidate control, mirrored stratified selection and a smaller pool form
+14 candidate P rows. The expandable shortlist now has43 auxiliary configurations
+plus up to2 native references before compatible reuse; final graph remains open.
+The draft specifies parent-local normalization, forbidden identity/global-axis
+cues, parent caps/exclusions, balanced loss and calibration limits, shortcut
+diagnostics, mining costs and raw source requirements. README and index agree.
+
+Only the draft, README, plans index and this handoff changed. No runtime donor,
+artifact contract, implementation or remote job changed. Pre-edit focused
+scaffold checks:3 passed; known whole-workspace scratch-link failures excluded.
+Post-edit focused scaffold checks:3 passed. All628 relative links across the4
+changed documents, fences/whitespace, section numbering and the43-row five-family
+grid checks passed; git diff --check passed. No model or remote validation was
+applicable. Next: finalize ideas/grid and source/sampling semantics before
+implementation.
+
+## 2026-11-05: structured offline questions added as idea04
+
+Expanded the [campaign draft](plans/LUKA_NEXT_SUPERVISION_CAMPAIGN_IDEAS.md)
+to v0.3 with the user-selected question-prediction family Q. The preferred arm
+asks64 questions per jet visit,16 each for composition/energy sharing, measured
+displacement/counts, joint properties and particle correlations. A removable
+query-conditioned decoder reads the native HLT jet embedding; every arm keeps
+CE+U100-w5. The draft specifies a large TRAIN-designed catalog, semantic query
+encoding, validity/units, answer-independent sampling to prevent question leakage,
+binary/fraction loss reductions, source/oracle requirements and bounded costs.
+Seven Q configurations bring the expandable shortlist to29 auxiliary rows plus
+up to2 native references before compatible reuse. Controls include HLT answers,
+marginal-only questions, more questions and a second seed. README/index agree.
+
+No runtime donor or artifact contract changed, and no new implementation,
+remote validation or submission occurred. A possible multi-view contrastive use
+of U/D teachers remains a discussion topic, not a registered fifth candidate.
+Pre-edit focused scaffold checks:3 passed; known whole-workspace scratch-link
+failures excluded. Post-edit focused scaffold checks:3 passed. All627 relative
+links across the4 changed documents, fences/whitespace, section numbering and
+four-idea grid checks passed; git diff --check passed. Next: discuss the ladder
+proposal, then freeze the combined campaign before coding.
+
+## 2026-11-05: learned compatibility judge added as idea03
+
+Expanded the [campaign discussion draft](plans/LUKA_NEXT_SUPERVISION_CAMPAIGN_IDEAS.md)
+to v0.2 with the user-selected learned HLT/OFFLINE compatibility judge (family J).
+It preserves native CE+U100-w5 and fixed deployed parameters, adds a joint
+training-only scorer, and compares against dot-product matching and the same
+judge using frozen HLT-reference candidates. Preferred mixed sampling retains
+the original1,024-negative law; a kinmix pair tests kinematically similar
+distractors with matched candidate order. Eight J configurations extend the
+shortlist to22 auxiliary configurations plus up to2 native references, with
+compatible completed references reused after authentication. Weights/seeds,
+shortcut diagnostics, gradient roles, resource implications and code maps are
+documented. The larger-model/compression route is explicitly outside this plan.
+
+Changed only the draft, README, plans index and this handoff. No runtime donor
+was copied, no artifact contract changed, and no implementation or queue action
+was performed. Pre-edit focused scaffold checks:3 passed; the previously known
+whole-workspace scratch-link failure was excluded. Post-edit focused checks:
+3 passed; all626 relative links across the4 changed documents, whitespace,
+fences, section numbering and third-idea grid checks passed. git diff --check
+passed. No model or remote validation applies to this documentation-only step.
+Next: further discussion or freezing the combined scientific grid before
+implementation.
+
+## 2026-11-05: next supervision ideas, documentation only
+
+Added the [growing campaign draft](plans/LUKA_NEXT_SUPERVISION_CAMPAIGN_IDEAS.md)
+at the user's request, with links from README and the plans index. Idea D adds
+a four-component conditional U100 embedding density head; idea S adds a
+global-HLT-conditioned denoising decoder for paired pure-OFFLINE particle sets.
+Both preserve the actual CE+5*SmoothL1 U100 baseline and native HLT deployment.
+The draft distinguishes jet pairing from unavailable physical particle matches,
+U100 from OFFLINE, density learning from point regression, and planning from
+measured evidence. It includes preferred defaults,14 candidate treatments,
+compatible control reuse, failure modes, data/compute requirements and code maps.
+The final idea list/run count remains open for further user discussion.
+
+No scientific runtime, source donor, artifact contract or remote job changed.
+No new model result or Hydra readiness is claimed. Pure-OFFLINE raw target
+availability requires an input audit during later implementation. Recent results
+in the draft are explicitly user-supplied observations, not newly authenticated.
+
+Pre-edit scaffold check with local src on PYTHONPATH:3 passed,1 failed. The
+existing whole-workspace Markdown test found6 broken links in scratch copies;
+the initial default-Python invocation also lacked the package import path.
+Neither issue changes the scientific proposal or authorizes modifying scratch
+work. Post-edit focused scaffold checks:3 passed (the known whole-workspace
+link scan excluded). All617 relative links across the4 changed documents,
+Markdown fences, new-plan whitespace and the recovery-threshold arithmetic
+passed direct checks; git diff --check passed. No model or remote validation
+was applicable to this documentation-only step. Next: discuss additional ideas,
+then freeze the combined campaign before implementation.
+
+## 2026-11-05: native HLT particle-teacher campaign
+
+Implemented twelve fresh Hydra A6000 fits in the additive
+`luka_particle_teacher_hydra` package, thin CLI/queue/sbatch wrappers, focused
+tests and separate plan/contract/runbook/validation documents. All keep native
+HLT attention and CE+U100-w5. Ten add per-particle prediction heads reading final
+student tokens; two match native seed0/seed1 controls. Full teacher_m16 states
+after blocks6/8 are extracted through its active privileged oracle path, not its
+native forward or compact injected message. Teacher training is reused.
+
+The grid tests block8/block6/both targets, weights .1/.3/1/3, a centered/full
+mixture and a second seed for the main weight1 arm. TRAIN-only channel statistics
+normalize frozen targets; losses average channels, real particles within each
+jet, depths, then jets. Weight ramps over three epochs. Heads are removed at
+deployment. This plan applies only to the new campaign; older attention-message
+controls are not native-architecture controls and are not substituted here.
+
+Dense targets are rebuilt once per supervised allocation and kept in RAM to
+avoid large Brown home caches. Exact hashes/statistics must match shared setup.
+Requests are one RTX A6000,6CPUs,32000MiB, with measured fit limits <=48h. GPU
+setup warms then measures all twelve paths; CPU release uses the verified
+one-requested/one-or-two-allocated CPU guard and queues independent fits plus
+an afterany report. No login watcher or science scheduling lanes.
+
+New contract family: `LUKA_PARTICLE_TEACHER_HYDRA_*/v1`. Internal baseline/donors:
+cc55765a5e6a80ed04b660d99dc182a4aaf4b017; selected teacher and qualification are
+authenticated in the original199928da991f8a4194dcf42df009130cfcf84118 worktree.
+The prior uncommitted shared-message guard fix remains separate; this campaign
+contains its own corrected guard. All unrelated changes were preserved.
+
+New focused suite:57 passed/48.10s, including installed-Weaver native parity,
+production-width CUDA full/partial paths, all objectives, synthetic workers,
+resource checks, artifact failures and durable submission/recovery. Related
+shared-message/cross-message/particle-prediction suites:124 passed/136.32s;
+181 total passes. Bash/CLI, required-file, AST/link/whitespace checks pass. See
+[validation evidence](LUKA_PARTICLE_TEACHER_HYDRA_VALIDATION.md) for environment,
+baseline checks and limits. No new remote validation or submission occurred.
+Next: exact additive commit/push, then the
+[Hydra queue runbook](LUKA_PARTICLE_TEACHER_HYDRA_RUNBOOK.md); real setup gates
+automatic scientific release. No new teacher fit or SPORC transfer is needed.
+
+## 2026-11-05: shared-message CPU allocation rounding and release recovery
+
+User-supplied Hydra accounting reports setup146336 completed in00:05:41, while
+release146337 failed before submitting fits at `cpu_allocation`. It requested
+one CPU and received two: `ReqTRES cpu=1`, `AllocTRES cpu=2`, compute/default/normal,
+4000MiB, one node on echidna. The old sourcecc55765a required exactly one allocated
+CPU. This was an execution guard failure, not a scientific result or GPU failure.
+
+Updated the shared-message CPU guard to authenticate requested versus allocated
+resources separately, allowing only one or two allocated CPUs for the registered
+one-CPU task. Request, memory, task/node counts, GPU exclusion, cluster/account/QOS
+and exact-job ownership checks remain. Controller/task-environment evidence is
+printed and errors name mismatched fields. Scientific recipe, artifact schemas,
+submission requests and GPU workers are unchanged. No donor runtime was copied;
+the modified implementation comes from cc55765a5e6a80ed04b660d99dc182a4aaf4b017.
+
+Pre-edit focused baseline:38 passed/37.94s. Post-fix focused suite:56 passed/38.25s,
+including rounded/exact CPU allocations, wrong request/allocation/job/cluster,
+task-environment conflicts and the existing production/submission tests. No remote
+run of the new guard or new scientific submission was performed here.
+
+The runbook now provides exact login-node `finish` recovery for the existing root
+`shared_message_cc55765a_a6000_r1`. It reuses authenticated setup and original
+authorization without editing pinned source/spec/journals. Its old automatic CPU
+report may hit the same guard; read-only login-node `results` remains available.
+The code fix applies to a future fresh campaign after commit/push. Do not release
+both old and fresh copies. Remote science release remains unconfirmed until the
+user runs recovery and receives the exact submission ledger.
+
+## 2026-11-04: shared-message campaign queue-ready on Hydra A6000
+
+Implemented the user-authorized twelve-fit campaign in the additive
+`src/hlt_classification/luka_shared_message_hydra/` package, with thin CLI,
+queue and Slurm wrappers, focused tests, and separate plan/contract/runbook/
+validation documents. Every HLT fit retains CE+U100 embedding weight5. Native
+blocks1–4 feed a contextual HLT attention predictor (including native pair bias)
+and a TRAIN-only privileged U100 cross-read. Both normalized16-dimensional
+messages use the same expansion, blocks5–8 and classifier. Only the HLT route
+selects checkpoints and survives deployment. No new logit KD.
+
+Nine joint fits vary agreement, privileged CE, seed, detached-target agreement
+and fade; one stronger-predictor frozen-m16 comparison and two same-seed new
+architecture controls complete the12. Main arm: alpha.25/beta.1, agreement ramps
+over epochs3–6. Controls still have U100 embedding supervision. The existing
+U100 encoder/targets, selected original m16 teacher and A6000 qualification are
+authenticated and reused without a new SPORC transfer or reference fit.
+
+Execution requests one RTX A6000,6 CPUs,32000MiB, measured walltimes <=48h,
+without a node pin or science lanes. GPU setup performs disposable warmup then
+fresh full/partial production miniatures at active-agreement position7. Largest
+128 shapes stay together and partial batches contain at least two jets to avoid
+native BatchNorm singleton support. Resource checks include preparation peaks;
+poor finite model metrics never gate admission. A scheduler-owned CPU release
+job in `compute` uses `afterok:setup`, authenticates acceptance, then submits12
+independent fits plus an `afterany` CPU report. No login-host watcher is needed.
+Manual `finish` is idempotent only for a complete stage and rejects ambiguous
+partial claims. No existing jobs, artifacts or donor runtime were changed.
+
+Final local validation: **126 passed/127.58s**, including38 new tests and88
+existing cross-message/A6000/CE tests. Production-width installed-Weaver CUDA
+full/partial forward/backward/AdamW/export replay ran on the local RTX2000 Ada;
+full30-epoch synthetic fits, exact-worker publication, gradient directions,
+padding/permutation, lineage/tamper rejection and durable submission were tested.
+Bash syntax, CLI help, AST/required-file/whitespace checks passed. New contracts
+are `LUKA_SHARED_MESSAGE_HYDRA_*/v1`; donor files/commits are recorded in
+[LEGACY_SOURCE_MAP](LEGACY_SOURCE_MAP.md), baseline546077aa, original execution
+parent199928da. Prior scientific contracts remain unchanged.
+
+Next action: commit/push the additive files, then use the
+[runbook](LUKA_SHARED_MESSAGE_HYDRA_RUNBOOK.md). No remote jobs were submitted,
+cancelled or modified; no new recovery result is claimed. Real Hydra installed
+environment/production miniature acceptance remains mandatory inside setup
+before automatic science release. The user's explicit Hydra allocation replaces
+the generic Tigris execution destination, not the real-miniature requirement.
+
+## 2026-11-04: CE-only Hydra cold-start timing correction
+
+The user supplied logs from source5a3509eb, root
+`cross_message_ce_5a3509eb_b29184c0_r1`. Jobs145718/145719 authenticated HLT,
+completed their one-epoch production miniatures and deployment publication,
+then failed the runtime check:924/896 projected minutes versus421/425 allocated.
+No full CE-only fit started. The reported violation was time, not model quality
+or memory. The first three cold-start batches were being extrapolated across
+all30 epochs; the reused parent control requests came from a warmed process.
+
+Added a disposable CE-only warmup before a second fresh measured miniature,
+using identical worst-multiplicity full/partial populations. Both reports are
+authenticated. The2x runtime projection now uses the second fit; all elapsed
+loading/warmup/measurement overhead counts once, plus900s. Memory peaks span
+both fits, with85% thresholds unchanged. Parent-derived requests and both30-epoch
+scientific controls are unchanged; a slow warmed measurement still fails.
+All three phases instantiate matched fresh weights/optimizers, so neither
+technical phase contributes training updates to the scientific fit.
+
+Changed addon contracts/campaign/worker, focused tests, plan/contract/runbook,
+README and source-map evidence. SPEC and RESOURCE_CHECK advance to v2; scientific
+contracts/recipe/model/training and the original199928da runtime are unchanged.
+No new donor files were copied; adapted source is5a3509eb90ff4c561afaf5d0ed73fdba2f05eb58.
+
+Pre-edit focused baseline:24 passed/30.39s. Final focused suite:28 passed/36.85s,
+including real local installed-Weaver CUDA full/partial warmup+measurement,
+three-phase fresh initialization, authenticated warmup tamper rejection,
+synthetic924/896-minute regressions, unchanged time/memory rejection, nonfinite
+timing rejection, version separation and the existing scientific controls.
+These are local tests, not Hydra acceptance of the new timing path.
+
+Next: commit/push the additive fix and use the updated
+[runbook](LUKA_CROSS_MESSAGE_CE_HYDRA_RUNBOOK.md) with the new commit for a fresh
+root. Preserve the two failed v1 runs. Existing parent jobs require no changes.
+No commit, push, deletion or remote scheduler action was performed here.
+
+## 2026-11-04: two CE-only cross-message controls for Hydra
+
+Implemented the user's additional width32/width16 seed0 architecture controls
+under `luka_cross_message_ce_hydra`, independently of the running A6000 study.
+Both retain the exact native/message/expansion initialization and thirty-epoch
+recipe of the corresponding CE+U100-w5 architecture control, but remove the
+embedding head before optimizer construction and optimize ground-truth CE only.
+Optimization loads D000 TRAIN/validation only; no privileged targets or pretrained
+weights are accepted. The running parent source/specs/jobs remain unchanged.
+
+The user supplied completed parent setup144840 and running science jobs
+145409--145423. The addon authenticates that parent's v3 A6000 setup in its
+original source process, reuses the pinned environment/bundle and measured
+matching-control requests, and queues exactly two independent `lukac0_*` jobs.
+Each runs a fresh production miniature inside its allocation, checks memory and
+runtime with saved diagnostics, then reseeds for full training. There is no new
+setup/target/reference job, dependency lane or background setup watcher. The
+two-GiB output allowance is separate from the parent's reserved output space.
+
+Added separate version1 contracts, thin CLI/queue/Slurm entrypoints, source and
+parent authentication, exact two-job journals, read-only results/progress, tests,
+plan and [commit/queue runbook](LUKA_CROSS_MESSAGE_CE_HYDRA_RUNBOOK.md).
+Internal donor is `199928da991f8a4194dcf42df009130cfcf84118`; exact reused/adapted
+files are recorded in LEGACY_SOURCE_MAP. No donor runtime was changed and no
+external or Fresh_check source was migrated.
+
+Validation: pre-edit donor baseline **60 passed in77.08s**. The combined run
+retained all60 donor/A6000 regressions; two new-test failures exposed an omitted
+fixture field and a miniature whose unique-row selection could be exactly256
+jets. The addon now explicitly retains worst shapes/all classes plus a partial
+batch. Final addon suite: **24 passed in30.88s**. Coverage includes actual local
+installed-Weaver CPU/CUDA CE gradients and deployment reload, exact initialization,
+full30 synthetic publication/selection, complete worker execution, full/partial
+miniature batches, target rejection, source/parent drift, dry/live/idempotent and
+partial-submission handling, and read-only authenticated results/recovery.
+Python AST, Bash scripts/runbook blocks, new-file whitespace and doc links passed.
+
+No commit, push or remote submission was performed. Next: scoped commit/push and
+the runbook's Brown queue command. Real CE-only Hydra resource acceptance remains
+inside each new allocation; local CUDA tests are not evidence of new remote fits.
+
+## 2026-11-04: A6000 setup144751 runtime-envelope correction
+
+The user's log from `c2bdfcc08b6d478165f83ccf59641e4afd34e463` shows A6000
+allocation, full frozen feature extraction, control/encoder numerical checks,
+and the first teacher miniature succeeded. `resource_failure.json` then recorded
+1759 requested minutes, GPU peak6761658880 bytes and host peak14607953920 bytes.
+The24h fit ceiling caused the stop; memory did not exceed its safety thresholds.
+
+New A6000 SPEC/v3 raises only the fit ceiling to48h and preserves the measured
+per-task requests,2x margin,32,000MiB allocation and85% memory checks. Old v2
+retains24h; L40 v1 is unchanged. RESOURCE_FAILURE/v2 now binds the spec and
+records explicit violations/limits/estimate components; the raised error names
+walltime, GPU or host RAM accurately. Existing failed and pending jobs/artifacts
+were not changed. The original two-teacher/twelve-student science is unchanged.
+
+Focused baseline before edits:52 passed/70.16s; final affected/neighboring suites:
+125 passed/90.78s, including the exact144751 regression and each retained memory
+limit, with Python/Bash syntax and whitespace checks passing. Follow-up validation and
+queue steps are recorded in [validation](LUKA_CROSS_MESSAGE_HYDRA_VALIDATION.md)
+and the [A6000 runbook](LUKA_CROSS_MESSAGE_A6000_RUNBOOK.md). No new donor runtime
+was copied; changes adapt cross-message registration/resources and their tests
+from c2bdfcc0. Next: commit/push and queue setup-only in a fresh source-bound root,
+retaining the old L40 queue until all A6000 miniatures pass.
+
+## 2026-11-04: cross-message A6000 execution option
+
+The user's Hydra snapshot showed six of seven RTX A6000s unallocated on
+gpu2201 while all six L40s were allocated. Their completed L40 setup reported
+about13.3GiB host RSS and6.3GiB GPU peak. Added an optional `SPEC/v2` A6000
+profile requesting6CPUs/32000MiB, preserving all scientific v1 settings and
+the2x measured fit-time margin. Shared setup performs a fresh full native-control
+replay and CPU/GPU FP32/BF16 probes, original U100 encoder replay and all14
+production miniatures. It must pass on actual A6000 hardware before science.
+No existing acceptance or result is relabelled; results use the local A6000
+control replay and historical recovery anchors.
+
+`dispatch --setup-only` allows qualification before retiring the old pending
+L40 jobs; `check-setup` authenticates completion and `finish` releases the exact
+graph idempotently. The [migration runbook](LUKA_CROSS_MESSAGE_A6000_RUNBOOK.md)
+reuses existing Brown inputs and describes exact-ledger cancellation after the
+new setup passes. No remote files, jobs, commits or pushes were changed here.
+
+Local evidence: baseline44 passed/93.66s; updated focused50 passed/83.95s;
+final cross-message/A6000 plus Hydra/portability regression117 passed/108.30s.
+Actual local CUDA/installed-Weaver kernels exercised the diagnostic, but GPU
+identity is simulated in the A6000 boundary test. It is not remote A6000
+acceptance. Changed package execution/registration/worker/submission paths,
+thin CLI/launcher, focused tests and docs; model/training kernels unchanged.
+Execution baseline is `a7249f49b6f522f7df3b150d27f53613452b7fb0`, preserving
+the separately committed Oscar namespace. Donor details are in LEGACY_SOURCE_MAP.
+Next: scoped commit/push, queue A6000 setup-only, then use the migration runbook
+to replace still-pending L40 fits after successful real qualification.
+
+## 2026-11-04: Oscar FullStat Multi3 plus pure-OFFLINE matching
+
+Implemented `luka_fullstat_multi3_contrastive` as one fresh native HLT student
+on the existing 3M TRAIN / 500k validation split for 20 epochs. It retains the
+completed Multi3 U100/CONCAT/FUSION embedding heads at total weight 10 and adds
+a separate pure-OFFLINE instance-identification head: mix negatives, weight 0.3
+ramped over three epochs, temperature 0.1, one paired positive and 1024 unique
+negatives. Native CE remains weight 1. All auxiliary heads are removed for
+deployment. The completed Multi3 is the historical reference; no teacher or
+matched-control retraining is queued. Existing scientific runtime is unchanged.
+
+Optimizations preserve the donor's RNG, candidates, tie order and FP32 reduction
+kernels: batched index uploads, stable GPU ranking, one hard-index readback,
+three persistent spawned CPU workers, bounded one-batch lookahead, resident
+frozen keys and batched loss logging. A local 110k-key synthetic probe measured
+0.4410 versus 0.1395 seconds per sampling batch (3.16x), with exact candidate and
+evidence parity. This does not establish production runtime or an AUC gain.
+The one L40S job requests 48h/6CPUs/192000MiB, with actual full-update and memory
+checks inside the science allocation, not a separate preflight. Measurements
+survive rejection, and CPU worker peaks count toward host memory admission.
+
+Full model/optimizer/RNG state is published every completed epoch. Explicit
+same-source recovery copies a verified contiguous prefix to a fresh result root;
+after all 20 epochs it only republishes the selected fit. The detached launcher
+authenticates historical source/artifacts, records a dry review and submits one
+exact journaled job. The foreground tail can exit independently. Results use
+saved predictions for AUC/accuracy/R50/R30 and recovery; final test stays sealed.
+
+Validation: combined new/donor regression **95 passed in 189.80s** before the
+additional CPU process optimization; all **37 final focused cases passed**
+across the final run and a focused resource-guard rerun. The latter corrected
+an intentionally oversized test workload after increasing the allocation
+ceiling; actual installed-Weaver startup already passed. CPU/CUDA checks cover
+exact parallel/serial candidates and diagnostic streams, complete synthetic
+20-epoch workers, exact continuation, publication-only recovery, all four bank
+validators, source/scheduler guards and detached Bash orchestration. Full
+installed-Weaver architecture completed the integrated stress/64-update path.
+Python/Bash syntax, runbook Bash blocks, links and whitespace checks passed.
+
+Donor baseline is `a40ae47ba87ee23020b482c17d467e2a42282e8f`; the completed Oscar
+parent is authenticated at `ceb2146149d2b1508a36b2cf91b274e0b58a26e6` using its
+original `a1eb1a74` scientific source. New contracts are
+`LUKA_FULLSTAT_MULTI3_CONTRASTIVE_*/v1`; details are in the
+[source map](LEGACY_SOURCE_MAP.md), [plan](plans/LUKA_FULLSTAT_MULTI3_CONTRASTIVE_PLAN.md)
+and [validation](LUKA_FULLSTAT_MULTI3_CONTRASTIVE_VALIDATION.md).
+No remote validation, jobs, commit or push were performed. Next: scoped
+commit/push and the [Oscar queue runbook](LUKA_FULLSTAT_MULTI3_CONTRASTIVE_RUNBOOK.md).
+Real full-population Oscar timing and resource acceptance remain in the worker.
+
+Queue follow-up: the user subsequently committed the unrelated Hydra runtime
+as `73abecfd95281246cea8e50bba3887a2737bac82`. Inspection confirmed additions
+only under its own package/entrypoints; existing scientific runtime did not
+change. The new campaign's execution-ancestry guard now pins that commit so a
+normal follow-up commit can queue. Scientific donor baseline remains `a40ae47`.
+Source/registration regression: **11 passed in 6.31s**, including rejection of
+changed donor runtime. Queue instructions stage only the new campaign files;
+the extensive unrelated shared-document edits remain for separate review.
+
+## 2026-11-04: cross-attention U100 message campaign on Hydra
+
+Implemented additive `luka_cross_message_hydra`: two fresh jointly trained HLT
+teachers with frozen U100 particle features as cross-attention keys/values,
+32/16-wide messages injected after block4, teacher CE0.25/KD0.75 atT2, and twelve
+fresh CE+U100-w5 students. Students compare injection plus supervision,
+auxiliary-only supervision and HLT architecture controls; message weights are
+0.1/0.3/1, with a matched seed1 pair for the lead32-wide setting. Teacher targets
+are detached, scaled using TRAIN only, and never used as student forward inputs.
+Selected teacher message-disabled predictions provide a separate reliance
+diagnostic without reselection. No high-data improvement is claimed.
+
+Brown's existing bundle/validation delta/environment/precision evidence are
+reused. The new CPU-only SPORC export copies only the original selected U100
+checkpoint and saved validation predictions. Frozen tokens/logits are built into
+bounded allocation-local RAM, avoiding persistent token or pair banks. Shared
+setup measures all14 production paths and source-encoder replay before releasing
+fits. Controls have no teacher dependency; supervised students wait only for
+their own teacher. No lanes/cap, no separate preflight, no native reference fit.
+Exact journals, idempotent `finish`, authenticated results and epoch progress
+are included. Output budget stays8GiB regardless of larger available quota.
+
+Initial donor baseline95 tests passed; the broader regression229 tests passed,
+and final focused suite44 tests passed in82.90s,
+including actual installed-Weaver CPU/CUDA-BF16 training, full30 synthetic
+teacher/student/control workers, checkpoint stripping/reload, all14 miniature
+paths, frozen-feature extraction, results, transfer corruption and watcher/DAG
+recovery. CPU-only head initialization preserves native CPU/CUDA random states.
+Full local evidence and limitations are recorded in
+[validation](LUKA_CROSS_MESSAGE_HYDRA_VALIDATION.md); donor details are in
+[LEGACY_SOURCE_MAP](LEGACY_SOURCE_MAP.md). Contracts are
+`LUKA_CROSS_MESSAGE_HYDRA_*/v1`, based on donor commit
+`a40ae47ba87ee23020b482c17d467e2a42282e8f`. Existing runtime and unrelated edits
+are preserved. No remote validation, transfer, job submission, commit or push
+was performed. Next: scoped commit/push, small encoder transfer and
+[Hydra queue runbook](LUKA_CROSS_MESSAGE_HYDRA_RUNBOOK.md). Real L40 dataset
+measurements remain enforced in shared setup.
+
+## 2026-11-04: U100 contrastive Oscar porting handoff
+
+Added [the Oscar handoff](LUKA_U100_CONTRASTIVE_OSCAR_HANDOFF.md) and a README
+link for a future port of U100-w5 plus OFFLINE jet identification to a different
+split and epoch schedule. It distinguishes SPORC kinmix's provisional 45.6%
+recovery from mixed sampling's completed 44.4%, documents the exact sampler,
+loss, training-only heads and code dependencies, and maps relevant existing
+Oscar FullStat components. New TRAIN-only statistics, teacher membership,
+matched-control schedules and resource measurements must follow the destination
+experiment; historical references and fixed-30 workers are not interchangeable.
+
+Donor reference: `431341db5eced8eaa3e52b37ba047f8cd4beed50`; no runtime files
+were migrated and no contracts changed. Focused existing contrastive tests:
+**18 passed, 14 deselected in 13.58s**, including installed-Weaver native
+initialization/zero-kernel checks, losses, target normalization, exclusions and
+optimized sampler equivalence. No remote inference, export, queue operation or
+real Oscar/Tigris validation was performed. Next: implement the destination
+configuration and worker using this handoff, once its split and schedule are
+specified. This step supplies documentation, not a queue-ready new campaign.
+
+## 2026-11-03: joint privileged-adapter teachers and final-token supervision
+
+Implemented the approved additive `luka_joint_adapter_hydra` campaign: two
+from-scratch CE teachers with trainable HLT backbones and privileged U100 bias/
+edge adapters, plus twelve fresh CE+U100-w5 students. The grid compares
+intermediate injection, intermediate auxiliary and final-particle auxiliary
+prediction at correction weights0.3/1. Teacher intervention remains block6;
+final auxiliary supervision taps block7 output before class attention/pooling.
+All student inference is HLT-only; auxiliary-only and embedding heads are removed.
+
+Existing Brown bundle/delta/environment/precision evidence are reused, with no
+new transfer, target rebuild or reference training. Completed original controls
+are authenticated in their original4b9630fa checkout; unfinished controls remain
+pending. One shared setup measures all14 production paths before automatic
+science submission. Each student depends only on its own teacher, with no lanes
+or concurrency cap. `finish` safely completes submission after a stopped watcher
+without repeating setup; active/partial claims stop rather than duplicate jobs.
+Built-in `results` and `progress` commands report AUC/recovery and batch markers.
+
+Validation: original donor baseline **44 passed in45.24s**; broader joint/frozen/
+Hydra portability regression **158 passed in116.94s**; final focused suite
+**51 passed in54.04s**. Includes installed-Weaver CPU/CUDA BF16 synthetic
+miniatures/full30 workers, native identity and selected-state reload, final-layer
+gradient isolation, matched initialization, role/lineage guards, result assembly,
+exact-DAG failures/recovery and detached Bash handoff. The shell smoke stubs
+setsid and handles MSYS ancestor-probing in the fixture; it does not certify
+Linux SSH hangup survival. Python/CLI/Bash/runbook syntax, links and whitespace
+checks passed. Existing campaign runtime and all unrelated user edits preserved.
+
+New contracts: `LUKA_JOINT_ADAPTER_HYDRA_*/v1`. Donor provenance and test details:
+[validation record](LUKA_JOINT_ADAPTER_HYDRA_VALIDATION.md). No real L40/Tigris
+miniature, remote data operation, job submission, commit or push was performed.
+Next: scoped commit/push and [queue runbook](LUKA_JOINT_ADAPTER_HYDRA_RUNBOOK.md).
+Real dataset resource acceptance remains enforced inside shared setup; no
+scientific improvement is claimed.
+
+## 2026-11-03: recover finished Oscar FUSION export without retraining
+
+User diagnostics show job8220911 completed all20 FUSION epochs and selected
+deployment validation (epoch14,AUC0.9705942285340523), then failed with signal7
+at TRAIN export start. It used42h15m40s of72h; the SIGBUS cause is not established.
+Student8220912 was cancelled before execution. Preserve the entire a1eb1a74
+fit and completed8ad0b381 CONCAT, including original source and failed status.
+
+Implemented additive `luka_fullstat_multiview_export`, CLI/worker and detached
+launcher. Exactly two jobs: fresh-process selected FUSION export (6h), then
+unchanged20-epoch HLT three-target student (24h) afterok. No new teacher fit or
+separate preflight. Original a1eb1a74 scientific code is loaded directly;
+newer unrelated modules cannot enter as import fallbacks. Original twenty
+epoch states, selected weights, saved predictions and metrics are authenticated;
+the export uses only TRAIN views and the original FP32/batch128 exporter.
+New EXPORT v1 execution artifacts record the recovery, without fabricating the
+original failed task's completion. Exclusive claims and exact submission
+journals prevent duplicate/ambiguous resubmission. Fatal-signal tracing and
+phase records improve diagnostics but do not certify the SIGBUS cause fixed.
+
+Validation: existing recovery baseline **27 passed in117.83s**. Final focused
+recovery and native fusion parity suite **36 passed in184.02s**, including
+CPU/CUDA late-export failure injection, byte-identical recovered target banks,
+unchanged original files, complete20-epoch students, full installed-Weaver FP32
+export/native parity, FP32/BF16 fusion update parity, corruption/source/owner/
+allocation/duplicate guards, partial submission and detached-shell smoke.
+Local Windows shell smoke stubs setsid; it is not an actual Linux SSH hangup
+test. Existing PyTorch mixed-mask deprecation warnings remain. Python/shell
+syntax, runbook Bash blocks, links and whitespace checks passed.
+
+No new real Oscar/Tigris miniature or full-size recovery was run. No remote
+files/jobs changed and no commit/push was made. Next: scoped commit/push and
+the detached block in the [export recovery runbook](LUKA_FULLSTAT_MULTIVIEW_EXPORT_RUNBOOK.md).
+Real scheduler acceptance, full-size export and downstream results remain
+pending. The [active plan](plans/LUKA_FULLSTAT_MULTIVIEW_PLAN.md) and
+[new contract](contracts/LUKA_FULLSTAT_MULTIVIEW_EXPORT.md) define this recovery.
+
+## 2026-11-03: frozen-adapter export repair
+
+User-reported SPORC export at `d95975fa256360814225900284f72a1be1d94afc`
+stopped before creating the transfer directory: `validate_content_hash` was
+missing its required contract argument. `luka_frozen_adapter_hydra/inputs.py`
+now explicitly requires the existing ALLJETS CACHE/v1 contract. Scientific
+semantics, schema versions and scheduler behavior are unchanged.
+
+The new exporter roundtrip test reproduced the original TypeError before the
+fix. **71 focused tests passed in 42.92 seconds** after it, including six
+invalid-input cases and the existing CUDA/Weaver synthetic worker coverage.
+See the [repair evidence](LUKA_FROZEN_ADAPTER_HYDRA_VALIDATION.md). Remote export
+and new Hydra acceptance remain pending. Next: push the repair, rerun the
+[export/copy/queue instructions](LUKA_FROZEN_ADAPTER_HYDRA_RUNBOOK.md) with the
+new commit and exported hash. No remote files or jobs were changed by this fix.
+
+## 2026-11-03: frozen M0HLT privileged adapters on Hydra
+
+Implemented the authorized two-oracle/twelve-student experiment in the additive
+`luka_frozen_adapter_hydra` package. Both attention-bias and compact edge-message
+sites are covered, with fresh students and learned head/message alignment.
+Each has auxiliary-only, CE architecture-control and combined variants, both
+standalone and on top of U100-w5. Only adapters train in the privileged teachers;
+native M0HLT parameters and normalization buffers remain frozen.
+
+The minimal additional transfer is M0HLT weights and validation U100 for oracle
+selection. Existing Brown TRAIN data, embedding bank, environment and completed
+precision evidence are reused. One shared setup measures and reloads production
+miniatures before automatic submission. There are no lanes or concurrency cap;
+target-dependent students wait only for their own teacher. No existing jobs or
+runtime implementations were modified.
+
+Final regression: **176 tests passed in 270.33 seconds**, including actual
+CUDA/BF16 synthetic setup miniatures and full30 teacher/student workers. Shell,
+CLI, runbook snippets, links and whitespace checks passed. See the
+[validation/donor record](LUKA_FROZEN_ADAPTER_HYDRA_VALIDATION.md). No remote job
+or real L40 miniature has run for this new campaign. Next: the scoped commit,
+small delta transfer and queue instructions in the
+[runbook](LUKA_FROZEN_ADAPTER_HYDRA_RUNBOOK.md).
+
+## 2026-11-03: independent remaining contrastive fits on Hydra
+
+Implemented the user's requested scheduler change in a separate
+`luka_u100_contrastive_hydra` adapter: original full-thirty-epoch recipes,
+completed SPORC rows reused, and every remaining student submitted with **no
+dependencies and no campaign concurrency limit**. Only the report waits on
+new fits. Existing SPORC attempts and the running pair campaign are untouched.
+
+The additional transfer contains OFFLINE TRAIN keys and completed result
+evidence only. Brown's existing HLT/U100 bundle, pinned environment and
+completed precision diagnostic131484 are reused. Shared setup still performs
+the original six real production resource miniatures before automatic science
+release; no separate preflight or target export is queued. New execution
+contracts are v1; original scientific and numerical contracts are unchanged.
+
+**152 focused tests passed in 68.42 seconds**, including a real-Weaver synthetic
+thirty-epoch worker fit, relocated bank reuse, mixed-site reporting, exact
+submission, source/input binding and failure checks. Shell/CLI/snippet and link
+checks passed. See [the evidence/donor record](LUKA_U100_CONTRASTIVE_HYDRA_VALIDATION.md).
+No new remote job was submitted and real contrastive L40 acceptance remains
+pending. User-reported pair jobs131589/131590 are running, not evidence for
+contrastive resource acceptance. Next: follow the
+[scoped commit/export/copy/queue runbook](LUKA_U100_CONTRASTIVE_HYDRA_RUNBOOK.md).
+
+## 2026-11-03: Hydra v2 diagnostic-source reuse repaired
+
+Creation from `d6f0126dd34dbded4a5be33162765a619edf648c` failed before root
+creation/submission: the new process applied its own foundation module-path
+guard to the old diagnostic checkout. `portability.authenticate` now checks the
+pinned commit and clean foreign snapshot using the generic provenance validator;
+original-source replay retains the old process's own ownership/published-source
+checks. No scientific, numerical or schema changes. All original evidence stays
+immutable and no new control inference is required.
+
+A separate real Git checkout/subprocess regression reproduced the exact failure
+before repair. **81 focused tests passed in 38.66s** afterward, including dirty
+source rejection and existing local Weaver CPU/GPU checks. No new Hydra job was
+submitted or remote miniature completed here. Donor/files/evidence are recorded
+in [the validation record](LUKA_U100_PAIR_HYDRA_VALIDATION.md). Next: push the
+scoped repair and use the [updated v2 runbook](LUKA_U100_PAIR_HYDRA_V2_RUNBOOK.md)
+with that new commit, reusing the completed diagnostic, bundle and environment.
+
+## 2026-11-03: completed Hydra diagnostic qualifies new v2 campaign
+
+User-reported precision job 131484 completed in 1m43s, source
+`ad55d3cd32d7826d6e16a475228fece3c6099da4`. CPU/GPU FP32 max/RMS are
+1.3113e-6/5.4447e-8; repeated BF16 batches are identical. Full validation AUC
+is 0.96209461 on Hydra versus 0.96209280 saved SPORC. The user then authorized
+queuing the campaign. Implemented an explicit v2 portability policy that
+authenticates/reuses these artifacts, without reference retraining or control
+inference. The old diagnostic alone is not resource acceptance.
+
+New SPEC/RESULTS and PORTABILITY_* v2 contracts distinguish this policy from
+the old strict probability gate. Source/inputs/checkpoint/population/environment
+remain bound; local FP32 and same-batch checks plus the original AUC-drift limit
+are required. Cross-site BF16 max/RMS are report-only. All four real production
+miniatures remain necessary before automatic two-lane science submission.
+Reports add the Hydra control and keep labelled SPORC recovery anchors.
+
+**80 focused tests passed (32.30s)**; queue shell/CLI checks passed. Local tests
+include actual Weaver CPU/GPU inference on synthetic inputs, not real Hydra
+miniature acceptance. Runtime is `luka_u100_pair_hydra/portability.py` plus
+campaign/contract/worker/submission wiring. See
+[current commit/queue instructions](LUKA_U100_PAIR_HYDRA_V2_RUNBOOK.md) and
+[donor/evidence record](LUKA_U100_PAIR_HYDRA_VALIDATION.md).
+No remote jobs were submitted. Next: push scoped changes, queue the fresh v2
+campaign on Brown, and let shared setup authenticate real evidence/measure
+resources before automatically releasing the four fits and report.
+
+## 2026-11-02: Hydra-only precision diagnostic is queue ready
+
+Added a separate inference-only job for the blocked U100 correction port.
+It reuses the transferred native control checkpoint and validation D000 view:
+full 74895-row BF16 replay plus four numerical modes on 527 rows retaining their
+original five batch shapes. Reports include AUC, accuracy, CE, QCD rejection
+counts, probability differences and backend settings. It does not require a
+SPORC GPU, read TRAIN payloads, retrain the reference or release science jobs.
+Finite mismatches are diagnostic results; original admission limits stay fixed.
+
+The dedicated queue helper dry-reviews and submits exactly one one-hour L40
+job in a fresh diagnostic root. New `PRECISION_*` v1 artifacts are separate
+from setup acceptance. Runtime is in the existing Hydra package's
+`precision.py` and `precision_campaign.py`; see the
+[commit/queue/results runbook](LUKA_U100_PAIR_HYDRA_PRECISION_RUNBOOK.md) and
+[donor/test evidence](LUKA_U100_PAIR_HYDRA_VALIDATION.md).
+**59 focused tests pass**, including actual local CPU/GPU modes with installed
+Weaver sources on synthetic inputs; shell syntax and CLI checks pass. No remote
+job was queued. Next: push the scoped change and run this diagnostic on Brown;
+production L40 numerics and science admission remain unvalidated.
+
+## 2026-11-02: Hydra allocation repaired; control portability now blocks setup
+
+User-reported job 131410 on source `d7589b312fe5cea7ebb177db0ede70388f0daf45`
+successfully resolved the null cluster export, admitted the registered L40/env,
+and loaded authenticated TRAIN/validation populations (299234/74895). It failed
+the native-control probability comparison before target export or miniatures.
+The full-validation AUC difference is 0.0000018135 (limit 0.00005), but maximum
+probability difference is 0.01554453 (limit 0.005) and RMS is 0.001017804
+(limit 0.0002). The detailed [validation record](LUKA_U100_PAIR_HYDRA_VALIDATION.md)
+records the saved report hash and interpretation limits.
+
+No thresholds or scientific code were changed. The existing synthetic parity
+test passes; it does not reproduce cross-GPU numerics. Next: controlled fixed-
+batch FP32/BF16/backend replay before any explicit portability-policy revision.
+The existing bundle and environment are usable; real miniature admission and
+all four scientific fits remain pending. No remote job or artifact was changed.
+
+## 2026-11-02: exact Hydra null-cluster failure reproduced and repaired
+
+Job 131385's log identifies `SLURM_CLUSTER_NAME="(null)"` as the sole allocation
+mismatch; every controller/resource field matched, including NumTasks=1. The
+previous fallback handled an absent variable only. Updated `site.py` to query
+controller configuration for this literal placeholder and still require hydra.
+The raw export stays logged; conflicting concrete names and failed/unknown
+controller responses fail. The supplied failure was reproduced before the
+two-condition runtime fix; **31 focused tests pass afterward**. See the
+[validation/donor record](LUKA_U100_PAIR_HYDRA_VALIDATION.md).
+
+Plan/contract, runbook and source map were updated; no schema or scientific
+change. No remote jobs or files were changed. Next: push the scoped fix and
+queue a fresh root, reusing the environment/bundle and preserving both failed
+roots. Real L40 setup parity/miniatures are still pending.
+
+## 2026-11-02: Hydra allocation compatibility and retained diagnostics
+
+User-reported setup 131366 failed in `luka_u100_pair_hydra/site.py` before data
+loading; no four-fit science submission occurred. Accounting matches the
+registered resources but has blank NTasks; the controller record has expired.
+The exact rejected field remains unknown. Updated the guard to cross-check
+available controller/batch evidence, reject all conflicts and print allowlisted
+fields plus expected/observed mismatches. Missing metadata alone is not admitted.
+See the [validation record](LUKA_U100_PAIR_HYDRA_VALIDATION.md) for donor and
+test evidence and the [retry instructions](LUKA_U100_PAIR_HYDRA_RUNBOOK.md#retry-after-setup-allocation-rejection).
+
+The plan/contract clarify metadata representations without changing science,
+schemas or resource requests. The 26 focused guard tests and full 38-test Hydra
+adapter suite pass. Real Hydra L40
+parity/miniatures are still unvalidated. Next: push the scoped repair and queue
+a fresh campaign, reusing the existing extracted bundle and isolated environment.
+No remote jobs, stored artifacts, original scientific runtime or unrelated edits
+were modified by this repair.
+
+## 2026-11-02: additive Brown CS Hydra correction execution adapter
+
+The user verified the compact transfer on Brown and supplied the original
+Python3.10.21/PyTorch2.5.1+cu118/Weaver0.5.3 environment identity. Implemented
+`luka_u100_pair_hydra`, isolated environment installer, CLI, worker and automatic
+two-lane queue tooling; see the [Hydra runbook](LUKA_U100_PAIR_HYDRA_RUNBOOK.md),
+[active plan](plans/LUKA_U100_PAIR_HYDRA_PLAN.md), [execution contract](contracts/LUKA_U100_PAIR_HYDRA.md)
+and [validation/donor record](LUKA_U100_PAIR_HYDRA_VALIDATION.md).
+
+The adapter pins the verified archive/manifest, extracts only regular allowlisted
+files and loads portable views with original identities/fingerprints. It preserves
+historical JSON bytes, follows no SPORC input paths, reuses U100 targets/control,
+and imports the original scientific training/model/resource code unchanged.
+Shared setup first checks native-control numerical portability, then measures
+all four real miniatures before automatic C/A/D/B fits and a report. Site is
+Hydra gpus/default/normal with one L40 per job, six CPUs/120000MiB and two lanes.
+No reference retraining, separate preflight, job cancellation or remote mutation.
+
+Pre-change32 focused tests passed in8.39s. Initial combined validation:
+**83 tests passed in59.29s**, including actual Weaver0.5.3 local model tests,
+portable synthetic array/target replay and exact-DAG failure guards. AST parsing
+passed for9 Python files. Two further allocation/source-guard tests passed
+in5.27s; all three shell scripts, scoped whitespace and four local links passed.
+This is local evidence, not actual Hydra readiness.
+Clean commit/push, separate Brown environment verification and real shared setup
+remain required; no new SPORC/Hydra GPU validation is claimed.
+
+## 2026-11-02: campaign-only U100 correction transfer tooling
+
+Added `luka_u100_pair_transfer`, its thin CLI, a v1 transfer contract and
+[Hydra transfer runbook](LUKA_U100_PAIR_HYDRA_TRANSFER_RUNBOOK.md). This follows the
+user's request to move only the files needed by the four U100 correction fits.
+The user measured2.862GiB of prepared views, TRAIN assignments and embedding
+targets on SPORC; existence and sizes passed, but those reported checks did not
+hash the payloads. The exporter authenticates the original campaign/control in
+its pinned source, selects exact files, preserves historical JSON and checks
+each registered payload hash while writing one archive. Its standard-library
+verifier checks the archive and every member without extracting or loading arrays.
+
+Only one selected native control checkpoint is copied for future cross-site
+parity. Teacher weights, raw datasets, other view arrays, validation assignments,
+unrelated campaign payloads and environment binaries are excluded. Original
+absolute paths remain evidence; no historical manifest is rewritten. Transfer
+is a new contract, not Hydra training admission. No existing scientific runtime
+or submission code was modified, no remote files were copied, and no jobs changed.
+The Hydra consumer/site adapter, environment and real shared setup remain next.
+
+Local validation: **32 focused tests passed in8.17s** (27 new transfer tests and
+five existing correction submission/storage/resource regressions). Coverage
+includes exact exclusions, deterministic round-trip archives, preservation of
+source bytes, corrupt/missing/changed payloads, existing-output refusal,
+incomplete archives and unsafe/extra members. CLI import/help also passes with
+Python `-S`, with site packages disabled. An attempted broader unchanged model
+suite could not run successfully because the prior `.tmp` Weaver fixture is
+absent locally; no new real-Weaver, SPORC or Hydra validation is claimed.
+
+## 2026-11-02: repair serial contrastive cancellation transition
+
+The user reported `f8f61ade` dispatch failing at the initial `scancel`, before
+replacement submission. Its earlier `sbatch` messages are the read-only
+`check_site`/`--test-only` checks. Some original pending cancellations may have
+succeeded; the supplied log does not establish the nonzero return's cause.
+
+The serial dispatcher now validates current controller IDs/names/owners,
+cancels only its pending ledger IDs with `--ctld --user=<owner> --state=PENDING`,
+and skips cancellation when none remain. Additive CANCELLATION and
+CANCELLATION_CHECK/v1 evidence retains command output, return status and the
+post-command controller snapshot. Any remaining pending job or query failure
+stops before replacement submission; nonzero status with proven pending
+clearance still requires terminal controller/accounting evidence and original
+receipt authentication. No automatic cancellation retries or broad commands.
+New completions during registration/review may proceed to final authentication
+without being mistaken for missing receipts from the earlier snapshot.
+
+Changed only serial `submission.py`, `campaign.py`, focused tests and associated
+plan/contract/runbook (plus this status/donor entry). Scientific updates, targets,
+patience, priorities and single-lane debug graph are unchanged. Donor base for
+this repair is `f8f61ade`; original parent replay remains pinned to `431341db`.
+Before edits: 21 serial tests passed in16.10s. After edits: **61 combined tests
+passed in29.34s**, including installed-Weaver CPU/CUDA parity and cancellation
+race/failure/empty-set regressions. No remote scheduler mutation or new SPORC
+miniature was performed here. The runbook now describes a fresh-commit launch,
+retaining the failed f8f61ade root/claim/log and reusing original completed fits
+and targets. Commit/push and execute that documented transition next.
+
+## 2026-11-02: serial contrastive continuation with successful early stopping
+
+Implemented the [authorized continuation](plans/LUKA_U100_CONTRASTIVE_SERIAL_PLAN.md)
+in additive `luka_u100_contrastive_serial`, with a thin CLI, debug worker,
+detached transition/queue helper, [v1 contract](contracts/LUKA_U100_CONTRASTIVE_SERIAL.md)
+and [runbook](LUKA_U100_CONTRASTIVE_SERIAL_RUNBOOK.md). Existing contrastive and
+particle/pair-correction runtimes remain unchanged. All20 registered arms are
+retained; no kinmix0.1 or other new scientific configuration was added.
+
+New fits use full-validation AUC patience5, min15/max30 epochs, min_delta1e-5,
+and the unchanged30-epoch LR schedule. Every actual best native checkpoint is
+saved immediately, independently of the patience threshold. A patience stop
+restores the selected checkpoint and publishes normal native predictions,
+validated reports and successful receipts, including for poor finite results.
+Original30 and new patience5 rows are explicitly distinguished in reporting.
+
+Original-source replay authenticates successful431341db setup/targets and
+completed fits. After exact dry review, the detached transition cancels only
+pending exact old campaign IDs using Slurm's state filter, preserves running
+fits, waits for their terminal accounting, and imports newly completed results.
+Only unfinished rows are submitted, in the agreed priority order and one
+afterany chain. Partial old files stay untouched; any reviewed fresh attempt
+uses the new root. No target export, new teacher, setup or preflight is scheduled.
+Original successful six-family A100 acceptance and conservative full30 walltime
+bounds are reused with environment/GPU checks and unchanged batch updates.
+
+Validation: original32 focused tests passed before final integration. The
+combined suite passed **53 tests in28.29 seconds**, including installed-Weaver
+CPU/CUDA exact native update/RNG parity, first-stop and warmup boundaries,
+sub-threshold best retention, successful poor-finite stopping/native reload,
+durable checkpoint survival on injected failure, external payload/resource
+binding, mixed historical/new reporting, exact-ID pending-only cancellation,
+completion while waiting, serial DAG, and duplicate/partial submission guards.
+AST checks covered9 Python files;12 documentation links, shell syntax and scoped
+whitespace checks passed. Donors are recorded atc08f6df6 in LEGACY_SOURCE_MAP.
+
+No remote jobs were cancelled/submitted and no final test was opened. The new
+SPORC transition has not been executed. Next: review/commit/push the additive
+files, launch the runbook wrapper from a clean pinned worktree, and review its
+concrete PLAN_HASH before the exact pending-job replacement. Unrelated local
+edits are preserved. The8GiB allowance includes durable best checkpoints and
+does not copy the original target banks.
+
+## 2026-11-02: four retained U100 correction fits implemented for debug
+
+Implemented the [active correction plan](plans/LUKA_U100_PARTICLE_PAIR_CORRECTION_PLAN.md)
+under `src/hlt_classification/luka_u100_pair_correction/`, with the thin CLI,
+queue wrapper and Slurm worker, focused tests, a new
+[v1 contract](contracts/LUKA_U100_PAIR_CORRECTION.md) and
+[queue/runbook](LUKA_U100_PAIR_CORRECTION_RUNBOOK.md). README and the plan index
+now point to the implementation. This entry supersedes the design-only status
+below; it does not claim a scientific improvement or a completed remote run.
+
+Exactly four fresh students retain the original CE1 + U100 embedding5 recipe:
+C (`p4_pair_u100`), A (`pair_u100`), D (`dual_u100`) and B (`p4_u100`). They add
+matched TRAIN particle/pair supervision and retained corrections to native
+attention. Correction predictors read contextual HLT tokens after block1;
+bounded symmetric bias enters blocks2--7. CE, embedding and correction losses
+can update the shared encoder. Inference accepts only HLT features/vectors/mask,
+retains the correction modules and removes the ordinary jet predictor.
+
+Original-source replay authenticates the completed `u100_w5_s0` control,
+exact job21993056, selected artifacts and compatible U100 target bytes. Neither
+that control nor its teacher/embedding export is repeated. Shared setup builds
+only the new compact matched-particle targets and TRAIN statistics, runs real
+production-worker miniatures/reloads for all four methods, and measures
+full-support memory, representative throughput and validation time. It then
+automatically releases four fits in two debug lanes and a report. Independent
+successors use `afterany`; poor finite performance never rejects a row.
+There is no separate preflight job. The concrete six-job graph is dry-reviewed
+before detached dispatch, and science waits for successful measured setup.
+
+All source donors and unchanged imports are recorded in LEGACY_SOURCE_MAP at
+`431341db5eced8eaa3e52b37ba047f8cd4beed50`. Existing scientific runtime is
+unchanged. New artifacts use `LUKA_U100_PAIR_CORRECTION_*/v1`; historical
+artifacts are not rewritten. The active plan explicitly records preservation
+of native collinear pair-feature forward values with finite backward behavior,
+and full correction strength for validation/deployment during the TRAIN ramp.
+
+Local validation: **72 existing U100/contrastive baseline tests passed**, then
+**43 new focused tests passed in 41.46 seconds** with real installed Weaver.
+Coverage includes all four production fit/selection/deployment reload paths on
+CPU and CUDA, full-size native initialization parity, finite geometry gradients,
+separate B/C/D supervision paths, chunked/dense backward parity, zero-eligible
+jets, all 30 epochs with deliberately poor finite metrics, exact missing-cache
+ROOT reconstruction, saved-control replay and payload-corruption rejection,
+storage/resource failure diagnostics, and duplicate/partial/failed submission.
+The tiny synthetic ROOT fixture alone simulates available disk space to bypass
+its donor's 5GiB fixture reserve; the campaign's actual 8GiB allowance plus
+1GiB headroom is unchanged and independently tested. Shell syntax and CLI
+checks pass. Local checks do not substitute for the pending A100 acceptance.
+
+No remote jobs were submitted or changed; no final test was accessed. The exact
+next step is to review and commit/push the additive files, create a clean pinned
+SPORC worktree, then run the queue wrapper from the runbook. Real SPORC memory,
+runtime and installed-environment acceptance occur in shared setup before any
+scientific fit. Unrelated user edits remain in place.
+
+## 2026-11-02: four U100 particle/pair correction variants specified
+
+Added the [implementation plan](plans/LUKA_U100_PARTICLE_PAIR_CORRECTION_PLAN.md)
+for exactly four fresh small-data debug students retaining CE1/U100 embedding5:
+direct pair corrections, particle corrections, particle corrections with
+derived-pair supervision, and independent particle/direct-pair branches.
+The leading hypothesis is the particle predictor with both particle and
+derived-pair supervision. This is a proposed experiment, not an observed gain.
+
+The document defines aligned TRAIN-only targets and matched-slot losses,
+physical decoding, zero-centered residual scales, a shared new-loss budget,
+a contextual tap after native block1 and bounded corrections in blocks2--7.
+Correction parameters remain at inference; the ordinary U100 auxiliary head
+is removed. It maps existing donors and proposed new modules, target reuse,
+two-lane debug execution, deployment checks and staged implementation tests.
+The completed contrastive zero-control job21993056 is a reference to authenticate,
+not a checkpoint warm start or a reason to rerun its targets.
+The user's follow-up is explicit in the root README, plan and plans index:
+all four additions retain CE1/U100 embedding5, and the completed U100-w5
+reference is reused without retraining or a new reference job. The intended
+graph remains one shared setup, four scientific fits and one report.
+
+Status is **design-only**. No runtime code, reusable contract or donor code was
+added/versioned, and no model, data, job or remote artifact was changed.
+The documentation index links the new plan; existing unrelated edits are retained.
+Focused documentation checks pass: all 19 local links resolve, code fences are
+balanced, four-arm loss definitions and six-job accounting are consistent, and
+scoped whitespace checks pass. No installed-Weaver or remote test was run for
+this documentation-only step.
+Next task is additive implementation under the proposed luka_u100_pair_correction
+namespace, followed by local installed-Weaver tests and genuine debug resource
+acceptance. No queue-ready or remote-validation claim is made here.
+
+## 2026-11-01: remaining contrastive exclusion-filtering runtime repair
+
+SPORC setup 21989719 at `810433f83eb6ab4ed78d18f6ab75ce70f5114350`
+successfully reused the original targets and passed all six miniatures plus
+exact native baseline parity. The user-provided diagnostic shows kinmix
+1.052471 seconds/update, down from 5.193610, but admission rejected its
+1,747-minute estimate against the unchanged 1,440-minute cap. No scientific
+fits were released. Peak GPU memory remained 7,123,744,768 bytes.
+
+Profiling identified repeated exclusion sorting/searching per class and
+Python membership loops as remaining sampler costs. `sampling.py` now
+partitions exclusions by class once per balanced draw, takes the identical
+RNG draw directly for unblocked pools, and uses vectorized sorted membership
+for the remaining proposals. The full ordered indices, diagnostics, dense
+exclusion behavior and RNG consumption match the 810433f8 implementation.
+No scientific recipe, row, weight, schedule, timing factor or cap changes.
+
+A local CUDA sampler benchmark used 299,234 synthetic TRAIN rows, physical
+batch 128 and full candidate quotas, comparing five batches per strategy
+with the first excluded from timing. Kinmix sampler time fell from 0.619 to
+0.431 seconds/batch, about 30%; mix 0.501 to 0.283, hard 0.709 to 0.472,
+random 0.083 to 0.046, cross 0.076 to 0.042. Every tested candidate and diagnostic matched.
+These are local sampler-only timings, not measured A100 fit estimates.
+
+The source guard now freezes reviewed main `a1eb1a746875a2697216d45a7c8ea4b6acdabc8a`
+so the independent committed FullStat recovery is preserved. Only the
+contrastive sampler/source guard, focused tests and campaign documentation
+are changed. SPEC/BUNDLE v2 and scientific v1 contracts remain unchanged;
+donor files/commits are recorded in LEGACY_SOURCE_MAP.
+
+Validation: **32 focused tests passed in 21.30 seconds**, including installed
+Weaver CPU/CUDA fits, all-strategy old/new candidate and diagnostic parity,
+training/diagnostic streams, dense/empty exclusions and exact RNG state,
+native baseline parity, target recovery and failure rejection. Bash syntax
+passed. The new A100 measurement is pending; no jobs were submitted locally.
+
+Next: commit/push, create a fresh pinned debug campaign and use the same
+`--reuse-setup` original 755f43d8 spec from the
+[runbook](LUKA_U100_CONTRASTIVE_RUNBOOK.md#recover-the-failed-755f43d8-setup-without-repeating-target-export).
+Target export remains reused; shared setup remeasures before automatically
+releasing all 20 scientific fits and the report. Preserve both failed roots.
+
+## 2026-11-01: FullStat FUSION timing recovery preserving completed CONCAT
+
+User-supplied Oscar accounting reports CONCAT8177360 COMPLETED/0:0 after
+22h27m09s at source `8ad0b381547134569818b4258f3cd31b509e9efb`; all twenty
+epoch receipts, selected checkpoint, report, TRAIN bank and final task receipt
+were present. FUSION8177361 passed native/storage parity and full-support
+training/validation/export stress, with 10.59 GiB CUDA peak and 87.31 GiB
+measured host peak. Its timing guard then rejected **4164 conservative minutes
+against2880 allocated**. It saved zero scientific epochs. Student8177362 was
+cancelled without running. This was a timing-admission rejection, not another
+GPU memory failure or a scientific-performance failure.
+
+The [active multiview plan](plans/LUKA_FULLSTAT_MULTIVIEW_PLAN.md) now includes
+an exact two-job recovery. New `luka_fullstat_multiview/recovery.py` authenticates
+the completed CONCAT in its original source, including all epoch/model/report/
+prediction/bank payloads and terminal exact-job accounting. The recovered
+student uses the original bank and original parent hashes read-only. No CONCAT
+fit/export is scheduled. FUSION requests72h; student requests24h afterok-FUSION.
+The 1.5 timing factor, 120-minute allowance, memory guards, inline checks,
+twenty epochs, batch128, losses, seeds, views and deployment remain unchanged.
+
+New RECOVERY_SPEC/RECOVERY_REUSE/RECOVERY_POLICY/RECOVERY_CLAIM v1 contracts
+bind the original source/spec/jobs/diagnostics and sole recovery. Original
+SPEC/STARTUP v2 and scientific RECIPE/BANK/REPORT v1 remain distinct and intact.
+An atomic original-root claim prevents competing recovery roots; partial live
+submissions retain journals and never retry. The new detached
+`launch_luka_fullstat_multiview_recovery.sh` authenticates, dry-checks the exact
+72h/24h shapes, then submits exactly two jobs under a separate authorization.
+It can finish submission after the SSH log viewer disconnects. Existing science
+kernels and other campaigns' runtime are unchanged. Donors are recorded in
+LEGACY_SOURCE_MAP; the new guard uses current baseline `810433f8` so unrelated
+subsequent SPORC additions are neither overwritten nor treated as old source.
+
+Local evidence: **27 recovery tests passed**, including installed-Weaver
+CPU/CUDA production-worker miniatures (twenty epochs per new fit), unchanged
+CONCAT files, native student deployment, original bank parent bindings,
+payload corruption, scheduler rejection, exact accounting, duplicate/partial
+submission, source replay and frozen-science guards. Initial failures were
+missing historical-path/environment fields and scheduler stubs in synthetic
+fixtures, corrected before the passing runs. Python syntax, Bash syntax, CLI
+recover-launch help, active-document links and scoped whitespace checks pass.
+The scientific recipe hash remains `6f2af53d...`; model/training/fusion/views/
+targets files match8ad0b381. Full original-suite regression also passed:
+**78 passed, 1 Linux-only HUP/setsid test skipped** in220.73 seconds. This
+includes all three original production workers, installed-Weaver FP32/BF16
+fusion parity, batch128 memory measurement and both actual Bash launch flows.
+There are105 distinct passing tests across these suites. Existing PyTorch
+mixed-mask deprecation warnings came from the native comparison path.
+
+No commit, push, remote submission, cancellation, data deletion, inference or
+test access was performed. Next: commit/push the scoped repair and use the recovery command in the
+[runbook](LUKA_FULLSTAT_MULTIVIEW_RUNBOOK.md#recover-fusion-8177361-while-keeping-completed-concat).
+Oscar acceptance of the72h request and new full-size FUSION timing remain
+remote checks; local tests do not establish either result.
+
+## 2026-10-31: contrastive setup runtime repair and target reuse
+
+User-provided SPORC diagnostics for `lukaoc_setup` job **21989145**, source
+`755f43d874ce90ff50ae9b80fe66d36869601650`, show completed U100/OFFLINE
+exports, all six miniatures and exact native baseline parity. Admission then
+failed because kinmix averaged **5.193610 seconds/update**, projecting roughly
+142 hours against the 24-hour cap. Peak GPU memory was about 6.63 GiB; this was
+a sampler runtime failure, not a scientific-performance rejection. No science
+was released by that failed setup.
+
+`luka_u100_contrastive/sampling.py` now indexes the fixed TRAIN bins once,
+caches the radius bound and vectorizes exclusion counts. Ordered candidate
+pools, draws, quotas, RNG streams and all twenty scientific rows are unchanged.
+A local synthetic benchmark at 299,234 rows / 128 anchors selected exactly the
+same candidates: original K selection 3.202 seconds, indexed first pass 0.224
+seconds and cached pass 0.150 seconds. These are CPU sampler-only timings, not
+an A100 end-to-end runtime claim.
+
+New `reuse.py` plus campaign/target/worker/CLI wiring support `--reuse-setup`
+for the failed original spec. Original-source replay checks terminal exact-job
+accounting, ownership, no science attempt, and published export/readback
+evidence. A fresh campaign references unchanged old bank manifests and their
+original parents. It reruns all technical miniatures and measured admission,
+without teacher inference or OFFLINE particle reconstruction. The failed root
+and claims remain intact. SPEC/BUNDLE are v2; new SETUP_REUSE/REUSED_EXPORTS
+are v1; scientific RECIPE/SAMPLER/KEYS stay v1. Resource failures now print
+the estimated and allowed minutes. Donors are recorded in LEGACY_SOURCE_MAP.
+
+Validation: **26 focused tests passed in 20.31 seconds**, including actual
+installed-Weaver CPU/CUDA fits, original zero-control parity, exact old/new
+kinmix candidates and evidence, frozen-bin/exclusion cases, recovery through
+the production setup branch, no target re-export, original-source replay
+admission/ownership checks, and corrupt/changed provenance rejection. Bash
+syntax, CLI create/help and scoped whitespace checks passed. No new remote
+job, full-data measurement or recovery gain is claimed.
+
+Next: commit/push this repair, create a fresh pinned SPORC worktree and use the
+[runbook recovery invocation](LUKA_U100_CONTRASTIVE_RUNBOOK.md#recover-the-failed-755f43d8-setup-without-repeating-target-export).
+Real A100 remeasurement remains required before automatic submission of the
+twenty fits. Do not retire the old setup bank or its source worktree.
+
+## 2026-10-31: U100 plus paired OFFLINE identification implementation
+
+Implemented the [twenty-run plan](plans/LUKA_U100_OFFLINE_CONTRASTIVE_PLAN.md)
+as additive `luka_u100_contrastive` code, CLI, debug queue helper and worker.
+The [runbook](LUKA_U100_CONTRASTIVE_RUNBOOK.md) provides commit/push, detached
+automatic submission and results commands. The new
+[v1 contract](contracts/LUKA_U100_CONTRASTIVE.md) binds the full grid, five
+samplers, independent TRAIN-only RNG/keys, teacher lineage, loss reductions,
+resource measurements, native deployment and exact submission receipts.
+The preceding design-only entry below is historical and is superseded here.
+
+Scientific recipe remains CE1 + original U100 embedding5, thirty full epochs,
+batch128, native HLT inference. Exactly eighteen matching-head fits and two
+fresh controls use the registered S0/S1 seeds. The first pair is mix_l0p3_s0
+and u100_w5_s0. No teacher is retrained. Controls call the original U100
+training kernel and never open the OFFLINE key payload. TRAIN probes restore
+RNG/mode/buffers and cannot choose a checkpoint or change the schedule.
+
+One shared debug setup authenticates/reuses or exports compact banks, runs
+real production-code miniatures with full candidate counts, verifies original
+U100 tensor parity, and records sampling-inclusive resource measurements.
+Only after setup succeeds does the detached dispatcher submit twenty fits
+in two afterany lanes plus a terminal report. The whole prospective graph is
+reviewed before launch; measured walltimes can only shrink its resource
+envelope. Shared setup failure submits no science; individual student failure
+does not cancel other registered fits. Partial claims are never auto-retried.
+Four GiB storage budget is independent of the personally available quota.
+
+Local evidence: **21 focused tests passed** in 35.50 seconds, including actual
+installed-Weaver CPU/CUDA fits with full 1,025-candidate losses, exact native
+baseline parity, isolated initialization/diagnostics, all five sampling
+strategies and exclusions, native reload, all thirty epochs under deliberately
+poor finite AUC, preserved failure diagnostics, automatic dispatch and exact
+journal duplicate/partial protection. Two existing U100 loss/bank tests also
+passed (13.86 seconds). After a final common-stream correction so exclusions
+outside a primitive's pool cannot alter its draws, nine affected sampler,
+Weaver and dispatcher checks passed again (22.09 seconds). Both Bash
+entrypoints pass `bash -n`; CLI help runs. A scoped audit passed fourteen
+Python files, thirty-eight local Markdown links, fences and whitespace.
+The local Weaver fixtures reduce block count but keep the genuine 128-D tap;
+they are not real-SPORC performance evidence. Initial two test failures were
+overly strict floating-point test tolerances; corrected FP32 comparisons passed.
+
+Donors at `8ad0b381547134569818b4258f3cd31b509e9efb` and their uses are recorded
+in LEGACY_SOURCE_MAP. Existing runtime remains unchanged. No remote jobs,
+commits, pushes, cancellations, deletions or final-test inference were performed.
+Next step: review/commit/push this additive implementation and use the runbook
+on SPORC. Local launch readiness is established; genuine debug resource
+admission remains pending and is enforced inside shared setup before the
+scientific jobs can be submitted. No recovery gain is claimed.
+
+## 2026-10-31: twenty-run U100 plus OFFLINE contrastive design only
+
+Added the requested detailed
+[paired OFFLINE identification plan](plans/LUKA_U100_OFFLINE_CONTRASTIVE_PLAN.md).
+Every fit preserves CE1 + U100 embedding5 and native HLT inference, adding an
+independent training-only OFFLINE matching head with its own coefficient.
+The plan specifies exactly twenty student fits: eighteen S0 configurations
+(including a fresh U100-w5 control), plus a predeclared S1 lead/control pair.
+It covers five candidate-sampling strategies, coefficients 0.03 through 10,
+fixed temperature0.1, 1,024 negatives, and a three-epoch coefficient ramp.
+The leading hypothesis is mix_l0p3_s0: 512 broad, 256 same-class and 256 bounded
+teacher-similarity different-class negatives. This is a prior, not a result.
+
+Scope is the original 299,234 TRAIN / 74,895 validation fixed30 debug screen.
+The document distinguishes it from the high-data recovery goal, binds original
+regular U100/OFFLINE teachers, describes shared authenticated TRAIN banks,
+independent RNG, comparisons, deployment stripping, runtime measurement,
+bounded concurrency and a proposed additive implementation/code map.
+It does not implement, submit, cancel or repair any running/failed campaign.
+No runtime donor migration or contract version change occurred; inspected
+reference revision is 8ad0b381547134569818b4258f3cd31b509e9efb.
+
+Verification: the document audit passed twenty unique ranked rows, all five
+samplers' 1,024-negative totals, both controls and the paired second seed,
+seventeen local links, fences and whitespace. Two existing focused U100 checks
+passed (loss/teacher detachment and TRAIN bank normalization/teacher binding).
+Initial attempts encountered local Weaver/temp-directory access restrictions;
+the rerun used the existing Weaver installation and a fresh workspace temp
+directory. No new contrastive runtime or real-SPORC validation is claimed.
+Next task, if requested: implement this separate plan and its scientific and
+execution tests; it is currently design-only, not queue-ready.
+
+## 2026-10-31: FullStat multiview startup resource repair
+
+User-supplied logs for source `2b1f0370993c2f20be3951a6ccafe572ab21600a` identify
+two technical admission failures. CONCAT job8148495 loaded all16 union files
+in4200.94 seconds, then failed the 24h timing guard. FUSION job8148496 loaded
+native paired views in215.90 seconds and failed the GPU-margin guard at
+43,110,401,536 peak allocated bytes. Neither produced an epoch or accepted
+startup; no scientific fit was lost and no selected teacher can be resumed.
+The logs do not report CUDA/Slurm OOM. Preserve the old root and its evidence.
+
+The multiview-only repair adds `fusion.py` and `resources.py`, updates the
+factory, startup/worker checks, registration/execution, source inventory and
+detached intent, and extends the two focused test files. Teachers request48h,
+student24h, with the same L40S/6CPU/192000MiB resources. FUSION uses the existing
+synchronous stride-preserving saved-tensor host storage and compact cross masks;
+native pair populations, BatchNorm, batch128, full support and all20 epochs stay
+fixed. SPEC/STARTUP advance to v2 and bind RUNTIME_POLICY/v1. Non-accepting
+STARTUP_DIAGNOSTIC/v1 files save timing/memory before guard rejection and record
+failed stages. Both old memory margins and the timing safety factor remain.
+No separate preflight, automatic fallback, old-source edit or old-root mutation.
+
+Donors at 2b1f0370 are documented in [LEGACY_SOURCE_MAP](LEGACY_SOURCE_MAP.md).
+The active [plan](plans/LUKA_FULLSTAT_MULTIVIEW_PLAN.md),
+[contract](contracts/LUKA_FULLSTAT_MULTIVIEW.md) and
+[retry runbook](LUKA_FULLSTAT_MULTIVIEW_RUNBOOK.md) describe the v2 boundary.
+The scientific RECIPE is exactly equal to the committed v1 artifact, hash
+`6f2af53d5a10fbe48c7649ef222da37be1b19c16d81c9b09b43e82cdc2a1cf65`.
+
+Evidence: baseline64 passed,1 Linux-only HUP test skipped,3 tests deselected.
+Final focused validation covers **77 distinct passing tests and1 Linux-only
+skip** across runs: the full invocation passed75 and skipped1, with one new
+test assertion incorrectly expecting hours-only Slurm notation. Its corrected
+day-format assertion and the additional real-Weaver batch128 memory check both
+passed on rerun. Both complete CPU and installed-Weaver0.5.3 CUDA three-worker
+miniatures passed all20 epochs, selected reloads, teacher exports and student
+publication. Native-vs-optimized CE comparisons passed three updates on CPU,
+CUDA FP32 and BF16, including gradients, BN buffers, weights and AdamW state.
+The synthetic CUDA memory check (HLT32/OFFLINE24 particles, batch128) measured
+1,089,503,232 bytes native versus739,125,760 optimized, **32.2% lower**; this is
+not a full-support FullStat or Oscar measurement. Failure-injection tests prove
+resource/stress rejection saves evidence and never publishes startup/epochs.
+AST, Bash syntax, active documentation links and whitespace checks passed.
+
+No commit/push, job submission/cancellation, research inference or remote
+miniature was performed. Next: commit/push this scoped repair and use a fresh
+commit-named root with the existing detached launcher. Scheduler dry checks
+must accept the48h requests; full-size memory/timing admission still runs inside
+each allocation. The old RAM-only union must be rebuilt on retry.
+
+## 2026-10-30: FullStat three-teacher multiview adaptation
+
+Implemented the requested separate Oscar study in the additive
+`src/hlt_classification/luka_fullstat_multiview/` namespace, thin CLI/Slurm worker,
+manual queue helper and detached launcher. The [plan](plans/LUKA_FULLSTAT_MULTIVIEW_PLAN.md),
+[v1 contracts](contracts/LUKA_FULLSTAT_MULTIVIEW.md) and
+[runbook](LUKA_FULLSTAT_MULTIVIEW_RUNBOOK.md) register three fresh 20-epoch fits
+on the original 3M TRAIN / 500k validation population: CE-only untagged physical
+CONCAT teacher, CE-only native HLT-to-OFFLINE cross-attention FUSION teacher,
+then a native HLT student predicting U100/CONCAT/FUSION embeddings. CE1 plus
+total embedding10, equally 10/3 per independently TRAIN-standardized target.
+The U100 target bank is the original regular COARSE_U100 behind completed
+U100-w5, authenticated through corrected completed readout db9afe8b. No
+retained-predictor inference, logit KD, readout or relational objective.
+
+CONCAT reconstructs only TRAIN/validation raw particle rows in bounded RAM,
+retains duplicates and all support even beyond512, and applies shared features
+to a source-blind physical union. FUSION reuses injections after blocks2/4/6/8.
+The student retains exact U100-w5 native/predictor initialization, batch128 and
+FullStat20 optimizer/schedule; three separate prediction heads are stripped for
+deployment. Existing jobs, historical artifacts and all old runtime bytes are
+unchanged. Internal donors and exact commits are in LEGACY_SOURCE_MAP.
+
+Three jobs, zero standalone preflight/setup jobs. FUSION follows CONCAT
+afterany for resource ordering; the student requires afterok on both complete
+teacher exports. New-graph installed-Weaver parity, finite connected gradients,
+full-support batch128 stress, timing/memory admission and strict deployment
+readback run inside each allocation before fresh scientific initialization.
+Exact Oscar profile: L40S, 6 CPUs, 192000 MiB, 24h per fit. Declared personal
+result quota >=22 GiB includes 20 GiB outputs and 2 GiB headroom. Every epoch
+saves full model/optimizer/RNG state; late publication failure preserves it.
+No performance gate, silent crop/batch/schedule fallback or automatic retry.
+
+Evidence: focused baseline **12 passed**. Final new checks cover **67 passing
+cases** across focused runs, with **one Linux-only real HUP test skipped** on
+Windows. The combined run passed65 and skipped1; its remaining synthetic
+registration fixture lacked a parent locator, corrected and passed on focused
+rerun. One additional separate original/current-source test passed, and exact
+U100 initialization equality also passed after its assertions were added.
+Both complete CPU and installed-Weaver0.5.3 CUDA three-worker miniatures passed:
+all20 epochs, selected-state reloads, two TRAIN exports, bank reuse and native
+student deployment. Tests cover corrupt/reordered/incorrect-bank rejection,
+failure after completed training, real synthetic ROOT/sealed roles, full union
+cardinality, three-job dependency journals, partial-submission preservation and
+the actual Bash detach/tail flow with synthetic commands. Fixture scheduler,
+population counts and CPU-sized models are not remote acceptance.
+
+Reused FullStat/cache, small-data multiview, retained and readout regression
+suites: **88 passed**, with4 CUDA-named checks deselected in this separate
+regression run (the new full CUDA miniature ran above). Existing attention-mask
+deprecation warnings remain. Python AST, Bash syntax, local document links and
+whitespace checks passed. Early local failures caught phase-log initialization,
+the too-large resource request and a CPU autocast comparison mismatch; all
+were corrected without weakening production checks.
+
+No commit/push, real Oscar/Tigris miniature, new full-size resource measurement,
+inference on research data, job submission or cancellation was performed.
+Next: commit/push the scoped new runtime plus tests/docs and use the detached
+three-job command in the runbook from a clean exact source worktree. Full-size
+resource acceptance is checked within those jobs, not claimed from fixtures.
+
 ## 2026-10-30: repair missing OFFLINE cache in multiview acceptance
 
 User-supplied job 21983825 log, source `de79c729`, shows the two-epoch CONCAT
@@ -47,6 +1438,5131 @@ The old job/watcher cannot be repurposed for the new SPEC/v2 campaign. No source
 commit/push, remote change, job submission or new SPORC/Tigris acceptance was
 performed here. Local synthetic success does not claim remote acceptance.
 
+## 2026-10-30: FullStat retained U100 predictor and matched CE control ready to queue
+
+Implemented the requested Oscar adaptation in the additive
+`src/hlt_classification/luka_fullstat_retained/` namespace, with thin CLI,
+Slurm worker, manual queue and detached launch helpers. The new
+[active plan](plans/LUKA_FULLSTAT_RETAINED_PLAN.md),
+[v1 contracts](contracts/LUKA_FULLSTAT_RETAINED.md) and
+[runbook](LUKA_FULLSTAT_RETAINED_RUNBOOK.md) govern this separate campaign.
+The originating handoff and plan index now point to it. This supersedes the
+earlier documentation-only implementation status below.
+
+Two fresh HLT-only fits on the existing 3M TRAIN / 500k development-validation
+split, 20 epochs, batch128 and original FullStat20 optimizer/schedule/seeds.
+Retained runs CE1 + U100 embedding5; the control runs CE alone using identical
+expanded architecture/initialization. Both deploy the native 128-dimensional representation,
+128->128->128 GELU predictor and learned 256->11 combined classifier. Predictor
+and combined classifier remain in selected.pt and all epoch snapshots; a
+native-only checkpoint fails strict readback. No KD, frozen-readout CE,
+relational objective, teacher replacement or warm start. Final test/unused
+remain sealed. Poor finite metrics never suppress a fit.
+
+The user explicitly chose **retained first, then matched CE-only control**.
+The control's afterany dependency is ordering only; its worker does not load
+teacher targets or require the retained output to succeed. Historical U100-w5,
+readout CE and original M0HLT/OFFLINE remain read-only references. A retained
+result can be reported before the control finishes, with an explicit pending row.
+
+The launcher requires the completed corrected Oscar readout at
+`db9afe8b87cdef6f3489f9b85603f52cf7d2084f`, replayed in its original source,
+to authenticate the original COARSE_U100 bank, dataset and Oscar evidence.
+No standalone preflight/setup jobs: bounded installed-Weaver/graph/gradient,
+maximum-support128, timing/memory and deployment checks run inside each fit
+before fresh initialization. Retained additionally uses the corrected
+historical export batching/backend replay. A local CUDA check caught a
+FP32 retained-vs-BF16 native initialization comparison issue; values are now
+compared in common FP32 without changing training precision or loss.
+
+Both jobs request Oscar L40S, 6 CPUs, 180000 MiB, 24h. Fixed result allowance 8 GiB
+plus 1 GiB filesystem headroom; personally available quota must be at least 9 GiB.
+Per-epoch full state/optimizer/RNG and receipts survive a reporting failure.
+Inference parameter/state sizes, timing and incremental CUDA allocation peaks
+are recorded separately from the preserved scientific-fit peak. The detached
+launcher writes a bounded intent and full dry plan before exact-ID submission;
+no later prompt, retry, old-job cancellation or cleanup. Partial/ambiguous
+submission retains claims/journals for inspection.
+
+Donor mapping is in [LEGACY_SOURCE_MAP](LEGACY_SOURCE_MAP.md): multiview graph
+and readout/runtime/queue patterns at db9afe8b, original FullStat U100-w5 lineage
+at 7ea8b0c6. No existing runtime files were edited and no Fresh_check import added.
+New scientific/artifact namespace: `LUKA_FULLSTAT_RETAINED_*/v1`.
+
+Validation evidence:
+
+- Before edits: focused existing retained/FullStat tests **3 passed, 45 deselected**.
+- Donor regression across new retained, readout, U100 and multiview suites:
+  **190 passed, 2 skipped in 187.85s**. Existing multiview mask-type deprecation
+  warnings remain.
+- After adding final inference-memory reporting: new focused suite
+  **70 passed, 1 skipped in 87.84s**. Includes both complete 20-epoch production
+  worker miniatures with full installed-Weaver CUDA architecture/parity,
+  HLT-only deployed readback, control with teacher-bank access blocked, poor
+  metric continuation, publication failure preservation, protected-root/source
+  validation, exact afterany order and partial-submission failure handling.
+- Python AST, Bash wrappers/documented command syntax, 31 local documentation
+  links and whitespace checks passed. Real Linux HUP/setsid tests skip on
+  Windows; the actual Bash detached-launch flow passes with synthetic commands.
+
+Local synthetic CUDA is not new Oscar/Tigris acceptance. No remote job, source
+push, commit, test evaluation or historical-artifact mutation occurred here.
+Next: commit/push only this implementation and its relevant docs, then use the
+detached runbook block. After DETACHED, SSH may disconnect while source/parent
+authentication and both submissions continue; LAUNCH_COMPLETE confirms them.
+
+## 2026-10-30: U100 retained-predictor code handoff
+
+Added [retained-predictor handoff](LUKA_U100_RETAINED_PREDICTOR_HANDOFF.md), with
+links from the multiview plan/runbook and frozen-readout handoff. It documents
+the existing `u100_use_prediction` graph, CE1 + embedding5 objective, matched
+`hlt_capacity_control`, complete deployment state and FullStat adaptation work.
+The separate FullStat readout CE result from job 8118608 is attributed to the
+user's supplied table, not local artifact authentication. It underperformed
+the supplied U100-w5 reference; no retained FullStat result is claimed.
+
+Focused existing inventory, initialization and retained/control miniature
+readback tests: **4 passed, 23 deselected**. Local links, documented symbols,
+inference-sketch syntax and whitespace checks pass. Documentation only; no runtime,
+contracts or donor files migrated. Existing donor lineage remains in
+`LEGACY_SOURCE_MAP.md`. No real SPORC/Oscar/Tigris execution or jobs changed.
+A FullStat retained-predictor comparison needs separate implementation and
+registration; current FullStat readout strips the predictor at deployment.
+
+## 2026-10-30: correct FullStat readout historical teacher replay
+
+User-provided Oscar accounting/logs identify job **8118177**, source
+`abe387791386507580b7e826850577c2b4cea6cf`, as FAILED after 4m20s in
+`integrated_readout_checks`, before training began (zero epoch receipts).
+Its embedding comparison differed by up to 0.00105989. The log shows an assertion
+failure, not an allocation timeout or OOM.
+
+The startup checker changed the historical export's computation by entering
+strict `parity_backend` (including disabling cuDNN TF32) and scattering rows
+into new batches with different padding. Corrected only this namespace's
+historical replay: complete original contiguous batches, original partial tail,
+ordinary production FP32 backend. Five spread batches plus maximum-support
+batch cover at most 768 TRAIN rows. Unchanged rtol=2e-4 / atol=2e-5 checks remain for
+reconstructed teacher embeddings and logits, with finite checks and logged
+backend/batch/error diagnostics. Fresh native/installed-Weaver comparisons
+still run under strict parity on both sides. The historical bank did not save
+backend flags; new flags describe the replay, not retrospective measurement.
+
+Changed readout worker, registration/contracts, execution version guard,
+readout tests, [plan](plans/LUKA_FULLSTAT_READOUT_PLAN.md),
+[contracts](contracts/LUKA_FULLSTAT_READOUT.md),
+[runbook](LUKA_FULLSTAT_READOUT_RUNBOOK.md) and donor map. SPEC/STARTUP advance
+to v2; new TEACHER_REPLAY is v1. Scientific RECIPE remains v1: same targets,
+loss, optimizer, seeds and schedule. Existing donor runtime is unchanged.
+
+Evidence: before edits, focused baseline **3 passed**. New CPU/CUDA regression
+failed under the old backend override, then passed with original 128/128/17
+export batches and ragged supports 32/65/24. One full-architecture CUDA
+reproduction showed old strict/rebatched maximum embedding error 9.12e-5
+versus 4.77e-7 after the correction. Corrupted targets still fail.
+
+Final focused regression: **120 passed, 1 skipped in 97.31s** across readout,
+readout-launch, historical FullStat U100 and multiview suites. Includes the
+installed-Weaver CUDA production-worker miniature through all20 epochs and
+native publication/readback, version rejection, witness corruption, source/
+allocation guards and detached Bash flow. Real Linux HUP/setsid is skipped on
+Windows. AST, readout documentation links and diff whitespace checks pass.
+Local synthetic CUDA is not Oscar acceptance.
+
+Next: commit/push the scoped fix and launch with the new commit into a fresh
+root, preserving `luka_fullstat_readout_abe38779_r1`. No standalone preflight,
+old job requeue, bank re-export or epoch recovery is needed. Fixed-source Oscar
+execution remains unverified; no remote jobs, commits or pushes performed here.
+
+## 2026-10-30: FullStat U100 frozen-readout CE implemented for Oscar
+
+Implemented the explicitly requested 3M TRAIN / 500k validation adaptation in
+`luka_fullstat_readout`, with [active plan](plans/LUKA_FULLSTAT_READOUT_PLAN.md),
+[v1 contracts](contracts/LUKA_FULLSTAT_READOUT.md), thin CLI/Slurm wrappers and
+[detached launch instructions](LUKA_FULLSTAT_READOUT_RUNBOOK.md). One fresh
+HLT-only student, 20 epochs, batch128, native CE1 + U100 embedding5 + frozen-U100
+readout CE ramped to1 over three passes. The user chose historical completed
+U100-w5 reuse only; no fresh control is queued. Original FullStat COARSE_U100,
+TRAIN moments/bank, seeds and schedule are retained; small-data/hybrid teachers
+and warm-start/meta objectives are not used.
+
+The one Oscar L40S job performs bounded installed/native/readout parity,
+largest-support gradient/memory and measured timing admission inline, followed
+by the scientific fit. No standalone preflight/setup job. Teacher readout is
+frozen FP32 buffers with a differentiable prediction input; the main classifier
+receives native CE only. Native inference discards all auxiliary components.
+Every completed epoch saves full student/predictor, optimizer, RNG and metrics;
+selected native/full states precede final readback/publication. New results
+include native AUC/accuracy and R30/R50/recoveries versus historical anchors and
+U100-w5, on identical ordered validation rows. Test and unused roles stay sealed.
+
+Source guards permit only additive runtime changes after
+`de79c7298a54dcb5818b97772635837e0a769914`; completed U100-w5 is replayed from
+`7ea8b0c693734a26ced3820354e047f4af26c979`. Donor files are recorded in
+LEGACY_SOURCE_MAP. Old runtime and research artifacts were not changed.
+
+Validation: **117 passed, 1 skipped** in 98.39 seconds across new readout and
+historical FullStat-U100/multiview suites. Includes exact zero-readout kernel
+parity, frozen/input/main-head gradient checks, full installed-Weaver CUDA
+production-worker miniature with all20 epochs and native readback, corruption
+and source guards, one-job dry/live mocks, detached Bash smoke and simulated
+final-publication failure preserving every epoch. Linux HUP/setsid test is
+skipped on Windows; no real Linux hangup or Oscar resource claim. AST, CLI help,
+all three shell syntax checks, documentation links and diff whitespace pass.
+Baseline focused tests passed before implementation (55 passed, 3 deselected).
+
+No remote jobs, commits or pushes performed. Next step: commit/push the listed
+additive files, then run the detached Oscar launcher with at least4GiB durable
+quota. Real Oscar source/parent verification and inline resource checks remain
+execution-time requirements; local synthetic CUDA is not remote acceptance.
+
+## 2026-10-30: frozen U100 readout-CE code handoff
+
+Added [the focused readout-CE handoff](LUKA_U100_FROZEN_READOUT_CE_HANDOFF.md),
+linked from the active multiview plan and runbook. It maps `u100_readout_ce` to
+the implementation at `de79c7298a54dcb5818b97772635837e0a769914`: exact teacher/tap,
+TRAIN normalization, frozen-but-differentiable classifier, CE1 + embedding5 +
+three-pass-ramped readout CE, native deployment, artifacts and adapting the
+mechanism elsewhere. It distinguishes CE/KD readouts and retained predictions,
+and explains that the queue helper submits the full registered campaign.
+
+Documentation only; no runtime/schema changes, donor migration, model training,
+remote access or job submission. The inventory plus both readout-gradient
+regressions pass (3 passed, 24 deselected, 8.65s); 52 relative links across the
+handoff/plan/runbook, 24 documented code symbols, code fences and whitespace
+checks pass. Earlier local CUDA/worker evidence remains in the entry below;
+this edit claims no new SPORC acceptance or high-statistics recovery result.
+
+## 2026-10-29: U100 multiview/readout implementation and debug launch path
+
+Implemented the [multiview/readout plan](plans/LUKA_U100_MULTIVIEW_READOUT_PLAN.md)
+under `src/hlt_classification/luka_u100_multiview/`, with thin CLI/Slurm/queue
+adapters, focused tests, [v1 contracts](contracts/LUKA_U100_MULTIVIEW.md) and a
+[runbook](LUKA_U100_MULTIVIEW_RUNBOOK.md). This supersedes the design-only status
+below. No historical runtime, campaign output, dataset or Fresh_check file was
+changed. Source is additive relative to reviewed donor
+`9868f38641d1648e43f519c20e53ec12efe04dc3`; exact donor paths and uses are recorded
+in LEGACY_SOURCE_MAP.
+
+Registered eight fresh fixed30 HLT students: U100-w5, U100+CONCAT, U100+FUSION,
+all three, U100 frozen-readout CE, U100 frozen-readout KD, retained U100 predictor,
+and its HLT-only capacity control. Total embedding weight remains 5 in the seven
+supervised arms; the capacity control uses CE only. Native classification uses
+CE1 throughout. Original regular COARSE_U100 is reused; two new CE-only oracle
+teachers train from scratch. CONCAT is the full untagged HLT/OFFLINE multiset.
+FUSION enriches HLT through native-OFFLINE cross-attention at blocks 2/4/6/8.
+The draft's generic JetClass frontend reference was explicitly reconciled with
+the historical ALLJETS physical-particle/17-feature transform in the plan.
+
+The queue path is **staged debug admission**, as required by this plan: one real
+full-support stress/miniature job, followed by a separately reviewed measured
+science DAG (two teacher fits/exports, U100 reuse validation, eight students,
+report). No arbitrary fit-to-fit dependencies or metric quality gates. Compact
+TRAIN banks have independent TRAIN moments, checkpoint/source/identity hashes
+and classifier reconstruction checks. The original U100 bank built at admission
+is reused without a second export. Historical U100-w5 is imported as retained
+results: original fit/comparison validators still run; its retired TRAIN bytes
+are not required or reused. The retained manifest and receipt must agree.
+Owned-bank retirement is explicit and receipt-bound after all consumers finish.
+
+Validation completed: **38 focused historical U100 tests passed** with
+installed Weaver accessible; **27 new campaign checks passed across full and
+focused runs**, including exact
+full30 historical-baseline training parity, full-size installed-Weaver native
+logit/gradient parity on local CUDA, fusion context/padding/gradient checks,
+both deployed graph forms, frozen readout gradients/T2, bank authentication,
+exact submission/duplicate/partial-claim behavior and owned retirement scope.
+The local CUDA synthetic production-worker DAG ran all ten science fits through
+30 epochs, publication, deployment readback and results validation. Its source,
+Slurm and data providers are fixtures, not remote acceptance. PyTorch emitted
+the inherited mask-type deprecation warning; numerical checks passed. The final
+three-test regression run passed in 70.80s after the node-metadata and result-only
+archive changes; it reran the complete science worker DAG and verified missing
+old TRAIN payloads are accepted while corrupted retained predictions fail.
+Bash syntax, 15 Python parses, 25 scoped documentation links and new-file
+whitespace/EOF checks pass.
+
+No jobs were submitted, and no real SPORC/A100 or real-data miniature is claimed.
+Next: commit/push the complete additive files, queue the runbook's `accept`
+stage on debug, then review its measured requests and queue `science` after
+successful acceptance. Changes preserve unrelated working-tree work.
+
+## 2026-10-29: U100 multiview and predicted-embedding readout design only
+
+Added [the first-campaign design](plans/LUKA_U100_MULTIVIEW_READOUT_PLAN.md) for
+later implementation, plus its plan-index link. It specifies two fresh oracle
+teachers (untagged raw HLT+OFFLINE union; HLT-primary cross-attention), seven
+core student runs and one capacity-matched HLT-only control. Plain mixtures
+hold total embedding weight at 5; U100-only readout CE/KD and retained-predictor
+inference are separate interventions. Students remain fresh fixed30/batch128
+on the original 299234/74895 trial split. Original regular COARSE_U100 is reused,
+not c50 UE100 or FullStat U100. Recommended readout coefficient1 uses a fixed
+three-pass ramp; retained-head initialization exactly preserves native logits.
+
+No runtime was changed, donor file migrated, executable contract added, job
+submitted, or remote artifact accessed. The inspected code revision was
+9868f38641d1648e43f519c20e53ec12efe04dc3; the design maps candidate reuse and
+explicitly warns against tagged-concat and dataset-incompatible fusion donors.
+New source/lineage contracts, real support/resource acceptance, installed-Weaver
+parity and exact dry-plan authorization remain implementation work. The design
+is not queue-ready and does not supersede historical execution contracts.
+
+Pre-edit focused test attempt: 33 passed, 8 failed because the local environment
+could not import Weaver, and 3 cases deselected (two GPU tests and an unbounded
+repository Markdown scan). The earlier repository-wide link scan was stopped;
+new-document links are checked separately without traversing temporary trees.
+Post-edit: **33 selected dependency-free U100/scaffold checks passed** in 32.49s
+(11 deselected: the eight Weaver-dependent cases, two GPU checks and the broad
+link scan). All **82 relative links** across the new plan and plan index resolve;
+the eight-arm inventory, untagged/design-only boundaries and scoped whitespace
+checks pass. No new model/Weaver/GPU or SPORC acceptance is claimed. Existing
+unrelated working-tree edits are preserved.
+
+## 2026-10-29: guarded FIXED diagnostic roundoff repair (v3)
+
+User-supplied SPORC log for setup `21977273` at
+`luka_meta_guard_691cccf3_shared_w5_debug_r1` shows authenticated parent reuse,
+native/maximum-support checks and two disposable FIXED blocks completing before
+`validate_report` raised `Invalid signed adapter diagnostic`. The paired query
+CE deltas were approximately +5.364418e-7 and +5.9604645e-8 with zero residual
+RMS. The v2 exact-zero loss comparison rejected them; dependent fits
+`21977274`/`21977275` never started. This was not a scientific result or evidence
+of poor guard/META performance.
+
+Guard `training.py` now uses an absolute-only `1e-6` tolerance for FIXED's
+separately evaluated query losses. Both residual RMS and maximum remain exactly
+zero; raw finite losses and their exact signed subtraction remain authenticated.
+No rounding/clamping, relaxed target identity, relative tolerance or META
+improvement gate. Larger FIXED discrepancies and corrupt/nonfinite evidence
+still fail closed with a more specific error. Scientific training, guard,
+initialization, native HLT inference and all imported runtime are unchanged.
+
+V3 contracts/recipe hashes and queue authorization bind the numerical policy;
+v1/v2 records must still use their original source. Changed guard contracts,
+training, queue helper, focused tests, plan/contract/runbook and provenance docs.
+Donor `691cccf357b7c97e6aa6063469fa9061cb4fba29`; exact paths are recorded in
+LEGACY_SOURCE_MAP. No external migration or old runtime changes.
+
+Validation: baseline 22 passed/3 GPU cases deselected; four new signed roundoff
+cases reproduced the original failure before the fix. After repair, **54 guard
+tests** pass across focused runs: 52 CPU/contract tests (32.87 seconds; two GPU
+checks initially skipped because the dependency was sandbox-inaccessible), then
+both installed-Weaver 0.5.3 CUDA checks passed with dependency access (721.89
+seconds). These cover full-size native parity/hypergradient/paired diagnostics
+and synthetic shared-w5 setup plus both complete 20-block worker fits, all 475
+science META updates, native/full readback, receipt/results and tamper rejection.
+The worker miniature uses reduced model depth and mocked source/Slurm/cache
+boundaries, not real SPORC data/resource evidence. The separate completed_fixed
+CUDA worker variant was not rerun; both initializer CPU checks pass.
+All **16 selected parent regressions** pass with Weaver available (18.20 seconds;
+four heavier cases deselected). Bash syntax, CLI help and scoped whitespace
+checks pass. Original shared docs contain unrelated uncommitted material and
+are preserved, not staged wholesale.
+
+No cluster jobs, old artifacts, datasets or Fresh_check were changed; no commit
+or push. Next: commit/push only the scoped repair, then launch from a new clean
+worktree/root using `shared_w5`. The failed root
+must be kept intact. Its unfinished setup is not reusable; new inline checks
+remain mandatory, but no teacher/target export/predictor calibration reruns.
+
+## 2026-10-29: guarded continuation after cancelled original fits (v2)
+
+User cancelled original FIXED/META before completion. The v1 launcher stopped
+before guarded-root creation/submission because it required a completed FIXED
+selected full state. No such state can be reconstructed from epoch logs.
+
+Added explicit `shared_w5` initialization: reuse the original completed setup's
+`initial/student.pt` (historical OFFLINE-w5 native weights plus the already
+calibrated predictor). Original-source replay authenticates setup receipt and
+scheduler completion, calibration, native checkpoint and all bank/reference
+artifacts, never reading cancelled-fit outputs. No old fit, teacher, target
+export or calibration is rerun. `completed_fixed` remains a separate explicit
+mode requiring FIXED completion. Both new arms always share one initializer.
+
+All guard artifacts and authorization are v2. Spec/recipe/report hashes bind the
+initializer; roots include its mode; results label `PARENT_SHARED_W5` separately
+from `PARENT_FIXED`. V1 artifacts stay in their original pinned source. Guard,
+losses, 20 half-pass blocks, meta-update schedule and three-job debug DAG are
+unchanged. This shared-w5 mode starts before the cancelled continuation and must
+not claim its observed validation improvement as an inherited checkpoint gain.
+
+Changes are limited to guard source/contracts, CLI/queue helper, focused tests
+and its plan/contract/runbook plus these provenance notes. Donor revision:
+`a65caa78913e5e31a89ff7855b6f184605881d22`; exact reuse is in LEGACY_SOURCE_MAP.
+Concurrent commit `b9cf63b0bf4a037e11ece91da21db465d2347b96` adds only isolated
+FullStat fine-tuning runtime. V2 pins that compatibility base and permits only
+guard-owned modifications afterward; old scientific runtime remains unchanged.
+Local evidence: all 25 guard tests passed across focused runs. The 23-test GPU
+run passed in 789.50 seconds, including full-size native parity/hypergradient and
+production setup plus both 20-block fits for BOTH initializer formats (475 META
+updates per mode, native/full readback and result/receipt checks). The two later
+source-compatibility and create/spec tests also passed in the final 22-test CPU
+run (25.72 seconds for its 21-test predecessor; 23.59 seconds for all 22).
+All 16 selected parent regressions passed (four heavier cases deselected).
+These use synthetic data, reduced-depth worker models, and mocked source/Slurm;
+they do not establish real-SPORC resource or scientific performance evidence.
+CLI help, Bash syntax and scoped whitespace checks pass. Initial commands required adding the
+repository PYTHONPATH and then the worker's deterministic cuBLAS environment;
+these were test-launch configuration errors, not bypassed production checks.
+No remote artifacts/jobs were changed and this fix was not committed or pushed
+by this agent. Next: commit/push scoped guard changes, then use the runbook's
+`queue_luka_meta_guard.sh shared_w5` in a clean new worktree. Actual SPORC setup
+artifacts and resource admission remain required; there is no separate preflight.
+
+## 2026-10-29: Oscar FullStat fine-tail DE000 low-LR refinement, locally queue-ready
+
+Added `src/hlt_classification/luka_fullstat_finetune/`, thin CLI/Slurm/manual and
+detached launch helpers, two focused test files and
+[queue instructions](LUKA_FULLSTAT_FINETUNE_RUNBOOK.md). Authority:
+[active plan](plans/LUKA_FULLSTAT_FINETUNE_PLAN.md) and
+[new v1 contracts](contracts/LUKA_FULLSTAT_FINETUNE.md).
+
+One continuation of the completed fine-tail DE000 at
+`luka_fullstat_fine_tail_k1_e40_04d1f0f5_r1`, reported selected epoch20,
+AUC0.96688543 /31.8% recovery. This is not the prior split-head DE000 or
+the separate meta-embedding campaign. All original runtime files, teacher
+banks/models, other jobs and unrelated dirty work remain unchanged.
+
+The parent discarded auxiliary heads and AdamW state: explicitly a warm start,
+not exact resume. Restore native HLT parameters/buffers; cache frozen eval-mode
+TRAIN features once in RAM and calibrate seven embedding plus seven logit heads
+for three TRAIN passes, preserving the native state byte-for-byte. Then run ten
+additional full-TRAIN epochs with fresh original-group AdamW, cosine LR1.5e-5
+to1.5e-6 and absolute sampler epochs21-30. CE0.5/K1/E40, batch128 and teacher
+order remain OFFLINE/UE100/DE066/DE033/M0HLT/DE022/DE011. No relational or meta
+adaptation, new teachers, new split, or final-test access.
+
+Baseline-inclusive selection retains the unchanged initializer as epoch0; all
+ten new epochs still run, and best-new validation is separately reported.
+Every completed epoch saves full model/optimizer/Torch RNG plus a bound receipt.
+Selected native/full state and completed report are durable before final
+publication checks. Partial attempts are preserved, not automatically resumed.
+Same 3M TRAIN/500k validation, unchanged HLT-only inference, adaptive single-seed
+development with more training/selection budget. Improvement is not promised.
+
+Exactly one Oscar L40S GPU job, 6CPU/180000MiB/24h ceiling and4GiB result budget;
+zero standalone preflight/setup jobs. Reuses original repaired runtime and
+acceptance. Mandatory short disposable installed-Weaver/native/gradient,
+maximum-support memory and bounded timing checks execute inside the fit job.
+Detached launch authenticates parent in its original source, saves the complete
+dry plan and submits one explicitly authorized job without further prompts.
+Exact source, allocation, scheduler completion, hashes and claims fail closed.
+No cancellation, deletion, automatic retry or full-test operation is provided.
+
+Evidence:116passed,2skipped across new continuation/launch and original
+fine-tail/launch suites (155.76s). New files account for51passes and one
+Linux-only HUP skip; the other skip is the historical HUP test. Actual Bash
+detached-flow smoke passes with synthetic commands. The new CUDA worker
+miniature used installed Weaver0.5.3 and the full native ParT architecture,
+synthetic22 TRAIN/22 validation rows, full three-pass calibration and ten added
+epochs, native/full checkpoint readback, result publication and corruption
+rejection. Source/scheduler/cache loading boundaries were mocked in that
+miniature; original bank/ROOT/view regressions also passed. AST, Bash syntax,
+CLI help, required-file/Markdown-link and whitespace checks pass. No real
+Oscar/Tigris execution, commit, push, submission or job change was performed.
+
+Donor baseline:`c10d2205677bae4769d45da447c338165bc6724f`;
+compatibility baseline:`a65caa78913e5e31a89ff7855b6f184605881d22`
+(isolated meta-guard commit landed during testing; parent runtime unchanged);
+completed parent:`04d1f0f5945ab9af38d83e192eff48e124ad8dc5`.
+Exact donor paths are in LEGACY_SOURCE_MAP. Next: selectively commit/push the
+new files, then launch from that clean pushed worktree with the completed
+parent and personally verified quota. Real Oscar inline admission remains.
+
+## 2026-10-29: guarded SPORC meta-embedding continuation
+
+Added `src/hlt_classification/luka_meta_guard/`, thin CLI/Slurm/queue helpers,
+focused tests and [runbook](LUKA_META_GUARD_RUNBOOK.md). Scientific authority is
+the [new active plan](plans/LUKA_META_GUARD_PLAN.md) and
+[v1 contract](contracts/LUKA_META_GUARD.md). Existing scientific runtime,
+running campaigns and unrelated work are unchanged.
+
+Both arms require the completed original `7a6dc268` FIXED selected **full**
+student, including its trained auxiliary predictor. Original-source replay
+requires setup and FIXED receipts, exact scheduler completion and source hashes;
+META completion is unnecessary. The original OFFLINE teacher/classifier,
+normalization and target bank are reused read-only. No target export, teacher
+retraining or predictor calibration. Both use CE1+embedding5 with no student KD,
+fresh AdamW at 5e-6, and 20 half-pass blocks (ten additional passes).
+
+Original 95% TRAIN inner membership is retained; the original 5% query pool is
+split into meta-query and guard. Guard AUC, not reporting validation, controls a
+0.0002-tolerance/two-block-patience policy, capped at three student+optimizer
+rollbacks and LR halvings. Adapter and adapter-optimizer progress survive.
+The full block budget continues even after the cap; poor finite performance is
+not an execution failure. META gets 100 stationary adapter-only updates before
+block 1, 25 before blocks 2–16, then freezes; five-step full-student functional
+AdamW uses the current real LR. FIXED gets the same guard and real schedule.
+
+Block zero is eligible for final validation selection. Improving full states and
+each completed block's history are published durably. Native HLT-only state is
+read back against selected predictions; auxiliary heads remain absent at
+inference. Guard feedback is adaptive TRAIN use, not an independent test.
+Historical M0HLT/OFFLINE recovery anchors remain fixed; original50k is report-only.
+
+Execution: shared inline-check/setup job plus two independent debug fits,
+6 CPUs/90,000 MiB/one A100/up to 12 hours each, fixed 4-GiB persistent allowance.
+No separate preflight, automatic resubmission, cleanup, or existing-job changes.
+Setup still requires installed-Weaver parity, maximum-support real/virtual checks,
+recipe-LR hypergradient evidence, and two whole disposable blocks per arm for
+runtime/memory admission. Exact pushed clean source and dry-plan authorization
+are required. Donor baseline is `c10d2205677bae4769d45da447c338165bc6724f`; see
+`docs/LEGACY_SOURCE_MAP.md` for paths and the original execution pin.
+
+Local evidence: all 16 new tests passed across focused runs. The new installed-
+Weaver CUDA worker miniature completed shared setup and both full 20-block loops,
+including all 475 science adapter updates, native/full readback, receipt/result
+validation and corruption rejection (14-test run: 504.10 seconds). Separate
+checks cover full-size native inference parity/five-step hypergradient at 5e-6
+and explicit TRAIN/validation overlap rejection. The worker miniature uses
+synthetic 3,200 TRAIN/22 validation jets, reduced model depth with the genuine
+128-dimensional tap, and mocked scheduler/source authentication; it is not
+SPORC scientific or resource evidence. All 20 existing meta-embedding regression
+tests also passed, including the prior two-arm 30-epoch CUDA worker miniature.
+CLI help, both Bash syntax checks and whitespace checks pass.
+No SPORC/Tigris jobs were submitted;
+real-cluster/full-population inline acceptance remains outstanding. Queueing also
+requires the completed original FIXED artifact and a committed/pushed clean source.
+
+## 2026-10-29: Oscar FullStat U100-w5 meta-embedding continuation, locally queue-ready
+
+Implemented the user-approved additive Oscar port under
+`src/hlt_classification/luka_fullstat_meta_embedding/`, with thin CLI, Slurm
+wrapper, manual/detached queue helpers and two focused test files. Authority:
+[active plan](plans/LUKA_FULLSTAT_META_EMBEDDING_PLAN.md),
+[new v1 contracts](contracts/LUKA_FULLSTAT_META_EMBEDDING.md),
+[queue/runbook](LUKA_FULLSTAT_META_EMBEDDING_RUNBOOK.md).
+This does not change the SPORC OFFLINE-w5 30-epoch campaign or historical runtime.
+
+Both arms continue the exact selected FullStat U100-w5 native student and use
+its original regular COARSE_U100 teacher, not hybrid UE100 or OFFLINE.
+Original-source replay authenticates completion, selected model, references,
+bank, prepared data and prior acceptance. Existing TRAIN target bytes and
+normalization are reused read-only; no large bank is duplicated. Since the old
+checkpoint discarded its auxiliary head, shared setup calibrates a fresh head
+for three passes with every native tensor frozen, then supplies the SAME full
+initializer to both arms.
+
+Science: matched FIXED versus META, CE1 + embedding5, fresh AdamW at 0.1 times
+the FullStat LR curve, 20 additional epochs. Exactly 150,000 identity-selected
+TRAIN query rows are excluded from real updates/calibration in both arms;
+2,850,000 TRAIN rows remain for real updates. The original initializer saw the
+query rows, so these are not an independent holdout. Validation stays the same
+500,000 rows; final-test and unused populations stay sealed. META uses the
+unchanged bounded adapter and five-step full-student functional AdamW core,
+every 100 real batches in epochs 3-17, with identity warmup in 1-2 and frozen
+adapter in 18-20. No student logit KD, neighborhood/relational loss or inference
+architecture change. Primary comparison is META minus matched FIXED, not raw
+improvement over the historical checkpoint.
+
+Queue topology: useful shared GPU setup followed by independent fixed/meta
+jobs via exact afterok dependencies; no separate preflight job. Setup verifies
+installed-Weaver parity, maximum-support higher-order gradients, native readback
+and whole-population technical epoch/validation timings for BOTH arms. Failed
+technical admission prevents the fits; poor finite metrics do not. L40S,
+6 CPU, 180000 MiB; ceilings 12h setup / 24h fixed / 48h meta. These are ceilings,
+not measured Oscar duration claims. The result allowance is 8 GiB, not the
+user's entire declared quota. Uses the existing verified runtime_repair_v1
+prefix. Completed native/full fit states are saved before publication checks;
+there is no implicit rolling resume, deletion or ambiguous scheduler retry.
+
+The detached launcher saves bounded authorization and a full dry review, then
+submits exactly three jobs without another prompt. It immediately tails a log;
+submission continues after SSH disconnect. Exclusive claims and exact journals
+prevent silent duplicate submissions. Host reboot/admin kill is not covered.
+
+Local evidence: scientific Python3.10/Torch2.5.1, pinned installed Weaver0.5.3,
+CUDA, bytecode writes disabled:
+
+- Pre-edit meta/U100 donor regression: 51 passed in 216.76s.
+- Final four-suite regression: 104 passed, 1 Linux-only real HUP/setsid test
+  skipped on Windows, in 335.17s. Includes native/auxiliary parity, functional
+  five-step gradients and a production-worker shared setup plus BOTH complete
+  20-epoch continuations on synthetic data with reduced Weaver depth and mocked
+  remote/cache boundaries. The meta miniature retains the exact five-step,
+  support16/query64, every100-batch cadence and full 3-17 update window.
+- Two final immutable-registration/portable-shell checks passed (53 deselected)
+  in 5.53s. One adds coverage beyond the preceding regression; the other reruns
+  the portable launcher contract. Bash script/runbook examples pass syntax
+  checks; all three relative links in the new documents resolve.
+- Exact three-job dry/live simulation, failure/tamper checks and actual Bash
+  detach/tail smoke passed. Windows smoke stubs setsid and is NOT real Linux
+  disconnect or Oscar validation evidence.
+
+Donor/source details are recorded in [LEGACY_SOURCE_MAP.md](LEGACY_SOURCE_MAP.md):
+internal compatibility baseline `7a6dc268800b0788e0e89d7ec56db37583397946`,
+original U100-w5 source `7ea8b0c693734a26ced3820354e047f4af26c979`. No historical
+runtime, dataset, model or remote job changed. No commit, push or submission
+performed; existing unrelated edits are preserved. Real Oscar/Tigris execution
+was not run locally. Next: commit/push the scoped implementation, then use the
+runbook's detached launcher. Real L40S admission must still pass inside setup
+before the scientific jobs are released; local queue readiness is not a claim
+of production resource acceptance or scientific improvement.
+
+## 2026-10-29: student-benefit embedding strategy/code handoff
+
+Added [LUKA_META_EMBEDDING_STRATEGY_HANDOFF.md](LUKA_META_EMBEDDING_STRATEGY_HANDOFF.md)
+and linked it from the existing runbook. It explains the frozen OFFLINE teacher,
+bounded target adapter, five-step virtual AdamW feedback, shared predictor
+calibration, matched fixed-target continuation, exact objectives and schedule,
+code/dependency map, debug queue/results commands, saved states and porting
+requirements. It explicitly distinguishes teacher-target preservation from the
+separate, unimplemented classifier-on-predicted-embedding idea.
+
+Documentation only: no scientific code, contract version, remote asset or job
+changed; no donor code copied. Verification: 22 relative links and three Bash
+examples checked; focused local suite excluding the long CUDA worker test:
+12 passed, 7 skipped (Weaver unavailable in the selected local environment),
+1 deselected. Earlier implementation evidence below is not relabelled as a new
+remote run. Real SPORC inline setup acceptance and scientific outcomes remain
+unverified in this conversation. Existing unrelated work was preserved.
+
+## 2026-10-28: OFFLINE-w5 student-benefit continuation, debug queue implementation
+
+Implemented an additive matched two-arm continuation campaign under
+`src/hlt_classification/luka_meta_embedding/`. Authority:
+[active plan](plans/LUKA_META_EMBEDDING_PLAN.md),
+[v1 contracts](contracts/LUKA_META_EMBEDDING.md),
+[queue/runbook](LUKA_META_EMBEDDING_RUNBOOK.md).
+
+The user confirmed nonempty original OFFLINE-w5 and fixed30 OFFLINE checkpoint
+paths on SPORC. That is presence evidence, not remote artifact authentication.
+Registration replays original fixed30 and original debug-w5 fit/receipt evidence;
+the latter no longer needs retired target payloads or other sweep arms. Setup
+requires a new compact OFFLINE TRAIN export to reproduce the actual historical
+bank hash exactly. No original checkpoint, dataset or Fresh_check file is changed.
+
+Important checkpoint finding: old w5 stores native encoder/classifier/buffers,
+not its predictor or optimizer. Shared setup calibrates a fresh predictor for
+three inner-TRAIN passes with native weights/buffers frozen, then publishes one
+full initializer used by BOTH arms. Both use CE1 + embedding5, fresh AdamW,
+the0.1x fixed30 LR curve and30 additional epochs. Five percent of TRAIN is an
+identity-defined query subset excluded from both arms' real updates/calibration;
+the old initializer already saw it, so it is not independent holdout evidence.
+
+`fixed` retains the original OFFLINE targets. `meta` learns a small bounded
+identity-initialized residual target adapter, differentiating through FIVE
+full-student AdamW updates every100 real batches in epochs4–25. Query CE is on
+TRAIN-internal HLT only. Original teacher-prediction KL and target-residual
+penalties preserve meaning; this is NOT student logit KD and does not reward
+teacher-only CE improvements. The original teacher/classifier stays frozen.
+Virtual parameters, optimizer moments, BN buffers and RNG are isolated; final
+five epochs freeze the adapter. All auxiliary machinery is absent at inference.
+
+Queue topology: `lukame_setup` followed by independent `lukame_fixed` and
+`lukame_meta`, all SPORC A100 debug,6CPU/90,000MiB, registered12h ceilings.
+No standalone preflight. Shared useful setup includes mandatory real installed
+Weaver, maximum-support FIVE-step higher-order checks and whole-population
+technical timing/memory probes before afterok-dependent fits may start.
+Persistent budget is fixed4GiB, not the user's whole available-space declaration.
+Full dry review, explicit hash authorization, exact journal IDs and no ambiguous
+automatic retries are enforced. Poor finite metrics never reject an experiment.
+
+Local evidence (Torch2.5.1, isolated installed weaver-core0.5.3, CUDA):
+
+- Pre-edit focused warm-start baseline:2 passed,17 deselected.
+- New campaign plus unchanged donor suites (`test_luka_meta_embedding.py`,
+  `test_luka_ce_warmstart.py`, `test_luka_embedding_aux.py`,
+  `test_luka_embedding_sweep_debug.py`): **101 passed in291.90s**.
+- Final tightened virtual CPU/CUDA RNG/autocast isolation and other fast checks:
+  **19 passed,1 deselected in16.79s** (long worker test excluded in this rerun).
+- Full-size native ParT five-step CUDA hypergradient and inference parity;
+  finite-difference meta gradient and functional-vs-Torch AdamW checks.
+- Actual production worker entry points on synthetic13,475 TRAIN jets and
+  reduced-depth installed Weaver: shared setup, both full30 continuations,
+  all22 miniature meta events with unchanged5-step/100-batch cadence, native and
+  full-state readback, partial/final results, duplicate-task and corruption
+  rejection. Slurm/source/data boundaries mocked, NOT cluster acceptance.
+- Original-w5 replay program executed against real historical-format miniature
+  fit artifacts with its target payload removed; checkpoint corruption rejected.
+- CLI help/AST checks, Bash syntax, dry/authorized mock DAG, lost-reply protection,
+  wrong-source/storage/resource/role checks. No external scheduler called.
+
+No real SPORC/Tigris run, commit, push, submission or cancellation was performed.
+Next: review/commit/push only the additive files plus scoped documentation, then
+use the runbook's detached-worktree helper. Queue-ready implementation does not
+mean that real A100 resource acceptance or scientific improvement is established.
+Existing unrelated dirty work and prior campaign semantics were preserved.
+
+## 2026-10-28: FullStat smooth-w10 Oscar port, one fit without standalone preflight
+
+Implemented the user's confirmed one-arm choice: one fresh HLT-only DE000,
+historical previous-DE000 reference, no matched control or new teachers.
+Active authority: [plan](plans/LUKA_FULLSTAT_NEIGHBORHOOD_PLAN.md),
+[contracts v1](contracts/LUKA_FULLSTAT_NEIGHBORHOOD.md),
+[queue/runbook](LUKA_FULLSTAT_NEIGHBORHOOD_RUNBOOK.md).
+
+Exact frozen OFFLINE/hybrid UE100/recovered non-relational split-head DE066/DE033
+are authenticated by replaying the completed finalization/retry DE000 source.
+No M0HLT, fine-tail DE022/DE011, or newer relational teachers are targets.
+The user-selected 3M TRAIN/500k validation, 20 epochs, physical batch 128 and native HLT
+inputs remain unchanged. Recipe CE0.5/K1/E40 uses separate heads; smooth10 adds
+an isolated-seed94271 block8 Linear128-GELU-Linear36 predictor. All auxiliary
+heads are removed for inference; original final test stays sealed.
+
+New additive namespace `luka_fullstat_neighborhood` implements bounded physical
+TRAIN target extraction with exact native D000 replay, one ragged FP32 Gaussian
+bank, equal-jet TRAIN normalization, resident vectorized target gathers,
+original-contract compact teacher-bank reuse, in-worker parity/gradient/support/
+timing checks, complete 20-epoch training, native checkpoint readback and R30/R50 results.
+Completed native state/report are saved before publication checks. Partial output
+and all historical artifacts are preserved; no automatic retry or deletion.
+
+Queue is exactly two jobs: CPU targets then L40S training via afterok; no
+standalone preflight. Separate result/target quota declarations, actual support
+size and host-memory bounds gate allocation. New reproducible targets use an
+explicit scratch root; native models and reports remain in home. Detached
+nohup/setsid helper saves an exact dry plan before the authorized live submission,
+keeps immutable claims/journals and immediately tails. No old job is changed.
+
+Local evidence: baseline target checks 4 passed; final new-campaign suite
+49 passed, 1 skipped (real Linux HUP test cannot run on Windows). Included:
+real synthetic FullStat ROOT and sealed-role guards, deterministic spawned target
+construction, installed Weaver 0.5.3 CPU/GPU FP32/BF16 native equality, all-head and
+CE-only gradients, zero-neighborhood 20-update native parity, complete 20-epoch
+production GPU miniature, recovered-parent replay, JSON publication checks,
+fake-scheduler two-job dry/live/ambiguity guards, CPU/GPU runtime guards, Bash
+syntax and detached-shell smoke. The Windows smoke stubs setsid; it is not a
+real Linux disconnect proof. Final combined regression: **159 passed, 2 skipped**
+in 378.19 seconds, covering both new test files plus neighborhood, fine-tail and
+fine-tail launch regressions. Both skips require real Linux HUP/setsid.
+An earlier run exposed a path-check ordering issue; it was fixed before this
+clean combined rerun. Test base: `.tmp/fullstat-neighbor-regression-final-01`.
+
+Testing used the existing tagging-hlt interpreter with pinned Weaver installed
+in a new workspace-only `.tmp/fullstat-neighborhood-weaver-v1` directory,
+PYTHONDONTWRITEBYTECODE=1 and CUBLAS_WORKSPACE_CONFIG=:4096:8. No global environment
+was changed. Source baseline/donor commit and files are in LEGACY_SOURCE_MAP.
+Existing runtime files remain byte-unchanged; unrelated dirty documents remain.
+
+No real Oscar/Tigris job, installed-Oscar check, push, commit, cancellation,
+inference on real data or final-test access was performed. Exact next step:
+review/stage the scoped changes, commit/push, create an exact clean Oscar worktree,
+confirm personal quotas and invoke the detached helper in the runbook. Real
+allocation/runtime/startup admission remains enforced inside the authorized jobs.
+
+## 2026-10-28: smooth_w10 code and porting handoff (documentation only)
+
+Added [the standalone smooth_w10 handoff](LUKA_SMOOTH_W10_NEIGHBORHOOD_HANDOFF.md)
+against implementation commit `62f9773aabd150004be9c319d6ed06c412fcc57a`.
+It documents the unchanged CE0.5/K1/E40 baseline, exact physical Gaussian
+targets, TRAIN normalization, block-8 attachment, loss reductions, native-only
+inference, code/API map, existing full-screen queue path and safe porting scope.
+It distinguishes a new single-arm adaptation from the registered fourteen-arm
+campaign and records the user-supplied storage failure without assuming that
+the proposed restart or any submission subsequently succeeded.
+
+Only this entry and the new document changed. No donor code migrated, contracts
+changed, source/runtime edited, jobs submitted/cancelled, or data deleted.
+Evidence: eight focused scaffold/registration/target/loss tests passed before
+editing and again afterward (4.47s final run); all32 local links in the new
+handoff resolve, three Python snippets parse, and the recipe-inspection example
+executes with the expected weights. Two additional pre-edit model checks failed
+at construction because `weaver.nn` was unavailable in this local environment;
+they do not establish a new parity failure or parity pass. No genuine remote
+acceptance or neighborhood result was produced. Existing unrelated work remains.
+Next: share the handoff; any requested port needs its own reviewed registration
+and runtime acceptance, not edits to old source or immutable campaign specs.
+
+## 2026-10-28: offline-neighborhood screen implemented, direct debug
+
+Implemented the subsequent user request under the new
+[active plan](plans/LUKA_NEIGHBORHOOD_PLAN.md),
+[v1 contracts](contracts/LUKA_NEIGHBORHOOD.md) and
+[runbook](LUKA_NEIGHBORHOOD_RUNBOOK.md). This supersedes the earlier
+documentation-only status below. Fourteen fresh native HLT fits retain the
+CE0.5/K1/E40 baseline and add smooth/annular/correction neighborhood supervision,
+with HLT-only neighborhood controls. Original seeds, batch128, fixed30 and split
+remain; smooth_w3/smooth_w10 go first, not a claim they will win.
+
+Queue graph: sixteen debug jobs (shared preparation,14fits,report), two GPU lanes,
+no new teacher, baseline rerun or standalone preflight. Exact pushed-source,
+original-source import, full dry review and explicit plan-hash authorization
+remain required. Shared preparation and fits perform disposable parity,
+CE-only-main-head gradient, maximum-support memory and population-timing checks;
+all probe state is discarded before science. Failure of an independent fit does
+not cancel other independent fits through capacity edges. No old jobs changed.
+
+New package: `src/hlt_classification/luka_neighborhood/` (contracts, physical
+targets, streaming banks, removable head, training, startup, source import,
+campaign, submission, workers and retention). New CLI and queue/Slurm wrappers,
+focused test module and plan/contract/runbook; scientific handoff updated with
+the explicit no-separate-preflight amendment. Internal donor commit
+`5d55d602549ff47c6301e74b712786650c3bf8f4`; file provenance is in LEGACY_SOURCE_MAP.
+All historical tracked scientific runtime bytes are unchanged. Existing unrelated
+documentation and untracked user work were preserved.
+
+Three new ragged FP32 descriptor banks are built from selected TRAIN only;
+every HLT query is replayed against exact existing input bytes/order. Borrowed
+four-teacher compact banks are reused in place. Actual support/quota admission
+precedes allocation. Histories retain all30epochs, per-family and36-channel
+diagnostics, AUC/accuracy, recovery/delta and progress. Native selected models,
+predictions and results remain. Only the three owned descriptor payloads can be
+retired, by separate hash-reviewed authorization after all fits/report complete;
+post-retirement reporting is tested. No cleanup was performed on research data.
+
+Local evidence: **45 new focused tests passed across final scoped runs**:
+43 non-production checks (47.73s),1 exact-allocation check (8.65s),1 complete
+fourteen-worker CUDA miniature with report/retirement/tamper checks (168.92s).
+The final allocation check separately covers the walltime guard that is mocked
+at the scheduler boundary in the miniature. Inherited depth+recovery regression:
+122passed,2Windows-symlink-privilege skips (378.28s). Additional evidence includes
+synthetic real-ROOT TRAIN access/HLT-byte replay, hand-computed target kernels,
+normalization/masking, CPU/CUDA FP32/BF16 parity and exact zero-new-loss fixed30
+native checkpoint parity. Shell syntax, whitespace/EOF and26local documentation
+links passed before this final status entry. No old runtime file changed.
+
+Tests used tagging-hlt Python, isolated workspace `weaver-core==0.5.3` installed
+with `--no-deps` under `.tmp/neighborhood-weaver-deps`, no bytecode, CUBLAS
+`:4096:8`, and fresh temporary test directories. Existing protected temporary
+dependencies were inaccessible; the Python environment itself was not modified.
+Synthetic worker tests stub scheduler/source admission and resource accounting;
+they are **not genuine SPORC/Tigris acceptance or full-data runtime evidence**.
+No remote jobs, submissions, cancellations, commits or pushes were performed.
+
+Next: review/commit/push the scoped release, create its pinned SPORC worktree,
+then use `scripts/queue_luka_neighborhood.sh` and the saved dry-plan review.
+Live original-source authentication, quota and in-job A100 admission must pass.
+Do not bypass a failure or substitute teachers/banks. Recovery improvements
+remain the scientific question, not an implementation acceptance requirement.
+
+## 2026-10-28: offline-neighborhood prediction design (not implemented)
+
+Added the user-requested
+[offline-neighborhood strategy handoff](LUKA_OFFLINE_NEIGHBORHOOD_STRATEGY_HANDOFF.md).
+It specifies a preferred smooth multi-scale OFFLINE-neighborhood head at weight 3
+on the unchanged CE0.5/K1/E40 baseline, plus a proposed 14-fit annular/smooth/
+correction screen and HLT-only structural controls. It defines geometry, target
+transforms, equal-jet normalization/loss, RNG/inference isolation, target-bank
+budgets, retirement safeguards, code reuse and future debug acceptance.
+This is documentation only: no implementation, new runtime contract, donor
+migration, submission, cancellation, data change or cleanup. Existing running
+depth/recovery campaigns remain unchanged. Next: implement and verify the new
+package before producing executable queue instructions. Local evidence:
+4 focused scaffold/inherited-recipe tests passed before and after the edit;
+all 16 local links in the new document resolve, and whitespace checks passed.
+No genuine research-compute acceptance was performed for this new design.
+
+## 2026-10-28: explicit interrupted set8_p3 restart, recovery v2
+
+The user cancelled original set8_p3 job21973955 after starting. The v1 inventory
+correctly refused it before creating the recovery claim or submitting new jobs;
+targets/baseline were not damaged. The user then authorized the narrow restart
+amendment in [the active plan](plans/LUKA_DEPTH_RECOVERY_PLAN.md).
+
+Added `luka_depth_recovery/interrupted.py`, restart-plan/restart CLI commands and
+`restart-set8-p3` helper mode. This separately reviewed operation authenticates
+the exact original journal/source/stopped accounting and completed controls,
+hashes the entire partial task plus its log, writes an exclusive intent, then
+renames only that directory into an original-root archive. No deletion, selected
+checkpoint reuse, general failed-job exception, or automatic crash retry.
+Late cancellation with a saved checkpoint/fit receipt requires separate review.
+Unapproved interruptions, changed bytes, links, existing claims, or incomplete
+archive receipts still fail closed. Log remains in place; datasets/Fresh_check
+and old node-local scratch are untouched.
+
+New v2 recovery contracts explicitly record the archive receipt in SPEC and
+RESULTS. The same registered set8_p3 restarts from epoch1 for all30epochs with
+unchanged seed/objective, at the end of lane A. CE-diverse/duplicate/SupCon stay
+early; the two-lane GPU bound, shared-target reuse and completed-control reuse
+remain. No preflight or shared-target job is added. If only targets/baseline
+completed, queue22jobs:19students,2teachers,1report, not an extra scientific row.
+Historical v1 artifacts/source are not rewritten or accepted as v2.
+
+Changed recovery package, CLI/helper, focused tests and plan/contract/runbook;
+only new sections added to the already-dirty shared HANDOFF and donor map.
+Operational donor8a80162f210437fe6c21d157543c57008887eeed; original scientific
+runtime remains byte-identical. No external donor/import or optimizer change.
+
+Local evidence: baseline44passed before edits. Combined recovery+original-depth
+regression121passed/2skipped in421.06s, including CUDA/installed-Weaver production
+workers, native readback and the interrupted-attempt-to-fresh-fixed30 miniature.
+Final archive/scheduling checks after additional crash/path guards:68passed,
+1symlink-privilege skip,2production tests deselected in18.01s. The new post-move
+publication-failure test accounts for one additional pass beyond the combined run.
+Final-code CUDA/Weaver interrupted-restart miniature recheck:1passed in37.07s.
+Temporary test data only; real cluster accounting is mocked in local tests.
+Tests used existing `.tmp/lukagate-deps` Weaver, tagging-hlt Python, CUBLAS
+`:4096:8`, PYTHONPATH including src, and a fresh workspace test directory because
+default sandbox access to old dependencies/pytest directories was restricted.
+No installed dependency, genuine SPORC/Tigris job or research dataset changed.
+
+Next: commit/push the scoped fix, create a NEW pinned recovery worktree, then
+review `restart-set8-p3` once and separately review `queue`. Do not rerun the old
+8a80162f helper, delete partial outputs, or reset claims. Exact workflow:
+[runbook](LUKA_DEPTH_RECOVERY_RUNBOOK.md#if-you-cancelled-set8_p3-after-it-started-v2).
+
+## 2026-10-28: pending-only parallel recovery for the Luka depth screen
+
+Implemented `luka_depth_recovery` under the user-approved
+[operational plan](plans/LUKA_DEPTH_RECOVERY_PLAN.md), with new
+[v1 recovery contracts](contracts/LUKA_DEPTH_RECOVERY.md) and a
+[two-phase stop/queue runbook](LUKA_DEPTH_RECOVERY_RUNBOOK.md). This changes
+scheduling, not the twenty scientific configurations or historical v1 artifacts.
+
+The old single afterok chain is replaced by two GPU lanes. True teacher inputs
+use afterok; capacity-only predecessors use afterany. The CE-only OFFLINE teacher
+and duplicate-target control start the lanes; CE-diverse and the SupCon teacher
+follow early. All previous same-lane jobs remain capacity dependencies so an
+early dependency cancellation cannot open a third GPU slot. Unrelated technical
+failures do not block independent fits; poor finite metrics never gate a row.
+
+Cancellation has its own hash-reviewed plan, exact original journal IDs,
+owner/account/name/comment/workdir checks, reverse ordering and hold/recheck.
+Running jobs and dispatch races are preserved. Recovery creation waits for all
+originals to be terminal, authenticates every completed fit, and admits only
+never-started cancelled tasks with absent output directories. Targets and the
+baseline must already exist and validate; neither is rerun. Partial outputs,
+ambiguous submissions and existing recovery claims fail closed without deletion.
+
+Shared targets and completed results remain in place. New scientific outputs
+use previously absent original task directories and unchanged recipes/kernels;
+separate recovery receipts bind actual new source, job IDs and real scientific
+parents. No old receipt/spec/ledger is rewritten. New logs/report live under the
+recovery root. Original cleanup is cancelled: compact target banks are retained
+(roughly one GiB) rather than deleting borrowed provenance. Per-fit token scratch
+still retires, with an added conservative locked node-local reservation policy.
+Datasets, Fresh_check and unrelated campaigns/jobs are untouched.
+
+Files added: eight package modules, CLI, queue/worker wrappers, test suite and
+plan/contract/runbook. Only this section and the corresponding donor-map section
+were added to already-dirty shared documents. Donors are unchanged source at
+04d1f0f5945ab9af38d83e192eff48e124ad8dc5; see LEGACY_SOURCE_MAP.md.
+
+Local evidence: original depth suite 52 passed/1 skipped (Windows symlink
+privilege); recovery suite 45 distinct passed across the full initial run plus
+the added ownership test and final 44-test non-miniature recheck. The production
+CUDA/installed-Weaver synthetic recovery runs all remaining 30-epoch fits and
+both teacher exports, merges results, and verifies targets/baseline/completed
+token fit byte-for-byte unchanged. Scheduling, exact submission journals,
+dispatch races, partial-output rejection, claims and shell syntax are covered.
+The Linux fcntl lease path has conservative budget unit coverage but is not a
+real Linux/SPORC filesystem validation. No remote job was submitted/cancelled,
+no genuine new SPORC/Tigris miniature executed, and no commit/push performed.
+Next: push only this additive implementation; review/cancel exact pending old
+jobs; let remaining running work finish; review and queue the corrected plan.
+
+## 2026-10-27: FullStat K1/E40/plain exact-ninths fine-tail continuation
+
+Implemented the user-approved additive `luka_fullstat_fine_tail` campaign.
+Authority: [plan](plans/LUKA_FULLSTAT_FINE_TAIL_PLAN.md),
+[v1 contracts](contracts/LUKA_FULLSTAT_FINE_TAIL.md);
+[runbook](LUKA_FULLSTAT_FINE_TAIL_RUNBOOK.md) contains scoped commit/push and
+one-block detached Oscar launch. No existing runtime, data or job was changed.
+
+Three fresh stages DE022 -> DE011 -> DE000 use exact retained offline fractions
+2/9,1/9,0 (explicit user confirmation), not decimal22%/11%. Main head CE0.5;
+independent auxiliary logit heads totalKD1 atT2 and embedding predictors totalE40,
+divided across five/six/seven teachers. No relational loss. Base teachers are
+OFFLINE, completed hybrid UE100, prior non-relational split-head DE066/DE033 and
+M0HLT; successive stages add new DE022 then DE011. M0HLT stays in the final
+teacher set. Prior selected DE000 remains reference-only. Fresh initialization,
+20 epochs, physical128, original optimizer/schedule and exact 3M/500k split;
+final test1.5M remains sealed. Only DE000 is HLT-deployable.
+
+D022/D011 reconstruct physical inputs once in RAM from authenticated original
+raw data and saved assignments with six bounded processes. No new matching,
+feature interpolation, persistent particle cache or global-coordinate change.
+Every chunk replays the existing D000 arrays exactly and checks row joins,
+support and role restrictions before training. Final D000 loads the old cache.
+Native TRAIN banks are reused in place; only two new rungs export targets.
+Reserve8GiB personally available durable headroom, plus the independently
+checked 180000MiB host envelope. Do not delete old payloads/source/raw data.
+
+Exactly three afterok GPU jobs; no separate preflight. In-worker disposable
+checks cover native FP32/BF16 equality, CE-only main-head gradients, all connected
+heads, physical128 maximum support, memory and bounded full-step timing including
+actual preparation elapsed time. Technical failure blocks descendants; poor
+finite AUC does not. FIT precedes outgoing banks and TASK publishes last.
+No automatic retry or partial-fit overwrite. Existing Oscar acceptance is reused,
+not presented as a new full-scale measurement. Verified runtime_repair_v1 required.
+
+The launcher detaches before slow authentication, immediately tails, saves the
+full dry plan and accepts only bounded three-fit authorization before submission.
+It survives SSH disconnect, not login-node reboot/site policy. It does not cancel
+current jobs, wait for an unfinished parent, or submit test/extra controller jobs.
+Claims/journals preserve ambiguous submission evidence; never blindly rerun.
+
+Files added: 13 package modules, CLI, queue/launch/Slurm wrappers, two tests and
+plan/contract/runbook. Only new sections added here and in the already-dirty
+[donor map](LEGACY_SOURCE_MAP.md). Donor:9e90b7dee50af4f122a60054031c7fcc255e4e08;
+all historical scientific runtime bytes remain unchanged.
+
+Release verification:179passed/2skipped across the two new suites and original
+split-head, relational ladder and relational launcher suites (226.33s).
+New coverage is65passed/1skipped. Includes local installed-Weaver native CUDA FP32/BF16 parity,
+three full20 production-worker miniature fits with synthetic populations,
+five-bank imports, seven-head gradients, sorted-JSON reports, native checkpoint
+and outgoing target readback, real synthetic ROOT role guards and serial/spawn
+view equality, completed-finalizer replay and exact three-job dry/live journals.
+Two Linux real-HUP tests (new and historical launcher) skipped on Windows;
+actual Bash smoke tests passed with stubbed setsid/runtime/scheduler. All three
+shell scripts pass bash -n; CLI help passes. All22 required files exist,
+14 production Python modules parse and the additive source allowlist rejects
+old runtime edits. No genuine Oscar/Tigris miniature or production submission
+performed here. Next: push exact new source,
+verify current quota and launch from a fresh pinned Oscar worktree.
+
+## 2026-10-27: twenty K1/E40 token-depth / teacher-diversity students, direct debug
+
+Implemented the user-authorized screen in the additive
+`luka_supervision_depth` package. Scientific authority is the
+[active plan](plans/LUKA_SUPERVISION_DEPTH_PLAN.md); new artifacts use
+[LUKA_SUPERVISION_DEPTH v1 contracts](contracts/LUKA_SUPERVISION_DEPTH.md).
+The [runbook](LUKA_SUPERVISION_DEPTH_RUNBOOK.md) contains scoped commit/push,
+pinned-worktree queue and partial/final result instructions.
+
+Twenty fresh HLT-only DE000 students keep main CE 0.5, independent auxiliary
+KD total 1, jet prediction total 40, physical batch 128 and fixed 30 epochs.
+Unordered token supervision tests total weights 1/3/10/30, c50 UE100 native
+particle blocks 8, 4+8 and 2+4+8, with a shared exact Hungarian assignment
+across depths. Controls include aligned slots, an exact K1/E40 repeat, a
+paired second student seed and a duplicated OFFLINE head. Two new matched
+OFFLINE teachers (CE-only versus CE+0.1 supervised contrastive loss) supply
+native jet targets for diversity, replacement and token-combination arms.
+KD teachers remain the original four frozen c50/OFFLINE teachers. No fusion,
+warm start, relation loss or auxiliary head is used at HLT inference.
+
+The immutable split remains 299234 TRAIN / 74895 validation. Original50k is
+overlapping report-only, not an independent test. All 30 epochs run; native
+full-validation AUC selects. Finite poor performance never blocks a row.
+
+The 25-job debug DAG has shared targets, 20 students, 2 OFFLINE teacher fits,
+report and cleanup. Registered student order is serial `afterok`; teachers
+run between students 10 and 11. No separate preflight, polling controller,
+automatic retry or existing-job changes. Hash-reviewed full authorization,
+exact pushed source, parent replay, successful accounting and duplicate
+submission guards remain. Disposable in-worker checks cover native parity,
+CE-only deployed-head gradients and physical-128 maximum support before
+reinitializing each scientific fit. Inherited A100 acceptance is not a new
+full-scale throughput measurement; GPU time allowances are conservative.
+
+Reserve 8 GiB persistent quota. Large token payloads use checked node-local
+disk and retire after each fit; per-depth moments/index/manifests survive.
+The six new compact TRAIN target payloads retire only after the complete
+report validates. Native selected checkpoints, predictions, histories and
+reports remain. No old campaign, dataset or Fresh_check files are removed.
+
+Donors are recorded in the [source map](LEGACY_SOURCE_MAP.md), all inspected
+at e21aa91463a8f313bf51e36d6bcac97ee7942bfb. Original grid replay stays in its
+pinned worktree; only four explicitly pinned, unrelated FullStat source
+revisions are exempted from byte equality. Existing scientific runtime is
+unchanged. Files added: 11 package modules, CLI, queue/worker wrappers,
+focused tests, plan/contract/runbook; only these new handoff/source-map
+entries extend the already-dirty shared documents.
+
+Verification: existing grid/token/joint regression suites 106 passed;
+new suite 52 distinct passed, 1 skipped (Windows symlink privilege), across
+the final release checks. This includes local installed-Weaver CPU/CUDA
+parity, all 25 production workers
+on synthetic populations, 22 full 30-epoch fits, native checkpoint readback
+and results after owned-bank retirement. A further baseline test reproduces
+the old grid's complete 30-epoch metrics and selected native state exactly.
+Release recheck after the replacement-head control correction: 50 passed,
+1 skipped, 2 native-parity tests deselected, in 194.34s; that recheck includes
+the added full-history/state baseline comparison and the entire 25-worker
+miniature. The two native-parity tests passed separately in 14.32s after
+removing redundant reference-state copies from the test (same assertions).
+Total across new and regression suites: 158 distinct passed, 1 skipped.
+No remote execution or full-scale measurement is claimed.
+
+No commit, push or job submission performed. Next: selectively commit/push
+and use a fresh pinned worktree against the
+completed auxiliary-grid campaign_spec containing k1_e40_plain. Real SPORC
+data/allocation/resource validation occurs in the authorized worker chain;
+no genuine remote miniature has been performed in this turn.
+
+## 2026-10-26: switch the fresh relational ladder to K2.5/E10
+
+User selected `k2p5_e10_rel` from the reported screening, not K5/E20/plain.
+This supersedes the K5 coefficient in the earlier relational-ladder entries;
+it does not change historical executions. All four fresh stages (UE100,
+DE066, DE033, DE000) now use total auxiliary KD 2.5, embedding 10, unchanged
+relational loss and 0.5 CE on the deployed head. Teacher sets, native targets,
+seeds, 20 epochs, physical batch 128, optimizer/schedule and sealed test stay
+fixed. The screening's near-tied single-seed AUCs are motivation, not proof
+that this setting is superior on the FullStat ladder.
+
+Updated relational contracts/execution, package label, launcher label,
+both queue wrappers, focused tests and the active plan/contract/runbook.
+RECIPE is now v2; SPEC/PLAN/SUBMISSION_CLAIM are v3. REUSE remains v2, native
+target formats remain v1. Changed parent hashes bind fits/banks to this new
+recipe. Automatic authorization is V2, manual authorization V3: old K5
+specs/plans/tokens are rejected, never silently converted. Fresh root required.
+Detached one-command launch and integrated worker checks remain; no standalone
+preflight was added. Completed-parent and replacement-runtime checks stay intact.
+
+No new donor migration; provenance remains the relational donor map below.
+No old runtime/recovery code, artifacts or remote jobs changed. No commit,
+push or submission performed. Focused pre-change baseline: 7 passed.
+Post-change relational/launcher suites: 77 passed, 1 skipped in 205.22s.
+Additional old-token/rehashed-recipe/CLI regressions and rechecks: 17 passed,
+66 deselected in 28.57s (5 additional distinct tests). Total: 82 distinct
+passed, 1 skipped. Loss/gradient checks prove the KD contribution is halved
+with unchanged CE, embedding and relation gradients. Four fixed-20-epoch
+installed-Weaver GPU workers pass with checkpoint readback/native bank exports;
+all four rehashed K5 stage recipes and old authorization tokens fail closed.
+Detached Bash smoke passes; actual HUP/setsid test requires Linux and is skipped
+on Windows. No real-data Oscar/Tigris or SSH-disconnect validation claimed.
+
+Next: selectively commit/push the revised ladder, then use the new token and
+a fresh root from the [queue instructions](LUKA_FULLSTAT_RELATIONAL_LADDER_RUNBOOK.md)
+against the verified completed finalization/retry parent.
+
+## 2026-10-26: relational ladder compatibility and detached one-command submission
+
+Patched the previously untracked relational ladder for the newer completed
+DE033-finalization/retry execution, not the failed old0c4a71a5 parent root.
+This explicitly supersedes the earlier relational entry's pending parent
+adaptation. No scientific loss, teacher order, split, seed, batch or20-epoch
+schedule changed. Authority remains the updated
+[active plan](plans/LUKA_FULLSTAT_RELATIONAL_LADDER_PLAN.md).
+
+REUSE/SPEC/PLAN/SUBMISSION_CLAIM now have execution-v2 identities; scientific
+artifacts remain v1. Parent authentication replays its own pinned source and
+requires completed DE000 with complete ancestry/accounting. Imported DE033
+payloads retain their old paths while their successful receipt comes from the
+new finalizer. Only OFFLINE/M0HLT banks seed the fresh four-stage ladder. Source
+boundary420d22f8 permits narrow separately committed retry paths, AND requires
+every parent runtime file byte-identical to the completed pinned parent.
+
+Added package-local execution.py with explicit runtime_repair_v1 binding and
+unchanged original Oscar site/resource/GPU/backend/fingerprint guards. Both
+queue and worker wrappers source the verified replacement activation helper.
+This avoids the old activation-versus-allocator mismatch; no prefix spoofing,
+global site changes, recovery edits or old-worktree modifications.
+
+User-authorized launch.py plus launch_luka_fullstat_relational_ladder.sh
+accept one bounded four-fit authorization, create an exclusive adjacent launch
+directory, detach via nohup/setsid BEFORE authentication, and immediately tail
+the pre-created log. Background flow records exact parent/source/quota/recipes,
+full dry plan/ledger, hash-bound approval, then the four accepted jobs. No new
+prompt, polling controller, preflight job, implicit retry or cancellation.
+HUP is ignored before spawning; the foreground tail restores normal handling.
+Ctrl-C/disconnect affects the log view, not the detached launch. Login-node
+loss/site policy/runtime corruption can still stop it; records are preserved.
+The parent must already be complete, otherwise launch fails before submitting.
+
+Changed only relational package/wrappers/tests/plan/contract/runbook plus this
+entry and donor-map entry. Separate dirty finalizer-retry work and all other
+user files preserved. [Queue runbook](LUKA_FULLSTAT_RELATIONAL_LADDER_RUNBOOK.md)
+separates one-time selective push/pinned source setup from the single launch
+command; manual dry-review/hash submission remains optional.
+
+Evidence: baseline relational+finalization75 passed in296.90s. Updated combined
+relational/launcher/finalization/retry suite161 passed,1 skipped in425.86s.
+Added Bash detached-launch smoke1 passed in14.63s (Windows setsid stub); real
+Linux HUP/setsid test is present but skipped locally. Tests exercise actual
+allocation dispatch/negative guards, four full20-epoch installed-Weaver GPU
+workers, real finalizer/native-DE000 receipt replay, imported fit locations,
+dry-before-live authorization, changed-plan/duplicate/ambiguous-response refusal.
+Scheduler/source/population fixtures are synthetic; no real Oscar/Tigris or
+actual SSH-disconnect validation claimed. No remote jobs, commits or pushes.
+Final launcher/runtime/shell/runbook recheck:38 passed,1 skipped,1 GPU integration
+case deselected in33.08s; that GPU case passed in the combined run. Across the
+current focused suites162 distinct tests passed; the Linux HUP test is skipped.
+
+Next: separately finish/push the finalizer retry, wait for its DE000 success,
+selectively commit/push this ladder, pin source on Oscar, declare16GiB personal
+durable quota and launch once against that exact completed parent spec. Do not
+rerun after disconnect; reattach the printed ROOT.launch/launcher.log instead.
+
+## 2026-10-26: correct finalizer 7963448 runtime binding and preserve its failed attempt
+
+User-supplied Oscar traceback identifies an integration bug in the previous
+finalization implementation at `420d22f8feb9f2237ee2dc2cbf3000d881ecd6a6`:
+the wrapper activated the verified replacement, but inherited allocation
+validation still required the original Conda prefix. Job 7963448 failed in
+`worker.execution`, before the finalizer created its attempt directory or
+opened validation particles. This is not evidence of a new environment-file
+loss, retraining failure, or lost DE033 checkpoint. The queue was empty in the
+user's inspection; exact descendant accounting remains required on Oscar.
+
+Implemented a scoped allocation check in `finalize_execution.py` for the
+finalizer AND subsequent DE000. It requires the registered replacement prefix
+and retains exact site, account/partition/QOS, Slurm allocation, architecture,
+CPU/memory, single BF16 GPU, accepted GPU identity, backend settings and installed
+environment fingerprint checks. Shared execution-site profiles and old workers
+are unchanged. Donors are `jetclass2_delphes/execution.py::allocation` and
+`luka_fullstat_attention/worker.py::execution` at the above commit.
+
+New [retry contract](contracts/LUKA_FULLSTAT_SPLITHEAD_FINALIZE_RETRY.md)
+versions the retry SPEC/EVIDENCE/PLAN/CLAIM as
+`LUKA_FULLSTAT_SPLITHEAD_FINALIZE_RETRY_*/v1`. `finalize_retry.py` authenticates
+the failed finalizer through its original pinned source, claim and submission
+journal; requires 7963448 FAILED/1:0 and its exact registered descendant
+CANCELLED/0:0 without starting; and binds the specific pre-work traceback.
+New output and a separate exclusive retry claim preserve every old spec,
+checkpoint, bank, ledger and consumed claim. No old job is modified. The
+original DE033 fit and exports are verified, not regenerated; only DE000
+trains, with unchanged scientific settings. No separate preflight or test use.
+
+Changed finalizer source/dispatch/CLI and added a retry queue helper, focused
+tests and contract. The [runbook's current route](LUKA_FULLSTAT_SPLITHEAD_FINALIZE_RUNBOOK.md)
+contains selective push and exact new-root review/submission commands. Old
+initial-submission commands are marked historical. Existing unrelated dirty
+documentation and relational-ladder implementation are preserved; no staging,
+commit, push, remote writes or job submissions performed here.
+
+Testing: the original local miniature mocked `worker.execution` and missed
+this integration bug. New tests reproduce the old rejection and exercise the
+actual corrected dispatcher/allocator, including negative runtime/scheduler
+guards. New-suite run: 49 passed in 73.01s, including installed-Weaver local
+CUDA finalization followed by a complete 20-epoch DE000 miniature, with
+training/exports forbidden during finalization and old payloads unchanged.
+Scheduler/source/population and GPU identity are synthetic fixtures: this is
+not a real Oscar/Tigris acceptance run. Combined splithead, recovery, finalizer
+and retry regression: 165 passed in 399.75s. This includes source-boundary and
+unchanged-science checks, prior-plan hash preservation, CLI help, shell/runbook
+syntax and required-file/link checks. Scoped git diff whitespace check passed.
+
+Next: push only the finalization-retry files, create a clean pinned Oscar
+worktree, run the authenticated dry review against the failed 420d22f8 root,
+then explicitly authorize its two-job plan. DE000 releases only after the
+corrected finalizer succeeds. The verified replacement is still on scratch;
+the original reason for disappearing environment files remains unestablished.
+
+## 2026-10-26: finalize saved DE033 after replacement-runtime repair
+
+Implemented the authorized recovery of job7938792 without repeating its
+twenty epochs or either TRAIN export. User-supplied logs establish that the
+fit/native checkpoint, predictions, embedding bank and logit bank exist;
+final original-source authentication failed because Python encodings files
+were missing.7938791 DE066 recovery completed;7938793 DE000 was cancelled
+without starting. No remote artifact authentication performed from this IDE.
+
+User reports the replacement at
+/oscar/scratch/rlyang/hlt_classification/runtime_repair_v1/atlas_kd_oscar passes
+required imports, Conda recorded-build/presence checks, pip check and the
+campaign environment fingerprint. It remains SCRATCH, not durable storage;
+the cause of repeated old-environment file loss is not established. The
+unwritable /oscar/data/nopi path is not retried or modified.
+
+New [execution contract](contracts/LUKA_FULLSTAT_SPLITHEAD_FINALIZE.md) and
+[exact push/queue instructions](LUKA_FULLSTAT_SPLITHEAD_FINALIZE_RUNBOOK.md).
+LUKA_FULLSTAT_SPLITHEAD_FINALIZE_* v1 binds the original0c4a71a5 spec,
+failed/cancelled accounting, successful DE066, full DE033 fit/exports,
+startup/bundle and exact failure log. New finalizer verifies native validation
+prediction equality and original/outgoing TRAIN joins, publishes two explicit
+imported-ancestor receipts, then an afterok DE000 runs unchanged. No fit,
+startup update or target regeneration during finalization. No separate
+preflight, controller or test access. Exact dry-plan/hash authorization,
+cross-root claim and submission journals prevent duplicate recovery.
+
+Added finalize.py/finalize_source.py, thin CLI/queue/worker/common wrappers,
+focused tests, contract/runbook. Four existing splithead modules receive only
+scoped dispatch/locator/plan changes and a finalization-only2GiB output
+headroom minimum (old banks reused in place; old16GiB policies unchanged).
+Scientific training/model/recipe files unchanged. New wrappers activate the
+verified replacement directly; no old wrappers/worktrees or environments
+changed. Donors: splithead recovery/submission/worker helpers at
+028c3314394949706787c6d1ef5e632f53ca157c, detailed in LEGACY_SOURCE_MAP.
+Updated only this entry and donor-map entry over pre-existing documentation
+edits; unrelated relational-ladder files are preserved and not staged.
+
+Evidence: pre-change focused72 passed in156.25s. New initial37 passed with
+one documentation test deselected in145.82s. Combined original/recovery/new
+suite115 passed in319.83s; additional original-plan/hash equivalence test1
+passed in14.20s. Total116 current focused tests passed. CLI help, shell and
+runbook Bash syntax, required-file/link and whitespace checks passed.
+Real installed-Weaver local GPU integration reproduces the post-export
+failure after20 DE033 epochs, forbids training/export during finalization,
+then completes20 DE000 epochs with native saved-model readback/results and
+immutable old payloads. Other cases reject corrupt/partial evidence, changed
+recipes/runtime/counts/resources, active/started/wrong-owner jobs, wrong
+authorization and cross-root duplicates. Old plans retain exact hashes.
+Synthetic22-row population and mocked scheduler/source/allocation are
+explicit: this is NOT a new real-data Oscar or Tigris validation.
+
+No commit/push, remote writes, jobs submitted/cancelled or user-data deletion.
+Next: selectively commit/push ONLY this finalization implementation, create
+clean pinned Oscar worktree, declare personally available home quota,
+authenticate actual artifacts/accounting in dry review, authorize its two
+jobs. Recovery success then releases DE000 automatically. Preserve every
+ancestor until results verify. The separate future relational-ladder source
+currently expects DE000 in the old0c4a71a5 root; adapt its provenance to this
+new completed recovery explicitly in that later task, not by editing old
+receipts or silently changing the unrelated implementation here.
+
+## 2026-10-26: fresh FullStat K5/E10/relational ladder, direct Oscar
+
+Implemented the approved four fresh stages UE100 -> DE066 -> DE033 -> DE000,
+not the trial20-arm grid or a warm start from old UE100. Authority:
+[active plan](plans/LUKA_FULLSTAT_RELATIONAL_LADDER_PLAN.md),
+[v1 contract](contracts/LUKA_FULLSTAT_RELATIONAL_LADDER.md),
+[queue/results instructions](LUKA_FULLSTAT_RELATIONAL_LADDER_RUNBOOK.md).
+Fixed3M TRAIN/500k validation, physical128,20 epochs, original optimizer/schedule
+and coordinate seeds. Final1.5M test remains sealed;105325 unused remain unused.
+
+CE0.5 acts only on the native classifier. Independent auxiliary heads predict
+each teacher's native logits (total KD5,T2) and native TRAIN-standardized128-D
+embedding (total10,SmoothL1). Divide totals by number of teachers. Relation
+uses2048 distinct balanced TRAIN references, shared IDs across teachers,
+same-jet mask,tau0.2,FP32 forward KL and a two-epoch ramp to1. Cached targets:
+no teacher/reference-particle forwards per update. UE100 uses OFFLINE/M0HLT;
+DE066 adds new UE100; DE033 adds new DE066; DE000 uses OFFLINE/new UE100/new
+DE066/new DE033, dropping M0HLT. Auxiliary predictions never become teacher
+targets or classifier inputs. Only final DE000 is HLT-deployable; exported
+checkpoints contain the native model only.
+
+Added17 files: ten-module luka_fullstat_relational_ladder package, three thin
+wrappers, focused tests and three documents. Updated this and donor-map sections
+without discarding pre-existing dirty work. No existing runtime changes.
+Donor boundary028c3314394949706787c6d1ef5e632f53ca157c: splithead modules,
+wrappers/tests and unchanged multiteacher_trial AnchorSampler/reference_kl;
+exact paths in LEGACY_SOURCE_MAP. New LUKA_FULLSTAT_RELATIONAL_LADDER_* v1;
+imported banks keep original contracts. Registered-order JSON loss validation
+retains the correction for the earlier post-fit failure.
+
+Exactly four afterok GPU fits, no standalone preflight/setup/controller job.
+Original0c4a71a5 recovery-source replay requires completed CURRENT DE000 plus
+ancestry/accounting before create/submission. No current-job changes. Require
+clean pushed source, full dry review/hash authorization and16GiB personal
+durable headroom. Reuse original Oscar L40S/6CPU/180000MiB acceptance. Each
+worker runs disposable native FP32/BF16 parity, three max-support batch128
+updates at full relation weight, CE-only main-head gradient/memory checks,
+four warmup+32 full-step timings and16 validation-batch timings. Conservative
+20-epoch estimate must fit allocation. Discard probes/reset science afterward.
+No truncated-epoch/batch/support fallback, automatic retry or cleanup. Poor
+finite science never blocks descendants; integrity/resource failures do.
+
+Evidence: pre-change split-head/recovery72 passed in156.48s; combined new+old
+regression102 passed in258.18s (30 new plus72 existing). Final new suite31
+passed in154.15s, including an additional original-replay glue test. Locally
+fixed a queue authorization mismatch and a synthetic fixture alias; no old
+science changed. CLI help, shell/helper/runbook syntax, required-file/link
+checks and whitespace passed. Tests cover genuine installed-Weaver native
+FP32/BF16 GPU parity, all four full-architecture20-epoch production workers,
+native checkpoint readback, target exports/joins, sorted-JSON reports,
+results/R30/R50, poor finite science, RNG reset, source/corruption/accounting
+rejection, exact mocked dry/live DAG and duplicate/ambiguous submissions.
+
+The four-by20 miniature uses22 synthetic rows with an explicitly reduced
+fixture sampler. Four separate startup tests use physical128 and REAL2048
+anchors with2068 TRAIN rows. Local Python3.10.19/Torch2.5.1/RTX2000 Ada laptop,
+Weaver0.5.3 from .tmp/alternating-deps-20261020, no bytecode, CUBLAS:4096:8.
+Mocked scheduler/source/allocation and synthetic inputs are explicit: NOT a
+real-data Oscar/Tigris certification. New combined-objective Oscar timing and
+memory acceptance remain integrated worker checks, not a full measured epoch.
+
+No commit/push, remote data access, jobs submitted/cancelled, user-data deletion
+or test access. Next: current ladder finishes; selectively commit/push, pin a
+new Oscar worktree/root, declare quota, dry-review and authorize the four fits.
+
+## 2026-10-26: recover the saved trial K5 reference for the debug grid
+
+User supplied an original-source diagnostic: K5's saved report failed the old
+JSON-order sum check, then passed with original teacher dictionary order and
+unchanged canonical values/hash. Accounting: targets21962580 COMPLETED/0:0,
+K5 21962581 and K10 21962582 FAILED/1:0, report21962583 CANCELLED/0:0.
+Grid creation at be6a6248 stopped before publishing a new root or submitting.
+User explicitly authorized this fix. No remote artifacts were accessed here.
+
+The amended [plan](plans/LUKA_AUXILIARY_GRID_PLAN.md),
+[contract](contracts/LUKA_AUXILIARY_GRID.md) and
+[runbook](LUKA_AUXILIARY_GRID_RUNBOOK.md) now define recovery-aware grid execution.
+Added reference_replay.py and focused recovery tests; changed grid reference,
+contracts, source, worker, submission, existing tests and queue helper. Preserved
+unrelated dirty documentation. Donors are detailed in LEGACY_SOURCE_MAP:
+be6a6248 grid and original234b029e strong-KD worker/validator. Old scientific
+runtime/worktrees are untouched; there is no Fresh_check runtime dependency.
+
+Only original234b029e accepted K5 job21962581 FAILED/1:0 with the confirmed
+post-publication traceback and rounding discrepancy is recoverable. Original
+FIT/TASK receipts, all outputs, costs, target ancestor accounting, startup,
+bundle, populations, prediction-derived metrics, all30 loss/schedule rows and
+selection still validate. The subprocess adapter restores dictionary order
+only in memory while calling the original validator, with unchanged hashes,
+numbers and exact comparisons. It restores the function on all exits. This
+does not label the failed old job successful or recover K10.
+
+New SPEC/REFERENCE/TASK/PLAN/ACQUISITION v2 and REFERENCE_REPLAY/READBACK v1
+bind the retained old accounting to the new execution. All20 scientific
+RECIPE/v1 hashes were compared against be6a6248 and are exactly unchanged.
+The shared targets job privately copies intact authenticated banks and performs
+native saved-K5 checkpoint readback on the identical ordinary validation rows;
+byte-identical probabilities and identical metrics are required. No optimizer,
+retraining, checkpoint reselection or separate preflight. A successful new
+targets receipt/accounting releases the same20 fits in ranked waves: still22
+jobs, debug, same quota/resources. No edits/deletions in old campaigns.
+
+Local validation completed:
+
+- Initial focused contracts/replay/queue checks:31 passed in172.34s.
+- Final recovery suite:27 passed in161.23s, including original failed-worker
+  reproduction, CPU/CUDA native checkpoint readback, byte-identical old files,
+  wrong-execution/accounting/corruption rejection and blocked publication.
+- Native-model/CUDA/integration subset:12 passed in586.70s, including installed
+  Weaver FP32/BF16 parity, the twenty-fit fixed30 worker miniature, strong-KD
+  regression and physical batch128/2048-anchor startup checks.
+- The broader grid/recovery/strong run first gave110 passes and7 failures
+  because CUBLAS_WORKSPACE_CONFIG was missing. All7 were covered by the clean
+  12-test rerun above; those unconfigured failures are not acceptance evidence.
+- CLI help, shell/static checks and git diff --check passed. All20 recipe hashes
+  match be6a6248; no scientific objective/schedule was changed.
+
+Local environment:tagging-hlt plus installed Weaver0.5.3 from
+.tmp/alternating-deps-20261020, PYTHONDONTWRITEBYTECODE=1,
+PYTHONPATH=src;.tmp/alternating-deps-20261020 and
+CUBLAS_WORKSPACE_CONFIG=:4096:8. Recovery tests use synthetic data and mocked
+Slurm accounting; installed-Weaver GPU tests are local, not a SPORC miniature.
+
+No commit, push, job submission/cancellation or user-data deletion occurred.
+Next: commit/push the scoped repair, create a NEW pinned
+worktree/root, review a fresh V2 plan hash and explicitly authorize. The genuine
+SPORC saved-checkpoint readback remains pending in that shared targets job;
+local synthetic fixtures and mocked Slurm accounting are not remote acceptance.
+
+## 2026-10-26: twenty trial DE000 KD/embedding/relation fits, debug
+
+Implemented the approved revised grid, not twenty new ladders. Authority:
+[active plan](plans/LUKA_AUXILIARY_GRID_PLAN.md),
+[v1 contract](contracts/LUKA_AUXILIARY_GRID.md),
+[commit/queue/results runbook](LUKA_AUXILIARY_GRID_RUNBOOK.md).
+Eighteen new files: eleven `luka_auxiliary_grid/` modules, three thin wrappers,
+focused tests and three documents. Updated this and LEGACY_SOURCE_MAP sections;
+pre-existing unrelated work was preserved. No existing scientific runtime was
+modified. Donor/source boundary is `0c4a71a55e8bc163ea3c4805b72f06d18e640cb5`;
+exact strong-KD donor paths and imported relational kernels are in the donor map.
+
+Exactly20 fresh HLT-only DE000 fits using frozen OFFLINE/c50 UE100/DE066/DE033.
+CE stays0.5 on the native classifier only. Separate trainable auxiliary KD heads
+use T2 forward KL with T-squared once; embedding prediction uses independent
+TRAIN-standardized128-D targets. Total K and E are each divided by four. Optional
+relational prediction imports the existing2048 balanced TRAIN-anchor KL,
+same-jet mask, tau0.2 and two-epoch ramp to1. No whole-loss rescaling, new LR,
+warm start, frozen-classifier readout or teacher-input inference. Auxiliary heads
+are excluded from selected native checkpoints. Same paired seeds, batch128,
+fixed30 optimizer/schedule,299234 TRAIN/74895 validation; original50k report-only,
+no independent test. This is a one-seed adaptive validation screen.
+
+Ranked (K,E) pairs: (5,10), (5,20), (2.5,10), (2.5,20), (1,10), (1,20),
+(5,40), (2.5,40), (1,40), (10,20), each with relation on/off. Twenty-two-job
+debug DAG: shared targets, ten two-fit waves, CPU report. Both jobs in a wave
+require both previous-wave jobs; ordering within each pair is not guaranteed.
+Technical failure blocks descendants; finite poor science never skips a fit.
+No standalone preflight or polling controller. Shared target setup includes
+three disposable three-update maximum-support probes, native FP32/BF16 parity,
+gradient isolation and memory checks; science resets afterward. Resources inherit
+authenticated c50 debug A100 acceptance,6CPU/90000MiB/at least8h per GPU job;
+full combined-objective throughput is not newly measured on SPORC.
+
+Completed original strong K5/E5 predictions are an additional comparison.
+Authenticate that campaign and c50 in their original pinned sources. If the
+strong campaign's four banks remain intact, privately copy their verified bytes
+and revalidate TRAIN joins; no hardlinks or edits to old files. If its normal
+retirement is authenticated, export the exact frozen targets once. Corrupt or
+unregistered missing files fail closed. All20 fits share the new banks. A4GiB
+owned allowance is required. After all consumers and results validate, retire
+only four newly owned target payloads, retaining selected models, predictions,
+histories, manifests/moments, logs and results. Fresh_check/datasets are untouched.
+
+Local evidence: new focused suite **61 passed in349.89s**; original strong-KD
+and multiteacher regression **57 passed in478.48s**. Includes exact20 objectives,
+paired native/head RNG, CE-only main-head gradients, detached teacher/anchor
+targets, installed-Weaver0.5.3 native CPU/CUDA FP32/BF16 parity, all20
+full-architecture30-epoch production-worker miniatures, selected native
+checkpoint readback, retained results after owned cleanup, real old strong
+worker replay before/after retirement, private-copy independence/corruption,
+twenty-two-job exact dry/live mocked DAG, duplicate/ambiguous submission refusal,
+poor finite science and JSON-key-order-stable report validation. Also checked
+all three physical128 startup corners with the genuine2048-anchor sampler.
+Synthetic small particle populations and mocked scheduler/source/host counters
+are explicit. The twenty-fit miniature uses22 rows and a small fixture anchor
+sampler; the separate physical128 test uses2068 TRAIN rows and the real sampler.
+Baseline multiteacher tests also exercise real2048-reference fixed30 training.
+Local runtime: Python3.10.19, Torch2.5.1, NVIDIA RTX2000 Ada laptop GPU.
+These are NOT new real-data SPORC/Tigris certification. CLI help, Bash/helper/
+runbook-block syntax, required paths, document links and whitespace passed.
+
+Next: selectively commit/push the complete additive implementation, create a
+clean pinned SPORC worktree, authenticate retained c50/K5 artifacts, reserve quota,
+review the full22-job plan, and explicitly authorize its exact hash. No commit,
+push, remote data access, job submission/cancellation or user-data deletion was
+performed here. Automatic cleanup occurs only after an authorized remote study
+completes; local tests removed only their own disposable synthetic payloads.
+
+## 2026-10-25: recover published FullStat split-head DE066 without retraining
+
+User authorized recovery of Oscar job `7910169`. Supplied logs show all 20
+epochs completed, selected epoch 17 (AUC 0.96954264), and native checkpoint,
+report, validation predictions and FIT receipt published before post-fit
+validation failed. Those remote payloads have not been accessed here.
+The reproduced bug is exact loss summation in deserialized JSON key order
+rather than registered teacher order. Corrected only the validation summation;
+no relaxed tolerance, loss/optimizer/model/selection changes or report rewriting.
+
+Authority and operation: [recovery contract](contracts/LUKA_FULLSTAT_SPLITHEAD_RECOVERY.md),
+[commit, review and queue commands](LUKA_FULLSTAT_SPLITHEAD_RECOVERY_RUNBOOK.md).
+Extends the existing 20-epoch scientific plan, not a new scientific experiment.
+New `LUKA_FULLSTAT_SPLITHEAD_RECOVERY_<kind>/v1` SPEC/EVIDENCE/PLAN/CLAIM/
+READBACK/TASK records bind the old FIT to a successful replacement export job.
+Original scientific contracts remain v1. Donor paths/commits are recorded in
+LEGACY_SOURCE_MAP: failed source `a7efcef6a8399cdcde80b2941e1a21910ba1bf67`,
+integration/source-boundary baseline `234b029ec14a8d4861134e098cafbf939d325cd8`.
+
+Three-job DAG: `recover_DE066` -> `train_DE033` -> `train_DE000`. Recovery
+authenticates the original source, completed upstream teachers, failed job and
+never-started cancelled descendants, all saved fit payloads and TRAIN banks.
+It requires the diagnosed ordering discrepancy, reads back the native checkpoint
+on the existing validation rows with byte-identical probabilities, and exports
+selected native TRAIN embeddings/T2 probabilities. It calls no training function.
+The two downstream jobs retain their original fresh 20-epoch recipes and require
+successful recovery accounting. No standalone preflight, test operation or login
+controller. Original Oscar acceptance/resources are reused; recovery walltime
+inherits the old ceiling, not a new measured duration.
+
+Changed five existing split-head runtime modules (training validator, campaign,
+worker, submission, KD locator); added recovery/recovery_source modules, thin
+CLI/queue/Slurm wrappers, focused tests and two recovery documents. Updated this
+and donor-map sections without discarding pre-existing edits. Old artifacts and
+pinned source remain untouched; authorized live submission adds only an exclusive
+recovery claim directory to the original campaign. Cross-root duplicate claims,
+corrupt/changed evidence, started descendants and ambiguous submissions fail closed.
+
+Local evidence: split-head plus recovery regression **72 passed in 149.71 s**.
+Earlier focused recovery run: 31 passed in 97.26 s, before nine additional safety
+tests. Includes installed-Weaver 0.5.3 native CPU/CUDA FP32/BF16 checks, original
+three-by-20-epoch production-worker miniature, export-only recovery followed by
+both downstream full-architecture 20-epoch workers, original-file preservation,
+exact byte readback, and a guard that fails if recovery invokes training.
+Synthetic populations/teacher fixtures, injected valid FP64 diagnostic loss means
+to reproduce JSON rounding, and mocked scheduler/source/data boundaries are
+explicit: this is not a new Oscar/Tigris/full-dataset certification. Local runtime:
+Python 3.10.19, Torch 2.5.1, NVIDIA RTX 2000 Ada Generation Laptop GPU.
+Also covered one-ULP tamper rejection, original-source replay failures, exact
+afterok DAG/authorization, duplicate prevention, corrupt banks/fit payloads,
+root protection, scheduler identity/state checks, shell/runbook syntax and CLI.
+
+Next: selectively commit/push, create a clean pinned Oscar worktree, review the
+three-job recovery plan and submit its exact hash. Remote artifact authentication
+is mandatory and will stop on any mismatch. No commit/push, remote inference,
+test access, job submission or cancellation was performed here.
+
+## 2026-10-24: trial auxiliary-logit k5/k10, direct debug
+
+Implemented additive `luka_auxiliary_logits_strong/`; authority:
+[plan](plans/LUKA_AUXILIARY_LOGITS_STRONG_PLAN.md),
+[v1 contract](contracts/LUKA_AUXILIARY_LOGITS_STRONG.md),
+[commit/queue/results runbook](LUKA_AUXILIARY_LOGITS_STRONG_RUNBOOK.md).
+Seventeen new files (ten package modules, three wrappers, tests, three docs),
+plus this and LEGACY_SOURCE_MAP sections; unrelated edits preserved.
+Donor/source-guard baseline: `a7efcef6a8399cdcde80b2941e1a21910ba1bf67`.
+Exact copied donor paths are recorded in LEGACY_SOURCE_MAP. Existing scientific
+runtime and original k0/k025/k05/k1 contracts are unchanged; no Fresh_check use.
+
+Exactly two new fresh HLT DE000 fits: total auxiliary-logit weights5 and10,
+divided over OFFLINE/c50 UE100/DE066/DE033. CE stays0.5; embedding total stays5;
+T2 KL with T-squared exactly once, same independent trainable heads, identical
+paired model/head/sampler initialization, physical batch128 and fixed30 schedule.
+No frozen teacher classifier on predicted embeddings, warm start, new ladder,
+adaptive weighting or LR change. Same299,234 TRAIN/74,895 validation; original50k
+report-only, no independent test. Main-head AUC selection and native-only export.
+
+User requested debug without a preflight: four-job DAG is targets -> independent
+k5/k10 -> CPU report. Submit k5 then k10; scheduler order is not guaranteed.
+Shared export has short disposable parity/gradient/max-support checks for both
+high weights, not a separate preflight or technical epoch. Re-authenticate the
+original72490a9d completed c50 ancestry/resource acceptance; other parent arms
+and current auxiliary-logit jobs need not finish. Independently export new banks
+so older campaigns' cleanup cannot race with these fits. A100/6CPU/90000MiB,
+GPU8h minimum or inherited larger allowance; CPU report16GiB/2h. New objective
+throughput is not remotely measured. Reserve3GiB personally available storage.
+
+After both fits and saved results validate, report retires only four newly
+owned TRAIN payloads with exact-path/hash intent/completion records. Keep native
+models, predictions, histories, moments, manifests, source and logs; retain
+readable/authenticated results after cleanup. Old campaigns/data untouched.
+
+Local evidence: combined strong/original auxiliary-logit and trial-hybrid
+regression **110 passed in264.21s**. Original auxiliary-logit baseline33 passed
+(88.91s); new focused suite33 passed (73.79s). Includes actual installed-Weaver native
+CPU/CUDA FP32/BF16 parity, full-architecture two-by30-epoch production workers
+on synthetic populations, exact initialization/KD-gradient scaling against k1,
+checkpoint roundtrips, exact four-job mocked submission, old-parent retirement,
+new-owned cleanup and failure injection. CLI, Bash helpers/runbook blocks,
+relative documentation links and all17 new-file whitespace checks passed.
+Scheduler/source/allocation boundaries are mocked locally; this is NOT new
+SPORC/Tigris execution certification. Existing source/CLI/worker/test files
+remain byte-unchanged in the tracked worktree; git diff --check passed.
+
+No jobs submitted, cancelled or changed; no remote data deletion or commit/push.
+Next: selective commit/push and exact dry-plan review using the new runbook.
+Preserve current campaign artifacts and journals. No standalone preflight job.
+
+## 2026-10-24: FullStat split-head continuation, queue-ready without a separate preflight
+
+Implemented additive `luka_fullstat_splithead/`; authority:
+[plan](plans/LUKA_FULLSTAT_SPLITHEAD_PLAN.md),
+[v1 contract](contracts/LUKA_FULLSTAT_SPLITHEAD.md),
+[commit/dry-review/queue/results instructions](LUKA_FULLSTAT_SPLITHEAD_RUNBOOK.md).
+Seventeen new files: ten package modules, three wrappers, focused tests and
+three documents. This section and LEGACY_SOURCE_MAP preserve all prior unrelated
+edits. Existing runtime modules/campaigns were not modified.
+
+Reuses only completed FullStat hybrid UE000/UE100 ancestry from execution
+`e129075e9c3eaa9fd2e49460b79ecf5f56ba4be7`; trains fresh DE066 -> DE033 -> DE000.
+Both objectives use OFFLINE/UE100/M0HLT at DE066, add NEW DE066 at DE033,
+then OFFLINE/UE100/NEW DE066/NEW DE033 at DE000. Main head receives CE only
+(0.5); independent native128->11 heads receive total auxiliary-logit alpha0.5,
+T2 KL/T-squared; independent native128-GELU-128 heads receive embedding total5.
+Both totals divide by teacher count. No predicted targets enter the main head.
+No 30-epoch/trial-c50/alpha-sweep settings carried over: same FullStat 3M/500k,
+fixed20, batch128, warmup2/cosine20, coordinate-paired from-scratch seeds.
+Final test sealed; only DE000 is deployable HLT-only.
+
+OFFLINE/M0HLT/UE100 embeddings and OFFLINE/UE100 probabilities reuse original
+authenticated bytes. First job exports missing M0HLT TRAIN probabilities;
+DE066/DE033 export selected native TRAIN targets for descendants. All three
+afterok jobs queue at once, with no login controller or separate setup/preflight.
+Each checks native FP32/BF16 parity, CE-only main-head gradient, three disposable
+max-support updates, maximum-validation support and memory headroom, then resets
+scientific initialization. Exact source, manifests, ordered joins, native-only
+checkpoint readback, success accounting and duplicate-submission protection stay
+enabled. Poor finite science never blocks a descendant. Runtime envelope is
+inherited Oscar L40S/6CPU/180000MiB plus explicit time allowance, not a newly
+measured split-head throughput claim.
+
+Donors: FullStat hybrid execution/export/worker/submission and trial auxiliary
+logit model/loss/startup kernels, read at integration baseline
+`a4596cb915252672ab42c7a8724d6a105a0bc56e`; exact paths in LEGACY_SOURCE_MAP.
+New `LUKA_FULLSTAT_SPLITHEAD_<kind>/v1`; old schemas remain unchanged.
+
+Local evidence: final new suite **32 passed** (34.54s); existing hybrid and
+auxiliary-logit donor suites **77 passed**. The combined run before adding the
+last two collision tests also passed **107 tests** (157.54s).
+Includes full native architecture, real installed-Weaver 0.5.3 FP32/BF16 CUDA
+parity, CE-only main-head/connected encoder gradients, three production workers
+with all 20 epochs on synthetic miniature populations, native checkpoint/target
+roundtrips, joins/corruption/roles, finite poor science, original-source replay
+guards, exact three-job mocked dry/live DAG and duplicate/ambiguous submission
+rejection, Bash/runbook syntax and CLI. Local GPU: RTX 2000 Ada laptop,
+torch 2.5.1/CUDA 12.1. Oscar scheduler/source/allocation are mocked in miniatures;
+this is NOT a new Oscar/Tigris certification. Exact genuine Oscar acceptance is
+re-authenticated at queue/run time. `git diff --check` passed.
+
+No jobs submitted/cancelled, no test inference, no data deletion or commit/push.
+Old IDs7871738/7871739/7871740 were not remotely inspected or cancelled here.
+Next: commit/push the explicit new-file list, review the pinned three-job plan
+on Oscar and authorize its exact hash. Preserve old results and partial attempts.
+
+## 2026-10-24: c50 auxiliary-logit DE000 follow-up, direct debug
+
+Implemented four fresh final-rung fits in additive `luka_auxiliary_logits/`.
+Authority: [active plan](plans/LUKA_AUXILIARY_LOGITS_PLAN.md),
+[v1 contract](contracts/LUKA_AUXILIARY_LOGITS.md),
+[commit/queue/results runbook](LUKA_AUXILIARY_LOGITS_RUNBOOK.md).
+Seventeen new files: ten package modules, three CLI/queue/worker wrappers,
+tests and three documents. Shared HANDOFF/LEGACY_SOURCE_MAP additions preserve
+existing unrelated edits. Donor baseline is
+`72490a9d6de4acabe9cbea518c5b100d893e6866`; full paths in LEGACY_SOURCE_MAP.
+Existing scientific runtime and old campaigns are unchanged.
+
+Main native class head receives only CE, at coefficient 0.5 to match c50.
+Four separate logit heads predict frozen OFFLINE/c50 UE100/DE066/DE033 T=2
+distributions; four embedding heads predict those teachers' native 128-D
+fc-input representations, independently TRAIN-standardized. Total embedding
+weight stays 5. Auxiliary-logit totals are 0, 0.25, 0.5 and 1, divided equally
+among four teachers; T-squared is applied exactly once. Alpha-zero is the
+matched embedding-only control, not CE-only training. Auxiliaries update the
+shared encoder but never feed the main head; exported models contain neither
+auxiliary head family. Native encoder/sampler/head RNG streams are paired.
+
+All fits start from scratch, physical batch 128, fixed 30 epochs and original
+warmup3/cosine30 AdamW. No earlier rung retraining. Same 299,234 TRAIN / 74,895
+validation; original50k is report-only and there is NO independent test.
+Full-validation main-head AUC selects each native checkpoint. Retained reports
+compare M0HLT, OFFLINE, OFFLINE-w5, U100-w5 and original c50 DE000, with recovery
+and c50 deltas. Poor finite scientific scores never block completion.
+
+User explicitly requested debug and no standalone preflight. The reviewed DAG
+is six afterok jobs: one target export, four fits, one CPU report. Shared export
+contains three disposable worst-support updates per arm, native FP32/BF16
+parity and CE-only head-gradient checks, but no technical epoch or scientific
+warm start. Require completed original-source c50 DE000 and its ancestors;
+other parent ladders need not finish. Import works before or after the parent's
+normal target retirement. New banks are independently exported from retained
+selected checkpoints. Debug A100 / 6 CPU / 90,000 MiB; GPU allowances at least
+8 hours, report 2 hours / 16 GiB. These inherit existing resource evidence;
+the new objective's full-population runtime is not remotely measured.
+
+Reserve 3 GiB personally available persistent space. After all four fits and
+saved results validate, delete ONLY the four newly owned TRAIN target payloads
+with exact-path/hash retirement records. Keep native models, predictions,
+histories, moments, manifests, source and logs. No parent data or Fresh_check
+deletion. Reporting remains authenticated after target retirement.
+
+Validation: **143 passed in 281.61s** across auxiliary-logit, trial-hybrid,
+FullStat-hybrid and joint-prediction tests. Includes actual local installed
+Weaver 0.5.3 native CPU/CUDA FP32/BF16 parity, full-architecture four-by-30-epoch
+production workers on synthetic populations, native checkpoint roundtrips,
+parent retirement/reuse, loss/gradient/normalization checks, exact six-job
+submission, failure injection and owned cleanup. Slurm/accounting/source
+boundaries are mocked in local synthetic worker tests. Bash syntax, CLI help,
+new-file whitespace and documentation links pass. These are not real SPORC
+or Tigris execution results. No jobs submitted, cancelled or modified; no
+commit/push performed. Next: selectively commit/push, then use the runbook's
+fresh pinned worktree and exact reviewed six-job plan.
+
+Follow-up submission-order request: fits now submit as **k1 -> k05 -> k025 ->
+k0** (1, 0.5, 0.25, 0), after the shared export and before the report. All fits
+remain independent afterok:targets consumers; no serialization or Slurm start
+order guarantee. Updated task contract, exact dry/live-order assertions, queue
+helper and plan/contract/runbook. **8 focused tests passed in 4.54s**, plus Bash
+syntax. No new donor or scientific/schema change; reordered spec/plan content
+hashes require a fresh dry review. Existing jobs/specs were not modified.
+
+## 2026-10-24: Four trial hybrid KD/embedding ladders, direct debug
+
+Implemented the requested four independent full ladders in additive
+`luka_trial_hybrid/`: CE/KD mixtures 25/75, 50/50, 75/25, and an annealed arm.
+Authority: [active plan](plans/LUKA_TRIAL_HYBRID_PLAN.md),
+[new v1 contract](contracts/LUKA_TRIAL_HYBRID.md),
+[commit/queue/results runbook](LUKA_TRIAL_HYBRID_RUNBOOK.md).
+Sixteen new files: nine package modules, CLI/queue/Slurm wrappers, tests and
+three documents. Shared HANDOFF/LEGACY_SOURCE_MAP updates preserve prior edits.
+Donor/integration baseline `2376559bc9b1d0ff455bbdb242ae5769a54d6168`;
+full donor paths recorded in LEGACY_SOURCE_MAP. All old runtime remains unchanged.
+
+Each arm trains UE000/U000 -> UE100/U100 -> DE066 -> DE033 -> DE000 from scratch,
+with same-arm immediate-predecessor logit KD (original OFFLINE for UE000).
+Embedding target graph copies the supplied FullStat hybrid, not its data or
+20-epoch recipe: OFFLINE/M0HLT at the first two rungs, then OFFLINE plus selected
+same-arm ancestors, omitting M0HLT only at DE000. No U050 rung. Native frozen
+128-D fc-input targets, separate TRAIN-only FP64 standardization and removable
+128-GELU-128 heads. Predict teacher representations, never predictor outputs.
+Total embedding weight 5 is divided equally across teachers and never annealed.
+T=2, exactly one T-squared forward-KL factor. Annealed KD is 0.75 at epoch 1,
+linearly zero at epoch 25, then zero through epoch 30; reset each rung. Native
+classification never consumes actual or predicted privileged embeddings.
+
+Original 299,234 TRAIN / 74,895 validation, physical batch 128, fixed 30 epochs,
+original AdamW/warmup3/cosine30 schedule and coordinate-paired native/sampler
+seeds. Full-validation AUC selects the native checkpoint; original50k is report
+only. Historical test was retired into TRAIN: NO independent test. Only DE000
+is HLT-deployable; all earlier rungs are richer-input oracle diagnostics.
+Poor finite science completes all registered fits without performance gates.
+
+User explicitly waived a new preflight/miniature for this campaign. Exactly
+22 debug jobs: one shared frozen-original TRAIN export, 20 scientific fits,
+one final CPU report/owned-target retirement. No technical epoch, benchmark,
+stress training, startup optimizer step or login-node controller. All afterok
+dependencies submitted as one exact hash-reviewed graph; no cross-arm teachers.
+Inherited acceptance authenticates completed d8dba242 token/native/KD evidence
+in original pinned sources; actual A100/software/allocation must still match.
+New multihead objective has NOT been measured remotely. Fit allowances are
+max(8 hours, 1.5 * old aligned projection + 120 minutes), reject above debug24h;
+6 CPU / 90,000 MiB / A100. Shared export 8 hours; CPU report 2 hours / 16 GiB.
+
+Reserve 8 GiB personally available persistent space. Store compact TRAIN jet
+targets, not particle/attention banks. Reuse original authenticated caches;
+wholly deleted OFFLINE TRAIN/U000 caches can be rebuilt in RAM by unchanged
+builders and must reproduce original fingerprints. Final report saves results
+before deleting exactly 18 newly owned target NPZs; canonical-path, file-hash
+and all-consumer checks precede deletion. No backup of retired targets. Keep
+all 20 selected native models, validation predictions, histories, moments,
+manifests, hashes and logs. Interrupted retirement stops results validation and
+requires explicit recovery. Existing datasets, worktrees, jobs, Fresh_check
+and historical artifacts are untouched.
+
+Final focused regression: **137 passed in 218.07s, no skips**, across
+`test_luka_trial_hybrid.py` (44 new tests), `test_luka_fullstat_hybrid_embedding.py`,
+`test_luka_embedding_prediction.py` and `test_luka_joint_prediction.py`.
+Includes all 20 full-architecture workers on synthetic 22-row CUDA data
+(600 scientific epochs), native checkpoint readback, partial/final results and
+retained-result authentication after target retirement. Hardening covers exact
+loss/gradient/temperature parity, registration, cross-arm checkpoint transplants,
+nonfinite/rehashed bad banks, invalid ancestors and canonical cleanup paths.
+Both shell scripts pass Bash syntax; all 16 new files pass AST, whitespace, EOF
+and local Markdown-link checks. No prior runtime files were modified.
+
+Local installed Weaver 0.5.3 / Torch 2.5.1 CUDA 12.1; real local CPU/CUDA native
+parity, but cluster/source/accounting boundaries are mocked. No new remote
+SPORC/Tigris execution, preflight or full-data test in this turn. No commit,
+push, submission, cancellation or old-data deletion. Next: selective commit
+and push, clean pinned SPORC worktree, helper dry review and exact-plan approval.
+
+## 2026-10-24: Joint U100 jet4/token3 prediction, direct debug
+
+Implemented the user's requested combined experiment: CE + 4*whole-jet
+embedding loss + 3*particle-token loss, aligned and unordered variants. The
+4/3 choice is explicit, not the suggested5/3 alternative. Authority:
+[active plan](plans/LUKA_JOINT_PREDICTION_PLAN.md),
+[new v1 contracts](contracts/LUKA_JOINT_PREDICTION.md),
+[commit/queue/results runbook](LUKA_JOINT_PREDICTION_RUNBOOK.md).
+
+Added nine-module `luka_joint_prediction`, thin CLI/queue/Slurm scripts,
+focused tests and three docs (16 new files). Donor/integration baseline
+`d8dba242c20c65a9c5155f93a68a5eaf12ba5063`; full donor paths in LEGACY_SOURCE_MAP.
+All old runtime files remain unchanged. Existing dirty documents and unrelated
+user work preserved. No Fresh_check dependency or shared artifact deletion.
+
+Both targets come from frozen original fixed30 COARSE_U100: fc-input final
+normalized class vector and eighth particle-block output. One native forward,
+two independently initialized128-GELU-128 FP32 heads; no head output enters
+classification. Separate TRAIN-only FP64 normalization, identical per-jet
+SmoothL1 reductions and exact detached within-jet Hungarian set loss. Both
+heads removed from selected checkpoints; native HLT-only inference unchanged.
+Same299234/74895 population, original50k report-only, no independent test;
+M0HLT-paired seeds, physical128, exact30-epoch schedule and original selection.
+No logit KD, ladder, warm start, teacher retraining or validation target fitting.
+
+User explicitly requested NO preflight. New plan registers exactly TWO direct
+debug jobs (`lukajp_aligned`, `lukajp_set`), zero preflight/technical epochs,
+no controller/dependency/follow-up. Replays completed original token study in
+its exact pinned source, including passed prior preflight/accounting, completed
+fits and whole-jet reference. Actual worker GPU/environment/allocation must
+match prior acceptance. Teacher probability readback and target export remain
+normal fit setup, not a hidden benchmark. Old acceptance is not presented as
+new combined-loss measurement. Source/data/teacher integrity still fail closed.
+
+Requests: A100,6CPU,90000MiB, max4h or125% of original arm projection +30min;
+reject if above24h. Both jobs may queue independently. Require2GiB personally
+available persistent quota. Joint target banks are per-job unique node-local
+/tmp disk scratch, exported in one teacher pass, retired on normal/error exit.
+Raw token bytes must match original accepted export; both arms must share exact
+joint descriptors. Retain models, validation probabilities, all raw/weighted
+loss histories, moments/hashes, reference snapshots, resource/phase evidence.
+Results compare M0HLT/OFFLINE, OFFLINE-w5, U100 teacher/w5, old token arms and
+new combined arms, with partial completion and saved-only metric validation.
+
+Evidence: pre-change token suite23 passed in48.04s. Initial new suite17 passed
+in34.45s. Final joint/token/U100-embedding/embedding-auxiliary regression:
+**107 passed in120.33s**, no skips. Includes all22 new tests, full-architecture
+installed-Weaver CPU/CUDA FP32/BF16 native output/gradient parity, both target
+taps in one forward, head/backbone gradients, detached targets, independent
+normalization and old-bank parity on CPU/CUDA, two complete30-epoch production
+workers on synthetic22-row CUDA data with native selected-model readback,
+partial/final results, corrupted targets/history/source, wrong task/job, weak
+science completion, duplicate/ambiguous submission and owned-scratch retirement.
+All16 new files pass syntax/link/whitespace checks; both shells pass Bash syntax.
+
+Local environment: Weaver0.5.3, Torch2.5.1/CUDA12.1, RTX2000 Ada laptop.
+Source/Slurm/host-accounting boundaries are fixture-mocked. User supplied prior
+real SPORC token-study success/results; this turn did NOT access SPORC or measure
+the new combination on full real data. No new remote preflight or miniature was
+run. No commit, push, submission, cancellation or old-data deletion performed.
+Next: selectively commit/push16 new files, create clean pinned SPORC worktree,
+run the new helper, review exact two-job plan and authorize its printed hash.
+
+## 2026-10-23: FullStat five-rung hybrid logit KD plus embedding prediction
+
+Implemented the user-approved NEW Oscar experiment, separate from the running
+CE-only cumulative ladder. Authority:
+[hybrid plan](plans/LUKA_FULLSTAT_HYBRID_EMBEDDING_PLAN.md),
+[v1 contracts](contracts/LUKA_FULLSTAT_HYBRID_EMBEDDING.md),
+[queue runbook](LUKA_FULLSTAT_HYBRID_EMBEDDING_RUNBOOK.md).
+
+Exact fresh chain UE000(U000) -> UE100(U100) -> DE066 -> DE033 -> DE000.
+Logit teachers: original OFFLINE, new UE000, new UE100, new DE066, new DE033.
+Embedding teachers by rung:
+OFFLINE+M0HLT; OFFLINE+M0HLT; OFFLINE+UE100+M0HLT;
+OFFLINE+UE100+DE066+M0HLT; OFFLINE+UE100+DE066+DE033.
+UE100 does NOT predict UE000 embeddings; DE000 does NOT predict M0HLT.
+New ancestors never substitute historical identically named checkpoints.
+
+Loss is .25 CE + .75 T-squared forward KL at T2 + (5/N) sum mean SmoothL1.
+75/25 applies only to classification terms. Separate native128-D prediction
+heads, independent TRAIN normalization, frozen selected teachers; no warm start,
+attention, relational loss or fusion. Heads/predictions never feed classifier
+inputs and are absent from selected native checkpoints. Same3M TRAIN/500k
+validation,20 epochs,batch128, paired seeds, AdamW/schedule. Final1.5M test and
+unused105325 remain sealed. Only final DE000 is native HLT-deployable.
+
+Added10-module `luka_fullstat_hybrid_embedding` package, thin CLI, queue helper,
+Slurm wrapper, focused tests and three documents. New
+`LUKA_FULLSTAT_HYBRID_EMBEDDING_<kind>/v1` binds exact recipes, embedding AND
+temperature-two probability banks, joined identities/labels, selected native
+checkpoints, full ancestor receipts, source and exact Slurm identities.
+Adapted cumulative donor d98359f76abe3a46c70f948aa4b99d51c82787e9; integration
+baseline6b76a6777952c8faa2b155084ef560518c6fa55a; accepted four-teacher execution
+b21c2d4e01211a31e57d879c5a86ca90aab2ca0b. Exact file map in LEGACY_SOURCE_MAP.
+Existing runtime files/contracts, unrelated local work and old jobs unchanged.
+
+One hash-reviewed five-job afterok DAG; no standalone preflight, setup, export,
+aggregate job or login controller. First job exports original M0HLT embeddings
+and OFFLINE TRAIN probabilities sequentially before loading its rung views.
+Every non-final selected model exports T2 TRAIN probabilities; UE100/DE066/DE033
+also export native embeddings. Original OFFLINE embedding bank is reused
+unchanged. Completion published last; partial fits cannot release descendants.
+Technical corruption/failure blocks descendants; poor finite science does not.
+
+Reuse authenticated original Oscar native/KD and four-head acceptance through
+original-source replay, including completed exact jobs and unchanged runtime
+bytes/environment/backend/GPU. Each scientific job performs only three
+disposable maximum-support updates, validation-support forward, tap/gradient/
+memory checks, then resets fresh scientific initialization. No new technical
+epoch or benchmark. RequestL40S,6CPU,180000MiB, larger inherited training request
+plus120min, first job plus180min instead; reject above48h. New objective timing
+is unmeasured, not guaranteed. Require16GiB personal durable headroom.
+
+Saved-only results include historical M0HLT/OFFLINE, DIRECT_D000/COARSE_D000,
+U100-w5 and four-teacher references, pending/new stages, AUC/accuracy/recovery
+and R30/R50 from the same selected validation checkpoint. All20 epoch histories,
+raw/weighted CE/KD/per-head losses and batch progress retained. This is adaptive
+single-seed development validation, not independent-test or compute-matched proof.
+
+Evidence: pre-change cumulative/four-teacher suites70 passed in62.37s. Focused
+new suite36 passed in43.63s before seven extra integrity tests. Final combined
+hybrid/cumulative/four-teacher/U100/sweep/auxiliary regression191 passed in198.56s,
+including all43 hybrid tests, no skips. Actual full-architecture installed-Weaver
+CUDA miniature executed all five production workers,100 scientific epochs on
+synthetic22-row data, both bank exports and selected native readbacks. Exact
+FP32/BF16 loss/gradient/optimizer-step parity against the existing KD and
+four-head kernels, original installed-Weaver parity, seeds, role/temperature/
+join/content corruption, KD-only transitive ancestry, poor-score completion,
+exact DAG/ambiguous-submission guards, shell syntax and doc links are covered.
+New-file whitespace/conflict checks and tracked `git diff --check` passed.
+Final source-guard integration permits only the explicit unimported concurrent
+particle-prediction trial ADDITIONS, never edits to any existing runtime. This
+allows either experiment's new files to be committed first without weakening
+donor compatibility. Final focused rerun:44 passed in41.17s, no skips.
+
+Local GPU: RTX2000 Ada laptop, Torch2.5.1/CUDA12.1, Weaver0.5.3. Windows host
+memory and source/Slurm boundaries are fixture-mocked. No new Oscar/Tigris job
+or cluster resource certification was performed. The requested no-preflight
+path reuses original real Oscar acceptance and validates the combination inside
+the scientific jobs. No commit, push, remote submission or cancellation done.
+Next: selectively commit/push the17 new files, declare16GiB personal headroom,
+review the exact five-job plan in a clean pinned Oscar worktree and authorize
+that hash. Existing CE-only cumulative jobs remain untouched.
+
+## 2026-10-23: Trial U100 particle-feature prediction, two debug arms
+
+User approved aligned particle-feature prediction and unordered set prediction,
+compared with completed whole-jet U100-w5. Authority:
+[LUKA_PARTICLE_PREDICTION_PLAN.md](plans/LUKA_PARTICLE_PREDICTION_PLAN.md),
+[new v1 contracts](contracts/LUKA_PARTICLE_PREDICTION.md),
+[queue/results runbook](LUKA_PARTICLE_PREDICTION_RUNBOOK.md).
+This is the original 299,234 TRAIN / 74,895 validation trial ALLJETS population,
+NOT FullStat. Original50k is report-only; no independent test remains.
+
+Added nine-file `luka_particle_prediction/`, thin CLI, queue helper/Slurm worker,
+focused tests, plan/contract/runbook. Donor `01d45d60`; full path mapping in
+LEGACY_SOURCE_MAP. No existing runtime edits or Fresh_check dependencies.
+Frozen original COARSE_U100; predict native eighth particle-block outputs
+before class attention using a removable shared 128-GELU-128 head.
+Two fresh HLT-only students: CE + 5*aligned SmoothL1, or CE + 5*exact per-jet
+Hungarian SmoothL1. Same targets/normalization, physical128, M0HLT seeds,
+original fixed30 schedule and full-validation selection. No warmstart,
+logit KD, ladder or teacher retraining. Persistent slots are authenticated
+algorithmic assignments, not asserted truth-level particle matches.
+
+Queue helper reviews and submits three exact debug jobs: preflight (8h), then
+both fits (24h ceilings) with afterok plus successful accounting/artifact checks.
+Preflight measures full-population technical epochs for BOTH losses, physical128
+maximum-support stress, native FP32/BF16 parity, teacher/checkpoint readback,
+host/GPU peaks, and conservative runtime <=24h. No scientific weights reused.
+Source, model environment, teacher, data, target hashes and jobs are pinned.
+No scientific performance threshold, login follow-up controller or automatic retry.
+
+Persistent budget 2GiB. Each job exports deterministic FP32 TRAIN token targets
+once into its unique `/tmp` child, checks local disk type and capacity, then
+retires only that owned child. No home fallback, tmpfs or shared-filesystem bank.
+Both fits must reproduce preflight target/index hashes exactly. Compact moments,
+identities, descriptors, selected native checkpoints, epoch histories and full
+validation predictions/reference snapshots remain. Reports do not require the
+retired scratch payload; no old models, jobs, datasets or campaigns touched.
+
+Local combined regression: 104 passed (two existing PyTorch mask-type warnings)
+across new tests, U100 embedding, embedding auxiliary and attention suites.
+After the final scratch-selector adjustment/additional test: all 23 focused
+tests passed in 41.69s. The combined run covered 82 existing donor tests.
+Actual installed Weaver0.5.3, torch2.5.1/CUDA12.1, RTX2000 Ada laptop: full native
+model CPU/CUDA FP32/BF16 logits/gradient parity; reduced-size eight-block CUDA
+production-worker miniature ran preflight then BOTH30-epoch fits, selected
+native checkpoint readback, partial/final results, corruption/failure and owned
+scratch-retirement tests. Synthetic source/accounting/resource fixtures do NOT
+certify the SPORC environment or real-population envelope. Shell syntax checked.
+Genuine SPORC/Tigris acceptance and scientific runs have NOT happened here.
+Next: scoped commit/push, then the runbook's exact-worktree helper. The new
+remote preflight must pass before either dependent scientific fit can execute.
+
+## 2026-10-23: Missing LOGIT teacher recovery before five tier3 trials
+
+User reported missing original LOGIT_D066/D033 selected.pt, no matching copies
+in the searched checkpoint tree, and a prior D066 bank manifest with no payload.
+Surviving OFFLINE/U100, retained results and checked prepared views were present
+(presence only). User authorized two replacement teacher fits then the planned
+five multi-teacher experiments. New authority:
+[LUKA_MULTITEACHER_RECOVERY_PLAN.md](plans/LUKA_MULTITEACHER_RECOVERY_PLAN.md),
+new `LUKA_MULTITEACHER_RECOVERY_<kind>/v1` execution contracts; old no-retraining
+trial registration stays immutable and is NOT silently repurposed.
+
+Added six-file `luka_multiteacher_recovery/`, thin CLI, queue helper/Slurm worker,
+focused tests, plan/contract/runbook. Donor01d45d6057e799b4e262f8c590b51706803ebfd1;
+detailed path mapping in LEGACY_SOURCE_MAP. No existing scientific runtime edits.
+Fresh LOGIT_D066 from original selected U100, then fresh LOGIT_D033 from NEW D066,
+using unchanged original LOGIT trainer: C25/P75 T2, physical128,30 epochs,
+coordinate seeds, original warmup/cosine and AUC selection. Compact probability
+targets only; no old attention bank reconstruction or replacement in old paths.
+
+One eight-job tier3 DAG: train_LOGIT_D066 -> train_LOGIT_D033 -> export_targets
+-> all five original student arms. No new preflight/technical epochs, login
+controller, second submission, automatic retry or scheduler changes. Each job
+checks exact source/environment/allocation, accepted journal and dependencies;
+afterok plus successful accounting and artifact authentication gate children.
+Teacher minutes=max(360,archived train+export requests), students retain original
+multi-head estimate, all <=24h. Historical resource metadata is inherited;
+deleted old probe payloads are NOT claimed to be revalidated/new acceptance.
+
+New immutable execution CONTEXT binds actual replacement checkpoint hashes to
+approved SPEC and completed teacher receipts. Unchanged original multi-teacher
+exporter/trainer consume that context; all five students remain fresh CE plus
+embedding losses, NO student logit KD. Native deployment has no auxiliary heads.
+299234 TRAIN /74895 validation, original50k report-only, NO independent test.
+Reports explicitly label NEW_LOGIT teachers and support partial completion.
+
+Reserve5GiB for compact probability/embedding banks, seven selected models,
+predictions/histories/lineage. Keep both replacement teachers and all models;
+no automatic deletion or persistent particle-cache duplication. Queue creation
+authenticates TRAIN D000/U100/D066/D033, validation D000/D066/D033 and raw TRAIN
+files needed to reconstruct OFFLINE inputs in RAM before spending GPU time.
+Shared original models, data, worktrees, existing jobs and Fresh_check untouched.
+
+Evidence: **75 recovery/archive/U100 tests passed** (10 new recovery tests),
+plus **44 original multi-teacher/attention baseline tests passed**. Installed
+Weaver/PyTorch CUDA integration executes both complete30-epoch replacement fits,
+native checkpoint readback, new D066->D033 probability lineage, all-four target
+export, derived context and one complete30-epoch multi_w5 student using actual
+production workers. Synthetic22-row population, reduced embed/pair/head/class
+configuration but eight particle blocks and128-vector; source/Slurm/host/input
+fixtures and export class-support admission are stand-ins, NOT new SPORC
+acceptance. The baseline suite separately exercises all five30-epoch students
+with2068 rows and the actual2048-reference sampler. Corrupt source, missing
+teacher-validation/raw files, wrong jobs/context and duplicate/ambiguous submit
+fail closed. Shell syntax, CLI/help, documentation links and whitespace pass.
+
+No commit, push, remote Slurm submission or deletion performed. Next: review and
+commit/push scoped recovery files, then use
+[LUKA_MULTITEACHER_RECOVERY_RUNBOOK.md](LUKA_MULTITEACHER_RECOVERY_RUNBOOK.md).
+Existing unrelated dirty files and accumulated HANDOFF/source-map edits preserved.
+
+## 2026-10-23: Five smaller-data multi-teacher trials, direct SPORC tier3
+
+Implemented the requested five-run screen on the original trial ALLJETS split:
+299,234 TRAIN / 74,895 validation, original50k report-only, historical holdout
+retired and NO independent test. Fresh HLT-only ParTs, physical batch128,
+exactly30 epochs, matched M0HLT seeds/order and fixed30 AdamW warmup/cosine.
+No logit KD, warm start, fusion or attention distillation. Frozen teachers are
+original fixed30 OFFLINE/COARSE_U100 and original LOGIT_D066/LOGIT_D033; no
+Oscar/ATTN substitution and no teacher retraining.
+
+New arms: four-target total weights2.5/5/10, four independent heads predicting
+the same U100 target at total5, and four-target5 plus relational supervision.
+The latter averages four teacher-space KLs against2048 balanced TRAIN reference
+rows, masks exact same-jet rows, temperature0.2, coefficient ramp0->1 over two
+epochs; no extra reference-model forward or validation target export. Per-head
+SmoothL1 means span jets and128 dimensions. Native HLT inference never consumes
+targets/predictions, and selected checkpoints contain no auxiliary heads.
+
+Added nine-file `src/hlt_classification/luka_multiteacher_trial/`, thin CLI,
+queue helper/Slurm worker, focused tests, active plan, reusable v1 contract and
+runbook. `LUKA_MULTITEACHER_TRIAL_<kind>/v1` binds teachers, recipes, shared TRAIN
+banks, original identities, exact jobs/dependencies, full histories, native
+checkpoint readback and saved-only partial comparisons. Donor/integration
+checkout d98359f76abe3a46c70f948aa4b99d51c82787e9; detailed file mapping in
+LEGACY_SOURCE_MAP. Existing runtime files and unrelated edits preserved.
+
+Direct queue path has SIX jobs: one real target export followed by all five
+independent fits via afterok. ZERO new preflight jobs or benchmark epochs,
+no login controller/second manual submission, no automatic retry. It reuses
+accepted original SPORC single-head resource evidence, explicitly estimates
+new multi-head/relational requests and verifies environment/allocation in each
+worker. Tier3 A100/6CPU/90000MiB; export6h, each fit max(6h,2*inherited request+1h),
+bounded by24h. Exact pushed source, full dry review and explicit plan authorization
+remain required. No claim that new multi-head timings were measured on SPORC.
+
+Four shared banks have ~0.57GiB vector payload; campaign reserves4GiB for banks,
+five selected native models, predictions, histories and evidence. No duplicate
+persistent particle caches, optimizer states, attention matrices or deletion.
+Missing OFFLINE TRAIN cache reconstructs only authenticated TRAIN in RAM;
+other missing inputs/checkpoints stop. Old attention banks need not survive.
+Historical M0HLT/OFFLINE/OFFLINE-w5 and optional authenticated U100-w5 comparison;
+validation/original50k AUC, accuracy, gap recovery and R30/R50 counts/censoring
+all use each fit's same full-validation-AUC-selected checkpoint.
+
+Verification: **24 focused tests passed**. Actual installed Weaver0.5.3,
+PyTorch2.5.1/CUDA12.1, RTX2000 Ada Laptop: full native model FP32/BF16 parity,
+RNG/head-removal and gradient checks; production export and all FIVE full30
+fits on a2068-TRAIN/22-validation synthetic fixture with reduced particle sizes
+and transformer block count. The actual2048-reference sampler/relation kernel,
+all30 epochs, checkpoint selection, native readback, durable receipts and partial
+results execute unchanged. Slurm/source/inventory/host counters are fixture
+stand-ins, NOT real SPORC acceptance. Additional **132 donor regression tests
+passed**, one pre-existing legacy test deselected:
+`test_luka_d066_embedding.py::test_real_committed_repository_includes_exact_parallel_tree`
+expects an older additive source boundary and already fails on the unchanged
+integration HEAD. Shell syntax, CLI help, Markdown links and whitespace checks
+pass. No real SPORC/Tigris miniature or remote job was run for this change.
+
+Next: commit/push scoped new files, then follow
+[LUKA_MULTITEACHER_TRIAL_RUNBOOK.md](LUKA_MULTITEACHER_TRIAL_RUNBOOK.md).
+The helper checks current remote checkpoint survival and hashes before any
+submission. No source commit/push, scheduler change or teacher deletion was
+performed locally by the agent. This remains single-seed exploratory validation.
+
+## 2026-10-23: FullStat cumulative representation ladder, Oscar, no separate preflight
+
+Implemented the user-approved shortened ladder: fresh UE100 predicts original
+OFFLINE; fresh DE066 predicts OFFLINE + new UE100; fresh DE033 predicts OFFLINE,
+new UE100 and new DE066; fresh native-HLT DE000 predicts all four ancestors.
+Independent 128-GELU-128 heads, CE + (5/N) sum of mean SmoothL1 losses, separate
+TRAIN normalization for every selected native teacher representation. No logit
+KD, warm start, attention, fusion, relational loss or predicted-target chaining.
+Selected checkpoints exclude auxiliary heads. The first three rungs are
+richer-input oracle diagnostics; final DE000 is HLT-only at inference.
+
+Same FullStat 3M TRAIN / 500k validation, physical batch 128, coordinate-paired
+model/sampling seeds, original optimizer and exactly 20 epochs. Final test1.5M
+and unused105325 stay sealed. Reuse verified completed U100-w5/four-teacher and
+historical M0HLT/OFFLINE references; no new matched control. AUC/accuracy/recovery
+and R30/R50 use the same AUC-selected probabilities. Intermediate per-epoch AUC,
+best epoch, CE/per-head losses and batch progress are logged. Single-seed,
+adaptively inspected development evidence, not independent-test claims.
+
+New additive `luka_fullstat_cumulative_embedding/` package (nine files), CLI,
+queue helper/Slurm wrapper, focused tests, active plan, contract and runbook.
+New `LUKA_FULLSTAT_CUMULATIVE_EMBEDDING_<kind>/v1` identities bind four recipes,
+completed ancestor tasks, native checkpoints, independently normalized banks,
+integrated startup checks, exact Slurm jobs and complete publications. Original
+OFFLINE bank retains its original contract and bytes. Donor execution
+b21c2d4e01211a31e57d879c5a86ca90aab2ca0b; integration baseline
+7e8dd105af1ead66b7ec120d7a391ca8310b5401; full mapping in LEGACY_SOURCE_MAP.
+No existing runtime or scientific contract was changed.
+
+One dry-reviewed four-job DAG: train_UE100 -> train_DE066 -> train_DE033 ->
+train_DE000. Every rung also depends on all earlier fits whose banks it uses.
+No separate preflight, setup, export or aggregate job, and no login controller.
+The first three jobs export their selected native TRAIN targets before publishing
+completion. Technical failure blocks dependent rungs; poor finite performance
+continues. No automatic retry, batch fallback or early stopping.
+
+Original-source replay authenticates the completed four-teacher campaign,
+original native seven-coordinate preflight, four-head acceptance, exact successful
+job accounting and upstream references. Every donor runtime byte must match.
+Each scientific job performs only three disposable maximum-support updates,
+maximum-validation-support forward, tap/finite-gradient/memory checks, then
+discards the probe and resets fresh scientific initialization. No benchmark or
+technical epoch. Resource request: L40S, 6 CPUs, 180000 MiB, larger accepted
+original/four-teacher train request +120 minutes, rejecting values above48h.
+New combination runtime is not measured or guaranteed. Require12GiB personal
+durable headroom; no new persistent particle caches or deletions.
+
+Evidence: pre-change donor suites65 passed in54.32s. Initial cumulative run26
+passed (2 documentation checks deferred). Final combined cumulative/four-teacher/
+U100/sweep/auxiliary suite148 passed in172.30s, no skips, including all36 new tests.
+Final focused rerun:36 passed in38.15s; tracked diff whitespace checks passed.
+Full-architecture installed-Weaver/CUDA miniature executed all four production
+workers, all80 scientific epochs on synthetic22-row data, native probability
+roundtrips and all three selected embedding exports. Separate FP32/BF16 tests
+check exact final-head loss/gradient/optimizer-step parity against the accepted
+four-teacher kernel, plus real installed-Weaver parity in the auxiliary suite.
+Other tests cover native-vs-predictor targets, independent moments, exact seeds,
+role/identity/label/corruption failures, transitive ancestry, poor-score completion,
+four-job journals/dependencies, ambiguous submission refusal, R30/R50 ranks/ties,
+shell syntax, CLI and documentation links.
+
+Local GPU: RTX2000 Ada laptop, Torch2.5.1/CUDA12.1, Weaver0.5.3. Windows host-memory
+and Slurm/source boundaries are fixture-mocked. This is not a new Oscar/Tigris
+resource certification or genuine-cluster miniature. The requested no-separate-
+preflight path reuses authenticated real Oscar evidence, checking the new
+head/view combination inside each scientific job. No remote execution, commit,
+push, submission/cancellation, old-artifact changes or final-test inference.
+Next: review, commit/push the additive implementation, then use the exact
+[queue instructions](LUKA_FULLSTAT_CUMULATIVE_EMBEDDING_RUNBOOK.md).
+
+## 2026-10-22: immediate-predecessor native embedding prediction ladder, debug
+
+Implemented the requested original U000 -> fresh U100 -> fresh D066 -> fresh
+D033 -> fresh D000 chain. Every new stage trains CE + 5*mean SmoothL1 through
+a small auxiliary head, predicting its predecessor's selected native 128-D
+pre-classifier representation, NOT the predecessor's prediction-head output.
+No logit KD, attention KD, fusion, U050 fit, warm start or embedding-only phase.
+Fresh original coordinate seeds; normal fixed30/batch128, 3e-4 warmup/cosine.
+TRAIN-only per-teacher normalization and exact identity/label joins. Each
+handoff strictly reloads a selected native-only checkpoint, with no predictor.
+Only D000 is deployable HLT-only; earlier richer-view models are oracle rows.
+Split remains trial ALLJETS299234/74895, original50k report-only; no independent
+test. Historical M0HLT/OFFLINE/U000 are contextual references, not new controls.
+
+New additive package `luka_embedding_prediction`, CLI/Slurm worker/helper,
+plan/contract/runbook and focused tests. Distinct LUKA_EMBEDDING_PREDICTION_*/v1
+records bind original source, selected predecessor, bank, stage and exact DAG.
+Imported original U000 anchor retains its old contract/validator. Donor baseline
+118aa375eea423e5e99338cd9a6eda198225ef21; full map in LEGACY_SOURCE_MAP.
+Instructions: [LUKA_EMBEDDING_PREDICTION_RUNBOOK.md](LUKA_EMBEDDING_PREDICTION_RUNBOOK.md).
+
+Queue integration checked against the subsequently committed FullStat addition:
+source guard now pins b21c2d4e01211a31e57d879c5a86ca90aab2ca0b, whose only src
+changes from the donor are nine files in a separate package. All original
+scientific donors remain unchanged. Added a regression test of that boundary;
+27 focused tests passed in39.79s, including CUDA miniature/parity, after this
+source-only pin update. Plan/runbook/source map record the integration pin;
+scientific contracts are unchanged. Nothing committed or submitted by the agent.
+
+One reviewed five-job debug DAG: setup, U100, D066, D033, D000. Every scientific
+stage requires setup success; later stages also require their predecessor's
+receipt and successful exact journal-bound Slurm job. Setup measures native
+readback, parity, maximum support and a disposable four-stage one-epoch chain;
+technical teachers cannot seed science. Six CPUs/90000MiB/A100, setup8h,
+each fit6h, measured resource margins. No scientific-quality acceptance gate.
+Compact2GiB reservation: seven small TRAIN banks, selected native models,
+predictions/histories/metadata. Fully deleted U000 input caches reconstruct in
+RAM with saved assignments/fingerprints; other missing/partial/corrupt caches
+fail. No persistent particle/attention cache, deletions, job changes, or access
+to Fresh_check. Completed-stage results remain inspectable while later jobs run.
+
+Evidence: pre-change donor suites74 passed; new focused suite26 passed
+in35.27s. Combined new/CE-warmstart/old-ladder/U100-direct regression100 passed
+in138.79s, no skips. Includes a local installed-Weaver/CUDA production-worker
+miniature (synthetic22 rows, reduced block count) executing setup and all four
+full30 fits, plus separate full-architecture native and FP32/BF16 predictor
+parity. Tests cover actual native targets, selected/fresh weights, kernel parity,
+TRAIN role/joins, technical-bank exclusion, poor-score completion, exact DAG,
+ambiguous submission refusal, read-only reporting, genuine ROOT U000 rebuild
+and shell syntax. This is NOT real SPORC/Tigris acceptance or cluster timing.
+No commit, push, remote submission/cancellation or test inference occurred.
+Next: review/commit/push and queue via the runbook;
+real SPORC setup must pass before its dependent scientific fits can execute.
+
+## 2026-10-22: FullStat four-teacher representation prediction, Oscar
+
+Implemented the requested one-new-fit comparison: fresh HLT ParT with four
+independent auxiliary heads predicting frozen OFFLINE, COARSE_U100, COARSE_D066
+and COARSE_D033 pre-classifier representations. Each independently TRAIN-normalized
+target receives SmoothL1 coefficient 1.25 (total 5). Native classification remains
+CE only; no logit KD, warm start, fusion, attention or relational objective.
+All auxiliary heads are removed from selected deployment checkpoints. Retains
+the original 3M TRAIN / 500k validation split, physical batch 128, seeds and exact
+20-epoch optimizer/LR schedule. Final-test and unused populations remain sealed.
+
+The user's comparison choice is explicit: reuse the verified completed U100-w5
+result, not a newly trained control. OFFLINE/U100 target banks keep their original
+contracts and bytes; only D066/D033 targets are exported. Reports authenticate
+original M0HLT/OFFLINE/U100-w5 predictions and the new selected predictions.
+No pasted/manual metric corrections are used. This remains single-seed adaptive
+development validation, without a fresh matched CE control or test claims.
+
+Files: additive `luka_fullstat_multiteacher/` runtime, thin CLI, queue helper,
+Slurm wrapper, focused tests, new scientific plan and reusable contract.
+Instructions: [LUKA_FULLSTAT_MULTITEACHER_RUNBOOK.md](LUKA_FULLSTAT_MULTITEACHER_RUNBOOK.md).
+New `LUKA_FULLSTAT_MULTITEACHER_<kind>/v1` families bind source, four targets,
+setup acceptance and one fit; old contracts/runtimes are unchanged. Integration
+baseline 118aa375eea423e5e99338cd9a6eda198225ef21; U100 donor/execution
+7ea8b0c693734a26ced3820354e047f4af26c979; details in LEGACY_SOURCE_MAP.
+
+One dry-reviewed authorized two-job DAG: setup -> train_multi4. Training has an
+afterok dependency and revalidates the exact setup receipt/accounting. Setup
+authenticates/exports targets, checks all four heads and maximum-support cases,
+times 512 ordinary updates plus full validation, and rejects requests exceeding
+the reviewed memory/time envelope. No full technical training epoch, login
+controller, second manual queue step, automatic retry or model-quality gate.
+Both jobs request the original Oscar L40S, 6 CPU, 180000 MiB; setup 12h, fit cap
+1.5 times the previous accepted U100 request (maximum 48h), with measured admission.
+Requires a clean pushed commit, new output root and 12 GiB durable headroom.
+
+Evidence: pre-change U100 suite 31 passed. Initial new suite 29 passed; expanded
+new/U100/sweep/auxiliary regression 112 passed in 119.14s, no skips. Includes
+independent normalization/gradients, native initialization and FP32/BF16 parity,
+strict native checkpoint readback, sealed-role/corruption/source checks, failed
+setup blocking, exact Slurm journal/dependency tests and a local installed-Weaver
+CUDA miniature through setup plus all 20 production-worker epochs (synthetic
+22-row data; production-size model). Shell helpers/runbook blocks and CLI pass.
+Windows host-memory/accounting fixtures are mocked; this is not Oscar/Tigris
+resource certification or a genuine-cluster miniature. Real Oscar acceptance is
+deferred to the queued setup. Final focused rerun: 34 passed in 28.95s; diff
+whitespace checks passed. No commit, push, remote jobs, data deletion or
+final-test inference occurred. Next: review/commit/push the additive files, then
+use the runbook's single reviewed setup-plus-fit submission.
+
+## 2026-10-22: matched CE warm-start continuations for SPORC debug
+
+Implemented the user's selected-CE-checkpoint warm start as a matched pair:
+CE_CONTINUE versus CE_EMBED_U100_W5, both restoring the same authenticated
+fixed30 M0HLT native weights/buffers and trained classifier. Both use 30
+additional epochs, batch128, fresh AdamW and the fixed30 warmup/cosine curve
+scaled by 0.1 (3e-5 peak, 1.5e-6 floor). Treatment alone predicts frozen regular
+COARSE_U100's standardized TRAIN embeddings with weight5; no logit KD, no
+embedding-only pretraining, no teacher retraining, native HLT-only inference.
+Split remains exploratory ALLJETS299234/74895, original50k report-only, no
+independent test. Primary comparison is against the new CE continuation.
+
+New additive `luka_ce_warmstart/{contracts,source,targets,training,campaign,
+submission,worker}.py`, CLI, Slurm worker, queue helper and focused tests.
+Plan/contract: `docs/plans/LUKA_CE_WARMSTART_PLAN.md` and
+`docs/contracts/LUKA_CE_WARMSTART.md`; instructions:
+[LUKA_CE_WARMSTART_RUNBOOK.md](LUKA_CE_WARMSTART_RUNBOOK.md).
+Distinct LUKA_CE_WARMSTART/v1 artifacts bind original CE initialization and
+target provenance. Existing U100 TRAIN-only BANK/v1 and TEACHER/v1 contracts
+are imported unchanged. Donor baseline ed6d0af4be65f059356543f90583b30185702615;
+details recorded in LEGACY_SOURCE_MAP. Existing runtimes remain unchanged.
+
+Queue helper registers one exact three-job debug DAG: setup, CE continuation,
+embedding continuation. Both science jobs depend only on verified successful
+setup, not on one another. Setup authenticates CE and teacher probability
+readbacks, exports one compact TRAIN bank, checks installed parity and maximum
+support, and measures one disposable full-population epoch per arm. Each probe
+and science fit independently loads the original CE initialization. Setup8h,
+science6h each, 6CPU/90000MiB/A100, measured admission with margins, 2GiB compact
+storage reservation. No new particle/attention caches, deletions, job changes,
+or Fresh_check access. Reporting retains completed arms even when another is
+pending and computes both validation populations without model inference.
+
+Evidence: pre-change focused U100 suites75 passed. New focused suite19 passed;
+combined new/U100-direct/U100-pretrain regression94 passed in42.74s, no skips.
+Includes exact native CE-update parity, restoration of classifier and buffers,
+fresh optimizer/head, objective isolation, full30 despite poor metrics,
+immutable exact dependencies/ambiguous-submit refusal, failed-setup blocking,
+and a real local installed-Weaver/CUDA production-worker miniature (synthetic
+22 rows) covering setup and both30-epoch fits. Full-width/depth installed
+native and FP32/BF16 predictor parity also passed. Both shell scripts pass
+`bash -n`. This is not real SPORC/Tigris acceptance or measured cluster timing.
+No commit, push, remote job submission, cancellation or test inference occurred.
+Next: review/commit/push these additive files, then use the runbook to queue
+the shared real SPORC setup and its two automatically dependent continuations.
+
+## 2026-10-22: FullStat U100 relational embedding design only
+
+Added [the proposed relational embedding strategy](LUKA_RELATIONAL_EMBEDDING_STRATEGY_HANDOFF.md)
+for later implementation: preserve Oscar FullStat CE + 5*U100 embedding
+prediction and add soft teacher-reference KL with 2,048 TRAIN-only anchors,
+fixed temperature 0.2 and a two-epoch ramp to relation weight 1. Physical batch 128,
+20 epochs, HLT-only deployment and sealed test/unused roles remain unchanged.
+The proposal specifies reference balancing, masks/RNG, numerical reductions,
+matched CE/pointwise/treatment comparisons, reuse boundaries and acceptance tests.
+It is not an implemented or authorized campaign and does not supersede existing
+active plans/contracts. No runtime donors copied or contracts changed.
+
+Before this documentation change, five focused local tests passed in 11.60s:
+FullStat U100 policy, weight5 objective, frozen TRAIN bank/roles, same-kernel
+parity, and auxiliary native/RNG/gradient/inference-removal behavior. These test
+the existing building blocks, not the proposed relational campaign. No new
+Oscar/Tigris validation, inference, test access, or job submission occurred.
+The documented loss sketch also passed in-memory CPU checks for finite
+prediction gradients/frozen targets, zero KL at equality, masked reference
+permutation invariance, independent FP64 agreement, and empty/zero-norm support.
+Relative documentation links, code fences and whitespace were checked. These
+formula checks do not constitute production-worker or GPU acceptance.
+Next task: approve the proposed recipe/arms, then implement its additive path.
+
+## 2026-10-22: normal U100 embedding weight5, direct tier3 without new preflight
+
+User separately authorizes fresh HLT CE + 5*embedding prediction from epoch1,
+fixed30/batch128, using frozen regular COARSE_U100 on the same trial ALLJETS
+299,234 TRAIN / 74,895 validation split. This is NOT the debug20+30 protocol
+below: no warm start, embedding-only stage, student logit KD or fusion. The
+128-D head and matched OFFLINE-w5 training kernel are unchanged in meaning;
+only target teacher and artifact identities differ. New isolated
+`luka_u100_embedding/{contracts,source,targets,training,worker,direct}.py`, CLI,
+wrapper, queue helper, tests, active plan, v1 contract and
+`docs/LUKA_U100_EMBEDDING_RUNBOOK.md`; no existing runtime edits.
+
+The explicit plan permits zero new preflights and zero technical epochs.
+One tier3 A100 job authenticates retained original COARSE_U100 and controls,
+builds TRAIN-only targets, and runs the scientific fit. Resource admission
+reuses completed matched OFFLINE-w5 and its accepted report in original source:
+6 CPUs, 90,000 MiB, same GPU/environment, max(360, donor request+120) minutes.
+These are inherited estimates with setup allowance, not newly measured U100
+resources. Exact clean pushed source, reviewed dry plan/hash, immutable
+journal, numerical/input checks and native checkpoint readback still apply.
+No hidden disposable fits; no old-job cancellation/hold-release guard.
+
+Reserve 2 GiB; reuse particle caches read-only. Save compact TRAIN targets,
+one selected native checkpoint, validation predictions, comparisons and receipts.
+No per-epoch checkpoints, attention banks, new particle caches or deletions.
+Inference is native HLT only, predictor removed. Full validation selects;
+original50k is report-only; no independent test. Existing D066/debug20+30 runs,
+holds, shared artifacts and Fresh_check remain untouched.
+
+Local evidence: new suite40passed in24.63s, including production-architecture
+installed-Weaver/CUDA/native-predictor parity and reduced-model production-worker
+target-export/full30/readback/report miniature. Wider new/donor regression
+149passed/1deselected in72.13s, including the final parity test. Baseline
+before edits was109passed/1failed: the old D066 test
+`test_real_committed_repository_includes_exact_parallel_tree` rejects the
+already-committed U100_PRETRAIN package at dd51e8e2. That legacy guard was not
+weakened or modified; its pinned old worktrees remain unchanged.
+No new SPORC/Tigris job was submitted or remote validation claimed. Next:
+commit/push the additive files, then the runbook's exact-source dry review and
+single tier3 submission. Donors pinned to dd51e8e25770482134809dbb34d4766f8dac74b9
+are enumerated in LEGACY_SOURCE_MAP and the runbook.
+
+## 2026-10-22: U100 embedding-only pretraining then joint CE, debug
+
+User authorizes a new two-stage HLT experiment on the existing trial ALLJETS
+299,234 TRAIN / 74,895 validation rows, not FullStat. Frozen original fixed30
+regular COARSE_U100 supplies 128-D representation targets. Stage 1 trains only
+the embedding predictor/backbone for 20 epochs, freezes the native classifier,
+and selects minimum full-validation embedding loss (earliest tie). Stage 2
+restores the selected full backbone and predictor, keeps the untouched original
+classifier initialization, resets AdamW/scheduler, and trains 30 epochs of
+CE + 5*embedding with the existing batch128/fixed30 schedule and AUC selection.
+No logit KD, attention distillation, fusion, or richer deployment inputs.
+
+New isolated `luka_u100_pretrain/{contracts,source,targets,training,campaign,
+submission,worker}.py`, thin CLI/Slurm wrapper/queue helper, focused tests,
+active plan, v1 contract and `docs/LUKA_U100_PRETRAIN_RUNBOOK.md`. Donor runtime
+is unchanged at e75237a803d3ea6dfb55f110be1a0a899b467bc1; donor files and the
+original teacher/reference execution commits are recorded in LEGACY_SOURCE_MAP.
+New `LUKA_U100_PRETRAIN_*/v1` records separate this protocol from all older fits.
+
+TRAIN-only FP64 moments normalize FP32 targets in two disjoint, identity-bound
+TRAIN/validation banks. Validation embeddings select stage 1 only; they never
+enter optimization or normalization fitting. The final selected checkpoint is
+native HLT-only with predictor removed. Original50k is report-only and there
+is NO independent test. Saved comparisons include M0HLT, OFFLINE, OFFLINE-w5,
+U100 oracle and the new endpoint, explicitly labeled as historical comparisons
+confounded by teacher choice and the extra 20 epochs, not a matched causal test.
+
+One exact reviewed submission queues setup -> pretrain -> finetune in SPORC
+debug, using afterok dependencies and invalid-dependency cancellation. Requests
+are one A100, 6 CPUs, 90,000 MiB; setup8h, each science stage6h. These are caps,
+not runtime predictions. Setup exports compact targets, checks original teacher
+probability readback and installed/native/auxiliary parity, stresses both role
+maxima, and measures a disposable whole-population one-epoch-per-stage
+miniature. Both science stages verify successful exact accounting, immutable
+receipts and conservative measured resource admission. Finetuning additionally
+requires the complete selected scientific pretraining checkpoint; technical
+weights cannot be used. No login controller/manual follow-up is needed.
+
+Reserve 2 GiB. Keep compact target banks (~183 MiB raw vectors), one selected
+full pretraining checkpoint, one native final checkpoint, compact technical
+checkpoints, histories/predictions and receipts/journals. No new particle
+caches, attention banks, per-epoch models or automatic deletion. Current
+debug holds, D066/tier3 jobs, all earlier artifacts and Fresh_check are untouched.
+
+Local evidence: pre-change D066/direct baseline75passed in53.43s. Final focused
+new/donor regression **183 passed in189.23s**, including35 new tests, genuine
+local installed-Weaver/CUDA production-configuration parity and a reduced-model
+production-worker setup/20+30 miniature with native checkpoint readback. Tests
+cover role joins/disjointness/TRAIN normalization, no-label stage1 gradients,
+classifier freeze, early selection/ties/poor-score continuation, full state
+handoff, fresh optimizer, exact phase2 donor updates, source/import mismatches,
+original-source U100 replay, exact DAG/ambiguous submission, failed-dependency
+blocking, memory/time admission and corrupt-result rejection. An earlier
+expanded run exposed a Windows low-resolution timing edge (a tiny validation
+pass measured zero seconds); the new training timers now use perf_counter and
+have an explicit regression test, without relaxing admission. Bash helpers/
+worker and runbook Bash/PowerShell syntax, CLI help, scoped whitespace and
+worker LF checks passed. No pre-existing runtime file was changed.
+
+No real SPORC/Tigris execution, commit, push, remote submission, cancellation,
+data modification or test access was performed here. The active SPORC plan
+explicitly replaces the generic legacy Tigris acceptance location for this
+isolated debug experiment; local CUDA evidence does not replace the genuine
+SPORC setup. Next: commit/push the new scoped files and use the runbook's fresh
+worktree/helper. Science remains dependent on the real setup's acceptance.
+Existing unrelated dirty work is preserved.
+
+## 2026-10-21: fixed D066 registration's parallel-package rejection
+
+User's direct registration from9a6163b75893b566d407022861cdaf8d5222e4a4 passed
+the old-job retirement check, then failed in `source.current` before root
+publication or submission. Read-only Git inspection found all required files;
+the only unexpected differences from4a3124e9 were eight additions under the
+separate FullStat U100 embedding package, introduced by7ea8b0c6. No existing
+shared scientific source was changed. The earlier mocked Git test missed this
+real integration state.
+
+Fixed only `luka_d066_embedding/source.py`, tests and documentation. Keep the
+original baseline and require A-only source differences. Allow the disjoint
+package only at complete tree8aabd738dd9314e459223a09d04a64c9e31ad01d (files,
+content and modes); no broad prefix exception or baseline bump. Missing required
+files, wrong imported module path, unregistered paths and source changes now
+produce specific errors. New tests inspect the actual committed repository
+and isolated real Git repositories, including shared edits/deletions, parallel
+edits/additions/missing files/mode changes. No scientific/schema/resource or
+preflight-policy changes; donor details recorded in LEGACY_SOURCE_MAP.
+
+Evidence: pre-change focused65passed in39.75s; targeted Git/source12passed
+in11.02s; final D066/direct/controller regression **101passed,1 Linux-only skip
+in45.07s**, including installed-Weaver/CUDA miniatures and all30 direct fit
+epochs. Standalone read-only tree validation also passed on exact9a6163b7.
+Whitespace checks passed. The unchanged Linux flock skip retains earlier WSL
+coverage; no new SPORC/Tigris job was run. No commit/push/cancellation/submission,
+dataset change or file removal by this fix. Next: commit/push the five scoped
+files, then repeat only the direct fresh-worktree queue block with the new hash.
+Do not repeat old21944417 cancellation, change its old worktree or add a preflight.
+
+## 2026-10-21: direct tier3 D066 embedding run; no new preflight
+
+The user explicitly declines the new preflight and asks for direct tier3
+training. The active D066 plan now authorizes distinct DIRECT_*/v1 records and
+one `lukad6e_direct` allocation: native frozen LOGIT_D066 prediction readback,
+TRAIN-only target export, unchanged fresh HLT CE+5*embedding fixed30 fit, and
+saved comparisons. No preflight runner, stress/parity rerun, technical epoch,
+second job or automatic controller is called. Existing GATE/SPEC execution is
+unchanged. Student recipe, target normalization, teacher selection,299234/74895
+population and native HLT-only deployment remain unchanged; no independent test.
+
+New `luka_d066_embedding/direct.py`, direct shell helper and focused tests;
+CLI dispatch, additive-source allowlist and optional reference-folder arguments
+in the existing worker were updated. Plan/contract/runbook and donor map record
+the user-authorized operational change. Source/reference replay authenticates
+the original accepted tier3 sweep and completed matched OFFLINE-target w5,
+including original-source checks and successful Slurm accounting. It reuses
+their student resource envelope, explicitly NOT new D066 preflight evidence.
+Request6CPUs/90000MiB/one matching A100 with max(360,measured_w5_minutes+120)
+minutes, capped24h; setup allowance is an estimate. Live GPU/environment,
+source, identities, finite values, bank lineage and native checkpoint readback
+remain checked. Science never gates on metric quality. Reserve2GiB; no old
+artifacts or files are deleted or modified.
+
+Before new registration/dry/live submission/execution, require exact cancelled
+pending debug21944417/name/owner/account/partition/zero elapsed accounting.
+Separate runbook cancellation uses hold/recheck and exact ID only; no tool in
+the new workflow cancels/holds/releases jobs. Existing debug sweep holds and
+Fresh_check work remain untouched. Exact dry plans, authorization, submission
+journals and permanent execution claims reject duplicate or ambiguous retries.
+Old controller cannot advance after the cancelled gate. If21944417 has started,
+stop and inspect; do not cancel completed/useful work under this procedure.
+
+Verification: pre-change focused **62 passed,1 Linux-only skip in42.53s**;
+new direct tests initially25passed, expanded **29 passed in13.48s**. Real local
+installed-Weaver/CUDA direct miniature exports targets, performs all30 scientific
+epochs, checks native deployment checkpoint and replayable results, and asserts
+exactly one nontechnical fit and no preflight directory. Expanded old/new/donor/
+controller regression **173 passed,1 skip in152.10s**. The unchanged Linux flock
+test is skipped on Windows (prior WSL evidence below). Tests cover exact
+single-job submission/idempotency, ambiguous-reply rejection, resource import
+replay, changed source/import/role rejection, zero-elapsed retirement, native
+reporting without model inference, and corrupted artifacts. CLI help, Python
+syntax and Bash/helper/runbook syntax passed; focused whitespace checks passed.
+No new real SPORC/Tigris execution occurred: the remote command authenticates
+prior genuine evidence and proceeds directly under the explicit waiver.
+
+Next: commit/push the scoped experiment files, retire only still-pending21944417,
+then use `scripts/queue_luka_d066_embedding_direct.sh` per the updated runbook.
+No commit/push, remote submission/cancellation, data change or test access by
+this implementation. Unrelated dirty work is preserved.
+
+## 2026-10-21: D066 embedding tier3 replacement supported
+
+User requests moving pending `lukad6e_preflight`21944417 from debug to tier3.
+Added explicit `--site sporc_a100` alongside the unchanged debug default in
+`luka_d066_embedding/campaign.py` and the thin CLI. Both the real preflight
+and automatic measured fit use the canonical site in their new content-hashed
+gate/plans. `followup.py` prints the actual partition and forbids debug-sweep
+hold operations in tier3 mode. Queue helper defaults to no hold ownership;
+pre-existing manually held21940433..21940437 remain untouched. The optional
+replacement guard accepts only exact21944417/name/owner/account/debug-partition
+CANCELLED accounting with zero elapsed time. It never cancels anything itself.
+
+Updated active plan, reusable v1 contract and runbook document a fresh source/
+root, exact pending-only retirement (with a hold/start race recheck), immutable
+old journals, and automatic old-controller exit after cancellation. This is an
+execution-site extension, not a new scientific recipe/schema: existing debug
+gate semantics/hashes are unchanged. Scientific training, target export,
+normalization, preflight measurement, selected frozen LOGIT_D066, split,
+weight5/noKD, fixed30 and inference code are unchanged. Donor/integration
+baseline7ea8b0c6 is recorded in LEGACY_SOURCE_MAP; no Fresh_check code or jobs
+are touched. The generic transfer-plan Tigris gate is superseded for this
+isolated study by its explicit active-plan SPORC A100 preflight requirement.
+
+Local evidence: pre-change **40 passed,1 Linux-only skip in24.11s**; first
+two-site suite **48 passed,1 skip in31.06s**, including actual installed-Weaver/
+CUDA miniature preflight and fixed30 science for both site registrations with
+mocked remote allocation/accounting. Expanded new/donor/controller regression:
+**145 passed,1 skip in138.32s**. Final replacement-guard and Bash/runbook syntax
+checks: **15 passed in11.14s**, including additional malformed/multiple-record
+cases. Final focused suite on all current edits: **62 passed,1 skip in39.74s**.
+The unchanged Linux flock test remains skipped on Windows (previous
+WSL evidence recorded below); no new remote SPORC/Tigris execution occurred.
+Tests cover exact two-job tier3 submission, failed-gate blocking, unchanged
+manual holds, forbidden live partition changes, fresh gate/CLI roundtrip,
+hash-bound site selection, and pending-only cancellation evidence. Scoped
+whitespace checks passed; unrelated dirty user documentation is preserved.
+
+Next: commit/push the scoped amendments, confirm/cancel only21944417 if it is
+still pending, then use the tier3 replacement helper in a new pinned worktree.
+If it has started/completed, inspect before any cancellation or replacement.
+New real tier3 preflight and full dry review remain mandatory; no jobs have
+been moved, cancelled, held or submitted, and no source committed/pushed by
+this implementation. Existing five debug holds are not automatically released.
+
+## 2026-10-21: FullStat U100 embedding weight 5, accepted Oscar resource reuse
+
+Added the isolated `luka_fullstat_u100_embedding` package, thin CLI, Oscar
+queue helper/worker, focused tests, v1 plan/contract and
+`LUKA_FULLSTAT_U100_EMBEDDING_RUNBOOK.md`. This is the **3M/500k, fixed20**
+FullStat experiment, not the separate 299234/74895 fixed30 SPORC D066 trial.
+One fresh HLT-only model predicts frozen selected COARSE_U100 128-dimensional
+TRAIN embeddings with CE + 5*SmoothL1. Original initialization/sampling seeds,
+batch128, optimizer/schedule and predictor are retained. No student logit KD,
+attention, warm start, fusion or privileged classifier input; deployable
+checkpoint omits the auxiliary prediction head. New TRAIN-only normalization
+and teacher-bound targets cannot reuse or relabel the OFFLINE bank.
+
+The explicit active plan permits reuse of the completed fd687181 real Oscar
+embedding-sweep preflight instead of another full technical epoch. Original-
+source replay authenticates its exact accepted job/receipt, completed FullStat
+parent, selected U100 checkpoint and unchanged transitive scientific runtime.
+Current workers enforce the same installed environment, GPU identity and
+6CPU/180000MiB allocation. Training uses the largest accepted sweep request;
+U100 export has an 8h ceiling, not a claim of newly measured U100 runtime.
+
+One reviewed submission queues **export_U100 -> train_w5**, with an afterok
+dependency and no detached controller/manual follow-up. Export includes
+maximum-support native/tap checks, full TRAIN target export, ordered row/label
+joins, finite normalization, three real-target backward updates, validation
+support and memory checks. These are integrated startup checks, not a full
+preflight; probe weights are discarded. Missing/incompatible old evidence or
+failed export blocks training. Poor scientific scores do not. No new matched
+w0 is authorized: reported recovery uses historical M0HLT and is exploratory.
+All old jobs/artifacts remain untouched; final test and unused rows stay sealed.
+
+Local evidence: pre-change donor baseline **25 passed in 66.74s**; initial new
+suite **22 passed in 24.16s**, including actual installed-Weaver/CUDA export and
+all20 scientific epochs on synthetic rows, head-free native checkpoint readback
+and same-target/same-weight exact parity against the donor training kernel.
+Expanded new/donor/automatic-followup regression: **87 passed in 69.05s**,
+including negative original-source replay, wrong target/role/identity,
+missing export admission, resource bounds, exact two-job journal and completed
+publication checks. Bash helper/worker/runbook syntax, CLI help and PowerShell
+runbook parsing passed. No new Oscar/Tigris job was
+executed locally; real accepted Oscar evidence is reverified at queue time and
+new-target checks execute inside export before the dependent fit starts.
+
+Next: review/commit/push the isolated new files, then dry-review and submit the
+two-job graph using the runbook. No commit, push, remote submission, cancellation,
+dataset changes or test-particle access by this implementation. Donor details
+are recorded in LEGACY_SOURCE_MAP; unrelated dirty documentation is preserved.
+
+## 2026-10-21: frozen LOGIT_D066 embedding weight5, debug
+
+User confirmed the original attention `train_LOGIT_D066/selected.pt` still
+exists on SPORC. Added the isolated `luka_d066_embedding` package, thin CLI,
+queue helper/worker, focused tests, v1 plan/contract and
+`LUKA_D066_EMBEDDING_RUNBOOK.md`. Donor details are in LEGACY_SOURCE_MAP.
+No pre-existing scientific runtime changed. One fresh HLT-only model learns
+CE + 5*SmoothL1 prediction of frozen LOGIT_D066 normalized128 embeddings;
+no logit KD, attention KD or warm start. Same299234/74895 development split,
+batch128, fixed30, native model, optimizer/seeds, original50k report-only.
+No independent test. New D066 TRAIN-only mean/std and compact target bank;
+old OFFLINE targets and normalization remain untouched. Predictor is removed
+from the native selected inference checkpoint. Primary comparator is the
+completed OFFLINE-target w5 debug fit; registration waits for its real receipt.
+
+Original-source archive replay checks retained teacher reports/predictions,
+then separately binds the surviving checkpoint to its original task receipt.
+The genuine new debug preflight reproduces its validation predictions,
+exports TRAIN targets, checks installed/native and predictor parity, both-role
+maximum supports and a full technical epoch/native readback. Science admission
+requires its exact journal, COMPLETED/0:0 accounting, authenticated evidence
+and measured limits; no metric-quality gate. New LUKA_D066_EMBEDDING_*/v1
+records prevent relabelling old OFFLINE banks. Reserve2GiB; no new particle
+caches, no automatic deletion, no old artifact mutation.
+
+Optional explicitly confirmed ordering binds only exact pending debug IDs
+21940433..21940437 (w50,w100,w200,w500,w1000) to their original exact ledger,
+commands and live owner/account/partition/paths/comment. No cancellation or
+suspension; running w5/w20 and unrelated tier3/Fresh_check jobs are untouched.
+Detached automatic continuation submits one preflight then one fresh fit after
+full acceptance, releasing acknowledged holds at fit termination or handled
+failure. Atomic claims/journals prevent duplicate or ambiguous retries. An
+advisory Linux lock excludes concurrent hold recovery. SIGKILL/host loss or
+ambiguous scheduler replies require explicit inspection/recovery; no claim of
+priority over other users or reservations. Slurm's hold/start race is detected
+and our acknowledged hold released without preempting the running job.
+
+Evidence: pre-change focused donor baseline9passed in14.59s. Initial new suite
+35passed in38.73s, including genuine local installed-Weaver/CUDA production
+architecture preflight and all30 scientific epochs on a synthetic population,
+native checkpoint roundtrip and report recomputation. Initial invocation lacked
+Weaver on PYTHONPATH; rerun used the existing test-only Weaver0.5.3 directory,
+without installing or changing any environment. Expanded new/donor/archive/
+controller regression: **128passed in191.58s**. Final ownership checks:
+22passed,1Linux-only skip in11.50s; the actual production controller lock was
+then exercised successfully under local WSL Linux (concurrent exclusion and
+post-exit recovery). Final new-experiment suite: **40passed,1Linux-only skip
+in34.49s**, including the real CUDA miniature and exact old-sweep journal
+binding; the skipped Linux lock case is covered by that successful WSL run.
+Synthetic scheduler checks never contact Slurm. Local
+fixtures do not certify a genuine SPORC/Tigris resource envelope; the new full
+SPORC preflight remains mandatory. CLI help, Bash helper/worker/runbook syntax
+and focused source-additivity tests passed, as did PowerShell runbook parsing.
+
+Next: review/commit/push the isolated new files, then use the runbook on
+sporcsubmit. Confirm ARMED before disconnecting; do not also submit science
+manually. No source committed/pushed, remote jobs submitted/held/cancelled,
+dataset changes or test-particle access by this implementation.
+
+## 2026-10-21: ordered-controller v2 portability recovery
+
+User reports the b3562677 handover failed before signaling/submission with
+`Linux Python with pidfd required; no unsafe PID fallback`; preflight7690397
+was still running. Added a native Linux x86_64 LP64 syscall adapter that retains
+pidfd process-identity protection when Python wrappers are missing, plus a
+read-only dry-review capability probe. Separate ORDER/v2 records authenticate
+only the exact pre-signal v1 failure; old records and claim remain untouched.
+No numeric-PID signaling fallback, environment change, scientific change,
+preflight rerun, remote signal or submission by this agent. The runtime, queue
+helper, focused tests, standalone Linux smoke, plan/contract/runbook were updated.
+Donor details are recorded in LEGACY_SOURCE_MAP. Focused tests: **69 passed,
+1 Linux-only skip in7.77s**. The skipped kernel test was then actually executed
+under local WSL Ubuntu with Python wrappers deliberately hidden: the pidfd
+adapter stopped/terminated/reaped its own disposable child successfully.
+The local Linux capability probe also passed. Final handover/original-sweep/
+followup regression: **94 passed, 1 Linux-only skip in58.47s**, including the
+unchanged local installed-Weaver/CUDA miniature and seven fixed20 fit workers.
+CLI help, helper/runbook Bash and PowerShell parsing, and whitespace checks
+passed. No new real Oscar or Tigris execution performed. Next: push this helper
+and explicitly review/authorize v2
+on login010; original preflight and source acceptance remain mandatory.
+
+## 2026-10-21: FullStat embedding sweep ordered-controller handover
+
+Added an isolated operations helper, CLI, queue wrapper and
+[runbook](LUKA_FULLSTAT_EMBEDDING_ORDER_RUNBOOK.md) for the user-requested
+50/500/1000/control/100/10/2 serial scheduling. Authority is the additive
+[plan](plans/LUKA_FULLSTAT_EMBEDDING_ORDER_PLAN.md) and
+[ORDER/v1 contract](contracts/LUKA_FULLSTAT_EMBEDDING_ORDER.md).
+The user reports PID300411 stopped (`Tl`) on login010, no science directory,
+and original preflight7690397 running. No remote process/job was changed by
+this implementation. Scientific donor fd687181 and its runtime/specs remain
+unchanged; the helper bootstraps that original source, authenticates original
+acceptance, and records a separate exact ordered submission journal.
+New authorization retires only the verified stopped submit controller via
+pidfd; no preflight rerun/cancellation. Each independent fit has an `afterany`
+scheduling edge, while aggregate keeps all seven original `afterok` parents.
+Permanent claims prohibit duplicate/ambiguous retries. Pre-change controller
+baseline: 31 passed in7.52s. New handover plus controller tests: 57 passed in7.96s.
+Final handover/scientific-sweep/controller regression: **82 passed in57.99s**,
+including the unchanged installed-Weaver/CUDA preflight and seven fixed20
+miniature workers, real exact-DAG journal replay, failure injection, stopped
+process identity and mocked pidfd signaling. Linux process retirement and live
+Oscar submission were not executed locally. Helper/CLI help, Bash/PowerShell
+runbook syntax and documentation links passed. Existing scientific source has
+no changes. Next: commit/push the additive files and review/arm on login010;
+original real preflight acceptance is still mandatory before science. No
+source committed/pushed or remote handover/submission performed by the agent.
+
+
+## 2026-10-21: pending trial embedding sweep -> debug transfer
+
+Added `luka_embedding_sweep/debug.py` and `debug_retirement.py`, thin CLI,
+queue helper/Slurm worker, tests, and [queue/runbook](LUKA_EMBEDDING_SWEEP_DEBUG_RUNBOOK.md).
+Authority: [transfer plan](plans/LUKA_EMBEDDING_SWEEP_DEBUG_PLAN.md) and separate
+[DEBUG/v1 contracts](contracts/LUKA_EMBEDDING_SWEEP_DEBUG.md). Existing sweep,
+ladder and FullStat runtime/specifications remain unchanged. Donor details are
+recorded in LEGACY_SOURCE_MAP: integration fd687181, measured source007885f7.
+
+This is the user-selected eight-weight trial CE+embedding sweep, not a new
+experiment: same inputs/targets, 299234/74895 split, batch128/fixed30, selected
+native HLT checkpoint and all eight coefficients. The accepted tier3 gate is
+fully replayed in its original clean source, including exact accounting,
+technical outputs and completed eight-job follow-up. Only the allocation moves
+to SPORC debug, with the same A100 identity/environment,6CPUs/90000MiB and
+measured walltimes. No new GPU preflight or target/cache copies are required.
+New immutable `science_debug` artifacts use the original2GiB allowance.
+
+Cancellation requires a separate reviewed hash and explicit confirmation.
+Only the two user-selected spec hashes (sweep a3770368, alternating d234b34c)
+can enter the exact-journal-derived retirement plan. Scheduler owner/account,
+partition/QOS, name, comment, workdir, worker and log are checked before cancel.
+Completed alternating results/files are preserved; unfinished running work is
+lost on confirmed cancellation. Any started/partial original sweep blocks the
+transfer. Before replacement submission, all eight old jobs must be confirmed
+CANCELLED with zero elapsed and unknown start, and no original fit output.
+Permanent claims and exact journals prohibit uncertain automatic retries.
+No evmsg/Fresh_check jobs or files are touched. No deletions are implemented.
+
+Verification: original sweep and ladder-transfer regression49passed in943.24s;
+final new transfer plus original sweep-controller suite71passed in126.29s
+(120 focused tests across the four modules). This includes installed local
+production-Weaver/CUDA fixed30 miniature fits at weights3/1000 versus the
+unchanged original fit kernel, matching selected epochs/probabilities, native
+checkpoint readback, compact results, exact submission/retirement boundaries,
+started-job races and ambiguous outcomes. A Linux RSS sampler and missing
+compact reference snapshots initially failed the Windows-only fixture; those
+test fixtures were corrected without changing scientific runtime. Original
+regression also exercises all eight weights and both five-rung donor ladders.
+CLI help, Python AST, Bash helper/worker/runbook syntax, PowerShell runbook
+parsing, local documentation links and focused whitespace checks passed.
+These are local fixtures, not new remote resource acceptance.
+No cluster jobs cancelled/submitted, dataset changed, source committed or
+pushed by this implementation. Next: review and push the additive files,
+then use the runbook's separate cancellation and
+debug-submission confirmations. Genuine original-source replay/site checks
+remain mandatory on SPORC; debug start time is not promised.
+
+## 2026-10-20: FullStat standalone CE embedding sweep on Oscar
+
+Implemented a separate `src/hlt_classification/luka_fullstat_embedding_sweep/`
+package, thin CLI/queue/Slurm entry points, two focused test modules and
+documentation. Authority: [active plan](plans/LUKA_FULLSTAT_EMBEDDING_SWEEP_PLAN.md),
+[v1 contracts](contracts/LUKA_FULLSTAT_EMBEDDING_SWEEP.md), and
+[commit / automatic queue / results runbook](LUKA_FULLSTAT_EMBEDDING_SWEEP_RUNBOOK.md).
+Per-file donors and unchanged reuse are recorded in LEGACY_SOURCE_MAP;
+integration donor is `007885f7360f4cd28e9f91a690e04f0f4ea0afff`.
+No existing runtime module or unrelated dirty work was changed.
+
+Seven fresh native HLT fits: lambda 0 matched CE-only control, then 2, 10, 50,
+100, 500 and 1000. Same authenticated FullStat 3M TRAIN / 500k validation,
+batch 128, original two-epoch warmup/cosine AdamW, fixed 20 complete epochs,
+shared native/predictor initialization and sampling seeds, and full-validation
+AUC-first selection. Objective is exactly CE plus weighted mean SmoothL1
+prediction of the frozen pure-OFFLINE 128-vector. No logit KD, D033 target,
+attention, ladder, fusion or warm start. The prediction head never feeds the
+classifier and is removed from saved deployable native checkpoints. Final
+test remains sealed; event independence and old-trial overlap remain unverified.
+No independent evaluation or claimed scientific gain is produced by implementation.
+
+TRAIN embeddings are exported once from the original selected OFFLINE model,
+standardized with TRAIN-only FP64 population moments and stored as FP32.
+Every arm verifies the exact bank/identity/label join and loads it into RAM;
+no per-batch remote target reads or duplicate particle preparation. Each fit
+saves its selected native checkpoint, validation predictions, complete epoch
+history and receipts, without large per-epoch optimizer archives. Live logs
+include best/current AUC, CE, auxiliary and weighted losses plus progress/ETA
+every 128 batches. Recovery uses the NEW lambda 0 denominator, not historical
+M0HLT; incomplete arms remain pending, and old controls are explicitly labeled.
+
+One Oscar L40S preflight (6 CPUs / 180,000 MiB / 8h) exports shared targets,
+checks installed-Weaver/native FP32/BF16 parity and exact zero-aux CE parity,
+stresses maximum TRAIN/validation support for every coefficient, and runs
+one full-population technical epoch plus selected native readback per arm.
+Admission uses measured time, host/GPU memory and storage, never accuracy.
+Scientific requests have a 12h floor and 48h cap. Declare 12 GiB of personally
+available durable quota; no automatic deletion or environment repair.
+
+The explicit `auto` mode reviews/authorizes one gate plus seven independent
+science fits and one CPU aggregation job. A detached submit-host controller
+binds the exact preflight ID/journal, waits for matching owner/account/name and
+COMPLETED/0:0, then authenticates technical receipts, resources and unchanged
+source before saving the measured exact dry plan and submitting science.
+Missing accounting waits; failed, cancelled, incomplete or corrupt evidence
+blocks science. No quality thresholds, implicit retries or adoption of manual
+science roots. Permanent claims/exact journals reject duplicate and ambiguous
+submissions. Confirm ARMED before disconnecting; nohup survives ordinary SSH
+disconnects, not controller/host failure. Poll interval 60s, maximum wait 14 days.
+
+Initial local evidence: pre-change FullStat embedding/controller baseline
+58 passed in 36.00s; initial new suite 53 passed in 53.48s, including local
+installed-Weaver/CUDA production-model preflight and all seven complete
+20-epoch miniature fits. Additional tests cover actual synthetic ROOT cache
+preparation to OFFLINE target export, poor-metric continuation/early-best
+retention, head removal, wrong-role/corrupt banks, sealed access, source drift,
+resource caps and exact automatic-submission failure paths.
+Local Weaver was loaded from a fresh test-only directory installed from an
+existing cached wheel (no network or cluster environment mutation). A broader
+regression attempt omitted the required CUBLAS parity setting and failed three
+donor GPU checks; the Oscar helper/worker already export `:4096:8`.
+With that required setting supplied before Python startup, final combined
+regression passed: **169 passed in 186.07s** across the new sweep/controller,
+FullStat embedding, auxiliary embedding and trial sweep/controller suites.
+This includes actual local installed-Weaver production-architecture CUDA
+miniature preflights/science workers, not a remote resource certification.
+CLI help, Bash helper/worker/runbook syntax, PowerShell runbook parsing,
+documentation links, donor source objects, AST and focused whitespace checks
+also passed. The focused command used `PYTHONDONTWRITEBYTECODE=1`,
+`CUBLAS_WORKSPACE_CONFIG=:4096:8`, the existing tagging-hlt Python and cached
+Weaver wheel on PYTHONPATH, with a fresh pytest temporary directory.
+
+Next: review and push the listed additions, then use runbook `auto` mode.
+Genuine full-population Oscar acceptance is mandatory before science; local
+CUDA fixtures do not certify Oscar resources or a real Tigris miniature.
+No jobs submitted, source committed/pushed, real particle data changed, or
+final-test arrays opened by this implementation.
+
+## 2026-10-20: Eight additional no-KD embedding weights on tier3
+
+Implemented separate `src/hlt_classification/luka_embedding_sweep/`, thin
+CLI/queue/Slurm entry points, focused tests and documentation. Authority:
+[plan](plans/LUKA_EMBEDDING_SWEEP_PLAN.md),
+[new SWEEP/v1 contracts](contracts/LUKA_EMBEDDING_SWEEP.md), and
+[commit/queue/results runbook](LUKA_EMBEDDING_SWEEP_RUNBOOK.md).
+Donor/integration `bf360343974121397a568fdb635a2c1c1011bc90`; per-file adaptation
+and unchanged reuse are recorded in LEGACY_SOURCE_MAP. Existing runtime and
+unrelated dirty work are preserved.
+
+Eight fresh native HLT models: weights3,5,20,50,100,200,500,1000 with
+`CE + weight * mean SmoothL1` to the same frozen TRAIN-only standardized
+OFFLINE128-vector through the original training-only predictor. No KD, ladder,
+fusion, warm start or inference head. Identical matched seeds, batch128,
+fixed30 optimizer/schedule,299234/74895 trial split and full-val AUC-first
+selection. Original50k stays report-only; no independent test exists.
+Earlier0.75/1.5/10 are not rerun and remain on their own source/worktree.
+
+One tier3/A100 preflight tests all eight weights, both roles' longest support,
+installed/native/zero-aux parity, full-population technical epochs and native
+checkpoint/prediction readback. New gate ceiling8h,6CPUs/90000MiB. After exact
+successful accounting and measured admission, independently reviewed science
+submits eight tier3 jobs with per-arm requests capped24h. No implicit launch,
+retry, overwrite or cleanup. Bad metrics never gate admission; nonfinite or
+corrupt evidence does. Reserve2GiB total and share particle/target caches
+read-only; retain only selected model state, predictions, epoch histories and
+compact technical/lineage evidence. No old/shared files are deleted.
+
+Follow-up addition (same date): explicit `auto` helper mode now reviews and
+authorizes the exact full gate plus bounded eight-job continuation once, then
+runs detached under nohup. ARMED binds the exact accepted preflight ID; after
+COMPLETED/0:0 plus full source/receipt/resource validation it saves the measured
+dry plan and submits all eight tier3 fits. Claims/journals prevent duplicate or
+uncertain retries; terminal failure, source drift, missing evidence or a manual
+science root stops continuation. No preflight is skipped or shortened. Default
+GATE automatic_followup remains false (no implicit continuation); separate
+FOLLOWUP/v1 records carry opt-in authority. Poll60s, max14days, no compute node
+held while waiting. SSH disconnects are supported; controller/host failure
+requires inspection. Donor is luka_gating_cold/followup.py at the integration
+commit above; see LEGACY_SOURCE_MAP. No live jobs submitted by this change.
+
+Live logs now show each epoch's current and best AUC/epoch plus CE and
+unweighted/weighted embedding loss. Authenticated partial results report
+CE/OFFLINE/0.3 and every completed new weight with AUC deltas and recoveries;
+unfinished arms remain pending. No provisional log value is a completed result.
+
+Initial local evidence: original weight baseline18passed in33.02s; new
+eight-weight suite28passed in68.14s, including installed local production
+Weaver/CUDA preflight and all eight complete30-epoch miniature science fits.
+Base sweep combined regression: **88 passed in219.14s**, comprising33 new sweep,
+18 original weight,22 auxiliary and15 ladder tests. This includes full local
+installed-Weaver/CUDA production-model preflights/science miniature workers,
+all eight loss gradients and initializations, early-best retention despite
+poor subsequent metrics, resource/storage/source/corruption guards, compact
+partial recovery tables and mocked exact tier3/uncertain-submit checks.
+CLI help, Bash helper/worker/runbook syntax, PowerShell runbook parsing,
+documentation links and focused whitespace checks passed without queueing.
+Automatic-followup baseline:56passed in74.42s (sweep plus existing controller).
+New follow-up cases:31passed in5.89s. Final combined regression with follow-up:
+**142 passed in215.26s** (33 sweep,31 new follow-up,23 donor follow-up,18 original
+weight,22 auxiliary,15 ladder). Includes installed local Weaver/CUDA production
+architecture miniature workers, exact journals, gate failure/missing accounting,
+source drift, concurrent manual science, duplicate/ambiguous submissions,
+resource ceilings and all-eight queue completion. Updated CLI help, Bash helper/
+worker/runbook syntax, PowerShell parsing, donor paths, links and whitespace
+checks passed. Genuine SPORC full-population acceptance is still outstanding;
+no claim of remote success or queued jobs is made.
+No existing runtime file changed. Local setup required
+access to the existing Weaver installation and an isolated fresh temporary
+directory after sandbox/module and shared-pytest-directory access failures.
+No cluster job, source commit, push or dataset change was performed.
+
+Next: review/commit/push only the listed additions and arm the full SPORC gate
+plus automatic eight-fit continuation using the runbook's `auto` mode. Genuine
+full-population SPORC acceptance is still required before science; local tiny
+CUDA fixtures do not replace it or constitute a scientific result.
+
+## 2026-10-20: stagewise privileged-to-self gate ladders, SPORC debug
+
+Implemented the approved alternating experiment as a separate namespace,
+`src/hlt_classification/luka_alternating_gate/`. Authority:
+[active plan](plans/LUKA_ALTERNATING_GATE_PLAN.md),
+[v1 contracts](contracts/LUKA_ALTERNATING_GATE.md), and
+[commit / preflight / science / results runbook](LUKA_ALTERNATING_GATE_RUNBOOK.md).
+No old runtime module, artifact, dataset, job or Fresh_check file was changed.
+
+Three independent six-fit arms start at the same selected fixed30 COARSE_U100:
+TEACH_D066 -> SELF_D066 -> TEACH_D033 -> SELF_D033 -> TEACH_D000 -> SELF_D000.
+Only the SELF model teaches the next rung. CONTROL's gate sees current/current;
+LOGIT/GATE TEACH sees current/immediately-richer. Every SELF forward sees only
+current/current, while its logit targets come from its own selected TEACH with
+that teacher's correct context. GATE additionally matches centered extra-gate
+corrections at weight0.1 at all three replacements. All18 fits are fresh, with
+matched native/gate initialization per coordinate and fresh optimizers.
+
+Same trial ALLJETS299234 TRAIN /74895 validation, original50k report-only,
+batch128/fixed30/C25-P75/T2 and native ParT plus the existing small bounded gate.
+This is not FullStat or particle swap. The former test was repurposed; no
+independent test exists. Earlier mixed-view SELF nodes and privileged TEACH
+nodes remain oracle rows; compare the three final SELF_D000 endpoints.
+
+New BANK/v1 binds the complete teacher node, context, checkpoint/report hashes
+and TRAIN slot alignment. Only GATE TEACH nodes export9 FP32 factors per particle.
+The linear-size bank is loaded once into RAM, avoiding shuffled shard reopen
+costs. Each consumer builds targets in verified node-local scratch and retires
+only its exact owned files after durable output/readback verification. Retain
+selected checkpoints, all epoch metrics, predictions and lineage. No persistent
+teacher bank, copied particle cache, epoch checkpoint or optimizer snapshot.
+Persistent campaign ceiling2GiB; scratch budget/headroom checked independently.
+
+One debug/A100 preflight rehearses all18 technical fits,36 role-specific
+batch128 stresses, FP32/BF16 installed-Weaver parity, initialization, checkpoint
+readback and cleanup. Science is18 independently measured fit jobs plus
+aggregate, afterok-bound, debug only. Fit requests include source and retained
+rehearsal authentication costs,1.75 safety factor, max24h. Gate8h/6CPUs/128000MiB.
+Separate reviewed exact-plan authorization for gate and science; no automatic
+follow-up/retry. Scores never gate admission. Per-epoch logs include AUC, best
+AUC/epoch and gate loss. Results validate retained outputs after scratch removal.
+
+Local evidence: **27 focused tests covered**, including all18 production fit
+workers for30 epochs on tiny aligned populations using real CUDA/Weaver, the
+full18-probe preflight/36 stresses, teacher-context rejection at all three rungs,
+post-retirement results, corruption/source/lineage/storage firewalls, and
+simulated exact-ID submission with ambiguous-reply refusal. Full initial focused
+run:25 passed in277.38s; the subsequently added exact-DAG cases are included in
+the25 non-integration tests passing in17.16s. Final resource-accounting/preflight
+recheck:1 passed in111.73s. Existing gate/cold regressions: **42 passed** in509.38s,
+including installed standard-ParT FP32/BF16 parity. CLI help, Bash helper/worker
+and runbook syntax, AST and whitespace checks pass. Tests used the existing
+Weaver0.5.3 wheel in an isolated workspace-local target with the tagging-hlt
+Python; initial default-Python/PYTHONPATH/Weaver collection issues were resolved.
+No network install or cluster environment change was needed.
+
+Donor commit: `e95c0d83a60b75cfc9acca4aaf377740fde8930e`; exact reused/adapted
+files are recorded in LEGACY_SOURCE_MAP. New files: ten package modules, thin
+CLI/queue helper/Slurm worker, focused test file, plan/contract/runbook. Existing
+unrelated dirty work was preserved. No commit, push or submission was performed.
+
+**Next:** review/commit/push the listed additions, use the runbook to queue the
+fresh SPORC debug preflight, then separately review/submit its measured19-job
+science DAG. Actual A100 full-population acceptance remains required; local
+tiny CUDA tests are not a genuine SPORC/Tigris miniature or production result.
+
+## 2026-10-20: FullStat final-rung cold PRIV -> REPLACE_GATE / REPLACE_LOGIT
+
+Implemented a separate Oscar queue-ready registration for the user's final-rung
+gate comparison. Authority:
+[plan](plans/LUKA_FULLSTAT_REPLACE_GATE_PLAN.md),
+[new FullStat v1 contracts](contracts/LUKA_FULLSTAT_REPLACE_GATE.md),
+[commit/preflight/science/results runbook](LUKA_FULLSTAT_REPLACE_GATE_RUNBOOK.md).
+New package `luka_fullstat_replace_gate/`, thin CLI/queue/Slurm entry points
+and focused tests; pre-existing runtime files and experiments are unchanged.
+Donor/integration `1dff4e5767e66fb5f355cf5d592626ecffcf73ea`; individual
+adapted/reused files are recorded in `LEGACY_SOURCE_MAP.md`.
+
+Reuse original authenticated FullStat D033 epoch 17 and its TRAIN logit bank.
+Fresh PRIV_D000 classifies D000 with a D033-context extra gate. Its selected
+weights export TRAIN logits and nine FP32 gate factors per particle. Fresh
+REPLACE_LOGIT and REPLACE_GATE have identical self-gated HLT architectures,
+seeds, order and logit targets; only the latter adds 0.1 centered bounded
+log-gate MSE. Both retain their self-gate at inference and reject external
+context. PRIV is explicitly an offline-containing oracle.
+
+Unchanged shared gate mathematics; FullStat 3M/500k, batch 128 and 20 full epochs,
+fresh optimizers, no inherited weights/freezing, no teacher forcing or full
+attention/embedding loss. Final 1.5M and unused 105,325 remain sealed. No score
+threshold; all scientific rows are retained. Primary contrast is matched
+REPLACE_GATE minus REPLACE_LOGIT, with original native models as historical
+references. Jet/event/old-trial-overlap caveats remain visible.
+
+New COMPACT_BANK identity deliberately avoids trial holdout flags while keeping
+the same nine-factor numerical layout. Export once, authenticate and load
+contiguous resident targets, no per-batch random network shard reads or dense
+pair storage. Keep selected states, predictions, teacher targets and immutable
+full-gated optimizer/RNG epoch evidence; no automatic cleanup or resume.
+Live progress every 128 batches plus full-validation AUC every epoch.
+
+One separately reviewed real L40S preflight requires native/gate FP32/BF16
+parity, six distinct TRAIN/validation maximum-support stresses, all three
+full-population one-epoch technical fits, checkpoint/prediction readback,
+factor export/resident readback and measured host/GPU/time/storage headroom.
+Technical teachers/targets cannot initialize or supervise science. Exact
+successful gate journal/accounting is required before five-job science:
+PRIV fit -> export -> two replacements -> aggregate. Dry/live hash matching,
+source guards and durable submission claims prevent silent retries.
+Declare at least 24 GiB personal durable headroom; measured requirements are
+checked again. No global filesystem free-space assumption or automatic deletion.
+
+Local evidence: unchanged baseline **69 passed in 258.54s**; the initial new
+end-to-end suite exercised all three complete 20-epoch fits with the actual
+installed production Weaver/CUDA model, exact readback, real ROOT-cache joins,
+and corruption guards. Two assertion-message regexes were corrected (the
+guards themselves correctly rejected corrupted bytes). New suite then
+**22 passed in 79.79s**. Final combined gate/cold/FullStat-embedding/new-gate
+regression: **93 passed in 325.48s**, including 24 new checks, exact five-job
+submission/parent guards and another complete three-fit CUDA miniature.
+Shell/runbook Bash,
+PowerShell-block syntax, Python AST/CLI help, links and whitespace checked
+without running queue commands.
+
+No real Oscar/Tigris jobs, commits, pushes, cancellations or test evaluation
+performed. Local miniature evidence is NOT production admission. Next:
+commit/push the additive files, dry-review/submit one Oscar preflight using
+the runbook, then separately authorize science only after measured acceptance.
+
+## 2026-10-20: Cold REPLACE_GATE strategy and portability handoff
+
+Added [in-depth REPLACE_GATE handoff](LUKA_REPLACE_GATE_STRATEGY_HANDOFF.md)
+at the user's request. It distinguishes cold from warm/staged replacements,
+documents the aligned PRIV ladder, bounded extra-attention gate, exact
+CE/logit/centered-gate losses, fixed30/batch128 selection, code entry points,
+retained artifacts and node-local target retirement. Includes historical
+source/path identifiers, read-only results instructions, and explicit
+registration/alignment/resource requirements for adapting the method.
+
+Results are transcribed from user-provided cold-campaign output, not newly
+authenticated remotely: REPLACE_GATE full-validation accuracy0.851939,
+AUC0.962361, recovery45.4%; REPLACE_LOGIT remains slightly higher in AUC.
+The handoff labels the accuracy/rejection tradeoff, single-seed development
+scope, overlapping original50k subset and absence of an independent test.
+
+Documentation only: no runtime changes, donor migration or contract version
+change. Shared/cold gate packages match cold execution source
+`a1d3a2c6caa20871ce2d0b3c1525fd347fd27df6`; existing source is linked, not copied.
+Focused local gate/cold checks: **6 passed,36 deselected in7.30s**, using
+existing local Weaver and a fresh temporary test directory after resolving
+local import/directory-access issues. Documentation file links, whitespace,
+code fences and the results Bash block passed local checks without execution.
+No new cluster validation, remote writes,
+job submissions, commits or pushes. Next: use this handoff to register a
+specific new setting if requested; it does not itself authorize a new campaign.
+
+## 2026-10-20: Accepted embedding-ladder gate -> tier3 science
+
+User reports debug preflight **21929903 COMPLETED/0:0**, then explicitly
+requests the real ladder on tier3. New operational authority:
+[transfer plan](plans/LUKA_EMBEDDING_LADDER_TIER3_PLAN.md),
+[new TIER3 v1 contracts](contracts/LUKA_EMBEDDING_LADDER_TIER3.md),
+[commit/queue/results runbook](LUKA_EMBEDDING_LADDER_TIER3_RUNBOOK.md).
+This supersedes only the original debug-only science site for explicitly
+transferred arms, not its measured gate or scientific recipe.
+
+Additive `luka_embedding_ladder/tier3.py`, thin CLI/queue/Slurm entry points and
+focused tests; existing runtime files are unchanged. Donor/integration commit:
+`0342951d7a11b959c3baa1611f9e581f6004c9f6`. Reuse original-source gate validation,
+exact journal/Slurm accounting, all report outputs and unchanged measured
+resources. Only the registered debug-to-tier3 same-A100/environment transfer
+is allowed. Actual allocation still checks exact measured GPU/environment,
+6 CPUs and 90000 MiB; retain each arm's measured whole-ladder time and 24h cap.
+No repeated GPU preflight, copied targets, schedule change or automatic launch.
+
+Fresh source-bound transfer spec/plan in one canonical
+`science_tier3/EMBED` or `science_tier3/LOGIT` directory. One separately
+authorized job per arm executes all five rungs with original training,
+targets, validation, final-checkpoint retention and intermediate retirement.
+Original gate/spec/journals and shared files are read-only. Existing original
+debug science for the same arm blocks transfer for review. Persistent budget
+remains the original 2 GiB across arms. This is the 0.3 embedding+KD ladder,
+not the 0.75/1.5/10 no-KD sweep; keep that sweep on its own 0342951d worktree.
+
+Local evidence: unchanged ladder baseline **15 passed in108.72s**; the first
+transfer suite **15 passed in75.85s**, including actual installed local
+Weaver/CUDA preflight and both full30 five-rung miniature arms, native final
+weights, source/parent/corruption/site guards, exact dry/live mocked submission,
+uncertain-submit prevention and compact results replay. Shell helper, worker
+and all runbook Bash/PowerShell blocks parsed without execution. An initial
+sandboxed baseline could not import the pre-existing Weaver neural modules;
+the tests passed with access to that existing installation.
+Final transfer verification **16 passed in82.24s**, including the output-path
+redirection guard and a repeat of both complete miniature CUDA arms.
+CLI help, documentation links and focused whitespace checks also passed.
+No real cluster jobs, commits or pushes performed by this implementation. Next:
+commit/push only the new transfer files and use the runbook to reauthenticate
+21929903, review and submit EMBED (and separately LOGIT if requested).
+
+## 2026-10-20: Trial no-KD embedding weights 0.75 / 1.5 / 10 on tier3
+
+Implemented additive `src/hlt_classification/luka_embedding_weight/`, thin CLI,
+queue helper, Slurm worker and focused tests. Authority:
+[plan](plans/LUKA_EMBEDDING_WEIGHT_PLAN.md),
+[new v1 contracts](contracts/LUKA_EMBEDDING_WEIGHT.md),
+[commit/queue/results runbook](LUKA_EMBEDDING_WEIGHT_RUNBOOK.md).
+Donor/base is `5ed50964085e9bf364030764bbbc755179c445ae`; individual adapted
+and reused files are recorded in `LEGACY_SOURCE_MAP.md`. Existing runtime,
+single-stage0.3 and ladder implementations remain unchanged.
+Latest user request moves both preflight and all three fits to tier3.
+The integration source pin advances to `ed129fa95a885f0f3b884b2dc861b1776327bc82`:
+its only intervening runtime additions are the unrelated FullStat embedding
+namespace, with no changes to reused scientific files. Existing debug
+specifications are rejected; create a fresh tier3 root and reviewed plan.
+
+Three independent, freshly initialized native HLT ParTs minimize CE plus
+0.75, 1.5 or10 times the same small-head OFFLINE prediction loss. No logit KD,
+attention loss, ladder, fusion or warm start. Same trial ALLJETS299234/74895,
+matched M0HLT seeds, batch128, fixed30 and full-val AUC-first selection.
+The original50k subset is report-only; there is no independent test.
+The completed0.3 bank and original-source references authenticate read-only.
+Per-epoch output includes CE, unweighted/weighted auxiliary loss and val AUC.
+Only native HLT weights are exported; the predictor is not used at inference.
+
+One shared tier3/A100 preflight measures all three objectives, installed
+Weaver/zero-weight parity, full-population technical epochs, both roles'
+longest-support stress and native checkpoint readback. After exact accounting
+and resource acceptance, a separately reviewed science plan submits three
+independent tier3 jobs. Each uses6CPUs/90000MiB with measured time capped24h.
+No automatic follow-up, retry, overwrite or cancellation. Weak AUC is not a
+technical failure. Weight10 is deliberately aggressive, not a promised gain.
+
+Reserve2GiB total new persistent allowance. No copied target banks or particle
+caches, no per-epoch checkpoints; keep compact histories/predictions/receipts,
+reference snapshots and one selected native model per fit. Shared parents,
+datasets, old runs and Fresh_check are untouched.
+
+Evidence: original auxiliary baseline22passed; final combined regression
+**53 passed in181.27s** (16 new weight tests,22 original auxiliary,15 original
+ladder). This includes all three full30 miniature CPU fits and a real local
+installed-Weaver/CUDA production-architecture preflight plus all three
+miniature science workers, reference/result replay, target corruption,
+gradient scaling/detachment, exact submissions, duplicate/uncertain submission
+guards and resource/source checks. CLI, shell/runbook syntax and Markdown links
+passed; `git diff --check` passed. Tier3 follow-up: **18 focused tests passed
+in 31.21s**, including exact tier3 preflight/science commands, rejection of old
+debug specifications and the unchanged scientific-runtime source-pin check.
+These miniature local populations do not
+replace real cluster resource acceptance. No SPORC jobs, commits or pushes were
+performed by this implementation. Next: commit/push the listed files, queue the
+shared tier3 preflight, then review and submit the three-job science plan.
+
+## 2026-10-20: FullStat Oscar final-rung embedding supervision
+
+New additive namespace `luka_fullstat_embedding`, thin CLI/queue/Slurm worker,
+focused tests, [active plan](plans/LUKA_FULLSTAT_LAST_EMBEDDING_PLAN.md),
+[v1 contracts](contracts/LUKA_FULLSTAT_LAST_EMBEDDING.md), and
+[commit/queue/results runbook](LUKA_FULLSTAT_LAST_EMBEDDING_RUNBOOK.md).
+Donor `5ed50964085e9bf364030764bbbc755179c445ae`; per-file reuse is recorded
+in `LEGACY_SOURCE_MAP.md`. Existing runtime and unrelated work are unchanged.
+
+This adapts the embedding strategy to the user's **FullStat final rung only**,
+not the trial ALLJETS/SPORC/30-epoch campaign below. Reuse original completed
+FullStat recovery `9bc3cae0`, selected D033 epoch 17, its T=2 TRAIN probability
+bank and pure OFFLINE checkpoint. Train one fresh `EMBED_D000` with
+0.25 CE + 0.75 T² KL + 0.3 mean SmoothL1 to fixed OFFLINE 128-dimensional
+embeddings through a 128-GELU-128 training-only predictor. Targets use FP64
+TRAIN-only moments and FP32 storage; predictor-free native HLT inference.
+
+FullStat 3M TRAIN / 500k validation, batch 128, 20 complete epochs, original
+seeds/optimizer/schedule/selection. No attention, fusion, warm start, repeated
+logit fit or prior-rung fit. Compare to authenticated historical M0HLT,
+OFFLINE, DIRECT_D000, COARSE_D033 and COARSE_D000. The 1.5M final test and
+105325 unused rows stay sealed; event independence remains unverified.
+
+One Oscar L40S preflight exports the compact target bank, checks exact row joins,
+native and FP32/BF16 auxiliary parity, zero-aux native KD equality, full support
+stress, one full-population epoch, native selected checkpoint/prediction
+readback and durable epoch state. Gate ceiling: 8h, 6 CPUs, 180000 MiB.
+Science admission needs measured memory/storage/time, authenticated receipt,
+exact submission journal and successful Slurm accounting. Then separately
+review two jobs: `train_EMBED_D000 -> aggregate`. No automatic follow-up,
+cleanup or retry. Epoch states are preserved; no automatic resume is promised.
+
+Local validation: **82 focused tests passed** (81 in the combined
+FullStat-embedding / embedding-aux / embedding-ladder / fast-attention run,
+plus the subsequently added real ROOT-to-cache embedding integration test).
+Runbook Bash/PowerShell snippets and worker/helper shell syntax also passed
+parsing without executing submission commands. Tests include installed-Weaver CUDA production-architecture preflight
+and 20-epoch miniature fit, native head-free replay, CPU exact zero-aux KD,
+source/target/scope/corruption guards and exact-plan submission fixtures.
+These are not genuine Oscar/Tigris acceptance. No jobs were submitted, no
+remote environment changed, and source was not committed or pushed by the
+agent. Next: commit only the additive change, push, dry-review and run the
+real Oscar gate using the runbook before authorizing science.
+
+## 2026-10-20: Fixed-OFFLINE embedding prediction + logit ladder
+
+New additive implementation: `src/hlt_classification/luka_embedding_ladder/`,
+CLI, SPORC debug queue helper, Slurm worker and focused tests. Authority:
+[plan](plans/LUKA_EMBEDDING_LADDER_PLAN.md),
+[v1 contracts](contracts/LUKA_EMBEDDING_LADDER.md),
+[commit/queue/results runbook](LUKA_EMBEDDING_LADDER_RUNBOOK.md).
+Donor/base: `991c9d44161552c3ff8ed65eafd59933217f08aa`; unchanged original
+teacher/control source: `74aa58c582ff6f497a2c6d91c503f5489fac3e9a`.
+Detailed donor files are recorded in `LEGACY_SOURCE_MAP.md`.
+
+Documentation follow-up: the standalone
+[embedding-ladder strategy handoff](LUKA_EMBEDDING_LADDER_STRATEGY_HANDOFF.md)
+explains the auxiliary prediction head versus direct hidden-state alignment,
+fixed-OFFLINE versus changing logit teachers, exact losses and target
+normalization, code locations, portable pseudocode, controls, storage and
+validation requirements. It describes code at `5ed50964085e9bf364030764bbbc755179c445ae`;
+no scientific semantics or runtime files were changed for that documentation.
+
+This is Luka **trial ALLJETS**, 299234 TRAIN / 74895 validation, batch 128,
+fixed 30 epochs, full-validation AUC-first selection, original50k report-only.
+No independent test is available. U000 is reused as the initial classifier
+teacher, followed by fresh U050 -> U100 -> D066 -> D033 -> D000 fits.
+Every student receives immediate-teacher T=2 logit KD. The EMBED arm also
+predicts the **same pure OFFLINE embedding** through a training-only small
+head, using the existing authenticated single-stage target bank and unchanged
+TRAIN-only normalization. Loss is 0.25 CE + 0.75 T^2 KL + 0.3 SmoothL1.
+This is not direct representation equality, attention KD, fusion or warm start.
+Final D000 checkpoint is strictly native HLT-only with no auxiliary head.
+
+Optional fresh LOGIT-only five-rung arm shares U000, coordinate seeds and the
+schedule. It is separately reviewed/authorized. The cancelled historical
+fixed30 D chain and later three-rung LOGIT chain are not mislabeled as an exact
+five-rung control. M0HLT, OFFLINE and completed SINGLE_EMBED are supplementary
+authenticated comparison rows. No metric quality gate exists.
+
+One debug GPU preflight executes ten full-population one-epoch probes, native
+installed-Weaver/zero-aux KD parity, FP32/BF16 auxiliary gradient checks, both
+roles' longest-support stress, native readback/export and retirement checks.
+Each separately submitted science job runs all five rungs; measured combined
+time must fit 24h and measured peak memory must leave host/GPU headroom.
+Exact pushed source, completed accepted preflight journal and reviewed science
+plan remain mandatory. No automatic submission or retry.
+
+Storage: reserve 2 GiB new persistent space. Entirely deleted U000/U050 input
+caches rebuild in bounded RAM only using original assignments/fingerprints.
+All other caches must authenticate; corruption never triggers silent rebuild.
+New logit arrays live in RAM, with hashed identity/teacher descriptors saved.
+Only newly owned intermediate selected weights are retired after verified
+TRAIN export; final D000 weights, per-epoch histories, selected predictions,
+labels, identities, comparisons and retirement receipts remain. Shared parent
+models/banks, datasets, old runs and Fresh_check are not deleted or modified.
+
+Local evidence: combined regression **37 passed in 134.75s** (15 new ladder
+tests plus 22 unchanged single-stage embedding tests), with fresh test-only
+temporary artifacts. The real installed local CUDA/ParT architecture completed
+both five-rung fixed30 miniature science arms and all ten technical probes;
+zero-aux native KD equality, real-ROOT cache reconstruction, source/target
+lineage guards, uncertain-submit rejection, result replay and owned cleanup
+were exercised. These small local populations are not cluster acceptance.
+Shell syntax and CLI checks passed. Remote SPORC preflight and any Tigris
+miniature have not run for this new experiment; nothing was submitted, pushed,
+or committed by the implementation agent. Next: commit/push the additive files,
+queue the new debug preflight, then review each desired science arm.
+
+## 2026-10-19: Whole-particle replacement D ladders, debug-preflight ready
+
+Implemented a separate balanced endpoint-swap experiment under
+`src/hlt_classification/luka_particle_swap/`, with thin CLI, queue helper,
+Slurm worker and focused tests. Authority:
+[plan](plans/LUKA_PARTICLE_SWAP_PLAN.md),
+[v1 contracts](contracts/LUKA_PARTICLE_SWAP.md),
+[commit/queue/results runbook](LUKA_PARTICLE_SWAP_RUNBOOK.md).
+
+Both matched cold arms reuse the authenticated fixed30 regular U100:
+U100 -> SWAP066 -> SWAP033 -> SWAP000. LOGIT uses the unchanged C25/P75 T2
+loss; ATTN adds existing block7 head-mean attention KL at0.1. Same299234 TRAIN /
+74895 validation, batch128, exactly30 epochs, coordinate seeds and full-val
+AUC-first checkpoint selection. Original50k remains report-only; the former
+test was already repurposed into TRAIN and no independent test exists.
+
+The new path swaps entire physical records on existing HLT slots, not
+interpolated feature values. A frozen label-free order balances count, HLT pT
+and charged/neutral rank strata across three nested batches. Unmatched slots
+stay HLT. U100/native-HLT endpoint fingerprints replay exactly; new intermediate
+features are recomputed from the whole hybrid jet. Algorithmic assignments are
+not truth matching, and improved recovery is a hypothesis, not an admission
+criterion. No construction/identity metadata enters the model.
+
+All four views are built once in RAM per role from authenticated raw selected
+ranges and existing assignments. A new INPUT_IDENTITY scopes all target banks;
+science must reproduce the measured view and schedule audit. FP32 teacher
+targets are authenticated into bounded RAM once per fit, removing minibatch
+target-file I/O without changing the training kernel. No new persistent
+particle cache. Exact newly owned scratch banks/checkpoints are retired after
+their validated last consumers; per-jet selected predictions, labels, IDs,
+original50k mask, histories, metrics and retirement provenance remain. Shared
+U100, other old artifacts, raw datasets and Fresh_check are untouched.
+
+One real preflight and one separately authorized three-rung science job per
+arm, all SPORC debug/A100,6CPU/128000MiB. Gate8h; complete-chain measured science
+request capped24h. Accepted native parity, full-support stress, complete-role
+probes, checkpoint/native readback, storage/RAM and exact Slurm journal plus
+COMPLETED/0:0 accounting are mandatory. No automatic retry/follow-up.
+
+Evidence: donor baseline79passed/1Windows-symlink skip; combined swap,
+attention-weight and archive regression129passed/2Windows-symlink skips
+(two existing PyTorch mask-type warnings). Final resident-memory-evidence,
+preflight/science lifecycle and production-architecture CUDA recheck5passed;
+final CLI/queue/runbook syntax check1passed. Coverage includes real synthetic
+ROOT rebuilds, exact endpoints, atomic/nested swaps, corrupted input/result
+rejection, full30 three-rung CPU/CUDA fixtures, safe retirement, native
+installed-Weaver FP32/BF16 parity and a production-size CUDA three-rung probe.
+`git diff --check` passed. These local fixtures are NOT remote resource evidence.
+
+Donor/base901535f026d32868e19c159a073947dfdbbbdd3c and every adapted/reused file
+are recorded in [LEGACY_SOURCE_MAP](LEGACY_SOURCE_MAP.md). New schemas use
+`LUKA_PARTICLE_SWAP_* /v1`; existing scientific source/contracts are unchanged.
+No commit, push, remote submission, cancellation or old-data deletion performed.
+Next: review/stage only the new implementation and this task's doc hunks, push,
+then dry-review and queue each debug gate using the runbook. Genuine SPORC
+acceptance remains outstanding; no new Tigris/remote acceptance is claimed.
+
+## 2026-10-19: FullStat attention resident-bank speedup and explicit recovery
+
+Implemented an additive, science-identical replacement for the slow62c9
+ATTN_D000 run. Authority: [operational plan](plans/LUKA_FULLSTAT_FAST_ATTENTION_PLAN.md),
+[execution contracts](contracts/LUKA_FULLSTAT_FAST_ATTENTION.md),
+[benchmark/queue runbook](LUKA_FULLSTAT_FAST_ATTENTION_RUNBOOK.md).
+
+The original20epoch/batch128 recipe, FP32 ragged attention targets, readout,
+losses, sampler, optimizer, selection and native inference remain unchanged.
+`luka_fullstat_attention_fast/` authenticates the existing export, loads it
+once into admitted RAM, prepares two batches ahead in original order, avoids
+redundant diagnostic graphs/synchronizations, logs within-epoch throughput and
+saves immutable optimizer/RNG/selection checkpoints after every epoch.
+
+One new Oscar performance gate benchmarks full-bank shuffled updates and full
+validation, then gates one attention fit plus CPU aggregate. No duplicate
+LOGIT fit or target export. Original COARSE_D000 and controls are labeled
+historical references. No old job/spec/source is modified; no remote jobs
+submitted or cancelled. The original unsaved fit cannot be resumed into this
+new implementation. Final-test and unused rows remain sealed.
+
+Local baseline attention tests:13passed. Focused FullStat/attention/recovery
+regression:83passed (two existing PyTorch mask-type deprecation warnings).
+Final optimized suite:18passed, including exact20epoch CPU/CUDA selected-state,
+loss/validation and epoch7 resume equality, multi-batch/partial-tail ordering,
+zero hot-path target opens, corrupt/budget refusals, production attention-only
+publication/comparison, exact submission failures and a real-local-CUDA
+34k-synthetic-population full-bank benchmark/preflight exercise. Installed
+Weaver is used with reduced-size test models; this is not Oscar validation.
+Both shell entrypoints pass `bash -n`; CLI help and `git diff --check` pass.
+Real Oscar performance remains unmeasured: near-logit speed is an objective,
+not an accepted claim. Next:
+commit/push additive files, queue and inspect the new performance gate before
+authorizing its science plan. Existing unrelated changes were preserved.
+
+## 2026-10-19: Single-stage HLT auxiliary offline-embedding prediction
+
+Implemented the requested **one HLT-only model with CE plus a small prediction
+head for a frozen OFFLINE jet embedding**, not another ladder. Authority:
+[plan](plans/LUKA_EMBEDDING_AUX_PLAN.md),
+[v1 contracts](contracts/LUKA_EMBEDDING_AUX.md), and
+[commit/queue/results runbook](LUKA_EMBEDDING_AUX_RUNBOOK.md).
+
+Uses the **trial ALLJETS 299,234 TRAIN / 74,895 validation** split and original
+fixed30 M0HLT/OFFLINE parent at `74aa58c582ff6f497a2c6d91c503f5489fac3e9a`.
+M0HLT's initialization, sampler, true batch128, AdamW, 30-epoch schedule and
+full-validation selection are matched exactly. M0HLT is reused only after
+original-source authentication. This is exploratory development; the former
+holdout was already retired into TRAIN, and original50k remains report-only.
+It is not the separate Oscar FullStat experiment documented below.
+
+Fixed objective: CE + 0.3 times mean SmoothL1 prediction loss. Targets are the
+teacher's final normalized 128-dimensional class/jet vector, standardized by
+TRAIN-only FP64 moments with std floor 1e-3. The predictor is
+128 -> 128 -> 128 with GELU and isolated initialization RNG. No logit KD,
+attention KD, direct equality constraint on backbone embeddings, warm start or
+offline deployment input. Predictor gradients reach the HLT encoder; the saved
+selected checkpoint contains only native ParT weights and runs with no added
+inference operations. These are preregistered choices, not demonstrated gains.
+
+New files: `src/hlt_classification/luka_embedding_aux/` (10 modules), thin CLI
+`scripts/luka_embedding_aux.py`, queue helper, sbatch worker,
+`tests/test_luka_embedding_aux.py`, and the three linked documents. This handoff
+and `LEGACY_SOURCE_MAP.md` have additive entries. Existing runtime remains
+unchanged; donor commit is `62c9b2df91eb3bda4fd4df4edc75c5f810a48c55` and the
+artifact namespace is `LUKA_EMBEDDING_AUX_*/v1`.
+
+Deleted durable OFFLINE caches are not required: only TRAIN OFFLINE is rebuilt
+in RAM from authenticated ROOT ranges, with exact old input-fingerprint replay.
+The compact 128-FP32 target bank is generated once in preflight and reused in
+science. No attention banks, matching rerun, copied datasets or rolling epoch
+checkpoints. A 2 GiB persistent allowance is required; reports, predictions,
+compact targets and selected native checkpoints are retained. No shared files
+are deleted. Archived comparison outputs can be read without the old teacher
+or raw data, while submitting/reusing science still requires complete lineage.
+
+Queue flow: one real SPORC A100 preflight, then one new scientific fit after
+exact journal and COMPLETED/0:0 acceptance. Default tier3, explicit debug
+option; same registered site for preflight and science. Full-population
+technical epoch, native/auxiliary FP32 and BF16 checks, longest TRAIN/validation
+stress and conservative measured runtime/RAM admission precede science.
+
+Validation: four pre-change focused baseline tests passed; **22 new tests
+passed**, including actual installed-Weaver CPU/CUDA parity, exact native-CE
+zero-coefficient epoch parity, real ROOT fixture rebuild/fingerprint checks,
+identity/corruption/partial-publication guards, a full fixed30 fit, and an
+end-to-end local CUDA production-architecture preflight + 30-epoch science
+worker miniature. Only the miniature population, host accounting and scheduler
+were fixtures; this is **not real SPORC acceptance**. CLI help, Python AST,
+Bash syntax and documentation links also passed. The combined focused/regression
+run passed **68 tests** (including the then-21 new tests and 47 existing tests);
+the final focused run passed **22 tests** after report/source hardening. Existing
+attention, offline-auxiliary math, fixed30 and ALLJETS regressions passed, with
+two pre-existing PyTorch mixed-mask deprecation warnings. Native training and
+input-kernel files were also confirmed byte-identical between the original
+parent and donor commits; runtime authentication now records/enforces that
+match instead of relying only on recipe names.
+
+No commit, push, remote job submission, cancellation, dataset regeneration or
+deletion performed. Next: commit/push these files, create a fresh gate with the
+runbook, run actual SPORC preflight, then review and submit the single fit.
+
+## 2026-10-19: FullStat last-rung attention comparison
+
+Implemented the user-approved **selected COARSE_D033 -> fresh D000** comparison
+on the existing Oscar FullStat split. New authority:
+[plan](plans/LUKA_FULLSTAT_LAST_ATTENTION_PLAN.md),
+[contracts](contracts/LUKA_FULLSTAT_LAST_ATTENTION.md), and
+[commit/queue/results runbook](LUKA_FULLSTAT_LAST_ATTENTION_RUNBOOK.md).
+
+The two matched students are `LOGIT_D000` (unchanged C25/P75 T2) and `ATTN_D000`
+(same objective plus constant 0.1 block-7 head-mean attention KL). Both keep
+3M TRAIN/500k validation, true batch128, 20 epochs, warmup2/cosine, native
+optimizer groups and selection rule. Both are initialized fresh with the same
+coordinate seeds; neither starts from teacher weights. D033 is frozen at the
+authenticated epoch17 checkpoint in the completed FullStat recovery source
+`9bc3cae082915259ad569a46eefa348ddce74ea3`. No prior rung is rerun. Original
+M0HLT/OFFLINE/DIRECT/D033/COARSE_D000 are authenticated historical references;
+the primary comparison is the two new fits, not attention versus an old seed.
+
+Changed/new files: additive `src/hlt_classification/luka_fullstat_attention/`,
+thin `scripts/luka_fullstat_attention.py`, its `queue_*.sh` helper,
+`sbatch/run_luka_fullstat_attention.sh`, focused tests and the three documents
+above; this handoff and the donor-source map receive new history entries.
+Existing runtime remains byte-identical. Donor mapping is recorded in
+[LEGACY_SOURCE_MAP.md](LEGACY_SOURCE_MAP.md) at in-repository donor
+`a1d3a2c6caa20871ce2d0b3c1525fd347fd27df6`. New artifact namespace is
+`LUKA_FULLSTAT_LAST_ATTENTION_*/v1`, not a redefinition of trial contracts.
+
+One real Oscar gate precedes four science jobs (shared TRAIN target export,
+two fits, CPU aggregation). Native installed FP32/BF16 parity, lambda-zero
+training equality, full required prepared-cache support/alignment audit,
+separate TRAIN/validation maxima, both measured one-pass fits, selected-state
+readback and explicit memory/runtime/personal-storage admission are required.
+The bank is retained in a separately registered scratch directory, with bounded
+ragged shards/mmap loading; selected checkpoints and predictions remain durable.
+Exact dry review/hash authorization, source/parent replay and successful gate
+accounting are mandatory. No automatic followup, ambiguous retry or deletion.
+
+The 1.5M final test and 105325 unused rows remain sealed. This is single-seed
+development validation; event independence and old-trial overlap remain
+unverified. The old trial's fixed30, consumed-test and checkpoint-retirement
+policies do not apply to this FullStat experiment.
+
+Local evidence: **129 passed, 1 skipped** across the new comparison and existing
+attention, attention-weight/archive, FullStat and recovery regression suites
+(298.16s). The skip is Windows symlink privilege; two existing PyTorch mask-type
+warnings remain. Final focused rerun: **13 passed** (24.35s), including actual
+prepared ROOT/cache fixtures, sealed-role rejection, local CUDA production
+gate/four-task smoke flow, native zero-weight equality, immutable parent/bank
+checks, measured-budget rejection and ambiguous-submission protection. Local
+fixtures mock Slurm/Oscar identity and resource accounting; installed native
+FP32/BF16 parity does not certify the remote L40S allocation. Initial restricted
+baseline lacked access to the Weaver directory; with access, all20 attention
+baseline tests passed. The new CLI help, 11 Python AST checks, both worker/helper
+shell syntax checks, six runbook Bash blocks, links and whitespace checks passed.
+No real Oscar/Tigris acceptance, cluster submissions, commits, pushes or remote
+changes were performed. Next: commit/push the scoped additions, dry-review and
+run the new Oscar gate, then review/authorize its measured science plan.
+
+## 2026-10-19: attention-distillation strategy handoff
+
+Added [a self-contained attention strategy and continuation handoff](LUKA_ATTENTION_DISTILLATION_STRATEGY_HANDOFF.md)
+covering persistent HLT-slot alignment, block7 head-mean pre-dropout targets,
+the exact logit/attention losses, fixed30 matched ladders, the 0.3/1.0 tier3
+sweep, owned-scratch retirement, retained result inspection and historical-test
+limitations. It distinguishes this method from fusion and privileged gating.
+Remote paths/jobs are explicitly user-reported locators, not newly verified
+live state; no final sweep outcome is asserted.
+
+Documentation-only: no runtime edits, donor migration, new/versioned contracts,
+remote writes, submissions or deletion. Existing unrelated work is preserved.
+Focused existing attention/sweep tests: 9 passed, 46 deselected, two existing
+PyTorch mask-type warnings. The first restricted attempt passed eight checks
+but could not import the local Weaver dependency; the same nine passed with
+access to that existing directory. No new SPORC/Tigris acceptance is claimed.
+Next: use the linked read-only results command to inspect actual completed
+rungs and compare matched D000 endpoints.
+
+## 2026-10-18: cold privileged-gate tier3 campaign is preflight-queue-ready
+
+Implemented the user's new cold-start experiment without modifying existing
+campaigns, U100, datasets, prepared caches, Fresh_check, or queued jobs. No
+retrospective cleanup, remote submission, commit or push was performed.
+Active authority: [plan](plans/LUKA_COLD_GATE_TIER3_PLAN.md),
+[v1 contract](contracts/LUKA_COLD_GATE_TIER3.md), and
+[commit/queue runbook](LUKA_COLD_GATE_TIER3_RUNBOOK.md).
+
+The separate `src/hlt_classification/luka_gating_cold/` package has fresh
+LOGIT/SELF/PRIV chains U100 -> D066 -> D033 -> D000, two cold replacements
+(logits-only and logits+0.1 gate loss), and SELF_REDISTILL. Every student
+starts all parameters/buffers/optimizer fresh; seed digests and native-backbone
+control equality are checked. No staged freezing of random weights. Unchanged
+ALLJETS299234/74895, batch128/fixed30, coordinate seeds, C25/P75 T2 and
+full-validation AUC selection. Original50000 remains report-only; no independent
+test. PRIV is an oracle; final replacements are HLT-only.
+
+New jobs build their teacher targets in private node-local scratch and retire
+only the authenticated, explicitly owned files after durable selected outputs
+verify. One selected checkpoint, all epoch metrics, validation predictions,
+identities/labels/counts/original50k mask and provenance remain. No dense
+attention bank, optimizer/per-epoch checkpoint, copied particle cache or
+persistent teacher bank. Conservative persistent admission is2GiB for the
+whole new run; scratch gets a separate measured allowance, no home fallback.
+Old data and U100 are not cleanup targets. Failed output validation retains
+scratch; successful retirement leaves archival result reading functional.
+
+New CLI `scripts/luka_gating_cold.py`, helper
+`scripts/queue_luka_gating_cold.sh`, worker `sbatch/run_luka_gating_cold.sh`,
+two focused test files and the three linked docs accompany the ten-module
+package. Internal donor files/commit are recorded in LEGACY_SOURCE_MAP:
+existing gated training/submission/followup and attention-weight retention at
+`84fcbf25529091a2f32daf96bf8b910dec50dc3f`; fixed30 scientific parent remains
+`74aa58c582ff6f497a2c6d91c503f5489fac3e9a`. Existing scientific source is frozen
+by the new compatibility guard. New `LUKA_COLD_GATE_* /v1` artifacts bind the
+cold recipe, selected outputs, retirement and optional continuation.
+
+Both phases use SPORC tier3/A100/6CPU/128000MiB. Gate8h;12 measured per-fit
+science requests capped24h plus aggregate1CPU/16GiB/1h. Optional explicitly
+authorized auto mode binds one preflight and13 science jobs, checks full
+technical evidence and successful exact accounting, then submits the reviewed
+measured DAG. Failed/ambiguous submissions never retry; poor scores never veto.
+
+Validation: baseline81 passed/1 Windows symlink-privilege skip. New initial
+suite36 passed. Broader final regression **146 passed,1 skipped** in329.09s
+(cold, existing warm/followup, attention-weight/storage, reference archive).
+Final expanded archive-readback/source-guard checks **2 passed** in35.97s.
+Includes local installed-Weaver standard ParT FP32/BF16 CUDA parity, all12
+synthetic scientific fits at30 epochs, all12 one-pass production-preflight
+fits and24 maximum-support stresses, checkpoint/prediction readback, failure
+injection, safe retirement, exact scheduler-free dry/live journals and bounded
+follow-up. Windows `resource`/site accounting is mocked in local GPU fixtures;
+this is NOT a real SPORC memory/timing measurement. Tests require the existing
+local Weaver dependency directory to be readable; the sandbox baseline first
+hit its ACL, then passed with local test access. `git diff --check`, new-file
+whitespace checks, CLI help, Bash syntax (including runbook blocks), and
+documentation links passed. Unrelated dirty/untracked user files were preserved.
+
+Next: commit/push only reviewed changes, then dry-review and queue a NEW tier3
+gate using the runbook. Real full-population A100 preflight acceptance remains
+mandatory; no actual SPORC/Tigris validation is claimed by these local tests.
+
+## 2026-10-18: both attention-weight arms use fresh tier3 gates
+
+User requested tier3 preflights followed by tier3 science for the attention
+weight sweep. New `LUKA_ATTENTION_WEIGHT_GATE/v2` registrations route w03/0.3
+and w10/1.0 to `sporc_a100` in both phases. Existing GATE/v1 meanings remain
+w03/debug and w10/tier3. The new helper rejects old roots and mismatched source;
+plans, journals and preflight acceptance remain tied to exact gate hashes.
+No in-place scheduler migration or cross-partition acceptance reuse.
+
+Changed sweep contracts/campaign/preflight/submission, CLI/queue helper, focused
+tests and plan/contract/runbook; internal donor commit is
+`6b6870ad2b40bb036f8dca83391eb1ed44cfd640` (see LEGACY_SOURCE_MAP). Scientific
+recipes, seeds, batch128/fixed30, A100/6CPU/128000MiB requests, 8h gate,
+24h measured ladder ceiling, and bounded owned-scratch retirement are unchanged.
+The separate privileged-gate campaign and Fresh_check are untouched.
+
+Baseline: 51 passed, 1 skipped after using a fresh workspace temporary directory;
+the first attempt hit an inaccessible Windows default pytest temp directory.
+Final sweep, reference-archive and original-attention regressions: **79 passed,
+1 skipped** in 176.55s. Includes both versioned gate/science dry/live plan paths,
+exact-source helper guards, rejected cross-gate acceptance, unchanged scientific
+registration, synthetic CPU/CUDA fixed30 chains, retirement/result readback,
+Bash syntax and installed-Weaver/native GPU parity. Skip: Windows real-symlink
+creation privilege (simulated guard passes); two existing PyTorch mask-type
+deprecation warnings. The initial post-change run caught the shared hash
+validator's default schema=1; explicit gate-version validation was added before
+the final full pass. `git diff --check` passed (CRLF normalization notices only).
+
+No cluster jobs were submitted, moved or cancelled; no old payload deleted.
+Next: commit/push scoped changes, inspect the old attention preflight 21916405
+before cancelling that exact ID if replacing it, then dry-review/submit NEW
+commit/fresh-root tier3 gates. Leave privileged-gate 21916249 alone. Real A100
+full-population preflight acceptance and separate science authorization remain
+required; local tests do not constitute remote readiness evidence.
+
+## 2026-10-18: recover attention-weight comparison import after legacy cleanup
+
+User's 3052c116 registration stopped before new-root creation/submission because
+the old full `check_spec` required an already deleted preflight attention shard.
+The user subsequently confirmed presence (not yet checksum verification) of
+old gate/preflight/science metadata, aggregate receipt/results and all six
+LOGIT/ATTN receipts, histories, predictions and cost records.
+
+Added `luka_attention_weight/reference_archive.py` and changed only the new
+sweep's `source.py`/`campaign.py` import path. It runs a comparison-only reader
+against original pinned source 94f56025: authenticate source/shared anchor,
+metadata parent links, aggregate-declared training/dependency hashes, required
+retained output bytes, original selector, exact validation population/subset,
+and recomputed aggregate metrics/recoveries/contrasts. A distinct
+`LUKA_ATTENTION_WEIGHT_REFERENCE_ARCHIVE/v1` proof explicitly excludes old
+preflight/bank/checkpoint payload reuse. Original validators and scientific
+training kernels remain unmodified. New arms still require their own full
+preflights, resource acceptance, dry plans and explicit science submission.
+
+Updated the active plan, reusable contract, runbook, donor-source map and tests.
+Donor reporting semantics: `luka_attention/{campaign,worker}.py` at
+`94f560259dd04253c0aa47b31dec3aedc105ac14`. Baseline sweep suite: 26 passed,
+1 skipped. Focused archival/sweep verification: **51 passed, 1 skipped** in
+84.14s, including synthetic missing legacy outputs, corruption/re-signed
+semantic mismatches, exact row joins, archival scope, no write/raw-particle
+access, fresh-preflight requirement, both CPU/CUDA three-rung chains and Bash
+syntax. Skip is the Windows real-symlink privilege case; simulated guard passes.
+Adjacent attention, gating/follow-up, fixed30 and regular-ladder regressions:
+**114 passed** in 337.89s, including installed-Weaver/native CUDA parity.
+Two existing PyTorch mask-type deprecation warnings; no regression failures.
+Combined post-change verification: **165 passed, 1 skipped**. `git diff --check`
+also passed (only existing CRLF normalization notices).
+
+No cluster job, source commit/push, old artifact deletion or dataset inference
+was performed. User's actual retained SPORC files are not locally available;
+remote import/hash validation and each arm's real A100 preflight remain pending.
+Next: commit/push the scoped fix including the new reader/test, use its NEW
+commit/fresh root in the runbook, and dry-review/submit w03/debug and w10/tier3
+preflights. Do not rebuild the deleted legacy banks or modify pinned worktrees.
+
+## 2026-10-18: attention-weight 0.3/debug and 1.0/tier3, bounded storage
+
+Implemented an isolated `luka_attention_weight` campaign for the requested
+U100 -> D066 -> D033 -> D000 ladders. `w03` is lambda 0.3 on SPORC debug;
+`w10` is lambda 1.0 on SPORC tier3. Each has its own A100 preflight and a
+separately authorized, measured, single-job sequential science ladder. Both
+retain batch 128, fixed 30 epochs, fresh initialization, original coordinate
+seeds, head-mean block-7 FP32 attention KL and the native AUC selector.
+Population stays 299,234 TRAIN / 74,895 validation; original 50k is report-only.
+There is no independent test. No existing scientific runtime file was changed.
+
+Storage is explicitly different from the old attention contract, only for this
+new campaign: one rolling FP32 TRAIN bank on verified node-local scratch, no
+home fallback. Exact owned bank files retire after the child checkpoint,
+predictions and report verify; the child checkpoint retires after its next
+bank verifies, or after terminal D000 prediction readback. Intent/completion
+receipts bind every deletion. Persistent predictions, IDs, labels, original50k
+membership, histories, metrics and provenance support later R30 diagnostics.
+New inference after checkpoint retirement requires retraining. Shared U100,
+old campaigns/models/banks, prepared data and Fresh_check are never deleted.
+Persistent admission reserves 1 GiB per arm separately from measured scratch.
+
+New files: package, thin CLI, queue helper, Slurm worker, focused tests, active
+[plan](plans/LUKA_ATTENTION_WEIGHT_SWEEP_PLAN.md),
+[v1 contracts](contracts/LUKA_ATTENTION_WEIGHT_SWEEP.md), and
+[queue/storage runbook](LUKA_ATTENTION_WEIGHT_SWEEP_RUNBOOK.md).
+`LEGACY_SOURCE_MAP.md` records internal donor source at
+`4e4a38a1a50bb2e227ace9f65657a8c20c585bb5`; fixed30 parent and original attention
+reference pins remain 74aa58c5 and 94f56025 respectively.
+
+Verification: final sweep suite **26 passed, 1 skipped** in 54.59s, including
+both coefficients through synthetic CPU and CUDA 30-epoch three-rung runs,
+production preflight/science orchestration with mocked site, retired-output
+readback, exact partition plans, corruption/dependency/deletion guards, Bash
+syntax and Python AST checks. The skipped test needs Windows symlink-creation
+privilege; a separate simulated-symlink guard passed. Existing attention,
+gating/follow-up, fixed30 and regular-ladder regressions: **103 passed**, including
+installed-Weaver CUDA parity. The full initial combined run found a Windows
+remote-Linux-path registration bug; it was fixed and the focused/attention
+rerun passed **44 tests, 1 skipped** before adding the two final CUDA sweep cases.
+No real SPORC/Tigris job, dataset inference, commit or push was performed.
+
+Next: review/commit/push the new files, dry-review and submit each arm's
+preflight on its registered partition. Actual A100 full-population resource,
+native-parity, scratch-space and whole-ladder timing acceptance remains pending;
+only then dry-review/authorize that arm's science. There is no automatic
+follow-up in this new helper. The privileged-gate campaign is unchanged.
+
+## 2026-10-18: privileged-gate frozen-backbone SDPA fix, preflight v2
+
+User-supplied SPORC evidence: gate21914569 failed in the first backward of
+REPLACE_STAGED with `LSE is not correctly aligned (strideH)`. Its preceding
+stress tested joint training rather than the registered frozen backbone.
+The automatic controller stopped without submitting science. A local minimal
+Torch2.5.1 CUDA reproduction produces the identical error with efficient SDPA
+and finite bias gradients with math SDPA. This was not a disk or OOM failure.
+
+Changed `luka_gating/{model,preflight,contracts,campaign}.py` and its focused
+test file. The model selects math only for a registered gated CUDA attention
+call with trainable bias but frozen inputs/attention parameters, restoring
+backend settings on success and exception. Other calls use native dispatch.
+Early FP32/BF16 gate-only classification-gradient/update and unfreeze checks
+now precede the full technical graph, along with maximum-TRAIN-support,
+true-batch128 frozen stress. All existing joint/validation stresses remain.
+FP32 additionally passes full-math-reference logits/gradient comparison; BF16
+checks finite gradients and updates, not equivalence to changing every layer's
+reduction precision. Old preflight acceptance is not reused.
+
+New ATTENTION_EXECUTION/v1 and PREFLIGHT/v2 are documented in the active
+[plan](plans/LUKA_PRIVILEGED_GATE_PLAN.md),
+[contract](contracts/LUKA_PRIVILEGED_GATE.md), and
+[restart runbook](LUKA_PRIVILEGED_GATE_RUNBOOK.md). Scientific recipe hash,
+all nodes/seeds, and23-task DAG were compared against source
+`1be6c1c040e98402da1844797ebd469453eb1d2d` and are unchanged. Batch128, fixed30,
+three frozen epochs, losses, populations and model state keys remain fixed.
+No external source was copied; internal provenance is in LEGACY_SOURCE_MAP.
+
+Local verification: **103 passed,2 existing mixed-mask warnings,280.80s** across
+privileged gate, follow-up, attention, fixed30 and regular-cache suites. This
+includes installed-Weaver0.5.3 standard-ParT CUDA FP32/BF16 checks, legacy
+Torch-MHA layouts, exception-safe backend restoration, all23 synthetic science
+tasks with30 epochs, full v2 miniature/admission, and early-failure/old-evidence
+rejection. Baseline CPU-focused run:35 passed,3 GPU tests deselected. CLI help,
+Bash/runbook parsing, changed-document links and scoped whitespace checks pass.
+Local RTX2000 Ada evidence is NOT genuine SPORC A100 acceptance.
+
+No commit, push, remote job, cleanup, or dataset mutation was performed.
+Unrelated existing documentation/work was preserved. Next: commit/push the
+scoped fix and dry-review/authorize a fresh source-pinned gate (optional auto
+follow-up still available). Preserve the failed1be6c1c0 root and controller
+claim. The new source reruns the full technical graph; partial-probe recovery
+was not added. Genuine A100 preflight/resource acceptance still gates science.
+
+## 2026-10-18: optional privileged-gate automatic science follow-up
+
+The user requested that a successful new preflight automatically queue the
+whole campaign. The [active plan](plans/LUKA_PRIVILEGED_GATE_PLAN.md) now
+explicitly permits an opt-in `auto` mode; manual gate/science authorization
+remains available and scientific v1 semantics are unchanged. This supersedes
+the manual-only next-step wording in the implementation entry below.
+
+Added `luka_gating/followup.py` and `tests/test_luka_gating_followup.py`; extended
+the thin CLI, queue helper, source-required file list, v1 contract and runbook.
+Separate operational FOLLOWUP_*/v1 artifacts bind the reviewed gate and full
+23-job science graph, fixed resource profiles and debug24h per-task ceilings.
+One explicit authorization queues/binds the exact preflight and arms a nohup
+submit-host controller. Only COMPLETED/0:0 plus the original full technical
+receipt/resource/source checks can create science; it saves/dry-checks the
+measurement-bound exact plan and then uses the existing durable submission
+journal. Permanent exclusive claims prevent duplicate arming and ambiguous
+automatic retries. No quality threshold, cleanup, cancellation, source/schema
+reinterpretation or unrelated submission is added. Existing science is never
+taken over. The controller prints ARMED before waiting, and a distinct all-jobs
+queued message after successful submission; neither means training completion.
+
+Donor: the read-only wait/authenticate pattern in `context_full_followup.py`,
+commit `eb69f6af3d9aacd8effc1125e9ecf273d0089510`; no runtime import of that Oscar
+controller. Details and unchanged reusable journal dependencies are recorded
+in LEGACY_SOURCE_MAP. Focused baseline:15 gate tests passed in98.05s; initial
+new follow-up suite:23 passed in6.28s with simulated Slurm and real immutable
+submission journals. Final combined regression:94 passed in254.43s across
+follow-up, privileged gate, existing attention, fixed30 and regular-cache tests;
+two existing native Torch mixed-mask deprecation warnings only. CLI help,
+helper/runbook Bash parsing, documentation links and whitespace checks passed.
+Real SPORC scheduling and A100 gate acceptance remain untested here. No jobs
+submitted/armed, no commit or push.
+
+Next: commit/push the reviewed implementation including the follow-up test;
+use [runbook sections2–3](LUKA_PRIVILEGED_GATE_RUNBOOK.md) to dry-review `auto`,
+authorize its OUTERMOST follow-up hash and launch under nohup. Wait for ARMED
+before disconnecting. Do not also run the manual science block. Login-host
+termination still requires inspection; nohup protects against SSH disconnect,
+not host reboot. A failed gate or oversized measured request stops science
+without silently changing the registered experiment.
+
+## 2026-10-18: privileged residual attention gates implemented; debug gate queue-ready
+
+The user authorized an independent implementation of richer-view attention
+gating and a small matched set of HLT replacement variants. Authority:
+[plan](plans/LUKA_PRIVILEGED_GATE_PLAN.md), [v1 contract](contracts/LUKA_PRIVILEGED_GATE.md),
+and [commit/queue runbook](LUKA_PRIVILEGED_GATE_RUNBOOK.md). This does not modify
+the existing running LOGIT/ATTN campaign, Fresh_check, raw data or older models.
+It reuses fixed30 regular COARSE_U100 and controls from original source commit
+`74aa58c582ff6f497a2c6d91c503f5489fac3e9a`. Same ALLJETS 299,234 TRAIN /
+74,895 validation; original50k is report-only; historical test is consumed and
+retired into training, so there is NO independent test.
+
+Implemented 13 warm-started single-encoder fits / 23 science tasks, all true
+batch128 and fixed30: native WARM, own-view SELF and privileged PRIV ladders
+through D066/D033/D000; three final HLT-only replacements (logits only,
+logits plus centered gate loss, and three gate-only epochs then joint training);
+plus SELF_CONT as a matching extra-fit control. The extra gate leaves native
+Q/K/V and pair embedding intact. A small token-local network emits nine factors
+per particle; bounded log-gate corrections enter only particle blocks6/7.
+Only PRIV_D000 exports factors, in linear-size ragged TRAIN banks. PRIV_D000
+is explicitly nondeployable/oracle; HLT replacements reject external context.
+Each fit copies selected predecessor weights but starts a fresh optimizer.
+
+Files added: `luka_gating/{__init__,contracts,model,banks,training,source,campaign,
+worker,preflight,submission}.py`; thin `scripts/luka_gating.py`,
+`scripts/queue_luka_gating.sh`, `sbatch/run_luka_gating.sh`; focused tests and
+the plan/contract/runbook linked above. Only new sections were added here and
+in LEGACY_SOURCE_MAP; pre-existing unrelated user edits were preserved.
+Reusable artifacts use new `LUKA_PRIVILEGED_GATE_*/v1` contracts. Internal donor
+files and the `94f56025`, `74aa58c5`, and concurrent `9bc3cae0` pins are recorded
+in LEGACY_SOURCE_MAP; existing scientific modules were not modified.
+
+Local evidence: a combined focused/regression run passed 71 tests in266.75s
+(new gate, existing attention, fixed30, persistent-cache suites). After final
+gate-only refinements, all15 new tests passed again in104.33s. Included actual
+installed Weaver0.5.3 standard-ParT FP32/BF16 CUDA identity logits, required
+gradients, optimizer updates and auxiliary vector-gradient topology; all13
+scientific30-epoch synthetic fits through all23 production tasks; full
+technical preflight with differentiated synthetic D views and mocked site;
+checkpoint/target readbacks, no-context endpoint rejection, warm/frozen buffers,
+corrupt lineage/payload rejection, exact submission claims and no ambiguous
+retry. Two existing native Torch mixed-mask deprecation warnings remain in
+the regression suite. CLI help, helpers and all Bash runbook blocks, new-doc
+links and whitespace checks passed. These are local checks, NOT real A100
+full-population evidence. The test-only Weaver dependency was installed into
+an isolated ignored temporary directory, not the user's scientific environment.
+
+Next: commit/push the reviewed new files; use a fresh detached SPORC worktree;
+declare personal quota; dry-review/authorize ONE 6CPU/128000MiB/A100/debug,
+8h technical gate. It reuses only retained U100/D066/D033/D000 caches, measures
+every arm and role-specific maximum support, then admits science only after
+exact successful accounting and checked memory/disk/time bounds. The 23-job
+science DAG needs a separate dry review and exact-hash authorization; measured
+requests over debug24h fail closed without changing the experiment. No jobs
+were submitted/cancelled, no source committed/pushed, no dataset rewritten,
+and no automatic follow-up/cleanup is armed. Live remote artifacts and quota
+must still pass the new gate's checks.
+
+## 2026-10-17: aligned-attention D ladder implemented; queue the technical gate next
+
+This supersedes the documentation-only status below. The user authorized
+implementation of the full three-step experiment, not a one-step scientific
+screen. The new [plan](plans/LUKA_D_ATTENTION_PLAN.md),
+[v1 contracts](contracts/LUKA_D_ATTENTION.md), and
+[commit/queue runbook](LUKA_D_ATTENTION_RUNBOOK.md) govern the isolated
+`luka_attention` namespace. Existing scientific source and running campaigns
+were not modified. Historical test remains consumed/repurposed; this trial has
+299,234 TRAIN / 74,895 validation and no independent test.
+
+Implemented six fresh single-ParT fixed30/true-batch128 fits: LOGIT and ATTN
+D066/D033/D000, paired seeds, common authenticated regular COARSE_U100 from
+the original fixed30 `74aa58c5` campaign. Attention uses final particle block7,
+head-mean pre-dropout probabilities including native own-view pair bias/masks,
+FP32 KL (epsilon1e-8), constant coefficient0.1, alongside unchanged C25/P75 T2.
+Each selected rung exports its own TRAIN targets; no teacher-weight warm start,
+fusion encoder, offline inference input, particle truncation or quality gate.
+
+Files: `luka_attention/{contracts,model,banks,training,source,campaign,worker,
+preflight,submission,__init__}.py`; thin `scripts/luka_attention.py`,
+`scripts/queue_luka_attention.sh`, `sbatch/run_luka_attention.sh`, focused tests
+and the plan/contract/runbook/proposal updates. Internal donor files and exact
+`74aa58c5` / reviewed `9bc3cae0` commits are recorded in LEGACY_SOURCE_MAP.
+All new reusable metadata uses `LUKA_D_ATTENTION_*/v1`; old schemas stay unchanged.
+
+Local evidence: all 20 attention tests passed in 114.19s, including installed
+Weaver standard-ParT FP32/BF16 CUDA readout/gradient/update parity on the local
+RTX2000 Ada laptop GPU, exact native-vs-control training-kernel equality,
+six scientific30-pass synthetic fits through all12 production science tasks,
+and the complete production preflight flow on synthetic inputs with mocked site
+admission. The existing fixed30 and persistent-view suites also passed:
+34 tests in 139.67s. Also cover parent/source drift, storage/resource limits, checksummed
+bank readbacks/corruption, incomplete publication and ambiguous-submission
+refusal. Native Torch mixed-mask deprecation warnings remain. Shell helpers,
+all six Bash runbook blocks, CLI help, new-document links and whitespace checks
+passed. These are local checks, NOT genuine SPORC full-population acceptance.
+
+No jobs were submitted/changed and nothing was committed/pushed by the agent.
+Next: commit/push the reviewed isolated changes; authenticate completed U100 and
+controls plus original prepared caches; declare personal quota; dry-review and
+submit ONE new A100/debug technical gate. After exact successful accounting and
+measured resource acceptance, separately review/authorize the 12-job science DAG.
+Gate probes never become science teachers. No automatic follow-up/retry/cleanup
+is armed. Live parent completion and remote available quota were not inspected.
+Unrelated dirty/untracked user work remains intact.
+
+## 2026-10-17: proposed aligned-attention D ladder (documentation only)
+
+User requested a full explanation of `U100 -> D066 -> D033 -> D000`, explicitly
+skipping the one-step scientific pilot. The new
+[attention-distillation proposal](LUKA_D_LADDER_ATTENTION_DISTILLATION.md)
+specifies persistent HLT-slot alignment, its non-truth-match limitations,
+late particle-block head-averaged attention KL, and cached TRAIN-only targets.
+It proposes two complete three-rung arms from one authenticated regular U100:
+ordinary logit KD versus logit plus attention KD, with fresh paired-seed students,
+true batch128/fixed30, and proposed constant auxiliary coefficient0.1.
+The existing trial299,234/74,895 split has no independent test; original50k
+remains secondary reporting. The parent U100 must finish and authenticate before
+import; its checkpoint hash and current completion status were not verified here.
+
+Only this handoff and the new proposal were edited for this task. No donor code
+was copied, no schema/runtime was changed, and no jobs were submitted or modified.
+Existing fixed30, FullStat and older attention-reoptimization contracts remain
+unchanged. Future attention contracts and settings in the proposal are not yet
+implemented or queue-ready. Next step is implementation with installed-Weaver
+attention extraction/parity, durable target validation, a full-graph technical
+miniature, and new measured SPORC resource acceptance; no scientific-quality gate.
+
+Validation: five focused existing tests passed in39.81s, covering persistent
+slot endpoints/unmatched support, no-truncation input validity, Luka view replay
+and HLT-only independence, and the unchanged fixed30 recipe. These are local
+regression checks, not acceptance of an attention implementation or remote GPU
+validation. Existing unrelated worktree changes were preserved.
+
+## 2026-10-16: FullStat sparse recovery with explicitly armed science follow-up
+
+User supplied original592a6dac Oscar gate accounting: foundation7486667 and
+prepare7486668 elements0--11,15 COMPLETED/0:0, thirteen receipt metadata files
+present; elements12--14 CANCELLED by0 on node1804 with no logs/output directories.
+Original assemble7486669 and preflight7486670 were CANCELLED before execution.
+`JobArrayTaskLimit` is retained scheduling information, not proof of the
+cancellation cause. No remote recovery or full-payload revalidation performed
+by the local implementation turn.
+
+User explicitly authorized sparse recovery plus automatic full science after
+success. The [plan addendum](plans/LUKA_FULLSTAT_OSCAR20_PLAN.md),
+[contracts](contracts/LUKA_FULLSTAT_OSCAR20.md) and
+[commit/queue runbook](LUKA_FULLSTAT_RECOVERY_RUNBOOK.md) define the extension.
+New recovery.py, thin CLI and repository-owned nohup launcher authenticate the
+original source/plan/journal/foundation and thirteen receipt hashes, retry only
+12--14 (excluding node1804), then require full physical assembly authentication
+and NEW installed-Weaver GPU acceptance under the new scientific source pin.
+All original data/split/cache identities remain unchanged; old ledgers are not
+rewritten. Only an additive ownership claim is written in the original root.
+
+New RECOVERY_GATE/RECOVERY_SPEC and recovery/follow-up contracts retain explicit
+old foundation/cache versus new acceptance/science lineage. Original GATE/SPEC
+v1 and its no-automatic-followup default remain unchanged. Review includes the
+complete sparse DAG plus all16 future commands at48h ceilings; explicit combined
+review-hash authorization arms continuation. Every replacement element, assembly
+and GPU preflight must be COMPLETED/0:0 AND all evidence/resource checks must
+pass. The controller then authenticates and submits a measured exact science
+plan. Gate failure means no science submission; missing accounting waits at
+most14days. A partial sbatch failure preserves its journal and blocks ambiguous
+retries. Cross-root ownership, controller locks and live claims prevent duplicate
+writers/submission. No automatic gate retry, deletion, unrelated job change,
+scientific-quality threshold, or final-test particle access.
+
+Changed implementation: luka_fullstat/{campaign,submission,worker,recovery}.py,
+scripts/luka_fullstat.py, scripts/luka_fullstat_recovery.py,
+scripts/queue_luka_fullstat_recovery.sh, focused tests and the FullStat docs.
+Internal donor producer592a6dace8adc662903d3da0d409bcab5fefb9a7 and reviewed
+parentbf04bb89a95d928faf008d899481ace05a69a5f3; detailed donor files are in
+LEGACY_SOURCE_MAP. Prepared kernels are source-compatible; the unrelated trial30
+dispatch in the parent is not treated as remote acceptance of this campaign.
+
+Local validation: baseline58 tests passed. Final combined FullStat/recovery/
+existing context-followup regression78 tests passed in31.06s; the final combined
+review-payload addition was also covered by a focused recovery rerun. Tests
+include real tiny ROOT caches, immutable receipt reuse, physical corruption
+rejection, recovery admission, all-stage failure injection, wrong authorization,
+missing accounting/timeout, exact journals, and duplicate/ambiguous reply guards.
+New helper and all3 recovery-runbook Bash blocks pass syntax validation; CLI help
+and scoped diff checks pass. No installed-Weaver/Oscar/Tigris acceptance was
+claimed locally. Exact next step: scoped commit/push, run Oscar dry recovery
+review, then arm and confirm ARMED in the durable log. Real GPU preflight and
+science remain unsubmitted by this turn; scientific settings remain3M/500k,
+20 epochs, batch128, controls/DIRECT/COARSE, with1.5M final test sealed.
+
+## 2026-10-16: matched trial ALLJETS fixed30, new v6 experiment
+
+User authorized reducing every matched batch128 fit to exactly30 epochs with
+three warmup epochs and cosine decay to30. This is not admission of the old
+60--100-pass experiment. Job21903074 recovered a3872-minute request; it failed
+time admission, not GPU or host memory. The original report stays unchanged.
+Authority: [plan](plans/LUKA_ALLJETS_30E_PLAN.md),
+[contract](contracts/LUKA_ALLJETS_30E.md),
+[commit/queue runbook](LUKA_ALLJETS_30E_RUNBOOK.md).
+
+New exact recipe LUKA_MATCHED_BATCH128_30E_RECIPE/v1 and execution artifacts v6
+cover all17 fresh controls/direct/regular-coarse/fusion/both-ending fits,
+11 TRAIN banks and30 science jobs. Same299,234/74,895 split, original50k
+secondary report, views, seeds, losses, batch128/accumulation1/inference128.
+No independent test. Fixed per-fit budgets are NOT equal total route compute.
+Legacy schedules and the separate FullStat20 experiment remain unchanged.
+
+One CPU-only admission job reuses original922bd972 job21898881 technical
+evidence. Original-source replay authenticates all twelve child receipts,
+payloads and accounting. Separate technical validation continues beyond the
+old failed timing check; it does not rewrite that candidate or waive parity,
+support, memory, source or artifact checks. Target requests use cache once,
+30 measured train+validation passes, selected inference/readback,1.75 margin;
+reducers retain factor2. Dry creation rejects estimates above24h before queueing.
+No GPU probe rerun, dataset preparation, old checkpoint or teacher-bank import.
+
+Unlike the narrow v5 recovery, v6 explicitly registers concurrent FullStat
+modules byte-pinned to592a6dac and the exact opt-in shared-runner dispatch.
+Publish from the current main lineage using the new runbook, not an ea7-only
+worktree. Existing versions retain their stricter source rules. All raw,
+cache, split and model/probe producer modules remain protected.
+
+Validation:26 focused tests passed in247.13s, including all17 actual fixed30
+CPU miniature fits,11 local banks, both final routes, dry/live-mock submission,
+and unchanged old-budget rejection. Three additional installed-Weaver0.5.3
+small CUDA30-epoch runs passed in43.72s on the local RTX2000 Ada laptop GPU:
+M0HLT (including installed parity), FUSION_U050 and FUSION_D000_D000. These use
+tiny synthetic populations, not full-support A100 resource measurements.
+Broader recovery/isolated/fusion/FullStat regression:120 passed, one stale
+repository-source allowlist assertion failed on the already-committed FullStat
+namespace. Its version-aware test allowance was updated; targeted rerun passed
+in4.36s. Production old-version source guards remain unchanged. Thus150 distinct
+focused/regression tests pass across these runs. Final v6 rerun:10 passed in
+100.65s, including the complete17-fit/11-bank fixed30 miniature on final code.
+Bash helper/four Bash runbook blocks, PowerShell runbook block, CLI help and
+scoped diff whitespace checks passed. Baseline before implementation similarly
+had83 passes and one pre-existing FullStat namespace assertion failure.
+
+No commit, push, remote job or new A100/Tigris acceptance performed. The pending
+site step is the exact-source CPU admission and a separately reviewed30-job
+science submission, not an automatic retry. Existing original A100 evidence
+is reauthenticated on SPORC; local tests do not substitute for that step.
+
+## 2026-10-16: batch128 report recovery accepts no-op parity GPU zeros
+
+The ea7cfdfc dry recovery stopped with `Missing child memory high-water evidence`.
+User metadata lists all twelve original probe records with positive host peaks;
+only parity_U000_probe and parity_FINAL_DIRECT_D000_probe have GPU allocation
+zero. The pinned v4 producer does no CUDA parity work in those two phases.
+`alljets_report_replay.py` now accepts integer zero there only, requires empty
+parities, and retains positive host/GPU evidence in every actual GPU phase.
+Missing/negative/noninteger values still fail, with the phase/node/field named.
+
+No scientific or artifact-schema change (execution v5 remains v5). All original
+source, payload, technical, memory-headroom and time-projection checks remain.
+Donor ea7cfdfc0222768bdffd386058a807f6fac84de6 and paths are in LEGACY_SOURCE_MAP;
+the active recovery plan/contract and queue runbook document this correction.
+
+Baseline focused suite:34 passed in51.82s. Injecting the user's twelve memory
+values into synthetic CPU probes reproduced the exact old rejection. After the
+fix:84 passed in51.50s, including complete report-recovery/dry-live-mock flow,
+unchanged old artifacts, corruption/resource/runtime rejection and sampler tests.
+Tests ran in an isolated ea7cfdfc checkout, not the newer FullStat/shared-runner
+source. Runbook PowerShell parsing and scoped git diff --check passed.
+This turn performed no real-Weaver/GPU/Tigris rerun, commit, push or submission.
+
+The supplied measurements imply maximum child host63.53GiB and GPU17.20GiB;
+with earlier sacct batch MaxRSS74695592K, the conservative host sum is134.77GiB.
+These are arithmetic on pasted evidence, NOT authenticated remote admission.
+Next: publish the isolated repair commit using section1 of
+[the runbook](LUKA_BATCH128_REPORT_RECOVERY_RUNBOOK.md), then dry-review the CPU
+report recovery and its unchanged timing checks. Do not deploy the combined
+FullStat main tip, rerun completed probes, or mark job21898881 successful.
+
+## 2026-10-16: FullStat Oscar20 regular ladder, local implementation
+
+User authorized genuine new FullStat DIRECT/COARSE/CE controls on Oscar,
+20 epochs, and explicitly accepted a class/QCD-bin-stratified jet-row split
+with unverified event independence. Authority:
+[plan](plans/LUKA_FULLSTAT_OSCAR20_PLAN.md),
+[contracts](contracts/LUKA_FULLSTAT_OSCAR20.md),
+[queue runbook](LUKA_FULLSTAT_OSCAR20_RUNBOOK.md).
+
+Implemented `luka_fullstat` foundation/cache/campaign/preflight/worker/submission
+modules, thin CLI/Oscar workers, new recipe, focused tests and local-data witness.
+Nine fresh single-encoder fits /five TRAIN banks /sixteen science jobs. No
+fusion, dense branch, imported weights or automatic followup. Exactly20 full
+epochs, two-epoch warmup/cosine decay, common true128 batch and selected full-
+validation AUC checkpoint. Legacy60--100-pass schedules are unchanged; the shared
+runner dispatch is opt-in by the exact new contract. Donor922bd972 and all reused
+paths are recorded in LEGACY_SOURCE_MAP. Old trial/fusion artifacts remain intact.
+
+The local downloaded snapshot's sixteen ROOT files were hashed before/after
+scalar scanning. New code reproduced7,036,584 raw /5,105,325 eligible rows and
+deterministically replayed3M train /500k validation /1.5M sealed test /105,325
+unused. QCD-labelled signal rows excluded; NO extra pT cut. Snapshot files are
+unchanged. Local diagnostic foundation (not production admission):
+`artifacts/luka_fullstat_local_validation_20261016/foundation`, content hash
+`a0191d33974fe64c3554fb01d93f512fe829024e66b227a82f8c09a5cc7bf187`.
+Both event independence and overlap with the old trial remain unverified.
+
+Preparation persists bounded2048-entry ragged chunks with identity/label joins
+and source-bound receipts, once for all seven coordinates. GPU jobs reuse these
+instead of rebuilding ROOT views. Conservative scratch reservation from real
+scalar counts:237.749GiB (includes temporary publication/reserve, not measured
+final usage). Raw snapshot/results are kept separately on persistent storage;
+actual personal quota must be confirmed before gate creation.
+
+Real local witness:128 TRAIN jets, eight per source file, all eleven classes,
+correct pairings across all seven views; official Weaver0.5.3 wheel-loaded
+CUDA forward/input-gradient/parameter-gradient parity passed. Witness hash:
+`38879347277c046a79b30aacf93f2701e61dad28d106cb94480e1807afc3e0f5` under
+`artifacts/luka_fullstat_local_validation_20261016/witness`. No validation/test
+particle arrays requested by that witness; no full-batch resource claim.
+
+Focused tests cover real synthetic ROOT I/O, split/quota replay, selected-only
+particle requests, serial/process byte parity, corrupt payload rejection,
+exact20-epoch execution, all nine local miniature fits and teacher banks,
+preflight evidence/admission and exact dry/live mock submissions. Final combined
+FullStat/historical training/foundation/stage2/matched128 regression:112 passed
+in112.78s, plus1 additional longer-validation-support stress test passed in6.51s
+(113 distinct tests). No skipped tests. Shell helpers and all seven runbook Bash
+blocks pass syntax checks; CLI help and scoped documentation links work.
+
+Production acceptance remains pending: real Oscar L40S full-support stress and
+representative miniatures, actual site/quota/resource checks, clean pushed source,
+then reviewed16-job science submission. No real Tigris/Oscar job, commit, push or
+remote transfer performed in this task. The registered target is Oscar, not a
+claim of Tigris acceptance. Exact next task: scoped commit/push, transfer/verify
+FullStat on Oscar, and queue the gate using the runbook. Final test stays sealed.
+
+## 2026-10-16: batch128 sampler repair and report-only recovery
+
+User supplied job21898881 FAILED/1:0 after 01:33:43, twelve saved child results,
+no aggregate/failure artifact, and a terminal ProcessLookupError from the RSS
+sampler's background thread re-raised at Measurement.__exit__. Batch MaxRSS:
+74695592K. This establishes the coordinator failure, not science admission.
+
+The sampler now tolerates disappearing child processes/threads (ENOENT/ESRCH)
+without hiding own-process read failures, permission errors or invalid data.
+New [plan](plans/LUKA_BATCH128_REPORT_RECOVERY_PLAN.md), execution-v5
+[contract](contracts/LUKA_BATCH128_REPORT_RECOVERY.md) and
+[runbook](LUKA_BATCH128_REPORT_RECOVERY_RUNBOOK.md) provide report-only recovery.
+All twelve v4 results, canonical logged order/results, original source/journal,
+payloads/banks, parity and timing evidence are validated in the original pinned
+922bd972 worktree. Exact failed Slurm accounting and child measurements supply
+a conservative double-counted host estimate; original 85%host/90%GPU and
+1.75*100-pass/debug24h admission remain mandatory.
+
+One new CPU-only debug report job (1CPU/32GiB/4h) can publish a separate receipt;
+21898881 remains FAILED and its directory is never rewritten. Successful
+recovery allows a separately reviewed 30-job science plan, all17 fresh matched
+batch128 fits /11 banks and both fusion endings. No model/data/split/recipe
+changes, no GPU probe rerun, no automatic followup, no independent test set.
+Donor922bd972 and adapted paths are recorded in LEGACY_SOURCE_MAP.
+
+Initial focused sampler/recovery tests: 31 passed in43.52s. Final isolated
+regression: **130 passed in427.93s**, including process-exit races, failed
+projections, exact CPU/science submissions and dedup, both v4/v5 complete
+17-fit/11-bank workflows, historical recovery versions and real local
+Weaver/CUDA small-support parity/stress. No skipped tests. These are not new
+full-support SPORC/A100 acceptance measurements.
+
+Tests used an isolated checkout of922bd972 plus only these repair files:
+unrelated concurrent FullStat changes to the shared runner were preserved and
+excluded. Scoped source bytes match the tested copy. Queue helper/all three
+runbook Bash blocks, relative doc links, CLI help and scoped diff checks pass.
+No cluster recovery, commit, push or submission performed here. Next: scoped
+commit/push, dry-review and queue the CPU report; science remains blocked until
+its authenticated report passes. Do not bundle FullStat/shared-runner edits
+into this source-compatible recovery commit.
+
+## 2026-10-15: matched true-batch128 ALLJETS rerun (local implementation)
+
+User explicitly authorized true batch128 AND rerunning matched baselines and
+ordinary ladder, not reusing batch256 reference fits. New authority:
+[LUKA_ALLJETS_BATCH128_PLAN](plans/LUKA_ALLJETS_BATCH128_PLAN.md).
+Same299234 TRAIN/74895 validation (original50k secondary), cached views, models,
+seeds, LR/loss/60--100-pass schedule; no independent test. This is an explicit
+batch/BatchNorm/updates-per-pass change, accumulation1, inference128 too.
+
+The latest old preflight21898735, source5cab1830, failed D000/D000 full256
+stress in a FRESH process. Synchronous copies plus isolation did not solve it.
+No OOM/time-limit evidence: MaxRSS about125GiB of250GiB. Do not claim the CUDA
+kernel cause proven or the new128 recipe A100-accepted until its real gate.
+
+Implementation adds `alljets_batch128.py`, explicit recipe, queue helper,
+tests and plan/contract/runbook; six existing source modules and thin CLI gain
+explicit opt-in/version dispatch. Shared model, old recipe, physics/cache/split
+and parity tolerances unchanged. Donor5cab18304d991e46457aa0d9318f8731ae3b7338
+and mappings recorded in LEGACY_SOURCE_MAP. GATE/SPEC and associated execution
+artifacts v4; LUKA_MATCHED_BATCH128_RECIPE/v1. Historical v1--v3 remain256.
+
+17 cold fits = nine controls/direct/coarse + eight fusion-route fits,11 local
+TRAIN reducers +aggregate/complete =30 science jobs. New128 U000 supervises
+DIRECT and both ladders. No imported weights/targets/comparison rows. Original
+parent source/outputs are authenticated solely for cached-input provenance.
+All selected validation predictions, both populations, bank/report/recipe and
+dependency hashes are authenticated. Incomplete controls yield n/a recovery.
+
+ONE new debug/A100/6CPU/250GiB/8h gate authenticates the failed5cab source,
+journal/runtime/failure and reuses existing prepared inputs read-only.12 fresh
+children: D000/D000 first, U050/U000, singleD000, largest singleU000; separate
+small parity/full128 TRAIN stress, independent validation inference stress;
+all stresses precede full-population passes and checkpoint/TRAIN-bank readback.
+Technical targets are uniform11-class (U000 CE-only), never science teachers.
+No retry, backend change, truncation, source mutation, uploads or preprocessing.
+85%host/90%GPU headroom and1.75*100-pass/debug24h admission remain mandatory.
+The previously observed >24h projection is not waived by changing batch.
+
+First new focused CPU/contract pass: 10 passed in 94.69s, including the complete
+17-fit/30-task synthetic workflow with real kernels/banks and original50k
+reporting. Final combined regression: **124 passed in 371.02s**, covering the
+new campaign, historical isolated/synchronous/diagnostic workflows, fusion
+offload, shared training runner and pure-offline controls. Includes two fresh
+real-Weaver production-factory CUDA stresses at true batch128/three updates
+(D000/D000 and unequal U050/U000), at SMALL particle support on the local
+RTX 2000 Ada laptop GPU, plus existing FP32/BF16 offload parity checks.
+Local runtime uses the official Weaver 0.5.3 wheel and Torch 2.5.1+cu121;
+it is not the remote cu118 A100 environment or a full-support acceptance run.
+Initial legacy suite ran while implementation began:100 passed/two source-
+allowlist assertions failed as expected when the new recipe source changed;
+tests now explicitly include the new plan's named allowlist, with separate
+old-source mutation-rejection tests retained. Do not call that a clean baseline.
+An additional CPU witness compared the modified runner's DEFAULT execution to
+the committed5cab runner: identical256+3 train/validation batches on259 rows,
+bit-identical selected weights and identical validation metrics. Shell helper,
+all three Bash and one PowerShell runbook blocks, CLI help, Python syntax,
+documentation links and diff whitespace checks passed.
+
+No jobs, commits, pushes or environment changes performed. Next: scoped
+commit/push and ONE new preflight using
+[the batch128 runbook](LUKA_ALLJETS_BATCH128_RUNBOOK.md), then separately review
+all30 science jobs only after real resource-admitted A100 evidence. Local
+synthetic/small-support tests do not establish production-scale acceptance.
+
+## 2026-10-15: isolated fusion preflight after synchronous failure 21898311
+
+User supplied FAILED/1:0 job21898311, source
+`f979171c40c0280ec307c4ed585889328b86732a`, from
+`checkpoints/luka_fusion_sync_f979171c_r1`. U050 and single-HLT full-population
+technical passes completed; D000/D000 failed full256/three-step backward stress
+with illegal CUDA access after small FP32/BF16 parity passed. MaxRSS was about
+134.6GiB of250GiB; this was NOT Slurm OOM or walltime failure. Earlier traced
+diagnostic success did not establish uninstrumented stability. The originating
+CUDA kernel remains unlocalized.
+
+Implemented an execution-lifecycle repair candidate, NOT a claimed proven kernel
+fix: `alljets_fusion_isolated_preflight.py` runs nine sequential fresh Python/CUDA
+children in one allocation. Separate parity and full-stress processes for
+D000/D000 FIRST, then U050/U000, then single-HLT; only after all stresses pass do
+three fresh processes run full-population technical passes and checkpoint/bank
+roundtrips. A stress context has no earlier parity/model activity. No tracing,
+launch blocking, automatic retries or fallback. Failure stops immediately and
+preserves the child log without sampling poisoned CUDA state during cleanup.
+
+`alljets_fusion_isolated_recovery.py`, CLI/helper and five orchestration modules
+bind a fresh GATE/v3 to the exact old source/journal/job/failure/runtime. Reuse
+prepared caches, parent controls and scientific U000 bank read-only. v3 admission
+and task contracts plus new PROBE/v3 bind child PIDs, exits, logs, payload hashes,
+source/runtime, all parity/stress evidence and measured resource peaks. Old v1/v2
+evidence cannot admit v3. Same16-job graph through both routes. The synchronous
+model, shared models/kernels, batch256, full support, BN population, seeds,
+schedule, data and parity tolerances remain unchanged. A locally tried cuDNN
+bypass FAILED strict FP32/BF16 parity and was discarded; no backend change ships.
+
+Baseline focused suite:82 passed in239.18s. Final combined regression:
+**102 passed in307.38s**, including installed-Weaver strict FP32/BF16 parity,
+fresh untraced production-factory CUDA stresses, and real synthetic CPU worker
+execution through both v2/v3 routes. Helper syntax, all10 Bash and3 PowerShell
+runbook blocks, both new CLI help paths, Python parsing and diff checks passed.
+New orchestration covers synthetic
+CPU full-population readback/admission, failure-before-fit, fresh real subprocess
+launches, provenance/tamper/recovery checks, the unchanged resource ceiling, and
+both scientific routes. Local installed-Weaver CUDA stress uses the actual
+production factory at batch256/three steps but SMALL support on an8GiB laptop;
+this is not A100 production-support acceptance. Donor f979171c and file mapping
+are recorded in LEGACY_SOURCE_MAP; active plan/contract/runbook updated.
+
+Next: commit/push scoped files and run ONE new SPORC debug/A100/6CPU/250GiB/8h
+preflight using [the isolated recovery runbook](LUKA_FULLSIM_ALLJETS_FUSION_RUNBOOK.md#process-isolated-preflight-after-job-21898311).
+No uploads or ROOT preprocessing needed. No jobs, commits, pushes or environment
+changes performed here. Preserve old worktrees/artifacts. Real A100 validation
+remains outstanding. The existing100-pass/1.75-margin/debug24h admission remains
+unchanged: an approximately60h projected fit is an independent blocker and must
+not be waved through if CUDA passes. Science requires separate exact review.
+
+## 2026-10-15: synchronous fusion repair and v2 preflight-only recovery
+
+User supplied diagnostic21896886 from658cafa5: original asynchronous D000/D000
+failed with cuDNN execution error, original launch-blocking failed with illegal
+memory access; synchronous D000/D000 and U050/U000 passed both precision parities
+and full256/three-step stress. Report hash
+`60abf23c62b03b2b627d8afc5823b69f65cedbf3564ab1edb104f7b0a48bea8b`.
+Peak host RSS135163040KiB (~128.9GiB) of250GiB. Overall FAILED1:0 is intentional
+because reference cases failed. This supports the workaround, not a full-run
+guarantee or proof of the exact underlying CUDA bug. User authorized promotion.
+
+New `alljets_fusion_sync.py` supplies an isolated production subclass with
+synchronous H2D saved-tensor restore. Same physical-span pack, dtype/shape/strides,
+BN population, seeds, state keys, batch256 and schedule60--100. Old shared models,
+factories, diagnostic and all data/cache/scientific kernel helpers remain byte-
+identical. Only ALLJETS fusion orchestration selects the new factory for v2;
+preflight AND all paired science fits/reducers use it. Strict canonical parity
+uses the actual subclass, with parity-only constructor scoping restored on error.
+
+New `alljets_fusion_recovery.py`, recovery helper and CLI mode authenticate the
+exact diagnostic report, every bound output, both candidate parities/counters,
+original sources and submission journals using original pinned validators.
+Require terminal failed accounting at creation, explicit source-change allowlist,
+fresh nonoverlapping root, exact pushed source and exact dry/live plan. Reuse the
+same existing caches, parent comparisons and U000 scientific TRAIN bank; no ROOT
+preprocessing, refits, old-file writes, automatic retries or science followup.
+
+GATE/SPEC/PREFLIGHT/PLAN/TASK/RESULTS/DIAGNOSTICS/SUBMISSION_CLAIM become v2 only
+for repaired execution. New storage policy `pair_saved_tensors_cpu_sync_v3`;
+old evidence cannot admit v2. Same SPORC software/A10040GB; one replacement full
+GPU preflight,6CPU/250GiB/8h. Repeats full-population technical passes and readback,
+separate TRAIN/validation stress and fresh uninstrumented measurements. Existing
+debug24h/100-pass/1.75-margin runtime admission is unchanged. If it does not fit,
+preserve measurement.json but do not publish admitting preflight.json.
+
+Baseline before edits:60 passed in160.42s. Initial repair suite:13 passed in65.75s.
+Combined v1/v2/factory/diagnostic/offload regression:78 passed in243.81s, including
+local installed-Weaver CUDA FP32/BF16 parity, real synthetic-cache full eight-fit
+graph and preflight failure/admission tests. Final expanded regression:
+**82 passed in237.65s**, adding real installed-Weaver production-subclass
+batch256/three-step CUDA stress at small support (identical and unequal views),
+interrupted v2 submission protection and pinned shared-source preservation.
+All9 Bash runbook blocks, helper/worker syntax and CLI create-recovery help pass.
+Local GPU is the8GiB laptop; production support/full repaired A100 acceptance is
+NOT claimed. Donor658cafa5; detailed file mapping in LEGACY_SOURCE_MAP.
+
+Next: commit/push scoped repair and queue ONE new preflight using
+[the recovery runbook](LUKA_FULLSIM_ALLJETS_FUSION_RUNBOOK.md#synchronous-production-repair-after-diagnostic21896886).
+No jobs, commits, pushes or environment changes performed locally. Preserve old
+roots and worktrees. The earlier approximately60h conservative runtime remains
+an independent possible blocker; do not queue science until new v2 admission.
+
+## 2026-10-15: ALLJETS fusion CUDA failure investigation
+
+User supplied failed gate **21896409** in
+`checkpoints/luka_alljets_fusion_e9b0b560_r1`: illegal CUDA access in
+`FUSION_D000_D000_probe_train_stress256_steps3`, after successful U050/direct
+technical passes and small offload parity. Slurm FAILED1:0, not OOM; MaxRSS
+137797MiB of256000MiB, elapsed35m23s. Runtime: A100-PCIE-40GB,
+torch2.5.1+cu118, cuDNN90100, Weaver0.5.3, correct CUBLAS4096:8; V8 disabled
+variable unset. Large-convolution fallback warning is real, but its relationship
+to the illegal access is UNPROVEN. Do not assert the source kernel from an
+asynchronous stack. U050's20.7min technical pass also implies an approximately
+60h conservative100-pass request: an independent debug24h blocker, not the crash.
+
+Implemented separate `alljets_fusion_diagnostic.py`, CLI, queue helper, worker,
+tests, diagnostic contract/plan/runbook sections and donor map. Source allowlist
+adds only that diagnostic module. Existing scientific model, preflight, cache,
+training kernels, schedules, batch256, BN and dataset are NOT changed. Authenticates
+the failed gate and submission journal in its original pinned worktree; new
+diagnostic root and clean pushed source required. Original results stay read-only.
+
+One explicitly reviewed debug A100/6CPU/250GiB/1h job runs four fresh processes:
+native asynchronous D000/D000, launch-blocking D000/D000, synchronous saved-tensor
+H2D restore D000/D000, synchronous restore U050/U000. Only TRAIN caches, no full
+training epoch or quality metrics. Candidate checks existing strict FP32/BF16
+Weaver/offload training parity before full256/three-step stress. Operation names,
+shapes, strides, progress, child logs and failures persist. A poisoned CUDA child
+does not suppress the other registered diagnostic cases. Any failed case makes
+the overall job exit nonzero, with collected report preserved. Every report is
+science_admissible=false; no auto followup or retries.
+
+Local investigation: the unmodified offload passed all9 installed-Weaver parity
+tests on RTX2000Ada8GiB/CUDA12.1/cuDNN9.1. Weaver0.5.3 was downloaded into an
+isolated `.tmp` test-wheel path, not installed into or used to alter the original
+environment. A bounded1x1-convolution candidate failed strict optimizer/gradient
+parity and was discarded, not admitted by relaxing tolerances. Synchronous
+restoration passed the same small FP32/BF16 checks. Full production support
+cannot be reproduced on this smaller GPU; no remote acceptance is claimed.
+Local Weaver ParticleTransformer SHA256 matches the supplied SPORC runtime:
+`44979aea4f53e48246eb1ada35be39d504e44f94b9f0bb69b946a79b4d14ae1d`.
+
+Final combined diagnostic/fusion/offload regression: **60 passed in168.81s**,
+including actual installed-Weaver batch256/three-step traced CUDA stress at small
+support, identical/unequal input parity, original-source guard, exact submission,
+child-failure isolation, failure-publication/no-post-error-CUDA-query checks and
+the synthetic eight-fit campaign. Final CLI results/readback smoke: **1 passed,
+17 deselected in6.30s**. CLI help, both Bash syntax and scoped whitespace
+checks pass. No commit/push, remote job, environment upgrade, data regeneration,
+checkpoint deletion or science admission was performed.
+
+Next: commit/push the scoped diagnostic and submit its single exact reviewed job
+using [the runbook](LUKA_FULLSIM_ALLJETS_FUSION_RUNBOOK.md#cuda-diagnostic-after-failed-gate21896409).
+Inspect the blocking trace and A/B cases before selecting a production repair.
+The actual A100 fault and runtime admission remain unresolved; do not rerun the
+unchanged full preflight or queue science yet.
+
+## 2026-10-15: ALLJETS fusion continuation, both single-HLT endings
+
+User authorized fusion on the same completed regular **299234 TRAIN / 74895
+validation** split through BOTH final-direct and HLT/HLT-bridge routes.
+Authority: [plan](plans/LUKA_FULLSIM_ALLJETS_FUSION_PLAN.md),
+[v1 contracts](contracts/LUKA_FULLSIM_ALLJETS_FUSION.md),
+[SPORC queue/results runbook](LUKA_FULLSIM_ALLJETS_FUSION_RUNBOOK.md).
+This remains single-seed exploratory development: historical test retired into
+TRAIN, no independent test. The full validation set selects; original50k reports
+the same selected checkpoints only. Cross-file event independence unverified.
+
+Added five `alljets_fusion_*` modules, thin CLI/helper/worker, focused tests and
+the three documents above. Existing scientific source is unchanged. The new
+source requires all old tracked src bytes identical to the completed parent's
+source, and validates that parent's whole campaign in its original clean pinned
+worktree. Freeze all receipt hashes, both-population comparison rows, cache and
+U000 TRAIN bank lineage. No old weights, technical banks, or validation targets
+enter new science. Parent artifacts and source remain read-only.
+
+Reuse nine completed regular fits as controls/comparisons; cold-start eight new
+fits: FUSION_U050/U100/D066/D033/D000, FINAL_DIRECT_D000, FUSION_D000_D000 and
+FINAL_BRIDGE_D000. Six TRAIN-only reducers plus aggregate/complete = 16 new jobs.
+The direct and bridge endpoints are single-HLT. FUSION_D000 retains offline
+information; D000/D000 uses two HLT encoders and is explicitly labeled as such.
+Same recipe, paired seeds, split, cache, matching, mm convention, masks, full
+support, batch256/BF16, FP32 C25/P75 T2 and 60--100-pass schedule as registered.
+
+The new GPU gate reuses durable inputs (no ROOT reconstruction), loads only
+needed role/coordinate pairs and aliases identical D000 inputs. Measures paired,
+HLT/HLT and single-HLT families on the full population, with independent longest
+TRAIN-backward and validation-inference stress, installed/native-mask parity,
+both-precision lossless offload parity and checkpoint/TRAIN-bank roundtrips.
+Gate request: SPORC debug, 6 CPUs, 256000 MiB, A100, 8h. Science is admitted only
+after exact completed gate accounting and payload authentication. A conservative
+100-pass projection above debug24h stops without shortening training. Separate
+dry/live plans and claims; no automatic followup or retries.
+
+Local evidence: initial focused suite **14 passed in 59.48s**, including a real
+synthetic-cache/CPU eight-fit graph, teacher banks, selected predictions, both
+validation populations, corruption, source drift, Slurm-journal mocks and
+preflight failure injection. CLI help, both Bash syntax checks, new-document
+links and scoped whitespace checks passed. Final combined Luka suites (new
+fusion, ALLJETS, regular, recovery, science): **76 passed, 1 deselected in
+264.69s**. The deselected historical `test_scripts_and_old_science_unchanged`
+already failed the pre-edit baseline because its bcccd498-era allowlist excludes
+subsequently committed campaigns; it was NOT relaxed. New tests separately
+require all old source unchanged from donor9e591c7a. Shared context/fusion parity
+and offload regressions: **38 passed, 9 skipped in 113.22s**; skips require the
+unavailable installed Weaver package. Real installed-Weaver/A100 acceptance is
+NOT claimed from mocked GPU tests; the new cluster gate is pending.
+No remote jobs submitted or changed, and no commit/push performed here.
+
+Donor `9e591c7a73e1fcf24d2e2032be441dd3ee965052`; full donor paths in
+LEGACY_SOURCE_MAP. Next: publish only the reviewed additive implementation,
+dry-review and submit its single GPU gate, then review/submit all 16 science jobs
+after admission. Preserve the original campaign and its worktree.
+
+## 2026-10-14: all-eligible Luka regular ladder development run
+
+User authorized a larger TRAIN/validation-only regular DIRECT/COARSE campaign,
+with the historical holdout explicitly retired for training. Active authority:
+[all-jets plan](plans/LUKA_FULLSIM_ALLJETS_PLAN.md),
+[contract](contracts/LUKA_FULLSIM_ALLJETS.md),
+[queue/results runbook](LUKA_FULLSIM_ALLJETS_RUNBOOK.md).
+
+Local authenticated scalar metadata confirms 890 ROOT files, 647935 raw rows,
+374129 eligible paired rows. Preserve original validation FILES and use all
+74895 eligible rows in them. TRAIN is all original train plus former test file
+rows: 149681 + 149553 = **299234**. No test or unused eligible rows remain.
+New deterministic split hash:
+`4b76251f98b1670c5378da96b0d13d25dd71323c8cd71f35df09076cf3d8e3a7`.
+The original 50000 validation identities remain a secondary report subset;
+only the full validation set selects checkpoints. This is single-seed
+exploratory development, not a new independent test. Cross-file event
+independence is still unverified. Natural file-reservoir proportions are used.
+
+New `alljets_{data,campaign,reporting}.py`, CLI, queue helper, Slurm worker and
+tests use separate ALLJETS/v1 contracts (PREFLIGHT/v2). Shared regular modules
+dispatch explicitly by artifact family; old scientific declarations/readers
+are unchanged. Identical nine cold-start single-encoder fits, five TRAIN-only
+reducers and two reporting jobs; no fusion. Same recipe, seeds, physical views,
+provisional mm/error-only zero masking, 512 capacity and no truncation.
+
+Preparation reuses the eight-process, one-decode-per-row durable cache path.
+Authenticated scalar multiplicities give a conservative disk bound with reserve.
+The larger GPU gate loads one coordinate pair at a time and must independently
+pass full-support stress, installed-Weaver parity, all seven full-population
+technical passes and checkpoint/TRAIN-bank roundtrips before science can be
+created. Old smaller-data preflight evidence is not reused. Saved full-validation
+probabilities, identities and labels support later rejection diagnostics and
+replay of the original-50k comparison at the same selected checkpoint.
+
+Donor: `adb2e939fd26b0fa22b84369e283f71a3944cee8`, paths in LEGACY_SOURCE_MAP.
+Baseline focused regression before edits: 69 passed in 122.96s. Initial new
+all-jets/regular/recovery regression: **42 passed in 191.84s**. Full local
+source-scalar storage bound: **22.624 GiB** including reserve; the remote worker
+must repeat it. A read-only real-data miniature built all seven physical views
+for 16 newly retired TRAIN rows plus 8 validation rows, successfully (not GPU
+acceptance or scientific training). All five runbook Bash blocks, queue/worker
+syntax, CLI help and new Python AST checks pass. Broader Luka regression:
+**158 passed, 1 failed, 1 deselected in 421.59s**. The failure is the historical
+`test_scripts_and_old_sources_remain_sealed` source-diff allowlist; comparing its
+reference commit against unchanged HEAD proves it already rejects the committed
+regular modules and particle-audit adapter. It was not weakened. The other
+known obsolete allowlist, `test_scripts_and_old_science_unchanged`, was deselected
+as documented previously. All executed functional tests passed, including old
+final-test locking/inference and real-data input replay. Final current-source
+policy/admission checks: **4 passed, 29 deselected in 5.20s**. The pinned new
+split hash was independently rechecked against the actual local metadata.
+No remote GPU acceptance claimed. No commit, push, live
+submission, cancellation or old-artifact rewrite was performed. Existing dirty
+documentation and unrelated untracked files are preserved.
+
+Next: review/commit/push the scoped files, dry-review and submit the new three-job
+SPORC debug gate via the runbook, then separately review/submit its 16-job science
+plan after genuine new-population acceptance. There is no automatic follow-up.
+
+## 2026-10-13: regular validation-support fix and preflight-only recovery
+
+User-supplied SPORC accounting: foundation **21880174** completed in 02:09;
+durable preparation **21880175** completed in 19:06; preflight **21880176**
+failed in 02:01 at the TRAIN-versus-validation maximum guard, not OOM (reported
+MaxRSS 1640964K of 90000 MiB requested). Original root is
+`checkpoints/luka_regular_a54c60e5_r1`, source
+`a54c60e5354f61b4c065f9322d89dbb4f6cf8dc3`. The completed inputs and failed
+attempt must remain intact. The user authorized this fix and recovery.
+
+REGULAR_PREFLIGHT/v2 measures longest TRAIN backward and longest validation
+inference-only batches separately for all seven views, batch 256 / three steps.
+Validation stress consumes no labels, loss, gradients or optimizer; its model
+is discarded before full-population technical CE/KD passes. Record independent
+role maxima and reject missing evidence, nonfinite outputs or insufficient
+resource headroom, not valid longer validation jets. No scientific recipe,
+view, truncation, split, seed, cache or model change. The active regular plan
+and contract explicitly supersede v1's overly restrictive resource assumption.
+
+Added `regular_recovery.py`, a thin recovery queue helper, CLI support and
+regression tests. New RECOVERY_GATE/v1 and SOURCE_REUSE/v1 bind the original
+clean source, exact journal/accounting, failure log and prepared/cache hashes
+to a fresh sibling execution root. All old src bytes must be identical except
+the three regular orchestration modules; campaign scientific declarations
+are separately compared as ASTs. Donor paths/commit are in LEGACY_SOURCE_MAP.
+The recovery queues only one GPU preflight (6 CPUs, 90000 MiB, 8h). No cache
+copy/rebuild, old-file rewrite, automatic retry or live-job cancellation exists.
+Subsequent separately reviewed science uses the original prepared root, old
+successful CPU job IDs and new accepted GPU job ID. The 16-job graph is unchanged.
+
+Local verification: focused regular/recovery tests pass; the original gate plan
+replays the pinned a54c60e5 builder exactly, and source/cache mutation and
+live-job replacement are rejected. Synthetic preflight orchestration covers
+fresh and recovered roots, both stress-failure paths and checkpoint/bank
+readbacks. The tiny CPU fixture now gives sub-clock-resolution timings a positive
+test-only floor; production timing checks were not weakened. CLI help, recovery
+helper and all six runbook Bash blocks pass. Broader Luka regression:
+**112 passed, 1 deselected in 155.45 s**. The deselected historical
+`test_scripts_and_old_science_unchanged` has an obsolete source-diff allowlist
+that already rejects the committed final-test/regular additions; it was not
+weakened. After adding the exact original-plan replay test, the standalone
+recovery suite passed **11 tests in 6.45 s**. No installed-Weaver/SPORC
+execution is claimed locally.
+
+Next: commit/push the reviewed fix and use the
+[preflight-only recovery instructions](LUKA_FULLSIM_REGULAR_RUNBOOK.md#preflight-only-recovery-after-21880176).
+Do not rerun the fresh three-job gate or modify the old a54c60e5 worktree. Nothing
+was committed, pushed or submitted by this implementation. Unrelated existing
+HANDOFF/SPORC documentation and untracked files are preserved.
+
+## 2026-10-13: restored Luka regular DIRECT/COARSE and durable inputs
+
+The user restored and checksum-verified all 890 original ROOT files on SPORC,
+then authorized a new **regular single-encoder teacher** comparison and faster
+preprocessing. The old atlas repository/campaign artifacts were deleted; the
+new workflow does not require them. The active authority is
+[LUKA_FULLSIM_REGULAR_PLAN.md](plans/LUKA_FULLSIM_REGULAR_PLAN.md), with separate
+[regular/cache v1 contracts](contracts/LUKA_FULLSIM_REGULAR.md) and a
+[commit, clone, dry-review, gate, science and results runbook](LUKA_FULLSIM_REGULAR_RUNBOOK.md).
+
+Nine cold-start fits: M0HLT, pure OFFLINE, U000, DIRECT_D000 from U000, and
+U000 -> COARSE_U050 -> COARSE_U100 -> COARSE_D066 -> COARSE_D033 -> COARSE_D000.
+Five TRAIN-only T=2 reducers plus aggregate/complete give 16 science jobs.
+No fusion/dense/bridge/imported-weight path. Preserve exact inventory/split,
+natural 100k/50k class ratios, provisional mm/error-only zero masking, all seven
+original physical views/features, support 512/no truncation and the unchanged
+batch-256/60--100-pass CE/KD schedule. Development validation selects checkpoints;
+performance never gates completion. The prior 149553-jet holdout was evaluated
+in the old campaign: it is not fresh blind test data. This run has no test
+particle/evaluation capability.
+
+Added five `regular_*.py` modules, thin CLI, queue helper, SPORC worker and tests.
+The only prior scientific source edit is an optional internal reader factory
+in `particle_audit.scan`; its default behavior is unchanged. File-parallel
+preparation audits each decoded ordinary row and writes all seven ragged input
+views once, with deterministic assignments, row joins, hashes and fingerprints.
+Eight bounded spawn workers publish in canonical file order. Scientific GPU
+workers load their one cached coordinate; reducers load TRAIN only. No implicit
+ROOT-reconstruction fallback. Source and donor details are recorded in
+`LEGACY_SOURCE_MAP.md`, donor `6c4cf9d12a6f354f3175103836d4e85d835a9a46`.
+
+Three source-bound SPORC debug gate jobs rebuild foundation, prepare CPU caches
+and measure the fresh single-encoder GPU path. New installed-Weaver parity,
+full-support stress, seven full-population technical passes and checkpoint/bank
+readback are required before science registration. Exact successful gate IDs
+and journals are authenticated. Both submission stages require saved full dry
+review, exact plan hash and explicit execution; ambiguous submissions preserve
+claims/journals and never silently retry. No automatic science follow-up or
+live job submission was performed during implementation.
+
+Local real-data diagnostic: first four original TRAIN files, 586 jets; exact
+serial/two-worker payload bytes and exact original per-coordinate fingerprints.
+Serial preparation 57.70s, two-worker 40.77s; original all-view rebuild 55.34s versus
+authenticated cache loading 0.359s. Evidence:
+`.tmp/luka_regular_real_5e259058aa634f72aaf6a14cfb374e27/report.json`.
+This small Windows sample is not a production throughput/GPU measurement.
+The local `tagging-hlt` environment has CUDA but no installed Weaver; genuine
+SPORC admission remains required and is explicitly built into the gate.
+
+Local verification: all 16 new focused tests pass, including serial/parallel
+cache parity, role/corruption/identity firewalls, real preparation assembly,
+the full tiny nine-fit/five-reducer graph, preflight orchestration/failure
+handling and dry/live submission safeguards. The broader Luka regression run
+passed 107 tests; two old preflight tests initially rejected the in-repository
+temporary output path and both passed when rerun in the system temporary
+directory (no protection weakened). One historical source-diff allowlist test
+was excluded: committed HEAD already contains the later final-test modules
+outside that old allowlist, before these changes. Shell helper/worker and all
+runbook Bash blocks pass syntax checks; CLI help and diff whitespace checks pass.
+
+Next: review and commit only the listed implementation files, push, create the
+fresh pinned SPORC worktree, and dry-review/submit the three gate jobs using the
+runbook. After genuine GPU acceptance, separately dry-review/submit all 16
+science jobs with measured resources. Nothing was committed, pushed or queued
+locally. Existing unrelated dirty/untracked work is preserved; no raw data,
+previous campaign, key or job was modified or deleted.
+
+## 2026-10-12: locked Luka all-model final-test stage implemented locally
+
+The user supplied a completed twelve-row validation comparison for
+`luka_science_01a73832_r1` and explicitly authorized the existing sealed test.
+The registered [final-test plan](plans/LUKA_FULLSIM_FINAL_TEST_PLAN.md) authorizes
+only this additive evaluation; the old science/preparation artifacts and readers
+keep their original test prohibition. No new scientific fitting or split exists.
+
+Added four `luka_fullsim/final_test_*.py` modules, a thin CLI, queue helper,
+Slurm worker, synthetic tests, separate final-test v1 contracts, and the
+[commit/dry-review/queue/results runbook](LUKA_FULLSIM_FINAL_TEST_RUNBOOK.md).
+Internal donor commit is `01a738328b267da1ecc13bbf4263c2e4a2d9e4e2`; reused
+paths/semantics are in `LEGACY_SOURCE_MAP.md`. Existing scientific source bytes,
+ordinary role gates and unrelated dirty work remain unchanged.
+
+Freeze all twelve validation-selected checkpoints and exactly **149553 jets in
+337 final-test files** (split `79ac6e577b92a5d2ed00d848c996812b388cab57f9d97d6b519f2bc10060c3b2`).
+Do not include 74576 unused ordinary-role rows. All seven views preserve native
+endpoints, provisional mm/zero-error convention, natural proportions, full
+cardinality and support512. T=1 batch256 BF16 inference uses the unchanged
+model/prediction kernels. Offline-containing rows are oracle controls;
+D000/D000 has two HLT encoders. No checkpoint selection occurs on test.
+
+Independent finalist/execution locks authenticate the original completed
+campaign in its original clean worktree; exactly four additional Python modules
+are admitted with all old src bytes identical. An integrated 64-TRAIN-row
+miniature verifies reconstructed assignments/view bytes, installed/native-mask
+parity and all twelve checkpoint inference replays before consuming a single
+campaign-wide test-access claim. A missing/failed miniature cannot unseal. The
+claim is process/job bound, preserved on interruption, and cannot be bypassed
+by choosing a new output root. Successful committed results can be read without
+reopening test particles. Original science artifacts are never rewritten.
+
+Two reviewed jobs: GPU evaluation (debug A100, 6 CPUs, 256000 MiB, 1386-minute
+conservative limit), then CPU report (1 CPU, 32 GiB, 4 hours). Seven ragged views
+are built once in bounded RAM and shared across all fits' inference; checkpoints
+load one at a time. Output is predictions plus common identities/labels/file
+groups, not model-input caches or training banks. The CPU report verifies exact
+membership, recomputes every metric/recovery and reports paired 200-draw
+source-file bootstrap intervals for bridge-versus-direct/M0HLT. These are
+fixed-fit sampling intervals, not training-seed or proven event-level evidence.
+
+Local evidence: unchanged foundation/stage-2 baseline **64 passed in
+153.82s**; initial final-test suite **12 passed in 70.93s**; expanded access,
+source-byte, interrupted-inference and complete synthetic twelve-checkpoint
+evaluation/report suite **19 passed in 69.66s**. After adding a twentieth
+lock-creation/full-authentication test, the broader regression (final-test,
+foundation, stage-2, preflight-v2, science, source packaging and fusion offload)
+finished **139 passed, 9 skipped in 725.54s**. The nine skips require installed
+Weaver, which is unavailable locally. CLI help, Python AST, both Bash syntax
+checks and whitespace checks passed. No actual final-test
+particle arrays were decoded, no remote login/job/commit/push/cancellation was
+performed, and no new installed-Weaver or genuine GPU execution is claimed.
+Accepted SPORC preflight evidence is reused only with exact source/environment
+authentication; its earlier timings are not a measured test-evaluation ETA.
+
+Next: commit/push the explicit file set, dry-review
+both jobs on SPORC, then submit the exact reviewed plan. Once the authorized
+comparison runs, this test set is consumed; later test-driven changes are
+exploratory rather than a fresh holdout confirmation.
+
+## 2026-10-09: Luka stage-3 fusion campaign implemented; local regression passed
+
+The user supplied successful genuine SPORC job **21835630** (01:30:34), report
+`checkpoints/luka_preflight_v2_bcccd498_r1/preflight.json`, content hash
+`ffaa43d6d83b4587a9e8a6fca0995ad30238ccc7936898022642e6856b53274c`, execution
+commit `bcccd498ee66fdee6fd3731b823d09ac2bb5df8b`. Reported technical checks,
+checkpoint/probability readback, memory envelope and debug-walltime fit all pass.
+Reported peaks: **158.76 GiB host / 250 allocated**, **26.18 GiB GPU / 39.52**;
+conservative requests **1386 training minutes / 131 reducer minutes**.
+These are user-supplied remote results, not a new local GPU measurement. The
+launcher fully authenticates the actual saved payloads before admitting reuse.
+This supersedes the older GPU-validation-pending status below.
+
+User then authorized implementing the remaining science stage. Added five
+`luka_fullsim/science_*.py` modules, `scripts/luka_fullsim_science.py`,
+`scripts/queue_luka_fullsim_science.sh`, `sbatch/run_luka_fullsim_science.sh`,
+focused tests, stage-3 plan/contracts and
+[commit/dry-review/queue/results runbook](LUKA_FULLSIM_SCIENCE_RUNBOOK.md).
+Internal donor paths and commit bcccd498 are in `LEGACY_SOURCE_MAP.md`.
+All pre-existing tracked `src/` files remain unchanged. Existing unrelated
+HANDOFF/SPORC documentation edits and untracked test material are preserved.
+
+The new namespace `LUKA_FULLSIM_SCIENCE_{SOURCE_REUSE,ADMISSION,SPEC,PLAN,
+SUBMISSION_CLAIM,TASK,RESULTS}/v1` binds three clean source worktrees, the exact
+accepted report and its output bytes, prepared-v1 and the new immutable graph.
+There are **12 fresh fits + 7 TRAIN-only reducers + aggregate/completion = 21
+jobs**: M0HLT, pure OFFLINE, U000, direct KD, five adjacent fusion stages, final
+direct single-HLT, HLT/HLT fusion, final bridge single-HLT. No extra non-fusion
+coarse/dense branch or imported fit. No probe checkpoint is used for science.
+
+Unchanged 100k/50k natural proportions, native paired FullSim, provisional mm,
+error-only zero uncertainty masking, finite tails, full cardinality and current
+60--100-pass recipe/full-validation policy. The historical fusion overview's
+dataset, validation partitions and pass-60-start patience are explicitly NOT
+inherited. Final test has no worker/CLI capability. New loader decodes at most
+two views in one pass, verifies every prepared fingerprint, aliases D000/D000,
+and never decodes offline branches for single D000. Source/installed environment
+and exact measured A100 allocation are revalidated around GPU execution.
+
+The helper defaults to read-only scheduler feasibility and a full exact dry
+plan. Separate reviewed-hash execution submits the complete DAG with afterok
+dependencies, a single exclusive claim and per-job journals. Ambiguous partial
+submission/failed task directories stop without duplicate retry or cancellation.
+Partial results require valid committed receipts; low scientific scores cannot
+block descendants or completion. No new technical probe is auto-submitted.
+
+Local evidence: stage-2/preflight-v2/context-fusion baseline **52 passed in
+438.87s** (plotting deprecation warnings only). Initial new-stage suite found a
+Boolean mean error in its tiny CPU test model, not the production fusion model;
+the fixture was fixed. Rerun **15 passed in 301.17s**, including a real CPU
+60--100-pass miniature through **all 21 tasks**, scientific checkpoint/TRAIN-bank
+readbacks, corruption/missing-parent rejection, exact DAG journals and no-auto-
+retry tests. Three additional admission/create/runtime tests passed separately.
+The optional downloaded-data diagnostic used **128 actual TRAIN jets from eight
+checksum-verified ROOT files**: all seven science-loader views matched v1 bytes.
+Its parents are ephemeral diagnostics, not production admission; no validation
+or test particles were decoded. CLI help, Python syntax and both Bash syntax
+checks passed. Final expanded regression (science, foundation, source packaging,
+fusion offload) completed: **80 passed, 9 skipped in 360.68s**. The nine skips
+require installed Weaver, which is unavailable in this local environment.
+
+No commit, push, remote login, job submission, cancellation or existing artifact
+mutation occurred. No new installed-Weaver/GPU run is claimed. Next: the user
+commits/pushes the explicit runbook file list,
+creates a fresh clean SPORC worktree, reviews the full plan and authorizes that
+exact 21-job submission. Preserve the old preparation and preflight worktrees.
+
+## 2026-10-09: Luka preflight-v2 recovery implemented; GPU validation pending
+
+User authorized the recommended fix after the reported SPORC GPU failures.
+The user-provided logs show job 21833946 failed on the missing deterministic
+cuBLAS workspace setting; 21834332 completed the U000/direct technical passes,
+reached fusion and was OOM-killed at **92158920 KiB** MaxRSS against **90000 MiB**.
+The first two train/validation passes took **107.6s** combined, not two hours.
+The old log does not identify parity versus longest-batch stress as the exact
+failing allocation. No CUDA/host-memory sufficiency claim is inferred from it.
+
+Added `luka_fullsim/preflight_v2.py`, `preflight_cache.py`, `preflight_reuse.py`,
+new regression tests, the `preflight-v2` CLI mode, and pre-Python cuBLAS export
+in the stage-2 worker. Updated stage-2 plan, contracts, runbook and donor map.
+Original scientific `src/` files (including v1 preflight/cache/reader, models,
+offload, recipe and provenance verifier) are unchanged from donor commit
+`1256c75633399ec177d07308eb17d88a78e1fb85`. Detailed internal donor paths are in
+`LEGACY_SOURCE_MAP.md`. Existing unrelated documentation/temp work is preserved.
+
+The new protocol authenticates both old/new clean source worktrees, requires
+every pre-existing tracked `src/` file byte-identical, and permits only the three
+named new execution modules. `LUKA_FULLSIM_PREFLIGHT_REUSE/v1` records separate
+source parents; `LUKA_FULLSIM_GPU_PREFLIGHT/v2` records the new execution protocol.
+It can reuse the existing `prepared_mm_r1` without rewriting any old artifacts
+or bypassing source checks. Provisional mm, zero-error masking and finite tails
+stay unchanged. No test particles or scientific fitting are authorized.
+
+Small authenticated TRAIN caches contain the first four rows and actual first
+longest witnesses per view. Installed/native-mask/offload parity and **unchanged
+batch256, three-step longest-TRAIN stress** now precede full caches. New exact
+allocation: **6 CPUs, one A100, 256000 MiB host RAM**, still unmeasured. Stress
+checks include reserved full-cache headroom. Afterwards U000/D000/U050 share one
+selected-particle pass per role and every original prepared-input fingerprint
+must replay. Full 100k/50k one-pass probes, checkpoints/TRAIN-bank readbacks and
+resource checks remain. Phase start/end/failure files plus 15-second timing/RSS/
+GPU-peak heartbeats identify future failures before expensive later work.
+
+Local evidence so far: original stage-1/2 baseline **64 passed in 39.85s**;
+recovery tests **12 passed in 22.02s** including mocked full orchestration,
+stress-failure-before-cache, source drift, sealed ranges, exact cache replay and
+state/bank round trips. Combined Luka/packaging regression **80 passed in
+58.29s** before adding the optional downloaded-data diagnostic. That diagnostic
+then passed on **128 actual TRAIN jets from eight checksum-verified ROOT files**
+in 8.93s: all three v1/v2 input batches and batch256 longest-witness batches were
+byte-identical. Subset maxima were U000=163, D000=144, U050=154; only five rows
+needed particle decoding for its witness search. Its temporary test parents
+are explicitly not production preparation/admission. No validation/test particles
+were decoded in this diagnostic. CLI help, Bash syntax and whitespace checks
+pass. CPU/mocked tests are not installed-Weaver or genuine SPORC acceptance.
+
+Final expanded regression (both Luka stages, v2 including downloaded-data smoke,
+packaging, context fusion and fusion offload): **113 passed, 9 skipped in
+127.74s**. The nine installed-Weaver checks skipped because Weaver is absent
+locally; third-party plotting deprecation warnings remain. Scaffold checks:
+**3 passed, 1 deselected** (repository-wide Markdown crawl excluded). No full
+repository-suite or real GPU acceptance is claimed. Existing tracked `src/`
+files still have no diff; only the three new execution modules were added.
+
+Next: commit/push the scoped fix, create a new clean SPORC worktree, dry-review
+the documented `preflight-v2` request and run it against the preserved old
+preparation/source. A real A100 run must establish memory sufficiency and parity
+before stage-3 science. No commit/push, submission, cancellation, rerun or deletion
+was performed here. HANDOFF already had unrelated edits; review staging carefully.
+
+## 2026-10-08: Luka source-packaging fix prepared; local worktrees preserved
+
+User authorized fixing the failure so the preparation/preflight sequence can
+be retried. Removed only the four mode-160000 `.worktrees/` pointers from the
+parent repository index with `git rm --cached`: `hcwdl-fullcard-offline-repair-local`,
+`hcwdl-rkd-local`, `hcwdl-u-rkd-local`, and `mt20-preflight-fix-315357c0`.
+All four local directories remain. Before/after HEADs, `.git` pointer hashes
+and full dirty/untracked status lists match, including existing user work.
+Their pointer removals are staged; no commit or push was performed.
+
+Added `/.worktrees/` to `.gitignore`, four new regression tests in
+`tests/test_source_packaging.py`, and scoped commit/recovery instructions in
+`LUKA_FULLSIM_FOUNDATION_RUNBOOK.md`. The tests reproduce the missing-gitlink
+failure in a fresh clone, preserve a dirty nested repository through index-only
+cleanup, verify clean-clone source authentication, enforce the real repository
+packaging/ignore rules, and retain ordinary missing-file/source-drift rejection.
+No scientific Python, source verifier, worker or reusable contract was changed.
+No donor file/code was migrated; the unchanged source verifier at parent
+commit `2255fd85318a5669cdb7aba74d3c9f9bbbaa9cc6` is exercised directly.
+
+Evidence: baseline Luka tests **64 passed in 41.33s**. New packaging checks
+failed as expected before the fix. After cleanup and explicitly fixing the
+test clones' line-ending configuration, packaging tests **4/4 passed** and
+the final focused regression **76 passed, 1 deselected in 44.73s** (packaging,
+both Luka stages and campaign/provenance tests). All **1889 currently indexed
+files** also passed the real tracked-byte source hasher; this main checkout
+remains dirty and is not represented as production-ready source. Whitespace
+checks pass. A broader run additionally exposed the pre-existing
+`test_campaign.py::test_worker_shell_contracts_and_syntax` blanket assertion
+that every historical worker sources `sbatch/common.sh`; unrelated workers
+violate that assumption. The test/workers are unchanged from HEAD and were
+not repaired as part of this scoped fix. No full-suite/Weaver/GPU acceptance
+is claimed.
+
+Next: review/stage only the packaging fix and its test/runbook (HANDOFF already
+contains mixed earlier work), commit/push, create a new clean SPORC checkout,
+and rerun foundation plus CPU audit into fresh output locations. Do not requeue
+the old source-pinned foundation job 21831081 or bind to that failed ID. Existing
+blocked audit 21831082 has not been cancelled. Local diagnostic results above
+do not substitute for production receipts. Explicit tracking conventions and
+view preparation still precede the genuine GPU preflight; no units, clipping,
+sentinel policy, scientific selection or final-test access was changed.
+
+## 2026-10-08: downloaded Luka data verified locally; full particle audit completed
+
+The user downloaded the SPORC transfer container into ignored
+`artifacts/luka_fullsim_local/cms_fullsim_630k_trial_luka_v1/`.
+The unchanged stage-1 functions authenticated all **890 ROOT checksums** and
+the transfer marker/manifest, reproducing **647935 raw / 374129 eligible jets**.
+The frozen seed and algorithm successfully constructed **100000 train / 50000
+validation / 149553 sealed-test** rows. Canonical replay, file-path/content
+disjointness and natural class quotas passed; both ordinary roles are 73.86%
+QCD. Inventory hash `0832a577f7bcd0b9a9b719a7f62ef2a8e1b5b24108beec5bd7b3946a09642d17`;
+split hash `79ac6e577b92a5d2ed00d848c996812b388cab57f9d97d6b519f2bc10060c3b2`.
+
+Local baseline: **64 stage-1/stage-2 tests passed in 45.26s**. No scientific
+Python, contracts, source index, remote jobs or raw data changed. The ignored
+diagnostic driver `artifacts/luka_fullsim_local/inspect_download.py` calls the
+existing inventory/split/reader/audit functions and fingerprints local Python.
+Outputs are in `artifacts/luka_fullsim_local/inspection_r1/`. They are explicitly
+**not** clean-source production foundation/admission receipts. No donor code
+was migrated and no contract was added/versioned in this inspection.
+
+The full **100000 train / 50000 validation** stored-unit particle audit finished
+successfully in **42.024 minutes**, exit 0. `local_diagnostic_report.json` was
+published completion-last after final raw-byte and Python-source rechecks.
+Its canonical content hash is
+`75be2be10e1d93855704500d5a48c74621fa5c0008786c2083ff44818b88f5ab`;
+file SHA256 is `cf6a83728c1a355664d7e26264206e327be1c8d89e68bf99985938c057c82d5d`.
+Saved report/inventory/split/source hashes and parent/count bindings were
+checked again when reading results. No final-test particle arrays were decoded.
+
+All reported structural anomaly counters are zero on both sides and both
+ordinary roles: nonfinite required fields, invalid/ambiguous/missing PID,
+charge/PID conflicts, invalid charge, nonpositive pT/energy, spacelike p4 beyond
+the stated tolerance, and negative errors. Jagged/scalar particle counts and
+selected-row coverage also passed. Mean particles per jet are **58.62265
+offline / 49.76189 HLT** in train and **57.97170 / 49.18788** in validation,
+about 15.1% lower HLT multiplicity. This is structural compatibility, not model
+performance, physical-unit confirmation, matching/view validation or admission.
+
+Charged zero-error counts (same counts separately for d0err and dzerr): train
+offline **1719/3304521 (0.0520%)**, HLT **239/2275656 (0.0105%)**; validation
+offline **873/1628687 (0.0536%)**, HLT **103/1122137 (0.00918%)**. Offline zeros
+occur in electrons/muons and HLT zeros in muons; no charged-hadron zero errors
+were counted. Full audit reports marginal fields, not a proof of joint sentinel
+semantics. Large finite offline tracking outliers also remain to interpret:
+train maximum charged dzerr is **12477.6377 in unconfirmed stored units**.
+No automatic conversion, clipping, sentinel inference or new selection occurred.
+
+A separate **first-1000-selected-training-row** inspection found 40736 HLT
+particles (18462 charged) and 47905 offline particles (27472 charged). There
+were zero d0err/dzerr values for 2 HLT muons and 25 offline electrons; inspected
+examples had all four tracking fields zero. Neither side had negative errors,
+nonfinite fields or spacelike p4 in this small sample. These are preliminary,
+nonrepresentative sample diagnostics, not full-population certification or
+evidence of mm/cm units or sentinel semantics.
+
+Production remains blocked independently by the four tracked `.worktrees/`
+gitlinks at commit `2255fd85318a5669cdb7aba74d3c9f9bbbaa9cc6`, which caused SPORC
+foundation job 21831081 to fail source hashing before data access. Dependent
+audit 21831082 was reported `DependencyNeverSatisfied`. No cleanup/cancellation
+was performed. Next: address the scoped source-packaging issue without deleting
+local worktrees, obtain explicit
+tracking conventions, then proceed through pinned preparation/GPU admission.
+Installed-Weaver and genuine research-compute preflight remain unrun here.
+
+## 2026-10-08: Luka stage-2 audit/view/preflight implementation (local only)
+
+User requested stage 2 and confirmed that Luka has NOT yet supplied tracking
+units or zero-error semantics. New [plan](plans/LUKA_FULLSIM_STAGE2_PLAN.md),
+[contracts](contracts/LUKA_FULLSIM_STAGE2.md) and
+[SPORC runbook](LUKA_FULLSIM_STAGE2_RUNBOOK.md). This extends stage 1; it does
+not change its strict offline-pT selection, natural 100k/50k proportions or
+sealed file split. Existing campaigns and historical Python are untouched.
+
+Added `luka_fullsim/{particles,particle_audit,stage2,stage2_cache,preflight}.py`,
+`scripts/luka_fullsim_stage2.py`, `sbatch/run_luka_fullsim_stage2.sh`, and
+`tests/test_luka_fullsim_stage2.py`. New `LUKA_FULLSIM_*/v1` PARTICLE_AUDIT,
+CONVENTIONS, VIEWS, INPUTS, PREPARED and GPU_PREFLIGHT contracts distinguish native
+FullSim endpoints from synthetic proxies. Internal donor paths and commit
+`97ee3434a93de2fc7b0f09d506926cd50c5cde46` are recorded in LEGACY_SOURCE_MAP.
+
+Audit requests only contiguous selected ordinary particle ranges and records
+raw stored-unit offline/HLT per-PID moments, errors/zeros/nonfinite values,
+multiplicities and structural anomalies. No unit conversion or sentinel
+inference is needed to run it. We have NOT observed real zero-error frequencies
+in the new sample here: only the user's earlier header/scalar audit is available.
+The next phase requires explicit unit/error declarations with audit lineage and
+evidence. Provisional operator conventions remain labelled provisional; no
+producer confirmation or event independence is invented.
+
+Preparation authenticates raw bytes before/after, validates all selected
+physical particles, computes salience assignments and fingerprints all seven
+coarse/control views. HLT-only cache requests no offline particle branches;
+every cache must replay the saved model-input fingerprint and row/label joins.
+No truncation, new selection, source-index features or permanent particle cache.
+Prepared products bind audit, conventions, split, clean source and payload bytes.
+
+GPU code requires a genuine SPORC A100 allocation (6 CPUs, 90000 MiB), installed
+Weaver parity, native mask/offload parity, repeated batch256 stress and full
+100k/50k technical CE/direct/adjacent-fusion/HLT-pair passes. The same-dataset
+one-pass U000 probe supplies TRAIN-only technical targets; no old scientific
+teacher is imported. Weight/probability readback, RSS/GPU peaks and conservative
+100-pass projections are recorded. Poor probe metrics never fail admission.
+The report explicitly forbids using these weights as science or auto-submitting
+a campaign. Source/units/resource acceptance still precede stage 3.
+
+Verification: baseline 51 stage-1/fusion tests passed. Combined regression then
+passed **76 tests in 90.60s**; the final stage-2 suite passed **26 tests in 26.10s**
+after adding wrapper/publication failure coverage, giving **77 distinct focused
+tests** across those runs. Synthetic ROOT, all-view fingerprint replay, native
+HLT branch isolation, zero policies, physical failures, malformed jagged arrays,
+raw/artifact/source-drift failures, teacher joins and a CPU tiny-model full-pass
+probe are covered. AST, CLI help, Git Bash syntax and whitespace checks passed.
+Installed Weaver is absent locally, so authoritative Weaver/GPU/SPORC/Tigris
+acceptance has NOT run. No remote data was read, no jobs submitted/cancelled,
+no commit/push performed, and no final-test arrays were accessed.
+
+Exact next task: commit/push the scoped stage-1/stage-2 work, materialize the
+stage-1 foundation if not already done, and run ONLY the CPU particle audit.
+Review `audit.json` and obtain conventions (or explicit provisional authority)
+before preparation/GPU preflight. Do not claim stage-2 empirical acceptance yet.
+
+## 2026-10-08: Luka paired FullSim stage-1 foundation implemented locally
+
+User requested stage 1 only for Luka's new
+`/eos/user/l/llambrec/jetclass/output_fullsim_630k_trial` export on SPORC.
+[Active stage-1 plan](plans/LUKA_FULLSIM_FOUNDATION_PLAN.md),
+[contract](contracts/LUKA_FULLSIM_FOUNDATION.md),
+[build/verify runbook](LUKA_FULLSIM_FOUNDATION_RUNBOOK.md).
+This is independent of the CONTEXT/Delphes foundations and all running ladders.
+
+Added `src/hlt_classification/luka_fullsim/{__init__,contracts,inventory,splits,foundation}.py`,
+thin build/summary/verify CLI, single-CPU SPORC worker and synthetic ROOT tests.
+New `LUKA_FULLSIM_{INVENTORY,SPLITS,FOUNDATION}/v1` families bind source transfer
+checksums, schema/cycle, scalar eligibility, source-bound row keys, exact split
+membership, actual clean source and atomic completion. Donor commit
+`97ee3434a93de2fc7b0f09d506926cd50c5cde46` and exact internal paths are in
+LEGACY_SOURCE_MAP; historical scientific Python remains untouched.
+
+Selection is strict **offline jet_pt >200**, matched/nonempty pairs, QCD only
+from QCD files, no HLT pT or other inherited cut. Offline-pT interpretation is
+user agreed; producer conventions are not represented as confirmed. Scalar
+metadata only: no particle arrays, tracking-unit assumptions, matching, views,
+training, GPU acceptance or test inference. Future test bytes are hashed and
+pre-split scalar metadata audited explicitly. Same source entry/identity joins
+both jet views; no constituent correspondence is asserted.
+
+Whole-file reservoirs target 40/20/40 with exact-rational class-deficit
+placement, seed 20261008. Ordinary subsets have exact 100000/50000 sizes and
+integer Hamilton quotas from global post-cut proportions (within one row per
+class); selection ranks identities by versioned SHA256. Class/file capacity
+shortage fails rather than moving files, balancing or silently shrinking.
+Unused ordinary-file rows stay unused, NOT test; the sealed reserve is all
+eligible rows in its separate files. Event independence across files is still
+unverified. Full verification replays scalar inventory and the exact split.
+
+Local verification: **38 new tests passed** in 13.81s after final hardening.
+Neighbor regression: **26 existing data/split tests passed**, included in the
+62-test combined run (137.71s) before the last two new tests/source guard and
+empty-file hardening. The separate initial split baseline passed 8/8 in 74.04s.
+Thus 64 distinct focused tests passed across final/neighbor runs. Coverage:
+real synthetic ROOT/latest cycles, no particle branch decoding, strict pT and
+source cuts, natural quotas, deterministic chunk-independent inventories and
+splits, join identity/order, file/content disjointness, test-role denial,
+source/manifest/schema corruption, relocation, immutable/partial publication,
+late raw/source drift and production build flow with fixture source/size only
+substituted. CLI help and Git Bash syntax checks pass. These are local tests,
+not real-source or installed-Weaver/RC acceptance.
+
+No commit, push, remote build, job submission/cancellation or data mutation was
+performed. The user's 890-file/647935-entry/374129-eligible audit is supplied
+evidence only; no real frozen 100k/50k foundation has been produced here.
+Exact next task: scoped commit/push, clean SPORC checkout, run the one CPU
+foundation build and verify its saved summary/hash. Stage 2 then addresses
+particle conventions/validation, matching/views and genuine GPU preflight.
+Existing unrelated HANDOFF edits, other documentation and user files preserved.
+
+## 2026-10-08: S3 automatic seven-job continuation implemented locally
+
+User reports `21826026` (`jc2s3_preflight`) pending in SPORC debug and explicitly
+requests the campaign to launch after it passes. No new remote state was read
+by the local agent. The separate [operational plan](plans/JETCLASS2_S3_FOLLOWUP_PLAN.md)
+supersedes only the original manual-follow-up boundary; the frozen S3 scientific
+spec, source, graph, preflight and existing job remain unchanged.
+[Contract](contracts/JETCLASS2_S3_FOLLOWUP.md),
+[push/arm runbook](JETCLASS2_S3_FOLLOWUP_RUNBOOK.md).
+
+Added `src/hlt_classification/s3_ladder_followup.py`, thin CLI/nohup launcher,
+tests and operational docs. `JC2_S3_FOLLOWUP/v1` authorization/review/submitted
+receipts bind the original spec, gate job/ledger/journal, controller source,
+bounded policy, measured dry plan and complete live science ledger. Internal
+donor commit `8d936b9b72ab2a10d2a9d7bb8b4e440e6fe59be5` and paths are recorded in
+LEGACY_SOURCE_MAP. No existing scientific Python/helper/contract file changed.
+
+The original plan depends on gate-derived timings, so this is a separate
+disconnect-safe one-time controller, **not** seven prematurely materialized
+Slurm jobs. It validates the original gate binding, waits on exact accounting,
+requires successful status plus genuine saved preflight validation and matching
+job ID, then uses the original pinned CLI to produce the full dry science plan
+and submit once. Four fits/two reducers/summary, same 100k/50k and S3/OFFLINE
+controls, same debug/A100 resources and measured <=24h bounds. It does not
+regenerate data, change partitions/resources, retry partial submissions, tune
+strength, cancel old work or access final test. Completed reruns authenticate
+the original resolved journal and do not create duplicate jobs.
+
+Local baseline regression: **39 passed** (existing S3 and literature-follow-up,
+174.08s), including the actual synthetic S3 CE/KD/bank workflow with mocked
+hardware acceptance. Final controller/neighbor verification: **96 passed**
+(45 new S3 follow-up tests plus 51 existing literature/correlated follow-up tests,
+5.69s). The combined scientific/controller regression also passed **107/107**
+in 174.33s before the last additional post-dry source-drift test; that final
+test is included in the 96-test run. That is 108 distinct tests across runs.
+New tests use the real
+S3 planner and durable dry/live submission journal with simulated Slurm and
+preflight evidence: full DAG/reuse, identity and corruption rejection, missing
+accounting/failure, before/after-wait source changes, post-dry source drift,
+scope expansion, partial-submit ambiguity and exclusive controller locking.
+Python AST/CLI help/Bash syntax/scoped whitespace checks pass. Existing plotting
+deprecation warnings occurred only in the scientific baseline tests.
+
+No new installed-Weaver/A100/Tigris acceptance is claimed, no remote controller
+was armed, and no commit/push/submission was performed here. Exact next task:
+publish scoped controller files, create a separate pinned SPORC checkout and
+arm it for `21826026`; confirm ARMED in its log. Keep the original S3 worktree.
+Unrelated existing HANDOFF additions remain preserved and are excluded from
+the runbook's automatic commit list. Final-test inference remains sealed.
+
+## 2026-10-08: CONTEXT_V1 100k/50k Oscar fusion implemented locally
+
+User authorized the adjacent-view fusion strategy on the newer frozen CONTEXT_V1
+dataset, retaining the existing 100k/50k training and validation convention.
+[Active plan](plans/JETCLASS2_CONTEXT_FUSION_PLAN.md),
+[contract](contracts/JETCLASS2_CONTEXT_FUSION.md),
+[queue/results runbook](JETCLASS2_CONTEXT_FUSION_RUNBOOK.md).
+
+Added isolated `context_fusion/{__init__,contracts,inputs,campaign,worker}.py`,
+`scripts/jetclass2_context_fusion.py`, queue helper and `tests/test_context_fusion.py`.
+New `JC2_CONTEXT_FUSION_*/v1` source/parent/spec/plan/preflight/task/results
+artifacts authenticate the old parent separately. Implementation donor is
+`06803a8ba106cd8695186140ddf08ca9ec6a6bae`; exact paths are recorded in
+[LEGACY_SOURCE_MAP.md](LEGACY_SOURCE_MAP.md). Historical scientific code,
+dataset, 100k campaign and separate 1M campaign are not modified.
+
+Import the completed original CONTEXT 100k/50k campaign at
+`f889f359cdddca1beb3d6e817332d2b42a42ddf3`: nine control/direct/coarse reports,
+the authenticated foundation and U000 train-only T=2 bank. Eight new cold fits
+follow adjacent fusion U050/U100/D066/D033/D000, then either direct single-D000
+distillation or HLT/HLT fusion followed by single-D000 distillation. Six reducers
+and two summaries make 16 science jobs. Original controls are labelled reused;
+teacher weights never initialize a new student. Both single-HLT endpoints use
+the original D000 initialization/shuffle seeds. All 50k validation jets and the
+unchanged current 60--100-pass kernel are retained, not the old dzfix fusion
+validation partition/patience rules. Final-test inference remains sealed.
+
+Separate Oscar L40S GPU gate measures actual full-population adjacent/HLT-pair/
+single KD, longest-view batch-256 stress, native single/mask and FP32/BF16
+offload parity, selected checkpoint/bank roundtrips, process-tree RAM and GPU
+headroom. Science requires its successful evidence, a separate exact dry plan,
+reviewed hash and durable live claim. No automatic follow-up is armed.
+
+Local focused regression: **120 passed, 1 skipped** in 182.05 seconds across
+new context-fusion, context ladder, dzfix fusion chain/tier3 and shared training
+tests. Includes actual synthetic CONTEXT release/foundation/paired-loader
+parity, native-wrapper tensor/gradient parity with fake Weaver, a complete
+16-job tiny-model CPU workflow using the actual training schedule, bank and
+checkpoint corruption rejection, and duplicate/interrupted submission checks.
+The skip requires installed Weaver; existing dependency/mask warnings remain.
+CLI help, Python AST and Bash syntax checks pass. No real installed-Weaver,
+Oscar GPU or Tigris acceptance is claimed, and no job was submitted here.
+
+Next: review/stage only these changes, commit/push, run the new Oscar gate from
+a clean pinned worktree, then review/submit its measured 16-job science plan.
+Do not treat the original single-view gate as fusion resource acceptance.
+
+## 2026-10-08: multi-view fusion ladder overview and code map
+
+Added [MULTIVIEW_FUSION_LADDER_OVERVIEW.md](MULTIVIEW_FUSION_LADDER_OVERVIEW.md)
+at the user's request. It explains the registered dzfix fusion-to-fusion
+chain, persistent U/D views, asymmetric learned cross-attention, cold C25P75/T2
+handoffs, both HLT-only endings, references/recovery, and validation boundaries.
+It distinguishes the current alpha-one chain from historical Strategy B
+withdrawal, Strategy A mixtures, and K2 concatenation. The code map links the
+queue/CLI/workers and reusable modules; examples distinguish fresh tier3
+submission from read-only results for the pinned fd1c0578 campaign.
+
+Documentation sources are the existing fusion implementation/plan/contracts;
+no donor code was migrated and no scientific contract version changed. Local
+focused fusion-chain/tier3 tests: **89 passed, 1 skipped** in 22.94 seconds;
+the skip requires installed Weaver, and two existing PyTorch mask warnings
+remain. No new real-Weaver/GPU/remote acceptance or job mutation was performed.
 
 ## 2026-10-07: frozen S3 direct/coarse follow-up implemented locally
 

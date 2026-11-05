@@ -1,5 +1,94 @@
 # Scientific Implementation Plans
 
+The [next supervision ideas draft](LUKA_NEXT_SUPERVISION_CAMPAIGN_IDEAS.md)
+starts an expandable campaign proposal with mixture-density prediction of U100
+jet embeddings, global-HLT-conditioned OFFLINE set denoising, a learned
+HLT/OFFLINE compatibility judge, structured OFFLINE questions, particle-soup
+membership, intact pair/triplet membership and learned offline pattern frequencies.
+Particle soup is the current priority and includes several negative sampling
+laws. Every proposed arm retains native CE+U100-w5. Preferred configurations, ablations, data needs
+and implementation references are documented. Group A has an additive
+[Hydra implementation and runbook](../LUKA_NEXT_SUPERVISION_GROUP_A_RUNBOOK.md);
+the complete seven-candidate campaign is not executable until B/C are implemented.
+
+The [three-group implementation proposal](LUKA_SEVEN_CANDIDATE_IMPLEMENTATION_PLAN.md)
+selects38 candidate/control configurations plus2 shared native reference rows
+from that wider catalog. Compatibility/membership, structured targets and
+probabilistic objectives form the implementation groups. Queue preferences
+interleave all seven families, with their preferred setups first. Every science
+fit is submitted independently, with no dependencies between fits or family
+lanes. Read-only partial results/progress are required from the campaign's start.
+
+The [shared-message Hydra plan](LUKA_SHARED_MESSAGE_HYDRA_PLAN.md) registers twelve
+fresh HLT CE+U100-w5 fits on RTX A6000. It tests jointly learned HLT/privileged
+messages with a shared downstream classifier, against the same HLT attention
+predictor without privileged messages, plus weight, seed and fade ablations.
+See the [runbook](../LUKA_SHARED_MESSAGE_HYDRA_RUNBOOK.md).
+
+The [Brown CS Hydra port](LUKA_U100_PAIR_HYDRA_PLAN.md) preserves the four U100
+correction fits while consuming the verified compact transfer. It uses a separate
+pinned environment, native-control portability checks and genuine shared setup
+before two L40 fit lanes. See the [runbook](../LUKA_U100_PAIR_HYDRA_RUNBOOK.md).
+
+The [serial contrastive continuation](LUKA_U100_CONTRASTIVE_SERIAL_PLAN.md)
+amends the original identification screen for remaining fits: one debug lane,
+min15/max30 epochs with validation-AUC patience5, durable best checkpoints,
+and the unchanged30-epoch learning-rate schedule. It reuses successful431341db
+targets, measured resources and completed fits. The detached transition replaces
+pending old campaign jobs only and lets running fits publish their results.
+See the [runbook](../LUKA_U100_CONTRASTIVE_SERIAL_RUNBOOK.md); no new setup or
+preflight is scheduled, and historical30-epoch results remain explicitly labelled.
+
+The [U100 particle/pair correction plan](LUKA_U100_PARTICLE_PAIR_CORRECTION_PLAN.md)
+specifies four new debug fits that each add to CE1/U100 embedding5: direct pair
+prediction, corrected particles, corrected particles with derived-pair supervision,
+and independent particle/pair branches. Compare their additional recovery against
+the completed u100_w5_s0 reference (job 21993056), reused without retraining or
+another reference job. Corrections guide later attention and remain in HLT-only
+deployment. The additive implementation and
+[v1 contract](../contracts/LUKA_U100_PAIR_CORRECTION.md) now provide an automatic
+shared-setup-to-science debug workflow; see the
+[runbook](../LUKA_U100_PAIR_CORRECTION_RUNBOOK.md). New-model remote resource
+acceptance remains inside the shared setup, before the four scientific fits.
+
+The [U100 plus paired OFFLINE identification study](LUKA_U100_OFFLINE_CONTRASTIVE_PLAN.md)
+preserves CE1/U100 embedding5 and tests eighteen independent matching-head fits
+plus two fresh controls on the original small-data split. The
+[debug runbook](../LUKA_U100_CONTRASTIVE_RUNBOOK.md) provides one shared setup
+followed automatically by twenty ranked students in two lanes and a report.
+Real sampling-inclusive resource admission precedes scientific submission.
+
+The [FullStat three-teacher multiview study](LUKA_FULLSTAT_MULTIVIEW_PLAN.md)
+adapts CONCAT and cross-attention FUSION teachers to Oscar 3M/500k, 20 epochs.
+One native HLT student predicts their embeddings and the original U100 teacher's
+embedding, with CE1 and total embedding10 split equally. Prediction heads are
+removed at inference. Its [runbook](../LUKA_FULLSTAT_MULTIVIEW_RUNBOOK.md) provides
+a detached three-fit launch with inline technical checks and no separate preflight.
+
+The [FullStat retained U100 predictor](LUKA_FULLSTAT_RETAINED_PLAN.md) adapts
+the retained multiview arm to Oscar, with 3M TRAIN/500k validation and 20 epochs.
+It queues CE1/embedding5 first, then the same expanded HLT-only architecture
+with CE only. Both deploy the predictor and combined classifier. The completed
+corrected readout authenticates original U100 targets and Oscar resources;
+bounded checks run inside each fit, with no standalone preflight. The
+[runbook](../LUKA_FULLSTAT_RETAINED_RUNBOOK.md) supplies a detached two-job launch.
+
+The [FullStat U100 frozen-readout CE adaptation](LUKA_FULLSTAT_READOUT_PLAN.md)
+registers one fresh HLT-only Oscar student on the existing 3M TRAIN / 500k
+validation split, with 20 epochs and the original FullStat U100-w5 teacher/bank.
+It adds ramped CE through the frozen U100 classifier to CE1/embedding5 and
+reuses historical U100-w5 results. Inline checks precede training in the same
+job; [the runbook](../LUKA_FULLSTAT_READOUT_RUNBOOK.md) provides a detached launch.
+
+The [U100-centered multiview embedding/readout design](LUKA_U100_MULTIVIEW_READOUT_PLAN.md)
+specifies an implemented staged SPORC/debug screen: two fresh untagged-concatenation and
+HLT-anchored cross-attention oracle teachers, seven core HLT student fits, and
+one retained-predictor capacity control. It fixes total embedding weight 5 and
+isolates frozen-classifier CE/KD and expanded HLT-only inference. The
+[runbook](../LUKA_U100_MULTIVIEW_RUNBOOK.md) queues real debug acceptance first,
+then a separately reviewed measured science DAG. Historical U100 artifacts and
+all other campaigns remain unchanged; remote acceptance is not yet claimed.
+
 The [dz-fix fixed-slot K=2 concatenation ladder](JETCLASS2_DZFIX_FIXED_SLOT_CONCAT_K2_LADDER_PLAN.md)
 records a separate one-encoder study: one original HLT slot plus two
 salience-matched rich slots per HLT particle, fixed threefold support, rich-only
