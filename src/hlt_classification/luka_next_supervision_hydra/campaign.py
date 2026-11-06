@@ -15,13 +15,16 @@ from .contracts import BASE,COUNTS,TASKS,ORDER,recipe,artifact,validate
 from . import inputs,reuse
 
 MODULES=('__init__','contracts','data','sampling','parallel','model','inputs','reuse','training','campaign','resources','submission','worker','reporting',
-    'structured_contracts','questions','vocabulary','structured_model','structured_targets','group_b')
+    'structured_contracts','questions','vocabulary','structured_model','structured_targets','group_b',
+    'probabilistic_contracts','probabilistic_model','probabilistic_targets','group_c')
 REQUIRED={f'src/hlt_classification/luka_next_supervision_hydra/{n}.py' for n in MODULES}|{
     'scripts/luka_next_supervision_hydra.py','scripts/queue_luka_next_supervision_hydra.sh',
     'sbatch/run_luka_next_supervision_hydra.sh','tests/test_luka_next_supervision_hydra.py',
     'docs/contracts/LUKA_NEXT_SUPERVISION_HYDRA.md','docs/LUKA_NEXT_SUPERVISION_GROUP_A_RUNBOOK.md'}
 REQUIRED|={'tests/test_luka_next_supervision_group_b.py','docs/contracts/LUKA_NEXT_SUPERVISION_GROUP_B.md',
     'docs/LUKA_NEXT_SUPERVISION_GROUP_B_RUNBOOK.md','docs/LUKA_NEXT_SUPERVISION_GROUP_B_VALIDATION.md'}
+REQUIRED|={'tests/test_luka_next_supervision_group_c.py','docs/contracts/LUKA_NEXT_SUPERVISION_GROUP_C.md',
+    'docs/LUKA_NEXT_SUPERVISION_GROUP_C_RUNBOOK.md','docs/LUKA_NEXT_SUPERVISION_GROUP_C_VALIDATION.md'}
 
 
 def current(project,commit):
@@ -29,7 +32,7 @@ def current(project,commit):
     def git(*args): return subprocess.run(['git','-C',str(project),*args],check=True,capture_output=True,text=True).stdout.splitlines()
     git('merge-base','--is-ancestor',BASE,commit)
     if not REQUIRED<=set(git('ls-files')) or Path(__file__).resolve()!=project/'src/hlt_classification/luka_next_supervision_hydra/campaign.py':
-        raise ValueError('Commit the complete Group A implementation')
+        raise ValueError('Commit the complete supervision implementation')
     donors=('jetclass2_delphes','luka_fullsim','luka_embedding_aux','luka_u100_embedding',
             'luka_u100_contrastive','luka_u100_pair_hydra','luka_cross_message_hydra')
     changes=git('diff','--name-only',BASE,commit,'--',*[f'src/hlt_classification/{n}' for n in donors])
@@ -51,7 +54,7 @@ def storage(spec):
     root=Path(spec['root']); used=sum(p.stat().st_size for p in root.rglob('*') if p.is_file()) if root.exists() else 0
     remaining=spec['storage_budget_bytes']-used
     if remaining<=0 or shutil.disk_usage(root if root.exists() else root.parent).free<remaining+2**30:
-        raise OSError('Need remaining four-GiB output allowance plus one GiB headroom')
+        raise OSError('Need remaining registered output allowance plus one GiB headroom')
 
 
 COPIED=('bundle_root','reference','imported','anchor')
@@ -89,6 +92,9 @@ def create(root,parent_path,raw_root,raw_hash,delta_root,delta_hash,reuse_map,pr
 
 
 def check(spec,*,check_storage=True):
+    if spec.get('scope')=='group_C_only':
+        from .group_c import check as probabilistic
+        return probabilistic(spec,check_storage=check_storage)
     if spec.get('scope')=='group_B_only':
         from .group_b import check as structured
         return structured(spec,check_storage=check_storage)

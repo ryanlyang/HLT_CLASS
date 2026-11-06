@@ -64,11 +64,16 @@ def setting(task):
     if task not in ARMS:
         from .structured_contracts import ARMS as structured
         if task in structured: return structured[task]
-        raise NotImplementedError('Groups A/B are implemented; Group C and full40 release are unavailable')
+        from .probabilistic_contracts import ARMS as probabilistic
+        if task in probabilistic: return probabilistic[task]
+        raise NotImplementedError('Unknown or unselected supervision task')
     return ARMS[task]
 
 
 def authorization(spec):
+    if spec.get('scope')=='group_C_only':
+        from .probabilistic_contracts import AUTHORIZATION as probabilistic
+        return probabilistic
     if spec.get('scope')=='group_B_only':
         from .structured_contracts import AUTHORIZATION as structured
         return structured

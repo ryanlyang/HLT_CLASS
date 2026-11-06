@@ -48,7 +48,7 @@ def results(spec):
         validate_predictions(a,spec['counts']['validation'])
         if any(not np.array_equal(a[k],arrays['M0HLT'][k]) for k in ('identities','labels')): raise ValueError('Validation joins differ')
     rows=[]
-    print(('Group B' if spec.get('scope')=='group_B_only' else 'Group A')+': native HLT CE+U100-w5; training heads removed. Exploratory validation, no independent test.')
+    print({'group_B_only':'Group B','group_C_only':'Group C'}.get(spec.get('scope'),'Group A')+': native HLT CE+U100-w5; training heads removed. Exploratory validation, no independent test.')
     for role,ix in (('validation',slice(None)),('original50k',subset)):
         metrics={n:evaluate_probabilities(a['labels'][ix],a['probabilities'][ix]) for n,a in arrays.items()}
         lo=metrics['M0HLT']['macro_ovr_auc']; hi=metrics['OFFLINE']['macro_ovr_auc']

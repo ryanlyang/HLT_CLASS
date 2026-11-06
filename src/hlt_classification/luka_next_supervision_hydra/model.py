@@ -69,6 +69,9 @@ class Student(AuxiliaryParT):
             if self.cfg['family'] in ('Q','V'):
                 from .structured_model import StructuredHead
                 self.aux=StructuredHead(self.cfg)
+            elif self.cfg['family'] in ('D','S'):
+                from .probabilistic_model import DensityHead,SetHead
+                self.aux=DensityHead(self.cfg['components']) if self.cfg['family']=='D' else SetHead()
             else: self.aux=None if self.cfg['family']=='C' else Compatibility(self.cfg)
         if self.cfg['dot']:
             # Exact old dot-product head, including its initialization.
@@ -85,7 +88,7 @@ class Student(AuxiliaryParT):
 
     def auxiliary(self, batch, *, query=None):
         h=self.jet if query is None else query
-        if self.cfg['family'] in ('Q','V'): return self.aux(h,batch)
+        if self.cfg['family'] in ('Q','V','D','S'): return self.aux(h,batch)
         if self.cfg['dot']:
             q=F.normalize(self.aux(h.float()),dim=-1,eps=1e-12)
             return (batch['features'].detach().float()*q[:,None]).sum(-1)/.1
@@ -110,6 +113,9 @@ def membership_loss(scores, labels):
 
 
 def auxiliary_loss(scores, batch, family):
+    if family in ('D','S'):
+        from .probabilistic_model import loss
+        return loss(scores,batch,family)
     if family in ('Q','V'):
         from .structured_model import loss
         return loss(scores,batch,family)

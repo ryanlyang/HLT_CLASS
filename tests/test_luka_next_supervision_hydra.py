@@ -59,7 +59,8 @@ def test_registry_global_order_scope_and_weights():
     for value in (-1,float('nan'),float('inf')):
         with pytest.raises(ValueError): c.coefficient(c.setting('P1'),value)
     assert c.setting('Q1')['family']=='Q'
-    with pytest.raises(NotImplementedError): c.setting('D1')
+    assert c.setting('D1')['family']=='D'
+    with pytest.raises(NotImplementedError): c.setting('D4')
 
 
 def test_physical_columns_and_parent_local_invariance():

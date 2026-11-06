@@ -58,14 +58,19 @@ def step(model,opt,raw,embedding,device,*,candidates,indices,epoch,position,prob
         with torch.autocast(torch.device(device).type,enabled=False):
             scores=model.auxiliary(batch); aux=auxiliary_loss(scores,batch,cfg['family'])
             timing('auxiliary_forward')
-            if probe and cfg['family'] in ('Q','V'):
+            if probe and cfg['family'] in ('Q','V','D','S'):
                 gradient=torch.autograd.grad(aux,model.jet,retain_graph=True)[0]
                 diagnostics['auxiliary_jet_gradient_norm']=float(gradient.detach().norm())
+                if cfg['family'] in ('D','S'):
+                    diagnostics['weighted_auxiliary_jet_gradient_norm']=coefficient(cfg,position)*float(gradient.detach().norm())
             with torch.no_grad():
                 if probe:
                     if cfg['family'] in ('Q','V'):
                         from .structured_model import diagnostics as structured_diagnostics
                         diagnostics.update(structured_diagnostics(scores,batch,cfg['family']))
+                    elif cfg['family'] in ('D','S'):
+                        from .probabilistic_model import diagnostics as probabilistic_diagnostics
+                        diagnostics.update(probabilistic_diagnostics(scores,batch,cfg['family']))
                     elif cfg['family']=='J':
                         diagnostics['retrieval_top1']=float((scores.argmax(-1)==batch['positive']).float().mean())
                     else:
@@ -81,6 +86,14 @@ def step(model,opt,raw,embedding,device,*,candidates,indices,epoch,position,prob
                     diagnostics['within_class_swapped_fraction']=float((permutation!=torch.arange(len(labels),device=device)).float().mean())
                     for name,q in (('zero_query',torch.zeros_like(model.jet)),('within_class_shuffle',model.jet[permutation])):
                         diagnostics[name+'_loss']=float(auxiliary_loss(model.auxiliary(batch,query=q.detach()),batch,cfg['family']))
+                    if cfg['family'] in ('D','S'):
+                        # Conditioning probes reuse the exact target/noise. Coarse
+                        # observable pT/count bins keep class/scale shortcuts local.
+                        from .probabilistic_targets import conditioning_permutation
+                        perm=conditioning_permutation(raw)
+                        q=model.jet[torch.as_tensor(perm,device=device)]
+                        diagnostics['within_class_kinematic_swapped_fraction']=float(np.mean(perm!=np.arange(len(perm))))
+                        diagnostics['within_class_kinematic_shuffle_loss']=float(auxiliary_loss(model.auxiliary(batch,query=q.detach()),batch,cfg['family']))
         timing('diagnostics')
     weighted=coefficient(cfg,position)*aux; total=ce+5*emb+weighted
     if not torch.isfinite(total): raise ValueError('Nonfinite objective')
@@ -95,8 +108,13 @@ def step(model,opt,raw,embedding,device,*,candidates,indices,epoch,position,prob
 
 
 def parents(spec):
-    return dict(spec=spec['content_hash'],recipe=spec.get('recipe',recipe())['content_hash'],embedding=spec['embedding_hash'],
+    value=dict(spec=spec['content_hash'],recipe=spec.get('recipe',recipe())['content_hash'],embedding=spec['embedding_hash'],
         prepared=spec['anchor']['evidence']['prepared'],raw=spec['raw_hash'],keys=spec['key_hash'])
+    if spec.get('scope')=='group_C_only':
+        from .probabilistic_targets import parents as target_parents
+        record=load_json(Path(spec['root'])/'setup/probabilistic_targets.json'); validate(record,'PROBABILISTIC_TARGETS',target_parents(spec))
+        value['probabilistic_targets']=record['content_hash']
+    return value
 
 
 def fit(folder,spec,task,train,val,bank,*,candidates=None,device='cuda',technical=False):
@@ -109,7 +127,9 @@ def fit(folder,spec,task,train,val,bank,*,candidates=None,device='cuda',technica
     counts=dict(train=len(train),validation=len(val))
     if not technical and counts!=spec['counts']: raise ValueError('Science population differs')
     folder=Path(folder); folder.mkdir(parents=True,exist_ok=False)
-    model=new_model(spec['imported'],task).to(device); opt=optimizer(model)
+    model=new_model(spec['imported'],task).to(device)
+    if hasattr(candidates,'initialize'): candidates.initialize(model)
+    opt=optimizer(model)
     parameter_counts=dict(trainable=sum(p.numel() for p in model.parameters() if p.requires_grad),
         deployed=sum(p.numel() for p in model.mod.parameters()),auxiliary=0 if model.aux is None else sum(p.numel() for p in model.aux.parameters()))
     steps=math.ceil(len(train)/128); epochs=1 if technical else 30; history=[]; best=None; state=None; update=0
@@ -173,7 +193,8 @@ def validate_fit(folder,spec,task,*,technical=False):
     history=report['validation_history']; steps=math.ceil(report['counts']['train']/128)
     if [r['pass_number'] for r in history]!=list(range(1,epochs+1)): raise ValueError('Incomplete epoch inventory')
     for r in history:
-        if (not np.isfinite([r[k] for k in LOSS_KEYS]).all() or min(r[k] for k in LOSS_KEYS)<0
+        nonnegative=('ce_hlt','embedding_loss') if cfg['family']=='D' else LOSS_KEYS
+        if (not np.isfinite([r[k] for k in LOSS_KEYS]).all() or min(r[k] for k in nonnegative)<0
                 or r['update']!=r['pass_number']*steps or r['validation']['rows']!=report['counts']['validation']
                 or not math.isclose(r['total_loss'],r['ce_hlt']+5*r['embedding_loss']+r['weighted_auxiliary'],rel_tol=1e-6,abs_tol=1e-6)
                 or (cfg['family']=='C' and (r['auxiliary_loss']!=0 or r['weighted_auxiliary']!=0))): raise ValueError('Invalid objective/schedule')

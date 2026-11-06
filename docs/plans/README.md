@@ -10,8 +10,11 @@ laws. Every proposed arm retains native CE+U100-w5. Preferred configurations, ab
 and implementation references are documented. Group A has an additive
 [Hydra implementation and runbook](../LUKA_NEXT_SUPERVISION_GROUP_A_RUNBOOK.md);
 Group B now extends that foundation with9 structured-target fits and its own
-[Brown runbook](../LUKA_NEXT_SUPERVISION_GROUP_B_RUNBOOK.md). The complete
-seven-candidate campaign is not executable until C is implemented/qualified.
+[Brown runbook](../LUKA_NEXT_SUPERVISION_GROUP_B_RUNBOOK.md). Group C now adds
+seven D/S fits through the same foundation and its own
+[Brown runbook](../LUKA_NEXT_SUPERVISION_GROUP_C_RUNBOOK.md). All selected
+methods are implemented; additive A/B/C release scopes require separate real
+setup acceptance. A combined full40 execution manifest remains a separate step.
 
 The [three-group implementation proposal](LUKA_SEVEN_CANDIDATE_IMPLEMENTATION_PLAN.md)
 selects38 candidate/control configurations plus2 shared native reference rows

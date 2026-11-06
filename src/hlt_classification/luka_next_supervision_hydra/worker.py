@@ -25,8 +25,9 @@ def receipt(spec,task):
 def completed_setup(spec):
     r=receipt(spec,'setup'); names={x['path'] for x in r['outputs']}
     required={'acceptance.json','baseline_parity.json'}
-    required|=({'structured_targets.json','question_catalog.json'} if spec.get('scope')=='group_B_only' else
-        {'hlt_keys.json','hlt_keys.npz','normalization_HLT.json','normalization_OFFLINE.json'})
+    if spec.get('scope')=='group_C_only': required|={'probabilistic_targets.json','set_HLT.json','set_OFFLINE.json','density_centers.npz'}
+    elif spec.get('scope')=='group_B_only': required|={'structured_targets.json','question_catalog.json'}
+    else: required|={'hlt_keys.json','hlt_keys.npz','normalization_HLT.json','normalization_OFFLINE.json'}
     if not required<=names: raise ValueError('Incomplete setup inventory')
     return resources.accepted(spec)
 
@@ -37,7 +38,10 @@ def setup(spec,device='cuda'):
     train=inputs.hlt(spec,'train'); val=inputs.hlt(spec,'validation'); bank=inputs.embedding_bank(spec,train)
     shared_preparation=time.perf_counter()-began
     write_immutable_json(folder/'baseline_parity.json',resources.baseline(spec,train,device))
-    if spec.get('scope')=='group_B_only':
+    if spec.get('scope')=='group_C_only':
+        from .probabilistic_targets import prepare
+        prepare(spec,train,bank)
+    elif spec.get('scope')=='group_B_only':
         from .structured_targets import prepare
         prepare(spec,train)  # One-time target work is accounted separately from each fit.
     else:

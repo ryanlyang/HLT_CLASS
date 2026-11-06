@@ -13,7 +13,7 @@ from . import campaign
 
 def command(spec,task,minutes):
     site=spec['execution_site']; project=spec['project_dir']; root=Path(spec['root'])
-    prefix='lukanb' if spec.get('scope')=='group_B_only' else 'lukanx'
+    prefix={'group_B_only':'lukanb','group_C_only':'lukanc'}.get(spec.get('scope'),'lukanx')
     cmd=['sbatch','--parsable','--no-requeue','--nodes=1','--ntasks=1','--export=NONE',
         '--partition='+site['partition'],'--account='+site['account'],'--qos='+site['qos'],'--gres='+site['gres'],
         '--cpus-per-task='+str(spec['cpus']),'--mem='+str(spec['memory_mb'])+'M','--time='+_walltime(minutes),
@@ -30,11 +30,12 @@ def plan(spec,stage,acceptance=None):
         if acceptance is None: raise ValueError('Completed measured setup required')
         parents['acceptance']=acceptance['content_hash']
         commands=[command(spec,t,acceptance['minutes'][t]) for t in spec['remaining']]
-    else: raise ValueError('Only setup or Group A science can be released')
+    else: raise ValueError('Only setup or registered independent science can be released')
     return artifact('PLAN',parents=parents,stage=stage,scope=spec.get('scope','group_A_only'),commands=commands,
         authorization=authorize(spec),science_dependencies='none',reused=list(spec['reused']),
         deferred_groups=spec.get('deferred_groups',['B','C']),
-        **(dict(structured_target_review=acceptance['structured_review']) if stage=='science' and spec.get('scope')=='group_B_only' else {}))
+        **(dict(structured_target_review=acceptance['structured_review']) if stage=='science' and spec.get('scope')=='group_B_only' else {}),
+        **(dict(probabilistic_target_review=acceptance['probabilistic_review']) if stage=='science' and spec.get('scope')=='group_C_only' else {}))
 
 
 def accepted_jobs(spec,stage):

@@ -58,7 +58,8 @@ def test_registry_exact_nine_rows_and_shared_recipe_unchanged():
     assert c.setting('Q6')['question_families']==[0,1] and c.setting('V7')['count_only']
     assert c.setting('Q2')['seed_index']==c.setting('V2')['seed_index']==1
     assert c.setting('Q3')['coefficient']==.1
-    with pytest.raises(NotImplementedError): c.setting('S1')
+    assert c.setting('S1')['family']=='S'
+    with pytest.raises(NotImplementedError): c.setting('S3')
 
 
 def test_geometry_tracking_validity_and_hlt_axis():
@@ -427,12 +428,16 @@ def test_group_b_real_submission_journals_are_idempotent_without_fit_dependencie
     assert all(not any(x.startswith('--dependency') for x in command) for command in commands)
 
 
-def test_group_b_partial_results_are_read_only_and_never_substitute_seed0_control(tmp_path,monkeypatch,capsys):
+@pytest.mark.parametrize('group',['B','C'])
+def test_group_b_partial_results_are_read_only_and_never_substitute_seed0_control(tmp_path,monkeypatch,capsys,group):
     from hlt_classification.cms_proxy_ladder.contracts import sha256_file
+    from hlt_classification.luka_next_supervision_hydra import group_c
+    first,replica,failed=('Q1','Q2','Q3') if group=='B' else ('D1','D2','D3')
+    registration=group_b.registration if group=='B' else group_c.registration
     n=50000; labels=np.arange(n,dtype=np.int64)%11; ids=np.zeros((n,32),np.uint8)
     ids[:,:4]=np.arange(n,dtype=np.int32).view(np.uint8).reshape(n,4)
     noise=np.random.default_rng(18).normal(size=(n,11)); arrays={}; paths={}
-    for name,boost in (('M0HLT',.2),('OFFLINE',.8),('matched',.4),('C0',.4),('Q1',.5),('Q2',.5)):
+    for name,boost in (('M0HLT',.2),('OFFLINE',.8),('matched',.4),('C0',.4),(first,.5),(replica,.5)):
         scores=noise.copy(); scores[np.arange(n),labels]+=boost; values=np.exp(scores-scores.max(-1,keepdims=True)); values/=values.sum(-1,keepdims=True)
         a=dict(identities=ids,labels=labels,probabilities=values.astype(np.float32)); path=tmp_path/(name+'.npz')
         np.savez(path,**a); arrays[name]=a; paths[name]=path
@@ -444,16 +449,16 @@ def test_group_b_partial_results_are_read_only_and_never_substitute_seed0_contro
     monkeypatch.setattr(reporting.reuse,'check',lambda *a:paths['C0'])
     monkeypatch.setattr(worker,'receipt',lambda *a:None)
     monkeypatch.setattr(training,'validate_fit',lambda folder,spec,task:(dict(selected_pass=3,content_hash=task),arrays[task]))
-    monkeypatch.setattr(reporting,'scheduler_states',lambda *a:{'Q3':['FAILED','1:0']})
-    for task in ('Q1','Q2'):
+    monkeypatch.setattr(reporting,'scheduler_states',lambda *a:{failed:['FAILED','1:0']})
+    for task in (first,replica):
         (tmp_path/task).mkdir(); (tmp_path/task/'receipt.json').write_text('{}')
-    spec=dict(group_b.registration(),root=str(tmp_path),bundle_root='unused',counts=dict(train=299234,validation=n),content_hash='s',
+    spec=dict(registration(),root=str(tmp_path),bundle_root='unused',counts=dict(train=299234,validation=n),content_hash='s',
         reused=dict(C0=dict(report=dict(selected_pass=2),content_hash='c0',source_mode='pinned_original_worktree')))
     before={str(p):sha256_file(p) for p in tmp_path.rglob('*') if p.is_file()}
     result=reporting.results(spec); output=capsys.readouterr().out
     rows={r['model']:r for r in result['rows'] if r['role']=='validation'}
-    assert rows['Q1']['delta_matched']>0 and rows['Q2']['delta_matched'] is None
-    assert 'C1' in result['incomplete'] and 'P1' not in result['incomplete'] and 'Group B' in output
+    assert rows[first]['delta_matched']>0 and rows[replica]['delta_matched'] is None
+    assert 'C1' in result['incomplete'] and 'P1' not in result['incomplete'] and 'Group '+group in output
     assert before=={str(p):sha256_file(p) for p in tmp_path.rglob('*') if p.is_file()}
 
 

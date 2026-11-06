@@ -1,5 +1,45 @@
 # Current Handoff
 
+## 2026-11-05: Group C density and measured-set objectives
+
+Implemented all seven selected C rows from the
+[active plan](plans/LUKA_SEVEN_CANDIDATE_IMPLEMENTATION_PLAN.md), extending the
+existing `luka_next_supervision_hydra` package with four modules. The native
+model, original CE+U100-w5 branch, optimizer/schedule, shared C0/C1 proofs and
+independent exact-ID submission infrastructure are retained. No old A/B
+source worktree, execution spec, job, claim or output was modified.
+
+D adds coherent K4 joint Gaussian-mixture likelihood with TRAIN-only frozen
+k-means initialization, learned bounded diagonal scales, and K1 uncertainty
+control. Likelihood runs in FP32; valid negative NLL is accepted. S adds
+full OFFLINE measured-set velocity denoising plus an HLT-set control. A
+four-block equivariant decoder conditions on pooled HLT h/noise level,
+with masked three-group velocity loss and h-only cardinality prediction.
+It does not modify native attention or expose targets to classification.
+Streaming masked normalization and memory-mapped full-set banks avoid loading
+a duplicate raw collection in every fit. No fixed particle crop is used.
+
+C registers from the existing pinned A input spec using the latter's own
+source process. It needs no new SPORC export or B target preparation. It reuses
+C0/C1, reserves8GiB plus1GiB filesystem headroom, and queues D1,S1,D2,S2,D5,S5,D3
+after its own genuine four-path warmed A6000 acceptance. All fits are independent;
+setup does not automatically release science. All40 methods are implemented,
+but executable registration remains separate A/B/C scopes; C authorization
+does not create a combined full40 requeue.
+
+Pre-change A/B baseline:115 passed in115.30s. Final combined A/B/C suite:
+154 passed in175.54s, including production-width CUDA full128/partial2 on
+synthetic short HLT inputs and complete negative-NLL/denoising30-epoch fits.
+Module/CLI, Bash, local document-link and whitespace checks pass. Details are in the
+[C validation record](LUKA_NEXT_SUPERVISION_GROUP_C_VALIDATION.md).
+No C source was pushed, live Brown job submitted or genuine real-data C
+miniature run by this agent. The
+[runbook](LUKA_NEXT_SUPERVISION_GROUP_C_RUNBOOK.md) gives commit/push, separate
+registration, setup/science reviews and read-only progress/results commands.
+Remote technical setup is the exact next admission step; no recovery gain is
+claimed from local synthetic tests. Donor/source lineage is in
+[LEGACY_SOURCE_MAP.md](LEGACY_SOURCE_MAP.md).
+
 ## 2026-11-05: Group B structured questions and pattern frequencies
 
 Implemented the9 selected B rows from the

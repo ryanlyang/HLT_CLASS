@@ -83,6 +83,9 @@ def candidates(spec,task,train,device='cpu'):
     cfg=setting(task)
     if train.role!='train': raise PermissionError('Candidates are TRAIN-only')
     if cfg['family']=='C': return None
+    if cfg['family'] in ('D','S'):
+        from .probabilistic_targets import candidates as probabilistic
+        return probabilistic(spec,task,train)
     if cfg['family'] in ('Q','V'):
         from .structured_targets import candidates as structured
         return structured(spec,task,train)
@@ -110,3 +113,5 @@ def candidates(spec,task,train,device='cpu'):
 class SubsetCandidates:
     def __init__(self,source,indices): self.source=source; self.indices=np.asarray(indices,np.int64)
     def batch(self,indices,epoch,cfg,mine=None): return self.source.batch(self.indices[indices],epoch,cfg,mine)
+    def initialize(self,model):
+        if hasattr(self.source,'initialize'): self.source.initialize(model)

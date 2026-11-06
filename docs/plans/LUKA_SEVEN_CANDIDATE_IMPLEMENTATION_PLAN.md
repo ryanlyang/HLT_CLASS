@@ -1,12 +1,14 @@
 # Seven supervision candidates: three implementation groups and a40-row campaign
 
-Status: implementation plan v0.5, 2026-11-05. The user requested three implementation
+Status: implementation plan v0.6, 2026-11-05. The user requested three implementation
 groups, approximately40 runs weighted toward the stronger bets, and a queue
 order that mixes candidate families with each preferred setup submitted first.
 This document selects the campaign. Group A now has an additive implementation
 and [runbook](../LUKA_NEXT_SUPERVISION_GROUP_A_RUNBOOK.md). Group B now extends
 that foundation with its own [contract](../contracts/LUKA_NEXT_SUPERVISION_GROUP_B.md)
-and [runbook](../LUKA_NEXT_SUPERVISION_GROUP_B_RUNBOOK.md); C remains unimplemented.
+and [runbook](../LUKA_NEXT_SUPERVISION_GROUP_B_RUNBOOK.md). Group C now adds the
+seven D/S rows through its own [contract](../contracts/LUKA_NEXT_SUPERVISION_GROUP_C.md)
+and [Brown runbook](../LUKA_NEXT_SUPERVISION_GROUP_C_RUNBOOK.md).
 No immutable execution specification or live submission is created by this plan.
 
 The [ideas catalog](LUKA_NEXT_SUPERVISION_CAMPAIGN_IDEAS.md) defines the seven
@@ -82,8 +84,9 @@ configurations:10 P,6 G and6 J.
 The implemented foundation is `src/hlt_classification/luka_next_supervision_hydra`.
 Its [science-v1/execution-v2 contract](../contracts/LUKA_NEXT_SUPERVISION_HYDRA.md) freezes the remaining
 feature, bin-expansion, capacity and bounded G-feature-reservoir decisions.
-It preserves the40-row registry and rejects a full40 release until C is
-implemented/qualified. An explicitly reviewed Group A-only release filters the original
+It preserves the40-row registry. All selected methods are now implemented;
+combined full40 release remains unavailable through the additive group helpers.
+An explicitly reviewed Group A-only release filters the original
 interleaving, reuses C0/C1 (and compatible J5), and adds no fit dependencies.
 This optional partial release does not replace the combined first-seven policy.
 
@@ -160,6 +163,12 @@ no dependency on an A scientific fit and no fit-to-fit dependency within B.
 
 ### Group C: conditional distributions and set denoising, candidates1/2
 
+Implemented additively in the same namespace as seven independently submitted
+C rows. C uses a fresh immutable output root, original A input/reference proofs
+and its own scope-specific authorization. It neither requeues nor waits for A/B
+scientific fits, and needs no B-prepared target bank. The original filtered
+submission order is D1,S1,D2,S2,D5,S5,D3; compatible C0/C1 are reused.
+
 Implement D and S through the same model/training/registry interfaces. This is7
 selected configurations:4 D and3 S.
 
@@ -171,6 +180,16 @@ count head, with a corresponding HLT-set control. Verify noise/velocity targets,
 permutation, padding/measurement masks and absence of target access from the
 classification route. Measure the complete preparation/full-cardinality path.
 
+The [C v1 contract](../contracts/LUKA_NEXT_SUPERVISION_GROUP_C.md) freezes
+TRAIN-only K4/K1 MiniBatchKMeans initialization, bounded learned scales and
+valid negative NLL. S uses22 mixed measured channels, source-specific masked
+normalization, HLT-relative geometry, cosine velocity targets and four
+width128 equivariant decoder blocks. Up to8-jet chunks trim padding only,
+retaining every particle. Full-set banks are streamed to memory-mapped files.
+Reserve8GiB plus1GiB filesystem headroom. A genuine separate A6000 setup must
+measure four full/partial paths, including largest-source and valid-track tails,
+before any C science release. Poor finite target quality never rejects a row.
+
 This group comes last in implementation because its new numerical and decoder
 paths have more technical uncertainty. That does not make its science jobs
 wait for A/B training results.
@@ -178,9 +197,12 @@ wait for A/B training results.
 ### Shared completion standard
 
 The groups are coding milestones, not three serialized scientific campaigns.
-Separately authorized A-only and B-only releases may run alongside one another.
+Separately authorized A-only, B-only and C-only releases may run alongside one another.
 Complete and technically validate all three before releasing the combined
 first campaign so its first seven primary submissions span all seven candidates.
+The current executable scopes are additive A/B/C releases; a new combined
+execution manifest/helper is still a separate step. Completing C does not
+authorize requeuing A/B or automatically release a new full40 execution.
 Each group should have focused tests and a concrete reviewable change set.
 Record exact donor files/commits in LEGACY_SOURCE_MAP during implementation;
 add new versioned recipes/targets/specs rather than repurposing old contracts.

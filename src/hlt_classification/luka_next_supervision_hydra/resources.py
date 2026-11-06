@@ -46,6 +46,7 @@ def baseline(spec,train,device):
 
 
 def baseline_tasks(spec):
+    if spec.get('scope')=='group_C_only': return ('C0','C1','D1','D5','S1','S5')
     return ('C0','C1','Q1','Q6','V1','V7') if spec.get('scope')=='group_B_only' else ('C0','C1','P1','G1','J1','J5')
 
 
@@ -101,6 +102,9 @@ def measure(spec,train,val,bank,device='cuda',*,shared_preparation_seconds=0.):
         if spec.get('scope')=='group_B_only':
             from .structured_targets import miniature_indices
             selected=miniature_indices(source,ix)
+        elif spec.get('scope')=='group_C_only':
+            from .probabilistic_targets import miniature_indices
+            selected=miniature_indices(source,ix)
         tr=Subset(train,selected)
         tiny=SimpleNamespace(identities=tr.identities,labels=tr.labels,targets=bank.targets[selected],manifest=bank.manifest)
         if source is not None and hasattr(source,'capacity'):
@@ -121,6 +125,11 @@ def measure(spec,train,val,bank,device='cuda',*,shared_preparation_seconds=0.):
         if memory.get('peak_rss_bytes') is not None: memory['peak_rss_bytes']+=children
         if spec.get('scope')=='group_B_only':
             from .structured_targets import authenticate
+            preparation_peak=authenticate(spec)['statistics_peak_host_bytes']
+            if preparation_peak is not None:
+                memory['peak_rss_bytes']=max(memory.get('peak_rss_bytes') or 0,preparation_peak)
+        elif spec.get('scope')=='group_C_only':
+            from .probabilistic_targets import authenticate
             preparation_peak=authenticate(spec)['statistics_peak_host_bytes']
             if preparation_peak is not None:
                 memory['peak_rss_bytes']=max(memory.get('peak_rss_bytes') or 0,preparation_peak)
@@ -176,6 +185,14 @@ def accepted(spec):
 
 
 def structured_parent(spec):
+    if spec.get('scope')=='group_C_only':
+        from .probabilistic_targets import authenticate
+        prepared=authenticate(spec); root=Path(spec['root'])/'setup'
+        review=dict(one_time_preparation_seconds=prepared['preparation_seconds'],
+            statistics_peak_host_bytes=prepared['statistics_peak_host_bytes'],density=spec['recipe']['density'],
+            sets={s:{k:load_json(root/f'set_{s}.json')[k] for k in ('content_hash','rows','tokens','maximum_count','count_quantiles','support')}
+                for s in ('OFFLINE','HLT')})
+        return dict(probabilistic_targets=prepared['content_hash'],probabilistic_review=review)
     if spec.get('scope')!='group_B_only': return {}
     from .structured_targets import authenticate
     prepared=authenticate(spec); root=Path(spec['root'])/'setup'

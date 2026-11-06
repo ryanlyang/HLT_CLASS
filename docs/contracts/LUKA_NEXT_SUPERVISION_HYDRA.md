@@ -14,7 +14,9 @@ accepted as a v2 setup. Old contracts are unchanged.
 This is the A-scope contract. The shared implementation additionally supports
 the separately registered [Group B v1 scope](LUKA_NEXT_SUPERVISION_GROUP_B.md).
 That extension does not rewrite the original A recipe, specifications or
-running worktrees, and cannot release the unimplemented Group C/full40 study.
+running worktrees. The separately registered
+[Group C v1 scope](LUKA_NEXT_SUPERVISION_GROUP_C.md) now implements D/S;
+additive A/B/C authorization does not release a new combined full40 execution.
 
 ## Scientific registration
 

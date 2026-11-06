@@ -25,7 +25,11 @@ science release follows real measured setup. Group B now extends that same
 foundation with9 structured-question/pattern-frequency fits and its own
 [Brown runbook](docs/LUKA_NEXT_SUPERVISION_GROUP_B_RUNBOOK.md). It reuses the
 existing transfer/references and can queue independently alongside A. Group C
-remains unimplemented; full40 release is unavailable.
+now adds seven embedding-density/full-set-denoising fits with its own
+[Brown runbook](docs/LUKA_NEXT_SUPERVISION_GROUP_C_RUNBOOK.md). It retains
+native CE+U100-w5 and reuses existing inputs/C0/C1. All40 selected methods are
+implemented; executable release scopes remain separate A/B/C registrations,
+each gated on genuine warmed setup. No combined full40 requeue is implied.
 Group A execution v2 repairs index/preparation overhead exposed by failed Hydra
 setup150801. It preserves the scientific recipe and transferred inputs; each
 new execution requires its own measured setup. The A runbook includes recovery

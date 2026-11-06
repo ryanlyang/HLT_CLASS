@@ -1,5 +1,28 @@
 # Legacy Donor-Source Map
 
+## Seven-candidate Group C conditional distributions and set denoising (2026-11-05)
+
+Exact internal donor: `3b839fc3aef7e1e24e886b9dd512a6a8114b5473`.
+New modules are `probabilistic_contracts.py`, `probabilistic_model.py`,
+`probabilistic_targets.py`, `group_c.py` in the existing namespace. No external
+implementation was copied, no old runtime donor was edited, and no
+`Fresh_check` runtime import was added. sklearn MiniBatchKMeans and PyTorch
+SDPA are existing pinned dependencies, not migrated source implementations.
+
+| Exact donor files at3b839fc3 | Group C use |
+|---|---|
+| `src/hlt_classification/luka_next_supervision_hydra/contracts.py`, `campaign.py`, `group_b.py`, `reuse.py` | Reuse original A/B recipes, isolated old-A authentication process, source/reference checks and separate registration; add C recipe/spec/token. |
+| `src/hlt_classification/luka_next_supervision_hydra/data.py`, `inputs.py` | Reuse ordered TRAIN raw physical shards, authenticated native HLT views and original standardized U100 bank. New S transforms use the paired HLT frame, not P/G source-local descriptors. |
+| `src/hlt_classification/luka_next_supervision_hydra/model.py`, `training.py`, `structured_model.py` | Extend isolated auxiliary RNG/native pooled jet tap with removable density/denoising heads, target initialization before optimizer and valid negative-NLL reporting; retain original CE+w5 and native checkpoint replay. Reuse the GELU MLP pattern. |
+| `src/hlt_classification/luka_next_supervision_hydra/resources.py`, `worker.py` | Extend common warmed path measurement, worst-support miniatures, setup target inventory and immutable receipts with four C paths/full-set preparation. |
+| `src/hlt_classification/luka_next_supervision_hydra/submission.py`, `reporting.py` | Reuse exact-ID independent journals/claims/idempotence and read-only results/progress; add C job prefix, authorization and frozen target review. |
+| `scripts/luka_next_supervision_hydra.py`, `scripts/queue_luka_next_supervision_hydra.sh`, `sbatch/run_luka_next_supervision_hydra.sh` | Add create-c/complete implementation registry in the CLI; existing queue helper and absolute-project Slurm worker are reused unchanged. |
+| `tests/test_luka_next_supervision_hydra.py`, `tests/test_luka_next_supervision_group_b.py`, `tests/test_luka_attention.py` | Reuse synthetic native/cache/raw fixtures and execution-test patterns; extend selected-family assertions and add the separate C suite. |
+
+PROBABILISTIC_RECIPE/SPEC/TARGETS and SET_BANK envelopes are v1. Shared measured
+RESOURCE_CHECK/ACCEPTANCE stay execution v2. Original A/B recipes and historical
+execution worktrees are unchanged. No new teacher/data export is introduced.
+
 ## Seven-candidate Group B structured targets (2026-11-05)
 
 Internal donor baseline: `342e5d3affba78f9d6add4cbb95d6264fc4b516b`.

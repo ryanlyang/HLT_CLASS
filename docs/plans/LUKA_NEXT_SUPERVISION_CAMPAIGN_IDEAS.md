@@ -1,12 +1,15 @@
 # Next HLT supervision campaign: seven training-only supervision ideas
 
-Status: research catalog v0.8, 2026-11-05. This is the growing design document
+Status: research catalog v0.9, 2026-11-05. This is the growing design document
 requested by the user. The first seven ideas are described here; more ideas can
 be added as later groups are implemented. Group A now has an additive
 [implementation contract](../contracts/LUKA_NEXT_SUPERVISION_HYDRA.md) and
 [Hydra runbook](../LUKA_NEXT_SUPERVISION_GROUP_A_RUNBOOK.md). Group B now extends
 the same foundation with [Q/V contracts](../contracts/LUKA_NEXT_SUPERVISION_GROUP_B.md)
-and a [Brown runbook](../LUKA_NEXT_SUPERVISION_GROUP_B_RUNBOOK.md); C remains future work.
+and a [Brown runbook](../LUKA_NEXT_SUPERVISION_GROUP_B_RUNBOOK.md). Group C now
+implements the selected D/S rows with a [v1 contract](../contracts/LUKA_NEXT_SUPERVISION_GROUP_C.md)
+and [Brown runbook](../LUKA_NEXT_SUPERVISION_GROUP_C_RUNBOOK.md), sharing the
+same native trainer and independent submission infrastructure.
 The proposed defaults below are
 research judgments, not measured optima or a promise of 45%+ recovery.
 
