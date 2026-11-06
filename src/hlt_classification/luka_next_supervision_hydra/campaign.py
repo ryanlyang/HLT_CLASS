@@ -14,11 +14,14 @@ from hlt_classification.data.cache_contracts import load_json,write_immutable_js
 from .contracts import BASE,COUNTS,TASKS,ORDER,recipe,artifact,validate
 from . import inputs,reuse
 
-MODULES=('__init__','contracts','data','sampling','parallel','model','inputs','reuse','training','campaign','resources','submission','worker','reporting')
+MODULES=('__init__','contracts','data','sampling','parallel','model','inputs','reuse','training','campaign','resources','submission','worker','reporting',
+    'structured_contracts','questions','vocabulary','structured_model','structured_targets','group_b')
 REQUIRED={f'src/hlt_classification/luka_next_supervision_hydra/{n}.py' for n in MODULES}|{
     'scripts/luka_next_supervision_hydra.py','scripts/queue_luka_next_supervision_hydra.sh',
     'sbatch/run_luka_next_supervision_hydra.sh','tests/test_luka_next_supervision_hydra.py',
     'docs/contracts/LUKA_NEXT_SUPERVISION_HYDRA.md','docs/LUKA_NEXT_SUPERVISION_GROUP_A_RUNBOOK.md'}
+REQUIRED|={'tests/test_luka_next_supervision_group_b.py','docs/contracts/LUKA_NEXT_SUPERVISION_GROUP_B.md',
+    'docs/LUKA_NEXT_SUPERVISION_GROUP_B_RUNBOOK.md','docs/LUKA_NEXT_SUPERVISION_GROUP_B_VALIDATION.md'}
 
 
 def current(project,commit):
@@ -86,6 +89,9 @@ def create(root,parent_path,raw_root,raw_hash,delta_root,delta_hash,reuse_map,pr
 
 
 def check(spec,*,check_storage=True):
+    if spec.get('scope')=='group_B_only':
+        from .group_b import check as structured
+        return structured(spec,check_storage=check_storage)
     validate_file_ref(spec['parent_spec']); parent,qualification=authenticate_parent(spec['parent_spec']['path'])
     validate(spec,'SPEC',dict(source=spec['source_snapshot']['content_hash'],parent=parent['content_hash'],raw=spec['raw_hash'],delta=spec['delta_hash']))
     if (any(spec.get(k)!=v for k,v in registration().items()) or any(spec[k]!=parent[k] for k in COPIED)

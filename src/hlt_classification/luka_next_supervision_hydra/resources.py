@@ -27,7 +27,7 @@ def path_key(task):
 def baseline(spec,train,device):
     raw=train.batch(np.arange(min(128,len(train)))); values={k:torch.from_numpy(raw[k]).to(device) for k in ('features','vectors','mask')}
     errors={}
-    for task in ('C0','C1','P1','G1','J1','J5'):
+    for task in baseline_tasks(spec):
         torch.manual_seed(seed(spec['imported'],setting(task),'initialization_seed'))
         original=AuxiliaryParT().to(device).eval(); original.capture=True
         candidate=model.new_model(spec['imported'],task).to(device).eval(); candidate.capture=True
@@ -43,6 +43,10 @@ def baseline(spec,train,device):
         del original,candidate
     return artifact('BASELINE_PARITY',parents=dict(spec=spec['content_hash']),checks=errors,
         environment=installed_environment(),installed_weaver=True,quality_gate=False)
+
+
+def baseline_tasks(spec):
+    return ('C0','C1','Q1','Q6','V1','V7') if spec.get('scope')=='group_B_only' else ('C0','C1','P1','G1','J1','J5')
 
 
 def resource_record(spec,task,report,warm,memory,gpu,preparation_seconds):
@@ -84,8 +88,7 @@ def resource_record(spec,task,report,warm,memory,gpu,preparation_seconds):
 def measure(spec,train,val,bank,device='cuda',*,shared_preparation_seconds=0.):
     if not math.isfinite(shared_preparation_seconds) or shared_preparation_seconds<0: raise ValueError('Invalid shared preparation timing')
     root=Path(spec['root'])/'setup'; ix=miniature_rows(train); vx=miniature_rows(val)
-    tr=Subset(train,ix); va=Subset(val,vx)
-    tiny=SimpleNamespace(identities=tr.identities,labels=tr.labels,targets=bank.targets[ix],manifest=bank.manifest)
+    va=Subset(val,vx)
     records={}; representatives={}; paths={}
     for task in spec['remaining']:
         key=path_key(task)
@@ -94,9 +97,15 @@ def measure(spec,train,val,bank,device='cuda',*,shared_preparation_seconds=0.):
         if str(device).startswith('cuda'): torch.cuda.reset_peak_memory_stats()
         began=time.perf_counter(); source=inputs.candidates(spec,task,train,device)
         preparation=shared_preparation_seconds+time.perf_counter()-began; memory_before=peaks(device)
+        selected=ix
+        if spec.get('scope')=='group_B_only':
+            from .structured_targets import miniature_indices
+            selected=miniature_indices(source,ix)
+        tr=Subset(train,selected)
+        tiny=SimpleNamespace(identities=tr.identities,labels=tr.labels,targets=bank.targets[selected],manifest=bank.manifest)
         if source is not None and hasattr(source,'capacity'):
             write_immutable_json(root/('capacity_'+task+'.json'),artifact('CAPACITY',parents=dict(spec=spec['content_hash']),task=task,**source.capacity))
-        wrapped=None if source is None else inputs.SubsetCandidates(source,ix)
+        wrapped=None if source is None else inputs.SubsetCandidates(source,selected)
         try:
             warm=training.fit(root/('warm_'+task),spec,task,tr,va,tiny,candidates=wrapped,device=device,technical=True)
             gc.collect()
@@ -110,6 +119,11 @@ def measure(spec,train,val,bank,device='cuda',*,shared_preparation_seconds=0.):
         children=source.child_pss_bytes() if hasattr(source,'child_pss_bytes') else 0
         memory['sampler_child_pss_bytes']=children
         if memory.get('peak_rss_bytes') is not None: memory['peak_rss_bytes']+=children
+        if spec.get('scope')=='group_B_only':
+            from .structured_targets import authenticate
+            preparation_peak=authenticate(spec)['statistics_peak_host_bytes']
+            if preparation_peak is not None:
+                memory['peak_rss_bytes']=max(memory.get('peak_rss_bytes') or 0,preparation_peak)
         record=resource_record(spec,task,report,warm,memory,gpu_identity(),preparation)
         write_immutable_json(root/('resource_'+task+'.json'),record)
         print(f'NEXT_SUPERVISION resource {task}: step={record["train_step_seconds"]:.3f}s '
@@ -117,14 +131,15 @@ def measure(spec,train,val,bank,device='cuda',*,shared_preparation_seconds=0.):
             f'phases={record["batch_phase_seconds"]}',flush=True)
         if not record['passed']:
             if hasattr(source,'close'): source.close()
-            raise RuntimeError('Measured Group A resource envelope exceeded: '+str(record['violations'])+'; preserve diagnostics')
+            raise RuntimeError('Measured supervision resource envelope exceeded: '+str(record['violations'])+'; preserve diagnostics')
         records[task]=record
         if hasattr(source,'close'): source.close()
         del source,wrapped; gc.collect()
         if str(device).startswith('cuda'): torch.cuda.empty_cache()
     result=artifact('ACCEPTANCE',parents=dict(spec=spec['content_hash']),paths=paths,measurements=records,
         minutes={t:records[p]['minutes'] for t,p in paths.items()},environment=installed_environment(),gpu=gpu_identity(),
-        quality_gate=False,science_dependencies='none',measured_universe='full_TRAIN',technical_weights_discarded=True)
+        quality_gate=False,science_dependencies='none',measured_universe='full_TRAIN',technical_weights_discarded=True,
+        **structured_parent(spec))
     write_immutable_json(root/'acceptance.json',result)
     return result
 
@@ -136,8 +151,9 @@ def accepted(spec):
             or a['quality_gate'] is not False or a['science_dependencies']!='none' or a['measured_universe']!='full_TRAIN'
             or a['technical_weights_discarded'] is not True or set(a['measurements'])!=set(a['paths'].values())):
         raise ValueError('Acceptance coverage/environment differs')
+    if any(a.get(k)!=v for k,v in structured_parent(spec).items()): raise ValueError('Frozen structured target parent changed')
     parity=load_json(root/'baseline_parity.json'); validate(parity,'BASELINE_PARITY',dict(spec=spec['content_hash']))
-    if (parity['environment']!=a['environment'] or set(parity['checks'])!={'C0','C1','P1','G1','J1','J5'}
+    if (parity['environment']!=a['environment'] or set(parity['checks'])!=set(baseline_tasks(spec))
             or parity['installed_weaver'] is not True or parity['quality_gate'] is not False
             or any(v['max_abs']!=0 or v['prediction_max_abs']!=0 or not v['native_tensors_equal'] for v in parity['checks'].values())):
         raise ValueError('Native baseline parity differs')
@@ -147,7 +163,7 @@ def accepted(spec):
         capacity=load_json(root/('capacity_'+path+'.json')); validate(capacity,'CAPACITY',dict(spec=spec['content_hash']))
         if (capacity['task']!=path or capacity['rows']!=spec['counts']['train']
                 or sum(capacity['class_counts'])!=spec['counts']['train']): raise ValueError('Capacity population differs')
-        if setting(path)['family'] in ('P','G') and capacity.get('sampler_workers')!=spec['candidate_workers']:
+        if setting(path)['family'] in ('P','G','Q') and capacity.get('sampler_workers')!=spec['candidate_workers']:
             raise ValueError('Measured CPU sampler-worker support differs')
         report,_=training.validate_fit(root/('mini_'+path),spec,path,technical=True)
         warm,_=training.validate_fit(root/('warm_'+path),spec,path,technical=True)
@@ -157,3 +173,17 @@ def accepted(spec):
                 or any(a['minutes'][task]!=r['minutes'] for task,p in a['paths'].items() if p==path)):
             raise ValueError('Measured resource evidence differs')
     return a
+
+
+def structured_parent(spec):
+    if spec.get('scope')!='group_B_only': return {}
+    from .structured_targets import authenticate
+    prepared=authenticate(spec); root=Path(spec['root'])/'setup'
+    catalog=load_json(root/'question_catalog.json')
+    dictionaries={s:load_json(root/('dictionary_'+s+'.json')) for s in ('OFFLINE','HLT')}
+    review=dict(catalog=catalog['content_hash'],coverage=catalog['coverage'],
+        one_time_preparation_seconds=prepared['preparation_seconds'],statistics_peak_host_bytes=prepared['statistics_peak_host_bytes'],
+        dictionaries={s:dict(hash=d['content_hash'],duplicate_centers=d['diagnostic']['duplicate_centers'],
+            empty_centers=sum(n==0 for n in d['diagnostic']['occupancy']),mean_squared_distance=d['diagnostic']['mean_squared_distance'])
+            for s,d in dictionaries.items()})
+    return dict(structured_targets=prepared['content_hash'],structured_review=review)

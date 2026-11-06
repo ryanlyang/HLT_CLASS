@@ -62,8 +62,20 @@ def recipe():
 
 def setting(task):
     if task not in ARMS:
-        raise NotImplementedError('Only Group A and shared references are implemented; full40 release is unavailable')
+        from .structured_contracts import ARMS as structured
+        if task in structured: return structured[task]
+        raise NotImplementedError('Groups A/B are implemented; Group C and full40 release are unavailable')
     return ARMS[task]
+
+
+def authorization(spec):
+    if spec.get('scope')=='group_B_only':
+        from .structured_contracts import AUTHORIZATION as structured
+        return structured
+    return AUTHORIZATION
+
+
+def selected_tasks(spec): return tuple(spec.get('tasks',TASKS))
 
 
 def seed(imported, cfg, kind):

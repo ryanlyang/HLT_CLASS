@@ -66,7 +66,10 @@ class Student(AuxiliaryParT):
         super().__init__(); self.cfg=setting(task); self.jet=None
         with torch.random.fork_rng(devices=[]):
             torch.random.default_generator.manual_seed(2026110507+1000003*self.cfg['seed_index'])
-            self.aux=None if self.cfg['family']=='C' else Compatibility(self.cfg)
+            if self.cfg['family'] in ('Q','V'):
+                from .structured_model import StructuredHead
+                self.aux=StructuredHead(self.cfg)
+            else: self.aux=None if self.cfg['family']=='C' else Compatibility(self.cfg)
         if self.cfg['dot']:
             # Exact old dot-product head, including its initialization.
             self.aux=head(2026103101)
@@ -82,6 +85,7 @@ class Student(AuxiliaryParT):
 
     def auxiliary(self, batch, *, query=None):
         h=self.jet if query is None else query
+        if self.cfg['family'] in ('Q','V'): return self.aux(h,batch)
         if self.cfg['dot']:
             q=F.normalize(self.aux(h.float()),dim=-1,eps=1e-12)
             return (batch['features'].detach().float()*q[:,None]).sum(-1)/.1
@@ -106,6 +110,9 @@ def membership_loss(scores, labels):
 
 
 def auxiliary_loss(scores, batch, family):
+    if family in ('Q','V'):
+        from .structured_model import loss
+        return loss(scores,batch,family)
     if family=='J': return F.cross_entropy(scores.float(),batch['positive'])
     return membership_loss(scores,batch['labels'])
 

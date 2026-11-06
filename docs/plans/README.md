@@ -9,7 +9,9 @@ Particle soup is the current priority and includes several negative sampling
 laws. Every proposed arm retains native CE+U100-w5. Preferred configurations, ablations, data needs
 and implementation references are documented. Group A has an additive
 [Hydra implementation and runbook](../LUKA_NEXT_SUPERVISION_GROUP_A_RUNBOOK.md);
-the complete seven-candidate campaign is not executable until B/C are implemented.
+Group B now extends that foundation with9 structured-target fits and its own
+[Brown runbook](../LUKA_NEXT_SUPERVISION_GROUP_B_RUNBOOK.md). The complete
+seven-candidate campaign is not executable until C is implemented/qualified.
 
 The [three-group implementation proposal](LUKA_SEVEN_CANDIDATE_IMPLEMENTATION_PLAN.md)
 selects38 candidate/control configurations plus2 shared native reference rows

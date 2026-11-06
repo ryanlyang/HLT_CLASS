@@ -26,6 +26,9 @@ def _finish(job):
     return [_SOURCE.semi_finish(p,s) for p,s in zip(prepared,scores)]
 
 
+def _statistics(indices): return _SOURCE.statistics(indices)
+
+
 class ParallelCandidates:
     def __init__(self,source,workers=4,*,executor=None):
         global _SOURCE
@@ -67,6 +70,13 @@ class ParallelCandidates:
             if len(entries)!=1: raise RuntimeError('Missing child proportional RSS')
             total+=int(entries[0][1])*1024
         return total
+
+    def statistics(self,indices,*,batch_size=32):
+        # Bound outstanding results; a whole TRAIN catalog reduction must not
+        # retain one large result/future for every batch in the dataset.
+        for start in range(0,len(indices),batch_size*8):
+            jobs=[indices[i:i+batch_size] for i in range(start,min(start+batch_size*8,len(indices)),batch_size)]
+            yield from self.pool.map(_statistics,jobs)
 
     def close(self):
         global _SOURCE

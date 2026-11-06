@@ -7,16 +7,17 @@ from hlt_classification.scouting.hcwdl_recovery import assemble_submission_ledge
 from hlt_classification.luka_fullsim.regular_submission import clean_environment
 from hlt_classification.luka_cross_message_hydra.execution import check_site
 from hlt_classification.luka_u100_pair_hydra.submission import accounting
-from .contracts import AUTHORIZATION,artifact
+from .contracts import authorization as authorize,artifact
 from . import campaign
 
 
 def command(spec,task,minutes):
     site=spec['execution_site']; project=spec['project_dir']; root=Path(spec['root'])
+    prefix='lukanb' if spec.get('scope')=='group_B_only' else 'lukanx'
     cmd=['sbatch','--parsable','--no-requeue','--nodes=1','--ntasks=1','--export=NONE',
         '--partition='+site['partition'],'--account='+site['account'],'--qos='+site['qos'],'--gres='+site['gres'],
         '--cpus-per-task='+str(spec['cpus']),'--mem='+str(spec['memory_mb'])+'M','--time='+_walltime(minutes),
-        '--job-name=lukanx_'+task,'--comment=lukanx:'+spec['content_hash']+':'+task,
+        '--job-name='+prefix+'_'+task,'--comment='+prefix+':'+spec['content_hash']+':'+task,
         '--chdir='+project,'--output='+str(root/(task+'-%j.out')),
         project+'/sbatch/run_luka_next_supervision_hydra.sh',project,str(root/'campaign_spec.json'),task]
     return dict(task_id=task,dependencies=[],command=cmd)
@@ -30,8 +31,10 @@ def plan(spec,stage,acceptance=None):
         parents['acceptance']=acceptance['content_hash']
         commands=[command(spec,t,acceptance['minutes'][t]) for t in spec['remaining']]
     else: raise ValueError('Only setup or Group A science can be released')
-    return artifact('PLAN',parents=parents,stage=stage,scope='group_A_only',commands=commands,
-        authorization=AUTHORIZATION,science_dependencies='none',reused=list(spec['reused']),deferred_groups=['B','C'])
+    return artifact('PLAN',parents=parents,stage=stage,scope=spec.get('scope','group_A_only'),commands=commands,
+        authorization=authorize(spec),science_dependencies='none',reused=list(spec['reused']),
+        deferred_groups=spec.get('deferred_groups',['B','C']),
+        **(dict(structured_target_review=acceptance['structured_review']) if stage=='science' and spec.get('scope')=='group_B_only' else {}))
 
 
 def accepted_jobs(spec,stage):
@@ -59,7 +62,7 @@ def submit(spec,stage,*,execute=False,plan_hash=None,authorization=None):
     value=plan(spec,stage,acceptance); folder=Path(spec['root'])/('submission_'+stage); folder.mkdir(exist_ok=True)
     saved=folder/'command_plan.json'; dry=folder/'dry_run_submission_ledger.json'; live=folder/'submission_ledger.json'
     if execute:
-        if authorization!=AUTHORIZATION or plan_hash!=value['content_hash'] or not saved.exists() or load_json(saved)!=value:
+        if authorization!=authorize(spec) or plan_hash!=value['content_hash'] or not saved.exists() or load_json(saved)!=value:
             raise PermissionError('Authorize this exact dry-reviewed stage and hash')
         if live.exists():
             if set(accepted_jobs(spec,stage))!={r['task_id'] for r in value['commands']}: raise ValueError('Incomplete ledger')
@@ -70,6 +73,6 @@ def submit(spec,stage,*,execute=False,plan_hash=None,authorization=None):
     if not execute: check_site(value)
     else:
         (folder/'live_claim').mkdir(exist_ok=False)
-        write_immutable_json(folder/'live_claim/intent.json',artifact('SUBMIT_CLAIM',parents=dict(plan=value['content_hash']),authorization=AUTHORIZATION))
+        write_immutable_json(folder/'live_claim/intent.json',artifact('SUBMIT_CLAIM',parents=dict(plan=value['content_hash']),authorization=authorize(spec)))
     return submit_exact_dag(identity=value['content_hash'],plan=value,output=live if execute else dry,
         canonical_dry_run=dry,execute=execute,environment=clean_environment())

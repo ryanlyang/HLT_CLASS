@@ -1,5 +1,64 @@
 # Current Handoff
 
+## 2026-11-05: Group B structured questions and pattern frequencies
+
+Implemented the9 selected B rows from the
+[active seven-candidate plan](plans/LUKA_SEVEN_CANDIDATE_IMPLEMENTATION_PLAN.md)
+inside the existing `luka_next_supervision_hydra` foundation. New Q/V target,
+decoder and registration modules share native training, deployment export,
+resource measurement, exact-ID submission/recovery and saved result/progress
+views. The user reports A queued/running; no live IDs/receipts were independently
+retrieved here. Existing A jobs, worktrees, specs, claims and outputs are untouched.
+
+Q freezes semantic composition/count/joint/pair questions from TRAIN, with
+shared HLT-axis geometry, validity-aware measured fields and bounded pair
+oracles. Up to2048 distinct proposals/family receive full-TRAIN min/max/sum
+support checks; up to1024 nonconstant entries/family are retained with no
+rare-prevalence pruning or duplicate padding. Actual short/constant coverage is
+disclosed and zero applicability never cancels a scientific row. The active
+plan/catalog explicitly reconcile this closure before execution registration.
+Per-anchor question streams do not use answers, classes or source. Neural
+inputs encode semantics, never catalog/jet/particle IDs.
+
+V fits independent OFFLINE/HLT TRAIN K128 dictionaries on the measured P
+descriptors, with equal block energy, fixed identity-ranked reservoirs/solver,
+deterministic assignment and frozen count/pT frequency banks. All9 fits retain
+native CE+U100-w5, matched native seeds/initialization and full30 budgets;
+C0/C1 are authenticated reused references. No new classifier teacher fit or
+extra raw transfer is needed, and deployed architecture remains native HLT.
+
+New STRUCTURED_RECIPE/SPEC/TARGETS, QUESTION_GEOMETRY/CATALOG, DICTIONARY and
+FREQUENCY_BANK artifacts are v1; common ACCEPTANCE/RESOURCE_CHECK stay v2.
+The A scientific recipe equals the342e5d3a version byte-for-byte. Exact internal
+donor commit `342e5d3affba78f9d6add4cbb95d6264fc4b516b` and files are recorded
+in [LEGACY_SOURCE_MAP.md](LEGACY_SOURCE_MAP.md). No external code was copied.
+Read the [contract](contracts/LUKA_NEXT_SUPERVISION_GROUP_B.md),
+[runbook](LUKA_NEXT_SUPERVISION_GROUP_B_RUNBOOK.md) and
+[local evidence](LUKA_NEXT_SUPERVISION_GROUP_B_VALIDATION.md).
+
+Pre-edit A baseline:66 passed in52.63s. Latest combined run:114 passed in95.85s;
+the added B-only read-only results check passed separately in7.03s. All115
+current focused tests passed, including production-width CUDA full/partial Q/V paths,
+all9 fit/export paths, full30 finite-poor-target continuation, actual synthetic
+target preparation, six-path resource acceptance, corruption checks, original
+source/parent immutability, target-heavy resource rows, independent submission
+journals and unresolved same-seed control handling.
+Static checks passed:23 Python AST/import checks,30 required files,741 local
+documentation links,5 Bash scripts/blocks, CLI/registry and scoped diff checks.
+Local serial Q1 oracle128-anchor construction took0.072s on synthetic54-particle jets;
+full8192-question support for256 synthetic jets took8.601s. These observations
+are not Hydra throughput, target quality or scientific recovery evidence.
+
+Next task: commit/push complete clean source, register a separate B root from
+the existing A input spec, and submit B's genuine setup. It prepares targets
+once, verifies installed-Weaver parity and measures six supports under one
+A6000/6CPUs/32000MiB, retaining48h/85% resource bounds. After exact successful
+setup and target/receipt authentication, an explicit B-only review queues
+Q1,V1,Q2,V2,Q5,V6,Q3,V7,Q6 independently, alongside A without fit dependencies,
+holds, lanes, caps or nice adjustments. Full40 remains unavailable until C.
+No B source was pushed, remote job submitted, real-data target prepared or
+remote miniature executed by the agent. No independent test is introduced.
+
 ## 2026-11-05: Group A execution v2 resource repair after setup150801
 
 The user supplied Hydra setup150801's failure and RESOURCE_CHECK/v1 record

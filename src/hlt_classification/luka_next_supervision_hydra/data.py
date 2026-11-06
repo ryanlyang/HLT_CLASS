@@ -144,7 +144,7 @@ class RawBundle:
         validate_file_ref(self.rows[name],root=self.root); return p
 
     def load(self,source,hlt):
-        chunks=[load_npz_arrays(self.path(n)) for n in sorted(self.rows) if n.startswith(source+'/')]
+        chunks=list(self.shards(source,hlt))
         if not chunks: raise ValueError('Missing raw source shards')
         offsets=[np.array([0],np.int64)]; end=0
         for a in chunks:
@@ -160,6 +160,23 @@ class RawBundle:
         del chunks,a,offsets
         result=Particles(arrays,source=source,parent_hash=self.manifest['content_hash']); result.join(hlt)
         return result
+
+    def shards(self,source,hlt):
+        if source not in ('HLT','OFFLINE') or hlt.role!='train': raise PermissionError('Raw shards are TRAIN-only')
+        start=0
+        for name in sorted(self.rows):
+            if not name.startswith(source+'/'): continue
+            a=load_npz_arrays(self.path(name)); n=len(a.get('labels',[]))
+            if (set(a)!={'identities','labels','offsets','values'} or a['offsets'].dtype!=np.int64
+                    or a['identities'].dtype!=np.uint8 or a['identities'].shape!=(n,32)
+                    or a['labels'].dtype!=np.int64 or a['labels'].shape!=(n,)
+                    or a['offsets'].shape!=(n+1,) or a['offsets'][0]!=0 or (np.diff(a['offsets'])<1).any()
+                    or a['values'].dtype!=np.float64 or a['values'].shape!=(a['offsets'][-1],14)
+                    or not np.isfinite(a['values']).all()
+                    or any(not np.array_equal(a[k],getattr(hlt,k)[start:start+n]) for k in ('identities','labels'))):
+                raise ValueError('Raw shard TRAIN role/ordered join differs')
+            start+=n; yield a
+        if start!=len(hlt.labels): raise ValueError('Raw shards do not cover TRAIN')
 
 
 def pair_features(local, mask):

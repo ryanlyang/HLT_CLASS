@@ -1,1 +1,1 @@
-"""Shared seven-candidate infrastructure; Group A compatibility objectives."""
+"""Shared seven-candidate infrastructure; implemented Group A/B objectives."""

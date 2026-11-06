@@ -1,5 +1,32 @@
 # Legacy Donor-Source Map
 
+## Seven-candidate Group B structured targets (2026-11-05)
+
+Internal donor baseline: `342e5d3affba78f9d6add4cbb95d6264fc4b516b`.
+Group B extends `luka_next_supervision_hydra`; it does not clone a second
+training/submission stack or edit any old pinned execution worktree. No
+external source implementation or `Fresh_check` runtime import was introduced.
+sklearn MiniBatchKMeans is imported from the existing pinned environment,
+not copied. Native/Weaver and original U100 modules remain unchanged.
+
+| Exact donor files at342e5d3a | Group B use |
+|---|---|
+| `src/hlt_classification/luka_next_supervision_hydra/contracts.py`, `campaign.py`, `reuse.py` | Retain original A recipe/flags and exact source/reference checks; add separate structured recipe/spec/scope and old-A input validation in its own process. |
+| `src/hlt_classification/luka_next_supervision_hydra/data.py`, `inputs.py` | Reuse physical TRAIN transfer,17-input HLT views and original U100 bank; add ordered streaming shards, Q geometry and V compact-bank capability. |
+| `src/hlt_classification/luka_next_supervision_hydra/parallel.py` | Reuse CPU-only pre-fork transport/PSS accounting; add bounded full-TRAIN question-statistic reduction. |
+| `src/hlt_classification/luka_next_supervision_hydra/model.py`, `training.py` | Extend the native128D jet tap and isolated auxiliary RNG with removable Q/V heads and declared BCE/frequency losses; retain CE+U100-w5 and native-only checkpoint replay. |
+| `src/hlt_classification/luka_next_supervision_hydra/resources.py`, `worker.py` | Reuse baseline parity, genuine warmed full/partial measurement and immutable receipts; add structured preparation and six-path resource coverage. |
+| `src/hlt_classification/luka_next_supervision_hydra/submission.py`, `reporting.py` | Reuse independent exact-ID journals, claims/idempotence, saved results/progress and same-seed deltas; add B-only scope/token/job prefix and realized target review. |
+| `scripts/luka_next_supervision_hydra.py`, `scripts/queue_luka_next_supervision_hydra.sh`, `sbatch/run_luka_next_supervision_hydra.sh` | Extend the same CLI/queue interface with create-b and scope-specific authorization; existing absolute-project Slurm worker is reused unchanged. |
+| `tests/test_luka_next_supervision_hydra.py`, `tests/test_luka_attention.py` | Reuse compact/native fixture, synthetic caches, old-seed recipes and transport fixtures; add separate Q/V scientific, corruption, worker and submission tests. |
+
+New modules are `structured_contracts.py`, `questions.py`, `vocabulary.py`,
+`structured_model.py`, `structured_targets.py` and `group_b.py` in that same
+namespace. New STRUCTURED_RECIPE/SPEC/TARGETS, QUESTION_GEOMETRY/CATALOG,
+DICTIONARY and FREQUENCY_BANK envelopes are v1. Shared resource/acceptance
+envelopes remain v2. The A scientific recipe remains byte-equivalent to342e5d3a
+(`d39c6ee09d803622385834756bb57c131ed8a8142659b1d99aec248ec6b6bddc`).
+
 ## Group A execution v2 resource repair (2026-11-05)
 
 Internal implementation baseline: `0a6721edf146e2ab3166cdee976377c22240053a`.

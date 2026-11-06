@@ -16,8 +16,9 @@ CLI="${PROJECT_DIR}/scripts/luka_next_supervision_hydra.py"
 "${PYTHON}" -B -s "${CLI}" review --spec "${SPEC}" --stage "${STAGE}"
 PLAN="$(dirname -- "${SPEC}")/submission_${STAGE}/command_plan.json"
 HASH="$("${PYTHON}" -B -s -c 'import json,sys; print(json.load(open(sys.argv[1]))["content_hash"])' "${PLAN}")"
+AUTHORIZATION="$("${PYTHON}" -B -s -c 'import json,sys; print(json.load(open(sys.argv[1]))["authorization"])' "${PLAN}")"
 printf '\nReview hash: %s\n' "${HASH}"
-printf 'Scope: Group A only. Science jobs have no dependencies, holds, lanes or priority adjustments.\n'
+printf 'Scope: the exact group in the reviewed plan. Science jobs have no dependencies, holds, lanes or priority adjustments.\n'
 read -r -p "Authorize this exact ${STAGE} plan? Type YES: " ANSWER
 [[ "${ANSWER}" == YES ]] || { printf 'Not submitted. Preserve this review.\n'; exit 1; }
-"${PYTHON}" -B -s "${CLI}" submit --spec "${SPEC}" --stage "${STAGE}" --plan-hash "${HASH}" --authorization AUTHORIZE_NEXT_SUPERVISION_GROUP_A_V2
+"${PYTHON}" -B -s "${CLI}" submit --spec "${SPEC}" --stage "${STAGE}" --plan-hash "${HASH}" --authorization "${AUTHORIZATION}"

@@ -83,6 +83,9 @@ def candidates(spec,task,train,device='cpu'):
     cfg=setting(task)
     if train.role!='train': raise PermissionError('Candidates are TRAIN-only')
     if cfg['family']=='C': return None
+    if cfg['family'] in ('Q','V'):
+        from .structured_targets import candidates as structured
+        return structured(spec,task,train)
     pt,count=summaries(train)
     if cfg['family']=='J':
         keys=key_bank(spec,train)

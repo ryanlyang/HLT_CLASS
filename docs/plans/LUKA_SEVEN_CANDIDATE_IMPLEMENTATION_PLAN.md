@@ -1,10 +1,12 @@
 # Seven supervision candidates: three implementation groups and a40-row campaign
 
-Status: implementation plan v0.4, 2026-11-05. The user requested three implementation
+Status: implementation plan v0.5, 2026-11-05. The user requested three implementation
 groups, approximately40 runs weighted toward the stronger bets, and a queue
 order that mixes candidate families with each preferred setup submitted first.
 This document selects the campaign. Group A now has an additive implementation
-and [runbook](../LUKA_NEXT_SUPERVISION_GROUP_A_RUNBOOK.md); B/C remain unimplemented.
+and [runbook](../LUKA_NEXT_SUPERVISION_GROUP_A_RUNBOOK.md). Group B now extends
+that foundation with its own [contract](../contracts/LUKA_NEXT_SUPERVISION_GROUP_B.md)
+and [runbook](../LUKA_NEXT_SUPERVISION_GROUP_B_RUNBOOK.md); C remains unimplemented.
 No immutable execution specification or live submission is created by this plan.
 
 The [ideas catalog](LUKA_NEXT_SUPERVISION_CAMPAIGN_IDEAS.md) defines the seven
@@ -80,8 +82,8 @@ configurations:10 P,6 G and6 J.
 The implemented foundation is `src/hlt_classification/luka_next_supervision_hydra`.
 Its [science-v1/execution-v2 contract](../contracts/LUKA_NEXT_SUPERVISION_HYDRA.md) freezes the remaining
 feature, bin-expansion, capacity and bounded G-feature-reservoir decisions.
-It preserves the40-row registry and rejects a full40 release while B/C are
-unimplemented. An explicitly reviewed Group A-only release filters the original
+It preserves the40-row registry and rejects a full40 release until C is
+implemented/qualified. An explicitly reviewed Group A-only release filters the original
 interleaving, reuses C0/C1 (and compatible J5), and adds no fit dependencies.
 This optional partial release does not replace the combined first-seven policy.
 
@@ -117,6 +119,12 @@ does not fail tests of scientific admission or cancel registered fits.
 
 ### Group B: questions and learned local-pattern statistics, candidates4/7
 
+Implemented additively in the existing namespace as9 independent B rows, with
+separate immutable registration/output roots and the common native trainer,
+worker, resource measurement, submission journals and reporting. The user's
+existing A jobs/source remain pinned and untouched. B reuses original C0/C1
+and already transferred raw/U100 inputs; it does not wait for A science.
+
 Implement Q and V on the authenticated raw-source foundation from A. This is9
 selected configurations:5 Q and4 V.
 
@@ -131,6 +139,24 @@ momentum-weighting controls. The wider question-count, codebook-size and spatial
 variants remain in the catalog. Tests must cover target formulas, sampling
 independence, missing-value behavior, frozen codebook fitting/assignment,
 frequency normalization and exact replay of compact banks.
+
+The [B v1 contract](../contracts/LUKA_NEXT_SUPERVISION_GROUP_B.md) closes the
+catalog/dictionary choices before execution registration. Q proposes up to2048
+distinct semantics per family and measures support over the entire TRAIN set,
+retaining up to1024 nonconstant entries with no rare-prevalence cutoff. Actual
+shortfall is disclosed in the frozen catalog/science review without duplicate
+padding. If a whole family is constant, its fixed queries have zero applicability
+and are reported as supplying no nonconstant supervision; finite poor targets
+never fail or cancel a row. This replaces the earlier unresolved instruction
+to change the draft only after seeing short support. Sampling uses semantic
+parameters, never per-anchor answers or class. V uses frozen K128 MiniBatchKMeans,
+equal TRAIN block energy and separate OFFLINE/HLT target banks. These data-driven
+target realizations are frozen in setup before any B scientific fit.
+
+B alone submits in original filtered order: Q1,V1,Q2,V2,Q5,V6,Q3,V7,Q6. Its
+six distinct source/loss paths require genuine warmed Hydra resource acceptance.
+It shares A's6CPU/32000MiB A6000 profile,48h ceiling and full30 budget. There is
+no dependency on an A scientific fit and no fit-to-fit dependency within B.
 
 ### Group C: conditional distributions and set denoising, candidates1/2
 
@@ -152,6 +178,7 @@ wait for A/B training results.
 ### Shared completion standard
 
 The groups are coding milestones, not three serialized scientific campaigns.
+Separately authorized A-only and B-only releases may run alongside one another.
 Complete and technically validate all three before releasing the combined
 first campaign so its first seven primary submissions span all seven candidates.
 Each group should have focused tests and a concrete reviewable change set.

@@ -21,10 +21,15 @@ must be reportable as fits finish. Group A now has an additive
 [implementation and Hydra runbook](docs/LUKA_NEXT_SUPERVISION_GROUP_A_RUNBOOK.md):
 22 particle-soup, intact-group and learned-judge configurations with authenticated
 reference reuse. It keeps native CE+U100-w5 and adds removable heads; independent
-science release follows real measured setup. Groups B/C remain unimplemented.
+science release follows real measured setup. Group B now extends that same
+foundation with9 structured-question/pattern-frequency fits and its own
+[Brown runbook](docs/LUKA_NEXT_SUPERVISION_GROUP_B_RUNBOOK.md). It reuses the
+existing transfer/references and can queue independently alongside A. Group C
+remains unimplemented; full40 release is unavailable.
 Group A execution v2 repairs index/preparation overhead exposed by failed Hydra
-setup150801. It preserves the scientific recipe and transferred inputs; a fresh
-measured setup remains required. The runbook includes recovery registration.
+setup150801. It preserves the scientific recipe and transferred inputs; each
+new execution requires its own measured setup. The A runbook includes recovery
+registration; the separate B setup measures its new target/loss paths.
 
 The [HLT-aligned particle-teacher campaign](docs/LUKA_PARTICLE_TEACHER_HYDRA_RUNBOOK.md)
 adds twelve native HLT fits on Hydra RTX A6000. Every fit keeps CE + U100-w5.

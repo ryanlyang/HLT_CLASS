@@ -58,9 +58,15 @@ def step(model,opt,raw,embedding,device,*,candidates,indices,epoch,position,prob
         with torch.autocast(torch.device(device).type,enabled=False):
             scores=model.auxiliary(batch); aux=auxiliary_loss(scores,batch,cfg['family'])
             timing('auxiliary_forward')
+            if probe and cfg['family'] in ('Q','V'):
+                gradient=torch.autograd.grad(aux,model.jet,retain_graph=True)[0]
+                diagnostics['auxiliary_jet_gradient_norm']=float(gradient.detach().norm())
             with torch.no_grad():
                 if probe:
-                    if cfg['family']=='J':
+                    if cfg['family'] in ('Q','V'):
+                        from .structured_model import diagnostics as structured_diagnostics
+                        diagnostics.update(structured_diagnostics(scores,batch,cfg['family']))
+                    elif cfg['family']=='J':
                         diagnostics['retrieval_top1']=float((scores.argmax(-1)==batch['positive']).float().mean())
                     else:
                         y=batch['labels']; diagnostics.update(positive_score=float(scores[y].sigmoid().mean()),
@@ -89,7 +95,7 @@ def step(model,opt,raw,embedding,device,*,candidates,indices,epoch,position,prob
 
 
 def parents(spec):
-    return dict(spec=spec['content_hash'],recipe=recipe()['content_hash'],embedding=spec['embedding_hash'],
+    return dict(spec=spec['content_hash'],recipe=spec.get('recipe',recipe())['content_hash'],embedding=spec['embedding_hash'],
         prepared=spec['anchor']['evidence']['prepared'],raw=spec['raw_hash'],keys=spec['key_hash'])
 
 

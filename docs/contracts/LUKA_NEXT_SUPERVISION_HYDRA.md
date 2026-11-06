@@ -11,6 +11,11 @@ transfer, normalization, targets and other envelopes stay v1. Failed execution
 v1 artifacts must be read in their pinned original source; they are not
 accepted as a v2 setup. Old contracts are unchanged.
 
+This is the A-scope contract. The shared implementation additionally supports
+the separately registered [Group B v1 scope](LUKA_NEXT_SUPERVISION_GROUP_B.md).
+That extension does not rewrite the original A recipe, specifications or
+running worktrees, and cannot release the unimplemented Group C/full40 study.
+
 ## Scientific registration
 
 The registry preserves all40 planned row IDs and their order. Only22 Group A
