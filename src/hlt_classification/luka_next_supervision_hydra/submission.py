@@ -1,4 +1,4 @@
-"""Independent fits; R2 additionally authorizes a durable measured Slurm release."""
+"""Independent fits; R2/R3 additionally authorize a durable measured Slurm release."""
 from pathlib import Path
 from hlt_classification.cms_proxy_ladder.submission import _walltime
 from hlt_classification.data.cache_contracts import load_json,write_immutable_json
@@ -12,7 +12,7 @@ from . import campaign
 
 
 def automatic(spec):
-    return spec.get('scope')=='direct_reconstruction_only' and spec.get('execution_version')=='R2'
+    return spec.get('scope')=='direct_reconstruction_only' and spec.get('execution_version') in ('R2','R3')
 
 
 def setup_stage(spec): return 'bootstrap' if automatic(spec) else 'setup'
@@ -33,11 +33,11 @@ def command(spec,task,minutes):
 def plan(spec,stage,acceptance=None):
     parents=dict(spec=spec['content_hash'])
     if stage=='bootstrap':
-        if not automatic(spec): raise ValueError('Automatic release requires a fresh R2 registration')
+        if not automatic(spec): raise ValueError('Automatic release requires a fresh R2/R3 registration')
         from .reconstruction_release import release_command
         commands=[command(spec,'setup',spec['setup_minutes']),release_command(spec)]
     elif stage=='setup':
-        if automatic(spec): raise ValueError('Use bootstrap to queue R2 setup and its durable release together')
+        if automatic(spec): raise ValueError('Use bootstrap to queue R setup and its durable release together')
         commands=[command(spec,'setup',spec['setup_minutes'])]
     elif stage=='science':
         if acceptance is None: raise ValueError('Completed measured setup required')

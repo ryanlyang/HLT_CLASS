@@ -1,4 +1,4 @@
-"""R2 CPU release, adapted from the particle-teacher exact Slurm workflow."""
+"""R2/R3 CPU release, adapted from the particle-teacher exact Slurm workflow."""
 from pathlib import Path
 import json
 import os
@@ -83,7 +83,7 @@ def finish(spec,job):
     """Honor the original bounded authorization; never resume a partial sbatch journal."""
     from .worker import completed_setup
     campaign.check(spec)
-    if not submission.automatic(spec): raise PermissionError('Fresh R2 bootstrap authorization required')
+    if not submission.automatic(spec): raise PermissionError('Registered automatic reconstruction authorization required')
     bootstrap=submission.plan(spec,'bootstrap'); folder=Path(spec['root'])/'submission_bootstrap'
     claim=load_json(folder/'live_claim/intent.json')
     expected=artifact('SUBMIT_CLAIM',parents=dict(plan=bootstrap['content_hash']),authorization=authorization(spec))

@@ -12,7 +12,8 @@ from . import campaign,inputs,reuse,reconstruction_targets as targets
 def registration():
     result=campaign.registration(); result.pop('storage_budget_bytes')
     result.update(recipe=recipe(),tasks=[*TASKS,'C0','C1'],global_order=list(TASKS),scope=SCOPE,
-        execution_version='R2',deferred_groups=['A','B','C'],sampler_index='direct_complete_measured_set_v1',candidate_workers=0,
+        execution_version='R3',reconstruction_kernel='batched_exact_chunk_v1',assignment_workers=6,
+        deferred_groups=['A','B','C'],sampler_index='direct_complete_measured_set_v1',candidate_workers=0,
         release_policy='slurm_afterok_measured_independent_v1',release_minutes=60,
         cpu_site=dict(partition='compute',account='default',qos='normal',cpus=1,memory_mb=4000))
     return result

@@ -2,12 +2,19 @@
 
 Twelve new native CE+U100-w5 fits, with complete measured-set reconstruction.
 See the [plan](plans/LUKA_DIRECT_OFFLINE_RECONSTRUCTION_IMPLEMENTATION_PLAN.md),
-[scientific v1 / execution R2 contract](contracts/LUKA_DIRECT_OFFLINE_RECONSTRUCTION.md) and
+[scientific v1 / execution R3 contract](contracts/LUKA_DIRECT_OFFLINE_RECONSTRUCTION.md) and
 [validation evidence](LUKA_DIRECT_OFFLINE_RECONSTRUCTION_VALIDATION.md).
 
 Use the existing Group A spec, raw transfer, environment and C0/C1 references.
 No new SPORC export, teacher training or reference rerun is needed. Keep those
 inputs and old source worktrees. The new R setup is separate from A/B/C jobs.
+
+R3 repairs the matching/loss execution overhead exposed by failed setup153208
+on commit57789d36. It retains all298 measured output slots for that dataset,
+the FP32 decoder, exact SciPy assignments, full30epochs and48-hour ceiling.
+Use the newly pushed commit and a fresh v3 root below. The failed v2 root,
+its setup/release IDs, claims and diagnostics must remain separate; do not
+requeue that setup or edit its spec. No new SPORC transfer is needed.
 
 ## Commit and push the reviewed files
 
@@ -22,6 +29,7 @@ $paths = @(
     'scripts/queue_luka_next_supervision_hydra.sh',
     'tests/test_luka_direct_reconstruction.py',
     'tests/test_luka_reconstruction_release.py',
+    'tests/test_luka_reconstruction_batched.py',
     'docs/contracts/LUKA_DIRECT_OFFLINE_RECONSTRUCTION.md',
     'docs/LUKA_DIRECT_OFFLINE_RECONSTRUCTION_RUNBOOK.md',
     'docs/LUKA_DIRECT_OFFLINE_RECONSTRUCTION_VALIDATION.md',
@@ -40,7 +48,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Staging failed' }
 git diff --cached --stat
 git diff --cached --check
 if ($LASTEXITCODE -ne 0) { throw 'Fix staged whitespace first' }
-git commit -m 'Implement direct OFFLINE jet reconstruction on Hydra'
+git commit -m 'Batch exact reconstruction loss and assignments for Hydra'
 if ($LASTEXITCODE -ne 0) { throw 'Commit failed' }
 git push origin main
 if ($LASTEXITCODE -ne 0) { throw 'Push failed' }
@@ -75,7 +83,7 @@ else
     git -C "$MAIN" worktree add --detach "$PROJECT" "$COMMIT"
 fi
 ENV_DIR="$(python3 -B -s -c 'import json,sys; print(json.load(open(sys.argv[1]))["environment_dir"])' "$GROUP_A_SPEC")"
-ROOT="${BASE}/runs/next_R_${COMMIT:0:8}_a6000_v2_r1"
+ROOT="${BASE}/runs/next_R_${COMMIT:0:8}_a6000_v3_r1"
 test ! -e "$ROOT"
 df -h "$BASE"
 read -r -p 'Personally available GiB for R outputs after existing data/environment: ' QUOTA_GIB </dev/tty
@@ -136,7 +144,7 @@ BASE="$(cd "$HOME" && pwd -P)/hlt_u100_pairs"
 read -r -p 'Same 40-character R commit: ' COMMIT </dev/tty
 [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]]
 PROJECT="${BASE}/code_next_R_${COMMIT:0:8}"
-ROOT="${BASE}/runs/next_R_${COMMIT:0:8}_a6000_v2_r1"
+ROOT="${BASE}/runs/next_R_${COMMIT:0:8}_a6000_v3_r1"
 SPEC="${ROOT}/campaign_spec.json"
 ENV_DIR="$(python3 -B -s -c 'import json,sys; print(json.load(open(sys.argv[1]))["environment_dir"])' "$SPEC")"
 export PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1
@@ -153,15 +161,16 @@ The bootstrap ledger contains setup/release IDs; the science ledger contains
 all twelve fit IDs after release. If release fails, preserve its log, claims
 and journals. An interrupted partial journal needs exact-ID inspection before
 recovery; do not erase its claim, requeue setup or launch another release blindly.
-Already registered R1 specs retain their old manual workflow in their pinned
-source; this R2 workflow requires a fresh root and the newly pushed code.
+Already registered R1/R2 specs retain their own pinned implementation. This
+R3 workflow requires a fresh root and the newly pushed code. Its setup must
+remeasure all six paths; local timing is not a substitute for Hydra acceptance.
 
 ## Read results and running epochs
 
 Set SPEC to the exact new campaign path, then use either final line:
 
 ```bash
-SPEC="/absolute/path/to/next_R_COMMIT_a6000_v2_r1/campaign_spec.json"
+SPEC="/absolute/path/to/next_R_COMMIT_a6000_v3_r1/campaign_spec.json"
 PROJECT="$(python3 -B -s -c 'import json,sys; print(json.load(open(sys.argv[1]))["project_dir"])' "$SPEC")"
 ENV_DIR="$(python3 -B -s -c 'import json,sys; print(json.load(open(sys.argv[1]))["environment_dir"])' "$SPEC")"
 export PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1

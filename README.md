@@ -17,6 +17,10 @@ One confirmation queues its real A6000 setup and a durable CPU release job.
 After setup qualifies resources, release automatically submits all twelve
 independent fits; logout is safe once bootstrap submission completes. Existing
 A/B/C executions remain separate.
+R execution v3 batches exact reconstruction matching/loss work and uses up to
+six CPU solver threads after setup153208 exceeded the48-hour runtime estimate.
+All targets, scientific losses and resource ceilings are retained; a fresh
+R3 setup must qualify the new execution before automatic science submission.
 
 The [next supervision ideas draft](docs/plans/LUKA_NEXT_SUPERVISION_CAMPAIGN_IDEAS.md)
 collects seven proposed additions to native CE+U100-w5: conditional distributions

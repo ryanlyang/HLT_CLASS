@@ -265,7 +265,7 @@ def test_create_check_inventory_quota_and_original_immutability(tmp_path,monkeyp
     assert not (tmp_path/'R').exists()
     spec=reconstruction.create(tmp_path/'R',original,tmp_path/'code','f'*40,8)
     assert spec['scope']==rc.SCOPE and spec['remaining']==list(rc.TASKS)
-    assert set(spec['reused'])=={'C0','C1'} and spec['contract'].endswith('DIRECT_RECONSTRUCTION_SPEC/v2')
+    assert set(spec['reused'])=={'C0','C1'} and spec['contract'].endswith('DIRECT_RECONSTRUCTION_SPEC/v3')
     reconstruction.check(spec); assert original.read_bytes()==initial
     with pytest.raises(ValueError,match='fresh'): reconstruction.create(tmp_path/'R',original,tmp_path/'code','f'*40,8)
     spec['remaining'].append('S1')
@@ -356,12 +356,12 @@ def test_R_progress_reports_selected_and_same_epoch_same_seed_without_writes(tmp
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(),reason='CUDA unavailable')
-def test_CUDA_257_fixed_slots_full128_decoder_backward_without_target_count_input():
-    decoder=rm.Decoder(c.setting('R10'),257).cuda()
+def test_CUDA_298_fixed_slots_full128_decoder_backward_without_target_count_input():
+    decoder=rm.Decoder(c.setting('R10'),298).cuda()
     h=torch.randn(128,128,device='cuda',requires_grad=True)
     tokens=torch.randn(128,16,128,device='cuda',requires_grad=True); mask=torch.ones(128,16,device='cuda',dtype=torch.bool)
-    targets=[target(87 if i%2 else 3) for i in range(128)]
+    targets=[target((298,87,3)[i%3]) for i in range(128)]
     value,_,gh,gt,_=kernel.decode_backward(decoder,h,tokens,mask,targets,.1,consistency=True)
     assert math.isfinite(value) and gh.shape==h.shape and gt.shape==tokens.shape
-    assert gh.norm()>0 and gt.norm()>0 and decoder.queries.shape==(257,256)
+    assert gh.norm()>0 and gt.norm()>0 and decoder.queries.shape==(298,256)
     del decoder,h,tokens,gh,gt; torch.cuda.empty_cache()

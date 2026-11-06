@@ -1,5 +1,21 @@
 # Legacy Donor-Source Map
 
+## Reconstruction R3 batched exact loss execution (2026-11-06)
+
+Exact internal donor: `57789d368e189ddf6bf8c8cb96cfb89e6b92251f`.
+No external implementation or Fresh_check import was added.
+
+| Donor at that commit | Adaptation |
+| --- | --- |
+| `src/hlt_classification/luka_next_supervision_hydra/reconstruction_loss.py` | `target`, `fields`, `match`, `physical`, `consistency` and `row` equations adapted into chunk-batched `reconstruction_batched.py`; original scalar objective retained unchanged as independent reference. SciPy solver is still exact on each complete rectangular cost. |
+| `src/hlt_classification/luka_next_supervision_hydra/reconstruction_training.py` | Existing eight-jet decoder backward and first-batch probes use the batched objective; native forward, VJP injection, optimizer and schedule unchanged. |
+| `tests/test_luka_direct_reconstruction.py` | Synthetic score/target fixtures reused in new scalar-versus-batched assignment, value and gradient parity coverage. |
+
+Registration/source inventory and R execution contract advance to SPEC/v3,
+recording `batched_exact_chunk_v1` and six assignment workers. Scientific recipe
+hashes and earlier source worktrees remain unchanged. Remote setup153208 evidence
+and subsequent local checks are recorded in the R validation/handoff documents.
+
 ## Direct reconstruction automatic release (2026-11-06)
 
 Exact internal donor: `505b07364041d4f51c42ac9e6a2f85353258606a`.

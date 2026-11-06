@@ -30,13 +30,13 @@ GROUP_PROPOSALS=4096
 
 
 def artifact(kind, *, parents=None, **fields):
-    version=2 if kind in ('SPEC','RESOURCE_CHECK','ACCEPTANCE','DIRECT_RECONSTRUCTION_SPEC') else 1
+    version=3 if kind=='DIRECT_RECONSTRUCTION_SPEC' else 2 if kind in ('SPEC','RESOURCE_CHECK','ACCEPTANCE') else 1
     return with_content_hash(dict(contract=f'LUKA_NEXT_SUPERVISION_{kind}/v{version}', schema_version=version,
         parents=dict(parents or {}), **FLAGS, **fields))
 
 
 def validate(value, kind, parents=None):
-    version=2 if kind in ('SPEC','RESOURCE_CHECK','ACCEPTANCE','DIRECT_RECONSTRUCTION_SPEC') else 1
+    version=3 if kind=='DIRECT_RECONSTRUCTION_SPEC' else 2 if kind in ('SPEC','RESOURCE_CHECK','ACCEPTANCE') else 1
     validate_content_hash(value, expected_contract=f'LUKA_NEXT_SUPERVISION_{kind}/v{version}', expected_schema_version=version)
     if any(value.get(k) != v for k,v in FLAGS.items()) or (parents is not None and value['parents'] != parents):
         raise ValueError('Supervision scope or parent lineage differs')

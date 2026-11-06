@@ -8,6 +8,7 @@ from hlt_classification.luka_cross_message_hydra.training import forward
 from .contracts import coefficient
 from .reconstruction_contracts import CHUNK
 from . import reconstruction_loss as objective
+from . import reconstruction_batched as batched
 from .probabilistic_targets import conditioning_permutation
 
 
@@ -21,7 +22,7 @@ def decode_backward(decoder,h,tokens,mask,targets,weight,*,chunk=CHUNK,consisten
         end=min(start+chunk,b); sync(); began=time.perf_counter()
         scores=decoder(sh[start:end],None if st is None else st[start:end],None if st is None else mask[start:end])
         sync(); decoder_seconds+=time.perf_counter()-began
-        losses,fields=objective.rows(scores,targets[start:end],consistency,timings=breakdown if measure else None)
+        losses,fields=batched.rows(scores,targets[start:end],consistency,timings=breakdown if measure else None)
         loss=losses.sum()/b
         sync(); forward_seconds+=time.perf_counter()-began; began=time.perf_counter()
         (weight*loss).backward()
@@ -61,7 +62,7 @@ def probes(model,targets,raw,weight,gh,gt):
                 end=min(start+CHUNK,n); ix=torch.as_tensor(indices[start:end],device=h.device)
                 q=h[ix]; t=tokens[ix]; m=mask[ix]
                 if zero: q=torch.zeros_like(q); t=torch.zeros_like(t); m=torch.zeros_like(m)
-                score=model.aux(q,t,m); losses,_=objective.rows(score,targets[start:end],False)
+                score=model.aux(q,t,m); losses,_=batched.rows(score,targets[start:end],False)
                 loss+=float(losses.sum())/n
                 if name=='correct':
                     count=torch.tensor([len(t['values']) for t in targets[start:end]],device=h.device)

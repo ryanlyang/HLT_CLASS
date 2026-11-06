@@ -1,6 +1,6 @@
 # Direct OFFLINE jet reconstruction: twelve-fit Hydra implementation plan
 
-Status: implementation v1, 2026-11-06. The additive R scope is implemented;
+Status: scientific implementation v1, execution R3, 2026-11-06. The additive R scope is implemented;
 see the [contract](../contracts/LUKA_DIRECT_OFFLINE_RECONSTRUCTION.md),
 [local evidence](../LUKA_DIRECT_OFFLINE_RECONSTRUCTION_VALIDATION.md) and
 [Hydra runbook](../LUKA_DIRECT_OFFLINE_RECONSTRUCTION_RUNBOOK.md).
@@ -515,6 +515,22 @@ Focused tests must include:
 
 ## 12. Hydra resources and independent queue workflow
 
+R3 execution correction after setup153208 on57789d36: real target support is
+K=298. The setup recorded2.030seconds per full training step and a conservative
+4791-minute request, above the2880-minute limit. Matching accounted for roughly
+0.84-0.90seconds/full batch; decoder forward was about0.13seconds. The failure
+was technical runtime admission, not scientific quality or memory exhaustion.
+
+R3 retains the registered objective and batch/decoder shapes. Validate and
+canonicalize targets on CPU, form the eight-jet chunk's full FP32 field costs
+in batch, transfer detached FP64 costs once, and solve each full rectangular
+assignment with SciPy using at most six threads. Recompute matched losses and
+consistency in batch with per-jet masking/reductions. No padded column reaches
+the solver; the decoder receives neither target counts nor padding. Preserve
+the scalar implementation as the loss/gradient/assignment reference. This is
+an execution change with SPEC/v3, not a larger runtime allowance or changed
+scientific recipe. New genuine six-path setup remains necessary.
+
 Use Brown Hydra's RTX A6000 profile as the initial intended platform, following
 the current campaigns. Its availability is not established by this plan.
 Start profiling with one GPU, six CPUs and the existing 32,000 MiB host request,
@@ -548,13 +564,13 @@ qualification before release. The user's preference authorizes investigating
 greater training cost, not claiming unmeasured resources or altering science
 silently. Preserve diagnostics for any technical admission failure.
 
-The R2 execution workflow below supersedes the original manual second review,
+The R3 execution workflow below retains R2's automatic release and supersedes the original manual second review,
 at the user's request. Scientific recipes, targets and twelve-row order are
-unchanged. A fresh SPEC/v2 binds the automatic release policy; existing manual
-registrations are not upgraded or edited in place.
+unchanged. A fresh SPEC/v3 binds the automatic release policy and batched exact
+matching kernel; existing registrations are not upgraded or edited in place.
 
 1. Commit/push exact clean source and register a new R-only root from existing
-   authenticated inputs/reference proofs. Prefix: `next_R_<commit>_a6000_v2_r1`.
+   authenticated inputs/reference proofs. Prefix: `next_R_<commit>_a6000_v3_r1`.
 2. Review/authorize the `bootstrap` plan once, including the twelve tasks,
    scientific recipe and resource ceilings. It submits `lukanr_setup` on the
    A6000 and `lukanr_release` on compute with `afterok:<exact setup job>`.
@@ -566,7 +582,7 @@ registrations are not upgraded or edited in place.
    scheduler-dry-reviews the complete measured science plan before submitting.
 4. All twelve fits queue automatically within the initially authorized bounds,
    with no second confirmation or login process. Token:
-   `AUTHORIZE_DIRECT_RECONSTRUCTION_AUTO_V2`; task names `lukanr_R1`, etc.
+   `AUTHORIZE_DIRECT_RECONSTRUCTION_AUTO_V3`; task names `lukanr_R1`, etc.
    Failed setup, missing/corrupt evidence or exceeded resources cannot release
    science. An ambiguous partial sbatch journal requires exact-ID inspection;
    it is never blindly retried. Poor finite quality does not gate admission.

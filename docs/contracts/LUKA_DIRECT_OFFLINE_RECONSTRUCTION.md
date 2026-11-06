@@ -1,4 +1,4 @@
-# Direct measured OFFLINE reconstruction: scientific v1, execution R2
+# Direct measured OFFLINE reconstruction: scientific v1, execution R3
 
 Authority: [implementation plan](../plans/LUKA_DIRECT_OFFLINE_RECONSTRUCTION_IMPLEMENTATION_PLAN.md).
 Execution: [Hydra runbook](../LUKA_DIRECT_OFFLINE_RECONSTRUCTION_RUNBOOK.md).
@@ -7,7 +7,7 @@ Evidence: [local validation](../LUKA_DIRECT_OFFLINE_RECONSTRUCTION_VALIDATION.md
 ## Scientific registration
 
 The separate scope is `direct_reconstruction_only`, authorization token
-`AUTHORIZE_DIRECT_RECONSTRUCTION_AUTO_V2`, and job prefix `lukanr_`. The existing
+`AUTHORIZE_DIRECT_RECONSTRUCTION_AUTO_V3`, and job prefix `lukanr_`. The existing
 forty-row A/B/C registry and recipes retain their scientific identities.
 All twelve R fits preserve the authenticated D000 HLT view, fresh native
 initialization, batch128,30epochs, schedule, CE+U100 embedding weight5, and
@@ -111,15 +111,29 @@ chunk/B and lambda. Their accumulated h/T VJPs are injected into the original
 native graph together with CE+5*embedding. One optimizer update follows.
 This preserves native BatchNorm and avoids retaining all decoder graphs.
 
+Execution R3 batches target validation/canonicalization on CPU and field-cost
+calculation on GPU within the same eight-jet chunk. One detached FP64 cost
+transfer replaces per-jet transfers. A persistent pool of at most six CPU
+threads solves independent complete K-by-N SciPy assignments, using the same
+canonical target order. No padding enters a solver; every real target receives
+one slot. Matched field/presence/count and consistency losses then run in batch,
+with per-jet reductions and empty-set masking. Padding exists only on the loss
+side, never as decoder input or a query-count hint. The scalar objective stays
+as an independent reference for value, assignment and gradient parity tests.
+FP32 reduction order may differ within measured tolerance; no loss, precision,
+model, matching approximation or decoder chunk-size change is introduced.
+
 ## Artifacts and admission
 
 Scientific v1 envelopes are
 `LUKA_NEXT_SUPERVISION_DIRECT_RECONSTRUCTION_{RECIPE,INVENTORY,BANK,TARGETS}/v1`.
-The execution envelope is `LUKA_NEXT_SUPERVISION_DIRECT_RECONSTRUCTION_SPEC/v2`,
-with execution_version R2. It binds CPU compute/default/normal, one requested
+The execution envelope is `LUKA_NEXT_SUPERVISION_DIRECT_RECONSTRUCTION_SPEC/v3`,
+with execution_version R3, reconstruction_kernel `batched_exact_chunk_v1` and
+assignment_workers6 (within the existing six-CPU GPU allocation). It binds
+CPU compute/default/normal, one requested
 CPU,4000MiB,60minutes, and `slurm_afterok_measured_independent_v1` release policy.
-The former SPEC/v1 manual flow is not silently converted to automatic release;
-use a fresh source-pinned R2 root. A/B/C remain on their existing manual workflow.
+Earlier SPEC/v1/v2 executions remain owned by their pinned implementations;
+use a fresh source-pinned R3 root. A/B/C remain on their existing manual workflow.
 Each uses the established content hash, scope flags, parent hashes and immutable
 publication. Banks include payload hashes, normalization, complete counts and
 ordered TRAIN identity/label arrays. TARGETS binds common K and both banks.

@@ -1,5 +1,36 @@
 # Current Handoff
 
+## 2026-11-06: R3 exact reconstruction execution repair
+
+User-supplied Hydra setup153208 at source57789d36 failed runtime admission:
+R1 measured2.030168seconds/full batch,4791minutes versus the2880-minute ceiling;
+K=298, host peak4.79GiB, GPU peak6.42GiB. It completed raw target preparation
+and warm/measured R1 steps. Matching took roughly0.84-0.90seconds/full batch;
+decoder forward was0.13seconds. This is not a scientific-quality rejection.
+
+New `reconstruction_batched.py` executes the same field costs and losses per
+eight-jet chunk, canonicalizes targets on CPU, transfers full detached costs
+once and solves independent exact SciPy assignments on up to six CPU threads.
+Matched losses and consistency are batched; the original scalar implementation
+is retained for parity. The trainer keeps its original decoder/native backward
+and schedule. R SPEC advances to v3 with execution R3; scientific recipe remains
+v1 and retains its hash. Resource ceilings and automatic release are unchanged.
+New tests, registry/source inventory, plan/contract/runbook/validation and README
+document the fresh v3 root and preservation of failed v2 outputs.
+
+Donor is `57789d368e189ddf6bf8c8cb96cfb89e6b92251f`; exact adaptations are in
+the source map. Baseline43 checks passed in130.86s; initial parity checks26
+passed in8.06s. Final R/batched/release suite91 passed in97.19s; A/B/C orchestration
+regression12 passed in7.67s. The subsequent298-slot/full128 CUDA stress case
+passed in8.14s. A same-condition synthetic decoder/loss/backward benchmark
+measured3.0-3.6x improvement locally, not on Hydra. Static AST/53-file inventory,
+runbook shell/PowerShell syntax, documentation links and whitespace passed.
+Final evidence is recorded in the
+[validation document](LUKA_DIRECT_OFFLINE_RECONSTRUCTION_VALIDATION.md).
+No remote job or old execution artifact was changed. Next task is commit/push
+and a fresh R3 bootstrap using the updated runbook; only real measured setup
+can establish that the optimized implementation fits the existing envelope.
+
 ## 2026-11-06: R2 automatic reconstruction release
 
 At the user's request, R now has a single-confirmation `bootstrap` workflow:
