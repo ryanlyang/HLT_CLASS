@@ -5,12 +5,25 @@ and training-time use of paired offline information.
 
 ## Current status
 
+The [direct OFFLINE reconstruction implementation plan](docs/plans/LUKA_DIRECT_OFFLINE_RECONSTRUCTION_IMPLEMENTATION_PLAN.md)
+now has twelve additional CE+U100-w5 fits implemented: complete particle-set prediction
+from the pooled HLT embedding or pooled embedding plus HLT particle tokens,
+with two main seeds, weight sweeps, whole-jet consistency and HLT-reconstruction
+controls. It prioritizes target completeness and decoder capacity, specifies
+exact set matching and independent Hydra submission, and reuses compatible
+references. See the [Hydra setup/queue runbook](docs/LUKA_DIRECT_OFFLINE_RECONSTRUCTION_RUNBOOK.md)
+and [validation boundary](docs/LUKA_DIRECT_OFFLINE_RECONSTRUCTION_VALIDATION.md).
+One confirmation queues its real A6000 setup and a durable CPU release job.
+After setup qualifies resources, release automatically submits all twelve
+independent fits; logout is safe once bootstrap submission completes. Existing
+A/B/C executions remain separate.
+
 The [next supervision ideas draft](docs/plans/LUKA_NEXT_SUPERVISION_CAMPAIGN_IDEAS.md)
 collects seven proposed additions to native CE+U100-w5: conditional distributions
 of richer jet embeddings, conditional denoising of pure-OFFLINE particle sets,
 a learned HLT/OFFLINE compatibility judge, structured OFFLINE question prediction,
 particle-soup membership, intact pair/triplet membership and learned offline
-pattern-frequency prediction. Particle soup is the user's current priority, with
+pattern-frequency prediction. Particle soup was prioritized within that screen, with
 broad, matched and mined distractor comparisons. The draft describes preferred
 designs, controls and an expandable grid at fixed deployed architecture.
 The [three-group implementation proposal](docs/plans/LUKA_SEVEN_CANDIDATE_IMPLEMENTATION_PLAN.md)

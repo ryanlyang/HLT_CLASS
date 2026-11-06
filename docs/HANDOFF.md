@@ -1,5 +1,116 @@
 # Current Handoff
 
+## 2026-11-06: R2 automatic reconstruction release
+
+At the user's request, R now has a single-confirmation `bootstrap` workflow:
+one A6000 setup plus a compute CPU release with afterok on the exact setup ID.
+The release survives logout, authenticates the original bounded authorization,
+source, successful setup accounting and full measured receipts, then writes
+and dry-reviews the exact twelve-fit plan before independent submission.
+There are no fit-to-fit dependencies. Failed setup cannot release science;
+ambiguous partial submissions stop without duplicate retries. CPU checks handle
+Hydra's observed one-requested/two-allocated CPU representation. Science and
+A/B/C workflows are unchanged. This supersedes the earlier manual R release
+description below, not its scientific recipe.
+
+Changes are in `reconstruction_release.py`, shared submission/worker and CLI/
+queue dispatch, R registration and SPEC/v2, focused tests, README and the R
+plan/contract/runbook/validation documents. Authorization is now
+`AUTHORIZE_DIRECT_RECONSTRUCTION_AUTO_V2`; register a fresh R2 root. The R
+RECIPE/INVENTORY/BANK/TARGETS contracts retain v1 and their meaning. Internal
+donor commit is `505b07364041d4f51c42ac9e6a2f85353258606a`; adapted
+particle-teacher submission/CPU-check paths are recorded in the source map.
+
+Pre-edit focused baseline:4 passed in10.53s. Initial automatic-release and
+R integration verification:30 passed in12.37s. Final focused A/B/C/R regression:
+61 passed in106.34s. Static checks passed34 ASTs,51 required files, two shell
+scripts, three Bash runbook blocks, the PowerShell commit block,16 R links and
+whitespace. Details are in the [validation document](LUKA_DIRECT_OFFLINE_RECONSTRUCTION_VALIDATION.md).
+No live Brown/Tigris jobs were submitted or modified. Next step: commit/push,
+register the new R2 spec, and use the runbook's `bootstrap` command. Its real
+A6000 setup must qualify the campaign before the automatic release can proceed.
+
+## 2026-11-06: direct OFFLINE reconstruction implementation
+
+Implemented the user's [twelve-fit R plan](plans/LUKA_DIRECT_OFFLINE_RECONSTRUCTION_IMPLEMENTATION_PLAN.md)
+as the additive `direct_reconstruction_only` scope in the next-supervision
+Hydra package. All rows retain native CE+U100-w5. R compares global-h and
+global-plus-block8-token reconstruction, replicated main seeds, weights0.03/0.1/0.3,
+whole-jet consistency and two HLT-source controls. C0/C1 proofs are reused;
+the original forty-row A/B/C recipes and existing jobs retain their meaning.
+
+Six new modules implement the R registry/registration, inventory-derived
+storage allowance, complete memory-mapped TRAIN targets, fixed common K,
+four-block width256 decoder, exact presence-aware rectangular assignment,
+mixed categorical/continuous/validity/count loss and FP64 aggregate consistency.
+The native batch128 executes once. Decoder chunks of eight accumulate h/T
+condition VJPs before a single native backward/update; classifier attention
+receives no reconstruction values. Deployment exports only native weights.
+
+Shared CLI/trainer/resource/worker/submission/reporting paths add create-r,
+six warmed execution paths, target/slot review and12independent `lukanr_` jobs
+in order `R1 R2 R3 R4 R11 R12 R5 R6 R7 R8 R9 R10`. There are no scientific
+dependencies, holds, concurrency lanes or automatic release after setup.
+Read-only epochs include selected and same-epoch same-seed U100 comparisons;
+first-TRAIN-batch probes report field, presence, count, validity, gradient and
+aggregate diagnostics with conditioning shuffles. Poor finite quality never
+skips a row. No new raw export, offline validation access or teacher fit is needed.
+
+Internal donor is `505b07364041d4f51c42ac9e6a2f85353258606a`; exact paths and
+adaptations are in [LEGACY_SOURCE_MAP](LEGACY_SOURCE_MAP.md). New
+DIRECT_RECONSTRUCTION RECIPE/INVENTORY/SPEC/BANK/TARGETS contracts are v1;
+shared fit/epoch/receipt and execution-v2 resource contracts bind R parents.
+Unrelated local edits and pinned historical donor runtime are preserved.
+
+Pre-edit baseline:154 tests passed in161.32s. Combined A/B/C/R verification:
+197 passed in273.10s, including production-width CUDA full128/partial2 paths
+and a257-slot/full128 decoder stress check. After the audit correction to
+exactly uniform initial categorical/count logits and presence0.1, the final
+R-only suite passed43 tests in131.68s. Details are recorded in the
+[validation document](LUKA_DIRECT_OFFLINE_RECONSTRUCTION_VALIDATION.md).
+Static checks passed for32ASTs,745local documentation links, shell/PowerShell
+syntax, whitespace and all49required files. The campaign is locally queue ready
+for its technical setup. These are synthetic results, not measured Brown recovery.
+
+No Brown/Tigris job was submitted or modified, and no real-data R miniature
+has run. Next execution step: commit/push the reviewed files, register a fresh
+R root from existing A inputs, and queue its genuine A6000 technical setup
+using the [runbook](LUKA_DIRECT_OFFLINE_RECONSTRUCTION_RUNBOOK.md). Only after
+exact setup COMPLETED/0:0 and measured acceptance can all twelve fits be released.
+
+## 2026-11-06: direct OFFLINE reconstruction implementation plan
+
+Added the [twelve-fit R implementation plan](plans/LUKA_DIRECT_OFFLINE_RECONSTRUCTION_IMPLEMENTATION_PLAN.md)
+at the user's request. This is documentation only. It retains native CE+U100-w5
+and compares full measured-set reconstruction from pooled h versus h plus
+block-8 HLT tokens, with main-arm seed replication, weights0.03/0.1/0.3,
+whole-jet consistency and two HLT-source reconstruction controls. C0/C1 reuse
+and existing S denoising comparisons are explicit; the forty-row A/B/C registry
+and existing jobs/specifications are unchanged.
+
+The plan describes fixed full-TRAIN output capacity without target-count input,
+source/masking conventions, a four-block width256 decoder, exact one-to-one
+assignment consistent with field/presence reductions, count and aggregate
+losses, gradient-preserving decoder microbatching, code locations, versioned
+artifact boundaries, tests and independent twelve-fit Hydra release. It honors
+the preference for scientific benefit over speed while retaining real measured
+resource acceptance before science. No runtime, queue helper, contract schema,
+target data or execution artifact was created or changed.
+
+Planning donor inspection: `505b07364041d4f51c42ac9e6a2f85353258606a`, especially
+the existing next-supervision target/training stack, native embedding tap and
+particle-teacher token hook. No donor code was migrated; exact migration
+provenance remains a requirement for the future implementation.
+Pre-edit focused checks:41 passed,1 failed in77.41s. The failure is the existing
+repository-wide Markdown link test finding six missing links under an unrelated
+scratch source snapshot. Scoped checks passed for all five new/edited documents,
+653 local links, fences/whitespace, the exact twelve-row registry/queue order
+and24 exhaustive toy assignment-loss identities. No real-Weaver/Hydra validation of R is
+possible before implementation; no remote jobs were submitted or changed.
+
+Next task: implement the R scope and its local verification from the new plan,
+then qualify exact pushed source with a genuine Hydra setup before science.
+
 ## 2026-11-05: Group C density and measured-set objectives
 
 Implemented all seven selected C rows from the

@@ -46,6 +46,7 @@ def baseline(spec,train,device):
 
 
 def baseline_tasks(spec):
+    if spec.get('scope')=='direct_reconstruction_only': return ('C0','C1','R1','R2','R3','R4')
     if spec.get('scope')=='group_C_only': return ('C0','C1','D1','D5','S1','S5')
     return ('C0','C1','Q1','Q6','V1','V7') if spec.get('scope')=='group_B_only' else ('C0','C1','P1','G1','J1','J5')
 
@@ -63,6 +64,12 @@ def resource_record(spec,task,report,warm,memory,gpu,preparation_seconds):
             or any(set(p)!=set(training.PHASE_KEYS) or not np.isfinite(list(p.values())).all()
                 or min(p.values())<0 or not math.isclose(sum(p.values()),t,rel_tol=1e-6,abs_tol=1e-6)
                 for p,t in zip(phases,times))): raise ValueError('Missing complete production phase timings')
+    if spec.get('scope')=='direct_reconstruction_only':
+        detail=row.get('batch_reconstruction_seconds')
+        keys={'decoder_forward_seconds','assignment_seconds','decoder_backward_seconds','native_backward_optimizer_seconds'}
+        if (not isinstance(detail,list) or len(detail)!=len(times) or any(set(d)!=keys
+                or not np.isfinite(list(d.values())).all() or min(d.values())<0 for d in detail)):
+            raise ValueError('Missing exact reconstruction execution timing')
     # Probes run once per epoch, not once per optimizer update. The complete
     # miniature still measures their cost and memory; budget their actual use.
     perstep=max(t-p['diagnostics'] for t,p,n in zip(times,phases,sizes) if n==128)
@@ -83,7 +90,8 @@ def resource_record(spec,task,report,warm,memory,gpu,preparation_seconds):
     return artifact('RESOURCE_CHECK',parents=dict(spec=spec['content_hash'],report=report['content_hash'],warm=warm['content_hash']),
         task=task,minutes=minutes,memory=memory,gpu=gpu,preparation_seconds=preparation_seconds,
         train_step_seconds=perstep,probe_seconds_per_epoch=probe_seconds,
-        batch_phase_seconds=phases,validation_step_seconds=vstep,limits=limits,violations=violations,passed=not violations,quality_gate=False)
+        batch_phase_seconds=phases,validation_step_seconds=vstep,limits=limits,violations=violations,passed=not violations,quality_gate=False,
+        **(dict(batch_reconstruction_seconds=row['batch_reconstruction_seconds']) if spec.get('scope')=='direct_reconstruction_only' else {}))
 
 
 def measure(spec,train,val,bank,device='cuda',*,shared_preparation_seconds=0.):
@@ -99,7 +107,10 @@ def measure(spec,train,val,bank,device='cuda',*,shared_preparation_seconds=0.):
         began=time.perf_counter(); source=inputs.candidates(spec,task,train,device)
         preparation=shared_preparation_seconds+time.perf_counter()-began; memory_before=peaks(device)
         selected=ix
-        if spec.get('scope')=='group_B_only':
+        if spec.get('scope')=='direct_reconstruction_only':
+            from .reconstruction_targets import miniature_indices
+            selected=miniature_indices(source,ix)
+        elif spec.get('scope')=='group_B_only':
             from .structured_targets import miniature_indices
             selected=miniature_indices(source,ix)
         elif spec.get('scope')=='group_C_only':
@@ -123,7 +134,12 @@ def measure(spec,train,val,bank,device='cuda',*,shared_preparation_seconds=0.):
         children=source.child_pss_bytes() if hasattr(source,'child_pss_bytes') else 0
         memory['sampler_child_pss_bytes']=children
         if memory.get('peak_rss_bytes') is not None: memory['peak_rss_bytes']+=children
-        if spec.get('scope')=='group_B_only':
+        if spec.get('scope')=='direct_reconstruction_only':
+            from .reconstruction_targets import authenticate
+            preparation_peak=authenticate(spec)['statistics_peak_host_bytes']
+            if preparation_peak is not None:
+                memory['peak_rss_bytes']=max(memory.get('peak_rss_bytes') or 0,preparation_peak)
+        elif spec.get('scope')=='group_B_only':
             from .structured_targets import authenticate
             preparation_peak=authenticate(spec)['statistics_peak_host_bytes']
             if preparation_peak is not None:
@@ -185,6 +201,15 @@ def accepted(spec):
 
 
 def structured_parent(spec):
+    if spec.get('scope')=='direct_reconstruction_only':
+        from .reconstruction_targets import authenticate
+        prepared=authenticate(spec); root=Path(spec['root'])/'setup'
+        review=dict(one_time_preparation_seconds=prepared['preparation_seconds'],
+            statistics_peak_host_bytes=prepared['statistics_peak_host_bytes'],fixed_output_slots=prepared['maximum'],
+            decoder=spec['recipe']['decoder'],storage_budget_bytes=spec['storage_budget_bytes'],
+            sources={s:{k:load_json(root/f'reconstruction_{s}.json')[k] for k in
+                ('content_hash','rows','tokens','maximum_count','count_quantiles','support')} for s in ('OFFLINE','HLT')})
+        return dict(reconstruction_targets=prepared['content_hash'],reconstruction_review=review)
     if spec.get('scope')=='group_C_only':
         from .probabilistic_targets import authenticate
         prepared=authenticate(spec); root=Path(spec['root'])/'setup'

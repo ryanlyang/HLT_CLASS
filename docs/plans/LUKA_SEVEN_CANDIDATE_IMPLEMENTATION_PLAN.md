@@ -11,6 +11,12 @@ seven D/S rows through its own [contract](../contracts/LUKA_NEXT_SUPERVISION_GRO
 and [Brown runbook](../LUKA_NEXT_SUPERVISION_GROUP_C_RUNBOOK.md).
 No immutable execution specification or live submission is created by this plan.
 
+The separate [twelve-run direct OFFLINE reconstruction follow-up](LUKA_DIRECT_OFFLINE_RECONSTRUCTION_IMPLEMENTATION_PLAN.md)
+extends the set-reconstruction research question with R1-R12. Its direct
+decoder receives HLT conditioning without noisy OFFLINE particles. That
+implemented follow-up does not change this forty-row selection, its
+implemented S denoising objective or any existing A/B/C execution.
+
 The [ideas catalog](LUKA_NEXT_SUPERVISION_CAMPAIGN_IDEAS.md) defines the seven
 objectives and their wider variant space. This document selects the proposed
 first campaign from that catalog. Catalog rows outside the selection are

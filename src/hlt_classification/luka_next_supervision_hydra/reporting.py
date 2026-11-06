@@ -48,7 +48,7 @@ def results(spec):
         validate_predictions(a,spec['counts']['validation'])
         if any(not np.array_equal(a[k],arrays['M0HLT'][k]) for k in ('identities','labels')): raise ValueError('Validation joins differ')
     rows=[]
-    print({'group_B_only':'Group B','group_C_only':'Group C'}.get(spec.get('scope'),'Group A')+': native HLT CE+U100-w5; training heads removed. Exploratory validation, no independent test.')
+    print({'group_B_only':'Group B','group_C_only':'Group C','direct_reconstruction_only':'Direct reconstruction'}.get(spec.get('scope'),'Group A')+': native HLT CE+U100-w5; training heads removed. Exploratory validation, no independent test.')
     for role,ix in (('validation',slice(None)),('original50k',subset)):
         metrics={n:evaluate_probabilities(a['labels'][ix],a['probabilities'][ix]) for n,a in arrays.items()}
         lo=metrics['M0HLT']['macro_ovr_auc']; hi=metrics['OFFLINE']['macro_ovr_auc']
@@ -88,6 +88,10 @@ def progress(spec):
         for r in rows[task]:
             auc=r['validation']['macro_ovr_auc']; delta=None if control is None else auc-control['validation']['macro_ovr_auc']
             print(f'  epoch {r["pass_number"]:2d} AUC={auc:.8f} recovery={recovery(auc,lo,hi):5.1f}% delta_selected_{ctrl}='+('--' if delta is None else f'{delta:+.8f}'))
+            if spec.get('scope')=='direct_reconstruction_only' and task not in spec['reused']:
+                matched=next((c for c in rows.get(ctrl,[]) if c['pass_number']==r['pass_number']),None)
+                print('    delta_same_epoch_'+ctrl+'='+('--' if matched is None else f'{auc-matched["validation"]["macro_ovr_auc"]:+.8f}'))
+                if 'reconstruction_losses' in r: print('    reconstruction: '+str(r['reconstruction_losses']))
         if task in best:
             r=best[task]; print(f'  BEST epoch={r["pass_number"]} AUC={r["validation"]["macro_ovr_auc"]:.8f}')
         logs=list(Path(spec['root']).glob(task+'-*.out'))

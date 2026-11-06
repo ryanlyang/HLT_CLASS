@@ -83,6 +83,9 @@ def candidates(spec,task,train,device='cpu'):
     cfg=setting(task)
     if train.role!='train': raise PermissionError('Candidates are TRAIN-only')
     if cfg['family']=='C': return None
+    if cfg['family']=='R':
+        from .reconstruction_targets import candidates as reconstruction
+        return reconstruction(spec,task,train)
     if cfg['family'] in ('D','S'):
         from .probabilistic_targets import candidates as probabilistic
         return probabilistic(spec,task,train)

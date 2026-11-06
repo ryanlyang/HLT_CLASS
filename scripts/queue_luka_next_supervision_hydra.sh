@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-if [[ $# -ne 2 || ( "$2" != setup && "$2" != science ) ]]; then
-    printf 'Usage: bash queue_luka_next_supervision_hydra.sh /absolute/campaign_spec.json setup|science\n' >&2
+if [[ $# -ne 2 || ( "$2" != setup && "$2" != bootstrap && "$2" != science ) ]]; then
+    printf 'Usage: bash queue_luka_next_supervision_hydra.sh /absolute/campaign_spec.json setup|bootstrap|science\n' >&2
     exit 2
 fi
 SPEC="$1"
@@ -19,6 +19,9 @@ HASH="$("${PYTHON}" -B -s -c 'import json,sys; print(json.load(open(sys.argv[1])
 AUTHORIZATION="$("${PYTHON}" -B -s -c 'import json,sys; print(json.load(open(sys.argv[1]))["authorization"])' "${PLAN}")"
 printf '\nReview hash: %s\n' "${HASH}"
 printf 'Scope: the exact group in the reviewed plan. Science jobs have no dependencies, holds, lanes or priority adjustments.\n'
+if [[ "$STAGE" == bootstrap ]]; then
+    printf 'This authorizes R setup plus durable CPU release of all twelve measured fits after setup passes. No second confirmation; safe to log off after submission completes.\n'
+fi
 read -r -p "Authorize this exact ${STAGE} plan? Type YES: " ANSWER
 [[ "${ANSWER}" == YES ]] || { printf 'Not submitted. Preserve this review.\n'; exit 1; }
 "${PYTHON}" -B -s "${CLI}" submit --spec "${SPEC}" --stage "${STAGE}" --plan-hash "${HASH}" --authorization "${AUTHORIZATION}"

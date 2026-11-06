@@ -1,5 +1,47 @@
 # Legacy Donor-Source Map
 
+## Direct reconstruction automatic release (2026-11-06)
+
+Exact internal donor: `505b07364041d4f51c42ac9e6a2f85353258606a`.
+No external implementation or Fresh_check import was added.
+
+| Donor at that commit | Adaptation |
+| --- | --- |
+| `src/hlt_classification/luka_particle_teacher_hydra/submission.py` | Bootstrap setup/CPU-afterok release, mixed CPU/GPU scheduler dry review, authenticated original authorization and idempotent exact-journal completion adapted into next-supervision `submission.py` and `reconstruction_release.py`; R keeps exactly twelve independent fits and on-demand reporting. |
+| `src/hlt_classification/luka_particle_teacher_hydra/worker.py::cpu_allocation` | Copied/adapted CPU request-versus-allocation verification, observed one-to-two CPU rounding and null task-field fallback into `reconstruction_release.py`. |
+| `tests/test_luka_particle_teacher_hydra.py` | Donor patterns for journal simulation and Hydra CPU rounding cases; new R tests also cover exact accounting lag, failed setup, altered authority, payload corruption and a lost sbatch response. |
+
+Existing next-supervision registration/submission/worker/CLI/queue files are
+extended in place. R SPEC advances to v2 with execution R2; the scientific
+recipe remains v1. Other campaign registrations and donor runtime files are
+unchanged by this step.
+
+## Direct OFFLINE jet reconstruction (2026-11-06)
+
+Exact internal donor: `505b07364041d4f51c42ac9e6a2f85353258606a`.
+New modules in `luka_next_supervision_hydra` are `reconstruction_contracts.py`,
+`reconstruction_targets.py`, `reconstruction_model.py`, `reconstruction_loss.py`,
+`reconstruction_training.py`, and `reconstruction.py`. No external implementation
+was copied and no Fresh_check runtime import was introduced. PyTorch's decoder
+layer and SciPy's assignment solver are existing pinned dependencies.
+
+| Exact donor paths at505b0736 | R use |
+|---|---|
+| `src/hlt_classification/luka_next_supervision_hydra/contracts.py`, `campaign.py`, `group_b.py`, `group_c.py`, `reuse.py` | Preserve A/B/C registries and reference meaning; adapt separate old-A authentication, immutable registration, source/environment checks and C0/C1 proof reuse. |
+| `src/hlt_classification/luka_next_supervision_hydra/data.py`, `inputs.py`, `probabilistic_targets.py`, `probabilistic_contracts.py` | Reuse raw ordered TRAIN shards and audited physical22 transforms/HLT frames; adapt streamed masked moments and ragged mmap publication to R-owned banks with p4 aggregates and common K. No C density fitting is run. |
+| `src/hlt_classification/luka_embedding_aux/model.py`, `src/hlt_classification/luka_particle_teacher_hydra/model.py` | Reuse native pooled readout tap; adapt temporary block8 hook to capture effective mask and live tokens from the same forward. Donor files remain unchanged. |
+| `src/hlt_classification/luka_next_supervision_hydra/model.py`, `training.py` | Dispatch target-blind R decoder, isolated initialization, exact bounded backward and component/probe reporting; retain native CE+w5 recipe, selection and export replay. |
+| `src/hlt_classification/luka_next_supervision_hydra/resources.py`, `worker.py`, `submission.py`, `reporting.py` | Extend genuine warmed measurement/receipts, six-path target review, independent exact-ID submission and read-only results. |
+| `scripts/luka_next_supervision_hydra.py`, `scripts/queue_luka_next_supervision_hydra.sh`, `sbatch/run_luka_next_supervision_hydra.sh` | Add create-r to CLI; reuse queue shell and absolute-project Slurm worker unchanged. |
+| `tests/test_luka_next_supervision_hydra.py`, `tests/test_luka_next_supervision_group_b.py`, `tests/test_luka_next_supervision_group_c.py`, `tests/test_luka_attention.py` | Reuse compact installed-Weaver/cache/raw fixtures and execution-test patterns for the new focused R suite. |
+
+New DIRECT_RECONSTRUCTION recipe/inventory/spec/bank/targets envelopes are v1.
+Existing common fit/epoch/receipt contracts bind R source/spec/target parents;
+execution resource/acceptance remain v2 with scope-specific R evidence.
+The [contract](contracts/LUKA_DIRECT_OFFLINE_RECONSTRUCTION.md) fixes the exact
+full-set objective and [validation](LUKA_DIRECT_OFFLINE_RECONSTRUCTION_VALIDATION.md)
+records the local/remote qualification boundary.
+
 ## Seven-candidate Group C conditional distributions and set denoising (2026-11-05)
 
 Exact internal donor: `3b839fc3aef7e1e24e886b9dd512a6a8114b5473`.

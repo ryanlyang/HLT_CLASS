@@ -16,7 +16,8 @@ from . import inputs,reuse
 
 MODULES=('__init__','contracts','data','sampling','parallel','model','inputs','reuse','training','campaign','resources','submission','worker','reporting',
     'structured_contracts','questions','vocabulary','structured_model','structured_targets','group_b',
-    'probabilistic_contracts','probabilistic_model','probabilistic_targets','group_c')
+    'probabilistic_contracts','probabilistic_model','probabilistic_targets','group_c',
+    'reconstruction_contracts','reconstruction_targets','reconstruction_model','reconstruction_loss','reconstruction_training','reconstruction','reconstruction_release')
 REQUIRED={f'src/hlt_classification/luka_next_supervision_hydra/{n}.py' for n in MODULES}|{
     'scripts/luka_next_supervision_hydra.py','scripts/queue_luka_next_supervision_hydra.sh',
     'sbatch/run_luka_next_supervision_hydra.sh','tests/test_luka_next_supervision_hydra.py',
@@ -25,6 +26,9 @@ REQUIRED|={'tests/test_luka_next_supervision_group_b.py','docs/contracts/LUKA_NE
     'docs/LUKA_NEXT_SUPERVISION_GROUP_B_RUNBOOK.md','docs/LUKA_NEXT_SUPERVISION_GROUP_B_VALIDATION.md'}
 REQUIRED|={'tests/test_luka_next_supervision_group_c.py','docs/contracts/LUKA_NEXT_SUPERVISION_GROUP_C.md',
     'docs/LUKA_NEXT_SUPERVISION_GROUP_C_RUNBOOK.md','docs/LUKA_NEXT_SUPERVISION_GROUP_C_VALIDATION.md'}
+REQUIRED|={'tests/test_luka_direct_reconstruction.py','tests/test_luka_reconstruction_release.py','docs/contracts/LUKA_DIRECT_OFFLINE_RECONSTRUCTION.md',
+    'docs/LUKA_DIRECT_OFFLINE_RECONSTRUCTION_RUNBOOK.md','docs/LUKA_DIRECT_OFFLINE_RECONSTRUCTION_VALIDATION.md',
+    'docs/plans/LUKA_DIRECT_OFFLINE_RECONSTRUCTION_IMPLEMENTATION_PLAN.md'}
 
 
 def current(project,commit):
@@ -92,6 +96,9 @@ def create(root,parent_path,raw_root,raw_hash,delta_root,delta_hash,reuse_map,pr
 
 
 def check(spec,*,check_storage=True):
+    if spec.get('scope')=='direct_reconstruction_only':
+        from .reconstruction import check as reconstruction
+        return reconstruction(spec,check_storage=check_storage)
     if spec.get('scope')=='group_C_only':
         from .group_c import check as probabilistic
         return probabilistic(spec,check_storage=check_storage)

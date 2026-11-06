@@ -30,13 +30,13 @@ GROUP_PROPOSALS=4096
 
 
 def artifact(kind, *, parents=None, **fields):
-    version=2 if kind in ('SPEC','RESOURCE_CHECK','ACCEPTANCE') else 1
+    version=2 if kind in ('SPEC','RESOURCE_CHECK','ACCEPTANCE','DIRECT_RECONSTRUCTION_SPEC') else 1
     return with_content_hash(dict(contract=f'LUKA_NEXT_SUPERVISION_{kind}/v{version}', schema_version=version,
         parents=dict(parents or {}), **FLAGS, **fields))
 
 
 def validate(value, kind, parents=None):
-    version=2 if kind in ('SPEC','RESOURCE_CHECK','ACCEPTANCE') else 1
+    version=2 if kind in ('SPEC','RESOURCE_CHECK','ACCEPTANCE','DIRECT_RECONSTRUCTION_SPEC') else 1
     validate_content_hash(value, expected_contract=f'LUKA_NEXT_SUPERVISION_{kind}/v{version}', expected_schema_version=version)
     if any(value.get(k) != v for k,v in FLAGS.items()) or (parents is not None and value['parents'] != parents):
         raise ValueError('Supervision scope or parent lineage differs')
@@ -61,6 +61,9 @@ def recipe():
 
 
 def setting(task):
+    if task.startswith('R'):
+        from .reconstruction_contracts import setting as reconstruction
+        return reconstruction(task)
     if task not in ARMS:
         from .structured_contracts import ARMS as structured
         if task in structured: return structured[task]
@@ -71,6 +74,9 @@ def setting(task):
 
 
 def authorization(spec):
+    if spec.get('scope')=='direct_reconstruction_only':
+        from .reconstruction_contracts import AUTHORIZATION as reconstruction
+        return reconstruction
     if spec.get('scope')=='group_C_only':
         from .probabilistic_contracts import AUTHORIZATION as probabilistic
         return probabilistic

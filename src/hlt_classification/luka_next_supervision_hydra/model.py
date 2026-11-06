@@ -66,7 +66,8 @@ class Student(AuxiliaryParT):
         super().__init__(); self.cfg=setting(task); self.jet=None
         with torch.random.fork_rng(devices=[]):
             torch.random.default_generator.manual_seed(2026110507+1000003*self.cfg['seed_index'])
-            if self.cfg['family'] in ('Q','V'):
+            if self.cfg['family']=='R': self.aux=None  # Fixed TRAIN support configured before optimizer.
+            elif self.cfg['family'] in ('Q','V'):
                 from .structured_model import StructuredHead
                 self.aux=StructuredHead(self.cfg)
             elif self.cfg['family'] in ('D','S'):
@@ -79,8 +80,12 @@ class Student(AuxiliaryParT):
 
     def forward(self, features, vectors, mask):
         self.prediction=self.jet=None
+        self.particle_tokens=self.particle_mask=None
         if not self.capture: return DelphesParticleTransformer.forward(self,features,vectors,mask)
-        logits,h=head_input(self,features,vectors,mask)
+        if self.cfg['family']=='R':
+            from .reconstruction_model import capture
+            logits,h=capture(self,features,vectors,mask)
+        else: logits,h=head_input(self,features,vectors,mask)
         ctx=torch.autocast(h.device.type,enabled=False) if h.is_cuda else nullcontext()
         with ctx:
             self.jet=h.float(); self.prediction=self.predictor(self.jet)

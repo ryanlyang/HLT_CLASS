@@ -1,11 +1,21 @@
 # Scientific Implementation Plans
 
+The [direct OFFLINE reconstruction follow-up](LUKA_DIRECT_OFFLINE_RECONSTRUCTION_IMPLEMENTATION_PLAN.md)
+specifies twelve implemented R fits on top of native CE+U100-w5. It compares global
+and global-plus-particle-token decoders, preserves complete source collections,
+defines one-to-one matching and mixed-field losses, and includes replicated
+main arms, weights, whole-jet consistency and HLT-source controls. It maps the
+work onto the existing Hydra stack and requires a separate measured setup.
+See its [Hydra runbook](../LUKA_DIRECT_OFFLINE_RECONSTRUCTION_RUNBOOK.md) and
+[validation evidence](../LUKA_DIRECT_OFFLINE_RECONSTRUCTION_VALIDATION.md).
+The original forty-row campaign stays separate; no remote R jobs were submitted locally.
+
 The [next supervision ideas draft](LUKA_NEXT_SUPERVISION_CAMPAIGN_IDEAS.md)
 starts an expandable campaign proposal with mixture-density prediction of U100
 jet embeddings, global-HLT-conditioned OFFLINE set denoising, a learned
 HLT/OFFLINE compatibility judge, structured OFFLINE questions, particle-soup
 membership, intact pair/triplet membership and learned offline pattern frequencies.
-Particle soup is the current priority and includes several negative sampling
+Particle soup was prioritized within that screen and includes several negative sampling
 laws. Every proposed arm retains native CE+U100-w5. Preferred configurations, ablations, data needs
 and implementation references are documented. Group A has an additive
 [Hydra implementation and runbook](../LUKA_NEXT_SUPERVISION_GROUP_A_RUNBOOK.md);

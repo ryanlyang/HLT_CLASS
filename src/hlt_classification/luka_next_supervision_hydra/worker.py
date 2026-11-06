@@ -16,7 +16,7 @@ from . import campaign,inputs,resources,submission,training
 def receipt(spec,task):
     folder=Path(spec['root'])/task; record=load_json(folder/'receipt.json')
     validate(record,'TASK',dict(spec=spec['content_hash']))
-    if (record['task']!=task or record['job_id']!=submission.accepted_jobs(spec,'setup' if task=='setup' else 'science').get(task)
+    if (record['task']!=task or record['job_id']!=submission.accepted_jobs(spec,submission.setup_stage(spec) if task=='setup' else 'science').get(task)
             or len({r['path'] for r in record['outputs']})!=len(record['outputs'])): raise ValueError('Exact job/output ownership differs')
     for r in record['outputs']: validate_file_ref(r,root=folder)
     return record
@@ -25,7 +25,8 @@ def receipt(spec,task):
 def completed_setup(spec):
     r=receipt(spec,'setup'); names={x['path'] for x in r['outputs']}
     required={'acceptance.json','baseline_parity.json'}
-    if spec.get('scope')=='group_C_only': required|={'probabilistic_targets.json','set_HLT.json','set_OFFLINE.json','density_centers.npz'}
+    if spec.get('scope')=='direct_reconstruction_only': required|={'reconstruction_targets.json','reconstruction_HLT.json','reconstruction_OFFLINE.json'}
+    elif spec.get('scope')=='group_C_only': required|={'probabilistic_targets.json','set_HLT.json','set_OFFLINE.json','density_centers.npz'}
     elif spec.get('scope')=='group_B_only': required|={'structured_targets.json','question_catalog.json'}
     else: required|={'hlt_keys.json','hlt_keys.npz','normalization_HLT.json','normalization_OFFLINE.json'}
     if not required<=names: raise ValueError('Incomplete setup inventory')
@@ -38,7 +39,10 @@ def setup(spec,device='cuda'):
     train=inputs.hlt(spec,'train'); val=inputs.hlt(spec,'validation'); bank=inputs.embedding_bank(spec,train)
     shared_preparation=time.perf_counter()-began
     write_immutable_json(folder/'baseline_parity.json',resources.baseline(spec,train,device))
-    if spec.get('scope')=='group_C_only':
+    if spec.get('scope')=='direct_reconstruction_only':
+        from .reconstruction_targets import prepare
+        prepare(spec,train)
+    elif spec.get('scope')=='group_C_only':
         from .probabilistic_targets import prepare
         prepare(spec,train,bank)
     elif spec.get('scope')=='group_B_only':
@@ -54,11 +58,14 @@ def setup(spec,device='cuda'):
 
 
 def run(spec,task):
+    if task=='release' and submission.automatic(spec):
+        from .reconstruction_release import run
+        return run(spec)
     if task not in ('setup',*spec['remaining']): raise ValueError('Unregistered, deferred or reused task')
     parent=campaign.check(spec); require_backend(); job=allocation(parent)
     if installed_environment()!=spec['reference']['environment'] or gpu_identity()!=spec['qualification']['acceptance']['gpu']:
         raise PermissionError('Qualified software/GPU differs')
-    stage='setup' if task=='setup' else 'science'
+    stage=submission.setup_stage(spec) if task=='setup' else 'science'
     for _ in range(12):
         if submission.accepted_jobs(spec,stage).get(task)==job: break
         time.sleep(5)

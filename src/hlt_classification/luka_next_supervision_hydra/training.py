@@ -23,6 +23,10 @@ PHASE_KEYS=('native_forward','candidate_sampling','auxiliary_forward','diagnosti
 
 
 def step(model,opt,raw,embedding,device,*,candidates,indices,epoch,position,probe=True,measure=False):
+    if model.cfg['family']=='R':
+        from .reconstruction_training import step as reconstruction_step
+        return reconstruction_step(model,opt,raw,embedding,device,candidates=candidates,indices=indices,
+            epoch=epoch,position=position,probe=probe,measure=measure)
     phases={}; began=time.perf_counter()
     def timing(name):
         nonlocal began
@@ -110,6 +114,11 @@ def step(model,opt,raw,embedding,device,*,candidates,indices,epoch,position,prob
 def parents(spec):
     value=dict(spec=spec['content_hash'],recipe=spec.get('recipe',recipe())['content_hash'],embedding=spec['embedding_hash'],
         prepared=spec['anchor']['evidence']['prepared'],raw=spec['raw_hash'],keys=spec['key_hash'])
+    if spec.get('scope')=='direct_reconstruction_only':
+        from .reconstruction_targets import parents as target_parents
+        from .reconstruction_contracts import validate as target_validate
+        record=load_json(Path(spec['root'])/'setup/reconstruction_targets.json')
+        target_validate(record,'TARGETS',target_parents(spec)); value['reconstruction_targets']=record['content_hash']
     if spec.get('scope')=='group_C_only':
         from .probabilistic_targets import parents as target_parents
         record=load_json(Path(spec['root'])/'setup/probabilistic_targets.json'); validate(record,'PROBABILISTIC_TARGETS',target_parents(spec))
@@ -136,7 +145,7 @@ def fit(folder,spec,task,train,val,bank,*,candidates=None,device='cuda',technica
     for epoch in range(1,epochs+1):
         order=np.arange(len(train)) if technical else np.random.default_rng(np.random.SeedSequence(
             [seed(spec['imported'],cfg,'sampler_seed'),epoch])).permutation(len(train))
-        sums=np.zeros(len(LOSS_KEYS)); times=[]; sizes=[]; evidence=[]; phases=[]
+        sums=np.zeros(len(LOSS_KEYS)); times=[]; sizes=[]; evidence=[]; phases=[]; reconstruction_sums={}; reconstruction_times=[]
         for start in range(0,len(order),128):
             ix=order[start:start+128]; update+=1
             if str(device).startswith('cuda'): torch.cuda.synchronize()
@@ -145,10 +154,12 @@ def fit(folder,spec,task,train,val,bank,*,candidates=None,device='cuda',technica
                 epoch=epoch,position=7. if technical else update/steps,probe=start==0,measure=technical)
             if str(device).startswith('cuda'): torch.cuda.synchronize()
             times.append(time.perf_counter()-began); sizes.append(len(ix)); sums+=len(ix)*losses
+            for k,v in details.get('reconstruction_losses',{}).items(): reconstruction_sums[k]=reconstruction_sums.get(k,0.)+len(ix)*v
             if technical:
                 phase=details.pop('phase_seconds')
                 phase['input_and_dispatch']=max(0.,times[-1]-sum(phase.values()))
                 phases.append(phase)
+                if cfg['family']=='R': reconstruction_times.append(details['reconstruction_timing'])
             if start==0: evidence=details
             if start//128%100==0 or start+128>=len(order):
                 print(f'NEXT_SUPERVISION {task} epoch={epoch}/{epochs} batch={start//128+1}/{steps}',flush=True)
@@ -156,6 +167,9 @@ def fit(folder,spec,task,train,val,bank,*,candidates=None,device='cuda',technica
         row=dict(pass_number=epoch,update=update,validation=metrics,train_seconds=sum(times),validation_seconds=time.perf_counter()-began,
             **dict(zip(LOSS_KEYS,(sums/len(train)).tolist())))
         if technical: row.update(batch_seconds=times,batch_sizes=sizes,batch_phase_seconds=phases,schedule_position=7.)
+        if cfg['family']=='R':
+            row['reconstruction_losses']={k:v/len(train) for k,v in reconstruction_sums.items()}
+            if technical: row['batch_reconstruction_seconds']=reconstruction_times
         history.append(row); key=selection_key(metrics,update)
         if best is None or key>best: best=key; selected=epoch; state=model.deployment_state()
         write_immutable_json(folder/f'epoch_{epoch:02d}.json',artifact('EPOCH',parents=dict(spec=spec['content_hash']),task=task,**row))
@@ -193,6 +207,12 @@ def validate_fit(folder,spec,task,*,technical=False):
     history=report['validation_history']; steps=math.ceil(report['counts']['train']/128)
     if [r['pass_number'] for r in history]!=list(range(1,epochs+1)): raise ValueError('Incomplete epoch inventory')
     for r in history:
+        if cfg['family']=='R':
+            components=r.get('reconstruction_losses',{})
+            if (set(components)!={'fields','presence','count','consistency','kinematic','composition','track'}
+                    or not np.isfinite(list(components.values())).all() or min(components.values())<0
+                    or not math.isclose(r['auxiliary_loss'],components['fields']+components['presence']+.1*components['count']+.1*components['consistency'],rel_tol=2e-6,abs_tol=2e-6)):
+                raise ValueError('Reconstruction component reduction differs')
         nonnegative=('ce_hlt','embedding_loss') if cfg['family']=='D' else LOSS_KEYS
         if (not np.isfinite([r[k] for k in LOSS_KEYS]).all() or min(r[k] for k in nonnegative)<0
                 or r['update']!=r['pass_number']*steps or r['validation']['rows']!=report['counts']['validation']
