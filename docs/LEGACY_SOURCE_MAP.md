@@ -1,5 +1,30 @@
 # Legacy Donor-Source Map
 
+## U100 embedding-first curriculum (2026-11-06)
+
+Exact internal donor: `b5464e73c94b322a81a33032baea18f1615a5a66`.
+The new `luka_embedding_curriculum_hydra` namespace is additive. No donor
+runtime is edited, no external implementation is copied and no Fresh_check
+runtime import is added. Its source check pins donor runtime to this commit.
+
+| Donor paths/functions at that commit | New use or adaptation |
+|---|---|
+| `luka_embedding_aux/model.py::{AuxiliaryParT,head_input}` | Reuse unchanged native model and isolated training predictor; tap frozen teacher validation embeddings. |
+| `luka_u100_embedding/{contracts,training}.py`, `jetclass2_delphes/{batch128_30e_recipe,runner,reporting,model,execution}.py` | Reuse original recipe, native forward/selection/metrics/environment; compare new E00 update against original objective. Extend training with explicit spent-epoch curricula and complete transition state. |
+| `luka_u100_contrastive/training.py::{optimizer,peaks}` | Reuse original AdamW groups and host/GPU memory observation. |
+| `luka_u100_pair_hydra/{inputs,site}.py` | Reuse authenticated bundle, HLT views, TRAIN embedding bank and scheduler/environment validation; new A6000 wrapper has its own schema. |
+| `luka_frozen_adapter_hydra/inputs.py::{Delta,oracle_validation,aligned}` and `luka_cross_message_hydra/inputs.py::{EncoderDelta,encoder}` | Reuse validation U100 and selected COARSE_U100 transfer evidence; new validation bank adds an explicit evaluation-only role with frozen TRAIN moments. |
+| `luka_next_supervision_hydra/{group_b,reuse,campaign}.py` | Reuse original-worktree Group A authentication, same-seed C0 proof and storage allowance checks; adapt separate curriculum registration. |
+| `luka_cross_message_hydra/{training,resources,execution}.py` | Reuse native BF16 forward/predict, bounded subset and A6000 profile. |
+| `luka_particle_teacher_hydra/{resources,submission}.py` | Reuse worst/full/partial miniature row selection and mixed-resource scheduler review; adapt independent exact-ID bootstrap/release and warmed resource acceptance. |
+| `luka_next_supervision_hydra/reconstruction_release.py::cpu_allocation` | Reuse observed Hydra one-requested/two-allocated CPU and null-field verification. |
+| `scouting/{hcwdl_exact_dag_submission,hcwdl_recovery}.py`, `cms_proxy_ladder/{contracts,submission}.py`, `data/cache_contracts.py`, `luka_fullsim/{foundation,regular_submission,preflight_v2,alljets_data}.py`, `context_fusion/worker.py::save_state` | Reuse immutable exact-job journals, file/source contracts, clean environment, backend guard, evaluation flags, atomic publication and checkpoint serialization. |
+| `tests/test_luka_attention.py` and `tests/test_luka_reconstruction_release.py` | Reuse compact HLT fixture and simulated-Slurm journal test patterns; add full curriculum/state/role coverage. |
+
+The new plan and v1 contract bind all twenty configurations, held-out embedding
+selection, native-only export, original input lineage and measured automatic
+release. Local and pending Hydra evidence are in the curriculum validation doc.
+
 ## Reconstruction R3 batched exact loss execution (2026-11-06)
 
 Exact internal donor: `57789d368e189ddf6bf8c8cb96cfb89e6b92251f`.

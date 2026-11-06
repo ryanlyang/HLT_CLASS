@@ -1,5 +1,38 @@
 # Current Handoff
 
+## 2026-11-06: U100 embedding-first curriculum ready for Hydra setup
+
+Implemented the twenty distinct single-seed configurations in the new
+[scientific plan](plans/LUKA_EMBEDDING_CURRICULUM_HYDRA_PLAN.md). E00 reuses the
+authenticated same-seed C0 U100-w5 result; E01-E19 are new independent fits.
+They compare pretraining duration, CE ramps, all four optimizer/LR transition
+choices, embedding fades, weak CE pretraining and last-versus-best selection.
+Full selected model/predictor/buffers, AdamW and CPU/CUDA RNG are restored at
+transition while spent epoch/data clocks continue. Validation embedding targets
+come from existing frozen U100 transfers using unchanged TRAIN normalization;
+they are explicitly evaluation-only. Native HLT export and deployment stay unchanged.
+
+Changes are additive in `luka_embedding_curriculum_hydra`, its CLI/queue/Slurm
+scripts, focused tests and plan/contract/runbook/validation documents, with
+README and donor-map entries. All new artifact contracts are v1. No existing
+runtime was edited. Exact donor is `b5464e73c94b322a81a33032baea18f1615a5a66`;
+reused functions and adaptations are enumerated in `LEGACY_SOURCE_MAP.md`.
+
+Focused pre-edit donor checks: 48 passed, 35 deselected in 14.29s. The expanded
+curriculum plus reconstruction-release regression suite passed 92 checks in
+56.01s, including all twenty full30 CPU fits, full native local CUDA transition
+and export cases, original U100 one-update parity, target-role checks and real
+exact-journal orchestration with a simulated Slurm boundary. Final static and
+runtime evidence is kept in the
+[validation document](LUKA_EMBEDDING_CURRICULUM_HYDRA_VALIDATION.md).
+
+No remote registration, submission, data transfer or old-job change occurred.
+Authoritative installed-Hydra qualification and measurements remain pending.
+Next task: commit/push the scoped files and use the
+[runbook](LUKA_EMBEDDING_CURRICULUM_HYDRA_RUNBOOK.md) to queue setup plus a durable
+CPU release. Successful measured setup automatically submits nineteen fits with
+no fit-to-fit dependencies. All warm/measurement weights are discarded.
+
 ## 2026-11-06: R3 exact reconstruction execution repair
 
 User-supplied Hydra setup153208 at source57789d36 failed runtime admission:

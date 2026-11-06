@@ -5,6 +5,18 @@ and training-time use of paired offline information.
 
 ## Current status
 
+The [U100 embedding-first curriculum](docs/plans/LUKA_EMBEDDING_CURRICULUM_HYDRA_PLAN.md)
+implements twenty distinct configurations: one authenticated U100-w5 control
+and nineteen new fits testing embedding-only pretraining, CE introduction,
+optimizer/LR transitions and embedding-loss fades. It preserves the native
+HLT classifier and original TRAIN targets, adding evaluation-only validation
+embeddings for pretraining checkpoint selection. The
+[Hydra runbook](docs/LUKA_EMBEDDING_CURRICULUM_HYDRA_RUNBOOK.md) queues an A6000
+setup and durable CPU release; successful measured setup automatically releases
+all nineteen independent fits. Existing Brown transfers are sufficient.
+[Local validation](docs/LUKA_EMBEDDING_CURRICULUM_HYDRA_VALIDATION.md) establishes
+readiness to queue setup; remote qualification and scientific results remain pending.
+
 The [direct OFFLINE reconstruction implementation plan](docs/plans/LUKA_DIRECT_OFFLINE_RECONSTRUCTION_IMPLEMENTATION_PLAN.md)
 now has twelve additional CE+U100-w5 fits implemented: complete particle-set prediction
 from the pooled HLT embedding or pooled embedding plus HLT particle tokens,
