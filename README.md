@@ -5,6 +5,14 @@ and training-time use of paired offline information.
 
 ## Current status
 
+The [small SupCon-5 study](docs/plans/LUKA_SUPCON5_DEBUG_PLAN.md) adds exactly two
+fits on SPORC debug: an OFFLINE CE+5×SupCon teacher and a fresh HLT student with
+CE + U100 embedding weight5 + new-teacher embedding weight5. It reuses completed
+U100-w5 job21993056 and exports native HLT inference without auxiliary heads.
+The [runbook](docs/LUKA_SUPCON5_DEBUG_RUNBOOK.md) describes pinned source,
+measured setup and automatic teacher/student release. Remote qualification and
+scientific benefit remain to be established.
+
 The [U100 embedding-first curriculum](docs/plans/LUKA_EMBEDDING_CURRICULUM_HYDRA_PLAN.md)
 implements twenty distinct configurations: one authenticated U100-w5 control
 and nineteen new fits testing embedding-only pretraining, CE introduction,

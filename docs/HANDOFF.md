@@ -1,5 +1,41 @@
 # Current Handoff
 
+## 2026-11-06: two-fit OFFLINE SupCon-5 study on SPORC debug
+
+Implemented the user's selected scope: one pure-OFFLINE CE+5×SupCon teacher,
+then one fresh native HLT student with CE + U100 embedding weight5 + new-teacher
+embedding weight5. Completed U100-w5 job21993056 is the reused comparison; no
+new CE-only teacher or baseline fit is included. Teacher targets are selected
+native preclassifier embeddings, exported only on TRAIN in FP32 and normalized
+with TRAIN moments. Both scientific fits retain the original batch128/full30
+recipe. Projection and prediction heads are absent from native deployment.
+
+Changes are additive in `luka_supcon5`, its CLI/queue/Slurm scripts, focused
+tests, plan/contract/runbook/validation documents and README/donor-map entries.
+All new artifact contracts are v1. Exact donor is
+`00fbb92641553e8817b577b8765796e6618afc13`; adaptations and reusable functions are
+listed in `LEGACY_SOURCE_MAP.md`. Existing runtime and unrelated dirty files
+were preserved.
+
+The final focused suite passed 25 checks in 24.39s, including CPU/CUDA full30 synthetic
+teacher-to-student transfer, full native physical-batch and partial-batch
+updates, native reload, gradient routing, production-worker receipts/readouts,
+poor finite results, actual exact-DAG journals with a simulated scheduler,
+duplicate/ambiguous submission protection, the setup measurement pipeline and
+resource/lineage failures. A focused donor/new-suite regression selection passed
+57 checks (94 deselected) in 194.41s. Static inventory, AST, CLI, shell/runbook
+syntax, documentation links and whitespace passed. Expanded evidence is in
+[LUKA_SUPCON5_VALIDATION.md](LUKA_SUPCON5_VALIDATION.md).
+
+No source was committed/pushed and no remote campaign was submitted. Live SSH
+was unavailable in the execution environment, so debug GPU availability remains
+unverified. The [runbook](LUKA_SUPCON5_DEBUG_RUNBOOK.md) provides scoped commit,
+pinned-worktree and queue commands. A real A100 setup must qualify the installed
+environment, production miniatures and measured resources before the detached
+SPORC dispatcher releases teacher, dependent student and report. This active
+plan explicitly selects debug rather than generic Tigris defaults. Remote
+qualification and scientific results are the next evidence required.
+
 ## 2026-11-06: U100 embedding-first curriculum ready for Hydra setup
 
 Implemented the twenty distinct single-seed configurations in the new

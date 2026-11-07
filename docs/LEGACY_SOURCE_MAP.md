@@ -1,5 +1,28 @@
 # Legacy Donor-Source Map
 
+## Two-fit OFFLINE SupCon-5 transfer (2026-11-06)
+
+Exact internal donor: `00fbb92641553e8817b577b8765796e6618afc13`.
+The new `luka_supcon5` runtime is additive; existing runtime remains unchanged.
+No external implementation is copied and no Fresh_check runtime import is added.
+All paths below are under `src/hlt_classification/` unless prefixed otherwise.
+
+| Donor paths/functions | New use or adaptation |
+|---|---|
+| `luka_supervision_depth/model.py::{seeded_head,supcon}` | Reuse the isolated projection/predictor MLP and exact temperature0.1 supervised contrastive definition; teacher coefficient changes from0.1 to5. |
+| `luka_embedding_aux/{model,targets}.py` | Reuse native HLT predictor initialization, preclassifier tap, TRAIN-only FP32 OFFLINE export, normalization and authenticated target bank. Add a separately seeded OFFLINE prediction branch. |
+| `luka_u100_embedding/contracts.py`, `luka_u100_contrastive/{training,resources,worker}.py` | Reuse original population/recipe, AdamW, subset adapter, resource estimator, recovery and detailed metric semantics. Adapt full30 fit orchestration. |
+| `luka_u100_pair_correction/{source,targets,campaign,submission}.py` | Reuse original-worktree job21993056 import, authenticated D000/U100 inputs, storage/accounting/envelope checks. Adapt two-fit registration, dry review, exclusive claims and automatic measured submission. |
+| `luka_u100_multiview/{views,offline_cache}.py` | Reuse support lengths and bounded OFFLINE TRAIN/validation loading with exact historical-byte reconstruction of absent caches. |
+| `luka_embedding_weight/worker.py::validate_predictions`, `jetclass2_delphes/{model,runner,reporting,batch128_30e_recipe,execution}.py` | Reuse native model, installed environment, BF16 forward, selected checkpoint tie rules, prediction/metric validation and SPORC allocation verification. |
+| `luka_fullsim/{foundation,preflight_v2,regular_submission,alljets_data}.py`, `data/cache_contracts.py`, `cms_proxy_ladder/{contracts,submission}.py`, `context_fusion/worker.py::save_state` | Reuse source/backend/file/content contracts, atomic publication, clean scheduler environment, storage/memory inspection and checkpoint serialization. |
+| `scouting/{hcwdl_exact_dag_submission,hcwdl_recovery}.py` | Reuse immutable exact-job submission journals and duplicate/partial-submission checks. |
+| `tests/test_luka_u100_pretrain.py::cache`, `tests/test_luka_embedding_aux.py::tiny`, `tests/test_luka_u100_contrastive.py` | Reuse synthetic TRAIN/validation fixtures and exact-journal test patterns; add full-native CUDA and real selected-teacher transfer coverage. |
+
+The new `LUKA_SUPCON5_*` artifact contracts are v1. Existing donor artifacts keep
+their original versions and validators. See the SupCon-5 validation document for
+local evidence and the pending authoritative SPORC setup boundary.
+
 ## U100 embedding-first curriculum (2026-11-06)
 
 Exact internal donor: `b5464e73c94b322a81a33032baea18f1615a5a66`.
