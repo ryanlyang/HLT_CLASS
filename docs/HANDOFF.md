@@ -1,5 +1,44 @@
 # Current Handoff
 
+## 2026-11-07: selective-information teachers implemented for Hydra setup
+
+Added `luka_selective_teacher_hydra`, thin CLI/queue/Slurm entrypoints, focused
+tests, and a separate scientific plan/contract/runbook/validation record.
+Four fresh CE-only teachers use K/I/T/IT field groups on authenticated original
+HLT particle slots. Eight fresh HLT students retain U100-w5 plus a shared extra
+weight5, with independent removable prediction heads and TRAIN-only normalized
+teacher embeddings. Native HLT inference and original attention are preserved.
+Identity/tracking conflicts are explicitly declared feature ablations, not new
+physical detector endpoints. Source field parity is tested against the original
+frontend and unchanged groups are bitwise preserved.
+
+The existing teacher-sweep T00/S00 and C0 references are authenticated in their
+own pinned code; unfinished unrelated teacher-sweep rows do not block reuse.
+Default inputs reuse the frozen-adapter validation U100 delta through Group A,
+so normally no new SPORC transfer is required. Optional minimal validation-only
+recovery exports check historical bytes and fingerprints without editing old
+data. The new source guard pins donor runtime to
+`6fe7e3499767f0a2216586d965efe39a05c24bf7`; adaptations are recorded in the donor map.
+
+One bounded review submits GPU setup and durable CPU release. After all12
+profiles pass real qualification, release submits four independent teachers,
+then `S6,S5,S4,S3,S2IT,S2T,S2I,S2K`, and an afterany CPU report. Students depend
+only on their required teachers, not other students. Every actual student runs
+a disposable target-bound startup miniature. Weak finite scores never gate
+later rows. Exact IDs, exclusive claims and immutable journals preserve failed
+or ambiguous attempts.
+
+Baseline checks passed91 tests; final combined regression checks passed151 tests
+in150.47s, plus the new immutable-registration round-trip test passed separately:
+152 distinct tests overall. Shell syntax, documentation links and whitespace
+checks passed. Final evidence is recorded in
+[LUKA_SELECTIVE_TEACHER_HYDRA_VALIDATION.md](LUKA_SELECTIVE_TEACHER_HYDRA_VALIDATION.md).
+Local CUDA uses a laptop GPU/Weaver fixture, not authoritative Hydra validation.
+No remote jobs, Git commit or push were performed. Next action is the
+[runbook](LUKA_SELECTIVE_TEACHER_HYDRA_RUNBOOK.md): commit/push only these additions,
+authenticate existing inputs, then queue measured A6000 setup and auto-release.
+Unrelated dirty user files remain preserved; historical runtime is unchanged.
+
 ## 2026-11-06: twelve OFFLINE teacher/student pairs ready for Hydra setup
 
 Implemented the approved24-fit scope in the additive

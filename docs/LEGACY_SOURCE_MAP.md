@@ -1,5 +1,31 @@
 # Legacy Donor-Source Map
 
+## Selective-information teachers on Hydra (2026-11-07)
+
+Exact internal donor for all entries below:
+`6fe7e3499767f0a2216586d965efe39a05c24bf7`. The new
+`luka_selective_teacher_hydra` package is additive. Existing runtime is not
+modified; no external implementation or Fresh_check runtime import is added.
+Paths below are under `src/hlt_classification/` unless otherwise specified.
+
+| Donor paths/functions | New use or adaptation |
+|---|---|
+| `luka_teacher_sweep_hydra/{campaign,contracts,submission,site,worker,training,resources,reporting,transfer}.py` | Adapt immutable registration, native full30 loops, resource profiling, exact-ID durable release, receipts and reporting to four selective teachers and eight multi-target students. |
+| `scripts/{luka_teacher_sweep_hydra.py,queue_luka_teacher_sweep_hydra.sh}`, `sbatch/run_luka_teacher_sweep_hydra.sh` | Adapt thin CLI, bounded authorization and absolute-path clean-environment workers. |
+| `luka_embedding_aux/{model,targets}.py` | Reuse native preclassifier tap and U100 predictor; adapt TRAIN-only FP32 target export/normalization/joins under a new selective bank contract. Existing OFFLINE bank keeps its original validator. |
+| `luka_supervision_depth/model.py::seeded_head`, `luka_u100_embedding/contracts.py`, `luka_u100_contrastive/{training,resources}.py` | Reuse isolated head initialization, fixed U100 recipe/counts, AdamW, recovery, and bounded miniature subsets. |
+| `luka_u100_pair_hydra/{inputs,site}.py`, `luka_frozen_adapter_hydra/inputs.py`, `luka_u100_pair_transfer/bundle.py` | Reuse authenticated D000/U100 inputs and U100 bank, original frozen-adapter validation delta, safe member references and scheduler/environment checks. |
+| `luka_u100_multiview/offline_cache.py`, `luka_fullsim/{regular_cache,preflight_cache,stage2,particles}.py` | Adapt optional missing-cache replay to validation U100 with saved assignments; preserve historical bytes, raw source and complete feature fingerprint. |
+| `literature_context/transform.py`, `cms_proxy_ladder/{inputs,views}.py`, `cms2jc2_response/bridge.py`, `jetclass2_delphes/cache.py` | Reuse native17 field semantics and ragged cache. New group-splice view is tested against the raw-field frontend, including declared applicability conflicts. |
+| `luka_next_supervision_hydra/{group_b,reuse,campaign,reconstruction_release}.py`, `luka_particle_teacher_hydra/submission.py` | Adapt original-worktree subprocess authentication; reuse C0 verification, storage, CPU allocation rounding and scheduler dry review. |
+| `jetclass2_delphes/{model,runner,reporting,batch128_30e_recipe,execution}.py`, `luka_embedding_weight/worker.py::validate_predictions` | Reuse native model, installed environment, BF16 training/prediction, original selection and metrics. |
+| `scouting/{hcwdl_exact_dag_submission,hcwdl_recovery}.py`, `data/cache_contracts.py`, `cms_proxy_ladder/{contracts,submission}.py`, `luka_fullsim/{foundation,regular_submission,preflight_v2,alljets_data}.py`, `context_fusion/worker.py::save_state` | Reuse source/file/content hashes, exact-job journals, atomic publication, backend/memory checks, clean environment and checkpoint serialization. |
+| `tests/test_luka_teacher_sweep_hydra.py`, `tests/test_luka_u100_pretrain.py`, `tests/test_luka_embedding_aux.py`, `tests/test_luka_u100_pair_correction.py`, `tests/test_luka_attention.py` | Adapt real production-loop and simulated-scheduler tests; reuse synthetic ROOT, miniature and full-native GPU fixtures. |
+
+New contracts are `LUKA_SELECTIVE_TEACHER_*/v1`. Donor artifacts retain original
+contracts. The active plan, runbook and validation record describe the local
+queue-readiness versus pending real-Hydra qualification boundary.
+
 ## Two-fit OFFLINE SupCon-5 transfer (2026-11-06)
 
 Exact internal donor: `00fbb92641553e8817b577b8765796e6618afc13`.

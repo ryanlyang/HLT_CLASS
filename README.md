@@ -5,6 +5,17 @@ and training-time use of paired offline information.
 
 ## Current status
 
+The [selective-information teacher campaign](docs/plans/LUKA_SELECTIVE_TEACHER_HYDRA_PLAN.md)
+adds four CE teachers restricted to kinematics, identity, tracking, or identity
+plus tracking on the original HLT particle slots, and eight fresh HLT students.
+Every student retains U100 embedding weight5 and shares an additional weight5
+across its other targets. Students submit from six total targets down to two,
+waiting only for required teachers. Existing T00/S00 and C0 controls are reused.
+The [runbook](docs/LUKA_SELECTIVE_TEACHER_HYDRA_RUNBOOK.md) reuses the existing
+Brown transfers and queues measured GPU setup plus durable CPU auto-release.
+See [local validation](docs/LUKA_SELECTIVE_TEACHER_HYDRA_VALIDATION.md) for the
+remaining real-Hydra qualification boundary.
+
 The [twelve-teacher Hydra sweep](docs/plans/LUKA_TEACHER_SWEEP_HYDRA_PLAN.md)
 adds twelve OFFLINE teacher recipes and twelve paired HLT students. It includes
 SupCon5/20, native-embedding and two-view objectives, masked reconstruction,
