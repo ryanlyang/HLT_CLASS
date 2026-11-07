@@ -80,7 +80,10 @@ Slurm resource/priority decisions can change actual execution order.
 
 Reuse the existing Hydra bundle (D000 TRAIN/validation, U100 TRAIN, U100 bank)
 and the existing frozen-adapter U100 validation delta located through the
-authenticated Group A parent. Normally no new transfer is required.
+authenticated Group A **cross-message parent** (`group_a.parent_spec`). Group
+A's own `delta_root` contains contrastive keys, not validation U100 particles.
+Registration checks both parent file/content hashes and their shared bundle,
+reference, imported control, anchor and population. Normally no new transfer is required.
 If those files are missing, export only U100 validation input shards from SPORC, using original
 assignments and raw source if deleted. Check every reconstructed shard against
 its historical byte checksum and the full native fingerprint; never rewrite

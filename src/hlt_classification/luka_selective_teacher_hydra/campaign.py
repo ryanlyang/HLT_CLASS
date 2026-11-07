@@ -8,6 +8,8 @@ from hlt_classification.luka_fullsim.foundation import _source
 from .reuse import original, references
 from hlt_classification.luka_next_supervision_hydra.campaign import storage
 from hlt_classification.luka_next_supervision_hydra import reuse
+from hlt_classification.luka_next_supervision_hydra.contracts import validate as validate_group
+from hlt_classification.luka_cross_message_hydra.contracts import validate as validate_cross
 from hlt_classification.luka_cross_message_hydra.execution import A6000_SITE
 from hlt_classification.luka_u100_pair_hydra import site
 from hlt_classification.luka_u100_pair_hydra.inputs import Bundle
@@ -66,11 +68,23 @@ def anchors(old):
 def validation_source(old, root=None, digest=None):
     if (root is None) != (digest is None): raise ValueError('Provide both validation root/hash or neither')
     if root is not None: return 'selective_export', str(Path(root).resolve(strict=True)), digest
-    # original() has already authenticated the teacher-sweep and its Group A
-    # parent using their pinned implementations. Bind its exact file again.
+    # original() has authenticated this complete chain in its pinned worktrees.
+    # Group A's own delta contains contrastive keys, not validation particles.
+    # Follow its cross-message parent, which owns the frozen-adapter U100 delta.
     validate_file_ref(old['group_a_spec'])
     group_a = load_json(old['group_a_spec']['path'])
-    return 'existing_frozen_adapter', group_a['delta_root'], group_a['delta_hash']
+    validate_group(group_a, 'SPEC')
+    validate_file_ref(group_a['parent_spec'])
+    parent = load_json(group_a['parent_spec']['path'])
+    validate_cross(parent, 'SPEC', version=3)
+    shared = ('bundle_root', 'reference', 'imported', 'anchor')
+    if (group_a['content_hash'] != old['parents']['group_a']
+            or parent['content_hash'] != group_a['parents']['parent']
+            or group_a['scope'] != 'group_A_only'
+            or group_a['counts'] != COUNTS or parent['counts'] != COUNTS
+            or any(group_a[k] != old[k] or parent[k] != old[k] for k in shared)):
+        raise ValueError('Validation U100 parent chain differs from the teacher-sweep inputs')
+    return 'existing_frozen_adapter', parent['delta_root'], parent['delta_hash']
 
 
 def create(root, teacher_sweep_spec, validation_root, validation_hash, project, commit, quota_gib):

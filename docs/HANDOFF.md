@@ -1,5 +1,31 @@
 # Current Handoff
 
+## 2026-11-07: selective-teacher registration transfer selection repaired
+
+User registration at commit `11499f088f3b62dddcf93e22d1377ec1b027fe13`
+stopped before creating its campaign directory or submitting jobs: Group A's
+direct `delta_root` has `LUKA_U100_CONTRASTIVE_HYDRA_TRANSFER/v1`, whereas the
+selective teachers need original U100 validation inputs. This was a source
+selection bug, not evidence of corrupt or missing data.
+
+`luka_selective_teacher_hydra/campaign.py` now follows the authenticated Group
+A `parent_spec` to its cross-message v3 parent and takes that parent's
+frozen-adapter delta. It rechecks both exact files, contracts, content-hash
+links, populations and common bundle/reference/imported/anchor fields. The
+existing frozen-adapter validator and all scientific v1 semantics remain
+unchanged; it still rejects contrastive manifests and corrupted payloads.
+
+The regression fixture reproduced the exact remote contract mismatch before
+the fix and passes afterward using the real old export and delta validator.
+Parent-chain tampering and registered-source substitution also fail closed.
+The complete selective-teacher plus frozen-adapter suite passed117 tests
+in103.13s, including the native CUDA paths. Syntax and whitespace checks passed.
+The active plan, contract, runbook, donor map and validation record explain
+the corrected lookup. Donor remains `6fe7e349`; historical runtime and unrelated
+work are preserved. Next: commit/push this fix and use the runbook's Brown
+registration block with the new commit, retaining the failed registration log.
+No remote retry, commit or push was performed by this repair session.
+
 ## 2026-11-07: selective-information teachers implemented for Hydra setup
 
 Added `luka_selective_teacher_hydra`, thin CLI/queue/Slurm entrypoints, focused

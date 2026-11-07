@@ -13,6 +13,14 @@ and completed teacher-sweep T00/S00. Keep those artifacts and their original
 worktrees. Other teacher-sweep tasks may still be running; only T00/S00 are
 required completed parents. No existing jobs are modified or canceled.
 
+If registration at `11499f08` stopped with a contrastive/frozen-adapter contract
+mismatch, use the corrected source described here. That failure occurred
+before campaign-directory creation and before submission. Commit/push the fix,
+then run step 2 with the **new** commit; it selects a new checkout/output path.
+Keep the earlier registration log. No job cancellation or new transfer is
+needed for this error: Group A's cross-message parent identifies the correct
+existing validation delta. The validator is not relaxed or bypassed.
+
 ## 1. Commit and push in the local PowerShell terminal
 
 Run from this repository. This list excludes unrelated current work. The

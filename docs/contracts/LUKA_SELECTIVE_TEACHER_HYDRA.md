@@ -27,7 +27,13 @@ parent hashes and the established exploratory population disclosure flags.
 Default validation source is the original frozen-adapter delta, authenticated
 with `LUKA_FROZEN_ADAPTER_HYDRA_TRANSFER/v1` through its original validator.
 It is not relabeled as a new TRANSFER. Its location/hash are derived from the
-original teacher-sweep's authenticated Group A parent. A new selective TRANSFER
+original teacher-sweep's authenticated Group A **cross-message parent**, using
+`group_a.parent_spec` and its content-hash binding. Group A's direct delta is a
+contrastive-key transfer and must never be substituted. Both parent files,
+contracts, content-hash links, populations and shared bundle/reference/imported/
+anchor fields are checked before the original frozen-adapter validator runs.
+This corrects input-source resolution; scientific semantics and schemas remain v1.
+A new selective TRANSFER
 is an explicit recovery alternative, not a fallback for corruption.
 
 Training reads only D000 for students. Teacher caches replace whole registered

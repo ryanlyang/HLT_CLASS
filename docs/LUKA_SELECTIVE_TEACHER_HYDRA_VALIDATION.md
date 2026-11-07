@@ -4,6 +4,28 @@ Scientific authority: [plan](plans/LUKA_SELECTIVE_TEACHER_HYDRA_PLAN.md).
 Internal donor commit: `6fe7e3499767f0a2216586d965efe39a05c24bf7`.
 No remote jobs have been submitted by this implementation session.
 
+## Registration repair after 11499f08
+
+Brown registration failed before output-directory creation or submission with
+`expected LUKA_FROZEN_ADAPTER_HYDRA_TRANSFER/v1, got
+LUKA_U100_CONTRASTIVE_HYDRA_TRANSFER/v1`. Group A's direct delta contains keys;
+its authenticated cross-message parent holds the required validation delta.
+The repair follows that exact parent reference instead of assuming delta roles.
+Scientific recipe and artifact contracts stay v1.
+
+Before editing runtime, three existing focused checks passed but did not model
+the two different delta roles. A new fixture with both roles and the real
+frozen-adapter export/validator reproduced the exact remote exception. After
+repair, all15 targeted validation/registration checks passed in21.63s. They
+cover the correct transfer, wrong manifest, corrupt payload, altered parent
+files/contracts/hash links/populations/shared lineage, explicit recovery export
+and immutable registration. Python syntax and all four runbook Bash blocks pass.
+The complete selective-teacher plus frozen-adapter regression suite then passed
+**117 tests in103.13s**, including native CUDA updates and automatic release.
+Command: `python -B -m pytest -q -p no:cacheprovider tests/test_luka_selective_teacher_hydra.py tests/test_luka_frozen_adapter_hydra.py`
+with the local environment variables documented below. Whitespace checks passed.
+The remote registration and genuine A6000 setup remain to be rerun on new source.
+
 ## Local checks
 
 Baseline teacher-sweep and reconstruction-release tests: **91 passed in90.93s**.

@@ -10,6 +10,7 @@ import torch
 from test_luka_u100_pretrain import cache
 from test_luka_embedding_aux import tiny
 from test_luka_u100_pair_correction import dataset, prepared, all_prepared
+from test_luka_frozen_adapter_hydra import export_origin
 from hlt_classification.cms_proxy_ladder.contracts import file_ref
 from hlt_classification.data.cache_contracts import (load_json, write_immutable_json, with_content_hash,
     deterministic_npz_bytes, atomic_publish_bytes)
@@ -343,10 +344,25 @@ def test_old_teacher_sweep_authentication_uses_original_process(tmp_path,monkeyp
     with pytest.raises(ValueError,match='not complete'): reuse.original(path)
 
 
+def validation_chain(tmp_path,delta,digest,**bindings):
+    """Group A owns contrastive keys; its cross-message parent owns U100 validation."""
+    from hlt_classification.luka_cross_message_hydra.contracts import artifact as cross_artifact
+    from hlt_classification.luka_next_supervision_hydra.contracts import artifact as group_artifact
+    shared=dict(bundle_root=str(tmp_path/'bundle'),reference={},imported={},anchor={})
+    shared.update(bindings)
+    cross=cross_artifact('SPEC',version=3,delta_root=str(delta),delta_hash=digest,counts=c.COUNTS,**shared)
+    cross_path=tmp_path/'cross.json'; write_immutable_json(cross_path,cross)
+    contrast=tmp_path/'contrast'; contrast.mkdir()
+    write_immutable_json(contrast/'manifest.json',with_content_hash(dict(
+        contract='LUKA_U100_CONTRASTIVE_HYDRA_TRANSFER/v1',schema_version=1)))
+    group=group_artifact('SPEC',parents=dict(parent=cross['content_hash']),parent_spec=file_ref(cross_path),
+        scope='group_A_only',counts=c.COUNTS,delta_root=str(contrast),delta_hash='c'*64,**shared)
+    group_path=tmp_path/'group.json'; write_immutable_json(group_path,group)
+    return dict(group_a_spec=file_ref(group_path),parents=dict(group_a=group['content_hash']),**shared)
+
+
 def test_existing_validation_is_default_and_new_export_is_explicit(tmp_path,monkeypatch):
-    group=tmp_path/'group.json'
-    group.write_text(json.dumps(dict(delta_root=str(tmp_path),delta_hash='d'*64)))
-    old=dict(group_a_spec=file_ref(group))
+    old=validation_chain(tmp_path,tmp_path,'d'*64)
     assert campaign.validation_source(old)==('existing_frozen_adapter',str(tmp_path),'d'*64)
     assert campaign.validation_source(old,tmp_path,'e'*64)==('selective_export',str(tmp_path.resolve()),'e'*64)
     with pytest.raises(ValueError): campaign.validation_source(old,tmp_path,None)
@@ -365,12 +381,11 @@ def test_existing_validation_is_default_and_new_export_is_explicit(tmp_path,monk
 def test_registration_roundtrip_binds_reused_controls_and_default_delta(tmp_path,monkeypatch):
     import sys
     delta=tmp_path/'delta'; delta.mkdir(); project=tmp_path/'code'; project.mkdir()
-    group=tmp_path/'group.json'; group.write_text(json.dumps(dict(delta_root=str(delta),delta_hash='d'*64)))
     parent=tmp_path/'parent.json'; parent.write_text('{}')
     old={k:{'fixture':k} for k in campaign.COPIED}
+    old.update(validation_chain(tmp_path,delta,'d'*64,reference=dict(environment={})))
     old.update(root=str(tmp_path/'old'),project_dir=str(tmp_path/'old_code'),environment_dir=sys.prefix,
-        bundle_root=str(tmp_path/'bundle'),content_hash='a'*64,group_a_spec=file_ref(group),
-        reference=dict(environment={}),control={'fixed':'C0'})
+        content_hash='a'*64,control={'fixed':'C0'})
     refs={'fixed':'T00/S00'}
     monkeypatch.setattr(campaign,'original',lambda _:old)
     monkeypatch.setattr(campaign,'references',lambda _:refs)
@@ -390,9 +405,55 @@ def test_registration_roundtrip_binds_reused_controls_and_default_delta(tmp_path
     assert s['validation_kind']=='existing_frozen_adapter' and s['reused']==refs
     assert seen==[('existing_frozen_adapter',str(delta),'d'*64)]*2
     assert s['parents']['teacher_sweep']==old['content_hash']
+    changed=copy.deepcopy(s); changed['validation_root']=str(tmp_path/'contrast'); changed=reseal(changed)
+    (root/'campaign_spec.json').write_text(json.dumps(changed))
+    with pytest.raises(ValueError,match='Existing validation source differs'): campaign.check(changed)
     bad=copy.deepcopy(s); bad['reused']={'substituted':'wrong'}; bad=reseal(bad)
     (root/'campaign_spec.json').write_text(json.dumps(bad))
     with pytest.raises(ValueError,match='registration differs'): campaign.check(bad)
+
+
+def test_validation_source_uses_real_frozen_delta_not_contrastive_keys(export_origin,tmp_path,monkeypatch):
+    from hlt_classification.luka_frozen_adapter_hydra import inputs as legacy
+    f=export_origin; dest=tmp_path/'validation'
+    exported=legacy.export(f.spec_path,dest)
+    old=validation_chain(tmp_path,dest,exported['manifest_hash'])
+    monkeypatch.setattr(transfer,'Bundle',lambda _:f.bundle)
+    kind,root,digest=campaign.validation_source(old)
+    d=transfer.selected(kind,root,digest,old['bundle_root'])
+    assert d.verify_all()['contract']=='LUKA_FROZEN_ADAPTER_HYDRA_TRANSFER/v1'
+    assert d.root==dest.resolve()
+    assert d.original.path('prepared/inputs/validation/U100/0000.npz').read_bytes()==f.payload.read_bytes()
+    # Never accept the key-only manifest, even if someone binds its correct hash.
+    contrast=tmp_path/'contrast'; contrast_hash=load_json(contrast/'manifest.json')['content_hash']
+    with pytest.raises(ValueError,match='contract mismatch'):
+        transfer.selected(kind,contrast,contrast_hash,old['bundle_root'])
+    shard=d.original.path('prepared/inputs/validation/U100/0000.npz'); shard.write_bytes(b'corrupted')
+    with pytest.raises(ValueError): d.verify_all()
+
+
+@pytest.mark.parametrize('problem',[
+    'group_file','cross_file','group_parent_hash','cross_parent_hash','cross_contract',
+    'group_scope','cross_counts','group_bundle_root','cross_bundle_root','cross_anchor','cross_imported'])
+def test_validation_source_rejects_changed_parent_chain(tmp_path,problem):
+    old=validation_chain(tmp_path,tmp_path,'d'*64)
+    group_path=Path(old['group_a_spec']['path']); group=load_json(group_path)
+    cross_path=Path(group['parent_spec']['path']); cross=load_json(cross_path)
+    if problem=='group_file': group_path.write_text('{}')
+    elif problem=='cross_file': cross_path.write_text('{}')
+    elif problem=='group_parent_hash': old['parents']['group_a']='0'*64
+    else:
+        if problem=='cross_parent_hash': group['parents']['parent']='0'*64
+        elif problem=='group_scope': group['scope']='group_B_only'
+        elif problem=='group_bundle_root': group['bundle_root']='/other'
+        else:
+            field=problem.removeprefix('cross_')
+            cross[field]='wrong' if field=='contract' else dict(train=1,validation=1) if field=='counts' else '/other'
+            cross=reseal(cross); cross_path.write_text(json.dumps(cross))
+            group['parent_spec']=file_ref(cross_path); group['parents']['parent']=cross['content_hash']
+        group=reseal(group); group_path.write_text(json.dumps(group))
+        old['group_a_spec']=file_ref(group_path); old['parents']['group_a']=group['content_hash']
+    with pytest.raises(ValueError): campaign.validation_source(old)
 
 
 @pytest.mark.parametrize('violation',['role','coordinate','identity','population','overlap','missing_target'])
