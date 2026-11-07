@@ -5,6 +5,18 @@ and training-time use of paired offline information.
 
 ## Current status
 
+The [twelve-teacher Hydra sweep](docs/plans/LUKA_TEACHER_SWEEP_HYDRA_PLAN.md)
+adds twelve OFFLINE teacher recipes and twelve paired HLT students. It includes
+SupCon5/20, native-embedding and two-view objectives, masked reconstruction,
+physical-summary prediction and noise regularization, with a CE-only teacher
+control. Every student retains U100 embedding weight5 and adds its new teacher
+at weight5; deployed inference remains the native HLT classifier. The
+[runbook](docs/LUKA_TEACHER_SWEEP_HYDRA_RUNBOOK.md) provides the minimal native
+OFFLINE TRAIN/validation transfer and queues setup plus a durable CPU release.
+Successful measured setup automatically submits all24 fits, each student
+waiting only for its own teacher. [Local checks](docs/LUKA_TEACHER_SWEEP_HYDRA_VALIDATION.md)
+passed116 tests; remote qualification and scientific results remain pending.
+
 The [small SupCon-5 study](docs/plans/LUKA_SUPCON5_DEBUG_PLAN.md) adds exactly two
 fits on SPORC debug: an OFFLINE CE+5×SupCon teacher and a fresh HLT student with
 CE + U100 embedding weight5 + new-teacher embedding weight5. It reuses completed

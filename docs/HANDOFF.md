@@ -1,5 +1,48 @@
 # Current Handoff
 
+## 2026-11-06: twelve OFFLINE teacher/student pairs ready for Hydra setup
+
+Implemented the approved24-fit scope in the additive
+`luka_teacher_sweep_hydra` package, CLI/queue/Slurm scripts, focused tests and
+plan/contract/runbook/validation documents. Twelve OFFLINE objectives include
+SupCon5/20 and a CE-only extra-teacher control. Every paired native HLT student
+uses CE + U100 embedding weight5 + selected new-teacher embedding weight5.
+Teacher selection uses OFFLINE validation AUC; targets are clean native pooled
+embeddings on TRAIN only. The existing authenticated Group A C0 U100-w5 result
+is reused. No scientific-quality threshold gates export or dependent students.
+
+The [runbook](LUKA_TEACHER_SWEEP_HYDRA_RUNBOOK.md) includes the required minimal
+native OFFLINE TRAIN/validation cache delta; the existing Group A raw transfer
+has no OFFLINE validation. All shards are matched against historical byte
+hashes and prepared fingerprints. Setup measures every teacher and the common
+student path; each actual student also runs a disposable miniature with its
+selected teacher targets. One approval queues GPU setup and durable CPU release,
+then successful measured setup automatically submits all24 fits and CPU report.
+Each student depends only on its own teacher; exact-ID journals preserve partial
+submission evidence. The separate SPORC SupCon5 campaign is unchanged.
+
+New artifact contracts are v1; the existing embedding-bank v1 semantics are
+reused. Exact donor is `0ae4f28fbc25df4aef0ddc617a16555f98b02591`; every adaptation
+and reused source is recorded in `LEGACY_SOURCE_MAP.md`. No existing runtime was
+edited. README, this handoff and the donor map document the addition; unrelated
+dirty work remains preserved.
+
+Baseline focused checks:51 passed in63.77s. The final new-campaign plus SupCon5
+and reconstruction-release suite passed116 tests in199.43s. Evidence includes
+all twelve native physical-batch128 CUDA teacher paths, full30 synthetic
+teacher-to-student training, native reloads, actual target export/normalization,
+native cache export/relocation/fingerprint checks, the setup measurement pipeline,
+production workers and exact-DAG automatic release with a simulated scheduler.
+See [validation details](LUKA_TEACHER_SWEEP_HYDRA_VALIDATION.md) for boundaries.
+
+No source was committed/pushed and no remote jobs or input transfers were run.
+Local CUDA used an RTX2000 Ada laptop GPU and the repository Weaver fixture;
+this does not establish installed Brown parity, throughput or scientific gain.
+The active plan selects Hydra A6000 rather than generic Tigris defaults. Next:
+commit/push the scoped addition, export/transfer the native OFFLINE delta, then
+queue setup and durable release using the runbook. Genuine A6000 qualification
+is mandatory before the automatic release of scientific fits.
+
 ## 2026-11-06: two-fit OFFLINE SupCon-5 study on SPORC debug
 
 Implemented the user's selected scope: one pure-OFFLINE CE+5×SupCon teacher,

@@ -5841,6 +5841,41 @@ Current tests/evidence: `tests/test_luka_fullsim_stage2.py` and HANDOFF.
 No third-party source/license changes. Installed Weaver remains an authenticated
 runtime dependency, and local tests do not establish remote acceptance.
 
+## 2026-11-06: twelve-teacher Hydra sweep
+
+All in-repository donors below are pinned at
+`0ae4f28fbc25df4aef0ddc617a16555f98b02591`. No external implementation was
+copied and there is no `Fresh_check` runtime import. New runtime is exclusively
+under `luka_teacher_sweep_hydra` and its three scripts. Existing donors remain
+unchanged. Paths without a prefix are relative to `src/hlt_classification/`.
+
+| Donor file(s) | Use in the new campaign |
+| --- | --- |
+| `luka_supcon5/training.py` | Adapted full30 training, gradient probes, native selection/reload, epoch/fit validation; adds deterministic augmentation and TRAIN-statistic parents. |
+| `luka_supcon5/resources.py` | Adapted real-worker miniatures, native parity, warmed/full/partial batch timing, failure diagnostics; profiles twelve teachers and the common student, validates native export and Hydra limits. |
+| `luka_supcon5/worker.py` | Adapted exact job ownership, receipts, selected TRAIN bank export and actual-target student startup; adds CPU release/report and portable inputs. |
+| `luka_supcon5/model.py`, `contracts.py` | Reuses identical Student and its CE/U1005/OFFLINE5 objective; new teacher objectives preserve the SupCon5 projection recipe and seeds. |
+| `luka_embedding_curriculum_hydra/site.py`, `submission.py` | Adapted A6000 allocation and durable exact-DAG bootstrap; adds full upper-bound review, own-teacher dependencies and afterany report. |
+| `luka_embedding_curriculum_hydra/campaign.py`, `reporting.py` | Registration/reference/source-guard and read-only comparison patterns adapted to native OFFLINE delta and oracle/student reports. |
+| `scripts/luka_embedding_curriculum_hydra.py`, `scripts/queue_luka_embedding_curriculum_hydra.sh`, `sbatch/run_luka_embedding_curriculum_hydra.sh` | Adapted thin CLI, one-approval queue helper and absolute-path isolated-environment worker. |
+| `docs/LUKA_EMBEDDING_CURRICULUM_HYDRA_RUNBOOK.md` | Scoped commit/worktree and progress command patterns; adds SPORC OFFLINE export and verified Brown transfer. |
+| `tests/test_luka_supcon5.py`, `tests/test_luka_u100_pretrain.py`, `tests/test_luka_embedding_aux.py`, `tests/test_luka_u100_pair_correction.py`, `tests/test_luka_attention.py` | Synthetic fixtures and parity/worker/queue tests reused or adapted; new twelve-loss, real ROOT transfer and failure coverage. |
+| `luka_u100_pair_transfer/bundle.py` | Original-source authentication, safe regular/relative file helpers; no modification of the original transfer's role policy. |
+| `luka_u100_pair_hydra/inputs.py`, `site.py` | Original bundle, native D000/U100 bank loading, environment and null-aware controller checks. |
+| `luka_u100_multiview/offline_cache.py`, `views.py` | Missing native OFFLINE cache replay against exact historical bytes, preserving originals; ragged lengths for resource stress. |
+| `luka_next_supervision_hydra/group_b.py`, `reuse.py`, `campaign.py`, `reconstruction_release.py` | Original-worktree Group A authentication, C0 reuse, storage reserve and CPU allocation-rounding checks. |
+| `luka_cross_message_hydra/execution.py` | Typed Hydra A6000 resource profile. |
+| `luka_embedding_aux/model.py`, `targets.py`, `luka_supervision_depth/model.py` | Native h tap, TRAIN FP32 target export/FP64 normalization, seeded projection and SupCon definitions. |
+| `luka_u100_embedding/contracts.py`, `luka_u100_contrastive/training.py`, `resources.py` | Population/recipe, original optimizer/recovery calculation and ordinary-view miniature subset. |
+| `jetclass2_delphes/model.py`, `runner.py`, `reporting.py`, `batch128_30e_recipe.py`, `execution.py`, `cache.py` | Native Weaver, predictions/tie rules/AUC, original LR, GPU identity and ragged native inputs. |
+| `luka_fullsim/foundation.py`, `regular_cache.py`, `regular_submission.py`, `preflight_v2.py`, `alljets_data.py` | Exact pushed source, historical native block/fingerprint checking, isolated submission environment, backend/memory and data-use flags. |
+| `data/cache_contracts.py`, `cms_proxy_ladder/contracts.py`, `submission.py`, `context_fusion/worker.py`, `luka_embedding_weight/worker.py` | Atomic/hash/file-reference helpers, Slurm walltime, checkpoint publication and prediction-array validation. |
+| `luka_particle_teacher_hydra/submission.py`, `scouting/hcwdl_exact_dag_submission.py`, `scouting/hcwdl_recovery.py` | Live Hydra shape review and exact-ID journal/ledger publication. |
+
+New `LUKA_TEACHER_SWEEP_*/v1` contracts isolate this science from all original
+campaigns. SupCon, VICReg, Barlow and masking literature are cited in the new
+plan as methodological inspiration, without importing third-party source.
+
 ## Deliberately excluded
 
 Do not migrate checkpoints, caches, logs, run registries, historical campaign
