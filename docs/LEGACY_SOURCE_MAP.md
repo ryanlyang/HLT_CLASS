@@ -1,5 +1,33 @@
 # Legacy Donor-Source Map
 
+## OFFLINE pretext and HLT structure on Hydra (2026-11-08)
+
+Exact internal donor for this additive implementation:
+`a6da7a02b773d2397ff0d301bb4b5b400fc7528c`. No existing runtime is modified.
+No external implementation or Fresh_check runtime import is copied. Paths are
+under `src/hlt_classification/` unless otherwise specified.
+
+| Donor files/functions | New use or adaptation |
+|---|---|
+| `luka_capacity_hydra/{training,resources,submission}.py` | Adapt matched full30 student training, head removal/reload, resource replay/profiling and exact-ID durable release to the 30-fit graph. |
+| `luka_capacity_hydra/model.py::Native`, `complementarity.py::align` | Reuse native128 installed factory and exact prediction-identity alignment. |
+| `luka_selective_teacher_hydra/{reuse,campaign,site,reporting,resources,training}.py` | Reuse original-source parent authentication, historical anchors, allocation checks including CPU rounding, recovery, miniature indices/freeing and student gradient diagnostics. Teacher pretext diagnostics are new. |
+| `luka_teacher_sweep_hydra/transfer.py::Delta` | Validate historical native OFFLINE inputs and exact physical-to-native frontend replay. |
+| `luka_next_supervision_hydra/data.py::{RawBundle,physical_columns}` | Reuse authenticated complete physical TRAIN export and field conventions. New minimal validation export has its own role-specific contract. |
+| `luka_next_supervision_hydra/reconstruction_batched.py::{solver_pool,solve}`, `campaign.py::storage` | Reuse bounded exact assignment threads and registered storage accounting. New mixed-field cost, matching reduction and target definitions live in the new package. |
+| `luka_embedding_aux/{model,targets}.py`, `luka_supervision_depth/model.py::seeded_head` | Reuse native preclassifier capture, old U100/T00 bank validators and isolated predictor initialization. New pretext banks have distinct coordinates and contracts. |
+| `luka_u100_pair_hydra/{inputs,site}.py`, `luka_u100_pair_transfer/bundle.py`, `luka_u100_embedding/contracts.py`, `luka_u100_contrastive/{training,resources}.py` | Reuse D000/U100 population authentication, original-source proof, original recipe, AdamW, recovery and cache subsets. |
+| `luka_fullsim/{alljets_data,particles,foundation,preflight_v2,regular_submission}.py`, `cms2jc2_response/bridge.py`, `literature_context/transform.py` | Reuse physical measurement conversion, visible-particle native frontend, hashes, installed backend/memory and clean worker environment. |
+| `jetclass2_delphes/{model,runner,reporting,batch128_30e_recipe,execution}.py`, `luka_embedding_weight/worker.py::validate_predictions` | Reuse original native model, BF16 inference, metric selection, schedule, environment/GPU identity and saved prediction checks. |
+| `data/cache_contracts.py`, `cms_proxy_ladder/{contracts,submission}.py`, `context_fusion/worker.py::save_state`, `scouting/{hcwdl_exact_dag_submission,hcwdl_recovery}.py`, `luka_particle_teacher_hydra/submission.py` | Reuse atomic/hash validation, checkpoint serialization, exact-ID journals and scheduler dry review. |
+| `scripts/{luka_capacity_hydra.py,queue_luka_capacity_hydra.sh}`, `sbatch/run_luka_capacity_hydra.sh` | Adapt thin CLI, one-time bounded authorization and absolute-project clean-environment workers. |
+| `tests/test_luka_{capacity_hydra,teacher_sweep_hydra,u100_pair_correction,fullsim_alljets,fullsim_stage2}.py` | Adapt production-loop/scheduler test patterns and reuse synthetic ROOT preparation fixtures. New scientific fixtures and tests are in `test_luka_pretext_structure_hydra.py`. |
+
+New reusable schemas are `LUKA_PRETEXT_STRUCTURE_HYDRA_*/v1`. FastJet3.5.1.5
+is an independent temporary test reference, not a runtime dependency or copied
+algorithm. See the [validation record](LUKA_PRETEXT_STRUCTURE_HYDRA_VALIDATION.md)
+for exact evidence and pending remote qualification.
+
 ## HLT capacity and complementarity on Hydra (2026-11-08)
 
 Exact internal donor for all entries below:

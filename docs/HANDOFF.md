@@ -1,5 +1,42 @@
 # Current Handoff
 
+## 2026-11-08: OFFLINE pretext and structure implementation ready for Hydra setup
+
+Implemented the [30-fit plan](plans/LUKA_OFFLINE_PRETEXT_STRUCTURE_HYDRA_PLAN.md)
+as the additive `luka_pretext_structure_hydra` package, three thin CLI/queue/Slurm
+wrappers, focused tests and a [runbook](LUKA_PRETEXT_STRUCTURE_HYDRA_RUNBOOK.md).
+Eight OFFLINE encoders train without jet-class loss or class-based selection.
+Their decoders depend on the pooled128 embedding, and a clean structure task
+trains the same representation that is exported. Twelve embedding students,
+eight structure variants and two controls retain native HLT CE+U100-w5.
+All auxiliary heads are removed and native checkpoints are strictly reloaded.
+
+Implemented complete-particle physical targets, deterministic corruption with
+visible-only feature reconstruction, exact mixed-set assignment, exact FP64
+correlators, exclusive angular clustering, branching/soft-drop/Lund summaries,
+TRAIN-only normalization and role-separated immutable banks. Setup profiles
+all 30 paths, including actual teacher miniatures and technical bank exports,
+full/partial and longest-support backward, full validation, native replay,
+head-removal parity, probes and concrete output storage. Students repeat a
+disposable startup miniature with their actual selected teachers.
+
+The durable Slurm CPU release submits all 30 fits plus the report only after
+setup acceptance. Only necessary teacher-to-student dependencies are added;
+structure students and controls can run alongside teachers. Failed or ambiguous
+submissions preserve exact-ID journals. Poor finite scientific quality never
+blocks a teacher's student. Reports distinguish pretext loss from HLT recovery.
+
+New schemas are `LUKA_PRETEXT_STRUCTURE_HYDRA_*/v1`; donor artifacts retain
+original validators. The internal donor is
+`a6da7a02b773d2397ff0d301bb4b5b400fc7528c`; see
+[donor map](LEGACY_SOURCE_MAP.md) and [validation evidence](LUKA_PRETEXT_STRUCTURE_HYDRA_VALIDATION.md)
+for files, local CPU/CUDA tests, pinned FastJet checks and their limits.
+Local validation passed108 campaign tests and127 donor baseline tests, plus
+the final focused report checks. No remote scientific fit was run and no jobs were submitted or changed here.
+The next execution step is to commit/push the scoped files, export/transfer the
+physical validation delta, register a fresh root, and queue setup plus release.
+Real installed-Weaver/A6000 qualification remains the setup job's responsibility.
+
 ## 2026-11-08: HLT capacity and prediction complementarity ready for Hydra setup
 
 Added the separate `luka_capacity_hydra` package, thin CLI/Slurm/queue wrappers,

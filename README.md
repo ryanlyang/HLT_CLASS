@@ -5,6 +5,17 @@ and training-time use of paired offline information.
 
 ## Current status
 
+The [OFFLINE pretext and physical-structure campaign](docs/plans/LUKA_OFFLINE_PRETEXT_STRUCTURE_HYDRA_PLAN.md)
+implements 30 scientific fits: eight teachers trained without jet-class loss,
+twelve students predicting individual/combined teacher embeddings, eight direct
+structure variants and two fresh controls. Every student retains U100-w5 and
+native HLT-only inference. The [runbook](docs/LUKA_PRETEXT_STRUCTURE_HYDRA_RUNBOOK.md)
+queues measured A6000 setup and a durable CPU release job, which automatically
+submits all 30 fits and the report after successful qualification. A separate
+physical validation export is required; existing physical TRAIN inputs and
+T00 are reused. See [local validation](docs/LUKA_PRETEXT_STRUCTURE_HYDRA_VALIDATION.md)
+for the evidence and the remaining real-Hydra qualification boundary.
+
 The [HLT capacity and complementarity study](docs/plans/LUKA_CAPACITY_HYDRA_PLAN.md)
 adds twelve fresh matched students: native128 and wide256, each with CE-only,
 U100-w5, or U100-w5+IT-w5 supervision, at two seeds. A separate CPU analysis
