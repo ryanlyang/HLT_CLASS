@@ -1,5 +1,42 @@
 # Current Handoff
 
+## 2026-11-08: HLT capacity and prediction complementarity ready for Hydra setup
+
+Added the separate `luka_capacity_hydra` package, thin CLI/Slurm/queue wrappers,
+62 focused tests and a scientific plan/contract/runbook/validation record.
+Twelve fresh students cover native128/wide256 x CE/U100-w5/U100-w5+IT-w5 x two
+matched seeds. Existing frozen U100 and selected IT TRAIN targets are reused;
+no new teachers are fitted. Width-aware native checkpoint export/reload keeps
+deployment HLT-only and removes every predictor. Reports include matched CE
+and U100 deltas, wide-minus-native and supervision interactions, deployment
+parameter/latency measurements, and provisional epoch recoveries.
+
+A separate CPU job authenticates completed S2IT/S4/S6 saved probabilities,
+aligns exact jet identities, and compares the three fixed equal-weight pairs
+and triple with each member. It reports AUC/recovery, accuracy/CE, per-class
+QCD rejection/counts, confusion/disagreement and paired jet bootstrap
+intervals. Event independence is unverified, selected-checkpoint uncertainty
+is conditional, original50k overlaps validation, and final test stays sealed.
+
+One bounded review queues CPU analysis, A6000 setup and durable CPU release.
+Successful real qualification automatically submits twelve independent fits
+and an afterany CPU report. Analysis performance is not a training gate.
+Setup checks actual-target production miniatures, installed-factory parity,
+native replay, warmed timing and resource limits for every cell. Exact claims
+and journals prevent blind duplicate retry. CPU checks retain observed Hydra
+one-requested/two-allocated rounding. Existing runtime and unrelated work
+remain unchanged; donor is `3fb9e7f11f628ad9d0d8c4c0d3694cc918e6e8a6`.
+
+Local evidence: baseline selective suite73 passed; combined capacity/selective
+suite130 passed in150.32s, then five added CPU/accounting checks passed in7.08s
+(135 distinct tests). Native128 dual-head initialization and one update match
+the donor exactly. Full-depth native/wide CUDA batch128/partial11 checks pass;
+all12 reduced-depth full30 fits and the simulated-site setup/release paths
+pass. This laptop/Weaver-fixture evidence is not authoritative Brown parity.
+No remote job, Git commit or push was performed. Next: scoped commit/push,
+then the [runbook](LUKA_CAPACITY_HYDRA_RUNBOOK.md) registration/queue block.
+See [validation evidence](LUKA_CAPACITY_HYDRA_VALIDATION.md).
+
 ## 2026-11-07: selective-teacher registration transfer selection repaired
 
 User registration at commit `11499f088f3b62dddcf93e22d1377ec1b027fe13`

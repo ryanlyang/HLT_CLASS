@@ -1,5 +1,30 @@
 # Legacy Donor-Source Map
 
+## HLT capacity and complementarity on Hydra (2026-11-08)
+
+Exact internal donor for all entries below:
+`3fb9e7f11f628ad9d0d8c4c0d3694cc918e6e8a6`. The new
+`luka_capacity_hydra` package is additive; existing runtime is unchanged.
+No external source is copied. Paths below are under `src/hlt_classification/`
+unless prefixed otherwise.
+
+| Donor paths/functions | New use or adaptation |
+|---|---|
+| `luka_selective_teacher_hydra/{campaign,contracts,training,resources,worker,submission,reporting,reuse}.py` | Adapt immutable registration, fixed recipe, full30 loops, actual-target miniatures, warmed profiling, receipts, exact-ID automatic release and reports to twelve fresh capacity fits. Authenticate the old selective parent in its own pinned process. |
+| `luka_selective_teacher_hydra/{targets,site}.py` | Reuse selected IT TRAIN bank validation and Hydra A6000/CPU allocation checks without changing their contracts. |
+| `luka_embedding_aux/model.py`, `luka_supervision_depth/model.py::seeded_head` | Adapt the preclassifier hook and isolated predictor initialization to width-aware Native and Student models. Native128 dual-predictor initialization and one optimizer update are checked against the donor. |
+| `jetclass2_delphes/{model,runner,reporting,batch128_30e_recipe,execution,schema}.py`, `models/particle_transformer.py` | Reuse installed Weaver factory, original model configuration, BF16 prediction, metrics/selection, learning rate, GPU/environment identity and class schema. Width256 changes embed_dims only. |
+| `luka_u100_pair_hydra/{inputs,site}.py`, `luka_u100_embedding/contracts.py`, `luka_u100_contrastive/{training,resources}.py`, `luka_u100_multiview/views.py` | Reuse authenticated D000 views/U100 bank, counts, AdamW, recovery, subset adapters and support lengths. |
+| `luka_embedding_weight/worker.py::validate_predictions` | Reuse prediction schema validation before exact identity alignment and fixed equal-weight probability averaging. Weighted tied-AUC/bootstrap and capacity interaction analysis are new. |
+| `luka_next_supervision_hydra/{campaign,reconstruction_release}.py`, `luka_particle_teacher_hydra/submission.py` | Reuse output storage checks, CPU request/allocation rounding and Slurm dry-review checks. |
+| `scouting/{hcwdl_exact_dag_submission,hcwdl_recovery}.py`, `data/cache_contracts.py`, `cms_proxy_ladder/{contracts,submission}.py`, `luka_fullsim/{foundation,regular_submission,preflight_v2,alljets_data}.py`, `context_fusion/worker.py::save_state` | Reuse source/file/content hashes, exact-job journals, atomic publication, backend/memory checks, clean environment and serialization. |
+| `scripts/{luka_selective_teacher_hydra.py,queue_luka_selective_teacher_hydra.sh}`, `sbatch/run_luka_selective_teacher_hydra.sh` | Adapt thin CLI, bounded dry authorization and absolute-path clean-environment worker. |
+| `tests/test_luka_selective_teacher_hydra.py`, `tests/test_luka_u100_pretrain.py::cache`, `tests/test_luka_attention.py::cache` | Adapt real-model/production-loop and simulated scheduler test patterns; reuse ragged synthetic populations. |
+
+New contracts are `LUKA_CAPACITY_HYDRA_*/v1`; all donor artifacts retain their
+original validators. The [validation record](LUKA_CAPACITY_HYDRA_VALIDATION.md)
+separates local CPU/CUDA evidence from pending real-Hydra qualification.
+
 ## Selective-information teachers on Hydra (2026-11-07)
 
 Exact internal donor for all entries below:

@@ -5,6 +5,16 @@ and training-time use of paired offline information.
 
 ## Current status
 
+The [HLT capacity and complementarity study](docs/plans/LUKA_CAPACITY_HYDRA_PLAN.md)
+adds twelve fresh matched students: native128 and wide256, each with CE-only,
+U100-w5, or U100-w5+IT-w5 supervision, at two seeds. A separate CPU analysis
+tests fixed equal-weight ensembles of completed S2IT/S4/S6 predictions. The
+[runbook](docs/LUKA_CAPACITY_HYDRA_RUNBOOK.md) queues CPU analysis, measured
+A6000 setup and durable automatic release of all twelve independent fits.
+It reuses existing targets and needs no new teacher training or normal SPORC
+transfer. See [local validation](docs/LUKA_CAPACITY_HYDRA_VALIDATION.md) for
+the tests and remaining real-Hydra qualification boundary.
+
 The [selective-information teacher campaign](docs/plans/LUKA_SELECTIVE_TEACHER_HYDRA_PLAN.md)
 adds four CE teachers restricted to kinematics, identity, tracking, or identity
 plus tracking on the original HLT particle slots, and eight fresh HLT students.
