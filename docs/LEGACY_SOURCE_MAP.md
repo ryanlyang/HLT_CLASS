@@ -1,5 +1,43 @@
 # Legacy Donor-Source Map
 
+## U100 classification-aware embedding objectives on Hydra (2026-11-10)
+
+Exact internal donor for all entries below:
+`37ed91205764667588105948f95a1784964ac8bc`. New namespace
+`luka_embedding_objective_hydra`, contracts
+`LUKA_EMBEDDING_OBJECTIVE_HYDRA_*/v1`. No existing runtime is modified,
+external implementation copied, or Fresh_check runtime dependency added.
+Paths below are under `src/hlt_classification/` unless stated otherwise.
+
+| Donor files | Reuse / adaptation |
+|---|---|
+| `luka_summary_tokens_hydra/{training,resources,worker,submission,reporting}.py` | Adapt full30 selection/export, actual-target setup and startup miniatures, warmed measurements, native parity/replay, exact-ID automatic release and read-only results. Replace summary architecture/multiple banks with original native U100 prediction and frozen loss geometry. |
+| `luka_embedding_curriculum_hydra/{campaign,inputs,resources}.py` | Adapt additive-source registration, Group A/C0 input reuse, evaluation-only validation target bank; import complete state comparison for original U100 update parity. No curriculum or stage selection is reused. |
+| `luka_embedding_aux/model.py`, `luka_u100_embedding/{contracts,training}.py` | Import unchanged AuxiliaryParT/predictor, preclassifier tap, counts/recipe and ordinary SmoothL1 objective for parity. |
+| `luka_u100_contrastive/{training,resources}.py`, `luka_u100_multiview/views.py` | Import original AdamW, recovery, memory measurements, cache subsets and support lengths; no contrastive objective. |
+| `luka_selective_teacher_hydra/{resources,site,reporting}.py` | Import miniature indices/bank subsets, cleanup, A6000 allocation and CPU rounding checks, recovery calculation. No selective teacher or IT targets. |
+| `luka_next_supervision_hydra/{group_b,reuse,campaign}.py`, `luka_cross_message_hydra/{inputs,execution}.py`, `luka_u100_pair_hydra/{inputs,site}.py` | Authenticate parent worktree/C0, storage, bundle, frozen U100 encoder and validation delta; import existing D000 views, TRAIN bank and A6000 profile. |
+| `jetclass2_delphes/{model,runner,reporting,batch128_30e_recipe,execution}.py`, `models/particle_transformer.py`, `luka_embedding_weight/worker.py` | Import original installed native factory, BF16 forward, selected-probability inference, metrics/tie rules, LR schedule, environment/GPU identity and prediction checks. |
+| `luka_fullsim/{alljets_data,foundation,preflight_v2,regular_submission}.py`, `data/cache_contracts.py`, `cms_proxy_ladder/{contracts,submission}.py`, `context_fusion/worker.py` | Import exploratory flags, pinned source, memory/backend checks, clean environment, atomic/hash publication, file references, walltimes and state serialization. |
+| `scouting/{hcwdl_exact_dag_submission,hcwdl_recovery}.py`, `luka_particle_teacher_hydra/submission.py` | Import exact-ID DAG journals, ledgers and scheduler dry review. Eight science fits have no inter-fit dependencies. |
+| `luka_capacity_hydra/complementarity.py` | Import saved-prediction identity alignment only. |
+| `scripts/{luka_summary_tokens_hydra.py,queue_luka_summary_tokens_hydra.sh}`, `sbatch/run_luka_summary_tokens_hydra.sh` | Adapt thin CLI, one-time bounded authorization and absolute-project workers. |
+| `tests/test_luka_summary_tokens_hydra.py`, `tests/test_luka_u100_pretrain.py`, `tests/test_luka_attention.py`, `tests/test_luka_embedding_aux.py` | Adapt setup/submission/fit tests and reuse deterministic synthetic native/cache fixtures. |
+| `docs/LUKA_EMBEDDING_CURRICULUM_HYDRA_RUNBOOK.md` | Adapt scoped PowerShell commit and Brown pinned-worktree registration/queue examples. |
+
+New geometry, weighting, discriminant/covariance objectives and asymmetric
+gradient projection are implemented in this namespace. Method context is cited
+in its plan; no published repository code was transplanted.
+
+## Complementary-teacher execution v2 repair (2026-11-10)
+
+Repair baseline: `d88eb82c6569312b72a3a3bccb1c39f9e357b4a4`. No new donor files
+were migrated. Existing complementary `contracts.py`, `training.py` and
+`resources.py` now bind64-jet explanation microbatches and v2 receipts; the
+per-jet objective and imported native ParT remain unchanged. Tests compare
+against the original8-jet execution. Original internal donors below retain
+their original meanings; failed v1 receipts cannot qualify v2 science.
+
 ## Complementary OFFLINE teachers on Hydra (2026-11-09)
 
 Exact internal donor for the entries below:
@@ -6062,3 +6100,28 @@ portable bundle, selected-model storage, native Weaver factory, exact-DAG journa
 and fixed30 recipe remain imports of existing contracts. Donor packages and
 existing campaign artifacts are untouched. New science contracts are
 `LUKA_JOINT_ADAPTER_HYDRA_*/v1`; original frozen controls retain their own namespace.
+
+## FullStat soft-subclass campaign (2026-11-10)
+
+Implementation donor commit: `6ab66183a0906183887386d278f6ef202a891365`.
+Completed historical Multi3 contrastive execution:
+`a7249f49b6f522f7df3b150d27f53613452b7fb0`, job8361672.
+No donor runtime file changed. No Fresh_check runtime import.
+
+| Donor files at implementation donor commit | New use |
+| --- | --- |
+| `src/hlt_classification/luka_fullstat_multi3_contrastive/{__init__,contracts,source,campaign,execution,launch,submission,recovery}.py` | Adapted under `luka_fullstat_subclass`: distinct contracts/task/auth, completed contrastive parent, scoped source guard and frozen target recovery. |
+| `src/hlt_classification/luka_fullstat_multi3_contrastive/{model,training,startup,worker,banks}.py` | Adapted under `luka_fullstat_subclass`: conditional subclass head/loss, frozen bank, complete-update checks, target-bound receipts/results. |
+| `src/hlt_classification/luka_fullstat_multi3_contrastive/sampling.py` | Imported unchanged via thin alias; exact negative law and optimized kernels preserved. |
+| `scripts/luka_fullstat_multi3_contrastive.py`, `scripts/launch_luka_fullstat_multi3_contrastive.sh`, `sbatch/run_luka_fullstat_multi3_contrastive.sh` | Adapted thin subclass CLI, detached launcher and absolute-path worker. |
+| `tests/test_luka_fullstat_multi3_contrastive.py` | Adapted campaign/model/worker/recovery/queue cases; new target and lifecycle suites added. |
+| `luka_fullstat_embedding_sweep/banks.py`, `luka_fullstat_u100_embedding/banks.py`, `luka_fullstat_multiview/targets.py` | Reused immutable OFFLINE/U100/CONCAT/FUSION readers and TRAIN identity validation. |
+| `luka_fullstat_readout/model.py`, `luka_u100_multiview/model.py` | Frozen native-readout reconstruction concept and unchanged native deployment extraction; subclass target readout uses explicitly registered FP64 arithmetic. |
+| `luka_fullstat_multiview/{views,resources}.py`, `luka_fullstat_readout/{training,worker}.py`, `luka_fullstat_fine_tail/worker.py` | Unchanged HLT views/resources, optimizer/state helpers, historical validation readers and R30/R50 metrics. |
+
+`luka_fullstat_subclass/targets.py` is new: deterministic TRAIN-only weighted
+prototype fitting, softness calibration and immutable compact target banks.
+The active [plan](plans/LUKA_FULLSTAT_SUBCLASS_PLAN.md),
+[contract](contracts/LUKA_FULLSTAT_SUBCLASS.md),
+[validation](LUKA_FULLSTAT_SUBCLASS_VALIDATION.md) and
+[queue runbook](LUKA_FULLSTAT_SUBCLASS_RUNBOOK.md) define the new semantics.

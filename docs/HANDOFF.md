@@ -1,5 +1,76 @@
 # Current Handoff
 
+## 2026-11-10: Eight U100 embedding-objective fits, queue-ready implementation
+
+Implemented the separate `luka_embedding_objective_hydra` campaign described
+in the [scientific plan](plans/LUKA_EMBEDDING_OBJECTIVE_HYDRA_PLAN.md). Eight
+new seed-0 fits reuse the authenticated Hydra C0 U100-w5 control. They test
+bounded classifier-coordinate weighting, teacher class-span prediction at two
+strengths, per-jet Fisher weighting, TRAIN discriminant directions, covariance
+balancing, and CE-protected gradients alone or with class-span prediction.
+All retain CE plus total auxiliary coefficient 5, the original native model,
+predictor, data, initialization, sampler and 30-epoch optimizer schedule.
+Only U100 is predicted; no extra teacher fits or deployed parameters are added.
+
+Geometry and fixed prediction-gradient scale calibration use TRAIN only.
+A separate frozen U100 validation bank supports observation-only embedding,
+class-span/complement and teacher-readout diagnostics. Full-validation native
+AUC selects checkpoints using the existing tie rule; finite poor auxiliary
+quality never blocks a run. Native-only exports undergo strict reload and
+probability replay. Reports distinguish same-seed Hydra C0 from historical
+SPORC U100 and disclose original50k overlap and single-seed screening.
+
+New package, CLI, queue/worker scripts, focused tests and four campaign docs
+are additive. Contracts use `LUKA_EMBEDDING_OBJECTIVE_HYDRA_*/v1`; internal
+donor commit is `37ed91205764667588105948f95a1784964ac8bc`, recorded in
+[LEGACY_SOURCE_MAP.md](LEGACY_SOURCE_MAP.md). Existing runtime is unchanged.
+The full bounded dry review covers 11 jobs: A6000 setup, CPU release afterok,
+eight independent measured fits in order R8/R2/R4/R1/R7/R3/R5/R6, and CPU
+report afterany. Setup authenticates reuse, proves ordinary U100 complete-update
+parity, builds geometry/targets, runs every production miniature and measures
+full/partial/longest-support updates. Actual-target startup miniatures are
+discarded before fresh scientific fits. Training memory peaks are retained
+across deployment-only benchmark counter resets.
+
+Local validation: 116 donor tests passed before changes; the final new suite
+passed 57 tests in 80.33s. Exact coverage and limits are in the
+[validation record](LUKA_EMBEDDING_OBJECTIVE_HYDRA_VALIDATION.md). No new
+Brown/Tigris run, remote qualification, scientific result, commit, push or
+submission has been performed. The exact next task is the scoped commit/push
+and Brown registration/queue block in the
+[runbook](LUKA_EMBEDDING_OBJECTIVE_HYDRA_RUNBOOK.md). Genuine installed-Weaver
+A6000 setup must pass before automatic scientific release.
+
+## 2026-11-10: Complementary-teacher setup160118 runtime repair
+
+Brown's complementary setup reached all ten miniature paths, then rejected
+TE's5058-minute projection (2.143s/update) above the48h ceiling. The failure
+was resource admission, not the tiny setup models' validation scores. No full
+campaign acceptance was produced.
+
+Updated only complementary-teacher execution: explanation microbatches grow
+from8 to64, preserving the per-jet penalty, full128 CE batch, one optimizer
+update and30 epochs. Finite-response probes use the final up-to-eight jets
+independently of grouping. `LUKA_COMPLEMENTARY_TEACHER_*/v2` receipts and a new
+authorization bind this execution; measured profiles explicitly record the
+TE grouping. Runtime/memory ceilings and2x margin stay fixed. The runbook now
+registers a fresh `_a6000_v2_r1` root and preserves failed v1 outputs.
+
+Local validation:50 baseline tests passed before edits;55 distinct tests passed
+afterward (12 focused in23.71s,43 remaining in79.50s). Full-depth CUDA128-particle
+checks match old/new parameter gradients, losses and BN state for full/partial
+batches. Synthetic end-to-end setup, all ten workers and auto-release pass.
+Laptop-GPU full-update benchmarks measured3.64x speedup at64 particles and1.53x
+at128, with5.81GiB maximum allocated memory. These do not establish Brown
+acceptance; see the [validation record](LUKA_COMPLEMENTARY_TEACHER_HYDRA_VALIDATION.md).
+
+Changed campaign contracts/training/resources, focused tests, plan/contract,
+runbook and validation docs. Existing internal donor remains54ff594d; repair
+baseline isd88eb82c6569312b72a3a3bccb1c39f9e357b4a4. No new donor files migrated;
+unrelated dirty work preserved. No commit, push or remote job changes. Next:
+commit/push the repair and queue fresh measured setup plus automatic release
+using the [runbook](LUKA_COMPLEMENTARY_TEACHER_HYDRA_RUNBOOK.md).
+
 ## 2026-11-09: Complementary OFFLINE teachers ready for Hydra setup
 
 Implemented the [approved complementary-teacher campaign](plans/LUKA_COMPLEMENTARY_TEACHER_HYDRA_PLAN.md)
@@ -16832,3 +16903,43 @@ step: commit/push the scoped implementation, create its clean Tigris worktree,
 review and execute the one-job helper, then inspect saved statistics and
 measured resources before authorizing any larger generation. Existing dirty
 documentation and unrelated user code were preserved.
+
+## 2026-11-10: Oscar FullStat Multi3 + contrastive + soft subclasses
+
+Implemented additive `luka_fullstat_subclass`: one fresh20-epoch HLT student on
+the existing3M TRAIN/500k validation split. It retains U100/CONCAT/FUSION
+embedding10 and OFFLINE mix-contrastive0.3, adds class-conditional soft-subclass
+KL0.5 ramped over3 epochs, and removes all auxiliary heads for deployment.
+The frozen OFFLINE TRAIN bank and native classifier define5 prototypes per
+signal and10 QCD using75/25 embedding/confusion-margin distance. TRAIN-only
+temperature calibration targets median maximum membership0.8. Degenerate
+finite clusters are diagnostics, not job-failure criteria. Targets are built
+once, authenticated and bound into every epoch receipt.
+
+One L40S/6CPU/192000MiB/48h allocation performs target construction and actual
+resource/parity checks before fresh training, without a separate preflight.
+Detached dry-review/submission and explicit same-source epoch recovery preserve
+old artifacts; recovery copies frozen targets and can publish a completed fit
+without repeating training. Completed Multi3 contrastive job8361672 is the
+historical reference, alongside M0HLT/OFFLINE/U100-w5/Multi3 in saved results.
+
+Validation:72 combined new/donor cases passed in160.89s, plus one complete
+target-bound worker/publication-recovery/results test in23.49s; four focused
+final guard checks passed. Coverage includes real installed-Weaver CUDA startup,
+synthetic20-epoch CPU/CUDA fits, exact continuation, target reproducibility,
+conditional gradients, corruption and queue boundaries. Local syntax, shell,
+links and whitespace checks passed. Initial missing-Weaver test environment
+and an extra test's missing fixture directory were resolved without donor edits.
+See [validation](LUKA_FULLSTAT_SUBCLASS_VALIDATION.md).
+
+New contracts: `LUKA_FULLSTAT_SUBCLASS_*/v1`; donor source baseline6ab66183,
+historical parenta7249f49. Existing runtime and unrelated dirty work preserved.
+No remote validation, jobs, commit or push. Next: scoped commit/push and
+[Oscar detached queue command](LUKA_FULLSTAT_SUBCLASS_RUNBOOK.md). Actual
+full-population acceptance and scientific outcomes remain to be measured.
+
+Subclass queue follow-up: execution ancestry advanced to the user's d88eb82c
+commit after verifying its runtime delta contains only the separate Hydra
+complementary-teacher additions. Oscar donor files and subclass science remain
+unchanged. Updated source/registration/detached-launch tests:15 passed in10.37s.
+No jobs submitted, commit or push performed; scoped commit/push is next.

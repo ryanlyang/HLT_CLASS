@@ -5,6 +5,16 @@ and training-time use of paired offline information.
 
 ## Current status
 
+The [U100 embedding-objective campaign](docs/plans/LUKA_EMBEDDING_OBJECTIVE_HYDRA_PLAN.md)
+adds eight student fits testing whether classification-aware embedding losses
+and CE-protected gradients improve on ordinary U100-w5. Every fit predicts only
+U100 and deploys the unchanged native HLT ParT; the existing same-seed control
+is reused. The [runbook](docs/LUKA_EMBEDDING_OBJECTIVE_HYDRA_RUNBOOK.md) queues
+A6000 setup and a durable release job that automatically submits the eight
+independent fits and report after measured qualification. The
+[validation record](docs/LUKA_EMBEDDING_OBJECTIVE_HYDRA_VALIDATION.md) distinguishes
+local tests from the required real-Hydra setup.
+
 The [complementary OFFLINE teacher campaign](docs/plans/LUKA_COMPLEMENTARY_TEACHER_HYDRA_PLAN.md)
 adds ordinary, explanation-diverse and error-focused teachers, with four HLT
 students predicting their individual or combined embeddings at total weight5.
@@ -528,3 +538,11 @@ The baseline uses the reference Particle Transformer implementation supplied
 by Weaver through its public Python interface; no Weaver source is copied into
 this repository. JetClass, Particle Transformer, and Weaver citations and
 licenses must be included in any scientific release.
+
+## Oscar FullStat soft-subclass experiment
+
+The one-fit [subclass campaign](docs/plans/LUKA_FULLSTAT_SUBCLASS_PLAN.md) adds
+TRAIN-only OFFLINE soft subclasses to the completed Multi3 + contrastive recipe.
+It keeps3M/500k,20 epochs and native HLT inference. See the
+[detached queue instructions](docs/LUKA_FULLSTAT_SUBCLASS_RUNBOOK.md) and
+[local validation](docs/LUKA_FULLSTAT_SUBCLASS_VALIDATION.md).
