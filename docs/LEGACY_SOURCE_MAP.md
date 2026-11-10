@@ -1,5 +1,32 @@
 # Legacy Donor-Source Map
 
+## Complementary OFFLINE teachers on Hydra (2026-11-09)
+
+Exact internal donor for the entries below:
+`54ff594df4fb7dddc56c0e99ffb13b9448a6a6c9`. New namespace
+`luka_complementary_teacher_hydra`, contracts
+`LUKA_COMPLEMENTARY_TEACHER_*/v1`. Existing runtime is unchanged. No external
+implementation is copied and no Fresh_check runtime dependency is introduced.
+Paths below are under `src/hlt_classification/` unless stated otherwise.
+
+| Donor files | Reuse / adaptation |
+|---|---|
+| `luka_teacher_sweep_hydra/{campaign,contracts,inputs,transfer,model,training,resources,worker,submission,site,reporting}.py` | Adapt immutable registration, native OFFLINE delta, full30 loop, original target export, task receipts, warmed timing, native parity/reload, exact-DAG auto-release and recovery reports. Import original input/transfer/site semantics, subset/free helpers, gradient diagnostics and recovery. Replace fixed student U100/new-teacher objective with independent banks sharing total5. |
+| `luka_selective_teacher_hydra/{model,training,reuse}.py` | Independent multi-bank heads, ordered joins and original-worktree subprocess authentication pattern. No selective field-view or U100 objective is copied. |
+| `luka_capacity_hydra/{campaign,resources}.py` | Additive registration and native BF16 saved-probability replay pattern. No wide model or ensemble inference. |
+| `luka_embedding_aux/{model,targets,contracts}.py`, `luka_supervision_depth/model.py` | Native preclassifier tap, independent seeded MLPs, clean TRAIN-only embeddings, FP64 normalization and original bank validator. |
+| `luka_u100_pair_hydra/{inputs,site}.py`, `luka_u100_embedding/contracts.py`, `luka_u100_contrastive/{training,resources}.py`, `luka_u100_multiview/views.py` | Authenticated D000 views/reference population, environment, fixed counts, AdamW, cache subsets, recovery and support lengths. U100 target arrays are read for setup identity/label joins only, never used as a training objective. |
+| `jetclass2_delphes/{model,runner,reporting,batch128_30e_recipe,execution}.py`, `models/particle_transformer.py`, `luka_embedding_weight/worker.py` | Installed native factory, BF16 inference, metrics, original selection/LR rules and prediction validation. New sensitivity hooks surround deterministic input features; installed attention is not reimplemented. |
+| `luka_fullsim/{alljets_data,foundation,preflight_v2,regular_submission}.py`, `luka_next_supervision_hydra/campaign.py::storage`, `luka_cross_message_hydra/execution.py` | Disclosure flags, clean pushed source, backend/memory validation, environment, storage and typed A6000 allocation. |
+| `data/cache_contracts.py`, `cms_proxy_ladder/{contracts,submission}.py`, `context_fusion/worker.py`, `scouting/{hcwdl_exact_dag_submission,hcwdl_recovery}.py`, `luka_particle_teacher_hydra/submission.py` | Atomic files/checkpoints, hashes, scheduler review and exact submission journals. |
+| `scripts/{luka_teacher_sweep_hydra.py,queue_luka_teacher_sweep_hydra.sh}`, `sbatch/run_luka_teacher_sweep_hydra.sh` | Adapt CLI, bounded review and absolute-project worker to ten jobs and their actual input dependencies. |
+| `tests/{test_luka_teacher_sweep_hydra.py,test_luka_selective_teacher_hydra.py,test_luka_embedding_aux.py,test_luka_u100_pretrain.py,test_luka_attention.py}` | Adapt production-function tests and reuse synthetic native caches/reduced-depth fixtures. Add both-stream second derivatives, microbatch equivalence, OOF exclusion and weighted supervision tests. |
+| `docs/{LUKA_TEACHER_SWEEP_HYDRA_RUNBOOK.md,LUKA_TEACHER_SWEEP_HYDRA_VALIDATION.md,LUKA_SELECTIVE_TEACHER_HYDRA_RUNBOOK.md}` | Commit/queue and validation structure, updated for input-only parent reuse and the new experiment. |
+
+The new fold assignment/difficulty protocol and two-input explanation penalty
+are described in the [plan](plans/LUKA_COMPLEMENTARY_TEACHER_HYDRA_PLAN.md).
+Ross et al. is a scientific inspiration, not a copied implementation.
+
 ## Shared ParT summary tokens on Hydra (2026-11-09)
 
 Exact internal donor for all entries below:

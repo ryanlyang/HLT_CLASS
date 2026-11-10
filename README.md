@@ -5,6 +5,16 @@ and training-time use of paired offline information.
 
 ## Current status
 
+The [complementary OFFLINE teacher campaign](docs/plans/LUKA_COMPLEMENTARY_TEACHER_HYDRA_PLAN.md)
+adds ordinary, explanation-diverse and error-focused teachers, with four HLT
+students predicting their individual or combined embeddings at total weight5.
+Three out-of-fold reference fits supply honest TRAIN difficulty weights: ten
+training jobs total. Native HLT ParT inference is unchanged. The
+[runbook](docs/LUKA_COMPLEMENTARY_TEACHER_HYDRA_RUNBOOK.md) reuses the existing
+OFFLINE transfer and queues A6000 setup with durable automatic release;
+[validation evidence](docs/LUKA_COMPLEMENTARY_TEACHER_HYDRA_VALIDATION.md)
+separates local checks from the required real-Hydra qualification.
+
 The [shared ParT summary-token campaign](docs/plans/LUKA_SUMMARY_TOKENS_HYDRA_PLAN.md)
 implements five configurations at two matched seeds (ten fresh fits). Three
 independent summary queries reuse the original pooling weights and add 3072

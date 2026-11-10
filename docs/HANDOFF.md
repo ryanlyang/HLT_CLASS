@@ -1,5 +1,53 @@
 # Current Handoff
 
+## 2026-11-09: Complementary OFFLINE teachers ready for Hydra setup
+
+Implemented the [approved complementary-teacher campaign](plans/LUKA_COMPLEMENTARY_TEACHER_HYDRA_PLAN.md)
+in the additive `luka_complementary_teacher_hydra` package, thin CLI/Slurm/queue
+wrappers and [commit/queue runbook](LUKA_COMPLEMENTARY_TEACHER_HYDRA_RUNBOOK.md).
+Three fresh final teachers use ordinary CE, explanation diversity relative to
+the ordinary teacher, or bounded OOF difficulty weighting. Four fresh HLT
+students predict ordinary only, ordinary+diverse, ordinary+error-focused or
+all three, with independent heads sharing total embedding weight5. No U100/IT
+objective is present. Native HLT ParT deployment is unchanged.
+
+The explanation penalty covers both native particle features and deterministic
+pairwise physics features before their learned input embeddings, with frozen
+reference scales/masks and FP32 eval-mode math-SDPA second derivatives.
+Microbatch accumulation bounds memory; finite perturbation diagnostics make
+the limitations of local gradients visible. This is a registered adaptation
+of explanation regularization, not a claim of causal or disjoint information.
+
+Three additional CE reference fits train on complements of fixed TRAIN folds
+and select their last epoch without consulting held-out or development scores.
+Their held-out predictions produce bounded positive class-normalized weights
+for TF. This makes ten training jobs total, with no full-data-teacher warm start
+or validation-error leakage into difficulty preparation.
+
+Existing native OFFLINE transfers and original input lineage are reused.
+Measured A6000 setup and durable CPU release automatically submit the full
+ten-fit DAG plus report. Dependencies only express required teacher/fold inputs.
+Actual-parent startup miniatures are discarded before fresh scientific fits.
+No quality gate was introduced. Exact-ID journals and fixed resource ceilings
+remain enforced. Reports expose S0-matched differences, historical recovery,
+privileged teacher roles and separate TRAIN-only fold preparation status.
+
+New contracts: `LUKA_COMPLEMENTARY_TEACHER_*/v1`; original native bank and
+HCWDL journal contracts are retained. Internal donor:
+`54ff594df4fb7dddc56c0e99ffb13b9448a6a6c9`; see
+[donor map](LEGACY_SOURCE_MAP.md). Existing runtime and the separate
+summary-token implementation were preserved.
+
+Local evidence:50 focused tests passed in99.81s and138 donor tests passed in
+136.29s. Coverage includes CPU/CUDA second derivatives, full-depth CUDA updates,
+all ten production worker paths on synthetic data, full30/OOF/bank/student
+readback, complete synthetic setup, source/input corruption and automatic DAG
+release. [Validation record](LUKA_COMPLEMENTARY_TEACHER_HYDRA_VALIDATION.md)
+distinguishes the local fixture from real installed-Weaver/Hydra qualification.
+No commit, push, remote inference or Slurm submission was performed by this
+task. Next: scoped commit/push, then runbook registration and queue setup on
+Brown; genuine data/installed-factory A6000 miniatures must pass before science.
+
 ## 2026-11-09: Shared ParT summary-token implementation ready for Hydra setup
 
 Implemented [five configurations at two matched seeds](plans/LUKA_SUMMARY_TOKENS_HYDRA_PLAN.md)
