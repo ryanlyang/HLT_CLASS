@@ -45,6 +45,10 @@ def step(model,task,opt,raw,banks,indices,position,device,*,context=None,diagnos
             del penalty
         values['explanation']=total
         if diagnose:
+            # Keep the original diagnostic's final eight jets independent of
+            # explanation microbatch size. It does not affect the objective.
+            count=recipe()['explanation']['diagnostic_rows']
+            part={k:torch.as_tensor(raw[k][-count:],device=device) for k in ('features','vectors','mask','labels')}
             diag.update(explanation=dict(mask_fraction=coverage,reference_energy=energy),
                         finite_response=explanations.finite_response(model,reference,part))
     checks=[torch.isfinite(p.grad).all() for p in model.parameters() if p.grad is not None]

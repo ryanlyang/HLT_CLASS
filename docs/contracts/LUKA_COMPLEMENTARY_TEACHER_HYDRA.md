@@ -1,15 +1,24 @@
-# Complementary teacher Hydra contracts v1
+# Complementary teacher Hydra contracts v2
 
 Authority: [active scientific plan](../plans/LUKA_COMPLEMENTARY_TEACHER_HYDRA_PLAN.md).
 Internal donor commit `54ff594df4fb7dddc56c0e99ffb13b9448a6a6c9`.
 Existing runtime and scientific artifacts retain their original meanings.
 
-New `LUKA_COMPLEMENTARY_TEACHER_<KIND>/v1` documents have schema1, content hashes,
+New `LUKA_COMPLEMENTARY_TEACHER_<KIND>/v2` documents have schema2, content hashes,
 parent hashes and the existing exploratory-population flags. The fixed recipe
 registers T0/TE/TF, F0/F1/F2 and S0/SE/SF/SEF. No U100 or IT loss is active.
 Original transfer and target bank contracts are validated through their original
 implementations, not relabeled. Reuse is authenticated in the original
 teacher-sweep worktree, with source, environment and complete native delta.
+
+Execution v2 replaces eight-jet explanation microbatches with64-jet groups;
+the full128 objective/update and30 epochs remain fixed. The final up-to-eight
+jets supply finite-response diagnostics independently of microbatch grouping.
+Resource profiles explicitly record64 for TE and null for other tasks; setup
+acceptance rejects missing/wrong TE grouping. The authorization token is
+`AUTHORIZE_LUKA_COMPLEMENTARY_TEACHER_HYDRA_V2`. All campaign receipts use the
+new version, so failed v1 setup160118 cannot be reused as v2 qualification.
+Historical v1 specs/receipts remain readable using their exact old worktree.
 
 | Artifact | Meaning |
 |---|---|

@@ -1,5 +1,13 @@
 # Queue complementary OFFLINE teachers on Hydra
 
+Execution v2 repairs the runtime failure in setup160118 from commitd88eb82c.
+TE's eight-jet explanation passes were too slow: measured2.143s/update and
+projected5058min exceeded the2880min ceiling. The new execution uses64-jet
+explanation microbatches, with the same loss, full128 training batch and30
+epochs. Commit/push the repair and register the fresh v2 root below. Preserve
+the old root, logs and journals; no export or input transfer needs repeating.
+The real setup must still qualify its new speed and memory before release.
+
 This queues **three final teachers, four students and three OOF preparation
 fits**: ten training jobs, plus setup, durable CPU release and CPU report.
 Every student uses CE and total embedding weight5; there is no U100 loss.
@@ -74,7 +82,7 @@ else
     git -C "$MAIN" worktree add --detach "$PROJECT" "$COMMIT"
 fi
 ENV_DIR="$(python3 -B -s -c 'import json,sys; print(json.load(open(sys.argv[1]))["environment_dir"])' "$PARENT")"
-ROOT="${BASE}/runs/complementary_teacher_${COMMIT:0:8}_a6000_r1"
+ROOT="${BASE}/runs/complementary_teacher_${COMMIT:0:8}_a6000_v2_r1"
 test ! -e "$ROOT"
 df -h "$BASE"
 read -r -p 'Personally available GiB for outputs (at least 9): ' QUOTA_GIB </dev/tty
@@ -126,7 +134,7 @@ campaigns, explicitly select the desired spec instead of choosing by timestamp.
 bash <<'BASH'
 set -euo pipefail
 shopt -s nullglob
-SPECS=("$HOME"/hlt_u100_pairs/runs/complementary_teacher_*_a6000_r1/campaign_spec.json)
+SPECS=("$HOME"/hlt_u100_pairs/runs/complementary_teacher_*_a6000_v2_r1/campaign_spec.json)
 [[ ${#SPECS[@]} -eq 1 ]] || { printf 'Select one exact spec; found %s\n' "${#SPECS[@]}"; exit 1; }
 SPEC="${SPECS[0]}"
 MODE=results

@@ -1,6 +1,6 @@
 # Complementary OFFLINE teachers on Hydra
 
-Active scientific plan, 2026-11-09. Implement three final OFFLINE teachers and
+Active scientific plan, execution v2 updated 2026-11-10. Implement three final OFFLINE teachers and
 four native HLT ParT students. Three additional out-of-fold (OOF) preparation
 fits make the error-focused targets honest with respect to TRAIN membership.
 Ten training jobs total; setup, durable CPU release and CPU report are separate.
@@ -63,11 +63,23 @@ TE's input derivatives to its actual classification parameters. T0, its scale
 and mask are frozen. All input fields remain available to TE.
 
 CE uses the original training-mode BF16 path. Accumulate the explanation term
-in microbatches of eight, each scaled by its fraction of the training batch;
+in microbatches of 64, each scaled by its fraction of the training batch;
 one optimizer update follows the complete CE and explanation gradients. This
 bounds second-order memory without changing the registered per-jet objective.
 All models use the same sampler; explanation passes preserve training RNG.
 Native eval/inference paths and exported weights remain unchanged.
+
+Execution v2 changes only the grouping of the deterministic explanation passes
+from eight jets to 64. Hydra setup160118 completed all miniatures, but its
+2.143-second TE step projected to5058 minutes with the registered safety margin,
+above2880 minutes. Larger microbatches reduce repeated launch/synchronization
+overhead. The per-jet objective, reference, coefficient, full128 CE batch,
+single optimizer update and30 epochs are unchanged. Finite-response probes
+use the final up-to-eight jets of the CE batch, independently of microbatch
+size. For partial batches this also fixes a diagnostic-only dependence on the
+last microbatch remainder. New v2 receipts and fresh setup are required;
+v1 artifacts retain their original meaning in their pinned worktree. Runtime
+and memory ceilings, and the2x timing margin, are not increased.
 
 This measures sensitivity to transformed input coordinates, including relaxed
 categorical channels and redundant pair information, not physically independent

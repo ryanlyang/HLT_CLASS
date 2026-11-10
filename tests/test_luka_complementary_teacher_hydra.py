@@ -46,6 +46,15 @@ def test_registry_fixed_budget_and_dependency_exclusions():
     assert not c.recipe()['u100_objective']
 
 
+def test_v2_execution_rejects_v1_receipts_and_keeps_science_budget():
+    r=c.recipe()
+    assert (r['schema_version'],r['explanation']['microbatch'],r['explanation']['diagnostic_rows'])==(2,64,8)
+    assert (r['epochs'],r['batch_size'],r['explanation']['coefficient'])==(30,128,1.)
+    assert campaign.registration()['fit_max_minutes']==2880
+    old=c.artifact('ACCEPTANCE');old.update(contract='LUKA_COMPLEMENTARY_TEACHER_ACCEPTANCE/v1',schema_version=1)
+    with pytest.raises(ValueError,match='contract mismatch'):c.validate(reseal(old),'ACCEPTANCE')
+
+
 @pytest.mark.parametrize('task',c.FITS)
 def test_native_initialization_and_head_seed_isolation(tmp_path,monkeypatch,task):
     tiny(monkeypatch); s=spec(tmp_path); m=model.new_model(s,task).eval()
@@ -122,6 +131,45 @@ def test_penalty_padding_permutation_and_microbatch_equivalence(tmp_path,monkeyp
     actual,_=explanations.penalty(b,a,padded);assert actual.item()==pytest.approx(loss.item(),rel=1e-4)
 
 
+@pytest.mark.parametrize('device,rows',[('cpu',75),('cuda',128),('cuda',75)])
+def test_te_update_microbatch64_matches_8_full_partial_long_support(tmp_path,monkeypatch,device,rows):
+    if device=='cuda' and not torch.cuda.is_available():pytest.skip('CUDA unavailable')
+    if device=='cpu':tiny(monkeypatch)
+    s=spec(tmp_path);length=128 if device=='cuda' else 5;rng=np.random.default_rng(90)
+    x=dict(features=rng.normal(size=(rows,17,length)).astype(np.float32),
+           vectors=rng.normal(size=(rows,4,length)).astype(np.float32),
+           mask=np.ones((rows,1,length),bool),labels=np.arange(rows)%11)
+    x['vectors'][:,3]=np.sqrt((x['vectors'][:,:3]**2).sum(1)+1)
+    # Different lengths, full support, padding, and a partial 64-jet chunk.
+    x['mask'][::3,:,length//2:]=False
+    for k in ('features','vectors'):x[k]*=x['mask']
+    reference=model.new_model(s,'T0').to(device).eval()
+    for p in reference.parameters():p.requires_grad_(False)
+    reference_state={k:v.clone() for k,v in reference.state_dict().items()}
+    original_recipe=c.recipe
+    outcomes=[]
+    for micro in (8,64):
+        def changed_recipe():
+            r=original_recipe();r['explanation']['microbatch']=micro;return r
+        monkeypatch.setattr(training,'recipe',changed_recipe)
+        m=model.new_model(s,'TE').to(device);opt=optimizer(m)
+        torch.manual_seed(781)
+        values,diag=training.step(m,'TE',opt,x,{},np.arange(rows),3.,device,
+            context=dict(reference=reference),diagnose=True)
+        outcomes.append((values,diag,{n:p.grad.detach().cpu().clone() for n,p in m.named_parameters() if p.grad is not None},
+                         {n:b.detach().cpu().clone() for n,b in m.named_buffers()}))
+        assert all(p.grad is None for p in reference.parameters())
+        assert all(torch.equal(v,reference.state_dict()[k]) for k,v in reference_state.items())
+        del m,opt
+    a,b=outcomes
+    assert a[0]['ce']==b[0]['ce']
+    assert b[0]['explanation']==pytest.approx(a[0]['explanation'],rel=3e-4,abs=1e-6)
+    assert b[1]['finite_response']==a[1]['finite_response']
+    assert a[2].keys()==b[2].keys()
+    for name,g in a[2].items():torch.testing.assert_close(b[2][name],g,rtol=5e-4,atol=3e-5)
+    for name,v in a[3].items():torch.testing.assert_close(b[3][name],v,rtol=0,atol=0)
+
+
 @pytest.mark.parametrize('task',['T0','TE','TF','S0','SEF'])
 def test_production_depth_batch128_partial_cuda(tmp_path,task):
     if not torch.cuda.is_available(): pytest.skip('CUDA unavailable')
@@ -163,13 +211,14 @@ def diagnostic(s):
             train_rows=44 if t in c.FOLDS else 66,validation_rows=0 if t in c.FOLDS else 22,
             export_rows=66 if t in c.TEACHERS else 22 if t in c.FOLDS else 0,
             step_samples=[.1]*12,step_seconds=float(np.mean([.1]*12)),validation_seconds=1.,probe_seconds=1.,load_seconds=1.,export_seconds=1.,
-            second_order_both_inputs=t=='TE',targets_technical=t in c.STUDENTS or t=='TF')
+            second_order_both_inputs=t=='TE',targets_technical=t in c.STUDENTS or t=='TF',
+            explanation_microbatch=c.recipe()['explanation']['microbatch'] if t=='TE' else None)
     return c.artifact('RESOURCES',parents=dict(spec=s['content_hash']),status='complete',error=None,profiles=profiles,
         environment=s['reference']['environment'],gpu=dict(name='NVIDIA RTX A6000',compute_capability=[8,6],total_memory_bytes=48*2**30),
         memory=dict(peak_rss_bytes=2**30,gpu_peak_bytes=2**30))
 
 
-@pytest.mark.parametrize('bad',['memory','time','missing','gpu','timing','fold_rows','second_order'])
+@pytest.mark.parametrize('bad',['memory','time','missing','gpu','timing','fold_rows','second_order','microbatch'])
 def test_admission_rejects_technical_failure_only(tmp_path,bad):
     s=spec(tmp_path);(tmp_path/'setup').mkdir();folds.build(s,large_cache('train','OFFLINE',66));d=diagnostic(s)
     assert set(resources.accept(s,d)['minutes'])==set(c.FITS)
@@ -179,6 +228,7 @@ def test_admission_rejects_technical_failure_only(tmp_path,bad):
     elif bad=='gpu': d['gpu']['name']='NVIDIA L40'
     elif bad=='timing': d['profiles']['TF']['validation_seconds']=-1
     elif bad=='fold_rows': d['profiles']['F0']['train_rows']=66
+    elif bad=='microbatch': d['profiles']['TE']['explanation_microbatch']=8
     else: d['profiles']['TE']['second_order_both_inputs']=False
     with pytest.raises((ValueError,MemoryError,RuntimeError)):resources.accept(s,reseal(d))
 

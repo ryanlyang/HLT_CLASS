@@ -17,7 +17,7 @@ from hlt_classification.luka_u100_contrastive.resources import Subset
 from hlt_classification.luka_u100_contrastive.training import optimizer
 from hlt_classification.luka_teacher_sweep_hydra.resources import free,mini_indices,subset_banks
 from hlt_classification.luka_embedding_aux import targets as target_impl
-from .contracts import TEACHERS,FOLDS,STUDENTS,FITS,artifact,validate
+from .contracts import TEACHERS,FOLDS,STUDENTS,FITS,artifact,validate,recipe
 from .model import new_model
 from . import inputs,training,folds
 
@@ -160,7 +160,8 @@ def measure(spec,device='cuda'):
                     train_rows=len(train),validation_rows=0 if selection is None else len(selection),export_rows=export_rows,
                     step_samples=samples,step_seconds=float(np.mean(samples)),validation_seconds=validation_seconds,
                     probe_seconds=probe,load_seconds=load_seconds,export_seconds=per_export*math.ceil(export_rows/128)*1.5,
-                    second_order_both_inputs=task=='TE',targets_technical=task in STUDENTS or task=='TF')
+                    second_order_both_inputs=task=='TE',targets_technical=task in STUDENTS or task=='TF',
+                    explanation_microbatch=recipe()['explanation']['microbatch'] if task=='TE' else None)
                 print(f'COMPLEMENTARY setup {task}: step={np.mean(samples):.3f}s validation={validation_seconds:.1f}s',flush=True)
                 del model,opt,banks,context,train,hold;free()
             del full,val;free()
@@ -188,7 +189,8 @@ def accept(spec,d):
         if (not all(p[k] is True for k in ('initial_native_fp32_parity','miniature_complete','deployment_reload','largest_support_backward','partial_batch_backward','ordered_reference_joins'))
             or p['train_rows']!=rows or p['validation_rows']!=vr or p['export_rows']!=er or len(p['step_samples'])!=12
             or not np.isfinite(p['step_samples']).all() or min(p['step_samples'])<=0 or p['step_seconds']!=float(np.mean(p['step_samples']))
-            or p['second_order_both_inputs']!=(t=='TE') or p['targets_technical']!=(t in STUDENTS or t=='TF')): raise ValueError('Profile coverage differs')
+            or p['second_order_both_inputs']!=(t=='TE') or p['targets_technical']!=(t in STUDENTS or t=='TF')
+            or p.get('explanation_microbatch')!=(recipe()['explanation']['microbatch'] if t=='TE' else None)): raise ValueError('Profile coverage differs')
         times=[p[k] for k in ('validation_seconds','probe_seconds','load_seconds','export_seconds')]
         if not np.isfinite(times).all() or min(times)<0: raise ValueError('Invalid resource timing')
         seconds=30*(math.ceil(rows/128)*p['step_seconds']+p['validation_seconds'])+5*p['probe_seconds']+p['load_seconds']+p['export_seconds']

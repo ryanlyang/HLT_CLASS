@@ -5,7 +5,8 @@ from hlt_classification.luka_u100_embedding.contracts import COUNTS
 from hlt_classification.jetclass2_delphes.batch128_30e_recipe import recipe as base_recipe
 
 BASE = '54ff594df4fb7dddc56c0e99ffb13b9448a6a6c9'
-AUTHORIZATION = 'AUTHORIZE_LUKA_COMPLEMENTARY_TEACHER_HYDRA_V1'
+VERSION = 2
+AUTHORIZATION = 'AUTHORIZE_LUKA_COMPLEMENTARY_TEACHER_HYDRA_V2'
 TEACHERS = ('T0', 'TE', 'TF')
 FOLDS = ('F0', 'F1', 'F2')
 STUDENTS = dict(S0=('T0',), SE=('T0', 'TE'), SF=('T0', 'TF'), SEF=('T0', 'TE', 'TF'))
@@ -18,12 +19,12 @@ NAMES = dict(T0='ordinary OFFLINE', TE='explanation-diverse OFFLINE', TF='OOF er
 
 
 def artifact(kind, *, parents=None, **fields):
-    return with_content_hash(dict(contract=f'LUKA_COMPLEMENTARY_TEACHER_{kind}/v1', schema_version=1,
+    return with_content_hash(dict(contract=f'LUKA_COMPLEMENTARY_TEACHER_{kind}/v{VERSION}', schema_version=VERSION,
         parents=dict(parents or {}), **FLAGS, **fields))
 
 
 def validate(value, kind, parents=None):
-    digest = validate_content_hash(value, expected_contract=f'LUKA_COMPLEMENTARY_TEACHER_{kind}/v1', expected_schema_version=1)
+    digest = validate_content_hash(value, expected_contract=f'LUKA_COMPLEMENTARY_TEACHER_{kind}/v{VERSION}', expected_schema_version=VERSION)
     if any(value.get(k) != v for k, v in FLAGS.items()): raise PermissionError('Population flags differ')
     if parents is not None and value['parents'] != parents: raise ValueError('Artifact parents differ')
     return digest
@@ -46,7 +47,7 @@ def recipe():
         fold_assignment='class_stratified_sha256_identity_seed_round_robin',
         difficulty='1+2*(1-p_true)_divided_by_TRAIN_class_mean',
         explanation=dict(score='true_logit_minus_logsumexp_others', coefficient=1., threshold=.67,
-            denominator_floor=1e-4, scale_floor=.001, microbatch=8, perturbation=.05,
+            denominator_floor=1e-4, scale_floor=.001, microbatch=64, diagnostic_rows=8, perturbation=.05,
             taps=['native17_before_input_bn','deterministic_pair4_before_input_bn'],
             scale='frozen_T0_sqrt_running_var_plus_bn_eps', precision='FP32_math_SDPA_eval',
             reduction='masked_energy_div_reference_masked_energy_mean_jets'),

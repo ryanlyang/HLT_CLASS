@@ -1,5 +1,48 @@
 # Complementary teacher Hydra validation
 
+## Execution v2 runtime repair, 2026-11-10
+
+User-supplied Brown log: setup160118 at commit
+`d88eb82c6569312b72a3a3bccb1c39f9e357b4a4` completed the fold miniatures and all
+ten objective miniatures/profiles. Admission rejected TE's5058-minute projection
+at a measured2.143s/update against the2880-minute ceiling. This was a runtime
+gate, not a scientific score failure or an out-of-memory error. No science
+acceptance was published. The previous v1 readiness statement below is historical.
+
+V2 uses64-jet explanation microbatches instead of8, keeping each row's weight,
+CE batch128, one optimizer update,30 epochs and all loss coefficients. Version2
+contracts/authorization and explicit measured microbatch fields prevent reuse
+of the failed setup. The48h ceiling and2x safety multiplier remain unchanged.
+The finite-response diagnostic uses the final up-to-eight jets independent of
+microbatch remainder; it does not enter optimization.
+
+Before editing, all50 existing focused tests passed in109.33s. After the repair,
+**55 distinct tests passed**:12 targeted version/admission and gradient-equivalence
+cases in23.71s, then the remaining43 in79.50s. No skips. CPU and CUDA comparisons
+cover64 versus8 microbatches, full128 and partial75 jets, full production depth
+and128-particle support with padding. Weighted losses/parameter gradients match
+within FP32 tolerance; reference parameters, BN state and finite-response probes
+match. Complete synthetic setup, all ten worker fits, receipts, bank exports,
+OOF assembly and automatic release continue to pass. Environment is the same
+local fixture described below, not genuine Brown qualification.
+
+Local full-depth CUDA benchmark, batch128, median of three warmed updates:
+
+| Particles per jet | Microbatch8 | Microbatch64 | Speedup | V2 peak allocated GPU |
+|---|---|---|---|---|
+|64|3.408s|0.937s|3.64x|1.92GiB|
+|128|4.617s|3.010s|1.53x|5.81GiB|
+
+These synthetic laptop-GPU timings demonstrate lower execution overhead, not
+the speedup or admission outcome on Brown's real A6000 workload. The benchmark
+uses complete CE plus both-stream second derivatives and the optimizer; it
+does not replace attention or subsample the loss. Real setup must remeasure
+the new execution. Next: scoped commit/push and fresh v2 registration using
+the [runbook](LUKA_COMPLEMENTARY_TEACHER_HYDRA_RUNBOOK.md). No input re-export,
+remote job changes, commit or push was performed here.
+
+## Original v1 local qualification record
+
 Local validation completed, 2026-11-09. Ready to queue the real Hydra setup.
 This task performed no commit, push, remote submission or scientific recovery
 measurement. Real qualification remains mandatory before scientific release.
