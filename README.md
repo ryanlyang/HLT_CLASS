@@ -5,6 +5,15 @@ and training-time use of paired offline information.
 
 ## Current status
 
+The [shared ParT summary-token campaign](docs/plans/LUKA_SUMMARY_TOKENS_HYDRA_PLAN.md)
+implements five configurations at two matched seeds (ten fresh fits). Three
+independent summary queries reuse the original pooling weights and add 3072
+deployed parameters. Matched controls isolate extra summaries from routing
+U100/IT embedding supervision to separate summaries. Existing frozen targets
+are reused. The [runbook](docs/LUKA_SUMMARY_TOKENS_HYDRA_RUNBOOK.md) queues
+A6000 setup and durable automatic release; [validation evidence](docs/LUKA_SUMMARY_TOKENS_HYDRA_VALIDATION.md)
+distinguishes local checks from required real-Hydra qualification.
+
 The [OFFLINE pretext and physical-structure campaign](docs/plans/LUKA_OFFLINE_PRETEXT_STRUCTURE_HYDRA_PLAN.md)
 implements 30 scientific fits: eight teachers trained without jet-class loss,
 twelve students predicting individual/combined teacher embeddings, eight direct

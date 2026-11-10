@@ -1,5 +1,42 @@
 # Current Handoff
 
+## 2026-11-09: Shared ParT summary-token implementation ready for Hydra setup
+
+Implemented [five configurations at two matched seeds](plans/LUKA_SUMMARY_TOKENS_HYDRA_PLAN.md)
+as the additive `luka_summary_tokens_hydra` package, thin CLI/queue/Slurm
+wrappers,50 focused tests and a [commit/queue runbook](LUKA_SUMMARY_TOKENS_HYDRA_RUNBOOK.md).
+A/B retain ordinary native pooling; C/D/E use three independent query streams
+with the original shared class-attention blocks and normalization. Deployed
+parameter counts are2,143,615 and2,146,687 (+3072). A/C use CE only; B/D/E use
+CE+U1005+IT5. D/E have identical initial parameters and differ only in whether
+prediction heads read the general summary or their dedicated summaries.
+
+Existing authenticated U100 and selected IT TRAIN banks are reused. Extra
+queries, classifier initialization and head construction preserve native
+initialization; A/B reproduce donor updates exactly. Classification uses all
+three summaries in C/D/E. Only auxiliary predictors are removed for strict
+deployment replay. All deployed inference remains HLT-only. Reports expose
+same-seed routing/architecture/supervision contrasts, epoch recovery and
+measured deployment costs; missing controls remain null.
+
+Setup and durable CPU release automatically queue all ten independent fits
+plus an afterany report after real qualification. Setup covers original BF16
+replay, installed-factory and independent batched-query equivalence, every
+actual-target miniature and warmed resource profile. Exact journals and CPU
+rounding checks follow the donor. No quality gate is introduced.
+
+New contracts are `LUKA_SUMMARY_TOKENS_HYDRA_*/v1`; internal donor is
+`54ff594df4fb7dddc56c0e99ffb13b9448a6a6c9`. See
+[donor map](LEGACY_SOURCE_MAP.md) for all migrated/reused files.
+[Local validation](LUKA_SUMMARY_TOKENS_HYDRA_VALIDATION.md):48 campaign tests
+passed in58.03s, including full-depth CUDA checks and simulated setup/release;
+two additional full-depth FP32 qualification tests passed in10.03s;
+62 donor baseline tests passed before changes. Real Brown installed-Weaver,
+data and A6000 qualification remains the setup job's responsibility. Existing
+runtime and unrelated work were preserved. No commit, push or job submission
+was performed. Next: commit/push scoped additions and use the runbook to
+register/queue setup and automatic release.
+
 ## 2026-11-08: OFFLINE pretext and structure implementation ready for Hydra setup
 
 Implemented the [30-fit plan](plans/LUKA_OFFLINE_PRETEXT_STRUCTURE_HYDRA_PLAN.md)

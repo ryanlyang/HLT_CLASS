@@ -1,5 +1,31 @@
 # Legacy Donor-Source Map
 
+## Shared ParT summary tokens on Hydra (2026-11-09)
+
+Exact internal donor for all entries below:
+`54ff594df4fb7dddc56c0e99ffb13b9448a6a6c9`. Existing runtime is unchanged.
+The new namespace is `luka_summary_tokens_hydra`; schemas are
+`LUKA_SUMMARY_TOKENS_HYDRA_*/v1`. No external source is copied and no
+Fresh_check runtime import is introduced. Paths are under
+`src/hlt_classification/` unless otherwise specified.
+
+| Donor files | Use or adaptation |
+| --- | --- |
+| `luka_capacity_hydra/{__init__,contracts,campaign,reuse,inputs,model,training,resources,worker,submission,reporting}.py` | Adapt the additive source guard, parent authentication, native initialization, full30 loop, exact receipts, warmed profiling, reload, durable release and matched reporting to five summary-token cells. Remove ensemble analysis and completed-student requirements. Independent shared pooling, routing and summary diagnostics are new. |
+| `luka_capacity_hydra/complementarity.py::align` | Reuse exact saved-prediction identity alignment; no ensemble calculation. |
+| `scripts/{luka_capacity_hydra.py,queue_luka_capacity_hydra.sh}`, `sbatch/run_luka_capacity_hydra.sh` | Adapt thin CLI, bounded authorization and absolute-project worker to ten fits. |
+| `tests/test_luka_capacity_hydra.py`, `test_luka_u100_pretrain.py::cache`, `test_luka_attention.py::cache` | Adapt production-loop, source, input, resource and exact-scheduler tests; reuse synthetic cache fixtures. Add independent batched pooling/gradient reference and routing controls. |
+| `docs/{LUKA_CAPACITY_HYDRA_RUNBOOK.md,LUKA_CAPACITY_HYDRA_VALIDATION.md}` | Adapt commit/queue and validation structure; scientific plan and contract are new. |
+| `luka_selective_teacher_hydra/{contracts,targets,site,resources,training,reporting}.py` | Original IT validation, TRAIN normalization, observed CPU allocation rounding, miniature subsets/freeing, gradient diagnostics and recovery. Original campaign/worker authentication runs in its own pinned subprocess. |
+| `luka_u100_pair_hydra/{inputs,site}.py`, `luka_u100_embedding/contracts.py`, `luka_embedding_aux/contracts.py`, `luka_u100_contrastive/{training,resources}.py` | Original D000 and U100 data/target authentication, recipe, predictor seed, optimizer, recovery and cache subsets. |
+| `jetclass2_delphes/{model,runner,reporting,batch128_30e_recipe,execution}.py`, `models/particle_transformer.py`, `luka_embedding_weight/worker.py` | Installed Weaver factory, BF16 inference, selection, metrics, schedule, environment/GPU identity and prediction validation. Installed class-attention modules are reused, not copied or reimplemented. |
+| `luka_fullsim/{alljets_data,foundation,preflight_v2,regular_submission}.py`, `luka_next_supervision_hydra/campaign.py::storage`, `luka_cross_message_hydra/execution.py` | Population disclosures, source/lineage, backend/memory, clean environment, storage and typed A6000 site. |
+| `data/cache_contracts.py`, `cms_proxy_ladder/{contracts,submission}.py`, `context_fusion/worker.py`, `scouting/{hcwdl_exact_dag_submission,hcwdl_recovery}.py`, `luka_particle_teacher_hydra/submission.py` | Atomic artifacts/checkpoints, hashes, exact-ID journals, walltimes and scheduler review. |
+
+See the [plan](plans/LUKA_SUMMARY_TOKENS_HYDRA_PLAN.md) and
+[validation evidence](LUKA_SUMMARY_TOKENS_HYDRA_VALIDATION.md) for local and
+remaining remote qualification boundaries.
+
 ## OFFLINE pretext and HLT structure on Hydra (2026-11-08)
 
 Exact internal donor for this additive implementation:
