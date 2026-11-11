@@ -1,6 +1,26 @@
 # Embedding assistants, teacher responses, and regional targets on Hydra
 
-Status: scientific recipe v1; input execution repair v2, 2026-11-11.
+Status: scientific recipe v1; execution repair v3, 2026-11-11.
+Setup162131 completed authenticated preparation in8816.77s, then failed the
+frozen U100 reproduction witness (maximum standardized difference0.00145674).
+The historical exporter uses consecutive batches128 on one card. The v2
+witness regrouped random panel rows and split each batch across two ranks.
+Execution v3 preserves each original batch and padding context, assigning
+whole inference batches to ranks; training still splits global batch128.
+This addresses a verified execution difference, not a proven attribution of
+all observed numerical drift. Tolerance remains absolute/relative1e-4.
+
+Fresh setup checks the frozen teacher before constructing quarter views.
+For the completed92397736 preparation, --resume-spec authenticates its exact
+terminal setup, source, manifests and array hashes, then hard-links immutable
+payloads into a fresh root with new manifests. No scientific fit or old GPU
+qualification is reused. Source logs/data remain intact; no new SPORC export
+or full particle reconstruction is needed for that recovery. SPEC/v3 and
+U100_REPLAY/v2 declare the new execution; PREPARATION_REUSE/v1 records lineage.
+The unchanged TRAIN targets and scientific RECIPE/v1 remain authoritative.
+Real two-GPU qualification is still pending; a remaining reproduction failure
+must stop with diagnostics, not silently increase tolerance.
+
 **Repaired implementation awaits real Hydra qualification.** Setup161306 failed
 while replaying historical inputs, before training. D000's first differing
 value was one float32 ULP in relative eta; all five historical TRAIN views

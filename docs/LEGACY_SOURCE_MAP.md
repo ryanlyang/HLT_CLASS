@@ -1,5 +1,18 @@
 # Legacy Donor-Source Map
 
+## Embedding bridge replay and completed-preparation recovery (2026-11-11)
+
+Operational donor: `9239773651179dc37f071156b30340d3e5bc3fba`.
+The original `luka_u100_embedding/targets.py` consecutive-batch128 extraction
+and `luka_embedding_aux/model.py` native embedding tap define frozen-teacher
+replay; these imported files are unchanged. Only campaign-specific inference
+batch assignment, early qualification order and recovery are modified.
+New `luka_embedding_bridge_hydra/recovery.py` reuses the existing Store/Writer
+manifest semantics, `provenance.py`/foundation source checks and exact old
+CLI ledger readback; it hard-links authenticated arrays into a fresh root.
+No external donor or Fresh_check import. Added PREPARATION_REUSE/v1,
+SPEC/v3 and U100_REPLAY/v2; scientific RECIPE/v1 is unchanged.
+
 ## Embedding bridge historical-input repair (2026-11-11)
 
 Repair source baseline: `2fb09f38a3a1da85cdceff9df311963fdb3aa872`.

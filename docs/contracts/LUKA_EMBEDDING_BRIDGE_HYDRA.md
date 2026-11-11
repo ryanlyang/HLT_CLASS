@@ -1,4 +1,4 @@
-# Embedding bridges, responses and regions: recipe v1, execution v2
+# Embedding bridges, responses and regions: recipe v1, execution v3
 
 Scientific authority: [implementation plan](../plans/LUKA_EMBEDDING_BRIDGE_RESPONSE_REGION_HYDRA_PLAN.md).
 Execution and commands: [runbook](../LUKA_EMBEDDING_BRIDGE_HYDRA_RUNBOOK.md).
@@ -58,6 +58,23 @@ at2fb09f38a3a1da85cdceff9df311963fdb3aa872 and allows only additions/modificatio
 inside the declared campaign runtime. The original scientific donor remains
 45075fe6c2d8ccdcf7463cd3a99cbe2fe6976a08; imported numerical code is unchanged.
 
+SPEC/v3 retains those inputs and adds `u100_extraction_policy` and nullable
+`preparation_reuse`. Frozen U100 inference uses original consecutive128-row
+contexts, including their padding, with whole batches assigned to ranks.
+The random4096 witness evaluates selected rows inside their original batches.
+U100_REPLAY/v2 retains atol/rtol1e-4 and adds RMS/mean/count diagnostics plus a
+non-gating comparison with the old regrouped path. No TRAIN target is replaced.
+Fresh setup performs this check before full particle preparation.
+
+PREPARATION_REUSE/v1 accepts only completed preparation from source92397736
+after its initial U100 witness failure, confirmed FAILED1:0 with no active
+bootstrap jobs or science submissions. Original source/spec, completion proof,
+all typed manifests/arrays and exact U100 target bytes are authenticated.
+Hard links preserve payload bytes and avoid duplicate persistent allocation;
+new manifests bind the new spec. This credits only absent link destinations
+when reserving remaining storage. No old qualification, claim or acceptance
+becomes a new execution's evidence. The original source root is retained.
+
 NATIVE_TRANSFER/v1 contains exactly TRAIN D033/D066 and validation
 D033/D066/U100 historical NPZ files. It binds original preparation/cache
 proofs, exact source snapshot, ordered file inventory, roles and byte count.
@@ -91,7 +108,7 @@ Raw and normalized arrays are processed in bounded chunks or memory maps.
 ## Artifact inventory
 
 Artifacts use `LUKA_EMBEDDING_BRIDGE_HYDRA_<KIND>/v1`, schema_version1,
-except SPEC/v2, schema_version2. All retain canonical content hashes, explicit
+except SPEC/v3, schema_version3 and U100_REPLAY/v2, schema_version2. All retain canonical content hashes, explicit
 parents and inherited evaluation disclosures. DATA/VIEW/PHYSICAL/U100_BANK
 parents include the native delta hash; the changed SPEC hash also separates
 every downstream result from the failed v1 execution. Old physical transfers

@@ -21,6 +21,7 @@ def main():
     for name in ('root','teacher-sweep-spec','transfer-root','transfer-hash','native-root','native-hash','expected-commit'):x.add_argument('--'+name,required=True)
     x.add_argument('--quota-gib',required=True,type=int)
     x.add_argument('--selective-spec')
+    x.add_argument('--resume-spec',help='Reuse only completed authenticated v2 preparation after frozen-target replay failure')
     x=sub.add_parser('verify-transfer')
     for name in ('bundle-root','transfer-root','transfer-hash'):x.add_argument('--'+name,required=True)
     for command in ('review','submit','run','prepare','qualify-cpu','rank','results','progress','summary','inspect-submission'):
@@ -38,7 +39,7 @@ def main():
         value=dict(verified=True,manifest_hash=d.manifest['content_hash'],payload_bytes=d.manifest['payload_bytes'])
     elif a.command=='create':
         value=campaign.create(a.root,a.teacher_sweep_spec,a.transfer_root,a.transfer_hash,project,a.expected_commit,a.quota_gib,
-            native_root=a.native_root,native_hash=a.native_hash,selective_spec=a.selective_spec)
+            native_root=a.native_root,native_hash=a.native_hash,selective_spec=a.selective_spec,resume_spec=a.resume_spec)
     elif a.command=='verify-transfer':
         from hlt_classification.luka_embedding_bridge_hydra.inputs import transferred
         t=transferred(dict(bundle_root=a.bundle_root,transfer_root=a.transfer_root,transfer_hash=a.transfer_hash))

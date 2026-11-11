@@ -5,26 +5,40 @@ import numpy as np
 import torch
 from hlt_classification.cms_proxy_ladder.contracts import file_ref
 from hlt_classification.data.cache_contracts import load_json,write_immutable_json
-from .contracts import artifact, validate, recipe
+from .contracts import artifact, validate, recipe, U100_EXTRACTION
 from .registry import PRODUCERS, ASSISTANTS, CONDITIONS, SCALES, SLICES, cell
 from .storage import Writer, Store, join,validate_population
 from . import response, distributed as d, inputs
 
 
-def prepare_u100(spec,ds,ctx):
-    """Evaluation targets use the original checkpoint and TRAIN normalization only."""
+def check_u100(spec,ds,ctx,*,filename='u100_replay.json'):
+    """Check original batching before expensive preparation or qualification."""
     from .model import Model
     t=inputs.transferred(spec);path=t.path(t.manifest['teacher']);u=ds.u100('train')
     teacher=Model('TR').to(ctx.device).eval()
     teacher.load_state_dict(torch.load(path,map_location='cpu',weights_only=True),strict=True)
-    ix=panel(ds.view('train','U100'));z,_=d.predict(teacher,ds,'train',ctx,coordinate='U100',indices=ix,embedding=True)
+    ix=panel(ds.view('train','U100'));z=d.original_u100(teacher,ds.view('train','U100'),ctx,ix)
     normalized=response.normalize(z,u['mean'],u['scale']);expected=np.array(u['targets'][ix])
     error=float(np.max(np.abs(normalized-expected)))
+    regrouped,_=d.predict(teacher,ds,'train',ctx,coordinate='U100',indices=ix,embedding=True)
+    regrouped_error=np.abs(response.normalize(regrouped,u['mean'],u['scale'])-expected)
+    delta=np.abs(normalized.astype(np.float64)-expected)
     witness=artifact('U100_REPLAY',parents=dict(spec=spec['content_hash'],teacher=t.manifest['teacher']['sha256'],original=spec['embedding_hash']),
-        rows=len(ix),maximum_error=error,atol=1e-4,rtol=1e-4,passed=bool(np.allclose(normalized,expected,atol=1e-4,rtol=1e-4)))
-    ctx.main(lambda:write_immutable_json(ds.root.parent/'u100_replay.json',witness))
-    if not witness['passed']:raise ValueError('Original U100 TRAIN target reproduction differs')
-    z,_=d.predict(teacher,ds,'validation',ctx,coordinate='U100',embedding=True)
+        rows=len(ix),maximum_error=error,atol=1e-4,rtol=1e-4,passed=bool(np.allclose(normalized,expected,atol=1e-4,rtol=1e-4)),
+        extraction_policy=U100_EXTRACTION,mean_absolute_error=float(delta.mean()),rms_error=float(np.sqrt(np.mean(delta**2))),
+        exceeding_coordinates=int(np.count_nonzero(delta > 1e-4+1e-4*np.abs(expected))),
+        regrouped_maximum_error=float(regrouped_error.max()),regrouped_diagnostic_only=True)
+    ctx.main(lambda:write_immutable_json(Path(spec['root'])/'setup'/filename,witness))
+    if not witness['passed']:
+        raise ValueError(f'Original-batch U100 reproduction differs: max={error:.8g}; '
+                         f"{witness['exceeding_coordinates']} coordinates exceed tolerance; preserve {filename} and completed preparation")
+    return teacher
+
+
+def prepare_u100(spec,ds,ctx):
+    """Evaluation targets use the original checkpoint and TRAIN normalization only."""
+    teacher=check_u100(spec,ds,ctx);u=ds.u100('train')
+    z=d.original_u100(teacher,ds.view('validation','U100'),ctx)
     def publish():
         view=ds.view('validation','D000');a=dict(identities=view.identities,labels=view.labels,
             targets=response.normalize(z,u['mean'],u['scale']),mean=u['mean'],scale=u['scale'])
@@ -34,6 +48,27 @@ def prepare_u100(spec,ds,ctx):
             coordinate='U100',rows=len(view),meaning='original_standardized_U100',usage='evaluation_only',source_manifest=u.manifest['source_manifest'])
     result=ctx.main(publish);del teacher;d.release_memory(ctx)
     return result
+
+
+def input_probe(spec,ctx):
+    """Read existing authenticated U100 inputs only; no quarter-view construction."""
+    from types import SimpleNamespace
+    from hlt_classification.luka_u100_pair_hydra.inputs import load_view, embedding_bank
+    from hlt_classification.data.cache_contracts import load_npz_arrays
+    view=load_view(spec,'train','U100')
+    identity_view=SimpleNamespace(role='train',coordinate_name='D000',foundation_sha256=view.foundation_sha256,
+        identities=view.identities,labels=view.labels)
+    # Bank requires len(cache), so use a tiny delegating view rather than alter U100.
+    class Joined:
+        def __len__(self):return len(view)
+        def __getattr__(self,name):return getattr(identity_view,name)
+    embedding_bank(spec,Joined())
+    bundle=inputs.Bundle(spec['bundle_root']);u=load_npz_arrays(bundle.path('targets/u100/targets.npz'))
+    if bundle.json('targets/u100/manifest.json')['content_hash']!=spec['embedding_hash']:
+        raise ValueError('Original U100 bank changed')
+    ds=SimpleNamespace(view=lambda role,coord:view,u100=lambda role:u)
+    teacher=check_u100(spec,ds,ctx,filename='u100_input_probe.json')
+    del teacher,ds,u,view;d.release_memory(ctx)
 
 
 def panel(view):

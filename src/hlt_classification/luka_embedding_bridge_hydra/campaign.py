@@ -7,20 +7,20 @@ from hlt_classification.cms_proxy_ladder.contracts import file_ref,validate_file
 from hlt_classification.data.cache_contracts import load_json,write_immutable_json
 from hlt_classification.luka_fullsim.foundation import _source
 from hlt_classification.luka_subclass_hydra.reuse import original
-from hlt_classification.luka_next_supervision_hydra.campaign import storage
+from hlt_classification.luka_next_supervision_hydra.campaign import storage as ordinary_storage
 from hlt_classification.luka_u100_pair_hydra import site
 from hlt_classification.luka_u100_pair_hydra.inputs import Bundle
-from .contracts import REPAIR_BASE,COUNTS,artifact,validate,recipe
+from .contracts import REPAIR_BASE,COUNTS,artifact,validate,recipe,U100_EXTRACTION
 from .registry import FITS,PRODUCERS,dependencies
 from .execution import configuration
 from .transfer import fresh,Transfer
-from . import native
+from . import native,recovery
 
-MODULES=('__init__','registry','contracts','regions','response','losses','model','storage','transfer','native','inputs',
+MODULES=('__init__','registry','contracts','regions','response','losses','model','storage','transfer','native','inputs','recovery',
          'distributed','banks','training','campaign','execution','resources','qualification','worker','submission','reporting')
 RUNTIME={f'src/hlt_classification/luka_embedding_bridge_hydra/{n}.py' for n in MODULES}|{
     'scripts/luka_embedding_bridge_hydra.py','scripts/queue_luka_embedding_bridge_hydra.sh','sbatch/run_luka_embedding_bridge_hydra.sh'}
-REQUIRED=RUNTIME|{'tests/test_luka_embedding_bridge_hydra.py','tests/test_luka_embedding_bridge_native.py','docs/plans/LUKA_EMBEDDING_BRIDGE_RESPONSE_REGION_HYDRA_PLAN.md',
+REQUIRED=RUNTIME|{'tests/test_luka_embedding_bridge_hydra.py','tests/test_luka_embedding_bridge_native.py','tests/test_luka_embedding_bridge_recovery.py','docs/plans/LUKA_EMBEDDING_BRIDGE_RESPONSE_REGION_HYDRA_PLAN.md',
     'docs/contracts/LUKA_EMBEDDING_BRIDGE_HYDRA.md','docs/LUKA_EMBEDDING_BRIDGE_HYDRA_RUNBOOK.md','docs/LUKA_EMBEDDING_BRIDGE_HYDRA_VALIDATION.md'}
 COPIED=('bundle_root','reference','imported','anchor','embedding_hash','qualification')
 
@@ -43,7 +43,13 @@ def registration(profile='1080ti_2_fp32'):
         report_site=dict(partition='compute',account='default',qos='normal',cpus=2,memory_mb=8000),
         resource_policy=dict(safety_multiplier=2.,fixed_overhead_seconds=1800,memory_fraction=.85,gpu_fraction=.88),
         dependencies={t:dependencies(t) for t in FITS},automatic_retry=False,reference_retrained=True,
-        native_input_policy=native.POLICY)
+        native_input_policy=native.POLICY,u100_extraction_policy=U100_EXTRACTION)
+
+
+def storage(spec):
+    # Completed immutable payloads are linked into the new execution; reserve
+    # only the bytes still to be produced, even before the links are published.
+    return ordinary_storage(dict(spec,storage_budget_bytes=spec['storage_budget_bytes']-recovery.credit(spec)))
 
 
 def inventory(transfer):
@@ -91,7 +97,7 @@ def check_historical(value,parent):
             validate_file_ref(ref)
 
 
-def create(root,parent_path,transfer_root,transfer_hash,project,commit,quota_gib,*,native_root,native_hash,selective_spec=None):
+def create(root,parent_path,transfer_root,transfer_hash,project,commit,quota_gib,*,native_root,native_hash,selective_spec=None,resume_spec=None):
     old=original(parent_path);project=Path(project).resolve();source=current(project,commit)
     b=Bundle(old['bundle_root']);t=Transfer(transfer_root,transfer_hash,b.json('origin/campaign_spec.json'))
     from .inputs import transferred
@@ -100,10 +106,13 @@ def create(root,parent_path,transfer_root,transfer_hash,project,commit,quota_gib
     transferred(probe).verify_all();sources=native.Sources(probe);sources.verify_all();budget=inventory(t)
     if type(quota_gib)is not int or quota_gib<budget['minimum_quota_gib']:
         raise ValueError('Available output quota must be at least '+str(budget['minimum_quota_gib'])+' GiB after input transfer')
-    root=fresh(root,[project,t.root,sources.delta.root,sources.offline.root,*[old[k] for k in ('root','project_dir','environment_dir','bundle_root')]])
+    reuse=recovery.inspect(resume_spec) if resume_spec is not None else None
+    protected=[project,t.root,sources.delta.root,sources.offline.root,*[old[k] for k in ('root','project_dir','environment_dir','bundle_root')]]
+    if reuse is not None:protected.append(Path(reuse['source_spec']['path']).parent)
+    root=fresh(root,protected)
     site.environment(old['reference']['environment'])
     value=artifact('SPEC',parents=dict(source=source['content_hash'],parent=old['content_hash'],transfer=transfer_hash,native=native_hash,recipe=recipe()['content_hash']),
-        **registration(),root=str(root),project_dir=str(project),source_commit=commit,source_snapshot=source,
+        **registration(),root=str(root),project_dir=str(project),source_commit=commit,source_snapshot=source,preparation_reuse=reuse,
         environment_dir=str(Path(sys.prefix).resolve()),parent_spec=parent_ref,
         native_root=str(sources.delta.root),native_hash=native_hash,
         transfer_root=str(t.root),transfer_hash=transfer_hash,available_quota_gib=quota_gib,storage_inventory=budget,
@@ -116,7 +125,7 @@ def create(root,parent_path,transfer_root,transfer_hash,project,commit,quota_gib
 
 
 def check(spec,*,check_storage=True):
-    validate(spec,'SPEC')  # Explain v1 incompatibility before reading v2 fields.
+    validate(spec,'SPEC')  # Old executions require their original source or explicit recovery.
     validate_file_ref(spec['parent_spec']);old=original(spec['parent_spec']['path'])
     validate(spec,'SPEC',dict(source=spec['source_snapshot']['content_hash'],parent=old['content_hash'],transfer=spec['transfer_hash'],native=spec['native_hash'],recipe=recipe()['content_hash']))
     from .inputs import transferred
@@ -129,4 +138,5 @@ def check(spec,*,check_storage=True):
             or load_json(Path(spec['root'])/'campaign_spec.json')!=spec):raise ValueError('Immutable campaign registration differs')
     site.environment(spec['reference']['environment'])
     check_historical(spec['historical_selective'],old)
+    if spec['preparation_reuse'] is not None:recovery.check(spec['preparation_reuse'],spec)
     if check_storage:storage(spec)

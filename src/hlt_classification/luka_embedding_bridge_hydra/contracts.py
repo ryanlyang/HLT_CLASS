@@ -9,7 +9,8 @@ BASE = '45075fe6c2d8ccdcf7463cd3a99cbe2fe6976a08'
 # Freeze all donor runtime at the published repair base; only this campaign
 # namespace may change afterwards. The original scientific recipe stays v1.
 REPAIR_BASE = '2fb09f38a3a1da85cdceff9df311963fdb3aa872'
-VERSIONS = {'SPEC': 2}
+VERSIONS = {'SPEC': 3, 'U100_REPLAY': 2}
+U100_EXTRACTION = 'original_consecutive_128_whole_batches_per_rank_fp32_v1'
 AUTHORIZATION = 'AUTHORIZE_LUKA_EMBEDDING_BRIDGE_HYDRA_V1'
 AUX_SEED = 20261110
 

@@ -13,7 +13,7 @@ from hlt_classification.cms_proxy_ladder.contracts import file_ref,validate_file
 from hlt_classification.jetclass2_delphes.model import installed_environment
 from .contracts import artifact,validate,recipe
 from .registry import FITS,PRODUCERS,cell
-from . import campaign,submission,execution,inputs,banks,resources,qualification,training,distributed as d
+from . import campaign,submission,execution,inputs,banks,resources,qualification,training,recovery,distributed as d
 
 
 def require_job(spec,task):
@@ -36,6 +36,7 @@ def receipt(spec,task,*,full=True):
         'startup/receipt.json','startup/training_report.json','startup_memory.json','fit/receipt.json','fit/training_report.json',
         'fit/selected.pt','fit/selected_full.pt','fit/validation_predictions.npz'}
     if task in PRODUCERS:required|={'bank/train/manifest.json','bank/validation/manifest.json'}
+    if task=='setup':required.add('preparation_reuse.json' if spec['preparation_reuse'] is not None else 'u100_input_probe.json')
     names=[v['path'] for v in r['outputs']]
     if len(names)!=len(set(names)) or not required<=set(names):raise ValueError('Incomplete task inventory')
     from .storage import regular
@@ -53,6 +54,12 @@ def completed_setup(spec,*,full=True):
 
 def verify_setup_payloads(spec,*,full=True):
     qualification.check_replay(spec);ds=inputs.Dataset(spec)
+    if spec['preparation_reuse'] is not None:
+        saved=load_json(Path(spec['root'])/'setup/preparation_reuse.json')
+        if saved!=spec['preparation_reuse']:raise ValueError('Preparation reuse receipt differs')
+        recovery.check(saved,spec)
+    else:
+        qualification.check_u100_witness(load_json(Path(spec['root'])/'setup/u100_input_probe.json'),spec)
     ds.u100('train');ds.u100('validation')
     if full:
         p=load_json(Path(spec['root'])/'setup/mini_population.json');validate(p,'MINI_POPULATION',dict(spec=spec['content_hash']))
@@ -119,7 +126,10 @@ def scientific_target(spec,task,ds):
 
 def prepare(spec):
     campaign.check(spec);require_job(spec,'setup');execution.allocation(spec)
-    started=time.perf_counter();inputs.Bundle(spec['bundle_root']).verify_all();value=inputs.prepare(spec)
+    started=time.perf_counter()
+    if spec['preparation_reuse'] is not None:value=recovery.materialize(spec)
+    else:
+        inputs.Bundle(spec['bundle_root']).verify_all();value=inputs.prepare(spec)
     import resource
     from hlt_classification.luka_subclass_ddp_hydra.distributed import launcher_rss
     proof=artifact('PREPARATION',parents=dict(spec=spec['content_hash']),seconds=time.perf_counter()-started,
@@ -139,7 +149,12 @@ def run(spec,task):
     write_immutable_json(claim/'intent.json',artifact('RUN_CLAIM',parents=dict(spec=spec['content_hash']),task=task,job_id=job))
     folder=Path(spec['root'])/task;folder.mkdir(exist_ok=False)
     cli=str(Path(spec['project_dir'])/'scripts/luka_embedding_bridge_hydra.py');path=str(Path(spec['root'])/'campaign_spec.json')
-    if task=='setup':subprocess.run([sys.executable,'-u','-B','-s',cli,'prepare','--spec',path],check=True)
+    if task=='setup':
+        if spec['preparation_reuse'] is None:
+            print('EMBEDDING_BRIDGE checking frozen U100 before full particle preparation',flush=True)
+            subprocess.run([sys.executable,'-u','-B','-s','-m','torch.distributed.run','--standalone','--nnodes=1','--nproc-per-node=2',
+                cli,'rank','--spec',path,'--task','input_probe'],check=True)
+        subprocess.run([sys.executable,'-u','-B','-s',cli,'prepare','--spec',path],check=True)
     else:completed_setup(spec,full=False)
     if task=='report':
         from .reporting import results
@@ -158,19 +173,21 @@ def run(spec,task):
 
 
 def rank(spec,task):
-    if task not in ('setup',*FITS):raise ValueError('Unregistered GPU task')
+    if task not in ('setup','input_probe',*FITS):raise ValueError('Unregistered GPU task')
+    owner='setup' if task=='input_probe' else task
     rank=int(os.environ.get('RANK','-1'))
     if (rank not in (0,1) or os.environ.get('LOCAL_RANK')!=str(rank) or os.environ.get('WORLD_SIZE')!='2'
             or os.environ.get('LOCAL_WORLD_SIZE')!='2' or os.environ.get('GROUP_RANK')!='0'):raise PermissionError('Exactly two local ranks required')
-    require_job(spec,task);devices=execution.allocation(spec)
+    require_job(spec,owner);devices=execution.allocation(spec)
     if campaign.current(spec['project_dir'],spec['source_commit'])!=spec['source_snapshot']:raise ValueError('Source changed')
-    expected=artifact('RUN_CLAIM',parents=dict(spec=spec['content_hash']),task=task,job_id=os.environ['SLURM_JOB_ID'])
-    if load_json(Path(spec['root'])/'claims'/task/'intent.json')!=expected:raise PermissionError('Missing exact launcher claim')
+    expected=artifact('RUN_CLAIM',parents=dict(spec=spec['content_hash']),task=owner,job_id=os.environ['SLURM_JOB_ID'])
+    if load_json(Path(spec['root'])/'claims'/owner/'intent.json')!=expected:raise PermissionError('Missing exact launcher claim')
     torch.cuda.set_device(rank);torch.backends.cuda.matmul.allow_tf32=False;torch.backends.cudnn.allow_tf32=False
     torch.backends.cudnn.benchmark=False;torch.backends.cudnn.deterministic=True
     os.environ['TORCH_NCCL_ASYNC_ERROR_HANDLING']='1';dist.init_process_group('nccl',timeout=timedelta(minutes=30))
     ctx=d.Context(rank,2,torch.device('cuda',rank))
     try:
+        if task=='input_probe':banks.input_probe(spec,ctx);return
         started=time.perf_counter();ds=inputs.Dataset(spec);ds.view('train','D000');ds.view('validation','D000');ds.u100('train')
         load_seconds=max(ctx.all(time.perf_counter()-started))
         if task=='setup':resources.measure(spec,ds,ctx,devices,load_seconds)

@@ -9,7 +9,7 @@ from hlt_classification.jetclass2_delphes.model import model_config
 from hlt_classification.models.particle_transformer import load_weaver_particle_transformer_class
 from hlt_classification.luka_subclass_hydra.benchmark_training import parity_snapshot,compare
 from hlt_classification.luka_subclass_ddp_hydra.resources import TOLERANCES,PROBE_TOLERANCES
-from .contracts import artifact,validate
+from .contracts import artifact,validate,U100_EXTRACTION
 from .registry import teacher_condition
 from . import model,distributed as d,inputs
 
@@ -119,8 +119,16 @@ def check_replay(spec):
     if (r['actual_auc']!=a or r['historical_auc']!=e or r['auc_abs']!=abs(a-e) or abs(a-e)>5e-5
             or r['tolerance']!=5e-5 or r['precision']!='fp32' or r['rows']!=spec['counts']['validation']):raise ValueError('Replay differs')
     check_parity(load_json(root/'parity.json'),spec)
-    u=load_json(root/'u100_replay.json');t=inputs.transferred(spec)
-    validate(u,'U100_REPLAY',dict(spec=spec['content_hash'],teacher=t.manifest['teacher']['sha256'],original=spec['embedding_hash']))
-    if u['passed']is not True or u['rows']!=4096 or (u['atol'],u['rtol'])!=(1e-4,1e-4) or not np.isfinite(u['maximum_error']):
-        raise ValueError('U100 reproduction witness differs')
+    check_u100_witness(load_json(root/'u100_replay.json'),spec)
     return r
+
+
+def check_u100_witness(u,spec):
+    t=inputs.transferred(spec)
+    validate(u,'U100_REPLAY',dict(spec=spec['content_hash'],teacher=t.manifest['teacher']['sha256'],original=spec['embedding_hash']))
+    if (u['passed']is not True or u['rows']!=4096 or (u['atol'],u['rtol'])!=(1e-4,1e-4)
+            or u['extraction_policy']!=U100_EXTRACTION or u['exceeding_coordinates']!=0
+            or u['regrouped_diagnostic_only']is not True
+            or any(not np.isfinite(u[k]) or u[k]<0 for k in ('maximum_error','mean_absolute_error','rms_error','regrouped_maximum_error'))):
+        raise ValueError('U100 reproduction witness differs')
+    return u

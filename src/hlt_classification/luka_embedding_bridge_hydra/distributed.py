@@ -91,6 +91,39 @@ def arrays(raw,ctx,indices=None):
     return {k:torch.as_tensor(raw[k] if indices is None else raw[k][indices],device=ctx.device) for k in KEYS}
 
 
+def original_u100(student, view, ctx, indices=None):
+    """Reproduce the frozen exporter batching, including original padding context.
+
+    Assign whole consecutive batches to ranks. A panel row is evaluated with
+    its original neighbours, not with other randomly selected panel rows.
+    This is inference only: training still uses the registered split batch128.
+    """
+    ordered = np.arange(len(view), dtype=np.int64) if indices is None else np.asarray(indices)
+    if (ordered.ndim != 1 or ordered.dtype.kind not in 'iu' or not len(ordered)
+            or np.any(ordered < 0) or np.any(ordered >= len(view))
+            or len(np.unique(ordered)) != len(ordered)):
+        raise ValueError('Invalid frozen U100 extraction rows')
+    positions = []; values = []; student.eval()
+    with torch.inference_mode(), torch.autocast(ctx.device.type, enabled=False):
+        for number, block in enumerate(np.unique(ordered // 128)):
+            if number % ctx.world != ctx.rank:
+                continue
+            start = int(block) * 128
+            ix = np.arange(start, min(start + 128, len(view)), dtype=np.int64)
+            _, h = student.encode(**arrays(view.batch(ix), ctx))
+            selected = np.flatnonzero(ordered // 128 == block)
+            z = h[torch.as_tensor(ordered[selected] - start, device=ctx.device)].float()
+            if z.shape != (len(selected), 128) or not torch.isfinite(z).all():
+                raise ValueError('Invalid frozen U100 representation')
+            positions.append(selected); values.append(z.cpu().numpy())
+    local = (np.concatenate(positions) if positions else np.empty(0, np.int64),
+             np.concatenate(values) if values else np.empty((0, 128), np.float32))
+    shards = ctx.all(local); pos = np.concatenate([p for p, _ in shards])
+    if not np.array_equal(np.sort(pos), np.arange(len(ordered))):
+        raise ValueError('Frozen U100 extraction has missing or duplicate rows')
+    return np.concatenate([v for _, v in shards])[np.argsort(pos)]
+
+
 def predict(student,ds,role,ctx,*,coordinate='D000',condition=None,source=None,scale=None,indices=None,embedding=False,predicted=False):
     """Collect in ordered row positions. Evaluation has no DDP/SyncBN collectives."""
     if role not in ('train','validation'):raise PermissionError('No final-test inference')

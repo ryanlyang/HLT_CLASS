@@ -1,5 +1,47 @@
 # Embedding bridge / response / region validation
 
+## 2026-11-11 original frozen-export batching and completed preparation reuse
+
+User evidence: setup162131, source92397736, completed both data roles and
+published PREPARATION/data manifests in8816.77s (host peak15088398336 bytes).
+The following U100 replay failed:4096 rows, maximum normalized-coordinate
+difference0.0014567375183105469, atol/rtol1e-4. This was not another historical
+input hash failure or a storage error. Original saved TRAIN targets remain
+unchanged. The original exporter uses consecutive128-row batches; the failed
+panel extraction regrouped rows and split each batch across ranks. That
+execution difference is established; its responsibility for all remote drift
+is not established without a new Brown witness.
+
+Execution v3 preserves original contexts for frozen U100 inference, records
+both original-batch and regrouped diagnostics, and retains the strict tolerance.
+Fresh setup runs this witness before expensive preparation. Explicit recovery
+from the completed92397736 preparation authenticates source/terminal jobs,
+completion manifests, all payloads and exact original U100 arrays. It links
+49 immutable arrays into a fresh root with new manifest parents; old data,
+claims/logs and failed witness remain. No scientific acceptance is reused.
+
+Local evidence (same installed-Weaver environment below):
+
+- Baseline:56 passed,1 skipped in55.84s.
+- New recovery/extraction suite:19 passed in24.38s.
+- Combined campaign/native/recovery regression:75 passed,1 skipped in66.34s.
+- Final actual-CUDA original128/tail replay and early-failure/recovery ordering:
+  3 passed in9.55s. These add two cases to the combined suite:77 distinct
+  passing cases, one two-GPU/NCCL skip.
+- Tests cover nonconsecutive panel order, original batch neighbours, whole-batch
+  distribution, tails, duplicate/invalid indices, unchanged tolerance with bad
+  targets rejected, payload corruption/partial inventories/lineage rejection,
+  terminal accounting, shared payload inodes, and storage-credit accounting.
+- Syntax:24 Python files and4 Bash runbook blocks pass.
+
+SPEC/v3 and U100_REPLAY/v2 are versioned; PREPARATION_REUSE/v1 is new.
+RECIPE/v1 and both input transfer formats are unchanged. No imported numerical
+donor is edited. No repaired two-GTX1080Ti run or Tigris miniature was executed
+locally; the numerical replay and remaining full GPU qualification are still
+required on Brown. No commit/push or remote mutation/submission was performed
+by the agent. Queue readiness here means readiness to run that recovery and
+qualification, not a promise that every remaining production check passes.
+
 ## 2026-11-11 exact historical-input repair
 
 Remote evidence supplied by the user: setup161306, source0a00441f, failed

@@ -13,6 +13,13 @@ completed physical export already on Brown and adds a minimal native delta.
 It copies exact historical tensors instead of re-encoding them on Brown.
 Do not rerun the failed v1 source or reuse its partial preparation as complete.
 
+**For failed setup162131, use the completed-preparation recovery below.**
+Its92397736 run finished preparation; preserve that root. Execution v3 checks
+the frozen teacher in original consecutive128-row contexts, retains the1e-4
+tolerance and reuses authenticated completed arrays. It requires no new SPORC
+export or particle reconstruction. Remaining GPU qualification can still fail;
+the completed arrays are preserved for diagnosis and subsequent reuse.
+
 ## 1. Commit and push from Windows
 
 Review the scoped diff. The source guard preserves donor runtime at
@@ -28,6 +35,7 @@ $paths = @(
     'sbatch/run_luka_embedding_bridge_hydra.sh',
     'tests/test_luka_embedding_bridge_hydra.py',
     'tests/test_luka_embedding_bridge_native.py',
+    'tests/test_luka_embedding_bridge_recovery.py',
     'docs/plans/LUKA_EMBEDDING_BRIDGE_RESPONSE_REGION_HYDRA_PLAN.md',
     'docs/contracts/LUKA_EMBEDDING_BRIDGE_HYDRA.md',
     'docs/LUKA_EMBEDDING_BRIDGE_HYDRA_RUNBOOK.md',
@@ -45,7 +53,7 @@ git add -p -- $shared
 git diff --cached --stat
 git diff --cached --check
 if ($LASTEXITCODE -ne 0) { throw 'Fix staged whitespace first' }
-git commit -m 'Preserve historical input bytes in embedding bridge preparation'
+git commit -m 'Preserve U100 export batching and recover completed bridge preparation'
 if ($LASTEXITCODE -ne 0) { throw 'Commit failed' }
 git push origin main
 if ($LASTEXITCODE -ne 0) { throw 'Push failed' }
@@ -53,6 +61,8 @@ git rev-parse HEAD
 ```
 
 ## 2. Export only the missing historical tensors on SPORC
+
+Skip sections2 and3 for recovery of162131; both transfers already exist on Brown.
 
 For the failed161306 execution, the physical transfer already on Brown is
 `embedding_bridge_raw_0a00441f`, manifest
@@ -109,7 +119,7 @@ export. Completion prints `directory`, `manifest_hash`, `payload_bytes`;
 copy the first two. A directory without its completion manifest is incomplete.
 The old physical export on SPORC is not needed for this repair.
 
-## 3. Copy the native delta, register a fresh v2 execution and queue on Brown
+## 3. Copy the native delta, register a fresh v3 execution and queue on Brown
 
 This block reuses the exact physical transfer from the failed run. It does
 not copy that4.3GiB payload again. The original bundle and native OFFLINE
@@ -168,7 +178,7 @@ CLI="${PROJECT}/scripts/luka_embedding_bridge_hydra.py"
     --bundle-root "$BUNDLE" --native-root "$NATIVE" --native-hash "$NATIVE_HASH"
 "${ENV_DIR}/bin/python" -u -B -s "$CLI" verify-transfer \
     --bundle-root "$BUNDLE" --transfer-root "$RAW" --transfer-hash "$RAW_HASH"
-ROOT="${BASE}/runs/embedding_bridge_${COMMIT:0:8}_1080ti_v2_r1"
+ROOT="${BASE}/runs/embedding_bridge_${COMMIT:0:8}_1080ti_v3_r1"
 test ! -e "$ROOT"
 df -h "$BASE"
 read -r -p 'Personally available output GiB (at least printed minimum_quota_gib): ' QUOTA_GIB </dev/tty
@@ -231,7 +241,7 @@ scientific producer chain, with shared setup cost separately reported.
 bash <<'BASH'
 set -euo pipefail
 shopt -s nullglob
-SPECS=("$HOME"/hlt_u100_pairs/runs/embedding_bridge_*_1080ti_v2_r1/campaign_spec.json)
+SPECS=("$HOME"/hlt_u100_pairs/runs/embedding_bridge_*_1080ti_v3_r1/campaign_spec.json)
 [[ ${#SPECS[@]} -eq 1 ]] || { printf 'Select one exact spec; found %s\n' "${#SPECS[@]}"; exit 1; }
 SPEC="${SPECS[0]}"
 MODE=summary
@@ -252,6 +262,72 @@ mean maximum primary AUC. Recovery uses historical anchors without clipping.
 This is single-seed development screening; FullStat confirmation comes later.
 
 ## Recovery after a technical failure
+
+For162131, first commit/push the scoped repair as above, then run this on
+Brown. Paste that new40-character commit. Registration checks the old terminal
+jobs and all completed preparation hashes; allow several minutes for NFS reads.
+The new setup links49 array payloads (32 view arrays,12 physical arrays and
+5 U100 arrays) and reruns GPU qualification. The storage reservation credits
+those links, so it does not demand a second full33GiB allocation. A fresh
+root and source snapshot distinguish this execution from the failed run.
+
+```bash
+bash <<'BASH'
+set -euo pipefail
+trap 'printf "Stopped; preserve the old and new roots and paste the error.\n" >&2' ERR
+BASE="$(cd "$HOME/hlt_u100_pairs" && pwd -P)"
+OLD="${BASE}/runs/embedding_bridge_92397736_1080ti_v2_r1/campaign_spec.json"
+test -f "$OLD"
+read -r -p 'New pushed repair commit (40 characters): ' COMMIT </dev/tty
+[[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]]
+MAIN="$(python3 -B -s -c 'import json,sys; print(json.load(open(sys.argv[1]))["project_dir"])' "$OLD")"
+ENV_DIR="$(python3 -B -s -c 'import json,sys; print(json.load(open(sys.argv[1]))["environment_dir"])' "$OLD")"
+git -C "$MAIN" fetch origin main
+git -C "$MAIN" merge-base --is-ancestor "$COMMIT" origin/main
+PROJECT="${BASE}/code_embedding_bridge_${COMMIT:0:8}"
+if [[ -e "$PROJECT" ]]; then
+    test "$(git -C "$PROJECT" rev-parse HEAD)" = "$COMMIT"
+    test -z "$(git -C "$PROJECT" status --porcelain --untracked-files=all)"
+else
+    git -C "$MAIN" worktree add --detach "$PROJECT" "$COMMIT"
+fi
+ROOT="${BASE}/runs/embedding_bridge_${COMMIT:0:8}_1080ti_v3_r1"
+test ! -e "$ROOT"
+export PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1
+export PYTHONPATH="${PROJECT}/src"
+export LD_LIBRARY_PATH="${ENV_DIR}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
+export CUBLAS_WORKSPACE_CONFIG=:4096:8
+REG_LOG="$(mktemp "${BASE}/runs/embedding_bridge_${COMMIT:0:8}_recovery.XXXXXX.log")"
+printf 'Recovery registration log: %s\n' "$REG_LOG"
+if ! "${ENV_DIR}/bin/python" -u -B -s - "$OLD" "$PROJECT" "$ROOT" "$COMMIT" >"$REG_LOG" 2>&1 <<'PY'
+import json, subprocess, sys
+old_path, project, root, commit = sys.argv[1:]
+with open(old_path) as handle:
+    old = json.load(handle)
+args = [sys.executable, '-u', '-B', '-s', project+'/scripts/luka_embedding_bridge_hydra.py', 'create',
+        '--root', root, '--teacher-sweep-spec', old['parent_spec']['path'],
+        '--transfer-root', old['transfer_root'], '--transfer-hash', old['transfer_hash'],
+        '--native-root', old['native_root'], '--native-hash', old['native_hash'],
+        '--expected-commit', commit, '--quota-gib', str(old['available_quota_gib']), '--resume-spec', old_path]
+if old.get('historical_selective'):
+    args += ['--selective-spec', old['historical_selective']['spec']['path']]
+subprocess.run(args, check=True)
+PY
+then
+    tail -n 100 -- "$REG_LOG"
+    exit 1
+fi
+bash "${PROJECT}/scripts/queue_luka_embedding_bridge_hydra.sh" "${ROOT}/campaign_spec.json" </dev/tty
+squeue --me -o "%.18i %.32j %.12T %.12l %R"
+BASH
+```
+
+The expected setup message is `reused 49 authenticated arrays; no particle
+reconstruction`, followed by the frozen-U100 check. Any remaining mismatch
+produces `u100_replay.json` with original-batch and regrouped diagnostics.
+Do not raise tolerance or edit old manifests. Source92397736 and its completed
+preparation remain recovery provenance and must be retained.
 
 Inspect the exact setup/job log, resource JSON and submission journal. A failed
 setup never releases science. Partial/ambiguous submission preserves claims
