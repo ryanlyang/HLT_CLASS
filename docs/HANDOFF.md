@@ -1,5 +1,74 @@
 # Current Handoff
 
+## 2026-11-10: Embedding bridges, shared responses and regions implementation
+
+Implemented the full [30-fit campaign](plans/LUKA_EMBEDDING_BRIDGE_RESPONSE_REGION_HYDRA_PLAN.md)
+in the additive `luka_embedding_bridge_hydra` namespace, three thin CLI/queue/
+Slurm scripts and focused tests. Six assistants, three HLT ladder endpoints,
+two shared teachers, eighteen response/regional students and fresh C0 retain
+the registered scientific definitions; R0/P0 alias C0. Every final student
+keeps original U100-w5 and deploys the unchanged native HLT ParT.
+
+Added authenticated two-role physical export, original-assignment replay,
+quarter-view preparation, typed memory-mapped banks, frozen TRAIN statistics,
+full30 training, exact selection/native reload, epoch diagnostics and fresh-C0
+readouts. Optional authenticated S2IT/S6 references remain historical. Runtime
+contracts are `LUKA_EMBEDDING_BRIDGE_HYDRA_*/v1`; old contracts are unchanged.
+Exact donor baseline `45075fe6c2d8ccdcf7463cd3a99cbe2fe6976a08` and reused files
+are recorded in [LEGACY_SOURCE_MAP](LEGACY_SOURCE_MAP.md).
+
+The [runbook](LUKA_EMBEDDING_BRIDGE_HYDRA_RUNBOOK.md) queues a 12h two-GTX1080Ti
+setup plus durable CPU release. Setup runs all production miniatures, actual
+target exports, parity/replay, full-validation/warmed resource measurements
+and a separate CPU authentication/report estimate. Its success automatically
+releases 30 scientific jobs with only true producer dependencies and an
+afterany report:33 Slurm jobs. Per-task scientific parents receive another
+disposable startup before fresh initialization. No metric-quality gate or
+automatic scientific retry is introduced.
+
+Local evidence: baseline106 passed/1 skipped; combined regression151 passed/
+2 skipped; final campaign suite48 passed/1 skipped after the last operational
+checks, followed by6 focused passing checks for measured chain-cost reporting.
+This includes full30 native fixture chains, one-GPU production-depth
+batch128/tails, original U100 AdamW parity and exact release/failure cases.
+See [validation evidence](LUKA_EMBEDDING_BRIDGE_HYDRA_VALIDATION.md) for scope.
+The two-CUDA/NCCL test cannot run on this one-GPU machine. The plan explicitly
+uses genuine Hydra qualification in place of the generic legacy Tigris gate.
+
+No commit/push, research export, Brown inference/training or job submission was
+performed. Exact next task: scoped commit/push, authenticated SPORC export and
+Brown registration via the runbook, then real two-GPU setup acceptance before
+automatic scientific release. Unrelated user changes were preserved.
+
+## 2026-11-10: Embedding assistants, responses and regions campaign design
+
+Added [the implementation design](plans/LUKA_EMBEDDING_BRIDGE_RESPONSE_REGION_HYDRA_PLAN.md)
+at the user's request, with discovery links in README and the plans index.
+The user selected the original 299234/74895 Hydra screen before FullStat
+confirmation, using the existing two-GTX1080Ti FP32 execution approach.
+The plan enumerates 30 scientific fits: six intermediate assistants, three
+HLT ladder endpoints, two shared target teachers, eighteen response/regional
+students and one fresh shared C0. R0/P0 are aliases, not extra fits.
+
+Specified fixed-coordinate assistant exports and anchored losses, six-condition
+shared-teacher responses, nested HLT-defined regions with independently encoded
+crop targets, source/absolute-target controls, normalization, selection and
+diagnostics. Proposed execution has 33 jobs including setup, durable release
+and report, with only real parent dependencies and required production-worker
+two-GPU qualification. The document distinguishes planned tests and schemas
+from implemented functionality. Existing campaigns and scientific meanings
+are unchanged.
+
+Documentation only: no donor code migrated, runtime contracts added/versioned,
+research inference/training, source commit/push, exports or job changes.
+Donor surfaces were inspected at 45075fe6c2d8ccdcf7463cd3a99cbe2fe6976a08.
+Existing focused scaffold checks passed 3 tests (the repository-wide recursive
+link scan was deselected). Focused checks passed for all 14 changed-document
+local links, whitespace/fences, both ten-row grids, the 30-fit/22-HLT/33-job
+counts, and target-storage arithmetic. No remote qualification was run for
+this documentation-only change. Next task: implement the immutable registry/data adapter
+and matched FP32 C0, then the three families and measured Hydra acceptance.
+
 ## 2026-11-10: Production two-GTX1080Ti subclass campaign
 
 Implemented the user's requested production follow-up to benchmark160948 in

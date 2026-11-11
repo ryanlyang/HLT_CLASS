@@ -1,5 +1,32 @@
 # Legacy Donor-Source Map
 
+## Embedding bridges, shared responses and regions (2026-11-10)
+
+Internal donor baseline `45075fe6c2d8ccdcf7463cd3a99cbe2fe6976a08`.
+The new `luka_embedding_bridge_hydra` package, three entrypoint/queue/worker
+scripts and focused tests import or adapt the following existing files.
+Paths are relative to `src/hlt_classification/` unless explicitly prefixed.
+No donor runtime is modified; no external code or Fresh_check runtime is copied.
+
+| Donor files | Reuse / adaptation |
+|---|---|
+| `luka_subclass_ddp_hydra/{contracts,campaign,distributed,execution,resources,submission,worker,reporting}.py` | Exact source/registry patterns, two-GTX1080Ti allocation, global batch weighting, rank collection, memory accounting, observation-preserving diagnostics, measured admission, durable exact-DAG release and fresh-control reports. |
+| `luka_subclass_hydra/{reuse,model,benchmark_site,benchmark_training,reporting}.py` | Original small-data parent authentication, shared native parameters, one/two-rank numerical comparison, installed allocation checks and historical comparisons. |
+| `luka_embedding_aux/{model,targets}.py`, `luka_u100_embedding/{contracts,targets,training}.py`, `luka_u100_contrastive/{training,resources}.py` | Original native predictor, standardized U100 targets, unchanged AdamW groups, full30 objective, recovery and preparation/miniature patterns. |
+| `luka_selective_teacher_hydra/{contracts,views,resources,reporting}.py`, `luka_capacity_hydra/{reuse,complementarity}.py` | K/I/T field semantics, inherited reporting, ordered prediction joins and optional authenticated S2IT/S6 references. Their independent teachers do not supply response differences. |
+| `luka_fullsim/{foundation,alljets_data,stage2,particles,regular_submission}.py`, `cms_proxy_ladder/{views,contracts,submission}.py`, `cms2jc2_response/bridge.py`, `literature_context/transform.py` | Original physical particles, assignment manifests, coordinate construction, native frontend, view digests, file/source references and walltimes. No JetClass2 degradation construction is substituted. |
+| `luka_next_supervision_hydra/{data,campaign,reconstruction_release,reuse}.py`, `luka_u100_pair_hydra/{inputs,site}.py`, `luka_u100_pair_transfer/bundle.py`, `luka_cross_message_hydra/inputs.py` | Physical-column export, protected roots/storage, CPU rounding pattern, authenticated original bundle/environment, U100 checkpoint and preparation proofs. |
+| `jetclass2_delphes/{model,runner,reporting,batch128_30e_recipe}.py`, `models/particle_transformer.py`, `luka_embedding_curriculum_hydra/resources.py` | Native installed-Weaver factory, exact LR/selection/metrics and state-comparison helpers. |
+| `luka_particle_teacher_hydra/submission.py`, `scouting/{hcwdl_exact_dag_submission,hcwdl_recovery}.py`, `data/cache_contracts.py`, `provenance.py`, `context_fusion/worker.py` | Full scheduler dry review, write-ahead exact-job ledgers, immutable artifacts, source validation and checkpoint publication. |
+| `scripts/{luka_subclass_ddp_hydra.py,queue_luka_subclass_ddp_hydra.sh}`, `sbatch/run_luka_subclass_ddp_hydra.sh`, `tests/{test_luka_subclass_ddp_hydra,test_luka_selective_teacher_hydra}.py` | Thin CLI/Slurm patterns, sanitized environment, automatic-release flow and local fixtures. |
+
+Fixed-coordinate assistant exports, shared-teacher response algebra, independent
+physical-crop targets, typed memory-mapped banks, all-family qualification and
+CPU report extrapolation are new code. Concrete schemas are
+`LUKA_EMBEDDING_BRIDGE_HYDRA_*/v1`; HCWDL journals are reused unchanged.
+See the [contract](contracts/LUKA_EMBEDDING_BRIDGE_HYDRA.md) and
+[validation evidence](LUKA_EMBEDDING_BRIDGE_HYDRA_VALIDATION.md).
+
 ## Production two-GTX1080Ti subclass execution (2026-11-10)
 
 Internal donor baseline `1d83d69d4339599d0cf8c59a8b5cafe52704cd81`.

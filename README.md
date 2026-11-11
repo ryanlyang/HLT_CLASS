@@ -10,6 +10,15 @@ uses detached submission with integrated checks instead of a separate preflight.
 
 ## Current status
 
+The [embedding-assistant, response and regional-target plan](docs/plans/LUKA_EMBEDDING_BRIDGE_RESPONSE_REGION_HYDRA_PLAN.md)
+implements a 30-fit Hydra screen on two GTX 1080 Ti GPUs: three assistant
+ladders, two shared target teachers, two ten-row student comparisons sharing a
+fresh U100-w5 control, and automatic release after measured qualification.
+The [runbook](docs/LUKA_EMBEDDING_BRIDGE_HYDRA_RUNBOOK.md) covers the authenticated
+physical export, registration, setup and automatic release. It is ready to
+queue real Hydra qualification; [local evidence](docs/LUKA_EMBEDDING_BRIDGE_HYDRA_VALIDATION.md)
+does not substitute for the required two-GPU production setup.
+
 The [two-GTX1080Ti subclass execution](docs/plans/LUKA_SUBCLASS_DDP_HYDRA_PLAN.md)
 adds a fresh FP32 U100-w5 control and the ten subclass weights using two GPUs
 per fit, synchronized BatchNorm, global batch128 and30 epochs. The

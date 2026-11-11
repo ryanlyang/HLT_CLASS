@@ -1,5 +1,14 @@
 # Scientific Implementation Plans
 
+The [embedding-assistant, response and regional-target campaign](LUKA_EMBEDDING_BRIDGE_RESPONSE_REGION_HYDRA_PLAN.md)
+is implemented as a 30-fit screen for two-GTX1080Ti Hydra execution.
+It specifies three fixed-U100-space assistant ladders, shared-teacher response
+targets, regional embedding supervision, matched controls, exact losses,
+resource qualification and a durable automatic-release DAG. The
+[queue runbook](../LUKA_EMBEDDING_BRIDGE_HYDRA_RUNBOOK.md) and
+[validation record](../LUKA_EMBEDDING_BRIDGE_HYDRA_VALIDATION.md) distinguish
+local queue readiness from the real Hydra acceptance still required.
+
 The [direct OFFLINE reconstruction follow-up](LUKA_DIRECT_OFFLINE_RECONSTRUCTION_IMPLEMENTATION_PLAN.md)
 specifies twelve implemented R fits on top of native CE+U100-w5. It compares global
 and global-plus-particle-token decoders, preserves complete source collections,
