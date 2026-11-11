@@ -6287,3 +6287,16 @@ Other fixture donors remain `tests/test_luka_attention.py`,
 Canonical hash/atomic publication, native ParT, FullStat schedule and exact-DAG
 journals remain imports. New science/execution/export contracts are
 `LUKA_FULLSTAT_SIX_TEACHER_*/v1`; old banks retain their original identities.
+
+### Six-teacher memory/export recovery repair
+
+Donor commit: `15808976126fb87cdf69ffae7a7a406cb865afb1` (failed Oscar job8821154).
+Existing `luka_fullstat_six_teacher/{sampling,startup,campaign,source,recovery,kd_banks}.py`
+were adapted only for post-exec worker memory accounting and reviewed reuse of
+completed exports before training. The new `export_recovery.py` replays the
+old `recovery.inspect`/`startup.check` in the original pinned source; it does not
+reinterpret or relabel old banks. `luka_fullstat_multi3_contrastive/sampling.py`
+remains unchanged: its CPUWorkers pool/initializer, proposals, ordering and RNG
+are inherited, with only the parent-side collection of memory counters replaced.
+New tests extend the existing six-teacher fixtures at this donor commit. The
+Linux stdlib spawn regression is new code, not migrated external implementation.

@@ -1,7 +1,9 @@
 # Oscar FullStat six-teacher subclass student
 
-Status: implemented and locally validated; scoped commit/push and Oscar launch
-remain. No jobs submitted. This is the active scientific plan for the
+Status: implemented; Oscar job8821154 completed both native TRAIN exports but
+stopped before scientific training at the host-memory guard. The memory-counter
+repair and export-only recovery are locally validated; the repaired job has not
+been submitted. This is the active scientific plan for the
 separate `luka_fullstat_six_teacher` campaign. It does not change the Hydra plan
 or reinterpret any existing Oscar run.
 
@@ -82,6 +84,21 @@ Save full optimizer/RNG/model states and receipts every epoch. An explicit
 same-source recovery uses a fresh root, verifies unsuccessful terminal accounting,
 copies authenticated exports/epochs, and resumes without repeating completed
 epochs. Never automatically retry ambiguous submission or erase claims.
+
+The reviewed exception for job8821154 at15808976126fb87cdf69ffae7a7a406cb865afb1
+permits a changed-source, export-only recovery before any student epochs. The
+original clean source must authenticate the failed startup, terminal FAILED/1:0
+job and both completed exports. The new source may change only memory accounting
+and recovery plumbing; loss, model, optimizer, sampler and target-generation
+semantics remain identical. Preserve the original export manifests and payloads
+byte-for-byte, including exporter commit, and bind the new fit to this evidence.
+
+Worker memory uses Linux `/proc/PID/status` `VmHWM`, the peak for the spawned
+worker's current address space. Keep `ru_maxrss` as diagnostic evidence only:
+that lifetime counter can include the parent's pre-exec image. Sum the three
+worker peaks with the main process peak and retain the existing memory limit
+and headroom. Missing worker measurements fail closed. Register this as
+`WORKER_MEMORY_POLICY/v1`; it does not change the scientific recipe.
 
 Use a detached launcher with a saved dry review and exact pushed clean source.
 Prepare the implementation and runbook locally; do not submit jobs now. Final

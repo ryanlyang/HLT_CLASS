@@ -32,9 +32,11 @@ def current(project, commit):
         raise ValueError('Only additive subclass runtime changes are registered')
     required = ENTRYPOINTS | {PACKAGE+n+'.py' for n in
         ('__init__','contracts','source','campaign','model','sampling','training','banks','startup',
-         'worker','submission','launch','execution','recovery','targets','kd_banks')}
+         'worker','submission','launch','execution','recovery','export_recovery','targets','kd_banks')}
     required |= {'tests/test_luka_fullstat_six_teacher.py','tests/test_luka_fullstat_six_teacher_targets.py',
                  'tests/test_luka_fullstat_six_teacher_lifecycle.py',
+                 'tests/test_luka_fullstat_six_teacher_memory.py',
+                 'tests/fixtures/luka_six_teacher_memory_smoke.py',
                  'docs/contracts/LUKA_FULLSTAT_SIX_TEACHER.md',
                  'docs/LUKA_FULLSTAT_SIX_TEACHER_RUNBOOK.md',
                  'docs/plans/LUKA_FULLSTAT_SIX_TEACHER_PLAN.md'}

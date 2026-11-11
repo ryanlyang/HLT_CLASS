@@ -90,3 +90,71 @@ exactly; an incomplete export is rebuilt in the fresh root. Completed epochs
 resume with their optimizer and RNG states; a20-epoch fit only republishes.
 Every recovery uses an exclusive claim on the original run. Ambiguous scheduler
 submission still requires inspection; do not erase the old journals/claims.
+
+## Recover job8821154 after the memory-counter fix
+
+This specific failure occurred before student training, after both native TRAIN
+exports completed. The patch keeps all training settings, three CPU workers,
+the192000MiB request and memory headroom. It replaces inherited worker lifetime
+peaks with current-address-space peaks. Recovery authenticates the original
+15808976 source and reuses both completed export files without another forward
+pass. Do not edit the old worktree or remove its failure records.
+
+Commit/push only this repair locally; preserve other unstaged work:
+
+```powershell
+$files = @(
+    'src/hlt_classification/luka_fullstat_six_teacher'
+    'tests/test_luka_fullstat_six_teacher.py'
+    'tests/test_luka_fullstat_six_teacher_memory.py'
+    'tests/fixtures/luka_six_teacher_memory_smoke.py'
+    'docs/plans/LUKA_FULLSTAT_SIX_TEACHER_PLAN.md'
+    'docs/contracts/LUKA_FULLSTAT_SIX_TEACHER.md'
+    'docs/LUKA_FULLSTAT_SIX_TEACHER_RUNBOOK.md'
+    'docs/LUKA_FULLSTAT_SIX_TEACHER_VALIDATION.md'
+    'docs/LEGACY_SOURCE_MAP.md'
+)
+git add -- $files
+if ($LASTEXITCODE -ne 0) { throw 'Staging failed' }
+git commit --only -m 'Fix six-teacher worker memory accounting and recover completed exports' -- $files
+if ($LASTEXITCODE -ne 0) { throw 'Commit failed' }
+git push origin HEAD:main
+if ($LASTEXITCODE -ne 0) { throw 'Push failed' }
+git rev-parse HEAD
+```
+
+The new HANDOFF entry can be staged separately after reviewing its unrelated
+pending changes. Then paste this on Oscar:
+
+```bash
+bash <<'BASH'
+set -euo pipefail
+checkquota
+read -r -p 'Pushed 40-character memory-recovery commit: ' COMMIT </dev/tty
+read -r -p 'Available HOME quota GiB (minimum 12): ' QUOTA </dev/tty
+[[ "${COMMIT}" =~ ^[0-9a-f]{40}$ ]]
+[[ "${QUOTA}" =~ ^[1-9][0-9]*$ && "${#QUOTA}" -le 6 ]]
+(( QUOTA >= 12 ))
+BASE=/oscar/home/rlyang/hlt_classification
+REPO="${BASE}/source/HLT_Classification_six_teacher_15808976"
+OLD="${BASE}/checkpoints/luka_fullstat_six_teacher_15808976_r1/campaign_spec.json"
+PARENT="${BASE}/checkpoints/luka_fullstat_subclass_16546c0e_r2/campaign_spec.json"
+LADDER="${BASE}/checkpoints/luka_fullstat_fine_tail_k1_e40_04d1f0f5_r1/campaign_spec.json"
+PROJECT="${BASE}/source/HLT_Classification_six_teacher_memory_${COMMIT:0:8}"
+ROOT="${BASE}/checkpoints/luka_fullstat_six_teacher_memory_${COMMIT:0:8}_r1"
+test -r "${OLD}"
+git -C "${REPO}" fetch origin main
+git -C "${REPO}" merge-base --is-ancestor "${COMMIT}" origin/main
+if [[ ! -e "${PROJECT}" ]]; then
+    git -C "${REPO}" worktree add --detach "${PROJECT}" "${COMMIT}"
+fi
+bash "${PROJECT}/scripts/launch_luka_fullstat_six_teacher.sh" \
+    "${COMMIT}" "${ROOT}" "${PARENT}" "${LADDER}" "${QUOTA}" \
+    --authorize AUTHORIZE_FULLSTAT_SIX_TEACHER_AUTOSUBMIT_V1 \
+    --resume-spec "${OLD}"
+BASH
+```
+
+After DETACHED the launcher survives SSH disconnect. LAUNCH_COMPLETE and
+LAUNCHER_EXIT=0 confirm submission. This submits one student job with integrated
+acceptance and no separate preflight; it does not retrain or re-export teachers.

@@ -48,3 +48,21 @@ submission. `LAUNCH_*` receipts distinguish detached launch from successful
 scheduler submission. Runtime is one L40S/6CPU/192000MiB/48h,12GiB quota minimum.
 No separate preflight/setup/teacher-training jobs. Finite poor metrics never
 invalidate a job. Final test remains sealed throughout.
+
+## Reviewed memory repair and export recovery (2026-11-11)
+
+New specs bind `LUKA_FULLSTAT_SIX_TEACHER_WORKER_MEMORY_POLICY/v1`. Each worker
+reports its current-address-space peak through Linux `VmHWM`, with PID/unit/
+positive-value checks. Startup records all three peaks and the old lifetime
+`ru_maxrss` values separately. Admission sums the actual worker peaks plus the
+main process peak, keeping the same limits. Old startup proofs cannot satisfy
+this new policy. Existing donor samplers and scientific `RECIPE/v1` are unchanged.
+
+`LUKA_FULLSTAT_SIX_TEACHER_EXPORT_RECOVERY/v1` permits only the reviewed
+FAILED/1:0 job8821154 at commit15808976126fb87cdf69ffae7a7a406cb865afb1, before
+any student epochs or accepted startup. It contains the original-source RESUME
+evidence, both complete export inventories, diagnostic file hashes and terminal
+accounting. It rejects altered science, partial exports, student state, different
+failures and unreviewed runtime changes. A fresh root and exclusive original-run
+claim remain mandatory. Original KD manifests/payloads keep their hashes and
+exporter source; later same-source continuation follows this provenance chain.

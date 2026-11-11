@@ -1,4 +1,4 @@
-"""Explicit same-source continuation into a fresh root; old evidence stays intact."""
+"""Same-source continuation, or reviewed pre-training export-only recovery."""
 from pathlib import Path
 import torch
 from hlt_classification.data.cache_contracts import load_json,write_immutable_json,atomic_publish_bytes
@@ -13,7 +13,8 @@ def inspect(path,project,commit):
     from . import campaign,worker,submission
     old=load_json(path)
     if old['source_commit']!=commit or Path(old['project_dir']).resolve()!=Path(project).resolve():
-        raise ValueError('This continuation requires the exact original source; changed-code recovery needs separate review')
+        from . import export_recovery
+        return export_recovery.inspect(path,project,commit)
     campaign.check(old);state=submission.accounting(old,success=False)
     if (Path(old['root'])/TASK/'task_receipt.json').exists():raise ValueError('Already published; inspect before recovering')
     if (Path(old['root'])/CLAIM).exists():raise FileExistsError('Original already claimed by a recovery')
@@ -28,6 +29,9 @@ def inspect(path,project,commit):
 def check(spec):
     resume=spec.get('resume')
     if resume is None:return
+    if resume['contract']=='LUKA_FULLSTAT_SIX_TEACHER_EXPORT_RECOVERY/v1':
+        from . import export_recovery
+        return export_recovery.check(spec)
     from .worker import epoch_records
     old=load_json(validate_file_ref(resume['spec']))
     validate(resume,'RESUME',dict(spec=old['content_hash'],recipe=recipe()['content_hash']))

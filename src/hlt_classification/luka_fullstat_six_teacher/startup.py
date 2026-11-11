@@ -15,7 +15,7 @@ from hlt_classification.luka_fullstat_retained.worker import sync
 from hlt_classification.luka_fullsim.preflight_v2 import memory_snapshot
 from hlt_classification.luka_u100_multiview import teachers
 from . import model,training
-from .sampling import Lookahead, ReferenceSampler
+from .sampling import Lookahead, ReferenceSampler, memory_policy
 from .contracts import artifact,validate,recipe,TASK
 
 
@@ -30,6 +30,17 @@ def timing(spec,step,val_step,preparation):
 
 def check(spec,proof):
     validate(proof,'STARTUP',dict(spec=spec['content_hash']))
+    if proof.get('worker_memory_policy')!=memory_policy():
+        raise ValueError('Worker memory measurement policy differs')
+    peaks=proof['cpu_worker_peaks'];legacy=proof['cpu_worker_lifetime_peaks']
+    if (len(peaks)!=3 or set(peaks)!=set(legacy)
+            or any(type(p) is not int or p<=0 for p in peaks.values())
+            or sum(peaks.values())!=proof['cpu_worker_peak_rss_bytes']):
+        raise ValueError('Missing worker memory evidence')
+    expected=dict(proof['parent_memory'])
+    for key in ('peak_rss_bytes','rss_bytes'):expected[key]+=sum(peaks.values())
+    if proof['memory']!=expected:
+        raise ValueError('Worker memory aggregate differs')
     for k in ('installed_weaver_parity','exact_sampler_parity','connected_gradients','classifier_ce_only',
               'native_reload_parity','probe_discarded'):
         if proof[k] is not True:raise ValueError('Missing integrated check: '+k)
@@ -111,10 +122,14 @@ def _run(spec,tr,val,banks,sampler,device,started):
             if not torch.isfinite(out).all():raise ValueError('Nonfinite validation benchmark')
             out.float().softmax(1).cpu().numpy()
     sync(device);val_step=(time.monotonic()-tick)/16
-    cpu=sampler._parallel_cpu;memory=memory_snapshot(torch)
+    cpu=sampler._parallel_cpu;parent_memory=memory_snapshot(torch);memory=dict(parent_memory)
     memory['peak_rss_bytes']+=cpu.memory();memory['rss_bytes']+=cpu.memory()
     proof=artifact('STARTUP',parents=dict(spec=spec['content_hash']),batch=128,candidates=1025,measured_steps=64,
         candidate_cpu_workers=cpu.workers,cpu_worker_peak_rss_bytes=cpu.memory(),
+        worker_memory_policy=memory_policy(),
+        cpu_worker_peaks={str(k):v for k,v in cpu.peaks.items()},
+        cpu_worker_lifetime_peaks={str(k):v for k,v in cpu.lifetime_peaks.items()},
+        parent_memory=parent_memory,
         installed_weaver_parity=True,exact_sampler_parity=True,connected_gradients=True,classifier_ce_only=True,
         native_reload_parity=True,probe_discarded=True,train=views.describe(tr),validation=views.describe(val),
         sampler_capacity=sampler.capacity,sampler_probe_seconds=dict(reference=reference_seconds,optimized=optimized_seconds),

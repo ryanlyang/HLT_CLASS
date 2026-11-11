@@ -292,6 +292,9 @@ def test_full_installed_weaver_integrated_full_candidate_startup(tmp_path,monkey
     (Path(spec['root'])/c.TASK).mkdir(parents=True)
     monkeypatch.setattr(startup,'memory_snapshot',lambda *a:dict(peak_rss_bytes=2**30,rss_bytes=2**30,
         gpu_peak_bytes=int(torch.cuda.max_memory_allocated())))
+    if sys.platform!='linux':
+        # CUDA/Weaver numerics are real; host memory remains a local fixture.
+        monkeypatch.setattr(sampling,'worker_peak',lambda pid:2**20)
     import time
     with sampling.CPUWorkers(sampler):proof=startup.run(spec,tr,val,targets,sampler,'cuda',time.monotonic())
     startup.check(spec,proof)
@@ -299,6 +302,8 @@ def test_full_installed_weaver_integrated_full_candidate_startup(tmp_path,monkey
     assert proof['timing']['conservative_minutes']<spec['minutes'][c.TASK]
     bad=deepcopy(proof);bad['timing']=startup.timing(spec,1000.,1.,0.)
     with pytest.raises(ValueError,match='exceeds'):startup.check(spec,with_content_hash(bad))
+    bad=deepcopy(proof);bad['memory']['peak_rss_bytes']=1
+    with pytest.raises(ValueError,match='aggregate'):startup.check(spec,with_content_hash(bad))
 
 
 def test_pinned_queue_ancestry_still_rejects_donor_changes(monkeypatch):
@@ -308,6 +313,8 @@ def test_pinned_queue_ancestry_still_rejects_donor_changes(monkeypatch):
     files+=list(source.ENTRYPOINTS)+['tests/test_luka_fullstat_six_teacher.py',
         'tests/test_luka_fullstat_six_teacher_targets.py',
         'tests/test_luka_fullstat_six_teacher_lifecycle.py',
+        'tests/test_luka_fullstat_six_teacher_memory.py',
+        'tests/fixtures/luka_six_teacher_memory_smoke.py',
         'docs/contracts/LUKA_FULLSTAT_SIX_TEACHER.md',
         'docs/LUKA_FULLSTAT_SIX_TEACHER_RUNBOOK.md',
         'docs/plans/LUKA_FULLSTAT_SIX_TEACHER_PLAN.md']

@@ -30,7 +30,16 @@ def export_recipe():
 def parents(spec,name):
     item=spec['reuse']['banks'][name]
     owner=load_json(validate_file_ref(item['owner']))
-    return dict(recipe=export_recipe()['content_hash'],source=spec['source_commit'],
+    # Copied banks retain the original exporter commit and manifest bytes,
+    # including through later same-source continuations of a reviewed recovery.
+    exporter=spec;seen=set()
+    while exporter.get('resume') is not None and name in exporter['resume']['exports']:
+        key=exporter['resume']['spec']['sha256']
+        if key in seen:raise ValueError('Cyclic export recovery lineage')
+        seen.add(key)
+        if len(seen)>32:raise ValueError('Export recovery lineage too deep')
+        exporter=load_json(validate_file_ref(exporter['resume']['spec']))
+    return dict(recipe=export_recipe()['content_hash'],source=exporter['source_commit'],
         prepared=spec['anchor']['evidence']['prepared'],owner=owner['content_hash'],
         checkpoint=item['refs']['checkpoint']['sha256'],report=item['refs']['report']['sha256'])
 

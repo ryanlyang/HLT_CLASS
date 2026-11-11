@@ -7,6 +7,7 @@ from hlt_classification.luka_fullstat_multiview.campaign import storage
 from hlt_classification.luka_fullstat_readout.source import RUNTIME
 from . import source
 from .contracts import artifact, validate, recipe, node, TASK, TASKS, COUNTS
+from .sampling import memory_policy
 
 
 def registration(parent,reuse):
@@ -16,7 +17,8 @@ def registration(parent,reuse):
         anchor=parent['anchor'],references={**parent['references'], 'SUBCLASS_C03':reuse['reference']},
         execution_site=parent['execution_site'],runtime_prefix=RUNTIME,cpus=6,memory_mb=192000,
         minutes={TASK:2880},storage_budget_bytes=10*2**30,filesystem_headroom_bytes=2*2**30,
-        preflight_jobs=0,setup_jobs=0,scientific_fits=1,teacher_fits=0,automatic_retry=False)
+        preflight_jobs=0,setup_jobs=0,scientific_fits=1,teacher_fits=0,automatic_retry=False,
+        worker_memory_policy=memory_policy())
 
 
 def validate_spec(spec):
