@@ -1,5 +1,29 @@
 # Embedding bridge / response / region validation
 
+## 2026-11-11 foreign-worktree authentication correction
+
+Registration using4fb32e79 failed before publishing the fresh spec or queueing
+jobs: recovery invoked foundation._source on the old92397736 checkout while
+that helper was imported from the new checkout. Its module-location guard
+correctly rejected the call. The original recovery source test had mocked
+that helper, so it missed the cross-worktree failure.
+
+Recovery now validates the original snapshot through the repository-oriented
+provenance helper, retaining exact commit and clean-source checks before
+executing any old code. The original CLI still checks its own imported path,
+published source, immutable registration and exact ledger. No schema or
+scientific change; no payload, numerical threshold or qualification bypass.
+
+Evidence: baseline recovery suite21 passed in22.51s; repaired suite27 passed
+in26.41s. Six new cases use real Git revisions and detached worktrees, without
+mocking source validation or the old CLI subprocess. They reproduce the old
+exception, verify successful old-CLI execution, and reject dirty tracked/
+untracked source, wrong checkout/commit and tampered snapshot metadata before
+scheduler access. Only Slurm responses are simulated. No real repaired Brown
+registration or numerical qualification has yet been observed.
+The source-runtime allowlist and unchanged recipe/schema checks also passed:
+2 tests in6.79s; scoped whitespace checks passed (29 focused passing cases).
+
 ## 2026-11-11 original frozen-export batching and completed preparation reuse
 
 User evidence: setup162131, source92397736, completed both data roles and

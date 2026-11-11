@@ -144,8 +144,9 @@ def test_recovery_rejects_changed_incomplete_or_wrong_lineage(prepared,tmp_path,
 
 
 def test_accounting_and_original_source_are_required(monkeypatch,tmp_path):
-    old=dict(root=str(tmp_path),project_dir=str(tmp_path/'code'),source_snapshot={'source':True})
-    monkeypatch.setattr(recovery,'_source',lambda root,commit:old['source_snapshot'])
+    old=dict(root=str(tmp_path),project_dir=str(tmp_path/'code'),source_commit=recovery.SOURCE,
+             source_snapshot={'git_commit':recovery.SOURCE})
+    monkeypatch.setattr(recovery,'validate_source_snapshot',lambda *args,**kwargs:None)
     states={'accounting':'162131|FAILED|1:0|\n','active':''}
     def run(cmd,**kw):
         if 'inspect-submission' in cmd:return SimpleNamespace(stdout='{"bootstrap":{"setup":"162131","release":"162132"},"science":{}}')
@@ -156,6 +157,68 @@ def test_accounting_and_original_source_are_required(monkeypatch,tmp_path):
     with pytest.raises(ValueError,match='not confirmed'):recovery.terminal_jobs(old)
     states['accounting']='162131|FAILED|1:0|\n';states['active']='162132\n'
     with pytest.raises(ValueError,match='still active'):recovery.terminal_jobs(old)
+
+
+@pytest.fixture
+def foreign_source(tmp_path,monkeypatch):
+    """Two real Git revisions/worktrees; only the scheduler is simulated."""
+    import subprocess
+    from hlt_classification.provenance import capture_source_snapshot
+    current=tmp_path/'current';current.mkdir();old_project=tmp_path/'original'
+    def git(*args):
+        return subprocess.run(['git','-C',str(current),*args],check=True,capture_output=True,text=True).stdout.strip()
+    git('init','--quiet');git('config','user.name','Recovery Test');git('config','user.email','recovery@example.invalid')
+    git('config','core.autocrlf','false');git('config','commit.gpgsign','false')
+    scripts=current/'scripts';scripts.mkdir();cli=scripts/'luka_embedding_bridge_hydra.py'
+    cli.write_text('''import json,sys
+from pathlib import Path
+assert sys.argv[1:3] == ['inspect-submission', '--spec']
+old = json.loads(Path(sys.argv[3]).read_text())
+assert Path(__file__).resolve().parents[1] == Path(old['project_dir']).resolve()
+print(json.dumps({'bootstrap': {'setup': '162131', 'release': '162132'}, 'science': {}}))
+''',encoding='utf-8')
+    git('add','scripts');git('commit','--quiet','-m','Original CLI');commit=git('rev-parse','HEAD')
+    cli.write_text('raise RuntimeError("Executed newer CLI for an old campaign")\n',encoding='utf-8')
+    git('add','scripts');git('commit','--quiet','-m','Different current CLI')
+    git('worktree','add','--quiet','--detach',str(old_project),commit)
+    root=tmp_path/'run';root.mkdir()
+    old=dict(root=str(root),project_dir=str(old_project),source_commit=commit,
+             source_snapshot=capture_source_snapshot(old_project))
+    write_immutable_json(root/'campaign_spec.json',old)
+    monkeypatch.setattr(recovery,'SOURCE',commit)
+    real_run=subprocess.run;calls=[]
+    def run(cmd,**kwargs):
+        calls.append(cmd)
+        if cmd[0]=='sacct':return SimpleNamespace(stdout='162131|FAILED|1:0|\n')
+        if cmd[0]=='squeue':return SimpleNamespace(stdout='')
+        return real_run(cmd,**kwargs)
+    monkeypatch.setattr(recovery.subprocess,'run',run)
+    return old,current,calls
+
+
+def test_terminal_jobs_authenticates_and_executes_real_foreign_checkout(foreign_source):
+    from hlt_classification.luka_fullsim.foundation import _source
+    old,current,calls=foreign_source
+    # Reproduce the exact previous failure without mocking the source checker.
+    with pytest.raises(ValueError,match='outside the pinned project'):
+        _source(Path(old['project_dir']),old['source_commit'])
+    assert recovery.terminal_jobs(old)=='162131'
+    executed=[cmd for cmd in calls if 'inspect-submission' in cmd]
+    assert len(executed)==1
+    assert str(Path(old['project_dir'])/'scripts/luka_embedding_bridge_hydra.py') in executed[0]
+    assert str(current/'scripts/luka_embedding_bridge_hydra.py') not in executed[0]
+
+
+@pytest.mark.parametrize('change',('tracked','untracked','wrong_checkout','wrong_commit','wrong_snapshot'))
+def test_foreign_source_tampering_stops_before_old_cli_or_scheduler(foreign_source,change):
+    old,current,calls=foreign_source;old=copy.deepcopy(old);root=Path(old['project_dir'])
+    if change=='tracked':(root/'scripts/luka_embedding_bridge_hydra.py').write_text('changed\n',encoding='utf-8')
+    elif change=='untracked':(root/'unexpected.txt').write_text('unexpected\n',encoding='utf-8')
+    elif change=='wrong_checkout':old['project_dir']=str(current)
+    elif change=='wrong_commit':old['source_commit']='0'*40
+    else:old['source_snapshot']['tracked_files_sha256']='0'*64
+    with pytest.raises(ValueError):recovery.terminal_jobs(old)
+    assert not any('inspect-submission' in cmd or cmd[0] in ('sacct','squeue') for cmd in calls)
 
 
 def test_no_reuse_credit_for_unregistered_preparation():

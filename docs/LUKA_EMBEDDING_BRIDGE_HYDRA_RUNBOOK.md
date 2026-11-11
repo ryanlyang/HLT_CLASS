@@ -263,6 +263,12 @@ This is single-seed development screening; FullStat confirmation comes later.
 
 ## Recovery after a technical failure
 
+The4fb32e79 recovery attempt failed during registration because it used an
+active-module source helper to authenticate a different checkout. It did not
+publish a new campaign spec, submit jobs or alter completed preparation.
+Commit/push the subsequent source-authentication correction before running
+the block below; supply that new commit, not4fb32e79. No new export is needed.
+
 For162131, first commit/push the scoped repair as above, then run this on
 Brown. Paste that new40-character commit. Registration checks the old terminal
 jobs and all completed preparation hashes; allow several minutes for NFS reads.

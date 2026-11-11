@@ -70,6 +70,9 @@ PREPARATION_REUSE/v1 accepts only completed preparation from source92397736
 after its initial U100 witness failure, confirmed FAILED1:0 with no active
 bootstrap jobs or science submissions. Original source/spec, completion proof,
 all typed manifests/arrays and exact U100 target bytes are authenticated.
+Foreign checkout authentication uses the repository-oriented source snapshot
+validator with clean-source/exact-commit checks. Its own CLI then enforces the
+original imported-module location and publication guards in a separate process.
 Hard links preserve payload bytes and avoid duplicate persistent allocation;
 new manifests bind the new spec. This credits only absent link destinations
 when reserving remaining storage. No old qualification, claim or acceptance

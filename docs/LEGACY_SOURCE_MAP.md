@@ -1,5 +1,14 @@
 # Legacy Donor-Source Map
 
+## Embedding bridge foreign-source authentication correction (2026-11-11)
+
+Donor commit: `4fb32e79c3d425c8392de50ae56fa662bc82c033`.
+Campaign recovery now imports `provenance.validate_source_snapshot` to verify
+the old checkout's exact clean snapshot before executing its CLI. The donor
+module is unchanged. `luka_fullsim.foundation._source` remains the active-code
+guard inside that old process; it is not used to authenticate foreign imported
+code from the new process. No file migration, new contract or scientific change.
+
 ## Embedding bridge replay and completed-preparation recovery (2026-11-11)
 
 Operational donor: `9239773651179dc37f071156b30340d3e5bc3fba`.

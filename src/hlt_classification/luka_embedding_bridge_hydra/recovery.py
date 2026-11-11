@@ -12,7 +12,7 @@ import sys
 
 from hlt_classification.data.cache_contracts import load_json, validate_content_hash, write_immutable_json
 from hlt_classification.cms_proxy_ladder.contracts import file_ref, validate_file_ref
-from hlt_classification.luka_fullsim.foundation import _source
+from hlt_classification.provenance import validate_source_snapshot
 from hlt_classification.luka_fullsim.alljets_data import FLAGS
 from .contracts import artifact, validate, recipe
 from .registry import COORDINATES
@@ -45,8 +45,12 @@ def source_spec(path):
 
 def terminal_jobs(old):
     """Old runtime authenticates its own immutable plan/journal under old schemas."""
-    if _source(Path(old['project_dir']),SOURCE)!=old['source_snapshot']:
+    if old['source_commit']!=SOURCE or old['source_snapshot']['git_commit']!=SOURCE:
         raise ValueError('Original preparation source changed')
+    # Authenticate a foreign checkout's bytes without claiming this process
+    # imported its modules. The old CLI below runs from that checkout and then
+    # enforces its own module location, published ancestry and campaign guards.
+    validate_source_snapshot(old['source_snapshot'],repository=old['project_dir'],require_clean=True)
     cli=Path(old['project_dir'])/'scripts/luka_embedding_bridge_hydra.py'
     result=subprocess.run([sys.executable,'-B','-s',str(cli),'inspect-submission','--spec',
         str(Path(old['root'])/'campaign_spec.json')],check=True,capture_output=True,text=True)
