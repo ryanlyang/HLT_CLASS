@@ -10,6 +10,15 @@ uses detached submission with integrated checks instead of a separate preflight.
 
 ## Current status
 
+The [two-GTX1080Ti subclass execution](docs/plans/LUKA_SUBCLASS_DDP_HYDRA_PLAN.md)
+adds a fresh FP32 U100-w5 control and the ten subclass weights using two GPUs
+per fit, synchronized BatchNorm, global batch128 and30 epochs. The
+[runbook](docs/LUKA_SUBCLASS_DDP_HYDRA_RUNBOOK.md) queues production setup and
+automatic release of all eleven fits plus a report. The completed benchmark
+supports trying this hardware; the new setup must qualify the full worker
+before release. [Validation evidence](docs/LUKA_SUBCLASS_DDP_HYDRA_VALIDATION.md)
+separates local checks from pending Brown production acceptance.
+
 The [small-data subclass sweep](docs/plans/LUKA_SUBCLASS_HYDRA_PLAN.md)
 adds ten 30-epoch native HLT fits with U100-w5 fixed and subclass weights
 0.03 through100. It rebuilds one frozen TRAIN bank from the existing small-data

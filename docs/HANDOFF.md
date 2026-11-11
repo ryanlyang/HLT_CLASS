@@ -1,5 +1,53 @@
 # Current Handoff
 
+## 2026-11-10: Production two-GTX1080Ti subclass campaign
+
+Implemented the user's requested production follow-up to benchmark160948 in
+the additive `luka_subclass_ddp_hydra` package and separate CLI/queue/Slurm
+scripts. The [active plan](plans/LUKA_SUBCLASS_DDP_HYDRA_PLAN.md) registers a
+fresh FP32 U100-w5 C0 and the original ten subclass weights. All use two GPUs,
+DDP/SyncBatchNorm, global batch128, the original thirty-epoch schedule and HLT-only
+native deployment. Global padding and sample-weighted uneven batches preserve
+batch semantics. Validation indices are gathered and checked exactly once;
+only rank0 publishes selected checkpoints and complete receipts.
+
+Setup uses two GTX1080Ti, six CPUs,48000MiB and4h. Disposable preprocessing
+rebuilds the same frozen small-data T00 TRAIN subclasses. The full distributed
+worker checks native factory/U100 update parity, two-rank numerical parity,
+diagnostic RNG/buffer/update noninterference, historical checkpoint FP32 replay,
+all eleven actual-target miniatures, longest-support/partial batches and warmed
+timings including full validation. Aggregate host and per-card memory checks
+precede measured acceptance. A durable afterok CPU release submits eleven
+independent fits, C0 first, then an afterany report:14 jobs total. Source/spec,
+exact-job claims and partial-submission journals remain strict; finite poor
+accuracy does not block science. Reports distinguish fresh C0 from historical
+BF16 C0 and provide epoch-by-epoch recovery and same-epoch contrasts.
+
+New contracts are `LUKA_SUBCLASS_DDP_HYDRA_*/v1`; original target recipe hash is
+unchanged. The scientific recipe is new for FP32/distributed execution and the
+fresh control. Original scientific and benchmark runtime remains untouched.
+Donor baseline `1d83d69d4339599d0cf8c59a8b5cafe52704cd81` and reused files are
+recorded in LEGACY_SOURCE_MAP. The active Hydra-specific plan explicitly uses
+real production Hydra miniatures instead of the generic legacy Tigris gate.
+
+User-supplied benchmark evidence:160948 completed17m24s; two cards passed
+longest-support memory and numerical parity, with0.164–0.168s updates and
+6.61/7.20GiB peaks. These observations supersede the earlier unmeasured status
+below, but do not constitute production acceptance. Local baseline95 passed,
+1 skipped; new focused tests include original FP32 AdamW parity, real
+two-process CPU Gloo full30 runs, native replay, exact release and local
+full-depth CUDA full/partial batches. Final counts are in the
+[validation record](LUKA_SUBCLASS_DDP_HYDRA_VALIDATION.md).
+Combined final result:128 passed,2 skipped in102.70s; both skips require two
+CUDA GPUs/NCCL. All22 required files, Python/shell syntax, Bash examples, links
+and whitespace passed local checks.
+
+No commit/push or new Brown submission was performed. Exact next task:
+scoped commit/push and fresh registration via the
+[two-GPU runbook](LUKA_SUBCLASS_DDP_HYDRA_RUNBOOK.md). Production NCCL/SyncBatchNorm
+miniatures run automatically in setup and must pass before science is released.
+Existing unrelated local changes were preserved.
+
 ## 2026-11-10: Bounded one/two-GPU GTX 1080 Ti benchmark
 
 Implemented the user's request to test idle older Hydra GPUs before choosing

@@ -1,5 +1,29 @@
 # Legacy Donor-Source Map
 
+## Production two-GTX1080Ti subclass execution (2026-11-10)
+
+Internal donor baseline `1d83d69d4339599d0cf8c59a8b5cafe52704cd81`.
+New package `luka_subclass_ddp_hydra`, three scripts and focused tests adapt or
+import the following files from that commit. All source paths in this table
+are relative to `src/hlt_classification/` unless explicitly prefixed.
+
+| Donor files | Use in the new execution |
+|---|---|
+| `luka_subclass_hydra/{contracts,campaign,inputs,reuse,model,losses,targets,submission,worker,reporting,resources}.py` | Original target recipe, authenticated sources, native student/heads, objective, exact-DAG patterns, selection and reporting; new namespace and fresh FP32 C0. |
+| `luka_subclass_hydra/{benchmark_training,benchmark_site}.py` | Global-axis shard weighting, output wrapper, dropout disabling, parity snapshot/comparison and two-GTX1080Ti controller/device checks. |
+| `luka_fullstat_subclass/{contracts,model,targets}.py`, `luka_embedding_aux/{model,targets}.py`, `luka_u100_embedding/{contracts,training}.py` | Original conditional-KL, frozen clustering kernel, auxiliary head and original U100 objective. No FullStat data is imported. |
+| `luka_u100_contrastive/{training,resources}.py`, `luka_selective_teacher_hydra/resources.py`, `luka_u100_multiview/views.py`, `luka_embedding_curriculum_hydra/resources.py` | Original optimizer, subset/miniature helpers, lengths and exact baseline state comparison. |
+| `jetclass2_delphes/{model,runner,reporting,batch128_30e_recipe}.py`, `models/particle_transformer.py`, `luka_embedding_weight/worker.py`, `luka_capacity_hydra/complementarity.py`, `luka_selective_teacher_hydra/reporting.py` | Installed native factory/environment, LR/selection/metrics, prediction validation, identity alignment and recovery. |
+| `luka_next_supervision_hydra/{campaign,reconstruction_release,reuse}.py`, `luka_u100_pair_hydra/{inputs,site}.py`, `luka_particle_teacher_hydra/submission.py`, `luka_fullsim/{foundation,regular_submission,alljets_data}.py` | Storage/source/environment checks, CPU allocation rounding, immutable reference validation, scheduler review and disclosures. |
+| `scouting/{hcwdl_exact_dag_submission,hcwdl_recovery}.py`, `data/cache_contracts.py`, `cms_proxy_ladder/{contracts,submission}.py`, `context_fusion/worker.py` | Atomic artifacts, exact accepted IDs/journals, file references, walltimes and checkpoints. |
+| `scripts/{luka_subclass_hydra.py,queue_luka_subclass_hydra.sh}`, `sbatch/run_luka_subclass_hydra.sh`, `tests/{test_luka_subclass_hydra,test_luka_u100_pretrain,test_luka_attention}.py` | Thin entrypoints, queue/worker environment patterns and local test fixtures. |
+
+Full distributed validation/reassembly, observation-preserving gradient probes,
+aggregate memory accounting, torchrun production orchestration and fresh-control
+contrasts are new code. No external implementation or Fresh_check runtime is
+copied. Old runtime/contracts stay intact; new execution contracts are
+`LUKA_SUBCLASS_DDP_HYDRA_*/v1`, preserving the original frozen target recipe.
+
 ## Bounded subclass GTX 1080 Ti benchmark (2026-11-10)
 
 Internal donor baseline `c8e15195f8fe2bdcecd15e66693031f5a4596697`.
