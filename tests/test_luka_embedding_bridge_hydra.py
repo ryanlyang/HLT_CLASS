@@ -202,23 +202,32 @@ def test_original_physical_preparation_and_quarter_views(tmp_path,monkeypatch):
     from hlt_classification.cms_proxy_ladder.views import build_view
     from hlt_classification.luka_fullsim.stage2 import ViewMeter
     from hlt_classification.data.cache_contracts import write_immutable_json,atomic_publish_bytes,deterministic_npz_bytes
-    ds=synthetic_dataset();s=ds.spec;s.update(root=str(tmp_path),anchor=dict(evidence=dict(prepared='c'*64)),transfer_hash='d'*64)
-    counts=s['counts'];monkeypatch.setattr(inputs,'COUNTS',counts);(tmp_path/'setup').mkdir();summaries={};payload={}
+    ds=synthetic_dataset();s=ds.spec;s.update(root=str(tmp_path),anchor=dict(evidence=dict(prepared='c'*64)),transfer_hash='d'*64,native_hash='e'*64)
+    counts=s['counts'];monkeypatch.setattr(inputs,'COUNTS',counts);(tmp_path/'setup').mkdir();summaries={};payload={};canonical={}
     for role in counts:
         rows=ds.rows[role];ids=ds.view(role,'D000').identities;labels=ds.view(role,'D000').labels
         off=np.r_[0,np.cumsum([len(x) for x in rows])].astype(np.int64)
         a=dict(identities=ids,labels=labels,HLT_offsets=off,OFFLINE_offsets=off,HLT_values=np.concatenate(rows),
             OFFLINE_values=np.concatenate([x.copy() for x in rows]),mapping=np.concatenate([np.arange(len(x),dtype=np.int32) for x in rows]))
         a['OFFLINE_values'][:,:4]*=1.1;a['OFFLINE_values'][:,6:8]*=1.2
-        payload[role]=a;meters={coord:ViewMeter() for coord in r.COORDINATES}
+        payload[role]=a;meters={coord:ViewMeter() for coord in r.COORDINATES};values={coord:[] for coord in r.COORDINATES}
         for i in range(counts[role]):
             start,end=off[i:i+2];h=regions.physical(a['HLT_values'][start:end]);o=regions.physical(a['OFFLINE_values'][start:end]);identity=bytes(ids[i]).hex()
             for coord,meter in meters.items():
                 v=build_view(identity=identity,proxy=h,offline=o,coordinate=coord,mapping=a['mapping'][start:end])
-                meter.add(SimpleNamespace(identity=identity,label=int(labels[i])),regions.encode(np.column_stack((v.p4,v.charge,v.category,v.tracking,v.valid))))
+                encoded=regions.encode(np.column_stack((v.p4,v.charge,v.category,v.tracking,v.valid)))
+                meter.add(SimpleNamespace(identity=identity,label=int(labels[i])),encoded);values[coord].append(encoded)
+        for coord in inputs.native.HISTORICAL:
+            canonical[role,coord]=SimpleNamespace(identities=ids,labels=labels,offsets=off,
+                features=np.concatenate([x.features for x in values[coord]]),vectors=np.concatenate([x.vectors for x in values[coord]]))
         summaries[role]={coord:meter.report() for coord,meter in meters.items()}
-    transfer=SimpleNamespace(manifest=dict(summaries=summaries),shards=lambda role:iter([(None,payload[role])]))
+    transfer=SimpleNamespace(manifest=dict(summaries=summaries),shards=lambda role:iter([(dict(index=0),payload[role])]))
     monkeypatch.setattr(inputs,'transferred',lambda spec:transfer)
+    monkeypatch.setattr(inputs.native,'Sources',lambda spec:SimpleNamespace(block=lambda role,coord,index,a:canonical[role,coord]))
+    def quarters_only(**kw):
+        assert kw['coordinate'] in ('D025','D050','D075'), 'Historical native views must never be re-encoded'
+        return build_view(**kw)
+    monkeypatch.setattr(inputs.kernel,'build_view',quarters_only)
     original=dict(ds.u100('train'));(tmp_path/'targets/u100').mkdir(parents=True)
     write_immutable_json(tmp_path/'targets/u100/manifest.json',dict(content_hash=s['embedding_hash']))
     atomic_publish_bytes(tmp_path/'targets/u100/targets.npz',deterministic_npz_bytes(original))
@@ -282,6 +291,11 @@ def test_source_guard_requires_all_new_files_and_unchanged_donors(monkeypatch):
     def git(args,**kwargs):return SimpleNamespace(stdout='\n'.join(tracked) if 'ls-files'in args else '\n'.join(changes) if 'diff'in args else '',returncode=0)
     monkeypatch.setattr(campaign.subprocess,'run',git)
     assert campaign.current(root,'a'*40)==dict(content_hash='s'*64)
+    changes[:]=['M\t'+p for p in campaign.RUNTIME]
+    assert campaign.current(root,'a'*40)==dict(content_hash='s'*64)
+    changes[0]='D\t'+next(iter(campaign.RUNTIME))
+    with pytest.raises(ValueError):campaign.current(root,'a'*40)
+    changes[:]=['M\t'+p for p in campaign.RUNTIME]
     changes.append('M\tsrc/hlt_classification/luka_u100_embedding/training.py')
     with pytest.raises(ValueError):campaign.current(root,'a'*40)
     changes.pop();tracked.remove('tests/test_luka_embedding_bridge_hydra.py')

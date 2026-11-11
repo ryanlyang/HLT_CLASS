@@ -8,14 +8,16 @@ the scientific comparisons; see the [contract](contracts/LUKA_EMBEDDING_BRIDGE_H
 and [validation record](LUKA_EMBEDDING_BRIDGE_HYDRA_VALIDATION.md).
 
 Keep the original Hydra bundle, teacher-sweep spec and its authenticated inputs,
-environment, original assignments and source worktrees. This needs a new
-bounded physical export with **both TRAIN and validation** and the original
-U100 weights. The earlier Group A raw export is insufficient.
+environment, original assignments and source worktrees. Execution v2 reuses the
+completed physical export already on Brown and adds a minimal native delta.
+It copies exact historical tensors instead of re-encoding them on Brown.
+Do not rerun the failed v1 source or reuse its partial preparation as complete.
 
 ## 1. Commit and push from Windows
 
 Review the scoped diff. The source guard preserves donor runtime at
-45075fe6c2d8ccdcf7463cd3a99cbe2fe6976a08. Stage relevant shared-document hunks
+2fb09f38a3a1da85cdceff9df311963fdb3aa872 for this repair (original scientific
+donor45075fe6c2d8ccdcf7463cd3a99cbe2fe6976a08). Stage relevant shared-document hunks
 separately so unrelated work is preserved.
 
 ```powershell
@@ -25,6 +27,7 @@ $paths = @(
     'scripts/queue_luka_embedding_bridge_hydra.sh',
     'sbatch/run_luka_embedding_bridge_hydra.sh',
     'tests/test_luka_embedding_bridge_hydra.py',
+    'tests/test_luka_embedding_bridge_native.py',
     'docs/plans/LUKA_EMBEDDING_BRIDGE_RESPONSE_REGION_HYDRA_PLAN.md',
     'docs/contracts/LUKA_EMBEDDING_BRIDGE_HYDRA.md',
     'docs/LUKA_EMBEDDING_BRIDGE_HYDRA_RUNBOOK.md',
@@ -42,28 +45,41 @@ git add -p -- $shared
 git diff --cached --stat
 git diff --cached --check
 if ($LASTEXITCODE -ne 0) { throw 'Fix staged whitespace first' }
-git commit -m 'Add embedding bridges, shared responses and regional targets on Hydra'
+git commit -m 'Preserve historical input bytes in embedding bridge preparation'
 if ($LASTEXITCODE -ne 0) { throw 'Commit failed' }
 git push origin main
 if ($LASTEXITCODE -ne 0) { throw 'Push failed' }
 git rev-parse HEAD
 ```
 
-## 2. Export on SPORC
+## 2. Export only the missing historical tensors on SPORC
 
-This CPU preparation reads authenticated selected rows, original assignments
-and the original U100 checkpoint. It does not train or access final-test rows.
-The source files must still exist; missing/corrupt parents stop the export.
-Use a fresh suffix if an earlier export was interrupted; preserve partial roots.
+For the failed161306 execution, the physical transfer already on Brown is
+`embedding_bridge_raw_0a00441f`, manifest
+`e42ced64292f9c6ce4f8831bb43aafa9f56aad60077258451c3ff6734b3120de`.
+Keep it. The following export supplies only TRAIN D033/D066 and validation
+D033/D066/U100, approximately3GiB. Existing native OFFLINE tensors and the
+original HLT/U100 bundle remain in place on Brown.
+
+This works with retained preparation metadata, assignments and raw data even
+if the source feature caches were deleted during cleanup. Missing caches are
+rebuilt one source file at a time and must reproduce their original NPZ
+hashes and full-view fingerprints. Existing corrupt files fail. The exporter
+never writes into the historical preparation, `atlas/Fresh_check` or
+`atlas/datasets`. No final-test rows, training or inference are involved.
+
+Use the **new repair commit**, contained in fetched `origin/main`; the old
+0a00441f worktree does not contain this exporter. Do not substitute a newer
+unrelated commit. Completion requires the printed final manifest hash.
 
 ```bash
 bash <<'BASH'
 set -euo pipefail
 MAIN=/home/ryreu/atlas/HLT_Classification
-read -r -p 'New pushed 40-character campaign commit: ' COMMIT </dev/tty
+read -r -p 'New pushed 40-character repair commit: ' COMMIT </dev/tty
 [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]]
 git -C "$MAIN" fetch origin main
-test "$(git -C "$MAIN" rev-parse origin/main)" = "$COMMIT"
+git -C "$MAIN" merge-base --is-ancestor "$COMMIT" origin/main
 PROJECT="/home/ryreu/atlas/HLT_Classification_embedding_bridge_${COMMIT:0:8}"
 if [[ -e "$PROJECT" ]]; then
     test "$(git -C "$PROJECT" rev-parse HEAD)" = "$COMMIT"
@@ -74,14 +90,14 @@ fi
 ENV_DIR=/home/ryreu/miniconda3/envs/atlas_kd_sporc
 PREPARED="${MAIN}/checkpoints/luka_alljets_9e591c7a_r1/prepared"
 ORIGIN="${MAIN}/checkpoints/luka_u100_pair_correction_c08f6df6_debug_r1/campaign_spec.json"
-OUTPUT="/home/ryreu/atlas/luka_embedding_bridge_raw_${COMMIT:0:8}"
+OUTPUT="/home/ryreu/atlas/luka_embedding_bridge_native_${COMMIT:0:8}"
 test ! -e "$OUTPUT"
 test ! -e "${OUTPUT}.log"
 export PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1
 export PYTHONPATH="${PROJECT}/src"
 export LD_LIBRARY_PATH="${ENV_DIR}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
-nohup "${ENV_DIR}/bin/python" -u -B -s "${PROJECT}/scripts/luka_embedding_bridge_hydra.py" export \
+nohup "${ENV_DIR}/bin/python" -u -B -s "${PROJECT}/scripts/luka_embedding_bridge_hydra.py" export-native \
     --prepared "$PREPARED" --origin-spec "$ORIGIN" --output "$OUTPUT" --expected-commit "$COMMIT" \
     >"${OUTPUT}.log" 2>&1 </dev/null &
 printf 'Exporter PID: %s\nLog: %s\n' "$!" "${OUTPUT}.log"
@@ -89,35 +105,48 @@ BASH
 ```
 
 Follow the printed log with `tail -f`. Ctrl-C exits that viewer, not the
-detached export. Completion prints `directory`, `manifest_hash`, `payload_bytes`;
-copy the first two. A directory without its completion manifest is not reusable.
+export. Completion prints `directory`, `manifest_hash`, `payload_bytes`;
+copy the first two. A directory without its completion manifest is incomplete.
+The old physical export on SPORC is not needed for this repair.
 
-## 3. Transfer, inventory, register and queue on Brown
+## 3. Copy the native delta, register a fresh v2 execution and queue on Brown
 
-The verifier prints an input-derived output quota bound, including physical
-views, eight native caches, all targets, checkpoints and temporary headroom.
-Enter personally available output GiB **after** transfer. Registration rejects
-an insufficient reservation before creating the campaign root. The byte count
-is intentionally more complete than the approximately6GB compact target banks.
+This block reuses the exact physical transfer from the failed run. It does
+not copy that4.3GiB payload again. The original bundle and native OFFLINE
+teacher-sweep delta must remain available. Registration verifies all three
+historical input sources before any job submission.
+
+Reserve at least the printed output minimum (currently33GiB) **after** the
+native delta is copied. The user retired the failed setup's22 unpublished
+arrays (12.87GiB logical size), preserving the spec, logs and hash receipt;
+the latest Brown reading is39GiB free and the failed root is328KiB. No more
+cleanup is needed for this retry at that reading. Recheck after the native
+copy; enter33 only if at least33GiB remain personally available for outputs.
+This block stops if the reservation cannot be satisfied.
 
 ```bash
 bash <<'BASH'
 set -euo pipefail
 BASE="$(cd "$HOME" && pwd -P)/hlt_u100_pairs"
-PARENT="${BASE}/runs/teacher_sweep_6fe7e349_a6000_r1/campaign_spec.json"
-test -f "$PARENT"
+FAILED="${BASE}/runs/embedding_bridge_0a00441f_1080ti_r1/campaign_spec.json"
+test -f "$FAILED"
+PARENT="$(python3 -B -s -c 'import json,sys; print(json.load(open(sys.argv[1]))["parent_spec"]["path"])' "$FAILED")"
+MAIN="$(python3 -B -s -c 'import json,sys; print(json.load(open(sys.argv[1]))["project_dir"])' "$PARENT")"
+ENV_DIR="$(python3 -B -s -c 'import json,sys; print(json.load(open(sys.argv[1]))["environment_dir"])' "$PARENT")"
+BUNDLE="$(python3 -B -s -c 'import json,sys; print(json.load(open(sys.argv[1]))["bundle_root"])' "$PARENT")"
+RAW="$(python3 -B -s -c 'import json,sys; print(json.load(open(sys.argv[1]))["transfer_root"])' "$FAILED")"
+RAW_HASH=e42ced64292f9c6ce4f8831bb43aafa9f56aad60077258451c3ff6734b3120de
 SELECTIVE="${BASE}/runs/selective_teacher_3fb9e7f1_a6000_r1/campaign_spec.json"
 HISTORICAL=()
 if [[ -f "$SELECTIVE" ]]; then HISTORICAL=(--selective-spec "$SELECTIVE"); fi
-MAIN="$(python3 -B -s -c 'import json,sys; print(json.load(open(sys.argv[1]))["project_dir"])' "$PARENT")"
-read -r -p 'New pushed 40-character campaign commit: ' COMMIT </dev/tty
-read -r -p 'Completed physical export directory on SPORC: ' REMOTE </dev/tty
-read -r -p 'Physical export manifest hash (64 characters): ' RAW_HASH </dev/tty
+read -r -p 'New pushed 40-character repair commit: ' COMMIT </dev/tty
+read -r -p 'Completed native export directory on SPORC: ' REMOTE </dev/tty
+read -r -p 'Native export manifest hash (64 characters): ' NATIVE_HASH </dev/tty
 [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]]
-[[ "$RAW_HASH" =~ ^[0-9a-f]{64}$ ]]
-[[ "$REMOTE" =~ ^/home/ryreu/atlas/luka_embedding_bridge_raw_[a-zA-Z0-9_]+$ ]]
+[[ "$NATIVE_HASH" =~ ^[0-9a-f]{64}$ ]]
+[[ "$REMOTE" =~ ^/home/ryreu/atlas/luka_embedding_bridge_native_[a-zA-Z0-9_]+$ ]]
 git -C "$MAIN" fetch origin main
-test "$(git -C "$MAIN" rev-parse origin/main)" = "$COMMIT"
+git -C "$MAIN" merge-base --is-ancestor "$COMMIT" origin/main
 PROJECT="${BASE}/code_embedding_bridge_${COMMIT:0:8}"
 if [[ -e "$PROJECT" ]]; then
     test "$(git -C "$PROJECT" rev-parse HEAD)" = "$COMMIT"
@@ -125,29 +154,30 @@ if [[ -e "$PROJECT" ]]; then
 else
     git -C "$MAIN" worktree add --detach "$PROJECT" "$COMMIT"
 fi
-ENV_DIR="$(python3 -B -s -c 'import json,sys; print(json.load(open(sys.argv[1]))["environment_dir"])' "$PARENT")"
-BUNDLE="$(python3 -B -s -c 'import json,sys; print(json.load(open(sys.argv[1]))["bundle_root"])' "$PARENT")"
-RAW="${BASE}/embedding_bridge_raw_${COMMIT:0:8}"
-test ! -e "$RAW"
-mkdir "$RAW"
-rsync -av --partial --info=progress2 "ryreu@sporcsubmit.rc.rit.edu:${REMOTE}/" "${RAW}/"
+NATIVE="${BASE}/embedding_bridge_native_${COMMIT:0:8}"
+test ! -e "$NATIVE"
+mkdir "$NATIVE"
+rsync -av --partial --info=progress2 "ryreu@sporcsubmit.rc.rit.edu:${REMOTE}/" "${NATIVE}/"
 export PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1
 export PYTHONPATH="${PROJECT}/src"
 export LD_LIBRARY_PATH="${ENV_DIR}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
 export CUBLAS_WORKSPACE_CONFIG=:4096:8
 CLI="${PROJECT}/scripts/luka_embedding_bridge_hydra.py"
+"${ENV_DIR}/bin/python" -u -B -s "$CLI" verify-native \
+    --bundle-root "$BUNDLE" --native-root "$NATIVE" --native-hash "$NATIVE_HASH"
 "${ENV_DIR}/bin/python" -u -B -s "$CLI" verify-transfer \
     --bundle-root "$BUNDLE" --transfer-root "$RAW" --transfer-hash "$RAW_HASH"
-ROOT="${BASE}/runs/embedding_bridge_${COMMIT:0:8}_1080ti_r1"
+ROOT="${BASE}/runs/embedding_bridge_${COMMIT:0:8}_1080ti_v2_r1"
 test ! -e "$ROOT"
 df -h "$BASE"
-read -r -p 'Personally available output GiB (at least the printed minimum_quota_gib): ' QUOTA_GIB </dev/tty
+read -r -p 'Personally available output GiB (at least printed minimum_quota_gib): ' QUOTA_GIB </dev/tty
 [[ "$QUOTA_GIB" =~ ^[1-9][0-9]*$ ]]
 REG_LOG="$(mktemp "${BASE}/runs/embedding_bridge_${COMMIT:0:8}_registration.XXXXXX.log")"
 printf 'Registration log: %s\n' "$REG_LOG"
 if ! "${ENV_DIR}/bin/python" -u -B -s "$CLI" create \
     --root "$ROOT" --teacher-sweep-spec "$PARENT" --transfer-root "$RAW" --transfer-hash "$RAW_HASH" \
+    --native-root "$NATIVE" --native-hash "$NATIVE_HASH" \
     --expected-commit "$COMMIT" --quota-gib "$QUOTA_GIB" "${HISTORICAL[@]}" >"$REG_LOG" 2>&1; then
     tail -n 100 -- "$REG_LOG"
     printf 'Registration stopped; preserve the root and log.\n' >&2
@@ -158,11 +188,12 @@ squeue --me -o "%.18i %.32j %.12T %.12l %R"
 BASH
 ```
 
-If transfer is interrupted, resume only that exact rsync destination/source and
-rerun verification; do not restart the whole block or overwrite another export.
-After successful registration, repeat only the queue helper if `YES` was mistyped
-before submission. Registration and checks can be quiet while hashing; tail
-the printed registration log in another terminal.
+If native transfer is interrupted, resume only that exact rsync
+source/destination and rerun verification; do not overwrite another export.
+Once copied, resume from environment initialization and verification rather
+than repeating `test ! -e "$NATIVE"`. After registration, repeat only the
+queue helper if `YES` was mistyped before submission. All checks can take
+minutes while hashing; follow the printed registration log in another terminal.
 
 The block includes S2IT/S6 as labelled historical comparisons if that exact
 selective-campaign spec is present. Registration authenticates its original
@@ -200,7 +231,7 @@ scientific producer chain, with shared setup cost separately reported.
 bash <<'BASH'
 set -euo pipefail
 shopt -s nullglob
-SPECS=("$HOME"/hlt_u100_pairs/runs/embedding_bridge_*_1080ti_r1/campaign_spec.json)
+SPECS=("$HOME"/hlt_u100_pairs/runs/embedding_bridge_*_1080ti_v2_r1/campaign_spec.json)
 [[ ${#SPECS[@]} -eq 1 ]] || { printf 'Select one exact spec; found %s\n' "${#SPECS[@]}"; exit 1; }
 SPEC="${SPECS[0]}"
 MODE=summary

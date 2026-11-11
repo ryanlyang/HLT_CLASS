@@ -6,15 +6,19 @@ import json
 import sys
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
 from hlt_classification.data.cache_contracts import load_json
-from hlt_classification.luka_embedding_bridge_hydra import campaign,contracts,submission,worker,reporting,transfer
+from hlt_classification.luka_embedding_bridge_hydra import campaign,contracts,submission,worker,reporting,transfer,native
 
 
 def main():
     p=argparse.ArgumentParser();sub=p.add_subparsers(dest='command',required=True);sub.add_parser('registry')
     x=sub.add_parser('export')
     for name in ('prepared','origin-spec','output','expected-commit'):x.add_argument('--'+name,required=True)
+    x=sub.add_parser('export-native')
+    for name in ('prepared','origin-spec','output','expected-commit'):x.add_argument('--'+name,required=True)
+    x=sub.add_parser('verify-native')
+    for name in ('bundle-root','native-root','native-hash'):x.add_argument('--'+name,required=True)
     x=sub.add_parser('create')
-    for name in ('root','teacher-sweep-spec','transfer-root','transfer-hash','expected-commit'):x.add_argument('--'+name,required=True)
+    for name in ('root','teacher-sweep-spec','transfer-root','transfer-hash','native-root','native-hash','expected-commit'):x.add_argument('--'+name,required=True)
     x.add_argument('--quota-gib',required=True,type=int)
     x.add_argument('--selective-spec')
     x=sub.add_parser('verify-transfer')
@@ -25,11 +29,16 @@ def main():
         if command in ('run','rank'):x.add_argument('--task',required=True)
     a=p.parse_args();project=Path(__file__).resolve().parents[1]
     if a.command=='registry':value=contracts.recipe()
-    elif a.command=='export':
+    elif a.command in ('export','export-native'):
         source=campaign.current(project,a.expected_commit)
-        value=transfer.export(a.prepared,a.origin_spec,a.output,source_snapshot=source)
+        exporter=native.export if a.command=='export-native' else transfer.export
+        value=exporter(a.prepared,a.origin_spec,a.output,source_snapshot=source)
+    elif a.command=='verify-native':
+        d=native.Delta(a.native_root,a.native_hash,native.Bundle(a.bundle_root));d.verify_all()
+        value=dict(verified=True,manifest_hash=d.manifest['content_hash'],payload_bytes=d.manifest['payload_bytes'])
     elif a.command=='create':
-        value=campaign.create(a.root,a.teacher_sweep_spec,a.transfer_root,a.transfer_hash,project,a.expected_commit,a.quota_gib,selective_spec=a.selective_spec)
+        value=campaign.create(a.root,a.teacher_sweep_spec,a.transfer_root,a.transfer_hash,project,a.expected_commit,a.quota_gib,
+            native_root=a.native_root,native_hash=a.native_hash,selective_spec=a.selective_spec)
     elif a.command=='verify-transfer':
         from hlt_classification.luka_embedding_bridge_hydra.inputs import transferred
         t=transferred(dict(bundle_root=a.bundle_root,transfer_root=a.transfer_root,transfer_hash=a.transfer_hash))

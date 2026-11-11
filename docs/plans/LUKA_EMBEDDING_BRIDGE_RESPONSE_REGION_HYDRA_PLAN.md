@@ -1,7 +1,25 @@
 # Embedding assistants, teacher responses, and regional targets on Hydra
 
-Status: implementation v1, 2026-11-10. **Implemented for queueing real Hydra
-qualification; remote production acceptance remains pending.** The user requested three ladder
+Status: scientific recipe v1; input execution repair v2, 2026-11-11.
+**Repaired implementation awaits real Hydra qualification.** Setup161306 failed
+while replaying historical inputs, before training. D000's first differing
+value was one float32 ULP in relative eta; all five historical TRAIN views
+had matching population/size summaries but different input hashes. This does
+not establish the size of every discrepancy or its exact platform cause.
+
+The repair preserves exact historical tensors instead of weakening comparison:
+D000 and TRAIN U100 come from the original Brown bundle; OFFLINE comes from
+the existing teacher-sweep transfer; a minimal native delta supplies TRAIN
+D033/D066 and validation D033/D066/U100. Exporting that delta may reconstruct
+missing SPORC caches from retained raw data and original assignments, but must
+reproduce the original file bytes and whole-population fingerprints. Only
+the new D025/D050/D075 views are encoded from physical rows on Brown.
+Physical TRANSFER/v1 and RECIPE/v1 stay unchanged; SPEC/v2 binds the additional
+NATIVE_TRANSFER/v1 hash. A fresh execution root is required. No failed partial
+preparation is accepted as a completed artifact. Existing crop construction,
+losses, models, teacher targets and all 30 recipes remain unchanged.
+
+The user requested three ladder
 sizes, ten response configurations, ten regional configurations, and the
 existing two-older-GPU Hydra execution style. The user selected the
 299,234 TRAIN / 74,895 development-validation screen first, followed by

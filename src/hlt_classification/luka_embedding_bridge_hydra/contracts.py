@@ -6,18 +6,24 @@ from hlt_classification.luka_u100_embedding.contracts import COUNTS, recipe as o
 from .registry import FITS, cell, dependencies, CONDITIONS, COORDINATES, ALIASES
 
 BASE = '45075fe6c2d8ccdcf7463cd3a99cbe2fe6976a08'
+# Freeze all donor runtime at the published repair base; only this campaign
+# namespace may change afterwards. The original scientific recipe stays v1.
+REPAIR_BASE = '2fb09f38a3a1da85cdceff9df311963fdb3aa872'
+VERSIONS = {'SPEC': 2}
 AUTHORIZATION = 'AUTHORIZE_LUKA_EMBEDDING_BRIDGE_HYDRA_V1'
 AUX_SEED = 20261110
 
 
 def artifact(kind, *, parents=None, **fields):
-    return with_content_hash(dict(contract=f'LUKA_EMBEDDING_BRIDGE_HYDRA_{kind}/v1',
-        schema_version=1, parents=dict(parents or {}), **FLAGS, **fields))
+    version = VERSIONS.get(kind, 1)
+    return with_content_hash(dict(contract=f'LUKA_EMBEDDING_BRIDGE_HYDRA_{kind}/v{version}',
+        schema_version=version, parents=dict(parents or {}), **FLAGS, **fields))
 
 
 def validate(value, kind, parents=None):
-    digest = validate_content_hash(value, expected_contract=f'LUKA_EMBEDDING_BRIDGE_HYDRA_{kind}/v1',
-                                   expected_schema_version=1)
+    version = VERSIONS.get(kind, 1)
+    digest = validate_content_hash(value, expected_contract=f'LUKA_EMBEDDING_BRIDGE_HYDRA_{kind}/v{version}',
+                                   expected_schema_version=version)
     if any(value.get(k) != v for k, v in FLAGS.items()):
         raise PermissionError('Evaluation disclosures differ')
     if parents is not None and value.get('parents') != parents:

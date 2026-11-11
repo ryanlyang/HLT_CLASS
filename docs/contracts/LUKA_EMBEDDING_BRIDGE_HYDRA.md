@@ -1,4 +1,4 @@
-# Embedding bridges, responses and regions: v1 contract
+# Embedding bridges, responses and regions: recipe v1, execution v2
 
 Scientific authority: [implementation plan](../plans/LUKA_EMBEDDING_BRIDGE_RESPONSE_REGION_HYDRA_PLAN.md).
 Execution and commands: [runbook](../LUKA_EMBEDDING_BRIDGE_HYDRA_RUNBOOK.md).
@@ -52,8 +52,26 @@ arrays, identities, labels and the original frozen U100 checkpoint. Rebuilding
 the assignment NPZ must reproduce its original hash; rematching is forbidden.
 The export binds original prepared/source proofs, conventions and summaries.
 
-Setup reconstructs D000/D025/D033/D050/D066/D075/U100/OFFLINE through the original
-frontend. D000/U100/D033/D066/OFFLINE must reproduce historical input digests.
+SPEC/v2 requires `native_input_policy`, `native_root`, `native_hash`, and the
+native hash as an explicit parent. Source registration freezes donor runtime
+at2fb09f38a3a1da85cdceff9df311963fdb3aa872 and allows only additions/modifications
+inside the declared campaign runtime. The original scientific donor remains
+45075fe6c2d8ccdcf7463cd3a99cbe2fe6976a08; imported numerical code is unchanged.
+
+NATIVE_TRANSFER/v1 contains exactly TRAIN D033/D066 and validation
+D033/D066/U100 historical NPZ files. It binds original preparation/cache
+proofs, exact source snapshot, ordered file inventory, roles and byte count.
+Absent source caches may be reconstructed with original assignments on SPORC;
+existing corrupt files are fatal. Every emitted NPZ must match the original
+byte hash, and all five populations must match their original input digest.
+Publication is completion-last and never writes to the historical cache.
+
+Setup copies D000 and TRAIN U100 from the original bundle, OFFLINE from the
+parent teacher-sweep delta, and the remaining historical views from the new
+native delta. Per-file hashes, identities, labels and particle offsets are
+checked before copying; whole-population fingerprints remain exact.
+Only D025/D050/D075 are constructed through the original frontend on Brown.
+Cross-platform roundoff is never admitted by relaxing historical hash checks.
 Field substitutions use the established K/I/T columns and HLT slot identity.
 Indices, source keys and matching metadata never enter model tensors.
 
@@ -72,8 +90,12 @@ Raw and normalized arrays are processed in bounded chunks or memory maps.
 
 ## Artifact inventory
 
-Every new artifact uses `LUKA_EMBEDDING_BRIDGE_HYDRA_<KIND>/v1`, schema_version1,
-canonical content hash, explicit parents and inherited evaluation disclosures.
+Artifacts use `LUKA_EMBEDDING_BRIDGE_HYDRA_<KIND>/v1`, schema_version1,
+except SPEC/v2, schema_version2. All retain canonical content hashes, explicit
+parents and inherited evaluation disclosures. DATA/VIEW/PHYSICAL/U100_BANK
+parents include the native delta hash; the changed SPEC hash also separates
+every downstream result from the failed v1 execution. Old physical transfers
+and the scientific recipe retain their original v1 hashes.
 
 | Kind | Required binding / evidence |
 | --- | --- |

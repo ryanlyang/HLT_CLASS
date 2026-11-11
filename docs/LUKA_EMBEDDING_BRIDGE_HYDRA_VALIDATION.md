@@ -1,5 +1,55 @@
 # Embedding bridge / response / region validation
 
+## 2026-11-11 exact historical-input repair
+
+Remote evidence supplied by the user: setup161306, source0a00441f, failed
+before training at the TRAIN D000 fingerprint check. A first-difference scan
+found one float32 ULP in relative eta (5.684341886080802e-14). A later full
+fingerprint pass found different hashes for D000/U100/D033/D066/OFFLINE, with
+all other summary fields equal. Only the first D000 numerical discrepancy
+was measured; platform math/layout remains a hypothesis, not a proven cause
+or a bound on all differences. Disk reported26GiB free, with no ENOSPC error.
+
+The repair copies authenticated original tensors instead of recomputing
+historical views on Brown. A minimal native delta fills five missing
+role/coordinate pairs; only the new quarter views use physical reconstruction.
+SPEC/v2 binds the delta. Tests explicitly compare original RECIPE/v1 and
+TRANSFER/v1 against the original0a00441f implementation: unchanged hashes.
+
+Before queueing, `main` advanced to2fb09f38 with the separate Oscar six-teacher
+repair. The embedding-bridge source pin now freezes that exact commit; the
+diff contains no changes to imported numerical donors. Its runtime allowlist
+remains restricted to this campaign. User cleanup evidence confirms22 failed
+partial arrays removed (12.87GiB), with hashes retained, failed root328KiB
+and filesystem free space39GiB. This is user-supplied remote evidence, not an
+agent-executed deletion or a repaired production acceptance.
+After this pin update, the focused source-guard and original-recipe checks
+passed:2 tests in6.92s; scoped whitespace checks also passed.
+
+Evidence using the same local environment below:
+
+- Before editing:2 focused preparation/source tests passed.
+- New export/preparation/source tests:9 passed in24.03s. Synthetic ROOT
+  replay succeeds with all required source cache files removed, reproduces
+  original NPZ bytes and leaves source caches absent. Existing corruption
+  and injected one-ULP replay changes both stop before completion manifest.
+- Full campaign plus native-transfer suite: **56 passed, 1 skipped in50.68s**.
+  Includes exact source routing, identity/offset rejection, resealed manifest
+  tampering rejection, original U100 preservation, all scientific loss paths,
+  real local one-GPU Weaver forward/backward and submission failure handling.
+- Final source guard, canonical preparation and recipe checks:3 passed in8.19s.
+- Syntax checks:23 Python files,3 Bash runbook blocks; local documentation links
+  and CLI help pass. No imported donor runtime changed.
+
+The skipped test needs two CUDA GPUs/NCCL. No real repaired SPORC export or
+Hydra/Tigris miniature has run here; local fixture success is not remote
+acceptance. The [runbook](LUKA_EMBEDDING_BRIDGE_HYDRA_RUNBOOK.md) specifies the
+fresh v2 execution, reuses the completed physical transfer, and retains
+measured two-GPU setup plus automatic release. Output reservation remains
+33GiB after the extra input transfer; failed partial arrays are not promoted.
+
+## Original implementation evidence (2026-11-10)
+
 Implementation completed locally on 2026-11-10 for queueing real Hydra setup.
 No Brown production setup, remote export, commit, push or research submission
 was performed here. No result or runtime improvement is claimed.

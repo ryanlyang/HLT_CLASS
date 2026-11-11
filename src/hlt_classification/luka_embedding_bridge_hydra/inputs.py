@@ -11,7 +11,7 @@ from hlt_classification.data.cache_contracts import load_json, write_immutable_j
 from .contracts import artifact, validate, COUNTS, recipe
 from .registry import COORDINATES, CONDITIONS, cell, SLICES
 from .storage import Writer, Store, join, validate_population
-from . import regions, transfer
+from . import regions, transfer, native
 
 
 def transferred(spec):
@@ -25,12 +25,12 @@ def transferred(spec):
 
 def data_parents(spec):
     return dict(spec=spec['content_hash'],prepared=spec['anchor']['evidence']['prepared'],
-                transfer=spec['transfer_hash'],recipe=recipe()['content_hash'])
+                transfer=spec['transfer_hash'],native=spec['native_hash'],recipe=recipe()['content_hash'])
 
 
 def prepare(spec):
     """Single disposable process, one physical source shard resident at a time."""
-    t=transferred(spec); counts=spec['counts']; root=Path(spec['root'])/'setup/data'
+    t=transferred(spec); sources=native.Sources(spec); counts=spec['counts']; root=Path(spec['root'])/'setup/data'
     root.mkdir(exist_ok=False); manifests={}
     for role,n in counts.items():
         summaries=t.manifest['summaries'][role]; htotal=summaries['D000']['particles']; ototal=summaries['OFFLINE']['particles']
@@ -47,11 +47,22 @@ def prepare(spec):
             for source in ends:
                 v=a[source+'_values']; raw.arrays[source+'_values'][ends[source]:ends[source]+len(v)]=v
                 raw.arrays[source+'_offsets'][row:row+batch_rows+1]=a[source+'_offsets']+ends[source]
+            # Preserve the authenticated input bytes. Re-encoding the physical
+            # endpoints on another platform can change even one float32 ULP.
+            for coord in native.HISTORICAL:
+                block=sources.block(role,coord,s['index'],a)
+                start=ends['OFFLINE' if coord=='OFFLINE' else 'HLT']
+                for key in ('features','vectors'):
+                    writers[coord].arrays[key][start:start+len(block.features)]=getattr(block,key)
+                for j,label in enumerate(block.labels):
+                    lo,hi=block.offsets[j:j+2]
+                    meters[coord].add(SimpleNamespace(identity=bytes(block.identities[j]).hex(),label=int(label)),
+                        SimpleNamespace(features=block.features[lo:hi],vectors=block.vectors[lo:hi]))
             for j in range(batch_rows):
                 hs,he=a['HLT_offsets'][j:j+2];os_,oe=a['OFFLINE_offsets'][j:j+2]
                 h=regions.physical(a['HLT_values'][hs:he]);o=regions.physical(a['OFFLINE_values'][os_:oe])
                 identity=bytes(a['identities'][j]).hex();jet=SimpleNamespace(identity=identity,label=int(a['labels'][j]))
-                for coord in COORDINATES:
+                for coord in ('D025','D050','D075'):
                     v=kernel.build_view(identity=identity,proxy=h,offline=o,coordinate=coord,mapping=a['mapping'][hs:he])
                     inp=build_inputs(v,capacity=512); meters[coord].add(jet,inp)
                     start=(ends['OFFLINE']+os_) if coord=='OFFLINE' else ends['HLT']+hs
@@ -62,7 +73,7 @@ def prepare(spec):
             if row%20000<1000:print(f'EMBEDDING_BRIDGE prepare {role}: {row}/{n}',flush=True)
         if row!=n or ends!=dict(HLT=htotal,OFFLINE=ototal): raise ValueError('Preparation incomplete')
         proofs={coord:meter.report() for coord,meter in meters.items()}
-        for coord in ('D000','U100','D033','D066','OFFLINE'):
+        for coord in native.HISTORICAL:
             if proofs[coord]!=summaries[coord]: raise ValueError('Original native/third-view replay differs: '+role+'/'+coord)
         manifests[role]={}
         for coord,w in writers.items():

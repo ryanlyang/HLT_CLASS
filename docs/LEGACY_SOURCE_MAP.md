@@ -1,5 +1,27 @@
 # Legacy Donor-Source Map
 
+## Embedding bridge historical-input repair (2026-11-11)
+
+Repair source baseline: `2fb09f38a3a1da85cdceff9df311963fdb3aa872`.
+The original campaign donor remains `45075fe6c2d8ccdcf7463cd3a99cbe2fe6976a08`.
+No imported numerical module is modified. New `luka_embedding_bridge_hydra/native.py`
+adapts these exact repository donors (unchanged between those two commits):
+
+- `luka_u100_multiview/offline_cache.py`: missing-only source replay; exact
+  historical file bytes and whole-population fingerprint before reuse.
+- `luka_teacher_sweep_hydra/transfer.py`: minimal native delta inventory,
+  completion-last export, canonical OFFLINE inputs already on Brown.
+- `luka_fullsim/regular_cache.py`: authenticated selected ROOT rows, original
+  metadata and bounded native blocks.
+- `luka_fullsim/preflight_cache.py`: `_values` with original assignments and
+  `_block` with unchanged deterministic NPZ encoding.
+- `luka_u100_pair_hydra/inputs.py` and `luka_u100_pair_transfer/bundle.py`:
+  original bundle allowlist and original-source proof.
+
+New behavior copies historical tensors instead of recomputing them on Brown.
+The existing physical transfer and scientific recipe are byte-identical v1;
+SPEC/v2 and NATIVE_TRANSFER/v1 bind the new execution path.
+
 ## Embedding bridges, shared responses and regions (2026-11-10)
 
 Internal donor baseline `45075fe6c2d8ccdcf7463cd3a99cbe2fe6976a08`.
