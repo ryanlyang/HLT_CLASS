@@ -1,5 +1,62 @@
 # Legacy Donor-Source Map
 
+## Bounded subclass GTX 1080 Ti benchmark (2026-11-10)
+
+Internal donor baseline `c8e15195f8fe2bdcecd15e66693031f5a4596697`.
+New `luka_subclass_hydra/benchmark{,_training,_submission,_site}.py` and
+separate CLI/queue/Slurm scripts adapt the following existing components:
+
+| Donor files at c8e15195 | Use |
+|---|---|
+| `luka_subclass_hydra/{campaign,inputs,model,losses,targets,reuse}.py` | Reuse authenticated small-data sources, native student, real U100/conditional-KL losses and frozen TRAIN targets in a distinct benchmark registration. |
+| `luka_u100_contrastive/training.py`, `jetclass2_delphes/batch128_30e_recipe.py`, `luka_u100_multiview/views.py` | Original AdamW groups, registered LR and particle support lengths. |
+| `luka_u100_pair_hydra/site.py`, `luka_particle_teacher_hydra/submission.py`, `luka_fullsim/regular_submission.py` | Scheduler/environment checks, test-only review and sanitized submission environment. |
+| `scouting/{hcwdl_exact_dag_submission,hcwdl_recovery}.py`, `data/cache_contracts.py`, `cms_proxy_ladder/contracts.py`, `context_fusion/worker.py` | Exact-ID journals, atomic/checksummed artifacts, file references and snapshot publication. |
+| `tests/test_luka_subclass_hydra.py`, `tests/test_luka_u100_pretrain.py` | Existing installed-Weaver model and synthetic authenticated-cache fixtures. |
+
+Paths without prefixes are relative to `src/hlt_classification/`. Distributed
+batch weighting, SyncBatchNorm conversion, one/two-rank parity and bounded
+reporting are new code using installed PyTorch APIs. No external implementation
+or Fresh_check runtime source was copied. The separate contract family is
+`LUKA_SUBCLASS_GPU_BENCHMARK_*/v1`; existing scientific execution v2 is unchanged.
+The pending profile-support changes remain separately recorded below.
+
+## Subclass Hydra GPU-profile execution v2 (2026-11-10)
+
+Repair baseline `c8e15195f8fe2bdcecd15e66693031f5a4596697`. New
+`luka_subclass_hydra/execution.py` adapts allocation checks from
+`luka_selective_teacher_hydra/site.py` at that commit, imports the existing
+`luka_u100_pair_hydra/{contracts,site}.py` profile/scheduler/environment helpers
+and `luka_next_supervision_hydra/reconstruction_release.py` CPU allocation check.
+It adds explicit L40/L40S device checks alongside A6000; donor runtime is
+unchanged. Subclass execution artifacts move to v2 while scientific RECIPE and
+TARGET_RECIPE retain their v1 hashes. No external implementation is copied.
+
+## Small-data U100-w5 plus subclass Hydra sweep (2026-11-10)
+
+Exact internal donor for the following files:
+`5571240c8c42fce1103344dff94c88bf8edf13c5`. New additive namespace
+`luka_subclass_hydra`, contracts `LUKA_SUBCLASS_HYDRA_*/v1`.
+No donor runtime is changed; no external repository code or Fresh_check
+runtime dependency is introduced. Paths below are under
+`src/hlt_classification/` unless stated otherwise.
+
+| Donor files | Reuse / adaptation |
+|---|---|
+| `luka_embedding_objective_hydra/{campaign,training,resources,worker,submission,reporting}.py` | Adapt immutable registration, full30 native training/export/replay, actual-target setup/startup, measured walltimes, exact-ID automatic release and read-only reports. Remove geometry/projection/validation-bank objectives; use fixed U100 plus subclass KL. |
+| `luka_fullstat_subclass/{contracts,targets,model}.py` | Import frozen clustering recipe/seeds/counts, pure TRAIN array fit and conditional KL. Adapt bank readers/publication into a distinct small-population contract. Do not reuse FullStat artifacts, Multi3 training or its matching loss. |
+| `luka_teacher_sweep_hydra/{campaign,worker,contracts}.py`, `luka_embedding_aux/targets.py` | Invoke original pinned T00 authentication in a subprocess; validate original TRAIN OFFLINE bank and selected readout. |
+| `luka_embedding_aux/model.py`, `luka_u100_embedding/{contracts,training}.py` | Import native U100 predictor/tap, original recipe/counts and zero-subclass parity objective. |
+| `luka_embedding_curriculum_hydra/resources.py` | Import complete model/optimizer state comparison. |
+| `luka_u100_contrastive/{training,resources}.py`, `luka_u100_multiview/views.py` | Import original AdamW/recovery/peaks, view subsets and support lengths; no contrastive loss. |
+| `luka_selective_teacher_hydra/{resources,site,reporting}.py` | Import miniatures' indices/bank subsets, cleanup, A6000/CPU allocation checks and recovery. |
+| `luka_next_supervision_hydra/{campaign,reuse}.py`, `luka_cross_message_hydra/execution.py`, `luka_u100_pair_hydra/{inputs,site}.py` | Import storage, matched C0 validation, site profile, authenticated D000 views/U100 targets and environment checks. |
+| `jetclass2_delphes/{model,runner,reporting,batch128_30e_recipe,execution}.py`, `models/particle_transformer.py`, `luka_embedding_weight/worker.py` | Import installed native factory/BF16 forward, selection/metrics/LR, GPU/environment evidence and prediction validators. |
+| `luka_fullsim/{alljets_data,foundation,preflight_v2,regular_submission}.py`, `data/cache_contracts.py`, `cms_proxy_ladder/{contracts,submission}.py`, `context_fusion/worker.py` | Import disclosure flags, exact source, backend/memory/environment, atomic/hash artifacts, file refs/walltimes and checkpoint publication. |
+| `scouting/{hcwdl_exact_dag_submission,hcwdl_recovery}.py`, `luka_particle_teacher_hydra/submission.py`, `luka_capacity_hydra/complementarity.py` | Import exact-ID DAG journals/ledgers/dry review and identity-aligned saved predictions. |
+| `scripts/{luka_embedding_objective_hydra.py,queue_luka_embedding_objective_hydra.sh}`, `sbatch/run_luka_embedding_objective_hydra.sh` | Adapt thin CLI, bounded authorization and absolute-project worker environment. |
+| `tests/{test_luka_embedding_objective_hydra,test_luka_u100_pretrain,test_luka_attention}.py`, `docs/LUKA_EMBEDDING_OBJECTIVE_HYDRA_RUNBOOK.md` | Adapt execution/fit tests, reuse synthetic caches and scoped commit/queue examples. |
+
 ## U100 classification-aware embedding objectives on Hydra (2026-11-10)
 
 Exact internal donor for all entries below:
@@ -6125,3 +6182,30 @@ The active [plan](plans/LUKA_FULLSTAT_SUBCLASS_PLAN.md),
 [contract](contracts/LUKA_FULLSTAT_SUBCLASS.md),
 [validation](LUKA_FULLSTAT_SUBCLASS_VALIDATION.md) and
 [queue runbook](LUKA_FULLSTAT_SUBCLASS_RUNBOOK.md) define the new semantics.
+
+
+## FullStat subclass contrastive0.6 follow-up (2026-11-10)
+
+Internal donor and completed historical source:
+`16546c0e0196ab85cd69e23de005dc5f6f29feb5`, subclass job8761518.
+Implementation ancestry baseline:`ffaf2997b3fa76a45e53105dae4c8ed68be3d56a`.
+No external source migration, Fresh_check import or historical runtime edit.
+
+| Donor files at16546c0e | New use |
+| --- | --- |
+| `src/hlt_classification/luka_fullstat_subclass/{__init__,campaign,source,training,banks,startup,worker,submission,launch,execution,recovery,sampling}.py` | Adapted into `luka_fullstat_subclass_c06`; distinct execution identities, completed subclass parent, independent loss coefficients, copied targets, additional historical result. |
+| `luka_fullstat_subclass/contracts.py` | Imported unchanged for original recipe, node checks and exact old subclass ramp arithmetic; new C06 recipe binds its hash. |
+| `luka_fullstat_subclass/model.py` | Student, initialization and conditional KL imported unchanged; objective adapted with explicit independent subclass weight and matching maximum0.6. |
+| `luka_fullstat_subclass/targets.py` | Original bank/manifest validators imported unchanged; new wrapper only authenticates and copies completed frozen targets, never fits them. |
+| `scripts/luka_fullstat_subclass.py`, `scripts/launch_luka_fullstat_subclass.sh`, `sbatch/run_luka_fullstat_subclass.sh` | Adapted C06 CLI, detached launcher and absolute-path worker. |
+| `tests/test_luka_fullstat_subclass.py`, `tests/test_luka_fullstat_subclass_lifecycle.py` | Adapted queue, training, startup and lifecycle tests; additional one-factor gradient, target-reuse and source-binding cases. |
+| `tests/test_luka_fullstat_subclass_targets.py`, `tests/test_luka_fullstat_multi3_contrastive.py`, `tests/test_luka_attention.py`, `tests/test_luka_embedding_aux.py`, `tests/test_luka_u100_contrastive.py`, `tests/test_luka_fullstat_multiview_launch.py` | Existing synthetic data/model/bank/allocation fixtures reused without modification. |
+| `luka_fullstat_multi3_contrastive/sampling.py` | Unchanged optimized candidates, CPU workers and lookahead imported through the existing alias. |
+| `luka_fullstat_multiview/{views,resources,execution,startup}.py`, `luka_fullstat_readout/{source,training,worker}.py`, `luka_u100_multiview/{teachers,training}.py`, `luka_fullstat_fine_tail/worker.py` | Existing runtime/view/resource/state/validation/rejection semantics reused without changes. |
+
+Package paths without a prefix in the table are relative to
+`src/hlt_classification/`. Existing deterministic caches, foundation source
+snapshot, canonical checksums/atomic writes, native ParT, FullStat recipe and
+exact-DAG journals remain imports. New science/execution artifacts use
+`LUKA_FULLSTAT_SUBCLASS_C06_*/v1`; original target-bank artifacts keep
+`LUKA_FULLSTAT_SUBCLASS_*/v1` byte-for-byte identity.

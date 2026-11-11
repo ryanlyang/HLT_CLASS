@@ -1,5 +1,54 @@
 # Small-data subclass Hydra validation
 
+## Separate GTX 1080 Ti benchmark
+
+2026-11-10: added a bounded benchmark in its own contract namespace, plan and
+[queue runbook](LUKA_SUBCLASS_GPU_BENCHMARK_RUNBOOK.md). It cannot release the
+scientific sweep. Existing BF16 production tests passed73/73 in72.29s before
+the benchmark changes. The combined suites passed93 tests with1 skip in80.51s;
+the final benchmark-only suite, including two new phase-failure orchestration
+cases, passed22 tests with1 skip in17.78s.
+
+New evidence covers global padding and odd-batch gradient weighting, a real
+two-process CPU Gloo comparison, actual-target payload schema/hash/role rejection,
+independent benchmark identity, exact two-card allocation checks, full dry/live
+submission idempotence, partial-claim rejection, sequential phase execution
+including one-card failure, and honest reporting of failed phases. Local
+installed-Weaver checks exercise FP32 forward/backward/AdamW and full128/partial
+GPU batches. Two-GPU NCCL/SyncBatchNorm parity is implemented as a test and as
+part of the real benchmark, but is skipped locally: this workstation has one
+RTX2000 Ada laptop GPU. No actual 1080 Ti performance measurement exists yet.
+
+Python/shell syntax, all32 required files, two benchmark Bash examples, new
+Markdown links/fences and whitespace passed. No donor runtime was changed;
+donor/source details are in LEGACY_SOURCE_MAP. Nothing was committed, pushed
+or submitted remotely. Real Brown benchmark completion remains the next step;
+it would still not qualify a new scientific FP32 profile by itself.
+
+## GPU-profile execution v2
+
+2026-11-10 follow-up to pushed c8e15195: the user's scheduler evidence shows
+A6000 maintenance drain; L40 and L40S are schedulable types but fully allocated
+in the supplied snapshot. Original scheduler dry review submitted no jobs.
+New registrations can select a6000, l40 or l40s, with fresh v2 receipts and
+authorization. Scientific RECIPE and TARGET_RECIPE hashes remain byte-identical
+to c8e15195. No objective, precision, batch size or epoch change.
+
+Before edits, **62 tests passed in77.93s**. After edits, the focused suite
+passed **73 tests in78.48s**, including all existing synthetic CUDA/Weaver
+checks. Added coverage validates registration and automatic13-job release for
+all three profiles, real controller/device check code with mocked evidence,
+wrong-device/compute-capability/BF16/allocated-GPU rejection, fresh-profile
+enforcement, v1 execution rejection and preserved scientific recipe hashes.
+No local identity mock is evidence of real L40/L40S qualification. Python
+syntax, both shell scripts, three runbook Bash blocks, links and whitespace pass.
+
+No commit/push or remote jobs were performed. Follow the updated runbook for
+one new execution. Its actual chosen GPU must pass the existing native replay,
+full model/update parity, real-target miniatures and measured resource checks
+before the durable CPU release submits science. Historical A6000 C0 remains the
+reference; numerical replay is not a proof of identical cross-GPU training.
+
 Implementation evidence, 2026-11-10. Exact internal donor base:
 `5571240c8c42fce1103344dff94c88bf8edf13c5`. This is a new additive campaign;
 existing runtime, original source worktrees and jobs are preserved.
@@ -67,8 +116,8 @@ $env:OPENBLAS_NUM_THREADS='1'
 
 No research training, inference, commit, push or Slurm submission was performed
 by this implementation task. Synthetic results do not estimate physics gains,
-A6000 throughput or campaign start times. No real Tigris/Hydra miniature is
-claimed. The active plan uses installed-Weaver A6000 qualification for this
+A6000/L40/L40S throughput or campaign start times. No real Tigris/Hydra miniature is
+claimed. The active plan uses installed-Weaver selected-GPU qualification for this
 Hydra-only campaign rather than the legacy Tigris-only workflow.
 
 After the scoped commit/push and initial queue authorization, setup must

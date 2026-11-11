@@ -39,7 +39,7 @@ def plan(spec,stage,acceptance=None):
         rows.append(command(spec,'report',spec['report_minutes'],cpu=True,dependencies=FITS,after='afterany'))
     else: raise ValueError('Unknown submission stage')
     return artifact('PLAN',parents=parents,stage=stage,commands=rows,authorization=AUTHORIZATION,
-        science_tasks=list(FITS),science_max_minutes=spec['fit_max_minutes'],registration=campaign.registration(),
+        science_tasks=list(FITS),science_max_minutes=spec['fit_max_minutes'],registration=campaign.registration(spec['gpu_profile']),
         upper_bound_commands=plan(spec,'envelope')['commands'] if stage=='bootstrap' else None)
 
 

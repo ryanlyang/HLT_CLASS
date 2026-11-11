@@ -7,7 +7,7 @@ from hlt_classification.cms_proxy_ladder.contracts import file_ref, validate_fil
 from hlt_classification.jetclass2_delphes.model import installed_environment
 from hlt_classification.jetclass2_delphes.execution import gpu_identity
 from hlt_classification.luka_fullsim.preflight_v2 import require_backend, memory_snapshot
-from hlt_classification.luka_selective_teacher_hydra import site
+from . import execution as site
 from .contracts import FITS, artifact, validate
 from . import campaign, submission, inputs, training, resources, targets
 

@@ -7,6 +7,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'src'))
 from hlt_classification.data.cache_contracts import load_json
 from hlt_classification.luka_subclass_hydra import campaign, contracts, submission, worker, reporting
+from hlt_classification.luka_subclass_hydra.execution import PROFILES
 
 
 def main():
@@ -16,6 +17,7 @@ def main():
     for name in ('root', 'teacher-sweep-spec', 'expected-commit'):
         p.add_argument('--'+name, required=True)
     p.add_argument('--quota-gib', type=int, required=True)
+    p.add_argument('--gpu-profile', choices=PROFILES, default='a6000')
     for name in ('review', 'submit', 'run', 'results', 'progress', 'inspect-submission'):
         p = sub.add_parser(name); p.add_argument('--spec', required=True)
         if name == 'submit':
@@ -26,7 +28,8 @@ def main():
     if a.command == 'registry':
         value = contracts.recipe()
     elif a.command == 'create':
-        value = campaign.create(a.root, a.teacher_sweep_spec, Path(__file__).resolve().parents[1], a.expected_commit, a.quota_gib)
+        value = campaign.create(a.root, a.teacher_sweep_spec, Path(__file__).resolve().parents[1], a.expected_commit, a.quota_gib,
+                                gpu_profile=a.gpu_profile)
     else:
         spec = load_json(a.spec)
         if a.command in ('results', 'progress', 'inspect-submission'):

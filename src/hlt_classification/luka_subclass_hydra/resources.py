@@ -1,4 +1,4 @@
-"""Actual-target production miniatures and warmed A6000 resource qualification."""
+"""Actual-target production miniatures and warmed selected-GPU qualification."""
 from pathlib import Path
 import math
 import time
@@ -20,7 +20,7 @@ from hlt_classification.luka_selective_teacher_hydra.resources import free, subs
 from .contracts import FITS, artifact, validate, cell, recipe
 from hlt_classification.jetclass2_delphes.model import model_config
 from .model import Native, new_model
-from . import inputs, training, targets
+from . import inputs, training, targets, execution
 
 
 def miniature(folder,spec,task,train,val,banks,device):
@@ -152,9 +152,9 @@ def accept(spec, diagnostic):
     validate(diagnostic, 'RESOURCES', dict(spec=spec['content_hash']))
     if diagnostic['status'] != 'complete' or diagnostic['error'] is not None or set(diagnostic['profiles']) != set(FITS):
         raise ValueError('Incomplete real setup')
-    if (diagnostic['environment'] != spec['reference']['environment'] or diagnostic['gpu']['name'] != 'NVIDIA RTX A6000'
-            or diagnostic['gpu']['compute_capability'] != [8, 6]):
-        raise ValueError('Wrong setup environment/GPU')
+    if diagnostic['environment'] != spec['reference']['environment']:
+        raise ValueError('Wrong setup environment')
+    execution.check_gpu(spec, diagnostic['gpu'])
     minutes = {}
     for task in FITS:
         p = diagnostic['profiles'][task]

@@ -13,7 +13,7 @@ from hlt_classification.data.cache_contracts import (load_json, write_immutable_
 from hlt_classification.cms_proxy_ladder.contracts import file_ref
 from hlt_classification.jetclass2_delphes.runner import _forward
 from hlt_classification.luka_subclass_hydra import (
-    contracts as c, model, targets, losses, training, inputs, resources, campaign, submission, worker, reporting, reuse)
+    contracts as c, model, targets, losses, training, inputs, resources, campaign, submission, worker, reporting, reuse, execution)
 
 
 @pytest.fixture(autouse=True)
@@ -23,9 +23,9 @@ def threads():
     torch.set_num_threads(old)
 
 
-def spec(root):
+def spec(root, gpu_profile='a6000'):
     node = dict(initialization_seed=23, sampler_seed=29)
-    return dict(campaign.registration(), root=str(root), project_dir='/project', content_hash='c'*64,
+    return dict(campaign.registration(gpu_profile), root=str(root), project_dir='/project', content_hash='c'*64,
         anchor=dict(evidence=dict(prepared='a'*64)), reference=dict(environment={'fixture':True}),
         bundle_root='/bundle', environment_dir='/env', counts=dict(train=22,validation=22),
         nodes={t:dict(node,node_id=t) for t in c.FITS}, imported=dict(node=node,teacher=dict(content_hash='t'*64)),
@@ -59,7 +59,8 @@ def banks(s,tr=None,va=None):
 
 def diagnostic(s):
     return c.artifact('RESOURCES',parents=dict(spec=s['content_hash']),status='complete',error=None,
-        environment=s['reference']['environment'],gpu=dict(name='NVIDIA RTX A6000',compute_capability=[8,6],total_memory_bytes=48*2**30),
+        environment=s['reference']['environment'],gpu=dict(name=s['execution_site']['gpu_name'],
+            compute_capability=s['gpu_compute_capability'],total_memory_bytes=48*2**30),
         profiles={t:dict(initial_factory_fp32_parity=True,miniature_complete=True,deployment_reload=True,
             initial_factory_max_abs=0.,fp32_equivalence=dict(rtol=2e-5,atol=5e-6),native_architecture_verified=True,
             architecture=dict(parameters=2143615,additional_parameters=0),largest_support_backward=True,
@@ -70,6 +71,75 @@ def diagnostic(s):
 
 def reseal(value):
     return with_content_hash({k:v for k,v in value.items() if k!='content_hash'})
+
+
+def test_execution_v2_preserves_scientific_identity_and_rejects_v1():
+    # Fixed hashes from pushed c8e15195: no loss, target or schedule change.
+    assert c.recipe()['content_hash']=='1d7a378e2e35d66bc05751ad34fd9cb38a1f58c1f251376e3ef2b8cd315b7f12'
+    assert c.target_recipe()['content_hash']=='2794d55556ae6d031f1347c00437df918e4261bea5f0c10016d38af3c980e60c'
+    c.validate(c.recipe(),'RECIPE'); c.validate(c.target_recipe(),'TARGET_RECIPE')
+    value=c.artifact('SPEC'); c.validate(value,'SPEC')
+    assert value['schema_version']==2 and c.AUTHORIZATION.endswith('_V2')
+    value.update(contract='LUKA_SUBCLASS_HYDRA_SPEC/v1',schema_version=1)
+    with pytest.raises(ValueError): c.validate(reseal(value),'SPEC')
+    with pytest.raises(ValueError): campaign.registration('auto')
+    with pytest.raises(ValueError): campaign.registration('2080ti')
+
+
+@pytest.mark.parametrize('gpu_profile',execution.PROFILES)
+def test_profile_measurements_cannot_cross_gpu_types(tmp_path,gpu_profile):
+    s=spec(tmp_path,gpu_profile); d=diagnostic(s)
+    accepted=resources.accept(s,d)
+    assert accepted['gpu']==d['gpu']
+    for other in execution.PROFILES:
+        if other!=gpu_profile:
+            wrong=diagnostic(spec(tmp_path,other))
+            with pytest.raises(ValueError,match='GPU differs'): resources.accept(s,wrong)
+    for changes in ({'compute_capability':[7,5]},{'total_memory_bytes':0}, {'total_memory_bytes':float('nan')}):
+        bad=copy.deepcopy(d); bad['gpu'].update(changes)
+        with pytest.raises(ValueError): execution.check_gpu(s,bad['gpu'])
+    tampered=copy.deepcopy(s); tampered['execution_site']['gres']='gpu:1'
+    with pytest.raises(ValueError): resources.accept(tampered,d)
+    envelope=submission.plan(s,'envelope'); measured=submission.plan(s,'science',accepted)
+    measured['commands'][0]['command']=[x.replace(s['execution_site']['gres'],'gpu:1')
+                                       for x in measured['commands'][0]['command']]
+    with pytest.raises(PermissionError): submission.within_envelope(envelope,measured)
+
+
+@pytest.mark.parametrize('gpu_profile',execution.PROFILES)
+def test_controller_and_device_allocation_for_each_profile(tmp_path,monkeypatch,gpu_profile):
+    import sys
+    s=spec(tmp_path,gpu_profile); s['environment_dir']=str(Path(sys.prefix).resolve())
+    monkeypatch.setenv('SLURM_JOB_ID','901'); monkeypatch.setenv('PYTHONNOUSERSITE','1')
+    for key in ('SLURM_CLUSTER_NAME','SLURM_NTASKS','SLURM_CPUS_PER_TASK','SLURM_MEM_PER_NODE'):
+        monkeypatch.delenv(key,raising=False)
+    gres_type=s['execution_site']['gres'].split(':')[1]
+    fields=dict(JobId='901',JobState='RUNNING',Account='default',Partition='gpus',QOS='normal',
+        NumNodes='1',NumCPUs='6',NumTasks='1',**{'CPUs/Task':'6'},
+        AllocTRES='cpu=6,mem=32000M,gres/gpu=1,gres/gpu:'+gres_type+'=1')
+    def controller(cmd,**kwargs):
+        return SimpleNamespace(stdout='ClusterName = hydra\n' if cmd[-1]=='config'
+            else ' '.join(k+'='+v for k,v in fields.items()))
+    monkeypatch.setattr(execution.subprocess,'run',controller)
+    monkeypatch.setattr(execution.platform,'machine',lambda:'x86_64')
+    monkeypatch.setattr(execution.donor,'environment',lambda expected:expected)
+    monkeypatch.setattr(torch.cuda,'is_available',lambda:True)
+    monkeypatch.setattr(torch.cuda,'device_count',lambda:1)
+    monkeypatch.setattr(torch.cuda,'get_device_name',lambda i:s['execution_site']['gpu_name'])
+    monkeypatch.setattr(torch.cuda,'get_device_capability',lambda i:tuple(s['gpu_compute_capability']))
+    monkeypatch.setattr(torch.cuda,'is_bf16_supported',lambda:True)
+    assert execution.allocation(s)=='901'
+    good=fields['AllocTRES']
+    for bad in ('cpu=6,mem=32000M', good.replace('gres/gpu=1','gres/gpu=2'),
+                good.replace('gres/gpu:'+gres_type+'=1','gres/gpu:wrong_type=1')):
+        fields['AllocTRES']=bad
+        with pytest.raises(PermissionError): execution.allocation(s)
+    fields['AllocTRES']=good
+    monkeypatch.setattr(torch.cuda,'is_bf16_supported',lambda:False)
+    with pytest.raises(PermissionError): execution.allocation(s)
+    monkeypatch.setattr(torch.cuda,'is_bf16_supported',lambda:True)
+    monkeypatch.setattr(torch.cuda,'get_device_name',lambda i:'NVIDIA TITAN RTX')
+    with pytest.raises(PermissionError): execution.allocation(s)
 
 
 def test_registry_independent_bounded_ten_fit_dag(tmp_path):
@@ -158,8 +228,9 @@ def fake_scheduler(monkeypatch):
     return calls,reviews
 
 
-def test_auto_release_exact_ids_and_no_duplicate_submission(tmp_path,monkeypatch):
-    s=spec(tmp_path); (tmp_path/'setup').mkdir(); a=resources.accept(s,diagnostic(s))
+@pytest.mark.parametrize('gpu_profile',execution.PROFILES)
+def test_auto_release_exact_ids_and_no_duplicate_submission(tmp_path,monkeypatch,gpu_profile):
+    s=spec(tmp_path,gpu_profile); (tmp_path/'setup').mkdir(); a=resources.accept(s,diagnostic(s))
     write_immutable_json(tmp_path/'setup/acceptance.json',a)
     calls,reviews=fake_scheduler(monkeypatch); submission.launch(s); p=submission.plan(s,'bootstrap')
     with pytest.raises(PermissionError): submission.launch(s,execute=True,plan_hash='bad',authorization=c.AUTHORIZATION)
@@ -170,6 +241,10 @@ def test_auto_release_exact_ids_and_no_duplicate_submission(tmp_path,monkeypatch
     result=submission.finish(s,'8002'); assert len(result['jobs'])==11 and len(calls)==13
     assert submission.finish(s,'8002')==result and len(calls)==13
     assert [p['stage'] for p in reviews]==['bootstrap','envelope','science']
+    for cmd in calls:
+        gpu_args=[arg for arg in cmd if arg.startswith('--gres=')]
+        assert gpu_args in ([], ['--gres='+s['execution_site']['gres']])
+    assert all(p['registration']['gpu_profile']==gpu_profile for p in reviews)
 
 
 def test_failed_setup_and_ambiguous_submission_preserved(tmp_path,monkeypatch):
@@ -298,7 +373,8 @@ def test_reporting_reads_completed_and_partial_without_writes(tmp_path,monkeypat
     with pytest.raises(ValueError): reporting.progress(s)
 
 
-def test_registration_reuses_matched_control_and_rejects_drift(tmp_path,monkeypatch):
+@pytest.mark.parametrize('gpu_profile',execution.PROFILES)
+def test_registration_reuses_matched_control_and_rejects_drift(tmp_path,monkeypatch,gpu_profile):
     import sys
     parent=tmp_path/'parent'; parent.mkdir(); project=tmp_path/'code'; project.mkdir()
     old=spec(parent); old.update(environment_dir=str(Path(sys.prefix).resolve()),project_dir=str(parent),
@@ -311,11 +387,14 @@ def test_registration_reuses_matched_control_and_rejects_drift(tmp_path,monkeypa
     monkeypatch.setattr(campaign,'load_anchors',lambda s:dict(M0HLT=.95,OFFLINE=.98))
     monkeypatch.setattr(inputs,'validate_sources',lambda s:None); monkeypatch.setattr(campaign.site,'environment',lambda *a:None)
     monkeypatch.setattr(campaign,'storage',lambda s:None)
-    s=campaign.create(tmp_path/'new',path,project,'b'*40,5); campaign.check(s)
+    s=campaign.create(tmp_path/'new',path,project,'b'*40,5,gpu_profile=gpu_profile); campaign.check(s)
     assert s['control']==old['control'] and len(s['nodes'])==10
+    assert s['gpu_profile']==gpu_profile and s['execution_version']==2
     assert {n['initialization_seed'] for n in s['nodes'].values()}=={23}
     with pytest.raises(ValueError,match='fresh separate'): campaign.create(tmp_path/'new',path,project,'b'*40,5)
     bad=copy.deepcopy(s); bad['nodes']['S100']['sampler_seed']+=1
+    with pytest.raises(ValueError): campaign.check(reseal(bad))
+    bad=copy.deepcopy(s); bad['gpu_profile']='l40s' if gpu_profile!='l40s' else 'l40'
     with pytest.raises(ValueError): campaign.check(reseal(bad))
 
 

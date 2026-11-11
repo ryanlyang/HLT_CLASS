@@ -7,17 +7,21 @@ from hlt_classification.data.cache_contracts import load_json, write_immutable_j
 from hlt_classification.luka_fullsim.foundation import _source
 from .reuse import original, references
 from hlt_classification.luka_next_supervision_hydra.campaign import storage
-from hlt_classification.luka_cross_message_hydra.execution import A6000_SITE
+from .execution import configuration
 from hlt_classification.luka_u100_pair_hydra import site
 from .contracts import BASE, COUNTS, FITS, recipe, artifact, validate
 
-MODULES=('__init__','contracts','campaign','inputs','training','resources','model','submission','worker','reporting','targets','losses','reuse')
+MODULES=('__init__','contracts','campaign','inputs','training','resources','model','submission','worker','reporting','targets','losses','reuse','execution',
+         'benchmark','benchmark_training','benchmark_submission','benchmark_site')
 RUNTIME={f'src/hlt_classification/luka_subclass_hydra/{n}.py' for n in MODULES}|{
     'scripts/luka_subclass_hydra.py','scripts/queue_luka_subclass_hydra.sh',
-    'sbatch/run_luka_subclass_hydra.sh'}
+    'sbatch/run_luka_subclass_hydra.sh','scripts/luka_subclass_gpu_benchmark.py',
+    'scripts/queue_luka_subclass_gpu_benchmark.sh','sbatch/run_luka_subclass_gpu_benchmark.sh'}
 REQUIRED=RUNTIME|{'tests/test_luka_subclass_hydra.py',
     'docs/plans/LUKA_SUBCLASS_HYDRA_PLAN.md','docs/contracts/LUKA_SUBCLASS_HYDRA.md',
-    'docs/LUKA_SUBCLASS_HYDRA_RUNBOOK.md','docs/LUKA_SUBCLASS_HYDRA_VALIDATION.md'}
+    'docs/LUKA_SUBCLASS_HYDRA_RUNBOOK.md','docs/LUKA_SUBCLASS_HYDRA_VALIDATION.md',
+    'tests/test_luka_subclass_gpu_benchmark.py','docs/plans/LUKA_SUBCLASS_GPU_BENCHMARK_PLAN.md',
+    'docs/LUKA_SUBCLASS_GPU_BENCHMARK_RUNBOOK.md'}
 COPIED=('bundle_root','reference','imported','anchor','embedding_hash','qualification')
 def current(project,commit):
     project=Path(project).resolve(); snapshot=_source(project,commit)
@@ -30,16 +34,17 @@ def current(project,commit):
     return snapshot
 
 
-def registration():
+def registration(gpu_profile='a6000'):
     return dict(recipe=recipe(),tasks=list(FITS),remaining=list(FITS),counts=COUNTS,
-        execution_site=A6000_SITE,gpu_profile='a6000',cpus=6,memory_mb=32000,
+        **configuration(gpu_profile),cpus=6,memory_mb=32000,
         setup_minutes=720,fit_max_minutes=2880,release_minutes=60,report_minutes=60,original50k_rows=50000,
         cpu_site=dict(partition='compute',account='default',qos='normal',cpus=1,memory_mb=4000),
         storage_budget_bytes=4*2**30,resource_policy=dict(safety_multiplier=2.,fixed_overhead_seconds=900,memory_fraction=.85),
         science_dependencies='none',automatic_retry=False,reference_retrained=False)
 
 
-def create(root,teacher_sweep_spec,project,commit,quota_gib):
+def create(root,teacher_sweep_spec,project,commit,quota_gib,*,gpu_profile='a6000'):
+    registered = registration(gpu_profile)
     old=original(teacher_sweep_spec); project=Path(project).resolve(); root=Path(root).absolute()
     if type(quota_gib) is not int or quota_gib<5: raise ValueError('Reserve four GiB outputs plus one GiB headroom')
     protected=[Path(old[k]).resolve() for k in ('root','project_dir','environment_dir','bundle_root')]+[
@@ -49,7 +54,7 @@ def create(root,teacher_sweep_spec,project,commit,quota_gib):
         raise ValueError('Use a fresh separate subclass output root')
     source=current(project,commit); site.environment(old['reference']['environment'])
     value=artifact('SPEC',parents=dict(source=source['content_hash'],teacher_sweep=old['content_hash'],recipe=recipe()['content_hash']),
-        **registration(),root=str(root),project_dir=str(project),source_commit=commit,source_snapshot=source,
+        **registered,root=str(root),project_dir=str(project),source_commit=commit,source_snapshot=source,
         environment_dir=str(Path(sys.prefix).resolve()),teacher_sweep_spec=file_ref(Path(teacher_sweep_spec).resolve()),
         available_quota_gib=quota_gib,control=old['control'],teacher_refs=references(old),
         nodes={t: dict(old['imported']['node'], node_id=t) for t in FITS},
@@ -62,7 +67,7 @@ def create(root,teacher_sweep_spec,project,commit,quota_gib):
 def check(spec,*,check_storage=True):
     validate_file_ref(spec['teacher_sweep_spec']); old=original(spec['teacher_sweep_spec']['path'])
     validate(spec,'SPEC',dict(source=spec['source_snapshot']['content_hash'],teacher_sweep=old['content_hash'],recipe=recipe()['content_hash']))
-    if (any(spec.get(k)!=v for k,v in registration().items()) or any(spec[k]!=old[k] for k in COPIED)
+    if (any(spec.get(k)!=v for k,v in registration(spec['gpu_profile']).items()) or any(spec[k]!=old[k] for k in COPIED)
             or spec['control']!=old['control'] or spec['teacher_refs']!=references(old)
             or spec['nodes']!={t:dict(old['imported']['node'],node_id=t) for t in FITS}
             or spec['recovery_anchors']!=load_anchors(old)

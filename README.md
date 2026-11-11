@@ -3,7 +3,24 @@
 A clean, standalone research repository for HLT-only JetClass classification
 and training-time use of paired offline information.
 
+The [Oscar contrastive0.6 follow-up](docs/LUKA_FULLSTAT_SUBCLASS_C06_RUNBOOK.md)
+adds one fresh FullStat student with subclass weight0.5 held fixed. It reuses
+the completed subclass run's exact targets, preserves3M/500k and20 epochs, and
+uses detached submission with integrated checks instead of a separate preflight.
+
 ## Current status
+
+The [small-data subclass sweep](docs/plans/LUKA_SUBCLASS_HYDRA_PLAN.md)
+adds ten 30-epoch native HLT fits with U100-w5 fixed and subclass weights
+0.03 through100. It rebuilds one frozen TRAIN bank from the existing small-data
+OFFLINE T00, reuses C0, and removes the subclass head at inference. The
+[runbook](docs/LUKA_SUBCLASS_HYDRA_RUNBOOK.md) selects A6000, L40 or L40S setup plus durable
+automatic release; [local evidence](docs/LUKA_SUBCLASS_HYDRA_VALIDATION.md)
+distinguishes queue readiness from real Hydra qualification.
+The separate [GTX 1080 Ti benchmark](docs/LUKA_SUBCLASS_GPU_BENCHMARK_RUNBOOK.md)
+compares one-card and two-card FP32 execution at the same global batch128,
+with synchronized BatchNorm and real targets. It submits one bounded job;
+the ten scientific fits are not released by this benchmark.
 
 The [U100 embedding-objective campaign](docs/plans/LUKA_EMBEDDING_OBJECTIVE_HYDRA_PLAN.md)
 adds eight student fits testing whether classification-aware embedding losses
@@ -546,3 +563,6 @@ TRAIN-only OFFLINE soft subclasses to the completed Multi3 + contrastive recipe.
 It keeps3M/500k,20 epochs and native HLT inference. See the
 [detached queue instructions](docs/LUKA_FULLSTAT_SUBCLASS_RUNBOOK.md) and
 [local validation](docs/LUKA_FULLSTAT_SUBCLASS_VALIDATION.md).
+The [subclass developer guide](docs/LUKA_FULLSTAT_SUBCLASS_DEVELOPER_GUIDE.md)
+explains target construction, conditional losses, code ownership, saved
+artifacts and how to develop variants, including the contrastive-0.6 follow-up.

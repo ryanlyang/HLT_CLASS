@@ -7,19 +7,21 @@ from hlt_classification.luka_fullstat_subclass.contracts import (
     subclass_recipe as kernel_recipe, COUNTS_PER_CLASS, SUBCLASS_SEED)
 
 BASE = '5571240c8c42fce1103344dff94c88bf8edf13c5'
-AUTHORIZATION = 'AUTHORIZE_LUKA_SUBCLASS_HYDRA_V1'
+AUTHORIZATION = 'AUTHORIZE_LUKA_SUBCLASS_HYDRA_V2'
 WEIGHTS = dict(S0p03=.03, S0p1=.1, S0p3=.3, S0p5=.5, S1=1., S2=2.,
                S5=5., S10=10., S40=40., S100=100.)
 FITS = ('S0p5', 'S5', 'S40', 'S1', 'S10', 'S100', 'S0p3', 'S2', 'S0p1', 'S0p03')
 
 
 def artifact(kind, *, parents=None, **fields):
-    return with_content_hash(dict(contract=f'LUKA_SUBCLASS_HYDRA_{kind}/v1', schema_version=1,
+    version = 1 if kind in ('RECIPE', 'TARGET_RECIPE') else 2
+    return with_content_hash(dict(contract=f'LUKA_SUBCLASS_HYDRA_{kind}/v{version}', schema_version=version,
         parents=dict(parents or {}), **FLAGS, **fields))
 
 
 def validate(value, kind, parents=None):
-    digest = validate_content_hash(value, expected_contract=f'LUKA_SUBCLASS_HYDRA_{kind}/v1', expected_schema_version=1)
+    version = 1 if kind in ('RECIPE', 'TARGET_RECIPE') else 2
+    digest = validate_content_hash(value, expected_contract=f'LUKA_SUBCLASS_HYDRA_{kind}/v{version}', expected_schema_version=version)
     if any(value.get(k) != v for k, v in FLAGS.items()):
         raise PermissionError('Evaluation disclosure differs')
     if parents is not None and value.get('parents') != parents:

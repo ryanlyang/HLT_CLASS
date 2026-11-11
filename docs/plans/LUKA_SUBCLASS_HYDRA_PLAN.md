@@ -5,6 +5,18 @@ HLT student fits at subclass coefficients 0.03, 0.1, 0.3, 0.5, 1, 2, 5, 10,
 40 and 100. Reuse the authenticated same-seed Hydra C0 U100-w5 control;
 no new teacher or control fit. This plan governs this separate campaign.
 
+Execution v2 adds explicit A6000, L40 and L40S profiles after the user's Brown
+diagnostic showed gpu2201 draining for maintenance. Scientific registration,
+losses, targets, batch size, seeds and schedule remain v1. One execution selects
+one GPU type at creation; its setup and every fit use that same type. A fresh
+spec and setup are required to switch profiles; never edit the old execution.
+
+The [GTX 1080 Ti benchmark plan](LUKA_SUBCLASS_GPU_BENCHMARK_PLAN.md) defines
+a separate technical one/two-GPU FP32 experiment requested after the GPU
+availability discussion. Its artifacts cannot qualify this BF16 campaign or
+trigger its release. A later production Pascal profile needs explicit execution
+semantics and a fresh matched FP32 U100-w5 control.
+
 ## Fixed experiment
 
 Use the original 299234 TRAIN / 74895 development-validation D000 jets,
@@ -98,7 +110,7 @@ New additive namespace luka_subclass_hydra, pinned donor base
 unchanged. Registration needs the existing teacher-sweep spec only; its C0,
 Group A and input ancestry are authenticated by the original source.
 
-Queue one A6000 setup and durable CPU release(afterok). Setup builds the
+Queue one selected-profile GPU setup and durable CPU release(afterok). Setup builds the
 shared bank, proves native initialization/forward and zero-subclass U100
 model/AdamW update parity, replays the historical native checkpoint, runs all
 ten actual-target production miniatures, and measures warmed representative,
@@ -112,11 +124,30 @@ acceptance, then submits ten independent fits and report(afterany):13 jobs.
 Only walltimes can shrink from the reviewed envelope. Exclusive claims,
 content hashes and exact-ID journals reject stale or ambiguous reuse; no
 automatic retries. Setup uses12h, each fit ceiling48h with2x measured work,
-900s fixed overhead and15min startup margin. Request one RTX A6000,6 CPUs,
+900s fixed overhead and15min startup margin. Request one selected GPU,6 CPUs,
 32000MiB; host peak below85% and GPU below88% of allocation. CPU release/report
 request1 CPU,4000MiB,1h and accept Hydra's observed two-CPU rounding.
 
-The user's Hydra target and this active plan use real installed-Weaver A6000
+| Profile | Hydra GRES | CUDA device name | Compute capability |
+|---|---|---|---|
+| a6000 | gpu:nvidia_rtx_a6000:1 | NVIDIA RTX A6000 | 8.6 |
+| l40 | gpu:nvidia_l40:1 | NVIDIA L40 | 8.9 |
+| l40s | gpu:nvidia_l40s:1 | NVIDIA L40S | 8.9 |
+
+Keep the original BF16 path and software environment. Runtime checks require
+the registered GPU name/capability, native BF16 support and one allocated,
+visible GPU. Resource acceptance binds the measured device; A6000 measurements
+cannot qualify L40/L40S fits. The full numerical replay and parity checks still
+apply. No generic GPU request, reduced batch, FP16 fallback or mixed-GPU sweep.
+The original C0 is an A6000 reference: numerical replay checks cross-device
+compatibility but does not prove an identical optimization trajectory.
+
+GPU capabilities follow [NVIDIA's CUDA table](https://developer.nvidia.com/cuda/gpus).
+The user's 2026-11-10 snapshot lists L40 and L40S in partition gpus without
+maintenance drains, but with all6 and8 GPUs allocated respectively. It establishes
+eligibility, not a promised start time. A new setup must pass scheduler dry review.
+
+The user's Hydra target and this active plan use real installed-Weaver GPU
 miniatures in setup in place of legacy Tigris-only acceptance. Local synthetic
 tests establish readiness to queue setup, never remote qualification or benefit.
 Final test stays sealed. Commit/push, full dry review and bounded authorization

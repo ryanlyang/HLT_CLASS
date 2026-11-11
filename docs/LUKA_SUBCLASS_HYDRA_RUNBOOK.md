@@ -14,6 +14,26 @@ these through their original code. Setup rebuilds one subclass bank on the
 299234 TRAIN rows; it never uses FullStat3M targets. HLT-only inference remains
 unchanged.
 
+Execution v2 supports explicit `a6000`, `l40` and `l40s` profiles. The block
+below selects **l40s** while gpu2201 is draining; change its `GPU_PROFILE` line
+to `l40` to use L40 instead. Both types were fully allocated in the user's
+latest snapshot, so eligibility does not imply an immediate start. To inspect
+remaining job limits (not guaranteed release times):
+
+```bash
+squeue -w gpu2301,gpu2501 -t R,CG -o "%.18i %.15N %.12L %.30j"
+```
+
+Keep the existing `subclass_c8e15195_a6000_r1` registration and its failed dry
+review. It submitted no jobs. Do not edit that spec or its pinned worktree.
+Commit the profile support below, then create one fresh v2 execution. Its own
+setup qualifies the chosen type before auto-release; no additional data export
+is needed. Original recipes, BF16, batch128 and30 epochs are preserved.
+
+For the user's proposed older-GPU experiment, use the separate
+[GTX 1080 Ti benchmark runbook](LUKA_SUBCLASS_GPU_BENCHMARK_RUNBOOK.md).
+It queues one bounded comparison, not this ten-fit scientific campaign.
+
 ## Commit and push locally
 
 Run in the repository's PowerShell terminal. Review the listed changes before
@@ -25,10 +45,16 @@ $paths = @(
     'scripts/luka_subclass_hydra.py',
     'scripts/queue_luka_subclass_hydra.sh',
     'sbatch/run_luka_subclass_hydra.sh',
+    'scripts/luka_subclass_gpu_benchmark.py',
+    'scripts/queue_luka_subclass_gpu_benchmark.sh',
+    'sbatch/run_luka_subclass_gpu_benchmark.sh',
     'tests/test_luka_subclass_hydra.py',
+    'tests/test_luka_subclass_gpu_benchmark.py',
     'docs/plans/LUKA_SUBCLASS_HYDRA_PLAN.md',
+    'docs/plans/LUKA_SUBCLASS_GPU_BENCHMARK_PLAN.md',
     'docs/contracts/LUKA_SUBCLASS_HYDRA.md',
     'docs/LUKA_SUBCLASS_HYDRA_RUNBOOK.md',
+    'docs/LUKA_SUBCLASS_GPU_BENCHMARK_RUNBOOK.md',
     'docs/LUKA_SUBCLASS_HYDRA_VALIDATION.md'
 )
 $unexpected = @(git diff --cached --name-only) | Where-Object {
@@ -43,7 +69,7 @@ git add -p -- README.md docs/HANDOFF.md docs/LEGACY_SOURCE_MAP.md
 git diff --cached --stat
 git diff --cached --check
 if ($LASTEXITCODE -ne 0) { throw 'Fix staged whitespace first' }
-git commit -m 'Add ten U100-w5 subclass weights with automatic Hydra release'
+git commit -m 'Support L40 and L40S subclass Hydra executions'
 if ($LASTEXITCODE -ne 0) { throw 'Commit failed' }
 git push origin main
 if ($LASTEXITCODE -ne 0) { throw 'Push failed' }
@@ -63,6 +89,8 @@ minutes. Its printed log can be tailed from another terminal.
 bash <<'BASH'
 set -euo pipefail
 BASE="$(cd "$HOME" && pwd -P)/hlt_u100_pairs"
+GPU_PROFILE=l40s
+[[ "$GPU_PROFILE" =~ ^(a6000|l40|l40s)$ ]]
 TEACHER_SWEEP_SPEC="${BASE}/runs/teacher_sweep_6fe7e349_a6000_r1/campaign_spec.json"
 test -f "$TEACHER_SWEEP_SPEC"
 MAIN="$(python3 -B -s -c 'import json,sys; print(json.load(open(sys.argv[1]))["project_dir"])' "$TEACHER_SWEEP_SPEC")"
@@ -78,7 +106,7 @@ else
     git -C "$MAIN" worktree add --detach "$PROJECT" "$COMMIT"
 fi
 ENV_DIR="$(python3 -B -s -c 'import json,sys; print(json.load(open(sys.argv[1]))["environment_dir"])' "$TEACHER_SWEEP_SPEC")"
-ROOT="${BASE}/runs/subclass_${COMMIT:0:8}_a6000_r1"
+ROOT="${BASE}/runs/subclass_${COMMIT:0:8}_${GPU_PROFILE}_v2_r1"
 test ! -e "$ROOT"
 df -h "$BASE"
 read -r -p 'Personally available GiB for new outputs (at least 5): ' QUOTA_GIB </dev/tty
@@ -93,7 +121,8 @@ printf 'Registration log: %s\n' "$REG_LOG"
 if ! "${ENV_DIR}/bin/python" -u -B -s \
     "${PROJECT}/scripts/luka_subclass_hydra.py" create \
     --root "$ROOT" --teacher-sweep-spec "$TEACHER_SWEEP_SPEC" \
-    --expected-commit "$COMMIT" --quota-gib "$QUOTA_GIB" >"$REG_LOG" 2>&1; then
+    --expected-commit "$COMMIT" --quota-gib "$QUOTA_GIB" \
+    --gpu-profile "$GPU_PROFILE" >"$REG_LOG" 2>&1; then
     tail -n 100 -- "$REG_LOG"
     printf 'Registration stopped; preserve its log and any output root.\n' >&2
     exit 1
@@ -110,7 +139,7 @@ logout is safe. Successful setup authenticates T00, builds the frozen TRAIN
 subclass bank, verifies native/U100 parity and runs every actual-target
 miniature. The CPU release then submits S0p5,S5,S40,S1,S10,S100,S0p3,S2,S0p1,S0p03
 with measured walltimes, followed by an afterany CPU report. Each fit requests
-one A6000 and has no dependency on another fit. There are 13 jobs in total:
+one GPU of the registered type and has no dependency on another fit. There are 13 jobs in total:
 setup, release, ten fits and report. No additional confirmation or login-side
 process is needed after the initial authorization. Setup can still reject
 invalid inputs, resource limits or numerical parity; it never rejects a finite
@@ -124,7 +153,8 @@ against an existing output directory.
 
 ## Epoch-by-epoch and completed results
 
-This finds exactly one campaign. If several exist, replace the `SPECS` line
+This finds exactly one L40S v2 campaign. Change the pattern to `_l40_v2_r1`
+or `_a6000_v2_r1` if that was your chosen profile. If several exist, replace the `SPECS` line
 with the intended full spec path. Set `MODE=results` for authenticated completed
 fits, or `MODE=inspect-submission` for exact setup/release/science IDs.
 
@@ -132,7 +162,7 @@ fits, or `MODE=inspect-submission` for exact setup/release/science IDs.
 bash <<'BASH'
 set -euo pipefail
 shopt -s nullglob
-SPECS=("$HOME"/hlt_u100_pairs/runs/subclass_*_a6000_r1/campaign_spec.json)
+SPECS=("$HOME"/hlt_u100_pairs/runs/subclass_*_l40s_v2_r1/campaign_spec.json)
 [[ ${#SPECS[@]} -eq 1 ]] || { printf 'Select one exact subclass spec; found %s\n' "${#SPECS[@]}"; exit 1; }
 SPEC="${SPECS[0]}"
 MODE=progress

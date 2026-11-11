@@ -1,9 +1,16 @@
-# U100-w5 plus subclass Hydra contract v1
+# U100-w5 plus subclass Hydra execution contract v2
 
 Scientific authority: [active plan](../plans/LUKA_SUBCLASS_HYDRA_PLAN.md).
-All artifacts carry `LUKA_SUBCLASS_HYDRA_<KIND>/v1`, schema_version1, content
-hash, explicit parents and the existing exploratory-development disclosure
-flags. Old FullStat and teacher-sweep artifacts retain their own contracts.
+Execution artifacts carry `LUKA_SUBCLASS_HYDRA_<KIND>/v2`, schema_version2,
+content hash, explicit parents and the existing exploratory-development
+disclosure flags. Unchanged RECIPE and TARGET_RECIPE retain v1 and their exact
+hashes. Old FullStat, teacher-sweep and original A6000 execution artifacts retain
+their own contracts and pinned readers. V1 execution receipts cannot qualify v2.
+
+The standalone [1080 Ti benchmark](../plans/LUKA_SUBCLASS_GPU_BENCHMARK_PLAN.md)
+uses `LUKA_SUBCLASS_GPU_BENCHMARK_*/v1` and `benchmark_spec.json`. Those
+artifacts are neither scientific SPEC nor ACCEPTANCE receipts. Its FP32,
+one/two-GPU timing and parity report cannot authorize this campaign's release.
 
 ## Registration and source
 
@@ -15,6 +22,14 @@ environment, paths and resource envelope. Original T00 authentication runs in
 its pinned original project; no S00 student is required. Counts are exactly
 299234 TRAIN and 74895 development-validation. All ten fits keep the same
 initialization and sampler seeds. No new control or teacher is registered.
+
+SPEC binds execution_version2 and one explicit gpu_profile: a6000, l40, or l40s.
+The profile determines exact typed GRES, CUDA device name and compute capability
+(8.6 for A6000; 8.9 for L40/L40S). The CLI defaults to a6000 for an omitted
+profile; the maintenance-recovery runbook explicitly selects l40s. Precision,
+batch128, CPU/RAM requests and all scientific settings remain fixed. Unknown or
+internally inconsistent profiles fail closed. A profile change requires a new
+root, exact-source spec, authorization, dry review and measured setup.
 
 ## Target bank
 
@@ -78,5 +93,5 @@ agreement or teacher quality must never cancel or skip another registered row.
 Results/progress are read-only and compute native recovery relative to the
 historical M0HLT/OFFLINE anchors, with C0 and SPORC U100 distinguished.
 Original50k overlaps validation; neither is an independent test. Final test
-remains sealed. Remote readiness is established by the actual A6000 setup,
+remains sealed. Remote readiness is established by the actual selected-profile GPU setup,
 not by local synthetic CUDA evidence.

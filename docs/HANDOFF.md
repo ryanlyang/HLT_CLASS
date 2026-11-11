@@ -1,5 +1,127 @@
 # Current Handoff
 
+## 2026-11-10: Bounded one/two-GPU GTX 1080 Ti benchmark
+
+Implemented the user's request to test idle older Hydra GPUs before choosing
+a production execution. New `luka_subclass_hydra/benchmark*.py`, separate
+CLI/queue/Slurm scripts, focused tests, [plan](plans/LUKA_SUBCLASS_GPU_BENCHMARK_PLAN.md)
+and [runbook](LUKA_SUBCLASS_GPU_BENCHMARK_RUNBOOK.md) register one two-GTX1080Ti,
+six-CPU,32000MiB, two-hour allocation. Real small-data TRAIN subclass targets
+and U100 targets are reused through authenticated parent artifacts. Sequential
+one-card/two-card FP32 phases measure weights0.5 and100 with global batch128.
+DDP synchronizes BatchNorm and correctly weights uneven final batches; global
+particle padding is preserved. Deterministic loss/gradient/buffer/state parity,
+normal-dropout timing, longest-support memory and partial batches are reported.
+
+New `LUKA_SUBCLASS_GPU_BENCHMARK_*/v1` contracts cannot act as science SPEC or
+ACCEPTANCE. No release job or full campaign submission is present. Parent
+source, file hashes, atomic artifacts and exact-ID submission journals remain
+required. One-card phase failure still attempts the two-card phase and preserves
+both exit codes/logs. Reports distinguish single-run speedup from idealized
+independent-run throughput; train-only projections exclude validation and other
+overhead. The original scientific BF16 recipe and pending profile changes remain
+as documented below. Donor commit c8e15195f8fe2bdcecd15e66693031f5a4596697 and
+reused files are recorded in LEGACY_SOURCE_MAP; unrelated work was preserved.
+
+Before this work,73 subclass tests passed in72.29s. Combined subclass and
+benchmark verification passed93 tests with1 skip in80.51s. After adding the
+phase-failure orchestration cases, the benchmark suite passed22 tests with1
+skip in17.78s. Evidence includes a real two-process CPU Gloo gradient comparison,
+local installed-Weaver CPU updates and a one-GPU FP32 full128/partial-batch
+measurement on the RTX2000 Ada laptop GPU. The two-GPU NCCL/SyncBatchNorm test
+is skipped locally because only one GPU is available. All32 required source
+files exist; Python/shell syntax, Bash examples, new links and whitespace pass.
+
+No commit/push, Brown submission, real research training, or Hydra/Tigris
+qualification was performed. Exact next task: scoped commit/push and the
+benchmark runbook's fresh Brown registration and one-job submission. Actual
+1080 Ti memory, speed and two-GPU numerical behavior remain unmeasured. A useful
+result would precede a separate production FP32 profile and matched U100 control.
+
+## 2026-11-10: Subclass execution v2 supports L40 and L40S
+
+The user's Brown diagnostics show A6000 gpu2201 draining for MAINT. The
+registered c8e15195 execution stopped at scheduler dry review; no bootstrap
+jobs were submitted. L40 gpu2301 and L40S gpu2501 are in partition gpus without
+drains but all6/all8 GPUs were allocated in the supplied snapshot. Availability
+and start times cannot be inferred from the MIXED state alone.
+
+Added campaign-local `execution.py` with explicit a6000/l40/l40s profiles.
+Updated registration, CLI, worker allocation, resource acceptance, submission
+plan, tests, plan/contract/runbook/validation and README/source-map discovery.
+Each v2 execution uses one type for setup and all ten fits; runtime requires
+the registered device name/capability, one allocated visible GPU and BF16.
+Execution contracts and authorization are v2. Scientific recipe/target hashes,
+batch128,30 epochs, original losses and the setup/auto-release DAG are unchanged.
+The runbook selects l40s and creates a new `_l40s_v2_r1` root; v1 artifacts and
+their original worktree remain intact. C0 remains the historical A6000 reference.
+
+Donor adaptation: selective-teacher allocation checks at
+c8e15195f8fe2bdcecd15e66693031f5a4596697, plus existing scheduler/environment
+and CPU allocation imports, recorded in LEGACY_SOURCE_MAP. Donor runtime was
+not edited. Before changes,62 tests passed in77.93s. Final focused suite:
+73 passed in78.48s, including immutable profile registration, controller/device
+checks, wrong-type/precision rejection, preserved scientific hashes, all three
+fake-scheduler auto-release flows and the existing local synthetic CUDA/Weaver
+checks. Python/shell syntax, runbook Bash examples, links and whitespace passed.
+
+No commit, push, remote inference/training or job changes were performed.
+Local device tests mock remote allocation identities; they do not qualify real
+L40/L40S throughput. Next: scoped commit/push, fresh profile registration and
+the runbook's setup plus automatic-release submission. Real setup must pass
+native replay, parity, actual-target miniatures and measured resource admission.
+
+## 2026-11-10: U100-w5 plus subclass sweep, queue-ready implementation
+
+Added `luka_subclass_hydra`, thin CLI/queue/Slurm entrypoints, focused tests,
+[plan](plans/LUKA_SUBCLASS_HYDRA_PLAN.md), new
+[contract](contracts/LUKA_SUBCLASS_HYDRA.md),
+[runbook](LUKA_SUBCLASS_HYDRA_RUNBOOK.md) and
+[validation record](LUKA_SUBCLASS_HYDRA_VALIDATION.md).
+Ten new same-seed native HLT fits use CE+U100-w5 plus conditional subclass KL
+at .03,.1,.3,.5,1,2,5,10,40,100, ramped over three of30 epochs on299234/74895.
+Reuse matched C0 and small-data OFFLINE T00; no new teacher/control and no
+FullStat3M targets. One frozen TRAIN bank uses the original75/25 embedding /
+margin clustering kernel. Both training-only heads are removed at deployment.
+
+New `LUKA_SUBCLASS_HYDRA_*/v1` artifacts bind exact source, parent T00/C0,
+population, recipes, immutable targets, reports and accepted Slurm IDs.
+Every fit records raw/weighted losses, native validation and observation-only
+gradient/subclass diagnostics. Setup plus CPU afterok release automatically
+submits ten independent measured fits and an afterany report (13 total jobs).
+Exact claims/journals reject duplicate or ambiguous submissions.
+
+Donor baseline5571240c8c42fce1103344dff94c88bf8edf13c5; imports/adaptations are
+recorded in LEGACY_SOURCE_MAP. Existing runtime and unrelated work preserved.
+Before edits:63 donor tests passed in70.74s. New suite:62 passed in77.82s,
+including full30 synthetic fits, CPU/CUDA U100 parity, all ten full-depth CUDA
+updates, target/role/hash validation, production setup/startup functions and
+fake-scheduler auto-release. Local installed-Weaver fixture testing is not real
+Hydra/Tigris acceptance. No research inference/training, commit/push or jobs
+were performed. Exact next task: scoped commit/push and runbook registration;
+real A6000 setup qualification precedes automatic science release.
+
+After tightening duplicate-ID/class-label checks, the focused target-reader
+rerun passed8 tests in11.76s. CLI registry, Python/shell syntax, runbook Bash
+blocks, Markdown links and whitespace were checked.
+
+## 2026-11-10: FullStat subclass developer guide
+
+Added [LUKA_FULLSTAT_SUBCLASS_DEVELOPER_GUIDE.md](LUKA_FULLSTAT_SUBCLASS_DEVELOPER_GUIDE.md)
+and discovery links in README and the C06 runbook. The guide traces the frozen
+OFFLINE within-class prototype targets, 75/25 embedding/margin geometry,
+soft membership calibration, conditional 60-output head, full objective and
+independent C06 ramps. It maps kernels, campaign execution, artifacts, analysis,
+recovery and tests, and explains which changes need a new scientific identity.
+
+Inspected implementation commit: 5571240c8c42fce1103344dff94c88bf8edf13c5.
+Focused target/recipe/CPU-CUDA loss-gradient tests: 30 passed in 28.82s, with
+the existing Windows joblib physical-core warning. All 44 guide links resolve;
+Bash examples, key code symbols, Markdown fences and whitespace were checked.
+Documentation-only work;
+no runtime or contract changes, donor migration, remote validation, research
+inference or job changes. Existing unrelated working-tree edits preserved.
+
 ## 2026-11-10: Eight U100 embedding-objective fits, queue-ready implementation
 
 Implemented the separate `luka_embedding_objective_hydra` campaign described
@@ -16943,3 +17065,37 @@ commit after verifying its runtime delta contains only the separate Hydra
 complementary-teacher additions. Oscar donor files and subclass science remain
 unchanged. Updated source/registration/detached-launch tests:15 passed in10.37s.
 No jobs submitted, commit or push performed; scoped commit/push is next.
+
+
+## 2026-11-10: Oscar subclass follow-up with contrastive0.6
+
+Implemented the user-requested one-factor comparison under
+`luka_fullstat_subclass_c06`: one fresh HLT-only20-epoch fit on the existing
+3M TRAIN/500k validation split. Only matching strength changes0.3 to0.6.
+Subclass0.5 uses its original three-epoch ramp independently; CE1,
+U100/CONCAT/FUSION embedding10, temperature, candidates, seeds, optimizer,
+precision, schedule and native deployment remain matched.
+
+The parent is completed subclass job8761518 at16546c0e. Its original-source
+validator, report/receipt bindings and frozen target files are authenticated;
+probabilities/prototypes/manifest are copied byte-identically without refitting
+or importing old student weights. Separate C06 v1 execution contracts retain
+the original v1 bank meaning and preserve both old campaigns. Source baseline
+isffaf2997b3fa76a45e53105dae4c8ed68be3d56a; donor16546c0e is documented in
+[LEGACY_SOURCE_MAP.md](LEGACY_SOURCE_MAP.md).
+
+Local evidence:35 existing baseline cases passed before edits, then53 distinct
+new cases passed (34 model/runtime/queue,11 target/worker,8 source-binding
+cases). Includes installed-Weaver local CUDA full-objective startup,
+full/partial CPU/CUDA gradient comparisons, exact20-epoch continuation,
+publication-only recovery, frozen target identity/corruption and detached
+single-job submission. Local syntax/links/whitespace checks passed.
+[Validation](LUKA_FULLSTAT_SUBCLASS_C06_VALIDATION.md) records precise scope.
+No actual Oscar/Tigris data miniature, scientific result, remote submission,
+commit or push was performed. In-job real-allocation admission remains.
+
+Changed: additive campaign package, CLI/launcher/worker, three focused test
+files, plan/contract/runbook/validation and shared documentation additions.
+Original runtime and unrelated dirty files were preserved. Next: scoped
+commit/push and [detached Oscar queue command](LUKA_FULLSTAT_SUBCLASS_C06_RUNBOOK.md).
+Exactly one L40S/6CPU/192000MiB/48h job; no separate preflight or teacher fit.
