@@ -584,3 +584,9 @@ It keeps3M/500k,20 epochs and native HLT inference. See the
 The [subclass developer guide](docs/LUKA_FULLSTAT_SUBCLASS_DEVELOPER_GUIDE.md)
 explains target construction, conditional losses, code ownership, saved
 artifacts and how to develop variants, including the contrastive-0.6 follow-up.
+
+The [six-teacher extension](docs/plans/LUKA_FULLSTAT_SIX_TEACHER_PLAN.md) adds
+pure OFFLINE, hybrid UE100 and previous split-head DE066/DE033 supervision to
+CONCAT/FUSION, with independent logit heads, contrastive0.3 and frozen
+subclass0.5. [Oscar queue instructions](docs/LUKA_FULLSTAT_SIX_TEACHER_RUNBOOK.md)
+describe one detached student job and its integrated acceptance.

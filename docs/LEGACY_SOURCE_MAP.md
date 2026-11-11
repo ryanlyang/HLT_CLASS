@@ -6260,3 +6260,30 @@ snapshot, canonical checksums/atomic writes, native ParT, FullStat recipe and
 exact-DAG journals remain imports. New science/execution artifacts use
 `LUKA_FULLSTAT_SUBCLASS_C06_*/v1`; original target-bank artifacts keep
 `LUKA_FULLSTAT_SUBCLASS_*/v1` byte-for-byte identity.
+
+## Oscar six-teacher subclass extension
+
+Implementation baseline: `0a00441fee7b7974f6e7b2692e79519a65faabd3`.
+Primary runtime donor: `5571240c8c42fce1103344dff94c88bf8edf13c5` (C06 lifecycle),
+present unchanged at that baseline. Original subclass scientific donor remains
+`16546c0e0196ab85cd69e23de005dc5f6f29feb5`; the ladder evidence donor is
+`04d1f0f5945ab9af38d83e192eff48e124ad8dc5`. No Fresh_check runtime import.
+
+| Donor files, relative to src/hlt_classification unless otherwise shown | Use |
+| --- | --- |
+| `luka_fullstat_subclass_c06/{__init__,contracts,source,campaign,model,sampling,training,banks,startup,worker,submission,launch,execution,recovery,targets}.py` | Adapted into the separate `luka_fullstat_six_teacher` namespace; new six-teacher science, two-parent authentication, native KD exports, expanded diagnostics and export-only recovery. |
+| `scripts/luka_fullstat_subclass_c06.py`, `scripts/launch_luka_fullstat_subclass_c06.sh`, `sbatch/run_luka_fullstat_subclass_c06.sh` | Adapted thin CLI, detached launcher and absolute-path worker. |
+| `tests/test_luka_fullstat_subclass_c06{,_targets,_lifecycle}.py` | Adapted runtime, target and recovery fixtures; new objective, native export and two-parent authentication cases. |
+| `luka_fullstat_finetune/source.py`, `luka_fullstat_fine_tail/{banks,kd_banks,worker}.py` | Original-source replay and unchanged bank/rejection readers; select only OFFLINE/UE100/DE066/DE033 evidence. |
+| `luka_fullstat_subclass/{contracts,model,targets}.py` | Unchanged frozen subclass recipe, conditional KL and target-bank validators. |
+| `luka_fullstat_multiview/{model,fusion,views,targets,resources,startup,execution}.py`, `luka_u100_multiview/{teachers,training}.py` | Existing native teacher factories (including synchronous FUSION), physical views, standardized bank reader, memory policy, forward and diagnostics. |
+| `luka_fullstat_multi3_contrastive/sampling.py`, `luka_u100_contrastive/losses.py`, `luka_fullstat_embedding_sweep/banks.py`, `luka_fullstat_readout/{source,training,worker}.py` | Exact candidate sampler, matching loss, OFFLINE bank, optimizer/state/reference helpers. |
+
+Other fixture donors remain `tests/test_luka_attention.py`,
+`test_luka_embedding_aux.py`, `test_luka_u100_contrastive.py`,
+`test_luka_fullstat_subclass{,_targets}.py`,
+`test_luka_fullstat_multi3_contrastive.py` and
+`test_luka_fullstat_multiview_launch.py`, at the implementation baseline.
+Canonical hash/atomic publication, native ParT, FullStat schedule and exact-DAG
+journals remain imports. New science/execution/export contracts are
+`LUKA_FULLSTAT_SIX_TEACHER_*/v1`; old banks retain their original identities.

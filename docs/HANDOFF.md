@@ -17216,3 +17216,40 @@ files, plan/contract/runbook/validation and shared documentation additions.
 Original runtime and unrelated dirty files were preserved. Next: scoped
 commit/push and [detached Oscar queue command](LUKA_FULLSTAT_SUBCLASS_C06_RUNBOOK.md).
 Exactly one L40S/6CPU/192000MiB/48h job; no separate preflight or teacher fit.
+
+## Oscar six-teacher subclass extension — implemented, not submitted
+
+The new [active plan](plans/LUKA_FULLSTAT_SIX_TEACHER_PLAN.md) implements one
+fresh20-epoch HLT student on the same3M TRAIN/500k development-validation split.
+OFFLINE/CONCAT/FUSION embeddings receive10/3 each; hybrid UE100 and the previous
+split-head DE066/DE033 embeddings receive5/3 each after a three-epoch ramp.
+Six independent T2 auxiliary logit heads share total KD1 with the same ramp.
+Native CE1, original pure-OFFLINE contrastive0.3 and byte-identical frozen
+subclass0.5 supervision remain. Original COARSE_U100 is removed from active
+supervision; all auxiliary heads are removed from deployment.
+
+Changed: additive `luka_fullstat_six_teacher` package, CLI/detached launcher/
+Slurm worker, three focused test files, new plan/contract/runbook/validation,
+README and donor-map documentation. No historical runtime files changed;
+unrelated dirty Hydra work and documentation remain preserved. New contracts
+are `LUKA_FULLSTAT_SIX_TEACHER_*/v1`; original bank identities stay unchanged.
+
+Donors: C06 lifecycle at5571240c8c42fce1103344dff94c88bf8edf13c5, original
+subclass16546c0e0196ab85cd69e23de005dc5f6f29feb5 and fine-tail teacher evidence
+04d1f0f5945ab9af38d83e192eff48e124ad8dc5, as mapped in
+[LEGACY_SOURCE_MAP.md](LEGACY_SOURCE_MAP.md). Runtime source baseline is
+0a00441fee7b7974f6e7b2692e79519a65faabd3.
+
+Evidence:52 distinct new focused cases passed plus53 donor regressions.
+Includes local installed-Weaver CUDA/full architecture startup, exact native
+CONCAT/FUSION KD exports, all six original bank readers, full/partial CPU/CUDA
+losses, CE-only deployed-head gradients,20-epoch optimizer/RNG continuation,
+publication-only and export-only recovery, sealed-role/lineage guards, and
+detached single-job submission fixtures. Static checks passed. See
+[validation](LUKA_FULLSTAT_SIX_TEACHER_VALIDATION.md) for fixture limits.
+
+No actual Oscar/Tigris data miniature, scheduler submission, commit or push was
+performed. The one requested job performs native TRAIN KD exports and genuine
+allocation acceptance before training; no separate preflight or teacher fit.
+Next: scoped commit/push, then the [detached queue command](LUKA_FULLSTAT_SIX_TEACHER_RUNBOOK.md).
+Request: one L40S,6CPU,192000MiB,48h ceiling,12GiB minimum available result quota.
