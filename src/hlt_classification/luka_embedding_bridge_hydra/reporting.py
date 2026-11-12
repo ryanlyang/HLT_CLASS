@@ -53,7 +53,10 @@ def measure_cpu(spec):
         for _ in range(3):evaluate_probabilities(base['labels'][sel],base['probabilities'][sel])
         elapsed.append((time.perf_counter()-started)/3)
     started=time.perf_counter()
-    for task in FITS:training.validate_fit(Path(spec['root'])/'setup'/('mini_'+task),spec,task,technical=True)
+    from .qualified import miniature
+    for task in FITS:
+        folder,owner=miniature(spec,task)
+        training.validate_fit(folder,owner,task,technical=True)
     mini_seconds=time.perf_counter()-started
     # validate_fit: primary plus component metrics. results: full and subset.
     full_calls=sum(2+len(training.component_names(t)) for t in FITS)

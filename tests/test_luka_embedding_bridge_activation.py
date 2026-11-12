@@ -145,7 +145,7 @@ def test_admission_rejects_resealed_incomplete_checkpoint_evidence(tmp_path,bad)
     if bad=='condition':checkpoint['checks'][0]['condition']=['HLT','whole']
     if bad=='rank':checkpoint['checks'][0]['ranks'].pop()
     if bad=='stress_rows':stress['cases'][0]['rows']=64
-    if bad=='stress_gpu':stress['memory']['ranks'][0]['gpu_peak_bytes']=11*2**30
+    if bad=='stress_gpu':stress['memory']['ranks'][0]['gpu_peak_bytes']=value['devices'][0]['total_memory_bytes']
     if bad=='stress_time':stress['cases'][0]['seconds']=-1.
     for part in ('tp_checkpoint','tp_stress'):
         value[part].pop('content_hash');value[part]=with_content_hash(value[part])
@@ -157,14 +157,17 @@ def test_tp_checks_precede_numerical_replay_and_miniatures(monkeypatch,tmp_path)
     from hlt_classification.luka_embedding_bridge_hydra import resources
     from types import SimpleNamespace
     events=[]
+    monkeypatch.setattr(resources.qualified,'profiles',lambda *a:dict.fromkeys(resources.qualified.REUSED))
+    monkeypatch.setattr(resources.qualified,'profile_devices',lambda *a:[])
+    monkeypatch.setattr(resources.regional_inputs,'qualify',lambda *a:events.append('frontend'))
     monkeypatch.setattr(banks,'Targets',lambda *a:object())
     monkeypatch.setattr(resources.qualification,'tp_checkpoint',lambda *a:events.append('parity'))
     def stop(*a):events.append('stress');raise MemoryError('early')
     monkeypatch.setattr(resources,'tp_stress',stop)
     monkeypatch.setattr(banks,'prepare_u100',lambda *a:pytest.fail('Late work ran before early stress'))
     with pytest.raises(MemoryError,match='early'):
-        resources.measure(dict(root=str(tmp_path)),None,SimpleNamespace(world=2,device=torch.device('cuda')),None,1.)
-    assert events==['parity','stress']
+        resources.measure(dict(root=str(tmp_path)),None,SimpleNamespace(world=2,device=torch.device('cuda'),main=lambda fn:fn()),None,1.)
+    assert events==['frontend','parity','stress']
 
 
 def _two_cuda_checkpoint(rank,root,init_method):

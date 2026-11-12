@@ -10,11 +10,11 @@ from hlt_classification.luka_fullsim.regular_submission import clean_environment
 from hlt_classification.luka_particle_teacher_hydra.submission import scheduler_review
 from .contracts import AUTHORIZATION,artifact
 from .registry import FITS,dependencies
-from . import campaign
+from . import campaign,execution
 
 
 def command(spec,task,minutes,*,cpu=False,dependencies=(),after='afterok'):
-    project=spec['project_dir']; root=Path(spec['root']); site=(spec['report_site'] if task=='report' else spec['cpu_site']) if cpu else spec['execution_site']
+    project=spec['project_dir']; root=Path(spec['root']); site=(spec['report_site'] if task=='report' else spec['cpu_site']) if cpu else execution.configuration(execution.profile(spec,task))['execution_site']
     cmd=['sbatch','--parsable','--no-requeue','--kill-on-invalid-dep=yes','--nodes=1','--ntasks=1','--export=NONE',
         '--partition='+site['partition'],'--account='+site['account'],'--qos='+site['qos'],
         '--cpus-per-task='+str(site['cpus'] if cpu else spec['cpus']),

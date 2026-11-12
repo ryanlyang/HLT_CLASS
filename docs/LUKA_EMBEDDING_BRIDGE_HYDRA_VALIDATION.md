@@ -1,5 +1,78 @@
 # Embedding bridge / response / region validation
 
+## 2026-11-12 queue instructions after R8 commit58d0c0ed
+
+The separate R8 campaign was committed after the initial repair validation.
+Advanced the reviewed source-admission baseline to
+58d0c0edf5f41cff2398fb168fc16fc92e169294 after inspecting its runtime diff.
+AST comparisons confirm the shared `storage`, `physical_columns` and
+`cpu_allocation` helpers consumed by bridge are unchanged. Bridge numerical
+donors are unchanged; R8 decoder/model/loss paths are not bridge execution.
+Focused source/queue/recovery-credit/hardware tests:6passed in12.00s;
+all three runbook Bash blocks and scoped whitespace checks pass.
+
+Runbook recovery now prints exact new free-space demand from the saved
+49-array reuse inventory before creating a worktree or submitting jobs.
+The known inventory implies about15.88GiB including the1GiB reserve;
+20GiB additional free is recommended. The original total-output quota field
+is inherited, while actual new disk demand credits hard-linked arrays.
+No input copies, remote jobs, commit or push were performed here.
+
+## 2026-11-12 TP runtime repair after setup165857
+
+The user supplied completed resource diagnostics from27a83412. All30
+production miniatures and parity checks finished. Only TP exceeded48h:
+13311min including2x safety; its components before safety were56.31h training,
+47.70h validation and6.66h other. TP memory peaked at7,728,843,264bytes on one
+rank and7,090,016,768 on the other; no OOM occurred in this setup.
+
+Local profiling identified repeated scalar crop construction/physical
+validation. The batched frontend preserves per-crop contiguous FP64 sum order,
+own-frame transforms, final FP32 bytes, masks and global padding. A128-jet
+synthetic benchmark with50–150 particles per jet and randomized momenta/tracking
+measured coarse0.2505→0.0328s, medium0.4056→0.0384s, fine0.6843→0.0426s.
+Every output byte matched. This is a CPU frontend benchmark only; it does not
+establish the whole TP speedup or a new walltime on Brown.
+
+Coverage includes empty/single/513-particle crops, neutral categories and
+partially valid tracking; corrupted physical fields are still rejected.
+All six source/scale conditions retain exact dropout RNG, gradients, buffers
+and AdamW updates in local tests. The real prepared-data frontend witness and
+historical teacher-bank/new-student consumption run through production code.
+Qualification recovery tests retain original ownership, reject modified
+artifacts and changed scientific inputs, enforce byte-preserved29 profiles,
+reject other historical resource failures, and exercise the setup path that
+fits TP alone. An impossible training-only bound stops before full validation.
+
+Local evidence (Python3.10 tagging-hlt, pinned local Weaver fixture, one RTX2000
+Ada GPU; no local pair of NCCL GPUs):
+
+- Hardware, qualification recovery, core and activation suites:
+  **89passed,2two-GPU skips** in121.16s. Tests reject wrong GRES, mixed GPU
+  pairs, cross-profile measurements, changed historical profiles and excess
+  resource requests; setup orchestration fits TP alone.
+- Native inputs, numerical checks, preparation recovery and crop frontend:
+  **76passed**, one fixture missing the new TP profile field. Corrected the
+  fixture; its two preparation-order cases then passed in5.57s. Across the
+  eight suites, **166distinct tests passed;2 require two CUDA/NCCL GPUs**.
+- Includes source/recipe guards, exact crop bytes and optimizer updates, real
+  teacher-bank export/consumer integration, one-GPU native Weaver/CUDA checks,
+  and corruption/lineage rejection. The local Weaver fixture is not a claim
+  of production installed-environment qualification on Brown.
+- 35 Python files parsed; all3 current runbook Bash blocks and both worker/
+  queue scripts pass `bash -n`; CLI create help and scoped diff checks pass.
+
+No commit, push, SSH, remote inference or Slurm submission was performed here.
+SPEC/v6 / RESOURCES-v3 / ACCEPTANCE-v3 are distinct from old execution evidence;
+scientific RECIPE/v1 is still exactly equal to the original0a00441f recipe.
+The next remote setup must prove crop byte parity, TP runtime/memory, current
+distributed update parity and CPU admission. It reuses the29 completed
+historical miniatures/profiles instead of fitting them again. The user's latest
+instruction moves setup and TP directly to two RTX A6000s. The other29 science
+fits remain on two GTX1080Ti cards. Per-task measured device records prevent
+cross-profile resource reuse; both profiles retain FP32/global128/two ranks.
+The new setup must establish TP's A6000 timing and still fails closed above48h.
+
 ## 2026-11-11 TP activation-memory repair after setup164517
 
 User-supplied Brown evidence: U100 numerical qualification passed, followed by

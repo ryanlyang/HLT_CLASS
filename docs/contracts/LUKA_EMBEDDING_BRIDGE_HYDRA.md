@@ -1,8 +1,48 @@
-# Embedding bridges, responses and regions: recipe v1, execution v5
+# Embedding bridges, responses and regions: recipe v1, execution v6
 
 Scientific authority: [implementation plan](../plans/LUKA_EMBEDDING_BRIDGE_RESPONSE_REGION_HYDRA_PLAN.md).
 Execution and commands: [runbook](../LUKA_EMBEDDING_BRIDGE_HYDRA_RUNBOOK.md).
 This namespace is distinct from the older embedding/logit ladders.
+
+## Batched crop frontend and completed-qualification reuse (v6)
+
+SPEC/v6 adds CROP_EXECUTION_POLICY/v1 and required QUALIFICATION_REUSE/v1.
+The batched frontend retains the scalar `regions.crops` as its authority:
+per-crop contiguous FP64 p4 sums in original order, own-crop frame/normalization,
+same17 features, vectors, valid masks, dummy empty tokens, and global128 padding.
+Full physical source validation precedes subsetting. No persistent cache or
+new scientific inputs are introduced. CROP_FRONTEND/v1 records byte equality
+on all-class, long-support and random TRAIN/validation panels, both sources,
+all scales. The production native forward, losses and RNG remain unchanged.
+
+Only completed v5 source27a8341210ca686b74d1c538a3ed258bb7fe947d is eligible for
+qualification recovery. It must have all30 completed miniatures/profiles,
+passing memory/parity/replay checks, only TP over the time ceiling, no setup
+acceptance/receipt, and a confirmed FAILED1:0 setup with no active bootstrap
+jobs or submitted science. Pin/hash every reused miniature/bank/epoch artifact,
+source spec and measurement. Match scientific registration and input-array
+bytes. Historical fits and measurements retain original ownership and paths;
+new setup records their explicit reuse, not rewritten historical receipts.
+
+RESOURCES/v3 and ACCEPTANCE/v3 require new frontend parity, new TP measurement
+and memory/checkpoint proofs, exact preservation of all29 reused profiles,
+and the same48h/memory limits. `task_devices` binds each fit to its measured
+hardware: TP/setup use two RTX A6000s; the29 other fits use the original two
+GTX1080Ti cards. The source profiles and Pascal device records are preserved
+exactly. Controller requested/allocated GRES and visible device identities
+must match the task; mixed pairs and cross-profile timing reuse are rejected.
+World size2, global batch128, FP32 and SyncBatchNorm remain fixed.
+Current-runtime distributed parity, original
+teacher replay, and CPU qualification still run. TP is measured and admitted
+before any unaffected fits; a time failure preserves `resource_TP.json`.
+Scientific training always starts fresh and validates its actual parents.
+
+Source admission now uses58d0c0edf5f41cff2398fb168fc16fc92e169294 after review of
+the separately committed R8 campaign. Bridge-consumed `storage`,
+`physical_columns` and shared `cpu_allocation` function bodies are unchanged;
+bridge numerical donors are unchanged. Recipe v1, numerical policy and TP checkpoint policy
+remain unchanged. Older v5 resources are readable only through the explicit
+historical audit, and cannot serve as v3 acceptance.
 
 ## TP memory execution policy (v5)
 
@@ -78,8 +118,9 @@ the assignment NPZ must reproduce its original hash; rematching is forbidden.
 The export binds original prepared/source proofs, conventions and summaries.
 
 SPEC/v2 requires `native_input_policy`, `native_root`, `native_hash`, and the
-native hash as an explicit parent. Source registration freezes donor runtime
-at2fb09f38a3a1da85cdceff9df311963fdb3aa872 and allows only additions/modifications
+native hash as an explicit parent. The prior repair froze donor runtime
+at2fb09f38a3a1da85cdceff9df311963fdb3aa872; v6 uses the reviewed additive baseline
+above and allows only additions/modifications
 inside the declared campaign runtime. The original scientific donor remains
 45075fe6c2d8ccdcf7463cd3a99cbe2fe6976a08; imported numerical code is unchanged.
 
@@ -183,14 +224,15 @@ contracts unchanged. Old artifacts do not become this campaign's artifacts.
 
 ## Execution and release
 
-GPU jobs: Hydra/gpus/default/normal, one node/task,6CPU,48000MiB,
-`gpu:geforce_gtx_1080_ti:2`, exactly two torchrun ranks, FP32 and SyncBatchNorm.
+GPU jobs: Hydra/gpus/default/normal, one node/task,6CPU,48000MiB.
+TP/setup request `gpu:nvidia_rtx_a6000:2`; the other29 fits request
+`gpu:geforce_gtx_1080_ti:2`. Both use exactly two torchrun ranks, FP32 and SyncBatchNorm.
 Global batch128 is padded before splitting; local means receive
 `world_size*local_rows/global_rows` weighting. Keep tail rows and gather unique
 evaluation positions in exact original order. TRAIN samplers are seed-bound.
 
-Setup requests12h and uses genuine production two-rank miniatures for every
-row. It checks all six teacher conditions, source transitions, longest support,
+Setup requests12h and remeasures TP on A6000s while authenticating the29
+completed Pascal miniatures. It checks all six teacher conditions, source transitions, longest support,
 partial batches, native reload, validation, diagnostics and serialized target
 exports. Full-fit time is measured/extrapolated with 2x safety +30min, capped
 at48h. Each card must use <88% physical memory and aggregate host peaks <85%

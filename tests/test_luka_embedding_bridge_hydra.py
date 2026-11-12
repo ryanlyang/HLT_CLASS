@@ -99,7 +99,8 @@ def execution_spec(root):
 
 def resource_diagnostic(s):
     from hlt_classification.luka_embedding_bridge_hydra import resources
-    devices=[dict(name='GeForce GTX 1080 Ti',compute_capability=[6,1],total_memory_bytes=11*2**30) for _ in range(2)]
+    older=[dict(name='GeForce GTX 1080 Ti',compute_capability=[6,1],total_memory_bytes=11*2**30) for _ in range(2)]
+    devices=[dict(name='NVIDIA RTX A6000',compute_capability=[8,6],total_memory_bytes=48*2**30) for _ in range(2)]
     profiles={}
     for t in r.FITS:
         sec=1. if t in r.PRODUCERS else 0.;rows=1000
@@ -120,7 +121,13 @@ def resource_diagnostic(s):
         cases=[dict(condition=list(r.teacher_condition(3,i,regional=True)),rows=count,seconds=1.,maximum_particles=300)
                for count in dict.fromkeys([128,11,s['counts']['train']%128]) if count for i in range(6)])
     return c.artifact('RESOURCES',parents=dict(spec=s['content_hash']),profiles=profiles,devices=devices,
-        tp_checkpoint=checkpoint,tp_stress=stress,status='complete',environment=s['reference']['environment'])
+        task_devices={t:devices if t=='TP' else older for t in r.FITS},
+        tp_checkpoint=checkpoint,tp_stress=stress,status='complete',environment=s['reference']['environment'],
+        crop_frontend=c.artifact('CROP_FRONTEND',parents=dict(spec=s['content_hash']),policy=c.crop_execution_policy(),
+            indices={role:list(range(min(n,10))) for role,n in s['counts'].items()},
+            checks=[dict(role=role,source=source,scale=scale,rows=min(s['counts'][role],10),byte_exact=True)
+                    for role in ('train','validation') for source in ('HLT','OFFLINE') for scale in r.SCALES]),
+        qualification_reuse=None)
 
 
 def test_complete_dag_and_measured_envelope(tmp_path):
@@ -130,11 +137,13 @@ def test_complete_dag_and_measured_envelope(tmp_path):
     assert boot['commands'][1]['dependencies']==['setup'] and boot['upper_bound_commands']==envelope['commands']
     for row in envelope['commands'][:-1]:
         assert row['dependencies']==r.dependencies(row['task_id'])
-        assert '--gres=gpu:geforce_gtx_1080_ti:2' in row['command'] and '--mem=48000M' in row['command']
+        gres='gpu:nvidia_rtx_a6000:2' if row['task_id']=='TP' else 'gpu:geforce_gtx_1080_ti:2'
+        assert '--gres='+gres in row['command'] and '--mem=48000M' in row['command']
         assert '--ntasks=1' in row['command'] and '--no-requeue' in row['command']
     report=envelope['commands'][-1];assert report['dependencies']==list(r.FITS)
     assert '--cpus-per-task=2' in report['command'] and '--mem=8000M' in report['command']
     assert any(x.startswith('--dependency=afterany:') for x in report['command'])
+    assert '--gres=gpu:nvidia_rtx_a6000:2' in boot['commands'][0]['command']
     measured=submission.plan(s,'science',resources.accept(s,resource_diagnostic(s)))
     assert submission.within_envelope(envelope,measured)
     measured['commands'][0]['command'].append('--gres=gpu:3')

@@ -10,17 +10,18 @@ from hlt_classification.luka_subclass_hydra.reuse import original
 from hlt_classification.luka_next_supervision_hydra.campaign import storage as ordinary_storage
 from hlt_classification.luka_u100_pair_hydra import site
 from hlt_classification.luka_u100_pair_hydra.inputs import Bundle
-from .contracts import REPAIR_BASE,COUNTS,artifact,validate,recipe,U100_EXTRACTION,u100_numerical_policy,tp_execution_policy
+from .contracts import REPAIR_BASE,COUNTS,artifact,validate,recipe,U100_EXTRACTION,u100_numerical_policy,tp_execution_policy,crop_execution_policy
 from .registry import FITS,PRODUCERS,dependencies
-from .execution import configuration
+from .execution import configuration,TP_PROFILE
 from .transfer import fresh,Transfer
-from . import native,recovery
+from . import native,recovery,qualified
 
 MODULES=('__init__','registry','contracts','regions','response','losses','model','storage','transfer','native','inputs','recovery',
-         'distributed','banks','numerical','activation','training','campaign','execution','resources','qualification','worker','submission','reporting')
+         'distributed','banks','numerical','activation','regional_inputs','qualified','training','campaign','execution','resources','qualification','worker','submission','reporting')
 RUNTIME={f'src/hlt_classification/luka_embedding_bridge_hydra/{n}.py' for n in MODULES}|{
     'scripts/luka_embedding_bridge_hydra.py','scripts/queue_luka_embedding_bridge_hydra.sh','sbatch/run_luka_embedding_bridge_hydra.sh'}
-REQUIRED=RUNTIME|{'tests/test_luka_embedding_bridge_hydra.py','tests/test_luka_embedding_bridge_native.py','tests/test_luka_embedding_bridge_recovery.py','tests/test_luka_embedding_bridge_numerical.py','tests/test_luka_embedding_bridge_activation.py','docs/plans/LUKA_EMBEDDING_BRIDGE_RESPONSE_REGION_HYDRA_PLAN.md',
+REQUIRED=RUNTIME|{'tests/test_luka_embedding_bridge_hydra.py','tests/test_luka_embedding_bridge_native.py','tests/test_luka_embedding_bridge_recovery.py','tests/test_luka_embedding_bridge_numerical.py','tests/test_luka_embedding_bridge_activation.py','tests/test_luka_embedding_bridge_regional_inputs.py','tests/test_luka_embedding_bridge_qualified.py','docs/plans/LUKA_EMBEDDING_BRIDGE_RESPONSE_REGION_HYDRA_PLAN.md',
+    'tests/test_luka_embedding_bridge_hardware.py',
     'docs/contracts/LUKA_EMBEDDING_BRIDGE_HYDRA.md','docs/LUKA_EMBEDDING_BRIDGE_HYDRA_RUNBOOK.md','docs/LUKA_EMBEDDING_BRIDGE_HYDRA_VALIDATION.md'}
 COPIED=('bundle_root','reference','imported','anchor','embedding_hash','qualification')
 
@@ -37,14 +38,17 @@ def current(project,commit):
 
 
 def registration(profile='1080ti_2_fp32'):
+    if profile!='1080ti_2_fp32':raise ValueError('The 29 non-TP fits remain on the original Pascal profile')
     return dict(recipe=recipe(),tasks=list(FITS),remaining=list(FITS),counts=COUNTS,**configuration(profile),cpus=6,memory_mb=48000,
+        tp_gpu_profile=TP_PROFILE,qualification_mode='recover_29_pascal_profiles_measure_TP_a6000',
         setup_minutes=720,fit_max_minutes=2880,release_minutes=60,report_minutes=120,original50k_rows=50000,
         cpu_site=dict(partition='compute',account='default',qos='normal',cpus=1,memory_mb=4000),
         report_site=dict(partition='compute',account='default',qos='normal',cpus=2,memory_mb=8000),
         resource_policy=dict(safety_multiplier=2.,fixed_overhead_seconds=1800,memory_fraction=.85,gpu_fraction=.88),
         dependencies={t:dependencies(t) for t in FITS},automatic_retry=False,reference_retrained=True,
         native_input_policy=native.POLICY,u100_extraction_policy=U100_EXTRACTION,
-        u100_numerical_policy=u100_numerical_policy(),tp_execution_policy=tp_execution_policy())
+        u100_numerical_policy=u100_numerical_policy(),tp_execution_policy=tp_execution_policy(),
+        crop_execution_policy=crop_execution_policy())
 
 
 def storage(spec):
@@ -98,7 +102,8 @@ def check_historical(value,parent):
             validate_file_ref(ref)
 
 
-def create(root,parent_path,transfer_root,transfer_hash,project,commit,quota_gib,*,native_root,native_hash,selective_spec=None,resume_spec=None):
+def create(root,parent_path,transfer_root,transfer_hash,project,commit,quota_gib,*,native_root,native_hash,selective_spec=None,resume_spec=None,qualified_spec=None):
+    if qualified_spec is None:raise ValueError('Mixed-hardware recovery requires --qualified-spec for completed v5 qualification')
     old=original(parent_path);project=Path(project).resolve();source=current(project,commit)
     b=Bundle(old['bundle_root']);t=Transfer(transfer_root,transfer_hash,b.json('origin/campaign_spec.json'))
     from .inputs import transferred
@@ -108,12 +113,15 @@ def create(root,parent_path,transfer_root,transfer_hash,project,commit,quota_gib
     if type(quota_gib)is not int or quota_gib<budget['minimum_quota_gib']:
         raise ValueError('Available output quota must be at least '+str(budget['minimum_quota_gib'])+' GiB after input transfer')
     reuse=recovery.inspect(resume_spec) if resume_spec is not None else None
+    qualified_reuse=qualified.inspect(qualified_spec) if qualified_spec is not None else None
     protected=[project,t.root,sources.delta.root,sources.offline.root,*[old[k] for k in ('root','project_dir','environment_dir','bundle_root')]]
     if reuse is not None:protected.append(Path(reuse['source_spec']['path']).parent)
+    if qualified_reuse is not None:protected.append(Path(qualified_reuse['source_spec']['path']).parent)
     root=fresh(root,protected)
     site.environment(old['reference']['environment'])
     value=artifact('SPEC',parents=dict(source=source['content_hash'],parent=old['content_hash'],transfer=transfer_hash,native=native_hash,recipe=recipe()['content_hash']),
         **registration(),root=str(root),project_dir=str(project),source_commit=commit,source_snapshot=source,preparation_reuse=reuse,
+        qualification_reuse=qualified_reuse,
         environment_dir=str(Path(sys.prefix).resolve()),parent_spec=parent_ref,
         native_root=str(sources.delta.root),native_hash=native_hash,
         transfer_root=str(t.root),transfer_hash=transfer_hash,available_quota_gib=quota_gib,storage_inventory=budget,
@@ -121,6 +129,7 @@ def create(root,parent_path,transfer_root,transfer_hash,project,commit,quota_gib
         historical_selective=historical_registration(selective_spec,parent=old),
         nodes={task:dict(old['imported']['node'],node_id=task) for task in FITS},recovery_anchors=load_anchors(old),
         **{k:old[k] for k in COPIED})
+    if qualified_reuse is not None:qualified.check(qualified_reuse,value)
     storage(value);root.mkdir();write_immutable_json(root/'campaign_spec.json',value)
     return value
 
@@ -140,4 +149,6 @@ def check(spec,*,check_storage=True):
     site.environment(spec['reference']['environment'])
     check_historical(spec['historical_selective'],old)
     if spec['preparation_reuse'] is not None:recovery.check(spec['preparation_reuse'],spec)
+    if spec['qualification_reuse'] is None:raise ValueError('The 29 Pascal fits require their completed qualification provenance')
+    qualified.check(spec['qualification_reuse'],spec)
     if check_storage:storage(spec)

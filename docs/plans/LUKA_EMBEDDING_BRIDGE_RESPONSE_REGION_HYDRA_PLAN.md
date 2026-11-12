@@ -1,6 +1,48 @@
 # Embedding assistants, teacher responses, and regional targets on Hydra
 
-Status: scientific recipe v1; execution repair v5, 2026-11-11.
+Status: scientific recipe v1; execution repair v6, 2026-11-12.
+
+### Runtime repair after setup165857
+
+The v5 two-GTX1080Ti setup completed all30 miniatures, target exports, memory
+checks and numerical parity, then rejected only TP's time estimate:13311min.
+Its unsafetied estimate was56.31h training,47.70h validation and6.66h other
+work. This is a runtime failure, not a scientific result or a memory failure.
+
+Execution v6 batches the analytic crop frontend. Each crop retains its own
+axis, sum order, particle order, feature transforms, empty mask, global-batch
+padding and native encoder. Validate complete physical sources before selecting
+regions. No persistent crop cache, smaller batch, fewer epochs, reduced
+validation, mixed precision, particle truncation or new model is introduced.
+The original scalar frontend remains the byte-parity authority. Setup checks
+every class, long-support tails and random rows in both populations and all six
+conditions before TP measurement. Full model/update parity remains mandatory.
+
+The required `--qualified-spec` explicitly binds the completed27a83412 setup.
+Authenticate its source, failed terminal setup/no scientific submissions,
+all30 completed miniatures and their original target lineage, numerical
+checks, and unchanged inputs. Reuse exactly29 non-TP profiles conservatively;
+historical artifacts retain their original spec, paths and Pascal hardware. Remeasure TP first,
+then repeat current-runtime parity and CPU release/report qualification.
+Never treat technical weights as scientific fits. The existing92397736
+preparation reuse remains separate and unchanged. Preserve both old roots.
+
+SPEC/v6 binds CROP_EXECUTION_POLICY/v1 and QUALIFICATION_REUSE/v1.
+RESOURCES/ACCEPTANCE v3 bind CROP_FRONTEND/v1 and explicit historical evidence.
+RECIPE/v1, TP_EXECUTION_POLICY/v1 and U100_REPLAY/v3 remain unchanged.
+At the user's request, v6 moves setup and TP directly to two RTX A6000s
+(`gpu:nvidia_rtx_a6000:2`). All29 other scientific fits retain two GTX1080Ti
+cards. Both profiles retain FP32, two ranks, SyncBatchNorm and global batch128.
+Per-task device records bind fresh TP measurements to A6000s and the29 reused
+measurements to their original Pascal cards. No A6000 timing can size a Pascal
+job. The same48h ceiling and measured memory margins apply; changing hardware
+does not assert that the new TP timing has already passed.
+
+The source-admission baseline advances to58d0c0edf5f41cff2398fb168fc16fc92e169294:
+the intervening commits add the independent Oscar and R8 campaigns. The shared
+`storage`, `physical_columns` and `cpu_allocation` helper bodies consumed here
+are unchanged (AST comparison); bridge numerical donors are unchanged.
+Changes after that reviewed baseline remain restricted to this campaign's runtime.
 
 Setup164517 passed the v4 numerical qualification, C0, LS_D050 and TR
 miniatures, then exhausted both GTX1080Ti cards in TP's crop encoder during
@@ -199,7 +241,7 @@ Ladder endpoints use lambda=5; R/P coefficients are in their tables below.
 | Native model | Original native17-input, width128, eight particle blocks, two class-attention blocks, 11 classes |
 | Optimizer | Existing U100 AdamW groups, betas, epsilon and weight decay |
 | LR | Existing warmup3/cosine30: peak 3e-4, final 1.5e-5 |
-| Precision | FP32 on two GTX 1080 Ti GPUs, TF32/autocast disabled |
+| Precision | FP32 on two GPUs: RTX A6000 for TP/setup, GTX1080Ti for the other29 fits; TF32/autocast disabled |
 | Distributed normalization | DDP with SyncBatchNorm |
 | Student checkpoint selection | Existing full-validation macro-OVR AUC selection and deterministic tie rules |
 | Main inference | Ordinary native HLT ParT, with auxiliary heads removed |
@@ -670,14 +712,15 @@ failure patterns, then design fresh-seed and FullStat confirmation. Do not
 choose a promising epoch on original50k or promote a small-data gain into a
 high-data claim. The first screen has no combinations of L/R/P objectives.
 
-## 9. Two-GTX1080Ti execution and resource qualification
+## 9. Two-GPU execution and resource qualification
 
 Reuse the execution principles in
 [the two-GPU plan](LUKA_SUBCLASS_DDP_HYDRA_PLAN.md) and
 [contract](../contracts/LUKA_SUBCLASS_DDP_HYDRA.md), with a NEW campaign recipe.
 
 GPU allocations: Hydra/gpus/default/normal, one node, one Slurm task,
-six CPUs, 48000 MiB RAM, and gpu:geforce_gtx_1080_ti:2.
+six CPUs and48000 MiB RAM. TP/setup request `gpu:nvidia_rtx_a6000:2`;
+the other29 scientific fits request `gpu:geforce_gtx_1080_ti:2`.
 Use exactly two torchrun ranks, FP32 and SyncBatchNorm. GPUs replicate the
 model and split the batch; their memory is not pooled into one larger device.
 No node pinning or promise of current GPU availability is implied.
@@ -688,9 +731,11 @@ rows. Validation shards gather unique indices and restore exact original
 order. Only rank0 publishes. Teacher branch loops and empty regions must
 execute compatible collectives on both ranks.
 
-A setup allocation (initial ceiling 12h, same device/memory profile) qualifies
-input readers, genuine production two-rank miniatures and all distinct model/
-loss paths on real selected rows. Technical target teachers and assistant
+A setup allocation (ceiling12h, two A6000s) qualifies the new TP runtime and
+input reader. It authenticates the29 completed Pascal miniatures/profiles
+from165857 under their original identities and repeats current-runtime update
+parity. Every distinct model/loss path has genuine production two-rank
+miniature evidence on real selected rows. Technical target teachers and assistant
 banks are labelled miniature-only, discarded for science, and forbidden as
 scientific parents. Setup profiles full/partial batches, largest particle
 support, all regional scales, source transitions, validation and target export.
@@ -871,7 +916,8 @@ requires the complete exact pushed source snapshot.
 6. **Execution and reporting.** Exercise exact dry/live fake scheduler DAG,
    partial publication, technical failures, no quality gates and all reports.
 7. **Real qualification.** Exact pushed source, full dry review, genuine
-   two-GTX1080Ti setup and per-task actual-parent checks precede science.
+   two-A6000 TP setup plus authenticated prior Pascal qualification and
+   per-task actual-parent checks precede science.
 8. **Readout and confirmation.** Report every row; select a later replicated
    FullStat study only after reviewing native classification and cost.
 
@@ -948,8 +994,9 @@ embeddings from context, but this supervised cross-view jet design is different:
 [Assran et al., I-JEPA](https://arxiv.org/abs/2301.08243).
 
 All three families, registration/export, measured setup, automatic release
-and readouts are implemented. Local fixtures exercise real training and target
-publication, but no research data export, source commit/push or Slurm submission
-was performed here. The next task is a scoped commit/push, authenticated input
-transfer and registration following the runbook. Production setup must pass on
-two GTX1080Ti before automatic scientific release.
+and readouts are implemented. Existing Brown exports and completed preparation
+are reused. Local fixtures exercise real training and target publication;
+the new mixed-hardware repair has not been committed, pushed or submitted here.
+Next is a scoped commit/push and recovery registration following the runbook.
+New TP qualification on two A6000s plus authenticated prior qualification of
+the29 Pascal fits must pass before automatic scientific release.

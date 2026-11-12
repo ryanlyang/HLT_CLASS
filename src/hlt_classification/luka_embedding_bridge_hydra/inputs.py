@@ -154,11 +154,12 @@ class Dataset:
         return h
 
     def crops(self,role,indices,source,scale):
+        from . import regional_inputs
         p=self.physical(role);ix=indices_checked(indices,len(p['labels']))
         def rows(name):
             return [p[name+'_values'][p[name+'_offsets'][i]:p[name+'_offsets'][i+1]] for i in ix]
         if source not in ('HLT','OFFLINE'):raise ValueError('Unknown crop source')
-        return regions.crops(rows('HLT'),rows(source),p['labels'][ix],scale)
+        return regional_inputs.crops(rows('HLT'),rows(source),p['labels'][ix],scale)
 
     def u100(self,role):
         if role not in COUNTS:raise PermissionError('Undeclared target role')

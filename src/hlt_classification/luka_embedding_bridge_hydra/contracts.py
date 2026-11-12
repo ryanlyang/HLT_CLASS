@@ -8,11 +8,19 @@ from .registry import FITS, cell, dependencies, CONDITIONS, COORDINATES, ALIASES
 BASE = '45075fe6c2d8ccdcf7463cd3a99cbe2fe6976a08'
 # Freeze all donor runtime at the published repair base; only this campaign
 # namespace may change afterwards. The original scientific recipe stays v1.
-REPAIR_BASE = '2fb09f38a3a1da85cdceff9df311963fdb3aa872'
-VERSIONS = {'SPEC': 5, 'U100_REPLAY': 3, 'RESOURCES': 2, 'ACCEPTANCE': 2}
+REPAIR_BASE = '58d0c0edf5f41cff2398fb168fc16fc92e169294'  # Reviewed R8 commit; consumed shared helpers unchanged.
+VERSIONS = {'SPEC': 6, 'U100_REPLAY': 3, 'RESOURCES': 3, 'ACCEPTANCE': 3}
 U100_EXTRACTION = 'original_consecutive_128_whole_batches_per_rank_fp32_v1'
 AUTHORIZATION = 'AUTHORIZE_LUKA_EMBEDDING_BRIDGE_HYDRA_V1'
 AUX_SEED = 20261110
+
+
+def crop_execution_policy():
+    return artifact('CROP_EXECUTION_POLICY', method='batched_analytic_frontend',
+        authority='regions.crops', required_parity='byte_exact_inputs_masks_labels',
+        reduction='original_per_crop_contiguous_float64_sum',
+        physical_validation='full_sources_before_subsets', persistent_cache=False,
+        global_padding='unchanged_global_batch128', scientific_recipe_unchanged=True)
 
 
 def tp_execution_policy():

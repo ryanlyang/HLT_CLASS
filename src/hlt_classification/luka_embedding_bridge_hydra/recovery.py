@@ -43,9 +43,10 @@ def source_spec(path):
     return old
 
 
-def terminal_jobs(old):
+def terminal_jobs(old, *, source=None):
     """Old runtime authenticates its own immutable plan/journal under old schemas."""
-    if old['source_commit']!=SOURCE or old['source_snapshot']['git_commit']!=SOURCE:
+    if source is None:source=SOURCE
+    if old['source_commit']!=source or old['source_snapshot']['git_commit']!=source:
         raise ValueError('Original preparation source changed')
     # Authenticate a foreign checkout's bytes without claiming this process
     # imported its modules. The old CLI below runs from that checkout and then

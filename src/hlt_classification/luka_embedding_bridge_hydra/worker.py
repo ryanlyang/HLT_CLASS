@@ -13,7 +13,7 @@ from hlt_classification.cms_proxy_ladder.contracts import file_ref,validate_file
 from hlt_classification.jetclass2_delphes.model import installed_environment
 from .contracts import artifact,validate,recipe
 from .registry import FITS,PRODUCERS,cell
-from . import campaign,submission,execution,inputs,banks,resources,qualification,training,recovery,distributed as d
+from . import campaign,submission,execution,inputs,banks,resources,qualification,training,recovery,qualified,distributed as d
 
 
 def require_job(spec,task):
@@ -30,13 +30,16 @@ def receipt(spec,task,*,full=True):
     if (r['task']!=task or r['job_id']!=submission.accepted_jobs(spec,stage).get(task)
             or r['environment']!=spec['reference']['environment'] or r['allocated_gpus']!=(0 if task=='report' else 2)
             or not math.isfinite(r['execution_seconds']) or r['execution_seconds']<=0):raise ValueError('Task ownership/environment differs')
+    if task!='report':execution.check_devices(r['devices'],execution.profile(spec,task))
     required={'results.json'} if task=='report' else {'acceptance.json','resource_diagnostic.json','parity.json','replay.json',
         'replay_predictions.npz','u100_replay.json','preparation.json','data/manifest.json','data/u100_train/manifest.json',
-        'data/u100_validation/manifest.json','mini_population.json','cpu_resources.json'}|{'mini_'+t+'/receipt.json' for t in FITS} if task=='setup' else {
+        'data/u100_validation/manifest.json','mini_population.json','cpu_resources.json','crop_frontend.json'}|{'mini_'+t+'/receipt.json' for t in FITS
+            if spec.get('qualification_reuse') is None or t=='TP'} if task=='setup' else {
         'startup/receipt.json','startup/training_report.json','startup_memory.json','fit/receipt.json','fit/training_report.json',
         'fit/selected.pt','fit/selected_full.pt','fit/validation_predictions.npz'}
     if task in PRODUCERS:required|={'bank/train/manifest.json','bank/validation/manifest.json'}
     if task=='setup':required.add('preparation_reuse.json' if spec['preparation_reuse'] is not None else 'u100_input_probe.json')
+    if task=='setup' and spec.get('qualification_reuse') is not None:required.add('qualification_reuse.json')
     names=[v['path'] for v in r['outputs']]
     if len(names)!=len(set(names)) or not required<=set(names):raise ValueError('Incomplete task inventory')
     from .storage import regular
@@ -61,16 +64,28 @@ def verify_setup_payloads(spec,*,full=True):
     else:
         qualification.check_u100_witness(load_json(Path(spec['root'])/'setup/u100_input_probe.json'),spec)
     ds.u100('train');ds.u100('validation')
+    if spec.get('qualification_reuse') is not None:
+        if load_json(Path(spec['root'])/'setup/qualification_reuse.json')!=spec['qualification_reuse']:
+            raise ValueError('Qualification recovery receipt differs')
+        qualified.check(spec['qualification_reuse'],spec,full=full)
     if full:
         p=load_json(Path(spec['root'])/'setup/mini_population.json');validate(p,'MINI_POPULATION',dict(spec=spec['content_hash']))
         import numpy as np
         selected=resources.selected_indices(ds,wide=True)
         if p['indices']!={k:v.tolist() for k,v in selected.items()} or p['technical']is not True:raise ValueError('Miniature population differs')
+        if load_json(Path(spec['root'])/'setup/crop_frontend.json')['indices']!=p['indices']:
+            raise ValueError('Crop parity omitted registered miniature/stress rows')
         small=inputs.SubsetDataset(ds,selected)
+        historical=None
         for task in FITS:
-            target=resources.technical_target(spec,task,small,Path(spec['root'])/'setup')
-            r,_=training.validate_fit(Path(spec['root'])/'setup'/('mini_'+task),spec,task,technical=True)
-            if r['parents']!=dict(spec=spec['content_hash'],recipe=recipe()['content_hash'],**target.parents) or r['world_size']!=2:
+            folder,owner=qualified.miniature(spec,task)
+            population=small
+            if owner is not spec:
+                if historical is None:historical=inputs.SubsetDataset(inputs.Dataset(owner),selected)
+                population=historical
+            target=resources.technical_target(owner,task,population,Path(owner['root'])/'setup')
+            r,_=training.validate_fit(folder,owner,task,technical=True)
+            if r['parents']!=dict(spec=owner['content_hash'],recipe=recipe()['content_hash'],**target.parents) or r['world_size']!=2:
                 raise ValueError('Production miniature lineage/execution differs')
     return resources.accepted(spec)
 
@@ -79,7 +94,7 @@ def qualify_cpu(spec):
     """Disposable CPU process: measure authentication and full-size report kernels."""
     from hlt_classification.luka_subclass_ddp_hydra.distributed import host_usage,launcher_rss
     from .reporting import measure_cpu
-    started=time.perf_counter();campaign.check(spec);require_job(spec,'setup');execution.allocation(spec)
+    started=time.perf_counter();campaign.check(spec);require_job(spec,'setup');execution.allocation(spec,'setup')
     verify_setup_payloads(spec)
     # Release authenticates the complete setup inventory. Measure those exact
     # hashes here before the final TASK receipt is published by the launcher.
@@ -125,7 +140,7 @@ def scientific_target(spec,task,ds):
 
 
 def prepare(spec):
-    campaign.check(spec);require_job(spec,'setup');execution.allocation(spec)
+    campaign.check(spec);require_job(spec,'setup');execution.allocation(spec,'setup')
     started=time.perf_counter()
     if spec['preparation_reuse'] is not None:value=recovery.materialize(spec)
     else:
@@ -135,13 +150,15 @@ def prepare(spec):
     proof=artifact('PREPARATION',parents=dict(spec=spec['content_hash']),seconds=time.perf_counter()-started,
         host_peak_bytes=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss*1024+launcher_rss(),data=value['content_hash'])
     write_immutable_json(Path(spec['root'])/'setup/preparation.json',proof)
+    if spec.get('qualification_reuse') is not None:
+        write_immutable_json(Path(spec['root'])/'setup/qualification_reuse.json',spec['qualification_reuse'])
     return proof
 
 
 def run(spec,task):
     started=time.perf_counter()
     if task not in ('setup','release','report',*FITS):raise ValueError('Unregistered task')
-    campaign.check(spec);cpu=task in ('release','report');devices=None if cpu else execution.allocation(spec)
+    campaign.check(spec);cpu=task in ('release','report');devices=None if cpu else execution.allocation(spec,task)
     if cpu:execution.cpu_allocation(spec,task)
     job=require_job(spec,task)
     if task=='release':return submission.finish(spec,job)
@@ -160,7 +177,7 @@ def run(spec,task):
         from .reporting import results
         write_immutable_json(folder/'results.json',results(spec))
     else:
-        print(f'EMBEDDING_BRIDGE allocation: {task}; two GTX1080Ti; FP32; global batch128',flush=True)
+        print(f'EMBEDDING_BRIDGE allocation: {task}; {execution.profile(spec,task)}; FP32; global batch128',flush=True)
         subprocess.run([sys.executable,'-u','-B','-s','-m','torch.distributed.run','--standalone','--nnodes=1','--nproc-per-node=2',
             cli,'rank','--spec',path,'--task',task],check=True)
         if task=='setup':subprocess.run([sys.executable,'-u','-B','-s',cli,'qualify-cpu','--spec',path],check=True)
@@ -178,7 +195,7 @@ def rank(spec,task):
     rank=int(os.environ.get('RANK','-1'))
     if (rank not in (0,1) or os.environ.get('LOCAL_RANK')!=str(rank) or os.environ.get('WORLD_SIZE')!='2'
             or os.environ.get('LOCAL_WORLD_SIZE')!='2' or os.environ.get('GROUP_RANK')!='0'):raise PermissionError('Exactly two local ranks required')
-    require_job(spec,owner);devices=execution.allocation(spec)
+    require_job(spec,owner);devices=execution.allocation(spec,owner)
     if campaign.current(spec['project_dir'],spec['source_commit'])!=spec['source_snapshot']:raise ValueError('Source changed')
     expected=artifact('RUN_CLAIM',parents=dict(spec=spec['content_hash']),task=owner,job_id=os.environ['SLURM_JOB_ID'])
     if load_json(Path(spec['root'])/'claims'/owner/'intent.json')!=expected:raise PermissionError('Missing exact launcher claim')
@@ -193,7 +210,7 @@ def rank(spec,task):
         if task=='setup':resources.measure(spec,ds,ctx,devices,load_seconds)
         else:
             acceptance=resources.accepted(spec)
-            if devices!=acceptance['devices']:raise PermissionError('Devices differ from setup')
+            if devices!=acceptance['task_devices'][task]:raise PermissionError('Devices differ from this task\'s measured hardware')
             folder=Path(spec['root'])/task;torch.cuda.reset_peak_memory_stats(ctx.device);target=scientific_target(spec,task,ds)
             startup=resources.miniature(folder/'startup',spec,task,ds,target,ctx)
             resources.check_memory(spec,startup['fit_memory'],devices)

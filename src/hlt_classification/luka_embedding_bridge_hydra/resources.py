@@ -6,10 +6,9 @@ import torch
 from hlt_classification.data.cache_contracts import load_json,write_immutable_json
 from hlt_classification.cms_proxy_ladder.contracts import file_ref
 from hlt_classification.jetclass2_delphes.model import installed_environment
-from hlt_classification.luka_subclass_ddp_hydra.resources import check_memory
 from .contracts import artifact,validate
 from .registry import FITS,PRODUCERS,cell,teacher_condition
-from . import inputs,banks,training,qualification,distributed as d,execution
+from . import inputs,banks,training,qualification,distributed as d,execution,qualified,regional_inputs
 
 
 def selected_indices(ds,*,wide=False):
@@ -41,14 +40,19 @@ def miniature(folder,spec,task,ds,target,ctx):
 def technical_target(spec,task,ds,root):
     parent=cell(task)['parent'];b=None
     if parent:
-        folder=Path(root)/('mini_'+parent)
-        b=banks.Bank(folder/'bank',spec,parent,ds.view('train','D000'),file_ref(folder/'selected_full.pt'),technical=True)
+        folder,owner=qualified.miniature(spec,parent)
+        b=banks.Bank(folder/'bank',owner,parent,ds.view('train','D000'),file_ref(folder/'selected_full.pt'),technical=True)
     return banks.Targets(spec,task,ds,parent_bank=b)
 
 
 def measure(spec,ds,ctx,devices,load_seconds):
     if ctx.world!=2 or ctx.device.type!='cuda':raise PermissionError('Real two-GPU production setup required')
     root=Path(spec['root'])/'setup'
+    recovered=qualified.profiles(spec,ds,devices)
+    if set(recovered)!=set(qualified.REUSED):raise ValueError('Mixed-hardware setup requires all 29 completed Pascal profiles')
+    old_devices=qualified.profile_devices(spec)
+    task_devices={t:devices if t=='TP' else old_devices for t in FITS}
+    frontend=ctx.main(lambda:regional_inputs.qualify(spec,ds))
     # Fail early on the most activation-heavy teacher, before numerical replay,
     # other families' miniatures, exports, or full validation. Prepared data reuse
     # still authenticates every input first.
@@ -61,8 +65,10 @@ def measure(spec,ds,ctx,devices,load_seconds):
     ctx.main(lambda:write_immutable_json(root/'mini_population.json',artifact('MINI_POPULATION',parents=dict(spec=spec['content_hash']),
         indices={k:v.tolist() for k,v in selected.items()},technical=True)))
     preparation=load_json(root/'preparation.json');validate(preparation,'PREPARATION',dict(spec=spec['content_hash']))
-    profiles={};targets=lambda task:technical_target(spec,task,small,root)
-    for task in FITS:
+    profiles=dict(recovered);targets=lambda task:technical_target(spec,task,small,root)
+    # Measure the expensive teacher first. Its time bound must pass before any
+    # unaffected fitting or remaining qualification work is attempted.
+    for task in ('TP',*[t for t in FITS if t!='TP' and t not in recovered]):
         target=targets(task);folder=root/('mini_'+task)
         fit_seconds,(m,report)=d.timed(lambda:training.fit(folder,spec,task,small,target,ctx,technical=True),ctx)
         export_seconds=0.
@@ -86,6 +92,18 @@ def measure(spec,ds,ctx,devices,load_seconds):
             start=(batch*128)%(n-128+1);ix=order[start:start+128]
             seconds,_=d.timed(lambda:d.step(m,w,o,task,small,target,ix,3,batch,3.,ctx),ctx)
             if batch>=6:samples.append(seconds)
+        if task=='TP':
+            # A training-only bound can reject an impossible allocation without
+            # paying for another full validation sweep. It can never admit a fit.
+            lower=max(60,math.ceil((2*30*math.ceil(spec['counts']['train']/128)*float(np.mean(samples))+1800)/60))
+            timing=artifact('TP_TRAINING_TIMING',parents=dict(spec=spec['content_hash']),
+                step_samples=samples,step_seconds=float(np.mean(samples)),training_only_minutes=lower,
+                excludes_validation_export_and_other_overhead=True,admission=False)
+            ctx.main(lambda:write_immutable_json(root/'tp_training_timing.json',timing))
+            if ctx.rank==0:print(f'EMBEDDING_BRIDGE TP training step={np.mean(samples):.3f}s; training-only request={lower}min',flush=True)
+            if lower>spec['fit_max_minutes']:
+                raise RuntimeError('TP training alone exceeds the 48-hour allocation; preserve tp_training_timing.json; '
+                                   'full validation and unaffected fits were not rerun')
         probe,_=d.timed(lambda:d.step(m,w,o,task,small,target,order[:128],3,0,3.,ctx,diagnose=True),ctx)
         validation_seconds,_=d.timed(lambda:training.evaluate(m,task,ds,ctx),ctx)
         panel_seconds,_=d.timed(lambda:training.target_diagnostics(m,task,small,target,ctx),ctx)
@@ -104,17 +122,48 @@ def measure(spec,ds,ctx,devices,load_seconds):
         print(f'EMBEDDING_BRIDGE resource {task}: step={np.mean(samples):.3f}s validation={validation_seconds:.1f}s export_estimate={export_estimate:.1f}s',flush=True) if ctx.rank==0 else None
         del m,w,o,target;d.release_memory(ctx)
         value=artifact('RESOURCES',parents=dict(spec=spec['content_hash']),profiles=profiles,devices=devices,
+            task_devices=task_devices,
             tp_checkpoint=checkpoint,tp_stress=stress,
+            crop_frontend=frontend,qualification_reuse=spec.get('qualification_reuse'),
             environment=installed_environment(),status='complete' if len(profiles)==len(FITS) else 'partial')
         ctx.main(lambda:write_immutable_json(root/f'resource_{task}.json',value))
+        requested=request_minutes(profiles[task])
+        if requested>spec['fit_max_minutes']:
+            raise RuntimeError(f'{task}: measured {requested} minutes exceeds registered 48-hour ceiling; '
+                               f'preserve resource_{task}.json; unaffected fits were not rerun')
     qualification.qualify(spec,small,targets,ctx)
     ctx.main(lambda:write_immutable_json(root/'resource_diagnostic.json',value))
     accepted_value=accept(spec,value);ctx.main(lambda:write_immutable_json(root/'acceptance.json',accepted_value))
     return accepted_value
 
 
-def accept(spec,diagnostic):
-    validate(diagnostic,'RESOURCES',dict(spec=spec['content_hash']))
+def request_minutes(p):
+    seconds=30*(math.ceil(p['train_rows']/128)*p['step_seconds']+p['validation_seconds'])
+    seconds+=5*(p['probe_seconds']+p['panel_seconds'])+sum(p[k] for k in ('load_seconds','startup_seconds','checkpoint_seconds','export_estimate_seconds'))+3*p['validation_seconds']
+    return max(60,math.ceil((2*seconds+1800)/60))
+
+
+def profile_minutes(spec,diagnostic,*,historical=False):
+    if historical:
+        from hlt_classification.data.cache_contracts import validate_content_hash
+        validate_content_hash(diagnostic,expected_contract='LUKA_EMBEDDING_BRIDGE_HYDRA_RESOURCES/v2',expected_schema_version=2)
+        if diagnostic['parents']!=dict(spec=spec['content_hash']):raise ValueError('Historical resource parent differs')
+        execution.check_devices(diagnostic['devices'],'1080ti_2_fp32')
+        task_devices={t:diagnostic['devices'] for t in FITS}
+    else:
+        validate(diagnostic,'RESOURCES',dict(spec=spec['content_hash']))
+        regional_inputs.check(diagnostic['crop_frontend'],spec)
+        if diagnostic['qualification_reuse']!=spec.get('qualification_reuse'):raise ValueError('Resource reuse lineage differs')
+        task_devices=diagnostic['task_devices']
+        if set(task_devices)!=set(FITS) or task_devices['TP']!=diagnostic['devices']:
+            raise ValueError('Incomplete task hardware measurements')
+        execution.check_devices(diagnostic['devices'],execution.TP_PROFILE)
+        for task in FITS:execution.check_devices(task_devices[task],execution.profile(spec,task))
+        if spec.get('qualification_reuse') is not None:
+            old=qualified.check(spec['qualification_reuse'],spec)
+            original=load_json(Path(old['root'])/'setup/resource_diagnostic.json')
+            if any(task_devices[t]!=original['devices'] or diagnostic['profiles'][t]!=original['profiles'][t] for t in qualified.REUSED):
+                raise ValueError('Recovered profiles changed')
     qualification.check_tp_checkpoint(diagnostic['tp_checkpoint'],spec)
     check_tp_stress(spec,diagnostic['tp_stress'],diagnostic['devices'])
     if (diagnostic['status']!='complete' or set(diagnostic['profiles'])!=set(FITS)
@@ -129,19 +178,35 @@ def accept(spec,diagnostic):
         expected=[list(x) if isinstance(x,tuple) else x for x in expected]
         actual=[list(x) if isinstance(x,tuple) else x for x in p['condition_coverage']]
         if actual!=expected:raise ValueError('Teacher condition coverage differs')
-        check_memory(spec,p['memory'],diagnostic['devices'])
+        check_memory(spec,p['memory'],task_devices[task])
         times=[p[k] for k in ('validation_seconds','probe_seconds','panel_seconds','load_seconds','startup_seconds','checkpoint_seconds')]
         if not np.isfinite(times).all() or min(times)<=0:raise ValueError('Invalid required timing')
         if task in PRODUCERS:
             e=p['export_measured_seconds']*(spec['counts']['train']+4096)/p['export_measured_rows']
             if not np.isfinite(e) or e<=0 or e!=p['export_estimate_seconds']:raise ValueError('Unmeasured producer export')
         elif p['export_measured_seconds']!=0 or p['export_estimate_seconds']!=0:raise ValueError('Unexpected target export')
-        seconds=30*(math.ceil(p['train_rows']/128)*p['step_seconds']+p['validation_seconds'])
-        seconds+=5*(p['probe_seconds']+p['panel_seconds'])+sum(p[k] for k in ('load_seconds','startup_seconds','checkpoint_seconds','export_estimate_seconds'))+3*p['validation_seconds']
-        minutes[task]=max(60,math.ceil((2*seconds+1800)/60))
+        minutes[task]=request_minutes(p)
+    return minutes
+
+
+def accept(spec,diagnostic):
+    minutes=profile_minutes(spec,diagnostic)
+    for task in FITS:
         if minutes[task]>spec['fit_max_minutes']:raise RuntimeError(f'{task}: measured {minutes[task]} minutes exceeds registered 48-hour ceiling; preserve diagnostics')
     return artifact('ACCEPTANCE',parents=dict(spec=spec['content_hash'],diagnostic=diagnostic['content_hash']),minutes=minutes,
-        devices=diagnostic['devices'],environment=diagnostic['environment'],technical_weights_discarded=True)
+        devices=diagnostic['devices'],task_devices=diagnostic['task_devices'],environment=diagnostic['environment'],technical_weights_discarded=True)
+
+
+def check_memory(spec,memory,devices):
+    """Same two-rank limits as the Pascal donor, applied to each actual profile."""
+    execution.check_devices(devices)
+    if (len(memory['ranks'])!=2 or not 0<memory['host_peak_bytes']<.85*spec['memory_mb']*1024**2
+            or memory['host_peak_bytes']<sum(m['peak_rss_bytes'] for m in memory['ranks'])):
+        raise MemoryError('Aggregate host envelope exceeded')
+    for m,g in zip(memory['ranks'],devices):
+        if (not np.isfinite([m['gpu_peak_bytes'],m['peak_rss_bytes']]).all()
+                or not 0<m['gpu_peak_bytes']<.88*g['total_memory_bytes'] or not 0<m['peak_rss_bytes']):
+            raise MemoryError('Rank memory envelope exceeded')
 
 
 def tp_stress(spec,ds,target,ctx,devices):
