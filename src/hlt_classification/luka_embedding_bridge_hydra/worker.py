@@ -199,8 +199,8 @@ def rank(spec,task):
     if campaign.current(spec['project_dir'],spec['source_commit'])!=spec['source_snapshot']:raise ValueError('Source changed')
     expected=artifact('RUN_CLAIM',parents=dict(spec=spec['content_hash']),task=owner,job_id=os.environ['SLURM_JOB_ID'])
     if load_json(Path(spec['root'])/'claims'/owner/'intent.json')!=expected:raise PermissionError('Missing exact launcher claim')
-    torch.cuda.set_device(rank);torch.backends.cuda.matmul.allow_tf32=False;torch.backends.cudnn.allow_tf32=False
-    torch.backends.cudnn.benchmark=False;torch.backends.cudnn.deterministic=True
+    torch.cuda.set_device(rank);settings=execution.configure_math(spec,owner)
+    if rank==0:print('EMBEDDING_BRIDGE numerical execution: '+str(settings),flush=True)
     os.environ['TORCH_NCCL_ASYNC_ERROR_HANDLING']='1';dist.init_process_group('nccl',timeout=timedelta(minutes=30))
     ctx=d.Context(rank,2,torch.device('cuda',rank))
     try:

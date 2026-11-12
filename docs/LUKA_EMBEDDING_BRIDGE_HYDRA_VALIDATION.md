@@ -1,5 +1,44 @@
 # Embedding bridge / response / region validation
 
+## 2026-11-12 deterministic A6000 repair after setup168529
+
+Remote source6a98c2bda010779b71348ff2cfd07b89f8160fc3 passed all twelve
+frontend checks. TP parity had identical loss, normalization buffers and RNG
+for all six conditions/ranks, gradient relative errors8.83e-8 to1.31e-7,
+moment errors9.14e-8 to1.34e-7, but post-AdamW parameter errors1.13e-5 to1.30e-5
+against5e-6. No TP runtime/memory result was produced by that attempt.
+
+Local PyTorch2.5.1 / Weaver0.5.3 fixture / RTX2000Ada reproduction with15
+variable-length jets (60..102 particles), independent fine crops and full
+eight-plus-two transformer blocks: ordinary-versus-ordinary failed with
+parameter relativeL2=1.3112925e-5, gradient=1.5045150e-7; checkpoint-versus-
+ordinary gave1.2037169e-5 and1.7256078e-7. Largest differences were in pair-
+embedding biases with near-zero gradients. No checkpoint is needed to trigger
+the failure. Enabling deterministic algorithms gave zero measured loss,
+gradient, parameter, moment and buffer differences for both comparisons.
+The math-only SDPA experiment also gave exact checkpoint parity; production
+retains the installed fast dispatch rather than forcing math-only attention.
+
+PyTorch2.5.1's [memory-efficient attention backward implementation](https://github.com/pytorch/pytorch/blob/v2.5.1/aten/src/ATen/native/transformers/cuda/attention_backward.cu#L613-L624)
+explicitly disables split-key reduction under deterministic algorithms.
+cuDNN deterministic mode alone does not set that switch. This source evidence
+and local reproduction identify a credible mechanism; exact A6000 confirmation
+still requires Brown's two-rank check on authenticated real jets.
+
+SPEC/v7, EXECUTION_MATH_POLICY/v1, TP_CHECKPOINT/v2 and RESOURCES/ACCEPTANCE v4
+bind whole-rank deterministic A6000 execution plus ordinary-repeat controls.
+All existing parity tolerances, loss/optimizer settings and Pascal execution
+remain unchanged. Historical v5 evidence retains its old schema and audit.
+Baseline focused activation/hardware tests:30passed,1two-GPU skip (90.73s).
+Post-repair eight-suite run: **171passed,2skipped in188.45s**. Both skips
+require two CUDA GPUs/NCCL. New full-depth CUDA regression checks three crop
+scales, ordinary repeats, checkpointed updates and diagnostic probes through
+complete AdamW updates with unchanged tolerances and exact RNG checks.
+Also covers policy tampering, bad repeat measurements, old-v5 recovery and
+mixed-hardware admission.34 Python files parse; all three runbook Bash blocks,
+both worker/queue shell scripts and scoped whitespace checks pass.
+No Brown/Tigris miniature, commit, push or job submission was performed here.
+
 ## 2026-11-12 queue instructions after R8 commit58d0c0ed
 
 The separate R8 campaign was committed after the initial repair validation.

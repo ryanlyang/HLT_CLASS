@@ -2,25 +2,26 @@
 import numpy as np
 import pytest
 import torch
-from hlt_classification.luka_embedding_bridge_hydra import activation, distributed as d, banks, registry
+from hlt_classification.luka_embedding_bridge_hydra import activation, distributed as d, banks, registry, execution, campaign
 from hlt_classification.luka_subclass_hydra.benchmark_training import parity_snapshot, compare
 from hlt_classification.luka_subclass_ddp_hydra.resources import PROBE_TOLERANCES
 from test_luka_embedding_bridge_hydra import synthetic_dataset, small
 
 
 @pytest.fixture(autouse=True)
-def math_settings():
+def math_settings(monkeypatch):
     threads = torch.get_num_threads()
     flags = (torch.backends.cuda.matmul.allow_tf32, torch.backends.cudnn.allow_tf32,
              torch.backends.cudnn.benchmark, torch.backends.cudnn.deterministic)
+    deterministic=(torch.are_deterministic_algorithms_enabled(),torch.is_deterministic_algorithms_warn_only_enabled())
+    monkeypatch.setenv('CUBLAS_WORKSPACE_CONFIG',':4096:8')
     torch.set_num_threads(1)
-    torch.backends.cuda.matmul.allow_tf32 = torch.backends.cudnn.allow_tf32 = False
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
+    execution.configure_math(campaign.registration(),'setup')
     yield
     torch.set_num_threads(threads)
     (torch.backends.cuda.matmul.allow_tf32, torch.backends.cudnn.allow_tf32,
      torch.backends.cudnn.benchmark, torch.backends.cudnn.deterministic) = flags
+    torch.use_deterministic_algorithms(deterministic[0],warn_only=deterministic[1])
 
 
 def test_replay_context_restores_references_versions_and_exception():
@@ -108,6 +109,48 @@ def test_full_depth_checkpoint_memory_native_reload_and_rng():
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason='CUDA required')
+def test_full_depth_long_crop_optimizer_repeat_and_checkpoint():
+    """Long, variable crops exercise SDPA backward splitting missed by tiny jets.
+
+    Without deterministic algorithms, even ordinary-versus-ordinary failed
+    parameter parity locally (~1.31e-5), despite identical loss and RNG. Test
+    complete AdamW updates, including nearly cancelling normalization biases.
+    """
+    from hlt_classification.luka_embedding_bridge_hydra.model import Model
+    from test_luka_embedding_bridge_hydra import physical
+    from hlt_classification.luka_embedding_bridge_hydra import regions,losses
+    ctx=d.Context(0,1,torch.device('cuda',0));particles=[]
+    for i in range(15):
+        a=physical(60+i*3)
+        a[:,6:10]*=np.random.default_rng(i).uniform(.5,2,(len(a),4))
+        particles.append(a)
+    labels=np.arange(15)%11
+    raw=regions.padded([regions.encode(a) for a in particles],labels)
+    snapshots=[];rngs=[]
+    for scale in registry.SCALES:
+        crops,valid=regions.crops(particles,particles,labels,scale)
+        args=d.arrays(raw,ctx);args['crops']=[d.arrays(x,ctx) for x in crops]
+        args['valid']=torch.as_tensor(valid,device=ctx.device)
+        y=torch.as_tensor(labels,device=ctx.device)
+        snapshots.clear();rngs.clear()
+        for enabled,diagnose in ((False,False),(False,False),(True,False),(True,True)):
+            torch.manual_seed(23);m=Model('TP').to(ctx.device).train();m.checkpoint_encoding=enabled
+            opt=d.optimizer(m)
+            for group in opt.param_groups:group['lr']=d.learning_rate(3.)
+            target=dict(valid=args['valid'])
+            if diagnose:d.probe(m,'TP',args,y,target,3.,1.,ctx)
+            out=m(**args);total,_=losses.objective('TP',out,y,target,3.)
+            total.backward();opt.step()
+            snapshots.append(parity_snapshot(m,opt,float(total)))
+            rngs.append((torch.get_rng_state(),torch.cuda.get_rng_state(ctx.device)))
+            del m,opt,out,total;d.release_memory(ctx)
+        for observed,rng in zip(snapshots[1:],rngs[1:]):
+            result=compare(snapshots[0],observed,PROBE_TOLERANCES)
+            assert result['passed'],(scale,result)
+            assert all(torch.equal(a,b) for a,b in zip(rngs[0],rng))
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason='CUDA required')
 def test_checkpoint_long_support_per_rank_batch64():
     from hlt_classification.luka_embedding_bridge_hydra.model import Model
     from test_luka_embedding_bridge_hydra import physical
@@ -131,7 +174,8 @@ def test_checkpoint_long_support_per_rank_batch64():
     del m,out,total,crops,x;d.release_memory(ctx)
 
 
-@pytest.mark.parametrize('bad', ['rng','gradient','buffers','policy','condition','rank','stress_rows','stress_gpu','stress_time'])
+@pytest.mark.parametrize('bad', ['rng','gradient','buffers','policy','condition','rank','stress_rows','stress_gpu','stress_time',
+                               'repeat','numerical_settings','math_policy'])
 def test_admission_rejects_resealed_incomplete_checkpoint_evidence(tmp_path,bad):
     from test_luka_embedding_bridge_hydra import execution_spec, resource_diagnostic
     from hlt_classification.data.cache_contracts import with_content_hash
@@ -144,6 +188,9 @@ def test_admission_rejects_resealed_incomplete_checkpoint_evidence(tmp_path,bad)
     if bad=='policy':checkpoint['policy']['preserve_rng_state']=False
     if bad=='condition':checkpoint['checks'][0]['condition']=['HLT','whole']
     if bad=='rank':checkpoint['checks'][0]['ranks'].pop()
+    if bad=='repeat':row['ordinary_repeat']['parameters_relative_l2']=1.
+    if bad=='numerical_settings':checkpoint['numerical_settings']['deterministic_algorithms']=False
+    if bad=='math_policy':checkpoint['execution_math_policy']['a6000_2_fp32']['warn_only']=True
     if bad=='stress_rows':stress['cases'][0]['rows']=64
     if bad=='stress_gpu':stress['memory']['ranks'][0]['gpu_peak_bytes']=value['devices'][0]['total_memory_bytes']
     if bad=='stress_time':stress['cases'][0]['seconds']=-1.
@@ -175,11 +222,11 @@ def _two_cuda_checkpoint(rank,root,init_method):
     from pathlib import Path
     from hlt_classification.luka_embedding_bridge_hydra import qualification,contracts
     torch.set_num_threads(1);torch.cuda.set_device(rank)
-    torch.backends.cuda.matmul.allow_tf32=False;torch.backends.cudnn.allow_tf32=False
-    torch.backends.cudnn.benchmark=False;torch.backends.cudnn.deterministic=True
+    execution.configure_math(campaign.registration(),'setup')
     torch.distributed.init_process_group('nccl',rank=rank,world_size=2,init_method=init_method,timeout=timedelta(minutes=5))
     try:
-        ds=synthetic_dataset();ds.spec.update(root=root,tp_execution_policy=contracts.tp_execution_policy())
+        ds=synthetic_dataset();ds.spec.update(root=root,tp_execution_policy=contracts.tp_execution_policy(),
+                                            execution_math_policy=contracts.execution_math_policy())
         ctx=d.Context(rank,2,torch.device('cuda',rank))
         ctx.main(lambda:(Path(root)/'setup').mkdir())
         qualification.tp_checkpoint(ds.spec,ds,banks.Targets(ds.spec,'TP',ds),ctx)

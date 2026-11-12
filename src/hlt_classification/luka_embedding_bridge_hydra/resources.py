@@ -164,7 +164,7 @@ def profile_minutes(spec,diagnostic,*,historical=False):
             original=load_json(Path(old['root'])/'setup/resource_diagnostic.json')
             if any(task_devices[t]!=original['devices'] or diagnostic['profiles'][t]!=original['profiles'][t] for t in qualified.REUSED):
                 raise ValueError('Recovered profiles changed')
-    qualification.check_tp_checkpoint(diagnostic['tp_checkpoint'],spec)
+    qualification.check_tp_checkpoint(diagnostic['tp_checkpoint'],spec,historical=historical)
     check_tp_stress(spec,diagnostic['tp_stress'],diagnostic['devices'])
     if (diagnostic['status']!='complete' or set(diagnostic['profiles'])!=set(FITS)
             or diagnostic['environment']!=spec['reference']['environment']):raise ValueError('Incomplete measured setup')

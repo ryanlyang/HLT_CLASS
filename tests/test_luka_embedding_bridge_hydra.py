@@ -112,10 +112,13 @@ def resource_diagnostic(s):
             condition_coverage=[r.teacher_condition(3,i,regional=t=='TP') if t in ('TR','TP') else 'native' for i in range(6)],
             train_rows=s['counts']['train'],validation_rows=s['counts']['validation'])
     from hlt_classification.luka_subclass_ddp_hydra.resources import PROBE_TOLERANCES
+    from hlt_classification.luka_embedding_bridge_hydra import execution
+    zero=dict.fromkeys(PROBE_TOLERANCES,0.)|dict(passed=True,rng_equal=True)
     checkpoint=c.artifact('TP_CHECKPOINT',parents=dict(spec=s['content_hash']),policy=c.tp_execution_policy(),
         tolerances=PROBE_TOLERANCES,dropout_enabled=True,rows=15,world_size=2,
+        execution_math_policy=c.execution_math_policy(),numerical_settings=execution.expected_math(execution.TP_PROFILE),
         checks=[dict(condition=list(r.teacher_condition(3,i,regional=True)),
-            ranks=[dict.fromkeys(PROBE_TOLERANCES,0.)|dict(passed=True,rng_equal=True) for _ in range(2)]) for i in range(6)])
+            ranks=[dict(zero,ordinary_repeat=dict(zero)) for _ in range(2)]) for i in range(6)])
     stress=c.artifact('TP_STRESS',parents=dict(spec=s['content_hash']),memory=copy.deepcopy(profiles['TP']['memory']),
         selection='longest_full_source_train_support',technical_weights_discarded=True,
         cases=[dict(condition=list(r.teacher_condition(3,i,regional=True)),rows=count,seconds=1.,maximum_particles=300)

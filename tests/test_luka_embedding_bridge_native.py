@@ -131,7 +131,7 @@ def test_spec_v6_and_old_physical_recipe_identity():
     namespace = dict(__name__='hlt_classification.luka_embedding_bridge_hydra._old_contracts', __package__='hlt_classification.luka_embedding_bridge_hydra')
     exec(compile(old, '<original-contracts>', 'exec'), namespace)
     assert contracts.recipe() == namespace['recipe']()
-    assert contracts.artifact('SPEC')['schema_version'] == 6
+    assert contracts.artifact('SPEC')['schema_version'] == 7
     assert campaign.registration()['tp_execution_policy'] == contracts.tp_execution_policy()
     assert campaign.registration()['u100_numerical_policy'] == contracts.u100_numerical_policy()
     with pytest.raises(ValueError): contracts.validate(namespace['artifact']('SPEC'), 'SPEC')

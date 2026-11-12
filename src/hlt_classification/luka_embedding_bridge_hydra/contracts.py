@@ -9,10 +9,20 @@ BASE = '45075fe6c2d8ccdcf7463cd3a99cbe2fe6976a08'
 # Freeze all donor runtime at the published repair base; only this campaign
 # namespace may change afterwards. The original scientific recipe stays v1.
 REPAIR_BASE = '58d0c0edf5f41cff2398fb168fc16fc92e169294'  # Reviewed R8 commit; consumed shared helpers unchanged.
-VERSIONS = {'SPEC': 6, 'U100_REPLAY': 3, 'RESOURCES': 3, 'ACCEPTANCE': 3}
+VERSIONS = {'SPEC': 7, 'U100_REPLAY': 3, 'RESOURCES': 4, 'ACCEPTANCE': 4, 'TP_CHECKPOINT': 2}
 U100_EXTRACTION = 'original_consecutive_128_whole_batches_per_rank_fp32_v1'
 AUTHORIZATION = 'AUTHORIZE_LUKA_EMBEDDING_BRIDGE_HYDRA_V1'
 AUX_SEED = 20261110
+
+
+def execution_math_policy():
+    return artifact('EXECUTION_MATH_POLICY',
+        a6000_2_fp32=dict(deterministic_algorithms=True, warn_only=False),
+        # Preserve the already measured Pascal worker configuration.
+        **{'1080ti_2_fp32': dict(deterministic_algorithms=False, warn_only=False)},
+        tf32=False, cudnn_benchmark=False, cudnn_deterministic=True,
+        cublas_workspace_config=':4096:8', attention='installed_weaver_default_dispatch',
+        scope='entire_rank_including_forward_backward_optimizer_and_diagnostics')
 
 
 def crop_execution_policy():

@@ -12,6 +12,11 @@ from test_luka_embedding_bridge_hydra import execution_spec,resource_diagnostic,
 
 def legacy(value):
     v=copy.deepcopy(value)
+    cp=v['tp_checkpoint'];cp.pop('execution_math_policy');cp.pop('numerical_settings')
+    for check in cp['checks']:
+        for row in check['ranks']:row.pop('ordinary_repeat')
+    cp.update(contract='LUKA_EMBEDDING_BRIDGE_HYDRA_TP_CHECKPOINT/v1',schema_version=1)
+    v['tp_checkpoint']=with_content_hash(cp)
     v.pop('crop_frontend');v.pop('qualification_reuse')
     v['devices']=v.pop('task_devices')['C0']
     v.update(contract='LUKA_EMBEDDING_BRIDGE_HYDRA_RESOURCES/v2',schema_version=2)

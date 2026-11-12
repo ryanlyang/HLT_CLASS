@@ -1,6 +1,28 @@
 # Embedding assistants, teacher responses, and regional targets on Hydra
 
-Status: scientific recipe v1; execution repair v6, 2026-11-12.
+Status: scientific recipe v1; execution repair v7, 2026-11-12.
+
+### Deterministic A6000 execution after setup168529
+
+The v6 setup passed all twelve crop-input checks but failed TP's post-AdamW
+parameter comparison (1.13e-5 to1.30e-5 versus5e-6). Loss, buffers and RNG
+were identical; gradient/moment relative errors were about1e-7. A local
+full-depth, variable-length CUDA reproduction also failed ordinary-versus-
+ordinary updates without checkpointing (parameter relative error1.31e-5).
+Enabling PyTorch deterministic algorithms eliminated both ordinary-repeat
+and checkpoint-versus-ordinary drift in that reproduction.
+
+Execution v7 requires `torch.use_deterministic_algorithms(True, warn_only=False)`
+for the entire A6000 setup/TP rank, including backward and optimizer steps.
+Keep installed Weaver attention dispatch, FP32, existing checkpointing and all
+parity tolerances. This is an execution change, not evidence of different
+scientific performance. Pascal workers retain their measured configuration.
+New SPEC/v7 binds EXECUTION_MATH_POLICY/v1. TP_CHECKPOINT/v2 records actual
+settings and an ordinary-repeat control for all six conditions on both ranks;
+RESOURCES/ACCEPTANCE v4 require this evidence. Failed v6 evidence cannot admit
+v7. Historical v5 checkpoint evidence is validated as v1 only during the pinned
+qualification-reuse audit. The29 completed Pascal profiles remain unmodified.
+A6000 timing, memory and genuine two-rank parity still require the new setup.
 
 ### Runtime repair after setup165857
 

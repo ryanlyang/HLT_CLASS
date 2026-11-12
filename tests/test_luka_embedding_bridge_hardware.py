@@ -4,9 +4,29 @@ from pathlib import Path
 import sys
 from types import SimpleNamespace
 import pytest
+import torch
 from hlt_classification.data.cache_contracts import with_content_hash
 from hlt_classification.luka_embedding_bridge_hydra import execution,submission,resources,registry
 from test_luka_embedding_bridge_hydra import execution_spec,resource_diagnostic
+
+
+def test_math_policy_is_applied_to_entire_a6000_rank_and_preserves_pascal(tmp_path,monkeypatch):
+    s=execution_spec(tmp_path);saved=execution.math_settings()
+    monkeypatch.setenv('CUBLAS_WORKSPACE_CONFIG',':4096:8')
+    try:
+        for task,wanted in [('setup',True),('TP',True),('C0',False),('P5',False)]:
+            result=execution.configure_math(s,task)
+            assert result==execution.expected_math(execution.profile(s,task))
+            assert torch.are_deterministic_algorithms_enabled() is wanted
+            assert not torch.is_deterministic_algorithms_warn_only_enabled()
+        changed=copy.deepcopy(s);changed['execution_math_policy']['a6000_2_fp32']['deterministic_algorithms']=False
+        with pytest.raises(ValueError,match='policy'):execution.configure_math(changed,'TP')
+        monkeypatch.delenv('CUBLAS_WORKSPACE_CONFIG')
+        with pytest.raises(PermissionError,match='workspace'):execution.configure_math(s,'TP')
+    finally:
+        torch.use_deterministic_algorithms(saved['deterministic_algorithms'],warn_only=saved['warn_only'])
+        torch.backends.cuda.matmul.allow_tf32=saved['matmul_tf32'];torch.backends.cudnn.allow_tf32=saved['cudnn_tf32']
+        torch.backends.cudnn.benchmark=saved['cudnn_benchmark'];torch.backends.cudnn.deterministic=saved['cudnn_deterministic']
 
 
 def test_exact_hardware_routes_and_unchanged_training_math(tmp_path):

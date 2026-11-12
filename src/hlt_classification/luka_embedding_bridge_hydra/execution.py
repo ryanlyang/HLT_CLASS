@@ -12,6 +12,38 @@ import torch
 TP_PROFILE='a6000_2_fp32'
 
 
+def math_settings():
+    return dict(deterministic_algorithms=torch.are_deterministic_algorithms_enabled(),
+        warn_only=torch.is_deterministic_algorithms_warn_only_enabled(),
+        matmul_tf32=torch.backends.cuda.matmul.allow_tf32,
+        cudnn_tf32=torch.backends.cudnn.allow_tf32,
+        cudnn_benchmark=torch.backends.cudnn.benchmark,
+        cudnn_deterministic=torch.backends.cudnn.deterministic,
+        cublas_workspace_config=os.environ.get('CUBLAS_WORKSPACE_CONFIG'))
+
+
+def expected_math(name):
+    from .contracts import execution_math_policy
+    policy=execution_math_policy();configuration(name)
+    return dict(**policy[name],matmul_tf32=False,cudnn_tf32=False,
+        cudnn_benchmark=False,cudnn_deterministic=True,cublas_workspace_config=':4096:8')
+
+
+def configure_math(spec,task):
+    from .contracts import execution_math_policy
+    if spec['execution_math_policy']!=execution_math_policy():raise ValueError('Execution math policy differs')
+    expected=expected_math(profile(spec,task))
+    if os.environ.get('CUBLAS_WORKSPACE_CONFIG')!=expected['cublas_workspace_config']:
+        raise PermissionError('Set the registered CUBLAS workspace before starting Python')
+    torch.backends.cuda.matmul.allow_tf32=False;torch.backends.cudnn.allow_tf32=False
+    torch.backends.cudnn.benchmark=False;torch.backends.cudnn.deterministic=True
+    # cudnn.deterministic alone does not control the SDPA backward reduction.
+    # Keep the installed fast attention dispatch, with deterministic algorithms.
+    torch.use_deterministic_algorithms(expected['deterministic_algorithms'],warn_only=False)
+    if math_settings()!=expected:raise RuntimeError('Unable to configure registered numerical execution')
+    return expected
+
+
 def configuration(name='1080ti_2_fp32'):
     if name=='1080ti_2_fp32':return pascal_configuration(name)
     if name!=TP_PROFILE:raise ValueError('Only registered pairs of 1080Ti or RTX A6000 GPUs are supported')

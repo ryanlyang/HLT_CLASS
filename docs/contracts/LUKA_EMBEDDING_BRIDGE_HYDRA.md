@@ -1,8 +1,29 @@
-# Embedding bridges, responses and regions: recipe v1, execution v6
+# Embedding bridges, responses and regions: recipe v1, execution v7
 
 Scientific authority: [implementation plan](../plans/LUKA_EMBEDDING_BRIDGE_RESPONSE_REGION_HYDRA_PLAN.md).
 Execution and commands: [runbook](../LUKA_EMBEDDING_BRIDGE_HYDRA_RUNBOOK.md).
 This namespace is distinct from the older embedding/logit ladders.
+
+## Deterministic A6000 execution (v7)
+
+SPEC/v7 adds EXECUTION_MATH_POLICY/v1. A6000 setup and TP enable deterministic
+algorithms with `warn_only=False` for the entire rank. This includes forward,
+backward, optimizer, probes and measurement; the parity check cannot use a
+different setting from science. Pascal jobs keep deterministic algorithms
+disabled as in their saved measurements. Both retain disabled TF32/benchmark,
+enabled cuDNN deterministic mode, CUBLAS workspace `:4096:8`, installed Weaver
+attention dispatch, FP32, SyncBatchNorm and global128. Missing or altered
+registered settings fail closed. No optimizer epsilon or parity limit changes.
+
+TP_CHECKPOINT/v2 records actual numerical settings, policy, dropout-active
+ordinary-repeat and ordinary-versus-checkpoint comparisons for all six
+conditions on both ranks. Every loss, gradient, parameter, moment, buffer
+and RNG comparison must pass the original PROBE_TOLERANCES. RESOURCES/v4 and
+ACCEPTANCE/v4 require this evidence. Diagnostic messages identify the failing
+comparison and metric. Historical TP_CHECKPOINT/v1 is accepted only in the
+explicit v5 resource audit, retaining original spec/hash ownership and limits;
+it cannot satisfy current resource admission. RECIPE/v1 and TP_EXECUTION_POLICY/v1
+remain unchanged; the new math policy separately versions numerical execution.
 
 ## Batched crop frontend and completed-qualification reuse (v6)
 

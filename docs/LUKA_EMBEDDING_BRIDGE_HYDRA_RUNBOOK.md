@@ -14,7 +14,12 @@ completed physical export already on Brown and adds a minimal native delta.
 It copies exact historical tensors instead of re-encoding them on Brown.
 Do not rerun the failed v1 source or reuse its partial preparation as complete.
 
-**For failed setup165857, use the recovery block below after committing v6.**
+**For failed setup168529, use the recovery block below after committing v7.**
+V7 enables deterministic algorithms for A6000 setup and TP. The v6 failure
+was a parameter-update parity check: tiny GPU backward differences were
+amplified by AdamW. Local ordinary-versus-ordinary updates reproduced it;
+deterministic execution passed without changing any tolerance. Setup now also
+checks ordinary-repeat parity. Two-rank A6000 confirmation is still required.
 Preserve both the original92397736 preparation and the27a83412 completed
 miniatures. V6 reuses the29 unaffected miniatures/resource profiles, batches
 the expensive crop-input calculations, and remeasures TP on A6000s first. It requires no
@@ -64,7 +69,7 @@ git add -p -- $shared
 git diff --cached --stat
 git diff --cached --check
 if ($LASTEXITCODE -ne 0) { throw 'Fix staged whitespace first' }
-git commit -m 'Move TP to paired A6000s and recover completed bridge qualification'
+git commit -m 'Make A6000 bridge execution deterministic and check ordinary repeat parity'
 if ($LASTEXITCODE -ne 0) { throw 'Commit failed' }
 git push origin main
 if ($LASTEXITCODE -ne 0) { throw 'Push failed' }
@@ -76,7 +81,7 @@ git rev-parse HEAD
 Both transfers already exist on Brown. Do not repeat SPORC export or rsync.
 Keep `embedding_bridge_raw_0a00441f`, `embedding_bridge_native_92397736`,
 the92397736 prepared-data root and the27a83412 completed-qualification root.
-V6 requires the latter's genuine Pascal measurements, so use the complete
+V7 requires the latter's genuine Pascal measurements, so use the complete
 recovery block below to register and queue this execution.
 
 The queue helper reviews the complete bounded graph and asks for `YES` once.
@@ -131,7 +136,7 @@ rejected TP's runtime. Commit/push v6 before running the block below. The
 original92397736 root supplies prepared arrays;27a83412 supplies the29
 unaffected completed miniatures and conservative resource measurements.
 
-After165857, first commit/push the scoped repair as above, then run this on
+After168529, first commit/push the scoped repair as above, then run this on
 Brown. Paste that new40-character commit. Registration checks the old terminal
 jobs and all completed preparation hashes; allow several minutes for NFS reads.
 The new setup links49 array payloads (32 view arrays,12 physical arrays and
@@ -189,7 +194,7 @@ if [[ -e "$PROJECT" ]]; then
 else
     git -C "$MAIN" worktree add --detach "$PROJECT" "$COMMIT"
 fi
-ROOT="${BASE}/runs/embedding_bridge_${COMMIT:0:8}_mixed_v6_r1"
+ROOT="${BASE}/runs/embedding_bridge_${COMMIT:0:8}_mixed_v7_r1"
 test ! -e "$ROOT"
 export PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1
 export PYTHONPATH="${PROJECT}/src"
@@ -223,9 +228,13 @@ BASH
 ```
 
 The expected setup message is `reused 49 authenticated arrays; no particle
-reconstruction`, followed by crop-input byte-parity checks, six `TP checkpoint parity` checks and eighteen
+reconstruction`, followed by numerical settings (`deterministic_algorithms: True`,
+`warn_only: False`), crop-input byte-parity checks, six `TP checkpoint parity` checks and eighteen
 `TP early backward` checks (six conditions at each of128/11/98 rows), then
 `TP early memory passed`. The frozen-U100 check and new TP miniature follow.
+`setup/tp_checkpoint.json` includes ordinary-repeat and checkpoint comparisons
+at unchanged tolerances. A parity failure names the comparison and metric;
+preserve that JSON instead of repeating setup unchanged.
 The other29 miniatures are authenticated in their original locations. Any remaining numerical mismatch
 produces `u100_replay.json` with historical raw/standardized errors and local
 CPU/GPU comparisons. Execution v4 uses the explicitly versioned bounds in the
