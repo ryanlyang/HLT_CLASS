@@ -79,13 +79,14 @@ class Student(AuxiliaryParT):
             self.aux=head(2026103101)
 
     def forward(self, features, vectors, mask):
-        self.prediction=self.jet=None
+        self.prediction=self.jet=self.ce_representation=None
         self.particle_tokens=self.particle_mask=None
         if not self.capture: return DelphesParticleTransformer.forward(self,features,vectors,mask)
         if self.cfg['family']=='R':
             from .reconstruction_model import capture
             logits,h=capture(self,features,vectors,mask)
         else: logits,h=head_input(self,features,vectors,mask)
+        self.ce_representation=h
         ctx=torch.autocast(h.device.type,enabled=False) if h.is_cuda else nullcontext()
         with ctx:
             self.jet=h.float(); self.prediction=self.predictor(self.jet)

@@ -58,6 +58,9 @@ def setup(spec,device='cuda'):
 
 
 def run(spec,task):
+    if task=='report' and spec.get('campaign_kind')=='R8_FOLLOWUP_V2':
+        from .reconstruction_release import report
+        return report(spec)
     if task=='release' and submission.automatic(spec):
         from .reconstruction_release import run
         return run(spec)

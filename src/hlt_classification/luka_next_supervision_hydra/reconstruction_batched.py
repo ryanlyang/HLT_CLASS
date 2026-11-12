@@ -8,6 +8,8 @@ import torch
 from torch.nn import functional as F
 from scipy.optimize import linear_sum_assignment
 
+from .reconstruction_loss import field_average
+
 ASSIGNMENT_WORKERS=6
 
 
@@ -56,7 +58,7 @@ def pack(targets,maximum,device):
     return {k:torch.as_tensor(v,device=device) for k,v in payload.items()},counts
 
 
-def fields(score,t,*,pairwise):
+def fields(score,t,*,pairwise,field_weights=(1.,1.,1.)):
     angles=torch.stack((score['angle'].sin(),score['angle'].cos()),-1)
     kin=torch.cat((score['kinematic'],(angles-t['mean'][:,None,3:5])/t['scale'][:,None,3:5]),-1)
     # Only the loss has padded targets; the decoder still predicts all K slots.
@@ -73,14 +75,14 @@ def fields(score,t,*,pairwise):
     a=torch.where(flags,pred,0.); b=torch.where(flags,actual,0.)
     regression=F.smooth_l1_loss(a,b,reduction='none',beta=1.).sum(-1)/flags.float().sum(-1).clamp(min=1)
     lt=.5*lv+.5*regression
-    return (lk+lc+lt)/3,dict(kinematic=lk,composition=lc,track=lt)
+    return field_average(lk,lc,lt,field_weights),dict(kinematic=lk,composition=lc,track=lt)
 
 
-def assignments(scores,t,counts):
+def assignments(scores,t,counts,*,field_weights=(1.,1.,1.)):
     """One cost transfer, then the same SciPy solver on each full rectangular cost."""
     b,k=scores['presence'].shape; width=t['values'].shape[1]
     with torch.no_grad():
-        field,_=fields(scores,t,pairwise=True)
+        field,_=fields(scores,t,pairwise=True,field_weights=field_weights)
         n=t['counts'].float(); positive=F.softplus(-scores['presence']); negative=F.softplus(scores['presence'])
         cost=field/n.clamp(min=1)[:,None,None]+(positive-.1*negative)[:,:,None]/(n+.1*(k-n))[:,None,None]
         # No GPU round trips per jet, and no padded column enters the solver.
@@ -111,7 +113,8 @@ def consistency(scores,t):
     return (components+mass_term+fraction_term)/3
 
 
-def rows(scores,targets,include_consistency=False,*,timings=None):
+def rows(scores,targets,include_consistency=False,*,consistency_weight=.1,field_weights=(1.,1.,1.),timings=None):
+    if not math.isfinite(consistency_weight) or consistency_weight<0: raise ValueError('Invalid consistency weight')
     b,k=scores['presence'].shape
     if b==0 or k==0 or len(targets)!=b: raise ValueError('Reconstruction batch join differs')
     shapes=dict(kinematic=(b,k,3),angle=(b,k),category=(b,k,6),charge=(b,k,3),track=(b,k,4),
@@ -119,16 +122,16 @@ def rows(scores,targets,include_consistency=False,*,timings=None):
     if set(scores)!=set(shapes) or any(v.shape!=shapes[n] for n,v in scores.items()): raise ValueError('Fixed output/count support differs')
     if not torch.stack([torch.isfinite(v).all() for v in scores.values()]).all(): raise ValueError('Nonfinite reconstruction prediction')
     t,counts=pack(targets,k,scores['presence'].device)
-    began=time.perf_counter(); slots,chosen=assignments(scores,t,counts)
+    began=time.perf_counter(); slots,chosen=assignments(scores,t,counts,field_weights=field_weights)
     if timings is not None: timings['assignment_seconds']=timings.get('assignment_seconds',0.)+time.perf_counter()-began
     selected={name:torch.gather(v,1,slots if v.ndim==2 else slots[...,None].expand(-1,-1,v.shape[-1]))
         for name,v in scores.items() if name!='count'}
-    matched,parts=fields(selected,t,pairwise=False)
+    matched,parts=fields(selected,t,pairwise=False,field_weights=field_weights)
     n=t['counts']; average=lambda x:torch.where(t['real'],x,0.).sum(-1)/n.clamp(min=1)
     field=average(matched); parts={name:average(v) for name,v in parts.items()}
     presence=torch.where(chosen,F.softplus(-scores['presence']),.1*F.softplus(scores['presence'])).sum(-1)/(n+.1*(k-n))
     count=F.cross_entropy(scores['count'],n,reduction='none')/math.log(k+1)
     extra=consistency(scores,t) if include_consistency else torch.zeros_like(field)
-    values=field+presence+.1*count+.1*extra
+    values=field+presence+.1*count+consistency_weight*extra
     if not torch.isfinite(values).all(): raise ValueError('Nonfinite exact set loss')
     return values,dict(fields=field,presence=presence,count=count,consistency=extra,**parts)

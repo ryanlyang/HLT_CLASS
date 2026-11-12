@@ -12,7 +12,7 @@ from . import campaign
 
 
 def automatic(spec):
-    return spec.get('scope')=='direct_reconstruction_only' and spec.get('execution_version') in ('R2','R3')
+    return spec.get('scope')=='direct_reconstruction_only' and spec.get('execution_version') in ('R2','R3','R4','R5')
 
 
 def setup_stage(spec): return 'bootstrap' if automatic(spec) else 'setup'
@@ -20,7 +20,8 @@ def setup_stage(spec): return 'bootstrap' if automatic(spec) else 'setup'
 
 def command(spec,task,minutes):
     site=spec['execution_site']; project=spec['project_dir']; root=Path(spec['root'])
-    prefix={'group_B_only':'lukanb','group_C_only':'lukanc','direct_reconstruction_only':'lukanr'}.get(spec.get('scope'),'lukanx')
+    prefix=('lukanrf' if spec.get('campaign_kind')=='R8_FOLLOWUP_V2' else
+        {'group_B_only':'lukanb','group_C_only':'lukanc','direct_reconstruction_only':'lukanr'}.get(spec.get('scope'),'lukanx'))
     cmd=['sbatch','--parsable','--no-requeue','--nodes=1','--ntasks=1','--export=NONE',
         '--partition='+site['partition'],'--account='+site['account'],'--qos='+site['qos'],'--gres='+site['gres'],
         '--cpus-per-task='+str(spec['cpus']),'--mem='+str(spec['memory_mb'])+'M','--time='+_walltime(minutes),
@@ -43,6 +44,9 @@ def plan(spec,stage,acceptance=None):
         if acceptance is None: raise ValueError('Completed measured setup required')
         parents['acceptance']=acceptance['content_hash']
         commands=[command(spec,t,acceptance['minutes'][t]) for t in spec['remaining']]
+        if spec.get('campaign_kind')=='R8_FOLLOWUP_V2':
+            from .reconstruction_release import report_command
+            commands.append(report_command(spec))
     else: raise ValueError('Unknown submission stage')
     return artifact('PLAN',parents=parents,stage=stage,scope=spec.get('scope','group_A_only'),commands=commands,
         authorization=authorize(spec),science_dependencies='none',reused=list(spec['reused']),
@@ -50,7 +54,9 @@ def plan(spec,stage,acceptance=None):
         **(dict(automatic_science=dict(tasks=list(spec['remaining']),recipe=spec['recipe'],
             fit_max_minutes=spec['fit_max_minutes'],execution_site=spec['execution_site'],
             cpus=spec['cpus'],memory_mb=spec['memory_mb'],resource_policy=spec['resource_policy'],
-            release_policy=spec['release_policy'],quality_gate=False,automatic_retry=False)) if stage=='bootstrap' else {}),
+            release_policy=spec['release_policy'],quality_gate=False,automatic_retry=False,
+            **(dict(report=dict(dependency='afterany_all_science',site=spec['cpu_site'],minutes=spec['report_minutes']))
+                if spec.get('campaign_kind')=='R8_FOLLOWUP_V2' else {}))) if stage=='bootstrap' else {}),
         **(dict(structured_target_review=acceptance['structured_review']) if stage=='science' and spec.get('scope')=='group_B_only' else {}),
         **(dict(probabilistic_target_review=acceptance['probabilistic_review']) if stage=='science' and spec.get('scope')=='group_C_only' else {}),
         **(dict(reconstruction_target_review=acceptance['reconstruction_review']) if stage=='science' and spec.get('scope')=='direct_reconstruction_only' else {}))
@@ -91,6 +97,9 @@ def submit(spec,stage,*,execute=False,plan_hash=None,authorization=None):
     write_immutable_json(saved,value)
     if not execute:
         if stage=='bootstrap':
+            from .reconstruction_release import scheduler_review
+            scheduler_review(value)
+        elif spec.get('campaign_kind')=='R8_FOLLOWUP_V2':
             from .reconstruction_release import scheduler_review
             scheduler_review(value)
         else: check_site(value)

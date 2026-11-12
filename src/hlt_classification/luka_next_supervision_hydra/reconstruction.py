@@ -45,6 +45,9 @@ def create(root,group_a_spec,project,commit,quota_gib):
 
 
 def check(spec,*,check_storage=True):
+    if spec.get('campaign_kind')=='R8_FOLLOWUP_V2':
+        from .reconstruction_followup import check as followup
+        return followup(spec,check_storage=check_storage)
     validate_file_ref(spec['group_a_spec']); old=original(spec['group_a_spec']['path'])
     inv=spec['target_inventory']; validate(inv,'INVENTORY',dict(raw=spec['raw_hash']))
     validate(spec,'SPEC',dict(source=spec['source_snapshot']['content_hash'],group_a=old['content_hash'],raw=old['raw_hash'],

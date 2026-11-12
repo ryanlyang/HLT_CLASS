@@ -18,12 +18,12 @@ def parents(spec):
     return dict(spec=spec['content_hash'],raw=spec['raw_hash'],recipe=recipe()['content_hash'])
 
 
-def storage_bytes(sources,rows):
+def storage_bytes(sources,rows,*,fits=24):
     # Actual token inventory, two compact index/frame/aggregate banks, twelve
     # science + twelve warm/measured native exports, full predictions and logs.
     banks=sum(s['tokens'] for s in sources.values())*89+2*rows*120
     fit=16*2**20+74895*84+30*2**20
-    return int(banks+24*fit+2*2**30)
+    return int(banks+fits*fit+2*2**30)
 
 
 def inventory(spec):
@@ -159,7 +159,7 @@ class Targets:
 
 
 def candidates(spec,task,train):
-    from .reconstruction_contracts import setting
+    from .contracts import setting
     if train.role!='train' or len(train.labels)!=spec['counts']['train']: raise PermissionError('Full TRAIN targets only')
     authenticate(spec); return Targets(spec,train,setting(task)['source'])
 

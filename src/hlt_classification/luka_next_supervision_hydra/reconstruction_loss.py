@@ -39,7 +39,14 @@ def kinematics(score,t):
     return torch.cat((score['kinematic'],(angles-t['mean'][3:5])/t['scale'][3:5]),-1)
 
 
-def fields(score,t,*,pairwise):
+def field_average(lk,lc,lt,weights):
+    if len(weights)!=3 or any(not math.isfinite(w) or w<=0 for w in weights):
+        raise ValueError('Three finite positive reconstruction field weights required')
+    if tuple(weights)==(1.,1.,1.): return (lk+lc+lt)/3
+    return (weights[0]*lk+weights[1]*lc+weights[2]*lt)/sum(weights)
+
+
+def fields(score,t,*,pairwise,field_weights=(1.,1.,1.)):
     x=t['values']; valid=t['valid']; kin=kinematics(score,t)
     # Pairwise K x N is used only under no_grad; matched tensors have N rows.
     expand=lambda a:a[:,None] if pairwise else a
@@ -56,15 +63,15 @@ def fields(score,t,*,pairwise):
     safe_pred=torch.where(flags.bool(),pred,0.); safe_actual=torch.where(flags.bool(),actual,0.)
     regression=F.smooth_l1_loss(safe_pred,safe_actual,reduction='none').sum(-1)/flags.sum(-1).clamp(min=1)
     lt=.5*lv+.5*regression
-    return (lk+lc+lt)/3,dict(kinematic=lk,composition=lc,track=lt)
+    return field_average(lk,lc,lt,field_weights),dict(kinematic=lk,composition=lc,track=lt)
 
 
-def match(score,t):
+def match(score,t,*,field_weights=(1.,1.,1.)):
     k=score['presence'].numel(); n=len(t['values'])
     if n>k: raise ValueError('Target count exceeds fixed TRAIN support; never crop')
     if n==0: return np.empty(0,np.int64),np.empty(0,np.int64)
     with torch.no_grad():
-        field,_=fields(score,t,pairwise=True)
+        field,_=fields(score,t,pairwise=True,field_weights=field_weights)
         positive=F.softplus(-score['presence']); negative=F.softplus(score['presence'])
         cost=field/n+(positive-.1*negative)[:,None]/(n+.1*(k-n))
         if not torch.isfinite(cost).all(): raise ValueError('Nonfinite assignment cost')
@@ -96,31 +103,33 @@ def consistency(score,t):
     return (components+mass_term+fraction_term)/3
 
 
-def row(score,t,include_consistency=False,*,timings=None):
+def row(score,t,include_consistency=False,*,consistency_weight=.1,field_weights=(1.,1.,1.),timings=None):
+    if not math.isfinite(consistency_weight) or consistency_weight<0: raise ValueError('Invalid consistency weight')
     k=score['presence'].numel(); n=len(t['values'])
     if any(not torch.isfinite(v).all() for v in score.values()): raise ValueError('Nonfinite reconstruction prediction')
     if score['count'].shape!=(k+1,): raise ValueError('Fixed count support differs')
-    began=time.perf_counter(); slots,columns=match(score,t)
+    began=time.perf_counter(); slots,columns=match(score,t,field_weights=field_weights)
     if timings is not None: timings['assignment_seconds']=timings.get('assignment_seconds',0.)+time.perf_counter()-began
     chosen=torch.zeros(k,device=score['presence'].device,dtype=torch.bool); chosen[slots]=True
     if n:
         s={name:v[slots] for name,v in score.items() if name!='count'}
         matched=dict(t,values=t['values'][columns],valid=t['valid'][columns])
-        field,parts=fields(s,matched,pairwise=False); field=field.mean(); parts={name:v.mean() for name,v in parts.items()}
+        field,parts=fields(s,matched,pairwise=False,field_weights=field_weights); field=field.mean(); parts={name:v.mean() for name,v in parts.items()}
     else:
         field=score['kinematic'].sum()*0; parts={name:field for name in ('kinematic','composition','track')}
     presence=(F.softplus(-score['presence'][chosen]).sum()+.1*F.softplus(score['presence'][~chosen]).sum())/(n+.1*(k-n))
     count=F.cross_entropy(score['count'][None],torch.tensor([n],device=score['count'].device))/math.log(k+1)
     extra=consistency(score,t) if include_consistency else field.new_zeros(())
-    loss=field+presence+.1*count+.1*extra
+    loss=field+presence+.1*count+consistency_weight*extra
     if not torch.isfinite(loss): raise ValueError('Nonfinite exact set loss')
     return loss,dict(fields=field,presence=presence,count=count,consistency=extra,**parts)
 
 
-def rows(scores,targets,include_consistency=False,*,timings=None):
+def rows(scores,targets,include_consistency=False,*,consistency_weight=.1,field_weights=(1.,1.,1.),timings=None):
     if len(targets)!=len(scores['presence']): raise ValueError('Reconstruction batch join differs')
     values=[]; details=[]
     for i,t in enumerate(targets):
-        value,parts=row({k:v[i] for k,v in scores.items()},target(t,scores['presence'].device),include_consistency,timings=timings)
+        value,parts=row({k:v[i] for k,v in scores.items()},target(t,scores['presence'].device),include_consistency,
+            consistency_weight=consistency_weight,field_weights=field_weights,timings=timings)
         values.append(value); details.append(parts)
     return torch.stack(values),{k:torch.stack([r[k] for r in details]) for k in details[0]}

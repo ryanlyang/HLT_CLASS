@@ -60,7 +60,11 @@ def results(spec):
             location=('historical SPORC' if task not in tasks else 'SPORC reused'
                 if task in spec['reused'] and spec['reused'][task]['source_mode']=='transferred_original_SPORC_result' else 'Hydra')
             label=task+' [SPORC]' if location=='SPORC reused' else task
-            print(f'{label:18} {str(selected.get(task,"-")):>5} {auc:12.8f} {recovery(auc,lo,hi):10.1f} '+('--' if delta is None else f'{delta:+.8f}').rjust(15))
+            description=''
+            if spec.get('campaign_kind')=='R8_FOLLOWUP_V2' and task in tasks:
+                from .reconstruction_followup import description as describe
+                description='  '+describe(task)
+            print(f'{label:18} {str(selected.get(task,"-")):>5} {auc:12.8f} {recovery(auc,lo,hi):10.1f} '+('--' if delta is None else f'{delta:+.8f}').rjust(15)+description)
             rows.append(dict(model=task,role=role,metrics=m,epoch=selected.get(task),recovery=recovery(auc,lo,hi),delta_matched=delta,reused=task in spec['reused'],location=location))
     for task in incomplete: print(task+': '+str(states.get(task,['NOT_SUBMITTED_OR_UNCONFIRMED',''])))
     return artifact('RESULTS',parents=dict(spec=spec['content_hash'],**hashes),rows=rows,incomplete=incomplete,states=states)
@@ -83,7 +87,11 @@ def progress(spec):
     states=scheduler_states(spec)
     for task in tasks:
         ctrl='C'+str(setting(task)['seed_index']); control=best.get(ctrl)
-        print('\n'+task+(' [reused]' if task in spec['reused'] else ''))
+        description=''
+        if spec.get('campaign_kind')=='R8_FOLLOWUP_V2':
+            from .reconstruction_followup import description as describe
+            description=': '+describe(task)
+        print('\n'+task+(' [reused]' if task in spec['reused'] else '')+description)
         if not rows[task]: print('  no published validation epoch; '+str(states.get(task,['NOT_SUBMITTED_OR_UNCONFIRMED',''])))
         for r in rows[task]:
             auc=r['validation']['macro_ovr_auc']; delta=None if control is None else auc-control['validation']['macro_ovr_auc']

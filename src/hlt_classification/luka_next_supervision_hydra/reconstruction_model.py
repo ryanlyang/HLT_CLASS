@@ -58,18 +58,26 @@ def attach(model,maximum):
 
 def capture(model,features,vectors,mask):
     from hlt_classification.luka_embedding_aux.model import head_input
-    found=[]; masks=[]
+    layers=tuple(model.cfg.get('token_layers',(8,)))
+    if layers not in ((8,),(4,8)): raise ValueError('Unregistered particle token taps')
+    found={}; masks={}; handles=[]
     if len(model.mod.blocks)!=8: raise ValueError('Expected eight native particle blocks')
-    def before(module,args,kwargs):
-        padding=kwargs.get('padding_mask')
-        if padding is None: raise ValueError('Native block-eight effective mask missing')
-        masks.append(~padding.bool())
-    handles=[model.mod.blocks[7].register_forward_pre_hook(before,with_kwargs=True),
-        model.mod.blocks[7].register_forward_hook(lambda module,args,out:found.append(out))]
+    def hooks(layer):
+        def before(module,args,kwargs):
+            padding=kwargs.get('padding_mask')
+            if padding is None: raise ValueError('Native particle effective mask missing')
+            masks[layer]=~padding.bool()
+        def after(module,args,out): found[layer]=out
+        return before,after
+    for layer in layers:
+        before,after=hooks(layer)
+        handles.extend((model.mod.blocks[layer-1].register_forward_pre_hook(before,with_kwargs=True),
+            model.mod.blocks[layer-1].register_forward_hook(after)))
     try: logits,h=head_input(model,features,vectors,mask)
     finally:
         for handle in handles: handle.remove()
-    if len(found)!=1 or len(masks)!=1 or found[0].shape!=(*masks[0].shape,128):
+    if set(found)!=set(layers) or set(masks)!=set(layers) or any(found[l].shape!=(*masks[l].shape,128) for l in layers):
         raise ValueError('Native contextual token/mask tap differs')
-    model.particle_tokens=found[0].float(); model.particle_mask=masks[0]
+    model.particle_tokens=(found[8].float() if layers==(8,) else torch.cat([found[l].float() for l in layers],1))
+    model.particle_mask=masks[8] if layers==(8,) else torch.cat([masks[l] for l in layers],1)
     return logits,h

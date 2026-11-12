@@ -20,7 +20,7 @@ AUTHORIZATION="$("${PYTHON}" -B -s -c 'import json,sys; print(json.load(open(sys
 printf '\nReview hash: %s\n' "${HASH}"
 printf 'Scope: the exact group in the reviewed plan. Science jobs have no dependencies, holds, lanes or priority adjustments.\n'
 if [[ "$STAGE" == bootstrap ]]; then
-    printf 'This authorizes R setup plus durable CPU release of all twelve measured fits after setup passes. No second confirmation; safe to log off after submission completes.\n'
+    printf 'This authorizes setup plus durable CPU release of every fit in the reviewed plan after setup passes. No second confirmation; safe to log off after submission completes.\n'
 fi
 read -r -p "Authorize this exact ${STAGE} plan? Type YES: " ANSWER
 [[ "${ANSWER}" == YES ]] || { printf 'Not submitted. Preserve this review.\n'; exit 1; }

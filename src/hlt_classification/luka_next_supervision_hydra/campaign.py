@@ -30,6 +30,11 @@ REQUIRED|={'tests/test_luka_next_supervision_group_c.py','docs/contracts/LUKA_NE
 REQUIRED|={'tests/test_luka_direct_reconstruction.py','tests/test_luka_reconstruction_batched.py','tests/test_luka_reconstruction_release.py','docs/contracts/LUKA_DIRECT_OFFLINE_RECONSTRUCTION.md',
     'docs/LUKA_DIRECT_OFFLINE_RECONSTRUCTION_RUNBOOK.md','docs/LUKA_DIRECT_OFFLINE_RECONSTRUCTION_VALIDATION.md',
     'docs/plans/LUKA_DIRECT_OFFLINE_RECONSTRUCTION_IMPLEMENTATION_PLAN.md'}
+REQUIRED|={'src/hlt_classification/luka_next_supervision_hydra/reconstruction_followup.py',
+    'tests/test_luka_reconstruction_followup.py','docs/contracts/LUKA_DIRECT_OFFLINE_RECONSTRUCTION_FOLLOWUP.md',
+    'docs/LUKA_DIRECT_OFFLINE_RECONSTRUCTION_FOLLOWUP_RUNBOOK.md',
+    'docs/LUKA_DIRECT_OFFLINE_RECONSTRUCTION_FOLLOWUP_VALIDATION.md',
+    'docs/plans/LUKA_DIRECT_OFFLINE_RECONSTRUCTION_FOLLOWUP_PLAN.md'}
 
 
 def current(project,commit):
@@ -98,6 +103,9 @@ def create(root,parent_path,raw_root,raw_hash,delta_root,delta_hash,reuse_map,pr
 
 def check(spec,*,check_storage=True):
     if spec.get('scope')=='direct_reconstruction_only':
+        if spec.get('campaign_kind')=='R8_FOLLOWUP_V2':
+            from .reconstruction_followup import check as followup
+            return followup(spec,check_storage=check_storage)
         from .reconstruction import check as reconstruction
         return reconstruction(spec,check_storage=check_storage)
     if spec.get('scope')=='group_C_only':

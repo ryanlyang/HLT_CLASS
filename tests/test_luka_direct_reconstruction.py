@@ -56,7 +56,7 @@ def test_registry_is_additive_exact_twelve_weight5_and_six_paths():
     assert c.setting('R3')['seed_index']==c.setting('R4')['seed_index']==1
     assert c.setting('R11')['source']==c.setting('R12')['source']=='HLT'
     assert c.coefficient(c.setting('R1'),1.5)==.05
-    with pytest.raises(NotImplementedError): c.setting('R13')
+    with pytest.raises(NotImplementedError): c.setting('R99')
 
 
 @pytest.mark.parametrize('n',[0,1,3,4])

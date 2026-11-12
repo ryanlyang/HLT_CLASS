@@ -38,6 +38,20 @@ def test_scalar_batched_losses_components_and_all_output_gradients(device,extra,
         torch.testing.assert_close(bg,ag,rtol=3e-5,atol=3e-6,msg=name)
 
 
+@pytest.mark.parametrize('consistency_weight',[.05,.2])
+def test_followup_consistency_weights_preserve_scalar_batched_value_and_gradient_parity(consistency_weight):
+    a,targets=examples([0,3,8]); b={k:v.detach().clone().requires_grad_() for k,v in a.items()}
+    expected,ep=scalar.rows(a,targets,True,consistency_weight=consistency_weight)
+    actual,ap=batch.rows(b,targets,True,consistency_weight=consistency_weight)
+    torch.testing.assert_close(actual,expected,rtol=3e-6,atol=2e-6)
+    for name in ep: torch.testing.assert_close(ap[name],ep[name],rtol=3e-6,atol=2e-6,msg=name)
+    expected.sum().backward(); actual.sum().backward()
+    for name in a:
+        ag=a[name].grad if a[name].grad is not None else torch.zeros_like(a[name])
+        bg=b[name].grad if b[name].grad is not None else torch.zeros_like(b[name])
+        torch.testing.assert_close(bg,ag,rtol=3e-5,atol=3e-6,msg=name)
+
+
 def test_canonical_target_permutation_duplicate_ties_empty_and_parallel_assignment():
     scores,targets=examples([40,0,30]); targets[0]['values'][1]=targets[0]['values'][0]; targets[0]['valid'][1]=targets[0]['valid'][0]
     t,counts=batch.pack(targets,40,'cpu'); slots,chosen=batch.assignments(scores,t,counts)

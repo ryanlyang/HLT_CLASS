@@ -20,7 +20,7 @@ def main():
     for name in ('root','parent-spec','raw-root','raw-hash','delta-root','delta-hash','reuse-map','expected-commit'):
         p.add_argument('--'+name,required=True)
     p.add_argument('--quota-gib',type=int,required=True)
-    for command in ('create-b','create-c','create-r'):
+    for command in ('create-b','create-c','create-r','create-r8-followup'):
         p=sub.add_parser(command)
         for name in ('root','group-a-spec','expected-commit'): p.add_argument('--'+name,required=True)
         p.add_argument('--quota-gib',type=int,required=True)
@@ -40,7 +40,8 @@ def main():
             implemented_groups=['A','B','C'],
             implemented_tasks=[t for t in contracts.ORDER if t in contracts.TASKS or t in structured or t in probabilistic],
             full40_implementation_available=True,full40_release_available=False,
-            release_scopes=['group_A_only','group_B_only','group_C_only','direct_reconstruction_only'])
+            release_scopes=['group_A_only','group_B_only','group_C_only','direct_reconstruction_only'],
+            direct_reconstruction_followup='R8_FOLLOWUP_V2')
     elif a.command=='export':
         campaign.current(project,a.expected_commit); value=data.export(a.prepared,a.origin_spec,a.output)
     elif a.command=='create':
@@ -54,6 +55,9 @@ def main():
         value=create(a.root,a.group_a_spec,project,a.expected_commit,a.quota_gib)
     elif a.command=='create-r':
         from hlt_classification.luka_next_supervision_hydra.reconstruction import create
+        value=create(a.root,a.group_a_spec,project,a.expected_commit,a.quota_gib)
+    elif a.command=='create-r8-followup':
+        from hlt_classification.luka_next_supervision_hydra.reconstruction_followup import create
         value=create(a.root,a.group_a_spec,project,a.expected_commit,a.quota_gib)
     else:
         spec=load_json(a.spec)

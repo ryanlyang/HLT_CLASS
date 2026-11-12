@@ -30,13 +30,13 @@ GROUP_PROPOSALS=4096
 
 
 def artifact(kind, *, parents=None, **fields):
-    version=3 if kind=='DIRECT_RECONSTRUCTION_SPEC' else 2 if kind in ('SPEC','RESOURCE_CHECK','ACCEPTANCE') else 1
+    version=3 if kind=='DIRECT_RECONSTRUCTION_SPEC' else 2 if kind in ('SPEC','RESOURCE_CHECK','ACCEPTANCE','DIRECT_RECONSTRUCTION_FOLLOWUP_SPEC','DIRECT_RECONSTRUCTION_FOLLOWUP_RECIPE') else 1
     return with_content_hash(dict(contract=f'LUKA_NEXT_SUPERVISION_{kind}/v{version}', schema_version=version,
         parents=dict(parents or {}), **FLAGS, **fields))
 
 
 def validate(value, kind, parents=None):
-    version=3 if kind=='DIRECT_RECONSTRUCTION_SPEC' else 2 if kind in ('SPEC','RESOURCE_CHECK','ACCEPTANCE') else 1
+    version=3 if kind=='DIRECT_RECONSTRUCTION_SPEC' else 2 if kind in ('SPEC','RESOURCE_CHECK','ACCEPTANCE','DIRECT_RECONSTRUCTION_FOLLOWUP_SPEC','DIRECT_RECONSTRUCTION_FOLLOWUP_RECIPE') else 1
     validate_content_hash(value, expected_contract=f'LUKA_NEXT_SUPERVISION_{kind}/v{version}', expected_schema_version=version)
     if any(value.get(k) != v for k,v in FLAGS.items()) or (parents is not None and value['parents'] != parents):
         raise ValueError('Supervision scope or parent lineage differs')
@@ -61,6 +61,10 @@ def recipe():
 
 
 def setting(task):
+    from .reconstruction_followup import SETTING_TASKS
+    if task in SETTING_TASKS:
+        from .reconstruction_followup import setting as followup
+        return followup(task)
     if task.startswith('R'):
         from .reconstruction_contracts import setting as reconstruction
         return reconstruction(task)
@@ -75,6 +79,9 @@ def setting(task):
 
 def authorization(spec):
     if spec.get('scope')=='direct_reconstruction_only':
+        if spec.get('campaign_kind')=='R8_FOLLOWUP_V2':
+            from .reconstruction_followup import AUTHORIZATION as followup
+            return followup
         from .reconstruction_contracts import AUTHORIZATION as reconstruction
         return reconstruction
     if spec.get('scope')=='group_C_only':
@@ -95,4 +102,14 @@ def seed(imported, cfg, kind):
 
 def coefficient(cfg, position):
     if not math.isfinite(position) or position < 0: raise ValueError('Invalid schedule position')
-    return cfg['coefficient']*min(position/3.,1.)
+    delay=cfg.get('start_after_epochs',0.)
+    ramp=cfg.get('ramp_epochs',3.)
+    if not math.isfinite(delay) or delay<0 or not math.isfinite(ramp) or ramp<=0:
+        raise ValueError('Invalid auxiliary schedule')
+    weight=cfg['coefficient']*min(max((position-delay)/ramp,0.),1.)
+    if 'fade_start' in cfg or 'fade_end' in cfg:
+        start,end=cfg.get('fade_start',float('nan')),cfg.get('fade_end',float('nan'))
+        if not math.isfinite(start) or not math.isfinite(end) or not delay+ramp<=start<end:
+            raise ValueError('Invalid auxiliary fade schedule')
+        weight*=min(max((end-position)/(end-start),0.),1.)
+    return weight

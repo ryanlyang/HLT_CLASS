@@ -18,10 +18,13 @@ from . import inputs,training,model
 
 
 def path_key(task):
+    from .reconstruction_followup import SETTING_TASKS,execution_key
+    if task in SETTING_TASKS: return execution_key(task)
     cfg=setting(task)
     # Same tensor support and compute graph; scalar weights and replicate seeds
     # do not create new execution paths. Source, sampler and interaction do.
-    return tuple((k,str(v)) for k,v in cfg.items() if k not in ('coefficient','seed_index'))
+    return tuple((k,str(v)) for k,v in cfg.items() if k not in
+        ('coefficient','seed_index','ramp_epochs','start_after_epochs','consistency_weight'))
 
 
 def baseline(spec,train,device):
@@ -46,6 +49,7 @@ def baseline(spec,train,device):
 
 
 def baseline_tasks(spec):
+    if spec.get('campaign_kind')=='R8_FOLLOWUP_V2': return ('C2','C3','R13','R22','R26','R27','R28')
     if spec.get('scope')=='direct_reconstruction_only': return ('C0','C1','R1','R2','R3','R4')
     if spec.get('scope')=='group_C_only': return ('C0','C1','D1','D5','S1','S5')
     return ('C0','C1','Q1','Q6','V1','V7') if spec.get('scope')=='group_B_only' else ('C0','C1','P1','G1','J1','J5')
@@ -64,7 +68,7 @@ def resource_record(spec,task,report,warm,memory,gpu,preparation_seconds):
             or any(set(p)!=set(training.PHASE_KEYS) or not np.isfinite(list(p.values())).all()
                 or min(p.values())<0 or not math.isclose(sum(p.values()),t,rel_tol=1e-6,abs_tol=1e-6)
                 for p,t in zip(phases,times))): raise ValueError('Missing complete production phase timings')
-    if spec.get('scope')=='direct_reconstruction_only':
+    if spec.get('scope')=='direct_reconstruction_only' and setting(task)['family']=='R':
         detail=row.get('batch_reconstruction_seconds')
         keys={'decoder_forward_seconds','assignment_seconds','decoder_backward_seconds','native_backward_optimizer_seconds'}
         if (not isinstance(detail,list) or len(detail)!=len(times) or any(set(d)!=keys
@@ -91,7 +95,7 @@ def resource_record(spec,task,report,warm,memory,gpu,preparation_seconds):
         task=task,minutes=minutes,memory=memory,gpu=gpu,preparation_seconds=preparation_seconds,
         train_step_seconds=perstep,probe_seconds_per_epoch=probe_seconds,
         batch_phase_seconds=phases,validation_step_seconds=vstep,limits=limits,violations=violations,passed=not violations,quality_gate=False,
-        **(dict(batch_reconstruction_seconds=row['batch_reconstruction_seconds']) if spec.get('scope')=='direct_reconstruction_only' else {}))
+        **(dict(batch_reconstruction_seconds=row['batch_reconstruction_seconds']) if spec.get('scope')=='direct_reconstruction_only' and setting(task)['family']=='R' else {}))
 
 
 def measure(spec,train,val,bank,device='cuda',*,shared_preparation_seconds=0.):
@@ -107,7 +111,7 @@ def measure(spec,train,val,bank,device='cuda',*,shared_preparation_seconds=0.):
         began=time.perf_counter(); source=inputs.candidates(spec,task,train,device)
         preparation=shared_preparation_seconds+time.perf_counter()-began; memory_before=peaks(device)
         selected=ix
-        if spec.get('scope')=='direct_reconstruction_only':
+        if spec.get('scope')=='direct_reconstruction_only' and source is not None:
             from .reconstruction_targets import miniature_indices
             selected=miniature_indices(source,ix)
         elif spec.get('scope')=='group_B_only':
@@ -185,11 +189,12 @@ def accepted(spec):
     for task,path in a['paths'].items():
         if path_key(task)!=path_key(path): raise ValueError('Resource path does not match task support')
     for path in a['measurements']:
-        capacity=load_json(root/('capacity_'+path+'.json')); validate(capacity,'CAPACITY',dict(spec=spec['content_hash']))
-        if (capacity['task']!=path or capacity['rows']!=spec['counts']['train']
-                or sum(capacity['class_counts'])!=spec['counts']['train']): raise ValueError('Capacity population differs')
-        if setting(path)['family'] in ('P','G','Q') and capacity.get('sampler_workers')!=spec['candidate_workers']:
-            raise ValueError('Measured CPU sampler-worker support differs')
+        if setting(path)['family']!='C':
+            capacity=load_json(root/('capacity_'+path+'.json')); validate(capacity,'CAPACITY',dict(spec=spec['content_hash']))
+            if (capacity['task']!=path or capacity['rows']!=spec['counts']['train']
+                    or sum(capacity['class_counts'])!=spec['counts']['train']): raise ValueError('Capacity population differs')
+            if setting(path)['family'] in ('P','G','Q') and capacity.get('sampler_workers')!=spec['candidate_workers']:
+                raise ValueError('Measured CPU sampler-worker support differs')
         report,_=training.validate_fit(root/('mini_'+path),spec,path,technical=True)
         warm,_=training.validate_fit(root/('warm_'+path),spec,path,technical=True)
         r=a['measurements'][path]

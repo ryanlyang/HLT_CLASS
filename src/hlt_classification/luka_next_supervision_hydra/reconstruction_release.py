@@ -15,13 +15,14 @@ from . import campaign, submission
 
 def release_command(spec):
     site=spec['cpu_site']; project=spec['project_dir']; root=Path(spec['root'])
+    prefix='lukanrf' if spec.get('campaign_kind')=='R8_FOLLOWUP_V2' else 'lukanr'
     return dict(task_id='release',dependencies=['setup'],command=[
         'sbatch','--parsable','--no-requeue','--kill-on-invalid-dep=yes',
         '--nodes=1','--ntasks=1','--export=NONE',
         '--partition='+site['partition'],'--account='+site['account'],'--qos='+site['qos'],
         '--cpus-per-task='+str(site['cpus']),'--mem='+str(site['memory_mb'])+'M',
-        '--time='+_walltime(spec['release_minutes']),'--job-name=lukanr_release',
-        '--comment=lukanr:'+spec['content_hash']+':release','--chdir='+project,
+        '--time='+_walltime(spec['release_minutes']),'--job-name='+prefix+'_release',
+        '--comment='+prefix+':'+spec['content_hash']+':release','--chdir='+project,
         '--output='+str(root/'release-%j.out'),'--dependency=afterok:${JOB_setup}',
         project+'/sbatch/run_luka_next_supervision_hydra.sh',project,str(root/'campaign_spec.json'),'release'])
 
@@ -38,6 +39,33 @@ def scheduler_review(value):
         result=subprocess.run(args,env=env,capture_output=True,text=True)
         print((result.stdout+result.stderr).strip(),flush=True)
         if result.returncode: raise RuntimeError('Hydra rejected the bootstrap resource shape')
+
+
+def report_command(spec):
+    row=release_command(spec)
+    row['task_id']='report'; row['dependencies']=list(spec['remaining'])
+    replacements={'--dependency=':'--dependency=afterany:'+':'.join('${JOB_'+t+'}' for t in spec['remaining']),
+        '--job-name=':'--job-name=lukanrf_report',
+        '--comment=':'--comment=lukanrf:'+spec['content_hash']+':report',
+        '--output=':'--output='+str(Path(spec['root'])/'report-%j.out'),
+        '--time=':'--time='+_walltime(spec['report_minutes'])}
+    row['command']=[next((value for prefix,value in replacements.items() if x.startswith(prefix)),x) for x in row['command']]
+    row['command'][-1]='report'
+    return row
+
+
+def report(spec):
+    from . import reporting
+    from hlt_classification.data.cache_contracts import write_immutable_json
+    campaign.check(spec)
+    if spec.get('campaign_kind')!='R8_FOLLOWUP_V2': raise PermissionError('Unregistered report')
+    if installed_environment()!=spec['reference']['environment']: raise PermissionError('Qualified software differs')
+    job=cpu_allocation(spec)
+    if submission.accepted_jobs(spec,'science').get('report')!=job:
+        raise PermissionError('Report is not the accepted exact job')
+    value=reporting.results(spec)
+    write_immutable_json(Path(spec['root'])/'report.json',value)
+    return value
 
 
 def cpu_allocation(spec):
@@ -110,7 +138,8 @@ def finish(spec,job):
             raise RuntimeError('Ambiguous partial science submission; inspect exact-ID journals before recovery')
         submission.submit(spec,'science')  # Persist and dry-review every measured sbatch request.
     result=submission.submit(spec,'science',execute=True,plan_hash=value['content_hash'],authorization=authorization(spec))
-    print('All twelve reconstruction fits submitted independently. See submission_science/submission_ledger.json.',flush=True)
+    print(f'All {len(spec["remaining"])} reconstruction follow-up fits submitted independently. '
+        'See submission_science/submission_ledger.json.',flush=True)
     return result
 
 

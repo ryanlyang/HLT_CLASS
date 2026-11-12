@@ -12,7 +12,8 @@ from . import reconstruction_batched as batched
 from .probabilistic_targets import conditioning_permutation
 
 
-def decode_backward(decoder,h,tokens,mask,targets,weight,*,chunk=CHUNK,consistency=False,measure=False):
+def decode_backward(decoder,h,tokens,mask,targets,weight,*,chunk=CHUNK,consistency=False,
+        consistency_weight=.1,measure=False):
     """Keep only one decoder chunk's graph. Native h/T remain graph-connected via VJP."""
     sh=h.detach().requires_grad_(True)
     st=tokens.detach().requires_grad_(True) if decoder.cfg['memory']=='tokens' else None
@@ -22,7 +23,8 @@ def decode_backward(decoder,h,tokens,mask,targets,weight,*,chunk=CHUNK,consisten
         end=min(start+chunk,b); sync(); began=time.perf_counter()
         scores=decoder(sh[start:end],None if st is None else st[start:end],None if st is None else mask[start:end])
         sync(); decoder_seconds+=time.perf_counter()-began
-        losses,fields=batched.rows(scores,targets[start:end],consistency,timings=breakdown if measure else None)
+        losses,fields=batched.rows(scores,targets[start:end],consistency,
+            consistency_weight=consistency_weight,field_weights=decoder.cfg.get('field_weights',(1.,1.,1.)),timings=breakdown if measure else None)
         loss=losses.sum()/b
         sync(); forward_seconds+=time.perf_counter()-began; began=time.perf_counter()
         (weight*loss).backward()
@@ -62,7 +64,7 @@ def probes(model,targets,raw,weight,gh,gt):
                 end=min(start+CHUNK,n); ix=torch.as_tensor(indices[start:end],device=h.device)
                 q=h[ix]; t=tokens[ix]; m=mask[ix]
                 if zero: q=torch.zeros_like(q); t=torch.zeros_like(t); m=torch.zeros_like(m)
-                score=model.aux(q,t,m); losses,_=batched.rows(score,targets[start:end],False)
+                score=model.aux(q,t,m); losses,_=batched.rows(score,targets[start:end],False,field_weights=model.cfg.get('field_weights',(1.,1.,1.)))
                 loss+=float(losses.sum())/n
                 if name=='correct':
                     count=torch.tensor([len(t['values']) for t in targets[start:end]],device=h.device)
@@ -72,7 +74,7 @@ def probes(model,targets,raw,weight,gh,gt):
                         s={k:v[j] for k,v in score.items()}; t=objective.target(tgt,h.device)
                         p4=objective.physical(s,t)
                         unphysical+=float((p4[:,3]<p4[:,:3].norm(dim=-1)).double().mean())/n
-                        slots,columns=objective.match(s,t); present=s['presence'].sigmoid()>=.5
+                        slots,columns=objective.match(s,t,field_weights=model.cfg.get('field_weights',(1.,1.,1.))); present=s['presence'].sigmoid()>=.5
                         tp+=int(present[slots].sum()); predicted+=int(present.sum()); actual+=len(t['values'])
                         valid_correct+=int(((s['validity'][slots].sigmoid()>=.5)==t['valid'][columns]).sum())
                         valid_total+=4*len(slots); valid_fraction+=float(t['valid'].float().mean())/n if len(slots) else 0.
@@ -112,9 +114,17 @@ def step(model,opt,raw,embedding,device,*,candidates,indices,epoch,position,prob
     weight=coefficient(model.cfg,position)
     with torch.autocast(torch.device(device).type,enabled=False):
         aux,parts,gh,gt,times=decode_backward(model.aux,model.jet,model.particle_tokens,model.particle_mask,
-            targets,weight,consistency=model.cfg['consistency'],measure=measure)
+            targets,weight,consistency=model.cfg['consistency'],
+            consistency_weight=model.cfg.get('consistency_weight',.1),measure=measure)
         reconstruction_timing=times.pop('reconstruction_timing'); phases.update(times); sync(); began=time.perf_counter()
         diagnostics=probes(model,targets,raw,weight,gh,gt) if probe else {}
+        if probe:
+            # Compare signals at the common global embedding, not total backbone gradients.
+            for name,term in (('ce',ce),('u100_w5',5*emb)):
+                condition=model.ce_representation if name=='ce' else model.jet
+                g=torch.autograd.grad(term,condition,retain_graph=True)[0].detach().float()
+                diagnostics[name+'_jet_gradient_norm']=float(g.norm())
+                diagnostics[name+'_aux_jet_gradient_cosine']=float(F.cosine_similarity(g.flatten(),gh.flatten(),dim=0,eps=1e-12))
         sync(); phases['diagnostics']=time.perf_counter()-began; began=time.perf_counter()
     if not torch.isfinite(base) or not np.isfinite(aux): raise ValueError('Nonfinite reconstruction objective')
     outputs=[base,model.jet]; gradients=[torch.ones_like(base),gh]
