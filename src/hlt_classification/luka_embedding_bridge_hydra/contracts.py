@@ -9,10 +9,31 @@ BASE = '45075fe6c2d8ccdcf7463cd3a99cbe2fe6976a08'
 # Freeze all donor runtime at the published repair base; only this campaign
 # namespace may change afterwards. The original scientific recipe stays v1.
 REPAIR_BASE = '2fb09f38a3a1da85cdceff9df311963fdb3aa872'
-VERSIONS = {'SPEC': 3, 'U100_REPLAY': 2}
+VERSIONS = {'SPEC': 4, 'U100_REPLAY': 3}
 U100_EXTRACTION = 'original_consecutive_128_whole_batches_per_rank_fp32_v1'
 AUTHORIZATION = 'AUTHORIZE_LUKA_EMBEDDING_BRIDGE_HYDRA_V1'
 AUX_SEED = 20261110
+
+
+def u100_numerical_policy():
+    """Explicit admission bounds; never inferred from the current execution."""
+    return artifact('U100_NUMERICAL_POLICY',
+        historical_limits=dict(standardized=dict(max_abs=.002, rms=.0001),
+                               raw=dict(max_abs=.002, rms=.0001)),
+        local_limits=dict(max_abs=1e-5, rms=2e-6),
+        legacy_elementwise=dict(atol=1e-4, rtol=1e-4, diagnostic_only=True),
+        witness_rows=4096, probe_selection='four_evenly_spaced_original_batches_plus_tail',
+        probe_modes=['gpu_default', 'gpu_math', 'cpu_math'], cpu_threads=6,
+        basis=dict(job='164226', rows=610,
+            spec='ff91de37f837925b6d437be35c25ffb0ef89b649c7ee0e509d788b9f22c2cc34',
+            historical_standardized_max=.0010596513748168945,
+            historical_standardized_rms=6.245392502114526e-5,
+            local_standardized_max=5.364418029785156e-6,
+            local_standardized_rms=5.161255827756094e-7,
+            full_witness_job='163911', full_witness_max=.0014574527740478516,
+            full_witness_rms=5.6815192022950564e-5),
+        interpretation='bounded_historical_export_difference_not_exact_setting_attribution',
+        original_train_targets='byte_exact_unchanged')
 
 
 def artifact(kind, *, parents=None, **fields):

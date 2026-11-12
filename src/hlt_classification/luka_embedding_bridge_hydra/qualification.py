@@ -9,9 +9,9 @@ from hlt_classification.jetclass2_delphes.model import model_config
 from hlt_classification.models.particle_transformer import load_weaver_particle_transformer_class
 from hlt_classification.luka_subclass_hydra.benchmark_training import parity_snapshot,compare
 from hlt_classification.luka_subclass_ddp_hydra.resources import TOLERANCES,PROBE_TOLERANCES
-from .contracts import artifact,validate,U100_EXTRACTION
+from .contracts import artifact,validate,U100_EXTRACTION,u100_numerical_policy
 from .registry import teacher_condition
-from . import model,distributed as d,inputs
+from . import model,distributed as d,inputs,numerical
 
 CHECKS=('C0','LS_D050','LM_D033','LS_D000','R8','P7','TR_B','TR_KIT',
         'TP_HLT_coarse','TP_HLT_medium','TP_HLT_fine','TP_OFFLINE_coarse','TP_OFFLINE_medium','TP_OFFLINE_fine')
@@ -126,9 +126,14 @@ def check_replay(spec):
 def check_u100_witness(u,spec):
     t=inputs.transferred(spec)
     validate(u,'U100_REPLAY',dict(spec=spec['content_hash'],teacher=t.manifest['teacher']['sha256'],original=spec['embedding_hash']))
-    if (u['passed']is not True or u['rows']!=4096 or (u['atol'],u['rtol'])!=(1e-4,1e-4)
-            or u['extraction_policy']!=U100_EXTRACTION or u['exceeding_coordinates']!=0
-            or u['regrouped_diagnostic_only']is not True
-            or any(not np.isfinite(u[k]) or u[k]<0 for k in ('maximum_error','mean_absolute_error','rms_error','regrouped_maximum_error'))):
+    if (spec['u100_numerical_policy']!=u100_numerical_policy()
+            or u['passed']is not True or u['rows']!=min(4096,spec['counts']['train']) or (u['atol'],u['rtol'])!=(1e-4,1e-4)
+            or u['extraction_policy']!=U100_EXTRACTION or u['legacy_elementwise_diagnostic_only']is not True
+            or type(u['exceeding_coordinates'])is not int or not 0<=u['exceeding_coordinates']<=u['rows']*128
+            or u['legacy_elementwise_passed']is not (u['exceeding_coordinates']==0)
+            or any(u[k]!=u['historical']['standardized'][v] for k,v in
+                   (('maximum_error','max_abs'),('mean_absolute_error','mean_abs'),('rms_error','rms')))):
         raise ValueError('U100 reproduction witness differs')
+    checks=numerical.decisions(u,spec['counts']['train'])
+    if u['checks']!=checks or not all(checks.values()):raise ValueError('U100 numerical qualification failed')
     return u

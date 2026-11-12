@@ -61,24 +61,28 @@ def test_invalid_replay_rows_fail(indices):
 
 
 @pytest.mark.parametrize('corrupt',[False,True])
-def test_replay_keeps_strict_tolerance_but_records_regrouped_diagnostic(tmp_path,monkeypatch,corrupt):
+def test_replay_preserves_bank_and_rejects_large_errors(tmp_path,monkeypatch,corrupt):
     from hlt_classification.luka_embedding_bridge_hydra import model
+    from test_luka_embedding_bridge_numerical import probe_record
     view=Rows();targets=reference(view)
     if corrupt:targets[0,0]+=.1
     mean=np.zeros(128,np.float64);scale=np.ones(128,np.float64)
     ds=SimpleNamespace(view=lambda role,coord:view,u100=lambda role:dict(targets=targets,mean=mean,scale=scale))
     (tmp_path/'setup').mkdir();checkpoint=tmp_path/'teacher.pt';torch.save({},checkpoint)
-    spec=dict(root=str(tmp_path),content_hash='a'*64,embedding_hash='b'*64)
+    spec=dict(root=str(tmp_path),content_hash='a'*64,embedding_hash='b'*64,u100_numerical_policy=c.u100_numerical_policy())
     monkeypatch.setattr(model,'Model',lambda task:BatchSensitive())
     monkeypatch.setattr(inputs,'transferred',lambda spec:SimpleNamespace(path=lambda ref:checkpoint,manifest=dict(teacher=file_ref(checkpoint))))
+    monkeypatch.setattr(banks.numerical,'local_probe',lambda *a:probe_record(len(view)))
+    saved=targets.copy()
     if corrupt:
         with pytest.raises(ValueError,match='Original-batch'):banks.check_u100(spec,ds,d.Context(0,1,torch.device('cpu')))
     else:banks.check_u100(spec,ds,d.Context(0,1,torch.device('cpu')))
     record=load_json(tmp_path/'setup/u100_replay.json');c.validate(record,'U100_REPLAY')
     assert record['passed'] is (not corrupt)
     assert (record['atol'],record['rtol'])==(1e-4,1e-4)
-    assert record['regrouped_maximum_error']>0
+    assert record['legacy_elementwise_diagnostic_only']is True
     assert (record['exceeding_coordinates']>0)==corrupt
+    np.testing.assert_array_equal(targets,saved)
 
 
 @pytest.fixture

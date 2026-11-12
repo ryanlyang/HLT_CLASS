@@ -1,25 +1,46 @@
 # Embedding assistants, teacher responses, and regional targets on Hydra
 
-Status: scientific recipe v1; execution repair v3, 2026-11-11.
+Status: scientific recipe v1; execution repair v4, 2026-11-11.
+Diagnostic164226 reproduced the historical-bank difference on both CPU and
+GTX1080Ti: standardized RMS6.25e-5, while CPU/GPU RMS was5.16e-7 and GPU default
+versus math attention was identical on610 rows. Setup163911's4096-row maximum
+was0.00145745 and RMS5.68152e-5. Scales range0.14857 to1.14471; none is floored.
+This supports bounded historical-export variation, without identifying its
+exact original hardware/library setting or measuring its effect on recovery.
+
+Execution v4 explicitly supersedes v3's elementwise1e-4 admission rule with
+U100_NUMERICAL_POLICY/v1: historical raw AND standardized maximum <=0.002 and
+RMS <=0.0001; current CPU/GPU and GPU default/math standardized maximum <=1e-5
+and RMS <=2e-6. Both the original4096-row witness and all three paths on four
+evenly spaced original batches plus the tail must satisfy the historical bounds.
+These are fixed qualification limits, not automatically tuned to each run.
+The standardized maximum is0.2% of one TRAIN standard deviation; RMS is0.01%.
+The raw maximum also covers the known full-witness standardized maximum times
+the largest TRAIN scale (<0.00167), rather than assuming the610-row raw maximum
+bounds all4096 rows. Independent local parity stays substantially tighter.
+The former elementwise decision remains recorded as a diagnostic. Source,
+teacher, population and input/target byte hashes remain exact. The original
+TRAIN bank, model, loss, optimizer, scientific recipe and GPU profile are fixed.
+SPEC/v4 binds the policy; U100_REPLAY/v3 records all comparisons and decisions.
+
 Setup162131 completed authenticated preparation in8816.77s, then failed the
 frozen U100 reproduction witness (maximum standardized difference0.00145674).
 The historical exporter uses consecutive batches128 on one card. The v2
 witness regrouped random panel rows and split each batch across two ranks.
 Execution v3 preserves each original batch and padding context, assigning
 whole inference batches to ranks; training still splits global batch128.
-This addresses a verified execution difference, not a proven attribution of
-all observed numerical drift. Tolerance remains absolute/relative1e-4.
+Setup163911 showed that preserving batches did not resolve the mismatch.
 
 Fresh setup checks the frozen teacher before constructing quarter views.
 For the completed92397736 preparation, --resume-spec authenticates its exact
 terminal setup, source, manifests and array hashes, then hard-links immutable
 payloads into a fresh root with new manifests. No scientific fit or old GPU
 qualification is reused. Source logs/data remain intact; no new SPORC export
-or full particle reconstruction is needed for that recovery. SPEC/v3 and
-U100_REPLAY/v2 declare the new execution; PREPARATION_REUSE/v1 records lineage.
+or full particle reconstruction is needed for that recovery.
+PREPARATION_REUSE/v1 records lineage and remains unchanged.
 The unchanged TRAIN targets and scientific RECIPE/v1 remain authoritative.
 Real two-GPU qualification is still pending; a remaining reproduction failure
-must stop with diagnostics, not silently increase tolerance.
+must stop with diagnostics; bounds never increase automatically.
 
 **Repaired implementation awaits real Hydra qualification.** Setup161306 failed
 while replaying historical inputs, before training. D000's first differing

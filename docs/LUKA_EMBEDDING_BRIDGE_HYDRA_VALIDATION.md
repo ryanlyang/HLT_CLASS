@@ -1,5 +1,45 @@
 # Embedding bridge / response / region validation
 
+## 2026-11-11 bounded historical replay and independent CPU/GPU qualification
+
+Brown diagnostic164226 used the authenticated e0f9d874 source, checkpoint and
+original TRAIN bank on610 rows: original batches starting0,99584,199296,299008,
+299136 (four128-row batches plus98-row tail). GTX1080Ti,torch2.5.1+cu118,
+CUDA11.8,cuDNN90100; inference only. GPU default and math attention were exactly
+equal. GPU versus CPU math standardized maximum5.36442e-6, RMS5.16126e-7.
+GPU versus historical standardized maximum0.00105965, RMS6.24539e-5; raw
+maximum0.000444395, RMS2.90579e-5. CPU versus historical RMS6.24858e-5.
+Setup163911's larger4096-row maximum0.00145745 and RMS5.68152e-5 agree with a
+small historical-export discrepancy. These observations do not identify an
+exact old setting or prove an effect, or absence of effect, on classification.
+
+New SPEC/v4 binds U100_NUMERICAL_POLICY/v1, with U100_REPLAY/v3 evidence.
+Historical maximum0.002/RMS0.0001 apply in both raw and standardized spaces;
+current CPU/GPU and GPU default/math maximum1e-5/RMS2e-6 remain much tighter.
+Both4096-row historical replay and every bounded-probe path must pass. The
+legacy elementwise1e-4 criterion is retained as diagnostic evidence. Validators
+recompute decisions, validate coverage and reject missing modes/changed limits.
+No input/target checksum, source rule or scientific objective is relaxed.
+Original TRAIN targets remain byte-identical. Recovery still authenticates
+the original92397736 completed preparation and links49 immutable arrays.
+
+Local baseline:34 recovery/native tests passed in42.84s. Initial new-policy
+tests:24 passed in9.67s. Combined campaign suites:105 passed,1 skipped in65.70s;
+the skip requires two CUDA GPUs/NCCL. Coverage includes sparse large errors,
+distributed drift, raw/standardized bounds, all local parity bounds, forged
+pass flags, invalid/missing coverage, nonfinite evidence, schema separation,
+unchanged recipe and real native CPU/CUDA parity. Final integrated publication
+and failure-restoration tests:2 passed in9.49s. Running the numerical suite in
+isolation exposed a fixture dependency on earlier tests' disabled-TF32 flags;
+the fixture now declares production flags and a fixed initialization seed.
+The final isolated numerical suite passed all23 cases in9.80s, including
+native witness publication/readback and thread/backend/RNG restoration after
+an injected CPU failure. Python syntax25 files and Bash syntax5 runbook blocks
+pass; scoped whitespace checks pass. No broad suite repetition was needed
+after this test-fixture correction.
+No revised production setup, commit, push or submission has been performed by
+the agent. Genuine two-GTX1080Ti qualification remains the next acceptance step.
+
 ## 2026-11-11 foreign-worktree authentication correction
 
 Registration using4fb32e79 failed before publishing the fresh spec or queueing

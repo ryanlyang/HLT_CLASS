@@ -14,9 +14,9 @@ It copies exact historical tensors instead of re-encoding them on Brown.
 Do not rerun the failed v1 source or reuse its partial preparation as complete.
 
 **For failed setup162131, use the completed-preparation recovery below.**
-Its92397736 run finished preparation; preserve that root. Execution v3 checks
-the frozen teacher in original consecutive128-row contexts, retains the1e-4
-tolerance and reuses authenticated completed arrays. It requires no new SPORC
+Its92397736 run finished preparation; preserve that root. Execution v4 checks
+the frozen teacher in original consecutive128-row contexts under the explicit
+historical/local numerical policy and reuses authenticated arrays. It requires no new SPORC
 export or particle reconstruction. Remaining GPU qualification can still fail;
 the completed arrays are preserved for diagnosis and subsequent reuse.
 
@@ -36,6 +36,7 @@ $paths = @(
     'tests/test_luka_embedding_bridge_hydra.py',
     'tests/test_luka_embedding_bridge_native.py',
     'tests/test_luka_embedding_bridge_recovery.py',
+    'tests/test_luka_embedding_bridge_numerical.py',
     'docs/plans/LUKA_EMBEDDING_BRIDGE_RESPONSE_REGION_HYDRA_PLAN.md',
     'docs/contracts/LUKA_EMBEDDING_BRIDGE_HYDRA.md',
     'docs/LUKA_EMBEDDING_BRIDGE_HYDRA_RUNBOOK.md',
@@ -53,7 +54,7 @@ git add -p -- $shared
 git diff --cached --stat
 git diff --cached --check
 if ($LASTEXITCODE -ne 0) { throw 'Fix staged whitespace first' }
-git commit -m 'Preserve U100 export batching and recover completed bridge preparation'
+git commit -m 'Qualify U100 historical replay with bounded drift and CPU GPU parity'
 if ($LASTEXITCODE -ne 0) { throw 'Commit failed' }
 git push origin main
 if ($LASTEXITCODE -ne 0) { throw 'Push failed' }
@@ -119,7 +120,7 @@ export. Completion prints `directory`, `manifest_hash`, `payload_bytes`;
 copy the first two. A directory without its completion manifest is incomplete.
 The old physical export on SPORC is not needed for this repair.
 
-## 3. Copy the native delta, register a fresh v3 execution and queue on Brown
+## 3. Copy the native delta, register a fresh v4 execution and queue on Brown
 
 This block reuses the exact physical transfer from the failed run. It does
 not copy that4.3GiB payload again. The original bundle and native OFFLINE
@@ -178,7 +179,7 @@ CLI="${PROJECT}/scripts/luka_embedding_bridge_hydra.py"
     --bundle-root "$BUNDLE" --native-root "$NATIVE" --native-hash "$NATIVE_HASH"
 "${ENV_DIR}/bin/python" -u -B -s "$CLI" verify-transfer \
     --bundle-root "$BUNDLE" --transfer-root "$RAW" --transfer-hash "$RAW_HASH"
-ROOT="${BASE}/runs/embedding_bridge_${COMMIT:0:8}_1080ti_v3_r1"
+ROOT="${BASE}/runs/embedding_bridge_${COMMIT:0:8}_1080ti_v4_r1"
 test ! -e "$ROOT"
 df -h "$BASE"
 read -r -p 'Personally available output GiB (at least printed minimum_quota_gib): ' QUOTA_GIB </dev/tty
@@ -241,7 +242,7 @@ scientific producer chain, with shared setup cost separately reported.
 bash <<'BASH'
 set -euo pipefail
 shopt -s nullglob
-SPECS=("$HOME"/hlt_u100_pairs/runs/embedding_bridge_*_1080ti_v3_r1/campaign_spec.json)
+SPECS=("$HOME"/hlt_u100_pairs/runs/embedding_bridge_*_1080ti_v4_r1/campaign_spec.json)
 [[ ${#SPECS[@]} -eq 1 ]] || { printf 'Select one exact spec; found %s\n' "${#SPECS[@]}"; exit 1; }
 SPEC="${SPECS[0]}"
 MODE=summary
@@ -266,8 +267,11 @@ This is single-seed development screening; FullStat confirmation comes later.
 The4fb32e79 recovery attempt failed during registration because it used an
 active-module source helper to authenticate a different checkout. It did not
 publish a new campaign spec, submit jobs or alter completed preparation.
-Commit/push the subsequent source-authentication correction before running
-the block below; supply that new commit, not4fb32e79. No new export is needed.
+The subsequent e0f9d874 setup163911 successfully reused the arrays but failed
+its strict numerical replay. Diagnostic164226 now supports the explicitly
+versioned v4 numerical policy. Commit/push this latest repair before running
+the block below; supply that new commit, not4fb32e79 or e0f9d874. No new export
+or separate numerical-probe job is needed.
 
 For162131, first commit/push the scoped repair as above, then run this on
 Brown. Paste that new40-character commit. Registration checks the old terminal
@@ -297,7 +301,7 @@ if [[ -e "$PROJECT" ]]; then
 else
     git -C "$MAIN" worktree add --detach "$PROJECT" "$COMMIT"
 fi
-ROOT="${BASE}/runs/embedding_bridge_${COMMIT:0:8}_1080ti_v3_r1"
+ROOT="${BASE}/runs/embedding_bridge_${COMMIT:0:8}_1080ti_v4_r1"
 test ! -e "$ROOT"
 export PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1
 export PYTHONPATH="${PROJECT}/src"
@@ -331,8 +335,9 @@ BASH
 
 The expected setup message is `reused 49 authenticated arrays; no particle
 reconstruction`, followed by the frozen-U100 check. Any remaining mismatch
-produces `u100_replay.json` with original-batch and regrouped diagnostics.
-Do not raise tolerance or edit old manifests. Source92397736 and its completed
+produces `u100_replay.json` with historical raw/standardized errors and local
+CPU/GPU comparisons. Execution v4 uses the explicitly versioned bounds in the
+plan/contract; do not tune them per job or edit old manifests. Source92397736 and its completed
 preparation remain recovery provenance and must be retained.
 
 Inspect the exact setup/job log, resource JSON and submission journal. A failed
@@ -341,3 +346,153 @@ and refuses automatic retry; reconcile accepted IDs before any further submit.
 Do not delete claims, mutate a campaign spec, reuse a partial root as complete,
 or cancel by broad job-name prefix. Queue readiness means readiness for this
 real qualification, not a claim that it has already passed on Brown.
+
+
+## Numerical diagnostic after setup163911
+
+**Completed as job164226. No need to submit it again for the v4 retry.**
+GPU default/math matched exactly; CPU/GPU RMS was5.16e-7, versus historical
+RMS6.25e-5. The command below is retained as the diagnostic record. The v4 setup
+automatically repeats the bounded check as part of its new qualification.
+
+The e0f9d874 recovery reused49 authenticated arrays in401.10s, but the original
+batch witness still failed (max0.00145745, RMS5.68152e-5). None of the128 TRAIN
+scales is near the0.001 floor. Neither batch regrouping nor a floor-valued
+normalization scale explains the failure. Do not repeat full setup or change
+its tolerance based solely on these numbers.
+
+Run this on Brown with the existing e0f9d874 checkout; no new commit is needed.
+It submits one30-minute diagnostic allocation with one GTX1080Ti,6CPU and16GB.
+It authenticates source and consumed data/checkpoint artifacts, evaluates four
+evenly spaced full original TRAIN batches plus the tail, and compares GPU
+FP32 default, GPU FP32 math attention and CPU FP32 math attention. The raw
+reference is reconstructed from saved standardized targets and TRAIN moments,
+so its error includes their float32 storage rounding. This is diagnostic
+inference only: no preparation, training, target rewrite or science release.
+Only the Slurm log is written. Keep both completed-preparation roots.
+
+```bash
+bash <<'BASH'
+set -euo pipefail
+BASE=/cs/home/rlyang/hlt_u100_pairs
+LOG="$(mktemp "$BASE/runs/u100_numerical_probe.XXXXXX.out")"
+JOB="$(sbatch --parsable --no-requeue --nodes=1 --ntasks=1 \
+  --partition=gpus --account=default --qos=normal \
+  --gres=gpu:geforce_gtx_1080_ti:1 --cpus-per-task=6 \
+  --mem=16000M --time=00:30:00 --export=NONE \
+  --job-name=lukaeb_numprobe --output="$LOG" --chdir="$BASE" <<'SLURM'
+#!/bin/bash
+set -euo pipefail
+SPEC=/cs/home/rlyang/hlt_u100_pairs/runs/embedding_bridge_e0f9d874_1080ti_v3_r1/campaign_spec.json
+ENV_DIR="$(python3 -B -s -c 'import json,sys; print(json.load(open(sys.argv[1]))["environment_dir"])' "$SPEC")"
+PROJECT="$(python3 -B -s -c 'import json,sys; print(json.load(open(sys.argv[1]))["project_dir"])' "$SPEC")"
+export PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PROJECT/src"
+export LD_LIBRARY_PATH="${ENV_DIR}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
+export CUBLAS_WORKSPACE_CONFIG=:4096:8
+"${ENV_DIR}/bin/python" -u -B -s - "$SPEC" <<'PY'
+"""Read-only frozen-U100 numerical diagnostic; cannot authorize campaign release."""
+import json
+import sys
+import time
+from contextlib import nullcontext
+
+import numpy as np
+import torch
+
+from hlt_classification.luka_embedding_bridge_hydra import campaign, contracts, inputs, response
+from hlt_classification.luka_embedding_bridge_hydra.model import Model
+from hlt_classification.luka_u100_pair_hydra.precision import backend_settings, fixed_batches, strict_math
+
+
+def compare(actual, expected):
+    a, b = np.asarray(actual, np.float64), np.asarray(expected, np.float64)
+    if a.shape != b.shape or not a.size or not np.isfinite(a).all() or not np.isfinite(b).all():
+        raise ValueError('Invalid comparison arrays')
+    delta = np.abs(a - b)
+    return dict(max_abs=float(delta.max()), rms=float(np.sqrt(np.mean(delta**2))),
+                mean_abs=float(delta.mean()), p999=float(np.quantile(delta, .999)))
+
+
+def probe(model, batches, rows, expected, mean, scale):
+    torch.backends.cuda.matmul.allow_tf32 = False
+    torch.backends.cudnn.allow_tf32 = False
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+    values = {}
+    raw_reference = expected.astype(np.float64) * scale + mean
+    for mode in ('gpu_fp32_default', 'gpu_fp32_math', 'cpu_fp32_math'):
+        print('Starting ' + mode, flush=True)
+        started = time.perf_counter()
+        device = 'cpu' if mode.startswith('cpu') else 'cuda'
+        model.to(device).float().eval()
+        parts = []
+        with (strict_math() if mode.endswith('_math') else nullcontext()):
+            settings = backend_settings()
+            with torch.inference_mode(), torch.autocast(device, enabled=False):
+                for batch in batches:
+                    x = {k: torch.from_numpy(batch[k]).to(device) for k in ('features', 'vectors', 'mask')}
+                    _, h = model.encode(**x)
+                    parts.append(h.float().cpu().numpy())
+        z = np.concatenate(parts)
+        normalized = response.normalize(z, mean, scale)
+        delta = np.abs(normalized.astype(np.float64) - expected)
+        worst = np.unravel_index(delta.argmax(), delta.shape)
+        values[mode] = normalized
+        print(json.dumps(dict(mode=mode, seconds=time.perf_counter()-started,
+            standardized=compare(normalized, expected), raw=compare(z, raw_reference),
+            exceeding_coordinates=int(np.count_nonzero(delta > 1e-4 + 1e-4*np.abs(expected))),
+            worst=dict(train_row=int(rows[worst[0]]), coordinate=int(worst[1]),
+                       scale=float(scale[worst[1]]), expected=float(expected[worst]),
+                       actual=float(normalized[worst])), settings=settings), allow_nan=False), flush=True)
+    for name in ('gpu_fp32_default', 'gpu_fp32_math'):
+        print(json.dumps(dict(comparison=name+'_vs_cpu_fp32_math',
+                              standardized=compare(values[name], values['cpu_fp32_math']))), flush=True)
+    print(json.dumps(dict(comparison='gpu_default_vs_gpu_math',
+                          standardized=compare(values['gpu_fp32_default'], values['gpu_fp32_math']))), flush=True)
+    return values
+
+
+def main():
+    print('Authenticating saved source, TRAIN inputs, target bank and frozen checkpoint.', flush=True)
+    with open(sys.argv[1]) as handle:
+        spec = json.load(handle)
+    contracts.validate(spec, 'SPEC')
+    if spec['recipe'] != contracts.recipe() or campaign.current(spec['project_dir'], spec['source_commit']) != spec['source_snapshot']:
+        raise ValueError('Saved source/recipe differs')
+    ds = inputs.Dataset(spec)
+    view = ds.view('train', 'U100')
+    u = ds.u100('train')
+    indices = fixed_batches(len(view))
+    rows = np.concatenate(indices)
+    batches = [view.batch(ix) for ix in indices]
+    transfer = inputs.transferred(spec)
+    path = transfer.path(transfer.manifest['teacher'])
+    model = Model('TR').eval()
+    model.load_state_dict(torch.load(path, map_location='cpu', weights_only=True), strict=True)
+    model.requires_grad_(False)
+    if not torch.cuda.is_available():
+        raise RuntimeError('Run inside the requested GPU allocation')
+    torch.set_num_threads(6)
+    print(json.dumps(dict(diagnostic_only=True, spec=spec['content_hash'],
+        teacher=transfer.manifest['teacher']['sha256'], original_bank=spec['embedding_hash'],
+        rows=len(rows), batch_starts=[int(ix[0]) for ix in indices],
+        batch_lengths=[len(ix) for ix in indices], gpu=torch.cuda.get_device_name(),
+        torch=torch.__version__, cuda=torch.version.cuda, cudnn=torch.backends.cudnn.version())), flush=True)
+    probe(model, batches, rows, np.array(u['targets'][rows]), u['mean'], u['scale'])
+    print('Diagnostic complete. No training, preparation, target changes or campaign release.', flush=True)
+
+
+if __name__ == '__main__':
+    main()
+PY
+SLURM
+)"
+printf 'Diagnostic job: %s\nLog: %s\nFollow it with: tail -f %q\n' "$JOB" "$LOG" "$LOG"
+BASH
+```
+
+The log prints per-mode raw/standardized errors and pairwise CPU/GPU differences.
+Interpret those before deciding whether a new qualification policy is justified.
+The command was locally checked with native Weaver CPU/CUDA inference, then
+executed on Brown in164226. The revised full two-GPU qualification remains pending.

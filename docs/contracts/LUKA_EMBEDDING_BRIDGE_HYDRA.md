@@ -1,4 +1,4 @@
-# Embedding bridges, responses and regions: recipe v1, execution v3
+# Embedding bridges, responses and regions: recipe v1, execution v4
 
 Scientific authority: [implementation plan](../plans/LUKA_EMBEDDING_BRIDGE_RESPONSE_REGION_HYDRA_PLAN.md).
 Execution and commands: [runbook](../LUKA_EMBEDDING_BRIDGE_HYDRA_RUNBOOK.md).
@@ -58,13 +58,35 @@ at2fb09f38a3a1da85cdceff9df311963fdb3aa872 and allows only additions/modificatio
 inside the declared campaign runtime. The original scientific donor remains
 45075fe6c2d8ccdcf7463cd3a99cbe2fe6976a08; imported numerical code is unchanged.
 
-SPEC/v3 retains those inputs and adds `u100_extraction_policy` and nullable
+SPEC/v3 retained those inputs and added `u100_extraction_policy` and nullable
 `preparation_reuse`. Frozen U100 inference uses original consecutive128-row
 contexts, including their padding, with whole batches assigned to ranks.
 The random4096 witness evaluates selected rows inside their original batches.
-U100_REPLAY/v2 retains atol/rtol1e-4 and adds RMS/mean/count diagnostics plus a
-non-gating comparison with the old regrouped path. No TRAIN target is replaced.
-Fresh setup performs this check before full particle preparation.
+U100_REPLAY/v2 retained atol/rtol1e-4 and added RMS/mean/count diagnostics plus a
+non-gating comparison with the old regrouped path. That policy failed163911.
+
+SPEC/v4 adds the complete hashed U100_NUMERICAL_POLICY/v1. Diagnostic164226
+showed CPU/GPU RMS5.16e-7 against historical-export RMS6.25e-5, with identical
+default/math GPU outputs. The precise historical setting is not established.
+U100_REPLAY/v3 admits only all of these fixed bounds:
+
+| Comparison | Maximum absolute | RMS |
+| --- | ---: | ---: |
+| Historical standardized embeddings | 0.002 | 0.0001 |
+| Historical raw embeddings, reconstructed from stored targets/moments | 0.002 | 0.0001 |
+| Current CPU math vs GPU default, CPU math vs GPU math, GPU default vs GPU math (standardized) | 0.00001 | 0.000002 |
+
+Historical bounds apply to the4096-row witness AND each path on four evenly
+spaced original128-row batches plus the partial tail (610 rows here). Each
+comparison preserves original neighbours and padding. The raw comparison
+includes stored standardized float32 rounding. A rank-zero CPU copy uses the
+same authenticated learned state; it does not initialize a new model or change
+the GPU teacher. Thread/backend settings are restored on success or error.
+Validators recompute all decisions and reject missing modes, wrong sample
+coverage, changed policy, invalid statistics or dishonest pass flags. Legacy
+atol/rtol1e-4 counts remain diagnostic only; redundant regrouped inference is
+removed in v3. No TRAIN target is replaced. Fresh setup still checks before
+full particle preparation; completed preparation still uses explicit recovery.
 
 PREPARATION_REUSE/v1 accepts only completed preparation from source92397736
 after its initial U100 witness failure, confirmed FAILED1:0 with no active
@@ -98,7 +120,7 @@ Indices, source keys and matching metadata never enter model tensors.
 Original TRAIN U100 arrays and float64 moments are preserved exactly in new
 memory-mapped containers. Validation U100 targets come from the original
 checkpoint with those TRAIN moments. A fixed4096 TRAIN witness checks the new
-extraction against original targets (absolute/relative tolerance1e-4).
+extraction against original targets under the declared numerical policy above.
 Native D000 FP32 checkpoint replay separately requires AUC difference <=5e-5.
 
 NPY payloads are written privately, flushed/fsynced, exclusively linked to
@@ -111,7 +133,7 @@ Raw and normalized arrays are processed in bounded chunks or memory maps.
 ## Artifact inventory
 
 Artifacts use `LUKA_EMBEDDING_BRIDGE_HYDRA_<KIND>/v1`, schema_version1,
-except SPEC/v3, schema_version3 and U100_REPLAY/v2, schema_version2. All retain canonical content hashes, explicit
+except SPEC/v4, schema_version4 and U100_REPLAY/v3, schema_version3. All retain canonical content hashes, explicit
 parents and inherited evaluation disclosures. DATA/VIEW/PHYSICAL/U100_BANK
 parents include the native delta hash; the changed SPEC hash also separates
 every downstream result from the failed v1 execution. Old physical transfers
@@ -126,6 +148,7 @@ and the scientific recipe retain their original v1 hashes.
 | EPOCH / TRAINING_REPORT / FIT | Actual bank lineage, coefficients via recipe/update, selection, all metrics, throughput, memory, target coverage, diagnostics, native reload and output files |
 | MINI_POPULATION / PREPARATION | Selected real rows, technical capability, CPU preparation time and peak memory |
 | PARITY / REPLAY / U100_REPLAY | Factory/control/distributed/probe neutrality and checkpoint reproduction evidence |
+| U100_NUMERICAL_POLICY | Fixed historical/local bounds, sample/mode coverage and diagnostic164226 calibration basis; embedded in SPEC and U100_REPLAY |
 | RESOURCES / ACCEPTANCE / CPU_RESOURCES / STARTUP | All GPU/CPU paths, actual timing samples, explicit report extrapolation, memory, per-task walltimes and actual-parent startup checks |
 | PLAN / SUBMIT_CLAIM / RUN_CLAIM / TASK | Exact authorized commands, source, accepted job IDs, ownership, measured worker seconds/GPU allocation and complete output inventories |
 | RESULTS / PROGRESS | Fresh-C0 comparisons, historical anchors, oracle labels, component metrics, own/ancestor GPU-hours and incomplete states |

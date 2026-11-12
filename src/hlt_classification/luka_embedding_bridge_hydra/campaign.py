@@ -10,17 +10,17 @@ from hlt_classification.luka_subclass_hydra.reuse import original
 from hlt_classification.luka_next_supervision_hydra.campaign import storage as ordinary_storage
 from hlt_classification.luka_u100_pair_hydra import site
 from hlt_classification.luka_u100_pair_hydra.inputs import Bundle
-from .contracts import REPAIR_BASE,COUNTS,artifact,validate,recipe,U100_EXTRACTION
+from .contracts import REPAIR_BASE,COUNTS,artifact,validate,recipe,U100_EXTRACTION,u100_numerical_policy
 from .registry import FITS,PRODUCERS,dependencies
 from .execution import configuration
 from .transfer import fresh,Transfer
 from . import native,recovery
 
 MODULES=('__init__','registry','contracts','regions','response','losses','model','storage','transfer','native','inputs','recovery',
-         'distributed','banks','training','campaign','execution','resources','qualification','worker','submission','reporting')
+         'distributed','banks','numerical','training','campaign','execution','resources','qualification','worker','submission','reporting')
 RUNTIME={f'src/hlt_classification/luka_embedding_bridge_hydra/{n}.py' for n in MODULES}|{
     'scripts/luka_embedding_bridge_hydra.py','scripts/queue_luka_embedding_bridge_hydra.sh','sbatch/run_luka_embedding_bridge_hydra.sh'}
-REQUIRED=RUNTIME|{'tests/test_luka_embedding_bridge_hydra.py','tests/test_luka_embedding_bridge_native.py','tests/test_luka_embedding_bridge_recovery.py','docs/plans/LUKA_EMBEDDING_BRIDGE_RESPONSE_REGION_HYDRA_PLAN.md',
+REQUIRED=RUNTIME|{'tests/test_luka_embedding_bridge_hydra.py','tests/test_luka_embedding_bridge_native.py','tests/test_luka_embedding_bridge_recovery.py','tests/test_luka_embedding_bridge_numerical.py','docs/plans/LUKA_EMBEDDING_BRIDGE_RESPONSE_REGION_HYDRA_PLAN.md',
     'docs/contracts/LUKA_EMBEDDING_BRIDGE_HYDRA.md','docs/LUKA_EMBEDDING_BRIDGE_HYDRA_RUNBOOK.md','docs/LUKA_EMBEDDING_BRIDGE_HYDRA_VALIDATION.md'}
 COPIED=('bundle_root','reference','imported','anchor','embedding_hash','qualification')
 
@@ -43,7 +43,8 @@ def registration(profile='1080ti_2_fp32'):
         report_site=dict(partition='compute',account='default',qos='normal',cpus=2,memory_mb=8000),
         resource_policy=dict(safety_multiplier=2.,fixed_overhead_seconds=1800,memory_fraction=.85,gpu_fraction=.88),
         dependencies={t:dependencies(t) for t in FITS},automatic_retry=False,reference_retrained=True,
-        native_input_policy=native.POLICY,u100_extraction_policy=U100_EXTRACTION)
+        native_input_policy=native.POLICY,u100_extraction_policy=U100_EXTRACTION,
+        u100_numerical_policy=u100_numerical_policy())
 
 
 def storage(spec):

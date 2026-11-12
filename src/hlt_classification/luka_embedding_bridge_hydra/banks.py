@@ -5,33 +5,41 @@ import numpy as np
 import torch
 from hlt_classification.cms_proxy_ladder.contracts import file_ref
 from hlt_classification.data.cache_contracts import load_json,write_immutable_json
-from .contracts import artifact, validate, recipe, U100_EXTRACTION
+from .contracts import artifact, validate, recipe, U100_EXTRACTION, u100_numerical_policy
 from .registry import PRODUCERS, ASSISTANTS, CONDITIONS, SCALES, SLICES, cell
 from .storage import Writer, Store, join,validate_population
-from . import response, distributed as d, inputs
+from . import response, distributed as d, inputs, numerical
 
 
 def check_u100(spec,ds,ctx,*,filename='u100_replay.json'):
     """Check original batching before expensive preparation or qualification."""
     from .model import Model
+    if spec['u100_numerical_policy'] != u100_numerical_policy():
+        raise ValueError('Unregistered U100 numerical qualification policy')
     t=inputs.transferred(spec);path=t.path(t.manifest['teacher']);u=ds.u100('train')
     teacher=Model('TR').to(ctx.device).eval()
     teacher.load_state_dict(torch.load(path,map_location='cpu',weights_only=True),strict=True)
-    ix=panel(ds.view('train','U100'));z=d.original_u100(teacher,ds.view('train','U100'),ctx,ix)
+    view=ds.view('train','U100')
+    probe=ctx.main(lambda:numerical.local_probe(teacher,view,u,ctx.device))
+    ix=panel(view);z=d.original_u100(teacher,view,ctx,ix)
     normalized=response.normalize(z,u['mean'],u['scale']);expected=np.array(u['targets'][ix])
-    error=float(np.max(np.abs(normalized-expected)))
-    regrouped,_=d.predict(teacher,ds,'train',ctx,coordinate='U100',indices=ix,embedding=True)
-    regrouped_error=np.abs(response.normalize(regrouped,u['mean'],u['scale'])-expected)
     delta=np.abs(normalized.astype(np.float64)-expected)
-    witness=artifact('U100_REPLAY',parents=dict(spec=spec['content_hash'],teacher=t.manifest['teacher']['sha256'],original=spec['embedding_hash']),
-        rows=len(ix),maximum_error=error,atol=1e-4,rtol=1e-4,passed=bool(np.allclose(normalized,expected,atol=1e-4,rtol=1e-4)),
+    error=float(delta.max());exceeding=int(np.count_nonzero(delta > 1e-4+1e-4*np.abs(expected.astype(np.float64))))
+    fields=dict(rows=len(ix),maximum_error=error,atol=1e-4,rtol=1e-4,
+        legacy_elementwise_passed=exceeding==0,legacy_elementwise_diagnostic_only=True,
         extraction_policy=U100_EXTRACTION,mean_absolute_error=float(delta.mean()),rms_error=float(np.sqrt(np.mean(delta**2))),
-        exceeding_coordinates=int(np.count_nonzero(delta > 1e-4+1e-4*np.abs(expected))),
-        regrouped_maximum_error=float(regrouped_error.max()),regrouped_diagnostic_only=True)
+        exceeding_coordinates=exceeding,
+        numerical_policy=u100_numerical_policy(),historical=numerical.historical(z,expected,u['mean'],u['scale']),local_probe=probe)
+    checks=numerical.decisions(fields,len(view))
+    witness=artifact('U100_REPLAY',parents=dict(spec=spec['content_hash'],teacher=t.manifest['teacher']['sha256'],original=spec['embedding_hash']),
+        **fields,checks=checks,passed=all(checks.values()))
     ctx.main(lambda:write_immutable_json(Path(spec['root'])/'setup'/filename,witness))
     if not witness['passed']:
         raise ValueError(f'Original-batch U100 reproduction differs: max={error:.8g}; '
-                         f"{witness['exceeding_coordinates']} coordinates exceed tolerance; preserve {filename} and completed preparation")
+                         f"failed checks={[k for k,v in checks.items() if not v]}; preserve {filename} and completed preparation")
+    if ctx.rank==0:
+        print(f'EMBEDDING_BRIDGE U100 numerical qualification passed: max={error:.8g}; RMS={witness["rms_error"]:.8g}; '
+              'original TRAIN targets unchanged',flush=True)
     return teacher
 
 

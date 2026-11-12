@@ -1,5 +1,15 @@
 # Legacy Donor-Source Map
 
+## Embedding bridge numerical qualification (2026-11-11)
+
+Operational donor: `e0f9d874ec69b31d827c0657c28163a2c348efbd`.
+New `luka_embedding_bridge_hydra/numerical.py` imports unchanged `fixed_batches`
+and `strict_math` from `luka_u100_pair_hydra/precision.py`, plus the original
+embedding tap and normalization. Only this campaign's qualification, schema
+binding and evidence change. No external file migration, Fresh_check import,
+target regeneration or imported numerical-module edit. Added numerical
+policy/v1, SPEC/v4 and U100_REPLAY/v3; scientific RECIPE/v1 remains identical.
+
 ## Embedding bridge foreign-source authentication correction (2026-11-11)
 
 Donor commit: `4fb32e79c3d425c8392de50ae56fa662bc82c033`.
