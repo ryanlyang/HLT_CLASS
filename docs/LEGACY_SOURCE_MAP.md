@@ -1,5 +1,43 @@
 # Legacy Donor-Source Map
 
+## Oscar six-teacher subclass-off ablation (2026-11-11)
+
+Scientific/operational donor: `2fb09f38a3a1da85cdceff9df311963fdb3aa872`.
+Implementation baseline: `49b838adab43bf20d0440fc79467e2318aaebfdd`.
+The original six-teacher runtime is unchanged between those revisions and
+remains unchanged by this addition. New package: `luka_fullstat_six_teacher_s0`.
+Paths below are relative to `src/hlt_classification/` unless prefixed otherwise.
+
+| Donor files | Reuse / adaptation |
+|---|---|
+| `luka_fullstat_six_teacher/{contracts,model,sampling,targets}.py` | Import exact student, initialization, objective, sampler/memory policy and frozen subclass target readers. New recipe/objective boundary changes only subclass coefficient to zero. |
+| `luka_fullstat_six_teacher/{training,startup,worker,execution,submission,banks,recovery}.py` | Adapt orchestration into a distinct namespace, preserving numerical order, resource checks, full epoch states, publication, one-job submission and explicit continuation; require zero subclass contribution. |
+| `luka_fullstat_six_teacher/{source,campaign,kd_banks}.py` | Original-source completion authentication, immutable original supervision, KD manifest/ordered-join validation, and original exporter traversal. New code copies the completed logit banks without teacher inference. |
+| `luka_fullstat_six_teacher/launch.py`, `scripts/{luka_fullstat_six_teacher.py,launch_luka_fullstat_six_teacher.sh}`, `sbatch/run_luka_fullstat_six_teacher.sh` | Adapt detached authentication/dry-review/submission, thin CLI and absolute worker sourcing for the single subclass-off fit. |
+| `provenance.py`, `luka_fullsim/foundation.py`, `cms_proxy_ladder/contracts.py`, `data/cache_contracts.py` | Import clean foreign-source snapshot validation, active-code source guard, file hashes, immutable publication and canonical content identities unchanged. |
+| `luka_fullstat_readout/{source,worker}.py`, `luka_fullstat_multiview/{campaign,views,resources}.py`, `luka_fullstat_fine_tail/worker.py` | Unchanged runtime/backend, authenticated HLT inputs, storage/resource checks and historical prediction/rejection reporting. |
+| `tests/test_luka_fullstat_six_teacher*.py`, `tests/{test_luka_attention,test_luka_embedding_aux}.py` | Reuse bounded native/frozen-bank fixtures; add exact ablation, source, recovered-bank, lifecycle and installed-Weaver tests. |
+
+No external code migration or Fresh_check runtime dependency. New
+`LUKA_FULLSTAT_SIX_TEACHER_S0_*/v1` artifacts distinguish this experiment;
+copied frozen banks keep their existing contracts, identities and bytes.
+See [validation](LUKA_FULLSTAT_SIX_TEACHER_S0_VALIDATION.md).
+
+## Embedding bridge TP activation repair (2026-11-11)
+
+Implementation baseline: `49b838adab43bf20d0440fc79467e2318aaebfdd`, failed
+Hydra setup164517. New campaign `activation.py` implements non-reentrant
+checkpoint dispatch, temporary replay buffers, and stateless block dispatch;
+it is new code, not a migrated encoder. `model.py` still delegates to
+`luka_embedding_aux/model.py:head_input` and installed Weaver forward methods.
+Neither donor nor installed Weaver bytes are edited. Qualification reuses
+unchanged `luka_subclass_hydra/benchmark_training.py:parity_snapshot,compare`
+and `luka_subclass_ddp_hydra/resources.py` strict tolerances/memory checks at
+this baseline. Existing campaign/native/synthetic fixtures are extended with
+activation, state/RNG, admission and long-support tests. SPEC/v5,
+TP_EXECUTION_POLICY/TP_CHECKPOINT/TP_STRESS v1 and RESOURCES/ACCEPTANCE v2 bind
+execution changes; scientific RECIPE/v1 and the U100 numerical policy remain.
+
 ## Embedding bridge numerical qualification (2026-11-11)
 
 Operational donor: `e0f9d874ec69b31d827c0657c28163a2c348efbd`.

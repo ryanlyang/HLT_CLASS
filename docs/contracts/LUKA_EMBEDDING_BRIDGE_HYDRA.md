@@ -1,8 +1,33 @@
-# Embedding bridges, responses and regions: recipe v1, execution v4
+# Embedding bridges, responses and regions: recipe v1, execution v5
 
 Scientific authority: [implementation plan](../plans/LUKA_EMBEDDING_BRIDGE_RESPONSE_REGION_HYDRA_PLAN.md).
 Execution and commands: [runbook](../LUKA_EMBEDDING_BRIDGE_HYDRA_RUNBOOK.md).
 This namespace is distinct from the older embedding/logit ladders.
+
+## TP memory execution policy (v5)
+
+SPEC/v5 adds the exact TP_EXECUTION_POLICY/v1 declaration. TP alone uses
+non-reentrant activation checkpointing on its full jet and every crop while
+training, with nested checkpoints around each stateless native transformer
+block to bound single-encoder backward memory. Block calls delegate to installed
+Weaver; unexpected mutable block buffers fail closed. Replay preserves dropout
+RNG and uses temporary cloned
+buffers, restoring the original tensor references even on failure. This keeps
+normalization updates single-counted without mutating tensors saved for
+backward. The registered trim=False factory is required. Parameter names,
+native exports, FP32, SyncBatchNorm, global batch128 and RECIPE/v1 are unchanged.
+
+Before replay/export/miniature work, setup publishes TP_CHECKPOINT/v1: all six
+conditions, ordinary versus checkpointed updates, dropout active, uneven batch15,
+both ranks, existing strict diagnostic-parity tolerances and exact RNG equality.
+TP_STRESS/v1 then records real longest-source TRAIN rows for batch128, batch11
+and the population remainder, all conditions, with the unchanged memory limits.
+Both records are embedded and revalidated in RESOURCES/v2. ACCEPTANCE/v2 cannot
+reuse an old profile without this evidence. Later producer miniatures, native
+reload, one/two-rank parity and diagnostic-neutrality checks still apply.
+
+Setup164517 passed the existing U100 numerical policy before its TP OOM. That
+policy and U100_REPLAY/v3 are unchanged; this is not another tolerance change.
 
 ## Population and deployment
 

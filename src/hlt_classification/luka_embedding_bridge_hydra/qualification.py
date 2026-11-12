@@ -9,12 +9,53 @@ from hlt_classification.jetclass2_delphes.model import model_config
 from hlt_classification.models.particle_transformer import load_weaver_particle_transformer_class
 from hlt_classification.luka_subclass_hydra.benchmark_training import parity_snapshot,compare
 from hlt_classification.luka_subclass_ddp_hydra.resources import TOLERANCES,PROBE_TOLERANCES
-from .contracts import artifact,validate,U100_EXTRACTION,u100_numerical_policy
+from .contracts import artifact,validate,U100_EXTRACTION,u100_numerical_policy,tp_execution_policy
 from .registry import teacher_condition
 from . import model,distributed as d,inputs,numerical
 
 CHECKS=('C0','LS_D050','LM_D033','LS_D000','R8','P7','TR_B','TR_KIT',
         'TP_HLT_coarse','TP_HLT_medium','TP_HLT_fine','TP_OFFLINE_coarse','TP_OFFLINE_medium','TP_OFFLINE_fine')
+
+
+def tp_checkpoint(spec,ds,target,ctx):
+    """Same-rank ordinary/checkpointed updates, with dropout enabled, on real rows."""
+    checks=[]
+    for batch in range(6):
+        condition=teacher_condition(3,batch,regional=True)
+        snapshots=[];rng=[]
+        for enabled in (False,True):
+            m,w,o=d.build(spec,'TP',ctx);m.checkpoint_encoding=enabled
+            values,_=d.step(m,w,o,'TP',ds,target,np.arange(15),3,batch,3.,ctx)
+            snapshots.append(parity_snapshot(m,o,values['total']))
+            rng.append((torch.get_rng_state(),torch.cuda.get_rng_state(ctx.device)))
+            del m,w,o;d.release_memory(ctx)
+        result=compare(*snapshots,PROBE_TOLERANCES)
+        result['rng_equal']=all(torch.equal(a,b) for a,b in zip(*rng))
+        result['passed']=result['passed'] and result['rng_equal']
+        checks.append(dict(condition=list(condition),ranks=ctx.all(result)))
+        if ctx.rank==0:print(f'EMBEDDING_BRIDGE TP checkpoint parity: {condition}',flush=True)
+    value=artifact('TP_CHECKPOINT',parents=dict(spec=spec['content_hash']),
+        policy=tp_execution_policy(),checks=checks,tolerances=PROBE_TOLERANCES,
+        dropout_enabled=True,rows=15,world_size=ctx.world)
+    ctx.main(lambda:write_immutable_json(Path(spec['root'])/'setup/tp_checkpoint.json',value))
+    check_tp_checkpoint(value,spec)
+    return value
+
+
+def check_tp_checkpoint(value,spec):
+    validate(value,'TP_CHECKPOINT',dict(spec=spec['content_hash']))
+    if (spec['tp_execution_policy']!=tp_execution_policy() or value['policy']!=tp_execution_policy()
+            or value['tolerances']!=PROBE_TOLERANCES or value['dropout_enabled']is not True
+            or value['world_size']!=2 or value['rows']!=15 or len(value['checks'])!=6):
+        raise ValueError('Incomplete TP checkpoint parity')
+    for batch,check in enumerate(value['checks']):
+        if check['condition']!=list(teacher_condition(3,batch,regional=True)) or len(check['ranks'])!=2:
+            raise ValueError('Incomplete TP checkpoint conditions/ranks')
+        for row in check['ranks']:
+            if (row['passed']is not True or row['rng_equal']is not True
+                    or any(not np.isfinite(row[k]) or not 0<=row[k]<=limit for k,limit in PROBE_TOLERANCES.items())):
+                raise ValueError('TP checkpoint changed native update or RNG')
+    return value
 
 
 def zero_control(spec,ds,target,device):

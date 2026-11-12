@@ -8,11 +8,14 @@ from hlt_classification.luka_subclass_hydra.benchmark_training import disable_dr
 from .contracts import AUX_SEED
 from .registry import cell, QUERY_NAMES
 from .regions import descriptors
+from . import activation
 
 
 class Model(AuxiliaryParT):
     def __init__(self, task):
         super().__init__(); self.task = task; self.cell = cell(task)
+        if task == 'TP': activation.install_blocks(self.mod)
+        self.checkpoint_encoding = task == 'TP'
         family = self.cell['family']
         self.extra = None
         with torch.random.fork_rng(devices=[]):
@@ -25,7 +28,23 @@ class Model(AuxiliaryParT):
         if self.cell['role'] == 'teacher':
             del self.predictor
 
+    @property
+    def checkpoint_encoding(self):
+        return self._checkpoint_encoding
+
+    @checkpoint_encoding.setter
+    def checkpoint_encoding(self, enabled):
+        self._checkpoint_encoding = bool(enabled)
+        if self.task == 'TP':
+            for block in (*self.mod.blocks, *self.mod.cls_blocks):
+                block._bridge_checkpoint_enabled = bool(enabled)
+
     def encode(self, features, vectors, mask):
+        if self.checkpoint_encoding:
+            return activation.encode(self,self._encode,features,vectors,mask)
+        return self._encode(features,vectors,mask)
+
+    def _encode(self, features, vectors, mask):
         return head_input(self,features,vectors,mask)
 
     def forward(self, features, vectors, mask, *, auxiliary=True, crops=None, valid=None):

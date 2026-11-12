@@ -110,7 +110,17 @@ def resource_diagnostic(s):
             technical_targets=True,miniature_complete=True,native_reload=True,largest_support_backward=True,partial_batch_backward=True,
             condition_coverage=[r.teacher_condition(3,i,regional=t=='TP') if t in ('TR','TP') else 'native' for i in range(6)],
             train_rows=s['counts']['train'],validation_rows=s['counts']['validation'])
-    return c.artifact('RESOURCES',parents=dict(spec=s['content_hash']),profiles=profiles,devices=devices,status='complete',environment=s['reference']['environment'])
+    from hlt_classification.luka_subclass_ddp_hydra.resources import PROBE_TOLERANCES
+    checkpoint=c.artifact('TP_CHECKPOINT',parents=dict(spec=s['content_hash']),policy=c.tp_execution_policy(),
+        tolerances=PROBE_TOLERANCES,dropout_enabled=True,rows=15,world_size=2,
+        checks=[dict(condition=list(r.teacher_condition(3,i,regional=True)),
+            ranks=[dict.fromkeys(PROBE_TOLERANCES,0.)|dict(passed=True,rng_equal=True) for _ in range(2)]) for i in range(6)])
+    stress=c.artifact('TP_STRESS',parents=dict(spec=s['content_hash']),memory=copy.deepcopy(profiles['TP']['memory']),
+        selection='longest_full_source_train_support',technical_weights_discarded=True,
+        cases=[dict(condition=list(r.teacher_condition(3,i,regional=True)),rows=count,seconds=1.,maximum_particles=300)
+               for count in dict.fromkeys([128,11,s['counts']['train']%128]) if count for i in range(6)])
+    return c.artifact('RESOURCES',parents=dict(spec=s['content_hash']),profiles=profiles,devices=devices,
+        tp_checkpoint=checkpoint,tp_stress=stress,status='complete',environment=s['reference']['environment'])
 
 
 def test_complete_dag_and_measured_envelope(tmp_path):

@@ -9,10 +9,20 @@ BASE = '45075fe6c2d8ccdcf7463cd3a99cbe2fe6976a08'
 # Freeze all donor runtime at the published repair base; only this campaign
 # namespace may change afterwards. The original scientific recipe stays v1.
 REPAIR_BASE = '2fb09f38a3a1da85cdceff9df311963fdb3aa872'
-VERSIONS = {'SPEC': 4, 'U100_REPLAY': 3}
+VERSIONS = {'SPEC': 5, 'U100_REPLAY': 3, 'RESOURCES': 2, 'ACCEPTANCE': 2}
 U100_EXTRACTION = 'original_consecutive_128_whole_batches_per_rank_fp32_v1'
 AUTHORIZATION = 'AUTHORIZE_LUKA_EMBEDDING_BRIDGE_HYDRA_V1'
 AUX_SEED = 20261110
+
+
+def tp_execution_policy():
+    return artifact('TP_EXECUTION_POLICY', method='native_encoder_and_stateless_blocks_checkpoint',
+        use_reentrant=False, preserve_rng_state=True,
+        recompute_buffers='disposable_clones_restore_original_references',
+        scope='TP_full_and_each_crop_training_only', global_batch=128, precision='fp32',
+        early_checks=['checkpoint_update_parity_all_six_conditions',
+                      'largest_support_backward_all_six_conditions', 'partial_batches'],
+        scientific_recipe_unchanged=True)
 
 
 def u100_numerical_policy():

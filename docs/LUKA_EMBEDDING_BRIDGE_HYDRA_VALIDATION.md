@@ -1,5 +1,49 @@
 # Embedding bridge / response / region validation
 
+## 2026-11-11 TP activation-memory repair after setup164517
+
+User-supplied Brown evidence: U100 numerical qualification passed, followed by
+C0, LS_D050 and TR miniatures/exports. TP failed during epoch2 in a crop encoder
+with roughly10.45GiB allocated per GTX1080Ti and only5-15MiB free. This is live
+activation exhaustion, not the earlier replay check or a scientific-quality
+failure. Completed preparation had been reused in388s.
+
+Execution v5 introduces TP whole-encoder plus stateless-block non-reentrant
+checkpointing, preserves RNG, isolates recomputation buffer updates, and keeps
+all native parameters and scientific settings. SPEC/v5 binds
+TP_EXECUTION_POLICY/v1; new TP_CHECKPOINT/TP_STRESS v1 evidence is required by
+RESOURCES/ACCEPTANCE v2. Setup now exercises dropout-active update parity and
+real longest-support backward passes before replay, miniatures and exports.
+
+Local baseline:49 passed,1 skipped. Final focused five-file suite:
+**126 passed,2 skipped in143.41s**, using the installed-Weaver fixture and
+PyTorch/CUDA on one RTX2000 Ada laptop GPU. Skips require two CUDA/NCCL ranks.
+Tests cover all six TP conditions, uneven batches, repeated autograd.grad
+diagnostics, output/gradient/update/moment/buffer/RNG parity, exception restoration,
+native reload, schema separation, rejected tampered evidence and early ordering.
+
+Full-depth comparative fixture (batch12,80 particles, eight independent encoder
+calls) reduced peak allocated memory from2,064,188,416 to230,850,560 bytes
+(1.92GiB to0.215GiB,88.8%). A conservative larger fixture used batch64,
+298 particles and eight separate crops each also containing298 particles;
+backward completed with finite gradients at9,591,894,528 bytes (8.93GiB), below
+the registered88% bound for a10.9GiB card. These synthetic stress fixtures are
+not scientific regional samples. Ordinary whole-encoder checkpointing alone
+reached10,740,180,480 bytes in that larger fixture; the nested block repair was
+added before acceptance. No local timing predicts Pascal performance.
+
+The two initial combined-suite failures were stale SPEC/v4 expectations and a
+failure-injection fixture attempting to hash Infinity before validation; both
+were corrected, then the complete focused suite passed. Evidence log:
+`tmp/embedding_bridge_tp_activation_validation.log`.
+Python syntax checks passed for29 files, Bash syntax for5 runbook blocks, and
+the scoped repository whitespace check passed.
+
+No new Brown setup or two-GTX1080Ti qualification has run from this source.
+No commit, push or submission was performed by the agent. The next step is
+the fresh v5 setup using original92397736 preparation; its early real two-rank
+parity/memory checks and remaining measured qualification remain mandatory.
+
 ## 2026-11-11 bounded historical replay and independent CPU/GPU qualification
 
 Brown diagnostic164226 used the authenticated e0f9d874 source, checkpoint and

@@ -48,7 +48,15 @@ def technical_target(spec,task,ds,root):
 
 def measure(spec,ds,ctx,devices,load_seconds):
     if ctx.world!=2 or ctx.device.type!='cuda':raise PermissionError('Real two-GPU production setup required')
-    root=Path(spec['root'])/'setup';banks.prepare_u100(spec,ds,ctx);qualification.replay(spec,ds,ctx)
+    root=Path(spec['root'])/'setup'
+    # Fail early on the most activation-heavy teacher, before numerical replay,
+    # other families' miniatures, exports, or full validation. Prepared data reuse
+    # still authenticates every input first.
+    tp_target=banks.Targets(spec,'TP',ds)
+    checkpoint=qualification.tp_checkpoint(spec,ds,tp_target,ctx)
+    stress=tp_stress(spec,ds,tp_target,ctx,devices)
+    del tp_target
+    banks.prepare_u100(spec,ds,ctx);qualification.replay(spec,ds,ctx)
     selected=selected_indices(ds,wide=True);small=inputs.SubsetDataset(ds,selected)
     ctx.main(lambda:write_immutable_json(root/'mini_population.json',artifact('MINI_POPULATION',parents=dict(spec=spec['content_hash']),
         indices={k:v.tolist() for k,v in selected.items()},technical=True)))
@@ -96,6 +104,7 @@ def measure(spec,ds,ctx,devices,load_seconds):
         print(f'EMBEDDING_BRIDGE resource {task}: step={np.mean(samples):.3f}s validation={validation_seconds:.1f}s export_estimate={export_estimate:.1f}s',flush=True) if ctx.rank==0 else None
         del m,w,o,target;d.release_memory(ctx)
         value=artifact('RESOURCES',parents=dict(spec=spec['content_hash']),profiles=profiles,devices=devices,
+            tp_checkpoint=checkpoint,tp_stress=stress,
             environment=installed_environment(),status='complete' if len(profiles)==len(FITS) else 'partial')
         ctx.main(lambda:write_immutable_json(root/f'resource_{task}.json',value))
     qualification.qualify(spec,small,targets,ctx)
@@ -106,6 +115,8 @@ def measure(spec,ds,ctx,devices,load_seconds):
 
 def accept(spec,diagnostic):
     validate(diagnostic,'RESOURCES',dict(spec=spec['content_hash']))
+    qualification.check_tp_checkpoint(diagnostic['tp_checkpoint'],spec)
+    check_tp_stress(spec,diagnostic['tp_stress'],diagnostic['devices'])
     if (diagnostic['status']!='complete' or set(diagnostic['profiles'])!=set(FITS)
             or diagnostic['environment']!=spec['reference']['environment']):raise ValueError('Incomplete measured setup')
     execution.check_devices(diagnostic['devices']);minutes={}
@@ -131,6 +142,46 @@ def accept(spec,diagnostic):
         if minutes[task]>spec['fit_max_minutes']:raise RuntimeError(f'{task}: measured {minutes[task]} minutes exceeds registered 48-hour ceiling; preserve diagnostics')
     return artifact('ACCEPTANCE',parents=dict(spec=spec['content_hash'],diagnostic=diagnostic['content_hash']),minutes=minutes,
         devices=diagnostic['devices'],environment=diagnostic['environment'],technical_weights_discarded=True)
+
+
+def tp_stress(spec,ds,target,ctx,devices):
+    """Global128 real longest-support jets, then uneven rank splits, all scales."""
+    d.release_memory(ctx);torch.cuda.reset_peak_memory_stats(ctx.device)
+    m,w,o=d.build(spec,'TP',ctx);cases=[]
+    counts=list(dict.fromkeys([128,11,spec['counts']['train']%128]))
+    try:
+        for count in counts:
+            if not count:continue
+            for batch in range(6):
+                source,scale=teacher_condition(3,batch,regional=True)
+                lengths=np.diff(ds.physical('train')[source+'_offsets'])
+                ix=np.argsort(lengths,kind='stable')[-count:]
+                if ctx.rank==0:print(f'EMBEDDING_BRIDGE TP early backward: {source}/{scale}; global batch={count}',flush=True)
+                seconds,_=d.timed(lambda:d.step(m,w,o,'TP',ds,target,ix,3,batch,3.,ctx),ctx)
+                cases.append(dict(condition=[source,scale],rows=count,seconds=seconds,
+                    maximum_particles=int(lengths[ix].max())))
+        memory=d.memory(ctx)
+    finally:
+        del m,w,o;d.release_memory(ctx)
+    value=artifact('TP_STRESS',parents=dict(spec=spec['content_hash']),cases=cases,memory=memory,
+        selection='longest_full_source_train_support',technical_weights_discarded=True)
+    ctx.main(lambda:write_immutable_json(Path(spec['root'])/'setup/tp_stress.json',value))
+    check_tp_stress(spec,value,devices)
+    if ctx.rank==0:print('EMBEDDING_BRIDGE TP early memory passed: '+str(memory),flush=True)
+    return value
+
+
+def check_tp_stress(spec,value,devices):
+    validate(value,'TP_STRESS',dict(spec=spec['content_hash']))
+    expected=[(list(teacher_condition(3,batch,regional=True)),count)
+        for count in dict.fromkeys([128,11,spec['counts']['train']%128]) if count for batch in range(6)]
+    if ([(x['condition'],x['rows']) for x in value['cases']]!=expected
+            or value['selection']!='longest_full_source_train_support'
+            or value['technical_weights_discarded']is not True
+            or any(not np.isfinite(x['seconds']) or x['seconds']<=0 or x['maximum_particles']<1 for x in value['cases'])):
+        raise ValueError('Incomplete TP early memory evidence')
+    check_memory(spec,value['memory'],devices)
+    return value
 
 
 def accepted(spec):

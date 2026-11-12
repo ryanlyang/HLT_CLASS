@@ -1,6 +1,32 @@
 # Embedding assistants, teacher responses, and regional targets on Hydra
 
-Status: scientific recipe v1; execution repair v4, 2026-11-11.
+Status: scientific recipe v1; execution repair v5, 2026-11-11.
+
+Setup164517 passed the v4 numerical qualification, C0, LS_D050 and TR
+miniatures, then exhausted both GTX1080Ti cards in TP's crop encoder during
+epoch2. Execution v5 checkpoints each TP full-jet/crop native encoder and its
+stateless transformer blocks using non-reentrant recomputation. The nested
+block checkpoints also bound the peak of a single encoder backward. Block
+implementations remain installed Weaver calls; mutable block buffers are rejected.
+Preserve dropout RNG and the entire batch; during
+backward recomputation replace registered buffers with disposable clones and
+restore their original references, so BatchNorm/SyncBatchNorm running moments
+and counters update only on the original forward. Evaluation remains native.
+No input, crop, objective, optimizer, precision, batch or teacher selection
+changes. SPEC/v5 binds TP_EXECUTION_POLICY/v1; RESOURCES/ACCEPTANCE advance to v2.
+
+Immediately after authenticated preparation, GPU setup compares ordinary and
+checkpointed TP updates on both ranks with dropout enabled, across all six
+source/scale conditions. It checks loss, gradients, parameters, optimizer
+moments, normalization buffers and RNG. Next it exercises the real longest
+TRAIN supports at global batch128 and uneven batches11/98, all six conditions,
+and checks the existing host/GPU memory bounds. These checks precede U100
+numerical replay, other miniature fits, exports and full validation. Their
+TP_CHECKPOINT/v1 and TP_STRESS/v1 records are required by resource admission.
+The existing full qualification remains required; local tests cannot certify
+two-card execution. Reuse the original completed92397736 preparation again;
+no new export or particle reconstruction is needed.
+
 Diagnostic164226 reproduced the historical-bank difference on both CPU and
 GTX1080Ti: standardized RMS6.25e-5, while CPU/GPU RMS was5.16e-7 and GPU default
 versus math attention was identical on610 rows. Setup163911's4096-row maximum

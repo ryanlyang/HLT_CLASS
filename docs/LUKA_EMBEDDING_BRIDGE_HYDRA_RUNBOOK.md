@@ -13,8 +13,9 @@ completed physical export already on Brown and adds a minimal native delta.
 It copies exact historical tensors instead of re-encoding them on Brown.
 Do not rerun the failed v1 source or reuse its partial preparation as complete.
 
-**For failed setup162131, use the completed-preparation recovery below.**
-Its92397736 run finished preparation; preserve that root. Execution v4 checks
+**For failed setup164517, use the completed-preparation recovery below.**
+The original92397736 run finished preparation; preserve that root. Execution v5
+first checks TP checkpoint parity and worst-support backward memory, then checks
 the frozen teacher in original consecutive128-row contexts under the explicit
 historical/local numerical policy and reuses authenticated arrays. It requires no new SPORC
 export or particle reconstruction. Remaining GPU qualification can still fail;
@@ -37,6 +38,7 @@ $paths = @(
     'tests/test_luka_embedding_bridge_native.py',
     'tests/test_luka_embedding_bridge_recovery.py',
     'tests/test_luka_embedding_bridge_numerical.py',
+    'tests/test_luka_embedding_bridge_activation.py',
     'docs/plans/LUKA_EMBEDDING_BRIDGE_RESPONSE_REGION_HYDRA_PLAN.md',
     'docs/contracts/LUKA_EMBEDDING_BRIDGE_HYDRA.md',
     'docs/LUKA_EMBEDDING_BRIDGE_HYDRA_RUNBOOK.md',
@@ -54,7 +56,7 @@ git add -p -- $shared
 git diff --cached --stat
 git diff --cached --check
 if ($LASTEXITCODE -ne 0) { throw 'Fix staged whitespace first' }
-git commit -m 'Qualify U100 historical replay with bounded drift and CPU GPU parity'
+git commit -m 'Checkpoint TP encoders and qualify regional memory before other setup work'
 if ($LASTEXITCODE -ne 0) { throw 'Commit failed' }
 git push origin main
 if ($LASTEXITCODE -ne 0) { throw 'Push failed' }
@@ -63,7 +65,7 @@ git rev-parse HEAD
 
 ## 2. Export only the missing historical tensors on SPORC
 
-Skip sections2 and3 for recovery of162131; both transfers already exist on Brown.
+Skip sections2 and3 for recovery of164517; both transfers already exist on Brown.
 
 For the failed161306 execution, the physical transfer already on Brown is
 `embedding_bridge_raw_0a00441f`, manifest
@@ -120,7 +122,7 @@ export. Completion prints `directory`, `manifest_hash`, `payload_bytes`;
 copy the first two. A directory without its completion manifest is incomplete.
 The old physical export on SPORC is not needed for this repair.
 
-## 3. Copy the native delta, register a fresh v4 execution and queue on Brown
+## 3. Copy the native delta, register a fresh v5 execution and queue on Brown
 
 This block reuses the exact physical transfer from the failed run. It does
 not copy that4.3GiB payload again. The original bundle and native OFFLINE
@@ -179,7 +181,7 @@ CLI="${PROJECT}/scripts/luka_embedding_bridge_hydra.py"
     --bundle-root "$BUNDLE" --native-root "$NATIVE" --native-hash "$NATIVE_HASH"
 "${ENV_DIR}/bin/python" -u -B -s "$CLI" verify-transfer \
     --bundle-root "$BUNDLE" --transfer-root "$RAW" --transfer-hash "$RAW_HASH"
-ROOT="${BASE}/runs/embedding_bridge_${COMMIT:0:8}_1080ti_v4_r1"
+ROOT="${BASE}/runs/embedding_bridge_${COMMIT:0:8}_1080ti_v5_r1"
 test ! -e "$ROOT"
 df -h "$BASE"
 read -r -p 'Personally available output GiB (at least printed minimum_quota_gib): ' QUOTA_GIB </dev/tty
@@ -242,7 +244,7 @@ scientific producer chain, with shared setup cost separately reported.
 bash <<'BASH'
 set -euo pipefail
 shopt -s nullglob
-SPECS=("$HOME"/hlt_u100_pairs/runs/embedding_bridge_*_1080ti_v4_r1/campaign_spec.json)
+SPECS=("$HOME"/hlt_u100_pairs/runs/embedding_bridge_*_1080ti_v5_r1/campaign_spec.json)
 [[ ${#SPECS[@]} -eq 1 ]] || { printf 'Select one exact spec; found %s\n' "${#SPECS[@]}"; exit 1; }
 SPEC="${SPECS[0]}"
 MODE=summary
@@ -269,11 +271,13 @@ active-module source helper to authenticate a different checkout. It did not
 publish a new campaign spec, submit jobs or alter completed preparation.
 The subsequent e0f9d874 setup163911 successfully reused the arrays but failed
 its strict numerical replay. Diagnostic164226 now supports the explicitly
-versioned v4 numerical policy. Commit/push this latest repair before running
-the block below; supply that new commit, not4fb32e79 or e0f9d874. No new export
-or separate numerical-probe job is needed.
+versioned v4 numerical policy. Setup164517 then passed that check but ran out
+of GPU memory in TP. Commit/push the v5 activation-checkpoint repair before
+running the block below; supply that new commit, not49b838ad. No new export or
+separate numerical-probe job is needed. The original92397736 root is still the
+reuse source; later partial setups are not accepted as replacement provenance.
 
-For162131, first commit/push the scoped repair as above, then run this on
+After164517, first commit/push the scoped repair as above, then run this on
 Brown. Paste that new40-character commit. Registration checks the old terminal
 jobs and all completed preparation hashes; allow several minutes for NFS reads.
 The new setup links49 array payloads (32 view arrays,12 physical arrays and
@@ -301,7 +305,7 @@ if [[ -e "$PROJECT" ]]; then
 else
     git -C "$MAIN" worktree add --detach "$PROJECT" "$COMMIT"
 fi
-ROOT="${BASE}/runs/embedding_bridge_${COMMIT:0:8}_1080ti_v4_r1"
+ROOT="${BASE}/runs/embedding_bridge_${COMMIT:0:8}_1080ti_v5_r1"
 test ! -e "$ROOT"
 export PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1
 export PYTHONPATH="${PROJECT}/src"
@@ -334,7 +338,9 @@ BASH
 ```
 
 The expected setup message is `reused 49 authenticated arrays; no particle
-reconstruction`, followed by the frozen-U100 check. Any remaining mismatch
+reconstruction`, followed by six `TP checkpoint parity` checks and eighteen
+`TP early backward` checks (six conditions at each of128/11/98 rows), then
+`TP early memory passed`. Only then does the frozen-U100 check run. Any remaining mismatch
 produces `u100_replay.json` with historical raw/standardized errors and local
 CPU/GPU comparisons. Execution v4 uses the explicitly versioned bounds in the
 plan/contract; do not tune them per job or edit old manifests. Source92397736 and its completed
