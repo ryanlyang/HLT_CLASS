@@ -13,7 +13,7 @@ PLAN="$(dirname -- "$SPEC")/submission_bootstrap/command_plan.json"
 HASH="$("${ENV_DIR}/bin/python" -B -s -c 'import json,sys; print(json.load(open(sys.argv[1]))["content_hash"])' "$PLAN")"
 AUTH="$("${ENV_DIR}/bin/python" -B -s -c 'import json,sys; print(json.load(open(sys.argv[1]))["authorization"])' "$PLAN")"
 printf '\nReview hash: %s\n' "$HASH"
-printf 'Setup and TP: two RTX A6000s. Other 29 fits: two GTX1080Ti. FP32/global batch128.\n'
+printf 'Setup and TP: one RTX A6000. Other 29 fits: two GTX1080Ti. FP32/global batch128.\n'
 printf 'Completed Pascal qualification is reused; new A6000 setup gates automatic release and CPU report.\n'
 read -r -p 'Authorize this exact bounded campaign? Type YES: ' ANSWER </dev/tty
 [[ "$ANSWER" == YES ]] || { printf 'Not submitted. Preserve the review.\n'; exit 1; }

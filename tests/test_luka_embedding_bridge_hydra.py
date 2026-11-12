@@ -18,12 +18,12 @@ def spec():
     return dict(nodes={t:dict(initialization_seed=23,sampler_seed=29,node_id=t) for t in r.FITS})
 
 
-def synthetic_dataset():
+def synthetic_dataset(train_rows=33,validation_rows=22):
     from hlt_classification.luka_embedding_bridge_hydra import inputs,storage
     class Arrays(dict):pass
     class Dataset:
         def __init__(self):
-            self.spec=dict(spec(),content_hash='a'*64,counts=dict(train=33,validation=22),embedding_hash='b'*64,
+            self.spec=dict(spec(),content_hash='a'*64,counts=dict(train=train_rows,validation=validation_rows),embedding_hash='b'*64,
                 recovery_anchors=dict(M0HLT=.96056122,OFFLINE=.96452569))
             self.v={};self.u={};self.rows={}
             for role,n in self.spec['counts'].items():
@@ -100,14 +100,14 @@ def execution_spec(root):
 def resource_diagnostic(s):
     from hlt_classification.luka_embedding_bridge_hydra import resources
     older=[dict(name='GeForce GTX 1080 Ti',compute_capability=[6,1],total_memory_bytes=11*2**30) for _ in range(2)]
-    devices=[dict(name='NVIDIA RTX A6000',compute_capability=[8,6],total_memory_bytes=48*2**30) for _ in range(2)]
+    devices=[dict(name='NVIDIA RTX A6000',compute_capability=[8,6],total_memory_bytes=48*2**30)]
     profiles={}
     for t in r.FITS:
         sec=1. if t in r.PRODUCERS else 0.;rows=1000
         profiles[t]=dict(step_samples=[.2]*12,step_seconds=float(np.mean([.2]*12)),validation_seconds=20.,probe_seconds=1.,panel_seconds=2.,
             load_seconds=120.,startup_seconds=20.,checkpoint_seconds=3.,export_measured_seconds=sec,export_measured_rows=rows,
             export_estimate_seconds=sec*(s['counts']['train']+4096)/rows,
-            memory=dict(host_peak_bytes=12*2**30,ranks=[dict(peak_rss_bytes=5*2**30,gpu_peak_bytes=7*2**30) for _ in range(2)]),
+            memory=dict(host_peak_bytes=12*2**30,ranks=[dict(peak_rss_bytes=5*2**30,gpu_peak_bytes=7*2**30) for _ in range(1 if t=='TP' else 2)]),
             technical_targets=True,miniature_complete=True,native_reload=True,largest_support_backward=True,partial_batch_backward=True,
             condition_coverage=[r.teacher_condition(3,i,regional=t=='TP') if t in ('TR','TP') else 'native' for i in range(6)],
             train_rows=s['counts']['train'],validation_rows=s['counts']['validation'])
@@ -115,10 +115,10 @@ def resource_diagnostic(s):
     from hlt_classification.luka_embedding_bridge_hydra import execution
     zero=dict.fromkeys(PROBE_TOLERANCES,0.)|dict(passed=True,rng_equal=True)
     checkpoint=c.artifact('TP_CHECKPOINT',parents=dict(spec=s['content_hash']),policy=c.tp_execution_policy(),
-        tolerances=PROBE_TOLERANCES,dropout_enabled=True,rows=15,world_size=2,
+        tolerances=PROBE_TOLERANCES,dropout_enabled=True,rows=15,world_size=1,
         execution_math_policy=c.execution_math_policy(),numerical_settings=execution.expected_math(execution.TP_PROFILE),
         checks=[dict(condition=list(r.teacher_condition(3,i,regional=True)),
-            ranks=[dict(zero,ordinary_repeat=dict(zero)) for _ in range(2)]) for i in range(6)])
+            ranks=[dict(zero,ordinary_repeat=dict(zero))]) for i in range(6)])
     stress=c.artifact('TP_STRESS',parents=dict(spec=s['content_hash']),memory=copy.deepcopy(profiles['TP']['memory']),
         selection='longest_full_source_train_support',technical_weights_discarded=True,
         cases=[dict(condition=list(r.teacher_condition(3,i,regional=True)),rows=count,seconds=1.,maximum_particles=300)
@@ -140,13 +140,13 @@ def test_complete_dag_and_measured_envelope(tmp_path):
     assert boot['commands'][1]['dependencies']==['setup'] and boot['upper_bound_commands']==envelope['commands']
     for row in envelope['commands'][:-1]:
         assert row['dependencies']==r.dependencies(row['task_id'])
-        gres='gpu:nvidia_rtx_a6000:2' if row['task_id']=='TP' else 'gpu:geforce_gtx_1080_ti:2'
+        gres='gpu:nvidia_rtx_a6000:1' if row['task_id']=='TP' else 'gpu:geforce_gtx_1080_ti:2'
         assert '--gres='+gres in row['command'] and '--mem=48000M' in row['command']
         assert '--ntasks=1' in row['command'] and '--no-requeue' in row['command']
     report=envelope['commands'][-1];assert report['dependencies']==list(r.FITS)
     assert '--cpus-per-task=2' in report['command'] and '--mem=8000M' in report['command']
     assert any(x.startswith('--dependency=afterany:') for x in report['command'])
-    assert '--gres=gpu:nvidia_rtx_a6000:2' in boot['commands'][0]['command']
+    assert '--gres=gpu:nvidia_rtx_a6000:1' in boot['commands'][0]['command']
     measured=submission.plan(s,'science',resources.accept(s,resource_diagnostic(s)))
     assert submission.within_envelope(envelope,measured)
     measured['commands'][0]['command'].append('--gres=gpu:3')
@@ -432,7 +432,9 @@ def _two_cuda(rank,root,init_method):
             m,_=training.fit(folder/('mini_'+task),s,task,ds,targets(task),ctx,technical=True,val_diagnostics=False)
             banks.export(folder/('mini_'+task)/'bank',s,task,m,ds,ctx,file_ref(folder/('mini_'+task)/'selected_full.pt'),technical=True)
             del m;d.release_memory(ctx)
-        qualification.qualify(s,ds,targets,ctx)
+        checks=qualification.update_checks(s,ds,targets,ctx)
+        assert all(v['passed'] for v in checks['checks'].values())
+        assert all(v['passed'] and v['rng_equal'] for v in checks['probe_neutrality'].values())
     finally:dist.destroy_process_group()
 
 

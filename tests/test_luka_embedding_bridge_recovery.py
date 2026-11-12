@@ -252,8 +252,7 @@ def test_native_teacher_matches_original_export_loop_on_cuda():
 @pytest.mark.parametrize('reuse',[False,True])
 def test_setup_checks_before_construction_or_uses_recovery_first(tmp_path,monkeypatch,reuse):
     from hlt_classification.luka_embedding_bridge_hydra import worker
-    spec=dict(root=str(tmp_path),content_hash='a'*64,project_dir=str(tmp_path/'code'),preparation_reuse={} if reuse else None,
-        tp_gpu_profile='a6000_2_fp32')
+    spec=dict(worker.campaign.registration(),root=str(tmp_path),content_hash='a'*64,project_dir=str(tmp_path/'code'),preparation_reuse={} if reuse else None)
     monkeypatch.setattr(worker.campaign,'check',lambda spec:None)
     monkeypatch.setattr(worker.execution,'allocation',lambda *args:[])
     monkeypatch.setattr(worker,'require_job',lambda spec,task:'100')
@@ -263,6 +262,7 @@ def test_setup_checks_before_construction_or_uses_recovery_first(tmp_path,monkey
         if 'rank' in cmd:raise RuntimeError('probe stops')
     monkeypatch.setattr(worker.subprocess,'run',run)
     with pytest.raises(RuntimeError,match='probe stops'):worker.run(spec,'setup')
+    assert '--nproc-per-node=1' in calls[-1]
     if reuse:
         assert len(calls)==2 and 'prepare' in calls[0] and calls[1][-1]=='setup'
     else:

@@ -1,8 +1,43 @@
-# Embedding bridges, responses and regions: recipe v1, execution v7
+# Embedding bridges, responses and regions: recipe v1, execution v8
 
 Scientific authority: [implementation plan](../plans/LUKA_EMBEDDING_BRIDGE_RESPONSE_REGION_HYDRA_PLAN.md).
 Execution and commands: [runbook](../LUKA_EMBEDDING_BRIDGE_HYDRA_RUNBOOK.md).
 This namespace is distinct from the older embedding/logit ladders.
+
+## Single-A6000 layout (v8)
+
+SPEC/v8 adds EXECUTION_LAYOUT/v1. Setup, input_probe and TP use
+`a6000_1_fp32` (one A6000, one process, full local/global128, native BatchNorm).
+The29 other fits remain `1080ti_2_fp32` (two processes, local64/global128,
+SyncBatchNorm). Both normalize over the complete global batch, including
+partial tails. This explicit layout overrides the two default execution fields
+in the unchanged historical RECIPE/v1. No claim of bitwise two-rank TP
+equivalence is made. Losses, optimizer schedule, epochs, input populations,
+crop conditions, checkpointing and HLT-only export are unchanged.
+
+Controller requested/allocated resources, visible devices, torchrun rank
+environment, scientific fit receipts, memory records and GPU-hour accounting
+must agree with each task's layout. One-rank execution must not initialize
+NCCL or convert BatchNorm to SyncBatchNorm. A current single-GPU profile
+without its explicit layout is rejected. Historical fit validation defaults
+to its original two-rank owner only; it cannot authorize a new worker.
+
+EXECUTION_MATH_POLICY/v2 names the single-A6000 profile with the same strict
+deterministic settings. TP_CHECKPOINT/v3 requires all six ordinary-repeat and
+checkpoint-update comparisons on that one rank at unchanged tolerances.
+PARITY/v2 records fresh single-rank native checks and a separate hash-bound
+reference to the pinned v5 PARITY/v1 evidence for the29 Pascal fits. The old
+two-rank evidence is read only through explicit historical validation; it is
+never relabeled as a current measurement or as single-A6000 TP qualification.
+RESOURCES/v5 and ACCEPTANCE/v5 bind one measured A6000 device for TP and the
+original two Pascal devices/profile for every other task. Host memory sums
+the actual ranks plus launcher; the per-device88% bound is unchanged.
+
+The reviewed source baseline is95e436c6d34885e20a8672d8655343a3b629d458.
+The separate R8 recovery additions at that commit do not change consumed
+donor runtime. Any subsequent runtime diff must stay inside this campaign's
+allowlist. Replace pending bootstrap jobs with a new spec/root, dry review
+and exact authorization; changing GRES on an old pinned job is invalid.
 
 ## Deterministic A6000 execution (v7)
 

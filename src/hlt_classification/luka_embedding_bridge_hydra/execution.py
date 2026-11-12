@@ -1,4 +1,4 @@
-"""TP/setup on two A6000s; all other fits on two Pascal GPUs, always FP32."""
+"""TP/setup on one A6000; all other fits on two Pascal GPUs, always FP32."""
 from hlt_classification.luka_subclass_ddp_hydra.execution import configuration as pascal_configuration
 from hlt_classification.luka_u100_pair_hydra.site import _scheduler_errors,environment
 from pathlib import Path
@@ -9,7 +9,7 @@ import subprocess
 import sys
 import torch
 
-TP_PROFILE='a6000_2_fp32'
+TP_PROFILE='a6000_1_fp32'
 
 
 def math_settings():
@@ -46,10 +46,21 @@ def configure_math(spec,task):
 
 def configuration(name='1080ti_2_fp32'):
     if name=='1080ti_2_fp32':return pascal_configuration(name)
-    if name!=TP_PROFILE:raise ValueError('Only registered pairs of 1080Ti or RTX A6000 GPUs are supported')
-    return dict(gpu_profile=name,world_size=2,precision='fp32',global_batch=128,
+    if name!=TP_PROFILE:raise ValueError('Only paired 1080Ti or single RTX A6000 GPUs are supported')
+    return dict(gpu_profile=name,world_size=1,precision='fp32',global_batch=128,
         execution_site=dict(cluster='hydra',partition='gpus',account='default',qos='normal',
-            gres='gpu:nvidia_rtx_a6000:2',gpu_name='NVIDIA RTX A6000',architecture='x86_64'))
+            gres='gpu:nvidia_rtx_a6000:1',gpu_name='NVIDIA RTX A6000',architecture='x86_64'))
+
+
+def world_size(spec,task):
+    from .contracts import execution_layout
+    # Historical fits are validated under their pinned owner, never admitted
+    # for new execution by this fallback. Current registration requires layout.
+    if 'execution_layout' not in spec:
+        if spec.get('tp_gpu_profile')==TP_PROFILE:raise ValueError('Missing registered execution layout')
+        return 2
+    if spec['execution_layout']!=execution_layout():raise ValueError('Execution layout differs')
+    return configuration(profile(spec,task))['world_size']
 
 
 def profile(spec,task):
@@ -62,10 +73,10 @@ def profile(spec,task):
 
 
 def check_devices(devices,name=None):
-    if len(devices)!=2:raise ValueError('Two GPUs required')
+    if not devices:raise ValueError('Missing GPU devices')
     if name is None:
         name=TP_PROFILE if devices[0]['name']=='NVIDIA RTX A6000' else '1080ti_2_fp32'
-    configuration(name)
+    if len(devices)!=configuration(name)['world_size']:raise ValueError('Registered GPU count differs')
     names,capability,minimum=(('NVIDIA RTX A6000',),[8,6],45*2**30) if name==TP_PROFILE else (
         ('GeForce GTX 1080 Ti','NVIDIA GeForce GTX 1080 Ti'),[6,1],10*2**30)
     for row in devices:
@@ -75,7 +86,7 @@ def check_devices(devices,name=None):
 
 
 def allocation(spec,task='setup'):
-    name=profile(spec,task);site=configuration(name)['execution_site']
+    name=profile(spec,task);site=configuration(name)['execution_site'];count=world_size(spec,task)
     job=os.environ.get('SLURM_JOB_ID','')
     if not re.fullmatch('[1-9][0-9]*',job):raise PermissionError('Real Slurm GPU allocation required')
     config=subprocess.run(['scontrol','show','config'],check=True,capture_output=True,text=True).stdout
@@ -86,19 +97,19 @@ def allocation(spec,task='setup'):
     kind=site['gres'].split(':')[1]
     for field in ('ReqTRES','AllocTRES'):
         tres=dict(t.split('=',1) for t in fields.get(field,'').split(',') if '=' in t)
-        if tres.get('gres/gpu')!='2' and tres.get('gres/gpu:'+kind)!='2':
-            errors.append(field+': exactly two registered GPUs required')
-        if any(k.startswith('gres/gpu:') and (k!='gres/gpu:'+kind or v!='2') for k,v in tres.items()):
+        if tres.get('gres/gpu')!=str(count) and tres.get('gres/gpu:'+kind)!=str(count):
+            errors.append(field+': registered GPU count required')
+        if any(k.startswith('gres/gpu:') and (k!='gres/gpu:'+kind or v!=str(count)) for k,v in tres.items()):
             errors.append(field+': wrong typed GPU allocation')
-        if 'gres/gpu' in tres and tres['gres/gpu']!='2':errors.append(field+': wrong total GPU count')
+        if 'gres/gpu' in tres and tres['gres/gpu']!=str(count):errors.append(field+': wrong total GPU count')
     if errors:raise PermissionError('Task GPU allocation differs: '+'; '.join(errors))
     if (platform.machine()!='x86_64' or Path(sys.prefix).resolve()!=Path(spec['environment_dir'])
             or os.environ.get('PYTHONNOUSERSITE')!='1' or os.environ.get('CUBLAS_WORKSPACE_CONFIG')!=':4096:8'):
         raise PermissionError('Use the isolated pinned FP32 environment')
     environment(spec['reference']['environment'])
-    if not torch.cuda.is_available() or torch.cuda.device_count()!=2:raise PermissionError('Exactly two visible GPUs required')
+    if not torch.cuda.is_available() or torch.cuda.device_count()!=count:raise PermissionError('Visible GPU count differs')
     devices=[dict(name=torch.cuda.get_device_name(i),compute_capability=list(torch.cuda.get_device_capability(i)),
-                  total_memory_bytes=torch.cuda.get_device_properties(i).total_memory) for i in range(2)]
+                  total_memory_bytes=torch.cuda.get_device_properties(i).total_memory) for i in range(count)]
     check_devices(devices,name)
     return devices
 

@@ -15,10 +15,15 @@ def legacy(value):
     cp=v['tp_checkpoint'];cp.pop('execution_math_policy');cp.pop('numerical_settings')
     for check in cp['checks']:
         for row in check['ranks']:row.pop('ordinary_repeat')
+        check['ranks']=check['ranks']*2
+    cp['world_size']=2
     cp.update(contract='LUKA_EMBEDDING_BRIDGE_HYDRA_TP_CHECKPOINT/v1',schema_version=1)
     v['tp_checkpoint']=with_content_hash(cp)
     v.pop('crop_frontend');v.pop('qualification_reuse')
     v['devices']=v.pop('task_devices')['C0']
+    for memory in (v['profiles']['TP']['memory'],v['tp_stress']['memory']):
+        memory['ranks']=memory['ranks']*2
+    v['tp_stress']=with_content_hash(v['tp_stress'])
     v.update(contract='LUKA_EMBEDDING_BRIDGE_HYDRA_RESOURCES/v2',schema_version=2)
     return with_content_hash(v)
 
@@ -50,7 +55,7 @@ def evidence(tmp_path,monkeypatch):
         folder=root/('mini_'+t);folder.mkdir();(folder/'receipt.json').write_bytes(b'original')
     monkeypatch.setattr(qualified,'source_spec',lambda path:old)
     monkeypatch.setattr(qualified.recovery,'terminal_jobs',lambda *a,**kw:'165857')
-    monkeypatch.setattr(qualified.qualification,'check_replay',lambda s:None)
+    monkeypatch.setattr(qualified.qualification,'check_replay',lambda s,**kw:None)
     monkeypatch.setattr(qualified.inputs,'Dataset',lambda s:ds)
     monkeypatch.setattr(resources,'selected_indices',lambda *a,**kw:selected)
     monkeypatch.setattr(resources,'technical_target',lambda *a:SimpleNamespace(parents=dict(u100='b'*64)))
@@ -100,6 +105,34 @@ def test_recovered_profile_is_conservative_and_cannot_be_edited(evidence,tmp_pat
     with pytest.raises(ValueError,match='profiles changed'):resources.accept(new,with_content_hash(value))
 
 
+def test_single_rank_parity_cannot_claim_new_two_gpu_validation(evidence,tmp_path):
+    import json
+    from hlt_classification.luka_subclass_ddp_hydra.resources import TOLERANCES,PROBE_TOLERANCES
+    from hlt_classification.luka_embedding_bridge_hydra import qualification
+    old,root=evidence
+    checks={k:dict.fromkeys(TOLERANCES,0.)|dict(passed=True) for k in qualification.CHECKS}
+    probes={k:dict.fromkeys(PROBE_TOLERANCES,0.)|dict(passed=True,rng_equal=True) for k in ('C0','TR','TP','R8','P7')}
+    measured=dict(checks=checks,probe_neutrality=probes,tolerances=TOLERANCES,probe_tolerances=PROBE_TOLERANCES,
+        factory_fp32=True,dropout_disabled=True,baseline=dict(model_update_equal=True,adamw_equal=True))
+    historical=c.artifact('PARITY',parents=dict(spec=old['content_hash']),**measured)
+    historical.update(contract='LUKA_EMBEDDING_BRIDGE_HYDRA_PARITY/v1',schema_version=1)
+    (root/'parity.json').write_text(json.dumps(with_content_hash(historical)))
+    reuse=qualified.inspect(Path(old['root'])/'campaign_spec.json')
+    new=dict(old,root=str(tmp_path/'new'),content_hash='7'*64,qualification_reuse=reuse)
+    proof=qualified.distributed_evidence(new)
+    assert proof['world_size']==2 and proof['tasks']==list(qualified.REUSED) and 'TP' not in proof['tasks']
+    assert proof['source_spec_hash']==old['content_hash']
+    value=c.artifact('PARITY',parents=dict(spec=new['content_hash']),**measured,reference_world_size=1,world_size=1,
+        comparison='native_single_rank_repeat',historical_distributed=proof)
+    qualification.check_parity(value,new)
+    with pytest.raises(ValueError,match='ownership'):
+        qualification.check_parity(with_content_hash(dict(value,world_size=2)),new)
+    with pytest.raises(ValueError,match='ownership'):
+        qualification.check_parity(with_content_hash(dict(value,historical_distributed=dict(proof,tasks=list(r.FITS)))),new)
+    (root/'parity.json').write_text('corrupt')
+    with pytest.raises(ValueError):qualification.check_parity(value,new)
+
+
 def test_reused_technical_bank_keeps_original_owner_in_new_parity_run(tmp_path,monkeypatch):
     import torch
     from test_luka_embedding_bridge_hydra import small
@@ -131,7 +164,7 @@ def test_regional_setup_measures_tp_first_and_skips_29_reused_fits(tmp_path,monk
     fixture=resource_diagnostic(s);ds=synthetic_dataset()
     selected={k:np.arange(n) for k,n in ds.spec['counts'].items()}
     class Context:
-        world=2;rank=0;device=SimpleNamespace(type='cuda')
+        world=1;rank=0;device=SimpleNamespace(type='cuda')
         def main(self,fn):return fn()
     monkeypatch.setattr(resources.qualified,'profiles',lambda *a:{t:fixture['profiles'][t] for t in qualified.REUSED})
     monkeypatch.setattr(resources.qualified,'profile_devices',lambda *a:fixture['task_devices']['C0'])

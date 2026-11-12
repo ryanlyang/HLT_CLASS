@@ -28,7 +28,7 @@ def receipt(spec,task,*,full=True):
     folder=Path(spec['root'])/task;r=load_json(folder/'receipt.json');validate(r,'TASK',dict(spec=spec['content_hash']))
     stage='bootstrap' if task=='setup' else 'science'
     if (r['task']!=task or r['job_id']!=submission.accepted_jobs(spec,stage).get(task)
-            or r['environment']!=spec['reference']['environment'] or r['allocated_gpus']!=(0 if task=='report' else 2)
+            or r['environment']!=spec['reference']['environment'] or r['allocated_gpus']!=(0 if task=='report' else execution.world_size(spec,task))
             or not math.isfinite(r['execution_seconds']) or r['execution_seconds']<=0):raise ValueError('Task ownership/environment differs')
     if task!='report':execution.check_devices(r['devices'],execution.profile(spec,task))
     required={'results.json'} if task=='report' else {'acceptance.json','resource_diagnostic.json','parity.json','replay.json',
@@ -85,7 +85,7 @@ def verify_setup_payloads(spec,*,full=True):
                 population=historical
             target=resources.technical_target(owner,task,population,Path(owner['root'])/'setup')
             r,_=training.validate_fit(folder,owner,task,technical=True)
-            if r['parents']!=dict(spec=owner['content_hash'],recipe=recipe()['content_hash'],**target.parents) or r['world_size']!=2:
+            if r['parents']!=dict(spec=owner['content_hash'],recipe=recipe()['content_hash'],**target.parents) or r['world_size']!=execution.world_size(owner,task):
                 raise ValueError('Production miniature lineage/execution differs')
     return resources.accepted(spec)
 
@@ -169,7 +169,7 @@ def run(spec,task):
     if task=='setup':
         if spec['preparation_reuse'] is None:
             print('EMBEDDING_BRIDGE checking frozen U100 before full particle preparation',flush=True)
-            subprocess.run([sys.executable,'-u','-B','-s','-m','torch.distributed.run','--standalone','--nnodes=1','--nproc-per-node=2',
+            subprocess.run([sys.executable,'-u','-B','-s','-m','torch.distributed.run','--standalone','--nnodes=1',f'--nproc-per-node={execution.world_size(spec,"input_probe")}',
                 cli,'rank','--spec',path,'--task','input_probe'],check=True)
         subprocess.run([sys.executable,'-u','-B','-s',cli,'prepare','--spec',path],check=True)
     else:completed_setup(spec,full=False)
@@ -178,13 +178,13 @@ def run(spec,task):
         write_immutable_json(folder/'results.json',results(spec))
     else:
         print(f'EMBEDDING_BRIDGE allocation: {task}; {execution.profile(spec,task)}; FP32; global batch128',flush=True)
-        subprocess.run([sys.executable,'-u','-B','-s','-m','torch.distributed.run','--standalone','--nnodes=1','--nproc-per-node=2',
+        subprocess.run([sys.executable,'-u','-B','-s','-m','torch.distributed.run','--standalone','--nnodes=1',f'--nproc-per-node={execution.world_size(spec,task)}',
             cli,'rank','--spec',path,'--task',task],check=True)
         if task=='setup':subprocess.run([sys.executable,'-u','-B','-s',cli,'qualify-cpu','--spec',path],check=True)
     campaign.check(spec)
     outputs=[file_ref(p,root=folder) for p in sorted(folder.rglob('*')) if p.is_file()]
     value=artifact('TASK',parents=dict(spec=spec['content_hash']),task=task,job_id=job,environment=installed_environment(),devices=devices,
-        outputs=outputs,execution_seconds=time.perf_counter()-started,allocated_gpus=0 if cpu else 2)
+        outputs=outputs,execution_seconds=time.perf_counter()-started,allocated_gpus=0 if cpu else execution.world_size(spec,task))
     write_immutable_json(folder/'receipt.json',value)
     return value
 
@@ -192,17 +192,18 @@ def run(spec,task):
 def rank(spec,task):
     if task not in ('setup','input_probe',*FITS):raise ValueError('Unregistered GPU task')
     owner='setup' if task=='input_probe' else task
-    rank=int(os.environ.get('RANK','-1'))
-    if (rank not in (0,1) or os.environ.get('LOCAL_RANK')!=str(rank) or os.environ.get('WORLD_SIZE')!='2'
-            or os.environ.get('LOCAL_WORLD_SIZE')!='2' or os.environ.get('GROUP_RANK')!='0'):raise PermissionError('Exactly two local ranks required')
+    rank=int(os.environ.get('RANK','-1'));world=execution.world_size(spec,owner)
+    if (rank not in range(world) or os.environ.get('LOCAL_RANK')!=str(rank) or os.environ.get('WORLD_SIZE')!=str(world)
+            or os.environ.get('LOCAL_WORLD_SIZE')!=str(world) or os.environ.get('GROUP_RANK')!='0'):raise PermissionError('Registered local ranks required')
     require_job(spec,owner);devices=execution.allocation(spec,owner)
     if campaign.current(spec['project_dir'],spec['source_commit'])!=spec['source_snapshot']:raise ValueError('Source changed')
     expected=artifact('RUN_CLAIM',parents=dict(spec=spec['content_hash']),task=owner,job_id=os.environ['SLURM_JOB_ID'])
     if load_json(Path(spec['root'])/'claims'/owner/'intent.json')!=expected:raise PermissionError('Missing exact launcher claim')
     torch.cuda.set_device(rank);settings=execution.configure_math(spec,owner)
     if rank==0:print('EMBEDDING_BRIDGE numerical execution: '+str(settings),flush=True)
-    os.environ['TORCH_NCCL_ASYNC_ERROR_HANDLING']='1';dist.init_process_group('nccl',timeout=timedelta(minutes=30))
-    ctx=d.Context(rank,2,torch.device('cuda',rank))
+    if world>1:
+        os.environ['TORCH_NCCL_ASYNC_ERROR_HANDLING']='1';dist.init_process_group('nccl',timeout=timedelta(minutes=30))
+    ctx=d.Context(rank,world,torch.device('cuda',rank))
     try:
         if task=='input_probe':banks.input_probe(spec,ctx);return
         started=time.perf_counter();ds=inputs.Dataset(spec);ds.view('train','D000');ds.view('validation','D000');ds.u100('train')
@@ -221,4 +222,5 @@ def rank(spec,task):
                 banks.export(folder/'bank',spec,task,m,ds,ctx,file_ref(folder/'fit/selected_full.pt'))
                 banks.Bank(folder/'bank',spec,task,ds.view('train','D000'),file_ref(folder/'fit/selected_full.pt'))
             del m;d.release_memory(ctx)
-    finally:dist.destroy_process_group()
+    finally:
+        if world>1:dist.destroy_process_group()

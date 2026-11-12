@@ -19,7 +19,7 @@ def test_math_policy_is_applied_to_entire_a6000_rank_and_preserves_pascal(tmp_pa
             assert result==execution.expected_math(execution.profile(s,task))
             assert torch.are_deterministic_algorithms_enabled() is wanted
             assert not torch.is_deterministic_algorithms_warn_only_enabled()
-        changed=copy.deepcopy(s);changed['execution_math_policy']['a6000_2_fp32']['deterministic_algorithms']=False
+        changed=copy.deepcopy(s);changed['execution_math_policy']['a6000_1_fp32']['deterministic_algorithms']=False
         with pytest.raises(ValueError,match='policy'):execution.configure_math(changed,'TP')
         monkeypatch.delenv('CUBLAS_WORKSPACE_CONFIG')
         with pytest.raises(PermissionError,match='workspace'):execution.configure_math(s,'TP')
@@ -32,12 +32,14 @@ def test_math_policy_is_applied_to_entire_a6000_rank_and_preserves_pascal(tmp_pa
 def test_exact_hardware_routes_and_unchanged_training_math(tmp_path):
     s=execution_spec(tmp_path)
     boot=submission.plan(s,'bootstrap');science=submission.plan(s,'envelope')
-    assert '--gres=gpu:nvidia_rtx_a6000:2' in boot['commands'][0]['command']
+    assert '--gres=gpu:nvidia_rtx_a6000:1' in boot['commands'][0]['command']
     assert not any(arg.startswith('--gres=') for arg in boot['commands'][1]['command'])
-    a6000=[row['task_id'] for row in science['commands'] if '--gres=gpu:nvidia_rtx_a6000:2' in row['command']]
+    a6000=[row['task_id'] for row in science['commands'] if '--gres=gpu:nvidia_rtx_a6000:1' in row['command']]
     pascal=[row['task_id'] for row in science['commands'] if '--gres=gpu:geforce_gtx_1080_ti:2' in row['command']]
     assert a6000==['TP'] and set(pascal)==set(registry.FITS)-{'TP'}
     assert (s['precision'],s['world_size'],s['global_batch'])==('fp32',2,128)
+    assert execution.world_size(s,'TP')==execution.world_size(s,'setup')==1
+    assert all(execution.world_size(s,t)==2 for t in registry.FITS if t!='TP')
     bad=copy.deepcopy(science)
     bad['commands'][0]['command']=[arg.replace('geforce_gtx_1080_ti','nvidia_rtx_a6000') for arg in bad['commands'][0]['command']]
     with pytest.raises(PermissionError):submission.within_envelope(science,bad)
@@ -65,7 +67,8 @@ def test_controller_and_visible_devices_must_match_task(tmp_path,monkeypatch,tas
     monkeypatch.setenv('CUBLAS_WORKSPACE_CONFIG',':4096:8')
     for key in ('SLURM_CLUSTER_NAME','SLURM_NTASKS','SLURM_CPUS_PER_TASK','SLURM_MEM_PER_NODE'):
         monkeypatch.delenv(key,raising=False)
-    tres=f'cpu=6,mem=48000M,gres/gpu=2,gres/gpu:{kind}=2'
+    count=1 if a6000 else 2
+    tres=f'cpu=6,mem=48000M,gres/gpu={count},gres/gpu:{kind}={count}'
     fields=dict(JobId='165999',JobState='RUNNING',Account='default',Partition='gpus',QOS='normal',
         NumNodes='1',NumCPUs='6',NumTasks='1',**{'CPUs/Task':'6'},ReqTRES=tres,AllocTRES=tres)
     def controller(cmd,**kwargs):return SimpleNamespace(stdout='ClusterName = hydra\n' if cmd[-1]=='config'
@@ -74,16 +77,59 @@ def test_controller_and_visible_devices_must_match_task(tmp_path,monkeypatch,tas
     monkeypatch.setattr(execution.platform,'machine',lambda:'x86_64')
     monkeypatch.setattr(execution,'environment',lambda e:None)
     monkeypatch.setattr(execution.torch.cuda,'is_available',lambda:True)
-    monkeypatch.setattr(execution.torch.cuda,'device_count',lambda:2)
+    monkeypatch.setattr(execution.torch.cuda,'device_count',lambda:count)
     monkeypatch.setattr(execution.torch.cuda,'get_device_name',lambda i:'NVIDIA RTX A6000' if a6000 else 'GeForce GTX 1080 Ti')
     monkeypatch.setattr(execution.torch.cuda,'get_device_capability',lambda i:(8,6) if a6000 else (6,1))
     monkeypatch.setattr(execution.torch.cuda,'get_device_properties',lambda i:SimpleNamespace(total_memory=(48 if a6000 else 11)*2**30))
-    assert len(execution.allocation(s,task))==2
+    assert len(execution.allocation(s,task))==count
     for key in ('ReqTRES','AllocTRES'):
-        fields[key]=tres.replace('gres/gpu=2','gres/gpu=1')
+        fields[key]=tres.replace(f'gres/gpu={count}',f'gres/gpu={3-count}')
         with pytest.raises(PermissionError):execution.allocation(s,task)
         fields[key]=tres.replace(kind,'wrong_card')
         with pytest.raises(PermissionError):execution.allocation(s,task)
         fields[key]=tres
+    monkeypatch.setattr(execution.torch.cuda,'device_count',lambda:3-count)
+    with pytest.raises(PermissionError,match='Visible GPU'):execution.allocation(s,task)
+    monkeypatch.setattr(execution.torch.cuda,'device_count',lambda:count)
     monkeypatch.setattr(execution.torch.cuda,'get_device_name',lambda i:'NVIDIA L40')
     with pytest.raises(ValueError):execution.allocation(s,task)
+
+
+@pytest.mark.parametrize('task',['setup','input_probe'])
+def test_single_rank_worker_runs_without_initializing_nccl(tmp_path,monkeypatch,task):
+    from hlt_classification.luka_embedding_bridge_hydra import worker,contracts
+    from hlt_classification.data.cache_contracts import write_immutable_json
+    s=execution_spec(tmp_path);s['source_commit']='a'*40;s['source_snapshot']={}
+    claim=tmp_path/'claims/setup';claim.mkdir(parents=True)
+    write_immutable_json(claim/'intent.json',contracts.artifact('RUN_CLAIM',parents=dict(spec=s['content_hash']),task='setup',job_id='171231'))
+    for key,value in dict(SLURM_JOB_ID='171231',RANK='0',LOCAL_RANK='0',WORLD_SIZE='1',LOCAL_WORLD_SIZE='1',GROUP_RANK='0').items():
+        monkeypatch.setenv(key,value)
+    monkeypatch.setattr(worker,'require_job',lambda *a:'171231')
+    monkeypatch.setattr(worker.campaign,'current',lambda *a:{})
+    monkeypatch.setattr(execution,'allocation',lambda *a:resource_diagnostic(s)['devices'])
+    monkeypatch.setattr(execution,'configure_math',lambda *a:{})
+    monkeypatch.setattr(torch.cuda,'set_device',lambda rank:None)
+    monkeypatch.setattr(worker.dist,'init_process_group',lambda *a,**kw:pytest.fail('Single rank initialized NCCL'))
+    monkeypatch.setattr(worker.dist,'destroy_process_group',lambda *a:pytest.fail('Single rank destroyed nonexistent process group'))
+    ds=SimpleNamespace(view=lambda *a:None,u100=lambda *a:None)
+    monkeypatch.setattr(worker.inputs,'Dataset',lambda s:ds)
+    observed=[]
+    monkeypatch.setattr(worker.resources,'measure',lambda s,ds,ctx,devices,seconds:observed.append((ctx.world,len(devices))))
+    monkeypatch.setattr(worker.banks,'input_probe',lambda s,ctx:observed.append((ctx.world,1)))
+    worker.rank(s,task)
+    assert observed==[(1,1)]
+    monkeypatch.setenv('WORLD_SIZE','2')
+    with pytest.raises(PermissionError,match='local ranks'):worker.rank(s,task)
+
+
+def test_layout_override_is_explicit_and_legacy_evidence_remains_two_rank(tmp_path):
+    s=execution_spec(tmp_path)
+    assert s['recipe']['world_size']==2  # Historical recipe identity is unchanged.
+    assert s['execution_layout']['single_rank']['local_batch']==128
+    assert s['execution_layout']['other_fits']['local_batch']==64
+    bad=copy.deepcopy(s);bad['execution_layout']['single_rank']['local_batch']=64
+    with pytest.raises(ValueError,match='layout'):execution.world_size(bad,'TP')
+    del s['execution_layout']
+    with pytest.raises(ValueError,match='layout'):execution.world_size(s,'TP')
+    s.pop('tp_gpu_profile')
+    assert execution.world_size(s,'TP')==2

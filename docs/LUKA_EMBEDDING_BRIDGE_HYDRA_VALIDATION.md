@@ -1,5 +1,62 @@
 # Embedding bridge / response / region validation
 
+## 2026-11-12 single-A6000 setup and TP (v8)
+
+User requested one A6000 for setup and TP while v7 setup171231/release171232
+were pending. No assertion that the nodes are down is needed for this change.
+The30-fit scientific comparison stays intact. Setup/TP now request one A6000,
+run one torchrun process without NCCL, and use native BatchNorm on the complete
+128-jet batch. The29 other fits retain two Pascal ranks and their original
+qualification. Old roots and pending-job registrations are not edited.
+
+Before changes: hardware/recovery baseline **21passed in19.37s**. Initial
+post-change hardware/recovery/activation checks: **46passed in131.34s**.
+Final complete eight-suite run: **178passed,1skipped in285.98s**
+(`tmp/bridge-single-full.log`). The skip requires two CUDA devices/NCCL;
+this machine has one RTX2000Ada8GB with PyTorch2.5.1 and the pinned
+Weaver0.5.3 fixture. Tests include:
+
+- Exact one-A6000 versus two-Pascal Slurm routing, typed/requested/allocated
+  GRES, visible-device and rank-layout rejection, no NCCL initialization for
+  either single-rank setup or input_probe, and correct torchrun process count.
+- Full-depth native CUDA TP updates for all six conditions at batch128,11,98;
+  a BatchNorm hook verifies every forward/recompute sees the whole batch.
+  Synthetic jets have6..10 particles: this tests batch semantics, not Brown's
+  largest-support48GB memory admission. Separate existing long-crop checkpoint
+  memory and deterministic-repeat regressions also pass.
+- Actual one-rank checkpoint qualification for all six conditions at the
+  unchanged strict loss/gradient/parameter/moment/buffer/RNG tolerances.
+- A fresh30-epoch native CUDA TP fit on the disjoint33/22 synthetic fixture,
+  all component evaluations, selected native reload, immutable fit validation,
+  real producer-bank export and downstream P7 loss/backward. Scientific TP
+  accepts the registered one-rank layout but rejects epoch/population overrides.
+- Original recipe hash preservation, authenticated old-v5 measurements and
+  explicit historical distributed parity, tamper rejection and no false claim
+  that a one-rank test newly verifies two-rank execution.
+
+Static validation:35 Python files parse;6 Bash scripts/blocks pass `bash -n`;
+4 embedded Python blocks parse; the scoped Git whitespace check passes.
+Exact pending-bootstrap retirement was locally
+simulated for five cases: pending, already running, starts during the check,
+wrong owner and wrong ledger. Only the verified pending pair reaches scancel.
+No real jobs were queried, held, cancelled or submitted by these tests.
+
+Changed campaign execution/contracts/qualification/reuse/training/worker code,
+queue display, seven focused test files and campaign documentation. No new
+copied donor source. Donor51323cc2b091fb5c525bb73cb6d20d8112ed6e5d; source baseline
+advances to95e436c6d34885e20a8672d8655343a3b629d458 after checking that its runtime
+diff adds only four independent R8 recovery files. Existing scientific engine,
+checkpointing, optimizer, loss and imported donor helpers remain unchanged.
+SPEC/v8, EXECUTION_LAYOUT/v1, EXECUTION_MATH_POLICY/v2, TP_CHECKPOINT/v3,
+PARITY/v2 and RESOURCES/ACCEPTANCE v5 distinguish the new execution.
+
+No commit, push, remote queue change or Brown/Tigris miniature was performed.
+Next: scoped commit/push, retire only the still-pending171231/171232 bootstrap,
+then register a fresh `_mixed_v8_r1` root using the existing92397736 arrays and
+27a83412 qualification. Brown must pass real longest-support single-A6000
+memory checks and full TP timing under48h before automatic release. Local
+success does not assert that those site measurements have already passed.
+
 ## 2026-11-12 deterministic A6000 repair after setup168529
 
 Remote source6a98c2bda010779b71348ff2cfd07b89f8160fc3 passed all twelve

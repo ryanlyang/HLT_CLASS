@@ -181,7 +181,7 @@ def test_admission_rejects_resealed_incomplete_checkpoint_evidence(tmp_path,bad)
     from hlt_classification.data.cache_contracts import with_content_hash
     from hlt_classification.luka_embedding_bridge_hydra import resources
     spec=execution_spec(tmp_path);value=resource_diagnostic(spec)
-    checkpoint=value['tp_checkpoint'];row=checkpoint['checks'][0]['ranks'][1];stress=value['tp_stress']
+    checkpoint=value['tp_checkpoint'];row=checkpoint['checks'][0]['ranks'][0];stress=value['tp_stress']
     if bad=='rng':row['rng_equal']=False
     if bad=='gradient':row['gradient_relative_l2']=1.
     if bad=='buffers':row['buffer_abs']=1.
@@ -190,7 +190,7 @@ def test_admission_rejects_resealed_incomplete_checkpoint_evidence(tmp_path,bad)
     if bad=='rank':checkpoint['checks'][0]['ranks'].pop()
     if bad=='repeat':row['ordinary_repeat']['parameters_relative_l2']=1.
     if bad=='numerical_settings':checkpoint['numerical_settings']['deterministic_algorithms']=False
-    if bad=='math_policy':checkpoint['execution_math_policy']['a6000_2_fp32']['warn_only']=True
+    if bad=='math_policy':checkpoint['execution_math_policy']['a6000_1_fp32']['warn_only']=True
     if bad=='stress_rows':stress['cases'][0]['rows']=64
     if bad=='stress_gpu':stress['memory']['ranks'][0]['gpu_peak_bytes']=value['devices'][0]['total_memory_bytes']
     if bad=='stress_time':stress['cases'][0]['seconds']=-1.
@@ -213,26 +213,62 @@ def test_tp_checks_precede_numerical_replay_and_miniatures(monkeypatch,tmp_path)
     monkeypatch.setattr(resources,'tp_stress',stop)
     monkeypatch.setattr(banks,'prepare_u100',lambda *a:pytest.fail('Late work ran before early stress'))
     with pytest.raises(MemoryError,match='early'):
-        resources.measure(dict(root=str(tmp_path)),None,SimpleNamespace(world=2,device=torch.device('cuda'),main=lambda fn:fn()),None,1.)
+        resources.measure(dict(campaign.registration(),root=str(tmp_path)),None,SimpleNamespace(world=1,device=torch.device('cuda'),main=lambda fn:fn()),None,1.)
     assert events==['frontend','parity','stress']
 
 
-def _two_cuda_checkpoint(rank,root,init_method):
-    from datetime import timedelta
-    from pathlib import Path
+@pytest.mark.skipif(not torch.cuda.is_available(),reason='CUDA required')
+def test_single_gpu_production_checkpoint_qualification(tmp_path):
     from hlt_classification.luka_embedding_bridge_hydra import qualification,contracts
-    torch.set_num_threads(1);torch.cuda.set_device(rank)
+    from hlt_classification.data.cache_contracts import load_json
+    torch.cuda.set_device(0)
     execution.configure_math(campaign.registration(),'setup')
-    torch.distributed.init_process_group('nccl',rank=rank,world_size=2,init_method=init_method,timeout=timedelta(minutes=5))
+    ds=synthetic_dataset();ds.spec.update(campaign.registration(),root=str(tmp_path))
+    (tmp_path/'setup').mkdir();ctx=d.Context(0,1,torch.device('cuda',0))
+    value=qualification.tp_checkpoint(ds.spec,ds,banks.Targets(ds.spec,'TP',ds),ctx)
+    assert value==load_json(tmp_path/'setup/tp_checkpoint.json') and value['world_size']==1
+    assert len(value['checks'])==6 and all(len(row['ranks'])==1 for row in value['checks'])
+    assert not torch.distributed.is_initialized()
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(),reason='CUDA required')
+def test_single_gpu_global128_and_tails_use_full_normalization_population():
+    ds=synthetic_dataset(train_rows=139);s=ds.spec;s.update(campaign.registration())
+    ctx=d.Context(0,1,torch.device('cuda',0));target=banks.Targets(s,'TP',ds)
+    m,w,opt=d.build(s,'TP',ctx)
+    assert m is w and not any(isinstance(x,torch.nn.SyncBatchNorm) for x in m.modules())
+    observed=[]
+    bn=next(x for x in m.modules() if isinstance(x,torch.nn.BatchNorm1d))
+    hook=bn.register_forward_pre_hook(lambda module,args:observed.append(len(args[0])))
     try:
-        ds=synthetic_dataset();ds.spec.update(root=root,tp_execution_policy=contracts.tp_execution_policy(),
-                                            execution_math_policy=contracts.execution_math_policy())
-        ctx=d.Context(rank,2,torch.device('cuda',rank))
-        ctx.main(lambda:(Path(root)/'setup').mkdir())
-        qualification.tp_checkpoint(ds.spec,ds,banks.Targets(ds.spec,'TP',ds),ctx)
-    finally:torch.distributed.destroy_process_group()
+        for count in (128,11,98):
+            for batch in range(6):
+                observed.clear();ix=np.arange(count)
+                args,y,target_batch,weight=d.prepare('TP',ds,target,ix,3,batch,ctx)
+                assert len(y)==count and weight==1. and all(len(crop['mask'])==count for crop in args['crops'])
+                values,_=d.step(m,w,opt,'TP',ds,target,ix,3,batch,3.,ctx)
+                assert observed and set(observed)=={count}
+                assert np.isfinite(list(values.values())).all()
+    finally:
+        hook.remove();del m,w,opt;d.release_memory(ctx)
 
 
-@pytest.mark.skipif(torch.cuda.device_count()<2 or not torch.distributed.is_nccl_available(),reason='Two CUDA GPUs with NCCL required')
-def test_two_gpu_checkpoint_syncbn_ddp_parity(tmp_path):
-    torch.multiprocessing.spawn(_two_cuda_checkpoint,args=(str(tmp_path),(tmp_path/'store').as_uri()),nprocs=2,join=True)
+@pytest.mark.skipif(not torch.cuda.is_available(),reason='CUDA required')
+def test_single_rank_scientific_tp_fit_export_and_consumer(tmp_path):
+    from hlt_classification.luka_embedding_bridge_hydra import training
+    from hlt_classification.cms_proxy_ladder.contracts import file_ref
+    ds=synthetic_dataset();s=ds.spec;counts=s['counts'];s.update(campaign.registration(),counts=counts,root=str(tmp_path))
+    ctx=d.Context(0,1,torch.device('cuda',0));target=banks.Targets(s,'TP',ds)
+    for options in (dict(epochs=2),dict(train_indices=np.arange(22))):
+        with pytest.raises(PermissionError):training.fit(tmp_path/('bad_'+next(iter(options))),s,'TP',ds,target,ctx,**options)
+    m,report=training.fit(tmp_path/'fit',s,'TP',ds,target,ctx)
+    assert report['epochs']==30 and report['world_size']==1 and report['native_reload']
+    assert training.validate_fit(tmp_path/'fit',s,'TP')[0]==report
+    checkpoint=file_ref(tmp_path/'fit/selected_full.pt')
+    banks.export(tmp_path/'bank',s,'TP',m,ds,ctx,checkpoint)
+    parent=banks.Bank(tmp_path/'bank',s,'TP',ds.view('train','D000'),checkpoint)
+    consumer=banks.Targets(s,'P7',ds,parent_bank=parent)
+    student,wrapped,opt=d.build(s,'P7',ctx)
+    values,_=d.step(student,wrapped,opt,'P7',ds,consumer,np.arange(15),3,0,3.,ctx)
+    assert np.isfinite(list(values.values())).all()
+    del m,student,wrapped,opt;d.release_memory(ctx)

@@ -10,7 +10,7 @@ from hlt_classification.luka_subclass_hydra.reuse import original
 from hlt_classification.luka_next_supervision_hydra.campaign import storage as ordinary_storage
 from hlt_classification.luka_u100_pair_hydra import site
 from hlt_classification.luka_u100_pair_hydra.inputs import Bundle
-from .contracts import REPAIR_BASE,COUNTS,artifact,validate,recipe,U100_EXTRACTION,u100_numerical_policy,tp_execution_policy,crop_execution_policy,execution_math_policy
+from .contracts import REPAIR_BASE,COUNTS,artifact,validate,recipe,U100_EXTRACTION,u100_numerical_policy,tp_execution_policy,crop_execution_policy,execution_math_policy,execution_layout
 from .registry import FITS,PRODUCERS,dependencies
 from .execution import configuration,TP_PROFILE
 from .transfer import fresh,Transfer
@@ -48,7 +48,7 @@ def registration(profile='1080ti_2_fp32'):
         dependencies={t:dependencies(t) for t in FITS},automatic_retry=False,reference_retrained=True,
         native_input_policy=native.POLICY,u100_extraction_policy=U100_EXTRACTION,
         u100_numerical_policy=u100_numerical_policy(),tp_execution_policy=tp_execution_policy(),
-        crop_execution_policy=crop_execution_policy(),execution_math_policy=execution_math_policy())
+        crop_execution_policy=crop_execution_policy(),execution_math_policy=execution_math_policy(),execution_layout=execution_layout())
 
 
 def storage(spec):

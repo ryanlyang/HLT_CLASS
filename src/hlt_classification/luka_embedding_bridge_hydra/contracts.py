@@ -8,8 +8,9 @@ from .registry import FITS, cell, dependencies, CONDITIONS, COORDINATES, ALIASES
 BASE = '45075fe6c2d8ccdcf7463cd3a99cbe2fe6976a08'
 # Freeze all donor runtime at the published repair base; only this campaign
 # namespace may change afterwards. The original scientific recipe stays v1.
-REPAIR_BASE = '58d0c0edf5f41cff2398fb168fc16fc92e169294'  # Reviewed R8 commit; consumed shared helpers unchanged.
-VERSIONS = {'SPEC': 7, 'U100_REPLAY': 3, 'RESOURCES': 4, 'ACCEPTANCE': 4, 'TP_CHECKPOINT': 2}
+REPAIR_BASE = '95e436c6d34885e20a8672d8655343a3b629d458'  # Additive R8 recovery tools; consumed donor helpers unchanged.
+VERSIONS = {'SPEC': 8, 'U100_REPLAY': 3, 'RESOURCES': 5, 'ACCEPTANCE': 5,
+            'TP_CHECKPOINT': 3, 'PARITY': 2, 'EXECUTION_MATH_POLICY': 2}
 U100_EXTRACTION = 'original_consecutive_128_whole_batches_per_rank_fp32_v1'
 AUTHORIZATION = 'AUTHORIZE_LUKA_EMBEDDING_BRIDGE_HYDRA_V1'
 AUX_SEED = 20261110
@@ -17,12 +18,24 @@ AUX_SEED = 20261110
 
 def execution_math_policy():
     return artifact('EXECUTION_MATH_POLICY',
-        a6000_2_fp32=dict(deterministic_algorithms=True, warn_only=False),
+        a6000_1_fp32=dict(deterministic_algorithms=True, warn_only=False),
         # Preserve the already measured Pascal worker configuration.
         **{'1080ti_2_fp32': dict(deterministic_algorithms=False, warn_only=False)},
         tf32=False, cudnn_benchmark=False, cudnn_deterministic=True,
         cublas_workspace_config=':4096:8', attention='installed_weaver_default_dispatch',
         scope='entire_rank_including_forward_backward_optimizer_and_diagnostics')
+
+
+def execution_layout():
+    """Override recipe-v1's default rank layout, without relabeling old evidence."""
+    return artifact('EXECUTION_LAYOUT', global_batch=128, precision='fp32',
+        single_rank_tasks=['setup', 'input_probe', 'TP'],
+        single_rank=dict(world_size=1, normalization='BatchNorm', local_batch=128),
+        other_fits=dict(world_size=2, normalization='SyncBatchNorm', local_batch=64),
+        normalization_population='complete_global_batch_including_partial_tail',
+        overrides=['recipe.world_size', 'recipe.normalization'],
+        historical_distributed_evidence='pinned_v5_qualification_for_29_pascal_fits',
+        bitwise_equivalence_to_two_rank_TP=False)
 
 
 def crop_execution_policy():

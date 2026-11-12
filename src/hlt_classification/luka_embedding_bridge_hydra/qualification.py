@@ -1,4 +1,4 @@
-"""Installed native parity, one-versus-two-rank updates and neutral diagnostics."""
+"""Installed native checks and explicitly owned single/distributed evidence."""
 from pathlib import Path
 import numpy as np
 import torch
@@ -11,7 +11,7 @@ from hlt_classification.luka_subclass_hydra.benchmark_training import parity_sna
 from hlt_classification.luka_subclass_ddp_hydra.resources import TOLERANCES,PROBE_TOLERANCES
 from .contracts import artifact,validate,U100_EXTRACTION,u100_numerical_policy,tp_execution_policy,execution_math_policy
 from .registry import teacher_condition
-from . import model,distributed as d,inputs,numerical,execution
+from . import model,distributed as d,inputs,numerical,execution,qualified
 
 CHECKS=('C0','LS_D050','LM_D033','LS_D000','R8','P7','TR_B','TR_KIT',
         'TP_HLT_coarse','TP_HLT_medium','TP_HLT_fine','TP_OFFLINE_coarse','TP_OFFLINE_medium','TP_OFFLINE_fine')
@@ -19,6 +19,7 @@ CHECKS=('C0','LS_D050','LM_D033','LS_D000','R8','P7','TR_B','TR_KIT',
 
 def tp_checkpoint(spec,ds,target,ctx):
     """Same-rank ordinary/checkpointed updates, with dropout enabled, on real rows."""
+    if ctx.world!=execution.world_size(spec,'TP'):raise ValueError('TP checkpoint rank layout differs')
     settings=execution.math_settings()
     if settings!=execution.expected_math(execution.TP_PROFILE):
         raise ValueError('TP parity requires the registered deterministic A6000 execution')
@@ -51,6 +52,7 @@ def tp_checkpoint(spec,ds,target,ctx):
 
 
 def check_tp_checkpoint(value,spec,*,historical=False):
+    world=2 if historical else execution.world_size(spec,'TP')
     if historical:
         from hlt_classification.data.cache_contracts import validate_content_hash
         validate_content_hash(value,expected_contract='LUKA_EMBEDDING_BRIDGE_HYDRA_TP_CHECKPOINT/v1',expected_schema_version=1)
@@ -63,10 +65,10 @@ def check_tp_checkpoint(value,spec,*,historical=False):
             raise ValueError('TP numerical execution differs')
     if (spec['tp_execution_policy']!=tp_execution_policy() or value['policy']!=tp_execution_policy()
             or value['tolerances']!=PROBE_TOLERANCES or value['dropout_enabled']is not True
-            or value['world_size']!=2 or value['rows']!=15 or len(value['checks'])!=6):
+            or value['world_size']!=world or value['rows']!=15 or len(value['checks'])!=6):
         raise ValueError('Incomplete TP checkpoint parity')
     for batch,check in enumerate(value['checks']):
-        if check['condition']!=list(teacher_condition(3,batch,regional=True)) or len(check['ranks'])!=2:
+        if check['condition']!=list(teacher_condition(3,batch,regional=True)) or len(check['ranks'])!=world:
             raise ValueError('Incomplete TP checkpoint conditions/ranks')
         for row in check['ranks']:
             for label,measurement in [('checkpoint',row)]+([] if historical else [('ordinary repeat',row['ordinary_repeat'])]):
@@ -98,7 +100,8 @@ def zero_control(spec,ds,target,device):
     return dict(model_update_equal=True,adamw_equal=True)
 
 
-def qualify(spec,ds,targets,ctx):
+def update_checks(spec,ds,targets,ctx):
+    """Compare the supplied layout to a one-rank reference; no artifact claims."""
     checks={}
     for label in CHECKS:
         task=label.split('_')[0] if label.startswith(('TR_','TP_')) else label
@@ -134,15 +137,32 @@ def qualify(spec,ds,targets,ctx):
         result=compare(*snapshots,PROBE_TOLERANCES)
         result['rng_equal']=all(ctx.all(all(a is None and b is None or a is not None and b is not None and torch.equal(a,b) for a,b in zip(*rng))))
         result['passed']=result['passed'] and result['rng_equal'];neutrality[task]=result
-    value=artifact('PARITY',parents=dict(spec=spec['content_hash']),checks=checks,tolerances=TOLERANCES,baseline=baseline,
+    return dict(checks=checks,tolerances=TOLERANCES,baseline=baseline,
         factory_fp32=True,dropout_disabled=True,probe_neutrality=neutrality,probe_tolerances=PROBE_TOLERANCES)
+
+
+def qualify(spec,ds,targets,ctx):
+    if ctx.world!=execution.world_size(spec,'setup'):raise ValueError('Setup parity rank layout differs')
+    measured=update_checks(spec,ds,targets,ctx)
+    value=artifact('PARITY',parents=dict(spec=spec['content_hash']),**measured,
+        reference_world_size=1,world_size=ctx.world,comparison='native_single_rank_repeat',
+        historical_distributed=qualified.distributed_evidence(spec))
     ctx.main(lambda:write_immutable_json(Path(spec['root'])/'setup/parity.json',value))
     check_parity(value,spec)
     return value
 
 
-def check_parity(p,spec):
-    validate(p,'PARITY',dict(spec=spec['content_hash']))
+def check_parity(p,spec,*,historical=False):
+    if historical:
+        from hlt_classification.data.cache_contracts import validate_content_hash
+        validate_content_hash(p,expected_contract='LUKA_EMBEDDING_BRIDGE_HYDRA_PARITY/v1',expected_schema_version=1)
+        if p['parents']!=dict(spec=spec['content_hash']):raise ValueError('Historical parity parent differs')
+    else:
+        validate(p,'PARITY',dict(spec=spec['content_hash']))
+        if (p['reference_world_size']!=1 or p['world_size']!=execution.world_size(spec,'setup')
+                or p['comparison']!='native_single_rank_repeat'
+                or p['historical_distributed']!=qualified.distributed_evidence(spec)):
+            raise ValueError('Native/distributed parity ownership differs')
     if (p['tolerances']!=TOLERANCES or p['probe_tolerances']!=PROBE_TOLERANCES or set(p['checks'])!=set(CHECKS)
             or p['factory_fp32']is not True or p['dropout_disabled']is not True
             or p['baseline']!=dict(model_update_equal=True,adamw_equal=True)
@@ -170,7 +190,7 @@ def replay(spec,ds,ctx):
     return ctx.main(publish)
 
 
-def check_replay(spec):
+def check_replay(spec,*,historical=False):
     root=Path(spec['root'])/'setup';r=load_json(root/'replay.json');validate(r,'REPLAY',dict(spec=spec['content_hash']))
     b=inputs.Bundle(spec['bundle_root']);expected=load_npz_arrays(b.path('reference/matched/predictions.npz'))
     if r['checkpoint']!=file_ref(b.path('reference/matched/checkpoint.pt')) or r['predictions']['path']!='replay_predictions.npz':raise ValueError('Replay ownership differs')
@@ -179,7 +199,7 @@ def check_replay(spec):
     a,e=[evaluate_probabilities(v['labels'],v['probabilities'])['macro_ovr_auc'] for v in (actual,expected)]
     if (r['actual_auc']!=a or r['historical_auc']!=e or r['auc_abs']!=abs(a-e) or abs(a-e)>5e-5
             or r['tolerance']!=5e-5 or r['precision']!='fp32' or r['rows']!=spec['counts']['validation']):raise ValueError('Replay differs')
-    check_parity(load_json(root/'parity.json'),spec)
+    check_parity(load_json(root/'parity.json'),spec,historical=historical)
     check_u100_witness(load_json(root/'u100_replay.json'),spec)
     return r
 

@@ -46,7 +46,7 @@ def technical_target(spec,task,ds,root):
 
 
 def measure(spec,ds,ctx,devices,load_seconds):
-    if ctx.world!=2 or ctx.device.type!='cuda':raise PermissionError('Real two-GPU production setup required')
+    if ctx.world!=execution.world_size(spec,'setup') or ctx.device.type!='cuda':raise PermissionError('Registered CUDA production setup required')
     root=Path(spec['root'])/'setup'
     recovered=qualified.profiles(spec,ds,devices)
     if set(recovered)!=set(qualified.REUSED):raise ValueError('Mixed-hardware setup requires all 29 completed Pascal profiles')
@@ -198,9 +198,9 @@ def accept(spec,diagnostic):
 
 
 def check_memory(spec,memory,devices):
-    """Same two-rank limits as the Pascal donor, applied to each actual profile."""
+    """Aggregate host and per-GPU limits for the actual registered rank count."""
     execution.check_devices(devices)
-    if (len(memory['ranks'])!=2 or not 0<memory['host_peak_bytes']<.85*spec['memory_mb']*1024**2
+    if (len(memory['ranks'])!=len(devices) or not 0<memory['host_peak_bytes']<.85*spec['memory_mb']*1024**2
             or memory['host_peak_bytes']<sum(m['peak_rss_bytes'] for m in memory['ranks'])):
         raise MemoryError('Aggregate host envelope exceeded')
     for m,g in zip(memory['ranks'],devices):

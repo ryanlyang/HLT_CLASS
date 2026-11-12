@@ -1,6 +1,42 @@
 # Embedding assistants, teacher responses, and regional targets on Hydra
 
-Status: scientific recipe v1; execution repair v7, 2026-11-12.
+Status: scientific recipe v1; execution repair v8, 2026-11-12.
+
+### One A6000 for setup and TP (v8)
+
+The user requested one A6000 because acquiring two together delays scheduling.
+Setup, its input probe, and TP now request `gpu:nvidia_rtx_a6000:1` and run one
+process. The other29 fits retain two GTX1080Ti cards. This supersedes the v6/v7
+two-A6000 layout below. One GPU executes the complete global batch128 in FP32,
+including the complete tail; there is no microbatch accumulation. Native
+BatchNorm sees the full batch on TP; the29 Pascal fits retain SyncBatchNorm
+across two64-jet shards. Keep activation checkpointing, all six TP conditions,
+full inputs,30epochs, loss weights, selection, target banks and native export.
+Dropout streams and reduction order need not match two-rank TP bit for bit.
+
+SPEC/v8 explicitly binds EXECUTION_LAYOUT/v1 and EXECUTION_MATH_POLICY/v2;
+the layout overrides RECIPE/v1's default world-size/normalization fields for
+setup/input_probe/TP only, preserving the original recipe identity needed by
+historical artifacts. A6000 deterministic algorithms stay enabled throughout.
+TP_CHECKPOINT/v3 records one actual rank; RESOURCES/ACCEPTANCE v5 require new
+single-A6000 measurements. Never divide old timings by GPU count or admit an
+old A6000/Pascal profile as new TP evidence. Test full128,11 and98-jet longest
+support batches on Brown before the remaining qualification work.
+
+PARITY/v2 distinguishes fresh native single-rank checks from the authenticated
+v5 one-versus-two-Pascal checks. The latter retain their original spec/file
+hashes and apply only to the29 unchanged Pascal fits. Current checks cover
+the installed factory, original C0 update, every objective path, probe
+neutrality and TP ordinary-repeat/checkpoint parity. A single-GPU check must
+never be described as a new two-GPU measurement. Reuse all49 prepared arrays
+and29 miniature/profile artifacts; do not repeat raw reconstruction or those
+fits. The same memory margins and48-hour admission bound remain mandatory.
+
+Source admission advances to reviewed commit95e436c6d34885e20a8672d8655343a3b629d458.
+Its changes since51323cc2 add only four standalone R8 recovery runtime files;
+all consumed donor helpers are unchanged. New changes are confined to the
+bridge runtime. The pending old two-A6000 bootstrap must be retired by exact
+IDs before submitting the replacement; never edit its immutable registration.
 
 ### Deterministic A6000 execution after setup168529
 

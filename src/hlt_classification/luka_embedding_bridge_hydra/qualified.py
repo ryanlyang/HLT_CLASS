@@ -38,7 +38,7 @@ def inspect(path):
     over = [t for t in FITS if minutes[t] > old['fit_max_minutes']]
     if over != ['TP']:
         raise ValueError('The historical resource failure is not TP alone')
-    qualification.check_replay(old)
+    qualification.check_replay(old,historical=True)
     ds = inputs.Dataset(old); ds.u100('train'); ds.u100('validation')
     preparation = load_json(root/'preparation.json')
     validate(preparation, 'PREPARATION', dict(spec=old['content_hash']))
@@ -84,7 +84,7 @@ def check(value, spec, *, full=False):
         raise ValueError('Qualification recovery policy differs')
     root = Path(old['root'])/'setup'
     names = [r['path'] for r in value['files']]
-    if len(set(names)) != len(names) or 'resource_diagnostic.json' not in names:
+    if len(set(names)) != len(names) or not {'resource_diagnostic.json','parity.json'}<=set(names):
         raise ValueError('Qualification recovery inventory differs')
     for ref in value['files']:
         from .storage import regular
@@ -93,6 +93,17 @@ def check(value, spec, *, full=False):
     if load_json(root/'resource_diagnostic.json')['content_hash'] != value['parents']['diagnostic']:
         raise ValueError('Recovered measurements changed')
     return old
+
+
+def distributed_evidence(spec):
+    """Authenticate, never relabel, the genuine two-Pascal update checks."""
+    value=spec['qualification_reuse'];old=check(value,spec)
+    ref=next(r for r in value['files'] if r['path']=='parity.json')
+    path=validate_file_ref(ref,root=Path(old['root'])/'setup')
+    parity=load_json(path);qualification.check_parity(parity,old,historical=True)
+    return dict(source_spec=value['source_spec'],source_spec_hash=old['content_hash'],
+        parity=file_ref(path),parity_hash=parity['content_hash'],reference_world_size=1,
+        world_size=2,tasks=list(REUSED),scope='historical_two_pascal_checks_only')
 
 
 def miniature(spec, task):

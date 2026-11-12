@@ -148,7 +148,7 @@ def test_native_teacher_complete_witness_publish_and_readback(tmp_path,monkeypat
 
 
 def test_schema_separates_old_witnesses_and_policy_is_not_scientific_recipe():
-    assert c.artifact('SPEC')['schema_version']==7
+    assert c.artifact('SPEC')['schema_version']==8
     assert c.artifact('U100_REPLAY')['schema_version']==3
     assert c.recipe()['schema_version']==1 and c.u100_numerical_policy()['schema_version']==1
     old=copy.deepcopy(witness());old['schema_version']=2;old['contract']=old['contract'].replace('/v3','/v2')

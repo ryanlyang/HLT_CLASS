@@ -14,7 +14,7 @@ from hlt_classification.luka_u100_contrastive.training import recovery_percent
 from .contracts import artifact,validate,recipe
 from .registry import cell,CONDITIONS,SCALES,PRODUCERS
 from .storage import validate_population
-from . import distributed as d,model,banks,losses
+from . import distributed as d,model,banks,losses,execution
 
 
 def selection(task,row):
@@ -146,8 +146,8 @@ def validate_diagnostics(row):
 
 def fit(folder,spec,task,ds,target,ctx,*,technical=False,epochs=None,train_indices=None,val_diagnostics=True):
     c=cell(task);folder=Path(folder);ctx.main(lambda:folder.mkdir(parents=True,exist_ok=False))
-    if not technical and (ctx.world!=2 or epochs is not None or train_indices is not None):
-        raise PermissionError('Science requires exact two-rank full30 population')
+    if not technical and (ctx.world!=execution.world_size(spec,task) or epochs is not None or train_indices is not None):
+        raise PermissionError('Science requires the registered rank layout and full30 population')
     train=ds.view('train','D000');val=ds.view('validation','D000')
     if set(map(bytes,train.identities)) & set(map(bytes,val.identities)):raise ValueError('Training/validation overlap')
     if not technical and dict(train=len(train),validation=len(val))!=spec['counts']:raise ValueError('Population differs')
@@ -225,7 +225,7 @@ def validate_fit(folder,spec,task,*,technical=False):
             or report['node']!=spec['nodes'][task] or report['native_reload'] is not True or report['precision']!='fp32'
             or report['oracle']!=(cell(task)['role']!='hlt') or len(report['history'])!=report['epochs']
             or report['component_names']!=component_names(task) or set(report['components'])!=set(component_names(task))
-            or (not technical and (report['epochs']!=30 or report['world_size']!=2 or report['counts']!=spec['counts']))):
+            or (not technical and (report['epochs']!=30 or report['world_size']!=execution.world_size(spec,task) or report['counts']!=spec['counts']))):
         raise ValueError('Fit scientific registration differs')
     for e,row in enumerate(report['history'],1):
         validate(row,'EPOCH',report['parents'])

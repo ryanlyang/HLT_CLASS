@@ -2,8 +2,9 @@
 
 This campaign has **30 scientific fits, including a fresh U100-w5 control**,
 plus setup, automatic release and report:33 jobs total. Setup and TP request
-**two RTX A6000s**; the other29 scientific fits request **two GTX1080Ti cards**.
-Each GPU job uses one node,6CPU,48000MiB and FP32/SyncBatchNorm/global batch128.
+**one RTX A6000**; the other29 scientific fits request **two GTX1080Ti cards**.
+Each GPU job uses one node,6CPU,48000MiB and FP32/global batch128. TP uses
+native BatchNorm over all128 jets; the two-Pascal jobs use SyncBatchNorm.
 The [plan](plans/LUKA_EMBEDDING_BRIDGE_RESPONSE_REGION_HYDRA_PLAN.md) fixes
 the scientific comparisons; see the [contract](contracts/LUKA_EMBEDDING_BRIDGE_HYDRA.md)
 and [validation record](LUKA_EMBEDDING_BRIDGE_HYDRA_VALIDATION.md).
@@ -14,15 +15,17 @@ completed physical export already on Brown and adds a minimal native delta.
 It copies exact historical tensors instead of re-encoding them on Brown.
 Do not rerun the failed v1 source or reuse its partial preparation as complete.
 
-**For failed setup168529, use the recovery block below after committing v7.**
-V7 enables deterministic algorithms for A6000 setup and TP. The v6 failure
+**Use the recovery block below after committing v8.** Retire the pending
+two-A6000 jobs171231/171232 using the exact replacement block below first.
+V8 runs setup and TP on one A6000 and retains v7's deterministic algorithms.
+The v6 failure
 was a parameter-update parity check: tiny GPU backward differences were
 amplified by AdamW. Local ordinary-versus-ordinary updates reproduced it;
 deterministic execution passed without changing any tolerance. Setup now also
-checks ordinary-repeat parity. Two-rank A6000 confirmation is still required.
+checks ordinary-repeat parity. Single-A6000 qualification is still required.
 Preserve both the original92397736 preparation and the27a83412 completed
-miniatures. V6 reuses the29 unaffected miniatures/resource profiles, batches
-the expensive crop-input calculations, and remeasures TP on A6000s first. It requires no
+miniatures. V8 reuses the29 unaffected miniatures/resource profiles, batches
+the expensive crop-input calculations, and remeasures TP on one A6000 first. It requires no
 new SPORC export, raw-particle reconstruction or persistent crop cache.
 The complete campaign releases automatically only after the new checks pass.
 The faster TP has not yet been timed on Brown. If still above48h, preserve its
@@ -34,7 +37,7 @@ original Pascal measurements and allocation requests.
 ## 1. Commit and push from Windows
 
 Review the scoped diff. The source guard preserves donor runtime at
-58d0c0edf5f41cff2398fb168fc16fc92e169294 for this repair (original scientific
+95e436c6d34885e20a8672d8655343a3b629d458 for this repair (original scientific
 donor45075fe6c2d8ccdcf7463cd3a99cbe2fe6976a08). Stage relevant shared-document hunks
 separately so unrelated work is preserved.
 
@@ -69,7 +72,7 @@ git add -p -- $shared
 git diff --cached --stat
 git diff --cached --check
 if ($LASTEXITCODE -ne 0) { throw 'Fix staged whitespace first' }
-git commit -m 'Make A6000 bridge execution deterministic and check ordinary repeat parity'
+git commit -m 'Run bridge setup and TP on one A6000 with explicit execution evidence'
 if ($LASTEXITCODE -ne 0) { throw 'Commit failed' }
 git push origin main
 if ($LASTEXITCODE -ne 0) { throw 'Push failed' }
@@ -78,15 +81,66 @@ git rev-parse HEAD
 
 ## 2. Existing inputs for this recovery
 
+For the currently pending two-A6000 bootstrap, run this on Brown **once**
+after the replacement code is committed and pushed. It validates both exact
+job identities, holds them, verifies they are still pending, and cancels only
+171231/171232. If either has started or its identity differs, it stops. Keep
+the old root and ledger; none of the R8 jobs is changed. Then run the complete
+recovery block later in this document to submit the one-A6000 replacement.
+
+```bash
+bash <<'BASH'
+set -euo pipefail
+kinit rlyang </dev/tty
+python3 -B -s - <<'PY'
+import json, os, subprocess
+from pathlib import Path
+expected = {'setup': '171231', 'release': '171232'}
+base = (Path.home()/'hlt_u100_pairs').resolve()
+def check():
+    owner = None
+    for task, job in expected.items():
+        text = subprocess.run(['scontrol','show','job','-o',job], check=True, text=True, capture_output=True).stdout
+        fields = dict(x.split('=',1) for x in text.split() if '=' in x)
+        root = Path(fields['StdOut']).resolve().parent
+        if root.parent != base/'runs' or not root.name.startswith('embedding_bridge_'):
+            raise SystemExit('Unexpected output root; nothing cancelled.')
+        spec = json.loads((root/'campaign_spec.json').read_text())
+        ledger = json.loads((root/'submission_bootstrap/submission_ledger.json').read_text())
+        if (fields.get('JobId') != job or fields.get('JobState') != 'PENDING'
+                or fields.get('UserId') != f'rlyang({os.getuid()})'
+                or fields.get('JobName') != 'lukaeb_'+task
+                or fields.get('Comment') != 'lukaeb:'+spec['content_hash']+':'+task
+                or spec.get('tp_gpu_profile') != 'a6000_2_fp32'
+                or Path(spec['root']).resolve() != root
+                or Path(fields['WorkDir']).resolve() != Path(spec['project_dir']).resolve()
+                or ledger.get('jobs') != expected
+                or (root/'submission_science').exists()
+                or (root/'claims/setup').exists()):
+            raise SystemExit('Bootstrap identity/state changed; nothing cancelled.')
+        if owner is not None and owner != root:
+            raise SystemExit('Jobs belong to different campaigns; nothing cancelled.')
+        owner = root
+    return owner
+root = check()
+subprocess.run(['scontrol','hold',','.join(expected.values())], check=True)
+check()
+subprocess.run(['scancel','171232','171231'], check=True)
+print('Cancelled only pending setup171231 and release171232. Preserved:', root)
+print('Now run the new registration/recovery block.')
+PY
+BASH
+```
+
 Both transfers already exist on Brown. Do not repeat SPORC export or rsync.
 Keep `embedding_bridge_raw_0a00441f`, `embedding_bridge_native_92397736`,
 the92397736 prepared-data root and the27a83412 completed-qualification root.
-V7 requires the latter's genuine Pascal measurements, so use the complete
+V8 requires the latter's genuine Pascal measurements, so use the complete
 recovery block below to register and queue this execution.
 
 The queue helper reviews the complete bounded graph and asks for `YES` once.
 It submits A6000 setup and an afterok CPU release. Setup success automatically
-queues TP on A6000s, the29 other fits on Pascal, and the CPU report. Only real
+queues TP on one A6000, the29 other fits on Pascal, and the CPU report. Only real
 producer dependencies are used. No later confirmation or login polling is
 needed. A finite weak teacher still releases its children.
 
@@ -103,7 +157,7 @@ scientific producer chain, with shared setup cost separately reported.
 bash <<'BASH'
 set -euo pipefail
 shopt -s nullglob
-SPECS=("$HOME"/hlt_u100_pairs/runs/embedding_bridge_*_mixed_v6_r1/campaign_spec.json)
+SPECS=("$HOME"/hlt_u100_pairs/runs/embedding_bridge_*_mixed_v8_r1/campaign_spec.json)
 [[ ${#SPECS[@]} -eq 1 ]] || { printf 'Select one exact spec; found %s\n' "${#SPECS[@]}"; exit 1; }
 SPEC="${SPECS[0]}"
 MODE=summary
@@ -132,15 +186,16 @@ The subsequent e0f9d874 setup163911 successfully reused the arrays but failed
 its strict numerical replay. Diagnostic164226 supports the explicitly
 versioned v4 numerical policy. Setup164517 passed that check but ran out of
 GPU memory in TP. V5 setup165857 passed memory and all miniatures/parity, then
-rejected TP's runtime. Commit/push v6 before running the block below. The
+rejected TP's runtime. Commit/push v8 before running the block below. The
 original92397736 root supplies prepared arrays;27a83412 supplies the29
 unaffected completed miniatures and conservative resource measurements.
 
-After168529, first commit/push the scoped repair as above, then run this on
+First commit/push the scoped repair as above, then run this on
 Brown. Paste that new40-character commit. Registration checks the old terminal
 jobs and all completed preparation hashes; allow several minutes for NFS reads.
 The new setup links49 array payloads (32 view arrays,12 physical arrays and
-5 U100 arrays), remeasures TP on two A6000s, and repeats current-runtime parity. It does not
+5 U100 arrays), remeasures TP on one A6000, and runs current native checks.
+The29 Pascal fits retain authenticated historical two-rank parity. It does not
 rerun the other29 fits. The storage reservation credits
 those links, so it does not demand a second full33GiB allocation. A fresh
 root and source snapshot distinguish this execution from the failed run.
@@ -157,6 +212,7 @@ prints the exact remaining requirement from the saved array inventory.
 bash <<'BASH'
 set -euo pipefail
 trap 'printf "Stopped; preserve the old and new roots and paste the error.\n" >&2' ERR
+kinit rlyang </dev/tty
 BASE="$(cd "$HOME/hlt_u100_pairs" && pwd -P)"
 OLD="${BASE}/runs/embedding_bridge_92397736_1080ti_v2_r1/campaign_spec.json"
 QUALIFIED="${BASE}/runs/embedding_bridge_27a83412_1080ti_v5_r1/campaign_spec.json"
@@ -194,7 +250,7 @@ if [[ -e "$PROJECT" ]]; then
 else
     git -C "$MAIN" worktree add --detach "$PROJECT" "$COMMIT"
 fi
-ROOT="${BASE}/runs/embedding_bridge_${COMMIT:0:8}_mixed_v7_r1"
+ROOT="${BASE}/runs/embedding_bridge_${COMMIT:0:8}_mixed_v8_r1"
 test ! -e "$ROOT"
 export PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1
 export PYTHONPATH="${PROJECT}/src"
