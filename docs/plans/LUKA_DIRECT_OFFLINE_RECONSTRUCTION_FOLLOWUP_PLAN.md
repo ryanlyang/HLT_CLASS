@@ -118,3 +118,14 @@ screens require later replication before claiming stable improvements.
 Local tests establish readiness to queue measured setup, not real Brown
 qualification or scientific benefit. See the follow-up runbook and validation
 record. No remote training, submission, commit or push is part of implementation.
+
+## 2026-11-12 execution-only C3/R14 recovery
+
+Source58d0c0ed setup168256 and release168257 completed on Brown. C3 job168726
+and R14 job168727 failed at the initial Slurm controller query before claims or
+training output; their controller records were subsequently purged. The
+[recovery contract](../contracts/LUKA_R8_RECOVERY.md) permits two replacement
+jobs using the exact original scientific runtime and setup, a separate root,
+explicit replacement lineage and bounded read-only controller retries. No
+scientific configuration or other campaign job is changed. See the
+[recovery runbook](../LUKA_R8_RECOVERY_RUNBOOK.md).
