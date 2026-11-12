@@ -4,6 +4,8 @@
 
 Scientific/operational donor: `2fb09f38a3a1da85cdceff9df311963fdb3aa872`.
 Implementation baseline: `49b838adab43bf20d0440fc79467e2318aaebfdd`.
+Reviewed source-admission baseline: `27a8341210ca686b74d1c538a3ed258bb7fe947d`;
+the intervening commit changes only the separate bridge-memory runtime.
 The original six-teacher runtime is unchanged between those revisions and
 remains unchanged by this addition. New package: `luka_fullstat_six_teacher_s0`.
 Paths below are relative to `src/hlt_classification/` unless prefixed otherwise.
