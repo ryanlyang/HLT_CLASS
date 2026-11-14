@@ -13,6 +13,7 @@ def main():
     p=sub.add_parser('create')
     for name in ('root','benchmark-spec','expected-commit'):p.add_argument('--'+name,required=True)
     p.add_argument('--quota-gib',required=True,type=int)
+    p.add_argument('--lanes',nargs='+',choices=('pascal','a6000'),default=['pascal','a6000'])
     for name in ('review','submit','run','rank','results','progress'):
         p=sub.add_parser(name);p.add_argument('--spec',required=True)
         if name in ('run','rank'):p.add_argument('--task',required=True)
@@ -26,7 +27,7 @@ def main():
     loader=importlib.util.spec_from_file_location(name,folder/'__init__.py',submodule_search_locations=[str(folder)])
     module=importlib.util.module_from_spec(loader);sys.modules[name]=module;loader.loader.exec_module(module)
     campaign=importlib.import_module(name+'.campaign')
-    if a.command=='create':value=campaign.create(a.root,a.benchmark_spec,project,a.expected_commit,a.quota_gib)
+    if a.command=='create':value=campaign.create(a.root,a.benchmark_spec,project,a.expected_commit,a.quota_gib,lanes=a.lanes)
     elif a.command in ('review','submit'):
         submission=importlib.import_module(name+'.submission')
         value=submission.launch(spec) if a.command=='review' else submission.launch(spec,execute=True,plan_hash=a.plan_hash,authorization=a.authorization)

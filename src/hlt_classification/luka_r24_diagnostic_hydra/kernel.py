@@ -1,5 +1,6 @@
 """Declared FP32/BF16 native forward, chunked decoder VJP, then sample-weighted gradient SUM."""
 import time
+from copy import deepcopy
 import numpy as np
 import torch
 from torch import nn
@@ -139,18 +140,54 @@ def snapshot(model,opt,loss):
         moments=torch.cat([opt.state[p][k].detach().cpu().flatten() for p in ps if p in opt.state for k in ('exp_avg','exp_avg_sq')]))
 
 
+def qualification_state(model,opt):
+    """CPU copies of the complete start state, including Adam steps and BN counters."""
+    def copy(value):
+        if torch.is_tensor(value):return value.detach().cpu().clone()
+        if isinstance(value,dict):return {key:copy(item) for key,item in value.items()}
+        if isinstance(value,list):return [copy(item) for item in value]
+        if isinstance(value,tuple):return tuple(copy(item) for item in value)
+        return value
+    return copy(dict(model=model.state_dict(),optimizer=opt.state_dict()))
+
+
+def restore_qualification_state(model,opt,state):
+    if set(state)!={'model','optimizer'}:raise ValueError('Incomplete qualification start state')
+    model.load_state_dict(state['model'],strict=True)
+    opt.load_state_dict(deepcopy(state['optimizer']))
+    opt.zero_grad(set_to_none=True);clear(model)
+
+
+def buffer_differences(reference,actual):
+    if reference.keys()!=actual.keys():raise ValueError('Buffer inventory differs')
+    rows={}
+    for name,ref in reference.items():
+        other=actual[name]
+        if ref.shape!=other.shape or ref.dtype!=other.dtype:raise ValueError('Buffer shape/dtype differs: '+name)
+        if not torch.isfinite(ref).all() or not torch.isfinite(other).all():raise ValueError('Nonfinite buffer: '+name)
+        a,b=ref.double(),other.double()
+        rows[name]=dict(absolute=float((a-b).abs().max()) if a.numel() else 0.,
+            relative_l2=float((a-b).norm()/a.norm().clamp_min(1e-12)),
+            reference_abs_max=float(a.abs().max()) if a.numel() else 0.,
+            actual_abs_max=float(b.abs().max()) if b.numel() else 0.,
+            dtype=str(ref.dtype),shape=list(ref.shape),
+            integer_equal=True if ref.is_floating_point() else torch.equal(ref,other))
+    return rows
+
+
 def compare(ref,actual,tolerances):
     def relative(a,b):
         if a.shape!=b.shape: raise ValueError('Snapshot shape differs')
         return float((a.double()-b.double()).norm()/a.double().norm().clamp_min(1e-12))
-    if ref['buffers'].keys()!=actual['buffers'].keys(): raise ValueError('Buffer inventory differs')
+    buffers=buffer_differences(ref['buffers'],actual['buffers'])
     result=dict(loss_abs=abs(ref['loss']-actual['loss']),
         gradient_relative_l2=relative(ref['gradients'],actual['gradients']),
         parameters_relative_l2=relative(ref['parameters'],actual['parameters']),
         adamw_moments_relative_l2=relative(ref['moments'],actual['moments']),
-        buffer_abs=max((float((v.double()-actual['buffers'][k].double()).abs().max()) for k,v in ref['buffers'].items() if v.numel()),default=0.))
+        buffer_abs=max((row['absolute'] for row in buffers.values()),default=0.))
     if not np.isfinite(list(result.values())).all(): raise ValueError('Nonfinite parity metrics')
-    return dict(result,passed=all(result[k]<=v for k,v in tolerances.items()))
+    return dict(result,buffers=buffers,
+        passed=all(result[k]<=v for k,v in tolerances.items()) and all(row['integer_equal'] for row in buffers.values()))
 
 
 def clock(call,device,world):

@@ -11,6 +11,11 @@ hold up Pascal science. You can log out once all four bootstrap IDs are saved.
 Setup is capped at 6h per lane; fit limits are measured and capped at 48h.
 No new data export is required; keep the original and benchmark directories.
 
+**Recovery of failed Pascal setup 174442:** use the Pascal-only section below
+after committing the v2 qualification fix. A6000 science174465–174470 is
+already submitted under 519d672f; do not queue a second mixed campaign for this
+recovery. Old outputs remain readable with their original pinned CLI.
+
 ## Commit and push locally
 
 Stage only the new campaign files; the shared README/handoff/source map may
@@ -21,7 +26,7 @@ staging the whole repository. In PowerShell:
 git add -- src/hlt_classification/luka_r24_diagnostic_hydra scripts/luka_r24_diagnostic_hydra.py scripts/queue_luka_r24_diagnostic_hydra.sh sbatch/run_luka_r24_diagnostic_hydra.sh tests/test_luka_r24_diagnostic_hydra.py docs/plans/LUKA_R24_DIAGNOSTIC_HYDRA_PLAN.md docs/contracts/LUKA_R24_DIAGNOSTIC_HYDRA.md docs/LUKA_R24_DIAGNOSTIC_HYDRA_RUNBOOK.md docs/LUKA_R24_DIAGNOSTIC_HYDRA_VALIDATION.md
 git diff --cached --stat
 git diff --cached --check
-git commit -m "Add fourteen R24 diagnostic fits with independent Hydra release lanes"
+git commit -m "Separate R24 update parity from trajectory drift and add Pascal-only retry"
 git push origin main
 git rev-parse HEAD
 ```
@@ -31,9 +36,69 @@ The production detached checkout must be completely clean and the exact full
 commit must be reachable from origin/main. Keep both original worktrees and
 the benchmark/results/data directories; no new data export is required.
 
+## Retry Pascal setup 174442 only
+
+The original setup's evolving one/four-GPU trajectories exceeded the absolute
+buffer tolerance. Protocol v2 retains that evidence as a trajectory diagnostic
+and enforces the unchanged tolerances on each update from identical full model
+and optimizer states. It also records named buffers and eval differences and
+checks synchronization across ranks. No science update or objective changes.
+New `SPEC`/`PLAN`/qualification versions require a fresh root and pushed source.
+
+After the local commit/push above, paste this on Brown:
+
+```bash
+bash <<'BASH'
+set -euo pipefail
+read -r -p 'New pushed parity-fix commit (40 characters): ' COMMIT </dev/tty
+[[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]]
+BASE="$(cd "$HOME/hlt_u100_pairs" && pwd -P)"
+BENCH="$BASE/runs/r24_bench_1094dea4_1080ti_r1/benchmark_spec.json"
+MAIN="$(python3 -B -s -c 'import json,sys; print(json.load(open(sys.argv[1]))["project_dir"])' "$BENCH")"
+ENV_DIR="$(python3 -B -s -c 'import json,sys; print(json.load(open(sys.argv[1]))["environment_dir"])' "$BENCH")"
+git -C "$MAIN" fetch origin main
+git -C "$MAIN" merge-base --is-ancestor "$COMMIT" origin/main
+PROJECT="$BASE/code_r24_diagnostic_${COMMIT:0:8}"
+if [[ -e "$PROJECT" ]]; then
+    test "$(git -C "$PROJECT" rev-parse HEAD)" = "$COMMIT"
+    test -z "$(git -C "$PROJECT" status --porcelain --untracked-files=all)"
+else
+    git -C "$MAIN" worktree add --detach "$PROJECT" "$COMMIT"
+fi
+ROOT="$BASE/runs/r24_diagnostic_${COMMIT:0:8}_pascal_v2_r1"
+test ! -e "$ROOT"
+df -h "$BASE"
+read -r -p 'Personally available GiB for new outputs (at least 10): ' QUOTA_GIB </dev/tty
+[[ "$QUOTA_GIB" =~ ^[1-9][0-9]*$ ]]
+export PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
+export LD_LIBRARY_PATH="${ENV_DIR}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+unset PYTHONPATH
+LOG="$(mktemp "$BASE/runs/r24_diagnostic_${COMMIT:0:8}_pascal_registration.XXXXXX.log")"
+printf 'Registration log: %s\n' "$LOG"
+if ! "${ENV_DIR}/bin/python" -u -B -s "$PROJECT/scripts/luka_r24_diagnostic_hydra.py" create \
+    --root "$ROOT" --benchmark-spec "$BENCH" --expected-commit "$COMMIT" \
+    --quota-gib "$QUOTA_GIB" --lanes pascal >"$LOG" 2>&1; then
+    tail -n 100 "$LOG"
+    printf 'Registration stopped; preserve root and log.\n' >&2
+    exit 1
+fi
+bash "$PROJECT/scripts/queue_luka_r24_diagnostic_hydra.sh" "$ROOT/campaign_spec.json"
+squeue --me -o "%.18i %.30j %.12T %.12l %R"
+BASH
+```
+
+This submits exactly `setup_pascal` and dependent `release_pascal`. After the
+new setup qualifies, release automatically queues P0_R/P0_C, PD_R/PD_C,
+PO_R/PO_C, PI_R/PI_C and `report_pascal`. No A6000 tasks are in this spec or its
+scheduler dry review. Log out after both bootstrap IDs have been recorded.
+If setup fails again, preserve the new `qualification.json` and
+`trajectory_*.json`/`parity_*.json` records for diagnosis; do not alter tolerances
+or reuse the failed setup's receipt.
+
 ## Register and queue on Brown
 
-Paste this complete block into your Brown terminal. It uses the completed
+For a **new full mixed campaign**, paste this block. It uses the completed
 benchmark173643 and the original source/environment recorded there.
 
 ```bash

@@ -13,6 +13,7 @@ from . import campaign
 
 
 def command(spec,task,minutes,*,cpu=False,dependencies=(),after='afterok'):
+    if lane(task) not in spec['enabled_lanes']:raise PermissionError('Task is outside the registered lanes')
     project=spec['project_dir']; root=Path(spec['root']); hw=campaign.hardware(lane(task)); site=spec['cpu_site'] if cpu else hw['execution_site']
     cmd=['sbatch','--parsable','--no-requeue','--kill-on-invalid-dep=yes','--nodes=1','--ntasks=1','--export=NONE',
         '--partition='+site['partition'],'--account='+site['account'],'--qos='+site['qos'],
@@ -30,11 +31,11 @@ def plan(spec,stage,acceptance=None):
     parents=dict(spec=spec['content_hash'])
     if stage=='bootstrap':
         rows=[]
-        for hardware in LANES:
+        for hardware in spec['enabled_lanes']:
             rows += [command(spec,'setup_'+hardware,spec['setup_minutes']),
                 command(spec,'release_'+hardware,spec['release_minutes'],cpu=True,dependencies=['setup_'+hardware])]
-        upper=[r for hardware in LANES for r in plan(spec,'envelope_'+hardware)['commands']]
-        scientific=list(FITS)
+        upper=[r for hardware in spec['enabled_lanes'] for r in plan(spec,'envelope_'+hardware)['commands']]
+        scientific=spec['tasks']
     elif stage in tuple(p+l for p in ('science_','envelope_') for l in LANES):
         hardware=stage.split('_',1)[1];scientific=list(tasks(hardware));upper=None
         if stage.startswith('envelope_'):
@@ -46,7 +47,7 @@ def plan(spec,stage,acceptance=None):
         rows.append(command(spec,'report_'+hardware,spec['report_minutes'],cpu=True,dependencies=scientific,after='afterany'))
     else:raise ValueError('Unknown submission stage')
     return artifact('PLAN',parents=parents,stage=stage,commands=rows,authorization=AUTHORIZATION,
-        science_tasks=scientific,science_max_minutes=spec['fit_max_minutes'],registration=campaign.registration(),upper_bound_commands=upper)
+        science_tasks=scientific,science_max_minutes=spec['fit_max_minutes'],registration=campaign.registration(spec['enabled_lanes']),upper_bound_commands=upper)
 
 
 def accepted_jobs(spec,stage):
@@ -76,7 +77,7 @@ def submit_stage(spec,value,*,execute):
     if not execute:
         scheduler_review(value)
         if value['stage']=='bootstrap':
-            for hardware in LANES:scheduler_review(plan(spec,'envelope_'+hardware))
+            for hardware in spec['enabled_lanes']:scheduler_review(plan(spec,'envelope_'+hardware))
     if execute:
         (folder/'live_claim').mkdir(exist_ok=False)
         write_immutable_json(folder/'live_claim/intent.json',artifact('SUBMIT_CLAIM',parents=dict(plan=value['content_hash']),authorization=AUTHORIZATION))
@@ -86,9 +87,9 @@ def submit_stage(spec,value,*,execute):
 
 def launch(spec,*,execute=False,plan_hash=None,authorization=None):
     campaign.check(spec); value=plan(spec,'bootstrap')
-    if execute and (plan_hash!=value['content_hash'] or authorization!=AUTHORIZATION): raise PermissionError('Authorize exact bootstrap and two bounded setup/release lanes,14 fits and two reports')
+    if execute and (plan_hash!=value['content_hash'] or authorization!=AUTHORIZATION): raise PermissionError('Authorize the exact selected lanes and their bounded science commands')
     result=submit_stage(spec,value,execute=execute)
-    if execute: print('GPU setup and durable CPU release submitted. Safe to log off after all four bootstrap job IDs are recorded.',flush=True)
+    if execute: print(f'GPU setup and durable CPU release submitted for {spec["enabled_lanes"]}. Safe to log off after all {2*len(spec["enabled_lanes"])} bootstrap job IDs are recorded.',flush=True)
     return result
 
 

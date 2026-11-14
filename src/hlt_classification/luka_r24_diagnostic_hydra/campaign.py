@@ -12,7 +12,7 @@ from hlt_classification.provenance import capture_source_snapshot
 from hlt_classification.jetclass2_delphes.model import installed_environment
 from hlt_classification.luka_next_supervision_hydra import campaign as original_campaign
 from hlt_classification.luka_u100_pair_hydra.inputs import Bundle
-from .contracts import DONOR, BENCHMARK, FITS, LANES, artifact, validate, recipe
+from .contracts import DONOR, BENCHMARK, FITS, LANES, artifact, validate, recipe, cell, QUALIFICATION_PROTOCOL
 
 MODULES = ('__init__', 'contracts', 'campaign', 'kernel', 'training', 'resources', 'worker', 'submission', 'reporting', 'identity', 'original')
 REQUIRED = tuple(f'src/hlt_classification/luka_r24_diagnostic_hydra/{n}.py' for n in MODULES) + (
@@ -33,8 +33,11 @@ def hardware(lane):
 def profile(spec,lane): return dict(spec,**hardware(lane))
 
 
-def registration():
-    return dict(recipe=recipe(),tasks=list(FITS),global_batch=128,hardware={l:hardware(l) for l in LANES},
+def registration(lanes=LANES):
+    lanes=tuple(lanes)
+    if not lanes or lanes!=tuple(l for l in LANES if l in lanes):raise ValueError('Select unique lanes in registered order')
+    return dict(recipe=recipe(),tasks=[t for t in FITS if cell(t)['lane'] in lanes],enabled_lanes=list(lanes),
+        qualification_protocol=QUALIFICATION_PROTOCOL,global_batch=128,hardware={l:hardware(l) for l in lanes},
         cpu_site=dict(partition='compute',account='default',qos='normal',cpus=1,memory_mb=4000),
         setup_minutes=360,fit_max_minutes=2880,release_minutes=60,report_minutes=60,
         output_budget_bytes=9*2**30,automatic_retry=False,science_dependencies='none',
@@ -79,7 +82,8 @@ def storage(spec):
         raise OSError('Insufficient remaining diagnostic output allowance plus one GiB reserve')
 
 
-def create(root,benchmark_spec,project,commit,quota_gib):
+def create(root,benchmark_spec,project,commit,quota_gib,*,lanes=LANES):
+    registered=registration(lanes)
     b,old,report=benchmark(benchmark_spec,full=True);snap=source(project,commit)
     root=Path(root).absolute();project=Path(project).resolve()
     protected=[Path(old[k]).resolve() for k in ('root','project_dir','environment_dir','bundle_root','raw_root','delta_root')]
@@ -93,7 +97,7 @@ def create(root,benchmark_spec,project,commit,quota_gib):
     anchors=Bundle(old['bundle_root']).json('origin/campaign_spec.json')['recovery_anchors']
     spec=artifact('SPEC',parents=dict(original=old['content_hash'],benchmark=b['content_hash'],
         benchmark_report=report['content_hash'],source=snap['content_hash'],recipe=recipe()['content_hash']),
-        **registration(),root=str(root),project_dir=str(project),source_commit=commit,source_snapshot=snap,
+        **registered,root=str(root),project_dir=str(project),source_commit=commit,source_snapshot=snap,
         benchmark_spec=file_ref(Path(benchmark_spec).resolve()),benchmark_outputs=refs,
         original_spec=b['original_spec'],environment_dir=old['environment_dir'],environment=old['reference']['environment'],
         counts=old['counts'],maximum=old['target_inventory']['maximum'],imported=old['imported'],
@@ -115,7 +119,7 @@ def check(spec, *, full=False):
             or Path(original_campaign.__file__).resolve()!=Path(old['project_dir'])/'src/hlt_classification/luka_next_supervision_hydra/campaign.py'
             or capture_source_snapshot(old['project_dir'],require_clean=True)!=old['source_snapshot']
             or capture_source_snapshot(b['project_dir'],require_clean=True)!=b['source_snapshot']
-            or any(spec.get(k)!=v for k,v in registration().items()) or spec['source_snapshot']!=snap or spec['parents']!=expected
+            or any(spec.get(k)!=v for k,v in registration(spec['enabled_lanes']).items()) or spec['source_snapshot']!=snap or spec['parents']!=expected
             or spec['environment']!=old['reference']['environment'] or installed_environment()!=spec['environment']
             or spec['counts']!=old['counts'] or spec['maximum']!=old['target_inventory']['maximum']
             or spec['imported']!=old['imported'] or spec['environment_dir']!=old['environment_dir']

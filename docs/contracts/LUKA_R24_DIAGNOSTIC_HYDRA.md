@@ -1,8 +1,9 @@
-# R24 diagnostic Hydra contracts v1
+# R24 diagnostic Hydra contracts (qualification and submission v2)
 
 Authority: [active scientific plan](../plans/LUKA_R24_DIAGNOSTIC_HYDRA_PLAN.md).
-Artifacts use `LUKA_R24_DIAGNOSTIC_<KIND>/v1`, schema version 1, canonical
-content hashes, explicit parent hashes and the existing exploratory-data flags.
+`SPEC`, `PLAN`, `QUALIFICATION` and `PARITY_STEP` now use
+`LUKA_R24_DIAGNOSTIC_<KIND>/v2`, schema version 2. Other kinds retain v1.
+All have canonical content hashes, explicit parent hashes and exploratory-data flags.
 They cannot be reused as curriculum or original R24 artifacts.
 
 `RECIPE` fixes fourteen cells, their order, paired controls, worker, native
@@ -10,6 +11,9 @@ precision, independent seed offsets, global batch 128, 30 epochs, U100 weight5
 and original R24 delay3/ramp3/.3. `SPEC` binds recipe, exact pushed clean source,
 original 58d0c0ed spec/source, completed 1094dea4 benchmark and receipt, installed
 environment, full TRAIN/validation identities, U100 bank and target support.
+`SPEC/v2` additionally fixes `enabled_lanes` and qualification protocol
+`same_start_update_and_observed_trajectory/v2`. The default registers both
+lanes; Pascal-only recovery registers exactly eight fits and two bootstrap jobs.
 The new-worker implementation is migrated from a549fef1; it is not imported
 from a mutable curriculum checkout. No existing artifact is overwritten.
 
@@ -28,11 +32,15 @@ reproduce selected validation probabilities and contain no auxiliary tensors.
 binding without relabeling its scientific schema. Its validation uses the
 unchanged donor validator. Task receipts bind every output to the accepted job.
 
-`QUALIFICATION` on Pascal requires 12 successive updates at positions
+`QUALIFICATION/v2` on Pascal requires 12 common-start update comparisons at positions
 1,2,2.9,3,3.01,3.5,4,4.5,5,5.9,6,7 for both control and R24, alternating
 16- and 15-row global batches. The reference is serial FP32; the comparison
 uses four real CUDA ranks, global BatchNorm/padding and weighted gradient SUM.
-Dropout is disabled for this diagnostic only. Every step must satisfy:
+Each reference snapshot retains the serial pre-update full model and optimizer
+state (including BN counters and Adam step counters), post-update metrics/state,
+and eval probabilities on that step's HLT batch. Every strict distributed step
+restores that exact pre-update state before advancing once. Dropout is disabled
+for this diagnostic only. Every strict step must satisfy the unchanged limits:
 
 | Quantity | Maximum difference |
 |---|---:|
@@ -41,6 +49,20 @@ Dropout is disabled for this diagnostic only. Every step must satisfy:
 | Parameters, relative L2 | 5e-4 |
 | AdamW first/second moments, relative L2 | 5e-4 |
 | Buffers, maximum absolute | 1e-4 |
+
+Named buffer differences include absolute error, relative L2, reference/actual
+scales, shape, dtype and exact integer equality. BN counters must match exactly.
+Rank buffers must agree within 1e-4 and integer counters exactly. Eval probability
+differences are recorded separately and must be finite; no new probability
+tolerance or quality threshold is introduced.
+
+`TRAJECTORY_STEP/v1` retains the separate freely evolving 12-update comparison
+in `trajectory_checks`. Its tolerance pass/fail is explicitly observational,
+not a release condition. Nonfinite values, integer buffer mismatches and
+unsynchronized replicas still fail. This policy replaces v1's use of the
+same buffer threshold on independently evolving weights. It does not relabel
+the failed v1 setup as successful or claim the observed drift is harmless.
+Both sets of step records must match the qualification summary and references.
 
 Reference snapshots are hashed and retained under setup. Failure preserves
 the numerical evidence and prevents that lane's release. A6000 qualification
@@ -61,7 +83,7 @@ validation, probes, loading, startup/reload/export allowance, a 2x margin and
 GPU limit is 88% of each device's memory. Invalid/nonfinite evidence fails closed.
 
 `PLAN`, submission journals and ledger use exact task-bound job IDs. Bootstrap
-contains two independent setup/afterok-release pairs. Each release can submit
+contains one setup/afterok-release pair for each registered lane. Each release can submit
 only its lane's preauthorized commands; only measured walltime may shrink.
 Pascal science requests 4 typed GTX1080 Ti, 12 CPUs and 64000 MiB; A6000 science
 requests 1 typed A6000, 6 CPUs and 32000 MiB. Report jobs use afterany; no fit

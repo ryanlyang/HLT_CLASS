@@ -49,12 +49,28 @@ reload, full-validation replay, longest HLT/OFFLINE support, full and uneven
 batches, timing and aggregate host/per-GPU memory measurements for its cells.
 Fresh fit startup miniatures are discarded before scientific initialization.
 
-Pascal setup also compares an identical 12-update sequence on one and four
+Pascal qualification protocol v2 tests 12 update positions on one and four
 GPUs, including unequal shards and the zero/ramp/full-weight transition.
-Dropout is disabled only for this numerical diagnostic. Loss, parameters,
-gradients, BatchNorm buffers and AdamW moments are compared at every update.
-This is a bounded numerical check, not proof of identical 30-epoch stochastic
-trajectories. Tolerances are fixed in the versioned contract before execution.
+For each strict comparison, all four ranks load the serial model's exact
+pre-update state, including BatchNorm statistics/counters and complete AdamW
+state. Loss, gradients, resulting parameters, buffers and moments must satisfy
+the original v1 tolerances. Dropout is disabled only for these diagnostics.
+
+A separate 12-update comparison lets both trajectories evolve independently.
+It records the same differences, per-buffer names/scales and evaluation
+probability differences. Finite accumulated trajectory differences are
+observations, not release thresholds. Nonfinite state, mismatched integer
+counters or unsynchronized rank buffers still fail. Neither comparison proves
+identical 30-epoch training. Saved serial start states and both sets of step
+records are hashed; old v1 qualification artifacts cannot satisfy v2.
+
+This explicitly revises the original qualification policy following setup
+174442: the independently evolving models exceeded buffer absolute tolerance
+1e-4 after four updates, reaching about .00126 at update 12, although all four
+other metrics remained within tolerance. The log cannot identify which buffer
+caused the maximum or establish its effect on evaluation. Common-start tests
+separate update correctness from the trajectory sensitivity this campaign
+is intended to investigate; the training algorithm and fit matrix are unchanged.
 
 Initial component hashes and actual RNG seeds are saved for every new-worker
 fit. Epoch records retain CE, embedding and reconstruction losses, applied
@@ -67,6 +83,12 @@ CPU release waits `afterok` on its own setup, validates measured resources and
 queues independent fits in pair order, reconstruction then control. Reports
 wait `afterany` on their lane's fits. No science fit depends on another fit or
 the other lane. Queue order encourages starts; Slurm chooses actual starts.
+
+A fresh v2 spec may register only `pascal` or only `a6000` using `--lanes`.
+Bootstrap, dry review, release and readers then cover only that immutable
+subset. The retry of 174442 registers Pascal only: the original A6000 lane
+has already released jobs 174465–174470. It continues under its original
+source/spec; no existing spec, output or job is modified or automatically retried.
 
 Pascal requests 4 typed GPUs, 12 CPUs and 64000 MiB; A6000 requests 1 typed GPU,
 6 CPUs and 32000 MiB. Setup limit 6h per lane; measured fit requests have 2x

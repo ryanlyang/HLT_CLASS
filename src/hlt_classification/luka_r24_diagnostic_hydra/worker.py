@@ -19,6 +19,7 @@ from . import campaign,submission,resources,training,kernel,original
 
 
 def require_job(spec,task):
+    if lane(task) not in spec['enabled_lanes']:raise PermissionError('Task outside registered lanes')
     job=os.environ.get('SLURM_JOB_ID','');stage='bootstrap' if task.startswith(('setup_','release_')) else 'science_'+lane(task)
     for _ in range(12):
         if re.fullmatch('[1-9][0-9]*',job) and submission.accepted_jobs(spec,stage).get(task)==job:return job
@@ -99,6 +100,7 @@ def completed_setup(spec,hardware):
 
 def run(spec,task):
     hardware=lane(task)
+    if hardware not in spec['enabled_lanes']:raise PermissionError('Task outside registered lanes')
     old=campaign.check(spec,full=not task.startswith(('release_','report_')));job,devices=allocation(spec,task)
     if task.startswith('release_'):return submission.finish(spec,job,hardware)
     claim=Path(spec['root'])/'claims'/task;claim.mkdir(parents=True,exist_ok=False)
@@ -122,6 +124,7 @@ def run(spec,task):
 
 def rank(spec,task):
     hardware=lane(task);hw=campaign.hardware(hardware);world=hw['world_size']
+    if hardware not in spec['enabled_lanes']:raise PermissionError('Task outside registered lanes')
     if task not in (*FITS,'setup_pascal','setup_a6000'):raise ValueError('Unregistered GPU task')
     rank=int(os.environ.get('RANK','-1'))
     if (rank not in range(world) or os.environ.get('LOCAL_RANK')!=str(rank) or os.environ.get('WORLD_SIZE')!=str(world)

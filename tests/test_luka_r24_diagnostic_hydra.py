@@ -365,12 +365,18 @@ def test_complete_qualification_protocol_and_reference_tamper(tmp_path):
     torch.multiprocessing.spawn(_protocol_worker,args=(str(tmp_path),(tmp_path/'store').as_uri()),nprocs=4,join=True)
     q=load_json(resources.setup_root(cfg,'pascal')/'qualification.json')
     resources.check_qualification(cfg,'pascal',q)
-    assert len(q['checks'])==24 and len(q['reference_snapshots'])==24
+    assert len(q['checks'])==24 and len(q['reference_snapshots'])==24 and len(q['trajectory_checks'])==24
+    assert q['schema_version']==2 and q['protocol']==c.QUALIFICATION_PROTOCOL
+    assert q['trajectory_tolerance_is_release_gate'] is False
+    ref=torch.load(resources.setup_root(cfg,'pascal')/q['reference_snapshots'][1]['path'],weights_only=True)
+    assert set(ref)=={'before','after','probabilities'}
+    assert any(float(s['step'])==1 for s in ref['before']['optimizer']['state'].values())
     path=resources.setup_root(cfg,'pascal')/q['reference_snapshots'][0]['path'];path.write_bytes(b'corrupt')
     with pytest.raises(ValueError):resources.check_qualification(cfg,'pascal',q)
 
 
-def test_registration_pins_all_three_sources_and_preserves_original(tmp_path,monkeypatch):
+@pytest.mark.parametrize('lanes',[c.LANES,('pascal',)])
+def test_registration_pins_all_three_sources_and_preserves_original(tmp_path,monkeypatch,lanes):
     import sys
     from hlt_classification.cms_proxy_ladder.contracts import file_ref
     oldroot=tmp_path/'original';oldroot.mkdir();benchroot=tmp_path/'benchmark';benchroot.mkdir()
@@ -391,8 +397,9 @@ def test_registration_pins_all_three_sources_and_preserves_original(tmp_path,mon
     monkeypatch.setattr(campaign.original_campaign,'__file__',str(oldcode/'src/hlt_classification/luka_next_supervision_hydra/campaign.py'))
     monkeypatch.setattr(campaign,'installed_environment',lambda:{})
     monkeypatch.setattr(campaign,'Bundle',lambda p:SimpleNamespace(json=lambda key:dict(recovery_anchors=dict(M0HLT=.2,OFFLINE=.9),content_hash='2'*64)))
-    cfg=campaign.create(tmp_path/'newrun',bpath,newcode,'a'*40,10)
+    cfg=campaign.create(tmp_path/'newrun',bpath,newcode,'a'*40,10,lanes=lanes)
     assert campaign.check(cfg,full=True)==old and oldpath.read_bytes()==before
+    assert cfg['enabled_lanes']==list(lanes) and cfg['schema_version']==2
     assert cfg['maximum']==298 and cfg['embedding_hash']=='2'*64
     with pytest.raises(ValueError):campaign.create(tmp_path/'newrun',bpath,newcode,'a'*40,10)
     with pytest.raises(ValueError):campaign.create(oldroot/'nested',bpath,newcode,'a'*40,10)
@@ -401,3 +408,100 @@ def test_registration_pins_all_three_sources_and_preserves_original(tmp_path,mon
     with pytest.raises(ValueError):campaign.check(bad)
     monkeypatch.setattr(campaign,'capture_source_snapshot',lambda *a,**kw:{'content_hash':'0'*64})
     with pytest.raises(ValueError,match='identity differs'):campaign.check(cfg)
+
+
+def test_same_start_restore_includes_bn_statistics_and_optimizer_history():
+    torch.manual_seed(17)
+    m=torch.nn.Sequential(torch.nn.Linear(4,6),torch.nn.BatchNorm1d(6),torch.nn.Linear(6,3))
+    o=torch.optim.AdamW(m.parameters(),lr=.003)
+    x=torch.randn(15,4)
+    def step(model,opt):
+        model.train();opt.zero_grad(set_to_none=True)
+        loss=model(x).square().mean();loss.backward();opt.step()
+        return k.snapshot(model,opt,float(loss.detach()))
+    for _ in range(3):step(m,o)
+    before=k.qualification_state(m,o)
+    expected=step(m,o)
+    assert int(before['model']['1.num_batches_tracked'])==3
+    assert all(float(s['step'])==3 for s in before['optimizer']['state'].values())
+    assert int(m[1].num_batches_tracked)==4
+    other=deepcopy(m);other_opt=torch.optim.AdamW(other.parameters(),lr=.1)
+    # The checkpoint's buffers and moments must not alias the moving model.
+    for _ in range(2):step(other,other_opt)
+    k.restore_qualification_state(other,other_opt,before)
+    actual=step(other,other_opt)
+    assert k.compare(expected,actual,{key:0. for key in resources.TOLERANCES})['passed']
+    assert int(before['model']['1.num_batches_tracked'])==3
+    assert all(float(s['step'])==3 for s in before['optimizer']['state'].values())
+
+
+def drift_comparison():
+    row={name:0. for name in resources.TOLERANCES}
+    row.update(buffer_abs=.0012,passed=False,eval_probability_abs=.0001,
+        buffers={'pair_embed.running_mean':dict(absolute=.0012,relative_l2=.01,reference_abs_max=.12,
+            actual_abs_max=.1212,integer_equal=True,dtype='torch.float32',shape=[4])},
+        replica_buffers=dict(maximum_abs=0.,integer_equal=True))
+    return row
+
+
+def test_accumulated_drift_is_reported_but_same_start_threshold_remains_strict():
+    row=drift_comparison()
+    resources.check_comparison(row,gate=False)
+    with pytest.raises(ValueError,match='Same-start'):resources.check_comparison(row,gate=True)
+    row['passed']=True
+    with pytest.raises(ValueError,match='outcome'):resources.check_comparison(row,gate=False)
+
+
+@pytest.mark.parametrize('bad',['counter','replica','nonfinite','aggregate'])
+def test_observational_trajectory_still_rejects_invalid_state(bad):
+    row=drift_comparison()
+    if bad=='counter':row['buffers']['pair_embed.running_mean']['integer_equal']=False
+    elif bad=='replica':row['replica_buffers']['maximum_abs']=.1
+    elif bad=='nonfinite':row['eval_probability_abs']=float('nan')
+    else:row['buffer_abs']=0.
+    with pytest.raises(ValueError):resources.check_comparison(row,gate=False)
+
+
+def test_named_buffer_diagnostics_preserve_counter_and_scale():
+    ref={'bn.running_mean':torch.tensor([.2,.5]),'bn.num_batches_tracked':torch.tensor(4)}
+    actual={'bn.running_mean':torch.tensor([.201,.5]),'bn.num_batches_tracked':torch.tensor(5)}
+    rows=k.buffer_differences(ref,actual)
+    assert rows['bn.running_mean']['absolute']==pytest.approx(.001,abs=1e-7)
+    assert rows['bn.running_mean']['reference_abs_max']==.5
+    assert rows['bn.num_batches_tracked']['integer_equal'] is False
+    actual['bn.running_mean'][0]=float('nan')
+    with pytest.raises(ValueError,match='Nonfinite buffer'):k.buffer_differences(ref,actual)
+
+
+def test_pascal_only_bootstrap_releases_eight_fits_without_touching_a6000(tmp_path,monkeypatch):
+    cfg=spec(tmp_path);cfg.update(campaign.registration(['pascal']))
+    root=resources.setup_root(cfg,'pascal');root.mkdir()
+    accepted=resources.accept(cfg,diagnostic(cfg,'pascal'),'pascal')
+    write_immutable_json(root/'acceptance.json',accepted)
+    calls,reviews=fake_scheduler(monkeypatch);submission.launch(cfg)
+    plan=submission.plan(cfg,'bootstrap')
+    assert plan['science_tasks']==list(c.tasks('pascal')) and plan['schema_version']==2
+    boot=submission.launch(cfg,execute=True,plan_hash=plan['content_hash'],authorization=c.AUTHORIZATION)
+    assert boot['jobs']==dict(setup_pascal='9001',release_pascal='9002')
+    assert len(calls)==2 and all('a6000' not in str(command) for command in calls)
+    assert {p['stage'] for p in reviews}=={'bootstrap','envelope_pascal'}
+    monkeypatch.setattr(submission,'accounting',lambda j:['COMPLETED','0:0'])
+    monkeypatch.setattr(worker,'completed_setup',lambda s,l:accepted)
+    result=submission.finish(cfg,'9002','pascal')
+    assert set(result['jobs'])==set(c.tasks('pascal'))|{'report_pascal'}
+    assert len(calls)==11 and all('a6000' not in str(command) for command in calls)
+    assert submission.finish(cfg,'9002','pascal')==result and len(calls)==11
+    with pytest.raises(PermissionError):submission.plan(cfg,'envelope_a6000')
+    with pytest.raises(PermissionError):worker.run(cfg,'setup_a6000')
+    assert not (tmp_path/'submission_science_a6000').exists()
+
+
+def test_registration_lanes_and_v1_qualification_are_not_interchangeable():
+    assert len(campaign.registration(['pascal'])['tasks'])==8
+    assert len(campaign.registration(['a6000'])['tasks'])==6
+    for lanes in ([],['bogus'],['pascal','pascal'],['a6000','pascal']):
+        with pytest.raises(ValueError):campaign.registration(lanes)
+    value=c.artifact('QUALIFICATION')
+    from hlt_classification.data.cache_contracts import with_content_hash
+    value.update(contract='LUKA_R24_DIAGNOSTIC_QUALIFICATION/v1',schema_version=1)
+    with pytest.raises(ValueError,match='contract mismatch'):c.validate(with_content_hash(value),'QUALIFICATION')

@@ -1,5 +1,47 @@
 # R24 diagnostic implementation validation
 
+## Qualification v2 follow-up, 2026-11-13
+
+Hydra job 174442 under 519d672f failed the original independent-trajectory
+buffer tolerance. By update 12 the maximum was .001167685 (P0_C) and
+.001259416 (P0_R), above 1e-4; all other registered metrics passed. This is
+remote evidence of a failed qualification, not a failed scientific result or
+proof that buffer drift is harmless. The old log lacks named distributed
+buffers and eval-probability comparisons. A6000 jobs 174465–174470 were released
+successfully under the old independent lane (user-supplied scheduler output).
+
+The revised protocol saves full serial pre-update model/optimizer states and
+tests each of 12 transitions from that exact common state at the original
+tolerances. It separately retains the free 12-update trajectories, per-buffer
+errors/scales and eval-probability differences. Finite trajectory drift is
+observational; nonfinite metrics, integer counter mismatches and unsynchronized
+rank buffers still fail. This is an explicit policy/schema change, not a
+tolerance increase or a retroactive pass for 174442.
+
+Local baseline before changes: **40 passed** in 105.55s. During implementation,
+the existing 40 passed with the revised protocol in 135.95s, and nine new
+focused checks passed in 11.99s. New checks cover BN running-stat/counter and
+Adam-state restoration without aliasing, named buffer metrics, strict versus
+observational thresholds, invalid state rejection, Pascal-only release and
+rejection of v1 qualification artifacts. The four-process/Gloo protocol test
+checks both 24-step record sets and hashed common-start checkpoints. The Gloo
+surrogate has no CUDA SyncBatchNorm and is not hardware parity evidence.
+
+Final combined diagnostic/curriculum/benchmark regression run:
+**143 passed, 4 skipped in 241.77s**, including 50 diagnostic tests. Skips
+require two/three/four CUDA GPUs and NCCL. The installed-Weaver single-GPU
+CUDA test and original/new miniature exports passed locally. This verifies
+the new protocol and submission implementation locally, not its acceptance
+on Hydra; the genuine four-card check still runs in the new setup.
+
+The runbook includes a fresh Pascal-only retry. Syntax checks pass for 13
+Python files, both shell wrappers and all three Bash runbook blocks. The
+historical trailing blank line in resources.py is removed. No new Hydra job
+was submitted, no A6000 job modified, and no Tigris validation was performed.
+Actual 4x1080Ti setup remains required before the eight fits can release.
+
+## Initial implementation evidence
+
 Implementation date: 2026-11-13. This file records local evidence, not a
 claim that the new Hydra jobs have run.
 

@@ -9,7 +9,7 @@ from . import submission,training,original
 
 
 def states(spec):
-    jobs={t:j for lane in LANES for t,j in submission.accepted_jobs(spec,'science_'+lane).items()}
+    jobs={t:j for lane in spec['enabled_lanes'] for t,j in submission.accepted_jobs(spec,'science_'+lane).items()}
     if not jobs:return {}
     r=subprocess.run(['sacct','-X','-n','-P','-j',','.join(jobs.values()),'-o','JobIDRaw,State,ExitCode'],
         check=True,capture_output=True,text=True)
@@ -39,18 +39,18 @@ def selected(rows):return max(rows,key=lambda row:selection_key(row['validation'
 def results(spec):
     from .worker import receipt
     reports={};status=states(spec)
-    for task in FITS:
+    for task in spec['tasks']:
         folder=Path(spec['root'])/task
         if not (folder/'receipt.json').exists():continue
         receipt(spec,task)
         module=original if cell(task)['worker']=='original' else training
         r,_=module.validate_fit(folder/'fit',spec,task)
         reports[task]=dict(r,selected_epoch=r['selected_pass']) if cell(task)['worker']=='original' else r
-    print('R24 diagnostics: eight 4x1080Ti FP32 and six 1xA6000 fits. Every fit includes CE + U100-w5.')
+    print(f'R24 diagnostics: lanes={spec["enabled_lanes"]}, fits={len(spec["tasks"])}. Every fit includes CE + U100-w5.')
     print('Selected exploratory validation; no independent test. Delta uses the fresh paired control.')
     print(f'{"task":6} {"epoch":>5} {"AUC":>12} {"recovery%":>10} {"control":>8} {"delta AUC":>12}  configuration')
     rows=[]
-    for task in FITS:
+    for task in spec['tasks']:
         if task not in reports:
             print(f'{task:6} {status.get(task,["NOT_SUBMITTED_OR_UNCONFIRMED",""])}');continue
         r=reports[task];auc=r['validation']['macro_ovr_auc'];match=reports.get(control(task))
@@ -58,11 +58,11 @@ def results(spec):
         text='--' if delta is None else f'{delta:+.8f}'
         print(f'{task:6} {r["selected_epoch"]:5} {auc:12.8f} {rec:10.1f} {control(task):>8} {text:>12}  {cell(task)}')
         rows.append(dict(task=task,epoch=r['selected_epoch'],auc=auc,recovery=rec,control=control(task),delta=delta,report=r['content_hash']))
-    return artifact('RESULTS',parents=dict(spec=spec['content_hash']),rows=rows,states=status,pending=[t for t in FITS if t not in reports])
+    return artifact('RESULTS',parents=dict(spec=spec['content_hash']),rows=rows,states=status,pending=[t for t in spec['tasks'] if t not in reports])
 
 
 def progress(spec):
-    epochs={t:read_epochs(spec,t) for t in FITS};best={t:selected(rows) for t,rows in epochs.items()};status=states(spec)
+    epochs={t:read_epochs(spec,t) for t in spec['tasks']};best={t:selected(rows) for t,rows in epochs.items()};status=states(spec)
     print('Provisional saved validation; no inference or job changes. Matched worker, precision and RNG controls.')
     for task,rows in epochs.items():
         print('\n'+task+' '+str(cell(task))+' '+str(status.get(task,['NOT_SUBMITTED_OR_UNCONFIRMED',''])))

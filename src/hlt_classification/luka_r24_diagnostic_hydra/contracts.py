@@ -7,7 +7,9 @@ from hlt_classification.luka_fullsim.alljets_data import FLAGS
 DONOR = '58d0c0edf5f41cff2398fb168fc16fc92e169294'
 BENCHMARK = '1094dea4ccfb36d08e29f740a97d90fc770335ec'
 CURRICULUM = 'a549fef16390f7ef5b5b426e8dae6f2951876d89'
-AUTHORIZATION = 'AUTHORIZE_R24_DIAGNOSTIC_14_TWO_LANES_V1'
+AUTHORIZATION = 'AUTHORIZE_R24_DIAGNOSTIC_SELECTED_LANES_V2'
+VERSIONS = {'SPEC':2,'PLAN':2,'QUALIFICATION':2,'PARITY_STEP':2}
+QUALIFICATION_PROTOCOL = 'same_start_update_and_observed_trajectory/v2'
 LANES = ('pascal', 'a6000')
 PAIRS = ('P0', 'PD', 'PO', 'PI', 'OB', 'NB', 'NF')
 FITS = tuple(p+'_'+s for p in PAIRS for s in ('R','C'))
@@ -65,12 +67,14 @@ def weights(task,position):
 
 
 def artifact(kind,*,parents=None,**values):
-    return with_content_hash(dict(contract=f'LUKA_R24_DIAGNOSTIC_{kind}/v1',schema_version=1,
+    version=VERSIONS.get(kind,1)
+    return with_content_hash(dict(contract=f'LUKA_R24_DIAGNOSTIC_{kind}/v{version}',schema_version=version,
         parents=dict(parents or {}),**FLAGS,**values))
 
 
 def validate(value,kind,parents=None):
-    validate_content_hash(value,expected_contract=f'LUKA_R24_DIAGNOSTIC_{kind}/v1',expected_schema_version=1)
+    version=VERSIONS.get(kind,1)
+    validate_content_hash(value,expected_contract=f'LUKA_R24_DIAGNOSTIC_{kind}/v{version}',expected_schema_version=version)
     if any(value.get(k)!=v for k,v in FLAGS.items()) or (parents is not None and value['parents']!=parents):
         raise ValueError('Diagnostic artifact scope or parents differ')
 
