@@ -91,6 +91,20 @@ the natural baseline's remaining footprint up to 17 GiB separately. Recheck
 available filesystem space; quota remains an explicit operator declaration.
 Preserve the original raw dataset, natural baseline cache and all other jobs.
 
+Operational amendment, 2026-11-15: after natural OFFLINE job174643 completed,
+the user authorized retirement of its regenerable prepared particle blocks to
+recover home space. The separately versioned
+[cache-retirement contract](../contracts/LUKA_HYDRA_CACHE_RETIREMENT.md) supersedes
+the cache-preservation/future-baseline-reservation clauses only for the exact
+registered `new_balanced_4a61a34c_r1` recovery. Raw data, memberships, cache
+metadata, source, models, epoch states, predictions and reports remain intact.
+Authenticated completed-baseline retirement sets its future write reserve to
+zero; the balanced14 GiB budget and all scientific semantics stay unchanged.
+Reuse completed balanced OFFLINE and resume only unfinished stages through the
+explicit, source-bound operational wrapper. Do not edit old specs or checkouts.
+The user requested cache cleanup as the first step; the separately authorized
+cleanup-only action stops after retirement, with campaign submission deferred.
+
 An explicit resume checks exact prior jobs are terminal and reuses only
 authenticated completed stages or contiguous committed epoch states. A completed
 20-epoch fit needing export/publication performs no additional updates.
