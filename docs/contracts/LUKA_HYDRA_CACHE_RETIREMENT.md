@@ -34,6 +34,10 @@ published and canonically SHA256 hashed. New contracts are
 All declare development validation, sealed final test and unchanged science.
 Existing scientific v1 artifacts retain their original identities.
 
+The post-cleanup continuation adds distinct
+`LUKA_HYDRA_CACHE_RETIREMENT_{RESUME_SPEC,RESUME_SUBMISSION,RESUME_EXECUTION,RESUME_EXECUTION_COMPLETE}/v1`
+records. It never edits the original SPEC, INTENT or COMPLETE records.
+
 The SPEC binds the operational source snapshot/commit, both original specs,
 baseline completion and output hashes, raw foundation, cache manifest and
 preparation intent, exact disposable payload references, current quota
@@ -74,6 +78,8 @@ balanced 14 GiB result budget, subtract only original committed-output credit,
 and check actual free space plus a conservative operator quota declaration.
 The declaration is capped at its recorded pre-cleanup value; the adapter does
 not invent additional quota from the amount deleted. Check again in each job.
+This describes the original combined `recover` action. The separate post-cleanup
+`resume` action below registers a new current quota declaration.
 
 The standalone CLI imports the operational module by path, then inserts only
 the pinned original scientific checkout into Python's import path. Already
@@ -110,3 +116,47 @@ Focused tests cover deletion boundaries, corruption, interruptions, retained
 outputs, active/external consumers, storage credit, original import isolation,
 unchanged request/DAG generation and shell syntax. Real Hydra cleanup and
 submission are not claimed by local tests.
+
+## Post-cleanup continuation with current headroom
+
+User-reported execution of cleanup source
+`68dc0cb6eeb0f1f527bbeba11f4753b84789bac7` retired15.68 GiB and reported28.30 GiB
+free with `LAUNCHER_EXIT=0`. This is remote cleanup evidence, not a new training
+or submission result. The user authorized preparing campaign recovery next.
+
+Use `resume` / `detach-resume`. Register a separate immutable RESUME_SPEC under
+`operations/post_cache_resume_v1/`, binding the new operational source, original
+balanced spec, old cleanup spec and COMPLETE receipt, completed-stage hashes,
+unfinished tasks, and current declared quota (28 whole GiB at that observation).
+The original cleanup's pre-deletion quota remains unchanged and does not cap
+this new declaration. A later observation can require a smaller declaration;
+never treat the reported28.30 GiB as a permanent reservation.
+
+The new module authenticates the cleanup checkout's exact68dc0cb6 snapshot
+before loading its validator. That original validator authenticates the
+existing retirement artifacts. Source modules for science still come only
+from the pinned4a61a34c checkout. The new continuation performs no unlink,
+cache rebuild, raw particle decoding or additional fit configuration changes.
+
+The submission and replacement workers use the same remaining-capacity check:
+`max(0, 14 GiB - original committed balanced-output bytes)`, with zero future
+natural-baseline writes. Actual filesystem free space and the new quota cap
+must both cover this amount. Every check verifies the retirement receipt,
+absence of retired blocks, and protected natural-baseline outputs. Partial
+uncommitted products and unrelated jobs receive no storage credit.
+
+Keep the original campaign root and submission journals. Fully authenticate
+completed stages and require all accepted previous jobs terminal, as before.
+OFFLINE cannot appear in the resumed command list, even if state changes
+between dry review and live submission. Expected tasks are M0HLT, CONCAT,
+UE100, DE050 and DE000 with original resources, names and afterok dependencies.
+Only their absolute worker wrapper arguments change. Each wrapper loads the
+RESUME_SPEC, original source and runtime, records its operational execution,
+and calls the unchanged scientific worker with the current storage guard.
+
+The new path shares the retirement advisory lock, but uses a separate live
+claim and a separate detached-launch directory. Duplicate launches and live/
+ambiguous prior submissions stop. `continue-resume` is explicit recovery after
+inspection, not an automatic retry. Integrated acceptance remains in the
+science allocations; no new GPU preflight is submitted. Poor finite model
+performance never blocks later jobs.

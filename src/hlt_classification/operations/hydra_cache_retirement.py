@@ -7,6 +7,7 @@ submission wrapper. Every execution records the separate operational identity.
 from contextlib import contextmanager
 import hashlib
 import importlib
+import importlib.util
 import json
 import math
 import os
@@ -27,9 +28,12 @@ BASELINE_COMMIT = 'a865e5b65bc0271d1359644b15956d98f94caca3'
 OLD_HASH = '3b6fdd3e0dab78645fc7630575282bf7aa15c69aee5f66b31283abfcafc9b6d9'
 AUTH = 'AUTHORIZE_HYDRA_BASELINE_CACHE_RETIREMENT_AND_BALANCED_RESUME_V1'
 CLEANUP_AUTH = 'AUTHORIZE_HYDRA_COMPLETED_BASELINE_CACHE_RETIREMENT_ONLY_V1'
+RESUME_AUTH = 'AUTHORIZE_HYDRA_BALANCED_POST_CLEANUP_RESUME_V1'
+RETIREMENT_COMMIT = '68dc0cb6eeb0f1f527bbeba11f4753b84789bac7'
 MODULE = 'src/hlt_classification/operations/hydra_cache_retirement.py'
 CLI = 'scripts/luka_hydra_cache_retirement.py'
 WORKER = 'sbatch/run_luka_hydra_cache_recovery.sh'
+RESUME_WORKER = 'sbatch/run_luka_hydra_balanced_resume.sh'
 LAUNCHER = 'scripts/launch_luka_hydra_cache_recovery.sh'
 PREFIX = 'LUKA_HYDRA_CACHE_RETIREMENT_'
 FLAGS = dict(final_test_accessed=False, final_test_sealed=True,
@@ -134,7 +138,7 @@ def operator_source(project, commit):
     subprocess.run(['git', '-C', str(project), 'merge-base', '--is-ancestor', commit, 'origin/main'],
                    check=True, capture_output=True)
     tracked = subprocess.check_output(['git', '-C', str(project), 'ls-files'], text=True).splitlines()
-    require({MODULE, CLI, WORKER, LAUNCHER, 'tests/test_luka_hydra_cache_retirement.py',
+    require({MODULE, CLI, WORKER, RESUME_WORKER, LAUNCHER, 'tests/test_luka_hydra_cache_retirement.py',
              'docs/LUKA_HYDRA_CACHE_RETIREMENT_RUNBOOK.md',
              'docs/contracts/LUKA_HYDRA_CACHE_RETIREMENT.md'} <= set(tracked), 'Commit all operational files')
     return snapshot
@@ -372,34 +376,47 @@ def quota(op, spec, campaign, dataset, root, baseline_spec, available_gib, *, re
 
 
 @contextmanager
-def execution(op, spec, campaign):
+def execution(op, spec, campaign, *, post_cleanup=False):
     """Explicit operational adapter; original science/source validation stays active."""
     original_storage, original_commands = campaign.storage, campaign.commands
+    script = RESUME_WORKER if post_cleanup else WORKER
+    locator = resume_path() if post_cleanup else operation_path()
+    guard = resume_quota if post_cleanup else quota
     def commands(s, tasks):
         require(s == spec, 'Commands outside registered parent')
+        if post_cleanup:
+            require(set(tasks) <= set(op['requested_tasks']) and 'train_OFFLINE' not in tasks,
+                    'Commands outside registered unfinished stages')
         rows = original_commands(s, tasks)
-        return [dict(row, command=row['command'][:-4]+[str(Path(op['project'])/WORKER),
-            op['project'], str(operation_path()), row['task']]) for row in rows]
-    campaign.storage = lambda *a, **kw: quota(op, spec, campaign, *a, **kw)
+        return [dict(row, command=row['command'][:-4]+[str(Path(op['project'])/script),
+            op['project'], str(locator), row['task']]) for row in rows]
+    campaign.storage = lambda *a, **kw: guard(op, spec, campaign, *a, **kw)
     campaign.commands = commands
     try: yield
     finally: campaign.storage, campaign.commands = original_storage, original_commands
 
 
-def run_task(op, spec, campaign, task):
+def run_task(op, spec, campaign, task, *, post_cleanup=False):
     job = os.environ.get('SLURM_JOB_ID', '')
     binding = campaign.binding(spec, task, job)
-    require(binding['command'][-4:] == [str(Path(op['project'])/WORKER), op['project'],
-        str(operation_path()), task], 'Job not bound to this operational wrapper')
-    retired(op)
+    script = RESUME_WORKER if post_cleanup else WORKER
+    locator = resume_path() if post_cleanup else operation_path()
+    kind = 'RESUME_EXECUTION' if post_cleanup else 'EXECUTION'
+    require(binding['command'][-4:] == [str(Path(op['project'])/script), op['project'],
+        str(locator), task], 'Job not bound to this operational wrapper')
+    if post_cleanup:
+        require(task in op['requested_tasks'] and task != 'train_OFFLINE', 'Unregistered recovery task')
+        resume_retirement(op)
+    else:
+        retired(op)
     path = Path(op['root'])/'executions'/f'{job}.json'
-    publish(path, record('EXECUTION', parents=dict(operation=op['content_hash'], spec=spec['content_hash']),
+    publish(path, record(kind, parents=dict(operation=op['content_hash'], spec=spec['content_hash']),
         job=job, task=task, scientific_project=spec['project'], operational_project=op['project'],
         overrides=op['runtime_overrides']))
-    with execution(op, spec, campaign):
+    with execution(op, spec, campaign, post_cleanup=post_cleanup):
         from hlt_classification.luka_new_balanced_hydra import worker
         result = worker.run(spec, task)
-    publish(path.with_name(job+'.complete.json'), record('EXECUTION_COMPLETE',
+    publish(path.with_name(job+'.complete.json'), record(kind+'_COMPLETE',
         parents=dict(operation=op['content_hash'], execution=read(path)['content_hash']),
         job=job, task=task, result=file_ref(Path(spec['root'])/task/'result.json')))
     return result
@@ -471,5 +488,140 @@ def recover_locked(project, commit, available_gib, campaign, spec, *, continue_e
         require('train_OFFLINE' not in [r['task'] for r in plan['commands']], 'Unexpected OFFLINE refit')
         jobs = campaign.queue(spec, execute=True, authorization=campaign.c.AUTH, resume=True,
                               available_gib=available_gib)
+    print(json.dumps(jobs, indent=2), flush=True)
+    return jobs
+
+
+def resume_path():
+    return BALANCED.parent/'operations/post_cache_resume_v1/spec.json'
+
+
+def authenticated_retirement(campaign, spec):
+    """Read the completed cleanup using its immutable, independently checked source."""
+    from hlt_classification.provenance import validate_source_snapshot
+    path = operation_path()
+    old = read(path, 'SPEC')
+    require(old['commit'] == RETIREMENT_COMMIT
+            and old['source']['git_commit'] == RETIREMENT_COMMIT, 'Unexpected cleanup source')
+    validate_source_snapshot(old['source'], repository=old['project'], require_clean=True)
+    source = Path(old['project'])/MODULE
+    loader = importlib.util.spec_from_file_location('frozen_hydra_retirement_68dc0cb6', source)
+    module = importlib.util.module_from_spec(loader)
+    loader.loader.exec_module(module)
+    require(module.BALANCED == BALANCED and module.CACHE == CACHE, 'Cleanup scope differs')
+    checked = module.load_operation(path, old['project'], campaign, spec)
+    require(checked == old, 'Cleanup changed during authentication')
+    return old, module.retired(old)
+
+
+def resume_retirement(op):
+    """Validate the exact completed receipt without repeating deletion or decoding data."""
+    require(verify(op['retirement']['spec']) == operation_path()
+            and verify(op['retirement']['complete']) == operation_path().parent/'retirement_complete.json',
+            'Cleanup dependency locator differs')
+    old = read(operation_path(), 'SPEC')
+    require(old['root'] == str(operation_path().parent) and old['cache'] == str(CACHE)
+            and old['commit'] == RETIREMENT_COMMIT, 'Cleanup dependency scope differs')
+    complete = retired(old)
+    require(op['parents']['retirement'] == old['content_hash']
+            and op['parents']['retirement_complete'] == complete['content_hash'], 'Cleanup dependency hash differs')
+    preserved_baseline(old)
+    return old, complete
+
+
+def resume_quota(op, spec, campaign, dataset, root, baseline_spec, available_gib, *, resume=False):
+    require(str(dataset) == spec['dataset'] and str(root) == spec['root']
+            and Path(baseline_spec) == BASELINE and resume is True, 'Resume storage scope differs')
+    require(type(available_gib) is int and available_gib >= 0
+            and type(op['available_gib']) is int and op['available_gib'] >= 0, 'Invalid current quota declaration')
+    old, completion = resume_retirement(op)
+    own = campaign.committed_bytes(root)
+    needed = max(0, 14*2**30-own)
+    declared = min(available_gib, op['available_gib'])
+    free = shutil.disk_usage(root).free
+    if min(free, declared*2**30) < needed:
+        raise OSError(f'Need {math.ceil(needed/2**30)} GiB for remaining balanced outputs; current free space is insufficient')
+    return dict(new_results_budget_bytes=14*2**30, natural_baseline=dict(remaining_bytes=0,
+        retirement=completion['content_hash'], result=old['baseline']['result']),
+        declared_available_gib=declared, filesystem_free_bytes=free, required_free_bytes=needed,
+        committed_output_bytes_credited=own, operation=op['content_hash'])
+
+
+def load_resume(path, project, campaign, spec):
+    require(Path(path).resolve() == resume_path(), 'Noncanonical resume locator')
+    op = read(path, 'RESUME_SPEC')
+    require(op['root'] == str(resume_path().parent) and Path(op['project']) == Path(project).resolve()
+            and op['runtime_overrides'] == ['campaign.storage', 'campaign.commands']
+            and op['storage_policy'] == 'completed_baseline_zero_future_reserve_post_cleanup_quota_v1'
+            and type(op['available_gib']) is int and op['available_gib'] >= 0,
+            'Unexpected post-cleanup scope')
+    require(operator_source(project, op['commit']) == op['source'], 'Recovery source drift')
+    require(verify(op['parent_spec']) == BALANCED and read(BALANCED) == spec
+            and op['parents']['spec'] == spec['content_hash'], 'Recovery parent differs')
+    require(op['requested_tasks'] and len(set(op['requested_tasks'])) == len(op['requested_tasks'])
+            and set(op['requested_tasks']) <= set(campaign.c.tasks())-{'train_OFFLINE'}
+            and 'OFFLINE' in op['completed'], 'Recovery must reuse completed OFFLINE')
+    for stage, saved_hash in op['completed'].items():
+        require(stage in campaign.c.STAGES
+                and read(BALANCED.parent/('train_'+stage)/'result.json')['content_hash'] == saved_hash,
+                'Previously completed stage receipt changed')
+    old, completion = authenticated_retirement(campaign, spec)
+    require(resume_retirement(op) == (old, completion), 'Retirement authentication differs')
+    return op
+
+
+def prepare_resume(project, commit, available_gib, campaign, spec):
+    require(type(available_gib) is int and available_gib >= 0, 'Declare current free quota in whole GiB')
+    path = resume_path()
+    if path.exists():
+        op = load_resume(path, project, campaign, spec)
+        require(op['commit'] == commit and op['available_gib'] == available_gib, 'Existing recovery registration differs')
+        return op
+    source = operator_source(project, commit)
+    old, completion = authenticated_retirement(campaign, spec)
+    tasks, completed = campaign.remaining(spec, True)
+    require('OFFLINE' in completed and 'train_OFFLINE' not in tasks, 'Completed OFFLINE must be reused')
+    op = record('RESUME_SPEC', root=str(path.parent), project=str(Path(project).resolve()),
+        commit=commit, source=source, parent_spec=file_ref(BALANCED),
+        parents=dict(spec=spec['content_hash'], retirement=old['content_hash'], retirement_complete=completion['content_hash']),
+        retirement=dict(spec=file_ref(operation_path()),
+            complete=file_ref(operation_path().parent/'retirement_complete.json')),
+        available_gib=available_gib, completed=completed, requested_tasks=tasks,
+        storage_policy='completed_baseline_zero_future_reserve_post_cleanup_quota_v1',
+        runtime_overrides=['campaign.storage', 'campaign.commands'])
+    resume_quota(op, spec, campaign, spec['dataset'], spec['root'], BASELINE, available_gib, resume=True)
+    publish(path, op)
+    return op
+
+
+def resume_campaign(project, commit, available_gib, authorization, *, continue_existing=False):
+    require(authorization == RESUME_AUTH, 'Explicit post-cleanup resume authorization required')
+    spec, campaign = bootstrap()
+    with operational_lock():
+        return resume_locked(project, commit, available_gib, campaign, spec,
+                             continue_existing=continue_existing)
+
+
+def resume_locked(project, commit, available_gib, campaign, spec, *, continue_existing=False):
+    root = resume_path().parent
+    safe(root, BALANCED.parent); root.mkdir(exist_ok=True)
+    claim = root/'live_claim'
+    if continue_existing:
+        require(claim.is_dir(), 'No attempted post-cleanup recovery to continue')
+    else:
+        claim.mkdir(exist_ok=False)
+    op = prepare_resume(project, commit, available_gib, campaign, spec)
+    # Original remaining() refuses live/ambiguous attempts before any submission.
+    tasks, completed = campaign.remaining(spec, True)
+    require(set(tasks) <= set(op['requested_tasks']) and 'OFFLINE' in completed,
+            'Remaining stages differ from registered recovery')
+    with execution(op, spec, campaign, post_cleanup=True):
+        plan = campaign.queue(spec, resume=True, available_gib=available_gib)
+        require([r['task'] for r in plan['commands']] == tasks and 'train_OFFLINE' not in tasks,
+                'Unexpected recovery plan/refit')
+        jobs = campaign.queue(spec, execute=True, authorization=campaign.c.AUTH, resume=True,
+                              available_gib=available_gib)
+    publish(root/f'submission_{len(list(root.glob("submission_*.json")))+1:03d}.json',
+        record('RESUME_SUBMISSION', parents=dict(operation=op['content_hash']), jobs=jobs))
     print(json.dumps(jobs, indent=2), flush=True)
     return jobs

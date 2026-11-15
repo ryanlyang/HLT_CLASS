@@ -16,6 +16,7 @@ o = importlib.util.module_from_spec(loader)
 loader.loader.exec_module(o)
 RAW_REBUILD = o.raw_rebuild_evidence
 BASELINE_EVIDENCE = o.baseline_evidence
+AUTHENTICATED_RETIREMENT = o.authenticated_retirement
 
 
 @pytest.fixture
@@ -272,6 +273,7 @@ def test_no_scientific_call_or_deletion_without_authorization(monkeypatch):
     monkeypatch.setattr(o, 'bootstrap', lambda: pytest.fail('must not start'))
     with pytest.raises(ValueError, match='authorization'): o.recover('.', 'a'*40, 14, 'wrong')
     with pytest.raises(ValueError, match='authorization'): o.cleanup('.', 'a'*40, 14, o.AUTH)
+    with pytest.raises(ValueError, match='authorization'): o.resume_campaign('.', 'a'*40, 28, o.CLEANUP_AUTH)
 
 
 def test_cleanup_only_never_calls_queue_or_scheduler_review(fixture, monkeypatch, capsys):
@@ -336,7 +338,7 @@ def test_shell_syntax_absolute_worker_and_detached_launch():
     bash = str(git_bash) if sys.platform == 'win32' and git_bash.is_file() else shutil.which('bash')
     if bash is None: pytest.skip('Bash unavailable')
     if not Path(bash).is_file(): pytest.skip('Bash unavailable')
-    for name in (o.WORKER, o.LAUNCHER):
+    for name in (o.WORKER, o.RESUME_WORKER, o.LAUNCHER):
         path = ROOT/name
         assert b'\r' not in path.read_bytes()
         result = subprocess.run([bash, '-n', str(path)], capture_output=True, text=True)
@@ -347,3 +349,173 @@ def test_shell_syntax_absolute_worker_and_detached_launch():
     assert 'exec "$ENV_DIR/bin/python"' in (ROOT/o.WORKER).read_text()
     assert 'detach-cleanup' in launcher and 'ACTION=cleanup' in launcher
     assert o.CLEANUP_AUTH in launcher
+    assert 'detach-resume' in launcher and 'ACTION=resume' in launcher and o.RESUME_AUTH in launcher
+
+
+@pytest.fixture
+def post_cleanup(fixture, monkeypatch):
+    from hlt_classification.luka_new_balanced_hydra import contracts as c
+    f = fixture
+    fields = {k: v for k, v in f.op.items() if k not in ('content_hash', 'contract', 'schema_version', *o.FLAGS)}
+    fields.update(commit=o.RETIREMENT_COMMIT, available_gib=1, source={'git_commit': o.RETIREMENT_COMMIT})
+    f.op = o.record('SPEC', **fields)
+    o.publish(o.operation_path(), f.op)
+    complete = o.retire(f.op, f.campaign, f.spec)
+    saved = o.record('FIXTURE_BALANCED', project=str(f.base/'old_science'),
+                     **{k: v for k, v in f.spec.items() if k != 'content_hash'})
+    o.publish(o.BALANCED, saved); f.spec = saved
+    receipt = o.record('FIXTURE_RESULT', stage='OFFLINE')
+    o.publish(o.BALANCED.parent/'train_OFFLINE/result.json', receipt)
+    f.completed = {'OFFLINE': receipt['content_hash']}
+    f.tasks = [t for t in c.tasks() if t != 'train_OFFLINE']
+    f.campaign.c = c
+    f.campaign.remaining = lambda *a: (f.tasks, f.completed)
+    monkeypatch.setattr(o, 'operator_source', lambda *a: {'git_commit': 'b'*40})
+    monkeypatch.setattr(o, 'authenticated_retirement', lambda *a: (f.op, o.retired(f.op)))
+    monkeypatch.setattr(o.shutil, 'disk_usage', lambda *a: SimpleNamespace(free=int(28.30*2**30)))
+    f.post = o.prepare_resume(f.base/'new_operator', 'b'*40, 28, f.campaign, f.spec)
+    # Nothing in continuation may re-enter destructive retirement or hash raw data.
+    monkeypatch.setattr(o, 'retire', lambda *a: pytest.fail('no deletion on resume'))
+    monkeypatch.setattr(o, 'raw_rebuild_evidence', lambda *a: pytest.fail('no repeated raw scan'))
+    return f
+
+
+def test_post_cleanup_28_gib_is_independent_of_original_quota_and_preserves_records(post_cleanup):
+    f = post_cleanup
+    old_bytes = o.operation_path().read_bytes()
+    quota = o.resume_quota(f.post, f.spec, f.campaign, f.spec['dataset'], f.spec['root'], f.baseline, 29, resume=True)
+    assert quota['declared_available_gib'] == 28 and f.op['available_gib'] == 1
+    assert quota['natural_baseline']['remaining_bytes'] == 0
+    assert quota['required_free_bytes'] == 12*2**30
+    assert o.operation_path().read_bytes() == old_bytes
+    assert o.load_resume(o.resume_path(), f.post['project'], f.campaign, f.spec) == f.post
+    assert o.prepare_resume(f.post['project'], 'b'*40, 28, f.campaign, f.spec) == f.post
+    with pytest.raises(ValueError, match='registration differs'):
+        o.prepare_resume(f.post['project'], 'b'*40, 27, f.campaign, f.spec)
+
+
+@pytest.mark.parametrize('failure', ['disk', 'declaration', 'receipt', 'reappeared', 'model'])
+def test_post_cleanup_fails_closed_before_submission(post_cleanup, monkeypatch, failure):
+    f = post_cleanup
+    declared = 29
+    if failure == 'disk': monkeypatch.setattr(o.shutil, 'disk_usage', lambda *a: SimpleNamespace(free=11*2**30))
+    if failure == 'declaration': declared = 11
+    if failure == 'receipt': (f.op_root/'retirement_complete.json').unlink()
+    if failure == 'reappeared': (f.cache/f.op['payloads'][0]['path']).write_bytes(b'reappeared')
+    if failure == 'model': (f.baseline.parent/'checkpoint.payload').write_bytes(b'corrupt')
+    with pytest.raises((ValueError, OSError)):
+        o.resume_quota(f.post, f.spec, f.campaign, f.spec['dataset'], f.spec['root'], f.baseline, declared, resume=True)
+
+
+def test_post_cleanup_requires_frozen_cleanup_source_before_import(post_cleanup, monkeypatch):
+    from hlt_classification import provenance
+    f = post_cleanup
+    def reject(*a, **kw): raise ValueError('source changed')
+    monkeypatch.setattr(provenance, 'validate_source_snapshot', reject)
+    # The real function, replaced only for the synthetic fixture above.
+    with pytest.raises(ValueError, match='source changed'):
+        AUTHENTICATED_RETIREMENT(f.campaign, f.spec)
+
+
+def test_post_cleanup_real_submission_preserves_five_fit_dag(post_cleanup, monkeypatch):
+    from hlt_classification.luka_new_balanced_hydra import campaign
+    from test_luka_new_balanced_hydra import spec_fixture
+    f = post_cleanup
+    spec = spec_fixture(f.base/'command_fixture'); spec['root'] = f.spec['root']; spec['dataset'] = f.spec['dataset']
+    spec['storage']['natural_baseline']['spec_path'] = str(f.baseline)
+    monkeypatch.setattr(o, 'prepare_resume', lambda *a: f.post)
+    monkeypatch.setattr(campaign, 'check', lambda *a, **kw: None)
+    def remaining(*a):
+        campaign.accepted_jobs(spec)  # Preserve ambiguous-intent rejection.
+        return f.tasks, f.completed
+    monkeypatch.setattr(campaign, 'remaining', remaining)
+    monkeypatch.setattr(campaign, 'committed_bytes', lambda *a: 2*2**30)
+    reviews = []; calls = []
+    monkeypatch.setattr(campaign, 'site', lambda rows: reviews.append(rows))
+    def accepted(args, **kw):
+        calls.append(args); return SimpleNamespace(returncode=0, stdout=str(200+len(calls)), stderr='')
+    monkeypatch.setattr(campaign.subprocess, 'run', accepted)
+    jobs = o.resume_locked(f.post['project'], 'b'*40, 28, campaign, spec)
+    assert list(jobs) == f.tasks and len(calls) == 5 and len(reviews) == 2
+    assert '--dependency=afterok:202:201' in calls[2]
+    assert '--dependency=afterok:202:203:201' in calls[3]
+    assert '--dependency=afterok:202:203:204' in calls[4]
+    original = campaign.commands(spec, f.tasks)
+    for args, row in zip(calls, original):
+        assert [x for x in args[:-4] if not x.startswith('--dependency=')] == [x for x in row['command'][:-4] if not x.startswith('--dependency=')]
+        assert args[-4:] == [str(Path(f.post['project'])/o.RESUME_WORKER), f.post['project'], str(o.resume_path()), row['task']]
+    assert len(campaign.accepted_jobs(spec)) == 5
+    with o.execution(f.post, spec, campaign, post_cleanup=True):
+        with pytest.raises(ValueError, match='unfinished stages'):
+            campaign.commands(spec, ['train_OFFLINE'])
+    with pytest.raises(FileExistsError): o.resume_locked(f.post['project'], 'b'*40, 28, campaign, spec)
+    # A live predecessor stops explicit continuation before another sbatch.
+    monkeypatch.setattr(campaign, 'remaining', lambda *a: (_ for _ in ()).throw(ValueError('live prior job')))
+    with pytest.raises(ValueError, match='live'):
+        o.resume_locked(f.post['project'], 'b'*40, 28, campaign, spec, continue_existing=True)
+    assert len(calls) == 5
+
+
+def test_post_cleanup_worker_installs_guard_and_publishes_execution(post_cleanup, monkeypatch):
+    from hlt_classification.luka_new_balanced_hydra import worker
+    f = post_cleanup; job = '123'; task = 'train_M0HLT'
+    monkeypatch.setenv('SLURM_JOB_ID', job)
+    f.campaign.binding = lambda *a: {'command': ['sbatch', str(Path(f.post['project'])/o.RESUME_WORKER),
+        f.post['project'], str(o.resume_path()), task]}
+    original = lambda *a, **kw: pytest.fail('old storage reservation was used')
+    f.campaign.storage = original; f.campaign.commands = lambda *a: []
+    def run(spec, task):
+        quota = f.campaign.storage(spec['dataset'], spec['root'], f.baseline, 29, resume=True)
+        assert quota['declared_available_gib'] == 28 and quota['natural_baseline']['remaining_bytes'] == 0
+        result = o.record('FIXTURE_RESULT', stage='M0HLT')
+        o.publish(Path(spec['root'])/task/'result.json', result)
+        return result
+    monkeypatch.setattr(worker, 'run', run)
+    result = o.run_task(f.post, f.spec, f.campaign, task, post_cleanup=True)
+    assert result['stage'] == 'M0HLT' and f.campaign.storage is original
+    complete = o.read(Path(f.post['root'])/'executions/123.complete.json', 'RESUME_EXECUTION_COMPLETE')
+    assert complete['parents']['operation'] == f.post['content_hash']
+
+
+def test_post_cleanup_detached_shell_finishes_after_tail_exits(tmp_path):
+    import os
+    import time
+    bash = 'C:/Program Files/Git/bin/bash.exe' if sys.platform == 'win32' else 'bash'
+    def shellpath(path):
+        p = Path(path).resolve()
+        return '/'+p.drive[0].lower()+p.as_posix()[2:] if sys.platform == 'win32' else str(p)
+    project = tmp_path/'project'; (project/'scripts').mkdir(parents=True)
+    env_dir = tmp_path/'environment'; (env_dir/'bin').mkdir(parents=True)
+    root = tmp_path/'campaign'; root.mkdir()
+    script = project/o.LAUNCHER
+    text = (ROOT/o.LAUNCHER).read_text().replace(
+        'ROOT=/cs/home/rlyang/hlt_u100_pairs/runs/new_balanced_4a61a34c_r1',
+        'ROOT="'+shellpath(root)+'"')
+    script.write_bytes(text.encode())
+    binpath = tmp_path/'bin'; binpath.mkdir()
+    bodies = {
+        binpath/'git': 'printf "%s\\n" "'+('b'*40)+'"\n',
+        binpath/'python3': 'printf "%s\\n" "$FIXTURE_ENV"\n',
+        binpath/'tail': 'printf "TAIL_VIEW\\n"\n',
+        env_dir/'bin/python': 'sleep 1\nprintf "%s\\n" "$*" >> "$FIXTURE_CALLS"\n',
+    }
+    for path, body in bodies.items():
+        path.write_bytes(('#!/usr/bin/env bash\n'+body).encode()); path.chmod(0o755)
+    bash_env = tmp_path/'environment.sh'
+    bash_env.write_bytes(b'export PATH="${FIXTURE_BIN}:${PATH}"\n')
+    calls = tmp_path/'calls'
+    env = dict(os.environ, BASH_ENV=shellpath(bash_env), FIXTURE_BIN=shellpath(binpath),
+               FIXTURE_CALLS=shellpath(calls), FIXTURE_ENV=shellpath(env_dir))
+    args = [bash, str(script), 'detach-resume', shellpath(project), 'b'*40, '28']
+    result = subprocess.run(args, env=env, capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+    assert 'DETACHED resume' in result.stdout and 'TAIL_VIEW' in result.stdout
+    log = Path(str(root)+'.post-cache-resume-launch')/'launcher.log'
+    deadline = time.monotonic()+10
+    while (not log.exists() or 'LAUNCHER_EXIT=0' not in log.read_text()) and time.monotonic() < deadline:
+        time.sleep(.05)
+    assert 'LAUNCHER_EXIT=0' in log.read_text()
+    lines = calls.read_text().splitlines()
+    assert len(lines) == 1 and ' resume ' in lines[0] and '--available-gib 28' in lines[0]
+    assert '--authorize '+o.RESUME_AUTH in lines[0]
+    assert subprocess.run(args, env=env, capture_output=True, timeout=5).returncode != 0

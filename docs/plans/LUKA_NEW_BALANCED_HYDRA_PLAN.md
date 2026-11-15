@@ -105,6 +105,15 @@ explicit, source-bound operational wrapper. Do not edit old specs or checkouts.
 The user requested cache cleanup as the first step; the separately authorized
 cleanup-only action stops after retirement, with campaign submission deferred.
 
+Cleanup subsequently completed under68dc0cb6: the user reported15.68 GiB freed
+and28.30 GiB available. The authorized post-cleanup continuation binds a new
+quota declaration in `post_cache_resume_v1` while preserving the cleanup
+records, original spec and source. It uses the same14 GiB result budget minus
+committed outputs, zero future baseline reserve and a fresh free-space check
+at submission and worker entry. Models, data, sampler, losses, optimizer,
+20-epoch schedule and hardware requests remain unchanged. A detached resume
+queues only unfinished stages after exact terminal-job and artifact checks.
+
 An explicit resume checks exact prior jobs are terminal and reuses only
 authenticated completed stages or contiguous committed epoch states. A completed
 20-epoch fit needing export/publication performs no additional updates.
