@@ -7,6 +7,26 @@ population: `LUKA_NEW_BALANCED_HYDRA_POPULATION/v1`.
 
 ## Local evidence
 
+2026-11-16 runtime-recovery patch: the three first-stage Oscar allocations failed
+before Python initialized. User-supplied inspection confirms missing stdlib files
+in the registered scratch prefix and intact exact Conda/pip metadata. HOME usage
+was 69.42/100 GB; no jobs were in the pasted queue. These are observed remote
+diagnostics, not successful science-worker validation.
+
+The persistent-runtime recovery has **23 focused tests passed**, including
+broken-prefix metadata inventory, missing Conda-owned metadata, exact CUDA wheel
+pins, unapproved URLs, duplicate/version/hash rejection, unpacked size budget,
+installed-file corruption/path escapes, environment contamination, atomic
+publication, mocked install success/failure, partial-prefix retry rejection and
+terminal-job/saved-epoch guards. The actual CPU model forward/backward and
+fingerprint-mismatch probe passed. Real Bash/nohup tests exercise detached success
+after tail exit and failure-without-submission; package installation and scheduler
+calls are fixtures. Both shell scripts pass Bash syntax checks.
+The pre-change focused submission/shell baseline passed **6 tests**. Final combined
+recovery/submission regression: **29 passed, 39 deselected, 27.44 seconds**. Actual Linux
+package downloads/install, exact registered fingerprint verification and Oscar
+GPU acceptance remain to run on site; mocked installation is not site evidence.
+
 Final focused suite: **45 passed, zero skipped**, 157.67 seconds. Bash syntax
 checks passed for all four new shell entrypoints/helpers, and CLI help passed.
 After the final submission review, ten focused queue/locking/semantic-guard

@@ -26,9 +26,14 @@ git rev-parse HEAD
 Enter that pushed 40-character commit and current available HOME quota in whole
 GiB. At least 14 GiB is reserved for this campaign, in addition to space needed
 by unrelated running jobs. The raw 25 GiB dataset stays in scratch; no persistent
-particle cache is built. The existing runtime is checked for actual imports and
-fingerprinted. To use an already provisioned persistent runtime instead, export
+particle cache is built. The default runtime is now
+`/oscar/home/rlyang/hlt_classification/environments/new_balanced_oscar_v1`;
+it must already be provisioned and is checked for real imports and fingerprinted.
+To use a different already provisioned persistent runtime, export
 `LUKA_OSCAR_ENV=/absolute/path/to/environment` before this block.
+
+For the failed `f9dfc80b_r1` execution, use the specific runtime recovery below
+instead of the ordinary launch block.
 
 ```bash
 bash <<'BASH'
@@ -91,6 +96,71 @@ The results command reads saved files; it performs no new inference or test
 access. It includes every published stage and lists the unfinished ones; recovery
 remains null until both anchors exist. Full payload authentication can take longer
 than progress inspection.
+
+## Recover the 2026-11-16 Python startup failure
+
+Jobs 9167004/9167005/9167006 exited before the Python training worker because
+the registered scratch environment was missing `os.py`, `codecs.py` and
+`encodings/__init__.py`. The cause of their deletion is not established. Oscar
+[documents individual-file scratch purging](https://docs.ccv.brown.edu/oscar/managing-files/filesystem),
+so the recovery provisions a HOME runtime instead. The dataset is not implicated.
+
+This path is specific to the untouched-training execution
+`luka_new_balanced_oscar_f9dfc80b_r1`. It preserves its logs/spec/journals and
+registers a new execution after runtime verification. If it finds saved training,
+ambiguous submissions, or nonterminal old jobs, it stops before new submission.
+No full-data model inference or separate preflight job is used for runtime repair.
+
+Commit only this patch in local PowerShell (shared HANDOFF/source-map edits may
+be staged separately with `git add -p`):
+
+```powershell
+git add -- src/hlt_classification/operations/oscar_runtime_restore.py scripts/restore_luka_oscar_runtime.py scripts/recover_luka_new_balanced_oscar.sh scripts/queue_luka_new_balanced_oscar.sh tests/test_oscar_runtime_restore.py docs/plans/LUKA_NEW_BALANCED_OSCAR_PLAN.md docs/contracts/LUKA_NEW_BALANCED_OSCAR.md docs/LUKA_NEW_BALANCED_OSCAR_RUNBOOK.md docs/LUKA_NEW_BALANCED_OSCAR_VALIDATION.md
+git diff --cached --stat
+git commit -m "Restore Oscar runtime in HOME and recover startup-only ladder failure"
+git push origin main
+git rev-parse HEAD
+```
+
+Then paste this on Oscar. The reported 69.42 GB HOME usage leaves enough for the
+28 GiB conservative declaration below, provided unrelated writes have not consumed
+it in the meantime. If `checkquota` shows less than 28 GiB available, stop before
+launching. Downloads/Conda package cache go to fresh scratch directories. Installed
+runtime payload is capped at 12 GiB, with 14 GiB outputs plus 2 GiB margin reserved.
+
+```bash
+bash <<'BASH'
+set -euo pipefail
+BASE=/oscar/home/rlyang/hlt_classification
+REPO="${BASE}/source/HLT_Classification_new_balanced_oscar_f9dfc80b"
+checkquota
+read -r -p 'Pushed 40-character runtime recovery commit: ' COMMIT </dev/tty
+[[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]]
+unset PYTHONHOME PYTHONPATH LD_LIBRARY_PATH LD_PRELOAD
+module load miniforge3/25.3.0-3-a6hh
+CONDA_BASE="$(conda info --base)"
+test -x "$CONDA_BASE/bin/python"
+test -x "$CONDA_BASE/bin/conda"
+git -C "$REPO" fetch origin main
+git -C "$REPO" merge-base --is-ancestor "$COMMIT" origin/main
+PROJECT="${BASE}/source/HLT_Classification_new_balanced_oscar_${COMMIT:0:8}"
+if [[ ! -e "$PROJECT" && ! -L "$PROJECT" ]]; then
+    git -C "$REPO" worktree add --detach "$PROJECT" "$COMMIT"
+fi
+bash "$PROJECT/scripts/recover_luka_new_balanced_oscar.sh" detach \
+    "$COMMIT" 28 "$CONDA_BASE/bin/conda" \
+    --authorize AUTHORIZE_NEW_BALANCED_OSCAR_SIX_V1
+BASH
+```
+
+After `DETACHED runtime recovery PID`, disconnecting or Ctrl-C on the tail does
+not stop reconstruction, verification, dry review or six-job submission. The log
+is `checkpoints/luka_new_balanced_oscar_<commit8>_r1.runtime-launch/launcher.log`.
+Success means `RUNTIME_RESTORED`, six `SUBMITTED` lines, and
+`RECOVERY_LAUNCHER_EXIT=0`. DETACHED alone is not proof of completion. A failure
+preserves diagnostics under `environments/new_balanced_oscar_v1.restore`; inspect
+them rather than deleting or rerunning over an existing prefix. No automatic
+package upgrades, prefix deletion, cancellation or dataset changes are performed.
 
 ## Explicit continuation after a failed job
 

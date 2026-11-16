@@ -80,3 +80,31 @@ at the last contiguous committed epoch; full histories only finalize/export.
 No existing files are overwritten or automatically deleted. Worker failure
 preserves phase/failure evidence. Local tests do not substitute for real Oscar
 timing and memory measurements inside the queued allocations.
+
+## Persistent runtime restoration
+
+Operational artifacts in `operations/oscar_runtime_restore.py` are stdlib-only
+in the driver and carry canonical hashes: `LUKA_OSCAR_RUNTIME_RESTORE_PLAN/v1`
+binds the failed spec, recorded runtime, exact Conda URLs/MD5/builds and pip
+METADATA/RECORD hashes. `LUKA_OSCAR_RUNTIME_WHEELS/v1` binds every downloaded
+wheel SHA256 and unpacked size. `LUKA_OSCAR_RUNTIME_RESTORED/v1` is published
+only after exact package/build inventory, Conda file presence, pip RECORD file
+hashes, dependency checks, recorded runtime/Weaver fingerprint equality and a
+synthetic CPU forward/backward pass. GPU acceptance remains in science jobs.
+Failures retain `LUKA_OSCAR_RUNTIME_RESTORE_FAILURE/v1` and the partial prefix.
+
+Fresh Conda caches and `--copy` prevent linking the HOME prefix to scratch.
+Every pip version is pinned from saved metadata; no dependency solving or
+automatic upgrades. Torch uses the official recorded CUDA 11.8 wheel channel.
+Require 28 GiB declared HOME headroom: at most 12 GiB runtime, 14 GiB scientific
+outputs, 2 GiB margin. Download and extraction work stays in scratch. Remaining
+quota passed to scientific submission deducts measured runtime payload and
+the margin; this is a reservation from user-reported quota, not live quota
+measurement or protection from concurrent unrelated writes.
+
+The specific startup-only retry of `f9dfc80b_r1` writes
+`LUKA_OSCAR_STARTUP_RETRY/v1` under the new execution's runtime launch directory.
+It binds the original spec, authenticated submission IDs and terminal accounting,
+and rejects saved epochs/checkpoints/results. A new source/runtime path registers
+a new spec/root and undergoes the ordinary six-job dry review. No old spec,
+journal, prefix, model, or dataset is modified. Restoration alone submits no jobs.

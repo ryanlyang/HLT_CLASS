@@ -66,6 +66,14 @@ include every teacher. No historical model substitutes and no Hydra baseline
 prerequisite. Persistent source/results in HOME, raw data in scratch, particle
 views only in RAM. Reserve 14 GiB for new outputs and inspect current free quota.
 Use an explicitly supplied healthy runtime, fingerprint it and reject drift.
+New launches default to a persistent HOME runtime, not the scratch repair prefix.
+The 2026-11-16 startup failures had missing Python standard-library files in that
+scratch prefix. Runtime restoration may rebuild the exact recorded versions and
+Conda builds in HOME, with downloads in scratch. It must match the original
+runtime fingerprint before use. A changed environment path requires a fresh
+execution spec; never rewrite the failed spec. The startup-only retry requires
+all old jobs terminal and no saved training states. Science and population are
+unchanged; there is no additional queued preflight.
 
 Integrated acceptance inside each allocation performs installed-Weaver parity,
 a two-epoch objective/reload miniature, main-classifier gradient checks, longest

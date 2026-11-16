@@ -10,7 +10,8 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DATASET=/oscar/scratch/rlyang/datasets/luka_qcdrun2com_higgs2p_sb_v1
 PROJECT="${BASE}/source/HLT_Classification_new_balanced_oscar_${COMMIT:0:8}"
 ROOT="${BASE}/checkpoints/luka_new_balanced_oscar_${COMMIT:0:8}_r1"
-ENV_DIR="${LUKA_OSCAR_ENV:-/oscar/scratch/rlyang/hlt_classification/runtime_repair_v1/atlas_kd_oscar}"
+ENV_DIR="${LUKA_OSCAR_ENV:-${BASE}/environments/new_balanced_oscar_v1}"
+test -x "$ENV_DIR/bin/python" || { echo 'STOP: provision the persistent HOME runtime first (restore_luka_oscar_runtime.py).'; exit 1; }
 test -f "$DATASET/transfer_complete.json"
 git -C "$REPO" fetch origin main
 git -C "$REPO" merge-base --is-ancestor "$COMMIT" origin/main
