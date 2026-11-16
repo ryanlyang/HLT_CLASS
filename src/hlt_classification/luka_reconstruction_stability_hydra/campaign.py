@@ -14,12 +14,13 @@ from hlt_classification.luka_next_supervision_hydra import campaign as original_
 from hlt_classification.luka_u100_pair_hydra.inputs import Bundle
 from .contracts import DONOR, BENCHMARK, FITS, LANES, artifact, validate, recipe, cell, QUALIFICATION_PROTOCOL
 
-MODULES = ('__init__', 'contracts', 'campaign', 'kernel', 'training', 'resources', 'worker', 'submission', 'reporting', 'identity', 'optimization', 'decoder', 'transport', 'readouts', 'calibration', 'storage')
+MODULES = ('__init__', 'contracts', 'campaign', 'kernel', 'training', 'resources', 'worker', 'submission', 'reporting', 'identity', 'optimization', 'decoder', 'transport', 'readouts', 'calibration', 'storage', 'transport_v2', 'recovery', 'repeat_audit')
 REQUIRED = tuple(f'src/hlt_classification/luka_reconstruction_stability_hydra/{n}.py' for n in MODULES) + (
     'scripts/luka_reconstruction_stability_hydra.py', 'scripts/queue_luka_reconstruction_stability_hydra.sh',
     'sbatch/run_luka_reconstruction_stability_hydra.sh', 'tests/test_luka_reconstruction_stability_hydra.py',
     'docs/plans/LUKA_RECONSTRUCTION_STABILITY_IDEAS.md', 'docs/contracts/LUKA_RECONSTRUCTION_STABILITY_HYDRA.md',
-    'docs/LUKA_RECONSTRUCTION_STABILITY_HYDRA_RUNBOOK.md', 'docs/LUKA_RECONSTRUCTION_STABILITY_HYDRA_VALIDATION.md')
+    'docs/LUKA_RECONSTRUCTION_STABILITY_HYDRA_RUNBOOK.md', 'docs/LUKA_RECONSTRUCTION_STABILITY_HYDRA_VALIDATION.md',
+    'tests/test_luka_stability_soft_recovery.py','docs/LUKA_STABILITY_SOFT_RECOVERY.md')
 
 
 def hardware(lane):
@@ -110,6 +111,9 @@ def create(root,benchmark_spec,project,commit,quota_gib,*,lanes=LANES):
 
 
 def check(spec, *, full=False, check_storage=True):
+    if spec.get('contract')=='LUKA_RECONSTRUCTION_STABILITY_RECOVERY_SPEC/v1':
+        from .recovery import check
+        return check(spec,full=full,check_storage=check_storage)
     validate(spec,'SPEC')
     for ref in (spec['original_spec'],spec['benchmark_spec'],*spec['benchmark_outputs']):validate_file_ref(ref)
     old=load_json(spec['original_spec']['path']);b=load_json(spec['benchmark_spec']['path'])

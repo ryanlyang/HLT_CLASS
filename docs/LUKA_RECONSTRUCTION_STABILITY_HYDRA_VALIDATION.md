@@ -1,5 +1,41 @@
 # Reconstruction stability validation
 
+## 2026-11-16 numerical recovery validation
+
+The [separate SOFT recovery](LUKA_STABILITY_SOFT_RECOVERY.md) was tested locally:
+
+- Baseline focused solver/identity tests:5 passed.
+- Combined stability and new recovery suite:58 passed,1 skipped.
+- Final focused rerun after the recovery authorization/resource-gate tests:
+  54 passed,1 skipped,6 deselected (overlaps the preceding suite).
+- Difficult full/null298-slot problems that fail the original500-iteration
+  solver pass unchanged1e-4 tolerances with numerical-v2 refinement; existing
+  converged cases keep the exact original plan. Finite differences and CUDA
+  envelope gradients are checked.
+- Real installed-Weaver single-CUDA recovery miniature trains, exports all
+  four native readouts and authenticates/reloads them. Original suite also
+  covers all14 paths, four-process Gloo numerical/worker checks and provenance.
+- Six-job simulated recovery DAG checks setup dependency, failed-setup stop,
+  recovery-specific authorization and duplicate-release idempotence. Missing
+  evolved probe or timing estimates below its measurements reject release.
+- All19 runtime modules import against exact donor58d0c0ed. CLI help,
+ 21 Python AST/whitespace checks, Bash wrappers/runbook blocks and focused
+  Markdown links pass.
+
+The skipped check requires four CUDA GPUs/NCCL, unavailable locally. No new
+Hydra/Tigris validation or scientific fits have been run by this repair. The
+new actual-data four-GTX1080Ti setup, including the discarded four-pass seed8
+probe, is mandatory before automatic release. Historical failures did not
+save their exact cost matrices; adversarial local tests are not claimed as
+exact replay of those failed numerical inputs. Any new bound exhaustion saves
+the finite cost/masses/temperature and update context for direct replay.
+
+The repeat-report audit keeps native-hash mismatches explicit and suppresses
+invalid paired deltas; it does not establish why those four seed4 initial
+states differed. Current C128 EMA metrics include U100-w5, not CE-only.
+
+## Original implementation validation
+
 Local validation completed2026-11-15. The implementation is ready to commit,
 push and queue its measured Hydra setup. No remote jobs were submitted by
 this implementation step. Real four-GTX1080Ti qualification remains mandatory

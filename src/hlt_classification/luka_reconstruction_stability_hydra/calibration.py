@@ -35,6 +35,13 @@ def numerical_check():
 
 def prepare(spec,train,targets,ctx):
     if train.role!='train' or len(train)!=spec['counts']['train']:raise PermissionError('Temperature calibration requires full TRAIN')
+    if 'recovery_parent' in spec:
+        from .recovery import calibration
+        value=calibration(spec)
+        if [bytes(train.identities[i]).hex() for i in value['indices']]!=value['identities']:
+            raise ValueError('Recovered calibration TRAIN identities differ')
+        ctx.main(lambda:write_immutable_json(Path(spec['root'])/'setup_pascal/soft_calibration.json',value))
+        return value
     ix=fixed_indices(train,SOFT_PROTOCOL['calibration_rows'],'stability-soft-calibration-v1')
     if len(ix)!=512:raise ValueError('Need 512 TRAIN calibration identities')
     def run():
@@ -68,6 +75,12 @@ def prepare(spec,train,targets,ctx):
 
 
 def load(spec):
+    if 'recovery_parent' in spec:
+        from .recovery import calibration
+        value=calibration(spec)
+        if load_json(Path(spec['root'])/'setup_pascal/soft_calibration.json')!=value:
+            raise ValueError('Recovered calibration differs')
+        return value
     value=load_json(Path(spec['root'])/'setup_pascal/soft_calibration.json');validate(value,'SOFT_CALIBRATION',dict(spec=spec['content_hash']))
     scales=value['cost_scales'];seed=SOFT_PROTOCOL['initialization_seed']
     if (value['protocol']!=SOFT_PROTOCOL or value['role']!='train' or value['domain']!='stability-soft-calibration-v1'

@@ -14,7 +14,7 @@ from hlt_classification.luka_next_supervision_hydra.inputs import SubsetCandidat
 from hlt_classification.luka_u100_contrastive.resources import Subset
 from hlt_classification.luka_u100_multiview.views import lengths
 from hlt_classification.luka_subclass_ddp_hydra import distributed as d
-from .contracts import artifact,validate,cell,tasks,QUALIFICATION_PROTOCOL,QUALIFICATION_TASKS
+from .contracts import artifact,validate,cell,tasks,QUALIFICATION_PROTOCOL,QUALIFICATION_TASKS,qualification_tasks
 from . import kernel as k,training,campaign,readouts,calibration
 from .contracts import RECIPES,READOUTS
 
@@ -79,7 +79,7 @@ def qualification(spec,train,bank,targets,ctx,lane):
     import io
     root=setup_root(spec,lane);checks={};digests={}
     if lane!='pascal':raise ValueError('Only Pascal qualification is registered')
-    for task in QUALIFICATION_TASKS:
+    for task in qualification_tasks(spec):
         serial_model,serial_opt=k.build(spec,task,0,1,ctx.device,parity=True) if ctx.rank==0 else (None,None)
         model,optimizer=k.build(spec,task,ctx.rank,ctx.world,ctx.device,parity=True)
         for i,pos in enumerate(POSITIONS):
@@ -113,13 +113,13 @@ def qualification(spec,train,bank,targets,ctx,lane):
 def check_qualification(spec,lane,value):
     import re
     validate(value,'QUALIFICATION',dict(spec=spec['content_hash']))
-    names={f'{t}_{i:02}' for t in QUALIFICATION_TASKS for i in range(len(POSITIONS))}
+    names={f'{t}_{i:02}' for t in qualification_tasks(spec) for i in range(len(POSITIONS))}
     if (lane!='pascal' or value['lane']!=lane or value['world_size']!=4
         or set(value['checks'])!=names or set(value['reference_digests'])!=names or value['tolerances']!=TOLERANCES
         or value['dropout_disabled_for_parity'] is not True or value['positions']!=list(POSITIONS)
         or value['protocol']!=QUALIFICATION_PROTOCOL):raise ValueError('Qualification coverage differs')
     for row in value['checks'].values():check_comparison(row,gate=True)
-    for task in QUALIFICATION_TASKS:
+    for task in qualification_tasks(spec):
         for i,pos in enumerate(POSITIONS):
             name=f'{task}_{i:02}';digest=value['reference_digests'][name]
             if not re.fullmatch('[0-9a-f]{64}',digest):raise ValueError('Invalid numerical reference digest')
@@ -184,10 +184,15 @@ def measure(spec,old,train,val,bank,targets,ctx,devices,load_seconds,lane):
     root=setup_root(spec,lane);membership=readouts.save_membership(spec,train,ctx)
     temperature=calibration.prepare(spec,train,targets,ctx)
     qualification(spec,train,bank,targets,ctx,lane);replay(spec,old,val,ctx,lane)
+    evolved=None
+    if 'recovery_parent' in spec:
+        from .recovery import evolved_probe,validate_probe
+        evolved=evolved_probe(spec,train,bank,targets,ctx);validate_probe(spec,evolved)
+        check_memory(spec,evolved['memory'],devices,lane)
     profiles={};minis={};order=np.random.default_rng(20261115).permutation(len(train))
-    for task in tasks(lane):
+    for task in tasks(lane,spec):
         mini=miniature(root/('mini_'+task),spec,task,train,val,bank,targets,ctx);minis[task]=mini
-        if task not in QUALIFICATION_TASKS:continue
+        if task not in qualification_tasks(spec):continue
         d.release_memory(ctx);torch.cuda.reset_peak_memory_stats(ctx.device)
         k.configure(ctx.world,campaign.hardware(lane)['cpus']);m,o=k.build(spec,task,ctx.rank,ctx.world,ctx.device)
         effective=128*cell(task)['accumulation']
@@ -201,6 +206,8 @@ def measure(spec,old,train,val,bank,targets,ctx,devices,load_seconds,lane):
         for position in positions:
             step(order[:effective],position);step(order[effective:2*effective],position)
             samples=[d.timed(lambda i=i:step(order[i*effective:(i+1)*effective],position),ctx)[0] for i in range(2,8)]
+            if evolved is not None and np.mean(evolved['phase_samples'][str(position)])>np.mean(samples):
+                samples=evolved['phase_samples'][str(position)]
             phases[str(position)]=samples
         probe_seconds,_=d.timed(lambda:step(order[:effective],4.5,True),ctx)
         averages=readouts.Averages();averages.update(m,3.,effective)
@@ -216,9 +223,9 @@ def measure(spec,old,train,val,bank,targets,ctx,devices,load_seconds,lane):
         del m,o,averages;d.release_memory(ctx)
         ctx.main(lambda:write_immutable_json(root/f'resource_{task}.json',artifact('RESOURCE_PARTIAL',parents=dict(spec=spec['content_hash']),profile=profiles[cell(task)['recipe']])))
     from .identity import validate_pairs
-    ctx.main(lambda:validate_pairs(spec,{t:load_json(root/('mini_'+t)/'initialization.json') for t in tasks(lane)},complete=True))
+    ctx.main(lambda:validate_pairs(spec,{t:load_json(root/('mini_'+t)/'initialization.json') for t in tasks(lane,spec)},complete=True))
     used=ctx.main(lambda:sum(p.stat().st_size for p in root.rglob('*') if p.is_file()))
-    projected=ctx.main(lambda:sum(measured_fit_bytes(root/('mini_'+t),spec) for t in tasks(lane)))
+    projected=ctx.main(lambda:sum(measured_fit_bytes(root/('mini_'+t),spec) for t in tasks(lane,spec)))
     value=artifact('RESOURCES',parents=dict(spec=spec['content_hash'],bn_membership=membership['content_hash'],soft_calibration=temperature['content_hash']),
         lane=lane,profiles=profiles,miniatures=minis,devices=devices,environment=installed_environment(),status='complete',
         storage=dict(setup_bytes=used,scientific_bytes=projected,required_bytes=math.ceil(1.25*(used+projected))+2**30))
@@ -238,13 +245,20 @@ def measured_fit_bytes(folder,spec):
 def accept(spec,value,lane):
     validate(value,'RESOURCES')
     if (value['parents'].get('spec')!=spec['content_hash'] or set(value['parents'])!={'spec','bn_membership','soft_calibration'}
-        or value['status']!='complete' or value['lane']!=lane or set(value['profiles'])!=set(RECIPES)
-        or set(value['miniatures'])!=set(tasks(lane)) or value['environment']!=spec['environment']):raise ValueError('Incomplete hardware setup')
+        or value['status']!='complete' or value['lane']!=lane or set(value['profiles'])!={cell(t)['recipe'] for t in tasks(lane,spec)}
+        or set(value['miniatures'])!=set(tasks(lane,spec)) or value['environment']!=spec['environment']):raise ValueError('Incomplete hardware setup')
     check_devices(value['devices'],lane);minutes={}
+    if 'recovery_parent' in spec:
+        from .recovery import validate_probe
+        evolved=load_json(setup_root(spec,lane)/'evolved_soft_probe.json');validate_probe(spec,evolved)
+        check_memory(spec,evolved['memory'],value['devices'],lane)
+        for profile in value['profiles'].values():
+            if any(np.mean(profile['phase_samples'][p])<np.mean(samples) for p,samples in evolved['phase_samples'].items()):
+                raise ValueError('Resource estimate omits evolved solver cost')
     storage=value['storage']
     if (storage['required_bytes']!=math.ceil(1.25*(storage['setup_bytes']+storage['scientific_bytes']))+2**30
         or min(storage.values())<=0 or storage['required_bytes']>spec['output_budget_bytes']):raise OSError('Measured 42-fit storage exceeds registered allowance')
-    for task in tasks(lane):
+    for task in tasks(lane,spec):
         p=value['profiles'][cell(task)['recipe']];mini=value['miniatures'][task];effective=128*cell(task)['accumulation']
         positions={'4.5','8.99','20.0'} if cell(task)['soft_assignment'] else {'4.5','20.0'}
         if (not all(p[k] is True for k in ('full_hlt_support','full_offline_support','partial11'))

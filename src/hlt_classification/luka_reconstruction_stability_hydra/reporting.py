@@ -94,21 +94,35 @@ def results(spec,readout='RAW'):
         elif any(not np.array_equal(reference[k],arrays[k]) for k in ('identities','labels')):raise ValueError('Different evaluation populations')
         reports[task]=report;initial[task]=load_json(folder/'fit/initialization.json')
     identity.validate_pairs(spec,initial)
+    reused=set();pairing={}
+    if 'recovery_parent' in spec:
+        from .recovery import controls
+        from .repeat_audit import differences
+        controls_report,controls_initial,populations=controls(spec)
+        for task,arrays in populations.items():
+            if reference is not None and any(not np.array_equal(reference[k],arrays[k]) for k in ('identities','labels')):
+                raise ValueError('Recovered/control validation populations differ')
+        for task,value in initial.items():
+            match=control(task)
+            pairing[task]=differences(controls_initial[match],value) if match in controls_initial else {'control':'missing'}
+        reports.update(controls_report);reused=set(controls_report)
     def auc(task,name):
         return None if task not in reports else reports[task]['selected_readouts'][name]['validation']['macro_ovr_auc']
     rows=[]
     for task,report in reports.items():
         for name in READOUTS:
             selected=report['selected_readouts'][name];value=auc(task,name);match=auc(control(task),name)
+            if pairing.get(task):match=None
             r24=auc(f'R24_s{cell(task)["seed_index"]}',name)
             rows.append(dict(task=task,readout=name,epoch=selected['epoch'],auc=value,
                 recovery=recovery_percent(value,spec['recovery_anchors']),control=control(task),
                 delta=None if match is None else value-match,delta_r24=None if r24 is None else value-r24,
                 delta_same_fit_raw_bn=value-auc(task,'RAW_BN'),late=stability(for_readout(report['history'],name),spec['recovery_anchors']),
-                report=report['content_hash']))
+                report=report['content_hash'],reused_control=task in reused,pairing_differences=pairing.get(task,{})))
     summary=summarize(rows)
-    print('42 fits: 4 GTX1080Ti FP32, CE+U100-w5, three fresh paired seeds. RAW is primary.')
+    print(f'{len(spec["tasks"])} fits: 4 GTX1080Ti FP32, CE+U100-w5. RAW is primary.')
     print('Readouts share each training trajectory. Exploratory validation; no independent test.')
+    if reused:print('C128 controls are authenticated reused parent fits; SOFT rows are numerical-v2 replacements.')
     for name in requested:
         print('\n'+name+' selected results; deltas use the same readout in matched controls.')
         print(f'{"task":12} {"ep":>3} {"AUC":>12} {"rec%":>7} {"delta ctrl":>12} {"delta R24":>12} {"late mean%":>11} {">=52":>7}')
@@ -134,7 +148,7 @@ def progress(spec,readout='RAW'):
         for task,history in epochs.items():
             rows=for_readout(history,name)
             print('\n'+task+' '+name+' '+str(status.get(task,['NOT_SUBMITTED_OR_UNCONFIRMED',''])))
-            match=control(task);control_best=best[name][match];paired={r['epoch']:r for r in for_readout(epochs[match],name)}
+            match=control(task);control_best=best[name].get(match);paired={r['epoch']:r for r in for_readout(epochs.get(match,[]),name)}
             for row in rows:
                 value=row['validation']['macro_ovr_auc'];delta=None if control_best is None else value-control_best['validation']['macro_ovr_auc']
                 same=None if row['epoch'] not in paired else value-paired[row['epoch']]['validation']['macro_ovr_auc']

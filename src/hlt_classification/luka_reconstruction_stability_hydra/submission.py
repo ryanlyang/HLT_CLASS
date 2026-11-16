@@ -12,14 +12,19 @@ from .contracts import FITS,LANES,AUTHORIZATION,artifact,tasks,lane
 from . import campaign
 
 
+def authorization(spec):
+    return 'AUTHORIZE_STABILITY_SOFT_RECOVERY_3_V1' if 'recovery_parent' in spec else AUTHORIZATION
+
+
 def command(spec,task,minutes,*,cpu=False,dependencies=(),after='afterok'):
     if lane(task) not in spec['enabled_lanes']:raise PermissionError('Task is outside the registered lanes')
     project=spec['project_dir']; root=Path(spec['root']); hw=campaign.hardware(lane(task)); site=spec['cpu_site'] if cpu else hw['execution_site']
+    prefix='lukarsf' if 'recovery_parent' in spec else 'lukars'
     cmd=['sbatch','--parsable','--no-requeue','--kill-on-invalid-dep=yes','--nodes=1','--ntasks=1','--export=NONE',
         '--partition='+site['partition'],'--account='+site['account'],'--qos='+site['qos'],
         '--cpus-per-task='+str(site['cpus'] if cpu else hw['cpus']),
         '--mem='+str(site['memory_mb'] if cpu else hw['memory_mb'])+'M','--time='+_walltime(minutes),
-        '--job-name=lukars_'+task,'--comment=lukars:'+spec['content_hash']+':'+task,
+        '--job-name='+prefix+'_'+task,'--comment='+prefix+':'+spec['content_hash']+':'+task,
         '--chdir='+project,'--output='+str(root/(task+'-%j.out'))]
     if not cpu: cmd.append('--gres='+site['gres'])
     if dependencies: cmd.append('--dependency='+after+':'+':'.join('${JOB_'+t+'}' for t in dependencies))
@@ -37,7 +42,7 @@ def plan(spec,stage,acceptance=None):
         upper=[r for hardware in spec['enabled_lanes'] for r in plan(spec,'envelope_'+hardware)['commands']]
         scientific=spec['tasks']
     elif stage in tuple(p+l for p in ('science_','envelope_') for l in LANES):
-        hardware=stage.split('_',1)[1];scientific=list(tasks(hardware));upper=None
+        hardware=stage.split('_',1)[1];scientific=list(tasks(hardware,spec));upper=None
         if stage.startswith('envelope_'):
             acceptance=dict(minutes={t:spec['fit_max_minutes'] for t in scientific},content_hash='upper_bound')
         if acceptance is None or set(acceptance['minutes'])!=set(scientific):raise ValueError('Complete lane acceptance required')
@@ -46,8 +51,8 @@ def plan(spec,stage,acceptance=None):
         rows=[command(spec,t,acceptance['minutes'][t]) for t in scientific]
         rows.append(command(spec,'report_'+hardware,spec['report_minutes'],cpu=True,dependencies=scientific,after='afterany'))
     else:raise ValueError('Unknown submission stage')
-    return artifact('PLAN',parents=parents,stage=stage,commands=rows,authorization=AUTHORIZATION,
-        science_tasks=scientific,science_max_minutes=spec['fit_max_minutes'],registration=campaign.registration(spec['enabled_lanes']),upper_bound_commands=upper)
+    return artifact('PLAN',parents=parents,stage=stage,commands=rows,authorization=authorization(spec),
+        science_tasks=scientific,science_max_minutes=spec['fit_max_minutes'],registration={k:spec[k] for k in campaign.registration(spec['enabled_lanes'])},upper_bound_commands=upper)
 
 
 def accepted_jobs(spec,stage):
@@ -80,14 +85,14 @@ def submit_stage(spec,value,*,execute):
             for hardware in spec['enabled_lanes']:scheduler_review(plan(spec,'envelope_'+hardware))
     if execute:
         (folder/'live_claim').mkdir(exist_ok=False)
-        write_immutable_json(folder/'live_claim/intent.json',artifact('SUBMIT_CLAIM',parents=dict(plan=value['content_hash']),authorization=AUTHORIZATION))
+        write_immutable_json(folder/'live_claim/intent.json',artifact('SUBMIT_CLAIM',parents=dict(plan=value['content_hash']),authorization=value['authorization']))
     return submit_exact_dag(identity=value['content_hash'],plan=value,output=live if execute else dry,
         canonical_dry_run=dry,execute=execute,environment=clean_environment())
 
 
 def launch(spec,*,execute=False,plan_hash=None,authorization=None):
     campaign.check(spec); value=plan(spec,'bootstrap')
-    if execute and (plan_hash!=value['content_hash'] or authorization!=AUTHORIZATION): raise PermissionError('Authorize the exact selected lanes and their bounded science commands')
+    if execute and (plan_hash!=value['content_hash'] or authorization!=value['authorization']): raise PermissionError('Authorize the exact selected lanes and their bounded science commands')
     result=submit_stage(spec,value,execute=execute)
     if execute: print(f'GPU setup and durable CPU release submitted for {spec["enabled_lanes"]}. Safe to log off after all {2*len(spec["enabled_lanes"])} bootstrap job IDs are recorded.',flush=True)
     return result
@@ -103,7 +108,7 @@ def accounting(job):
 def finish(spec,job,hardware):
     from .worker import completed_setup
     campaign.check(spec); bootstrap=plan(spec,'bootstrap'); folder=Path(spec['root'])/'submission_bootstrap'
-    expected=artifact('SUBMIT_CLAIM',parents=dict(plan=bootstrap['content_hash']),authorization=AUTHORIZATION)
+    expected=artifact('SUBMIT_CLAIM',parents=dict(plan=bootstrap['content_hash']),authorization=authorization(spec))
     if load_json(folder/'live_claim/intent.json')!=expected: raise PermissionError('Original authorization differs')
     for _ in range(12):
         jobs=accepted_jobs(spec,'bootstrap')
@@ -123,7 +128,7 @@ def finish(spec,job,hardware):
         if (science/'live_claim').exists() or (science/'submission_ledger_journal').exists(): raise RuntimeError('Ambiguous partial science submission; preserve journals')
         submit_stage(spec,value,execute=False)
     result=submit_stage(spec,value,execute=True)
-    print(f'{hardware}: {len(tasks(hardware))} independent stability fits submitted; report waits afterany.',flush=True)
+    print(f'{hardware}: {len(tasks(hardware,spec))} independent stability fits submitted; report waits afterany.',flush=True)
     return result
 
 

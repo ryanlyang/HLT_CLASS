@@ -1,5 +1,12 @@
 # Reconstruction stability contracts v1
 
+The original execution retains these contracts. The separate
+[SOFT recovery addendum](../LUKA_STABILITY_SOFT_RECOVERY.md) defines
+`RECOVERY_SPEC/v1`, `RECOVERY_RECIPE/v1`, `EVOLVED_SOFT_PROBE/v1` and
+`REPEAT_FAILURE_AUDIT/v1` under the same namespace, plus solver protocol
+`soft_dual_newton/v2`. Replacement fits parent their distinct recovery spec;
+no original artifact is relabelled as a v2 result.
+
 Authority: [approved 42-fit design](../plans/LUKA_RECONSTRUCTION_STABILITY_IDEAS.md).
 New artifacts use `LUKA_RECONSTRUCTION_STABILITY_<KIND>/v1`, content hashes,
 explicit parents and inherited exploratory-development scope. Earlier

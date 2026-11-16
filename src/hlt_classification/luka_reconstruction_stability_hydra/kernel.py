@@ -49,6 +49,7 @@ def build(spec,task,rank,world,device,*,parity=False):
     if cell(task)['soft_assignment']:
         from .calibration import load
         opt.stability_state['soft_scale']=load(spec)['scale']
+        opt.stability_state['robust_soft']=spec.get('soft_solver') is not None
     torch.manual_seed(seeds(spec,task)['dropout_base']+rank)
     return model,opt
 
@@ -141,7 +142,8 @@ def update_group(model,opt,batches,task,rank,world,device,position,*,probe=False
             previous=[None if p.grad is None else p.grad.clone() for p in model.aux.parameters()] if special else None
             with optim.isolated_rng(device,rng,decoder_seed):
                 aux,parts,gh,gt,_=decoder.backward(model.aux,model.jet,model.particle_tokens,
-                    model.particle_mask,targets,fraction if special else w*fraction,temperature=temperature)
+                    model.particle_mask,targets,fraction if special else w*fraction,temperature=temperature,
+                    robust=state.get('robust_soft',False))
             if special:
                 for p,old in zip(model.aux.parameters(),previous):
                     if p.grad is not None:p.grad.mul_(w)

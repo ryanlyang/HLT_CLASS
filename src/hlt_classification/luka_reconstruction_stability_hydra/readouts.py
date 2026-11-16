@@ -27,6 +27,9 @@ def membership(spec,train,*,technical=False):
 
 def save_membership(spec,train,ctx):
     value=membership(spec,train)
+    if 'recovery_parent' in spec:
+        from .recovery import check_membership
+        check_membership(spec,value)
     ctx.main(lambda:write_immutable_json(Path(spec['root'])/'setup_pascal/bn_membership.json',value))
     return value
 

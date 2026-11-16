@@ -78,6 +78,9 @@ def fit(folder,spec,task,train,val,bank,targets,ctx,*,technical=False,calibratio
     from .identity import initial_record
     initial=ctx.main(lambda:initial_record(spec,task,model,ctx.world))
     ctx.main(lambda:write_immutable_json(folder/'initialization.json',initial))
+    if 'recovery_parent' in spec:
+        from .recovery import check_initial
+        ctx.main(lambda:check_initial(spec,task,initial))
     averages=readouts.Averages();epochs=2 if technical else 30
     effective=128*cell(task)['accumulation'];steps=math.ceil(len(train)/effective)
     history=[];selected={};selected_states={};selected_probabilities={};sampler=seeds(spec,task)['sampler']
@@ -90,7 +93,17 @@ def fit(folder,spec,task,train,val,bank,targets,ctx,*,technical=False,calibratio
             ix=order[start:start+effective];update=(epoch-1)*steps+start//effective+1
             position=(4.5,20.)[epoch-1] if technical else epoch-1+(start+len(ix))/len(train)
             batches=[batch(train,bank,targets,ix[i:i+128],epoch,task) for i in range(0,len(ix),128)]
-            losses,details=k.update_group(model,optimizer,batches,task,ctx.rank,ctx.world,ctx.device,position,probe=start==0)
+            try:
+                losses,details=k.update_group(model,optimizer,batches,task,ctx.rank,ctx.world,ctx.device,position,probe=start==0)
+            except Exception as exc:
+                from .transport_v2 import ConvergenceError
+                if isinstance(exc,ConvergenceError):
+                    # Each failing rank publishes its own exact finite problem;
+                    # no collective is needed after a rank-local solver error.
+                    save_state(folder/f'transport_failure_rank{ctx.rank}.pt',dict(exc.problem,
+                        spec_hash=spec['content_hash'],task=task,epoch=epoch,update=update,position=position,
+                        rank=ctx.rank,indices=ix.tolist()))
+                raise
             averages.update(model,position,len(ix))
             if start==0:probe=ctx.all(details['diagnostics'])
             counters['optimizer_updates']+=1

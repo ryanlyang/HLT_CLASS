@@ -1,5 +1,11 @@
 # R24 reconstruction stability: 42-run Hydra campaign design
 
+2026-11-16 operational addendum: the separate
+[SOFT recovery and report audit](../LUKA_STABILITY_SOFT_RECOVERY.md) governs
+numerical-v2 replacements for SOFT_s7/s8/s9 only. The original42 fits retain
+the v1 design below. CE-only with EMA is a subsequent comparison, not a new
+interpretation of the C128 controls.
+
 Campaign specification, 2026-11-15. The user approved and requested implementation
 of the seven candidates and42-fit allocation:14 training configurations at
 three seeds each, on4 GTX1080 Ti GPUs per fit. The separate stability package

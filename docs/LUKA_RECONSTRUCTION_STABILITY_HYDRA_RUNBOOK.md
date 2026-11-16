@@ -1,5 +1,9 @@
 # Queue 42 reconstruction stability fits on Hydra
 
+For the three epoch4 SOFT failures in the3ccc35ae execution, use the separate
+[SOFT recovery runbook](LUKA_STABILITY_SOFT_RECOVERY.md). It submits only three
+replacement fits after a new measured setup, with automatic release.
+
 This campaign runs **14 configurations at fresh seed indices7,8,9:42 fits**.
 The five control configurations are C128,C_L50,C_L25,C256,C512. Reconstruction
 arms are R24,G30,R_L50,R_L25,PROJ,DEC2,R256,R512,SOFT. Every fit uses4 GTX1080 Ti,

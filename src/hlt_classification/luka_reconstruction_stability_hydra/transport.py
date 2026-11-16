@@ -7,6 +7,12 @@ from hlt_classification.luka_next_supervision_hydra import reconstruction_batche
 from .contracts import SOFT_PROTOCOL
 
 
+class ScalingConvergenceError(RuntimeError):
+    def __init__(self, residual, gap, potential):
+        super().__init__(f'Soft assignment did not converge: residual={residual:.6g}, gap={gap:.6g}; no hard fallback')
+        self.potential=potential.detach().clone()
+
+
 def temperature_at(scale,position):
     if not math.isfinite(scale) or scale<=0 or not 3.<position<9.:raise ValueError('Invalid soft interval/scale')
     return scale*.1*(.1**((position-3.)/6.))
@@ -54,10 +60,10 @@ def solve(cost,masses,temperature,*,iterations=None):
         if float(residual)<=SOFT_PROTOCOL['marginal_tolerance'] and float(gap)<=SOFT_PROTOCOL['gap_tolerance']:
             return p,dict(marginal_residual=float(residual),normalized_gap=float(gap),iterations=iteration,
                 primal=float(primal),dual=float(dual),entropy=float(entropy))
-    raise RuntimeError(f'Soft assignment did not converge: residual={float(residual):.6g}, gap={float(gap):.6g}; no hard fallback')
+    raise ScalingConvergenceError(float(residual),float(gap),v)
 
 
-def rows(scores,targets,temperature):
+def rows(scores,targets,temperature,*,robust=False):
     matrices,masses,counts=costs(scores,targets);k=scores['presence'].shape[1];losses=[];details=[]
     if not all(torch.isfinite(v).all() for v in scores.values()):raise ValueError('Nonfinite reconstruction prediction')
     for i,n in enumerate(counts):
@@ -66,7 +72,10 @@ def rows(scores,targets,temperature):
             losses.append(F.softplus(scores['presence'][i]).mean()+.1*count)
             details.append(dict(marginal_residual=0.,normalized_gap=0.,iterations=0.,entropy=0.))
             continue
-        plan,record=solve(matrices[i],masses[i],temperature)
+        solver=solve
+        if robust:
+            from .transport_v2 import solve as solver
+        plan,record=solver(matrices[i],masses[i],temperature)
         # The solver is detached, but this expression differentiates the original
         # cost tensor. The entropy scalar completes the regularized objective.
         value=(plan*matrices[i].double()).sum()+temperature*record['entropy']+.1*count

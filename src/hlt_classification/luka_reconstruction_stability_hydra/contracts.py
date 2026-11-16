@@ -41,9 +41,13 @@ def cell(task):
         decoder_extra_steps=2 if name=='DEC2' else 0,soft_assignment=name=='SOFT')
 
 
-def tasks(hardware):
+def tasks(hardware,spec=None):
     if hardware not in LANES: raise ValueError('Unknown hardware lane')
-    return FITS
+    return FITS if spec is None else tuple(spec['tasks'])
+
+
+def qualification_tasks(spec):
+    return tuple(t for t in tasks('pascal',spec) if cell(t)['seed_index']==7)
 
 
 def lane(task):

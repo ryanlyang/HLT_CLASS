@@ -78,8 +78,9 @@ def receipt(spec,task):
     names=[v['path'] for v in r['outputs']]
     if task.startswith('report_'):required={'results.json'}
     elif task.startswith('setup_'):
-        required={'acceptance.json','resource_diagnostic.json','qualification.json','replay.json','replay_predictions.npz','soft_calibration.json','bn_membership.json'}|{f'mini_{t}/receipt.json' for t in tasks(lane(task))}
+        required={'acceptance.json','resource_diagnostic.json','qualification.json','replay.json','replay_predictions.npz','soft_calibration.json','bn_membership.json'}|{f'mini_{t}/receipt.json' for t in tasks(lane(task),spec)}
     else:required={'startup/receipt.json','startup_memory.json'}|{'fit/'+n for n in (*training.OUTPUTS,'receipt.json')}
+    if task.startswith('setup_') and 'recovery_parent' in spec:required.add('evolved_soft_probe.json')
     if len(names)!=len(set(names)) or not required<=set(names):raise ValueError('Task output inventory incomplete')
     for ref in r['outputs']:validate_file_ref(ref,root=folder)
     return r
@@ -93,13 +94,13 @@ def completed_setup(spec,hardware):
     membership=load_json(root/'bn_membership.json');validate(membership,'BN_MEMBERSHIP',dict(spec=spec['content_hash']))
     diagnostic=load_json(root/'resource_diagnostic.json')
     if diagnostic['parents']!=dict(spec=spec['content_hash'],soft_calibration=calibration['content_hash'],bn_membership=membership['content_hash']):raise ValueError('Setup calibration parents differ')
-    for task in tasks(hardware):
+    for task in tasks(hardware,spec):
         r,_=training.validate_fit(root/('mini_'+task),spec,task,technical=True)
         if r['content_hash']!=diagnostic['miniatures'][task]['content_hash']:raise ValueError('Miniature lineage differs')
         if r['bn_membership']!=membership['content_hash']:raise ValueError('Miniature BN membership differs')
         if cell(task)['worker']=='stability' and r['world_size']!=campaign.hardware(hardware)['world_size']:raise ValueError('Miniature rank count differs')
     from .identity import validate_pairs
-    validate_pairs(spec,{t:load_json(root/('mini_'+t)/'initialization.json') for t in tasks(hardware)},complete=True)
+    validate_pairs(spec,{t:load_json(root/('mini_'+t)/'initialization.json') for t in tasks(hardware,spec)},complete=True)
     return resources.accepted(spec,hardware)
 
 

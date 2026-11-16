@@ -42,7 +42,8 @@ def validate_initial(spec,task,value,world):
 def validate_pairs(spec,records,*,complete=False):
     """Compare any available pair; missing runs never count as successful pairs."""
     from .contracts import FITS,SEED_INDICES
-    if not set(records)<=set(FITS) or (complete and set(records)!=set(FITS)):
+    expected=set(spec.get('tasks',FITS))
+    if not set(records)<=expected or (complete and set(records)!=expected):
         raise ValueError('Paired initialization coverage differs')
     for task,value in records.items():validate_initial(spec,task,value,4)
     for index in SEED_INDICES:
