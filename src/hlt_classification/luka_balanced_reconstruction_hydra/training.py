@@ -83,8 +83,6 @@ def fit(spec,task,caches,targets,bank,pt,ctx,folder,job,*,validation_pt):
         if ctx.device.type=='cuda':torch.cuda.set_rng_state(resume['rng'][ctx.rank]['cuda'],ctx.device)
     del state,resume
     for epoch in range(len(history)+1,c.EPOCHS+1):
-        from . import storage
-        ctx.main(lambda:storage.check(spec))
         order=sampler.draw(epoch,draws=c.COUNTS['train']);sums=None;ctx.barrier();ctx.sync();begun=time.monotonic()
         for start in range(0,len(order),c.BATCH):
             ix=order[start:start+c.BATCH];position=epoch-1+(start+len(ix))/len(order)

@@ -15,7 +15,7 @@ from hlt_classification.data.cache_contracts import load_json,load_npz_arrays,wr
 from hlt_classification.cms_proxy_ladder.contracts import file_ref,validate_file_ref
 from hlt_classification.luka_fullstat_multiview.execution import allocation_minutes
 from hlt_classification.luka_subclass_ddp_hydra.distributed import Context
-from . import contracts as c,campaign,population,inputs,artifacts,resources,training,kernel,banks,storage
+from . import contracts as c,campaign,population,inputs,artifacts,resources,training,kernel,banks
 
 
 def controller(args):
@@ -114,7 +114,6 @@ def run(spec,task):
             write_immutable_json(Path(spec['root'])/'tasks/qualify.json',receipt);return receipt
         if task!='qualify':task_receipt(spec,'qualify');resources.qualification(spec)
         if task in c.FITS and (artifacts.fit_root(spec,task)/'result.json').exists():raise FileExistsError('Fit already published')
-        storage.check(spec)
         node=scratch(job)
         try:
             loaded=population.load(spec['dataset'],Path(spec['root'])/'population')

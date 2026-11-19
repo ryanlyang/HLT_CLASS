@@ -81,13 +81,15 @@ def create(dataset,root,project,commit,environment,available_gib):
         environment_dir=str(environment),environment=env,backend=backend(),population=p,maximum=maximum,
         recipe=c.recipe(),tasks=c.tasks(),resources=c.RESOURCES,execution_site=c.SITE,
         foundation_producer=producer,transfer_manifest_sha256=c.parent.TRANSFER_HASH,
-        protected_campaign=preliminary['protected_campaign'],storage=quota,output_inventory=inventory,
+        protected_campaign=preliminary['protected_campaign'],storage=quota,storage_policy=storage.policy(),output_inventory=inventory,
         output_allowance_bytes=c.RESULT_BYTES,reserve_bytes=c.RESERVE_BYTES)
     write_immutable_json(root/'campaign_spec.json',spec);return spec
 
 
 def check(spec,*,live=True):
     c.validate(spec,'SPEC');c.validate(spec['population'],'POPULATION',dict(parent=c.parent.POPULATION_HASH))
+    if spec.get('storage_policy')!=storage.policy():
+        raise ValueError('Execution storage policy differs; register a fresh study with this source')
     if (spec['recipe']!=c.recipe() or spec['tasks']!=c.tasks() or spec['resources']!=c.RESOURCES
             or spec['execution_site']!=c.SITE or spec['population']['counts']!=c.COUNTS
             or spec['population']['content_hash']!=c.POPULATION_HASH
@@ -157,7 +159,7 @@ def site(rows):
 
 def submit(spec,tasks,*,execute,authorization=None,existing=None,resume=False):
     if execute and authorization!=c.AUTH:raise PermissionError('Exact eighteen-fit authorization required')
-    check(spec);storage.check(spec)
+    check(spec)
     from contextlib import nullcontext
     with submission_lock(spec['root']) if execute else nullcontext():
         prior=accepted_jobs(spec)

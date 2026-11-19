@@ -135,6 +135,23 @@ actual and declared current free space for both remaining reservations. Output
 size is estimated from actual initialized tensors and exact selected token/row
 inventory; fail before submission if this envelope is insufficient.
 
+Operator revision2026-11-19: HOME admission applies only at registration and
+explicit manual resume. Remove automatic HOME free-space/allowance rechecks
+from submissions (including automatic release), GPU-job startup and epoch
+boundaries. Record this as `STORAGE_POLICY/v1` in new execution specs. The
+operator accepts genuine filesystem write failures if disk space runs out.
+The nominal10GiB output allowance is an initial estimate, not a runtime cap.
+Node-local input capacity, CPU/GPU qualification, lineage and atomic artifact
+publication requirements remain. Existing execution specs are not rewritten;
+launch this revision from a fresh committed source/study root.
+
+The separate authorized pre-launch cleanup may retire only the inactive old
+`contrast_delta_54473f10/keys/keys.npz` derived TRAIN export. Verify both manifests,
+payload checksum/teacher lineage and current transitive job dependencies; retain
+the manifests and a retirement receipt. Old contrastive replay needs that bank
+restored or re-exported. This exception does not authorize changing raw datasets,
+existing model/prediction outputs, source checkouts or scheduler state.
+
 Checkpoint retention is current full restart state plus selected native states,
 not twenty full optimizer backups. Each epoch publishes immutable metrics and a
 full restart state, atomically commits it, then journals retirement of the old

@@ -190,6 +190,31 @@ def test_quota_respects_existing_tail_and_never_mutates_it(tmp_path,monkeypatch)
     assert measured['host_peak_bytes']==110+20*len({parent,991})
 
 
+def test_storage_admission_is_explicit_execution_policy_and_old_specs_fail_closed():
+    p=storage.policy();c.validate(p,'STORAGE_POLICY')
+    assert p['automatic_home_rechecks'] is False and p['runtime_output_limit'] is False
+    assert p['admission']=='registration_and_explicit_resume_only'
+    pop=c.artifact('POPULATION',parents=dict(parent=c.parent.POPULATION_HASH))
+    old=c.artifact('SPEC',population=pop)
+    with pytest.raises(ValueError,match='Execution storage policy differs'):campaign.check(old,live=False)
+
+
+def test_gpu_job_wrapper_does_not_recheck_home_space(tmp_path,monkeypatch):
+    from hlt_classification.luka_balanced_reconstruction_hydra import worker
+    spec=dict(root=str(tmp_path),project='/project',dataset='/data',content_hash='a'*64)
+    node=tmp_path/'node';node.mkdir()
+    monkeypatch.setattr(kernel,'configure',lambda *a:None);monkeypatch.setattr(campaign,'check',lambda *a:None)
+    monkeypatch.setattr(worker,'allocation',lambda *a:'123');monkeypatch.setattr(worker,'task_receipt',lambda *a:{})
+    monkeypatch.setattr(storage,'check',lambda *a,**kw:pytest.fail('No HOME recheck at GPU startup'))
+    monkeypatch.setattr(worker,'scratch',lambda job:node);monkeypatch.setattr(worker,'cleanup',lambda *a:None)
+    monkeypatch.setattr(population,'load',lambda *a:None);monkeypatch.setattr(inputs,'prepare_node',lambda *a,**kw:None)
+    def run(*a,**kw):
+        assert kw['env']['LUKABREC_INPUT_LAUNCHER_PID']==str(os.getpid())
+        write_immutable_json(tmp_path/'qualification.json',c.artifact('QUALIFICATION'))
+    monkeypatch.setattr(worker.subprocess,'run',run)
+    assert worker.run(spec,'qualify')['task']=='qualify'
+
+
 class ToyModule(nn.Module):
     def __init__(self):
         super().__init__();self.encoder=nn.Sequential(nn.Linear(17,128),nn.Dropout(.1));self.fc=nn.Sequential(nn.Linear(128,6))
@@ -218,7 +243,7 @@ def fit_fixture(root,monkeypatch):
     monkeypatch.setattr(c,'BN_ROWS',128);monkeypatch.setattr(c,'SEEDS',(10,))
     monkeypatch.setattr(c,'FITS',tuple(f'{a}_s10' for a in c.ARMS));monkeypatch.setitem(c.RESOURCES,'gpus',1)
     monkeypatch.setattr(model,'Student',ToyStudent);monkeypatch.setattr(model,'NativeParticleTransformer',ToyNative)
-    monkeypatch.setattr(storage,'check',lambda *a,**k:{})
+    monkeypatch.setattr(storage,'check',lambda *a,**k:pytest.fail('No automatic HOME checks during science'))
     monkeypatch.setattr(campaign,'check',lambda *a,**k:None)
     jobs=[dict(task=task,job=str(100+i)) for i,task in enumerate(c.FITS)]
     monkeypatch.setattr(campaign,'accepted_jobs',lambda *a,**k:jobs)
@@ -277,10 +302,10 @@ def test_epoch_resume_restores_optimizer_rng_and_selected_readouts(tmp_path,monk
     spec,tr,val,pt,targets,jobs=fit_fixture(tmp_path/'restart',monkeypatch)
     real=artifacts.commit_epoch
     def stop(spec,task,folder,row,state,parents,job):
-        if row['epoch']==2:raise RuntimeError('interrupted before commit')
+        if row['epoch']==2:raise OSError(28,'No space left on device')
         return real(spec,task,folder,row,state,parents,job)
     monkeypatch.setattr(artifacts,'commit_epoch',stop)
-    with pytest.raises(RuntimeError,match='before commit'):run_fit(spec,'M0HLT_s10',tr,val,pt,targets,'101')
+    with pytest.raises(RuntimeError,match='No space left'):run_fit(spec,'M0HLT_s10',tr,val,pt,targets,'101')
     assert len(list((artifacts.fit_root(spec,'M0HLT_s10')/'epochs').glob('*.json')))==1
     jobs.append(dict(task='M0HLT_s10',job='201'));monkeypatch.setattr(artifacts,'commit_epoch',real)
     actual=run_fit(spec,'M0HLT_s10',tr,val,pt,targets,'201')
@@ -356,7 +381,7 @@ def test_four_rank_weighted_gradients_optimizer_and_partial_batch(tmp_path):
 def test_submission_intents_duplicate_guard_dependencies_and_uncertain_ids(tmp_path,monkeypatch):
     spec=dict(root=str(tmp_path),project='/p',content_hash='a'*64)
     monkeypatch.setattr(campaign,'check',lambda *a,**kw:None)
-    monkeypatch.setattr(storage,'check',lambda *a,**kw:{})
+    monkeypatch.setattr(storage,'check',lambda *a,**kw:pytest.fail('No HOME recheck during automatic submission/release'))
     monkeypatch.setattr(campaign,'site',lambda *a:None)
     commands=[]
     def submit(args,**kw):

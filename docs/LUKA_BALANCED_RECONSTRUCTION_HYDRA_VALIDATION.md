@@ -45,6 +45,26 @@ staging and extra metadata margin. It is an inventory estimate, not a measured
 remote disk peak. Physical/declared free space,2GiB reserve and the unspent
 existing ladder14GiB reservation are checked before launch and throughout fits.
 
+Operator update2026-11-19: the paragraph above describes the original release.
+The revised source checks HOME admission at registration and explicit manual
+resume only. Its versioned execution policy removes submission/release, GPU-job
+startup and epoch checks. Genuine filesystem write errors propagate; the previous
+committed checkpoint remains available. The scientific recipe and donor pins
+are unchanged. See the updated runbook for a fresh-commit launch after the
+original01324411 attempt stopped at admission before registration/submission.
+
+Revision checks: **51 passed,1 skipped in75.99s** across the reconstruction and
+new retirement suites (41 reconstruction tests plus10 cleanup tests). The skip
+requires four real CUDA/NCCL GPUs. Tests make the HOME checker raise if invoked
+during scientific training, GPU startup or automatic submission, and verify those
+paths still complete. Simulated`ENOSPC` at epoch2 propagates while epoch1 remains
+committed; resuming reproduces uninterrupted selected native tensors exactly.
+Cleanup tests verify one-file-only deletion, unchanged retained model/prediction/
+manifest bytes, content-hash/checksum/lineage rejection, alias-normalized transitive
+dependencies, unknown jobs, newly arriving consumers and exclusive retirement
+records. No remote deletion was performed by these local tests. Scientific
+Weaver/CUDA and full-support checks remain as described below.
+
 ## Local automated checks
 
 Before implementation, the focused existing reconstruction-stability,

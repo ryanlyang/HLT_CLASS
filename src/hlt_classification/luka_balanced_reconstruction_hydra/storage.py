@@ -1,10 +1,17 @@
-"""A bounded new campaign and an explicit remaining reservation for the live tail."""
+"""Initial HOME admission only; later writes may fail naturally at the filesystem."""
 from pathlib import Path
 import math
 import shutil
 import torch
 from hlt_classification.data.cache_contracts import load_json
 from . import contracts as c,model
+
+
+def policy():
+    return c.artifact('STORAGE_POLICY',admission='registration_and_explicit_resume_only',
+        automatic_home_rechecks=False,runtime_output_limit=False,
+        disk_exhaustion='propagate_filesystem_write_error',initial_output_allowance_bytes=c.RESULT_BYTES,
+        initial_reserve_bytes=c.RESERVE_BYTES,protected_initial_allowance_bytes=c.OTHER_RESERVATION)
 
 
 def usage(root):

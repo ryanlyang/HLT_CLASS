@@ -52,7 +52,12 @@ The verified dataset already exists on Hydra. No new upload is needed.
 The shared reservation can require26GiB currently free when none of the
 protected ladder's14GiB has been spent; committed ladder outputs reduce that
 unspent reservation. Declare current whole freeGiB, not the earlier27GiB value.
-The launcher also checks actual filesystem space before submitting.
+The initial registration checks actual filesystem space. Operator-authorized
+revised executions record `STORAGE_POLICY/v1`: no automatic HOME rechecks during
+release, later submission, GPU-job startup or training epochs, and no runtime
+output cap. A genuinely full filesystem can still cause a write failure. An
+explicit manual resume performs its own initial admission check. Node-local
+RAM scratch capacity and CPU/GPU resource qualification remain required.
 
 ```bash
 bash <<'BASH'
@@ -139,3 +144,70 @@ Refresh FREE_GIB from current storage first. An incomplete registration without
 `campaign_spec.json` is not an epoch resume: inspect its log and preserve it.
 Source/runtime drift, invalid data, ambiguous submissions and insufficient space
 fail closed. Poor physics metrics are retained scientific results.
+
+## One-file cleanup before retrying the blocked01324411 launch
+
+The supplied inventory identifies169,968,554 bytes of derived old TRAIN keys at
+`contrast_delta_54473f10/keys/keys.npz`. The revised helper authenticates that
+exact payload against both its key manifest and transfer manifest, checks its
+TRAIN-only teacher lineage and traces all current jobs through registered specs
+and local metadata parents. Any live dependency, unresolved job, checksum error
+or redirected path prevents deletion. It audits again immediately before unlink.
+
+Only that one file can be deleted. Retain both manifests, all completed historical
+results, raw datasets, source, environments, model checkpoints and predictions.
+Old contrastive training/full replay will require restoring or re-exporting this
+bank; the retained manifests are not rewritten to pretend the payload exists.
+Intent/completion receipts are under
+`retired_campaigns/contrast_delta_54473f10_keys_v1`. Do not erase or repeat an
+existing operation record. This is an authorized derived-input cleanup, separate
+from the new campaign's training and science outputs.
+
+Commit and push the changed reconstruction package/tests and plan/contract/
+runbook/validation docs, plus these new helper files and tests:
+
+```powershell
+git add -- src/hlt_classification/luka_balanced_reconstruction_hydra `
+  tests/test_luka_balanced_reconstruction_hydra.py `
+  src/hlt_classification/operations/hydra_contrast_key_retirement.py `
+  scripts/retire_luka_hydra_contrast_keys.py `
+  tests/test_hydra_contrast_key_retirement.py `
+  docs/plans/LUKA_BALANCED_RECONSTRUCTION_HYDRA_PLAN.md `
+  docs/contracts/LUKA_BALANCED_RECONSTRUCTION_HYDRA.md `
+  docs/LUKA_BALANCED_RECONSTRUCTION_HYDRA_RUNBOOK.md `
+  docs/LUKA_BALANCED_RECONSTRUCTION_HYDRA_VALIDATION.md
+git commit -m "Check HOME space only at launch and retire unused contrastive keys"
+git push origin HEAD:main
+git rev-parse HEAD
+```
+
+In Hydra Bash, use the new pushed commit. Cleanup runs before the detached queue
+helper; it will refuse to proceed if it cannot authenticate inactivity. The new
+commit makes a fresh study/launch path and preserves the failed01324411 log.
+
+```bash
+bash <<'BASH'
+set -euo pipefail
+BASE=/cs/home/rlyang/hlt_u100_pairs
+REPO="$BASE/code_65952ed3"
+read -r -p 'Pushed 40-character storage-fix commit: ' COMMIT </dev/tty
+[[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]]
+git -C "$REPO" fetch origin main
+git -C "$REPO" merge-base --is-ancestor "$COMMIT" origin/main
+PROJECT="$BASE/code_balanced_reco_${COMMIT:0:8}"
+if [[ ! -e "$PROJECT" && ! -L "$PROJECT" ]]; then
+    git -C "$REPO" worktree add --detach "$PROJECT" "$COMMIT"
+fi
+test "$(git -C "$PROJECT" rev-parse HEAD)" = "$COMMIT"
+/usr/bin/python3 -I -B "$PROJECT/scripts/retire_luka_hydra_contrast_keys.py" \
+    --execute --authorize RETIRE_UNUSED_HYDRA_CONTRAST_KEYS_V1
+FREE_GIB="$(/usr/bin/python3 -I -B -c \
+    'import shutil,sys; print(shutil.disk_usage(sys.argv[1]).free // 2**30)' "$BASE")"
+printf 'Currently available: %s whole GiB\n' "$FREE_GIB"
+bash "$PROJECT/scripts/queue_luka_balanced_reconstruction_hydra.sh" "$COMMIT" "$FREE_GIB"
+BASH
+```
+
+For a read-only cleanup preview, run the helper without`--execute --authorize ...`.
+If space remains insufficient after cleanup, registration stops before any job
+submission. Do not edit the source inside an existing pinned execution checkout.
