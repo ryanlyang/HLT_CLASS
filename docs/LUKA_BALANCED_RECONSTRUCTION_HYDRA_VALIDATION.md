@@ -45,6 +45,15 @@ staging and extra metadata margin. It is an inventory estimate, not a measured
 remote disk peak. Physical/declared free space,2GiB reserve and the unspent
 existing ladder14GiB reservation are checked before launch and throughout fits.
 
+Budget-sizing follow-up: the current initial output allowance is8GiB, replacing
+the original10GiB above. The complete initialized316-support inventory remains
+4,828,964,049 bytes, leaving over3GiB additional allowance plus the separate2GiB
+reserve. The protected ladder allowance stays14GiB. The initial maximum is24GiB;
+it is an estimate/admission rule, not physical storage reservation. A dedicated
+test reinitializes all18 production models and verifies the inventory and exact
+scientific recipe equality with1e602e33. No further deletion is required merely
+to clear admission at the user's last reported24.539GiB free snapshot.
+
 Operator update2026-11-19: the paragraph above describes the original release.
 The revised source checks HOME admission at registration and explicit manual
 resume only. Its versioned execution policy removes submission/release, GPU-job

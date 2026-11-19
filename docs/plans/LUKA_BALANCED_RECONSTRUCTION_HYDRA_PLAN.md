@@ -128,7 +128,7 @@ required teachers. Failures of an unrelated arm do not suppress other arms;
 missing/corrupt required teachers fail closed. Resume requires exact terminal
 accounting and preserves accepted submission journals; no automatic blind retry.
 
-Reserve10 GiB for new outputs plus2 GiB operational headroom. Preserve the
+Reserve8 GiB for new outputs plus2 GiB operational headroom. Preserve the
 existing14 GiB ladder-output reservation, crediting its authenticated committed
 outputs when determining the unspent reservation. Registration must see enough
 actual and declared current free space for both remaining reservations. Output
@@ -140,10 +140,20 @@ explicit manual resume. Remove automatic HOME free-space/allowance rechecks
 from submissions (including automatic release), GPU-job startup and epoch
 boundaries. Record this as `STORAGE_POLICY/v1` in new execution specs. The
 operator accepts genuine filesystem write failures if disk space runs out.
-The nominal10GiB output allowance is an initial estimate, not a runtime cap.
+The nominal8GiB output allowance is an initial estimate, not a runtime cap.
 Node-local input capacity, CPU/GPU qualification, lineage and atomic artifact
 publication requirements remain. Existing execution specs are not rewritten;
 launch this revision from a fresh committed source/study root.
+
+Budget-sizing follow-up: the verified complete initialized inventory is
+4,828,964,049 bytes (4.50GiB), including native readouts, prediction arrays,
+teacher banks, restart staging,15% margin and2GiB metadata/overhead allowance.
+Reduce this campaign's original10GiB initial allowance to8GiB, leaving over3GiB
+above that conservative inventory. The separate2GiB spare and full14GiB
+protected ladder allowance stay unchanged: at most24GiB initially required.
+This is an execution budget revision only; model, population, objectives,
+epochs, readouts and scientific recipe hashes remain unchanged. Existing
+committed executions retain their original policies; use a new source/study.
 
 The separate authorized pre-launch cleanup may retire only the inactive old
 `contrast_delta_54473f10/keys/keys.npz` derived TRAIN export. Verify both manifests,
@@ -151,6 +161,14 @@ payload checksum/teacher lineage and current transitive job dependencies; retain
 the manifests and a retirement receipt. Old contrastive replay needs that bank
 restored or re-exported. This exception does not authorize changing raw datasets,
 existing model/prediction outputs, source checkouts or scheduler state.
+
+Follow-up: the live dependency audit protected that old key bank, and it was not
+deleted. The separately authorized inactive cross-message miniature cleanup
+completed with126MiB retired, according to supplied operator output. It removed
+only authenticated one-epoch `setup/mini_*/selected.pt` weights, retaining live
+dependencies, scientific models/predictions and original metadata. Its receipts
+are under `retired_campaigns/cross_message_setup_weights_v1`; do not rerun it.
+This file operation did not change the1e602e33 scientific execution or sources.
 
 Checkpoint retention is current full restart state plus selected native states,
 not twenty full optimizer backups. Each epoch publishes immutable metrics and a

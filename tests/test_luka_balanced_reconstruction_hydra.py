@@ -176,11 +176,11 @@ def test_serial_dag_has_only_teacher_quality_dependencies():
 def test_quota_respects_existing_tail_and_never_mutates_it(tmp_path,monkeypatch):
     spec=dict(root=str(tmp_path/'new'))
     monkeypatch.setattr(storage,'other_remaining',lambda s:14*2**30)
-    monkeypatch.setattr(storage.shutil,'disk_usage',lambda p:SimpleNamespace(free=27*2**30))
-    q=storage.check(spec,declared_gib=27);assert q['needed_free_bytes']==26*2**30
-    with pytest.raises(OSError):storage.check(spec,declared_gib=25)
+    monkeypatch.setattr(storage.shutil,'disk_usage',lambda p:SimpleNamespace(free=int(24.539*2**30)))
+    q=storage.check(spec,declared_gib=24);assert q['needed_free_bytes']==24*2**30
+    with pytest.raises(OSError):storage.check(spec,declared_gib=23)
     Path(spec['root']).mkdir();(Path(spec['root'])/'own.bin').write_bytes(b'x'*1024)
-    assert storage.check(spec)['needed_free_bytes']==26*2**30-1024
+    assert storage.check(spec)['needed_free_bytes']==24*2**30-1024
     monkeypatch.setenv('LUKABREC_INPUT_LAUNCHER_PID','991')
     parent=os.getppid()
     monkeypatch.setattr(resources,'host_snapshot',lambda pid=None:dict(Pss=100 if pid is None else 20,Rss=110))
@@ -193,10 +193,23 @@ def test_quota_respects_existing_tail_and_never_mutates_it(tmp_path,monkeypatch)
 def test_storage_admission_is_explicit_execution_policy_and_old_specs_fail_closed():
     p=storage.policy();c.validate(p,'STORAGE_POLICY')
     assert p['automatic_home_rechecks'] is False and p['runtime_output_limit'] is False
+    assert p['initial_output_allowance_bytes']==8*2**30
     assert p['admission']=='registration_and_explicit_resume_only'
     pop=c.artifact('POPULATION',parents=dict(parent=c.parent.POPULATION_HASH))
     old=c.artifact('SPEC',population=pop)
     with pytest.raises(ValueError,match='Execution storage policy differs'):campaign.check(old,live=False)
+
+
+def test_initialized_full_support_output_inventory_fits_revised_allowance_without_science_change():
+    inventory=storage.estimate(316)
+    assert inventory['conservative_output_bytes']==4828964049
+    assert inventory['allowance_bytes']==8*2**30
+    assert inventory['allowance_bytes']-inventory['conservative_output_bytes']>3*2**30
+    root=Path(__file__).resolve().parents[1]
+    original=subprocess.check_output(['git','-C',str(root),'show',
+        '1e602e33b8070fd4e1e00d7de7b5e440902f50f5:src/hlt_classification/luka_balanced_reconstruction_hydra/contracts.py'],text=True)
+    namespace={};exec(compile(original,'original_contracts.py','exec'),namespace)
+    assert namespace['recipe']()==c.recipe()
 
 
 def test_gpu_job_wrapper_does_not_recheck_home_space(tmp_path,monkeypatch):

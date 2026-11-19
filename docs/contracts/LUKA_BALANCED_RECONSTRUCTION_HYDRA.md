@@ -87,14 +87,19 @@ Only successful authentication of published outputs permits retiring the final
 restart payload. Scientific native outputs remain. No timestamp is an identity.
 
 Allocation-local `/dev/shm` inputs/targets are mmap-shared, authenticated and
-removed only under the exact owned job path. HOME budget10GiB+2GiB reserve is
+removed only under the exact owned job path. HOME budget8GiB+2GiB reserve is
 checked together with the unspent authenticated14GiB existing ladder reservation
 only at registration or explicit manual resume. Operator-authorized
 `LUKA_BALANCED_RECONSTRUCTION_HYDRA_STORAGE_POLICY/v1` binds this execution rule:
 no automatic HOME checks at submission/release, job startup or epoch boundaries;
-no runtime10GiB cap. Genuine filesystem write errors propagate. Specs without
+no runtime output cap. Genuine filesystem write errors propagate. Specs without
 this policy fail closed under the revised source; use a fresh study root.
 Dataset, other campaigns, existing models and jobs are never cleanup targets.
+
+The revised initial8GiB budget is bound numerically in the STORAGE_POLICY and
+SPEC. The full initialized inventory is4,828,964,049 bytes; the protected14GiB
+ladder allowance and separate2GiB reserve remain, so the initial ceiling is24GiB.
+This estimate does not reserve physical filesystem space or promise write success.
 
 The separate operator-authorized one-file retirement described in the runbook
 may remove the unused old `contrast_delta_54473f10/keys/keys.npz` derived TRAIN

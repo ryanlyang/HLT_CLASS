@@ -49,7 +49,7 @@ its own detached clean worktree, so other local unstaged work is preserved.
 ## Queue from your authenticated Hydra Bash terminal
 
 The verified dataset already exists on Hydra. No new upload is needed.
-The shared reservation can require26GiB currently free when none of the
+The shared reservation can require24GiB currently free when none of the
 protected ladder's14GiB has been spent; committed ladder outputs reduce that
 unspent reservation. Declare current whole freeGiB, not the earlier27GiB value.
 The initial registration checks actual filesystem space. Operator-authorized
@@ -58,6 +58,13 @@ release, later submission, GPU-job startup or training epochs, and no runtime
 output cap. A genuinely full filesystem can still cause a write failure. An
 explicit manual resume performs its own initial admission check. Node-local
 RAM scratch capacity and CPU/GPU resource qualification remain required.
+
+The current output allowance is8GiB, based on the audited4.50GiB complete
+initialized inventory. The protected ladder's14GiB and2GiB spare remain. The
+older01324411/1e602e33 sources required26GiB; use the new pushed budget-sizing
+commit in the general queue block above, without running either cleanup again.
+The user reports the cross-message cleanup completed (126MiB retired), with
+24.539GiB then free. The bank cleanup remains blocked and must stay untouched.
 
 ```bash
 bash <<'BASH'
