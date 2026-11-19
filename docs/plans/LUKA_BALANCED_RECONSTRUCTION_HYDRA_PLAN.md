@@ -1,0 +1,150 @@
+# Balanced six-class reconstruction screen on four GTX 1080 Ti GPUs
+
+Authorized 2026-11-19. This is a new 600k/150k study, not a continuation of the
+old 299234/74895 reconstruction trajectories or the full-size balanced ladder.
+No existing Hydra/Oscar jobs, datasets, sources or results may be changed.
+
+## Population
+
+Use the verified new QCD Run-2-combined/Higgs dataset and frozen six-class
+600 <= offline jet pT < 2600 GeV population, hash
+`5092ce94a5e32fac10bdbd5b91b1becddc3fe9123affc41a93a0b312db2ea616`.
+QCD, X_bb, X_cc, X_ss, X_qq, X_gg retain labels 0..5. Twenty 100 GeV bins give
+120 class/pT cells. Quarantine raw label 206 and exclude the other classes.
+
+Allocate exactly 600000 TRAIN and 150000 validation rows proportionally across
+their respective original class/pT cell counts using largest remainders, ties
+by cell code. Select rows within each cell by a fixed SHA256 identity ranking;
+selection is independent of the model seed. Preserve canonical parent order.
+The 600k TRAIN counts are [427186,35806,34645,33939,33774,34650]. The smallest
+cell has 1234 rows; 600000/(120*1234) = 4.051864 expected appearances/epoch.
+These are replacement-sampling expectations, not maximum observed counts.
+
+TRAIN draws are uniform cell then uniform row, 600000 draws/epoch, global
+batch128, 4688 updates/epoch, final batch64. All arms of a seed use identical
+draws. Validation retains natural class/pT frequencies, is never resampled or
+loss weighted. Reduced-out TRAIN/validation rows retain their old roles. The
+822313 in-range and 610553 outside-range test rows remain sealed; no test
+particle or prediction API is introduced. This campaign evaluates only its
+150k primary validation subset, not outside validation or a relabeled test set.
+
+For efficient ROOT decoding, a reader may read bounded contiguous slices of
+the original six-class in-range TRAIN/validation roles and discard rows outside
+the small subset before feature construction, fitting statistics or training.
+It may never logically read test or unused particle rows. Reconstruction targets
+are selected TRAIN only; HLT-only CE inputs never request OFFLINE branches.
+
+## Eighteen scientific fits
+
+Fresh seed indices10/11, ordered seed-major with the priority comparisons first:
+
+| Arm | Inputs | Training objective |
+| --- | --- | --- |
+| OFFLINE | Pure OFFLINE | CE |
+| M0HLT | HLT only | CE |
+| U100 | Matched U100 hybrid on HLT support | .25 CE + .75 T² KL from same-seed OFFLINE EMA05, T=2 |
+| U100_W5 | HLT only | CE + 5 SmoothL1 to same-seed U100 EMA05 embedding |
+| R24 | HLT only | U100_W5 + reconstruction, delay3/ramp3/max.3 |
+| D20 | HLT only | U100_W5 + prepared decoder, delay3/cosine-ramp6/max.3 |
+| R20 | HLT only | U100_W5 + reconstruction, delay0/ramp3/max2 |
+| R22 | HLT only | U100_W5 + reconstruction, delay0/ramp3/max10 |
+| R28 | HLT only | U100_W5 + block4+block8 reconstruction, delay0/ramp3/max.3 |
+
+U100 is a newly declared single predecessor-KD teacher, not the historical
+COARSE_U100 or full ladder's multiple-target UE100. OFFLINE and U100 are trained
+on the same 600k subset as the students. Their selected EMA05 checkpoint supplies
+one fixed bank per seed shared by every downstream comparison. No CONCAT,
+contrastive matching, subclasses or auxiliary logit heads are included here.
+The later combination with the full balanced ladder is a separate experiment.
+
+Use the installed Weaver six-output native ParT and original independent
+128->128->128 embedding predictor. Canonical untrained native/predictor tensors
+per seed are loaded by every arm; independent decoder initialization preserves
+native/dropout RNG. R28 differs in captured memory, not decoder parameters.
+All fits use four GPUs, FP32/TF32-off, synchronized BatchNorm, sample-weighted
+gradient SUM, global padding and global batch128. Decoder chunks8 preserve the
+complete per-jet loss and all real constituents. Three solver threads per rank
+fit the twelve CPU allocation. No optimizer reset, gradient clipping/projection,
+batch accumulation or automatic learning-rate scaling.
+
+AdamW retains the existing betas/eps/weight decay. Use peak3e-4, floor1.5e-5,
+warmup2 then cosine through20 epochs. Schedule/EMA clocks count actual draws:
+epoch-1+(draws_consumed/600000), including the final64 batch. These are adapted
+20-epoch recipes, not claims to reproduce historical 30-epoch trajectories.
+
+Reconstruct complete OFFLINE TRAIN particle sets in the paired HLT frame using
+the original measured14->mixed22 transforms, TRAIN-only FP64 moments with .001
+scale floor, validity masking, detached exact one-to-one assignment, equal
+kinematic/composition/tracking groups, balanced presence and .1 normalized
+count CE. No aggregate consistency term. K is the maximum selected TRAIN HLT
+or OFFLINE multiplicity, not the old fixed298 and not a validation-derived cap.
+D20 trains decoder parameters at .3 from the start, but its encoder VJP follows
+the delayed cosine ramp. R24 has no decoder-only preparation during its delay.
+During zero-weight delay, preserve the donor's zero decoder gradients, AdamW
+moment/step advancement and decay. Explicit zeros avoid a costly zero-weight
+decoder forward/backward without changing that optimizer bookkeeping.
+
+## Readouts and fair reporting
+
+Every fit yields separately selected RAW, RAW_BN, EMA05 and EMA10. EMA05 is the
+predeclared primary; averaging starts at draw-position3, half-lives .5/1 epoch.
+Only native parameters are averaged. Copies recalibrate BN on the same frozen
+8192 balanced TRAIN draws (replacement, separate RNG); this intentionally adapts
+the older uniform-TRAIN calibration to the new training distribution. Dropout
+is disabled and live buffers/CPU-CUDA RNG are preserved during readouts.
+
+Select by macro six-class OVR AUC, then CE, macro log R50 and earliest update.
+Report accuracy, AUC, class R50/R30, passing-QCD counts and per-pT diagnostics
+at each stream's same selected checkpoint. No R50/R30 reselection. Compute
+recovery using the same seed and same readout of new M0HLT/OFFLINE. Missing,
+censored or nonpositive gaps remain unresolved. Pair R24/D20/etc with U100_W5
+and U100_W5 with M0HLT; report individual seeds, mean/min/sample SD and fixed
+late epochs16..20 separately. Do not compare recovery with old eleven-class
+anchors or select the maximum across readout streams as the primary result.
+
+## Execution and bounded storage
+
+CPU preparation authenticates source/runtime/data, builds the frozen population,
+and publishes canonical untrained starts. A four-GPU qualification job measures
+all nine arm types using actual selected TRAIN/validation inputs and complete
+support. It performs independent full-graph update parity, discarded two-epoch
+miniatures and native reload/EMA checks. It uses temporary untrained teacher
+outputs only for technical probes; they never become scientific banks.
+
+A dependent CPU release authenticates successful qualification and measured
+48h envelope before submitting the eighteen fits and an afterany report. Each
+fit repeats a short integrated acceptance with its real frozen teacher inputs.
+No scientific metric threshold admits or suppresses a row. The first queued
+bootstrap does not imply real four-card acceptance has already passed.
+
+GPU fits: four `geforce_gtx_1080_ti`, twelve CPUs, 64000 MiB, 48h envelope.
+Temporary input/target arrays are shared read-only through allocation-local
+scratch, not replicated persistent HOME caches; the filesystem and host-memory
+envelopes are measured. The decoder and target statistics are discarded probes
+during qualification. Science starts always reload canonical untrained states.
+
+Serialize scientific allocations, with afterany ordering plus afterok edges for
+required teachers. Failures of an unrelated arm do not suppress other arms;
+missing/corrupt required teachers fail closed. Resume requires exact terminal
+accounting and preserves accepted submission journals; no automatic blind retry.
+
+Reserve10 GiB for new outputs plus2 GiB operational headroom. Preserve the
+existing14 GiB ladder-output reservation, crediting its authenticated committed
+outputs when determining the unspent reservation. Registration must see enough
+actual and declared current free space for both remaining reservations. Output
+size is estimated from actual initialized tensors and exact selected token/row
+inventory; fail before submission if this envelope is insufficient.
+
+Checkpoint retention is current full restart state plus selected native states,
+not twenty full optimizer backups. Each epoch publishes immutable metrics and a
+full restart state, atomically commits it, then journals retirement of the old
+state. Retain full per-rank CPU/CUDA/dropout RNG, optimizer, native/predictor/
+decoder state, EMA values, best readouts and sampling cursor. Completed fits keep
+native checkpoints, predictions, reports and manifests; restart payload retirement
+occurs only after authenticated final publication. Never retire another campaign.
+
+Source/runtime/model environment are immutable, pinned and rechecked. Exact
+pushed source, dry scheduler review, durable intent/accepted-ID journals and a
+detached launcher are required. Local tests and single-GPU CUDA checks establish
+queue readiness; real Hydra four-GPU qualification remains mandatory before
+science release, superseding generic Tigris validation for this Hydra workflow.
