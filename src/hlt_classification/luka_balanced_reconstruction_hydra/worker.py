@@ -15,7 +15,7 @@ from hlt_classification.data.cache_contracts import load_json,load_npz_arrays,wr
 from hlt_classification.cms_proxy_ladder.contracts import file_ref,validate_file_ref
 from hlt_classification.luka_fullstat_multiview.execution import allocation_minutes
 from hlt_classification.luka_subclass_ddp_hydra.distributed import Context
-from . import contracts as c,campaign,population,inputs,artifacts,resources,training,kernel,banks
+from . import contracts as c,campaign,population,inputs,artifacts,resources,training,kernel,banks,diagnostics as log
 
 
 def controller(args):
@@ -52,10 +52,14 @@ def allocation(spec,task):
     if gpu:
         if tres.get('gres/gpu')!='4' or any(k.startswith('gres/gpu:') and (k!='gres/gpu:geforce_gtx_1080_ti' or v!='4') for k,v in tres.items()):
             raise PermissionError('Four registered GTX1080Ti devices required')
+        log.mark('BEGIN CUDA availability/device-count query')
         if not torch.cuda.is_available() or torch.cuda.device_count()!=4:raise PermissionError('Exactly four visible CUDA devices required')
+        log.mark('END CUDA availability/device-count query')
         for i in range(4):
+            log.mark(f'BEGIN CUDA properties device={i}')
             name=torch.cuda.get_device_name(i).removeprefix('NVIDIA ')
             if name!='GeForce GTX 1080 Ti' or torch.cuda.get_device_capability(i)!=(6,1):raise PermissionError('Wrong physical GPU family')
+            log.mark(f'END CUDA properties device={i} name={name}')
     elif any(k.startswith('gres/gpu') for k in tres):raise PermissionError('CPU task unexpectedly allocated GPUs')
     if os.environ.get('PYTHONNOUSERSITE')!='1' or os.environ.get('LD_LIBRARY_PATH','').split(os.pathsep)[0]!=str(Path(spec['environment_dir'])/'lib'):
         raise ValueError('Use isolated worker environment')
@@ -85,7 +89,10 @@ def cleanup(root,job):
 
 
 def run(spec,task):
-    kernel.configure(1,12);campaign.check(spec);job=allocation(spec,task)
+    with log.stage('worker configuration and source/runtime verification'):
+        kernel.configure(1,12);campaign.check(spec)
+    with log.stage('Slurm and device verification'):
+        job=allocation(spec,task)
     if task=='prepare':
         loaded=population.load(spec['dataset'],Path(spec['root'])/'population')
         if loaded[0]!=spec['population']:raise ValueError('Frozen subset differs')
@@ -116,17 +123,24 @@ def run(spec,task):
         if task in c.FITS and (artifacts.fit_root(spec,task)/'result.json').exists():raise FileExistsError('Fit already published')
         node=scratch(job)
         try:
-            loaded=population.load(spec['dataset'],Path(spec['root'])/'population')
+            with log.stage('population replay'):
+                loaded=population.load(spec['dataset'],Path(spec['root'])/'population')
             coords=('D000','OFFLINE','U100') if task=='qualify' else (c.cell(task)['coordinate'],)
             for coord in coords:
                 needs=coord=='D000' and (task=='qualify' or c.cell(task)['reconstruction'])
-                inputs.prepare_node(spec,node/coord,coord,targets=needs,loaded=loaded)
+                with log.stage(f'input build coordinate={coord} targets={needs}'):
+                    inputs.prepare_node(spec,node/coord,coord,targets=needs,loaded=loaded)
             command=[sys.executable,'-X','faulthandler','-u','-B','-s','-m','torch.distributed.run','--standalone','--nnodes=1',
                 '--nproc-per-node=4','--max-restarts=0',str(Path(spec['project'])/'scripts/luka_balanced_reconstruction_hydra.py'),
                 'rank','--spec',str(Path(spec['root'])/'campaign_spec.json'),'--task',task,'--node',str(node)]
             env=dict(os.environ,LUKABREC_INPUT_LAUNCHER_PID=str(os.getpid()))
-            subprocess.run(command,check=True,env=env)
-        finally:cleanup(node,job)
+            # Child ranks own startup/probe tracing; waiting here is expected.
+            log.disable_stall_traces()
+            with log.stage('four-rank worker execution'):
+                subprocess.run(command,check=True,env=env)
+        finally:
+            with log.stage('allocation scratch cleanup'):
+                cleanup(node,job)
         files=dict(qualification=file_ref(Path(spec['root'])/'qualification.json')) if task=='qualify' else dict(result=file_ref(artifacts.fit_root(spec,task)/'result.json'))
     campaign.check(spec)
     receipt=c.artifact('TASK',parents=dict(spec=spec['content_hash']),task=task,job=job,files=files)
@@ -139,15 +153,20 @@ def rank(spec,task,node):
     rank=int(os.environ.get('RANK','-1'))
     if rank not in range(4) or os.environ.get('LOCAL_RANK')!=str(rank) or os.environ.get('WORLD_SIZE')!='4':
         raise PermissionError('Four local ranks on one node required')
-    torch.cuda.set_device(rank);kernel.configure(4,12);campaign.check(spec);job=allocation(spec,task)
+    with log.stage('rank device/configuration and source/runtime verification'):
+        torch.cuda.set_device(rank);kernel.configure(4,12);campaign.check(spec);job=allocation(spec,task)
     if Path(node)!=Path('/dev/shm')/f'rlyang_lukabrec_{job}':raise PermissionError('Scratch not bound to this allocation')
     # I/O was completed before NCCL initialization, avoiding a collective timeout
     # while the launcher reconstructs the large views.
-    dist.init_process_group('nccl',timeout=timedelta(minutes=20))
+    with log.stage('NCCL initialization'):
+        dist.init_process_group('nccl',timeout=timedelta(minutes=20))
     ctx=Context(rank,4,torch.device('cuda',rank))
     try:
         coords=('D000','OFFLINE','U100') if task=='qualify' else (c.cell(task)['coordinate'],)
-        views={coord:inputs.load_node(spec,Path(node)/coord) for coord in coords}
+        views={}
+        for coord in coords:
+            with log.stage(f'rank mmap validation coordinate={coord}'):
+                views[coord]=inputs.load_node(spec,Path(node)/coord)
         arrays=load_npz_arrays(validate_file_ref(spec['population']['rows'],root=Path(spec['root'])/'population'))
         for caches,_,_ in views.values():
             for role,cache in caches.items():
@@ -155,6 +174,7 @@ def rank(spec,task,node):
                     raise ValueError('Node cache canonical join differs')
         folder=Path(spec['root'])/'runs'/f'{task}_{job}' if task=='qualify' else artifacts.fit_root(spec,task)/'runs'/job
         ctx.main(lambda:folder.mkdir(parents=True,exist_ok=False))
+        log.mark('GPU working directory ready: '+str(folder))
         if task=='qualify':resources.qualify(spec,views,arrays['train_pt'],ctx,folder)
         else:
             caches,targets,node_manifest=views[c.cell(task)['coordinate']]
@@ -162,11 +182,14 @@ def rank(spec,task,node):
             if target is not None and target.normalization['content_hash']!=resources.qualification(spec)['target_normalization_sha256']:
                 raise ValueError('TRAIN reconstruction normalization changed after qualification')
             bank=banks.Bank(spec,task,caches['train']) if c.cell(task)['teacher'] else None
-            mini=resources.miniature(spec,task,caches,target,bank,arrays['train_pt'],ctx)
+            with log.stage('science integrated miniature'):
+                mini=resources.miniature(spec,task,caches,target,bank,arrays['train_pt'],ctx)
             startup=c.artifact('STARTUP',parents=dict(spec=spec['content_hash']),task=task,job=job,
                 miniature=mini,discarded=True,qualification=resources.qualification(spec)['content_hash'])
             ctx.main(lambda:write_immutable_json(folder/'startup.json',startup))
             # fit owns its own fresh run directory so technical state cannot be resumed.
+            log.mark('BEGIN scientific fit '+task)
+            log.disable_stall_traces()
             training.fit(spec,task,caches,target,bank,arrays['train_pt'],ctx,folder/'fit',job,
                          validation_pt=arrays['validation_pt'])
     finally:dist.destroy_process_group()

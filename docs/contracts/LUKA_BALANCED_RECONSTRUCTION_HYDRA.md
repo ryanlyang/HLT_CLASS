@@ -67,6 +67,17 @@ Every scientific allocation repeats an integrated miniature using real teacher
 banks. A failed qualification releases no scientific fits. Real four-GPU evidence
 is a prerequisite for release, not a claim made by local queue-readiness tests.
 
+Execution diagnostics add no scientific artifact kind or schema change. Source
+identity binds the logging revision. Shell/import/stage messages and scheduled
+stack samples are diagnostic output only; they cannot replace any qualified-arm
+proof or authorize release. The initial common import probe has a300s deadline
+and15s termination grace; a timeout propagates failure before the CLI starts.
+Other startup phases retain their existing allocation deadline. Stack samples
+are nonfatal, and timers are disabled for ordinary scientific epochs and for a
+launcher waiting on child workers. Data/target ordering and validation rules
+remain identical. A changed source requires a fresh execution, not rewriting a
+prior spec or running revised code under its old accepted IDs.
+
 Slurm allocations must match accepted task/job IDs, spec comments, absolute source,
 site, CPU/RAM/time and four physical GTX1080Ti GPUs. Science fits are serialized
 with afterany ordering and afterok teacher dependencies; report is afterany.

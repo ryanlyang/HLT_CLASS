@@ -22,7 +22,7 @@ from hlt_classification.luka_new_fullstat_hydra.population import identity
 from hlt_classification.luka_sixclass_balanced_oscar.views import reader,initialize_worker,close_reader
 from hlt_classification.luka_next_supervision_hydra.probabilistic_targets import measured
 from hlt_classification.luka_next_supervision_hydra.probabilistic_contracts import CONTINUOUS
-from . import contracts as c, population
+from . import contracts as c, population, diagnostics as log
 
 
 def work(arg):
@@ -63,8 +63,13 @@ def work(arg):
 
 
 def arguments(spec,parent,arrays,coordinate,targets):
+    last_report=0.
     for index,record,a,codes,keep in population.selections(parent,arrays):
         path=Path(spec['dataset'])/record['path']
+        now=time.monotonic()
+        if now-last_report>=60:
+            log.mark(f'input source authentication coordinate={coordinate} file_index={index}')
+            last_report=now
         if sha256_file(path)!=record['sha256']:raise ValueError('Raw source checksum differs')
         for role in (0,1):
             entries=np.flatnonzero(codes==role)
@@ -104,9 +109,11 @@ def prepare_node(spec,node,coordinate,*,targets=False,workers=4,loaded=None):
         for name,shape,dtype in [('target_raw',(tokens,22),np.float64),('target_bits',(tokens,),np.uint8),
             ('target_offsets',(n+1,),np.int64),('target_frame',(n,3),np.float64),('target_aggregate',(n,5),np.float64)]:create(name,shape,dtype)
         values['target_offsets'][0]=0
+    log.mark(f'input arrays allocated coordinate={coordinate} targets={targets}')
     total=np.zeros(22);squares=np.zeros(22);support=np.zeros(22,np.int64);target_cursor=0
+    chunks=0;last_report=time.monotonic()
     def accept(arg,result):
-        nonlocal target_cursor
+        nonlocal target_cursor,chunks,last_report
         role=('train','validation')[arg[5]];row,token=cursors[role];rows,tg=result
         n=len(rows);wanted=arrays[role+'_identities'][row:row+n]
         if not np.array_equal(np.asarray([np.frombuffer(bytes.fromhex(rid),np.uint8) for rid,_ in rows]),wanted):
@@ -125,6 +132,13 @@ def prepare_node(spec,node,coordinate,*,targets=False,workers=4,loaded=None):
                 safe=np.where(mask,x,0.);total[:]+=safe.sum(0);squares[:]+=(safe*safe).sum(0);support[:]+=mask.sum(0)
                 target_cursor=end
         cursors[role]=[row+n,token+len(block.features)]
+        chunks+=1;now=time.monotonic()
+        if chunks==1 or now-last_report>=60:
+            log.mark(f'input decoding coordinate={coordinate} chunks={chunks} '
+                f'train_rows={cursors["train"][0]}/{p["counts"]["train"]} '
+                f'validation_rows={cursors["validation"][0]}/{p["counts"]["validation"]} '
+                f'elapsed_s={now-begun:.1f}')
+            last_report=now
     jobs=arguments(spec,parent,arrays,coordinate,targets)
     context=ProcessPoolExecutor(max_workers=workers,mp_context=multiprocessing.get_context('spawn'),initializer=initialize_worker) if workers>1 else nullcontext()
     with context as pool:
@@ -140,12 +154,14 @@ def prepare_node(spec,node,coordinate,*,targets=False,workers=4,loaded=None):
             while pending:
                 arg,future=pending.popleft();accept(arg,future.result());nxt=next(jobs,None)
                 if nxt is not None:pending.append((nxt,pool.submit(work,nxt)))
+    log.mark(f'input decoding complete coordinate={coordinate}; rechecking source hashes')
     for _,record,_,_,_ in population.selections(parent,arrays):
         if sha256_file(Path(spec['dataset'])/record['path'])!=record['sha256']:raise ValueError('Source changed during construction')
     normalization=None
     for role in c.COUNTS:
         if cursors[role]!=[p['counts'][role],p['particles'][role][side]]:raise ValueError('Full input support/coverage differs')
     if targets:
+        log.mark('TRAIN reconstruction normalization and target publication')
         if target_cursor!=p['particles']['train']['offline']:raise ValueError('Incomplete reconstruction targets')
         mean=np.zeros(22);scale=np.ones(22);cols=np.asarray(CONTINUOUS)
         mean[cols]=total[cols]/np.maximum(support[cols],1)
@@ -158,12 +174,15 @@ def prepare_node(spec,node,coordinate,*,targets=False,workers=4,loaded=None):
             rows=p['counts']['train'],tokens=target_cursor,frame='paired_HLT_sum_p4_axis_and_vector_pt')
         raw=values.pop('target_raw');raw.flush();raw._mmap.close();del raw
         (node/'target_raw.npy').unlink()
+    log.mark(f'input flush and payload authentication coordinate={coordinate}')
     for name,value in values.items():
         value.flush();value._mmap.close();files.append(file_ref(node/(name+'.npy'),root=node))
     values.clear();gc.collect()
     record=c.artifact('NODE_INPUTS',parents=dict(spec=spec['content_hash'],population=p['content_hash']),
         coordinate=coordinate,targets=targets,files=files,normalization=normalization,build_seconds=time.monotonic()-begun)
-    write_immutable_json(node/'manifest.json',record);return record
+    write_immutable_json(node/'manifest.json',record)
+    log.mark(f'input publication complete coordinate={coordinate} elapsed_s={record["build_seconds"]:.1f}')
+    return record
 
 
 def load_node(spec,node):

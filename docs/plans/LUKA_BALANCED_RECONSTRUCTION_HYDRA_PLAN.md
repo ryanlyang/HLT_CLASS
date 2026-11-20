@@ -104,6 +104,28 @@ anchors or select the maximum across readout streams as the primary result.
 
 ## Execution and bounded storage
 
+Startup-diagnostic follow-up2026-11-19: the operator reports prepare216290
+COMPLETED, qualify216291 TIMEOUT at6h, and release216292 CANCELLED. No GPU
+working directory or arm proofs were published. CPU accounting is zero/absent;
+this does not establish idle GPUs, a specific slow reader or a CUDA fault.
+The failure occurred before the qualification working-directory marker, which
+follows imports, source/runtime/allocation checks, population replay, construction
+of all three views, NCCL setup and rank-side mmap validation.
+
+Add flushed shell/import/stage markers, per-view decoded-row progress and
+five-minute scheduled stack samples during startup and qualification. Limit
+the common initial import probe to300s plus15s termination grace. This bounds
+that probe only, not input construction or all startup. Stack samples do not
+abort healthy work or certify qualification. Disable the parent's stack timer
+while it waits on child ranks, and disable rank timers before ordinary science
+epochs. Preserve the six-hour qualification and48h science limits until measured
+evidence supports a resource revision. No scientific recipe, input selection,
+target, readout, resource or artifact-contract change is introduced.
+Use a fresh pushed source/study for this diagnostic retry; preserve4a264700's
+spec, journals, completed preparation and logs. The new source cannot be used
+to resume that source-pinned execution. Qualification remains required before
+release; no old science fits need repeating because none were released.
+
 CPU preparation authenticates source/runtime/data, builds the frozen population,
 and publishes canonical untrained starts. A four-GPU qualification job measures
 all nine arm types using actual selected TRAIN/validation inputs and complete

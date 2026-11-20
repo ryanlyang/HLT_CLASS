@@ -134,6 +134,34 @@ and prediction files are referenced by`fits/<task>/result.json`.
 
 ## Technical continuation
 
+### Silent qualification timeout at4a264700
+
+Operator output: prepare216290 completed in5m24, qualify216291 timed out at6h,
+release216292 was cancelled, and no scientific fits were released. The GPU
+working directory and qualification receipts are absent. The accounting's zero
+CPU fields do not identify where startup stopped. Preserve that study unchanged.
+The follow-up node SSH probe was reset before authentication, so neither GPU
+health nor scratch manifests could be inspected. This is not evidence that the
+node is faulty; the next useful action is a fresh-source diagnostic retry.
+
+The diagnostic revision prints `LUKABREC_SHELL`, `LUKABREC_IMPORT` and
+`LUKABREC_STAGE` records from shell entry through device/source checks, input
+construction, rank loading, parity, miniatures and measurements. Input progress
+includes decoded TRAIN/validation row counts. A five-minute gap in progress
+dumps a stack sample during startup/probes; that is not a failed scientific
+check. The common import check stops after300s plus15s termination grace if
+hung. Normal science epochs and a parent waiting on workers do not produce
+scheduled stack dumps. Qualification still has6h and science48h; this revision
+does not claim to have identified or accelerated the original bottleneck.
+
+Commit/push these changes with the campaign file list above, then use the
+general fresh-commit queue block. There are no prior science fits to repeat.
+Do not run the old-root resume block with revised source or alter its spec.
+Use the new source-derived study root, leaving all other campaigns unchanged.
+Watch the new `qualify-<accepted-ID>.out`; its last BEGIN/progress message and
+any following stack sample identify the stalled phase. Do not merely increase
+the old walltime or remove qualification.
+
 Preserve all claims, journals and partial outputs. First inspect exact task logs
 and accounting; a missing accepted-ID receipt requires reconciliation, not retry.
 For an ordinary failed allocation after all accepted campaign jobs are terminal,

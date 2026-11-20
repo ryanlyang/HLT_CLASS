@@ -5,6 +5,33 @@ Evidence date2026-11-19. This implements the
 physics campaign. No remote jobs were submitted, changed or cancelled. Existing
 datasets, scientific checkpoints and other working-tree edits were preserved.
 
+## Operator-reported silent qualification timeout and diagnostic revision
+
+The operator reports4a264700 prepare216290 COMPLETED/0:0 (5m24), qualify216291
+TIMEOUT (6h00m25), release216292 CANCELLED, no qualification working directory,
+and no arm proofs or qualification/task receipts. No scientific fits were
+released. Zero CPU accounting is inconclusive. No independent remote inspection
+has identified an input-reader, import or GPU-driver cause.
+
+The subsequent read-only SSH probe to gpu1705 was reset during key exchange.
+It supplied no GPU-health or scratch-manifest evidence. Do not interpret this
+connection failure as proof of a bad GPU or completed input construction.
+
+The follow-up adds flushed stage/progress logs and nonfatal scheduled stack
+samples, and bounds the common initial import probe to300s with15s termination
+grace. The parent waiting for ranks and ordinary scientific epochs disable
+their stack timers. Both resource limits, all scientific donor pins, population,
+objectives and readouts remain unchanged. Source changes require a fresh study.
+Focused pre-edit baseline:8 passed in18.88s. Revised full campaign suite:
+45 passed,1 skipped in86.46s. The skip requires four actual CUDA/NCCL devices.
+New tests reproduce a blocked subprocess and observe its real stack sample
+without aborting work, inject an import-probe timeout and verify the CLI is not
+entered, and preserve exceptions without publishing a successful stage. Existing
+reader role/target checks, source/recipe equality, actual local Weaver/CUDA
+objectives, restart equivalence and no-runtime-HOME-check tests also pass.
+Both changed Bash helpers pass `bash -n`; scoped `git diff --check` passes.
+No real four-card acceptance or remote bottleneck fix is claimed by this change.
+
 ## Population and storage
 
 The downloaded verified new dataset was audited locally using scalar membership

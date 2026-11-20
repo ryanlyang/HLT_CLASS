@@ -18,7 +18,7 @@ from hlt_classification.luka_reconstruction_stability_hydra.readouts import reca
 from hlt_classification.luka_next_supervision_hydra import reconstruction_batched as assignment
 from hlt_classification.luka_fullstat_readout.training import optimizer
 from hlt_classification.luka_fullstat.recipe import learning_rate
-from . import contracts as c,kernel,model,artifacts,readouts,training
+from . import contracts as c,kernel,model,artifacts,readouts,training,diagnostics as log
 
 TOLERANCES=dict(loss_abs=1e-3,gradient_relative_l2=5e-4,parameters_relative_l2=5e-4,
                 adamw_moments_relative_l2=5e-4,buffer_abs=1e-4)
@@ -190,20 +190,29 @@ def qualify(spec,views,pt,ctx,folder):
     if ctx.world!=4:raise PermissionError('Authoritative qualification requires four actual GPUs')
     rows={};folder=Path(folder)
     from hlt_classification.luka_sixclass_balanced_oscar.model import installed_parity
-    installed=installed_parity(views['D000'][0]['train'],device=ctx.device)
+    with log.stage('installed-Weaver parity'):
+        installed=installed_parity(views['D000'][0]['train'],device=ctx.device)
     for arm in c.ARMS:
         task=f'{arm}_s{c.SEEDS[0]}';coordinate=c.cell(task)['coordinate']
         caches,targets,node=views[coordinate]
         target=targets if c.cell(task)['reconstruction'] else None
         if ctx.device.type=='cuda':torch.cuda.reset_peak_memory_stats(ctx.device)
-        proof=parity(spec,task,caches['train'],target,None,ctx)
+        with log.stage(f'qualification arm={arm} full-weight parity'):
+            proof=parity(spec,task,caches['train'],target,None,ctx)
         # Check both sides of the delayed/asymmetric decoder transition.
-        if c.cell(task)['reconstruction']:proof['delay']=parity(spec,task,caches['train'],target,None,ctx,position=2.)
-        mini={str(seed):miniature(spec,f'{arm}_s{seed}',caches,target,None,pt,ctx) for seed in c.SEEDS}
-        measured=measure(spec,task,caches,target,None,pt,ctx,load_seconds=node['build_seconds'])
+        if c.cell(task)['reconstruction']:
+            with log.stage(f'qualification arm={arm} delayed-weight parity'):
+                proof['delay']=parity(spec,task,caches['train'],target,None,ctx,position=2.)
+        mini={}
+        for seed in c.SEEDS:
+            with log.stage(f'qualification arm={arm} seed={seed} miniature'):
+                mini[str(seed)]=miniature(spec,f'{arm}_s{seed}',caches,target,None,pt,ctx)
+        with log.stage(f'qualification arm={arm} resource measurement and full validation'):
+            measured=measure(spec,task,caches,target,None,pt,ctx,load_seconds=node['build_seconds'])
         row=c.artifact('QUALIFIED_ARM',parents=dict(spec=spec['content_hash']),task=task,
             parity=proof,miniature=mini,measured=measured,teacher_targets='technical_synthetic_only',passed=True)
         ctx.main(lambda:write_immutable_json(folder/(arm+'.json'),row));rows[arm]=row['content_hash']
+        log.mark('qualification arm proof published: '+arm)
     result=c.artifact('QUALIFICATION',parents=dict(spec=spec['content_hash']),arms=rows,
         world=4,gpu_type=c.RESOURCES['gpu_type'],complete_support=True,miniatures_discarded=True,passed=True,
         installed_weaver_parity=installed,

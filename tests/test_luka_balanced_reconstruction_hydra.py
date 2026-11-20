@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import math
 import os
 import subprocess
+import sys
 import numpy as np
 import pytest
 import torch
@@ -18,6 +19,55 @@ from hlt_classification.luka_subclass_ddp_hydra.distributed import Context
 from test_luka_direct_reconstruction import target
 from test_luka_fullstat import write_root
 from test_luka_sixclass_balanced_oscar import cache
+
+
+def test_diagnostic_stage_preserves_failure_and_does_not_publish_success(capsys):
+    from hlt_classification.luka_balanced_reconstruction_hydra import diagnostics
+    with pytest.raises(OSError,match='source unavailable'):
+        with diagnostics.stage('raw source authentication'):
+            raise OSError('source unavailable')
+    output=capsys.readouterr().out
+    assert 'BEGIN raw source authentication' in output
+    assert 'FAILED raw source authentication' in output and 'error=OSError' in output
+    assert 'END raw source authentication' not in output
+
+
+def test_silent_stall_emits_real_stack_without_aborting_work(tmp_path):
+    root=Path(__file__).resolve().parents[1]
+    env=dict(os.environ,PYTHONPATH=str(root/'src'),PYTHONDONTWRITEBYTECODE='1')
+    code='''from threading import Event
+from hlt_classification.luka_balanced_reconstruction_hydra import diagnostics as d
+d.enable_stall_traces(1)
+with d.stage("deliberately blocked diagnostic"):
+    Event().wait(2.2)
+d.disable_stall_traces()
+print("WORK_COMPLETED", flush=True)
+'''
+    result=subprocess.run([sys.executable,'-u','-B','-c',code],cwd=tmp_path,env=env,
+                          capture_output=True,text=True,timeout=20,check=True)
+    assert 'Timeout (0:00:01)' in result.stderr and 'threading.py' in result.stderr
+    assert 'END deliberately blocked diagnostic' in result.stdout and 'WORK_COMPLETED' in result.stdout
+
+
+def test_import_timeout_stops_shell_before_cli(tmp_path):
+    bash=Path('C:/Program Files/Git/bin/bash.exe') if os.name=='nt' else Path('/bin/bash')
+    if not bash.is_file():pytest.skip('Bash unavailable')
+    (tmp_path/'bin').mkdir();(tmp_path/'env/bin').mkdir(parents=True)
+    helper=tmp_path/'bin/timeout'
+    helper.write_bytes(b'#!/bin/sh\necho "TEST_TIMEOUT_ARGS $*"\nexit 124\n')
+    python=tmp_path/'env/bin/python';python.write_bytes(b'#!/bin/sh\nexit 99\n')
+    helper.chmod(0o755);python.chmod(0o755)
+    common=Path(__file__).resolve().parents[1]/'sbatch/luka_balanced_reconstruction_hydra_common.sh'
+    command=('set -euo pipefail; test_root="$1"; '
+             'if command -v cygpath >/dev/null 2>&1; then test_root="$(cygpath -u "$test_root")"; fi; '
+             'export PROJECT_DIR="$test_root" ENV_DIR="$test_root/env"; export PATH="$test_root/bin:$PATH"; '
+             'source "$2"; echo UNREACHABLE_CLI')
+    result=subprocess.run([str(bash),'-c',command,'test',tmp_path.as_posix(),common.as_posix()],
+                          capture_output=True,text=True,timeout=20)
+    assert result.returncode==124
+    assert '--kill-after=15s 300s' in result.stdout
+    assert 'Python import checks failed exit=124' in result.stderr
+    assert 'UNREACHABLE_CLI' not in result.stdout
 
 
 @pytest.fixture(autouse=True)

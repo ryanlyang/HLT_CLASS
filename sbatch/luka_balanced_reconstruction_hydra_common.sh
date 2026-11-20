@@ -12,4 +12,23 @@ unset TORCH_CUDNN_V8_API_DISABLED
 export CONDA_PREFIX="$ENV_DIR"
 export LD_LIBRARY_PATH="${CONDA_PREFIX}/lib"
 cd "$PROJECT_DIR"
-"$ENV_DIR/bin/python" -I -B -c 'import ssl,torch.nn.functional,uproot,scipy,threadpoolctl; from weaver.nn.model.ParticleTransformer import ParticleTransformer'
+printf 'LUKABREC_SHELL checking Python imports (five-minute total limit)\n'
+if timeout --signal=TERM --kill-after=15s 300s "$ENV_DIR/bin/python" -X faulthandler -I -u -B - <<'PY'
+import faulthandler
+import importlib
+
+faulthandler.dump_traceback_later(60, repeat=True)
+for name in ('ssl', 'torch.nn.functional', 'uproot', 'scipy', 'threadpoolctl',
+             'weaver.nn.model.ParticleTransformer'):
+    print('LUKABREC_IMPORT BEGIN ' + name, flush=True)
+    importlib.import_module(name)
+    print('LUKABREC_IMPORT END ' + name, flush=True)
+faulthandler.cancel_dump_traceback_later()
+PY
+then
+    printf 'LUKABREC_SHELL Python import checks passed\n'
+else
+    LUKABREC_IMPORT_STATUS=$?
+    printf 'LUKABREC_SHELL Python import checks failed exit=%s (124 means timeout)\n' "$LUKABREC_IMPORT_STATUS" >&2
+    return "$LUKABREC_IMPORT_STATUS"
+fi
