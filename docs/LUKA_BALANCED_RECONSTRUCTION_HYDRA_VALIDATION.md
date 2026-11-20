@@ -5,6 +5,52 @@ Evidence date2026-11-19. This implements the
 physics campaign. No remote jobs were submitted, changed or cancelled. Existing
 datasets, scientific checkpoints and other working-tree edits were preserved.
 
+## 2026-11-20: Input-reader repair and measured local parity
+
+Operator-supplied217200 log: D000 reached64370 TRAIN+7063 validation rows after
+8470.7s across57697 tiny spans, then repeated parent-side waits on an unfinished
+Executor result until the6h Slurm limit. This identifies input preparation as
+the blocked stage; worker-level traces were unavailable, so its precise I/O or
+kernel cause is not established. Qualification and science had not begun.
+
+New source batches up to128 selected rows per same-file/role CPU task, retains
+at most128MiB of temporary numeric basket buffers per process, finalizes only
+original authorized spans to numeric NumPy arrays, and preserves FP64 physical
+conversion and per-jet normalization order. Four spawned workers have own
+stack samples and600s submitted-batch deadlines; failed pool shutdown terminates
+owned workers. New specs bind INPUT_EXECUTION_POLICY/v1; scientific recipes,
+resource limits, source donor pins and initial-only HOME policy are unchanged.
+
+Focused pre-edit baseline:7 passed in17.94s. Final complete campaign suite:
+**50 passed,1 skipped in97.13s**. The skip requires four actual CUDA/NCCL GPUs.
+Tests cover multi-basket boundaries, cache hits/eviction/oversize nonretention,
+authorized final row bounds, and byte-for-byte equality with the53bab0c5 reader
+for all three coordinates, mixed22 targets and normalization. Interleaved
+synthetic roles include test/unused/quarantined rows; the reconstruction case
+uses all four spawned CPU workers. A real stalled child test verifies timeout
+propagation and no remaining owned children. Old specs lacking the new policy
+fail closed. All existing objective/reload/resume/HOME-policy tests still pass.
+
+An authenticated local replay retained population
+21175a03adc3d847e62d84a447b04525fc813207685a37d0b0dcb630acafd1f1. A discarded
+technical probe read64 selected TRAIN jets from a merged Higgs source and64
+from a QCD source, checking source hashes before/after. Original versus final
+reader:2.906s versus0.453s, **6.415x** local serial speedup. Features, vectors,
+masks and raw mixed22 target/frame/aggregate arrays were bitwise equal. No model
+inference, validation particles or test evaluation. This small local probe does
+not measure full Hydra/NFS throughput or the additional task-batching benefit.
+Evidence (ignored local artifact):
+`artifacts/audits/balanced_reader_repair_uk2m4b5g/evidence.json`, content hash
+`c45a23e4493329a112b01fe9fded906530b6420f755927a26dde384a30803b0f`.
+
+All531 committed donor payloads match their pins. Three working-copy byte
+differences are solely Windows CRLF conversion; no dependency changes are
+required or included. Scoped whitespace and package syntax checks pass.
+No new scientific donor migration or Tigris job is involved. Actual Hydra
+four-GPU qualification remains mandatory; no remote job/source/data mutation
+was performed here. Next action: push this scoped revision and queue a fresh
+study using its source-derived root, preserving prior records and other jobs.
+
 ## Operator-reported silent qualification timeout and diagnostic revision
 
 The operator reports4a264700 prepare216290 COMPLETED/0:0 (5m24), qualify216291

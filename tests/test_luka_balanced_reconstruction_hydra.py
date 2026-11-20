@@ -6,13 +6,14 @@ import math
 import os
 import subprocess
 import sys
+import time
 import numpy as np
 import pytest
 import torch
 from torch import nn
 from hlt_classification.data.cache_contracts import load_json,write_immutable_json,with_content_hash,sha256_file
 from hlt_classification.luka_balanced_reconstruction_hydra import (
-    contracts as c,population,inputs,kernel,model,artifacts,readouts,resources,training,storage,campaign,banks,reporting)
+    contracts as c,population,inputs,kernel,model,artifacts,readouts,resources,training,storage,campaign,banks,reporting,basket_reader)
 from hlt_classification.luka_next_supervision_hydra.reconstruction_model import Decoder
 from hlt_classification.luka_fullstat_readout.training import optimizer
 from hlt_classification.luka_subclass_ddp_hydra.distributed import Context
@@ -192,13 +193,13 @@ def test_new_root_reader_preserves_roles_and_complete_support(tmp_path,monkeypat
     arrays,fields=population.describe(parent)
     p=c.artifact('POPULATION',parents=dict(parent='a'*64),**fields)
     spec=dict(root=str(tmp_path/'study'),dataset=str(tmp_path),content_hash='b'*64,population=p,maximum=3)
-    original=uproot.behaviors.TBranch.HasBranches.arrays;reads=[]
+    original=basket_reader.Reader.arrays;reads=[]
     def guarded(tree,expressions,*args,**kw):
         lo,hi=kw['entry_start'],kw['entry_stop'];assert np.all(roles[lo:hi]!=2)
         if coordinate=='D000' and (not reco or roles[lo]==1):assert all(k.startswith('hlt_') for k in expressions)
         if reco and any(not k.startswith('hlt_') for k in expressions):assert np.all(roles[lo:hi]==0)
         reads.append((lo,hi));return original(tree,expressions,*args,**kw)
-    monkeypatch.setattr(uproot.behaviors.TBranch.HasBranches,'arrays',guarded)
+    monkeypatch.setattr(basket_reader.Reader,'arrays',guarded)
     inputs.prepare_node(spec,tmp_path/'node',coordinate,targets=reco,workers=1,loaded=(p,parent,arrays))
     caches,targets,m=inputs.load_node(spec,tmp_path/'node')
     assert reads and all(len(v)==120 for v in caches.values())
@@ -209,6 +210,139 @@ def test_new_root_reader_preserves_roles_and_complete_support(tmp_path,monkeypat
         t=targets.batch([0,0,119]);assert [len(v['values']) for v in t]==[3,3,3]
         assert m['normalization']['rows']==120 and m['normalization']['tokens']==360
     else:assert targets is None
+
+
+def test_cached_baskets_finalize_only_requested_rows_and_reuse_reads(tmp_path,monkeypatch):
+    import awkward as ak
+    import uproot
+    path=tmp_path/'particles.root';write_root(path,[1]*120)
+    cache=basket_reader.Reader(path,'tree',cache_bytes=128*2**20)
+    plain=uproot.open(path,object_cache=None,array_cache=None)
+    branches=['jet_nparticles','part_px','hlt_part_d0val']
+    finalizer=uproot.interpretation.jagged.AsJagged.final_array;spans=[]
+    def guarded(interpretation,arrays,start,stop,*args,**kw):
+        spans.append((start,stop))
+        # Treat every odd row as a sealed test row in this synthetic source.
+        assert stop==start+1 and start%2==0
+        return finalizer(interpretation,arrays,start,stop,*args,**kw)
+    try:
+        expected={i:plain['tree'].arrays(branches,entry_start=i,entry_stop=i+1,library='ak',how=dict)
+                  for i in range(0,120,2)}
+        monkeypatch.setattr(uproot.interpretation.jagged.AsJagged,'final_array',guarded)
+        for i in range(0,120,2):
+            actual=cache.arrays(branches,entry_start=i,entry_stop=i+1)
+            for name in branches:assert ak.to_list(actual[name])==ak.to_list(expected[i][name])
+        assert spans and cache.reads==3 and cache.hits==59*3
+        assert cache.peak_bytes<=cache.cache_bytes
+        with pytest.raises(PermissionError):cache.arrays(['jet_label'],entry_start=0,entry_stop=1)
+    finally:cache.close();plain.close()
+    # A tiny budget evicts/declines retention without changing particle support.
+    tiny=basket_reader.Reader(path,'tree',cache_bytes=1)
+    try:
+        first=tiny.arrays(branches,entry_start=0,entry_stop=1)
+        for name in branches:assert ak.to_list(first[name])==ak.to_list(expected[0][name])
+        assert tiny.resident_bytes==0
+    finally:tiny.close()
+
+
+def test_interleaved_input_payloads_equal_original_reader_exactly(tmp_path,monkeypatch):
+    import awkward as ak
+    import uproot
+    path=tmp_path/'raw/test.root';write_root(path,[1]*840)
+    with uproot.open(path) as handle:payload=handle['tree'].arrays(library='ak',how=dict)
+    # Distinct row values catch cache-range/order mistakes, including targets.
+    for side,count in [('',3),('hlt_',2)]:
+        payload[side+'part_px']=ak.Array([[i*.001+j+1 for j in range(count)] for i in range(840)])
+        payload[side+'part_energy']=payload[side+'part_px']+1.
+    schema={name:('var * float32' if '_part_' in name or name.startswith('part_') else
+            'bool' if name=='hlt_matched' else 'float32' if name=='jet_pt' else 'int32') for name in payload
+            if not name.startswith(('npart_','nhlt_part_'))}
+    payload={k:v for k,v in payload.items() if k in schema}
+    with uproot.recreate(path) as handle:handle.mktree('tree',schema);handle['tree'].extend(payload)
+    record=dict(path='raw/test.root',sha256=sha256_file(path),entries=840,tree_key='tree',category='signal')
+    labels=np.repeat(np.repeat(np.arange(6),20),7)
+    pt=np.repeat(np.tile(np.arange(650,2600,100),6),7)
+    roles=np.tile(np.array([0,2,0,3,1,255,1],np.uint8),120)
+    member=dict(labels=labels,jet_pt=pt,jet_nparticles=np.full(840,3),hlt_jet_nparticles=np.full(840,2))
+    parent_arrays={}
+    for code,role in enumerate(('train','validation')):
+        ix=np.flatnonzero(roles==code)
+        parent_arrays[role+'_identities']=np.array([np.frombuffer(bytes.fromhex(population.donor.original.identity(record,int(i))),np.uint8) for i in ix])
+        parent_arrays[role+'_labels']=labels[ix];parent_arrays[role+'_pt']=pt[ix]
+    parent=(dict(content_hash='a'*64,counts=dict(train=240,validation=240)),dict(files=[record]),[member],[roles],parent_arrays,None)
+    monkeypatch.setattr(c,'COUNTS',dict(train=120,validation=120))
+    arrays,fields=population.describe(parent);p=c.artifact('POPULATION',parents=dict(parent='a'*64),**fields)
+    spec=dict(root=str(tmp_path/'study'),dataset=str(tmp_path),content_hash='b'*64,population=p,maximum=3)
+    root=Path(__file__).resolve().parents[1]
+    source=subprocess.check_output(['git','-C',str(root),'show',
+        '53bab0c5e0a31da0d3878e09204d5e5137f80739:src/hlt_classification/luka_balanced_reconstruction_hydra/inputs.py'],text=True)
+    old={'__name__':inputs.__name__,'__package__':inputs.__package__};exec(compile(source,'original_inputs.py','exec'),old)
+    original=basket_reader.Reader.arrays
+    def authorized(reader,branches,**kw):
+        lo,hi=kw['entry_start'],kw['entry_stop']
+        assert np.all(roles[lo:hi]==roles[lo]) and roles[lo] in (0,1)
+        if roles[lo]==1 and coordinate=='D000':
+            assert all(k.startswith('hlt_') for k in branches)
+        return original(reader,branches,**kw)
+    monkeypatch.setattr(basket_reader.Reader,'arrays',authorized)
+    for coordinate,reco in [('D000',True),('OFFLINE',False),('U100',False)]:
+        old_folder=tmp_path/(coordinate+'_old');new_folder=tmp_path/(coordinate+'_new')
+        old['prepare_node'](spec,old_folder,coordinate,targets=reco,workers=1,loaded=(p,parent,arrays))
+        inputs.prepare_node(spec,new_folder,coordinate,targets=reco,workers=4 if reco else 1,loaded=(p,parent,arrays))
+        for name in sorted(old_folder.glob('*.npy')):
+            assert name.read_bytes()==(new_folder/name.name).read_bytes(),name.name
+        if reco:
+            assert load_json(old_folder/'manifest.json')['normalization']==load_json(new_folder/'manifest.json')['normalization']
+
+
+def _blocked_input_batch(batch):
+    time.sleep(30)
+    return [None]*len(batch)
+
+
+def test_basket_cache_preserves_jagged_values_across_baskets_and_eviction(tmp_path):
+    import awkward as ak
+    import uproot
+    path=tmp_path/'several_baskets.root'
+    with uproot.recreate(path) as handle:
+        handle.mktree('tree',{'jet_nparticles':'int32','part_px':'var * float32'})
+        for start in (0,4,8):
+            counts=np.asarray([i%5+1 for i in range(start,start+4)],np.int32)
+            handle['tree'].extend(dict(jet_nparticles=counts,
+                part_px=ak.Array([[i*10+j+.25 for j in range(int(n))] for i,n in zip(range(start,start+4),counts)])))
+    branches=['jet_nparticles','part_px'];cached=basket_reader.Reader(path,'tree',cache_bytes=150)
+    plain=uproot.open(path)
+    try:
+        for lo,hi in [(0,1),(2,5),(5,9),(3,12),(0,12),(0,1)]:
+            expected=plain['tree'].arrays(branches,entry_start=lo,entry_stop=hi,library='ak',how=dict)
+            actual=cached.arrays(branches,entry_start=lo,entry_stop=hi)
+            for name in branches:assert ak.to_list(actual[name])==ak.to_list(expected[name])
+            assert cached.resident_bytes<=150
+        assert cached.reads>6
+    finally:cached.close();plain.close()
+
+
+def test_stalled_input_worker_is_terminated_without_waiting_for_its_task():
+    import multiprocessing
+    before={p.pid for p in multiprocessing.active_children()}
+    arg=('/unused',dict(path='raw/stalled.root'),0,0,1,0,np.ones(1,bool),'D000',False,'a'*64,{})
+    begun=time.monotonic()
+    with pytest.raises(TimeoutError,match='raw/stalled.root'):
+        list(inputs.decoded([arg],workers=2,task_timeout=.2,function=_blocked_input_batch))
+    assert time.monotonic()-begun<15
+    assert not ({p.pid for p in multiprocessing.active_children()}-before)
+
+
+def test_new_input_execution_policy_is_bound_and_old_specs_fail_closed():
+    value=inputs.policy();c.validate(value,'INPUT_EXECUTION_POLICY')
+    assert value['max_batch_rows']==128 and value['workers']==4
+    assert value['worker_batch_timeout_seconds']==600
+    assert value['temporary_basket_cache_bytes_per_worker']==128*2**20
+    assert value['persistent_particle_cache'] is False
+    pop=c.artifact('POPULATION',parents=dict(parent=c.parent.POPULATION_HASH))
+    old=c.artifact('SPEC',population=pop,storage_policy=storage.policy())
+    with pytest.raises(ValueError,match='Input execution policy differs'):
+        campaign.check(old,live=False)
 
 
 def test_serial_dag_has_only_teacher_quality_dependencies():

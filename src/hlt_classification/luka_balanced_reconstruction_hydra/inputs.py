@@ -1,10 +1,9 @@
 """Bounded ROOT decoding into allocation-local shared read-only mmap arrays."""
 from collections import deque
-from concurrent.futures import ProcessPoolExecutor
-from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 import gc
+import atexit
 import multiprocessing
 import os
 import shutil
@@ -14,15 +13,88 @@ from hlt_classification.data.cache_contracts import load_json,write_immutable_js
 from hlt_classification.cms_proxy_ladder.contracts import file_ref,validate_file_ref
 from hlt_classification.jetclass2_delphes.cache import RamBlock,RamCache
 from hlt_classification.luka_fullsim.preflight_cache import _block
-from hlt_classification.luka_fullsim.particles import FIELDS,_matrix,_ranges,physical
+from hlt_classification.luka_fullsim.particles import FIELDS,_ranges,physical
 from hlt_classification.luka_fullstat.cache import conventions
 from hlt_classification.literature_context.transform import build_inputs
 from hlt_classification.cms_proxy_ladder.views import match_particles,build_view
 from hlt_classification.luka_new_fullstat_hydra.population import identity
-from hlt_classification.luka_sixclass_balanced_oscar.views import reader,initialize_worker,close_reader
+from hlt_classification.luka_sixclass_balanced_oscar.views import initialize_worker
 from hlt_classification.luka_next_supervision_hydra.probabilistic_targets import measured
 from hlt_classification.luka_next_supervision_hydra.probabilistic_contracts import CONTINUOUS
 from . import contracts as c, population, diagnostics as log
+from .basket_reader import reader, close_reader
+from .basket_reader import CACHE_BYTES
+
+BATCH_ROWS=128
+TASK_TIMEOUT=600
+
+
+def policy():
+    return c.artifact('INPUT_EXECUTION_POLICY',max_batch_rows=BATCH_ROWS,workers=4,
+        worker_batch_timeout_seconds=TASK_TIMEOUT,temporary_basket_cache_bytes_per_worker=CACHE_BYTES,
+        cache='numeric_Uproot_temporary_basket_buffers_only',
+        final_arrays='numeric_numpy_jagged_exact_authorized_spans',
+        logical_reads='unchanged_contiguous_single_authorized_role_spans',
+        acceptance_order='original_file_then_role_then_entry',
+        hung_worker='diagnose_then_terminate_owned_pool_without_retry',
+        persistent_particle_cache=False)
+
+
+def initialize_decode_worker():
+    initialize_worker()
+    atexit.register(close_reader)
+    log.enable_stall_traces(120)
+
+
+def work_batch(batch):
+    first,last=batch[0],batch[-1]
+    log.mark(f'input worker BEGIN file_index={first[2]} role={first[5]} '
+             f'spans={len(batch)} entries={first[3]}..{last[4]}')
+    result=[work(arg) for arg in batch]
+    log.mark(f'input worker END file_index={first[2]} role={first[5]} spans={len(batch)}')
+    return result
+
+
+def batches(arguments):
+    batch=[];rows=0;key=None
+    for arg in arguments:
+        current=(arg[2],arg[5]);count=int(arg[6].sum())
+        if batch and (key!=current or rows+count>BATCH_ROWS):
+            yield batch
+            batch=[];rows=0
+        batch.append(arg);rows+=count;key=current
+    if batch:yield batch
+
+
+def decoded(arguments, *, workers, task_timeout=TASK_TIMEOUT, function=work_batch):
+    """At most one bounded batch per worker; preserve canonical accept order."""
+    jobs=iter(batches(arguments))
+    if workers==1:
+        try:
+            for batch in jobs:
+                yield from zip(batch,function(batch),strict=True)
+        finally:close_reader()
+        return
+    context=multiprocessing.get_context('spawn')
+    # Unlike Executor.__exit__, Pool.__exit__ terminates owned workers on a
+    # failed/timed-out result instead of waiting indefinitely for their work.
+    with context.Pool(workers,initializer=initialize_decode_worker) as pool:
+        pending=deque()
+        for _ in range(workers):
+            batch=next(jobs,None)
+            if batch is not None:
+                pending.append((batch,pool.apply_async(function,(batch,)),time.monotonic()+task_timeout))
+        while pending:
+            batch,future,deadline=pending.popleft()
+            try:results=future.get(timeout=max(0.,deadline-time.monotonic()))
+            except multiprocessing.TimeoutError as error:
+                arg=batch[0]
+                raise TimeoutError(f'Input worker exceeded {task_timeout}s; file={arg[1]["path"]} '
+                    f'role={arg[5]} entries={arg[3]}..{batch[-1][4]}; inspect worker stack samples') from error
+            yield from zip(batch,results,strict=True)
+            following=next(jobs,None)
+            if following is not None:
+                pending.append((following,pool.apply_async(function,(following,)),time.monotonic()+task_timeout))
 
 
 def work(arg):
@@ -37,13 +109,16 @@ def work(arg):
     rows=[];targets=[];config=conventions(parent)
     with reader(Path(dataset)/record['path'],record['tree_key'],retain=True) as tree:
         if tree.num_entries!=record['entries']:raise ValueError('ROOT row count differs')
-        arrays=tree.arrays(branches,entry_start=lo,entry_stop=hi,library='ak',how=dict)
+        arrays=tree.arrays(branches,entry_start=lo,entry_stop=hi,library='np',how=dict)
         for offset in np.flatnonzero(keep):
             endpoints={}
             for side in sides:
                 prefix='hlt_' if side=='hlt' else '';n=int(arrays[prefix+'jet_nparticles'][offset])
                 if n!=int(counts[side][offset]):raise ValueError('Particle/scalar count differs')
-                endpoints[side]=physical(_matrix(arrays,prefix+'part_',offset,n),config,side)
+                columns=[np.asarray(arrays[prefix+'part_'+field][offset]) for field in FIELDS]
+                if n<=0 or any(v.ndim!=1 or len(v)!=n for v in columns):
+                    raise ValueError('Selected particle/count mismatch')
+                endpoints[side]=physical(np.column_stack(columns).astype(np.float64),config,side)
             entry=lo+int(offset);rid=identity(record,entry)
             if coordinate=='OFFLINE':particles=endpoints['offline']
             elif coordinate=='U100':
@@ -74,7 +149,7 @@ def arguments(spec,parent,arrays,coordinate,targets):
         for role in (0,1):
             entries=np.flatnonzero(codes==role)
             if not len(entries):continue
-            for lo,hi in _ranges(entries.tolist(),1024):
+            for lo,hi in _ranges(entries.tolist(),BATCH_ROWS):
                 if np.any(codes[lo:hi]!=role):raise PermissionError('Unauthorized ROOT span')
                 subset=keep[lo:hi]
                 if subset.any():yield (spec['dataset'],record,index,lo,hi,role,subset,coordinate,targets and role==0,parent[0]['content_hash'],
@@ -140,20 +215,7 @@ def prepare_node(spec,node,coordinate,*,targets=False,workers=4,loaded=None):
                 f'elapsed_s={now-begun:.1f}')
             last_report=now
     jobs=arguments(spec,parent,arrays,coordinate,targets)
-    context=ProcessPoolExecutor(max_workers=workers,mp_context=multiprocessing.get_context('spawn'),initializer=initialize_worker) if workers>1 else nullcontext()
-    with context as pool:
-        if pool is None:
-            try:
-                for arg in jobs:accept(arg,work(arg))
-            finally:close_reader()
-        else:
-            pending=deque()
-            for _ in range(workers):
-                arg=next(jobs,None)
-                if arg is not None:pending.append((arg,pool.submit(work,arg)))
-            while pending:
-                arg,future=pending.popleft();accept(arg,future.result());nxt=next(jobs,None)
-                if nxt is not None:pending.append((nxt,pool.submit(work,nxt)))
+    for arg,result in decoded(jobs,workers=workers):accept(arg,result)
     log.mark(f'input decoding complete coordinate={coordinate}; rechecking source hashes')
     for _,record,_,_,_ in population.selections(parent,arrays):
         if sha256_file(Path(spec['dataset'])/record['path'])!=record['sha256']:raise ValueError('Source changed during construction')

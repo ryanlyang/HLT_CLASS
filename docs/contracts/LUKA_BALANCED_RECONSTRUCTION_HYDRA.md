@@ -53,6 +53,14 @@ fixed late16..20 means are separate from selected results.
 
 ## Publication, execution and continuation
 
+Reader repair2026-11-20 adds the distinct
+[INPUT_EXECUTION_POLICY/v1 contract](LUKA_BALANCED_RECONSTRUCTION_HYDRA_INPUTS.md)
+bound in new specs. It batches CPU tasks, caches bounded temporary ROOT basket
+buffers and terminates failed owned pools, while preserving logical row/branch
+capabilities, scientific payload bytes and acceptance/normalization order.
+No existing scientific schema or recipe changes. Register a fresh source/study;
+prior specs lacking this policy fail closed under revised source.
+
 `SPEC` binds exact pushed clean source, transitive donor pins, installed runtime,
 population, backend, resources, protected ladder reservation and output inventory.
 Canonical untrained starts bind native/predictor/decoder hashes. Temporary probes

@@ -104,6 +104,29 @@ anchors or select the maximum across readout streams as the primary result.
 
 ## Execution and bounded storage
 
+Reader-repair follow-up2026-11-20: the diagnostic run217200 timed out while
+building D000, before any GPU qualification checks. The last progress marker
+shows64370 TRAIN+7063 validation rows after8470.7s, across57697 tiny spans;
+subsequent samples show the parent waiting for a process-pool future. This
+establishes slow preparation and then a nonreturning worker result, not its
+underlying OS/I/O cause. Do not attribute the timeout to model quality or GPU
+training, or repeat the original reader under a larger walltime alone.
+
+Bind a new INPUT_EXECUTION_POLICY/v1 in fresh specs. Bundle consecutive spans
+by source file/role into at most128 selected rows per CPU task. Preserve the
+original single-role contiguous logical request boundaries, acceptance order,
+all particle support and TRAIN-only statistics. Cache at most128MiB of Uproot
+temporary numeric basket buffers per process; its final interpreter still
+trims only to authorized entry bounds. No finalized test/unused row, new target,
+whole-file array or HOME particle cache is permitted. Four bounded spawned
+workers, own stack samples,600s submitted-batch deadlines and terminating pool
+shutdown replace tiny Executor futures and indefinite failed-future waits.
+Require bitwise original-reader feature/target/normalization parity and actual
+local selected-TRAIN probes. See the
+[input execution contract](../contracts/LUKA_BALANCED_RECONSTRUCTION_HYDRA_INPUTS.md).
+Scientific recipe/resource limits remain unchanged; remote speed/acceptance is
+still measured by Hydra qualification. Preserve all earlier roots and jobs.
+
 Startup-diagnostic follow-up2026-11-19: the operator reports prepare216290
 COMPLETED, qualify216291 TIMEOUT at6h, and release216292 CANCELLED. No GPU
 working directory or arm proofs were published. CPU accounting is zero/absent;

@@ -9,7 +9,7 @@ from hlt_classification.provenance import capture_source_snapshot
 from hlt_classification.luka_new_fullstat_hydra.campaign import runtime,clean_env
 from hlt_classification.luka_new_fullstat_hydra import lineage
 from hlt_classification.luka_sixclass_tail_hydra.campaign import submission_lock,terminal
-from . import contracts as c,population,storage,artifacts
+from . import contracts as c,population,storage,artifacts,inputs
 
 
 def source(project,commit):
@@ -28,6 +28,7 @@ def source(project,commit):
         'scripts/queue_luka_balanced_reconstruction_hydra.sh','sbatch/run_luka_balanced_reconstruction_hydra.sh',
         'sbatch/luka_balanced_reconstruction_hydra_common.sh','tests/test_luka_balanced_reconstruction_hydra.py',
         'docs/plans/LUKA_BALANCED_RECONSTRUCTION_HYDRA_PLAN.md','docs/contracts/LUKA_BALANCED_RECONSTRUCTION_HYDRA.md',
+        'docs/contracts/LUKA_BALANCED_RECONSTRUCTION_HYDRA_INPUTS.md',
         'docs/LUKA_BALANCED_RECONSTRUCTION_HYDRA_RUNBOOK.md','docs/LUKA_BALANCED_RECONSTRUCTION_HYDRA_VALIDATION.md'}
     tracked=set(subprocess.check_output(['git','-C',str(project),'ls-files'],text=True).splitlines())
     if not required<=tracked:raise ValueError('Commit all campaign files before deployment')
@@ -81,7 +82,8 @@ def create(dataset,root,project,commit,environment,available_gib):
         environment_dir=str(environment),environment=env,backend=backend(),population=p,maximum=maximum,
         recipe=c.recipe(),tasks=c.tasks(),resources=c.RESOURCES,execution_site=c.SITE,
         foundation_producer=producer,transfer_manifest_sha256=c.parent.TRANSFER_HASH,
-        protected_campaign=preliminary['protected_campaign'],storage=quota,storage_policy=storage.policy(),output_inventory=inventory,
+        protected_campaign=preliminary['protected_campaign'],storage=quota,storage_policy=storage.policy(),
+        input_execution_policy=inputs.policy(),output_inventory=inventory,
         output_allowance_bytes=c.RESULT_BYTES,reserve_bytes=c.RESERVE_BYTES)
     write_immutable_json(root/'campaign_spec.json',spec);return spec
 
@@ -90,6 +92,8 @@ def check(spec,*,live=True):
     c.validate(spec,'SPEC');c.validate(spec['population'],'POPULATION',dict(parent=c.parent.POPULATION_HASH))
     if spec.get('storage_policy')!=storage.policy():
         raise ValueError('Execution storage policy differs; register a fresh study with this source')
+    if spec.get('input_execution_policy')!=inputs.policy():
+        raise ValueError('Input execution policy differs; register a fresh study with this source')
     if (spec['recipe']!=c.recipe() or spec['tasks']!=c.tasks() or spec['resources']!=c.RESOURCES
             or spec['execution_site']!=c.SITE or spec['population']['counts']!=c.COUNTS
             or spec['population']['content_hash']!=c.POPULATION_HASH

@@ -34,6 +34,7 @@ git add -- src/hlt_classification/luka_balanced_reconstruction_hydra `
   tests/test_luka_balanced_reconstruction_hydra.py `
   docs/plans/LUKA_BALANCED_RECONSTRUCTION_HYDRA_PLAN.md `
   docs/contracts/LUKA_BALANCED_RECONSTRUCTION_HYDRA.md `
+  docs/contracts/LUKA_BALANCED_RECONSTRUCTION_HYDRA_INPUTS.md `
   docs/LUKA_BALANCED_RECONSTRUCTION_HYDRA_RUNBOOK.md `
   docs/LUKA_BALANCED_RECONSTRUCTION_HYDRA_VALIDATION.md
 git diff --cached --stat
@@ -133,6 +134,36 @@ fits are present. Native deployable checkpoints
 and prediction files are referenced by`fits/<task>/result.json`.
 
 ## Technical continuation
+
+### Reader repair after diagnostic job217200
+
+The53bab0c5 qualification log establishes slow D000 preparation:71433 of750000
+rows after2h21m, across57697 tiny spans, then repeated waits on an unfinished
+CPU worker until the6h Slurm limit. No scientific fit had started. This is not
+an observed GPU-training performance limit or a physics-quality failure.
+
+The revised source batches up to128 selected rows per same-file/role task,
+reuses up to128MiB of temporary interpreted ROOT basket buffers per process,
+and keeps original authorized final row spans and exact payload/normalization
+order. Four CPU workers now have child stack samples,600s submitted-batch
+deadlines and pool termination on failure. It preserves six-hour qualification,
+48h science, the18-fit recipe, test sealing and initial-only HOME admission.
+See the [input contract](contracts/LUKA_BALANCED_RECONSTRUCTION_HYDRA_INPUTS.md).
+
+Commit/push the revised package/tests and campaign docs using the file list
+above, including the new input contract, then run the general fresh-commit queue
+block. No dataset upload is needed. Preserve both failed studies and all other
+queued/running jobs; do not edit their source/spec or use old-root resume with
+this revision. Qualification must still pass before scientific release.
+Watch `input worker BEGIN/END` and row counts in the new qualification log.
+If a worker times out, share its own stack samples and the named source/span;
+no rows will be silently dropped. Local speed measurements are not a Hydra
+runtime guarantee.
+
+Local acceptance:50 tests passed/1 four-GPU skip. A128-selected-TRAIN QCD/Higgs
+probe preserved exact features/vectors/targets and improved serial construction
+from2.906s to0.453s (6.415x). This is not a full remote timing measurement.
+The source snapshot remains source-pinned and qualification still gates release.
 
 ### Silent qualification timeout at4a264700
 
