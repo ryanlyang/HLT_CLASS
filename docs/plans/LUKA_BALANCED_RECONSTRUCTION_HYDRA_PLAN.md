@@ -2,7 +2,36 @@
 
 Authorized 2026-11-19. This is a new 600k/150k study, not a continuation of the
 old 299234/74895 reconstruction trajectories or the full-size balanced ladder.
-No existing Hydra/Oscar jobs, datasets, sources or results may be changed.
+Scientific workers may change only their own execution. The separately
+authorized clean-slate operation below may retire prior inactive Hydra artifacts.
+Oscar artifacts and scheduler state remain outside that operation.
+
+## Current execution revision: standalone campaign, 2026-11-20
+
+The operator now authorizes retiring previous Hydra campaigns and old inputs,
+keeping what this new study needs. This supersedes the historical preservation
+and protected-ladder reservation requirements later in this document. The new
+study trains fresh OFFLINE/U100 teachers; it requires no old300k data, old model
+weights, imported Oscar teacher bundle or earlier ladder execution records.
+
+Fresh execution specs bind `STORAGE_POLICY/v2`, schema2: own8GiB output allowance
+plus2GiB spare, zero other-campaign reservation, `protected_campaign=null` and
+`other_campaign_dependency=null`. Initial fresh admission requires10GiB, credited
+for own existing outputs on explicit resume. There are still no automatic HOME
+rechecks at release, worker startup or epoch boundaries and no runtime output cap.
+The model, population, sampling, objectives,18-fit recipe, readouts, output
+inventory, reader repair and actual four-GPU acceptance requirements are unchanged.
+Older policy-v1 executions are not migrated; use a new pushed commit/study.
+
+The separate [clean-slate contract](../contracts/LUKA_HYDRA_CLEAN_SLATE.md)
+keeps the whole new dataset/foundation, whole runtime/interpreter, shared Git
+store in `code_65952ed3/.git`, newly pushed source, every `balanced_reco_600k_*`
+root/log and existing retirement records. It archives compact text evidence
+before retiring prior campaign models/predictions/inputs, including other
+full-size new-dataset campaigns. Clean, pushed, registered old worktrees may be
+removed; dirty, separate-store, unpublished or unknown source paths stay.
+No cleanup runs inside training. The [operator commands](../LUKA_HYDRA_CLEAN_SLATE.md)
+perform no job submission/cancellation and require an empty queue throughout.
 
 ## Population
 

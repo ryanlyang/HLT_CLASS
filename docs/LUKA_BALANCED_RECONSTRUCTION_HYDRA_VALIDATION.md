@@ -5,6 +5,39 @@ Evidence date2026-11-19. This implements the
 physics campaign. No remote jobs were submitted, changed or cancelled. Existing
 datasets, scientific checkpoints and other working-tree edits were preserved.
 
+## 2026-11-20: Standalone storage policy and authorized workspace retirement
+
+The operator supplied names-only Hydra inventory confirming the common Git store
+at `code_65952ed3/.git`, the new raw/foundation dataset and the current runtime.
+They authorize retiring all earlier workspace campaigns/inputs except what this
+new study needs. That supersedes the narrower stability-only retirement scope.
+No remote deletion has been performed by this implementation.
+
+STORAGE_POLICY/v2 removes the14GiB other-campaign reservation and all reads of
+the old six-class execution records. Fresh admission is8GiB own outputs plus
+2GiB spare. Automatic HOME checks stay disabled. No scientific recipe, population,
+readout, model, schedule, objective, input reader or resource limit changes.
+Old specs fail closed; use new source and a fresh root. The old v1 budget evidence
+later in this document is historical rather than the current admission rule.
+
+Pre-change focused baseline:3 passed in12.06s. Updated storage tests:4 passed
+in10.31s. Full campaign suite:50 passed,1 four-CUDA skip in100.24s. It includes
+the initialized production inventory/unchanged recipe, original input parity,
+no-automatic-HOME-check paths and filesystem-failure/resume checks. Actual
+Hydra four-GPU qualification remains necessary; no new Tigris check is involved.
+
+The separate cleanup authenticates kept pushed source/Git/interpreter and uses
+a bounded CPU runtime import probe. It archives compact old metadata before
+retiring old binaries without decoding or hashing them. Its focused tests cover
+keep-set preservation, queue changes, altered runtime/keep contracts, external
+imports, changed directories/reports, corrupt archives, partial deletion journals
+and rerun refusal. No local test opens the real remote filesystem or submits jobs.
+See [the cleanup contract](contracts/LUKA_HYDRA_CLEAN_SLATE.md).
+Final new+existing cleanup regression:33 passed,1 Windows directory-symlink
+privilege skip in3.67s (21 new clean-slate tests). PowerShell parser and embedded
+Bash/queue-helper syntax checks pass. No remote cleanup or new qualification
+has been performed; older payloads remain until the operator executes cleanup.
+
 ## 2026-11-20: Input-reader repair and measured local parity
 
 Operator-supplied217200 log: D000 reached64370 TRAIN+7063 validation rows after

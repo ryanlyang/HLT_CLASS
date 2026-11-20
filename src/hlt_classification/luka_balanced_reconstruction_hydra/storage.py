@@ -3,15 +3,17 @@ from pathlib import Path
 import math
 import shutil
 import torch
-from hlt_classification.data.cache_contracts import load_json
+from hlt_classification.data.cache_contracts import with_content_hash
 from . import contracts as c,model
 
 
 def policy():
-    return c.artifact('STORAGE_POLICY',admission='registration_and_explicit_resume_only',
+    return with_content_hash(dict(contract=c.PREFIX+'_STORAGE_POLICY/v2',schema_version=2,
+        parents={},**c.FLAGS,admission='registration_and_explicit_resume_only',
         automatic_home_rechecks=False,runtime_output_limit=False,
         disk_exhaustion='propagate_filesystem_write_error',initial_output_allowance_bytes=c.RESULT_BYTES,
-        initial_reserve_bytes=c.RESERVE_BYTES,protected_initial_allowance_bytes=c.OTHER_RESERVATION)
+        initial_reserve_bytes=c.RESERVE_BYTES,protected_initial_allowance_bytes=0,
+        other_campaign_dependency=None))
 
 
 def usage(root):
@@ -24,27 +26,18 @@ def usage(root):
     return total
 
 
-def other_remaining(spec):
-    from hlt_classification.luka_sixclass_tail_hydra.campaign import committed_bytes
-    from hlt_classification.luka_sixclass_tail_hydra.contracts import validate
-    p=Path(spec['protected_campaign']['root'])/'campaign_spec.json';other=load_json(p);validate(other,'SPEC')
-    if other['content_hash']!=spec['protected_campaign']['spec_sha256'] or other['root']!=str(p.parent):
-        raise ValueError('Protected ladder reservation differs')
-    return max(0,c.OTHER_RESERVATION-committed_bytes(p.parent))
-
-
 def check(spec,*,declared_gib=None):
     root=Path(spec['root']);used=usage(root)
     if used>c.RESULT_BYTES:raise OSError('Own campaign exceeded its result allowance; preserve outputs')
-    needed=max(0,c.RESULT_BYTES-used)+c.RESERVE_BYTES+other_remaining(spec)
+    needed=max(0,c.RESULT_BYTES-used)+c.RESERVE_BYTES
     anchor=root
     while not anchor.exists():anchor=anchor.parent
     free=shutil.disk_usage(anchor).free
     if declared_gib is not None:
         if type(declared_gib)!=int or declared_gib<0:raise ValueError('Declare current whole free GiB')
         free=min(free,declared_gib*2**30)
-    if free<needed:raise OSError(f'Need {math.ceil(needed/2**30)} GiB currently available including protected ladder reservation')
-    return dict(used_bytes=used,needed_free_bytes=needed,filesystem_free_bytes=free,other_remaining_bytes=other_remaining(spec))
+    if free<needed:raise OSError(f'Need {math.ceil(needed/2**30)} GiB currently available for this campaign')
+    return dict(used_bytes=used,needed_free_bytes=needed,filesystem_free_bytes=free,other_remaining_bytes=0)
 
 
 def estimate(maximum):

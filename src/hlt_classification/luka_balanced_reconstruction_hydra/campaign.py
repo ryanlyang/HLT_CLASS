@@ -1,4 +1,4 @@
-"""Pinned source, shared-reservation registration and durable two-phase submission."""
+"""Pinned standalone source/data/runtime and durable two-phase submission."""
 from pathlib import Path
 import os
 import re
@@ -70,10 +70,7 @@ def create(dataset,root,project,commit,environment,available_gib):
     manifest=load_json(dataset/'transfer_manifest.json');complete=load_json(dataset/'transfer_complete.json')
     if (canonical_sha256(manifest)!=c.parent.TRANSFER_HASH or complete.get('manifest_sha256')!=c.parent.TRANSFER_HASH
             or complete.get('all_files_verified') is not True):raise ValueError('New dataset transfer differs')
-    from hlt_classification.luka_sixclass_tail_hydra.contracts import validate as validate_tail
-    other=load_json(Path(c.OTHER_ROOT)/'campaign_spec.json');validate_tail(other,'SPEC')
-    if other['root']!=c.OTHER_ROOT:raise ValueError('Protected campaign root differs')
-    preliminary=dict(root=str(root),protected_campaign=dict(root=c.OTHER_ROOT,spec_sha256=other['content_hash']))
+    preliminary=dict(root=str(root),protected_campaign=None)
     quota=storage.check(preliminary,declared_gib=available_gib)
     root.mkdir(parents=True,exist_ok=False)
     p=population.build(dataset,root/'population')
@@ -99,7 +96,7 @@ def check(spec,*,live=True):
             or spec['population']['content_hash']!=c.POPULATION_HASH
             or spec['maximum']!=max(spec['population']['maximum_support']['train'].values())
             or spec['output_allowance_bytes']!=c.RESULT_BYTES or spec['reserve_bytes']!=c.RESERVE_BYTES
-            or spec['transfer_manifest_sha256']!=c.parent.TRANSFER_HASH or spec['protected_campaign']['root']!=c.OTHER_ROOT):
+            or spec['transfer_manifest_sha256']!=c.parent.TRANSFER_HASH or spec['protected_campaign'] is not None):
         raise ValueError('Scientific/resource policy differs')
     if live:
         locations(*(Path(spec[k]) for k in ('dataset','root','project','environment_dir')))

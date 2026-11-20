@@ -9,8 +9,10 @@ classes,600k TRAIN/150k natural validation. See the
 [contract](contracts/LUKA_BALANCED_RECONSTRUCTION_HYDRA.md) and
 [validation](LUKA_BALANCED_RECONSTRUCTION_HYDRA_VALIDATION.md).
 
-Existing Oscar jobs and Hydra ladders stay queued/running. This campaign does
-not reuse their scientific weights or create a persistent particle cache. The
+This campaign does not mutate scheduler state or reuse old scientific weights,
+and does not create a persistent particle cache. For the newly authorized
+retirement of old Hydra campaigns, use the
+[clean-slate commands](LUKA_HYDRA_CLEAN_SLATE.md) before queuing. The
 initial three jobs prepare, qualify actual hardware, then automatically release
 the18 fits plus report. The fits run serially. Qualification failure releases
 no fits; it preserves diagnostic records. 48h is a per-fit envelope, not a
@@ -50,22 +52,21 @@ its own detached clean worktree, so other local unstaged work is preserved.
 ## Queue from your authenticated Hydra Bash terminal
 
 The verified dataset already exists on Hydra. No new upload is needed.
-The shared reservation can require24GiB currently free when none of the
-protected ladder's14GiB has been spent; committed ladder outputs reduce that
-unspent reservation. Declare current whole freeGiB, not the earlier27GiB value.
-The initial registration checks actual filesystem space. Operator-authorized
-revised executions record `STORAGE_POLICY/v1`: no automatic HOME rechecks during
+Current `STORAGE_POLICY/v2` needs10GiB initially: own8GiB output allowance plus
+2GiB spare, with no old-ladder reservation or old-campaign file dependency.
+Declare current whole freeGiB. Registration checks actual filesystem space.
+There are no automatic HOME rechecks during
 release, later submission, GPU-job startup or training epochs, and no runtime
 output cap. A genuinely full filesystem can still cause a write failure. An
 explicit manual resume performs its own initial admission check. Node-local
 RAM scratch capacity and CPU/GPU resource qualification remain required.
 
-The current output allowance is8GiB, based on the audited4.50GiB complete
-initialized inventory. The protected ladder's14GiB and2GiB spare remain. The
-older01324411/1e602e33 sources required26GiB; use the new pushed budget-sizing
-commit in the general queue block above, without running either cleanup again.
-The user reports the cross-message cleanup completed (126MiB retired), with
-24.539GiB then free. The bank cleanup remains blocked and must stay untouched.
+The current allowance is based on the audited4.50GiB complete initialized
+inventory. Older sources retained a14GiB ladder allowance and require its old
+records. After the clean-slate cleanup, use the new standalone-policy pushed
+commit and fresh study, never an old ebd15b7e retry. The historical one-file
+cleanup section below records an earlier narrower authorization; do not run
+it alongside or after the new clean-slate operation.
 
 ```bash
 bash <<'BASH'
@@ -211,7 +212,11 @@ Refresh FREE_GIB from current storage first. An incomplete registration without
 Source/runtime drift, invalid data, ambiguous submissions and insufficient space
 fail closed. Poor physics metrics are retained scientific results.
 
-## One-file cleanup before retrying the blocked01324411 launch
+## Historical one-file cleanup before the blocked01324411 retry
+
+Superseded for the clean-slate workflow by [these commands](LUKA_HYDRA_CLEAN_SLATE.md).
+This section documents the earlier protected-ladder policy; its old cleanup and
+launch instructions are not the current clean-slate sequence.
 
 The supplied inventory identifies169,968,554 bytes of derived old TRAIN keys at
 `contrast_delta_54473f10/keys/keys.npz`. The revised helper authenticates that

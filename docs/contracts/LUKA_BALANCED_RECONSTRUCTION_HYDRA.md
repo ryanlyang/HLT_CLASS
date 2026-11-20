@@ -62,7 +62,7 @@ No existing scientific schema or recipe changes. Register a fresh source/study;
 prior specs lacking this policy fail closed under revised source.
 
 `SPEC` binds exact pushed clean source, transitive donor pins, installed runtime,
-population, backend, resources, protected ladder reservation and output inventory.
+population, backend, resources, versioned storage policy and output inventory.
 Canonical untrained starts bind native/predictor/decoder hashes. Temporary probes
 are discarded; scientific starts reload the canonical state. No quality threshold
 may suppress a scientific row or fail training.
@@ -106,21 +106,24 @@ Only successful authentication of published outputs permits retiring the final
 restart payload. Scientific native outputs remain. No timestamp is an identity.
 
 Allocation-local `/dev/shm` inputs/targets are mmap-shared, authenticated and
-removed only under the exact owned job path. HOME budget8GiB+2GiB reserve is
-checked together with the unspent authenticated14GiB existing ladder reservation
-only at registration or explicit manual resume. Operator-authorized
-`LUKA_BALANCED_RECONSTRUCTION_HYDRA_STORAGE_POLICY/v1` binds this execution rule:
-no automatic HOME checks at submission/release, job startup or epoch boundaries;
-no runtime output cap. Genuine filesystem write errors propagate. Specs without
-this policy fail closed under the revised source; use a fresh study root.
-Dataset, other campaigns, existing models and jobs are never cleanup targets.
+removed only under the exact owned job path. Current standalone HOME policy is
+`LUKA_BALANCED_RECONSTRUCTION_HYDRA_STORAGE_POLICY/v2`, schema2, canonical hash,
+parents{} and inherited development-validation flags. It binds own8GiB output
+allowance plus2GiB spare, zero protected allowance, and
+`other_campaign_dependency=null`. SPEC requires `protected_campaign=null`.
+Registration/explicit manual resume read no earlier ladder records. Fresh
+admission requires10GiB; own existing outputs receive credit on resume.
+No automatic HOME checks at submission/release, job startup or epoch boundaries;
+no runtime output cap. Genuine filesystem write errors propagate. Old/missing
+policy-v1 specs fail closed under revised source; use a fresh study root.
 
-The revised initial8GiB budget is bound numerically in the STORAGE_POLICY and
-SPEC. The full initialized inventory is4,828,964,049 bytes; the protected14GiB
-ladder allowance and separate2GiB reserve remain, so the initial ceiling is24GiB.
-This estimate does not reserve physical filesystem space or promise write success.
+The full initialized inventory remains4,828,964,049 bytes. The policy is an
+admission estimate, not a physical reservation or promise of write success.
+Scientific recipe/resources and INPUT_EXECUTION_POLICY/v1 remain identical.
+The source-bound WORKSPACE_KEEP/v1 JSON declares no historical artifact dependency.
 
-The separate operator-authorized one-file retirement described in the runbook
-may remove the unused old `contrast_delta_54473f10/keys/keys.npz` derived TRAIN
-bank after manifest/checksum and transitive live-job authentication. It does
-not change this experiment's dataset, teacher targets, model or prediction files.
+Scientific workers never retire another campaign. A separately authorized
+[clean-slate filesystem operation](LUKA_HYDRA_CLEAN_SLATE.md) may retire prior
+inactive runs/inputs/worktrees before launch. It preserves the new dataset,
+runtime, shared Git, current source and all new reconstruction studies. No
+model/prediction payload is read or evaluated by that operation.

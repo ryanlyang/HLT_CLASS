@@ -357,14 +357,14 @@ def test_serial_dag_has_only_teacher_quality_dependencies():
     assert any(a.startswith('--dependency=afterany:') for a in rows[-1]['command'])
 
 
-def test_quota_respects_existing_tail_and_never_mutates_it(tmp_path,monkeypatch):
-    spec=dict(root=str(tmp_path/'new'))
-    monkeypatch.setattr(storage,'other_remaining',lambda s:14*2**30)
-    monkeypatch.setattr(storage.shutil,'disk_usage',lambda p:SimpleNamespace(free=int(24.539*2**30)))
-    q=storage.check(spec,declared_gib=24);assert q['needed_free_bytes']==24*2**30
-    with pytest.raises(OSError):storage.check(spec,declared_gib=23)
+def test_quota_requires_only_own_outputs_and_spare_without_any_old_campaign(tmp_path,monkeypatch):
+    spec=dict(root=str(tmp_path/'new'),protected_campaign=None)
+    monkeypatch.setattr(storage.shutil,'disk_usage',lambda p:SimpleNamespace(free=int(10.539*2**30)))
+    q=storage.check(spec,declared_gib=10);assert q['needed_free_bytes']==10*2**30
+    assert q['other_remaining_bytes']==0 and not (tmp_path/'runs').exists()
+    with pytest.raises(OSError):storage.check(spec,declared_gib=9)
     Path(spec['root']).mkdir();(Path(spec['root'])/'own.bin').write_bytes(b'x'*1024)
-    assert storage.check(spec)['needed_free_bytes']==24*2**30-1024
+    assert storage.check(spec)['needed_free_bytes']==10*2**30-1024
     monkeypatch.setenv('LUKABREC_INPUT_LAUNCHER_PID','991')
     parent=os.getppid()
     monkeypatch.setattr(resources,'host_snapshot',lambda pid=None:dict(Pss=100 if pid is None else 20,Rss=110))
@@ -375,10 +375,12 @@ def test_quota_respects_existing_tail_and_never_mutates_it(tmp_path,monkeypatch)
 
 
 def test_storage_admission_is_explicit_execution_policy_and_old_specs_fail_closed():
-    p=storage.policy();c.validate(p,'STORAGE_POLICY')
+    from hlt_classification.data.cache_contracts import validate_content_hash
+    p=storage.policy();validate_content_hash(p,expected_contract=c.PREFIX+'_STORAGE_POLICY/v2',expected_schema_version=2)
     assert p['automatic_home_rechecks'] is False and p['runtime_output_limit'] is False
     assert p['initial_output_allowance_bytes']==8*2**30
     assert p['admission']=='registration_and_explicit_resume_only'
+    assert p['protected_initial_allowance_bytes']==0 and p['other_campaign_dependency'] is None
     pop=c.artifact('POPULATION',parents=dict(parent=c.parent.POPULATION_HASH))
     old=c.artifact('SPEC',population=pop)
     with pytest.raises(ValueError,match='Execution storage policy differs'):campaign.check(old,live=False)

@@ -26,8 +26,6 @@ RESOURCES=dict(gpus=4,gpu_type='geforce_gtx_1080_ti',gpu_name='NVIDIA GeForce GT
                cpus=12,memory_mb=64000,minutes=2880)
 RESULT_BYTES=8*2**30  # Audited full inventory is4.50 GiB; retain2 GiB separate headroom.
 RESERVE_BYTES=2*2**30
-OTHER_ROOT=BASE+'/runs/sixclass_tail_504a8314_r1'
-OTHER_RESERVATION=14*2**30
 
 
 def artifact(kind,*,parents=None,**fields):

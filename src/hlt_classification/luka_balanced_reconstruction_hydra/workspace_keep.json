@@ -1,0 +1,11 @@
+{
+  "contract": "LUKA_BALANCED_RECONSTRUCTION_HYDRA_WORKSPACE_KEEP/v1",
+  "schema_version": 1,
+  "dataset": "datasets/luka_qcdrun2com_higgs2p_sb_v1",
+  "environment": "environment_pair_hydra_v1",
+  "git_primary": "code_65952ed3",
+  "run_prefix": "balanced_reco_600k_",
+  "storage_policy": "LUKA_BALANCED_RECONSTRUCTION_HYDRA_STORAGE_POLICY/v2",
+  "historical_artifacts_required": false,
+  "content_hash": "8d5077aa3d15e303756e03aa55476bee1c2abac2692ae83dac77613ed1ba6822"
+}
