@@ -1,20 +1,23 @@
 """Exact Hydra allocations; allocation-local shared inputs; four actual GPU ranks."""
 from datetime import timedelta
 from decimal import Decimal
+import faulthandler
 from pathlib import Path
 import os
 import re
 import shutil
 import subprocess
 import time
+import traceback
 import numpy as np
 import torch
 import torch.distributed as dist
 from hlt_classification.data.cache_contracts import load_json,load_npz_arrays,write_immutable_json
 from hlt_classification.cms_proxy_ladder.contracts import file_ref,validate_file_ref
 from hlt_classification.luka_fullstat_multiview.execution import allocation_minutes
-from hlt_classification.luka_subclass_ddp_hydra.distributed import Context
-from . import contracts as c,campaign,population,inputs,artifacts,resources,training,kernel,banks,launch,diagnostics as log
+from hlt_classification.luka_subclass_ddp_hydra.distributed import Context as BaseContext
+from hlt_classification.operations.hydra_reconstruction_gpu_diagnostic import context
+from . import contracts as c,campaign,population,inputs,artifacts,resources,training,kernel,banks,launch,startup,transport,diagnostics as log
 
 
 def controller(args):
@@ -49,6 +52,7 @@ def allocation(spec,task):
     minutes=c.QUALIFICATION_MINUTES if task=='qualify' else c.RESOURCES['minutes'] if gpu else 240 if task=='prepare' else 60
     if allocation_minutes(fields.get('TimeLimit',''))!=minutes:raise PermissionError('Allocation walltime differs')
     if gpu:
+        transport.check()
         if tres.get('gres/gpu')!='4' or any(k.startswith('gres/gpu:') and (k!='gres/gpu:geforce_gtx_1080_ti' or v!='4') for k,v in tres.items()):
             raise PermissionError('Four registered GTX1080Ti devices required')
         log.mark('BEGIN CUDA availability/device-count query')
@@ -120,11 +124,20 @@ def run(spec,task):
             write_immutable_json(Path(spec['root'])/'tasks/qualify.json',receipt);return receipt
         if task!='qualify':task_receipt(spec,'qualify');resources.qualification(spec)
         if task in c.FITS and (artifacts.fit_root(spec,task)/'result.json').exists():raise FileExistsError('Fit already published')
+        if os.name=='posix':
+            import resource
+            resource.setrlimit(resource.RLIMIT_CORE,(0,0))
         node=scratch(job)
         try:
             command=launch.command(spec['project'],spec['root'],task,node)
             with log.stage('installed torchrun argument parser before input build'):
                 launch.validate(command)
+                launch.validate(launch.command(spec['project'],spec['root'],task,node,startup_only=True))
+            env=dict(os.environ,LUKABREC_INPUT_LAUNCHER_PID=str(os.getpid()),**transport.ENVIRONMENT)
+            startup.folder(spec,job).mkdir(parents=True,exist_ok=False)
+            with log.stage('five-minute actual GPU acceptance before population or particle reads'):
+                subprocess.run(launch.startup_command(spec['project'],spec['root'],task,node),check=True,env=env)
+                startup.check(spec,task,job)
             with log.stage('population replay'):
                 loaded=population.load(spec['dataset'],Path(spec['root'])/'population')
             coords=('D000','OFFLINE','U100') if task=='qualify' else (c.cell(task)['coordinate'],)
@@ -132,7 +145,6 @@ def run(spec,task):
                 needs=coord=='D000' and (task=='qualify' or c.cell(task)['reconstruction'])
                 with log.stage(f'input build coordinate={coord} targets={needs}'):
                     inputs.prepare_node(spec,node/coord,coord,targets=needs,loaded=loaded)
-            env=dict(os.environ,LUKABREC_INPUT_LAUNCHER_PID=str(os.getpid()))
             # Child ranks own startup/probe tracing; waiting here is expected.
             log.disable_stall_traces()
             with log.stage('four-rank worker execution'):
@@ -147,20 +159,30 @@ def run(spec,task):
     write_immutable_json(destination,receipt);return receipt
 
 
-def rank(spec,task,node):
+def rank(spec,task,node,*,startup_only=False):
     if task!='qualify' and task not in c.FITS:raise PermissionError('Not a GPU task')
     rank=int(os.environ.get('RANK','-1'))
     if rank not in range(4) or os.environ.get('LOCAL_RANK')!=str(rank) or os.environ.get('WORLD_SIZE')!='4':
         raise PermissionError('Four local ranks on one node required')
     with log.stage('rank device/configuration and source/runtime verification'):
+        transport.check()
         torch.cuda.set_device(rank);kernel.configure(4,12);campaign.check(spec);job=allocation(spec,task)
     if Path(node)!=Path('/dev/shm')/f'rlyang_lukabrec_{job}':raise PermissionError('Scratch not bound to this allocation')
-    # I/O was completed before NCCL initialization, avoiding a collective timeout
-    # while the launcher reconstructs the large views.
-    with log.stage('NCCL initialization'):
-        dist.init_process_group('nccl',timeout=timedelta(minutes=20))
-    ctx=Context(rank,4,torch.device('cuda',rank))
+    # Control objects use a separate host group. Native SyncBN and tensor/gradient
+    # reductions retain the default NCCL group and their scientific math.
+    trace=None
+    if startup_only:
+        log.disable_stall_traces()
+        trace=(startup.folder(spec,job)/f'rank_{rank}.stack.log').open('x')
+        faulthandler.cancel_dump_traceback_later();faulthandler.enable(file=trace)
+        faulthandler.dump_traceback_later(40,repeat=True,file=trace)
     try:
+        with log.stage('NCCL tensor group initialization'):
+            dist.init_process_group('nccl',timeout=timedelta(seconds=startup.COLLECTIVE_SECONDS) if startup_only else timedelta(minutes=20))
+        with log.stage('Gloo CPU control group initialization'):
+            control=dist.new_group(backend='gloo',timeout=timedelta(seconds=startup.COLLECTIVE_SECONDS if startup_only else 1200))
+        ctx=context(BaseContext,control,dist)(rank,4,torch.device('cuda',rank))
+        if startup_only:return startup.run(spec,task,ctx,job)
         coords=('D000','OFFLINE','U100') if task=='qualify' else (c.cell(task)['coordinate'],)
         views={}
         for coord in coords:
@@ -183,12 +205,21 @@ def rank(spec,task,node):
             bank=banks.Bank(spec,task,caches['train']) if c.cell(task)['teacher'] else None
             with log.stage('science integrated miniature'):
                 mini=resources.miniature(spec,task,caches,target,bank,arrays['train_pt'],ctx)
-            startup=c.artifact('STARTUP',parents=dict(spec=spec['content_hash']),task=task,job=job,
+            receipt=c.artifact('STARTUP',parents=dict(spec=spec['content_hash']),task=task,job=job,
                 miniature=mini,discarded=True,qualification=resources.qualification(spec)['content_hash'])
-            ctx.main(lambda:write_immutable_json(folder/'startup.json',startup))
+            ctx.main(lambda:write_immutable_json(folder/'startup.json',receipt))
             # fit owns its own fresh run directory so technical state cannot be resumed.
             log.mark('BEGIN scientific fit '+task)
             log.disable_stall_traces()
             training.fit(spec,task,caches,target,bank,arrays['train_pt'],ctx,folder/'fit',job,
                          validation_pt=arrays['validation_pt'])
-    finally:dist.destroy_process_group()
+    except Exception:
+        if startup_only:
+            error=c.artifact('EARLY_GPU_ERROR',parents=dict(spec=spec['content_hash'],policy=startup.policy()['content_hash']),
+                task=task,job=job,rank=rank,traceback=traceback.format_exc(),synthetic_only=True)
+            write_immutable_json(startup.folder(spec,job)/f'rank_{rank}.error.json',error)
+        raise
+    finally:
+        if dist.is_initialized():dist.destroy_process_group()
+        if trace is not None:
+            faulthandler.cancel_dump_traceback_later();faulthandler.disable();trace.close()

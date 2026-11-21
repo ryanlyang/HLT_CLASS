@@ -25,8 +25,10 @@ def source(project,commit):
     required={p.relative_to(project).as_posix() for p in Path(__file__).parent.iterdir() if p.suffix in ('.py','.json')}
     required|=set(pins['files'])
     required|={'scripts/luka_balanced_reconstruction_hydra.py','scripts/launch_luka_balanced_reconstruction_hydra.sh',
+        'src/hlt_classification/operations/hydra_reconstruction_gpu_diagnostic.py',
         'scripts/queue_luka_balanced_reconstruction_hydra.sh','sbatch/run_luka_balanced_reconstruction_hydra.sh',
         'sbatch/luka_balanced_reconstruction_hydra_common.sh','tests/test_luka_balanced_reconstruction_hydra.py',
+        'tests/test_luka_balanced_reconstruction_startup.py','tests/test_hydra_reconstruction_gpu_diagnostic.py',
         'docs/plans/LUKA_BALANCED_RECONSTRUCTION_HYDRA_PLAN.md','docs/contracts/LUKA_BALANCED_RECONSTRUCTION_HYDRA.md',
         'docs/contracts/LUKA_BALANCED_RECONSTRUCTION_HYDRA_INPUTS.md',
         'docs/contracts/LUKA_BALANCED_RECONSTRUCTION_HYDRA_LAUNCH.md',

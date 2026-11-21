@@ -1,5 +1,14 @@
 # Queue the 600k balanced reconstruction screen on Hydra
 
+**Current next action:** the operator verified Gloo/no-P2P diagnostic219052
+COMPLETED/0:0 with saved four-rank OFFLINE parity. Original/Gloo-only profiles
+returned incorrect tensor sums. Commit/push the v3 transport repair and use a
+fresh study below. It pins NCCL_P2P_DISABLE=1 before Python, uses Gloo control,
+and performs a five-minute actual GPU check before full decoding. That check
+must pass all9 arm paths before qualification builds inputs. Full real-input
+resource qualification still gates scientific release. Preserve old source and
+diagnostics; no repeat of the three diagnostics is needed.
+
 This is **18 scientific fits**, two matched seeds,20 epochs each, on **four
 GTX1080Ti GPUs per fit**. It trains new OFFLINE/M0HLT/U100 teachers and compares
 U100-w5, R24, D20, R20, R22 and R28. Four readouts per trajectory include EMA05
@@ -28,12 +37,18 @@ required for the executable campaign snapshot.
 ```powershell
 git diff --cached --stat
 git add -- src/hlt_classification/luka_balanced_reconstruction_hydra `
+  src/hlt_classification/operations/hydra_reconstruction_gpu_diagnostic.py `
   scripts/luka_balanced_reconstruction_hydra.py `
   scripts/launch_luka_balanced_reconstruction_hydra.sh `
   scripts/queue_luka_balanced_reconstruction_hydra.sh `
   sbatch/luka_balanced_reconstruction_hydra_common.sh `
   sbatch/run_luka_balanced_reconstruction_hydra.sh `
   tests/test_luka_balanced_reconstruction_hydra.py `
+  tests/test_luka_balanced_reconstruction_startup.py `
+  tests/test_hydra_reconstruction_gpu_diagnostic.py `
+  scripts/diagnose_luka_hydra_gpus.ps1 `
+  docs/LUKA_HYDRA_GPU_DIAGNOSTIC.md `
+  docs/contracts/LUKA_HYDRA_GPU_DIAGNOSTIC.md `
   docs/plans/LUKA_BALANCED_RECONSTRUCTION_HYDRA_PLAN.md `
   docs/contracts/LUKA_BALANCED_RECONSTRUCTION_HYDRA.md `
   docs/contracts/LUKA_BALANCED_RECONSTRUCTION_HYDRA_INPUTS.md `
@@ -41,7 +56,7 @@ git add -- src/hlt_classification/luka_balanced_reconstruction_hydra `
   docs/LUKA_BALANCED_RECONSTRUCTION_HYDRA_RUNBOOK.md `
   docs/LUKA_BALANCED_RECONSTRUCTION_HYDRA_VALIDATION.md
 git diff --cached --stat
-git commit -m "Fix balanced reconstruction torchrun argument boundary and qualification budget"
+git commit -m "Pin passing Hydra GPU transport and check all arms before decoding"
 git push origin HEAD:main
 git rev-parse HEAD
 ```

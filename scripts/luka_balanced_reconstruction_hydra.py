@@ -20,6 +20,7 @@ def main():
     a=sub.add_parser('resume');a.add_argument('--spec',required=True);a.add_argument('--authorize',required=True);a.add_argument('--available-gib',type=int,required=True)
     a=sub.add_parser('run');a.add_argument('--spec',required=True);a.add_argument('--task',choices=list(c.tasks()),required=True)
     a=sub.add_parser('rank');a.add_argument('--spec',required=True);a.add_argument('--task',required=True);a.add_argument('--node',required=True)
+    a.add_argument('--startup-only',action='store_true')
     for name in ('results','progress'):
         a=sub.add_parser(name);a.add_argument('--spec',required=True);a.add_argument('--readout',choices=c.READOUTS,default='EMA05')
         if name=='results':a.add_argument('--rejections',action='store_true')
@@ -39,7 +40,7 @@ def main():
     elif a.command in ('run','rank'):
         with diagnostics.stage('worker imports'):
             from hlt_classification.luka_balanced_reconstruction_hydra import worker
-        result=worker.run(spec,a.task) if a.command=='run' else worker.rank(spec,a.task,a.node)
+        result=worker.run(spec,a.task) if a.command=='run' else worker.rank(spec,a.task,a.node,startup_only=a.startup_only)
     else:
         from hlt_classification.luka_balanced_reconstruction_hydra import reporting
         if a.command=='results':reporting.table(spec,a.readout,rejections=a.rejections)

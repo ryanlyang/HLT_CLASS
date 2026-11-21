@@ -399,19 +399,25 @@ def test_initialized_full_support_output_inventory_fits_revised_allowance_withou
 
 
 def test_gpu_job_wrapper_does_not_recheck_home_space(tmp_path,monkeypatch):
-    from hlt_classification.luka_balanced_reconstruction_hydra import worker
+    from hlt_classification.luka_balanced_reconstruction_hydra import worker,startup
     spec=dict(root=str(tmp_path),project='/project',dataset='/data',content_hash='a'*64)
     node=tmp_path/'node';node.mkdir()
     monkeypatch.setattr(kernel,'configure',lambda *a:None);monkeypatch.setattr(campaign,'check',lambda *a:None)
     monkeypatch.setattr(worker,'allocation',lambda *a:'123');monkeypatch.setattr(worker,'task_receipt',lambda *a:{})
     monkeypatch.setattr(storage,'check',lambda *a,**kw:pytest.fail('No HOME recheck at GPU startup'))
     monkeypatch.setattr(worker,'scratch',lambda job:node);monkeypatch.setattr(worker,'cleanup',lambda *a:None)
-    monkeypatch.setattr(population,'load',lambda *a:None);monkeypatch.setattr(inputs,'prepare_node',lambda *a,**kw:None)
-    def run(*a,**kw):
+    events=[]
+    monkeypatch.setattr(population,'load',lambda *a:events.append('population'))
+    monkeypatch.setattr(inputs,'prepare_node',lambda *a,**kw:events.append('inputs'))
+    monkeypatch.setattr(startup,'check',lambda *a:events.append('proof'))
+    def run(argv,**kw):
         assert kw['env']['LUKABREC_INPUT_LAUNCHER_PID']==str(os.getpid())
-        write_immutable_json(tmp_path/'qualification.json',c.artifact('QUALIFICATION'))
+        assert kw['env']['NCCL_P2P_DISABLE']=='1'
+        events.append('early' if argv[0]=='srun' else 'full')
+        if argv[0]!='srun':write_immutable_json(tmp_path/'qualification.json',c.artifact('QUALIFICATION'))
     monkeypatch.setattr(worker.subprocess,'run',run)
     assert worker.run(spec,'qualify')['task']=='qualify'
+    assert events==['early','proof','population','inputs','inputs','inputs','full']
 
 
 def test_actual_torchrun_parser_reproduces_old_failure_and_accepts_boundary(tmp_path,capsys):
@@ -499,7 +505,9 @@ def test_registration_parser_check_precedes_population_and_raw_authentication(tm
 
 def test_new_launch_policy_binds_qualification_time_and_old_specs_fail_closed():
     from hlt_classification.luka_balanced_reconstruction_hydra import launch
-    policy=launch.policy();c.validate(policy,'WORKER_LAUNCH_POLICY')
+    from hlt_classification.data.cache_contracts import validate_content_hash
+    policy=launch.policy();validate_content_hash(policy,
+        expected_contract=c.PREFIX+'_WORKER_LAUNCH_POLICY/v3',expected_schema_version=3)
     assert policy['qualification_minutes']==720 and policy['science_minutes']==2880
     assert policy['installed_parser_check'] is True
     spec=dict(root='/study',project='/project',content_hash='a'*64)
@@ -699,6 +707,7 @@ def test_worker_allocation_rejects_wrong_gpu_or_request(monkeypatch):
     from hlt_classification.luka_balanced_reconstruction_hydra import worker
     spec=dict(root='/r',project='/p',environment_dir='/e',content_hash='a'*64)
     monkeypatch.setenv('SLURM_JOB_ID','123');monkeypatch.setenv('PYTHONNOUSERSITE','1')
+    monkeypatch.setenv('NCCL_P2P_DISABLE','1')
     monkeypatch.setenv('LD_LIBRARY_PATH',str(Path('/e')/'lib'))
     task=['R24_s10']
     monkeypatch.setattr(campaign,'accepted_jobs',lambda *a,**kw:[dict(job='123',task=task[0])])

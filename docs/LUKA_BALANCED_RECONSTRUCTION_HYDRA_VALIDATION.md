@@ -5,6 +5,95 @@ Evidence date2026-11-19. This implements the
 physics campaign. No remote jobs were submitted, changed or cancelled. Existing
 datasets, scientific checkpoints and other working-tree edits were preserved.
 
+## 2026-11-21: Remote no-P2P pass and pinned production transport
+
+Operator's original-helper -Status output confirms on gpu1905:
+
+| Profile | Job | Result | Runtime |
+| --- | --- | --- | --- |
+| Original NCCL control |219050|FAILED/1:0; root tensor SUM incorrect|2m34|
+| Gloo control, default P2P |219051|FAILED/1:0; ranks1--3 tensor SUM incorrect|2m08|
+| Gloo control, P2P disabled |219052|Saved four-rank pass; COMPLETED/0:0|1m27|
+
+The Gloo-only root reached object gather but timed out because peers had
+already rejected incorrect tensor values. These failures precede real model
+data/training and show that a control-group change alone is insufficient.
+Passing profile covers known SUM/broadcast, host control and independent
+OFFLINE_s10 full-graph/four-rank parity with synthetic inputs. Helper SHA is
+4a19da6c85172343141bbfbc43fa494bad59482439be6edee2f8435c56bf0466, verified unchanged
+locally. This is operator-supplied remote evidence; the agent did not submit
+or independently fetch the remote jobs. Root hardware/driver cause is unproven.
+
+New owned transport.py and WORKER_LAUNCH_POLICY/v3 pin Gloo control plus
+NCCL_P2P_DISABLE=1 for NCCL tensors. The common shell exports it before Python;
+rank/allocation guards reject a missing/different value before CUDA use.
+EARLY_GPU_POLICY/v2 and completion evidence bind that transport. Both early
+srun and full torchrun receive it. Scientific objectives/SyncBN/FP32 SUM, all
+531 donor pins, sampler, epochs and HOME policy remain unchanged. No automatic
+fallback or environment edits to other campaigns. Actual all9-arm early GPU
+checks still precede full decoding; real-input/resource acceptance still gates
+science release. The old diagnostic helper/source/results are preserved.
+
+Pre-change focused baseline:9 passed in11.20s. Final combined regression:
+**84 passed,1 skipped in126.83s**, covering campaign, isolated diagnostics and
+startup/transport. The skip requires four actual CUDA/NCCL devices. New checks
+exercise shell export before the first Python call (overriding inherited0),
+rank rejection before CUDA for missing/invalid flags, policy/evidence identity,
+unchanged original helper hash and environment propagation to both launches.
+Actual four-process Gloo ordering and local CUDA/Weaver all9-arm parity also
+pass. Bash syntax and scoped diff checks pass. All531 scientific donor pins
+remain unchanged. The operator's remote four-Pascal OFFLINE check is separate
+from local all-arm single-card evidence. Remote all9-arm early acceptance and
+full real-input qualification remain required in the fresh execution.
+
+## 2026-11-21: NCCL broadcast timeout and bounded diagnostic workflow
+
+Operator's a2b634c7 job218567 log shows four ranks completed D000/OFFLINE/U100
+mmap validation; rank0 completed installed-Weaver parity3.3s and entered OFFLINE
+full-weight parity. Ranks1--3 timed out after1200s in NCCL BROADCAST (2 elements)
+inside donor Context.main. No arm proof was written. Torchrun reported SIGABRT;
+job FAILED/1:0 in6h06m16 under12h, then allocation scratch was cleaned. The
+subsequently supplied earlier stack shows rank0 waiting in SyncBatchNorm while
+peers remained in the preceding object broadcast. This establishes different
+collective positions, not a proven hardware/P2P fault.
+
+New isolated diagnostic helper/uploader compares original, Gloo-control and
+Gloo/no-P2P profiles on gpu1905, each4 GTX1080Ti/12CPU/64000MiB/5m, serialized
+afterany. The test first exercises Context.main, NCCL tensor sums/broadcast and
+object gather, then old production OFFLINE parity on16 synthetic jets using
+authenticated untrained starts. Source/spec remain a2b634c7. No real particle
+access, cached-array construction or scientific fit/release. Per-rank trace
+files,45s collective deadlines and5m allocation limits replace another blind
+full-input retry. No-P2P remains diagnostic-only. The owned worker repair uses
+Gloo for control objects/barriers and retains native NCCL SyncBN/tensor SUM.
+WORKER_LAUNCH_POLICY/v2 requires a separate five-minute srun step before
+population replay/full decoding, with actual four-rank synthetic communication,
+Weaver and native/full-weight/auxiliary parity. Qualification covers all9 arm
+types, including delayed schedules; each scientific allocation checks its arm.
+Failed processes or missing/corrupt receipts stop before data work. No old
+source/spec, scientific kernel, recipe, donor pin or HOME policy is changed.
+
+Focused existing baseline3 passed in9.39s. New14 tests passed in6.62s, covering
+job limits/profile dependencies, source/hash/lineage, uncertainty/duplicate
+protection, CPU control routing, no data/training calls, missing rank proof and
+rank-driver branches with mocked CUDA. Actual GPU probes remain unperformed
+here. Next: operator runs only the short diagnostic launcher, then fetches
+statuses/rank traces before a fresh-source full campaign attempt.
+
+Expanded local regression: **78 passed,1 skipped in146.42s**, covering the
+existing campaign, isolated diagnostic and early-startup suites. The skip is
+the four-real-CUDA/NCCL test. After tightening installed-Weaver proof checks
+and adding rank-driver ordering coverage, the final startup suite passed
+**10 tests in29.22s**. This includes actual four-process Gloo object/tensor
+ordering and error propagation, all9 native/auxiliary paths with the new
+synthetic inputs on local CUDA/Weaver, unchanged full registered decoder
+execution in the remote guard, bad/missing completion rejection and proof
+that failed early execution cannot begin population/particle loading.
+PowerShell parser, CLI rank --startup-only help and scoped diff checks pass.
+The old531 donor-pin regression and full scientific recipe equality pass.
+These checks do not certify actual four-GTX1080Ti operation. Remote diagnostics
+were not submitted here; the existing authenticated terminal/key is needed.
+
 ## 2026-11-21: Torchrun boundary failure and qualification envelope
 
 Operator log217775 establishes all three input views completed and were published

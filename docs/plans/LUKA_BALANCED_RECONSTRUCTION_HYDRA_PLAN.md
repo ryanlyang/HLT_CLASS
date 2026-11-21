@@ -6,7 +6,68 @@ Scientific workers may change only their own execution. The separately
 authorized clean-slate operation below may retire prior inactive Hydra artifacts.
 Oscar artifacts and scheduler state remain outside that operation.
 
-## Current execution revision: worker argument boundary, 2026-11-21
+## Passing transport diagnostic and fresh-source recovery, 2026-11-21
+
+Operator accounting and saved diagnostic status show three allocations on
+gpu1905: original219050 FAILED/1:0 (2m34), Gloo-only219051 FAILED/1:0 (2m08),
+Gloo/no-P2P219052 COMPLETED/0:0 (1m27), saved four-rank pass. With P2P enabled,
+the known eight-element tensor SUM returned incorrect results on rank0 in
+original and ranks1--3 in Gloo-only; the latter's root then timed out gathering
+control objects because peers had failed. Thus Gloo alone is insufficient.
+The no-P2P pass covers known tensor SUM/broadcast, host object control and
+original OFFLINE_s10 independent four-rank parity on16 synthetic inputs.
+It does not establish the root hardware/driver defect or all scientific arms.
+Helper SHA:4a19da6c85172343141bbfbc43fa494bad59482439be6edee2f8435c56bf0466.
+
+WORKER_LAUNCH_POLICY/v3 now pins GPU_TRANSPORT_POLICY/v1: Gloo host control,
+NCCL tensor operations and NCCL_P2P_DISABLE=1. The campaign's common shell
+sets the flag before its first Python import; the allocation/rank guards reject
+missing or different values before CUDA use. Both early srun and scientific
+torchrun inherit the fixed environment. This is an explicit campaign-local
+transport choice, with no automatic fallback or changes to other campaigns.
+The EARLY_GPU_POLICY/v2 proof includes the transport identity. All9 arms and
+both reconstruction schedule positions must pass the five-minute step before
+particle decoding on each qualification allocation; every fit checks its arm.
+The production real-input qualification still gates release of18 fits and
+measures timing/memory with this transport. Do not infer full-runtime speed
+from the87s diagnostic. SyncBN, FP32 gradient SUM and all scientific recipe
+settings remain unchanged; bitwise equality across transport choices is not
+promised. Use a fresh pushed source/spec; old a2b634c7 and diagnostic helper/
+receipts remain unchanged. The old three diagnostics need not be repeated.
+
+### Historical failure and v2 control-only repair
+
+The operator reports qualify218567 failed after6h06m16 in the12h allocation.
+The launch boundary repair worked: four ranks reached mmap validation. Rank0
+passed Weaver parity and entered OFFLINE full-weight parity; ranks1--3 timed
+out in the initial Context.main NCCL broadcast after20 minutes. The subsequent
+earlier-stack excerpt shows rank0 inside native SyncBatchNorm while peers were
+still in that preceding broadcast. The ranks reached different collectives;
+hardware/P2P failure is not established. No completed arm proof or science fit.
+
+Before any further long attempt, run the isolated
+[five-minute diagnostics](../LUKA_HYDRA_GPU_DIAGNOSTIC.md) on the failed node.
+They compare original control transport, Gloo CPU control with NCCL tensor
+reductions, and a diagnostic no-peer-transfer profile. All use synthetic inputs
+and canonical untrained states; no real particle cache/data preparation or
+scientific release. This supersedes earlier instructions to immediately retry
+the whole qualification after a local-only launch/parser test. Keep all old
+source/spec/logs. Probe success is not full qualification.
+
+The current owned worker repair binds WORKER_LAUNCH_POLICY/v2: Gloo CPU
+control plus a host barrier after root callbacks, with native SyncBatchNorm
+and tensor/gradient collectives unchanged on NCCL. A separate five-minute
+srun step runs actual four-rank synthetic parity before any population replay
+or full particle preparation, in every GPU allocation. Qualification probes
+all9 arms; science probes the current arm. Require valid completion and zero
+exit before decoding. Preserve real-input qualification before science release,
+all531 donor pins, scientific recipe, draws/epochs, readouts, initial-only HOME
+admission and no persistent particle cache. See the
+[v2 launch contract](../contracts/LUKA_BALANCED_RECONSTRUCTION_HYDRA_LAUNCH.md).
+Remote acceptance remains the next action; no long retry is approved by local
+tests alone.
+
+## Worker argument boundary revision, 2026-11-21
 
 Operator evidence: prepare217774 completed in5m10; qualify217775 exited1 after
 5h49m28. All three input views completed. U100 construction took13547.9s; then
