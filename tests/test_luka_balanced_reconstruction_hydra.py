@@ -414,6 +414,102 @@ def test_gpu_job_wrapper_does_not_recheck_home_space(tmp_path,monkeypatch):
     assert worker.run(spec,'qualify')['task']=='qualify'
 
 
+def test_actual_torchrun_parser_reproduces_old_failure_and_accepts_boundary(tmp_path,capsys):
+    from torch.distributed.run import get_args_parser
+    from hlt_classification.luka_balanced_reconstruction_hydra import launch
+    argv=launch.command(tmp_path/'source with spaces',tmp_path/'study','qualify',tmp_path/'node with spaces')
+    old=argv.copy();old.remove('--')
+    with pytest.raises(SystemExit) as error:
+        get_args_parser().parse_args(old[old.index('torch.distributed.run')+1:])
+    assert error.value.code==2 and 'ambiguous option: --node' in capsys.readouterr().err
+    proof=launch.validate(argv)
+    assert proof['processes']=='4' and proof['nodes']=='1'
+    assert proof['training_script_args'][-2:]==['--node',str(tmp_path/'node with spaces')]
+    assert proof['training_script_args'][:1]==['rank']
+
+
+def test_real_torchrun_delivers_worker_arguments_to_four_cpu_processes(tmp_path):
+    from hlt_classification.luka_balanced_reconstruction_hydra import launch
+    script=tmp_path/'rank worker.py';node=tmp_path/'node with spaces'
+    script.write_text('''import argparse,json,os
+from pathlib import Path
+p=argparse.ArgumentParser(allow_abbrev=False)
+p.add_argument('phase',choices=['rank'])
+for key in ('spec','task','node'):p.add_argument('--'+key,required=True)
+a=p.parse_args();folder=Path(a.node);folder.mkdir(parents=True,exist_ok=True)
+rank=os.environ['RANK']
+(folder/('rank_'+rank+'.json')).write_text(json.dumps(dict(args=vars(a),rank=rank,
+    local_rank=os.environ['LOCAL_RANK'],world=os.environ['WORLD_SIZE'])))
+''')
+    argv=launch.command(tmp_path,tmp_path/'study with spaces','qualify',node)
+    argv[argv.index('--')+1]=str(script);launch.validate(argv)
+    env=dict(os.environ,PYTHONDONTWRITEBYTECODE='1',OMP_NUM_THREADS='1')
+    if os.name=='nt':
+        # This Windows torch2.5.1 build lacks libuv; its elastic backend does
+        # not consult USE_LIBUV. Select the real legacy TCPStore only in this
+        # CPU test harness. Parser, worker arguments and four workers are real.
+        i=argv.index('-m')
+        wrapper=('from functools import partial; '
+            'import torch.distributed.elastic.rendezvous.c10d_rendezvous_backend as b; '
+            'b.TCPStore=partial(b.TCPStore,use_libuv=False); '
+            'from torch.distributed.run import main; main()')
+        argv=argv[:i]+['-c',wrapper]+argv[i+2:]
+    result=subprocess.run(argv,env=env,capture_output=True,text=True,timeout=60)
+    assert result.returncode==0,result.stdout+result.stderr
+    import json
+    rows=[json.loads((node/f'rank_{r}.json').read_text()) for r in range(4)]
+    assert {r['rank'] for r in rows}=={'0','1','2','3'}
+    assert all(r['rank']==r['local_rank'] and r['world']=='4' for r in rows)
+    assert all(r['args']==dict(phase='rank',spec=str(tmp_path/'study with spaces/campaign_spec.json'),
+        task='qualify',node=str(node)) for r in rows)
+
+
+def test_bad_worker_command_stops_before_population_or_particle_loading(tmp_path,monkeypatch):
+    from hlt_classification.luka_balanced_reconstruction_hydra import launch,worker
+    spec=dict(root=str(tmp_path),project=str(tmp_path/'project'),dataset='/data',content_hash='a'*64)
+    node=tmp_path/'node';node.mkdir();cleaned=[]
+    monkeypatch.setattr(kernel,'configure',lambda *a:None);monkeypatch.setattr(campaign,'check',lambda *a:None)
+    monkeypatch.setattr(worker,'allocation',lambda *a:'123');monkeypatch.setattr(worker,'task_receipt',lambda *a:{})
+    monkeypatch.setattr(worker,'scratch',lambda *a:node);monkeypatch.setattr(worker,'cleanup',lambda *a:cleaned.append(1))
+    monkeypatch.setattr(population,'load',lambda *a:pytest.fail('Population must not be loaded'))
+    monkeypatch.setattr(inputs,'prepare_node',lambda *a,**kw:pytest.fail('Particle inputs must not be built'))
+    original=launch.command
+    def broken(*args):
+        command=original(*args);command.remove('--');return command
+    monkeypatch.setattr(launch,'command',broken)
+    with pytest.raises(ValueError,match='Missing torchrun/worker argument boundary'):worker.run(spec,'qualify')
+    assert cleaned==[1] and not (tmp_path/'qualification.json').exists()
+
+
+def test_registration_parser_check_precedes_population_and_raw_authentication(tmp_path,monkeypatch):
+    from hlt_classification.luka_balanced_reconstruction_hydra import launch
+    env=tmp_path/'environment';root=tmp_path/'study'
+    monkeypatch.setattr(campaign,'locations',lambda *a:None);monkeypatch.setattr(campaign.sys,'prefix',str(env))
+    monkeypatch.setattr(kernel,'configure',lambda *a:None);monkeypatch.setenv('CUBLAS_WORKSPACE_CONFIG',':4096:8')
+    monkeypatch.setattr(campaign,'source',lambda *a:{})
+    monkeypatch.setattr(campaign,'runtime',lambda:dict(versions={'torch':'2.5.1','weaver-core':'0.5.3'}))
+    monkeypatch.setattr(campaign.lineage,'verify',lambda *a:pytest.fail('Raw authentication must not start'))
+    monkeypatch.setattr(population,'build',lambda *a:pytest.fail('Population construction must not start'))
+    def rejected(*a):raise ValueError('injected torchrun parser failure')
+    monkeypatch.setattr(launch,'validate',rejected)
+    with pytest.raises(ValueError,match='injected torchrun parser failure'):
+        campaign.create('/data',root,tmp_path/'project','a'*40,env,60)
+    assert not root.exists()
+
+
+def test_new_launch_policy_binds_qualification_time_and_old_specs_fail_closed():
+    from hlt_classification.luka_balanced_reconstruction_hydra import launch
+    policy=launch.policy();c.validate(policy,'WORKER_LAUNCH_POLICY')
+    assert policy['qualification_minutes']==720 and policy['science_minutes']==2880
+    assert policy['installed_parser_check'] is True
+    spec=dict(root='/study',project='/project',content_hash='a'*64)
+    rows=campaign.commands(spec,['prepare','qualify','release',c.FITS[0]])
+    assert '--time=720' in rows[1]['command'] and '--time=2880' in rows[3]['command']
+    pop=c.artifact('POPULATION',parents=dict(parent=c.parent.POPULATION_HASH))
+    old=c.artifact('SPEC',population=pop,storage_policy=storage.policy(),input_execution_policy=inputs.policy())
+    with pytest.raises(ValueError,match='Worker launch policy differs'):campaign.check(old,live=False)
+
+
 class ToyModule(nn.Module):
     def __init__(self):
         super().__init__();self.encoder=nn.Sequential(nn.Linear(17,128),nn.Dropout(.1));self.fc=nn.Sequential(nn.Linear(128,6))
@@ -604,7 +700,8 @@ def test_worker_allocation_rejects_wrong_gpu_or_request(monkeypatch):
     spec=dict(root='/r',project='/p',environment_dir='/e',content_hash='a'*64)
     monkeypatch.setenv('SLURM_JOB_ID','123');monkeypatch.setenv('PYTHONNOUSERSITE','1')
     monkeypatch.setenv('LD_LIBRARY_PATH',str(Path('/e')/'lib'))
-    monkeypatch.setattr(campaign,'accepted_jobs',lambda *a,**kw:[dict(job='123',task='R24_s10')])
+    task=['R24_s10']
+    monkeypatch.setattr(campaign,'accepted_jobs',lambda *a,**kw:[dict(job='123',task=task[0])])
     fields=dict(JobId='123',JobState='RUNNING',Account='default',QOS='normal',Partition='gpus',JobName='lukabrec_R24_s10',
         Comment='a'*64+':R24_s10',WorkDir='/p',NumNodes='1',NumCPUs='12',NumTasks='1',TimeLimit='2-00:00:00',
         AllocTRES='cpu=12,mem=64000M,gres/gpu=4,gres/gpu:geforce_gtx_1080_ti=4',**{'CPUs/Task':'12'})
@@ -615,6 +712,11 @@ def test_worker_allocation_rejects_wrong_gpu_or_request(monkeypatch):
     assert worker.allocation(spec,'R24_s10')=='123'
     fields['AllocTRES']='cpu=12,mem=64000M,gres/gpu=2,gres/gpu:geforce_gtx_1080_ti=2'
     with pytest.raises(PermissionError):worker.allocation(spec,'R24_s10')
+    fields['AllocTRES']='cpu=12,mem=64000M,gres/gpu=4,gres/gpu:geforce_gtx_1080_ti=4'
+    task[0]='qualify';fields.update(JobName='lukabrec_qualify',Comment='a'*64+':qualify',TimeLimit='12:00:00')
+    assert worker.allocation(spec,'qualify')=='123'
+    fields['TimeLimit']='06:00:00'
+    with pytest.raises(PermissionError,match='walltime differs'):worker.allocation(spec,'qualify')
 
 
 def test_retirement_cannot_escape_the_fit(tmp_path):

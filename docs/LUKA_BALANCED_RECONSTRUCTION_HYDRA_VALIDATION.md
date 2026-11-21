@@ -5,6 +5,68 @@ Evidence date2026-11-19. This implements the
 physics campaign. No remote jobs were submitted, changed or cancelled. Existing
 datasets, scientific checkpoints and other working-tree edits were preserved.
 
+## 2026-11-21: Torchrun boundary failure and qualification envelope
+
+Operator log217775 establishes all three input views completed and were published
+to allocation scratch. U100 alone took13547.9s. The subsequent torchrun parser
+rejected child `--node` as ambiguous with --node-rank/--node_rank and exited2;
+the worker raised CalledProcessError, removed allocation scratch and exited1.
+No GPU ranks/arm proofs were created. Slurm FAILED after5h49m28 was neither the
+earlier nonfatal300s stack timer nor a six-hour scheduler TIMEOUT. Prepare217774
+completed in5m10. No scientific fits were released.
+
+Reproduced that exact parser error with local installed torch2.5.1. The new
+launch module inserts `--` before the rank script, verifies the actual installed
+parser's script/arguments/allocation both before registration data/population
+work and before GPU input work, and binds WORKER_LAUNCH_POLICY/v1 in fresh specs.
+Qualification requests12h because the observed prep nearly consumed its former
+6h budget; science48h,4 GPUs/12 CPUs/64000MiB, all reader/scientific semantics and
+technical acceptance remain. No persistent cache or dependency change. A fresh
+pushed source/study is required; old58b9e655 source/spec/receipts stay untouched.
+
+Focused pre-edit baseline3 passed in7.23s. New focused launcher checks5 passed
+in13.95s; final entire campaign suite55 passed,1 four-CUDA skip in106.58s.
+The actual installed parser reproduces old failure and accepts fixed transport.
+Four real CPU worker processes receive exact child arguments/rank/world values,
+including paths with spaces. The Windows-only CPU smoke selects the real legacy
+TCPStore constructor because the local wheel lacks libuv; production Linux
+torchrun invocation is unchanged. Parser failure injection proves registration
+stops before raw authentication/population, and worker stops before input reads.
+Allocation checks accept12h qualification and reject old6h; science remains48h.
+Existing tests still verify recipe equality,531 donor pins, reader equality,
+all arm objectives, no automatic HOME checks, four-rank weighted gradients and
+exact interrupted-training resume. Actual Hydra/NCCL acceptance is still required.
+
+No remote files/jobs changed here. Next action: scoped commit/push and fresh
+source-derived queue. Temporary arrays were cleaned after the failure, so they
+must be reconstructed; neither timing nor a remote completed qualification is
+claimed by local tests. The12h allocation is headroom, not a measured guarantee.
+
+## 2026-11-20: Operator-reported partial cleanup and continuation
+
+User-supplied journal reports15 completed removals and no complete.json.
+Two old input/cache roots and13 old source worktrees were removed. Git returned255
+for code_cross_message_73abecfd; original captured stderr was not printed, so
+the underlying reason is unresolved. Old run roots were not yet attempted.
+The user reports workspace usage65G; this is not a new measured free-space quota.
+
+New helper/uploader explicit resume preserves that checkout and authenticates
+the existing archive, scope, source and per-target receipts before continuing.
+Old run/input payloads precede optional source removal. New continuation records
+leave the original archive/receipts intact. Captured stderr is now printed for
+Git failures. No scientific source, runtime, model or data contract changes;
+the original58b9e655 campaign remains the kept execution source.
+
+Focused baseline21 passed in1.49s. Extended clean-slate suite38 passed in3.14s,
+covering the original failure, archive/journal preservation, partial recovery,
+recreated paths, corrupt receipts, changed metadata, shared locks, queue changes,
+preserved worktrees, missing-path attribution and different NFS client devices.
+PowerShell parameter sets bind fresh Commit versus Resume independently; parser
+and embedded Bash syntax pass. These are local filesystem tests, not remote
+deletion or scientific/GPU acceptance. Next: operator runs local -Resume, waits
+for COMPLETE with free-space/deferred-path report, then queues the original
+kept source. Actual scientific four-GPU qualification remains required.
+
 ## 2026-11-20: Standalone storage policy and authorized workspace retirement
 
 The operator supplied names-only Hydra inventory confirming the common Git store

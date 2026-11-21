@@ -24,6 +24,7 @@ AUTH='AUTHORIZE_BALANCED_RECONSTRUCTION_18_FOUR_1080TI_V1'
 SITE=dict(cluster='hydra',partition='gpus',account='default',qos='normal')
 RESOURCES=dict(gpus=4,gpu_type='geforce_gtx_1080_ti',gpu_name='NVIDIA GeForce GTX 1080 Ti',
                cpus=12,memory_mb=64000,minutes=2880)
+QUALIFICATION_MINUTES=720  # Observed input construction alone used almost6h.
 RESULT_BYTES=8*2**30  # Audited full inventory is4.50 GiB; retain2 GiB separate headroom.
 RESERVE_BYTES=2*2**30
 

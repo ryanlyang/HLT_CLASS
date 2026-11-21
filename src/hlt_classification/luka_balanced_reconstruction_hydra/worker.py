@@ -6,7 +6,6 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 import time
 import numpy as np
 import torch
@@ -15,7 +14,7 @@ from hlt_classification.data.cache_contracts import load_json,load_npz_arrays,wr
 from hlt_classification.cms_proxy_ladder.contracts import file_ref,validate_file_ref
 from hlt_classification.luka_fullstat_multiview.execution import allocation_minutes
 from hlt_classification.luka_subclass_ddp_hydra.distributed import Context
-from . import contracts as c,campaign,population,inputs,artifacts,resources,training,kernel,banks,diagnostics as log
+from . import contracts as c,campaign,population,inputs,artifacts,resources,training,kernel,banks,launch,diagnostics as log
 
 
 def controller(args):
@@ -47,7 +46,7 @@ def allocation(spec,task):
     mem=re.fullmatch(r'([0-9.]+)([KMGT]?)',tres.get('mem',''))
     if mem is None or Decimal(mem[1])*{'K':Decimal(1)/1024,'':1,'M':1,'G':1024,'T':1024**2}[mem[2]]!=memory:
         raise PermissionError('Allocation memory differs')
-    minutes=360 if task=='qualify' else 2880 if gpu else 240 if task=='prepare' else 60
+    minutes=c.QUALIFICATION_MINUTES if task=='qualify' else c.RESOURCES['minutes'] if gpu else 240 if task=='prepare' else 60
     if allocation_minutes(fields.get('TimeLimit',''))!=minutes:raise PermissionError('Allocation walltime differs')
     if gpu:
         if tres.get('gres/gpu')!='4' or any(k.startswith('gres/gpu:') and (k!='gres/gpu:geforce_gtx_1080_ti' or v!='4') for k,v in tres.items()):
@@ -123,6 +122,9 @@ def run(spec,task):
         if task in c.FITS and (artifacts.fit_root(spec,task)/'result.json').exists():raise FileExistsError('Fit already published')
         node=scratch(job)
         try:
+            command=launch.command(spec['project'],spec['root'],task,node)
+            with log.stage('installed torchrun argument parser before input build'):
+                launch.validate(command)
             with log.stage('population replay'):
                 loaded=population.load(spec['dataset'],Path(spec['root'])/'population')
             coords=('D000','OFFLINE','U100') if task=='qualify' else (c.cell(task)['coordinate'],)
@@ -130,9 +132,6 @@ def run(spec,task):
                 needs=coord=='D000' and (task=='qualify' or c.cell(task)['reconstruction'])
                 with log.stage(f'input build coordinate={coord} targets={needs}'):
                     inputs.prepare_node(spec,node/coord,coord,targets=needs,loaded=loaded)
-            command=[sys.executable,'-X','faulthandler','-u','-B','-s','-m','torch.distributed.run','--standalone','--nnodes=1',
-                '--nproc-per-node=4','--max-restarts=0',str(Path(spec['project'])/'scripts/luka_balanced_reconstruction_hydra.py'),
-                'rank','--spec',str(Path(spec['root'])/'campaign_spec.json'),'--task',task,'--node',str(node)]
             env=dict(os.environ,LUKABREC_INPUT_LAUNCHER_PID=str(os.getpid()))
             # Child ranks own startup/probe tracing; waiting here is expected.
             log.disable_stall_traces()

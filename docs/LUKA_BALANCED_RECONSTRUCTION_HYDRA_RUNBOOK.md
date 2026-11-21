@@ -37,10 +37,11 @@ git add -- src/hlt_classification/luka_balanced_reconstruction_hydra `
   docs/plans/LUKA_BALANCED_RECONSTRUCTION_HYDRA_PLAN.md `
   docs/contracts/LUKA_BALANCED_RECONSTRUCTION_HYDRA.md `
   docs/contracts/LUKA_BALANCED_RECONSTRUCTION_HYDRA_INPUTS.md `
+  docs/contracts/LUKA_BALANCED_RECONSTRUCTION_HYDRA_LAUNCH.md `
   docs/LUKA_BALANCED_RECONSTRUCTION_HYDRA_RUNBOOK.md `
   docs/LUKA_BALANCED_RECONSTRUCTION_HYDRA_VALIDATION.md
 git diff --cached --stat
-git commit -m "Add balanced 600k reconstruction screen for four Hydra GTX1080Ti GPUs"
+git commit -m "Fix balanced reconstruction torchrun argument boundary and qualification budget"
 git push origin HEAD:main
 git rev-parse HEAD
 ```
@@ -98,7 +99,7 @@ The persistent runtime is
 `/cs/home/rlyang/hlt_u100_pairs/environment_pair_hydra_v1/venv`.
 Requests are partition`gpus`, account`default`, qos`normal`,
 `gpu:geforce_gtx_1080_ti:4`,12 CPUs,64000MiB,48h. CPU prep has4h;
-the four-GPU qualification has6h. GPU qualification measures full support and
+the four-GPU qualification has12h. GPU qualification measures full support and
 timing before release; resource failure requires an explicit revision.
 
 ## Reconnect, progress and results
@@ -135,6 +136,28 @@ fits are present. Native deployable checkpoints
 and prediction files are referenced by`fits/<task>/result.json`.
 
 ## Technical continuation
+
+### Torchrun argument repair after job217775
+
+The input reader completed all three views. U100 took13547.9s; the entire job
+ran5h49m28 before torchrun rejected the child worker's `--node` as an ambiguous
+prefix of its own node-rank option. No GPU arm proof or scientific fit was run.
+This was a launcher-argument error rather than the earlier diagnostic timer.
+
+The corrected command puts `--` before the rank script. The installed PyTorch
+parser now checks the generated command before registration's population work
+and again before GPU input construction. New specs bind WORKER_LAUNCH_POLICY/v1.
+Qualification requests12h, leaving room beyond the observed input preparation;
+science48h and all physics/readout/resource checks remain. No separate preflight
+job or persistent particle cache is added. Local smoke uses four real CPU worker
+processes; actual four-GPU qualification remains required.
+
+Commit/push the revised namespace/tests/plan/contracts/runbook/validation using
+the file list above, including the new launch contract, then use its new pushed
+commit in the general queue block. No dataset/environment transfer is needed.
+Do not relaunch58b9e655 or modify its source/spec. Its temporary input arrays
+were removed by the failed job's cleanup, so input construction will run again.
+Keep all prior logs, preparation artifacts and submission records intact.
 
 ### Reader repair after diagnostic job217200
 

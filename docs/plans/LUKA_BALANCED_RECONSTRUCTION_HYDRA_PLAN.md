@@ -6,7 +6,32 @@ Scientific workers may change only their own execution. The separately
 authorized clean-slate operation below may retire prior inactive Hydra artifacts.
 Oscar artifacts and scheduler state remain outside that operation.
 
-## Current execution revision: standalone campaign, 2026-11-20
+## Current execution revision: worker argument boundary, 2026-11-21
+
+Operator evidence: prepare217774 completed in5m10; qualify217775 exited1 after
+5h49m28. All three input views completed. U100 construction took13547.9s; then
+torchrun rejected worker `--node` as ambiguous with its node-rank options.
+GPU ranks, parity, miniatures and scientific fits had not started. The earlier
+five-minute stack samples were diagnostic; this final argparse error was fatal.
+
+Put `--` between torchrun options and the rank script, and parse the real command
+with installed PyTorch both before registration population work and before GPU
+worker input work. Bind WORKER_LAUNCH_POLICY/v1 in fresh specs. No separate
+preflight job is added. Increase qualification's allocation from6h to12h because
+observed input preparation used almost the whole former limit. Keep science48h,
+four GTX1080Ti,12 CPUs/64000MiB and every technical acceptance check. The12h
+envelope provides headroom rather than a measured completion guarantee.
+
+This execution revision supersedes later historical6h descriptions. Science,
+source donor pins, reader/sampler, normalization, objectives,18 fits, seeds,
+20 epochs, readouts and initial-only HOME policy stay unchanged. No persistent
+particle cache is introduced. The failed job already removed its temporary
+arrays; a fresh pushed source/study reconstructs them. Preserve58b9e655 logs,
+population, canonical starts and submission records; never patch that checkout
+or rewrite its spec to use new source. See the
+[launch contract](../contracts/LUKA_BALANCED_RECONSTRUCTION_HYDRA_LAUNCH.md).
+
+## Standalone storage revision, 2026-11-20
 
 The operator now authorizes retiring previous Hydra campaigns and old inputs,
 keeping what this new study needs. This supersedes the historical preservation

@@ -9,7 +9,7 @@ from hlt_classification.provenance import capture_source_snapshot
 from hlt_classification.luka_new_fullstat_hydra.campaign import runtime,clean_env
 from hlt_classification.luka_new_fullstat_hydra import lineage
 from hlt_classification.luka_sixclass_tail_hydra.campaign import submission_lock,terminal
-from . import contracts as c,population,storage,artifacts,inputs
+from . import contracts as c,population,storage,artifacts,inputs,launch
 
 
 def source(project,commit):
@@ -29,6 +29,7 @@ def source(project,commit):
         'sbatch/luka_balanced_reconstruction_hydra_common.sh','tests/test_luka_balanced_reconstruction_hydra.py',
         'docs/plans/LUKA_BALANCED_RECONSTRUCTION_HYDRA_PLAN.md','docs/contracts/LUKA_BALANCED_RECONSTRUCTION_HYDRA.md',
         'docs/contracts/LUKA_BALANCED_RECONSTRUCTION_HYDRA_INPUTS.md',
+        'docs/contracts/LUKA_BALANCED_RECONSTRUCTION_HYDRA_LAUNCH.md',
         'docs/LUKA_BALANCED_RECONSTRUCTION_HYDRA_RUNBOOK.md','docs/LUKA_BALANCED_RECONSTRUCTION_HYDRA_VALIDATION.md'}
     tracked=set(subprocess.check_output(['git','-C',str(project),'ls-files'],text=True).splitlines())
     if not required<=tracked:raise ValueError('Commit all campaign files before deployment')
@@ -66,6 +67,9 @@ def create(dataset,root,project,commit,environment,available_gib):
     from weaver.nn.model.ParticleTransformer import ParticleTransformer
     import torch.nn.functional,threadpoolctl,scipy,uproot
     if env['versions']['torch'].split('+')[0]!='2.5.1' or env['versions']['weaver-core']!='0.5.3':raise ValueError('Use qualified torch2.5.1/Weaver0.5.3')
+    from . import diagnostics
+    with diagnostics.stage('installed torchrun argument parser (no worker launch)'):
+        launch.validate(launch.command(project,root,'qualify','/dev/shm/rlyang_lukabrec_parser_probe'))
     producer=lineage.verify(dataset,project,c.parent.PARENT_HASH)
     manifest=load_json(dataset/'transfer_manifest.json');complete=load_json(dataset/'transfer_complete.json')
     if (canonical_sha256(manifest)!=c.parent.TRANSFER_HASH or complete.get('manifest_sha256')!=c.parent.TRANSFER_HASH
@@ -80,7 +84,7 @@ def create(dataset,root,project,commit,environment,available_gib):
         recipe=c.recipe(),tasks=c.tasks(),resources=c.RESOURCES,execution_site=c.SITE,
         foundation_producer=producer,transfer_manifest_sha256=c.parent.TRANSFER_HASH,
         protected_campaign=preliminary['protected_campaign'],storage=quota,storage_policy=storage.policy(),
-        input_execution_policy=inputs.policy(),output_inventory=inventory,
+        input_execution_policy=inputs.policy(),worker_launch_policy=launch.policy(),output_inventory=inventory,
         output_allowance_bytes=c.RESULT_BYTES,reserve_bytes=c.RESERVE_BYTES)
     write_immutable_json(root/'campaign_spec.json',spec);return spec
 
@@ -91,6 +95,8 @@ def check(spec,*,live=True):
         raise ValueError('Execution storage policy differs; register a fresh study with this source')
     if spec.get('input_execution_policy')!=inputs.policy():
         raise ValueError('Input execution policy differs; register a fresh study with this source')
+    if spec.get('worker_launch_policy')!=launch.policy():
+        raise ValueError('Worker launch policy differs; register a fresh study with this source')
     if (spec['recipe']!=c.recipe() or spec['tasks']!=c.tasks() or spec['resources']!=c.RESOURCES
             or spec['execution_site']!=c.SITE or spec['population']['counts']!=c.COUNTS
             or spec['population']['content_hash']!=c.POPULATION_HASH
@@ -128,7 +134,7 @@ def commands(spec,tasks,existing=None):
         args=['sbatch','--parsable','--partition='+('gpus' if gpu else 'compute'),'--account=default','--qos=normal',
             '--nodes=1','--ntasks=1','--cpus-per-task='+str(12 if gpu else 4 if task=='prepare' else 1),
             '--mem='+str(64000 if gpu or task=='prepare' else 4000)+'M',
-            '--time='+str(360 if task=='qualify' else 2880 if gpu else 240 if task=='prepare' else 60),
+            '--time='+str(c.QUALIFICATION_MINUTES if task=='qualify' else c.RESOURCES['minutes'] if gpu else 240 if task=='prepare' else 60),
             '--job-name=lukabrec_'+task,'--output='+str(Path(spec['root'])/(task+'-%j.out')),
             '--chdir='+spec['project'],'--export=NONE','--kill-on-invalid-dep=yes',
             '--comment='+spec['content_hash']+':'+task]

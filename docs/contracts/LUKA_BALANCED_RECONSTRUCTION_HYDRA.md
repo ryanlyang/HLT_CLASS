@@ -53,6 +53,13 @@ fixed late16..20 means are separate from selected results.
 
 ## Publication, execution and continuation
 
+Worker launch repair2026-11-21 binds
+[WORKER_LAUNCH_POLICY/v1](LUKA_BALANCED_RECONSTRUCTION_HYDRA_LAUNCH.md) in fresh
+SPEC. Installed torchrun parses a `--`-separated worker command before costly
+registration/population/input work. Qualification now requests12h; science48h,
+GPU/CPU/RAM, recipe, readouts and acceptance requirements stay. Old specs lacking
+this policy fail closed. This supersedes historical6h qualification descriptions.
+
 Reader repair2026-11-20 adds the distinct
 [INPUT_EXECUTION_POLICY/v1 contract](LUKA_BALANCED_RECONSTRUCTION_HYDRA_INPUTS.md)
 bound in new specs. It batches CPU tasks, caches bounded temporary ROOT basket

@@ -57,7 +57,11 @@ before qualification publication. This repairs Executor shutdown's indefinite
 wait on unfinished work. It does not promise recovery from an uninterruptible
 kernel/filesystem fault; normal Slurm termination remains the outer boundary.
 
-Scientific48h and qualification6h envelopes, four GTX1080Ti devices,12 CPUs,
+Scientific48h and the original qualification6h envelopes, four GTX1080Ti devices,12 CPUs,
 64000MiB, initial-only HOME admission, test sealing and all other campaigns are
 unchanged. Real Hydra qualification still must measure full inputs and four
 GPUs before science release; local probes do not certify remote throughput.
+
+The later [worker-launch policy](LUKA_BALANCED_RECONSTRUCTION_HYDRA_LAUNCH.md)
+raises qualification only to12h after job217775's measured preparation time.
+This INPUT_EXECUTION_POLICY/v1 and all authorized reader semantics are unchanged.
