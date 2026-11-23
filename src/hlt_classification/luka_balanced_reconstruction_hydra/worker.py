@@ -17,7 +17,7 @@ from hlt_classification.cms_proxy_ladder.contracts import file_ref,validate_file
 from hlt_classification.luka_fullstat_multiview.execution import allocation_minutes
 from hlt_classification.luka_subclass_ddp_hydra.distributed import Context as BaseContext
 from hlt_classification.operations.hydra_reconstruction_gpu_diagnostic import context
-from . import contracts as c,campaign,population,inputs,artifacts,resources,training,kernel,banks,launch,startup,transport,diagnostics as log
+from . import contracts as c,campaign,population,inputs,artifacts,resources,training,kernel,banks,launch,startup,transport,normalization as norms,diagnostics as log
 
 
 def controller(args):
@@ -144,7 +144,13 @@ def run(spec,task):
             for coord in coords:
                 needs=coord=='D000' and (task=='qualify' or c.cell(task)['reconstruction'])
                 with log.stage(f'input build coordinate={coord} targets={needs}'):
-                    inputs.prepare_node(spec,node/coord,coord,targets=needs,loaded=loaded)
+                    options={}
+                    if needs:
+                        path=Path(spec['root'])/'normalization/qualified.json'
+                        fixed=norms.qualified(spec) if task!='qualify' else norms.validate(load_json(path),spec) if path.exists() else None
+                        if fixed is not None:options=dict(frozen_normalization=fixed,
+                            normalization_evidence=Path(spec['root'])/'normalization'/f'{task}-{job}.json')
+                    inputs.prepare_node(spec,node/coord,coord,targets=needs,loaded=loaded,**options)
             # Child ranks own startup/probe tracing; waiting here is expected.
             log.disable_stall_traces()
             with log.stage('four-rank worker execution'):

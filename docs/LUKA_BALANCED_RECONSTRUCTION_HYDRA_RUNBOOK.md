@@ -1,5 +1,11 @@
 # Queue the 600k balanced reconstruction screen on Hydra
 
+**Existing dc5920f0 study,2026-11-23:** use the
+[normalization recovery commands](LUKA_BALANCED_RECO_NORMALIZATION_RECOVERY_RUNBOOK.md).
+Do not repeat the generic full-campaign launch below. The recovery preserves
+completed/running models and restores the exact qualified normalization before
+new reconstruction attempts. Historical fresh-campaign instructions follow.
+
 **Current next action:** the operator verified Gloo/no-P2P diagnostic219052
 COMPLETED/0:0 with saved four-rank OFFLINE parity. Original/Gloo-only profiles
 returned incorrect tensor sums. Commit/push the v3 transport repair and use a

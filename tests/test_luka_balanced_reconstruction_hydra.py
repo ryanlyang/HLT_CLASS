@@ -334,7 +334,9 @@ def test_stalled_input_worker_is_terminated_without_waiting_for_its_task():
 
 
 def test_new_input_execution_policy_is_bound_and_old_specs_fail_closed():
-    value=inputs.policy();c.validate(value,'INPUT_EXECUTION_POLICY')
+    from hlt_classification.data.cache_contracts import validate_content_hash
+    value=inputs.policy();validate_content_hash(value,
+        expected_contract=c.PREFIX+'_INPUT_EXECUTION_POLICY/v2',expected_schema_version=2)
     assert value['max_batch_rows']==128 and value['workers']==4
     assert value['worker_batch_timeout_seconds']==600
     assert value['temporary_basket_cache_bytes_per_worker']==128*2**20

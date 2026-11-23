@@ -189,6 +189,8 @@ def measure(spec,task,caches,targets,bank,pt,ctx,*,load_seconds):
 def qualify(spec,views,pt,ctx,folder):
     if ctx.world!=4:raise PermissionError('Authoritative qualification requires four actual GPUs')
     rows={};folder=Path(folder)
+    from . import normalization
+    frozen=ctx.main(lambda:normalization.publish(spec,views['D000'][1].normalization))
     from hlt_classification.luka_sixclass_balanced_oscar.model import installed_parity
     with log.stage('installed-Weaver parity'):
         installed=installed_parity(views['D000'][0]['train'],device=ctx.device)
@@ -217,12 +219,17 @@ def qualify(spec,views,pt,ctx,folder):
         world=4,gpu_type=c.RESOURCES['gpu_type'],complete_support=True,miniatures_discarded=True,passed=True,
         installed_weaver_parity=installed,
         target_normalization_sha256=views['D000'][1].normalization['content_hash'],
+        target_normalization=frozen,
         files={a:file_ref(folder/(a+'.json')) for a in rows})
     ctx.main(lambda:write_immutable_json(Path(spec['root'])/'qualification.json',result));return result
 
 
 def qualification(spec):
     q=load_json(Path(spec['root'])/'qualification.json');c.validate(q,'QUALIFICATION',dict(spec=spec['content_hash']))
+    if 'target_normalization' in q:
+        from . import normalization
+        normalization.validate(load_json(validate_file_ref(q['target_normalization'])),spec,
+            expected_hash=q['target_normalization_sha256'])
     if (set(q['arms'])!=set(c.ARMS) or q['world']!=4 or q['gpu_type']!=c.RESOURCES['gpu_type']
             or q['passed'] is not True or q['miniatures_discarded'] is not True or q['complete_support'] is not True):
         raise ValueError('Missing real four-card qualification')

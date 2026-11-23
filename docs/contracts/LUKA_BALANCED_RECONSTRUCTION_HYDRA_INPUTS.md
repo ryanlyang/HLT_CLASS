@@ -1,4 +1,18 @@
-# Balanced reconstruction input execution: v1
+# Balanced reconstruction input execution: v2
+
+Revision2026-11-23 freezes the full TRAIN normalization once. Fresh SPEC binds
+INPUT_EXECUTION_POLICY/v2 and its NORMALIZATION_EXECUTION_POLICY/v1. Qualified
+records are retained on durable storage and checksum-bound by qualification.
+Science validates/reuses those exact FP64 means/scales before casting raw
+targets to float32. Recomputed local moments are diagnostic: exact scope/count/
+support/frame, with rtol1e-10/atol1e-12 mean/scale agreement. Both records and
+differences are persisted on mismatch. Applied normalization identities never
+use tolerant matching. No scientific recipe change or loosened raw-data join.
+The existing dc5920f0 execution requires the separately versioned
+[legacy recovery adapter](LUKA_BALANCED_RECO_NORMALIZATION_RECOVERY.md);
+do not execute new input source under an old accepted job ID.
+
+The following v1 text records the unchanged decoding/order semantics.
 
 Authority: [scientific plan](../plans/LUKA_BALANCED_RECONSTRUCTION_HYDRA_PLAN.md).
 `SPEC.input_execution_policy` must equal the content-hashed

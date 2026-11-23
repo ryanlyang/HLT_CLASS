@@ -6,6 +6,47 @@ Scientific workers may change only their own execution. The separately
 authorized clean-slate operation below may retire prior inactive Hydra artifacts.
 Oscar artifacts and scheduler state remain outside that operation.
 
+## Normalization repair and continuation, 2026-11-23
+
+Jobs219507/R24,219508/D20,219509/R20 passed early GPU acceptance but rejected
+their rebuilt normalization hash before the scientific miniature; zero epochs
+were committed. Underlying numerical/statistical drift remains unproven. Original
+qualification219148 on gpu1905 retained only hash
+c06fa2b1d349e0a8615d0ef14132975bd6f1b543a46d3df3ebe2c455da9ffc59.
+
+The operator subsequently captured the full record from running R22 job 219510.
+Its hash matches the qualification exactly. Preserve that captured record in
+the repair source and use it by default, avoiding another input replay or GPU
+placement wait. Replacement fits must still authenticate it against the old
+qualification and compare their local TRAIN statistics before using it.
+
+Persist the full qualified TRAIN record and apply that exact mean/scale to all
+raw FP64 targets before float32 publication. Fresh campaigns bind
+INPUT_EXECUTION_POLICY/v2 and NORMALIZATION_EXECUTION_POLICY/v1. Observe the
+local FP64 statistics separately: exact population/count/support/frame joins,
+rtol1e-10/atol1e-12 mean/scale agreement, and full comparison evidence. Tolerance
+is diagnostic only; the applied artifact hash remains exact. Preserve source
+hashes, all selected TRAIN rows, original per-jet accumulation and test sealing.
+
+For the existing dc5920f0 execution, use the explicit
+[normalization recovery contract](../contracts/LUKA_BALANCED_RECO_NORMALIZATION_RECOVERY.md).
+Recover a full record matching the old hash exactly, from a captured candidate
+or one original-source replay on the original qualification node. A mismatch
+saves the full record and releases no fits. Reuse original qualification only
+with that exact record and unchanged scientific kernel/recipe/runtime. Keep
+actual early acceptance and real-bank miniature in every replacement allocation.
+
+An audited execution adapter runs new campaign-bound IDs while preserving old
+source/spec/results. New fit parents record repair-source and comparison hashes.
+It cancels only exact bound pending reconstruction/report IDs, preserving all
+running/completed fits and queued baselines/teachers. New replacements cover
+terminal reconstruction attempts with no committed epochs; partial histories
+remain protected. Replacement siblings have only real teacher dependencies,
+superseding the historical serial edges for these new attempts. The final report
+includes retained and repaired fits. Review full prospective resources before
+any mutation/submission. No new scientific method, sample, loss, epoch budget,
+test capability, persistent particle cache or automatic HOME gate is introduced.
+
 ## Passing transport diagnostic and fresh-source recovery, 2026-11-21
 
 Operator accounting and saved diagnostic status show three allocations on

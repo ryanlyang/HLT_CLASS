@@ -1,5 +1,50 @@
 # Balanced reconstruction Hydra: queue-readiness evidence
 
+## 2026-11-23: Frozen normalization and existing-study recovery
+
+Reported jobs 219507, 219508, 219509 completed their early GPU steps in 77--83s,
+then failed before any epoch at `TRAIN reconstruction normalization changed
+after qualification`. Operator confirmed qualification 219148/gpu1905 and the
+expected c06fa2b1d349e0a8615d0ef14132975bd6f1b543a46d3df3ebe2c455da9ffc59 hash.
+The failed record bodies were not retained by the old code; exact numerical
+cause remains unknown. No claim that the difference is harmless was made.
+
+The operator subsequently captured the complete record from running R22 job
+219510. Local canonical-hash and TRAIN-scope validation confirms it matches
+the exact qualified hash. Its source-bound JSON is now the queue wrapper's
+default candidate: a CPU stage authenticates/publishes it without input replay.
+It is not a new normalization estimate. R22 remains untouched while running.
+
+New normalizer execution preserves the exact qualified record, casts only after
+applying its FP64 values, validates exact membership/count/support/frame and
+records local moment comparisons. Substantive drift still fails. The legacy
+adapter preserves completed/running fits and requires exact old-hash recovery
+before any replacement release. It does not regenerate a new arbitrary normalizer.
+No original source/spec/accepted receipt/epoch/result is rewritten. New fit
+parents and appended submission attempts explicitly bind the repair source.
+
+Focused original baseline: 7 passed in 36.18s. Expanded combined regression:
+**101 passed, 1 skipped in 164.09s**. Coverage includes actual synthetic ROOT
+preparation through 4 spawn workers with the isolated publication module,
+unchanged native arrays, exact frozen-normalized targets before float32,
+substantive/scope/tamper rejection, lost-reference fail-closed behavior,
+candidate recovery without particle reads, retained live/completed models,
+teacher-only replacement edges, pending cancellation races, old-journal
+compatibility, intent preservation and duplicate refusal. Existing 531 donor,
+CPU/Gloo and single-card CUDA/Weaver regressions pass. The one skip requires
+four local CUDA/NCCL devices. Bash syntax, rank CLI and scoped diff checks pass.
+
+Final focused regression after worker guards, candidate launcher and captured
+record updates: **21 passed, 54 deselected in 18.46s**. This adds exact captured
+record verification, CPU candidate dependency checks, inherited scheduler
+environment isolation and preexisting scratch protection.
+
+Remote capture was performed by the operator; actual replacement jobs have not
+been launched by the agent. Recovery must authenticate the exact qualified hash;
+otherwise its saved full replay record is the next diagnostic, with no fits
+released. Scientific allocations retain their actual early GPU and real-bank
+miniature acceptance before training. See the dedicated recovery runbook.
+
 Evidence date2026-11-19. This implements the
 [600k plan](plans/LUKA_BALANCED_RECONSTRUCTION_HYDRA_PLAN.md), not a completed
 physics campaign. No remote jobs were submitted, changed or cancelled. Existing

@@ -21,7 +21,7 @@ from hlt_classification.luka_new_fullstat_hydra.population import identity
 from hlt_classification.luka_sixclass_balanced_oscar.views import initialize_worker
 from hlt_classification.luka_next_supervision_hydra.probabilistic_targets import measured
 from hlt_classification.luka_next_supervision_hydra.probabilistic_contracts import CONTINUOUS
-from . import contracts as c, population, diagnostics as log
+from . import contracts as c, population, normalization as norms, diagnostics as log
 from .basket_reader import reader, close_reader
 from .basket_reader import CACHE_BYTES
 
@@ -30,14 +30,16 @@ TASK_TIMEOUT=600
 
 
 def policy():
-    return c.artifact('INPUT_EXECUTION_POLICY',max_batch_rows=BATCH_ROWS,workers=4,
+    from hlt_classification.data.cache_contracts import with_content_hash
+    return with_content_hash(dict(contract=c.PREFIX+'_INPUT_EXECUTION_POLICY/v2',schema_version=2,parents={},**c.FLAGS,
+        normalization=norms.policy(),max_batch_rows=BATCH_ROWS,workers=4,
         worker_batch_timeout_seconds=TASK_TIMEOUT,temporary_basket_cache_bytes_per_worker=CACHE_BYTES,
         cache='numeric_Uproot_temporary_basket_buffers_only',
         final_arrays='numeric_numpy_jagged_exact_authorized_spans',
         logical_reads='unchanged_contiguous_single_authorized_role_spans',
         acceptance_order='original_file_then_role_then_entry',
         hung_worker='diagnose_then_terminate_owned_pool_without_retry',
-        persistent_particle_cache=False)
+        persistent_particle_cache=False))
 
 
 def initialize_decode_worker():
@@ -163,9 +165,13 @@ def shape_bytes(pop,coordinate,targets):
     return int(value*1.05)+2**30
 
 
-def prepare_node(spec,node,coordinate,*,targets=False,workers=4,loaded=None):
+def prepare_node(spec,node,coordinate,*,targets=False,workers=4,loaded=None,
+                 frozen_normalization=None,normalization_evidence=None):
     if coordinate not in ('D000','OFFLINE','U100') or (targets and coordinate!='D000'):
         raise PermissionError('Unregistered view/target capability')
+    if frozen_normalization is not None:
+        if not targets:raise PermissionError('Normalization is only permitted for TRAIN reconstruction')
+        norms.validate(frozen_normalization,spec)
     p,parent,arrays=population.load(spec['dataset'],Path(spec['root'])/'population') if loaded is None else loaded
     node=Path(node);node.mkdir(parents=True,exist_ok=False);begun=time.monotonic()
     if shutil.disk_usage(node).free<shape_bytes(p,coordinate,targets):raise OSError('Insufficient allocation-local shared scratch')
@@ -228,12 +234,14 @@ def prepare_node(spec,node,coordinate,*,targets=False,workers=4,loaded=None):
         mean=np.zeros(22);scale=np.ones(22);cols=np.asarray(CONTINUOUS)
         mean[cols]=total[cols]/np.maximum(support[cols],1)
         scale[cols]=np.maximum(np.sqrt(np.maximum(squares[cols]/np.maximum(support[cols],1)-mean[cols]**2,0)),.001)
+        observed=c.artifact('TARGET_NORMALIZATION',parents=dict(population=p['content_hash']),
+            role='train',mean=mean.tolist(),scale=scale.tolist(),support=support.tolist(),maximum=spec['maximum'],
+            rows=p['counts']['train'],tokens=target_cursor,frame='paired_HLT_sum_p4_axis_and_vector_pt')
+        normalization=norms.choose(spec,observed,frozen_normalization,evidence=normalization_evidence)
+        mean=np.asarray(normalization['mean']);scale=np.asarray(normalization['scale'])
         target=create('target_values',(target_cursor,22),np.float32)
         for start in range(0,target_cursor,65536):
             x=values['target_raw'][start:start+65536];target[start:start+len(x)]=((x-mean)/scale).astype(np.float32)
-        normalization=c.artifact('TARGET_NORMALIZATION',parents=dict(population=p['content_hash']),
-            role='train',mean=mean.tolist(),scale=scale.tolist(),support=support.tolist(),maximum=spec['maximum'],
-            rows=p['counts']['train'],tokens=target_cursor,frame='paired_HLT_sum_p4_axis_and_vector_pt')
         raw=values.pop('target_raw');raw.flush();raw._mmap.close();del raw
         (node/'target_raw.npy').unlink()
     log.mark(f'input flush and payload authentication coordinate={coordinate}')
