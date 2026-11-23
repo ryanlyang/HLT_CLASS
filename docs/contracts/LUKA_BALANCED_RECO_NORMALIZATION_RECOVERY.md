@@ -43,6 +43,27 @@ records and differences before substantive mismatch failure. Raw source hashes,
 membership, target shape and canonical row joins remain enforced. This does
 not prove that the original mismatch was numerical roundoff.
 
+Execution correction after de6e9309's submission rejection: sbatch receives
+the absolute `run_luka_reconstruction_normalization_recovery.sh` filename
+directly, followed by the existing project/spec/phase/task arguments. No shell
+interpreter precedes the script filename. Validate its Bash shebang and Unix
+line endings locally, then run `sbatch --test-only` against the actual script
+and arguments, removing only unresolved dependency options. Do not substitute
+a `--wrap=true` probe. Validate every command before cancellation, and again
+before submission intents. Normalization, release, fits and report use this
+same script boundary. New SUBMISSION_RESPONSE/v1 metadata retain the actual
+return code/stdout/stderr linked to the intent before handling acceptance or
+failure. Uncertain responses still stop without a blind retry.
+
+The reported first normalization submission was rejected by sbatch's script
+parser and created no accepted job. Keep its recovery spec, claim, intent,
+cancellation records and launch log. Launch the corrected pushed source in
+its fresh commit-derived recovery root. Existing cancelled original attempts
+remain in the scientific journal and are eligible for authenticated replacement;
+completed/running fits and queued original teachers are preserved as before.
+This fixes orchestration under the existing v1 recovery schemas; science,
+normalization and original execution identities are unchanged.
+
 The execution adapter imports scientific modules only from the original clean
 checkout and verifies the original full source/runtime/qualification. The new
 normalization and input-publication modules are loaded by exact file hashes.

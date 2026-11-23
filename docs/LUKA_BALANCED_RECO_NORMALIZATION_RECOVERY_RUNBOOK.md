@@ -1,5 +1,42 @@
 # Recover the existing balanced reconstruction campaign
 
+## Retry after the de6e9309 sbatch script rejection
+
+The earlier estimates were `--test-only` output. The first live normalization
+submission failed because sbatch received `bash` as its script filename.
+No normalization/release/replacement job was accepted by that invocation.
+Pending original reconstruction/report cancellations had already been requested.
+Keep that failed recovery directory and its logs/intents; do not remove its
+claim or retry the same commit/root. The corrected launcher uses the actual
+shebang script for both dry review and live submission.
+
+In local PowerShell, commit only this submission fix:
+
+```powershell
+$FixFiles = @(
+  'src/hlt_classification/operations/hydra_reconstruction_normalization_recovery.py'
+  'tests/test_luka_reconstruction_normalization_recovery.py'
+  'docs/plans/LUKA_BALANCED_RECONSTRUCTION_HYDRA_PLAN.md'
+  'docs/contracts/LUKA_BALANCED_RECO_NORMALIZATION_RECOVERY.md'
+  'docs/LUKA_BALANCED_RECO_NORMALIZATION_RECOVERY_RUNBOOK.md'
+  'docs/LUKA_BALANCED_RECONSTRUCTION_HYDRA_VALIDATION.md'
+)
+git add -- $FixFiles
+if ($LASTEXITCODE -ne 0) { throw 'Staging failed' }
+git commit --only -m "Submit recovery batch scripts directly to Slurm" -- $FixFiles
+if ($LASTEXITCODE -ne 0) { throw 'Commit failed' }
+git push origin HEAD:main
+if ($LASTEXITCODE -ne 0) { throw 'Push failed' }
+git rev-parse HEAD
+```
+
+Use that new 40-character commit with the Hydra launch block below. The new
+commit creates a fresh recovery root. It still uses the bundled exact
+normalization, retains completed/running models, and replaces eligible
+cancelled/failed original reconstruction attempts. No generic campaign restart.
+
+## Normal recovery launch
+
 This continues the dc5920f0 study. Do not launch the generic 18-fit campaign
 again. Completed and running models remain in place. The operation cancels
 only pending reconstruction/report jobs, then submits replacements for failed

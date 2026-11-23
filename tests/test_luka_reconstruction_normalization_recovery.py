@@ -113,6 +113,74 @@ def test_recovery_bootstrap_replays_on_original_node_and_release_waits_for_succe
     assert '--dependency=afterok:{normalize}' in candidate_rows[1]['command']
 
 
+def recovery_script(tmp_path):
+    project=tmp_path/'source';script=project/'sbatch/run_luka_reconstruction_normalization_recovery.sh'
+    script.parent.mkdir(parents=True);script.write_bytes(b'#!/usr/bin/env bash\nexit 0\n')
+    return project,script
+
+
+def test_scheduler_reviews_and_submits_actual_batch_scripts_with_arguments(tmp_path,monkeypatch):
+    project,script=recovery_script(tmp_path)
+    spec=dict(root=str(tmp_path/'repair'),project=str(project),content_hash='a'*64,
+        qualification_node='gpu1905',parent_spec=dict(path='/parent'),candidate=dict(path='/candidate'))
+    monkeypatch.setattr(op,'referenced',lambda r:Path(r['path']))
+    monkeypatch.setattr(op,'read',lambda p:dict(project='/old'))
+    rows=op.bootstrap_commands(spec)
+    rows.append(dict(task='R24_s10',command=['sbatch','--parsable',*op.wrapper(spec,'run','R24_s10')]))
+    rows.append(dict(task='report',command=['sbatch','--parsable',*op.wrapper(spec,'run','report')]))
+    calls=[]
+    def scheduler(argv,**kwargs):
+        calls.append(argv)
+        # Model sbatch's script-file boundary, which the former --wrap probe bypassed.
+        index=next(i for i in range(1,len(argv)) if not argv[i].startswith('-'))
+        assert Path(argv[index])==script and script.read_bytes().startswith(b'#!')
+        assert argv[index+1:index+3]==[str(project),str(Path(spec['root'])/'repair_spec.json')]
+        assert '--wrap=true' not in argv and 'bash' not in argv
+        return SimpleNamespace(returncode=0,stdout=f'{100+len(calls)}\n',stderr='')
+    monkeypatch.setattr(op.subprocess,'check_output',lambda *a,**kw:'ClusterName = hydra\n')
+    monkeypatch.setattr(op.subprocess,'run',scheduler)
+    op.dry_review(rows)
+    assert all('--test-only' in args for args in calls)
+    assert not any(a.startswith('--dependency=') for args in calls for a in args)
+    calls.clear()
+    jobs=op.submit_rows(spec,rows,tmp_path/'submission')
+    assert jobs==dict(normalize='101',release='102',R24_s10='103',report='104')
+    assert '--dependency=afterok:101' in calls[1]
+    assert calls[2][-2:]==['run','R24_s10'] and calls[3][-2:]==['run','report']
+
+
+@pytest.mark.parametrize('damage',['bash_prefix','bad_header','windows_lines'])
+def test_invalid_batch_script_is_rejected_before_scheduler_or_cancellation(tmp_path,monkeypatch,damage):
+    project,script=recovery_script(tmp_path)
+    command=['sbatch','--parsable',*op.wrapper(dict(project=str(project),root='/repair'),'normalize')]
+    if damage=='bash_prefix':command.insert(2,'bash')
+    elif damage=='bad_header':script.write_bytes(b'exit 0\n')
+    else:script.write_bytes(b'#!/usr/bin/env bash\r\nexit 0\r\n')
+    monkeypatch.setattr(op.subprocess,'run',lambda *a,**kw:pytest.fail('Invalid script reached scheduler'))
+    monkeypatch.setattr(op.subprocess,'check_output',lambda *a,**kw:pytest.fail('Invalid script reached scheduler'))
+    rows=[dict(task='normalize',command=command)]
+    with pytest.raises(ValueError):op.dry_review(rows)
+    with pytest.raises(ValueError):op.submit_rows({},rows,tmp_path/'submission')
+    assert not (tmp_path/'submission').exists()
+
+
+def test_sbatch_script_rejection_preserves_response_and_stops_before_release(tmp_path,monkeypatch):
+    project,script=recovery_script(tmp_path)
+    spec=dict(root='/repair',project=str(project),content_hash='a'*64)
+    rows=[dict(task=t,command=['sbatch','--parsable',*op.wrapper(spec,t)]) for t in ('normalize','release')]
+    calls=[]
+    def rejected(argv,**kwargs):
+        calls.append(argv)
+        return SimpleNamespace(returncode=1,stdout='',stderr='sbatch: error: This does not look like a batch script.')
+    monkeypatch.setattr(op.subprocess,'run',rejected)
+    folder=tmp_path/'submission'
+    with pytest.raises(ValueError,match='Uncertain submission'):op.submit_rows(spec,rows,folder)
+    assert len(calls)==1 and not (folder/'normalize.submitted.json').exists()
+    response=op.read(folder/'normalize.response.json')
+    assert response['returncode']==1 and 'batch script' in response['stderr']
+    assert not (folder/'release.intent.json').exists()
+
+
 def test_only_campaign_bound_pending_reconstruction_and_report_are_cancelled(tmp_path,monkeypatch):
     rows=[dict(job=str(i),task=t) for i,t in enumerate(('R24_s10','D20_s10','U100_s11','report'),1)]
     spec=dict(root=str(tmp_path),content_hash='a'*64,original_jobs={r['job']:r['task'] for r in rows})
@@ -204,7 +272,9 @@ def test_new_original_format_attempt_retains_recovery_lineage_and_uncertainty_gu
     oldspec=dict(root=str(tmp_path/'original'),content_hash='a'*64)
     old=SimpleNamespace(spec=oldspec,c=c)
     spec=dict(content_hash='b'*64)
-    rows=[dict(task='R24_s10',command=['sbatch','--wrap=true'])]
+    project,_=recovery_script(tmp_path)
+    rows=[dict(task='R24_s10',command=['sbatch','--parsable',
+        *op.wrapper(dict(project=str(project),root=oldspec['root']),'run','R24_s10')])]
     monkeypatch.setenv('SBATCH_GRES','gpu:unexpected:8');monkeypatch.setenv('SLURM_JOB_ID','999')
     def submit(*args,**kwargs):
         assert 'SBATCH_GRES' not in kwargs['env'] and 'SLURM_JOB_ID' not in kwargs['env']

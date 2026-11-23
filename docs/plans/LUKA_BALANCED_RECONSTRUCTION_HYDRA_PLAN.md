@@ -8,6 +8,13 @@ Oscar artifacts and scheduler state remain outside that operation.
 
 ## Normalization repair and continuation, 2026-11-23
 
+Submission correction after de6e9309: pass the absolute shebang batch script
+directly to sbatch for normalization, release, replacement fits and report.
+Dry review must parse that actual script and its arguments before cancellation
+or live submission. Preserve the failed recovery root; a new pushed commit
+creates a fresh recovery execution against the same scientific study. No
+scientific fit, qualified normalizer or original journal is reset.
+
 Jobs219507/R24,219508/D20,219509/R20 passed early GPU acceptance but rejected
 their rebuilt normalization hash before the scientific miniature; zero epochs
 were committed. Underlying numerical/statistical drift remains unproven. Original

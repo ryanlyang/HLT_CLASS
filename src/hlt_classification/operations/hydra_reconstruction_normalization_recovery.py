@@ -165,7 +165,7 @@ def check(spec):
 
 
 def wrapper(spec,phase,task=None):
-    args=['bash',str(Path(spec['project'])/'sbatch/run_luka_reconstruction_normalization_recovery.sh'),
+    args=[str(Path(spec['project'])/'sbatch/run_luka_reconstruction_normalization_recovery.sh'),
         spec['project'],str(Path(spec['root'])/'repair_spec.json'),phase]
     return args+([task] if task is not None else [])
 
@@ -189,16 +189,30 @@ def scheduler_env():
     return {k:v for k,v in os.environ.items() if not k.startswith(('SBATCH_','SLURM_'))}
 
 
+def batch_script_index(command):
+    require(command and command[0]=='sbatch','Expected a direct sbatch command')
+    cut=next((i for i in range(1,len(command)) if not command[i].startswith('-')),None)
+    require(cut is not None,'Missing batch script')
+    script=Path(command[cut])
+    require(script.is_absolute() and script.is_file()
+        and script.name=='run_luka_reconstruction_normalization_recovery.sh',
+        'Pass the absolute recovery batch script directly to sbatch, without a bash prefix')
+    with script.open('rb') as stream:header=stream.readline()
+    require(header==b'#!/usr/bin/env bash\n','Batch script requires a Bash shebang and Unix line endings')
+    return cut
+
+
 def dry_review(rows):
+    for row in rows:batch_script_index(row['command'])
     config=subprocess.check_output(['scontrol','show','config'],text=True,timeout=30)
     require(re.search(r'(?m)^\s*ClusterName\s*=\s*hydra\s*$',config),'Hydra required')
     for row in rows:
-        cut=row['command'].index('bash')
-        args=[x for x in row['command'][:cut] if not x.startswith('--dependency=')]
-        subprocess.run(args+['--test-only','--wrap=true'],check=True,timeout=30,env=scheduler_env())
+        args=[x for x in row['command'][1:] if not x.startswith('--dependency=')]
+        subprocess.run(['sbatch','--test-only',*args],check=True,timeout=30,env=scheduler_env())
 
 
 def submit_rows(spec,rows,folder,*,old=None):
+    for row in rows:batch_script_index(row['command'])
     folder=Path(folder);folder.mkdir(parents=True,exist_ok=False);jobs={}
     plan=artifact('PLAN',parents=dict(repair=spec['content_hash']),commands=rows)
     publish(folder/'plan.json',plan)
@@ -209,8 +223,12 @@ def submit_rows(spec,rows,folder,*,old=None):
         fields=dict(parents=dict(spec=old.spec['content_hash']) if old else dict(repair=spec['content_hash']),
             task=row['task'],plan=plan['content_hash'],command=args,execution_recovery=spec['content_hash'])
         make=old.c.artifact if old else artifact
-        publish(folder/(row['task']+'.intent.json'),make('SUBMISSION_INTENT',**fields))
+        intent=make('SUBMISSION_INTENT',**fields)
+        publish(folder/(row['task']+'.intent.json'),intent)
         result=subprocess.run(args,capture_output=True,text=True,timeout=30,env=scheduler_env())
+        publish(folder/(row['task']+'.response.json'),artifact('SUBMISSION_RESPONSE',
+            parents=dict(intent=intent['content_hash']),task=row['task'],returncode=result.returncode,
+            stdout=result.stdout,stderr=result.stderr))
         job=result.stdout.strip().split(';')[0]
         require(result.returncode==0 and re.fullmatch('[1-9][0-9]*',job),
             'Uncertain submission; inspect intent before retry: '+result.stdout+result.stderr)

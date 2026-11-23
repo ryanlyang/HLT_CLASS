@@ -1,5 +1,32 @@
 # Balanced reconstruction Hydra: queue-readiness evidence
 
+## 2026-11-23: Actual sbatch script parsing after de6e9309 rejection
+
+The operator's first live normalization submission was rejected with `This
+does not look like a batch script`. The preceding scheduling estimates did
+not submit jobs. The owned wrapper incorrectly placed `bash` in sbatch's
+script-file position, while dry review used `--wrap=true` and missed it.
+Pending original reconstruction/report cancellations preceded this rejection;
+the failed recovery spec/claim/intent/log must remain intact.
+
+The wrapper now supplies the absolute shebang script directly for all phases.
+Dry review sends the real script and its arguments to `sbatch --test-only`
+before cancellation. Every command also validates its script/header before
+live submission. Actual scheduler return code/stdout/stderr are retained in
+intent-bound SUBMISSION_RESPONSE/v1 metadata, including rejections.
+
+Baseline focused suite: 19 passed in 14.76s. After repair: **24 passed in
+17.12s**. Added coverage exercises normalization/release/fit/report script
+boundaries, resolved release dependency, malformed interpreter/header/CRLF
+rejection before scheduler access, actual-script dry review, and rejection
+evidence without releasing later phases. Combined reconstruction, recovery,
+startup and transport regression: **108 passed, 1 skipped in 160.33s**. The
+skip requires four real local CUDA/NCCL devices; installed-Weaver/CUDA, actual
+four-process Gloo, decoder spawn and unchanged 531 donor checks passed. Bash
+syntax, rank CLI and scoped diff checks passed.
+No remote job or file was changed by the agent. A new pushed commit/root
+continues the same original scientific campaign and retains its completed fits.
+
 ## 2026-11-23: Frozen normalization and existing-study recovery
 
 Reported jobs 219507, 219508, 219509 completed their early GPU steps in 77--83s,
