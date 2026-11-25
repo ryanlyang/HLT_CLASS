@@ -118,6 +118,77 @@ def test_real_root_requests_are_role_bounded_and_validation_has_no_offline(tmp_p
     finally:inputs.close_reader()
 
 
+@pytest.mark.parametrize('coordinate,targets',[('D000',True),('D000',False),('OFFLINE',False),('U100',False)])
+def test_full_input_builder_roundtrip_uses_wide_population_schema(tmp_path,monkeypatch,coordinate,targets):
+    """Exercise allocation, real decoding, publication and reload, not just work()."""
+    path=tmp_path/'raw/a.root';write_root(path,[1]*6)
+    record=dict(path='raw/a.root',sha256=sha256_file(path),tree_key='tree',entries=6)
+    rs=np.array([0,1,2,3,3,0],np.uint8)
+    member=dict(labels=np.array([1,2,0,3,5,4],np.int64),jet_pt=np.full(6,250.),
+        hlt_jet_nparticles=np.full(6,2),jet_nparticles=np.full(6,3),roles=rs)
+    counts,outside,particles,maxima,arrays,class_counts=population.donor.inventory(dict(files=[record]),[member],[rs])
+    p=with_content_hash(dict(counts=counts,outside_counts=outside,role_particles=particles,
+        maximum_support=maxima,class_counts=class_counts))
+    assert 'particles' not in p and p['role_particles']['train']==dict(hlt=4,offline=6)
+    parent=(p,dict(files=[record]),[member],[rs],arrays);loaded=(p,parent,arrays)
+    spec=dict(root=str(tmp_path/'study'),dataset=str(tmp_path),population=p,maximum=3,content_hash='a'*64)
+    spans=list(inputs.arguments(spec,parent,arrays,coordinate,targets))
+    expected=[(arg,inputs.work(arg)) for arg in spans]
+    inputs.close_reader()
+    original=inputs.reader;reads=[]
+    class Guard:
+        def __init__(self,inner):self.inner=inner
+        def __enter__(self):self.tree=self.inner.__enter__();self.num_entries=self.tree.num_entries;return self
+        def __exit__(self,*args):return self.inner.__exit__(*args)
+        def arrays(self,keys,**kw):
+            lo,hi=kw['entry_start'],kw['entry_stop'];role=int(rs[lo])
+            assert role in (0,1) and np.all(rs[lo:hi]==role)
+            if coordinate=='D000' and (role==1 or not targets):
+                assert all(k.startswith('hlt_') for k in keys)
+            reads.append((role,lo,hi));return self.tree.arrays(keys,**kw)
+    monkeypatch.setattr(inputs,'reader',lambda *args,**kw:Guard(original(*args,**kw)))
+    node=tmp_path/'node'
+    manifest=inputs.prepare_node(spec,node,coordinate,targets=targets,workers=1,loaded=loaded)
+    caches,reconstruction,reloaded=inputs.load_node(spec,node)
+    assert reloaded==manifest and reads and not (node/'target_raw.npy').exists()
+    side='offline' if coordinate=='OFFLINE' else 'hlt'
+    for role in ('train','validation'):
+        actual=caches[role];block=actual.blocks[0]
+        assert len(actual)==counts[role] and block.offsets[-1]==particles[role][side]
+        np.testing.assert_array_equal(actual.identities,arrays[role+'_identities'])
+        np.testing.assert_array_equal(actual.labels,arrays[role+'_labels'])
+        row=0
+        for arg,(rows,_) in expected:
+            if ('train','validation')[arg[5]]!=role:continue
+            for _,native in rows:
+                batch=actual.batch(np.array([row]));length=len(native.features)
+                np.testing.assert_array_equal(batch['features'][0,:,:length],native.features.T)
+                np.testing.assert_array_equal(batch['vectors'][0,:,:length],native.vectors.T)
+                assert int(batch['mask'].sum())==length;row+=1
+        assert row==counts[role]
+    if not targets:
+        assert reconstruction is None and manifest['normalization'] is None
+        assert not list(node.glob('target_*.npy'))
+        return
+    norm=normalization.validate(manifest['normalization'],spec)
+    assert norm['rows']==2 and norm['tokens']==6 and len(reconstruction.values)==6
+    expected_targets=[item for arg,(_,items) in expected for item in items]
+    actual_targets=reconstruction.batch(np.arange(counts['train']))
+    assert len(actual_targets)==len(expected_targets)==2
+    for actual,(raw,valid,frame,aggregate) in zip(actual_targets,expected_targets,strict=True):
+        np.testing.assert_allclose(actual['values']*actual['scale']+actual['mean'],raw,rtol=1e-6,atol=1e-7)
+        np.testing.assert_array_equal(actual['valid'],valid[:,14:18])
+        np.testing.assert_array_equal(actual['frame'],frame)
+        np.testing.assert_array_equal(actual['aggregate'],aggregate)
+    # Science allocations must reproduce and apply the exact qualified record.
+    evidence=tmp_path/'normalization_comparison.json'
+    repeated=inputs.prepare_node(spec,tmp_path/'repeat',coordinate,targets=True,workers=1,loaded=loaded,
+        frozen_normalization=norm,normalization_evidence=evidence)
+    assert repeated['normalization']==norm
+    assert load_json(evidence)['applied_sha256']==norm['content_hash']
+    assert load_json(evidence)['exact_scope'] is True
+
+
 def small_fixture(root,monkeypatch):
     root.mkdir(parents=True);monkeypatch.setattr(c,'COUNTS',dict(train=144,validation=12));monkeypatch.setattr(c,'SEEDS',(20,))
     monkeypatch.setattr(c,'BN_ROWS',128);monkeypatch.setitem(c.RESOURCES,'gpus',1)

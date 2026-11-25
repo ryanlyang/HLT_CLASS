@@ -1,10 +1,54 @@
 # Full-population RAW D20 campaign: implementation evidence
 
 Final evidence date2026-11-25; implementation began2026-11-24.
-Source is locally implemented; real four-GTX1080Ti Hydra
-qualification has not been run here. Queue readiness is distinct from passed
-remote resource/transport/miniature acceptance. No remote files/jobs, final-test
-inference or working-branch commit/push were performed.
+The sections below distinguish supplied remote execution records from local
+tests. Full four-GTX1080Ti Hydra resource/miniature qualification remains
+pending. No remote files/jobs, final-test inference or working-branch
+commit/push were performed by the agent.
+
+## Input-schema repair after qualification226613
+
+Repair base:0051dc8e0da4b9e791d9a2b6fbf7ba9b26318267. The supplied2026-11-25
+logs/accounting identify root `d20_full_0051dc8e_r1`: prepare226612 completed in
+5m17s, qualify226613 failed in7m57s on gpu1705, release226614 was cancelled.
+All four early GPU ranks passed transport, installed-Weaver and the five base
+arm technical checks; that stage took69.2s. Scalar membership replay completed
+in294.3s. Full D000 input allocation then failed at once with
+`KeyError: 'particles'`, before any particle construction or scientific epoch.
+Neither qualification completion artifact was present. These are the user's
+supplied records; the remote scheduler/payloads were not independently reread.
+
+Four lookups retained the miniature population's `particles` field even though
+the imported full population exposes `role_particles`. Corrected all four in
+the owned input adapter: native allocation, target allocation, native coverage
+and target coverage. No population alias or rehash, recipe change, input
+cropping, normalization change or donor-source mutation was introduced.
+
+Baseline focused input/metadata checks3 passed in15.76s. New real synthetic ROOT
+roundtrips for D000 with/without reconstruction, OFFLINE and U100 all reproduced
+the original KeyError before the fix (4 failed in17.14s); after repair,4 passed
+in16.95s. They exercise the pinned wide inventory schema without `particles`,
+full mmap allocation/decode/publication/reload, complete particle counts,
+ordered IDs and labels, exact native arrays, TRAIN-only target values/masks/
+frames/aggregates, sealed test/unused spans, and exact frozen-normalizer reuse.
+The related donor ROOT/basket/worker-pool regression8 passed in41.13s.
+
+The full repaired owned suite **64 passed in157.42s**, including the clean
+deployment closure/stale-source test, all objective-gradient cases, real
+installed-Weaver single-CUDA parity and exact serialized D20 decoder/AdamW/RNG
+next-update restoration. Together with the related donor regression,72 tests
+passed. Edited Python syntax, owned Markdown links, all5 runbook Bash blocks
+and scoped `git diff --check` passed. None of these local tests claims complete
+real full-population four-GPU qualification.
+
+The original local implementation evidence below remains historical. The
+repaired source requires a new pushed commit and fresh study; old source/spec
+and accepted-job records remain unchanged. Because no science began, repeat
+the small preparation task and full real qualification rather than inventing
+cross-source reuse. The early pass at the old source does not authorize release
+under the repaired source. See the [runbook](LUKA_D20_FULL_HYDRA_RUNBOOK.md).
+
+## Original implementation evidence
 
 Before edits, focused donor/benchmark baseline75 passed,3 deselected in212.02s.
 The combined new-campaign/donor/startup/transport/benchmark regression passed

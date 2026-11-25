@@ -1,5 +1,33 @@
 # Queue the full D20 RAW campaign on Hydra
 
+After the226613 qualification failure at commit0051dc8e, use a **new commit and
+fresh study** for the input-schema repair. That job passed its four-GPU early
+checks, then failed on the old `particles` field before particle construction
+or scientific training. The repair consumes the existing `role_particles`
+schema throughout allocation and coverage checks; no scientific setting changes.
+Do not apply a new source to the old immutable spec or use its same-source
+`resume` command. Leave the failed execution in place for provenance.
+
+For this repair, the local commit block can use this smaller file list and
+commit message (then use the same Hydra launch block below with the new hash):
+
+```powershell
+$Files = @(
+  'src/hlt_classification/luka_d20_full_hydra/inputs.py'
+  'tests/test_luka_d20_full_hydra.py'
+  'docs/LUKA_D20_FULL_HYDRA_RUNBOOK.md'
+  'docs/LUKA_D20_FULL_HYDRA_VALIDATION.md'
+)
+git add -- $Files
+if ($LASTEXITCODE -ne 0) { throw 'Staging failed' }
+git diff --cached --stat -- $Files
+git commit --only -m "Fix full D20 wide-population input builder" -- $Files
+if ($LASTEXITCODE -ne 0) { throw 'Commit failed' }
+git push origin HEAD:main
+if ($LASTEXITCODE -ne 0) { throw 'Push failed' }
+git rev-parse HEAD
+```
+
 This is the full2,488,148 TRAIN /497,954 natural validation campaign,200--2600GeV,
 six classes, equal class/pT sampling, batch256, peakLR1e-4,20 epochs. Three seeds
 train OFFLINE/M0HLT/U100/U100-w5/D20 and eight first-seed variants:23 fits.

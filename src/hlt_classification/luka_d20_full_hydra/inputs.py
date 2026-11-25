@@ -199,13 +199,13 @@ def prepare_node(spec,node,coordinate,*,targets=False,workers=4,loaded=None,
         value=np.lib.format.open_memmap(node/(name+'.npy'),mode='w+',dtype=dtype,shape=shape)
         values[name]=value;return value
     for role in c.COUNTS:
-        n=p['counts'][role];tokens=p['particles'][role][side]
+        n=p['counts'][role];tokens=p['role_particles'][role][side]
         for name,shape,dtype in [('features',(tokens,17),np.float32),('vectors',(tokens,4),np.float32),
             ('offsets',(n+1,),np.int64),('identities',(n,32),np.uint8),('labels',(n,),np.int64)]:
             create(role+'_'+name,shape,dtype)
         values[role+'_offsets'][0]=0
     if targets:
-        n=p['counts']['train'];tokens=p['particles']['train']['offline']
+        n=p['counts']['train'];tokens=p['role_particles']['train']['offline']
         for name,shape,dtype in [('target_raw',(tokens,22),np.float64),('target_bits',(tokens,),np.uint8),
             ('target_offsets',(n+1,),np.int64),('target_frame',(n,3),np.float64),('target_aggregate',(n,5),np.float64)]:create(name,shape,dtype)
         values['target_offsets'][0]=0
@@ -246,10 +246,10 @@ def prepare_node(spec,node,coordinate,*,targets=False,workers=4,loaded=None,
         if sha256_file(Path(spec['dataset'])/record['path'])!=record['sha256']:raise ValueError('Source changed during construction')
     normalization=None
     for role in c.COUNTS:
-        if cursors[role]!=[p['counts'][role],p['particles'][role][side]]:raise ValueError('Full input support/coverage differs')
+        if cursors[role]!=[p['counts'][role],p['role_particles'][role][side]]:raise ValueError('Full input support/coverage differs')
     if targets:
         log.mark('TRAIN reconstruction normalization and target publication')
-        if target_cursor!=p['particles']['train']['offline']:raise ValueError('Incomplete reconstruction targets')
+        if target_cursor!=p['role_particles']['train']['offline']:raise ValueError('Incomplete reconstruction targets')
         mean=np.zeros(22);scale=np.ones(22);cols=np.asarray(CONTINUOUS)
         mean[cols]=total[cols]/np.maximum(support[cols],1)
         scale[cols]=np.maximum(np.sqrt(np.maximum(squares[cols]/np.maximum(support[cols],1)-mean[cols]**2,0)),.001)
