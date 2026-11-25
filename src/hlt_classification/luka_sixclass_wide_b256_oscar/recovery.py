@@ -95,13 +95,18 @@ def validate(spec):
 
 
 def origin(spec,stage):
-    if spec.get('schema_version')==2 and stage in BASELINES:
+    if spec.get('schema_version') in (2,3) and stage in BASELINES:
         return validate(spec)
     return spec
 
 
 def enabled(spec,stage):
-    return spec.get('schema_version')==2 and stage=='CONCAT'
+    return spec.get('schema_version') in (2,3) and stage=='CONCAT'
+
+
+def model_options(spec,stage):
+    if not enabled(spec,stage):return {}
+    return dict(pair_storage=True,**({'pointwise_dgrad':True} if spec['schema_version']==3 else {}))
 
 
 def claim(spec):

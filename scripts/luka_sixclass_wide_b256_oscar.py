@@ -15,7 +15,7 @@ def main():
     for k in ('dataset','root','commit','environment'):a.add_argument('--'+k,required=True)
     a.add_argument('--gpu',choices=list(c.GPUS),default='l40s');a.add_argument('--available-gib',type=int,required=True)
     a.add_argument('--minutes',type=int,default=2880)
-    a.add_argument('--recover',help='Exact d534fcfe parent campaign_spec.json; reuse its two completed baselines')
+    a.add_argument('--recover',help='Exact d534fcfe memory parent or failed 44aa1522 gradient parent; reuse completed baselines')
     a=sub.add_parser('queue');a.add_argument('--spec',required=True)
     a.add_argument('--execute',action='store_true');a.add_argument('--authorize');a.add_argument('--resume',action='store_true')
     a.add_argument('--available-gib',type=int)

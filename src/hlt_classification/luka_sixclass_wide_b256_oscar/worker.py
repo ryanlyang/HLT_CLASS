@@ -50,7 +50,7 @@ def allocation(spec,task):
 
 def run(spec,task,*,device='cuda:0'):
     campaign.check(spec);job=allocation(spec,task);stage=task.removeprefix('train_');started=time.monotonic()
-    if spec['schema_version']==2 and stage in recovery.BASELINES:raise PermissionError('Reuse the completed baselines')
+    if spec['schema_version'] in (2,3) and stage in recovery.BASELINES:raise PermissionError('Reuse the completed baselines')
     folder=Path(spec['root'])/task/'runs'/job;folder.mkdir(parents=True,exist_ok=False)
     if (Path(spec['root'])/task/'result.json').exists():raise FileExistsError('Already published stage')
     torch.set_num_threads(1);phases=PhaseLog(folder,lambda:memory_snapshot(torch));device=torch.device(device)
@@ -66,7 +66,7 @@ def run(spec,task,*,device='cuda:0'):
             dependencies={t:artifacts.completed(spec,t,memo=memo) for t in c.TEACHERS[stage]}
             parents=artifacts.fit_parents(spec,stage,dependencies)
             write_immutable_json(folder/'fit_binding.json',c.artifact('FIT_BINDING',parents=parents,stage=stage,job_id=job))
-        if spec['schema_version']==2:
+        if spec['schema_version'] in (2,3):
             from . import early_memory
             with phases.phase('early_memory_before_resident_inputs'):
                 early_memory.run(spec,stage,loaded,device,folder)
@@ -86,8 +86,8 @@ def run(spec,task,*,device='cuda:0'):
         with phases.phase('integrated_acceptance'):
             proof=startup.run(spec,stage,tr,val,targets,sampler,matching,device,folder,started,
                 remaining_epochs=c.EPOCHS-(len(resume['history']) if resume else 0),outside=outside,
-                **({'pair_storage':True} if recovery.enabled(spec,stage) else {}))
-            if spec['schema_version']==2:
+                **recovery.model_options(spec,stage))
+            if spec['schema_version'] in (2,3):
                 from hlt_classification.data.cache_contracts import with_content_hash
                 proof=with_content_hash(dict(proof,early_memory=file_ref(folder/'early_memory.json')))
             write_immutable_json(folder/'startup.json',proof)
@@ -97,7 +97,7 @@ def run(spec,task,*,device='cuda:0'):
             with context:
                 net,report,best=training.train(tr,val,banks=targets,sampler=sampler,stage=stage,parents=parents,
                     device=device,save_epoch=save,matching=matching,resume=resume,outside=outside,
-                    **({'pair_storage':True} if recovery.enabled(spec,stage) else {}))
+                    **recovery.model_options(spec,stage))
             training.validate_report(report,stage,parents,len(val),sampler)
             write_immutable_json(folder/'training_report.json',report)
             native=net.deployed().to(device).eval();del net,best,resume,targets,matching

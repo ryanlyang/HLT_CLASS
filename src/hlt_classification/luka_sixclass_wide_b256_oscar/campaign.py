@@ -64,7 +64,8 @@ def source(project,commit):
         'scripts/queue_luka_sixclass_wide_b256_oscar.sh','sbatch/luka_sixclass_wide_b256_oscar_common.sh',
         'scripts/bootstrap_luka_sixclass_wide_b256_oscar.sh'}
     required|={'scripts/recover_luka_sixclass_wide_b256_oscar.sh',
-               'tests/test_luka_sixclass_wide_b256_recovery.py'}
+               'tests/test_luka_sixclass_wide_b256_recovery.py',
+               'tests/test_luka_sixclass_wide_b256_convolution.py'}
     if not required<=tracked:raise ValueError('Commit all campaign implementation files first')
     return snapshot
 
@@ -127,12 +128,17 @@ def create(dataset,root,project,commit,environment,*,gpu='l40s',available_gib,mi
     extra={};version=1
     if recover is not None:
         from . import recovery
-        old,record=recovery.authenticate(Path(recover))
+        if load_json(recover).get('schema_version')==2:
+            from . import gradient_recovery
+            old,record,gradient=gradient_recovery.authenticate(Path(recover))
+            extra=dict(gradient_recovery=gradient);version=3
+        else:
+            old,record=recovery.authenticate(Path(recover));version=2
         if env!=old['environment'] or str(environment)!=old['environment_dir'] or backend()!=old['backend']:
             raise ValueError('Recovery runtime must match the original baselines')
         # Authenticate the scalar population before copying only its immutable metadata.
         population.load(dataset,old['population_root'])
-        extra=dict(execution_recovery=record);version=2
+        extra.update(execution_recovery=record)
     root.mkdir(parents=True,exist_ok=False)
     if recover is None:pop=population.build(dataset,root/'population')
     else:
@@ -166,10 +172,14 @@ def check(spec,*,live=True):
             or spec['storage']['new_results_budget_bytes']!=c.RESULT_GIB*2**30):
         raise ValueError('Scientific/resource registration differs')
     if Path(spec['population_root'])!=Path(spec['root'])/'population':raise ValueError('Population root differs')
-    if spec['schema_version']==2:
+    if spec['schema_version'] in (2,3):
         from . import recovery
         recovery.validate(spec)
     elif 'execution_recovery' in spec:raise ValueError('Recovery requires SPEC/v2')
+    if spec['schema_version']==3:
+        from . import gradient_recovery
+        gradient_recovery.validate(spec)
+    elif 'gradient_recovery' in spec:raise ValueError('Direct pointwise gradients require SPEC/v3')
     if live:
         locations(spec['dataset'],spec['root'],spec['project'],spec['environment_dir'])
         if source(spec['project'],spec['commit'])!=spec['source']:raise ValueError('Source drift')
@@ -209,9 +219,16 @@ def remaining(spec,resume):
     jobs=accepted_jobs(spec)
     if jobs and not resume:raise FileExistsError('Already submitted; use explicit resume only after terminal accounting')
     complete={}
-    if spec['schema_version']==2:
+    if spec['schema_version'] in (2,3):
         from . import recovery
-        old,record=recovery.authenticate(Path(spec['execution_recovery']['parent_spec']['path']))
+        if spec['schema_version']==3:
+            from . import gradient_recovery
+            old,record,gradient=gradient_recovery.authenticate(Path(spec['gradient_recovery']['previous_spec']['path']))
+            if gradient!=spec['gradient_recovery']:raise ValueError('Kernel recovery evidence changed')
+        else:
+            if (Path(spec['root'])/'concat_gradient_recovery_claim_v1.json').exists():
+                raise ValueError('This execution was superseded by the pointwise-gradient recovery')
+            old,record=recovery.authenticate(Path(spec['execution_recovery']['parent_spec']['path']))
         if record!=spec['execution_recovery']:raise ValueError('Recovery parent evidence changed')
         complete={s:artifacts.completed(old,s)['receipt']['content_hash'] for s in recovery.BASELINES}
     if resume:
@@ -278,7 +295,7 @@ def queue(spec,*,execute=False,authorization=None,resume=False,available_gib=Non
     if execute and authorization!=c.AUTH:raise PermissionError('Exact six-fit authorization required')
     check(spec)
     with submission_lock(spec['root']) if execute else nullcontext():
-        if spec['schema_version']==2 and execute:
+        if spec['schema_version'] in (2,3) and execute:
             from . import recovery
             old=recovery.validate(spec)
             with submission_lock(old['root']):
@@ -295,7 +312,10 @@ def _queue(spec,*,execute=False,authorization=None,resume=False,available_gib=No
     print(__import__('json').dumps(plan,indent=2),flush=True);site(plan['commands'])
     if not execute:return plan
     if authorization!=c.AUTH:raise PermissionError('Exact six-fit authorization required')
-    if spec['schema_version']==2:
+    if spec['schema_version']==3:
+        from . import gradient_recovery
+        gradient_recovery.claim(spec)
+    elif spec['schema_version']==2:
         from . import recovery
         recovery.claim(spec)
     attempts=sorted((root/'submission').glob('attempt_*'))

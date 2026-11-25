@@ -58,9 +58,13 @@ def model_contract():
 
 
 class NativeParticleTransformer(DelphesParticleTransformer):
-    def __init__(self):
+    def __init__(self, *, pointwise_dgrad=False):
         nn.Module.__init__(self)
         self.mod = load_weaver_particle_transformer_class()(**model_config())
+        self.pair_convolution = None
+        if pointwise_dgrad:
+            from .pair_convolution import PointwiseInputGradient
+            self.pair_convolution = PointwiseInputGradient(self.mod.pair_embed)
 
 
 def classifier(net):
@@ -102,9 +106,11 @@ def forward(net, raw, device, *, bf16, capture=False):
 
 
 class Student(NativeParticleTransformer):
-    def __init__(self, stage, *, pair_storage=False):
+    def __init__(self, stage, *, pair_storage=False, pointwise_dgrad=False):
         config=c.node(stage)
-        super().__init__()
+        if type(pointwise_dgrad) is not bool or (pointwise_dgrad and (stage!='CONCAT' or not pair_storage)):
+            raise ValueError('Direct pair input gradients require explicit CONCAT CPU storage')
+        super().__init__(pointwise_dgrad=pointwise_dgrad)
         self.stage=stage
         if type(pair_storage) is not bool or (pair_storage and stage!='CONCAT'):
             raise ValueError('Pair storage is an explicit CONCAT-only execution policy')
@@ -149,14 +155,14 @@ class Student(NativeParticleTransformer):
     def deployed(self):
         # Deployment construction must not perturb the scientific RNG stream.
         with torch.random.fork_rng(devices=[]):
-            result=NativeParticleTransformer()
+            result=NativeParticleTransformer(pointwise_dgrad=self.pair_convolution is not None)
         result.load_state_dict(self.native_state(),strict=True)
         return result.eval()
 
 
-def new_model(stage, *, pair_storage=False):
+def new_model(stage, *, pair_storage=False, pointwise_dgrad=False):
     torch.manual_seed(c.node(stage)['initialization_seed'])
-    return Student(stage, pair_storage=pair_storage)
+    return Student(stage, pair_storage=pair_storage, pointwise_dgrad=pointwise_dgrad)
 
 
 

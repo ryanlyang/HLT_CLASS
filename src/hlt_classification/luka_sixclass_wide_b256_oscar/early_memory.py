@@ -50,15 +50,18 @@ def run(spec,stage,loaded,device,folder):
     begun=time.monotonic();device=torch.device(device)
     caches,records=witnesses(spec,stage,loaded)
     storage=recovery.enabled(spec,stage)
+    pointwise=spec['schema_version']==3 and stage=='CONCAT'
     print('BALANCED early memory: longest real rows loaded; before full particle construction',flush=True)
     parity=[]
     if storage:
         # A small batch with full particle support exercises the installed CUDA kernels.
         raw=caches['train'].batch(np.zeros(2,np.int64))
         for bf16 in (False,True):parity.append(pair_storage.parity(raw,device,bf16=bf16))
+        if pointwise:
+            for bf16 in (False,True):parity.append(pair_storage.parity(raw,device,bf16=bf16,pointwise_dgrad=True))
         del raw;gc.collect();torch.cuda.empty_cache()
     torch.cuda.reset_peak_memory_stats(device)
-    net=model.new_model(stage,pair_storage=storage).to(device).train()
+    net=model.new_model(stage,**recovery.model_options(spec,stage)).to(device).train()
     opt=training.optimizer(net,c.recipe())
     raw=caches['train'].batch(np.zeros(c.BATCH,np.int64))
     for _ in range(3):
@@ -67,12 +70,17 @@ def run(spec,stage,loaded,device,folder):
         loss=torch.nn.functional.cross_entropy(logits.float(),torch.as_tensor(raw['labels'],device=device,dtype=torch.long))
         loss.backward()
         if not torch.isfinite(loss):raise ValueError('Nonfinite early memory loss')
-        for p in net.mod.parameters():
-            if p.grad is None or not torch.isfinite(p.grad).all():raise ValueError('Nonfinite/disconnected native gradient')
+        bad=[name for name,p in net.mod.named_parameters() if p.grad is None or not torch.isfinite(p.grad).all()]
+        if bad:raise ValueError('Nonfinite/disconnected native gradient: '+', '.join(bad))
         opt.step()
         del logits,loss
     stats=dict(net.pair_storage.stats) if storage else None
     if storage:pair_storage.validate_storage_stats(stats,calls=3)
+    gradient={}
+    if pointwise:
+        from .pair_convolution import POLICY,validate_stats
+        g=dict(net.pair_convolution.stats);validate_stats(g,require_fallback=True)
+        gradient=dict(pointwise_policy=POLICY,pointwise_statistics=g)
     opt.zero_grad(set_to_none=True);net.eval()
     with torch.inference_mode():
         for role in ('validation','outside_validation'):
@@ -87,7 +95,7 @@ def run(spec,stage,loaded,device,folder):
     measured=c.artifact('EARLY_MEMORY',parents=dict(spec=spec['content_hash']),stage=stage,
         witnesses=records,parity=parity,pair_storage=stats,batch_size=c.BATCH,export_batch=c.EXPORT_BATCH,
         native_steps=3,seconds=time.monotonic()-begun,memory=memory,passed=True,
-        scope='native_graph_only_full_objective_acceptance_still_required')
+        scope='native_graph_only_full_objective_acceptance_still_required',**gradient)
     if memory['gpu_peak_bytes']>torch.cuda.get_device_properties(device).total_memory*.92:
         raise MemoryError('Early full-support CUDA peak lacks headroom; full input load not started')
     if memory['peak_rss_bytes']+12*2**30>spec['memory_mb']*1024**2*.95:

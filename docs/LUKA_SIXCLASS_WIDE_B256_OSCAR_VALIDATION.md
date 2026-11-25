@@ -4,7 +4,72 @@ Implementation dated 2026-11-23. Scientific authority is the
 [active plan](plans/LUKA_SIXCLASS_WIDE_B256_OSCAR_PLAN.md); execution instructions
 are in the [runbook](LUKA_SIXCLASS_WIDE_B256_OSCAR_RUNBOOK.md).
 
-## November 25 recovery evidence
+## November 25 input-gradient recovery evidence (SPEC/v3)
+
+User-supplied diagnostic9618095 identifies `ConvolutionBackward0` output0 as
+nonfinite in native Weaver's pair network. Preceding recovery9615391 stopped
+before full resident inputs/scientific epochs with GPU peak27,651,303,424bytes
+and host peak88,348,499,968bytes. Those are supplied Oscar measurements, not
+new remote measurements. The warning identifies a large-convolution fallback;
+it alone would not establish a numerical failure.
+
+Implemented `pair_convolution.py`: oversized pointwise input gradients use
+`W.T @ dY`; native forward/weight/bias calculations and global BatchNorm remain.
+The implementation follows the derivative used before spatial folding in
+[PyTorch v2.5.1 CUDA ConvolutionMM2d](https://github.com/pytorch/pytorch/blob/v2.5.1/aten/src/ATen/native/cuda/ConvolutionMM2d.cu).
+The large-tensor dispatch is described in
+[PyTorch v2.5.1 Convolution.cpp](https://github.com/pytorch/pytorch/blob/v2.5.1/aten/src/ATen/native/Convolution.cpp).
+This is a targeted workaround for the observed input-gradient failure, not a
+claim that an upstream bug has been independently isolated on Oscar.
+
+Local installed Weaver0.5.3 / PyTorch2.5.1 / cuDNN90100 checks:
+
+- Forced native-fallback comparisons in FP32/BF16 cover logits, losses, feature
+  and parameter gradients, all BatchNorm buffers, three AdamW updates and optimizer
+  moments. Original tolerances are unchanged. Isolated Conv1d output/input/weight/
+  bias comparisons are bit-exact at both precisions.
+- Both precision comparisons also pass using B2 copies of the authenticated
+  maximum TRAIN witness (596 particles), identity
+  `243c460a2790fa1e7870ea9e35f8d5147ffab7cb22df4e49ae001bc643c4e50d`.
+  This is a discarded technical probe, not scientific training or final test.
+- An isolated native last pair convolution (64->4) at **45,543,936 pairs**,
+  **2,914,811,904 input elements**, automatically takes the repaired path and
+  returns finite input/weight/bias gradients. Its input gradient matches the
+  analytical pointwise result. Input is a synthetic broadcast pattern; this is
+  not a full-network or L40S memory qualification. Windows allocation counters
+  can exceed physical device capacity and are not used as an Oscar fit estimate.
+
+Evidence: `artifacts/testing/wide_gradient_diagnosis/real_witness_pointwise_parity.json`
+and `large_pointwise_backward.json`. The first attempted chunked-forward approach
+was rejected after strict optimizer/gradient parity failures; no such implementation
+or relaxed tolerance is in the final repair.
+
+The v3 worker also records both parity modes and actual large-path use in early
+and full startup receipts. It reuses original OFFLINE/M0HLT and authenticates both
+prior executions, jobs, failures and preserved claims. Actual batch256 full-support
+L40S checks still run before full input construction. No new Oscar/Tigris job was
+submitted here, no remote artifact changed, and no final-test inference occurred.
+
+Final coverage: **91 distinct focused test cases pass across the suite and focused
+rerun**. The broad run passed90 and rejected one test fixture because its miniature
+pair network contained only two convolutions. The fixture now retains the production
+four-convolution topology and forces the repaired path on small inputs; both v2/v3
+end-to-end worker cases then passed (2passed,16deselected). Production guards and
+parity tolerances were not relaxed. Logs: `artifacts/testing/wide_dgrad_final_a.log`
+and `wide_dgrad_fixture_final.log`. Earlier unchanged-suite regression:76passed.
+Python AST checks (27files), Bash launcher syntax, owned documentation links and
+scoped whitespace checks passed. No environment package was installed or patched.
+
+The focused suite consists of `tests/test_luka_sixclass_wide_b256_oscar.py`,
+`tests/test_luka_sixclass_wide_b256_recovery.py` and
+`tests/test_luka_sixclass_wide_b256_convolution.py`. It includes strict parity,
+threshold/inference dispatch, changed-policy rejection, missing/live/committed
+parent rejection, preserved claims/specs, registration, four-stage dependency
+submission, both real Bash detach modes, and real CUDA two-epoch miniature/reload.
+Windows host-memory measurements are stubbed only in the synthetic qualification
+tests; the actual local forward/backward/optimizer/export operations run on CUDA.
+
+## November 25 memory recovery evidence (SPEC/v2)
 
 Supplied Oscar log: CONCAT9544072 failed with CUDA OOM during its full-support
 batch256 stress, after25,832s building resident inputs. It requested another

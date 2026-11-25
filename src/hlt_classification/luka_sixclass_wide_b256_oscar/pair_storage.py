@@ -1,5 +1,6 @@
 """Instance-local, lossless storage of CONCAT pair autograd tensors on CPU."""
 from copy import deepcopy
+from contextlib import nullcontext
 import torch
 from hlt_classification.jetclass2_delphes.concat_k2_model import (
     PAIR_STORAGE, PARITY_TOLERANCES, parity_backend,
@@ -38,16 +39,21 @@ class Storage:
             return self.native(vectors, *args, **kwargs)
 
 
-def parity(raw, device, *, bf16):
+def parity(raw, device, *, bf16, pointwise_dgrad=False):
     """Six-output native CE: compare three AdamW steps, including all BN state."""
     from . import model, training, contracts as c
     cuda = torch.device(device).type == 'cuda'
     if bf16 and not cuda:
         raise ValueError('BF16 pair-storage acceptance requires CUDA')
     tolerance = PARITY_TOLERANCES['bf16' if bf16 else 'fp32']
-    with parity_backend(device), torch.random.fork_rng(devices=[torch.device(device).index or 0] if cuda else []):
+    with parity_backend(device), torch.random.fork_rng(devices=[torch.device(device).index or 0] if cuda else []), \
+            (torch.backends.cudnn.flags(enabled=False) if pointwise_dgrad else nullcontext()):
         native = model.new_model('CONCAT').to(device).train()
-        stored = model.new_model('CONCAT', pair_storage=True).to(device).train()
+        stored = model.new_model('CONCAT', pair_storage=True, pointwise_dgrad=pointwise_dgrad).to(device).train()
+        if pointwise_dgrad:
+            # Match the native non-cuDNN fallback used above the int32 limit.
+            # Force the replacement only in this small parity probe.
+            stored.pair_convolution.force=True
         stored.load_state_dict(native.state_dict(), strict=True)
         nets = (native, stored)
         opts = [training.optimizer(n, c.recipe()) for n in nets]
@@ -88,5 +94,12 @@ def parity(raw, device, *, bf16):
             a,b=[n.eval()(x,vectors,mask) for n,x in zip(nets,features)]
             torch.testing.assert_close(a,b,**tolerance)
         if stored.pair_storage.stats != stats:raise ValueError('Inference offloaded tensors')
+        extra={}
+        if pointwise_dgrad:
+            from . import pair_convolution
+            bounded=deepcopy(stored.pair_convolution.stats)
+            pair_convolution.validate_stats(bounded,require_fallback=True)
+            extra=dict(pointwise_policy=pair_convolution.POLICY,pointwise_statistics=bounded,
+                       forced_fallback_reference=True)
     return dict(precision='bf16' if bf16 else 'fp32',steps=3,tolerance=dict(tolerance),
-                policy=POLICY,statistics=stats,passed=True)
+                policy=POLICY,statistics=stats,passed=True,**extra)

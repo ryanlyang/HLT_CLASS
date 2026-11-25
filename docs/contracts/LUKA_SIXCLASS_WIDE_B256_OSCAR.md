@@ -1,5 +1,7 @@
 # Six-class wide-range batch-256 Oscar contract v1
 
+Execution extensions SPEC/v2 and SPEC/v3 below retain the v1 scientific recipe.
+
 Scientific authority: [active plan](../plans/LUKA_SIXCLASS_WIDE_B256_OSCAR_PLAN.md).
 Owned artifacts use `LUKA_SIXCLASS_WIDE_B256_OSCAR_<KIND>/v1`, schema_version 1,
 canonical content hashes, explicit parents and development-validation/sealed
@@ -82,3 +84,35 @@ CONCAT storage counters; full-objective acceptance remains mandatory. Probe
 models never initialize the scientific model. A checksum-bound
 `RECOVERY_CLAIM/v1` under the parent, protected by its submission lock, permits
 only one recovery spec to submit. Ambiguous scheduler receipts fail closed.
+
+## Pointwise input-gradient recovery: SPEC/v3
+
+`LUKA_SIXCLASS_WIDE_B256_OSCAR_SPEC/v3` adds `gradient_recovery`, a hashed
+`GRADIENT_RECOVERY/v1` record. Its exact previous SPEC/v2 is
+`8f9ed0893cbe6a0c7f99beae9bab76d8870a75b3460ffc6d1b2894b6550b9d6f`,
+commit `44aa1522d4720fd8045e55d16f977689bd7df0aa`. The record binds the previous
+spec, job9615391 failure, job9618095 diagnostic log, original parent claim and
+`sixclass_pair_pointwise_dgrad_v1` execution policy. The existing
+`execution_recovery` record is identical to v2: completed baseline payloads retain
+their original parents. All four prior recovery jobs and the diagnostic must be
+terminal; the two observed failures must match, with no committed tail progress.
+
+A new `concat_gradient_recovery_claim_v1.json` belongs to the failed v2 root.
+The original v1 memory-recovery claim is preserved. New submission remains
+serialized by the original parent's lock and refuses a different second fork.
+The new code refuses continuation of a superseded v2 execution. Do not invoke
+the old 44aa1522 launcher after submitting the new execution.
+
+Only CONCAT enables the policy: native sparse layout `(1,channels,pairs)`, four
+Conv1d modules with kernel1/stride1/padding0/dilation1/groups1, unchanged parameter
+keys. Above `2**31-1` elements per input/output sparse sample, native forward and
+native parameter backward are retained; input backward is `W.T @ dY`. Autocast
+dtype is preserved, with no chunked parameter reductions or split BatchNorm.
+The forced small-array path is solely a parity probe and is never enabled in a
+scientific model. No second derivatives are supported or used by this campaign.
+
+Both EARLY_MEMORY and STARTUP must carry the exact pointwise policy and nonzero
+replacement input-gradient counters. EARLY_MEMORY must include four passing
+parity records (native storage and forced fallback, FP32/BF16). These fields are
+required by SPEC/v3 when reusing CONCAT results; old v1/v2 artifacts remain valid
+under their own original specs. Missing evidence or changed policy fails closed.

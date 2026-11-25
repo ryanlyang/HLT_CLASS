@@ -1,6 +1,39 @@
 # New-data six-class ladder: 200–2600 GeV, LR 1e-4, batch 256
 
-## November 25 memory recovery amendment
+## November 25 pointwise input-gradient recovery amendment
+
+The memory recovery reached the early check in job9615391 but stopped before
+resident input construction or scientific epochs. Diagnostic job9618095 locates
+the failure in `ConvolutionBackward0` output0 (the input gradient), inside native
+Weaver's pair network. Its missing upstream gradients follow the aborted backward;
+they do not establish disconnected scientific heads. The supplied runtime is
+PyTorch2.5.1+cu118/cuDNN90100. This is a technical execution failure.
+
+SPEC/v3 forks the exact failed SPEC/v2 execution, keeping both previous specs,
+claims, results and failures immutable. It reuses the original completed OFFLINE
+and M0HLT, then submits CONCAT -> UE100 -> DE050 -> DE000. Recipe/population,
+batch256, all particles, precision, losses, sampling and optimizer remain fixed.
+
+CONCAT retains the v2 lossless pair-tensor CPU storage. For its four native 1x1
+pair convolutions only, when input or output elements per sparse sample exceed
+`2**31-1`, training computes the input derivative directly as `W.T @ dY`.
+Native convolution forward and native weight/bias backward are retained. The
+operation is algebraically the same pointwise derivative, avoiding the spatial
+folding step used by the native CUDA fallback. BatchNorm still sees the entire
+pair population; activations, state keys and deployment are unchanged. Smaller
+operations and inference use native execution. No gradient clipping or repair
+of nonfinite values is allowed. Kernel root cause beyond the observed failing
+input-gradient operation remains a hypothesis until target-hardware acceptance.
+
+The early check now requires both storage-only native parity and forced-fallback
+input-gradient parity in FP32/BF16, at the original strict tolerances, including
+three AdamW steps and all BatchNorm state. It then verifies three real full-support
+batch256 updates and records actual replacement-path counters before loading full
+inputs. Full-objective miniature, gradient, memory and timing acceptance remain
+inside that same science job. No separate preflight is submitted. Local acceptance
+on smaller hardware is explicitly not full-size L40S acceptance.
+
+## November 25 memory recovery amendment (SPEC/v2, historical)
 
 The user supplied the CUDA OOM and zero-epoch record for CONCAT job9544072
 and authorized memory recovery. Original campaign d534fcfe remains immutable.

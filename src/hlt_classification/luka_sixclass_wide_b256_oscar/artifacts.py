@@ -81,7 +81,7 @@ def completed(spec,stage,*,recurse=True,memo=None):
         raise ValueError('Missing integrated acceptance')
     if startup.get('main_head')!=c.main_policy(stage):raise ValueError('Main-head acceptance differs')
     if startup.get('matching_serial_parity')!=(stage=='DE000'):raise ValueError('Matching acceptance differs')
-    if spec['schema_version']==2:
+    if spec['schema_version'] in (2,3):
         early_path=Path(receipt['files']['report']['path']).parent/'early_memory.json'
         early=load_json(validate_file_ref(startup['early_memory']))
         c.validate(early,'EARLY_MEMORY',dict(spec=spec['content_hash']))
@@ -90,6 +90,12 @@ def completed(spec,stage,*,recurse=True,memo=None):
         if stage=='CONCAT':
             from .pair_storage import validate_storage_stats
             stats=startup['pair_storage'];validate_storage_stats(stats,calls=stats['calls'])
+            if spec['schema_version']==3:
+                from .pair_convolution import POLICY,validate_stats,validate_parities
+                for witness in (early,startup):
+                    if witness.get('pointwise_policy')!=POLICY:raise ValueError('Pointwise gradient policy differs')
+                    validate_stats(witness['pointwise_statistics'],require_fallback=True)
+                validate_parities(early['parity'])
     result=dict(spec=spec,folder=Path(receipt['files']['report']['path']).parent,receipt=receipt,
                 report=report,refs={k:receipt['files'][k] for k in ('checkpoint','report')})
     memo[stage]=result

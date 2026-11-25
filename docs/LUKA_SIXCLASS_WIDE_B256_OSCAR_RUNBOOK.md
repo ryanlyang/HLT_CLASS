@@ -9,7 +9,63 @@ Six fresh fits: OFFLINE, M0HLT, CONCAT, UE100, DE050, DE000. All have peak LR
 classifiers. Teacher embedding/logit branches remain; DE000 adds OFFLINE
 contrastive matching. The final model is HLT-only. No standalone preflight job.
 
-## Recover the November 25 CONCAT memory failure
+## Recover the failed backward check (current SPEC/v3)
+
+Use this for failed recovery `44aa1522_r1`, CONCAT9615391, diagnosed by9618095.
+The repair keeps native forward/weight gradients and uses the equivalent direct
+input gradient for oversized pointwise pair convolutions. It preserves batch256,
+full particles, global BatchNorm and the complete scientific recipe. OFFLINE9544070
+and M0HLT9544071 are reused. Only CONCAT -> UE100 -> DE050 -> DE000 are submitted.
+All previous jobs must be terminal; no old claim or failure record is removed.
+
+Local PowerShell:
+
+```powershell
+git add -- src/hlt_classification/luka_sixclass_wide_b256_oscar scripts/luka_sixclass_wide_b256_oscar.py scripts/recover_luka_sixclass_wide_b256_oscar.sh tests/test_luka_sixclass_wide_b256_recovery.py tests/test_luka_sixclass_wide_b256_convolution.py docs/plans/LUKA_SIXCLASS_WIDE_B256_OSCAR_PLAN.md docs/contracts/LUKA_SIXCLASS_WIDE_B256_OSCAR.md docs/LUKA_SIXCLASS_WIDE_B256_OSCAR_RUNBOOK.md docs/LUKA_SIXCLASS_WIDE_B256_OSCAR_VALIDATION.md
+git add -p -- docs/HANDOFF.md docs/LEGACY_SOURCE_MAP.md
+git diff --cached --stat
+git commit -m "Recover CONCAT oversized pointwise input gradients without changing the recipe"
+git push origin main
+git rev-parse HEAD
+```
+
+Select only this repair's additions in the two shared documents. Then on Oscar:
+
+```bash
+bash <<'BASH'
+set -euo pipefail
+BASE=/oscar/home/rlyang/hlt_classification
+REPO="$BASE/source/HLT_Classification_sixclass_wide_b256_oscar_d534fcfe"
+checkquota
+read -r -p 'Pushed 40-character gradient-recovery commit: ' COMMIT </dev/tty
+read -r -p 'Currently free HOME GiB (minimum 18): ' QUOTA </dev/tty
+[[ "$COMMIT" =~ ^[0-9a-f]{40}$ && "$QUOTA" =~ ^[0-9]+$ ]]
+git -C "$REPO" fetch origin main
+git -C "$REPO" merge-base --is-ancestor "$COMMIT" origin/main
+PROJECT="$BASE/source/HLT_Classification_sixclass_wide_gradient_${COMMIT:0:8}"
+ROOT="$BASE/checkpoints/luka_sixclass_wide_gradient_${COMMIT:0:8}_r1"
+if [[ ! -e "$PROJECT" && ! -L "$PROJECT" ]]; then
+    git -C "$REPO" worktree add --detach "$PROJECT" "$COMMIT"
+fi
+bash "$PROJECT/scripts/recover_luka_sixclass_wide_b256_oscar.sh" gradient-detach \
+    "$PROJECT" "$ROOT" "$COMMIT" "$QUOTA" \
+    --authorize AUTHORIZE_SIXCLASS_WIDE_B256_OSCAR_V1
+BASH
+```
+
+Four `SUBMITTED` lines and `LAUNCHER_EXIT=0` confirm submission. The early
+full-support check runs before full resident input construction; it is still
+required on the actual L40S. `DETACHED` alone is not confirmation of submission.
+Ctrl-C leaves the log view without stopping the detached launcher. Do not also
+resume the old failed `44aa1522` execution. Keep its source, diagnostic log and
+both original baseline outputs. No final-test inference is performed.
+The large-convolution cuDNN warning can still appear because forward execution
+remains native; the recorded finite backward checks determine acceptance.
+
+## Recover the November 25 CONCAT memory failure (historical SPEC/v2)
+
+This earlier procedure does not fix the subsequently observed backward failure.
+For the current failure use the SPEC/v3 instructions above.
 
 Use this section for original campaign `d534fcfe_r1`, failed job9544072.
 It creates a new SPEC/v2 execution and reuses OFFLINE9544070/M0HLT9544071.

@@ -177,9 +177,10 @@ def test_native_checkpoint_keys_and_policy_scope():
     with pytest.raises(ValueError):model.new_model('DE000',pair_storage=True)
 
 
-def test_early_oom_prevents_full_view_build(tmp_path,monkeypatch):
+@pytest.mark.parametrize('version',[2,3])
+def test_early_oom_prevents_full_view_build(tmp_path,monkeypatch,version):
     s,*_=worker_fixture(tmp_path,monkeypatch)
-    s=dict(s,schema_version=2)
+    s=dict(s,schema_version=version)
     monkeypatch.setattr(early_memory,'run',lambda *a:(_ for _ in ()).throw(torch.OutOfMemoryError('test OOM')))
     monkeypatch.setattr(views,'load',lambda *a:pytest.fail('Full particle construction must not start'))
     with pytest.raises(torch.OutOfMemoryError):worker.run(s,'train_CONCAT',device='cpu')
@@ -188,23 +189,43 @@ def test_early_oom_prevents_full_view_build(tmp_path,monkeypatch):
     assert not list((tmp_path/'train_CONCAT/epochs').glob('*.json'))
 
 
-def test_imported_baselines_used_by_real_tail_workers_and_results(tmp_path,monkeypatch):
+@pytest.mark.parametrize('version',[2,3])
+def test_imported_baselines_used_by_real_tail_workers_and_results(tmp_path,monkeypatch,version):
     old,tr,val,sampler,jobs=worker_fixture(tmp_path/'original',monkeypatch)
+    if version==3:
+        # Keep the production four-convolution topology in the small fixture.
+        config=dict(model.model_config(),pair_embed_dims=[8,8,8])
+        monkeypatch.setattr(model,'model_config',lambda:config)
+        from hlt_classification.luka_sixclass_wide_b256_oscar.pair_convolution import PointwiseInputGradient
+        original_init=PointwiseInputGradient.__init__
+        def forced(self,pair):original_init(self,pair);self.force=True
+        monkeypatch.setattr(PointwiseInputGradient,'__init__',forced)
     for stage in recovery.BASELINES:worker.run(old,'train_'+stage,device='cpu')
     before={p:p.read_bytes() for p in Path(old['root']).rglob('*.json')}
     fields={k:v for k,v in old.items() if k not in ('contract','schema_version','content_hash','parents',*c.FLAGS)}
     fields.update(root=str(tmp_path/'new'),project='/new/project')
-    new=c.artifact('SPEC',version=2,**fields)
+    new=c.artifact('SPEC',version=version,**fields)
     monkeypatch.setattr(recovery,'origin',lambda s,stage:old if s==new and stage in recovery.BASELINES else s)
+    from hlt_classification.luka_sixclass_wide_b256_oscar.pair_convolution import POLICY
+    gradient=dict(pointwise_policy=POLICY,pointwise_statistics=dict(calls=12,fallback_calls=12,
+                                                                  input_gradient_calls=12,largest_pair_count=100))
+    parities=[dict(precision=precision,steps=3,tolerance=pair_storage.PARITY_TOLERANCES[precision],
+        policy=pair_storage.POLICY,statistics=dict(calls=3,saved_cuda_tensors=3,saved_cuda_bytes=32,restored_cuda_tensors=3),
+        passed=True,**(dict(gradient,forced_fallback_reference=True) if fallback else {}))
+        for fallback in (False,True) for precision in ('fp32','bf16')]
     def early(s,stage,loaded,device,folder):
         write_immutable_json(folder/'early_memory.json',c.artifact('EARLY_MEMORY',parents=dict(spec=s['content_hash']),
-                                                               stage=stage,passed=True))
+            stage=stage,passed=True,**(dict(gradient,parity=parities)
+            if version==3 and stage=='CONCAT' else {})))
     monkeypatch.setattr(early_memory,'run',early)
     prior=startup.run
     def qualification(s,stage,*a,**kw):
         out=prior(s,stage,*a,**kw)
         if stage=='CONCAT':out=with_content_hash(dict(out,pair_storage=dict(calls=3,saved_cuda_tensors=3,
                                                                          saved_cuda_bytes=32,restored_cuda_tensors=3)))
+        if version==3 and stage=='CONCAT':
+            assert kw['pair_storage'] is True and kw['pointwise_dgrad'] is True
+            out=with_content_hash(dict(out,**gradient))
         return out
     monkeypatch.setattr(startup,'run',qualification)
     for stage in c.STAGES[2:]:
@@ -245,7 +266,8 @@ def test_real_optimized_integrated_qualification(tmp_path,monkeypatch):
     assert proofs[0]['pair_storage']['restored_cuda_tensors']>0
 
 
-def test_real_detached_recovery_shell_preserves_parent_and_registers_fork(tmp_path):
+@pytest.mark.parametrize('mode',['detach','gradient-detach'])
+def test_real_detached_recovery_shell_preserves_parent_and_registers_fork(tmp_path,mode):
     import os,sys,subprocess,time
     bash='C:/Program Files/Git/bin/bash.exe' if sys.platform=='win32' else 'bash'
     def sp(p):
@@ -254,7 +276,8 @@ def test_real_detached_recovery_shell_preserves_parent_and_registers_fork(tmp_pa
     base=tmp_path/'base';project=base/'source/new';(project/'scripts').mkdir(parents=True)
     (project/'sbatch').mkdir()
     env_dir=base/'environments/new_balanced_oscar_v1';(env_dir/'bin').mkdir(parents=True)
-    old=base/'checkpoints/luka_sixclass_wide_b256_oscar_d534fcfe_r1'
+    old=base/('checkpoints/luka_sixclass_wide_b256_oscar_d534fcfe_r1' if mode=='detach'
+              else 'checkpoints/luka_sixclass_wide_memory_44aa1522_r1')
     old.mkdir(parents=True);parent=old/'campaign_spec.json';parent.write_bytes(b'old immutable spec')
     root=base/'checkpoints/new_recovery'
     source=Path(__file__).resolve().parents[1]/'scripts/recover_luka_sixclass_wide_b256_oscar.sh'
@@ -267,7 +290,7 @@ def test_real_detached_recovery_shell_preserves_parent_and_registers_fork(tmp_pa
         path.write_bytes(('#!/usr/bin/env bash\n'+body).encode());path.chmod(0o755)
     envfile=tmp_path/'env.sh';envfile.write_bytes(b'export PATH="${FIXTURE_BIN}:${PATH}"\n')
     env=dict(os.environ,BASH_ENV=sp(envfile),FIXTURE_BIN=sp(bindir),FIXTURE_CALLS=sp(calls))
-    args=[bash,str(script),'detach',sp(project),sp(root),'0'*39+'1','18','--authorize',c.AUTH]
+    args=[bash,str(script),mode,sp(project),sp(root),'0'*39+'1','18','--authorize',c.AUTH]
     result=subprocess.run(args,env=env,capture_output=True,text=True,timeout=15)
     assert result.returncode==0,result.stderr
     assert 'DETACHED recovery' in result.stdout and 'TAIL_ATTACHED' in result.stdout

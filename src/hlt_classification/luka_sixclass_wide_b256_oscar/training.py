@@ -24,7 +24,7 @@ def join(tr,val,banks,sampler,stage):
             raise ValueError('Ordered teacher/student join differs')
 
 
-def train(tr,val,*,banks,sampler,stage,parents,device,save_epoch,matching=None,resume=None,outside=None,pair_storage=False):
+def train(tr,val,*,banks,sampler,stage,parents,device,save_epoch,matching=None,resume=None,outside=None,pair_storage=False,pointwise_dgrad=False):
     join(tr,val,banks,sampler,stage)
     if outside is None:raise ValueError("Outside validation is required every epoch")
     if len(val)!=c.COUNTS['validation'] or len(outside)!=c.OUTSIDE['validation']:
@@ -34,7 +34,7 @@ def train(tr,val,*,banks,sampler,stage,parents,device,save_epoch,matching=None,r
     if matching is not None and (not np.array_equal(matching.identities,tr.identities)
                                 or not np.array_equal(matching.labels,tr.labels)):
         raise ValueError('Matching bank join differs')
-    net=model.new_model(stage,pair_storage=pair_storage).to(device);opt=optimizer(net,c.recipe())
+    net=model.new_model(stage,pair_storage=pair_storage,pointwise_dgrad=pointwise_dgrad).to(device);opt=optimizer(net,c.recipe())
     steps=math.ceil(c.DRAWS/c.BATCH);history=[];selected=None;best=None;update=0
     if resume is not None:
         state=resume['state'];history=list(resume['history']);best=resume['best']
