@@ -1,0 +1,23 @@
+{
+  "commit": "d534fcfea4f11a4bc845127d03c31b779e391a8c",
+  "adapted": {
+    "src/hlt_classification/luka_balanced_reconstruction_hydra/model.py": "7539c64a06f1e3f93ac7e0615af3a21176eec6584c8fe75d5150b667859e31b3",
+    "src/hlt_classification/luka_balanced_reconstruction_hydra/kernel.py": "a0d3025b3fbaddcc77b2fd469956a0b5a1400454974238714243c301cafeaea9",
+    "src/hlt_classification/luka_balanced_reconstruction_hydra/inputs.py": "820d29496a17bc57ee7a31ec0aaa3475e02e884df08ce17bfbd35a237ead6a96",
+    "src/hlt_classification/luka_balanced_reconstruction_hydra/basket_reader.py": "86b7735f745a9e4731c3f201f73708c4a257cbef9dfb02703a53ef1edbcd6cdd",
+    "src/hlt_classification/luka_balanced_reconstruction_hydra/normalization.py": "0546bfa4da165ff0ffa1a82361e9c913783845147a403a76bf19dd7685781e59",
+    "src/hlt_classification/luka_balanced_reconstruction_hydra/diagnostics.py": "a3a8a2da92e15f29db294d9a481d2b74ec610535b4896598d35da14198315d81",
+    "src/hlt_classification/luka_balanced_reconstruction_hydra/transport.py": "bd7273c8951463de314ed95b1e429906124dfbdff03d7c343b99c829eb3f1f48",
+    "src/hlt_classification/luka_balanced_reconstruction_hydra/startup.py": "9d95eecbe1b2caab4b57fa790705aff5fa6d3e70269b79dddfa4ad20ea6cc738",
+    "src/hlt_classification/luka_balanced_reconstruction_hydra/launch.py": "6a0eb33f3617d7b31675bc9147df2eacae3267f167a809a544d033563c163930",
+    "src/hlt_classification/luka_balanced_reconstruction_hydra/resources.py": "9f396ab625116dd6de95edd9edee0cb912a222775277cdb44b06d4d1e78820b1",
+    "src/hlt_classification/luka_balanced_reconstruction_hydra/artifacts.py": "a3f21edc3864ddcba982d2a98cc5694f9af3df145b932ce98b4915776dded55f",
+    "src/hlt_classification/luka_balanced_reconstruction_hydra/banks.py": "f289a5749053f491c7bde4f34bb503c52880872c2072d4e8896fb663e027df7e",
+    "src/hlt_classification/luka_balanced_reconstruction_hydra/training.py": "abddc94534dd8b659d6218157dcf29b4b12ad86488e84330a5498becc9546381",
+    "src/hlt_classification/luka_balanced_reconstruction_hydra/readouts.py": "0ed01e8cbaf3de53a485f2b554efc0a3c3a068e9008801dce1d87df74e1e754c",
+    "src/hlt_classification/luka_balanced_reconstruction_hydra/reporting.py": "723f4762856ea2089b9f78b62ac7a81022b0f76719c73cd03b22dc129fcb8702",
+    "src/hlt_classification/luka_balanced_reconstruction_hydra/storage.py": "de879566a91a26b58cad2f7ba27aeabc90b1887203f601405c993fadc2388f61",
+    "src/hlt_classification/luka_balanced_reconstruction_hydra/worker.py": "a4a03c0e0b961de750901556fb3cb6e17c11487e70566cdb6cfa1c98a448ce24",
+    "src/hlt_classification/luka_balanced_reconstruction_hydra/campaign.py": "25f68b586a13fae55eeca850f34a3a270e0c63a433e2259492e400961e0576b7"
+  }
+}

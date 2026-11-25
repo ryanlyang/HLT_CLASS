@@ -1,0 +1,322 @@
+{
+  "class_bin_counts": [
+    [
+      248604,
+      189457,
+      178089,
+      165573,
+      129210,
+      116683,
+      109103,
+      92683,
+      75177,
+      50214,
+      45651,
+      62527,
+      63256,
+      49344,
+      46629,
+      55712,
+      52882,
+      39361,
+      25984,
+      24033,
+      31215,
+      41271,
+      40135,
+      30053
+    ],
+    [
+      1293,
+      2605,
+      3207,
+      3552,
+      4027,
+      4243,
+      4550,
+      4933,
+      5329,
+      5673,
+      5564,
+      5524,
+      5766,
+      5593,
+      5624,
+      5648,
+      5593,
+      5557,
+      4699,
+      4577,
+      4425,
+      4147,
+      3893,
+      3635
+    ],
+    [
+      1044,
+      2337,
+      2930,
+      3266,
+      3678,
+      3881,
+      4150,
+      4419,
+      4824,
+      5250,
+      5182,
+      5163,
+      5367,
+      5418,
+      5474,
+      5505,
+      5558,
+      5428,
+      4774,
+      4719,
+      4509,
+      4344,
+      4159,
+      3988
+    ],
+    [
+      941,
+      2169,
+      2777,
+      3031,
+      3469,
+      3631,
+      3918,
+      4326,
+      4715,
+      4818,
+      5046,
+      5001,
+      5220,
+      5379,
+      5275,
+      5299,
+      5403,
+      5394,
+      4727,
+      4591,
+      4531,
+      4541,
+      4374,
+      4179
+    ],
+    [
+      805,
+      2213,
+      2687,
+      3058,
+      3413,
+      3702,
+      3769,
+      4157,
+      4697,
+      4822,
+      4943,
+      5143,
+      5046,
+      5238,
+      5364,
+      5365,
+      5393,
+      5337,
+      4735,
+      4547,
+      4526,
+      4506,
+      4422,
+      4258
+    ],
+    [
+      992,
+      2297,
+      2915,
+      3369,
+      3580,
+      3913,
+      4096,
+      4407,
+      5004,
+      5171,
+      5066,
+      5137,
+      5358,
+      5414,
+      5468,
+      5341,
+      5449,
+      5367,
+      4746,
+      4610,
+      4526,
+      4487,
+      4419,
+      4245
+    ]
+  ],
+  "class_counts": {
+    "final_test": [
+      962656,
+      55168,
+      52997,
+      51916,
+      51459,
+      53216
+    ],
+    "train": [
+      1962846,
+      109657,
+      105367,
+      102755,
+      102146,
+      105377
+    ],
+    "unused": [
+      47763,
+      5694,
+      6032,
+      6156,
+      6389,
+      6236
+    ],
+    "validation": [
+      392677,
+      21872,
+      21051,
+      20870,
+      20336,
+      21148
+    ]
+  },
+  "content_hash": "57eb7febd6ee6ae2c9729bdcc5f58a4f34dea232d7b1eaf12b7901ca405025d1",
+  "contract": "LUKA_SIXCLASS_WIDE_B256_OSCAR_POPULATION/v1",
+  "counts": {
+    "final_test": 1227412,
+    "train": 2488148,
+    "unused": 78270,
+    "validation": 497954
+  },
+  "evaluation_scope": "development_validation",
+  "event_independence_verified": false,
+  "final_test_accessed": false,
+  "final_test_sealed": true,
+  "maximum_support": {
+    "outside_validation": {
+      "concat": 531,
+      "hlt": 240,
+      "offline": 291
+    },
+    "train": {
+      "concat": 596,
+      "hlt": 280,
+      "offline": 316
+    },
+    "validation": {
+      "concat": 467,
+      "hlt": 224,
+      "offline": 251
+    }
+  },
+  "old_trial_overlap_verified": false,
+  "outside_counts": {
+    "final_test": 205454,
+    "train": 424322,
+    "unused": 103207,
+    "validation": 68078
+  },
+  "parents": {
+    "foundation": "2f05adcca889288e705a69fc1e54670f1713d29ec16ab75c4f694ab7b5a23d02",
+    "role_population": "7f2413152ecb588764c862b4b83bd6f900320a1b915a3b77f95540dd6e283939"
+  },
+  "policy": {
+    "additions": {
+      "final_test": 0,
+      "train": 0,
+      "validation": 0
+    },
+    "boundary": "[200,2600)",
+    "class_names": [
+      "QCD",
+      "X_bb",
+      "X_cc",
+      "X_ss",
+      "X_qq",
+      "X_gg"
+    ],
+    "counts": {
+      "final_test": 1227412,
+      "train": 2488148,
+      "validation": 497954
+    },
+    "excluded_raw_label": 206,
+    "final_test_sealed": true,
+    "original_labels": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "outside_validation": "all_extended_validation_six_classes_outside_range",
+    "preserve_all_extended_roles": true,
+    "pt_edges_GeV": [
+      200,
+      300,
+      400,
+      500,
+      600,
+      700,
+      800,
+      900,
+      1000,
+      1100,
+      1200,
+      1300,
+      1400,
+      1500,
+      1600,
+      1700,
+      1800,
+      1900,
+      2000,
+      2100,
+      2200,
+      2300,
+      2400,
+      2500,
+      2600
+    ],
+    "role_population_sha256": "7f2413152ecb588764c862b4b83bd6f900320a1b915a3b77f95540dd6e283939",
+    "unused_in_range": 78270
+  },
+  "production": true,
+  "role_particles": {
+    "outside_validation": {
+      "hlt": 3857853,
+      "offline": 4674613
+    },
+    "train": {
+      "hlt": 126815751,
+      "offline": 150126346
+    },
+    "validation": {
+      "hlt": 25276656,
+      "offline": 29903645
+    }
+  },
+  "role_population": {
+    "bytes": 1087702,
+    "path": "role_parent/population.json",
+    "sha256": "252b8f4e9018d537bad180c8a529a8e766395fded278ff6ee508ec22ff170462"
+  },
+  "rows": {
+    "bytes": 146602894,
+    "path": "rows.npz",
+    "sha256": "c68a91ff052a0f342197e28b6d02e6c9ee06bb8a6701551c97684f07e66060c4"
+  },
+  "schema_version": 1
+}
