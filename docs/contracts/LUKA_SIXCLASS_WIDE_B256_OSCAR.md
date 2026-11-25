@@ -55,3 +55,30 @@ validation identities. Read-only inspection authenticates report/epoch hashes
 and job/teacher bindings without loading binary payloads. It must disclose that
 binary payloads, full source lineage and current scheduler were not reverified.
 No evaluation command can unseal final test.
+
+## Explicit memory recovery: SPEC/v2
+
+Only the recovery SPEC uses schema_version2 and
+`LUKA_SIXCLASS_WIDE_B256_OSCAR_SPEC/v2`; recipe, population, report and payload
+contracts retain v1 because their scientific meanings are unchanged. A v1 SPEC
+cannot enable the new execution policy. New fields are never written into the
+old spec. `EXECUTION_RECOVERY/v1` binds the original spec file, failure record,
+two imported baseline result files, exact pair-storage policy and four fresh
+tail stages. The permitted parent spec hash is
+`38c65fcb5d6850d4a74f79470337b314d73cb5c1d31c1dd3f7d6c035fb448f33`,
+commit `d534fcfea4f11a4bc845127d03c31b779e391a8c`.
+
+Result/epoch/target hashes retain their original spec parents when imported.
+`artifacts.completed` and metadata inspection resolve OFFLINE/M0HLT back to that
+authenticated parent; new fits bind those exact receipt hashes. A reused BANK
+is validated against its originating spec and the identical current TRAIN
+identities and labels. Completed models, source worktrees and old predictions
+are not copied, rewritten, resubmitted or reselected.
+
+`EARLY_MEMORY/v1` records the three authorized real witness identities/supports,
+parity evidence, memory and scope (native graph only), and binds the new spec.
+The completion-last STARTUP includes its checksummed file reference and actual
+CONCAT storage counters; full-objective acceptance remains mandatory. Probe
+models never initialize the scientific model. A checksum-bound
+`RECOVERY_CLAIM/v1` under the parent, protected by its submission lock, permits
+only one recovery spec to submit. Ambiguous scheduler receipts fail closed.

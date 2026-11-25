@@ -9,7 +9,66 @@ Six fresh fits: OFFLINE, M0HLT, CONCAT, UE100, DE050, DE000. All have peak LR
 classifiers. Teacher embedding/logit branches remain; DE000 adds OFFLINE
 contrastive matching. The final model is HLT-only. No standalone preflight job.
 
-## Commit and push from local PowerShell
+## Recover the November 25 CONCAT memory failure
+
+Use this section for original campaign `d534fcfe_r1`, failed job9544072.
+It creates a new SPEC/v2 execution and reuses OFFLINE9544070/M0HLT9544071.
+Only CONCAT -> UE100 -> DE050 -> DE000 are submitted. Batch256, the full
+particle inputs, draws, LR, losses and twenty epochs are unchanged. CONCAT
+stores native pair autograd tensors in CPU RAM. A memory check on three real
+maximum-support rows now precedes the hours-long full input construction.
+
+In local PowerShell, stage the owned repair and only its shared-document additions:
+
+```powershell
+git add -- src/hlt_classification/luka_sixclass_wide_b256_oscar scripts/luka_sixclass_wide_b256_oscar.py scripts/recover_luka_sixclass_wide_b256_oscar.sh tests/test_luka_sixclass_wide_b256_recovery.py docs/plans/LUKA_SIXCLASS_WIDE_B256_OSCAR_PLAN.md docs/contracts/LUKA_SIXCLASS_WIDE_B256_OSCAR.md docs/LUKA_SIXCLASS_WIDE_B256_OSCAR_RUNBOOK.md docs/LUKA_SIXCLASS_WIDE_B256_OSCAR_VALIDATION.md
+git add -p -- docs/HANDOFF.md docs/LEGACY_SOURCE_MAP.md
+git diff --cached --stat
+git commit -m "Recover batch256 CONCAT with lossless pair tensor storage and early memory check"
+git push origin main
+git rev-parse HEAD
+```
+
+Paste on Oscar, entering that newly pushed full commit and current free HOME
+quota. Require18GiB for the new outputs; the existing persistent environment is
+reused. The last observed HOME usage was65.88GiB; check current usage below.
+
+```bash
+bash <<'BASH'
+set -euo pipefail
+BASE=/oscar/home/rlyang/hlt_classification
+REPO="$BASE/source/HLT_Classification_sixclass_wide_b256_oscar_d534fcfe"
+checkquota
+read -r -p 'Pushed 40-character memory-recovery commit: ' COMMIT </dev/tty
+read -r -p 'Currently free HOME GiB (minimum 18): ' QUOTA </dev/tty
+[[ "$COMMIT" =~ ^[0-9a-f]{40}$ && "$QUOTA" =~ ^[0-9]+$ ]]
+git -C "$REPO" fetch origin main
+git -C "$REPO" merge-base --is-ancestor "$COMMIT" origin/main
+PROJECT="$BASE/source/HLT_Classification_sixclass_wide_memory_${COMMIT:0:8}"
+ROOT="$BASE/checkpoints/luka_sixclass_wide_memory_${COMMIT:0:8}_r1"
+if [[ ! -e "$PROJECT" && ! -L "$PROJECT" ]]; then
+    git -C "$REPO" worktree add --detach "$PROJECT" "$COMMIT"
+fi
+bash "$PROJECT/scripts/recover_luka_sixclass_wide_b256_oscar.sh" detach \
+    "$PROJECT" "$ROOT" "$COMMIT" "$QUOTA" \
+    --authorize AUTHORIZE_SIXCLASS_WIDE_B256_OSCAR_V1
+BASH
+```
+
+`DETACHED` starts authentication and submission; four `SUBMITTED` lines plus
+`LAUNCHER_EXIT=0` confirm it queued. Ctrl-C only exits the attached log view.
+Preserve the original source, spec, results and new parent recovery claim.
+Read progress/results with the same CLI below, using the new PROJECT/ROOT.
+It resolves the preserved baselines automatically. For a later terminal failure
+of this new execution, use its same-source `resume-detach` command below.
+Never point the old resume command at a new source to bypass source checks.
+
+The longest-row check remains a real L40S acceptance boundary, not a promise
+that every resource limit is already measured locally. It adds no extra job.
+CPU storage can cost transfer time; the worker measures remaining runtime and
+memory before fitting. No historical results or final-test data are changed.
+
+## Original six-fit registration: commit and push from local PowerShell
 
 ```powershell
 git add -- src/hlt_classification/luka_sixclass_wide_b256_oscar scripts/luka_sixclass_wide_b256_oscar.py scripts/launch_luka_sixclass_wide_b256_oscar.sh scripts/queue_luka_sixclass_wide_b256_oscar.sh scripts/bootstrap_luka_sixclass_wide_b256_oscar.sh sbatch/run_luka_sixclass_wide_b256_oscar.sh sbatch/luka_sixclass_wide_b256_oscar_common.sh tests/test_luka_sixclass_wide_b256_oscar.py docs/plans/LUKA_SIXCLASS_WIDE_B256_OSCAR_PLAN.md docs/contracts/LUKA_SIXCLASS_WIDE_B256_OSCAR.md docs/LUKA_SIXCLASS_WIDE_B256_OSCAR_RUNBOOK.md docs/LUKA_SIXCLASS_WIDE_B256_OSCAR_VALIDATION.md

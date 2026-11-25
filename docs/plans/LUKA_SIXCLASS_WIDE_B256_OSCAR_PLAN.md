@@ -1,5 +1,41 @@
 # New-data six-class ladder: 200–2600 GeV, LR 1e-4, batch 256
 
+## November 25 memory recovery amendment
+
+The user supplied the CUDA OOM and zero-epoch record for CONCAT job9544072
+and authorized memory recovery. Original campaign d534fcfe remains immutable.
+OFFLINE9544070 and M0HLT9544071 completed; a SPEC/v2 execution fork reuses
+their exact selected results and TRAIN banks, then trains only CONCAT, UE100,
+DE050 and DE000. This is the sole exception to the fresh-six-fit registration
+below: the two baselines are the already completed fits from that same recipe.
+Original and recovery runs have distinct source/spec identities and results.
+
+CONCAT alone stores autograd's native pair-embedding saved tensors in pinned
+CPU RAM, retaining dtype, shape and strides. Forward operations, the complete
+BatchNorm population, backward derivatives, full particles, batch256, optimizer,
+draw ordering, schedule and all scientific loss coefficients are unchanged.
+There is no microbatching, accumulation, truncation, recomputation, precision
+change or inference offload. Other stages keep their original model execution.
+The exact recipe and population hashes below remain unchanged.
+
+After scalar population authentication, each recovery worker reads the longest
+real TRAIN, in-range-validation and outside-validation row only. It verifies
+native full-support batch256 forward/backward and validation, plus FP32 export
+batch128 where required, before full resident particle construction. CONCAT
+also compares native/offloaded FP32 and BF16 logits, input/parameter gradients,
+three optimizer updates, BatchNorm buffers and evaluation outputs. All technical
+probes are discarded. Full-objective acceptance and measured resource/timing
+checks still run inside the same science allocation after full input loading.
+These early checks are not a separate preflight job and cannot guarantee fit
+runtime before measurements on Oscar. Initial failure causes a prompt stop.
+
+Recovery requires the exact original source/spec, terminal accounting for all
+six original submissions, the bound CUDA failure, no committed unfinished-stage
+epochs, and authenticated completed baselines. A parent claim prevents two
+different recoveries from being submitted. Same-source continuation of the new
+recovery retains its existing epoch/optimizer/RNG/export recovery behavior.
+Nothing unseals final-test inference or alters original selections.
+
 This is the active scientific plan for the user's November 23 campaign. It is
 a new six-fit experiment on the new QCD Run-2 combined + Higgs2p dataset.
 It does not revise the identities or interpretation of historical executions.

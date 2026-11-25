@@ -18,7 +18,7 @@ from . import contrastive
 from hlt_classification.luka_fullsim.preflight_v2 import PhaseLog, memory_snapshot
 from .training import predict
 from .reporting import evaluate_probabilities
-from . import contracts as c, campaign, population, views, startup, training, banks, artifacts, reporting
+from . import contracts as c, campaign, population, views, startup, training, banks, artifacts, reporting, recovery
 
 
 def allocation(spec,task):
@@ -50,6 +50,7 @@ def allocation(spec,task):
 
 def run(spec,task,*,device='cuda:0'):
     campaign.check(spec);job=allocation(spec,task);stage=task.removeprefix('train_');started=time.monotonic()
+    if spec['schema_version']==2 and stage in recovery.BASELINES:raise PermissionError('Reuse the completed baselines')
     folder=Path(spec['root'])/task/'runs'/job;folder.mkdir(parents=True,exist_ok=False)
     if (Path(spec['root'])/task/'result.json').exists():raise FileExistsError('Already published stage')
     torch.set_num_threads(1);phases=PhaseLog(folder,lambda:memory_snapshot(torch));device=torch.device(device)
@@ -65,6 +66,10 @@ def run(spec,task,*,device='cuda:0'):
             dependencies={t:artifacts.completed(spec,t,memo=memo) for t in c.TEACHERS[stage]}
             parents=artifacts.fit_parents(spec,stage,dependencies)
             write_immutable_json(folder/'fit_binding.json',c.artifact('FIT_BINDING',parents=parents,stage=stage,job_id=job))
+        if spec['schema_version']==2:
+            from . import early_memory
+            with phases.phase('early_memory_before_resident_inputs'):
+                early_memory.run(spec,stage,loaded,device,folder)
         with phases.phase('resident_inputs'):
             caches,proof=views.load(spec,stage,loaded)
             tr,val,outside=(caches[k] for k in ('train','validation','outside_validation'))
@@ -74,20 +79,25 @@ def run(spec,task,*,device='cuda:0'):
             write_immutable_json(folder/'view_build.json',proof)
             del loaded
         with phases.phase('teacher_banks'):
-            targets={t:banks.Bank(r['folder']/'bank',tr,t,r['refs'],spec) for t,r in dependencies.items()}
+            targets={t:banks.Bank(r['folder']/'bank',tr,t,r['refs'],r['spec']) for t,r in dependencies.items()}
             matching=contrastive.Sampler(targets['OFFLINE'].keys(),tr.identities,tr.labels,device=device) if stage=='DE000' else None
             training.join(tr,val,targets,sampler,stage)
             resume=artifacts.restore(spec,stage,parents,sampler)
         with phases.phase('integrated_acceptance'):
             proof=startup.run(spec,stage,tr,val,targets,sampler,matching,device,folder,started,
-                remaining_epochs=c.EPOCHS-(len(resume['history']) if resume else 0),outside=outside)
+                remaining_epochs=c.EPOCHS-(len(resume['history']) if resume else 0),outside=outside,
+                **({'pair_storage':True} if recovery.enabled(spec,stage) else {}))
+            if spec['schema_version']==2:
+                from hlt_classification.data.cache_contracts import with_content_hash
+                proof=with_content_hash(dict(proof,early_memory=file_ref(folder/'early_memory.json')))
             write_immutable_json(folder/'startup.json',proof)
         with phases.phase('fit_or_finalize'):
             def save(epoch,row,state):artifacts.save_epoch(spec['root'],folder,stage,epoch,row,state,parents,job)
             context=contrastive.CPUWorkers(matching,workers=spec['candidate_workers']) if matching else nullcontext()
             with context:
                 net,report,best=training.train(tr,val,banks=targets,sampler=sampler,stage=stage,parents=parents,
-                    device=device,save_epoch=save,matching=matching,resume=resume,outside=outside)
+                    device=device,save_epoch=save,matching=matching,resume=resume,outside=outside,
+                    **({'pair_storage':True} if recovery.enabled(spec,stage) else {}))
             training.validate_report(report,stage,parents,len(val),sampler)
             write_immutable_json(folder/'training_report.json',report)
             native=net.deployed().to(device).eval();del net,best,resume,targets,matching

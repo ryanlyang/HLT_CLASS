@@ -16,6 +16,7 @@
     "src/hlt_classification/cms_proxy_ladder/views.py": "8dca863da7525d216ef032860128445d921601cee9d5b2a6c5dec15c53bafd3b",
     "src/hlt_classification/data/cache_contracts.py": "004aef8e8bbdf6ce513479024d4a119f92277fca3e359f977a5f4022d8e0d7dc",
     "src/hlt_classification/jetclass2_delphes/acceptance.py": "0ab5601067e3397cb85e47c0f1a82b85b1ac422d26ee8b5503eda7a2cf21a174",
+    "src/hlt_classification/jetclass2_delphes/concat_k2_model.py": "68ea1075c88c543a4079b4cc986c5d1df3ddd1c78f5f3d8ca7deac178c276d72",
     "src/hlt_classification/jetclass2_delphes/inventory.py": "998323e064d10916268f0ab2e4ea833d2cd7a568eafde259611d92ce6b98e605",
     "src/hlt_classification/jetclass2_delphes/model.py": "5f35fcd6e6b76d83f6b957e8e81653250235216ec4d440fab118906139cf07b1",
     "src/hlt_classification/jetclass2_delphes/reporting.py": "c1b216374024544b122e1699643abd022df1361b32593facbc65828a90e203cc",

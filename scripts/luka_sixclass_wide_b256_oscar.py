@@ -15,6 +15,7 @@ def main():
     for k in ('dataset','root','commit','environment'):a.add_argument('--'+k,required=True)
     a.add_argument('--gpu',choices=list(c.GPUS),default='l40s');a.add_argument('--available-gib',type=int,required=True)
     a.add_argument('--minutes',type=int,default=2880)
+    a.add_argument('--recover',help='Exact d534fcfe parent campaign_spec.json; reuse its two completed baselines')
     a=sub.add_parser('queue');a.add_argument('--spec',required=True)
     a.add_argument('--execute',action='store_true');a.add_argument('--authorize');a.add_argument('--resume',action='store_true')
     a.add_argument('--available-gib',type=int)
@@ -25,7 +26,7 @@ def main():
     if a.command=='register':
         from hlt_classification.luka_sixclass_wide_b256_oscar import campaign
         result=campaign.create(a.dataset,a.root,project,a.commit,a.environment,gpu=a.gpu,
-                               available_gib=a.available_gib,minutes=a.minutes)
+                               available_gib=a.available_gib,minutes=a.minutes,recover=a.recover)
         print('Registered:',result['root'],'spec:',result['content_hash']);return
     s=load_json(a.spec)
     if Path(a.spec).resolve()!=Path(s['root'])/'campaign_spec.json':raise ValueError('Noncanonical spec locator')

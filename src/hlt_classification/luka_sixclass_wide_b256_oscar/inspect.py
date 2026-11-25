@@ -3,9 +3,11 @@ from pathlib import Path
 from hlt_classification.data.cache_contracts import load_json
 from hlt_classification.cms_proxy_ladder.contracts import validate_file_ref
 from . import contracts as c, campaign, artifacts, reporting, training
+from . import recovery as execution_recovery
 
 
 def selected_metadata(spec,stage):
+    spec=execution_recovery.origin(spec,stage)
     path=Path(spec['root'])/('train_'+stage)/'result.json'
     if not path.exists():return None
     receipt=load_json(path);c.validate(receipt,'RESULT')
@@ -22,6 +24,7 @@ def selected_metadata(spec,stage):
 
 def progress(spec,stage):
     campaign.check(spec,live=False)
+    spec=execution_recovery.origin(spec,stage)
     if stage not in c.STAGES:raise ValueError('Unregistered stage')
     jobs=[r['job'] for r in campaign.accepted_jobs(spec) if r['task']=='train_'+stage]
     print('Stage:',stage,'; saved jobs:',', '.join(jobs) or 'not submitted')
@@ -56,7 +59,8 @@ def progress(spec,stage):
 
 def results(spec):
     campaign.check(spec,live=False);memo={}
-    rows={s:completed_metadata(spec,s,memo) for s in c.STAGES if (Path(spec['root'])/('train_'+s)/'result.json').exists()}
+    rows={s:completed_metadata(spec,s,memo) for s in c.STAGES
+          if (Path(execution_recovery.origin(spec,s)['root'])/('train_'+s)/'result.json').exists()}
     if not rows:raise ValueError('No completed results yet; use progress')
     measurements={s:r['metrics'] for s,r in rows.items()}
     for stage,m in measurements.items():c.validate(m,'METRICS',dict(report=rows[stage]['report']['content_hash']))
@@ -80,6 +84,7 @@ def results(spec):
 
 def completed_metadata(spec,stage,memo):
     if stage in memo:return memo[stage]
+    spec=execution_recovery.origin(spec,stage)
     report=selected_metadata(spec,stage)
     if report is None:raise ValueError('Missing fresh same-campaign teacher')
     receipt=load_json(Path(spec['root'])/('train_'+stage)/'result.json')

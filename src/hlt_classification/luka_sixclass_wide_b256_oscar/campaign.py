@@ -63,6 +63,8 @@ def source(project,commit):
         'docs/LUKA_SIXCLASS_WIDE_B256_OSCAR_RUNBOOK.md','docs/LUKA_SIXCLASS_WIDE_B256_OSCAR_VALIDATION.md',
         'scripts/queue_luka_sixclass_wide_b256_oscar.sh','sbatch/luka_sixclass_wide_b256_oscar_common.sh',
         'scripts/bootstrap_luka_sixclass_wide_b256_oscar.sh'}
+    required|={'scripts/recover_luka_sixclass_wide_b256_oscar.sh',
+               'tests/test_luka_sixclass_wide_b256_recovery.py'}
     if not required<=tracked:raise ValueError('Commit all campaign implementation files first')
     return snapshot
 
@@ -104,7 +106,7 @@ def storage(root,available_gib,*,resume=False):
                 committed_output_bytes_credited=own)
 
 
-def create(dataset,root,project,commit,environment,*,gpu='l40s',available_gib,minutes=2880):
+def create(dataset,root,project,commit,environment,*,gpu='l40s',available_gib,minutes=2880,recover=None):
     dataset,root,project,environment=[Path(p).resolve() for p in (dataset,root,project,environment)]
     for i,a in enumerate((dataset,root,project)):
         for b in (dataset,root,project)[i+1:]:
@@ -122,15 +124,29 @@ def create(dataset,root,project,commit,environment,*,gpu='l40s',available_gib,mi
     if (canonical_sha256(manifest)!=c.TRANSFER_HASH or complete.get('manifest_sha256')!=c.TRANSFER_HASH or manifest.get('foundation_sha256')!=c.PARENT_HASH
             or complete.get('all_files_verified') is not True):raise ValueError('Dataset transfer is not authenticated')
     quota=storage(root,available_gib)
+    extra={};version=1
+    if recover is not None:
+        from . import recovery
+        old,record=recovery.authenticate(Path(recover))
+        if env!=old['environment'] or str(environment)!=old['environment_dir'] or backend()!=old['backend']:
+            raise ValueError('Recovery runtime must match the original baselines')
+        # Authenticate the scalar population before copying only its immutable metadata.
+        population.load(dataset,old['population_root'])
+        extra=dict(execution_recovery=record);version=2
     root.mkdir(parents=True,exist_ok=False)
-    pop=population.build(dataset,root/'population')
-    spec=c.artifact('SPEC',root=str(root),dataset=str(dataset),project=str(project),commit=commit,source=src,
+    if recover is None:pop=population.build(dataset,root/'population')
+    else:
+        shutil.copytree(old['population_root'],root/'population')
+        pop=load_json(root/'population/population.json')
+        if pop!=old['population']:raise ValueError('Copied population differs')
+    spec=c.artifact('SPEC',version=version,**extra,root=str(root),dataset=str(dataset),project=str(project),commit=commit,source=src,
         environment_dir=str(environment),environment=env,gpu=gpu,foundation_producer=producer,
         population=pop,population_root=str(root/'population'),recipe=c.recipe(),nodes={s:c.node(s) for s in c.STAGES},
         counts=dict(c.COUNTS),cpus=6,memory_mb=192000,minutes={task:minutes for task in c.tasks()},
         preparation_workers=4,candidate_workers=3,storage=quota,tasks=c.tasks(),
         transfer_manifest_sha256=canonical_sha256(manifest),execution_site=c.SITE,
         backend=backend())
+    check(spec,live=False)
     write_immutable_json(root/'campaign_spec.json',spec)
     return spec
 
@@ -150,6 +166,10 @@ def check(spec,*,live=True):
             or spec['storage']['new_results_budget_bytes']!=c.RESULT_GIB*2**30):
         raise ValueError('Scientific/resource registration differs')
     if Path(spec['population_root'])!=Path(spec['root'])/'population':raise ValueError('Population root differs')
+    if spec['schema_version']==2:
+        from . import recovery
+        recovery.validate(spec)
+    elif 'execution_recovery' in spec:raise ValueError('Recovery requires SPEC/v2')
     if live:
         locations(spec['dataset'],spec['root'],spec['project'],spec['environment_dir'])
         if source(spec['project'],spec['commit'])!=spec['source']:raise ValueError('Source drift')
@@ -189,6 +209,11 @@ def remaining(spec,resume):
     jobs=accepted_jobs(spec)
     if jobs and not resume:raise FileExistsError('Already submitted; use explicit resume only after terminal accounting')
     complete={}
+    if spec['schema_version']==2:
+        from . import recovery
+        old,record=recovery.authenticate(Path(spec['execution_recovery']['parent_spec']['path']))
+        if record!=spec['execution_recovery']:raise ValueError('Recovery parent evidence changed')
+        complete={s:artifacts.completed(old,s)['receipt']['content_hash'] for s in recovery.BASELINES}
     if resume:
         if not jobs:raise ValueError('No submission to resume')
         states={r['job']:terminal(r['job']) for r in jobs}
@@ -222,7 +247,7 @@ def site(rows):
     config=subprocess.run(['scontrol','show','config'],env=clean_env(),check=True,capture_output=True,text=True).stdout
     if not re.search(r'(?m)^\s*ClusterName\s*=\s*slurmctld\s*$',config):raise PermissionError('Oscar required')
     for row in rows:
-        args=[x for x in row['command'][:-4] if not x.startswith('--dependency=')]+['--test-only','--wrap=true']
+        args=[x for x in row['command'][:-4] if not x.startswith('--dependency=')]+['--test-only']+row['command'][-4:]
         proc=subprocess.run(args,env=clean_env(),check=False,capture_output=True,text=True)
         print((proc.stdout+proc.stderr).strip(),flush=True)
         if proc.returncode:raise RuntimeError('Scheduler dry review rejected resources; no jobs submitted')
@@ -253,6 +278,11 @@ def queue(spec,*,execute=False,authorization=None,resume=False,available_gib=Non
     if execute and authorization!=c.AUTH:raise PermissionError('Exact six-fit authorization required')
     check(spec)
     with submission_lock(spec['root']) if execute else nullcontext():
+        if spec['schema_version']==2 and execute:
+            from . import recovery
+            old=recovery.validate(spec)
+            with submission_lock(old['root']):
+                return _queue(spec,execute=execute,authorization=authorization,resume=resume,available_gib=available_gib)
         return _queue(spec,execute=execute,authorization=authorization,resume=resume,available_gib=available_gib)
 
 
@@ -265,6 +295,9 @@ def _queue(spec,*,execute=False,authorization=None,resume=False,available_gib=No
     print(__import__('json').dumps(plan,indent=2),flush=True);site(plan['commands'])
     if not execute:return plan
     if authorization!=c.AUTH:raise PermissionError('Exact six-fit authorization required')
+    if spec['schema_version']==2:
+        from . import recovery
+        recovery.claim(spec)
     attempts=sorted((root/'submission').glob('attempt_*'))
     attempt=root/'submission'/f'attempt_{len(attempts)+1:03d}';attempt.mkdir(parents=True,exist_ok=False)
     write_immutable_json(attempt/'plan.json',plan);jobs={}

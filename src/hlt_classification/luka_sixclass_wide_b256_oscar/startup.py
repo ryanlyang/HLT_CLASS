@@ -36,14 +36,14 @@ def estimate(stage,train_step,val_step,export_step,elapsed,remaining_epochs=20):
         remaining_epochs=remaining_epochs,conservative_minutes=math.ceil(seconds/60),timing_factor=1.3,fixed_margin_minutes=60)
 
 
-def run(spec,stage,tr,val,banks,sampler,matching,device,folder,started,remaining_epochs=20,outside=None):
+def run(spec,stage,tr,val,banks,sampler,matching,device,folder,started,remaining_epochs=20,outside=None,pair_storage=False):
     def record(name,**fields):
         value=c.artifact('STARTUP_PHASE',parents=dict(spec=spec['content_hash']),stage=stage,phase=name,**fields)
         meta.write_immutable_json(folder/'startup_diagnostics'/f'{name}.json',value)
         print('BALANCED startup '+name,flush=True)
     record('begin')
     with parity_backend(device):weaver=installed_parity(tr,device=device)
-    net=model.new_model(stage).to(device).eval();native=net.deployed().to(device)
+    net=model.new_model(stage,pair_storage=pair_storage).to(device).eval();native=net.deployed().to(device)
     raw=tr.batch(np.arange(min(4,len(tr))));errors={}
     with parity_backend(device),torch.no_grad():
         for bf16 in (False,True):
@@ -155,9 +155,14 @@ def run(spec,stage,tr,val,banks,sampler,matching,device,folder,started,remaining
         raise MemoryError('Measured full-support CUDA peak lacks headroom')
     if timing['conservative_minutes']>spec['minutes']['train_'+stage]:
         raise RuntimeError('Measured remaining work exceeds walltime; retained diagnostic requires explicit resource revision')
+    storage_stats=dict(net.pair_storage.stats) if pair_storage else None
+    if pair_storage:
+        from .pair_storage import validate_storage_stats
+        validate_storage_stats(storage_stats,calls=storage_stats['calls'])
     del net,opt,diagnostic;gc.collect();torch.cuda.empty_cache()
     return c.artifact('STARTUP',parents=dict(spec=spec['content_hash']),stage=stage,initial_errors=errors,
         installed_weaver_parity=True,finite_connected_gradients=True,classifier_objective_verified=True,
         main_head=c.main_policy(stage),
         native_deployment_parity=True,full_support=True,matching_serial_parity=stage=='DE000',
-        integrated_two_epoch_miniature=True,probe_discarded=True,memory=memory,timing=timing)
+        integrated_two_epoch_miniature=True,probe_discarded=True,memory=memory,timing=timing,
+        **({'pair_storage':storage_stats} if pair_storage else {}))

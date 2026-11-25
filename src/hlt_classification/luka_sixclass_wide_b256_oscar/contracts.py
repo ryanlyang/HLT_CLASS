@@ -29,15 +29,18 @@ TRANSFER_HASH = '7034f2153e585068000185ce4c1e7fb3e61fe96e5bbfeb5e650608a150071ae
 DATASET = '/oscar/scratch/rlyang/datasets/luka_qcdrun2com_higgs2p_sb_v1'
 
 
-def artifact(kind, *, parents=None, **fields):
+def artifact(kind, *, parents=None, version=1, **fields):
     if set(fields).intersection(('contract', 'schema_version', 'parents', *FLAGS)):
         raise ValueError('Reserved artifact fields')
-    return with_content_hash(dict(contract=f'{PREFIX}_{kind}/v1', schema_version=1,
+    if version!=1 and (kind!='SPEC' or version!=2):raise ValueError('Unsupported artifact version')
+    return with_content_hash(dict(contract=f'{PREFIX}_{kind}/v{version}', schema_version=version,
                                   parents=dict(parents or {}), **FLAGS, **fields))
 
 
 def validate(value, kind, parents=None):
-    validate_content_hash(value, expected_contract=f'{PREFIX}_{kind}/v1', expected_schema_version=1)
+    version=value.get('schema_version') if kind=='SPEC' else 1
+    if version not in (1,2):raise ValueError('Unsupported spec version')
+    validate_content_hash(value, expected_contract=f'{PREFIX}_{kind}/v{version}', expected_schema_version=version)
     if any(value.get(k) != v for k,v in FLAGS.items()):
         raise ValueError('Scientific scope differs')
     if parents is not None and value.get('parents') != parents:

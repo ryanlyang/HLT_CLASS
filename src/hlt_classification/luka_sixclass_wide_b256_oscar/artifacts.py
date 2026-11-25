@@ -53,6 +53,9 @@ def restore(spec,stage,parents,sampler):
 def completed(spec,stage,*,recurse=True,memo=None):
     memo={} if memo is None else memo
     if stage in memo:return memo[stage]
+    from . import recovery
+    original=recovery.origin(spec,stage)
+    if original is not spec:return completed(original,stage,recurse=recurse,memo=memo)
     folder=Path(spec['root'])/('train_'+stage)
     receipt=load_json(folder/'result.json');c.validate(receipt,'RESULT')
     if receipt['stage']!=stage or receipt['parents'].get('spec')!=spec['content_hash']:
@@ -78,6 +81,15 @@ def completed(spec,stage,*,recurse=True,memo=None):
         raise ValueError('Missing integrated acceptance')
     if startup.get('main_head')!=c.main_policy(stage):raise ValueError('Main-head acceptance differs')
     if startup.get('matching_serial_parity')!=(stage=='DE000'):raise ValueError('Matching acceptance differs')
+    if spec['schema_version']==2:
+        early_path=Path(receipt['files']['report']['path']).parent/'early_memory.json'
+        early=load_json(validate_file_ref(startup['early_memory']))
+        c.validate(early,'EARLY_MEMORY',dict(spec=spec['content_hash']))
+        if Path(startup['early_memory']['path'])!=early_path or early['stage']!=stage or early['passed'] is not True:
+            raise ValueError('Early full-support memory acceptance differs')
+        if stage=='CONCAT':
+            from .pair_storage import validate_storage_stats
+            stats=startup['pair_storage'];validate_storage_stats(stats,calls=stats['calls'])
     result=dict(spec=spec,folder=Path(receipt['files']['report']['path']).parent,receipt=receipt,
                 report=report,refs={k:receipt['files'][k] for k in ('checkpoint','report')})
     memo[stage]=result

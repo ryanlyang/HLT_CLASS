@@ -102,10 +102,16 @@ def forward(net, raw, device, *, bf16, capture=False):
 
 
 class Student(NativeParticleTransformer):
-    def __init__(self, stage):
+    def __init__(self, stage, *, pair_storage=False):
         config=c.node(stage)
         super().__init__()
         self.stage=stage
+        if type(pair_storage) is not bool or (pair_storage and stage!='CONCAT'):
+            raise ValueError('Pair storage is an explicit CONCAT-only execution policy')
+        self.pair_storage=None
+        if pair_storage:
+            from .pair_storage import Storage
+            self.pair_storage=Storage(self.mod.pair_embed)
         self.predictors=nn.ModuleDict(); self.logit_heads=nn.ModuleDict()
         for teacher in c.TEACHERS[stage]:
             with torch.random.fork_rng(devices=[]):
@@ -148,9 +154,9 @@ class Student(NativeParticleTransformer):
         return result.eval()
 
 
-def new_model(stage):
+def new_model(stage, *, pair_storage=False):
     torch.manual_seed(c.node(stage)['initialization_seed'])
-    return Student(stage)
+    return Student(stage, pair_storage=pair_storage)
 
 
 
