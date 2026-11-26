@@ -273,8 +273,10 @@ def test_quota_credit_excludes_uncommitted_attempt_files(tmp_path):
     with pytest.raises(ValueError):campaign.committed_bytes(tmp_path)
 
 
-def test_exact_allocation_and_runtime_binding(tmp_path,monkeypatch):
+@pytest.mark.parametrize('task,minutes,limit',[('train_OFFLINE',2880,'2-00:00:00'),('train_CONCAT',4320,'3-00:00:00')])
+def test_exact_allocation_and_runtime_binding(tmp_path,monkeypatch,task,minutes,limit):
     s=spec_fixture(tmp_path);s['environment_dir']=sys_prefix=__import__('sys').prefix
+    s['minutes'][task]=minutes
     monkeypatch.setenv('SLURM_JOB_ID','123');monkeypatch.setenv('PYTHONNOUSERSITE','1')
     monkeypatch.setenv('LD_LIBRARY_PATH',str(Path(sys_prefix)/'lib'))
     monkeypatch.setattr(campaign,'binding',lambda *a:None);monkeypatch.setattr(campaign,'runtime',lambda:{})
@@ -282,14 +284,17 @@ def test_exact_allocation_and_runtime_binding(tmp_path,monkeypatch):
     monkeypatch.setattr(torch.cuda,'is_bf16_supported',lambda:True);monkeypatch.setattr(torch.cuda,'get_device_name',lambda i:'NVIDIA L40S')
     def response(args,**kw):
         out='ClusterName = slurmctld\n' if args[-1]=='config' else (
-            f'JobId=123 JobState=RUNNING Account=default QOS=norm-gpu Partition=gpu JobName=luka6b256_train_OFFLINE '
-            f'Comment={s["content_hash"]}:train_OFFLINE WorkDir=/project NumCPUs=6 NumNodes=1 NumTasks=1 CPUs/Task=6 '
-            'AllocTRES=cpu=6,mem=187.5G,node=1,gres/gpu=1 TimeLimit=2-00:00:00')
+            f'JobId=123 JobState=RUNNING Account=default QOS=norm-gpu Partition=gpu JobName=luka6b256_{task} '
+            f'Comment={s["content_hash"]}:{task} WorkDir=/project NumCPUs=6 NumNodes=1 NumTasks=1 CPUs/Task=6 '
+            f'AllocTRES=cpu=6,mem=187.5G,node=1,gres/gpu=1 TimeLimit={limit}')
         return SimpleNamespace(stdout=out)
     monkeypatch.setattr(subprocess,'run',response)
-    assert worker.allocation(s,'train_OFFLINE')=='123'
+    assert worker.allocation(s,task)=='123'
+    s['minutes'][task]=minutes-1
+    with pytest.raises(PermissionError,match='Walltime'):worker.allocation(s,task)
+    s['minutes'][task]=minutes
     monkeypatch.setattr(torch.cuda,'get_device_name',lambda i:'GeForce GTX 1080 Ti')
-    with pytest.raises(PermissionError):worker.allocation(s,'train_OFFLINE')
+    with pytest.raises(PermissionError):worker.allocation(s,task)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(),reason='Actual CUDA integrated qualification')

@@ -1,6 +1,71 @@
 # New-data six-class ladder: 200–2600 GeV, LR 1e-4, batch 256
 
-## November 25 pointwise input-gradient recovery amendment
+## November 25 single-allocation recovery amendment (SPEC/v5, current)
+
+The user selected one longer CONCAT job and rejected persistent prepared-input
+storage. This amendment supersedes the unlaunched SPEC/v4 split-allocation
+proposal below. User-supplied live Oscar output shows partition `gpu` MaxTime
+UNLIMITED, no explicit norm-gpu MaxWall, maximum two GPUs/12 CPUs/192G per user,
+and running-allocation budgets of5,760 GPU-minutes and34,560 CPU-minutes.
+At six CPUs, one GPU for72h uses4,320 GPU-minutes and25,920 CPU-minutes.
+Two GPUs for72h would exceed the GPU-minute budget. These observations support
+one72h allocation; they do not guarantee its queue start time.
+
+SPEC/v5 requests one L40S, six CPUs and192000MiB for **72 hours for CONCAT**.
+Its sole `train_CONCAT` task runs epochs1--20, selected validation and TRAIN
+export. Inputs are prepared once per attempt in RAM, with no persistent particle
+cache. The measured3,105-minute conservative estimate fits4,320 minutes;
+the1.3 timing factor and60-minute reserve remain in place. The integrated
+acceptance checks remeasure runtime inside the allocation.
+
+Only CONCAT's walltime changes relative to v3. Reuse completed OFFLINE9544070
+and M0HLT9544071; queue CONCAT -> UE100 -> DE050 -> DE000, each student still
+at48h. No standalone preflight or two-GPU implementation is introduced.
+Batch256, full particles, pair storage/input-gradient repair, initialization,
+sampling, losses, optimizer,20-epoch schedule and selection remain unchanged.
+Existing full-state epoch recovery remains available after terminal accounting.
+
+LONG_RECOVERY/v1 authenticates the same failed v3 execution and evidence as
+v4. Both alternatives share the same exclusive parent claim, preventing duplicate
+recovery launches. Previous source/specs/claims/results remain immutable. The
+original failed run has zero committed scientific epochs; this is a fresh CONCAT
+fit. Final test remains sealed.
+
+## November 25 checkpointed walltime recovery amendment (SPEC/v4, superseded option)
+
+Job9620918 completed the repaired real batch256 memory/gradient checks and
+full-objective startup acceptance phases, then stopped at the runtime guard
+before scientific epoch1. Its bound measurements predict **3,105 minutes**
+including 27,682.95 seconds already elapsed, a 30% remaining-work margin and
+one-hour reserve, exceeding the 2,880-minute allocation. This is an execution
+budget failure; there is no scientific result or committed epoch to discard.
+
+SPEC/v4 retains the same recipe, population, numerical repair, precision and
+resources. CONCAT runs in two dependent allocations: `train_CONCAT_part1`
+(epochs1--10), then `train_CONCAT` (epochs11--20). Each has the existing 48-hour
+limit. The measured conservative estimate is 1,842 minutes for ten epochs,
+including a full input rebuild and even a conservative final-export allowance.
+The estimate must pass again inside each allocation; it is not a runtime promise.
+
+The boundary restores full native model and optimizer state, CPU/CUDA RNG,
+global update and the best checkpoint across the committed history. Warmup,
+cosine schedule, sampling epochs and checkpoint selection still span20 epochs.
+Only the second allocation publishes the final selected model and TRAIN bank.
+A hashed ten-epoch SEGMENT receipt is a continuation prerequisite, never a
+completed teacher. UE100 -> DE050 -> DE000 wait for final CONCAT publication.
+Inputs are rebuilt in both allocations, adding preparation time but avoiding
+any new persistent particle cache or storage requirement.
+
+The new fork authenticates exact SPEC/v3 `2fea86c9...`, source
+`2bf345f96ffd45f46f0cd9e6934798af62349401`, job9620918, its measured timing,
+passed phase receipts and previous claims. All previous submissions must be
+terminal and no unfinished-stage epoch may be committed. Original completed
+OFFLINE9544070 and M0HLT9544071 remain the two baselines. Five jobs execute
+four unfinished scientific fits. Existing same-source explicit resume also
+handles interruptions within either segment and export-only continuation.
+Final test remains sealed; no separate preflight job is introduced.
+
+## November 25 pointwise input-gradient recovery amendment (SPEC/v3, historical)
 
 The memory recovery reached the early check in job9615391 but stopped before
 resident input construction or scientific epochs. Diagnostic job9618095 locates

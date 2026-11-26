@@ -15,18 +15,19 @@ def main():
     for k in ('dataset','root','commit','environment'):a.add_argument('--'+k,required=True)
     a.add_argument('--gpu',choices=list(c.GPUS),default='l40s');a.add_argument('--available-gib',type=int,required=True)
     a.add_argument('--minutes',type=int,default=2880)
-    a.add_argument('--recover',help='Exact d534fcfe memory parent or failed 44aa1522 gradient parent; reuse completed baselines')
+    a.add_argument('--recover',help='Exact failed memory, gradient or walltime parent; reuse completed baselines')
+    a.add_argument('--single-concat',action='store_true',help='Recover failed SPEC/v3 with one 72-hour CONCAT allocation')
     a=sub.add_parser('queue');a.add_argument('--spec',required=True)
     a.add_argument('--execute',action='store_true');a.add_argument('--authorize');a.add_argument('--resume',action='store_true')
     a.add_argument('--available-gib',type=int)
-    a=sub.add_parser('run');a.add_argument('--spec',required=True);a.add_argument('--task',choices=list(c.tasks()),required=True)
+    a=sub.add_parser('run');a.add_argument('--spec',required=True);a.add_argument('--task',choices=list(c.tasks(4)),required=True)
     a=sub.add_parser('progress');a.add_argument('--spec',required=True);a.add_argument('--stage',choices=c.STAGES,required=True)
     a=sub.add_parser('results');a.add_argument('--spec',required=True);a.add_argument('--json',action='store_true')
     a=p.parse_args();project=Path(__file__).resolve().parents[1]
     if a.command=='register':
         from hlt_classification.luka_sixclass_wide_b256_oscar import campaign
         result=campaign.create(a.dataset,a.root,project,a.commit,a.environment,gpu=a.gpu,
-                               available_gib=a.available_gib,minutes=a.minutes,recover=a.recover)
+                               available_gib=a.available_gib,minutes=a.minutes,recover=a.recover,single_concat=a.single_concat)
         print('Registered:',result['root'],'spec:',result['content_hash']);return
     s=load_json(a.spec)
     if Path(a.spec).resolve()!=Path(s['root'])/'campaign_spec.json':raise ValueError('Noncanonical spec locator')

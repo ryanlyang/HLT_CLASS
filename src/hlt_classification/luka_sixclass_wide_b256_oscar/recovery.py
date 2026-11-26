@@ -78,10 +78,15 @@ def validate(spec):
             or r.get('scientific_recipe_unchanged') is not True
             or spec['root']==s['root'] or spec['project']==s['project']):
         raise ValueError('Recovery execution policy differs')
-    for key in ('recipe','population','counts','nodes','tasks','dataset','environment_dir','environment',
+    for key in ('recipe','population','counts','nodes','dataset','environment_dir','environment',
                 'backend','foundation_producer','transfer_manifest_sha256','gpu','memory_mb','cpus',
-                'preparation_workers','candidate_workers','minutes','execution_site'):
+                'preparation_workers','candidate_workers','execution_site'):
         if spec[key]!=s[key]:raise ValueError('Recovery changed '+key)
+    if spec['tasks']!=c.tasks(spec['schema_version']):raise ValueError('Recovery changed tasks')
+    expected_minutes=dict(s['minutes'])
+    if spec['schema_version']==4:expected_minutes['train_CONCAT_part1']=s['minutes']['train_CONCAT']
+    if spec['schema_version']==5:expected_minutes['train_CONCAT']=c.LONG_CONCAT_MINUTES
+    if spec['minutes']!=expected_minutes:raise ValueError('Recovery changed minutes')
     for stage,ref in r['imported'].items():
         if Path(ref['path'])!=Path(s['root'])/('train_'+stage)/'result.json':
             raise ValueError('Imported baseline locator differs')
@@ -95,18 +100,18 @@ def validate(spec):
 
 
 def origin(spec,stage):
-    if spec.get('schema_version') in (2,3) and stage in BASELINES:
+    if spec.get('schema_version') in (2,3,4,5) and stage in BASELINES:
         return validate(spec)
     return spec
 
 
 def enabled(spec,stage):
-    return spec.get('schema_version') in (2,3) and stage=='CONCAT'
+    return spec.get('schema_version') in (2,3,4,5) and stage=='CONCAT'
 
 
 def model_options(spec,stage):
     if not enabled(spec,stage):return {}
-    return dict(pair_storage=True,**({'pointwise_dgrad':True} if spec['schema_version']==3 else {}))
+    return dict(pair_storage=True,**({'pointwise_dgrad':True} if spec['schema_version'] in (3,4,5) else {}))
 
 
 def claim(spec):

@@ -23,7 +23,7 @@ from . import contracts as c, campaign, population, views, startup, training, ba
 
 def allocation(spec,task):
     job=os.environ.get('SLURM_JOB_ID','')
-    if task not in c.tasks() or not re.fullmatch('[1-9][0-9]*',job):raise PermissionError('Registered Oscar job required')
+    if task not in c.tasks(spec['schema_version']) or not re.fullmatch('[1-9][0-9]*',job):raise PermissionError('Registered Oscar job required')
     campaign.binding(spec,task,job)
     config=subprocess.run(['scontrol','show','config'],check=True,capture_output=True,text=True).stdout
     if not re.search(r'(?m)^\s*ClusterName\s*=\s*slurmctld\s*$',config):raise PermissionError('Wrong cluster')
@@ -49,10 +49,13 @@ def allocation(spec,task):
 
 
 def run(spec,task,*,device='cuda:0'):
-    campaign.check(spec);job=allocation(spec,task);stage=task.removeprefix('train_');started=time.monotonic()
-    if spec['schema_version'] in (2,3) and stage in recovery.BASELINES:raise PermissionError('Reuse the completed baselines')
-    folder=Path(spec['root'])/task/'runs'/job;folder.mkdir(parents=True,exist_ok=False)
-    if (Path(spec['root'])/task/'result.json').exists():raise FileExistsError('Already published stage')
+    campaign.check(spec);job=allocation(spec,task);stage=c.task_stage(task);started=time.monotonic()
+    first,last=c.epoch_window(spec,task);stage_root=Path(spec['root'])/('train_'+stage)
+    if spec['schema_version'] in (2,3,4,5) and stage in recovery.BASELINES:raise PermissionError('Reuse the completed baselines')
+    folder=stage_root/'runs'/job;folder.mkdir(parents=True,exist_ok=False)
+    if (stage_root/'result.json').exists():raise FileExistsError('Already published stage')
+    if task=='train_CONCAT_part1' and (stage_root/'segments/part1.json').exists():
+        raise FileExistsError('Already published first segment')
     torch.set_num_threads(1);phases=PhaseLog(folder,lambda:memory_snapshot(torch));device=torch.device(device)
     try:
         with phases.phase('authenticate_population_and_teachers'):
@@ -65,8 +68,9 @@ def run(spec,task,*,device='cuda:0'):
             memo={}
             dependencies={t:artifacts.completed(spec,t,memo=memo) for t in c.TEACHERS[stage]}
             parents=artifacts.fit_parents(spec,stage,dependencies)
+            if first>1:artifacts.segment_completed(spec)
             write_immutable_json(folder/'fit_binding.json',c.artifact('FIT_BINDING',parents=parents,stage=stage,job_id=job))
-        if spec['schema_version'] in (2,3):
+        if spec['schema_version'] in (2,3,4,5):
             from . import early_memory
             with phases.phase('early_memory_before_resident_inputs'):
                 early_memory.run(spec,stage,loaded,device,folder)
@@ -83,13 +87,17 @@ def run(spec,task,*,device='cuda:0'):
             matching=contrastive.Sampler(targets['OFFLINE'].keys(),tr.identities,tr.labels,device=device) if stage=='DE000' else None
             training.join(tr,val,targets,sampler,stage)
             resume=artifacts.restore(spec,stage,parents,sampler)
+            before=len(resume['history']) if resume else 0
+            if not first-1<=before<=last:raise ValueError('Checkpoint cursor outside registered allocation window')
         with phases.phase('integrated_acceptance'):
             proof=startup.run(spec,stage,tr,val,targets,sampler,matching,device,folder,started,
-                remaining_epochs=c.EPOCHS-(len(resume['history']) if resume else 0),outside=outside,
+                remaining_epochs=last-before,outside=outside,
                 **recovery.model_options(spec,stage))
-            if spec['schema_version'] in (2,3):
+            if spec['schema_version'] in (2,3,4,5):
                 from hlt_classification.data.cache_contracts import with_content_hash
                 proof=with_content_hash(dict(proof,early_memory=file_ref(folder/'early_memory.json')))
+            if spec['schema_version'] in (4,5):
+                proof=with_content_hash(dict(proof,allocation_task=task,epoch_window=[first,last],committed_epochs_before=before))
             write_immutable_json(folder/'startup.json',proof)
         with phases.phase('fit_or_finalize'):
             def save(epoch,row,state):artifacts.save_epoch(spec['root'],folder,stage,epoch,row,state,parents,job)
@@ -97,7 +105,12 @@ def run(spec,task,*,device='cuda:0'):
             with context:
                 net,report,best=training.train(tr,val,banks=targets,sampler=sampler,stage=stage,parents=parents,
                     device=device,save_epoch=save,matching=matching,resume=resume,outside=outside,
-                    **recovery.model_options(spec,stage))
+                    stop_epoch=last,**recovery.model_options(spec,stage))
+            if last<c.EPOCHS:
+                if campaign.source(spec['project'],spec['commit'])!=spec['source']:raise ValueError('Source drift during segment')
+                receipt=artifacts.save_segment(spec,parents,job,folder)
+                print(f'OSCAR_BALANCED SEGMENT stage={stage} epochs={first}-{last}; teacher export waits for epoch20',flush=True)
+                return receipt
             training.validate_report(report,stage,parents,len(val),sampler)
             write_immutable_json(folder/'training_report.json',report)
             native=net.deployed().to(device).eval();del net,best,resume,targets,matching
@@ -127,7 +140,7 @@ def run(spec,task,*,device='cuda:0'):
             if stage!='DE000':files['bank']=file_ref(folder/'bank/manifest.json')
             receipt=c.artifact('RESULT',parents=dict(spec=spec['content_hash'],report=report['content_hash']),
                 stage=stage,job_id=job,fit_parents=parents,files=files,selected_epoch=report['selected_pass'])
-            write_immutable_json(Path(spec['root'])/task/'result.json',receipt)
+            write_immutable_json(stage_root/'result.json',receipt)
             print(f'OSCAR_BALANCED PUBLISHED stage={stage} epoch={report["selected_pass"]} AUC={measured["macro_ovr_auc"]:.8f}',flush=True)
         return receipt
     except BaseException as exc:

@@ -266,7 +266,7 @@ def test_real_optimized_integrated_qualification(tmp_path,monkeypatch):
     assert proofs[0]['pair_storage']['restored_cuda_tensors']>0
 
 
-@pytest.mark.parametrize('mode',['detach','gradient-detach'])
+@pytest.mark.parametrize('mode',['detach','gradient-detach','time-detach','long-detach'])
 def test_real_detached_recovery_shell_preserves_parent_and_registers_fork(tmp_path,mode):
     import os,sys,subprocess,time
     bash='C:/Program Files/Git/bin/bash.exe' if sys.platform=='win32' else 'bash'
@@ -276,8 +276,10 @@ def test_real_detached_recovery_shell_preserves_parent_and_registers_fork(tmp_pa
     base=tmp_path/'base';project=base/'source/new';(project/'scripts').mkdir(parents=True)
     (project/'sbatch').mkdir()
     env_dir=base/'environments/new_balanced_oscar_v1';(env_dir/'bin').mkdir(parents=True)
-    old=base/('checkpoints/luka_sixclass_wide_b256_oscar_d534fcfe_r1' if mode=='detach'
-              else 'checkpoints/luka_sixclass_wide_memory_44aa1522_r1')
+    old=base/({'detach':'checkpoints/luka_sixclass_wide_b256_oscar_d534fcfe_r1',
+               'gradient-detach':'checkpoints/luka_sixclass_wide_memory_44aa1522_r1',
+               'time-detach':'checkpoints/luka_sixclass_wide_gradient_2bf345f9_r1',
+               'long-detach':'checkpoints/luka_sixclass_wide_gradient_2bf345f9_r1'}[mode])
     old.mkdir(parents=True);parent=old/'campaign_spec.json';parent.write_bytes(b'old immutable spec')
     root=base/'checkpoints/new_recovery'
     source=Path(__file__).resolve().parents[1]/'scripts/recover_luka_sixclass_wide_b256_oscar.sh'
@@ -299,6 +301,7 @@ def test_real_detached_recovery_shell_preserves_parent_and_registers_fork(tmp_pa
     assert 'LAUNCHER_EXIT=0' in log.read_text()
     commands=calls.read_text().splitlines()
     assert len(commands)==2 and '--recover '+sp(parent) in commands[0]
+    assert ('--single-concat' in commands[0])==(mode=='long-detach')
     assert ' register ' in commands[0] and ' queue ' in commands[1] and '--execute' in commands[1]
     assert parent.read_bytes()==b'old immutable spec'
     assert subprocess.run(args,env=env,capture_output=True,timeout=10).returncode!=0

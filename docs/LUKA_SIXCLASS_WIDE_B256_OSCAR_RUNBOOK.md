@@ -9,7 +9,122 @@ Six fresh fits: OFFLINE, M0HLT, CONCAT, UE100, DE050, DE000. All have peak LR
 classifiers. Teacher embedding/logit branches remain; DE000 adds OFFLINE
 contrastive matching. The final model is HLT-only. No standalone preflight job.
 
-## Recover the failed backward check (current SPEC/v3)
+## Recover CONCAT in one 72-hour job (current SPEC/v5)
+
+For failed job9620918, use this section. CONCAT gets one L40S/6CPUs/192000MiB
+allocation for72h and prepares its inputs once in RAM. The full20 epochs and
+export run in that allocation. The prior conservative estimate was51h45m;
+runtime is measured again inside the job. No persistent particle cache is made.
+The submitted sequence is CONCAT -> UE100 -> DE050 -> DE000; the latter three
+retain48h each. OFFLINE9544070 and M0HLT9544071 are reused.
+
+The supplied norm-gpu limits allow4,320 GPU-minutes and25,920 CPU-minutes for
+this request, below5,760 and34,560 respectively. Two GPUs for72h would exceed
+the GPU-minute budget. Scheduler dry review still runs before submission.
+
+In local PowerShell, stage the owned recovery and review the staged changes:
+
+```powershell
+git add -- src/hlt_classification/luka_sixclass_wide_b256_oscar scripts/luka_sixclass_wide_b256_oscar.py scripts/recover_luka_sixclass_wide_b256_oscar.sh tests/test_luka_sixclass_wide_b256_oscar.py tests/test_luka_sixclass_wide_b256_segments.py tests/test_luka_sixclass_wide_b256_long.py tests/test_luka_sixclass_wide_b256_recovery.py docs/plans/LUKA_SIXCLASS_WIDE_B256_OSCAR_PLAN.md docs/contracts/LUKA_SIXCLASS_WIDE_B256_OSCAR.md docs/LUKA_SIXCLASS_WIDE_B256_OSCAR_RUNBOOK.md docs/LUKA_SIXCLASS_WIDE_B256_OSCAR_VALIDATION.md
+git add -p -- docs/HANDOFF.md docs/LEGACY_SOURCE_MAP.md
+git diff --cached --stat
+git commit -m "Recover CONCAT in one 72-hour allocation with RAM-only inputs"
+git push origin main
+git rev-parse HEAD
+```
+
+Select only this campaign's additions in the shared documents. Then on Oscar:
+
+```bash
+bash <<'BASH'
+set -euo pipefail
+BASE=/oscar/home/rlyang/hlt_classification
+REPO="$BASE/source/HLT_Classification_sixclass_wide_b256_oscar_d534fcfe"
+checkquota
+read -r -p 'Pushed 40-character single-job recovery commit: ' COMMIT </dev/tty
+read -r -p 'Currently free HOME GiB (minimum 18): ' QUOTA </dev/tty
+[[ "$COMMIT" =~ ^[0-9a-f]{40}$ && "$QUOTA" =~ ^[0-9]+$ ]]
+git -C "$REPO" fetch origin main
+git -C "$REPO" merge-base --is-ancestor "$COMMIT" origin/main
+PROJECT="$BASE/source/HLT_Classification_sixclass_wide_long_${COMMIT:0:8}"
+ROOT="$BASE/checkpoints/luka_sixclass_wide_long_${COMMIT:0:8}_r1"
+if [[ ! -e "$PROJECT" && ! -L "$PROJECT" ]]; then
+    git -C "$REPO" worktree add --detach "$PROJECT" "$COMMIT"
+fi
+bash "$PROJECT/scripts/recover_luka_sixclass_wide_b256_oscar.sh" long-detach \
+    "$PROJECT" "$ROOT" "$COMMIT" "$QUOTA" \
+    --authorize AUTHORIZE_SIXCLASS_WIDE_B256_OSCAR_V1
+BASH
+```
+
+Expect four `SUBMITTED` lines: `train_CONCAT`, `train_UE100`, `train_DE050`,
+`train_DE000`, then `LAUNCHER_EXIT=0`. There is no `train_CONCAT_part1` and
+no separate preflight. `DETACHED` alone is not submission confirmation.
+Ctrl-C only exits the tail view. Keep the old sources, specs, claims and baseline
+artifacts. Do not launch the split alternative as well: both share one claim.
+If interrupted, use the same-source `resume-detach` launcher documented below;
+committed optimizer/model/RNG state is retained, including export-only recovery.
+
+## Recover the walltime estimate stop (SPEC/v4, superseded split option)
+
+The user selected SPEC/v5 above instead. Retain this section for interpreting
+the split execution contract; do not use it for the current launch.
+
+Use this for job9620918 in `luka_sixclass_wide_gradient_2bf345f9_r1`.
+The batch256 gradient and memory checks passed, but the buffered estimate was
+51h45m against48h. This recovery trains CONCAT epochs1--10 and11--20 in separate
+dependent allocations, then UE100, DE050 and DE000. OFFLINE/M0HLT are reused.
+There are five submitted jobs, four scientific fits, and no separate preflight.
+The20-epoch schedule, RNG, optimizer and global checkpoint selection continue
+through the boundary. Both halves rebuild inputs; allow that preparation time.
+
+Local PowerShell:
+
+```powershell
+git add -- src/hlt_classification/luka_sixclass_wide_b256_oscar scripts/luka_sixclass_wide_b256_oscar.py scripts/recover_luka_sixclass_wide_b256_oscar.sh tests/test_luka_sixclass_wide_b256_segments.py tests/test_luka_sixclass_wide_b256_recovery.py docs/plans/LUKA_SIXCLASS_WIDE_B256_OSCAR_PLAN.md docs/contracts/LUKA_SIXCLASS_WIDE_B256_OSCAR.md docs/LUKA_SIXCLASS_WIDE_B256_OSCAR_RUNBOOK.md docs/LUKA_SIXCLASS_WIDE_B256_OSCAR_VALIDATION.md
+git add -p -- docs/HANDOFF.md docs/LEGACY_SOURCE_MAP.md
+git diff --cached --stat
+git commit -m "Split CONCAT into checkpointed allocations without changing twenty-epoch training"
+git push origin main
+git rev-parse HEAD
+```
+
+Select only this recovery's additions in shared documents. On Oscar:
+
+```bash
+bash <<'BASH'
+set -euo pipefail
+BASE=/oscar/home/rlyang/hlt_classification
+REPO="$BASE/source/HLT_Classification_sixclass_wide_b256_oscar_d534fcfe"
+checkquota
+read -r -p 'Pushed 40-character segmented-recovery commit: ' COMMIT </dev/tty
+read -r -p 'Currently free HOME GiB (minimum 18): ' QUOTA </dev/tty
+[[ "$COMMIT" =~ ^[0-9a-f]{40}$ && "$QUOTA" =~ ^[0-9]+$ ]]
+git -C "$REPO" fetch origin main
+git -C "$REPO" merge-base --is-ancestor "$COMMIT" origin/main
+PROJECT="$BASE/source/HLT_Classification_sixclass_wide_time_${COMMIT:0:8}"
+ROOT="$BASE/checkpoints/luka_sixclass_wide_time_${COMMIT:0:8}_r1"
+if [[ ! -e "$PROJECT" && ! -L "$PROJECT" ]]; then
+    git -C "$REPO" worktree add --detach "$PROJECT" "$COMMIT"
+fi
+bash "$PROJECT/scripts/recover_luka_sixclass_wide_b256_oscar.sh" time-detach \
+    "$PROJECT" "$ROOT" "$COMMIT" "$QUOTA" \
+    --authorize AUTHORIZE_SIXCLASS_WIDE_B256_OSCAR_V1
+BASH
+```
+
+Expect `SUBMITTED train_CONCAT_part1`, `train_CONCAT`, `train_UE100`,
+`train_DE050`, `train_DE000`, then `LAUNCHER_EXIT=0`. `DETACHED` alone does
+not confirm submission. Ctrl-C leaves only the tail view. Preserve every earlier
+source/spec/claim and the original baseline results; do not launch the old v3
+execution. Each half retains48h and repeats integrated measured acceptance.
+
+For an interrupted new segment use the existing `resume-detach` launcher below
+with this exact new project/commit/spec. It authenticates terminal accounting,
+keeps committed progress and omits a successfully published first segment.
+No automatic resubmission or old-job cancellation is performed.
+
+## Recover the failed backward check (historical SPEC/v3)
 
 Use this for failed recovery `44aa1522_r1`, CONCAT9615391, diagnosed by9618095.
 The repair keeps native forward/weight gradients and uses the equivalent direct
@@ -65,7 +180,7 @@ remains native; the recorded finite backward checks determine acceptance.
 ## Recover the November 25 CONCAT memory failure (historical SPEC/v2)
 
 This earlier procedure does not fix the subsequently observed backward failure.
-For the current failure use the SPEC/v3 instructions above.
+For job9620918's walltime stop use the current SPEC/v5 instructions above.
 
 Use this section for original campaign `d534fcfe_r1`, failed job9544072.
 It creates a new SPEC/v2 execution and reuses OFFLINE9544070/M0HLT9544071.

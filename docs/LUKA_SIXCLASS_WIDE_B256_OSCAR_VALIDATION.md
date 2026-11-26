@@ -4,6 +4,85 @@ Implementation dated 2026-11-23. Scientific authority is the
 [active plan](plans/LUKA_SIXCLASS_WIDE_B256_OSCAR_PLAN.md); execution instructions
 are in the [runbook](LUKA_SIXCLASS_WIDE_B256_OSCAR_RUNBOOK.md).
 
+## November 25 single-allocation recovery (SPEC/v5, current)
+
+The supplied Oscar partition/QoS/association output permits the requested
+single-L40S72h allocation:4,320 GPU-minutes <=5,760 and25,920 CPU-minutes
+<=34,560,6 CPUs <=12 and192000MiB <=192GiB. MaxTime is UNLIMITED and no
+explicit MaxWall is listed. This is user-supplied scheduling evidence, not a
+guarantee of immediate dispatch or a new remote inspection.
+
+The bound20-epoch conservative estimate remains3,105 minutes; the new CONCAT
+request is4,320 minutes. One preparation is performed per attempt in RAM, no
+persistent input cache. Students retain2,880 minutes. Scientific hashes,
+kernel repairs and epoch checkpointing are unchanged. V4 remains readable but
+is superseded for this launch; the shared claim prevents both options running.
+
+Before editing, the11 existing segment cases passed in47.06s. New tests cover
+single-job resource/lineage registration, exact DAG, exclusive alternate claims,
+rejection of changed resources/evidence,20-epoch worker publication and resume
+after an interrupted epoch. The real Bash detached-launch test now covers
+`long-detach` and requires `--single-concat` only for that mode.
+The new recovery/launcher subset passed11 cases in28.44s. Final combined
+regression completed early November26: **112 passed in677.00s (11m17s)**,
+covering the oscar/recovery/convolution/segments/long test files. This includes
+installed-Weaver CPU/CUDA qualification, historical-version compatibility,
+full-state continuation and both72h/48h scheduler time formats. Log:
+`artifacts/testing/wide_long_final_01.log`; test workspace:
+`artifacts/testing/wide_long_final_01`. No production code changed after this
+run. Bash syntax, scoped whitespace checks and campaign documentation links pass.
+
+No new Oscar/Tigris job, final-test access, commit or push has occurred. Full-size
+hardware acceptance from job9620918 is prior supplied evidence; the new
+allocation repeats integrated acceptance and timing before science training.
+
+## November 25 checkpointed walltime recovery (SPEC/v4, superseded option)
+
+User-supplied Oscar job9620918 measurements (not a new remote inspection):
+
+| Component | Estimate |
+|---|---:|
+| Already elapsed | 7.69 h |
+|20 training epochs | 30.77 h |
+| Validation, including selected evaluation | 1.71 h |
+| Selected TRAIN export | 0.64 h |
+| Nominal total | 40.81 h |
+| Total with30% future-work margin and1h reserve | 51.75 h |
+| Ten epochs with the same preparation/margins/export allowance | 30.70 h |
+
+The old guard correctly stopped before epoch1. Full-size repaired backward,
+memory, parity, miniature, stress and deployment phases completed first. GPU
+peak was27,668,450,816 bytes and the measured host peak121,224,904,704 bytes.
+The fixed timing hash is1b8cb8d35b6d554b93964e23a6671ff0ebe64b3cabaec15c612756a53b5183dc.
+This supports two allocations without reducing the timing safety margin.
+
+New local coverage: v4 immutable lineage/claims, identical recipe/population,
+five-job/four-fit dependency graph, registration preserving previous specs,
+unchanged timing formula, and exact window-bound job/epoch receipts. Production
+worker tests verify no first-half report or bank, blocked premature continuation,
+successful20-epoch publication, interrupted handoff, interrupted epoch13,
+export-only recovery and resubmission skipping the completed first segment.
+Installed-Weaver tiny-model CPU and CUDA training compare10+10 to uninterrupted20:
+every model/BatchNorm state, optimizer state, CPU/CUDA RNG and non-timing epoch
+metric matches bit-for-bit; random numbers are deliberately consumed between
+allocations. These are local technical tests, not full-population training.
+
+The new11 tests passed in47.20s; the earlier focused91 passed in365.07s.
+The first development test attempts corrected two fixture issues: the model
+configuration helper name and aliasing an audit snapshot into AdamW's mutable
+CPU state. Production guards/tolerances were not relaxed.
+Final combined regression after the code changes: **103 passed in384.41s**.
+Log: `artifacts/testing/wide_segments_final_01.log`; unique test workspace:
+`artifacts/testing/wide_segments_final_01`. The four test files are
+`test_luka_sixclass_wide_b256_{oscar,recovery,convolution,segments}.py`.
+Real Bash syntax and scoped `git diff --check` also pass; the detached-shell
+test covers the new time mode. No production code changes followed this run.
+
+No additional Tigris/Oscar miniature was submitted. Both new allocations repeat
+integrated real-data acceptance and timing on Oscar. Queue-ready means the
+implementation and local checks are prepared, not that the new remote execution
+has already completed or that the timing estimate guarantees elapsed runtime.
+
 ## November 25 input-gradient recovery evidence (SPEC/v3)
 
 User-supplied diagnostic9618095 identifies `ConvolutionBackward0` output0 as

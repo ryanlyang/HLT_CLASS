@@ -26,7 +26,8 @@ def progress(spec,stage):
     campaign.check(spec,live=False)
     spec=execution_recovery.origin(spec,stage)
     if stage not in c.STAGES:raise ValueError('Unregistered stage')
-    jobs=[r['job'] for r in campaign.accepted_jobs(spec) if r['task']=='train_'+stage]
+    records=sorted((r for r in campaign.accepted_jobs(spec) if c.task_stage(r['task'])==stage),key=lambda r:int(r['job']))
+    jobs=[r['job'] for r in records]
     print('Stage:',stage,'; saved jobs:',', '.join(jobs) or 'not submitted')
     print(f"Same {c.COUNTS['validation']:,} six-class in-range validation jets; selection excludes outside-range diagnostics.")
     lo,hi=(selected_metadata(spec,s) for s in ('M0HLT','OFFLINE'))
@@ -40,6 +41,8 @@ def progress(spec,stage):
         r=load_json(path);c.validate(r,'EPOCH_COMMIT')
         if r['parents']['spec']!=spec['content_hash'] or r['stage']!=stage or r['epoch']!=seen+1 or r['job_id'] not in jobs:
             raise ValueError('Saved epoch/job binding differs')
+        first,last=c.epoch_window(spec,next(j['task'] for j in records if j['job']==r['job_id']))
+        if not first<=r['epoch']<=last:raise ValueError('Epoch outside registered allocation window')
         seen+=1;training.check_row(r['row'],seen,stage,c.COUNTS['validation'])
         v=r['row']['validation'];s=r['row']['sampling']
         full=r['row']['full_validation'];rec=None
@@ -50,7 +53,8 @@ def progress(spec,stage):
         rec='n/a' if rec is None else f'{rec:.2f}'
         print(f'{seen:5d} {v["accuracy"]:11.6f} {recovery(v,"accuracy"):>10} {v["macro_ovr_auc"]:12.8f} {recovery(v,"macro_ovr_auc"):>10} {full["macro_ovr_auc"]:12.8f} {rec:>11} {r["row"]["full_hbb"]["auc"]:13.8f} {s["unique_jets"]:13,d} {100*s["repeated_draws"]/s["draws"]:11.1f}')
     if jobs:
-        log=Path(spec['root'])/f'train_{stage}-{jobs[-1]}.out'
+        running=next((j for j in reversed(records) if (Path(spec['root'])/f'{j["task"]}-{j["job"]}.out').exists()),records[-1])
+        log=Path(spec['root'])/f'{running["task"]}-{running["job"]}.out'
         if log.exists():
             lines=[x for x in log.read_text(errors='replace').splitlines() if x.startswith('BALANCED progress ')]
             if lines:print('Latest marker:',lines[-1])

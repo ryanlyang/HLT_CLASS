@@ -25,6 +25,7 @@ GPUS = {'l40s': ('l40s', 'NVIDIA L40S')}
 SITE = dict(cluster='slurmctld', partition='gpu', account='default', qos='norm-gpu')
 AUTH = 'AUTHORIZE_SIXCLASS_WIDE_B256_OSCAR_V1'
 RESULT_GIB = 18
+LONG_CONCAT_MINUTES = 4320
 TRANSFER_HASH = '7034f2153e585068000185ce4c1e7fb3e61fe96e5bbfeb5e650608a150071ae4'
 DATASET = '/oscar/scratch/rlyang/datasets/luka_qcdrun2com_higgs2p_sb_v1'
 
@@ -32,14 +33,14 @@ DATASET = '/oscar/scratch/rlyang/datasets/luka_qcdrun2com_higgs2p_sb_v1'
 def artifact(kind, *, parents=None, version=1, **fields):
     if set(fields).intersection(('contract', 'schema_version', 'parents', *FLAGS)):
         raise ValueError('Reserved artifact fields')
-    if version!=1 and (kind!='SPEC' or version not in (2,3)):raise ValueError('Unsupported artifact version')
+    if version!=1 and (kind!='SPEC' or version not in (2,3,4,5)):raise ValueError('Unsupported artifact version')
     return with_content_hash(dict(contract=f'{PREFIX}_{kind}/v{version}', schema_version=version,
                                   parents=dict(parents or {}), **FLAGS, **fields))
 
 
 def validate(value, kind, parents=None):
     version=value.get('schema_version') if kind=='SPEC' else 1
-    if version not in (1,2,3):raise ValueError('Unsupported spec version')
+    if version not in (1,2,3,4,5):raise ValueError('Unsupported spec version')
     validate_content_hash(value, expected_contract=f'{PREFIX}_{kind}/v{version}', expected_schema_version=version)
     if any(value.get(k) != v for k,v in FLAGS.items()):
         raise ValueError('Scientific scope differs')
@@ -100,5 +101,32 @@ def recipe():
     return artifact('RECIPE', **fields)
 
 
-def tasks():
-    return donor.tasks()
+def tasks(version=1):
+    original=donor.tasks()
+    if version!=4:return original
+    result={}
+    for task,dependencies in original.items():
+        if task=='train_CONCAT':
+            result['train_CONCAT_part1']=dependencies
+            dependencies=['train_CONCAT_part1']
+        result[task]=dependencies
+    return result
+
+
+def task_stage(task):
+    if task not in tasks(4):raise ValueError('Unregistered task')
+    return 'CONCAT' if task=='train_CONCAT_part1' else task.removeprefix('train_')
+
+
+def valid_minutes(version,minutes):
+    if set(minutes)!=set(tasks(version)):return False
+    return all(type(value)==int and
+        (value==LONG_CONCAT_MINUTES if version==5 and task=='train_CONCAT' else 60<=value<=2880)
+        for task,value in minutes.items())
+
+
+def epoch_window(spec,task):
+    if task not in tasks(spec['schema_version']):raise ValueError('Task not registered by this spec')
+    if spec['schema_version']==4 and task_stage(task)=='CONCAT':
+        return (1,10) if task=='train_CONCAT_part1' else (11,20)
+    return (1,EPOCHS)

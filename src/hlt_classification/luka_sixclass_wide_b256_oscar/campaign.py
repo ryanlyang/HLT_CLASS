@@ -65,7 +65,9 @@ def source(project,commit):
         'scripts/bootstrap_luka_sixclass_wide_b256_oscar.sh'}
     required|={'scripts/recover_luka_sixclass_wide_b256_oscar.sh',
                'tests/test_luka_sixclass_wide_b256_recovery.py',
-               'tests/test_luka_sixclass_wide_b256_convolution.py'}
+               'tests/test_luka_sixclass_wide_b256_convolution.py',
+               'tests/test_luka_sixclass_wide_b256_segments.py',
+               'tests/test_luka_sixclass_wide_b256_long.py'}
     if not required<=tracked:raise ValueError('Commit all campaign implementation files first')
     return snapshot
 
@@ -107,7 +109,7 @@ def storage(root,available_gib,*,resume=False):
                 committed_output_bytes_credited=own)
 
 
-def create(dataset,root,project,commit,environment,*,gpu='l40s',available_gib,minutes=2880,recover=None):
+def create(dataset,root,project,commit,environment,*,gpu='l40s',available_gib,minutes=2880,recover=None,single_concat=False):
     dataset,root,project,environment=[Path(p).resolve() for p in (dataset,root,project,environment)]
     for i,a in enumerate((dataset,root,project)):
         for b in (dataset,root,project)[i+1:]:
@@ -115,6 +117,8 @@ def create(dataset,root,project,commit,environment,*,gpu='l40s',available_gib,mi
     if root.exists():raise FileExistsError('Use a fresh campaign root')
     locations(dataset,root,project,environment)
     if gpu not in c.GPUS or type(minutes)!=int or not 60<=minutes<=2880:raise ValueError('Unsupported GPU/walltime')
+    if single_concat and (recover is None or load_json(recover).get('schema_version')!=3):
+        raise ValueError('Single CONCAT recovery requires the failed SPEC/v3 parent')
     if Path(sys.prefix).resolve()!=environment:raise ValueError('Registration must use the intended environment')
     src=source(project,commit);env=runtime()
     # Force actual imports; a partially purged installation can still have metadata.
@@ -128,7 +132,16 @@ def create(dataset,root,project,commit,environment,*,gpu='l40s',available_gib,mi
     extra={};version=1
     if recover is not None:
         from . import recovery
-        if load_json(recover).get('schema_version')==2:
+        if load_json(recover).get('schema_version')==3:
+            if single_concat:
+                from . import long_recovery
+                old,record,gradient,timing=long_recovery.authenticate(Path(recover))
+                extra=dict(gradient_recovery=gradient,long_recovery=timing);version=5
+            else:
+                from . import time_recovery
+                old,record,gradient,timing=time_recovery.authenticate(Path(recover))
+                extra=dict(gradient_recovery=gradient,time_recovery=timing);version=4
+        elif load_json(recover).get('schema_version')==2:
             from . import gradient_recovery
             old,record,gradient=gradient_recovery.authenticate(Path(recover))
             extra=dict(gradient_recovery=gradient);version=3
@@ -145,11 +158,13 @@ def create(dataset,root,project,commit,environment,*,gpu='l40s',available_gib,mi
         shutil.copytree(old['population_root'],root/'population')
         pop=load_json(root/'population/population.json')
         if pop!=old['population']:raise ValueError('Copied population differs')
+    walltimes={task:minutes for task in c.tasks(version)}
+    if version==5:walltimes['train_CONCAT']=c.LONG_CONCAT_MINUTES
     spec=c.artifact('SPEC',version=version,**extra,root=str(root),dataset=str(dataset),project=str(project),commit=commit,source=src,
         environment_dir=str(environment),environment=env,gpu=gpu,foundation_producer=producer,
         population=pop,population_root=str(root/'population'),recipe=c.recipe(),nodes={s:c.node(s) for s in c.STAGES},
-        counts=dict(c.COUNTS),cpus=6,memory_mb=192000,minutes={task:minutes for task in c.tasks()},
-        preparation_workers=4,candidate_workers=3,storage=quota,tasks=c.tasks(),
+        counts=dict(c.COUNTS),cpus=6,memory_mb=192000,minutes=walltimes,
+        preparation_workers=4,candidate_workers=3,storage=quota,tasks=c.tasks(version),
         transfer_manifest_sha256=canonical_sha256(manifest),execution_site=c.SITE,
         backend=backend())
     check(spec,live=False)
@@ -161,9 +176,9 @@ def check(spec,*,live=True):
     c.validate(spec,'SPEC');c.validate(spec['population'],'POPULATION',
         dict(foundation=c.PARENT_HASH, role_population=c.ROLE_POPULATION_HASH))
     if (spec['counts']!=c.COUNTS or spec['recipe']!=c.recipe() or spec['nodes']!={s:c.node(s) for s in c.STAGES}
-            or spec['tasks']!=c.tasks() or spec['gpu'] not in c.GPUS or spec['cpus']!=6 or spec['memory_mb']!=192000
+            or spec['tasks']!=c.tasks(spec['schema_version']) or spec['gpu'] not in c.GPUS or spec['cpus']!=6 or spec['memory_mb']!=192000
             or spec['preparation_workers']!=4 or spec['candidate_workers']!=3
-            or set(spec['minutes'])!=set(c.tasks()) or any(type(m)!=int or not 60<=m<=2880 for m in spec['minutes'].values())
+            or not c.valid_minutes(spec['schema_version'],spec['minutes'])
             or spec['population']['policy']!=c.population_policy()
             or spec['population']['counts']!=dict(c.COUNTS,unused=c.UNUSED)
             or spec['population']['outside_counts']!=c.OUTSIDE
@@ -172,14 +187,22 @@ def check(spec,*,live=True):
             or spec['storage']['new_results_budget_bytes']!=c.RESULT_GIB*2**30):
         raise ValueError('Scientific/resource registration differs')
     if Path(spec['population_root'])!=Path(spec['root'])/'population':raise ValueError('Population root differs')
-    if spec['schema_version'] in (2,3):
+    if spec['schema_version'] in (2,3,4,5):
         from . import recovery
         recovery.validate(spec)
     elif 'execution_recovery' in spec:raise ValueError('Recovery requires SPEC/v2')
-    if spec['schema_version']==3:
+    if spec['schema_version'] in (3,4,5):
         from . import gradient_recovery
         gradient_recovery.validate(spec)
     elif 'gradient_recovery' in spec:raise ValueError('Direct pointwise gradients require SPEC/v3')
+    if spec['schema_version']==4:
+        from . import time_recovery
+        time_recovery.validate(spec)
+    elif 'time_recovery' in spec:raise ValueError('Segmented execution requires SPEC/v4')
+    if spec['schema_version']==5:
+        from . import long_recovery
+        long_recovery.validate(spec)
+    elif 'long_recovery' in spec:raise ValueError('Single long allocation requires SPEC/v5')
     if live:
         locations(spec['dataset'],spec['root'],spec['project'],spec['environment_dir'])
         if source(spec['project'],spec['commit'])!=spec['source']:raise ValueError('Source drift')
@@ -199,7 +222,7 @@ def accepted_jobs(spec,*,require_unambiguous=True):
                 continue
             r=load_json(receipt);c.validate(r,'SUBMITTED',dict(spec=spec['content_hash']))
             if (r['task']!=saved['task'] or r['command']!=saved['command'] or r['plan']!=saved['plan']
-                    or r['task'] not in c.tasks() or not re.fullmatch('[1-9][0-9]*',r['job'])):
+                    or r['task'] not in c.tasks(spec['schema_version']) or not re.fullmatch('[1-9][0-9]*',r['job'])):
                 raise ValueError('Submitted job intent differs')
             result.append(r)
     if len({r['job'] for r in result})!=len(result):raise ValueError('Duplicate scheduler job')
@@ -219,9 +242,21 @@ def remaining(spec,resume):
     jobs=accepted_jobs(spec)
     if jobs and not resume:raise FileExistsError('Already submitted; use explicit resume only after terminal accounting')
     complete={}
-    if spec['schema_version'] in (2,3):
+    if spec['schema_version'] in (2,3,4,5):
         from . import recovery
-        if spec['schema_version']==3:
+        if spec['schema_version']==5:
+            from . import long_recovery
+            old,record,gradient,timing=long_recovery.authenticate(Path(spec['long_recovery']['previous_spec']['path']))
+            if gradient!=spec['gradient_recovery'] or timing!=spec['long_recovery']:
+                raise ValueError('Long recovery evidence changed')
+        elif spec['schema_version']==4:
+            from . import time_recovery
+            old,record,gradient,timing=time_recovery.authenticate(Path(spec['time_recovery']['previous_spec']['path']))
+            if gradient!=spec['gradient_recovery'] or timing!=spec['time_recovery']:
+                raise ValueError('Time recovery evidence changed')
+        elif spec['schema_version']==3:
+            if (Path(spec['root'])/'concat_time_recovery_claim_v1.json').exists():
+                raise ValueError('This execution was superseded by the time recovery')
             from . import gradient_recovery
             old,record,gradient=gradient_recovery.authenticate(Path(spec['gradient_recovery']['previous_spec']['path']))
             if gradient!=spec['gradient_recovery']:raise ValueError('Kernel recovery evidence changed')
@@ -240,7 +275,14 @@ def remaining(spec,resume):
                 row=states[result['receipt']['job_id']]
                 if row[1].split()[0]!='COMPLETED' or row[2]!='0:0':raise ValueError('Published stage did not exit successfully')
                 complete[stage]=result['receipt']['content_hash']
-    tasks=[t for t in c.tasks() if t.removeprefix('train_') not in complete]
+    tasks=[t for t in c.tasks(spec['schema_version']) if c.task_stage(t) not in complete]
+    if resume and spec['schema_version']==4 and 'train_CONCAT_part1' in tasks:
+        marker=Path(spec['root'])/'train_CONCAT/segments/part1.json'
+        if marker.exists():
+            segment=artifacts.segment_completed(spec);row=states[segment['job_id']]
+            if row[1].split()[0]!='COMPLETED' or row[2]!='0:0':
+                raise ValueError('Completed segment did not exit successfully')
+            tasks.remove('train_CONCAT_part1')
     if not tasks:raise ValueError('All six stages are already published')
     return tasks,complete
 
@@ -253,7 +295,7 @@ def commands(spec,tasks):
             f'--gres=gpu:{c.GPUS[spec["gpu"]][0]}:1',f'--time={spec["minutes"][task]}',
             '--job-name=luka6b256_'+task,f'--output={root}/{task}-%j.out',f'--chdir={spec["project"]}',
             '--export=NONE','--kill-on-invalid-dep=yes','--comment='+spec['content_hash']+':'+task]
-        dependencies=[x for x in c.tasks()[task] if x in tasks]
+        dependencies=[x for x in c.tasks(spec['schema_version'])[task] if x in tasks]
         if dependencies:args+=['--dependency=afterok:'+':'.join('{'+x+'}' for x in dependencies)]
         args+=[script,spec['project'],str(root/'campaign_spec.json'),task]
         out.append(dict(task=task,dependencies=dependencies,command=args))
@@ -295,7 +337,7 @@ def queue(spec,*,execute=False,authorization=None,resume=False,available_gib=Non
     if execute and authorization!=c.AUTH:raise PermissionError('Exact six-fit authorization required')
     check(spec)
     with submission_lock(spec['root']) if execute else nullcontext():
-        if spec['schema_version'] in (2,3) and execute:
+        if spec['schema_version'] in (2,3,4,5) and execute:
             from . import recovery
             old=recovery.validate(spec)
             with submission_lock(old['root']):
@@ -308,11 +350,18 @@ def _queue(spec,*,execute=False,authorization=None,resume=False,available_gib=No
     budget=spec['storage']['declared_available_gib'] if available_gib is None else available_gib
     quota=storage(root,budget,resume=True)
     plan=c.artifact('PLAN',parents=dict(spec=spec['content_hash']),commands=commands(spec,tasks),
-                    completed=complete,resume=resume,storage=quota,scientific_fits=len(tasks),preflight_jobs=0)
+                    completed=complete,resume=resume,storage=quota,
+                    scientific_fits=len({c.task_stage(t) for t in tasks}),preflight_jobs=0)
     print(__import__('json').dumps(plan,indent=2),flush=True);site(plan['commands'])
     if not execute:return plan
     if authorization!=c.AUTH:raise PermissionError('Exact six-fit authorization required')
-    if spec['schema_version']==3:
+    if spec['schema_version']==5:
+        from . import long_recovery
+        long_recovery.claim(spec)
+    elif spec['schema_version']==4:
+        from . import time_recovery
+        time_recovery.claim(spec)
+    elif spec['schema_version']==3:
         from . import gradient_recovery
         gradient_recovery.claim(spec)
     elif spec['schema_version']==2:

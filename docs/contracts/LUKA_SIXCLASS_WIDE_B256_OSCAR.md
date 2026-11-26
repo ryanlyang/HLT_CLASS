@@ -1,11 +1,11 @@
 # Six-class wide-range batch-256 Oscar contract v1
 
-Execution extensions SPEC/v2 and SPEC/v3 below retain the v1 scientific recipe.
+Execution extensions SPEC/v2 through SPEC/v5 below retain the v1 scientific recipe.
 
 Scientific authority: [active plan](../plans/LUKA_SIXCLASS_WIDE_B256_OSCAR_PLAN.md).
 Owned artifacts use `LUKA_SIXCLASS_WIDE_B256_OSCAR_<KIND>/v1`, schema_version 1,
 canonical content hashes, explicit parents and development-validation/sealed
-test flags. Historical schema namespaces remain unchanged and are rejected.
+test flags. Other campaign namespaces remain distinct and are rejected.
 
 ## Frozen inputs
 
@@ -84,6 +84,67 @@ CONCAT storage counters; full-objective acceptance remains mandatory. Probe
 models never initialize the scientific model. A checksum-bound
 `RECOVERY_CLAIM/v1` under the parent, protected by its submission lock, permits
 only one recovery spec to submit. Ambiguous scheduler receipts fail closed.
+
+## Single long CONCAT allocation: SPEC/v5 (current)
+
+`LUKA_SIXCLASS_WIDE_B256_OSCAR_SPEC/v5` adds `long_recovery`, a
+`LONG_RECOVERY/v1` record binding the exact failed v3 spec/source/job and
+startup evidence identified in the v4 section below. It fixes a single
+CONCAT epoch window1--20, one GPU, six CPUs,4,320 minutes, RAM-only input
+preparation and unchanged conservative timing margins. The full20-epoch
+estimate is recomputed from the bound measurements and must fit72h.
+
+Tasks are the original six-node DAG; only four unfinished fits are submitted.
+The original two baseline results remain authenticated under their v1 parent.
+All non-CONCAT resource budgets must match the original parent, including
+48-hour student limits. V1--v4 cannot silently accept the longer request.
+The `--single-concat` registration option requires the exact failed v3 parent;
+`long-detach` selects this option. New output/source roots are mandatory.
+
+V5 STARTUP binds task, full epoch window, prior committed count and measured
+remaining epochs. Timing is checked against the exact registered allocation.
+No SEGMENT receipt is produced or needed. All20 epoch commits, selected
+evaluation and TRAIN-bank publication complete inside one normal allocation;
+explicit same-source recovery after an interruption restores committed state.
+
+V4 and v5 use the same `concat_time_recovery_claim_v1.json` under the v3 parent
+and the same submission lock. Either alternative excludes the other. The old
+failure/spec/evidence remain unchanged. Recipe/population/result/bank meanings
+and final-test seals are unchanged.
+
+## Checkpointed CONCAT execution: SPEC/v4 (superseded option)
+
+`LUKA_SIXCLASS_WIDE_B256_OSCAR_SPEC/v4` adds `time_recovery`, a
+`TIME_RECOVERY/v1` record binding exact previous SPEC/v3 hash
+`2fea86c9d8109a20d1738b096095d3287630babdf03407f3b4c265809f5cb8fc`,
+commit `2bf345f96ffd45f46f0cd9e6934798af62349401`, job9620918 failure,
+early acceptance and five startup phase files. The measurements hash is
+`1b8cb8d35b6d554b93964e23a6671ff0ebe64b3cabaec15c612756a53b5183dc`.
+The policy fixes windows1--10 and11--20, with complete epoch-boundary state
+continuation, twenty-epoch selection, final export only and unchanged timing
+margins. Recipe/population/epoch/result/bank contracts retain their meanings.
+
+The DAG adds `train_CONCAT_part1`; final `train_CONCAT` depends on it. Both
+allocations write attempt evidence under `train_CONCAT/runs/JOBID`, shared
+completion-last epoch markers under `train_CONCAT/epochs`, and separate logs
+named for their actual tasks. Epoch receipts must belong to a submitted job
+whose registered window contains that epoch. Final result publication still
+requires the final task, all20 epochs and complete teacher export.
+
+`SEGMENT/v1` at `train_CONCAT/segments/part1.json` binds the ten epoch receipts,
+fit parents, first-task job, startup/view checksums and `teacher_published=false`.
+All checkpoint bytes and acceptance evidence are checked before continuation.
+V4 STARTUP records its task, window, prior committed count and measured remaining
+epochs. A resumed half may finish from its last complete epoch; if a crash occurs
+after epoch10 but before the segment marker, the first task can finalize it
+without repeating optimizer updates. The final task also supports export-only
+continuation after20 commits. No partial TRAINING_REPORT or BANK is published.
+
+`concat_time_recovery_claim_v1.json` under the failed v3 root allows only one
+new execution, serialized using the original baseline parent's submission lock.
+The earlier memory/gradient claims remain immutable. New code refuses to resume
+a v3 execution already superseded by this claim. Registration requires terminal
+accounting for the prior four submissions and zero committed tail epochs.
 
 ## Pointwise input-gradient recovery: SPEC/v3
 

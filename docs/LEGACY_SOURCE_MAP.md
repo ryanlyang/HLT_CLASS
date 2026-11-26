@@ -1,5 +1,1138 @@
 # Legacy Donor-Source Map
 
+## 2026-11-25: Single-allocation CONCAT recovery
+
+Owned additions: `luka_sixclass_wide_b256_oscar/long_recovery.py` and
+`tests/test_luka_sixclass_wide_b256_long.py`. They reuse this package's existing
+v3 failure/lineage and full-state recovery machinery, extending the local v4
+proposal from predecessor `2bf345f96ffd45f46f0cd9e6934798af62349401`.
+No new donor migration; all86 frozen donor entries are unchanged. The only
+resource change is CONCAT's72h allocation; scientific model code is unchanged.
+
+## 2026-11-25: Wide batch256 checkpointed walltime recovery
+
+Owned additions: `luka_sixclass_wide_b256_oscar/time_recovery.py` and the
+segmented execution test file. Existing owned training/artifact/worker/spec/
+submission/inspection adapters are extended from predecessor
+`2bf345f96ffd45f46f0cd9e6934798af62349401`. No additional donor file is migrated;
+the86-entry donor manifest, scientific recipe and population remain unchanged.
+Continuation reuses this package's existing full optimizer/model/RNG checkpoints.
+
+## 2026-11-25: Wide batch256 pointwise input-gradient repair
+
+Owned additions: `luka_sixclass_wide_b256_oscar/pair_convolution.py` and
+`gradient_recovery.py`; adapters extend the same owned model/parity/worker/
+registration/recovery package. Predecessor is
+`44aa1522d4720fd8045e55d16f977689bd7df0aa`; original science source remains
+`d534fcfea4f11a4bc845127d03c31b779e391a8c`. No additional internal donor file
+is migrated and the86-entry donor manifest is unchanged. Existing lossless
+storage/parity helpers still come from `jetclass2_delphes/concat_k2_model.py`
+at `de6e9309737a781275cade1ee30758b1b84eacc6`.
+
+The new derivative is implemented locally using PyTorch operations, with native
+forward and parameter backward. Reference algorithm/dispatch: PyTorch v2.5.1
+`aten/src/ATen/native/cuda/ConvolutionMM2d.cu` and
+`aten/src/ATen/native/Convolution.cpp`; no external source file is copied or
+runtime package patched. See the linked primary sources and measured parity in
+[validation evidence](LUKA_SIXCLASS_WIDE_B256_OSCAR_VALIDATION.md).
+
+## 2026-11-25: Wide batch256 CONCAT memory recovery
+
+Owned repair: `luka_sixclass_wide_b256_oscar/{pair_storage,recovery,early_memory}.py`
+and its worker/spec/submission/inspection adapters. Original campaign commit:
+`d534fcfea4f11a4bc845127d03c31b779e391a8c`. Reused implementation donor:
+`src/hlt_classification/jetclass2_delphes/concat_k2_model.py` at
+`de6e9309737a781275cade1ee30758b1b84eacc6`, added to the owned donor manifest
+(86 pinned files). Its storage pack/unpack helpers preserve native tensor
+shape, dtype, physical storage span and strides. Its instance-local hook and
+three-step parity design are adapted to the native six-output CE classifier;
+the old K2 model, recipe and runtime are not changed. Early witness reads reuse
+the owned authenticated scalar roles and ROOT view builder. No new science
+recipe or population is introduced. SPEC/v2 and EXECUTION_RECOVERY/EARLY_MEMORY/
+RECOVERY_CLAIM v1 explicitly distinguish operational recovery from the old run.
+
+## 2026-11-25: Full D20 wide-population input-field repair
+
+Repair base: `0051dc8e0da4b9e791d9a2b6fbf7ba9b26318267`.
+Changed the owned `luka_d20_full_hydra/inputs.py` adapter's four stale
+`particles` lookups to the imported wide population's existing `role_particles`
+field. The596 pinned donor files and18 original adapter origins below remain
+unchanged. No new scientific schema, recipe or population identity is introduced.
+
+The added full input-builder regression reuses `tests/test_luka_fullstat.py`'s
+real synthetic ROOT fixture and the pinned wide population inventory function;
+it constructs the wide schema without a miniature `particles` alias, then
+checks all three views, numeric payloads, role boundaries, target support and
+frozen TRAIN normalization through publication and reload. No additional donor
+file was migrated. See the [repair evidence](LUKA_D20_FULL_HYDRA_VALIDATION.md).
+
+## 2026-11-24: Full-population three-seed RAW D20 Hydra campaign
+
+Donor commit: `d534fcfea4f11a4bc845127d03c31b779e391a8c`.
+Owned destination: `src/hlt_classification/luka_d20_full_hydra/`.
+
+The18 adapted modules from `luka_balanced_reconstruction_hydra/` are `model.py`,
+`kernel.py`, `inputs.py`, `basket_reader.py`, `normalization.py`, `diagnostics.py`,
+`transport.py`, `startup.py`, `launch.py`, `resources.py`, `artifacts.py`,
+`banks.py`, `training.py`, `readouts.py`, `reporting.py`, `storage.py`, `worker.py`
+and `campaign.py`. Exact original Git-byte hashes are recorded in the owned
+`adapted_donors.json`. These are explicit adapters to the new scientific plan,
+not a mutation of historical recipes/specs or reuse of completed models.
+
+New contracts register the full population, RAW primary, three seeds/23 fits,
+eight single-change variants and92 five-epoch segments. Owned population/sampler
+wrappers reuse `luka_sixclass_wide_b256_oscar/population.py` and `sampling.py` to
+preserve the audited scalar membership/hash and144-cell replacement sampling.
+Kernel/readout adapters use reusable exact matching/VJP, normalization, native
+ParT, selection, optimizer and Gloo/NCCL helpers from the donor's transitive
+closure. All596 repository Python donor files are pinned in `donors.json`;
+all matched the stated commit when this implementation was prepared.
+
+The owned `population_audit.json` bundles the aggregate-only local
+`artifacts/audits/sixclass_wide_b256_oscar_v1/population.json` report, preserving
+canonical content hash57eb7febd6ee6ae2c9729bdcc5f58a4f34dea232d7b1eaf12b7901ca405025d1.
+It includes no row/particle payload and makes metadata tests independent of
+untracked local datasets. Production still replays/authenticates full membership.
+
+Bank export is rewritten as rank-partitioned mmap output plus bounded two-pass
+FP64 moments. Execution adapts complete epoch restarts to explicit five-epoch
+segments with exact teacher/final-stage edges and actual-script dry review.
+The new CLI and launch/queue/Slurm wrappers are thin owned orchestration.
+Synthetic tests reuse `ToyModule`/`ToyNative`, cache/ROOT fixtures and target
+helpers from the donor tests, with production guards replaced explicitly.
+
+New root contract family `LUKA_D20_FULL_HYDRA_*/v1` and owned policy versions
+separate the new semantics. No Fresh_check runtime import, historical source
+edit, historical target reuse or final-test capability is introduced. The
+[plan](plans/LUKA_D20_FULL_HYDRA_PLAN.md) is scientific authority; the
+[runbook](LUKA_D20_FULL_HYDRA_RUNBOOK.md) and
+[evidence](LUKA_D20_FULL_HYDRA_VALIDATION.md) distinguish local readiness from
+pending genuine four-GPU Hydra acceptance.
+
+## 2026-11-24: D20 four-versus-eight GTX1080Ti hardware benchmark
+
+Scientific donor commit: `dc5920f0ed95beeb288816276beb36c485332561`.
+Owned destination: `src/hlt_classification/luka_d20_scaling_hydra/`.
+The CLI imports donor scientific modules from the original immutable worktree
+and loads the new benchmark package separately. No donor file is edited.
+
+- `kernel.py` adapts `luka_balanced_reconstruction_hydra/kernel.py`'s D20 update
+  to explicit batch/world and the new LR. It reuses that package's `model.py`,
+  `contracts.py`, and `artifacts.py` for model construction, RNG domains,
+  optimizer settings and technical checkpoints.
+- `data.py` reuses `luka_balanced_reconstruction_hydra/inputs.py`/`basket_reader.py`
+  for exact authorized-row physical inputs/full reconstruction targets;
+  `luka_new_fullstat_hydra/population.py` and
+  `luka_new_balanced_hydra/population.py` for authenticated scalar roles and
+  unused-only extension; and `jetclass2_delphes/cache.py` for ragged batches.
+- The kernel imports `luka_r24_curriculum_hydra/kernel.py`'s runtime solver
+  configuration, explicit gradient SUM and dropout control;
+  `luka_next_supervision_hydra/reconstruction_training.py`'s exact chunked VJP;
+  `luka_reconstruction_stability_hydra/optimization.py`'s isolated RNG;
+  `luka_fullstat_readout/training.py`'s AdamW construction; and
+  `luka_reconstruction_benchmark/kernel.py`'s complete numerical snapshots.
+- `runner.py` reuses `luka_subclass_ddp_hydra/distributed.py`'s base Context
+  and `operations/hydra_reconstruction_gpu_diagnostic.py`'s known-passing Gloo
+  control/NCCL tensor adapter. The Slurm wrapper sources the absolute original
+  `sbatch/luka_balanced_reconstruction_hydra_common.sh` runtime helper.
+- Shared `data/cache_contracts.py`, `cms_proxy_ladder/contracts.py`,
+  `provenance.py` and `luka_fullstat_multiview/execution.py` supply canonical
+  hashes, file/source references, atomic publication and allocation parsing.
+- `configs/operations/balanced_reco_dc5920f0_normalization.json` supplies the
+  already qualified historical TRAIN normalizer, independently hash pinned.
+  This record was added in recovery commit
+  `de6e9309737a781275cade1ee30758b1b84eacc6`; it is part of the new benchmark's
+  tracked closure, not assumed to exist in the original scientific worktree.
+
+New orchestration, selection, projections, wrappers and documentation are
+owned benchmark work. Tests reuse synthetic fixtures from
+`test_luka_balanced_reconstruction_hydra.py`, `test_luka_direct_reconstruction.py`,
+`test_luka_sixclass_balanced_oscar.py`, and `test_luka_fullstat.py` at the same
+scientific donor; test-only production guards are replaced explicitly.
+The `LUKA_D20_SCALING_HYDRA_*/v1` namespace marks all evidence benchmark-only,
+without altering a historical scientific contract or releasing full training.
+
+## 2026-11-23: New-data six-class wide-range batch-256 Oscar ladder
+
+Donor commit: `de6e9309737a781275cade1ee30758b1b84eacc6`.
+Owned destination: `src/hlt_classification/luka_sixclass_wide_b256_oscar/`.
+
+- From `luka_sixclass_balanced_oscar/`: `__init__.py`, `artifacts.py`, `banks.py`,
+  `campaign.py`, `contracts.py`, `contrastive.py`, `contrastive_parallel.py`,
+  `contrastive_reference.py`, `inspect.py`, `population.py`, `runtime.py`,
+  `sampling.py`, `views.py`, `worker.py`.
+- From `luka_sixclass_low_lr_oscar/`: `model.py`, `training.py`, `reporting.py`,
+  `startup.py` (CE-only classifiers, lower LR integration, per-epoch outside
+  validation and diagnostic Hbb logic; adapted to all six fresh fits).
+- Adapted `scripts/luka_sixclass_balanced_oscar.py`,
+  `scripts/{bootstrap,launch,queue}_luka_sixclass_balanced_oscar.sh`,
+  `sbatch/{run_luka_sixclass_balanced_oscar,luka_sixclass_balanced_oscar_common}.sh`,
+  and `tests/test_luka_sixclass_balanced_oscar.py` to the corresponding new names.
+- Transitive reusable sources and the precise donor hashes are exhaustively
+  listed in the owned `donors.json` (85 files at the stated commit). Historical
+  role-extension and initialization/RNG domains remain pinned; no Fresh_check
+  runtime import or historical teacher/checkpoint reuse was introduced.
+
+New namespace `LUKA_SIXCLASS_WIDE_B256_OSCAR_*/v1` binds range200?2600,
+2488148draws/B256/LR1e-4/20epochs, six fresh nodes, mainCE-only, and per-epoch
+pooled validation. Scientific changes and explicit authority reconciliation are
+in `docs/plans/LUKA_SIXCLASS_WIDE_B256_OSCAR_PLAN.md`; validation/runbook/contract
+are owned new documents. No prior scientific schema was changed.
+
+## 2026-11-23: Recovery batch-script submission correction
+
+Owned operations/hydra_reconstruction_normalization_recovery.py adapts its
+de6e9309737a781275cade1ee30758b1b84eacc6 orchestration to submit the actual
+shebang script directly and dry-review that same script before cancellations.
+SUBMISSION_RESPONSE/v1 adds intent-bound scheduler response evidence. No donor
+science, model, target, population, normalization, runtime or 531 pinned files
+changed. The original dc5920f0 scientific source and failed repair records
+remain immutable; corrected source runs a new commit-derived recovery root.
+
+## 2026-11-23: Frozen TRAIN normalizer and legacy execution adapter
+
+Owned normalization.py plus inputs.py/resources.py/worker.py adapt the balanced
+reconstruction source at dc5920f0ed95beeb288816276beb36c485332561. Statistics and
+target definitions are unchanged; INPUT_EXECUTION_POLICY/v2 binds exact frozen
+application and separately checked observed moments. NORMALIZATION_EXECUTION_
+POLICY/v1 and NORMALIZATION_COMPARISON/v1 record the execution semantics.
+
+New operations/hydra_reconstruction_normalization_recovery.py, CLI, queue and
+Slurm wrapper reuse that commit's campaign.py/resources.py/artifacts.py/inputs.py/
+worker.py/training.py/launch.py and original common shell through the pinned
+execution checkout. Only the owned new normalization/input-publication modules
+are loaded externally by hash. Pool functions stay in original modules so spawn
+can import them. New fit parents bind repair source and comparison identity.
+The original source/spec/results and all531 frozen scientific donors remain
+unchanged. No Fresh_check runtime import or migrated legacy scientific file.
+The dedicated recovery v1 artifact family records normalizer replay, reviewed
+commands, pending-only cancellation and replacement submission lineage.
+
+configs/operations/balanced_reco_dc5920f0_normalization.json is an exact
+operator-supplied TRAIN metadata capture from running R22 job 219510 on
+2026-11-23, not migrated source. Its canonical content hash matches the
+original qualification 219148 normalizer exactly. The queue wrapper uses
+this source-bound candidate to avoid another normalization input replay.
+
+## 2026-11-21: Pin observed Hydra no-P2P transport
+
+New owned luka_balanced_reconstruction_hydra/transport.py records the passing
+operator-provided diagnostic219052 with helper SHA
+4a19da6c85172343141bbfbc43fa494bad59482439be6edee2f8435c56bf0466 and original
+scientific donor a2b634c7a4406f24f6a11422f24fdb76b5a1c7ca. Owned common shell,
+launch.py/startup.py/worker.py adapt the prior control-only repair to pin
+NCCL_P2P_DISABLE=1 before GPU use. The original standalone diagnostic helper,
+scientific donor Context/kernel and all531 donor-pinned files are unchanged.
+Versioned GPU_TRANSPORT_POLICY/v1, WORKER_LAUNCH_POLICY/v3 and EARLY_GPU_POLICY/v2
+separate new execution from old specs; objectives and sampler are unchanged.
+
+## 2026-11-21: Full-validation DE000 recovery analysis
+
+New `operations/sixclass_full_recovery.py` and CLI/queue/worker reuse
+`operations/sixclass_hbb_reselection.py`,
+`scripts/{queue_luka_sixclass_hbb.sh,reselect_luka_sixclass_hbb.py}`,
+`sbatch/run_luka_sixclass_hbb.sh` and their tests from donor
+`d946e956138a4add6e8120dab2545af9c89a64f8`. That commit also supplies lower-LR
+`{campaign,artifacts,model,reporting,training,reuse}` modules imported from the
+actual execution checkout. Historical six-class science remains
+`8a25f12653d0bcfefe170273d3f3e0748b4b508f`; the lower-LR donor manifest pins
+reused original source bytes. New semantics are full macro/binary recovery
+with fixed primary-selected oldM0HLT/newOFFLINE anchors, not Hbb reselection.
+No donor training code changed and no Fresh_check import introduced.
+
+## 2026-11-21: Lower-LR three-fit Oscar experiment
+
+Owned `luka_sixclass_low_lr_oscar/{campaign,artifacts,banks,model,startup,
+training,worker,reporting,inspect}.py` and the CLI/launcher/common helper/worker
+adapt the same-named `luka_sixclass_balanced_oscar` files at
+`8a25f12653d0bcfefe170273d3f3e0748b4b508f`. The focused tests adapt that commit's
+`tests/test_luka_sixclass_balanced_oscar.py` fixture and recovery/launcher tests.
+New `contracts.py`, `reuse.py` and queue wrapper own the changed experiment.
+
+Unchanged population/sampling/particle views/contrastive semantics are imported
+from the original package, pinned with the transitive donor manifest already
+used by `luka_sixclass_tail_hydra/donors.json`. The new manifest preserves
+its8a25f126 file hashes and upstream lineage. Original-source subprocess
+authentication validates frozen CONCAT/UE100/DE050; no old OFFLINE target is
+substituted for the freshly trained teacher. Full-Hbb metrics are implemented
+in the new reporting module using pooled probabilities and existing empirical
+rejection semantics, with no import from a legacy checkout. No Fresh_check
+runtime imports or original scientific modules were changed. All changed
+scientific artifacts use the new `LUKA_SIXCLASS_LOW_LR_OSCAR_* /v1` family.
+
+## 2026-11-20: Full-validation Hbb epoch reselection
+
+New `operations/sixclass_hbb_reselection.py` adapts the ordered bounded loader
+from `luka_sixclass_balanced_oscar/views.py` at
+`8a25f12653d0bcfefe170273d3f3e0748b4b508f`, filtering to validation roles before
+calling the original particle reader. It directly reuses that commit's
+`model.py`, `training.py`, `artifacts.py`, `campaign.py`, `population.py` and
+`reporting.py` through the pinned execution checkout. The CLI deliberately
+loads only the new adapter by file location, preserving original science imports.
+No legacy Fresh_check imports, training semantics changes or donor files edited.
+The new SPEC/EPOCH/REPORT v1 analysis namespace distinguishes exploratory
+full-validation binary-Hbb selection from original in-range macro-AUC selection.
+
+## 2026-11-21: Bounded reconstruction GPU communication diagnosis
+
+New operations/hydra_reconstruction_gpu_diagnostic.py reuses the original
+Context and production OFFLINE parity path at
+`a2b634c7a4406f24f6a11422f24fdb76b5a1c7ca`: luka_subclass_ddp_hydra/distributed.py,
+balanced reconstruction campaign.py/kernel.py/resources.py/artifacts.py/model.py.
+Original modules are imported only from their authenticated pinned checkout.
+No scientific donor is changed or copied into the new package. The diagnostic
+HostContext mirrors donor main/all/barrier with an explicit Gloo object group
+and a host barrier after root callbacks; tensor reductions stay on the original
+default NCCL group. Synthetic test inputs
+and transport comparisons are new diagnostic semantics, not scientific targets.
+PowerShell upload/hash/submission follows the existing isolated filesystem
+operation pattern. New v1 diagnostic records never rewrite old execution specs.
+
+Owned balanced reconstruction worker.py/campaign.py/launch.py and thin CLI
+adapt their a2b634c7 versions to use that wrapper without editing frozen donor
+Context/kernel source. New startup.py reuses resources.parity and installed
+Weaver parity with synthetic16-row inputs/1--4 particle targets and canonical
+untrained starts. WORKER_LAUNCH_POLICY/v2, EARLY_GPU_POLICY/ARM/ERROR/completion
+v1 bind the changed technical execution. All scientific recipes and531 pins
+remain unchanged; no Fresh_check import or dependency upgrade introduced.
+
+## 2026-11-21: Balanced reconstruction torchrun launch boundary
+
+Adapted owned worker.py/campaign.py/contracts.py and tests from
+`58b9e655cae6b7becf934c378d8e8bd1dc157e01`. New launch.py centralizes the
+torchrun command/installed-parser check; -- separates launcher flags from rank
+CLI arguments. WORKER_LAUNCH_POLICY/v1 records transport checks and12h technical
+qualification. Scientific48h resources and recipe remain; all531 frozen donor
+files are unchanged. No Fresh_check import, new scientific donor or dependency
+upgrade. Installed local PyTorch2.5.1 parser/elastic runtime supplies technical
+reproduction/acceptance; Windows TCPStore test adaptation is test-only.
+
+## 2026-11-20: Continue partial Hydra clean-slate operation
+
+Adapted owned `operations/hydra_clean_slate.py`, PowerShell uploader and tests
+from `58b9e655cae6b7becf934c378d8e8bd1dc157e01`. New explicit continuation
+records authenticate and extend that filesystem operation without rewriting
+old receipts or mutating its scientific checkout. No scientific donor migration,
+new teacher, particle reader or payload interpretation. Original source, new
+dataset/runtime and shared Git remain protected. Git-failed old source copies
+are retained rather than force removed.
+
+## 2026-11-20: Standalone reconstruction storage and clean-slate operation
+
+Adapted owned campaign/storage/queue modules from
+`ebd15b7e6351f014aec006fca27333a53b37ebbd`: remove the old ladder-record
+dependency/reservation, version STORAGE_POLICY/v2, retain the same scientific
+recipe, reader and all531 pinned donor files. New WORKSPACE_KEEP/v1 is an
+execution keep-set rather than a scientific input/population change.
+
+New `operations/hydra_clean_slate.py` and PowerShell launcher follow the owned
+path/queue/exclusive-intent patterns of `operations/hydra_contrast_key_retirement.py`
+at `1e602e33b8070fd4e1e00d7de7b5e440902f50f5`. The metadata archive and broader
+operator-authorized retirement scope are new; no old scientific payload is
+imported or used as a teacher. The operation keeps common Git history and the
+whole new runtime/dataset, and is separately versioned from prior narrow cleanup.
+
+## 2026-11-20: Finished stability scientific-payload retirement
+
+New standalone `operations/hydra_stability_payload_retirement.py` follows the
+owned-path/hash/exclusive-intent/queue-guard patterns of
+`operations/hydra_contrast_key_retirement.py` at
+`1e602e33b8070fd4e1e00d7de7b5e440902f50f5`; no common-helper runtime import is
+needed. The PowerShell uploader follows the existing standalone cleanup pattern.
+The broader scientific-payload scope is newly operator-authorized, separately
+versioned, and never retroactively applied to earlier technical-only helpers.
+
+Original spec interpretations are read from the source contracts at
+3ccc35ae709c63d8833cb0388c618b53dcde5b9e (stability),
+794b8f8016f9b47a3368bc223cecdf01d4d345f4 (storage recovery),
+d28c403360f7b4662f679f5564529a048d8db5e2 (SOFT recovery), and
+a7f18395b93fe5bd593881b9e378cca3e7a20a49 (completion).
+Scientific modules, source snapshots, models and data contracts are not changed.
+
+## 2026-11-20: Repair balanced reconstruction input execution
+
+Adapted owned `inputs.py` and campaign SPEC checks from
+`53bab0c5e0a31da0d3878e09204d5e5137f80739`. The original reader at that commit
+remains the golden comparison for exact features, vectors and mixed22 target
+payloads/normalization. No frozen scientific donor file or531-file pin changed.
+New `basket_reader.py` implements bounded temporary-buffer reuse through the
+documented Uproot interpretation and basket APIs. Runtime keeps its registered
+installed Uproot version; no dependency is upgraded. This is new adapter code,
+not copied Uproot source. The new INPUT_EXECUTION_POLICY/v1 is separate from
+unchanged scientific recipe/data/model/output contracts.
+
+## 2026-11-19: Balanced reconstruction startup diagnostics
+
+Adapted only the owned balanced-reconstruction CLI, `inputs.py`, `worker.py`,
+`resources.py` and two Slurm helpers from
+`4a264700c749da2b751cf2097d1b3eec4e0fdcd9`. The new `diagnostics.py` uses
+standard-library printing, context management and faulthandler; no scientific
+donor code was migrated or changed. Logging/initial-import deadline changes
+do not modify the scientific recipe or reusable artifact schemas. Original
+source/runtime/payload checks remain. The531 scientific donor hashes stay fixed.
+
+## 2026-11-19: Reconstruction output allowance10GiB ->8GiB
+
+Adapted only `luka_balanced_reconstruction_hydra/contracts.py` and its focused
+test from`1e602e33b8070fd4e1e00d7de7b5e440902f50f5`. This changes the numeric
+initial execution allowance, bound by the existing versioned STORAGE_POLICY
+and SPEC fields. Scientific recipe equality with that commit is tested.
+No new scientific donor migration, schema interpretation or runtime guard
+is introduced. The full initialized inventory4,828,964,049 bytes remains below
+the revised8GiB allowance; protected14GiB and separate2GiB spare stay fixed.
+The new source must register a fresh execution; old immutable specs remain.
+
+## 2026-11-19: Inactive cross-message technical selected weights
+
+New `operations/hydra_cross_message_miniature_retirement.py` loads the exact
+standard-library path/hash/audit/publication helper from
+`operations/hydra_contrast_key_retirement.py` at
+`1e602e33b8070fd4e1e00d7de7b5e440902f50f5`, canonical SHA256
+`730e2c4a90eb89353b0452e3ce0fb5bbfe7a4f51641fbce8627765829939a57c`.
+It interprets technical report/FIT/spec formats from
+`luka_cross_message_hydra/{contracts,training,resources,campaign}.py` at that
+same donor commit. The donor scientific modules are neither imported at runtime
+nor modified; the operation uses no Torch or inference environment.
+
+The PowerShell launcher follows the previously used source-hashed legacy-SCP,
+nohup and log-viewer pattern. The new code has its own exact three-root/one-file
+allowlist and versioned retirement artifacts under
+`LUKA_HYDRA_CROSS_MESSAGE_MINIATURE_RETIREMENT_<KIND>/v1`. It does not alter
+scientific model/checkpoint/prediction outputs, source worktrees, datasets or
+scheduler state. Retired miniature weights must be regenerated for old complete
+setup replay. Original metadata remains; the retirement ledger records the
+missing technical payloads explicitly.
+
+## 2026-11-19: Operator-selected initial-only HOME admission
+
+Adapted the four owned reconstruction execution files`campaign.py`,`storage.py`,
+`worker.py`,`training.py` from01324411fc9f9762b9fd796b54997cf3b661dbc3. Added
+a versioned execution`STORAGE_POLICY/v1`; scientific donor code and recipe are
+unchanged. No existing campaign specs are migrated or rewritten.
+
+New standard-library cleanup module`operations/hydra_contrast_key_retirement.py`
+and thin CLI adapt safe-path, hashing, live-job metadata-graph and immutable
+intent/completion patterns from the pre-existing uncommitted
+`operations/hydra_inactive_payload_retirement.py`, observed exact SHA256
+`ad1890e269f0a7d054abf63342943ee5f766d4879097be4edd87eb8a7ee4de42`.
+That donor has no committed identity in the current repository; no donor Git
+commit is claimed, and it is not imported or modified by this change. Transfer
+and key-bank semantics are checked against the committed
+`luka_u100_contrastive_hydra/{transfer,inputs}.py` and
+`luka_u100_contrastive/targets.py` at01324411fc9f9762b9fd796b54997cf3b661dbc3.
+Only the exact169968554-byte derived TRAIN key payload is eligible. Raw data,
+models, predictions and original manifests remain. Its retired bank must be
+restored/re-exported for old full training replay. New retirement artifacts use
+`LUKA_HYDRA_CONTRAST_KEY_RETIREMENT_<KIND>/v1`; the executable scope and recovery
+consequence are documented in the updated reconstruction runbook/contract.
+
+## 2026-11-19: Balanced reconstruction Hydra600k screen
+
+New package`luka_balanced_reconstruction_hydra/` directly reuses scientific
+functions from canonical commit`504a8314fbbbcdeeb5ec7024e94993d3e0e99ba6`.
+Its`donors.json` enumerates all531 canonical committed Python files reachable
+through the transitive local import closure, with SHA256 Git-blob hashes.
+Those original files remain unchanged. Existing unrelated dirty work is excluded.
+
+Primary donors and adaptations:
+
+| Donor | Reused meaning / new adaptation |
+| --- | --- |
+| `luka_sixclass_balanced_oscar/{population,sampling,model,reporting,banks}.py` | Frozen six-class roles, uniform120-cell sampling, six-output Weaver, metrics and array export; new proportional subset and same-seed EMA05 teachers |
+| `luka_new_fullstat_hydra/{population,lineage,campaign}.py` | Raw identity/producer/runtime authentication and scalar membership; no scientific weight import |
+| `luka_fullsim/{particles,preflight_cache}.py`, `literature_context/transform.py`, `cms_proxy_ladder/views.py` | Physical particles/full-support native transforms and matched U100; new bounded node-local mmap construction |
+| `luka_next_supervision_hydra/{probabilistic_targets,probabilistic_contracts,reconstruction_model,reconstruction_training,reconstruction_batched,reconstruction_loss}.py` | Original mixed22 target, complete-set decoder, exact assignment/loss and chunked backward |
+| `luka_r24_curriculum_hydra/kernel.py` | FP32 configuration, dropout disabling and bounded sample-weighted gradient SUM |
+| `luka_reconstruction_stability_hydra/{kernel,optimization,readouts}.py` | Full-graph comparison, isolated RNG, native copies/BN readouts; new600k draw-clock EMA and balanced calibration |
+| `luka_subclass_ddp_hydra/distributed.py` | Error-propagating rank context, memory/timing; new six-output prediction gathering and shared-page accounting |
+| `luka_fullstat/recipe.py`, `luka_fullstat_readout/training.py` |20-epoch LR/AdamW and CPU state copy |
+| `luka_fullstat_balanced_ladder/artifacts.py`, `data/cache_contracts.py`, `cms_proxy_ladder/contracts.py` | Atomic states, immutable content hashes and file references; new authenticated restart retirement |
+| `luka_sixclass_tail_hydra/campaign.py` | Submission locking, terminal accounting and read-only committed-byte reservation credit |
+
+New CLI/Slurm helpers follow the repository's detached exact-commit submission
+pattern, with a new prepare/qualification/release envelope. No legacy module is
+copied into`Fresh_check` or imported from it. The full enumeration in the manifest
+owns file-level donor provenance. New scientific/execution semantics receive a
+separate [v1 contract](contracts/LUKA_BALANCED_RECONSTRUCTION_HYDRA.md); existing
+contracts and immutable campaign meanings are not rewritten.
+
+## 2026-11-18: Six-class Oscar teachers and Hydra L40 tail
+
+New execution package: `src/hlt_classification/luka_sixclass_tail_hydra/`.
+`campaign.py`, `artifacts.py`, `worker.py` and `inspect.py` adapt their same-name
+donors in `luka_sixclass_balanced_oscar/` at
+`8a25f12653d0bcfefe170273d3f3e0748b4b508f`. The new CLI, launcher and Slurm
+helpers adapt the six-class Oscar scripts at that same commit. The original
+files remain unchanged. New semantics are portable selected-artifact resolution,
+a distinct Hydra execution contract and a two-job L40 continuation DAG.
+
+All scientific functions are imported directly from the original six-class
+package. `luka_sixclass_tail_hydra/donors.json` pins 66 canonical committed files:
+the 19 original package Python/JSON files plus its 47 inherited scientific
+dependencies. The inherited manifest retains their earlier donor provenance.
+The new implementation checks those bytes in both the original Oscar source
+and new execution source before accepting transferred teachers.
+
+The standard-library binary SSH transport adapts patterns from the existing
+working-tree `scripts/transfer_luka_new_fullstat.py`, observed SHA256
+`ab613092fa4d09c685871a83d072f77a6832b6ad47ea3909933b63db0667f359`.
+Its committed ancestor is `a865e5b65bc0271d1359644b15956d98f94caca3`;
+the observed file also contains unrelated local edits, so those bytes are not
+attributed to that commit. That helper is not changed by this work. The new
+`transfer_luka_sixclass_tail.py` adds manifest-bound fetch/send, writer locking,
+atomic records and bundle-specific inventory restrictions.
+
+New v1 contract: `docs/contracts/LUKA_SIXCLASS_TAIL_HYDRA.md`. Scientific Oscar
+contracts are unchanged. Test fixtures reuse the six-class Oscar tests and
+installed-Weaver qualification at the pinned donor commit. No donor data,
+private keys, environment files or remote scientific artifacts enter Git.
+
+## 2026-11-18: Second Hydra setup/export retirement
+
+`src/hlt_classification/operations/hydra_setup_export_retirement.py` imports the
+standalone safety primitives in `hydra_inactive_payload_retirement.py` only after
+checking SHA256 `ad1890e269f0a7d054abf63342943ee5f766d4879097be4edd87eb8a7ee4de42`.
+The donor is local uncommitted operation code; it is not attributed to a Git
+commit. The PowerShell launcher and synthetic tests adapt the neighboring
+inactive-campaign cleanup launcher/tests. The donor helper remains unchanged.
+
+New deletion semantics come from inspecting exact committed runtime/receipt
+behavior, without copying or modifying the training implementation:
+
+- `luka_reconstruction_stability_hydra/` at
+  `3ccc35ae709c63d8833cb0388c618b53dcde5b9e`: original setup, miniature outputs,
+  calibration/membership, scientific receipts and input validation.
+- `luka_stability_storage_recovery/` at
+  `794b8f8016f9b47a3368bc223cecdf01d4d345f4`: remaining parent checks/report paths.
+- `luka_reconstruction_stability_hydra/` at
+  `d28c403360f7b4662f679f5564529a048d8db5e2`: separate SOFT setup and training.
+- `luka_stability_completion_hydra/` at
+  `a7f18395b93fe5bd593881b9e378cca3e7a20a49`: exact current jobs, qualification,
+  finalization and combined reporting paths.
+
+All paths above are under `src/hlt_classification/`. Whole-package Python byte
+digests are recorded in the v1 operation contract and verified against both Git
+objects in tests and remote worktrees at execution. Input-export schemas follow
+`luka_teacher_sweep_hydra/transfer.py` at
+`6fe7e3499767f0a2216586d965efe39a05c24bf7` and
+`luka_pretext_structure_hydra/transfer.py` at
+`54ff594df4fb7dddc56c0e99ffb13b9448a6a6c9`. No legacy `Fresh_check`
+runtime dependency or scientific donor migration is introduced.
+
+## 2026-11-18: Inactive campaign payload retirement
+
+`src/hlt_classification/operations/hydra_inactive_payload_retirement.py` adapts
+the standard-library path checks, hash/record publication, scheduler inspection
+and home-alias normalization patterns from the local uncommitted donor
+`src/hlt_classification/operations/hydra_repeat_parity_retirement.py`, SHA256
+`36bcb799cbf5cdc29e435aa9dc690f8afa04147bbf0e93340a6b73c7557590a8`.
+That donor has no committed revision at implementation time; repository HEAD
+is `a7f18395b93fe5bd593881b9e378cca3e7a20a49`, which is not claimed to contain
+the uncommitted helper. No scientific/numerical implementation is copied.
+
+The exact 16-root retirement scope comes from the user's November 18 Hydra
+inventory. Fit and readout inventory semantics were inspected in the existing
+teacher-sweep, R24 curriculum and EMA training modules. New inventory,
+retained-result summary and deletion-policy code, PowerShell detached launcher,
+synthetic tests and v1 operation contract/runbook are original work. The source
+snapshots of all remote campaigns remain untouched; deleting auxiliary or
+technical payloads is explicitly recorded as retirement, not scientific reuse.
+
+## 2026-11-17: Completed repeat-campaign parity retirement
+
+New standalone operational file:
+`src/hlt_classification/operations/hydra_repeat_parity_retirement.py`.
+No scientific model or numerical code is migrated or imported. Inventory
+semantics are derived from the committed repeat donor
+`15c35c428fa0548b97700d639323e593ea3aabac`, specifically
+`luka_reconstruction_repeat_hydra/{contracts,resources,training,worker,submission}.py`:
+six recipes/four steps, qualification references, task/fit receipts, output
+inventories and exact job bindings. Original numerical donors remain unchanged.
+
+Standalone file authentication, dependency traversal, durable retirement and
+upload/detach structure adapt the existing local
+`operations/hydra_teacher_bank_retirement.py` and its runbook/test patterns.
+That helper is uncommitted at this operation's baseline; its exact SHA256 is
+`a9918b184213803d21ed5b4356c53c78a08707b7485bfbcee8c0e50f4980e134`.
+Repository HEAD at implementation is
+`794b8f8016f9b47a3368bc223cecdf01d4d345f4`; this does not falsely attribute the
+uncommitted donor helper to that commit. The new implementation adds home-alias
+normalization, exact repeat-snapshot and 30-epoch retention bindings. Runtime
+uses only the standard library; new records bind its uploaded SHA256 under
+`LUKA_HYDRA_REPEAT_PARITY_RETIREMENT_*/v1`.
+
+Same-day operational fix: the first uploaded helper (SHA256
+`1f66d6b0b7a30ebd0a072335d550ffc154f9fd66ccc41ffc855ec6c894ef770c`)
+double-normalized `/cs/home` and stopped before deletion. Its local successor
+uses one bounded alias substitution, with canonical-path and recovery-report
+regressions. No additional donor or scientific contract change is introduced.
+
+## 2026-11-17: Stability storage-only recovery
+
+New original execution glue lives in `luka_stability_storage_recovery/`,
+`scripts/luka_stability_storage_recovery.py`, its queue shell and
+`sbatch/run_luka_stability_storage_recovery.sh`. It does not copy or change a
+scientific implementation. It loads `luka_reconstruction_stability_hydra/`
+from exact donor `3ccc35ae709c63d8833cb0388c618b53dcde5b9e`: `campaign.py`,
+`contracts.py`, `worker.py`, `training.py`, `resources.py`, `kernel.py`,
+`identity.py`, `submission.py`, `reporting.py` and their package dependencies.
+The original scientific dependency tree remains exact donor
+`58d0c0edf5f41cff2398fb168fc16fc92e169294`; notably next-supervision inputs and
+reconstruction targets, subclass distributed context, fullsim backend checks,
+source/artifact validation and exact-DAG submission utilities.
+
+Shell, registration and test structure adapt the corresponding stability CLI,
+queue shell, worker shell and `tests/test_luka_reconstruction_stability_hydra.py`
+at baseline `8a25f12653d0bcfefe170273d3f3e0748b4b508f`; the new focused test also
+reuses synthetic fixtures from `tests/test_luka_direct_reconstruction.py`.
+The only runtime adaptation is the exact job-ID lookup for a new execution;
+the original resource validator and scientific training are called unchanged.
+The original campaign checker explicitly receives `check_storage=False`;
+replacement free-space observations are advisory. Source/data/fit validation
+remains required. New execution namespace: `LUKA_STABILITY_STORAGE_*/v1`.
+
+## 2026-11-16: Six-class 600–2600 GeV Oscar ladder
+
+Donor commit: `d28c403360f7b4662f679f5564529a048d8db5e2`. Exact canonical Git
+blob checksums for 47 reused/copied files are recorded in
+`src/hlt_classification/luka_sixclass_balanced_oscar/donors.json` and tested.
+Copied/adapted `luka_new_balanced_oscar/{__init__,artifacts,banks,campaign,
+contracts,inspect,model,population,reporting,startup,training,views,worker}.py`,
+its CLI, queue/launch/common/worker shells and focused test suite.
+
+Six-output native construction/student heads adapt
+`luka_fullstat_balanced_ladder/model.py`, `jetclass2_delphes/model.py`,
+`luka_embedding_aux/model.py` (classifier-input tap),
+`jetclass2_delphes/acceptance.py` (installed parity),
+`jetclass2_delphes/reporting.py`, and `luka_u100_multiview/teachers.py` and
+`training.py` (native capture/predict/diagnostics). Cell sampling adapts
+`luka_fullstat_balanced_ladder/sampling.py`; six-class contrastive reference,
+optimized base and occurrence adapter respectively adapt
+`luka_u100_contrastive/sampling.py`, `luka_fullstat_multi3_contrastive/sampling.py`
+and `luka_fullstat_balanced_ladder/contrastive.py`. Unchanged view, normalization,
+identity/role-extension and numerical donors are individually listed in the
+manifest. No old scientific implementation was edited or monkey-patched.
+
+New original `population.py` filters the existing authenticated role population
+without refilling/reassigning rows. `runtime.py` and the bootstrap shell wrap the
+already committed `operations/oscar_runtime_restore.py` (introduced 9a633b7d),
+validating existing HOME completion or reconstructing exact recorded builds.
+They never launch the old recovery campaign. New scientific/operational artifact
+namespace: `LUKA_SIXCLASS_BALANCED_OSCAR_*/v1`; the old population remains a
+separate role-provenance parent. No `Fresh_check` runtime import.
+
+## 2026-11-16: Persistent Oscar runtime restoration
+
+New original operational code: `operations/oscar_runtime_restore.py`,
+`scripts/restore_luka_oscar_runtime.py`, `scripts/recover_luka_new_balanced_oscar.sh`
+and `tests/test_oscar_runtime_restore.py`. No legacy scientific donor copied.
+The shell detachment pattern and queue entrypoint adapt
+`scripts/launch_luka_new_balanced_oscar.sh` and
+`scripts/queue_luka_new_balanced_oscar.sh` at
+`f9dfc80b706850bc15cdb6526d61e9ad3b59ac47`. Runtime equality uses the existing
+`jetclass2_delphes.model.installed_environment`; exact-job terminal checks reuse
+`luka_new_balanced_oscar.campaign` from that commit. Neither semantic function nor
+the frozen scientific donors are edited. New operational contracts are documented
+in `docs/contracts/LUKA_NEW_BALANCED_OSCAR.md`; scientific contracts stay at v1.
+
+## 2026-11-16: New-data balanced Oscar six-fit main-KD ladder
+
+Implementation donor commit: `ec541496de9120cd046f5eb351a7bc0f97da31ad`.
+New namespace: `src/hlt_classification/luka_new_balanced_oscar/`.
+Copied/adapted from `luka_new_balanced_hydra/`: `__init__.py`, `artifacts.py`,
+`banks.py`, `campaign.py`, `inspect.py`, `reporting.py`, `startup.py`,
+`training.py`, `views.py`, `worker.py`. The corresponding thin
+`scripts/luka_new_balanced_hydra.py` and
+`tests/test_luka_new_balanced_hydra.py` supplied the CLI and test scaffolds.
+The Hydra detached-launch/worker scripts supplied the shell lifecycle pattern;
+the new named Oscar scripts add explicit runtime selection and absolute helper
+loading. No donor source was edited.
+
+The model objective adapts `luka_fullstat_balanced_main_kd/model.py` at that same
+commit from one old-data DE000 to all three new-data students. New contracts and
+per-stage policies distinguish this experiment. `population.py` re-exports the
+unchanged Hydra builder/loader; its hash domain is deliberately preserved to
+reproduce the same row assignments. Native model/seeds, sampler, contrastive
+implementation and teacher view/target semantics remain shared imports. The
+complete explicit frozen donor inventory and canonical Git-blob SHA256s are in
+`luka_new_balanced_oscar/donors.json`; full execution source is additionally
+snapshot-bound at registration. No Fresh_check import or historical teacher
+checkpoint reuse was added.
+
+## New FullSim Oscar scratch transfer (2026-11-16)
+
+Extended `scripts/transfer_luka_new_fullstat.py` and its focused cases in
+`tests/test_luka_new_fullstat_hydra.py` from implementation baseline
+`ec541496de9120cd046f5eb351a7bc0f97da31ad`. No donor file copied and no runtime
+scientific module imported/modified. Added only the registered Oscar endpoint
+profile, paired-destination guard and destination-ancestor symlink check; binary
+manifest/receipt semantics remain v1. A transfer-only plan/runbook and amendments
+to the original Hydra plan/contract record scope. Original foundation/source
+bytes and later balanced extension identities remain separate from locators.
+
+## 2026-11-16: balanced DE000 direct main-head KD
+
+Donor commit `ff22b20f27fdc67d0fbd1a1df7005eb4626d19b7`; implementation workspace
+baseline `3ccc35ae709c63d8833cb0388c618b53dcde5b9e`.
+New namespace: `src/hlt_classification/luka_fullstat_balanced_main_kd/`.
+Copied and adapted balanced-ladder files: `training.py`, `startup.py`,
+`worker.py`, `artifacts.py`, `submission.py`, `execution.py`, `launch.py`,
+`recovery.py`; corresponding thin `scripts/luka_fullstat_balanced_ladder.py`,
+`scripts/launch_luka_fullstat_balanced_ladder.sh`,
+`scripts/queue_luka_fullstat_balanced_ladder.sh`, and
+`sbatch/run_luka_fullstat_balanced_ladder.sh` supply the new named entrypoints.
+The launch-test scaffold comes from
+`tests/test_luka_fullstat_balanced_ladder_launch.py` at that same donor commit.
+The new contracts/source/campaign/model/inspection modules adapt the donor's
+semantics with explicit new identities and direct native DE050 KD.
+
+Imported unchanged from that donor: balanced `model`, `contracts`, `population`,
+`sampling`, `views`, `banks`, `contrastive`, `reporting`, source/runtime and
+root-path helpers, including `occupancy.json`; their conservative local-import
+closure is byte-checked against the original source before reuse. Shared
+FullStat AdamW/schedule, selected prediction, diagnostics, provenance, atomic
+publication and exact-DAG journal helpers remain reused. Original execution
+validation runs in a subprocess of its clean pinned worktree. No external
+runtime files were migrated, and there is no `Fresh_check` runtime import.
+
+## Forty-two-fit reconstruction stability campaign (2026-11-15)
+
+Implementation donor: `15c35c428fa0548b97700d639323e593ea3aabac`.
+Adapted every module in `luka_reconstruction_repeat_hydra/` (`__init__`,
+`contracts`, `campaign`, `kernel`, `training`, `resources`, `worker`,
+`submission`, `reporting`, `identity`), its CLI, queue helper, Slurm wrapper,
+runbook and focused test patterns into the separate
+`luka_reconstruction_stability_hydra/` namespace. The newer read-only results
+storage-check separation is retained explicitly in the new CLI/campaign.
+No existing scientific donor file is edited by this implementation.
+
+New modules: `optimization.py`, `decoder.py`, `transport.py`, `readouts.py`,
+`calibration.py`, `storage.py`. New scientific/artifact contract family:
+`LUKA_RECONSTRUCTION_STABILITY_<KIND>/v1`. The approved plan defines14
+configurations/seeds7/8/9, accumulation, parameter-gradient transforms,
+decoder steps, native EMA/BN readouts and entropy transport.
+
+Runtime science remains pinned to `58d0c0edf5f41cff2398fb168fc16fc92e169294`:
+`luka_next_supervision_hydra/{contracts,model,inputs,reconstruction_model,
+reconstruction_batched,reconstruction_targets}.py`, original native model,
+optimizer constants, selection and data contracts. Qualified parent benchmark:
+`1094dea4ccfb36d08e29f740a97d90fc770335ec`; historical curriculum reference:
+`a549fef16390f7ef5b5b426e8dae6f2951876d89`. The CLI isolates new runtime modules
+beside the original source, never importing a later checkout's scientific
+modules into a pinned campaign.
+
+Tests reuse synthetic `batch`/target/native fixture patterns from
+`tests/test_luka_r24_gpu_benchmark.py`, `test_luka_direct_reconstruction.py`,
+`test_luka_attention.py` and the repeatability registration/submission tests at
+15c35c42. New independent full-graph, transport, accumulation, EMA/BN and
+four-process tests exercise the new semantics. Shared exact-DAG journals and
+Slurm environment helpers are reused through the pinned original dependency
+closure; no Fresh_check runtime dependency is introduced.
+
+
+## Older Hydra teacher-bank retirement (2026-11-15)
+
+New standalone standard-library operation and synthetic tests; no donor file
+copied and no training runtime imported or modified. Receipt/bank layouts were
+inspected in the teacher-sweep `worker.py` and embedding-aux bank exporter at
+`6fe7e3499767f0a2216586d965efe39a05c24bf7`, pretext `worker.py`/`embedding_banks.py`
+at `54ff594df4fb7dddc56c0e99ffb13b9448a6a6c9`, and selective `worker.py`/`targets.py`
+at `3fb9e7f11f628ad9d0d8c4c0d3694cc918e6e8a6`. Only original TRAIN payloads in
+the allowlist can be retired; the operational INTENT/COMPLETE v1 contracts
+preserve original metadata and record the exact helper SHA256. Shared T00 stays.
+
+## Post-cleanup balanced Hydra quota and continuation (2026-11-15)
+
+Implementation baseline/cleanup source:
+`68dc0cb6eeb0f1f527bbeba11f4753b84789bac7`.
+Extended `operations/hydra_cache_retirement.py`, its existing CLI/launcher and
+tests; added `sbatch/run_luka_hydra_balanced_resume.sh`, adapted from that
+commit's `sbatch/run_luka_hydra_cache_recovery.sh` with the explicit
+`run-resume` dispatch. The runbook, operational contract and plan document
+current post-cleanup quota without modifying existing execution metadata.
+
+The new module independently authenticates the pinned68dc0cb6 source before
+loading its original retirement validator. All scientific modules and the
+campaign journal remain the original4a61a34c implementation described below.
+Runtime overrides remain limited to the storage check and absolute worker
+arguments; new `RESUME_*` operational v1 artifacts bind their separate source
+identity, completed cleanup and current quota. No scientific donor module or
+existing scientific contract changed. The real Bash detachment fixture adapts
+`test_real_bash_detached_launch_finishes_after_tail_exits` from
+`tests/test_luka_new_balanced_hydra.py` at4a61a34c to the new resume dispatch.
+
+## Completed natural-baseline cache retirement / balanced recovery (2026-11-15)
+
+New implementation: `src/hlt_classification/operations/hydra_cache_retirement.py`,
+`scripts/luka_hydra_cache_retirement.py`,
+`scripts/launch_luka_hydra_cache_recovery.sh`,
+`sbatch/run_luka_hydra_cache_recovery.sh`,
+`tests/test_luka_hydra_cache_retirement.py`, plus a new operational contract and
+runbook. No donor file was copied or modified. Local implementation baseline:
+`15c35c428fa0548b97700d639323e593ea3aabac`.
+The same-day cleanup-only follow-up adds a separate authorization and CLI/
+launcher dispatch in these new files; it introduces no additional donor and
+does not invoke submission. Existing operational v1 records remain compatible.
+
+The adapter imports the unchanged scientific runtime from
+`4a61a34c97888d3ad5f479e29a5b94f9b6afa22a`:
+`luka_new_balanced_hydra/campaign.py` provides source, journal, scheduler,
+committed-output accounting and continuation interfaces; `worker.py` and all
+its scientific dependencies execute there. Only `campaign.storage` and
+`campaign.commands` receive explicit, scoped operational overrides, recorded
+separately from old scientific artifact identities. Tests reuse the existing
+`test_luka_new_balanced_hydra.py` synthetic spec fixture and real command builder.
+
+Completed natural baseline source is
+`a865e5b65bc0271d1359644b15956d98f94caca3`.
+Its `luka_new_fullstat_hydra/{contracts,campaign,training,prepare}.py` interfaces
+define the cache, completion and selected-history checks. These files are
+identical between a865e5b6 and4a61a34c; the adapter imports them from the latter
+while independently authenticating the original baseline source snapshot.
+`provenance.py` supplies original source checks. New artifacts use
+`LUKA_HYDRA_CACHE_RETIREMENT_*/v1`; existing science schemas remain unchanged.
+
+## R24 read-only storage check correction (2026-11-15)
+
+Baseline `15c35c428fa0548b97700d639323e593ea3aabac`. Modified local
+`luka_r24_diagnostic_hydra/campaign.py` and
+`luka_reconstruction_repeat_hydra/campaign.py`, their corresponding
+`scripts/luka_*_hydra.py` CLIs and existing focused test files to exempt
+read-only results/progress from future write-capacity reservations. No code
+was migrated, no new runtime donor was introduced and no deployed source was
+edited. Scientific semantics and artifact contracts remain unchanged.
+
+## Reconstruction repeatability on four GTX1080 Ti GPUs (2026-11-14)
+
+Implementation donor: `4a61a34c97888d3ad5f479e29a5b94f9b6afa22a`.
+New package: `src/hlt_classification/luka_reconstruction_repeat_hydra/`.
+No external code was migrated; no donor module was edited for this campaign.
+
+- Copied/adapted `luka_r24_diagnostic_hydra/__init__.py`, `campaign.py`,
+  `kernel.py`, `training.py`, `resources.py`, `worker.py`, `submission.py`,
+  `identity.py` to their same-named new modules. Qualification now covers six
+  recipes, and registration/release permit only four-Pascal execution.
+- `contracts.py` and `reporting.py` adapt the diagnostic modules' artifact,
+  epoch-validation and ledger interfaces with a new18-fit matrix, historical
+  recipe binding, paired initialization checks and late-window summaries.
+- Adapted `scripts/luka_r24_diagnostic_hydra.py`,
+  `scripts/queue_luka_r24_diagnostic_hydra.sh`,
+  `sbatch/run_luka_r24_diagnostic_hydra.sh` to the corresponding
+  `luka_reconstruction_repeat_hydra` filenames.
+- Adapted fixtures/tests from `tests/test_luka_r24_diagnostic_hydra.py` and
+  reused fixtures in `test_luka_direct_reconstruction.py`,
+  `test_luka_r24_gpu_benchmark.py`, `test_luka_r24_curriculum_hydra.py`,
+  `test_luka_attention.py`. New checks independently compare full-graph
+  reconstruction gradients with chunked VJPs and verify incomplete summaries.
+- Adapted queue/read commands from `docs/LUKA_R24_DIAGNOSTIC_HYDRA_RUNBOOK.md`.
+  The repeat plan, contract and validation evidence are new documents.
+
+Scientific runtime remains pinned to `58d0c0edf5f41cff2398fb168fc16fc92e169294`:
+`luka_next_supervision_hydra/{contracts,model,inputs,reconstruction_followup,
+reconstruction_model,reconstruction_training,reconstruction_batched,
+reconstruction_targets}` supply the original objectives, decoder, complete
+TRAIN targets and native model. Original recipe R20/R22/R24/R28 differs only
+by the declared fresh seed; D20 follows the asymmetric schedule in
+`a549fef16390f7ef5b5b426e8dae6f2951876d89`'s curriculum `contracts.py`.
+Completed benchmark evidence is pinned to
+`1094dea4ccfb36d08e29f740a97d90fc770335ec`. Existing artifacts remain unchanged;
+new contracts are `LUKA_RECONSTRUCTION_REPEAT_*/v1`.
+
+## New-data balanced six-model Hydra campaign (2026-11-14)
+
+Implementation donor/base: `a865e5b65bc0271d1359644b15956d98f94caca3`.
+New adapter: `src/hlt_classification/luka_new_balanced_hydra/`, its thin CLI,
+detached launcher and absolute-path Slurm worker. Donor modules are unchanged.
+
+- Adapted `luka_fullstat_balanced_ladder/{training,banks,startup,artifacts}.py`
+  into the new training, bank, integrated acceptance and recovery modules.
+  The new worker adds outside validation and preserves per-job payloads with
+  completion-last canonical epoch markers.
+- Reuse `luka_fullstat_balanced_ladder/{contracts,model,sampling,contrastive}.py`
+  for the exact six-stage objective, initialization, draw streams and
+  occurrence-keyed negatives. Reuse `views.lengths` and reporting
+  rejection/recovery kernels. New population and evaluation semantics have
+  their own `LUKA_NEW_BALANCED_HYDRA_*/v1` contracts and hashes.
+- Reuse `luka_new_fullstat_hydra/{population,lineage,contracts,campaign}.py`
+  for the immutable parent split, producer checks, GPU names and runtime
+  fingerprint; `training.subset` supplies bounded acceptance witnesses.
+  The unused-only extension and its frozen population hash are new code.
+- Reuse `luka_fullsim/{particles,preflight_cache,preflight_v2}.py`,
+  `luka_fullstat/{cache,data,recipe}.py`, `cms_proxy_ladder/views.py`,
+  `literature_context/transform.py` and `luka_u100_multiview/views.py`
+  for physical rows, exact matching, union inputs, quotas, schedule and phase
+  diagnostics. New bounded readers retain ROOT metadata only between chunks.
+- Reuse `jetclass2_delphes/{cache,acceptance,dzfix_fusion_model,reporting,runner}.py`,
+  `luka_u100_multiview/{teachers,training}.py`, `luka_embedding_aux/targets.py`,
+  `luka_fullstat_readout/training.py` and `luka_fullstat_multiview/execution.py`
+  for resident inputs, installed-Weaver parity, native export/selection,
+  standardization, optimizer/state handling and Slurm time parsing.
+- Reuse `data/cache_contracts.py`, `cms_proxy_ladder/contracts.py`,
+  `operations/fullstat_pt_metadata.py` and `provenance.py` for immutable
+  publication, hashes, references and exact source capture.
+- Tests reuse the ROOT, resident-cache, tiny-architecture and thread fixtures
+  in `tests/test_luka_fullstat.py`, `test_luka_attention.py`,
+  `test_luka_embedding_aux.py` and `test_luka_fullstat_balanced_ladder.py`.
+  The six-worker/recovery and actual Bash smoke patterns adapt
+  `test_luka_fullstat_balanced_ladder_workflow.py` and
+  `test_luka_fullstat_balanced_ladder_launch.py` at the same donor commit.
+
+The Hydra storage reservation, six-job DAG, submission journals, progress and
+subset reporting are new adapter code. No Fresh_check runtime import or
+historical artifact rewrite is introduced. See the
+[validation record](LUKA_NEW_BALANCED_HYDRA_VALIDATION.md).
+
+## New FullSim transfer SSH-key correction (2026-11-13)
+
+Adapted the just-created local `scripts/transfer_luka_new_fullstat.py` and
+`tests/test_luka_new_fullstat_hydra.py` on base
+`ff22b20f27fdc67d0fbd1a1df7005eb4626d19b7`: forward the user's explicit OpenSSH
+identity path and handle disconnected Windows pipes. No external donor was
+migrated, private key read, artifact schema changed or scientific code modified.
+
+## New FullSim natural OFFLINE Hydra baseline (2026-11-13)
+
+Donor/base commit `ff22b20f27fdc67d0fbd1a1df7005eb4626d19b7`. New package
+`luka_new_fullstat_hydra/`, CLI, binary transfer utility and Hydra shell workers
+adapt the original FullStat population and CE workflow into a separate dataset
+and artifact namespace. No donor files are changed by this adapter.
+
+- `luka_fullstat/data.py`: proportional integer quotas and shared block split
+  pattern, with a new source identity domain and explicit 206 quarantine.
+- `luka_fullstat/recipe.py`, `luka_fullsim/regular_campaign.py`: unchanged
+  20-epoch update schedule and original OFFLINE node/init/sampler seeds.
+- `jetclass2_delphes/{schema,inventory}.py`, `data/cache_contracts.py`,
+  `provenance.py`, `cms_proxy_ladder/contracts.py`: schema, source inventory,
+  canonical hashes, immutable publication, source snapshots and file references.
+- `luka_fullsim/{particles,preflight_cache}.py`, `luka_fullstat/cache.py`,
+  `literature_context/transform.py`, `cms_proxy_ladder/inputs.py`: selected
+  particle reads, original physical conventions, native inputs and blocks.
+- `jetclass2_delphes/{cache,runner,reporting,model,acceptance}.py`,
+  `context_fusion/inputs.py`: RAM views, native model, CE/prediction/selection,
+  metric and installed-Weaver parity kernels.
+- `luka_fullstat_readout/training.py`,
+  `luka_fullstat_balanced_ladder/artifacts.py`: optimizer grouping, CPU state
+  conversion and checkpoint publication. The new epoch runner adds authenticated
+  model/optimizer/RNG recovery and is tested against the original CE runner.
+- `jetclass2_delphes/dzfix_fusion_model.py`, `luka_fullstat/preflight.py`:
+  parity backend and full-batch support stress used during Hydra qualification.
+
+The new transfer protocol, producer binding, Hydra DAG/journals and completion
+records are original adapter code. Contracts are
+`LUKA_NEW_FULLSTAT_HYDRA_*/v1`, `LUKA_NEW_FULLSTAT_TRANSFER/v1` and
+`LUKA_NEW_FULLSTAT_TRANSFER_COMPLETE/v1`. Nothing imports Fresh_check.
+
+## R24 qualification v2 and Pascal-only retry (2026-11-13)
+
+Implementation donor `519d672fc817491f6a1f646d2d55f73445f347f6`:
+the existing `luka_r24_diagnostic_hydra/{campaign,contracts,kernel,resources,
+submission,worker,reporting}.py`, CLI, queue wrapper and focused tests are
+updated in place. New diagnostic-only code saves/restores full common-start
+model/AdamW states, reports per-buffer and eval differences, preserves the
+independent trajectory comparison, and restricts a fresh spec to selected
+hardware lanes. SPEC/PLAN/QUALIFICATION/PARITY_STEP become v2; other kinds and
+the scientific recipe remain v1. No new scientific donor files are migrated.
+The original 58d0c0ed training and a549fef1 curriculum remain unchanged.
+
+## R24 reproducibility diagnostics (2026-11-13)
+
+Implementation donor `a549fef16390f7ef5b5b426e8dae6f2951876d89`:
+`luka_r24_curriculum_hydra/{campaign,kernel,training,resources,worker,submission,reporting}.py`
+is migrated/adapted into `luka_r24_diagnostic_hydra/`. The original CLI,
+queue/worker shell wrappers, runbook and focused test patterns supply the
+corresponding diagnostic files. New contracts, initialization component hashes,
+independent RNG factors, original-fit binding, two hardware release lanes and
+twelve-update numerical diagnostics are implemented here. Historical files
+and schemas are not changed.
+
+Scientific runtime donor `58d0c0edf5f41cff2398fb168fc16fc92e169294` remains an
+immutable external worktree: next-supervision model/training/contracts/inputs,
+reconstruction model/targets/batched loss/training, cross-message forward and
+optimizer, native ParT/30-epoch recipe, subset/distributed utilities and exact
+submission helpers are reused through its isolated source path. OB fits call
+its unchanged `training.fit` and validator. New-worker fit code is local;
+its original scientific primitives still resolve to that donor. Benchmark
+`1094dea4ccfb36d08e29f740a97d90fc770335ec` supplies authenticated four-card
+qualification evidence through `luka_reconstruction_benchmark/{campaign,runner}`.
+No external project or Fresh_check runtime code is migrated. New artifact
+namespace is `LUKA_R24_DIAGNOSTIC_*/v1`; original artifacts retain their schemas.
+
+## Balanced FullStat six-fit Oscar ladder (2026-11-13)
+
+Isolated destination `src/hlt_classification/luka_fullstat_balanced_ladder/`,
+thin CLI/Slurm/detached launch wrappers, focused tests and documentation.
+Adaptation baseline: `1094dea4ccfb36d08e29f740a97d90fc770335ec`.
+
+- `operations/fullstat_pt_{metadata,audit}.py`: canonical metadata and data-only
+  parent/foundation provenance; new eligible identity population and198-cell
+  occupancy guard. Frozen occupancy is derived from the authenticated audit
+  report at `reports/fullstat_pt_audit_0810779d_r1/report.json`, audit source
+  `0810779da6143de4616c1e34f71fe0fbc2b6c0eb`, content hash
+  `8383cbacb0aeb7664a534ab5e8f3287b8e67c4963dbe69e7c90146786c25522c`.
+- `luka_fullstat/{contracts,cache,data,recipe}.py`,
+  `luka_fullstat_fine_tail/views.py`, `cms_proxy_ladder/views.py`,
+  `luka_fullsim/{particles,preflight_cache}.py`, `literature_context/transform.py`,
+  `luka_u100_multiview/views.py`: authenticated paired views, saved assignments,
+  native endpoint replay, physical union and fixed FullStat schedule. Adapted
+  eligible-only TRAIN assembly, exact D050 and bounded four-process construction.
+- `jetclass2_delphes/{model,cache,acceptance,reporting,runner,execution,dzfix_fusion_model}.py`,
+  `luka_embedding_aux/{model,targets}.py`,
+  `luka_fullstat_readout/training.py`, `luka_u100_multiview/{teachers,training}.py`:
+  installed native ParT, head tap, FP64 standardization, AdamW, selected-state
+  metrics, diagnostic gradients and deployment/parity. New stage maps and
+  CE1/E10/KD1, replacement epochs, eligible native banks and per-pT reporting.
+- `luka_u100_contrastive/{sampling,losses}.py` and
+  `luka_fullstat_multi3_contrastive/sampling.py`: mix candidate law, FP32 ranking,
+  ties, CPU pools and lookahead. New occurrence-specific RNG prevents repeated
+  draws from sharing one fixed candidate set; serial/optimized parity retained.
+- `luka_fullstat_multiview/{execution,startup}.py`,
+  `luka_fullstat_six_teacher/{submission,launch}.py`,
+  `scouting/{hcwdl_exact_dag_submission,hcwdl_recovery}.py`,
+  `context_fusion/worker.py`, `luka_fullsim/preflight_v2.py`: adapted exact DAG,
+  journals, resource admission, phases and atomic epoch/publication patterns.
+  New six-fit dependency graph and recovery never import historical weights.
+- `scripts/launch_luka_fullstat_six_teacher.sh`,
+  `scripts/queue_luka_fullstat_readout.sh`, `sbatch/run_luka_fullstat_six_teacher.sh`,
+  `sbatch/luka_splithead_finalize_common.sh`: detached/pinned absolute-path
+  execution conventions; added concrete runtime import check. Launch tests
+  adapt `tests/test_luka_fullstat_readout_launch.py` detachment fixtures.
+
+New balanced sampler and scientific schemas are v1. No donor scientific file
+was edited; imports remain under `hlt_classification`, never `Fresh_check`.
+Old memberships, models, banks and metrics are preserved. Shared documentation
+changes are additive and do not redefine older immutable executions.
+
+## R24 twenty-curriculum four-GPU follow-up (2026-11-13)
+
+New isolated package `luka_r24_curriculum_hydra`, CLI, queue/Slurm wrappers,
+tests and documentation; no existing scientific or benchmark source edited.
+Copied/adapted baseline `1094dea4ccfb36d08e29f740a97d90fc770335ec`:
+
+- `luka_reconstruction_benchmark/kernel.py`: sharding, bounded gradient SUM,
+  snapshot comparison and FP32 native execution. New cell initialization,
+  independently scaled encoder/decoder gradients and loss reporting.
+- `luka_subclass_ddp_hydra/submission.py`: exact immutable DAG, authorized
+  envelope, successful-setup release, idempotent ledgers and partial-submit stop.
+  New namespace, four-GPU resources and twenty independent curriculum rows.
+- `luka_subclass_ddp_hydra/{training,resources,worker,reporting}.py` and
+  `luka_reconstruction_benchmark/{campaign,submission,runner}.py`: adapted
+  patterns for complete training/export, parity/replay/measurement, source
+  admission, controller checks, claims, reporting and isolated runtime loading.
+- `scripts/luka_r24_gpu_benchmark.py`, `sbatch/run_luka_r24_gpu_benchmark.sh`,
+  `scripts/queue_luka_subclass_ddp_hydra.sh`: thin runtime/wrapper conventions.
+
+Runtime scientific donor remains exactly
+`58d0c0edf5f41cff2398fb168fc16fc92e169294`: original R24 Student/capture,
+decoder, target bank/normalization, matching/chunked VJP, probes, optimizer/LR,
+native model, authenticated input readers and selection/metrics. Runtime also
+imports `luka_subclass_ddp_hydra/distributed.py` Context, timing, memory and
+prediction-merge helpers from that original checkout; its DDP optimizer path
+is not used. Provenance, file references, atomic artifacts, save_state and
+HCWDL exact-DAG helpers are reused. No Fresh_check import or external donor.
+
+Completed benchmark source/evidence at1094dea4 is independently authenticated.
+New `LUKA_R24_CURRICULUM_*/v1` artifacts do not reinterpret original R24 or
+benchmark contracts. Local tests build against an archived original 58d0c0ed
+runtime as well as current installed-Weaver parity.
+
+## FullStat saved-histogram pT comparison (2026-11-13)
+
+Reuse baseline `1094dea4ccfb36d08e29f740a97d90fc770335ec`.
+New `operations/fullstat_pt_comparison.py` imports the existing audit bundle
+reader/source recorder and `fullstat_pt_metadata.py` canonical metadata,
+class order and immutable publication. No source was copied from another
+campaign or Fresh_check. New merged-bin sampling projections, half-open
+rebinning and fine-grid class-mismatch calculations receive their own
+`LUKA_FULLSTAT_PT_COMPARISON/v1` diagnostic contract. Original audit v1 and
+training semantics are unchanged. CLI, focused tests and documentation are
+additive; real histogram comparison remains pending the saved Oscar bundle.
+
+## FullStat TRAIN class/pT metadata audit (2026-11-12)
+
+Donor/review commit `1fc128dca7dc7ef547d242a1e2941e9a74e25ac8`.
+New `operations/fullstat_pt_metadata.py` adapts canonical JSON/array hashing
+and publication from `data/cache_contracts.py`, file references from
+`cms_proxy_ladder/contracts.py`, population/source/role policy from
+`luka_fullstat/contracts.py`, and the label mapping from
+`jetclass2_delphes/schema.py`. Tests check adapter equivalence; publication
+intentionally refuses overwrite because report directories are always fresh.
+Separate adapters avoid eager ROOT/model imports in the original packages.
+
+New `operations/fullstat_pt_audit.py` consumes the foundation membership format
+written by `luka_fullstat/data.py`, cache parent bindings from
+`luka_fullstat/cache.py`, and the immutable anchor layout from
+`luka_fullstat_embedding_sweep/source.py`. No scientific implementation is
+copied from Fresh_check and no original source or artifact is changed.
+Counts/exposure formulas and the portable report workflow are new. New contract
+`LUKA_FULLSTAT_PT_AUDIT/v1`; no training/sampling contract is changed.
+
+## R24 two/three/four-GPU benchmark (2026-11-12)
+
+Scientific donor `58d0c0edf5f41cff2398fb168fc16fc92e169294`: runtime imports
+`luka_next_supervision_hydra/{campaign,worker,training,submission,inputs,contracts,
+model,reconstruction_model,reconstruction_targets,reconstruction_training,
+reconstruction_batched}.py`, plus native ParT, optimizer/LR, provenance, immutable
+artifacts and exact-DAG helpers. No scientific donor files were copied or edited.
+Original setup/R24 receipts, source, environment and full fit are verified before
+reuse. The new driver uses an isolated package import next to the original
+scientific package, following `scripts/luka_r8_recovery.py`'s loading pattern.
+
+Reviewed implementation baseline `1fc128dca7dc7ef547d242a1e2941e9a74e25ac8`:
+adapted execution patterns from `luka_subclass_hydra/benchmark_training.py`
+(global padding, parity snapshots, timing), `benchmark_submission.py`
+(one-job exact journal), `benchmark_site.py` (controller/GPU checks) and
+`luka_r8_recovery.py` (original-source admission and bounded read retries).
+The R24 driver uses explicit sample-weighted gradient SUM instead of DDP hooks,
+to accommodate original decoder chunk-backward and native VJP injection.
+New artifacts have their own `LUKA_R24_GPU_BENCHMARK_*/v1` namespace.
+
+## Bridge single-A6000 execution (2026-11-12)
+
+Donor commit `51323cc2b091fb5c525bb73cb6d20d8112ed6e5d` (deterministic bridge repair), reviewed tree baseline
+`95e436c6d34885e20a8672d8655343a3b629d458`. Extended the existing campaign-local
+execution, contracts, campaign, worker, training, resources, qualification and
+qualified modules. No donor implementation was copied. Existing
+`luka_embedding_bridge_hydra/distributed.py` already supports a one-rank
+Context, whole-batch native BatchNorm and unwrapped model execution; its
+implementation is unchanged. `luka_subclass_ddp_hydra/distributed.py` Context,
+memory and timing helpers, native ParT factory, loss/optimizer and activation
+checkpointing are reused unchanged. The baseline advance adds only four
+standalone R8 recovery runtime files; consumed shared helpers remain intact.
+Old v5 two-Pascal evidence retains its original source/hash ownership.
+
+## Bridge deterministic A6000 execution (2026-11-12)
+
+Donor commit `6a98c2bda010779b71348ff2cfd07b89f8160fc3`: campaign-local
+`execution.py`, `qualification.py`, `worker.py`, `contracts.py`, `campaign.py`
+and `resources.py` extended in place. Existing `luka_subclass_hydra/benchmark_training.py`
+snapshot/comparison and `luka_subclass_ddp_hydra/resources.py` tolerances are
+reused unchanged. No new copied donor implementation, external dependency or
+Fresh_check import. PyTorch2.5.1 native deterministic-algorithm configuration
+is used; no CUDA attention implementation is copied. Scientific RECIPE/v1 and
+TP checkpoint implementation remain unchanged.
+
+## Embedding bridge runtime repair (2026-11-12)
+
+Donor commit: `27a8341210ca686b74d1c538a3ed258bb7fe947d`.
+`luka_embedding_bridge_hydra/regions.py`, `cms_proxy_ladder/inputs.py`, and
+`literature_context/transform.py` supply the crop geometry and analytic input
+formulas adapted into `luka_embedding_bridge_hydra/regional_inputs.py`.
+The original per-crop contiguous FP64 sums and final FP32 inputs are retained;
+scalar `regions.crops` remains the parity authority. Original files are not
+modified. `luka_embedding_bridge_hydra/recovery.py` supplies source/terminal-job
+authentication for `qualified.py`; original source ownership is preserved.
+`luka_subclass_hydra/benchmark_site.py`, `luka_subclass_ddp_hydra/execution.py`
+and `luka_u100_pair_hydra/site.py` supply controller/typed-GRES/device checks
+adapted into the local `execution.py` for two A6000s versus two GTX1080Ti.
+`luka_subclass_ddp_hydra/resources.py` supplies the unchanged aggregate-host
+and per-rank GPU memory bounds, applied locally to each measured device pair.
+These donors are from the same27a83412 commit and remain unmodified.
+No new external dependency or Fresh_check runtime import.
+Admission baseline `58d0c0edf5f41cff2398fb168fc16fc92e169294` includes the
+independent Oscar and R8 campaigns. Shared `storage`, `physical_columns` and
+`cpu_allocation` bodies match the prior baseline by AST comparison; bridge
+numerical donors are unchanged. R8 model/loss changes are not used by this campaign.
+
 ## Oscar six-teacher subclass-off ablation (2026-11-11)
 
 Scientific/operational donor: `2fb09f38a3a1da85cdceff9df311963fdb3aa872`.
@@ -5835,7 +6968,7 @@ artifacts, or previous runtime evidence are reused.
 | `scouting/hcwdl_homotopy.py`, `repair.py` | Adapted exact endpoint/support and atomic applicability principles into new raw-field layout |
 | `scouting/hcwdl_upper_coupling.py`, `hcwdl_unified_balanced.py` | Adapted mass-normalized insertion/removal and balanced circular switch mathematics; no residual substitutions under full cardinality |
 | `scouting/hcwdl_tri100_spine4_graph.py` | Copied branch/rational-coordinate/schedule definitions into independently versioned fresh-reference graph |
-| `scouting/hcwdl_mhpe_tri60_training.py` | Adapted CE+forward-KL/T², schedule, patience/selection and no-resume principles; not a runtime import of its 15-class trainer |
+| `scouting/hcwdl_mhpe_tri60_training.py` | Adapted CE+forward-KL/TÂ², schedule, patience/selection and no-resume principles; not a runtime import of its 15-class trainer |
 | `scouting/hcwdl_authorization.py` | Runtime exact-clean-pushed-checkout validation |
 | `scouting/hcwdl_exact_dag_submission.py`, `hcwdl_recovery.py` | Runtime canonical dry-ledger validation, dependency resolution and submission receipts; new wrapper adds a campaign-wide submitter claim, pre-sbatch durable intent and cross-recovery active-job checks |
 | `sbatch/common.sh` | Existing absolute-path Conda/Tigris activation helper; new worker scripts supply explicit new data/spec paths |
@@ -5907,11 +7040,11 @@ campaign rows retained below as historical implementation context:
 
 | Historical path and Git blob | Current destination | Retained semantics |
 |---|---|---|
-| `src/hlt_classification/scouting/hcwdl_tri100_spine4_bottleneck_contracts.py` — `6e218fecb50c54b2a2f718e958e456eb206d55c7` | `hcwdl_adjacent_output_handoff_source.py` | Exact non-persistent full-cardinality `/v2` source contract identities. |
-| `src/hlt_classification/scouting/hcwdl_tri100_spine4_bottleneck_graph.py` — `058f0a4729137f9e0973b43e68e20769e921e297` | `hcwdl_adjacent_output_handoff_source.py` | Campaign, recipe, pairing, and exact coarse-U100 graph authentication. |
-| `src/hlt_classification/scouting/hcwdl_tri100_spine4_bottleneck_campaign.py` — `0602fc5bfbfff0e3bbbc5d74bfc8390f53cdb598` | `hcwdl_adjacent_output_handoff_source.py` | Immutable campaign-parent and all-mapped-population checks. |
-| `src/hlt_classification/scouting/hcwdl_tri100_spine4_bottleneck_runner.py` — `4002c92c62e4d7ed02ad370db0dfa7fcb3124dac` | `hcwdl_adjacent_output_handoff_runner.py` | Exact `replace_source_with_target_v1` RAM-only student-view reconstruction and historical training authority. |
-| `src/hlt_classification/scouting/hcwdl_tri100_spine4_graph.py` — `3de1bbe6886ac98df76fea9db6d6adc21856bc7e` | reused current module (byte-identical at the compatibility boundary) | Exact `SP4_COARSE_U100_from_U050` node payload and seed alias. |
+| `src/hlt_classification/scouting/hcwdl_tri100_spine4_bottleneck_contracts.py` â€” `6e218fecb50c54b2a2f718e958e456eb206d55c7` | `hcwdl_adjacent_output_handoff_source.py` | Exact non-persistent full-cardinality `/v2` source contract identities. |
+| `src/hlt_classification/scouting/hcwdl_tri100_spine4_bottleneck_graph.py` â€” `058f0a4729137f9e0973b43e68e20769e921e297` | `hcwdl_adjacent_output_handoff_source.py` | Campaign, recipe, pairing, and exact coarse-U100 graph authentication. |
+| `src/hlt_classification/scouting/hcwdl_tri100_spine4_bottleneck_campaign.py` â€” `0602fc5bfbfff0e3bbbc5d74bfc8390f53cdb598` | `hcwdl_adjacent_output_handoff_source.py` | Immutable campaign-parent and all-mapped-population checks. |
+| `src/hlt_classification/scouting/hcwdl_tri100_spine4_bottleneck_runner.py` â€” `4002c92c62e4d7ed02ad370db0dfa7fcb3124dac` | `hcwdl_adjacent_output_handoff_runner.py` | Exact `replace_source_with_target_v1` RAM-only student-view reconstruction and historical training authority. |
+| `src/hlt_classification/scouting/hcwdl_tri100_spine4_graph.py` â€” `3de1bbe6886ac98df76fea9db6d6adc21856bc7e` | reused current module (byte-identical at the compatibility boundary) | Exact `SP4_COARSE_U100_from_U050` node payload and seed alias. |
 
 No runtime import from a detached historical worktree is used.
 
@@ -5927,23 +7060,23 @@ modules before live creation.
 
 | Donor path and SHA-256 | New path | Retained semantics and integration |
 |---|---|---|
-| `src/hlt_classification/models/scouting_particle_transformer.py` — `c6128610d4d249984a8d7af874737e1dd2e00337466ebdd91a119424dbf765cc` | same path | Merged one-forward token/jet/relation surface capture into the current unified model while preserving ordinary-logit parity. |
-| `src/hlt_classification/models/hcwdl_representation.py` — `49d754e3cae1abfbb1c332c90f2db15245303ffbe5ccf2a649e647a25fcd5219` | same path | Exact representation heads, student wrapper, and head-free deployable extraction. |
-| `src/hlt_classification/models/hcwdl_surfaces.py` — `90d8449e862c10e8fe8a73c305d338b7411a4e74c734b353c9be1ccdfa7027ae` | same path | Exact typed one-forward surface container and validation. |
-| `src/hlt_classification/scouting/hcwdl_representation_graph.py` — `5205b158aabc2f31587c5554f4bccadcdf3a878e2b1fa12423481a77522ccb0e` | same path | RSET/RREL strategy identities and paired seed semantics. |
-| `src/hlt_classification/scouting/hcwdl_representation_artifacts.py` — `45cea8226a6e752857b407031d330453f10e999130a1daa9d4aeb33a2a7a5fb7` | same path | Exact representation artifact-envelope and lineage helpers. |
-| `src/hlt_classification/scouting/hcwdl_representation_contracts.py` — `808ca40ed06ecf2ac0df22b2a51c1fc0854c8be1b870aa9beab733654e9c37c1` | same path | Exact versioned representation contract validators. |
-| `src/hlt_classification/scouting/hcwdl_representation_data.py` — `0fa2f085e5646d2410135f61968ab139048b212cf1dacb740467c865689d9bbd` | same path | Exact representation-aware input and batch containers. |
-| `src/hlt_classification/scouting/hcwdl_representation_recipe.py` — `0cc302ce6aa862506db32112038913cb4b9bd58bd64294d50c7193153188c1ed` | same path | Corrected representation recipe v5 schedules, kernels, and calibration. |
-| `src/hlt_classification/scouting/hcwdl_representation_kernels.py` — `c236e668f481d6724f50eca59b693b376000e42788376d483206ed1f7668a173` | same path | Spectral resources, finite kernels, weighted means, and reference oracles. |
-| `src/hlt_classification/scouting/hcwdl_representation_losses.py` — `413bcaebf645dce0811d23c1d3093b2255512f34c6c1b5b2c44560d0edf9d2e3` | same path | Jet, set, relation, topology, scheduling, and support-aware losses. |
-| `src/hlt_classification/scouting/hcwdl_representation_calibration.py` — `c9a94361e09e27eca999e3e93fcf691f5e4d026c8f644b44294d800f311ae9c1` | same path | Train-only deterministic calibration with state/RNG restoration. |
-| `src/hlt_classification/scouting/hcwdl_representation_targets.py` — `97324a3b492ab21785d0fe6be3184afbf91cc7521c93b1881de877965de65b0a` | same path | Target schemas, identity hashes, validation, and support metadata. |
-| `src/hlt_classification/scouting/hcwdl_representation_target_runtime.py` — `450a7843293fe69a73306decc086385c650487c36b63cfc17e0c045d4e5a8b2b` | same path | One-forward in-memory carrier target construction and runtime audits. |
-| `src/hlt_classification/scouting/hcwdl_representation_training.py` — `16f344be23a7ce40ed7c4a45222a8ca769953ffcfbfc06d82a08c82135817f1b` | same path | Representation model initialization, identity joins, normalized components, diagnostics, and extraction. |
-| `src/hlt_classification/scouting/hcwdl_homotopy_stream.py` — `de49beb816ab4f80e83d0159e3143744d3b935cca8428eea1935382a4affcd04` | same path | Merged fixed-work-per-source-chunk endpoint streaming into the current homotopy stream. |
-| `src/hlt_classification/scouting/hcwdl_homotopy_representation_training.py` — `bbf468f1e9bcb199dc5ebce790391f47ec20fbcca79eaf440f56d73d538ae29d` | same path | Retained as the numerical wiring reference for carrier-view target generation and training. |
-| `src/hlt_classification/scouting/hcwdl_homotopy_representation_targets.py` — `e2e10e74c6009f5cecf1fb19fa1ff90045bd76f505caeed053b6821e45ff11d9` | same path | Retained only as a durable-bank numerical oracle; TRI60 never calls its publisher. |
+| `src/hlt_classification/models/scouting_particle_transformer.py` â€” `c6128610d4d249984a8d7af874737e1dd2e00337466ebdd91a119424dbf765cc` | same path | Merged one-forward token/jet/relation surface capture into the current unified model while preserving ordinary-logit parity. |
+| `src/hlt_classification/models/hcwdl_representation.py` â€” `49d754e3cae1abfbb1c332c90f2db15245303ffbe5ccf2a649e647a25fcd5219` | same path | Exact representation heads, student wrapper, and head-free deployable extraction. |
+| `src/hlt_classification/models/hcwdl_surfaces.py` â€” `90d8449e862c10e8fe8a73c305d338b7411a4e74c734b353c9be1ccdfa7027ae` | same path | Exact typed one-forward surface container and validation. |
+| `src/hlt_classification/scouting/hcwdl_representation_graph.py` â€” `5205b158aabc2f31587c5554f4bccadcdf3a878e2b1fa12423481a77522ccb0e` | same path | RSET/RREL strategy identities and paired seed semantics. |
+| `src/hlt_classification/scouting/hcwdl_representation_artifacts.py` â€” `45cea8226a6e752857b407031d330453f10e999130a1daa9d4aeb33a2a7a5fb7` | same path | Exact representation artifact-envelope and lineage helpers. |
+| `src/hlt_classification/scouting/hcwdl_representation_contracts.py` â€” `808ca40ed06ecf2ac0df22b2a51c1fc0854c8be1b870aa9beab733654e9c37c1` | same path | Exact versioned representation contract validators. |
+| `src/hlt_classification/scouting/hcwdl_representation_data.py` â€” `0fa2f085e5646d2410135f61968ab139048b212cf1dacb740467c865689d9bbd` | same path | Exact representation-aware input and batch containers. |
+| `src/hlt_classification/scouting/hcwdl_representation_recipe.py` â€” `0cc302ce6aa862506db32112038913cb4b9bd58bd64294d50c7193153188c1ed` | same path | Corrected representation recipe v5 schedules, kernels, and calibration. |
+| `src/hlt_classification/scouting/hcwdl_representation_kernels.py` â€” `c236e668f481d6724f50eca59b693b376000e42788376d483206ed1f7668a173` | same path | Spectral resources, finite kernels, weighted means, and reference oracles. |
+| `src/hlt_classification/scouting/hcwdl_representation_losses.py` â€” `413bcaebf645dce0811d23c1d3093b2255512f34c6c1b5b2c44560d0edf9d2e3` | same path | Jet, set, relation, topology, scheduling, and support-aware losses. |
+| `src/hlt_classification/scouting/hcwdl_representation_calibration.py` â€” `c9a94361e09e27eca999e3e93fcf691f5e4d026c8f644b44294d800f311ae9c1` | same path | Train-only deterministic calibration with state/RNG restoration. |
+| `src/hlt_classification/scouting/hcwdl_representation_targets.py` â€” `97324a3b492ab21785d0fe6be3184afbf91cc7521c93b1881de877965de65b0a` | same path | Target schemas, identity hashes, validation, and support metadata. |
+| `src/hlt_classification/scouting/hcwdl_representation_target_runtime.py` â€” `450a7843293fe69a73306decc086385c650487c36b63cfc17e0c045d4e5a8b2b` | same path | One-forward in-memory carrier target construction and runtime audits. |
+| `src/hlt_classification/scouting/hcwdl_representation_training.py` â€” `16f344be23a7ce40ed7c4a45222a8ca769953ffcfbfc06d82a08c82135817f1b` | same path | Representation model initialization, identity joins, normalized components, diagnostics, and extraction. |
+| `src/hlt_classification/scouting/hcwdl_homotopy_stream.py` â€” `de49beb816ab4f80e83d0159e3143744d3b935cca8428eea1935382a4affcd04` | same path | Merged fixed-work-per-source-chunk endpoint streaming into the current homotopy stream. |
+| `src/hlt_classification/scouting/hcwdl_homotopy_representation_training.py` â€” `bbf468f1e9bcb199dc5ebce790391f47ec20fbcca79eaf440f56d73d538ae29d` | same path | Retained as the numerical wiring reference for carrier-view target generation and training. |
+| `src/hlt_classification/scouting/hcwdl_homotopy_representation_targets.py` â€” `e2e10e74c6009f5cecf1fb19fa1ff90045bd76f505caeed053b6821e45ff11d9` | same path | Retained only as a durable-bank numerical oracle; TRI60 never calls its publisher. |
 
 The following exact same-commit support modules were also migrated so the
 representation package and its regression tests remain standalone. They do
@@ -5952,17 +7085,17 @@ publisher, or durable representation-target publisher.
 
 | Donor path and SHA-256 | New path | Campaign role |
 |---|---|---|
-| `src/hlt_classification/scouting/hcwdl_direct_offline_kd_graph.py` — `16fd891eb2358f17af4e1a82a4628722ba96aad15304e73a13a0f5248c6bf312` | same path | Donor graph validation/reference only. |
-| `src/hlt_classification/scouting/hcwdl_homotopy_representation_contracts.py` — `593c5ac9215490abab388f315fd1d81b226ca9d0a2bfee5d07bce874219e613a` | same path | Donor contract validation/reference only. |
-| `src/hlt_classification/scouting/hcwdl_homotopy_representation_graph.py` — `d0841a608d1dccf71fa5d474f2ba1e6f19a489f31578079687903bf65d8670c6` | same path | Donor graph/reference fixtures only. |
-| `src/hlt_classification/scouting/hcwdl_homotopy_representation_recipe.py` — `84ad20239df5b1b7c7ffab60caccaab36c8ac83e6265189742335e1ce18c4357` | same path | Donor recipe/reference fixtures only. |
-| `src/hlt_classification/scouting/hcwdl_numerical_acceptance.py` — `3aa8f02919bbfb964fb7225486c929185744c7e7d128c703290f4295f4687596` | same path | Numerical acceptance helpers reused by regression tests. |
-| `src/hlt_classification/scouting/hcwdl_paired_bootstrap.py` — `79d8f5f3e206b3137163208e0780226513e6cc08bb5a6fc954daf12fe049fb1e` | same path | Paired reporting/bootstrap reference. |
-| `src/hlt_classification/scouting/hcwdl_parent_loss.py` — `879c8fc49263006375226398659ad8739cb729222f320f7c20fbff8c429bb2bf` | same path | Parent-loss reference and validation. |
-| `src/hlt_classification/scouting/hcwdl_representation_graph_registry.py` — `63881ffc2e3554b15a9aefab709b12b6d697fb7ad6354066ebc63d2ca0163049` | same path | Donor strategy registry/reference. |
-| `src/hlt_classification/scouting/hcwdl_representation_reporting.py` — `ea6bf42fed13384bdcca13381eb280f0b696dd913ac215640a34950bdf725b6d` | same path | Representation diagnostics/reference reporting. |
-| `src/hlt_classification/scouting/hcwdl_representation_resources.py` — `511e17de3a88e6d9c5670af117ce2095680109383be31a07307ad124ab2a611e` | same path | Resource-envelope reference. |
-| `src/hlt_classification/scouting/hcwdl_representation_resume.py` — `9333574c5edd3b8913df9f8f6039340817f8ec6fc037c9082434773ae213d223` | same path | Numerical no-resume equivalence oracle only; TRI60 never invokes its publisher. |
+| `src/hlt_classification/scouting/hcwdl_direct_offline_kd_graph.py` â€” `16fd891eb2358f17af4e1a82a4628722ba96aad15304e73a13a0f5248c6bf312` | same path | Donor graph validation/reference only. |
+| `src/hlt_classification/scouting/hcwdl_homotopy_representation_contracts.py` â€” `593c5ac9215490abab388f315fd1d81b226ca9d0a2bfee5d07bce874219e613a` | same path | Donor contract validation/reference only. |
+| `src/hlt_classification/scouting/hcwdl_homotopy_representation_graph.py` â€” `d0841a608d1dccf71fa5d474f2ba1e6f19a489f31578079687903bf65d8670c6` | same path | Donor graph/reference fixtures only. |
+| `src/hlt_classification/scouting/hcwdl_homotopy_representation_recipe.py` â€” `84ad20239df5b1b7c7ffab60caccaab36c8ac83e6265189742335e1ce18c4357` | same path | Donor recipe/reference fixtures only. |
+| `src/hlt_classification/scouting/hcwdl_numerical_acceptance.py` â€” `3aa8f02919bbfb964fb7225486c929185744c7e7d128c703290f4295f4687596` | same path | Numerical acceptance helpers reused by regression tests. |
+| `src/hlt_classification/scouting/hcwdl_paired_bootstrap.py` â€” `79d8f5f3e206b3137163208e0780226513e6cc08bb5a6fc954daf12fe049fb1e` | same path | Paired reporting/bootstrap reference. |
+| `src/hlt_classification/scouting/hcwdl_parent_loss.py` â€” `879c8fc49263006375226398659ad8739cb729222f320f7c20fbff8c429bb2bf` | same path | Parent-loss reference and validation. |
+| `src/hlt_classification/scouting/hcwdl_representation_graph_registry.py` â€” `63881ffc2e3554b15a9aefab709b12b6d697fb7ad6354066ebc63d2ca0163049` | same path | Donor strategy registry/reference. |
+| `src/hlt_classification/scouting/hcwdl_representation_reporting.py` â€” `ea6bf42fed13384bdcca13381eb280f0b696dd913ac215640a34950bdf725b6d` | same path | Representation diagnostics/reference reporting. |
+| `src/hlt_classification/scouting/hcwdl_representation_resources.py` â€” `511e17de3a88e6d9c5670af117ce2095680109383be31a07307ad124ab2a611e` | same path | Resource-envelope reference. |
+| `src/hlt_classification/scouting/hcwdl_representation_resume.py` â€” `9333574c5edd3b8913df9f8f6039340817f8ec6fc037c9082434773ae213d223` | same path | Numerical no-resume equivalence oracle only; TRI60 never invokes its publisher. |
 
 The donor regression references were
 `tests/test_hcwdl_representation_math.py` (`83a1592346ef0d94f8cff7d313d1298cf98ae78e6f425508e55504a7cbe8ef25`),
@@ -5980,9 +7113,9 @@ rewrote the following semantics without donor runtime imports:
 
 | Donor path and SHA-256 | New paths | Retained semantics | Intentional changes and evidence |
 |---|---|---|---|
-| `jetclass_fresh/jetclass_data.py` — `30bbb947f83aeab9b190af640842071af075a558e1e12f7018f6ae96edf248ea` | `src/hlt_classification/data/{schema,identity,root_reader,splits}.py` | class order, longest-prefix mapping, 14 channels, 128 cap, transformations, bounded retries, chunk ordering, per-role sampling RNG, global shuffle | canonical recursive parent root; one root-relative namespace; label-bound identity plus label-free leakage key; strict branches/lengths/finiteness/PID/one-hot checks; stronger capacity/balance/overlap audit; versioned self-hashing immutable atomic manifest; streaming iterator. Covered by `tests/test_data_foundation.py`. |
-| `scripts/build_jetclass_splits.py` — `87293fff44a413c5e6e833a2bfcddf422fe3e2017a077b6bbaade9ecba99b222` | `scripts/build_splits.py` | explicit split sizes and report | rewritten standalone CLI; single recursive root; production fail-closed; authenticated atomic output. |
-| `scripts/preflight_relational_part_data.py` — `c15cb8c30100809f6b6804ccaea425b545e3598c41e877c0b7d0d7682c8ea780` | `scripts/preflight_data.py` | class capacity preflight | generic standalone CLI; full branch schema validation; diagnostic skips can never be production-eligible. |
+| `jetclass_fresh/jetclass_data.py` â€” `30bbb947f83aeab9b190af640842071af075a558e1e12f7018f6ae96edf248ea` | `src/hlt_classification/data/{schema,identity,root_reader,splits}.py` | class order, longest-prefix mapping, 14 channels, 128 cap, transformations, bounded retries, chunk ordering, per-role sampling RNG, global shuffle | canonical recursive parent root; one root-relative namespace; label-bound identity plus label-free leakage key; strict branches/lengths/finiteness/PID/one-hot checks; stronger capacity/balance/overlap audit; versioned self-hashing immutable atomic manifest; streaming iterator. Covered by `tests/test_data_foundation.py`. |
+| `scripts/build_jetclass_splits.py` â€” `87293fff44a413c5e6e833a2bfcddf422fe3e2017a077b6bbaade9ecba99b222` | `scripts/build_splits.py` | explicit split sizes and report | rewritten standalone CLI; single recursive root; production fail-closed; authenticated atomic output. |
+| `scripts/preflight_relational_part_data.py` â€” `c15cb8c30100809f6b6804ccaea425b545e3598c41e877c0b7d0d7682c8ea780` | `scripts/preflight_data.py` | class capacity preflight | generic standalone CLI; full branch schema validation; diagnostic skips can never be production-eligible. |
 
 The donor test reference was
 `tests/test_jetclass_data.py` at
@@ -5995,9 +7128,9 @@ Transfer Block 3 migrated the registered HLT-v3 v1 scientific kernel:
 
 | Donor path and SHA-256 | New path | Retained semantics | Intentional changes and evidence |
 |---|---|---|---|
-| `teacher_logit_reco/relation_expert_token_bridge/hlt_v3.py` — `3f8509486818469fc63990eccb9d09182df460ae593efef474f4a6a3b9311037` | `src/hlt_classification/data/hlt_v3.py` | profile parameters, degradation profiles, type multipliers, PID transitions, operation order, substream IDs, threshold/loss/merge/response algorithms, mass preservation, stable sorting, validity states, and diagnostics | removed RETB/cache imports; strengthened invalid-type and finite validation; assigned serialized metadata a repository-specific contract name; retained donor random-domain bytes for registered-v1 output parity. Golden array and diagnostic hashes plus focused mechanism tests are in `tests/test_hlt_v3.py`. |
-| `teacher_logit_reco/relation_expert_token_bridge/replicas.py` — `fe3013ac4543d048287527bb326c6ea943251b9448170c4f2fbc1dcc6181ffa8` | `src/hlt_classification/data/replicas.py` | policies, donor role seeds, random multipliers, identity cycle, event seed derivation, and evaluation replica zero | removed RETB contract dependency; added canonical `model_val=3054` and `stack_train=3055` domains required by the new five-role split while preserving every donor-existing mapping; added a repository-specific self-authenticating manifest contract, strict input validation, and detached manifest payloads. |
-| `jetclass_fixed_hlt.py` — `c222a9233b1a5284a57bbcf2e253c83d3d7679ff26f5e825c854e8cece3bb2e4` | `src/hlt_classification/data/hlt_v3.py` | phi wrapping, local density, v2 efficiency base terms, and v2 kinematic base terms only | excluded legacy v1/v2 builders, CLI, caches, and unrelated profiles; inlined only the inherited formulas needed by registered HLT-v3. |
+| `teacher_logit_reco/relation_expert_token_bridge/hlt_v3.py` â€” `3f8509486818469fc63990eccb9d09182df460ae593efef474f4a6a3b9311037` | `src/hlt_classification/data/hlt_v3.py` | profile parameters, degradation profiles, type multipliers, PID transitions, operation order, substream IDs, threshold/loss/merge/response algorithms, mass preservation, stable sorting, validity states, and diagnostics | removed RETB/cache imports; strengthened invalid-type and finite validation; assigned serialized metadata a repository-specific contract name; retained donor random-domain bytes for registered-v1 output parity. Golden array and diagnostic hashes plus focused mechanism tests are in `tests/test_hlt_v3.py`. |
+| `teacher_logit_reco/relation_expert_token_bridge/replicas.py` â€” `fe3013ac4543d048287527bb326c6ea943251b9448170c4f2fbc1dcc6181ffa8` | `src/hlt_classification/data/replicas.py` | policies, donor role seeds, random multipliers, identity cycle, event seed derivation, and evaluation replica zero | removed RETB contract dependency; added canonical `model_val=3054` and `stack_train=3055` domains required by the new five-role split while preserving every donor-existing mapping; added a repository-specific self-authenticating manifest contract, strict input validation, and detached manifest payloads. |
+| `jetclass_fixed_hlt.py` â€” `c222a9233b1a5284a57bbcf2e253c83d3d7679ff26f5e825c854e8cece3bb2e4` | `src/hlt_classification/data/hlt_v3.py` | phi wrapping, local density, v2 efficiency base terms, and v2 kinematic base terms only | excluded legacy v1/v2 builders, CLI, caches, and unrelated profiles; inlined only the inherited formulas needed by registered HLT-v3. |
 
 The focused donor test reference is
 `tests/test_relation_expert_token_bridge_step2.py`. Block 3 does not copy
@@ -6008,8 +7141,8 @@ than copying either monolithic format:
 
 | Donor path and SHA-256 | New paths | Retained semantics | Intentional changes and evidence |
 |---|---|---|---|
-| `jetclass_fresh/hlt_cache.py` — `5631ac115a4f352739492e0db06c5e9c3111fa52d522d273243504e0731823c4` | `src/hlt_classification/data/{cache_contracts,offline_cache,dataset}.py` | bounded cached raw views, stable identity order, reusable HLT-facing dataset access | split offline and degraded caches into distinct versioned contracts; deterministic NPZ bytes; per-array and per-file hashes; atomic immutable sidecars and manifests; bounded cross-shard reads; exact source/split/schema/generator lineage. |
-| `teacher_logit_reco/relation_expert_token_bridge/hlt_cache.py` — `57d0dde4e4aad5aa622fc62c2020954ae69a0108cf89178d7304dabd2f6345e4` | `src/hlt_classification/data/{cache_contracts,hlt_cache,dataset}.py` | deterministic degradation from authenticated offline parents, replica/profile binding, resumable shards, aggregate diagnostics | removed RETB campaign coupling and construction-index exposure; added source-snapshot and exact parent-range hashes; made processing-batch and physical-shard layouts semantically invariant; added standalone build/audit CLIs. |
+| `jetclass_fresh/hlt_cache.py` â€” `5631ac115a4f352739492e0db06c5e9c3111fa52d522d273243504e0731823c4` | `src/hlt_classification/data/{cache_contracts,offline_cache,dataset}.py` | bounded cached raw views, stable identity order, reusable HLT-facing dataset access | split offline and degraded caches into distinct versioned contracts; deterministic NPZ bytes; per-array and per-file hashes; atomic immutable sidecars and manifests; bounded cross-shard reads; exact source/split/schema/generator lineage. |
+| `teacher_logit_reco/relation_expert_token_bridge/hlt_cache.py` â€” `57d0dde4e4aad5aa622fc62c2020954ae69a0108cf89178d7304dabd2f6345e4` | `src/hlt_classification/data/{cache_contracts,hlt_cache,dataset}.py` | deterministic degradation from authenticated offline parents, replica/profile binding, resumable shards, aggregate diagnostics | removed RETB campaign coupling and construction-index exposure; added source-snapshot and exact parent-range hashes; made processing-batch and physical-shard layouts semantically invariant; added standalone build/audit CLIs. |
 
 Block-4 failure injection and byte-level resume/layout evidence is in
 `tests/test_cache_pipeline.py`. No donor runtime import or third-party source
@@ -6019,8 +7152,8 @@ Transfer Block 5 migrated the canonical model-input and adapter semantics:
 
 | Donor path and SHA-256 | New path | Retained semantics | Intentional changes and evidence |
 |---|---|---|---|
-| `jetclass_fresh/part_inputs.py` — `6e237ba0eec33ef9a2b78cde579896b02c5b739ccd8126de0512774eef30166a` | `src/hlt_classification/data/part_inputs.py` | two point coordinates, exact ordered 17-feature transform, four-vectors, supplied-view axis reconstruction, padding, and all-empty safety | removed donor package and candidate-weight coupling; accepts the standalone 14-token `JetView`; adds strict dtype, finite, padding, identity, label, and explicit source-view validation plus a repository-specific contract. Covered by `tests/test_part_inputs.py`. |
-| `jetclass_fresh/hlt_baseline.py` — `982c1696967b809fd534add1766f9b780fb858297f334036a7d9aa84f078a418` | `src/hlt_classification/models/particle_transformer.py` | lazy Weaver construction, exact standard-four canonical architecture, input delegation, and class-token no-weight-decay name | excluded donor dataset/training code; mixed precision is disabled by the authoritative FP32 runtime rather than passed as a noncanonical model constructor argument; adds logits/input-gradient/parameter-gradient/mask/state-dictionary attestation. Covered locally with an interface-faithful test double; authoritative real-Weaver execution remains pending. |
+| `jetclass_fresh/part_inputs.py` â€” `6e237ba0eec33ef9a2b78cde579896b02c5b739ccd8126de0512774eef30166a` | `src/hlt_classification/data/part_inputs.py` | two point coordinates, exact ordered 17-feature transform, four-vectors, supplied-view axis reconstruction, padding, and all-empty safety | removed donor package and candidate-weight coupling; accepts the standalone 14-token `JetView`; adds strict dtype, finite, padding, identity, label, and explicit source-view validation plus a repository-specific contract. Covered by `tests/test_part_inputs.py`. |
+| `jetclass_fresh/hlt_baseline.py` â€” `982c1696967b809fd534add1766f9b780fb858297f334036a7d9aa84f078a418` | `src/hlt_classification/models/particle_transformer.py` | lazy Weaver construction, exact standard-four canonical architecture, input delegation, and class-token no-weight-decay name | excluded donor dataset/training code; mixed precision is disabled by the authoritative FP32 runtime rather than passed as a noncanonical model constructor argument; adds logits/input-gradient/parameter-gradient/mask/state-dictionary attestation. Covered locally with an interface-faithful test double; authoritative real-Weaver execution remains pending. |
 
 Both donor files were inspected at commit
 `bfcda5bd6fd48037ab198bcca1eadf6f4d87e131` and were clean at their recorded
@@ -6032,7 +7165,7 @@ plan:
 
 | Donor path and SHA-256 | New path | Retained semantics | Intentional changes and evidence |
 |---|---|---|---|
-| `teacher_logit_reco/HLT_OFFLINE_STRUCTURE_DISTILLATION_IMPLEMENTATION_PLAN.md` — `0d4eaab71c13dd64a4af326d085f35259490b90eca084c60d6c6c3a24325a937` | `docs/plans/HLT_OFFLINE_STRUCTURE_DISTILLATION_IMPLEMENTATION_PLAN.md` | all scientific questions, target definitions, controls, split counts, access rules, stages, selectors, metrics, statistics, locks, and acceptance criteria | replaced old repository/runtime paths with `src/hlt_classification/hosd` and local reusable contracts; retained optional donor comparators; required local ports plus donor-parity tests for missing RPT/RETB semantics; reset donor-only implementation statuses. No executable donor code was copied by this document migration. |
+| `teacher_logit_reco/HLT_OFFLINE_STRUCTURE_DISTILLATION_IMPLEMENTATION_PLAN.md` â€” `0d4eaab71c13dd64a4af326d085f35259490b90eca084c60d6c6c3a24325a937` | `docs/plans/HLT_OFFLINE_STRUCTURE_DISTILLATION_IMPLEMENTATION_PLAN.md` | all scientific questions, target definitions, controls, split counts, access rules, stages, selectors, metrics, statistics, locks, and acceptance criteria | replaced old repository/runtime paths with `src/hlt_classification/hosd` and local reusable contracts; retained optional donor comparators; required local ports plus donor-parity tests for missing RPT/RETB semantics; reset donor-only implementation statuses. No executable donor code was copied by this document migration. |
 
 ## PRAD implementation provenance
 
@@ -6075,9 +7208,9 @@ exact source hashes rather than inventing a donor commit:
 
 | Donor path and SHA-256 | New paths | Retained semantics | Intentional changes and evidence |
 |---|---|---|---|
-| `HLTvsOfflineComparisons/matching/run_selective_matcher_campaign.py` — `68e2bbf1098506c37dbd5af7a1265db89bfbece19b7f7a6a00ab99605e2544d0` | `src/hlt_classification/scouting/fitted_strict.py` | fitted-strict edge features/signs, empirical LLR lookup, broad and strict gates, rectangular Hungarian private dummies, assignment diagnostics, confidence calibration, exact operating point | refactored inference only into a stable typed API; no implicit fitting; native offline indices are restored after lost-track exclusion; fail-closed artifact validation; numerical golden parity in `tests/test_fitted_strict_matcher.py`. |
-| `HLTvsOfflineComparisons/matching/FITTED_STRICT_MATCHER_IMPLEMENTATION_GUIDE.md` — `d3b2adc32df67b0ee971a9383fadbae00540b4022be64a921b7d2d90c361733e` | `docs/contracts/FITTED_STRICT_MATCHER.md` | algorithm, population, selective-mask, and PMARD preservation contract | condensed into a repository-local versioned contract and explicitly blocks the incompatible legacy complete endpoint. |
-| canonical `fitted_edge_model.json` — donor byte SHA-256 `2cfd51b209435164263247252a35cf83708fa71fc2580301c35bb5d905d41142`; `confidence_models.json` — `dc1ce2f3f889bef3e3c6cdc46da70bc14e79dff518d6d4b1d759fac51f093735`; `independent_validation.json` — `af1d2b009e7c9186b454acd461e4cf40335261ae4b491f1c82dd1957e941687e` | `src/hlt_classification/scouting/resources/fitted_strict_v1/` | exact parsed model/audit values from the intact 7,500-jet bundle | JSON semantic hashes are authenticated so Windows/Linux checkout line endings cannot change identity; original donor byte hashes remain in the vendored provenance file. No checkpoint, dataset, or race-corrupted result directory was copied. |
+| `HLTvsOfflineComparisons/matching/run_selective_matcher_campaign.py` â€” `68e2bbf1098506c37dbd5af7a1265db89bfbece19b7f7a6a00ab99605e2544d0` | `src/hlt_classification/scouting/fitted_strict.py` | fitted-strict edge features/signs, empirical LLR lookup, broad and strict gates, rectangular Hungarian private dummies, assignment diagnostics, confidence calibration, exact operating point | refactored inference only into a stable typed API; no implicit fitting; native offline indices are restored after lost-track exclusion; fail-closed artifact validation; numerical golden parity in `tests/test_fitted_strict_matcher.py`. |
+| `HLTvsOfflineComparisons/matching/FITTED_STRICT_MATCHER_IMPLEMENTATION_GUIDE.md` â€” `d3b2adc32df67b0ee971a9383fadbae00540b4022be64a921b7d2d90c361733e` | `docs/contracts/FITTED_STRICT_MATCHER.md` | algorithm, population, selective-mask, and PMARD preservation contract | condensed into a repository-local versioned contract and explicitly blocks the incompatible legacy complete endpoint. |
+| canonical `fitted_edge_model.json` â€” donor byte SHA-256 `2cfd51b209435164263247252a35cf83708fa71fc2580301c35bb5d905d41142`; `confidence_models.json` â€” `dc1ce2f3f889bef3e3c6cdc46da70bc14e79dff518d6d4b1d759fac51f093735`; `independent_validation.json` â€” `af1d2b009e7c9186b454acd461e4cf40335261ae4b491f1c82dd1957e941687e` | `src/hlt_classification/scouting/resources/fitted_strict_v1/` | exact parsed model/audit values from the intact 7,500-jet bundle | JSON semantic hashes are authenticated so Windows/Linux checkout line endings cannot change identity; original donor byte hashes remain in the vendored provenance file. No checkpoint, dataset, or race-corrupted result directory was copied. |
 
 The independent donor validator
 `validate_selective_matcher_results.py` was inspected at SHA-256
@@ -6085,9 +7218,9 @@ The independent donor validator
 No runtime import reaches the external FCV tree, and no new third-party source
 or license obligation was introduced.
 
-The subsequent selective campaign plumbing—`selective_assignment.py`, the two
+The subsequent selective campaign plumbingâ€”`selective_assignment.py`, the two
 builder CLIs, selective 21-field repair, assignment authorization, pilot DAG,
-and oracle evaluation—is original repository-local work with no donor file or
+and oracle evaluationâ€”is original repository-local work with no donor file or
 commit. It composes the authenticated matcher above with existing Scouting
 contracts; tests cover sparse joins, exact unmatched preservation, endpoint
 replacement, and campaign registration.
@@ -6102,16 +7235,16 @@ runtime has no import, path lookup, or other dependency on that repository.
 
 | Donor path and SHA-256 | New path | Retained semantics | Repository integration |
 |---|---|---|---|
-| `src/highcov/assignment.py` — `44dee1847dbc5287ee97c738468abf6be7a551831180130ace5ae8563166bba7` | `src/hlt_classification/scouting/highcov_assignment.py` | cardinality-first lexicographic assignment, private dustbins, consensus assignment, and 18 diagnostics | package-relative imports; immutable assignment shards and parity tests |
-| `src/highcov/calibration.py` — `6dcbfefa0222ddd9a06a5cc1fdb7bfc5f137a00cdcef56c1f1c6878d034aa832` | `src/hlt_classification/scouting/highcov_calibration.py` | frozen isotonic confidence calibration | strict packaged-resource validation and uint16 persistence |
-| `src/highcov/data.py` — `7e4b2ce99abab15b7abc06a1aae223ba58b5d81c5e16ad59c58f998cf18f8676` | `src/hlt_classification/scouting/highcov_data.py` | validated particle container, kinematics, categories, charge, measurements, and native indices | Scouting particle adapter; lost-track exclusion before matching |
-| `src/highcov/features.py` — `db2a1206686697003bb6b8a2803b340424a0f56f667c08ac29286c559cffe597` | `src/hlt_classification/scouting/highcov_features.py` | frozen candidate gate, edge matrices, ranks, and feature order | donor-parity fixture and fail-closed schema validation |
-| `src/highcov/scorers.py` — `77debf7a892c6e16149027563f91fb68433f58638ae965b3ed2a20e1c829d97c` | `src/hlt_classification/scouting/highcov_scorers.py` | empirical and independent consensus scores | role/fold scorer selection is enforced by `highcov_matcher.py` |
-| `src/highcov/final_matcher.py` — `78a758ef5d3333d67d1e2aa193af2eed06edcb7d04b483f2f788e4722ddbc897` | `src/hlt_classification/scouting/highcov_matcher.py` | selected global matcher and post-assignment confidence | train cross-fitting, validation/audit model policy, native-index output |
-| `src/highcov/hashing.py` — `fb602d4048bb8f8497dc899a219e55679272046b424dccd259a2e40c4bdec00a` | `src/hlt_classification/scouting/highcov_hashing.py` | canonical semantic hashing | composed with repository byte/content hashes and atomic publication |
-| `configs/selected_matcher.json` — `eab6c945c058a5447063066eca79c931434d06d63e3729d1dfeeeab354100a87` | `src/hlt_classification/scouting/resources/highcov_v1/selected_matcher.json` | exact selected algorithm/configuration | packaged runtime resource; parsed semantic hash is also checked |
-| `artifacts/models/empirical_models.json` — `6a9f8d594b0bfadae03a80187917fac2c8261cb0345965daa2f33af4e6836389` | `src/hlt_classification/scouting/resources/highcov_v1/empirical_models.json` | full and four holdout empirical scorers | exact fold selection and train-leakage rejection |
-| `artifacts/models/final_confidence_calibration.json` — `40a9c4499244916e58a1f8c74a52d05aac0418a21220b27d03afcd97a8454c31` | `src/hlt_classification/scouting/resources/highcov_v1/final_confidence_calibration.json` | final confidence calibrator | exact semantic/resource validation and quantization tests |
+| `src/highcov/assignment.py` â€” `44dee1847dbc5287ee97c738468abf6be7a551831180130ace5ae8563166bba7` | `src/hlt_classification/scouting/highcov_assignment.py` | cardinality-first lexicographic assignment, private dustbins, consensus assignment, and 18 diagnostics | package-relative imports; immutable assignment shards and parity tests |
+| `src/highcov/calibration.py` â€” `6dcbfefa0222ddd9a06a5cc1fdb7bfc5f137a00cdcef56c1f1c6878d034aa832` | `src/hlt_classification/scouting/highcov_calibration.py` | frozen isotonic confidence calibration | strict packaged-resource validation and uint16 persistence |
+| `src/highcov/data.py` â€” `7e4b2ce99abab15b7abc06a1aae223ba58b5d81c5e16ad59c58f998cf18f8676` | `src/hlt_classification/scouting/highcov_data.py` | validated particle container, kinematics, categories, charge, measurements, and native indices | Scouting particle adapter; lost-track exclusion before matching |
+| `src/highcov/features.py` â€” `db2a1206686697003bb6b8a2803b340424a0f56f667c08ac29286c559cffe597` | `src/hlt_classification/scouting/highcov_features.py` | frozen candidate gate, edge matrices, ranks, and feature order | donor-parity fixture and fail-closed schema validation |
+| `src/highcov/scorers.py` â€” `77debf7a892c6e16149027563f91fb68433f58638ae965b3ed2a20e1c829d97c` | `src/hlt_classification/scouting/highcov_scorers.py` | empirical and independent consensus scores | role/fold scorer selection is enforced by `highcov_matcher.py` |
+| `src/highcov/final_matcher.py` â€” `78a758ef5d3333d67d1e2aa193af2eed06edcb7d04b483f2f788e4722ddbc897` | `src/hlt_classification/scouting/highcov_matcher.py` | selected global matcher and post-assignment confidence | train cross-fitting, validation/audit model policy, native-index output |
+| `src/highcov/hashing.py` â€” `fb602d4048bb8f8497dc899a219e55679272046b424dccd259a2e40c4bdec00a` | `src/hlt_classification/scouting/highcov_hashing.py` | canonical semantic hashing | composed with repository byte/content hashes and atomic publication |
+| `configs/selected_matcher.json` â€” `eab6c945c058a5447063066eca79c931434d06d63e3729d1dfeeeab354100a87` | `src/hlt_classification/scouting/resources/highcov_v1/selected_matcher.json` | exact selected algorithm/configuration | packaged runtime resource; parsed semantic hash is also checked |
+| `artifacts/models/empirical_models.json` â€” `6a9f8d594b0bfadae03a80187917fac2c8261cb0345965daa2f33af4e6836389` | `src/hlt_classification/scouting/resources/highcov_v1/empirical_models.json` | full and four holdout empirical scorers | exact fold selection and train-leakage rejection |
+| `artifacts/models/final_confidence_calibration.json` â€” `40a9c4499244916e58a1f8c74a52d05aac0418a21220b27d03afcd97a8454c31` | `src/hlt_classification/scouting/resources/highcov_v1/final_confidence_calibration.json` | final confidence calibrator | exact semantic/resource validation and quantization tests |
 
 The donor's research-only completion/contextual/inference/synthetic surfaces,
 generated results, and datasets were deliberately excluded. The 21-field
@@ -6394,3 +7527,116 @@ remains unchanged: its CPUWorkers pool/initializer, proposals, ordering and RNG
 are inherited, with only the parent-side collection of memory counters replaced.
 New tests extend the existing six-teacher fixtures at this donor commit. The
 Linux stdlib spawn regression is new code, not migrated external implementation.
+
+### R8-centered direct reconstruction follow-up
+
+This additive campaign reuses the repository's own direct reconstruction
+implementation from donor commit
+`b5464e73c94b322a81a33032baea18f1615a5a66` (R3 execution), including
+`luka_next_supervision_hydra/{reconstruction_contracts,reconstruction_model,reconstruction_targets,reconstruction_batched,reconstruction_training,reconstruction_release}.py`.
+The follow-up registry, independent seed-2/3 controls, scalar schedule and
+consistency ablations, and dedicated campaign recipe are new repository code;
+no external runtime donor was migrated. The scalar loss default stays
+unchanged for prior campaigns; the new consistency multipliers are explicit.
+
+### 2026-11-12: R8 follow-up v2, eighteen fits
+
+Implementation baseline `7bab93c4256fa97d71b51e112ac630d66acb5b88`, preserving
+pre-existing uncommitted twelve-fit follow-up work. Historical runtime donor
+`b5464e73c94b322a81a33032baea18f1615a5a66` supplies the complete-set decoder,
+exact assignment/loss, chunked VJP, native training, resource measurement,
+submission journals and CPU release within `luka_next_supervision_hydra/`.
+Modified local modules: reconstruction_followup/contracts/campaign/resources,
+reconstruction_targets/model/loss/batched/training/release, shared model/training/
+submission/worker/reporting, CLI and queue wrapper. No external runtime code migrated.
+New field weighting, fade schedule, two-depth tap and eighteen-row registry are
+original implementation here. Base R3 scientific recipe and A/B/C controls are
+preserved. FOLLOWUP_SPEC and FOLLOWUP_RECIPE v2 bind the new semantics and
+execution R5; old snapshots remain authoritative for their own artifacts.
+
+### 2026-11-13: embedding bridge primary-prediction reporting
+
+Donor `1fc128dca7dc7ef547d242a1e2941e9a74e25ac8` supplies the running
+`luka_embedding_bridge_hydra/{reporting,training}.py` prediction/report contract.
+Only the local `reporting.py` consumer is adapted to select primary arrays after
+authenticating the complete four-array bridge output. Imported donors
+`luka_capacity_hydra/complementarity.py` and `luka_embedding_weight/worker.py`
+remain unchanged and strict. New synthetic saved-output regression cases extend
+`tests/test_luka_embedding_bridge_hydra.py`; no external code was migrated and
+no contracts or scientific semantics were versioned.
+
+### 2026-11-12: exact R8 pre-claim recovery
+
+New `luka_r8_recovery.py`, CLI/queue/worker and tests load scientific code
+directly from the original clean worktree at
+`58d0c0edf5f41cff2398fb168fc16fc92e169294`. Reused donor modules are
+`luka_next_supervision_hydra/{campaign,worker,submission,training,inputs,reporting,contracts,reconstruction_release}`,
+the original cross-message allocation validator and exact-DAG journal helpers.
+They remain unchanged and are not copied into the repair. New execution-only
+v1 recovery contracts bind original setup, failure logs and replacement IDs.
+Implementation baseline `6a98c2bda010779b71348ff2cfd07b89f8160fc3`.
+
+
+### 2026-11-16: numerical SOFT recovery and repeat-result audit
+
+Donor `3ccc35ae709c63d8833cb0388c618b53dcde5b9e` supplies the local stability
+`{contracts,campaign,calibration,readouts,identity,training,resources,worker,submission,reporting,transport,decoder,kernel}.py`
+and CLI. Extensions add three-fit recovery, old-calibration reuse, numerical-v2
+refinement, failure replay artifacts, evolved TRAIN qualification and reused
+control reporting. The pinned remote original remains unchanged. New
+`transport_v2.py`, `recovery.py`, `repeat_audit.py`, tests and recovery runbook
+are original work; no external implementation was copied.
+
+The read-only audit uses repeat donor
+`15c35c428fa0548b97700d639323e593ea3aabac`
+`{contracts,submission,training}.py` validators. Scientific models/losses/data
+remain loaded from `58d0c0edf5f41cff2398fb168fc16fc92e169294`. The native-hash
+mismatch is disclosed, not converted into a valid paired comparison. New
+RECOVERY_SPEC/RECIPE, EVOLVED_SOFT_PROBE and REPEAT_FAILURE_AUDIT contracts bind
+separate provenance. See `docs/LUKA_STABILITY_SOFT_RECOVERY.md`.
+
+## 2026-11-16: nine-fit A6000 EMA comparison
+
+The new `luka_ema_control_hydra/` namespace adapts the following files from
+commit `d28c403360f7b4662f679f5564529a048d8db5e2`, under
+`src/hlt_classification/luka_reconstruction_stability_hydra/`:
+`contracts.py`, `campaign.py`, `kernel.py`, `training.py`, `resources.py`,
+`worker.py`, `submission.py`, `reporting.py`, `identity.py`, `optimization.py`,
+`decoder.py`, `readouts.py`, `storage.py` and package initialization. The
+corresponding stability CLI, queue wrapper, sbatch wrapper and focused test
+file supply the orchestration/test scaffolding. New code separates CE-only
+target-free updates, U100-w5 and R24; freezes untrained same-seed initial
+tensors; switches to single-A6000 FP32; and makes EMA05 primary.
+
+Scientific runtime remains pinned to
+`58d0c0edf5f41cff2398fb168fc16fc92e169294`: original next-supervision Student,
+reconstruction model/targets/hard loss, authenticated inputs, native ParT,
+AdamW recipe, schedule and selection. Readout semantics and the required
+stability parent are
+`3ccc35ae709c63d8833cb0388c618b53dcde5b9e`; the parent is dynamically loaded
+under a separate module name for lineage validation only. No donor worktree
+is edited. Existing SOFT recovery and42-fit scientific paths remain unchanged.
+
+## 2026-11-17: stability completion execution
+
+`luka_stability_completion_hydra/{core,runtime,submission,reporting}.py` and its
+thin CLI, queue/sbatch wrappers and tests adapt execution/report scaffolding from
+`794b8f8016f9b47a3368bc223cecdf01d4d345f4`:
+`src/hlt_classification/luka_stability_storage_recovery/{core,runtime,submission,reporting}.py`,
+`scripts/luka_stability_storage_recovery.py`,
+`scripts/queue_luka_stability_storage_recovery.sh`,
+`sbatch/run_luka_stability_storage_recovery.sh`, and
+`tests/test_luka_stability_storage_recovery.py`.
+
+New `audit.py` follows the evidence checks in
+`luka_reconstruction_stability_hydra/worker.py:completed_setup` at
+`d28c403360f7b4662f679f5564529a048d8db5e2`. It dynamically reuses that commit's
+`{campaign,contracts,resources,training,identity,calibration,recovery,worker,submission}`
+modules, authenticating all setup evidence while recording a separate measured
+execution walltime override. Scientific training remains in the pinned package.
+The original validators remain at
+`3ccc35ae709c63d8833cb0388c618b53dcde5b9e`; common model/physics/input dependencies
+remain at `58d0c0edf5f41cff2398fb168fc16fc92e169294`. No numerical implementation,
+training objective or original source checkout is edited. New execution
+contracts and the exact four-salvage/three-SOFT scope are documented in
+`docs/LUKA_STABILITY_COMPLETION_HYDRA.md`.

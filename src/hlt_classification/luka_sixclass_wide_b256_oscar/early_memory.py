@@ -50,7 +50,7 @@ def run(spec,stage,loaded,device,folder):
     begun=time.monotonic();device=torch.device(device)
     caches,records=witnesses(spec,stage,loaded)
     storage=recovery.enabled(spec,stage)
-    pointwise=spec['schema_version']==3 and stage=='CONCAT'
+    pointwise=spec['schema_version'] in (3,4,5) and stage=='CONCAT'
     print('BALANCED early memory: longest real rows loaded; before full particle construction',flush=True)
     parity=[]
     if storage:

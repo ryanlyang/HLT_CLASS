@@ -24,7 +24,10 @@ def join(tr,val,banks,sampler,stage):
             raise ValueError('Ordered teacher/student join differs')
 
 
-def train(tr,val,*,banks,sampler,stage,parents,device,save_epoch,matching=None,resume=None,outside=None,pair_storage=False,pointwise_dgrad=False):
+def train(tr,val,*,banks,sampler,stage,parents,device,save_epoch,matching=None,resume=None,outside=None,pair_storage=False,pointwise_dgrad=False,stop_epoch=None):
+    stop_epoch=c.EPOCHS if stop_epoch is None else stop_epoch
+    if type(stop_epoch)!=int or not 1<=stop_epoch<=c.EPOCHS:
+        raise ValueError('Invalid training segment endpoint')
     join(tr,val,banks,sampler,stage)
     if outside is None:raise ValueError("Outside validation is required every epoch")
     if len(val)!=c.COUNTS['validation'] or len(outside)!=c.OUTSIDE['validation']:
@@ -50,7 +53,8 @@ def train(tr,val,*,banks,sampler,stage,parents,device,save_epoch,matching=None,r
         if torch.device(device).type=='cuda':torch.cuda.set_rng_state_all(state['cuda_rng'])
         elif state['cuda_rng']:raise ValueError('CUDA scientific continuation cannot move to CPU')
         update=state['update']
-    for epoch in range(len(history)+1,c.EPOCHS+1):
+    if len(history)>stop_epoch:raise ValueError('Resume cursor exceeds segment endpoint')
+    for epoch in range(len(history)+1,stop_epoch+1):
         net.train();order=sampler.draw(epoch,draws=c.DRAWS);exposure=sampler.evidence(order)
         begun=time.monotonic();sums=None;names=None;diagnostic=None
         iterator=(contrastive.Lookahead(matching,order,epoch,batch_size=c.BATCH) if matching is not None else
@@ -92,6 +96,10 @@ def train(tr,val,*,banks,sampler,stage,parents,device,save_epoch,matching=None,r
             selected=row;best=state
         print(f'BALANCED epoch={epoch}/{c.EPOCHS} stage={stage} auc={metrics["macro_ovr_auc"]:.8f} '
               f'best_auc={selected["validation"]["macro_ovr_auc"]:.8f} best_epoch={selected["pass_number"]}',flush=True)
+    if stop_epoch<c.EPOCHS:
+        # The full last state was committed above. Do not export/select a teacher
+        # or disguise a partial fit as a twenty-epoch training report.
+        return None,None,None
     net.load_state_dict(best['student'],strict=True);net.eval();net.capture=False;net.clear()
     report=c.artifact('TRAINING_REPORT',parents=dict(parents,recipe=c.recipe()['content_hash']),
         stage=stage,node=c.node(stage),passes=c.EPOCHS,selected_pass=selected['pass_number'],
