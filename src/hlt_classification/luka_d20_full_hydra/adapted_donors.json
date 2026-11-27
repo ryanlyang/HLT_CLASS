@@ -18,6 +18,7 @@
     "src/hlt_classification/luka_balanced_reconstruction_hydra/reporting.py": "723f4762856ea2089b9f78b62ac7a81022b0f76719c73cd03b22dc129fcb8702",
     "src/hlt_classification/luka_balanced_reconstruction_hydra/storage.py": "de879566a91a26b58cad2f7ba27aeabc90b1887203f601405c993fadc2388f61",
     "src/hlt_classification/luka_balanced_reconstruction_hydra/worker.py": "a4a03c0e0b961de750901556fb3cb6e17c11487e70566cdb6cfa1c98a448ce24",
-    "src/hlt_classification/luka_balanced_reconstruction_hydra/campaign.py": "25f68b586a13fae55eeca850f34a3a270e0c63a433e2259492e400961e0576b7"
+    "src/hlt_classification/luka_balanced_reconstruction_hydra/campaign.py": "25f68b586a13fae55eeca850f34a3a270e0c63a433e2259492e400961e0576b7",
+    "src/hlt_classification/luka_embedding_bridge_hydra/activation.py": "eba048422ddc509af95369be15543d8ca3e12e00e20f01bf361acdba9ab329b6"
   }
 }

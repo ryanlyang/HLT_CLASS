@@ -24,11 +24,23 @@ validation predictions, diagnostics and any outgoing teacher bank.
 
 The root artifact schemas are v1. Imported technical policy structures retain
 their explicit owned INPUT_EXECUTION_POLICY/v2, STORAGE_POLICY/v2,
-WORKER_LAUNCH_POLICY/v3 and EARLY_GPU_POLICY/v2 versions. They are exact SPEC
+WORKER_LAUNCH_POLICY/v3 and EARLY_GPU_POLICY/v3 versions. They are exact SPEC
 fields, not interchangeable with policies from older namespaces. Before data
-decoding, a separate five-minute srun probes four physical Pascal GPUs using
+decoding, a separate fifteen-minute srun probes four physical Pascal GPUs using
 NCCL_P2P_DISABLE=1, Gloo control objects, known tensor collectives and real
-installed-Weaver/independent-gradient parity. Failure releases no science.
+installed-Weaver/independent-gradient parity. It also performs two actual
+global256 backward/AdamW updates with synthetic inputs at authenticated TRAIN
+maximum native and decoder support. EARLY_GPU_MEMORY/v1 receipts bind each
+rank's peak/capacity, shape, batch, steps and finite loss; all must fit88% VRAM.
+Failure releases no science and occurs before the full particle builds.
+
+ACTIVATION_EXECUTION_POLICY/v1 is mandatory in SPEC. It binds FP32 native
+encoder/stateless-block non-reentrant recomputation, unchanged batch256,
+preserved dropout RNG and disposable BN/SyncBN replay buffers. The original
+buffer references/counters update once; all model/optimizer tensor keys and
+native inference remain unchanged. The independent full-graph reference has
+recomputation disabled. Old specs without this policy are rejected by this
+source and require a fresh execution; no old qualification is silently reused.
 
 QUALIFICATION requires all13 objective arms and all registered seed miniatures,
 complete physical particle support, aggregate host/GPU memory, full-validation

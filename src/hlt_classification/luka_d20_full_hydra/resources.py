@@ -93,7 +93,7 @@ def parity(spec,task,tr,targets,bank,ctx,position=8.):
     truth=targets.batch(ix) if targets is not None else None
     state,_=artifacts.start(spec,task)
     local=SimpleNamespace(rank=0,world=1,device=ctx.device)
-    reference,ro=kernel.build(task,spec['maximum'],local,state,parity=True)
+    reference,ro=kernel.build(task,spec['maximum'],local,state,parity=True,checkpointing=False)
     expected=independent_step(reference,ro,raw,emb,q,truth,task,ctx.device,position)
     del reference,ro;d.release_memory(ctx)
     actual,ao=kernel.build(task,spec['maximum'],ctx,state,parity=True)

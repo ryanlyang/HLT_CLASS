@@ -1,10 +1,67 @@
 # Full-population RAW D20 campaign: implementation evidence
 
-Final evidence date2026-11-25; implementation began2026-11-24.
+Final evidence date2026-11-26; implementation began2026-11-24.
 The sections below distinguish supplied remote execution records from local
 tests. Full four-GTX1080Ti Hydra resource/miniature qualification remains
 pending. No remote files/jobs, final-test inference or working-branch
 commit/push were performed by the agent.
+
+## Activation-memory repair after qualification227995
+
+The user's supplied accounting/log records show qualification227995 failed
+after17:02:29 on gpu1703; release227996 was cancelled. All three full input
+views completed. OFFLINE full-weight parity, seed miniatures and serialized
+continuation passed; the maximum-support resource stress then failed in1.2s
+with CUDA OOM on every rank. Each64-jet local batch repeated the longest316-
+particle TRAIN jet. The reported GPU capacity was10.90GiB, with10.34GiB allocated
+and an additional196MiB allocation failing. This is genuine VRAM exhaustion,
+not a48h timeout or the earlier field-name bug. The four-rank stage ran394.7s;
+most of the allocation was input preparation. No scientific fit was released.
+
+The owned `activation.py` adapts the existing bridge recomputation helper from
+donor d534fcfea4f11a4bc845127d03c31b779e391a8c, SHA256
+eba048422ddc509af95369be15543d8ca3e12e00e20f01bf361acdba9ab329b6.
+It invokes installed native module implementations, preserves RNG, and replays
+BN/SyncBN with disposable buffers. Taps are explicit checkpoint outputs so a
+recomputed forward cannot replace the live reconstruction VJP endpoints.
+The independent reference disables recomputation. No parameter/state keys,
+scientific recipe/population, dtype, batch or target support change.
+
+ACTIVATION_EXECUTION_POLICY/v1 is mandatory; EARLY_GPU_POLICY advances to/v3.
+The early actual four-card srun has15minutes and performs two global256 steps
+at authenticated maximum native/decoder support before population replay or
+particle preparation. Both synthetic early admission and later real stress
+retain88% per-GPU memory limits. A failed early check never enters data builds.
+Existing roots/specs remain immutable; deploy a new pushed source/fresh study.
+
+Before edits,4 focused policy/DAG/scratch checks passed in29.30s. The existing
+installed-Weaver CUDA13-arm/asymmetric-gradient and exact D20 resume test
+passed after model adaptation in85.70s. New focused policy, failure-order,
+CPU/CUDA dropout/gradient/AdamW/BN-state and native-export checks:12 passed in
+28.73s. They verify original and recomputed RNG/buffers after ordinary updates
+and both sides of the delayed reconstruction schedule.
+
+Standalone local CUDA stress used the production kernel/model for two full
+updates at local batch64: OFFLINE316 particles peaked at9,107,302,400bytes
+(8.48GiB), D20 HLT280/full316 targets at7,318,498,816bytes (6.82GiB).
+Evidence: `tmp/d20_full_checkpoint_memory.json`. The local device is an RTX2000
+Ada laptop with Windows memory management; these are PyTorch allocation peaks,
+not proof of physical Pascal fit or transferable speed measurements. Genuine
+four1080Ti acceptance remains pending. Recomputing trades extra work for lower
+retained activation memory; actual timing must still pass the48h envelope.
+
+The broad repaired suite ran188.05s:73 passed and the clean-deployment case
+caught a pre-existing shared donor change from the separate Oscar recovery.
+Only `luka_sixclass_wide_b256_oscar/contracts.py` drifted: it added SPEC/v2--v5
+execution helpers and72h CONCAT support. Its v1 recipe, population artifact,
+flags, constants and default tasks remain exactly equal to the d534fcfe source.
+The reviewed file now pins committed b94cb3d23c4fee6c05dbf6d1401d44474366e119,
+SHA25623ab1b38578e1f5a3d5cd269df18ba3ca21f95259aa3382d5736287b62a07c06,
+as an explicit `reviewed_overrides` entry;595 original pins are unchanged.
+The shared file itself was not altered or reverted. The new compatibility test
+and complete clean-deployment/stale-source test then2 passed in47.41s, verifying
+all75 cases across the broad and focused runs. All596 current donor bytes,
+owned Python syntax, documentation links and5 Bash blocks authenticate/parse.
 
 ## Input-schema repair after qualification226613
 

@@ -1,27 +1,32 @@
 # Queue the full D20 RAW campaign on Hydra
 
-After the226613 qualification failure at commit0051dc8e, use a **new commit and
-fresh study** for the input-schema repair. That job passed its four-GPU early
-checks, then failed on the old `particles` field before particle construction
-or scientific training. The repair consumes the existing `role_particles`
-schema throughout allocation and coverage checks; no scientific setting changes.
-Do not apply a new source to the old immutable spec or use its same-source
-`resume` command. Leave the failed execution in place for provenance.
+After qualification227995 at `d20_full_e364186e_r1`, use a **new commit and
+fresh study** for the memory repair. All three views finished; the first
+OFFLINE maximum-support stress batch exhausted the1080Ti VRAM. The repaired
+training graph recomputes activations with preserved RNG and BN state, keeping
+global batch256, FP32, full particle support and the same scientific recipe.
+Full-size backward/memory acceptance now runs in a15-minute srun before any
+particle preparation. A pass still requires the full input builds and real
+qualification afterward; this does not promise faster preparation.
 
-For this repair, the local commit block can use this smaller file list and
-commit message (then use the same Hydra launch block below with the new hash):
+Do not apply new source to an old immutable spec or use its same-source
+`resume` command for this repair. Preserve both failed executions and their
+records. In local PowerShell, commit these owned files, then use the Hydra
+launch block below with the new hash:
 
 ```powershell
 $Files = @(
-  'src/hlt_classification/luka_d20_full_hydra/inputs.py'
+  'src/hlt_classification/luka_d20_full_hydra'
   'tests/test_luka_d20_full_hydra.py'
   'docs/LUKA_D20_FULL_HYDRA_RUNBOOK.md'
   'docs/LUKA_D20_FULL_HYDRA_VALIDATION.md'
+  'docs/plans/LUKA_D20_FULL_HYDRA_PLAN.md'
+  'docs/contracts/LUKA_D20_FULL_HYDRA.md'
 )
 git add -- $Files
 if ($LASTEXITCODE -ne 0) { throw 'Staging failed' }
 git diff --cached --stat -- $Files
-git commit --only -m "Fix full D20 wide-population input builder" -- $Files
+git commit --only -m "Reduce D20 activation memory and check full support before data builds" -- $Files
 if ($LASTEXITCODE -ne 0) { throw 'Commit failed' }
 git push origin HEAD:main
 if ($LASTEXITCODE -ne 0) { throw 'Push failed' }
@@ -104,7 +109,8 @@ the log view. First it authenticates source/runtime/transfer/scalar population
 and prints a complete actual-script dry plan. It submits prepare -> qualify ->
 release. Qualification has a48h outer limit because it constructs full views,
 measures complete validation and all13 objectives; GPU transport/native checks
-have a separate five-minute early limit before particle preparation.
+have a separate fifteen-minute early limit before particle preparation, covering
+two full-support global256 backward updates as well as transport/parity.
 
 Only successful real four-GPU qualification permits automatic release of92
 science segments and a report. A benchmark result alone cannot release them.

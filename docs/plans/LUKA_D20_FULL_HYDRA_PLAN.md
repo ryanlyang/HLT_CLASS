@@ -65,6 +65,25 @@ anchor gaps remain unresolved, not job failures.
 
 ## Execution and continuation
 
+The2026-11-26 memory repair preserves the scientific recipe above. Native
+training uses non-reentrant activation recomputation for the full encoder and
+its stateless transformer blocks. Dropout RNG is preserved; replay updates
+disposable copies of BN/SyncBN running buffers and restores original references.
+The actual normalization batch remains256; no accumulation, cropping, reduced
+precision or input/target removal is introduced. Native deployment state keys
+and inference remain unchanged. Independent parity disables recomputation in
+the reference; resume tests cover the recomputed production graph.
+
+Before any particle preparation, the real four-GPU srun additionally performs
+two global256 updates at authenticated TRAIN maximum support:316 OFFLINE
+particles or280 HLT particles and, for D20, all316 decoder target slots. The
+five base arms cover all architectural shapes; each science allocation probes
+its own arm. The early step has a15-minute hard limit and88% per-GPU memory
+admission. Full real-data stress/miniature/resource qualification still follows.
+This catches an unsupported shape before repeating expensive three-view input
+construction. Extra recomputation time is included in the actual measured48h
+segment envelope; a memory improvement alone cannot release an overlong fit.
+
 New namespace `luka_d20_full_hydra`, owned versioned artifacts, thin workers.
 Exact pushed clean source, immutable donor byte inventory, installed Weaver
 runtime, verified transfer/producer, population, starts, policies and all

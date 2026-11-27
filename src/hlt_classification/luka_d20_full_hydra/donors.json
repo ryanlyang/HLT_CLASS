@@ -1,6 +1,13 @@
 {
   "commit": "d534fcfea4f11a4bc845127d03c31b779e391a8c",
   "scope": "transitive_repository_import_closure",
+  "reviewed_overrides": {
+    "src/hlt_classification/luka_sixclass_wide_b256_oscar/contracts.py": {
+      "commit": "b94cb3d23c4fee6c05dbf6d1401d44474366e119",
+      "sha256": "23ab1b38578e1f5a3d5cd269df18ba3ca21f95259aa3382d5736287b62a07c06",
+      "reason": "Oscar execution-version extensions; v1 population, recipe, flags and default tasks unchanged"
+    }
+  },
   "files": {
     "src/hlt_classification/__init__.py": "a60a2f05d2328549cd600d256e284509c62e85109a7713f6a773657bddb42937",
     "src/hlt_classification/cms2jc2_production/__init__.py": "dc8c95414c4a7817666afad996413b7f7759f68d6c56923ed4edc4957495ecf2",
@@ -486,7 +493,7 @@
     "src/hlt_classification/luka_sixclass_tail_hydra/campaign.py": "05d9575f7ceca2014bee8f70cf2c093ae411e19997141645efe63cbbcf457f74",
     "src/hlt_classification/luka_sixclass_tail_hydra/contracts.py": "f699bf4af65eb791cb19c7d1cc2575452d4c9baab550c974ca63974095c3faad",
     "src/hlt_classification/luka_sixclass_wide_b256_oscar/__init__.py": "fbbca2b3867a0fbf9995a95d9c6ed721d82fd7b06ebac04c9b31fc5a930f6016",
-    "src/hlt_classification/luka_sixclass_wide_b256_oscar/contracts.py": "2844ca976514482a482c908fe233ecf038e37538cc2426f6dc60d434e00412ba",
+    "src/hlt_classification/luka_sixclass_wide_b256_oscar/contracts.py": "23ab1b38578e1f5a3d5cd269df18ba3ca21f95259aa3382d5736287b62a07c06",
     "src/hlt_classification/luka_sixclass_wide_b256_oscar/population.py": "cd3dbba56b914b7f087a18a7aa0bc148f8c84a8ccc5a966fcc47ef47b91a84ce",
     "src/hlt_classification/luka_sixclass_wide_b256_oscar/sampling.py": "109564ad505934b4979d37427a497354d96d14f9241a52d57c6fd79dab5ddb33",
     "src/hlt_classification/luka_subclass_ddp_hydra/__init__.py": "4752850be1a412547abdf73c364649a225bcbc4c4ad13dbc11726059d919d229",

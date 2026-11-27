@@ -172,7 +172,7 @@ def run(spec,task):
                 launch.validate(launch.command(spec['project'],spec['root'],task,node,startup_only=True))
             env=dict(os.environ,LUKABREC_INPUT_LAUNCHER_PID=str(os.getpid()),**transport.ENVIRONMENT)
             startup.folder(spec,job).mkdir(parents=True,exist_ok=False)
-            with log.stage('five-minute actual GPU acceptance before population or particle reads'):
+            with log.stage('early full-support GPU acceptance before population or particle reads'):
                 subprocess.run(launch.startup_command(spec['project'],spec['root'],task,node),check=True,env=env)
                 startup.check(spec,'qualify' if task=='qualify' else c.segment(task)[0],job)
             with log.stage('population replay'):

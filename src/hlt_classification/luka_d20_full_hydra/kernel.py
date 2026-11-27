@@ -11,8 +11,9 @@ from .contracts import learning_rate
 from . import contracts as c, model
 
 
-def build(task,maximum,ctx,state=None,*,parity=False):
+def build(task,maximum,ctx,state=None,*,parity=False,checkpointing=True):
     net=model.fresh(task,maximum)
+    net.checkpoint_encoding=checkpointing
     if state is not None:net.load_state_dict({k:state[k] for k in net.state_dict()},strict=True)
     if parity:disable_dropout(net)
     if ctx.world>1:net=nn.SyncBatchNorm.convert_sync_batchnorm(net)

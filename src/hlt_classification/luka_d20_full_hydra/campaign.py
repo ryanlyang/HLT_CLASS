@@ -9,7 +9,7 @@ from hlt_classification.provenance import capture_source_snapshot
 from hlt_classification.luka_new_fullstat_hydra.campaign import runtime,clean_env
 from hlt_classification.luka_new_fullstat_hydra import lineage
 from hlt_classification.luka_sixclass_tail_hydra.campaign import submission_lock,terminal
-from . import contracts as c,population,storage,artifacts,inputs,launch
+from . import contracts as c,population,storage,artifacts,inputs,launch,activation
 
 
 def source(project,commit):
@@ -83,12 +83,15 @@ def create(dataset,root,project,commit,environment,available_gib):
         foundation_producer=producer,transfer_manifest_sha256=c.population_parent.TRANSFER_HASH,
         protected_campaign=preliminary['protected_campaign'],storage=quota,storage_policy=storage.policy(),
         input_execution_policy=inputs.policy(),worker_launch_policy=launch.policy(),output_inventory=inventory,
+        activation_execution_policy=activation.policy(),
         output_allowance_bytes=c.RESULT_BYTES,reserve_bytes=c.RESERVE_BYTES)
     write_immutable_json(root/'campaign_spec.json',spec);return spec
 
 
 def check(spec,*,live=True):
     c.validate(spec,'SPEC');c.population_parent.validate(spec['population'],'POPULATION')
+    if spec.get('activation_execution_policy')!=activation.policy():
+        raise ValueError('Activation execution policy differs; register a fresh study with this source')
     if spec.get('storage_policy')!=storage.policy():
         raise ValueError('Execution storage policy differs; register a fresh study with this source')
     if spec.get('input_execution_policy')!=inputs.policy():

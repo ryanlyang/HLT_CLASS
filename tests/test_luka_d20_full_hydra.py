@@ -17,7 +17,7 @@ from hlt_classification.luka_next_supervision_hydra import reconstruction_batche
 from hlt_classification.luka_fullstat_readout.training import optimizer
 from hlt_classification.luka_d20_full_hydra import (
     contracts as c,campaign,worker,training,artifacts,kernel,resources,model,banks,readouts,
-    inputs,population,normalization,storage,launch,startup,reporting)
+    inputs,population,normalization,storage,launch,startup,reporting,activation)
 from hlt_classification.luka_d20_full_hydra.sampling import BalancedSampler
 from test_luka_balanced_reconstruction_hydra import ToyModule,ToyNative
 from test_luka_direct_reconstruction import target
@@ -297,10 +297,13 @@ def test_full_audit_and_semantic_spec_reject_rehashed_recipe_changes(tmp_path):
     spec=c.artifact('SPEC',root=str(tmp_path),population=pop,recipe=c.recipe(),tasks=c.tasks(),resources=c.RESOURCES,
         execution_site=c.SITE,maximum=316,output_allowance_bytes=c.RESULT_BYTES,reserve_bytes=c.RESERVE_BYTES,
         transfer_manifest_sha256=c.population_parent.TRANSFER_HASH,protected_campaign=None,
-        storage_policy=storage.policy(),input_execution_policy=inputs.policy(),worker_launch_policy=launch.policy())
+        storage_policy=storage.policy(),input_execution_policy=inputs.policy(),worker_launch_policy=launch.policy(),
+        activation_execution_policy=activation.policy())
     campaign.check(spec,live=False)
     bad=deepcopy(spec);bad['recipe']['batch']=512;bad=with_content_hash(bad)
     with pytest.raises(ValueError,match='Scientific/resource'):campaign.check(bad,live=False)
+    bad=deepcopy(spec);del bad['activation_execution_policy'];bad=with_content_hash(bad)
+    with pytest.raises(ValueError,match='Activation execution'):campaign.check(bad,live=False)
 
 
 def test_full_support_output_inventory_accounts_for_all_concurrent_restarts():
@@ -393,10 +396,103 @@ def test_transport_and_torchrun_contracts_require_four_pascal_ranks(tmp_path):
     spec=command_spec(tmp_path);argv=launch.command(spec['project'],spec['root'],'D20_s20_p02','/dev/shm/node')
     proof=launch.validate(argv);assert proof['processes']=='4' and proof['training_script_args'][-1]=='/dev/shm/node'
     assert startup.probe_tasks('qualify')==[arm+'_s20' for arm in c.BASE_ARMS]
+    assert '--time=00:15:00' in launch.startup_command(spec['project'],spec['root'],'qualify','/dev/shm/node')
     rows=campaign.commands(spec,list(c.tasks()))
     assert len(rows)==96 and sum('--gres=gpu:geforce_gtx_1080_ti:4' in r['command'] for r in rows)==93
     for row in rows:
         if row['task'] in c.GPU_TASKS:assert '--mem=96000M' in row['command'] and '--time=2880' in row['command']
+
+
+def test_full_support_early_inputs_cover_actual_batch_and_authenticated_maxima():
+    p=load_json(Path(c.__file__).with_name('population_audit.json'));spec=dict(population=p,maximum=316)
+    for task,length in [('OFFLINE_s20',316),('M0HLT_s20',280),('U100_s20',280),('D20_s20',280)]:
+        raw=startup.full_support_batch(spec,task)
+        assert raw['features'].shape==(256,17,length) and raw['vectors'].shape==(256,4,length)
+        assert raw['mask'].all() and raw['mask'].shape==(256,1,length)
+        assert np.isfinite(raw['features']).all() and np.isfinite(raw['vectors']).all()
+    assert startup.target(0,316,full=True)['values'].shape==(316,22)
+    assert startup.policy()['contract'].endswith('_EARLY_GPU_POLICY/v3')
+    assert startup.policy()['full_support_steps']==2 and startup.policy()['full_support_global_batch']==256
+    bad=deepcopy(spec);bad['population']['maximum_support']['train']['hlt']=317
+    with pytest.raises(ValueError,match='TRAIN support'):startup.full_support_batch(bad,'D20_s20')
+
+
+@pytest.mark.parametrize('peak_gib',[8.,10.5])
+def test_early_full_support_memory_admission_checks_real_shape_before_data(tmp_path,monkeypatch,peak_gib):
+    from hlt_classification.luka_subclass_ddp_hydra import distributed
+    p=load_json(Path(c.__file__).with_name('population_audit.json'))
+    spec=dict(population=p,maximum=316,content_hash='a'*64);calls=[]
+    monkeypatch.setattr(resources.artifacts,'start',lambda *a:({},{}))
+    monkeypatch.setattr(kernel,'build',lambda *a:(object(),object()))
+    def update(net,opt,raw,emb,q,targets,task,ctx,position):
+        assert len(raw['labels'])==256 and raw['features'].shape[-1]==280
+        assert len(targets)==256 and all(len(t['values'])==316 for t in targets)
+        assert position==20. and emb.shape==(256,128) and q is None
+        calls.append('update');return dict(total=1.)
+    monkeypatch.setattr(kernel,'update',update)
+    monkeypatch.setattr(torch.cuda,'reset_peak_memory_stats',lambda *a:None)
+    monkeypatch.setattr(torch.cuda,'max_memory_allocated',lambda *a:int(peak_gib*2**30))
+    monkeypatch.setattr(torch.cuda,'get_device_properties',lambda *a:SimpleNamespace(total_memory=11*2**30))
+    monkeypatch.setattr(distributed,'release_memory',lambda *a:calls.append('released'))
+    ctx=SimpleNamespace(rank=0,world=4,device='cuda:0',sync=lambda:None,
+        all=lambda row:[dict(row,rank=i) for i in range(4)])
+    if peak_gib>9.68:
+        with pytest.raises(MemoryError,match='particle preparation not started'):startup.full_support(spec,'D20_s20',ctx)
+    else:
+        proof=startup.full_support(spec,'D20_s20',ctx)
+        assert proof['global_batch']==256 and proof['local_batch']==64 and proof['steps']==2
+        assert proof['length']==280 and proof['reconstruction_maximum']==316 and proof['passed']
+    assert calls==['update','update','released']
+
+
+def test_failed_early_full_support_never_enters_population_or_particle_preparation(tmp_path,monkeypatch):
+    spec=command_spec(tmp_path);spec['population']=load_json(Path(c.__file__).with_name('population_audit.json'))
+    node=tmp_path/'scratch';node.mkdir();events=[]
+    monkeypatch.setattr(kernel,'configure',lambda *a:None)
+    monkeypatch.setattr(campaign,'check',lambda *a,**kw:None)
+    monkeypatch.setattr(worker,'allocation',lambda *a:'123')
+    monkeypatch.setattr(worker,'task_receipt',lambda *a:None)
+    monkeypatch.setattr(worker,'scratch',lambda *a:node)
+    monkeypatch.setattr(worker,'cleanup',lambda *a:events.append('cleanup'))
+    monkeypatch.setattr(inputs,'planned_peak',lambda *a:0)
+    monkeypatch.setattr(launch,'validate',lambda *a:None)
+    monkeypatch.setattr(population,'load',lambda *a:pytest.fail('Population replay preceded GPU acceptance'))
+    monkeypatch.setattr(inputs,'prepare_node',lambda *a,**kw:pytest.fail('Particle preparation preceded GPU acceptance'))
+    def child(command,**kw):
+        assert command[0]=='srun' and '--time=00:15:00' in command
+        events.append('early');raise RuntimeError('full-support CUDA memory failure')
+    monkeypatch.setattr(worker.subprocess,'run',child)
+    with pytest.raises(RuntimeError,match='full-support CUDA memory'):worker.run(spec,'qualify')
+    assert events==['early','cleanup']
+
+
+@pytest.mark.parametrize('task',['OFFLINE_s20','U100_W5_s20','D20_s20'])
+@pytest.mark.parametrize('device',['cpu','cuda'])
+def test_recomputed_native_matches_original_dropout_gradients_buffers_and_optimizer(task,device):
+    if device=='cuda' and not torch.cuda.is_available():pytest.skip('CUDA unavailable')
+    ctx=Context(0,1,torch.device(device));raw=cache(rows=7).batch(np.arange(7))
+    nets=[kernel.build(task,4,ctx,checkpointing=flag) for flag in (False,True)]
+    for position in (2.,20.):
+        snapshots=[];rng=[]
+        for net,opt in nets:
+            emb,q=resources.target_values(task,np.arange(7))
+            targets=[target(1+i%4) for i in range(7)] if c.cell(task)['reconstruction'] else None
+            torch.manual_seed(9237)
+            losses=kernel.update(net,opt,raw,emb,q,targets,task,ctx,position)
+            snapshots.append(resources.snapshot(net,opt,losses['total']))
+            rng.append((torch.get_rng_state(),torch.cuda.get_rng_state(ctx.device) if device=='cuda' else None))
+        proof=resources.compare(*snapshots,resources.TOLERANCES)
+        assert proof['passed'],proof
+        assert torch.equal(rng[0][0],rng[1][0])
+        if device=='cuda':assert torch.equal(rng[0][1],rng[1][1])
+        original,optimized=[dict(net.named_buffers()) for net,_ in nets]
+        assert original.keys()==optimized.keys()
+        assert all(torch.equal(original[k],optimized[k]) for k in original)
+    native=model.NativeParticleTransformer().to(device)
+    native.load_state_dict(nets[1][0].deployment_state());native.eval()
+    optimized=nets[1][0];optimized.eval();optimized.capture=False
+    with torch.inference_mode():
+        torch.testing.assert_close(kernel.native(native,raw,device),kernel.native(optimized,raw,device),rtol=1e-5,atol=1e-6)
 
 
 def test_clean_deployment_closure_and_stale_source_rejection(tmp_path):
@@ -433,6 +529,26 @@ else:raise AssertionError('Stale source accepted')
     result=subprocess.run([sys.executable,'-I','-B','-c',code,str(project),commit,str(weaver)],capture_output=True,text=True,timeout=120)
     assert result.returncode==0,result.stdout+result.stderr
     assert 'stale source rejection' in result.stdout
+
+
+def test_shared_donor_execution_extension_preserves_v1_population_and_recipe():
+    from hlt_classification.luka_sixclass_wide_b256_oscar import contracts as current
+    pins=load_json(Path(c.__file__).with_name('donors.json'))
+    name='src/hlt_classification/luka_sixclass_wide_b256_oscar/contracts.py'
+    root=Path(__file__).resolve().parents[1]
+    original_source=subprocess.check_output(['git','-C',str(root),'show',pins['commit']+':'+name],text=True)
+    original={'__name__':'_d20_original_wide_contracts'};exec(compile(original_source,name,'exec'),original)
+    assert original['recipe']()==current.recipe() and original['tasks']()==current.tasks()
+    for field in ('FLAGS','CLASS_NAMES','EDGES','COUNTS','OUTSIDE','POPULATION_HASH','ROLE_POPULATION_HASH'):
+        assert original[field]==getattr(current,field)
+    row=dict(parents=dict(foundation='a'*64),counts=c.COUNTS)
+    population_record=original['artifact']('POPULATION',**row)
+    assert population_record==current.artifact('POPULATION',**row)
+    current.validate(population_record,'POPULATION',row['parents'])
+    override=pins['reviewed_overrides'][name]
+    committed=subprocess.check_output(['git','-C',str(root),'show',override['commit']+':'+name])
+    import hashlib
+    assert hashlib.sha256(committed).hexdigest()==override['sha256']==pins['files'][name]
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(),reason='Installed-Weaver CUDA device unavailable')
