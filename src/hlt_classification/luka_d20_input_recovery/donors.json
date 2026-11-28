@@ -1,0 +1,9 @@
+{
+  "commit": "5af66449d2b56ae37b01a642c7246027db94b097",
+  "scope": "execution_only_adapters_original_science_loaded_from_immutable_parent",
+  "files": {
+    "src/hlt_classification/luka_d20_full_hydra/basket_reader.py": "86b7735f745a9e4731c3f201f73708c4a257cbef9dfb02703a53ef1edbcd6cdd",
+    "src/hlt_classification/luka_d20_full_hydra/inputs.py": "13b5fe0816262440265ff8800fb7e9a177191a95f775bba9229aa315e9a93093",
+    "src/hlt_classification/operations/hydra_reconstruction_normalization_recovery.py": "440880bcc115526b851293cd46a3a368954df9925c5758beb2f12c4096cb4702"
+  }
+}

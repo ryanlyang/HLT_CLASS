@@ -5,6 +5,31 @@ supersedes the 600k/150k population and undecided hardware in the earlier
 miniature follow-up proposal. Historical execution
 specifications and the separate scaling benchmark remain unchanged.
 
+## 2026-11-28 execution amendment: targeted input recovery
+
+Qualification239597 and release239598 succeeded for the immutable5af66449
+execution. Scientific job243576 (`M0HLT_s22_p01`) subsequently failed before
+an epoch commit: two decoding workers repeatedly waited in fsspec file-context
+exit, then exceeded the600s batch limit. Other M0HLT/OFFLINE jobs were active.
+
+The user's requested repair authorizes the separate
+`luka_d20_input_recovery` execution adapter and its
+[versioned contract](../contracts/LUKA_D20_INPUT_RECOVERY.md). It preserves the
+original scientific source/specification and completed qualification. A CPU
+probe must first prove exact equality between the original and native local
+ROOT readers on authorized TRAIN/validation rows, including reconstruction
+targets. Only then may release replace the failed seed22 M0HLT chain and
+rebind the report, preserving unrelated running/pending jobs and all committed
+epochs. Exact bound pending descendants may be cancelled with a scheduler-side
+PENDING filter; active scientific descendants block replacement.
+
+This is an explicit exception to the original controller's all-jobs-terminal
+recovery rule. The original controller and source are unchanged. Accepted
+replacement IDs carry a checksummed execution override; scientific parents,
+sampling, model updates and exact checkpoint continuation retain their meaning.
+No full GPU qualification replay or new population is required. The adapter's
+reader probe and existing per-allocation GPU startup gates remain mandatory.
+
 ## Science
 
 Use all 2,488,148 eligible TRAIN jets and 497,954 natural validation jets from
